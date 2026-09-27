@@ -1,0 +1,26 @@
+id = "audacity"
+name = "Audacity"
+summary = "Record and edit audio."
+category = "recording"
+role = "audio editor"
+default = false
+tile = "audacity"
+icon = "mic"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: audacity 3.7.9.
+method = "dnf"
+packages = ["audacity"]
+download_mb = 22
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.audacityteam.Audacity"
+runtime = "org.gnome.Platform//50"
+verified = false
+download_mb = 24

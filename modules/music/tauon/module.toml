@@ -1,0 +1,20 @@
+id = "tauon"
+name = "Tauon"
+summary = "Stylish player for your music library."
+category = "music"
+default = false
+tile = "tauon"
+icon = "music"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora.
+method = "flatpak"
+remote = "flathub"
+ref = "com.github.taiko2k.tauonmb"
+runtime = "org.gnome.Platform//51"
+verified = true
+download_mb = 142

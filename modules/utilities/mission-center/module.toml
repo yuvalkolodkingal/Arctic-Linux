@@ -1,0 +1,21 @@
+id = "mission-center"
+name = "Mission Center"
+summary = "See what's using your CPU, memory and GPU."
+category = "utilities"
+role = "system monitor"
+default = false
+tile = "mission-center"
+icon = "cpu"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora.
+method = "flatpak"
+remote = "flathub"
+ref = "io.missioncenter.MissionCenter"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 15

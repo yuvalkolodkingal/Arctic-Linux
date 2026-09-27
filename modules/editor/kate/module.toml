@@ -1,0 +1,41 @@
+id = "kate"
+name = "Kate"
+summary = "KDE's capable text and code editor."
+category = "editor"
+default = false
+tile = "kate"
+icon = "edit"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: kate 26.08.1 (7.5 MB + KDE Frameworks).
+method = "dnf"
+packages = ["kate"]
+download_mb = 83
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.kde.kate"
+runtime = "org.kde.Platform//6.10"
+desktop_id = "org.kde.kate.desktop"
+command = "gtk-launch org.kde.kate"
+verified = true
+download_mb = 9
+
+[defaults]
+desktop_id = "org.kde.kate.desktop"
+role = "editor"
+command = "kate"
+mime = [
+  "text/plain",
+  "text/markdown",
+  "text/x-python",
+  "text/x-csrc",
+  "text/x-shellscript",
+  "application/json",
+  "application/toml",
+]

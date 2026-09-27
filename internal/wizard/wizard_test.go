@@ -421,7 +421,7 @@ func TestAppsStep(t *testing.T) {
 	if err == nil || err.Fields["browser"] != "Pick just one browser." {
 		t.Fatalf("got %v", err)
 	}
-	d, err := set(t, w, "apps", `{"selection":{"browser":["firefox"],"files":["thunar","yazi"],"extras":["steam"]}}`)
+	d, err := set(t, w, "apps", `{"selection":{"browser":["firefox"],"files":["thunar","yazi"],"gaming":["steam"]}}`)
 	if err != nil {
 		t.Fatal(err)
 	}

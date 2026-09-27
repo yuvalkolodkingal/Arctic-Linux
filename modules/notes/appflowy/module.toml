@@ -1,0 +1,19 @@
+id = "appflowy"
+name = "AppFlowy"
+summary = "Docs, wikis and boards, like Notion."
+category = "notes"
+default = false
+tile = "appflowy"
+icon = "grid"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "io.appflowy.AppFlowy"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 177

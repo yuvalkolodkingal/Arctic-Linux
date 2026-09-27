@@ -1,0 +1,22 @@
+id = "konsole"
+name = "Konsole"
+summary = "KDE's terminal with tabs, splits and profiles."
+category = "terminal"
+default = false
+tile = "konsole"
+icon = "terminal"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: konsole 26.08.1 (1.5 MB + KDE Frameworks).
+method = "dnf"
+packages = ["konsole"]
+download_mb = 62
+
+[defaults]
+desktop_id = "org.kde.konsole.desktop"
+role = "terminal"
+command = "konsole"

@@ -1,5 +1,6 @@
-// .ar-app — one app in the checklist: check (or radio), tile, name, Default tag,
-// one-line summary. The whole row is the control; Space toggles.
+// .ar-app — one app in the checklist: check (or radio), tile, name, Default tag
+// (and Proprietary for non-free apps), one-line summary. The whole row is the
+// control; Space toggles. Long names elide so the tags always fit.
 import QtQuick
 import QtQuick.Templates as T
 import ".."
@@ -11,6 +12,7 @@ T.AbstractButton {
     property string name: ""
     property string summary: ""
     property bool isDefault: false
+    property bool proprietary: false
     property bool radio: false
     property bool error: false
     property string sizeLabel: ""
@@ -20,7 +22,7 @@ T.AbstractButton {
     focusPolicy: Qt.StrongFocus
     implicitHeight: 56
     Accessible.role: radio ? Accessible.RadioButton : Accessible.CheckBox
-    Accessible.name: name + (isDefault ? " (default)" : "")
+    Accessible.name: name + (isDefault ? " (default)" : "") + (proprietary ? " (proprietary)" : "")
     Accessible.description: summary
     Accessible.checkable: true
     Accessible.checked: checked
@@ -63,18 +65,34 @@ T.AbstractButton {
                 width: parent.width - 20 - 36 - 2 * parent.spacing
                 anchors.verticalCenter: parent.verticalCenter
                 Row {
+                    id: nameRow
+                    width: parent.width
                     spacing: Theme.space2
+                    readonly property real tagsWidth: (defaultTag.visible ? defaultTag.width + spacing : 0) + (propTag.visible ? propTag.width + spacing : 0)
                     ArText {
+                        width: Math.min(implicitWidth, nameRow.width - nameRow.tagsWidth)
                         text: app.name
                         size: 15
                         lh: 20
                         weight: Font.DemiBold
+                        elide: Text.ElideRight
                         color: app.enabled ? Theme.ink : Theme.inkDisabled
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     ArTag {
+                        id: defaultTag
                         visible: app.isDefault
                         text: "Default"
+                        textSize: 10
+                        hpad: 6
+                        implicitHeight: 16
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    ArTag {
+                        id: propTag
+                        visible: app.proprietary
+                        text: "Proprietary"
+                        kind: "info"
                         textSize: 10
                         hpad: 6
                         implicitHeight: 16

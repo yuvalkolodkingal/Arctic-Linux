@@ -1,0 +1,19 @@
+id = "logseq"
+name = "Logseq"
+summary = "Outliner for daily notes and ideas."
+category = "notes"
+default = false
+tile = "logseq"
+icon = "edit"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.logseq.Logseq"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 184

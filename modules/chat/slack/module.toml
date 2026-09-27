@@ -1,0 +1,21 @@
+id = "slack"
+name = "Slack"
+summary = "Team chat for work."
+category = "chat"
+default = false
+tile = "slack"
+icon = "hash"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# Proprietary. Community Flathub wrapper (unverified).
+method = "flatpak"
+remote = "flathub"
+ref = "com.slack.Slack"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 238

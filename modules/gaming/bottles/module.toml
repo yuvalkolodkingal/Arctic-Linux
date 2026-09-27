@@ -1,0 +1,21 @@
+id = "bottles"
+name = "Bottles"
+summary = "Run Windows apps and games."
+category = "gaming"
+role = "Windows app runner"
+default = false
+tile = "bottles"
+icon = "package"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Upstream supports only the Flatpak; Fedora's bottles 52 is years old.
+method = "flatpak"
+remote = "flathub"
+ref = "com.usebottles.bottles"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 176

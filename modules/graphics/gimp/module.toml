@@ -1,0 +1,26 @@
+id = "gimp"
+name = "GIMP"
+summary = "Photo editing and painting."
+category = "graphics"
+role = "photo editor"
+default = false
+tile = "gimp"
+icon = "brush"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: gimp 3.2.6, the same release as Flathub; avoids the 420 MB GNOME 50 runtime.
+method = "dnf"
+packages = ["gimp"]
+download_mb = 61
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gimp.GIMP"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 100

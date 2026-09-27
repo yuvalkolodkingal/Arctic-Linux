@@ -1,0 +1,27 @@
+id = "telegram"
+name = "Telegram"
+summary = "Fast messaging that syncs everywhere."
+category = "chat"
+role = "messenger"
+default = false
+tile = "telegram"
+icon = "send"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# RPM Fusion free: telegram-desktop 7.2.5.
+method = "dnf"
+packages = ["telegram-desktop"]
+repos = ["rpmfusion-free"]
+download_mb = 129
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.telegram.desktop"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 100

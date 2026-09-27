@@ -1,0 +1,22 @@
+id = "prism"
+name = "Prism Launcher"
+short = "Prism"
+summary = "Manage Minecraft versions and mods."
+category = "gaming"
+role = "game launcher"
+default = false
+tile = "prism"
+icon = "gamepad"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora. Minecraft itself needs a paid Microsoft account.
+method = "flatpak"
+remote = "flathub"
+ref = "org.prismlauncher.PrismLauncher"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 42

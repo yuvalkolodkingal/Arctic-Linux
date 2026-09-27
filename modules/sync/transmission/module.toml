@@ -1,0 +1,32 @@
+id = "transmission"
+name = "Transmission"
+summary = "Simple, light torrent downloader."
+category = "sync"
+role = "torrent app"
+default = false
+tile = "transmission"
+icon = "download"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: transmission 4.1.3.
+method = "dnf"
+packages = ["transmission-gtk"]
+download_mb = 15
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.transmissionbt.Transmission"
+runtime = "org.gnome.Platform//51"
+desktop_id = "com.transmissionbt.Transmission.desktop"
+command = "gtk-launch com.transmissionbt.Transmission"
+verified = false
+download_mb = 6
+
+[defaults]
+desktop_id = "transmission-gtk.desktop"
+mime = ["application/x-bittorrent", "x-scheme-handler/magnet"]

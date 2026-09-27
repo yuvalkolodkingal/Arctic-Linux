@@ -1,0 +1,26 @@
+id = "darktable"
+name = "darktable"
+summary = "Develop RAW photos like a darkroom."
+category = "photos"
+role = "photo editor"
+default = false
+tile = "darktable"
+icon = "camera"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: darktable 5.6.1.
+method = "dnf"
+packages = ["darktable"]
+download_mb = 22
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.darktable.Darktable"
+runtime = "org.gnome.Platform//50"
+verified = false
+download_mb = 71

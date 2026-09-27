@@ -1,0 +1,20 @@
+id = "protonplus"
+name = "ProtonPlus"
+summary = "Adds newer Proton versions for Windows games."
+category = "gaming"
+role = "game tool"
+default = false
+tile = "protonplus"
+icon = "download"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.vysp3r.ProtonPlus"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 2

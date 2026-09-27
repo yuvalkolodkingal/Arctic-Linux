@@ -1,0 +1,20 @@
+id = "gpu-screen-recorder"
+name = "GPU Screen Recorder"
+summary = "Record gameplay with almost no slowdown."
+category = "recording"
+role = "screen recorder"
+default = false
+tile = "gpu-screen-recorder"
+icon = "record"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.dec05eba.gpu_screen_recorder"
+runtime = "org.freedesktop.Platform//24.08"
+verified = true
+download_mb = 12

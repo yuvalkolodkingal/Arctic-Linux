@@ -1,0 +1,18 @@
+id = "btrfs-assistant"
+name = "Btrfs Assistant"
+summary = "Manage snapshots and Btrfs subvolumes."
+category = "utilities"
+role = "snapshot tool"
+default = false
+tile = "btrfs-assistant"
+icon = "disk"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: btrfs-assistant 2.2, snapper 0.13.
+method = "dnf"
+packages = ["btrfs-assistant", "snapper"]
+download_mb = 2

@@ -1,0 +1,27 @@
+id = "kodi"
+name = "Kodi"
+summary = "Media centre for your TV, films and music."
+category = "video"
+role = "media centre"
+default = false
+tile = "kodi"
+icon = "home"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# RPM Fusion free: kodi 22.0 (Flathub still has 21.3).
+method = "dnf"
+packages = ["kodi"]
+repos = ["rpmfusion-free"]
+download_mb = 39
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "tv.kodi.Kodi"
+runtime = "org.freedesktop.Platform//24.08"
+verified = true
+download_mb = 298

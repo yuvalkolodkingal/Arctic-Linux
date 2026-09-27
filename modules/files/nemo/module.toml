@@ -1,0 +1,23 @@
+id = "nemo"
+name = "Nemo"
+summary = "Familiar, full-featured file manager."
+category = "files"
+default = false
+tile = "nemo"
+icon = "folder"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: nemo 6.6.3.
+method = "dnf"
+packages = ["nemo"]
+download_mb = 42
+
+[defaults]
+desktop_id = "nemo.desktop"
+role = "files"
+command = "nemo"
+mime = ["inode/directory"]

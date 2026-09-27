@@ -22,7 +22,7 @@ download_mb = 327
 method = "dnf"
 desktop_id = "libreoffice-writer.desktop"
 packages = ["libreoffice-writer", "libreoffice-calc", "libreoffice-impress"]
-download_mb = 180
+download_mb = 235
 
 [defaults]
 desktop_id = "org.libreoffice.LibreOffice.writer.desktop"

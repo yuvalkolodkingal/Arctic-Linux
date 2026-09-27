@@ -1,0 +1,26 @@
+id = "nextcloud"
+name = "Nextcloud"
+summary = "Syncs files with your Nextcloud server."
+category = "sync"
+role = "sync app"
+default = false
+tile = "nextcloud"
+icon = "cloud"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: nextcloud-client 34.0.4 (native, so file-manager integration works).
+method = "dnf"
+packages = ["nextcloud-client"]
+download_mb = 10
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.nextcloud.desktopclient.nextcloud"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 10

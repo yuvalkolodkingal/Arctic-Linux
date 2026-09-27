@@ -1,0 +1,21 @@
+id = "jellyfin"
+name = "Jellyfin Media Player"
+short = "Jellyfin"
+summary = "Watch your Jellyfin server's library."
+category = "video"
+role = "media player"
+default = false
+tile = "jellyfin"
+icon = "film"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.jellyfin.JellyfinDesktop"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 137

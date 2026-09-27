@@ -76,7 +76,7 @@ class FakeRunner:
 
 class EngineShapeTests(unittest.TestCase):
     def test_encoding_drops_empty_fields(self):
-        flathub = engine_entry('extras/flathub')
+        flathub = engine_entry('utilities/flathub')
         self.assertNotIn('ref', flathub['install'][0])       # json:"ref,omitempty", ref = ""
         self.assertNotIn('packages', flathub['install'][0])
         self.assertIn('verified', flathub['install'][0])     # not omitempty
@@ -88,7 +88,7 @@ class MethodTests(unittest.TestCase):
 
     def test_flathub_without_ref_only_adds_the_remote(self):
         run = FakeRunner()
-        self.assertTrue(self.fb(run).install(engine_entry('extras/flathub')))
+        self.assertTrue(self.fb(run).install(engine_entry('utilities/flathub')))
         self.assertEqual(run.commands, [['flatpak', 'remote-add', '--system', '--if-not-exists', 'flathub',
                                          'https://dl.flathub.org/repo/flathub.flatpakrepo']])
 
@@ -98,7 +98,7 @@ class MethodTests(unittest.TestCase):
         zed = engine_entry('editor/zed')
         ref = zed['install'][0]['ref']
         self.assertTrue(fb.install(zed))
-        self.assertTrue(fb.install(engine_entry('extras/flathub')))
+        self.assertTrue(fb.install(engine_entry('utilities/flathub')))
         self.assertEqual([c[:2] for c in run.commands], [['flatpak', 'remote-add'], ['flatpak', 'install']])
         self.assertEqual(run.commands[1], ['flatpak', 'install', '--system', '-y', '--noninteractive', 'flathub', ref])
 
@@ -173,7 +173,7 @@ class MainTests(unittest.TestCase):
             return firstboot.main(runner)
 
     def test_everything_installed_removes_the_file(self):
-        self.write([engine_entry('extras/flathub'), engine_entry('_system/codecs')])
+        self.write([engine_entry('utilities/flathub'), engine_entry('_system/codecs')])
         self.assertEqual(self.main(FakeRunner(installed={'ffmpeg-free'})), 0)
         self.assertFalse(self.pending.exists())
 
@@ -187,7 +187,7 @@ class MainTests(unittest.TestCase):
                 raise TypeError('bad command')
             return original(cmd, quiet)
 
-        self.write([broken, engine_entry('extras/flathub'), engine_entry('editor/zed')])
+        self.write([broken, engine_entry('utilities/flathub'), engine_entry('editor/zed')])
         self.assertEqual(self.main(run), 1)
         left = json.loads(self.pending.read_text())
         self.assertEqual(left['version'], 2)

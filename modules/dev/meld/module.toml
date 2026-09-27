@@ -1,0 +1,26 @@
+id = "meld"
+name = "Meld"
+summary = "Compare files and folders side by side."
+category = "dev"
+role = "compare tool"
+default = false
+tile = "meld"
+icon = "copy"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: meld 3.24.0.
+method = "dnf"
+packages = ["meld"]
+download_mb = 3
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.meld"
+runtime = "org.gnome.Platform//50"
+verified = false
+download_mb = 5

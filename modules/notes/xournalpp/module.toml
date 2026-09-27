@@ -1,0 +1,25 @@
+id = "xournalpp"
+name = "Xournal++"
+summary = "Handwritten notes and PDF annotation."
+category = "notes"
+default = false
+tile = "xournalpp"
+icon = "pen-nib"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# The Fedora RPM pulls TeX Live (~187 MB).
+method = "flatpak"
+remote = "flathub"
+ref = "com.github.xournalpp.xournalpp"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 114
+
+[[install]]
+method = "dnf"
+packages = ["xournalpp"]
+download_mb = 187

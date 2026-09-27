@@ -1,0 +1,21 @@
+id = "shortwave"
+name = "Shortwave"
+summary = "Listen to internet radio stations."
+category = "music"
+role = "radio app"
+default = false
+tile = "shortwave"
+icon = "volume"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora.
+method = "flatpak"
+remote = "flathub"
+ref = "de.haeckerfelix.Shortwave"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 6

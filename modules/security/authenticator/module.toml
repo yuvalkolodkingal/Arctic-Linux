@@ -1,0 +1,20 @@
+id = "authenticator"
+name = "Authenticator"
+summary = "Two-factor codes for your accounts."
+category = "security"
+role = "two-factor app"
+default = false
+tile = "authenticator"
+icon = "clock"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.belmoussaoui.Authenticator"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 6

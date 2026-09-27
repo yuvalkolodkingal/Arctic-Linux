@@ -1,0 +1,21 @@
+id = "blender"
+name = "Blender"
+summary = "3D modelling, animation and rendering."
+category = "graphics"
+role = "3D app"
+default = false
+tile = "blender"
+icon = "package"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Community Flathub build of the official release. The Fedora RPM pulls over 1.5 GB of dependencies.
+method = "flatpak"
+remote = "flathub"
+ref = "org.blender.Blender"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 477

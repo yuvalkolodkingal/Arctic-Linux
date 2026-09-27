@@ -1,0 +1,30 @@
+id = "qbittorrent"
+name = "qBittorrent"
+summary = "Full-featured torrent downloader."
+category = "sync"
+role = "torrent app"
+default = false
+tile = "qbittorrent"
+icon = "download"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: qbittorrent 5.2.3.
+method = "dnf"
+packages = ["qbittorrent"]
+download_mb = 12
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.qbittorrent.qBittorrent"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 13
+
+[defaults]
+desktop_id = "org.qbittorrent.qBittorrent.desktop"
+mime = ["application/x-bittorrent", "x-scheme-handler/magnet"]

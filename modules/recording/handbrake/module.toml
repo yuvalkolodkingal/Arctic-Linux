@@ -1,0 +1,27 @@
+id = "handbrake"
+name = "HandBrake"
+summary = "Convert videos to other formats."
+category = "recording"
+role = "video converter"
+default = false
+tile = "handbrake"
+icon = "refresh"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# RPM Fusion free: HandBrake 1.11.2 (patent-encumbered encoders).
+method = "dnf"
+packages = ["HandBrake-gui"]
+repos = ["rpmfusion-free"]
+download_mb = 14
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "fr.handbrake.ghb"
+runtime = "org.gnome.Platform//49"
+verified = true
+download_mb = 44

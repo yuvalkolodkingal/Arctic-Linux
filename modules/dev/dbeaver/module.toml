@@ -1,0 +1,21 @@
+id = "dbeaver"
+name = "DBeaver"
+summary = "One tool for every database."
+category = "dev"
+role = "database tool"
+default = false
+tile = "dbeaver"
+icon = "database"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Community edition (Apache-2.0). Not in Fedora.
+method = "flatpak"
+remote = "flathub"
+ref = "io.dbeaver.DBeaverCommunity"
+runtime = "org.gnome.Platform//50"
+verified = false
+download_mb = 163

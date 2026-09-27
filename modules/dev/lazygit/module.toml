@@ -1,0 +1,17 @@
+id = "lazygit"
+name = "lazygit"
+summary = "Git in a friendly terminal interface."
+category = "dev"
+default = false
+tile = "lazygit"
+icon = "branch"
+in_live_image = false
+gpu = false
+requires = ["git"]
+conflicts = []
+
+[[install]]
+# Not in Fedora; the Fedora COPRs are unmaintained or have no Fedora 44 build. Size estimated (nar.xz).
+method = "nix"
+attr = "lazygit"
+download_mb = 9

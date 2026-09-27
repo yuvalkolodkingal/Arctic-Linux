@@ -1,0 +1,18 @@
+id = "waydroid"
+name = "Waydroid"
+summary = "Run Android apps next to your desktop."
+category = "containers"
+role = "Android app runner"
+default = false
+tile = "waydroid"
+icon = "phone"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: waydroid 1.6.3; the preset enables waydroid-container.service. The Android image (~800 MB) downloads on first start.
+method = "dnf"
+packages = ["waydroid"]
+download_mb = 5

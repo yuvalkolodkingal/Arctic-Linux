@@ -1,0 +1,32 @@
+id = "vivaldi"
+name = "Vivaldi"
+summary = "Feature-packed browser you can reshape."
+category = "browser"
+default = false
+tile = "vivaldi"
+icon = "sliders"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# Proprietary UI. Community Flathub wrapper (unverified).
+method = "flatpak"
+remote = "flathub"
+ref = "com.vivaldi.Vivaldi"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 208
+
+[defaults]
+desktop_id = "com.vivaldi.Vivaldi.desktop"
+role = "browser"
+command = "gtk-launch com.vivaldi.Vivaldi"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]

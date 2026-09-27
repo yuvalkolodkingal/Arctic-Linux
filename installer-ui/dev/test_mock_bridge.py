@@ -110,10 +110,24 @@ class MockBridgeTest(unittest.TestCase):
         self.assertFalse(any(d["install_media"] for d in disk["options"]["disks"]))
         self.assertEqual(disk["data"]["mode"], "erase")
         apps = b.ok("GetStep", {"id": "apps"})
-        self.assertEqual([c["id"] for c in apps["options"]["categories"]],
-                         ["browser", "editor", "terminal", "shell", "files", "office", "video", "extras"])
+        cats = apps["options"]["categories"]
+        self.assertEqual([c["id"] for c in cats],
+                         ["browser", "editor", "terminal", "shell", "files", "office", "video",
+                          "music", "photos", "graphics", "recording", "chat", "email", "notes", "reading",
+                          "gaming", "security", "sync", "dev", "containers", "utilities"])
+        # The design's seven sections are open; the optional groups start collapsed.
+        self.assertEqual([c["id"] for c in cats if not c["collapsed"]],
+                         ["browser", "editor", "terminal", "shell", "files", "office", "video"])
+        mods = {m["id"]: m for m in apps["options"]["modules"]}
+        self.assertEqual(len(mods), 126)
+        self.assertEqual((mods["steam"]["category"], mods["steam"]["source"], mods["steam"]["proprietary"]),
+                         ("gaming", "RPM Fusion", True))
+        self.assertEqual(mods["zen"]["source"], "Flathub")
+        self.assertFalse(mods["zen"]["proprietary"])
         est = b.ok("EstimateDownload", {"selection": apps["data"]["selection"]})
-        self.assertRegex(est["label"], r"^\d+ apps? · [\d.]+ (GB|MB) download$")
+        # The same numbers as the engine's catalog.EstimateDownload.
+        self.assertEqual(est["label"], "8 apps · 2.1 GB download")
+        self.assertEqual(est["bytes"], 2138 * 1000 * 1000)
 
     def test_network_blocks_next_until_online(self):
         b = self.start()
@@ -150,7 +164,7 @@ class MockBridgeTest(unittest.TestCase):
         b = self.start()
         self.walk_to("apps")
         sel = b.ok("GetStep", {"id": "apps"})["data"]["selection"]
-        sel["extras"] = ["steam"]
+        sel["gaming"] = ["steam"]
         b.ok("SetStep", {"id": "apps", "data": {"selection": sel}})
         b.ok("Next")
         summary = b.ok("GetSummary")

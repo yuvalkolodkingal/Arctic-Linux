@@ -1,0 +1,17 @@
+id = "git"
+name = "Git"
+summary = "Version control, with the GitHub command line."
+category = "dev"
+default = false
+tile = "git"
+icon = "branch"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: git 2.55, gh 2.97.
+method = "dnf"
+packages = ["git", "gh"]
+download_mb = 36

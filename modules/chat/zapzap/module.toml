@@ -1,0 +1,21 @@
+id = "zapzap"
+name = "ZapZap"
+summary = "WhatsApp in its own window (unofficial)."
+category = "chat"
+role = "messenger"
+default = false
+tile = "zapzap"
+icon = "chat"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Unofficial WhatsApp Web wrapper, not made by Meta.
+method = "flatpak"
+remote = "flathub"
+ref = "com.rtosta.zapzap"
+runtime = "org.kde.Platform//6.11"
+verified = true
+download_mb = 145

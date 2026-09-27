@@ -1,0 +1,33 @@
+id = "chrome"
+name = "Google Chrome"
+short = "Chrome"
+summary = "Google's browser, synced to your account."
+category = "browser"
+default = false
+tile = "chrome"
+icon = "globe"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# Proprietary. Community Flathub wrapper of Google's build (unverified). Google's RPM repo (fedora-workstation-repositories, key distribution-gpg-keys/google) is the alternative.
+method = "flatpak"
+remote = "flathub"
+ref = "com.google.Chrome"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 152
+
+[defaults]
+desktop_id = "com.google.Chrome.desktop"
+role = "browser"
+command = "gtk-launch com.google.Chrome"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]
