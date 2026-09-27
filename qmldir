@@ -1,0 +1,9 @@
+singleton Theme 1.0 Theme.qml
+PickerButton 1.0 PickerButton.qml
+AppBar 1.0 AppBar.qml
+DragHandle 1.0 DragHandle.qml
+InstallConsole 1.0 InstallConsole.qml
+PopupSurface 1.0 PopupSurface.qml
+DockPosition 1.0 DockPosition.qml
+ScreenFrame 1.0 ScreenFrame.qml
+Workspaces 1.0 Workspaces.qml
