@@ -1,0 +1,22 @@
+id = "alacritty"
+name = "Alacritty"
+summary = "Minimal GPU terminal."
+category = "terminal"
+default = false
+tile = "alacritty"
+icon = "terminal"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: alacritty 0.17
+method = "dnf"
+packages = ["alacritty"]
+download_mb = 3
+
+[defaults]
+desktop_id = "Alacritty.desktop"
+role = "terminal"
+command = "alacritty"

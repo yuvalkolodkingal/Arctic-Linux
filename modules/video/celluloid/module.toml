@@ -1,0 +1,32 @@
+id = "celluloid"
+name = "Celluloid"
+summary = "Simple player built on mpv."
+category = "video"
+default = false
+tile = "celluloid"
+icon = "film"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "io.github.celluloid_player.Celluloid"
+runtime = "org.gnome.Platform//51"
+verified = true
+download_mb = 66
+
+[defaults]
+desktop_id = "io.github.celluloid_player.Celluloid.desktop"
+mime = [
+  "video/mp4",
+  "video/x-matroska",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+  "audio/mpeg",
+  "audio/flac",
+  "audio/ogg",
+]

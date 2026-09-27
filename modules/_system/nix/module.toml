@@ -1,0 +1,19 @@
+# Fedora 44 ships nix 2.34. arctic-selinux labels /nix (Fedora bug 2525943).
+id = "nix"
+name = "Nix"
+summary = "Nix package manager (daemon mode) with SELinux file contexts."
+category = "system"
+hidden = true
+always = true
+in_live_image = true
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ["nix", "nix-daemon", "arctic-selinux"]
+download_mb = 0
+
+[session]
+services = ["nix-daemon.service"]

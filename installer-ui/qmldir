@@ -1,0 +1,4 @@
+singleton Theme 1.0 Theme.qml
+singleton Engine 1.0 Engine.qml
+singleton Wizard 1.0 Wizard.qml
+Frame 1.0 Frame.qml

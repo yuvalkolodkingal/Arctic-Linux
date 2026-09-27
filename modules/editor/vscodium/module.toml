@@ -1,0 +1,24 @@
+id = "vscodium"
+name = "VSCodium"
+summary = "VS Code without the telemetry."
+category = "editor"
+default = false
+tile = "vscodium"
+icon = "code"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.vscodium.codium"
+runtime = "org.freedesktop.Sdk//25.08"
+verified = true
+download_mb = 248
+
+[defaults]
+desktop_id = "com.vscodium.codium.desktop"
+role = "editor"
+command = "gtk-launch com.vscodium.codium"

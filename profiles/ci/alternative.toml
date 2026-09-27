@@ -1,0 +1,41 @@
+# CI profile: the alternative path (PLAN P4) — Firefox + foot + fish + Nautilus + mpv +
+# LibreOffice, no encryption, installed alongside an existing system, autologin on.
+# The VM disk must already carry a partition table with at least 40 GB unallocated (the test
+# harness creates one partition and leaves the rest free). On BIOS a 1 MiB BIOS boot partition
+# is added in the free space when the disk is GPT.
+
+description = "CI: alternative apps, alongside, no encryption"
+
+[welcome]
+language = "de_DE.UTF-8"
+
+[keyboard]
+layout = "de"
+variant = "nodeadkeys"
+
+[timezone]
+timezone = "Europe/Berlin"
+auto_time = false
+
+[disk]
+disk = ""
+mode = "alongside"
+
+[encryption]
+enabled = false
+
+[account]
+full_name = "Arctic Alt"
+username = "alt"
+hostname = "arctic-alt"
+autologin = true
+
+[apps]
+browser = ["firefox"]
+editor = ["neovim"]
+terminal = ["foot"]
+shell = ["fish"]
+files = ["nautilus"]
+office = ["libreoffice"]
+video = ["mpv"]
+extras = []

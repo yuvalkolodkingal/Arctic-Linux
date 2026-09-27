@@ -1,0 +1,89 @@
+# Arctic Linux app catalog — catalog-wide data.
+#
+# Categories are the installer's app picker sections, in the design's order (design bundle.js
+# CATEGORIES + components/AppChecklist). `modules` fixes the order of the tiles inside each
+# section; every visible module must be listed in exactly one category.
+# Each module lives in modules/<category>/<id>/module.toml; hidden, always-installed modules in
+# modules/_system/<id>/module.toml. Profiles and the UI only ever reference module ids.
+
+# Pinned nixpkgs for Nix-installed modules: head of nixos-26.05 on 2026-09-27
+# (git ls-remote https://github.com/NixOS/nixpkgs refs/heads/nixos-26.05).
+nixpkgs = "github:NixOS/nixpkgs/5e2305d577ca00acbba631b05cb1094d172b29f3"
+
+[[category]]
+id = "browser"
+name = "Browser"
+choice = "one"
+required = true
+note = "Becomes your default browser."
+role = "web browser"
+modules = ["zen", "firefox", "chromium"]
+
+[[category]]
+id = "editor"
+name = "Editor"
+choice = "any"
+note = ""
+role = "code editor"
+modules = ["zed", "vscodium", "neovim", "helix"]
+
+[[category]]
+id = "terminal"
+name = "Terminal"
+choice = "one"
+required = true
+note = "Opens with Super + Enter."
+role = "terminal"
+modules = ["kitty", "alacritty", "foot"]
+
+[[category]]
+id = "shell"
+name = "Shell"
+choice = "one"
+required = true
+note = "What runs inside the terminal."
+role = "shell"
+modules = ["zsh", "fish", "bash"]
+
+[[category]]
+id = "files"
+name = "File manager"
+choice = "any"
+note = ""
+role = "file manager"
+modules = ["yazi", "thunar", "nautilus"]
+
+[[category]]
+id = "office"
+name = "Office"
+choice = "one"
+note = ""
+role = "office suite"
+modules = ["collabora", "libreoffice", "onlyoffice"]
+
+[[category]]
+id = "video"
+name = "Video"
+choice = "any"
+note = ""
+role = "video player"
+modules = ["vlc", "mpv", "celluloid"]
+
+[[category]]
+id = "extras"
+name = "Extras"
+choice = "any"
+note = "Nothing here is ticked by default."
+role = "app"
+modules = ["flathub", "steam", "gimp", "inkscape", "signal", "obs"]
+
+# Download size (MB) of each shared Flatpak runtime, counted once per install.
+# Flathub API /api/v2/summary/<runtime> on 2026-09-27.
+[runtimes]
+"org.freedesktop.Platform//25.08" = 259
+"org.freedesktop.Platform//26.08" = 281
+"org.freedesktop.Sdk//25.08" = 609
+"org.freedesktop.Sdk//26.08" = 656
+"org.kde.Platform//6.10" = 392
+"org.gnome.Platform//50" = 420
+"org.gnome.Platform//51" = 432

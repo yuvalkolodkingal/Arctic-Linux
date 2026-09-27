@@ -1,0 +1,16 @@
+# The flathub remote is added into the target from the live host when a Flatpak app is installed (PLAN §6.6).
+id = "flatpak"
+name = "Flatpak"
+summary = "Flatpak app runtime."
+category = "system"
+hidden = true
+always = true
+in_live_image = true
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ["flatpak"]
+download_mb = 2

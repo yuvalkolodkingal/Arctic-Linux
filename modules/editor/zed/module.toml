@@ -1,0 +1,34 @@
+id = "zed"
+name = "Zed"
+summary = "Fast, modern code editor."
+category = "editor"
+default = true
+tile = "zed"
+icon = "code"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Community Flathub build (unverified); runs on the full SDK runtime (PLAN §12).
+method = "flatpak"
+remote = "flathub"
+ref = "dev.zed.Zed"
+runtime = "org.freedesktop.Sdk//26.08"
+verified = false
+download_mb = 132
+
+[defaults]
+desktop_id = "dev.zed.Zed.desktop"
+role = "editor"
+command = "gtk-launch dev.zed.Zed"
+mime = [
+  "text/plain",
+  "text/markdown",
+  "text/x-python",
+  "text/x-csrc",
+  "text/x-shellscript",
+  "application/json",
+  "application/toml",
+]

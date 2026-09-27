@@ -1,0 +1,28 @@
+# Not in the v0.1 live ISO (it comes from COPR), so it is downloaded. Nix is the fallback.
+id = "yazi"
+name = "yazi"
+summary = "Quick file manager inside the terminal."
+category = "files"
+default = true
+tile = "yazi"
+icon = "folder"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# COPR lihaohong/yazi builds 26.9.1 for Fedora 44 (checked with dnf copr enable).
+method = "copr"
+copr = "lihaohong/yazi"
+packages = ["yazi"]
+download_mb = 12
+
+[[install]]
+method = "nix"
+attr = "yazi"
+download_mb = 15
+
+[defaults]
+role = "files-tui"
+command = "{terminal} -e yazi"

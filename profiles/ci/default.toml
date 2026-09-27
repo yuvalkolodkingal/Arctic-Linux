@@ -1,0 +1,39 @@
+# CI profile: the default install (UEFI or BIOS, LUKS2 on) inside the QEMU test VM.
+# The VM has one blank virtio disk; the wizard picks it. The test harness passes
+# ARCTIC_LUKS_PASSPHRASE and ARCTIC_USER_PASSWORD and types the passphrase at boot.
+
+description = "CI: defaults on a blank disk, encrypted"
+
+[welcome]
+language = "en_US.UTF-8"
+
+[keyboard]
+layout = "us"
+variant = ""
+
+[timezone]
+timezone = "UTC"
+auto_time = true
+
+[disk]
+disk = ""
+mode = "erase"
+
+[encryption]
+enabled = true
+
+[account]
+full_name = "Arctic CI"
+username = "ci"
+hostname = "arctic-ci"
+autologin = false
+
+[apps]
+browser = ["zen"]
+editor = ["zed"]
+terminal = ["kitty"]
+shell = ["zsh"]
+files = ["yazi", "thunar"]
+office = ["collabora"]
+video = ["vlc"]
+extras = []

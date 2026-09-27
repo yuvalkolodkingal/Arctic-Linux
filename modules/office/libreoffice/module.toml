@@ -1,0 +1,39 @@
+id = "libreoffice"
+name = "LibreOffice"
+summary = "The full classic office suite."
+category = "office"
+default = false
+tile = "libreoffice"
+icon = "document"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.libreoffice.LibreOffice"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 327
+
+[[install]]
+method = "dnf"
+desktop_id = "libreoffice-writer.desktop"
+packages = ["libreoffice-writer", "libreoffice-calc", "libreoffice-impress"]
+download_mb = 180
+
+[defaults]
+desktop_id = "org.libreoffice.LibreOffice.writer.desktop"
+mime = [
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]

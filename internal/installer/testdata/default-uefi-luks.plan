@@ -1,0 +1,174 @@
+# Arctic Linux install: erase Samsung SSD 980 · 512 GB (/dev/nvme0n1), firmware uefi, encryption true, 8 apps
+
+# == disk: Preparing the disk…
+$ lsblk --noheadings --raw --output MOUNTPOINTS /dev/nvme0n1
+$ wipefs --all --force /dev/nvme0n1
+$ sfdisk --wipe always --wipe-partitions always /dev/nvme0n1 <<'EOF'
+    label: gpt
+    size=1MiB, type=21686148-6449-6E6F-744E-656564454649, name="BIOS boot"
+    size=1GiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name="EFI System"
+    size=2GiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="Arctic boot"
+    type=CA7D7CCB-63ED-4C53-861C-1742536059CC, name="Arctic root"
+    EOF
+$ udevadm settle --timeout=15
+$ mkfs.vfat -F 32 -n EFI /dev/nvme0n1p2
+$ mkfs.ext4 -F -q -L arctic-boot /dev/nvme0n1p3
+$ cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --label arctic-root --key-file - /dev/nvme0n1p4 < [secret: disk passphrase]
+$ blkid --match-tag UUID --output value /dev/nvme0n1p4
+$ cryptsetup open --allow-discards --key-file - /dev/nvme0n1p4 luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad < [secret: disk passphrase]
+$ mkfs.btrfs -f -q -L arctic /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad
+$ mount -o compress=zstd:1 /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad /mnt
+$ btrfs subvolume create /mnt/@
+$ btrfs subvolume create /mnt/@home
+$ btrfs subvolume create /mnt/@var_log
+$ btrfs subvolume create /mnt/@nix
+$ umount /mnt
+$ mount -o subvol=@,compress=zstd:1 /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad /mnt
+mkdir -p /mnt/home
+$ mount -o subvol=@home,compress=zstd:1 /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad /mnt/home
+mkdir -p /mnt/var/log
+$ mount -o subvol=@var_log,compress=zstd:1 /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad /mnt/var/log
+mkdir -p /mnt/nix
+$ mount -o subvol=@nix,compress=zstd:1 /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad /mnt/nix
+mkdir -p /mnt/boot
+$ mount /dev/nvme0n1p3 /mnt/boot
+mkdir -p /mnt/boot/efi
+$ mount -o umask=0077 /dev/nvme0n1p2 /mnt/boot/efi
+$ blkid --match-tag UUID --output value /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad
+$ blkid --match-tag UUID --output value /dev/nvme0n1p3
+$ blkid --match-tag UUID --output value /dev/nvme0n1p2
+
+# == copy: Copying Arctic Linux…
+$ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' '--exclude=/boot/efi/*' '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
+$ rsync -rt /run/rootfsbase/boot/efi/ /mnt/boot/efi/
+$ cp -rn /mnt/usr/lib/efi/grub2/1:2.12-64.fc44/EFI /mnt/boot/efi/
+$ cp -rn /mnt/usr/lib/efi/shim/16.1-5/EFI /mnt/boot/efi/
+$ mount --rbind /dev /mnt/dev
+$ mount --make-rslave /mnt/dev
+$ mount -t proc proc /mnt/proc
+$ mount --rbind /sys /mnt/sys
+$ mount --make-rslave /mnt/sys
+$ mount --bind /run /mnt/run
+$ chroot /mnt dnf remove -y --no-autoremove arctic-live livesys-scripts arctic-installer dracut-live dracut-kiwi-live
+rm -f /mnt/etc/sddm.conf.d/90-arctic-live.conf
+rm -f /mnt/etc/sysconfig/livesys
+
+# == configure: Setting up Arctic Linux…
+rm -f /mnt/etc/machine-id
+$ systemd-machine-id-setup --root=/mnt
+$ systemd-firstboot --root=/mnt --force --locale=en_US.UTF-8 --timezone=UTC --hostname=arctic-user-thinkpad
+write /mnt/etc/vconsole.conf (0644)
+    | KEYMAP=us
+    | XKBLAYOUT=us
+    | XKBVARIANT=
+write /mnt/etc/arctic/mango/keyboard.conf (0644)
+    | # Written by the Arctic Linux installer: the keyboard layout you picked.
+    | xkb_rules_layout=us
+    | xkb_rules_variant=
+write /mnt/etc/arctic/sddm-keyboard.conf (0644)
+    | # Written by the Arctic Linux installer: the keyboard layout you picked.
+    | xkb_rules_layout=us
+    | xkb_rules_variant=
+write /mnt/etc/fstab (0644)
+    | # /etc/fstab — written by the Arctic Linux installer.
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /          btrfs subvol=@,compress=zstd:1,x-systemd.device-timeout=0 0 0
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /home      btrfs subvol=@home,compress=zstd:1 0 0
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /var/log   btrfs subvol=@var_log,compress=zstd:1 0 0
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /nix       btrfs subvol=@nix,compress=zstd:1 0 0
+    | UUID=c5e9ebb8-0000-4000-8000-42d19badf238 /boot      ext4 defaults 1 2
+    | UUID=c6e9ed4b-0000-4000-8000-7b445e0283db /boot/efi  vfat umask=0077,shortname=winnt 0 2
+write /mnt/etc/crypttab (0600)
+    | luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad UUID=cce9f6bd-0000-4000-8000-cdf4ebfdedad none discard
+$ systemctl --root=/mnt enable sddm.service
+$ systemctl --root=/mnt enable NetworkManager.service
+$ systemctl --root=/mnt enable nix-daemon.service
+$ systemctl --root=/mnt enable chronyd.service
+$ systemctl --root=/mnt set-default graphical.target
+$ rsync -a /etc/NetworkManager/system-connections/ /mnt/etc/NetworkManager/system-connections/
+
+# == bootloader: Getting your computer ready to start Arctic Linux…
+write /mnt/etc/default/grub (0644)
+    | # Written by the Arctic Linux installer.
+    | GRUB_TIMEOUT=5
+    | GRUB_DISTRIBUTOR="Arctic Linux"
+    | GRUB_DEFAULT=saved
+    | GRUB_DISABLE_SUBMENU=true
+    | GRUB_TERMINAL_OUTPUT="gfxterm"
+    | GRUB_CMDLINE_LINUX="rootflags=subvol=@ rd.luks.uuid=luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad rhgb quiet"
+    | GRUB_DISABLE_RECOVERY="true"
+    | GRUB_ENABLE_BLSCFG=true
+    | GRUB_THEME="/boot/grub2/themes/arctic/theme.txt"
+write /mnt/etc/kernel/cmdline (0644)
+    | root=UUID=acc15146-0000-4000-8000-bfd07b1d4766 ro rootflags=subvol=@ rd.luks.uuid=luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad rhgb quiet
+$ chroot /mnt kernel-install add 6.17.8-300.fc44.x86_64 /lib/modules/6.17.8-300.fc44.x86_64/vmlinuz
+mkdir -p /mnt/boot/grub2
+$ chroot /mnt grub2-mkconfig -o /boot/grub2/grub.cfg
+write /mnt/boot/efi/EFI/fedora/grub.cfg (0600)
+    | search --no-floppy --fs-uuid --set=dev c5e9ebb8-0000-4000-8000-42d19badf238
+    | set prefix=($dev)/grub2
+    | export $prefix
+    | configfile $prefix/grub.cfg
+$ efibootmgr --create --disk /dev/nvme0n1 --part 2 --label 'Arctic Linux' --loader '\EFI\fedora\shimx64.efi'
+
+# == apps: Installing your apps…
+$ chroot /mnt dnf copr enable -y lihaohong/yazi
+$ chroot /mnt rpm --import /usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KEY-rpmfusion-free-fedora-44
+$ chroot /mnt dnf install -y https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm
+$ chroot /mnt rpm --import /usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KEY-rpmfusion-nonfree-fedora-44
+$ chroot /mnt dnf install -y https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-44.noarch.rpm
+$ chroot /mnt dnf swap -y --allowerasing ffmpeg-free ffmpeg
+$ chroot /mnt dnf install -y yazi openh264 mozilla-openh264 gstreamer1-plugin-openh264 glibc-langpack-en kitty kitty-shell-integration zsh Thunar vlc vlc-plugins-freeworld
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub app.zen_browser.zen
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub dev.zed.Zed
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub com.collaboraoffice.Office
+write /mnt/var/lib/flatpak/.fedora-initialized (0644, empty)
+
+# == finalize: Setting up your account…
+$ useradd --root /mnt --create-home --user-group --groups wheel --shell /bin/zsh --comment 'Arctic User' --password [secret: password hash] arctic-user
+$ usermod --root /mnt --lock root
+write /mnt/etc/arctic/default-apps (0644)
+    | # Written by the Arctic Linux installer: the apps you picked, as role=command.
+    | # arctic-open reads this; override any line in ~/.config/arctic/default-apps.
+    | terminal=kitty
+    | browser=gtk-launch app.zen_browser.zen
+    | editor=gtk-launch dev.zed.Zed
+    | files=thunar
+    | files-tui=kitty -e yazi
+write /mnt/etc/xdg/mimeapps.list (0644)
+    | # Written by the Arctic Linux installer from the apps you picked.
+    | [Default Applications]
+    | x-scheme-handler/http=app.zen_browser.zen.desktop
+    | x-scheme-handler/https=app.zen_browser.zen.desktop
+    | text/html=app.zen_browser.zen.desktop
+    | application/xhtml+xml=app.zen_browser.zen.desktop
+    | text/plain=dev.zed.Zed.desktop
+    | text/markdown=dev.zed.Zed.desktop
+    | text/x-python=dev.zed.Zed.desktop
+    | text/x-csrc=dev.zed.Zed.desktop
+    | text/x-shellscript=dev.zed.Zed.desktop
+    | application/json=dev.zed.Zed.desktop
+    | application/toml=dev.zed.Zed.desktop
+    | inode/directory=thunar.desktop
+    | application/vnd.oasis.opendocument.text=com.collaboraoffice.Office.desktop
+    | application/vnd.oasis.opendocument.spreadsheet=com.collaboraoffice.Office.desktop
+    | application/vnd.oasis.opendocument.presentation=com.collaboraoffice.Office.desktop
+    | application/msword=com.collaboraoffice.Office.desktop
+    | application/vnd.openxmlformats-officedocument.wordprocessingml.document=com.collaboraoffice.Office.desktop
+    | application/vnd.ms-excel=com.collaboraoffice.Office.desktop
+    | application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=com.collaboraoffice.Office.desktop
+    | application/vnd.ms-powerpoint=com.collaboraoffice.Office.desktop
+    | application/vnd.openxmlformats-officedocument.presentationml.presentation=com.collaboraoffice.Office.desktop
+    | video/mp4=vlc.desktop
+    | video/x-matroska=vlc.desktop
+    | video/webm=vlc.desktop
+    | video/quicktime=vlc.desktop
+    | video/x-msvideo=vlc.desktop
+    | audio/mpeg=vlc.desktop
+    | audio/flac=vlc.desktop
+    | audio/ogg=vlc.desktop
+mkdir -p /mnt/var/log/arctic-install
+$ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install
+$ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt
+$ umount --recursive /mnt
+$ cryptsetup close luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad

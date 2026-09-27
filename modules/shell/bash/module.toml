@@ -1,0 +1,21 @@
+# Always installed (BUILD-SPEC §4.1): picking it only makes it the login shell. Never removed.
+id = "bash"
+name = "bash"
+summary = "The standard Linux shell."
+category = "shell"
+default = false
+tile = "bash"
+icon = "prompt"
+always = true
+in_live_image = true
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ["bash"]
+download_mb = 2
+
+[defaults]
+shell = "/bin/bash"

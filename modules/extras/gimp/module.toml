@@ -1,0 +1,20 @@
+id = "gimp"
+name = "GIMP"
+summary = "Photo editing and painting."
+category = "extras"
+role = "photo editor"
+default = false
+tile = "gimp"
+icon = "brush"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gimp.GIMP"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 100
