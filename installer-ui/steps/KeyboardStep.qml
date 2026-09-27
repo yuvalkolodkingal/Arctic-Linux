@@ -1,6 +1,7 @@
 // Step 2 — Keyboard layout (INSTALL_STEPS[1]). The layout is saved as soon as it
-// is picked so the engine can apply it to the live session and "Try it" types
-// with it.
+// is picked, and Wizard applies what the engine stored to the live session
+// (live/live-keyboard), so "Try it", the disk passphrase and the password are
+// typed with the layout the installed system uses.
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -17,6 +18,16 @@ StepPage {
     helpText: "Pick the layout printed on your keys. Then type in the Try it box to check that the letters on screen match the keys you press."
 
     readonly property var layouts: (Wizard.step.options && Wizard.step.options.layouts) || []
+    // Can't type Latin letters: English (US) comes first and Alt+Shift switches (the
+    // engine says so for the saved choice; the list covers the moment before saving).
+    readonly property bool nonLatin: {
+        const l = selectedLayout();
+        if (l === null)
+            return false;
+        if (Wizard.keyboardXkb && l.layout === Wizard.keyboardLayout && (l.variant || "") === Wizard.keyboardVariant)
+            return Wizard.keyboardNonLatin;
+        return Wizard.nonLatinLayouts.indexOf(l.layout) >= 0;
+    }
     property string selectedKey: {
         const d = Wizard.step.data || {};
         return d.layout ? d.layout + ":" + (d.variant || "") : "";
@@ -56,8 +67,10 @@ StepPage {
         list.forceActiveFocus();
     }
     function fillForm(v) {
-        if (v.layout !== undefined)
+        if (v.layout !== undefined) {
             selectedKey = v.layout + ":" + (v.variant || "");
+            applyTimer.restart();
+        }
         if (v["try"] !== undefined) {
             tryIt.text = v["try"];
             tryIt.forceActiveFocus();
@@ -65,7 +78,8 @@ StepPage {
         return "ok";
     }
 
-    // Apply the picked layout live (engine → compositor) shortly after picking.
+    // Save the picked layout shortly after picking; Wizard.saveStep then applies it
+    // to the live session.
     Timer {
         id: applyTimer
         interval: 250
@@ -110,7 +124,7 @@ StepPage {
             id: tryIt
             width: parent.width
             label: "Try it"
-            help: "Type a few letters to check the layout matches your keys."
+            help: page.nonLatin ? "English (US) is added too, so you can type passwords. Alt + Shift switches between them." : "Type a few letters to check the layout matches your keys."
         }
     }
 }

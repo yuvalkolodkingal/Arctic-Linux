@@ -46,6 +46,8 @@ ShellRoot {
                 return "no page";
             if (!frame.nextEnabled)
                 return "next disabled";
+            if (!frame.armed || Wizard.busy || Wizard.committing)
+                return "not ready";     // wait for state().ready
             frame.goNext();
             return "ok";
         }
@@ -57,6 +59,20 @@ ShellRoot {
         function goto(id: string): string {
             Wizard.gotoStep(id);
             return "ok";
+        }
+        // After a failed install: "Change something" (back to the Summary).
+        function change(): string {
+            if (!Wizard.failure)
+                return "nothing failed";
+            Wizard.leaveFailure();
+            return "ok";
+        }
+        // Esc: "quit" (no answers yet), "asking" (the confirmation opened) or "not now".
+        function quit(): string {
+            const direct = frame.pageKey === "" || frame.pageKey === "done" || (Wizard.view === "step" && Wizard.railIndex === 0);
+            if (!frame.requestQuit())
+                return "not now";
+            return direct ? "quit" : "asking";
         }
         // Fill the current page's form: a JSON object, see each step's fillForm().
         function fill(json: string): string {
@@ -77,11 +93,15 @@ ShellRoot {
                 current: Wizard.current,
                 view: Wizard.view,
                 valid: frame.page ? frame.page.valid : false,
-                busy: Wizard.busy,
+                busy: Wizard.busy || Wizard.committing,
+                ready: frame.armed && !Wizard.busy && !Wizard.committing,
+                can_quit: frame.canQuit,
                 connected: Engine.connected,
                 failure: Engine.failure,
                 error: Wizard.stepError,
+                error_step: Wizard.errorStep,
                 fields: Wizard.fieldErrors,
+                keyboard: Wizard.keyboardLayout + (Wizard.keyboardVariant ? ":" + Wizard.keyboardVariant : ""),
                 percent: Wizard.percent,
                 status: Wizard.status,
                 apps: Wizard.appsDone + "/" + Wizard.appsTotal

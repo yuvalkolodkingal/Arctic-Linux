@@ -1,6 +1,8 @@
 // Step 9 — Ready to install (INSTALL_STEPS[8]). Rows from GetSummary with
 // "Change" links back to each step, the erase warning, and the one primary
-// action: "Erase disk and install" / "Install alongside {OS}".
+// action: "Erase disk and install" / "Install alongside {OS}". Only a click (or
+// Enter/Space on the focused button) starts it, and only after a short wait: Enter
+// elsewhere on the page, a key held down or a double click from Apps do nothing.
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -14,6 +16,9 @@ StepPage {
     measure: 620
     nextLabel: primaryLabel
     valid: rows.length > 0
+    armDelay: 1000
+    armVisible: true
+    enterActivates: false
     helpText: "Check each line. Use Change to go back to a step; your other answers are kept. Installing starts only when you press the button at the bottom right."
 
     property var rows: []
@@ -54,7 +59,10 @@ StepPage {
     function primary() {
         Wizard.startInstall();
     }
+    // Take keyboard focus off the footer button (it keeps it after a click on Apps' Next,
+    // where Enter would then press "Erase disk and install").
     function focusFirst() {
+        page.forceActiveFocus();
     }
 
     Component.onCompleted: load()
@@ -89,6 +97,17 @@ StepPage {
                     onClicked: Wizard.gotoStep(srow.modelData.step)
                 }
             }
+        }
+
+        // An answer the engine rejected when installing was asked for (for example a
+        // passphrase too weak): where to change it. The footer has the message.
+        ArBanner {
+            visible: Wizard.errorStep !== ""
+            width: parent.width
+            kind: "error"
+            title: "The " + Wizard.railName(Wizard.errorStep) + " step needs a change"
+            actionText: "Go to " + Wizard.railName(Wizard.errorStep)
+            onAction: Wizard.gotoStep(Wizard.errorStep)
         }
 
         ArBanner {

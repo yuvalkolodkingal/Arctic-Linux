@@ -2,7 +2,8 @@
 // 232px rail (wordmark, steps, language, Help F1) | main: header (overline,
 // title, lede — or the aurora hero on Welcome/Done), the step's one decision,
 // footer with the reassurance note and Back/Next (44px).
-// Keys: Enter = Next when valid, Alt+← = Back, F1 = help, Tab/Shift+Tab.
+// Keys: Enter = Next when valid (not on Summary), Alt+← = Back, F1 = help,
+// Esc = quit (asks first once there are answers), Tab/Shift+Tab.
 pragma ComponentBehavior: Bound
 import QtQuick
 import "components"
@@ -17,21 +18,48 @@ FocusScope {
     readonly property string pageKey: Engine.connected && !Wizard.loading ? (Wizard.view === "step" ? Wizard.current : Wizard.view) : ""
     readonly property bool hero: page !== null && page.hero !== ""
     readonly property bool nextEnabled: page !== null && page.showNext && page.valid
+    // The page has been on screen for its armDelay (see StepPage): until then the primary
+    // action ignores clicks and Enter, so a double click or a held key on the previous page
+    // can't press it (Summary's is "Erase disk and install").
+    property bool armed: false
     property string loadedKey: ""
+    // Leaving is possible except while the install runs (installing, or an app waiting).
+    readonly property bool canQuit: !(Engine.connected && !Wizard.loading && (Wizard.view === "attention" || (Wizard.view === "step" && Wizard.current === "install")))
 
     function goNext() {
-        if (!page || !page.showNext || !page.valid || Wizard.busy)
+        if (!page || !page.showNext || !page.valid || !armed || Wizard.busy || Wizard.committing)
             return;
         page.primary();
     }
     function goBack() {
-        if (!page || !page.showBack || Wizard.railIndex === 0 || Wizard.busy)
+        if (!page || !page.showBack || Wizard.railIndex === 0 || Wizard.busy || Wizard.committing)
             return;
         Wizard.back();
     }
     function openHelp() {
         help.open();
     }
+    // Esc / Quit: straight out when there is nothing to lose (engine not there, first
+    // step, installed), else ask first.
+    function requestQuit() {
+        if (!canQuit || quitDialog.opened)
+            return false;
+        if (pageKey === "" || pageKey === "done" || (Wizard.view === "step" && Wizard.railIndex === 0)) {
+            Qt.quit();
+            return true;
+        }
+        quitDialog.open();
+        return true;
+    }
+    function keyActivate(event) {
+        event.accepted = true;
+        // A held key repeats: only a fresh press counts.
+        if (event.isAutoRepeat || !page || !page.enterActivates)
+            return;
+        goNext();
+    }
+
+    onCanQuitChanged: if (!canQuit) quitDialog.close()
 
     function componentFor(key) {
         switch (key) {
@@ -72,8 +100,11 @@ FocusScope {
             return;
         }
         loadedKey = pageKey;
+        armed = false;
         stepLoader.sourceComponent = comp;
         if (comp) {
+            armTimer.interval = frame.page ? frame.page.armDelay : 400;
+            armTimer.restart();
             enter.restart();
             Qt.callLater(() => {
                 if (frame.page)
@@ -82,8 +113,17 @@ FocusScope {
         }
     }
 
-    Keys.onReturnPressed: frame.goNext()
-    Keys.onEnterPressed: frame.goNext()
+    Timer {
+        id: armTimer
+        interval: 400
+        onTriggered: frame.armed = true
+    }
+
+    Keys.onReturnPressed: event => frame.keyActivate(event)
+    Keys.onEnterPressed: event => frame.keyActivate(event)
+    Keys.onEscapePressed: event => {
+        event.accepted = frame.requestQuit();
+    }
     Shortcut {
         sequences: ["Alt+Left"]
         onActivated: frame.goBack()
@@ -186,6 +226,36 @@ FocusScope {
                 }
                 TapHandler {
                     onTapped: frame.openHelp()
+                }
+                HoverHandler {
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+            Row {
+                visible: frame.canQuit && frame.pageKey !== "done"
+                spacing: 6
+                Accessible.role: Accessible.Button
+                Accessible.name: "Quit the installer (Esc)"
+                Icon {
+                    name: "log-out"
+                    size: 16
+                    color: Theme.inkMuted
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                ArText {
+                    text: "Quit"
+                    size: 12
+                    lh: 16
+                    weight: Font.Medium
+                    color: Theme.inkMuted
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                ArKbd {
+                    text: "Esc"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                TapHandler {
+                    onTapped: frame.requestQuit()
                 }
                 HoverHandler {
                     cursorShape: Qt.PointingHandCursor
@@ -373,14 +443,23 @@ FocusScope {
                 font.family: Theme.fontMono
                 font.pixelSize: 12
             }
-            ArButton {
+            Row {
                 visible: frame.engineDown
                 anchors.horizontalCenter: parent.horizontalCenter
-                variant: "primary"
-                size: "lg"
-                iconName: "refresh"
-                text: "Try again"
-                onClicked: Engine.restart()
+                spacing: Theme.space3
+                ArButton {
+                    variant: "secondary"
+                    size: "lg"
+                    text: "Quit"
+                    onClicked: Qt.quit()
+                }
+                ArButton {
+                    variant: "primary"
+                    size: "lg"
+                    iconName: "refresh"
+                    text: "Try again"
+                    onClicked: Engine.restart()
+                }
             }
         }
 
@@ -461,9 +540,13 @@ FocusScope {
                     text: frame.page ? frame.page.nextLabel : ""
                     iconName: frame.page ? frame.page.nextIcon : ""
                     iconRight: frame.page && frame.page.nextLabel === "Next" ? "chevron-right" : ""
-                    enabled: frame.nextEnabled
-                    Accessible.description: "Enter"
+                    // Summary shows the short wait before "Erase disk and install" works.
+                    enabled: frame.nextEnabled && (frame.armed || !frame.page.armVisible)
+                    Accessible.description: frame.page && frame.page.enterActivates ? "Enter" : ""
                     onClicked: frame.goNext()
+                    // Connecting doubleClicked makes the button swallow a double click's
+                    // second click instead of pressing again.
+                    onDoubleClicked: {}
                 }
             }
         }
@@ -478,7 +561,7 @@ FocusScope {
         tone: "info"
 
         Repeater {
-            model: [["Enter", "Next, when everything is filled in"], ["Alt + ←", "Back to the previous step"], ["Tab", "Move between controls"], ["F1", "This help"], ["Esc", "Close this help"]]
+            model: [["Enter", "Next, when everything is filled in"], ["Alt + ←", "Back to the previous step"], ["Tab", "Move between controls"], ["F1", "This help"], ["Esc", "Close this help, or quit the installer"]]
             Row {
                 id: shortcut
                 required property var modelData
@@ -503,6 +586,33 @@ FocusScope {
                 text: "Close"
                 gapColor: Theme.surfaceRaised
                 onClicked: help.close()
+            }
+        ]
+    }
+
+    // ---------------------------------------------------------------- quit (Esc)
+    ArDialog {
+        id: quitDialog
+        readonly property bool failed: Wizard.view === "failed"
+        title: "Quit the installer?"
+        body: failed ? "The install didn’t finish, so this computer may not start from its disk until you install again. You can open the installer again from the desktop." : "Nothing has been changed on this computer. Your answers are kept: open the installer again from the desktop to carry on."
+        iconName: "log-out"
+        tone: failed ? "warning" : "info"
+        onOpened: stayButton.forceActiveFocus()
+
+        buttons: [
+            ArButton {
+                id: stayButton
+                variant: "secondary"
+                text: quitDialog.failed ? "Stay" : "Keep installing"
+                gapColor: Theme.surfaceRaised
+                onClicked: quitDialog.close()
+            },
+            ArButton {
+                variant: "primary"
+                text: "Quit"
+                gapColor: Theme.surfaceRaised
+                onClicked: Qt.quit()
             }
         ]
     }

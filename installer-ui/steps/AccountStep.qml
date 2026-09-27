@@ -1,6 +1,8 @@
 // Step 7 — Create your account (INSTALL_STEPS[6]). Your name → username
 // (auto-filled, lowercase, editable) → password + confirm → computer name
 // ({username}-{model}, suggested by the engine). Passwords go to SetSecrets only.
+// Coming back (Summary "Change"), the engine still has the password
+// (options.password_set): empty password fields keep it.
 import QtQuick
 import ".."
 import "../components"
@@ -12,7 +14,7 @@ StepPage {
     lede: ""
     measure: 560
     note: showFixNote ? "Fix the highlighted field to continue." : ""
-    valid: fullName.text.trim() !== "" && username.text !== "" && hostname.text !== "" && password.text !== "" && password.text === confirm.text && strength.score >= 1 && localUsernameError === "" && Object.keys(Wizard.fieldErrors).length === 0
+    valid: fullName.text.trim() !== "" && username.text !== "" && hostname.text !== "" && passwordOk && localUsernameError === "" && Object.keys(Wizard.fieldErrors).length === 0
     helpText: "This is the account you log in with. Your username is filled in from your name; you can change it. The computer name is how other devices on your network see this computer."
 
     readonly property var d: Wizard.step.data || {}
@@ -30,6 +32,16 @@ StepPage {
     readonly property string localUsernameError: username.text !== "" && !/^[a-z_][a-z0-9_-]*$/.test(username.text) ? "Use lowercase letters, numbers, - and _." : ""
     readonly property bool mismatch: confirm.text !== "" && confirm.text !== password.text
     readonly property bool showFixNote: mismatch || localUsernameError !== "" || Object.keys(Wizard.fieldErrors).length > 0
+    readonly property bool saved: !!opts.password_set
+    readonly property bool keep: saved && password.text === "" && confirm.text === ""
+    readonly property bool encryption: opts.encryption !== undefined ? !!opts.encryption : Wizard.encryptionEnabled
+    // "Use this password for the disk passphrase too": then it has to pass as a
+    // passphrase (Fair or better), and it has to be typed (a kept one isn't known here).
+    readonly property bool diskToo: sameAsDisk && encryption
+    readonly property bool diskTooWeak: diskToo && password.text !== "" && !strength.ok
+    // As a disk passphrase it is typed at start-up with English (US) (see EncryptionStep).
+    readonly property string latinError: diskToo && Wizard.keyboardNonLatin && /[^\x20-\x7e]/.test(password.text) ? "For the disk too, use English (US) letters, numbers and symbols." : ""
+    readonly property bool passwordOk: keep ? !diskToo : (password.text !== "" && password.text === confirm.text && strength.score >= 1 && (!diskToo || strength.ok === true) && latinError === "")
 
     function suggest() {
         const name = fullName.text.trim();
@@ -65,10 +77,20 @@ StepPage {
         });
     }
     function commit(done) {
+        const save = () => Wizard.saveStep("account", {
+                full_name: fullName.text.trim(),
+                username: username.text,
+                hostname: hostname.text,
+                autologin: autologin
+            }, done);
+        if (keep) {
+            save();
+            return;
+        }
         const secrets = {
             user_password: password.text
         };
-        if (sameAsDisk && Wizard.encryptionEnabled)
+        if (diskToo)
             secrets.luks_passphrase = password.text;
         Engine.call("SetSecrets", secrets, (res, err) => {
             if (err) {
@@ -76,12 +98,7 @@ StepPage {
                 done(false);
                 return;
             }
-            Wizard.saveStep("account", {
-                full_name: fullName.text.trim(),
-                username: username.text,
-                hostname: hostname.text,
-                autologin: autologin
-            }, done);
+            save();
         });
     }
     function focusFirst() {
@@ -174,8 +191,14 @@ StepPage {
             password: true
             meterLevel: text === "" ? 0 : page.strength.score
             meterLabel: page.strength.label
-            help: text === "" ? "" : page.strength.label
-            error: Wizard.fieldErrors.password || ""
+            help: {
+                if (text === "")
+                    return page.keep && page.diskToo ? "Type it again to use it for the disk too." : page.saved ? "Your password is saved. Leave this empty to keep it." : "";
+                if (page.diskTooWeak)
+                    return "To use it for the disk too, it needs to be Fair or better. Add another word or two.";
+                return page.strength.label;
+            }
+            error: Wizard.fieldErrors.password || page.latinError
             onEdited: {
                 Wizard.clearFieldError("password");
                 checkTimer.restart();
@@ -214,7 +237,7 @@ StepPage {
             }
         }
         ArToggle {
-            visible: Wizard.encryptionEnabled
+            visible: page.encryption
             text: "Use this password for the disk passphrase too"
             checked: page.sameAsDisk
             onToggled: page.sameAsDisk = checked

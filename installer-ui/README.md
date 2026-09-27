@@ -9,7 +9,9 @@ draws them, following the design system (rail, header, one decision, footer).
 shell.qml        ShellRoot: one full-screen layer-shell PanelWindow (layer Top,
                  exclusive keyboard, namespace "arctic-installer") + IpcHandler "installer"
 Frame.qml        232px rail | header (overline/title/lede or aurora hero) | page | footer;
-                 Enter = Next, Alt+Left = Back, F1 = help, step-change animation
+                 Enter = Next (not on Summary: only its button installs), Alt+Left = Back,
+                 F1 = help, Esc = quit (asks first mid-way; not while installing),
+                 step-change animation
 Theme.qml        tokens from design/exports/Theme.qml (+ type, shadows, motion), fonts
 Engine.qml       bridge process, JSON-lines, request ids → callbacks, events
 Wizard.qml       wizard state, navigation, install progress from events
@@ -44,6 +46,7 @@ ARCTIC_INSTALLER_BRIDGE="arctic-install bridge --mock" installer-ui/dev/run.sh  
 | `ARCTIC_INSTALLER_SOCKET` | pass `--socket PATH` to the bridge |
 | `ARCTIC_INSTALLER_THEME=light` | Winter theme (default Polar night) |
 | `ARCTIC_REDUCE_MOTION=1` | no slides; step change is a 120 ms fade |
+| `ARCTIC_LIVE_KEYBOARD` | command run instead of `/usr/libexec/arctic/live-keyboard` to apply the keyboard choice to the session (tests; the real helper only runs with a live, non-mock engine) |
 | `ARCTIC_MOCK_*` | mock engine knobs, see the header of `dev/mock-bridge.py` |
 
 Fonts: `FontLoader` reads `/usr/share/fonts/arctic/*.woff2` (arctic-fonts), falling
@@ -53,9 +56,16 @@ back to `../design/fonts/` in a checkout. The design's Figtree files are named
 ## Automation / tests
 
 `quickshell ipc --pid <pid> call installer <fn> [args]`:
-`next`, `back`, `goto <id>`, `fill '<json>'` (per-step form values, see each step's
-`fillForm`), `state` (JSON), `retry`, `skip`, `savelog`, `help`, `focused`,
-`tab <bool>`, `theme light|dark`.
+`next` (`not ready` until the page's short arm delay has passed: wait for
+`state().ready`), `back`, `goto <id>`, `fill '<json>'` (per-step form values, see each
+step's `fillForm`), `state` (JSON), `retry`, `skip`, `change` (after a failed install:
+back to the Summary), `quit` (Esc), `savelog`, `help`, `focused`, `tab <bool>`,
+`theme light|dark`.
+
+The keyboard layout picked on step 2 is applied to the live session as soon as the
+engine has it (`live/live-keyboard`, package arctic-live: a Mango include plus
+`mmsg dispatch reload_config`), so the passphrase and password are typed with the
+layout the installed system checks them with.
 
 ```sh
 python3 -m unittest installer-ui/dev/test_mock_bridge.py   # protocol tests (no GUI)

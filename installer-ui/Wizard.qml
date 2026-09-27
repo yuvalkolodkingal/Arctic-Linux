@@ -4,6 +4,7 @@
 pragma Singleton
 import QtQuick
 import Quickshell
+import Quickshell.Io
 
 Singleton {
     id: wiz
@@ -17,10 +18,21 @@ Singleton {
     property var step: ({})             // GetStep result for `current`
     property bool loading: true         // waiting for the first GetStep
     property bool busy: false           // a navigation request is in flight
+    property bool committing: false     // a page is saving its answers before Next
     property var fieldErrors: ({})      // field -> message from the last SetStep/Next
     property string stepError: ""       // general error for the current step
+    property string errorStep: ""       // step that owns fieldErrors when it isn't the current one (Summary)
     property string languageName: "English (US)"
     property string layoutName: "English (US)"
+    property string keyboardLayout: "us"
+    property string keyboardVariant: ""
+    // What the engine makes of the choice (keyboard data.xkb: layout, variant, options,
+    // latin), when it says: the same goes to the installed system and the live session.
+    property var keyboardXkb: null
+    // xkb layouts that can't type Latin letters (English (US) is added first, Alt+Shift
+    // switches), for engines that don't send xkb. Same list as live/live-keyboard.
+    readonly property var nonLatinLayouts: ["af", "am", "ara", "bd", "bg", "bt", "by", "et", "ge", "gr", "il", "in", "iq", "ir", "kg", "kh", "kz", "la", "lk", "mk", "mm", "mn", "mv", "np", "pk", "rs", "ru", "sy", "th", "tj", "ua"]
+    readonly property bool keyboardNonLatin: keyboardXkb ? keyboardXkb.latin === false : nonLatinLayouts.indexOf(keyboardLayout) >= 0
     property bool encryptionEnabled: true
     property string selectedDiskLabel: ""
     property string alongsideOs: ""
@@ -37,6 +49,7 @@ Singleton {
     property var failure: null          // failed event (core failure)
     property var doneInfo: null         // done event
     property string lastLogPath: ""
+    property string lastLogMessage: ""  // SaveLog's own sentence, when the engine sends one
 
     // "step" normally; "attention" / "failed" replace the Install page (step 11).
     readonly property string view: failure ? "failed" : (attention ? "attention" : "step")
@@ -76,7 +89,6 @@ Singleton {
 
     signal stepLoaded(string id)
     signal navigated(string from, string to)
-    signal notify(string message)
 
     function railName(id) {
         const i = railIds.indexOf(id);
@@ -90,20 +102,35 @@ Singleton {
     }
 
     // ---- lifecycle
+    // On every (re)connection. The engine replays the install state (progress, modules,
+    // attention, failed, done) right after Subscribe answers, so everything shown from
+    // events is dropped here: a failure the bridge reported before the engine answered, or
+    // one from an earlier connection, must not outlive it.
     function reset() {
         steps = [];
         current = "";
         step = {};
         loading = true;
         busy = false;
+        committing = false;
         fieldErrors = {};
         stepError = "";
+        errorStep = "";
+        resetProgress();
+        lastLogPath = "";
+        lastLogMessage = "";
     }
 
     function refresh() {
         Engine.call("GetWizard", null, (res, err) => {
             if (err) {
                 stepError = err.message || "";
+                return;
+            }
+            // Summary's Next went through but Start never came (the installer was closed
+            // in between): back to Summary, where the install is started.
+            if (res && res.current === "install" && Engine.hello.state === "wizard") {
+                Engine.call("Back", null, (r, e) => applyWizard(e ? res : r));
                 return;
             }
             applyWizard(res);
@@ -139,9 +166,16 @@ Singleton {
             const from = current;
             fieldErrors = {};
             stepError = "";
+            errorStep = "";
             step = res;
             current = id;
             loading = false;
+            // Back in the wizard (Back / Change after a failed install): the failed run is
+            // over. `current` is set first so the install page doesn't flash.
+            if ((failure !== null || attention !== null) && railIds.indexOf(id) >= 0 && railIds.indexOf(id) < railIds.indexOf("install"))
+                resetProgress();
+            if (id === "keyboard" && res.data)
+                rememberStep("keyboard", res.data);
             stepLoaded(id);
             navigated(from, id);
         });
@@ -171,14 +205,107 @@ Singleton {
             return;
         if (id === "encryption" && data.enabled !== undefined)
             encryptionEnabled = !!data.enabled;
+        if (id === "keyboard" && data.layout)
+            setKeyboard(data);
+        // A new language can change the suggested layout (when none was picked yet).
+        if (id === "welcome")
+            syncKeyboard();
+    }
+
+    // The engine's keyboard choice, applied to the live session.
+    function syncKeyboard() {
+        Engine.call("GetStep", {
+            id: "keyboard"
+        }, (res, err) => {
+            if (!err && res && res.data && res.data.layout)
+                setKeyboard(res.data);
+        });
+    }
+    function setKeyboard(data) {
+        keyboardLayout = data.layout;
+        keyboardVariant = data.variant || "";
+        keyboardXkb = (data.xkb && data.xkb.layout) ? data.xkb : null;
+        applyLiveKeyboard();
+    }
+
+    // ---- the live session's keyboard (docs/PLAN.md step 2): the layout picked here is
+    // what the disk passphrase and the password are checked with after installing, so the
+    // live session types with it too (live/live-keyboard: Mango config include + reload).
+    // Only on a real live system; ARCTIC_LIVE_KEYBOARD=<command> overrides it (tests).
+    readonly property string liveKeyboardOverride: Quickshell.env("ARCTIC_LIVE_KEYBOARD") || ""
+    readonly property bool liveKeyboardEnabled: liveKeyboardOverride !== "" || (!!Engine.hello.live && !Engine.hello.mock)
+    property string liveKeyboardApplied: ""
+    property bool liveKeyboardPending: false
+
+    // live-keyboard --xkb LAYOUT VARIANT OPTIONS (the engine's xkb), or LAYOUT VARIANT.
+    function applyLiveKeyboard() {
+        if (!liveKeyboardEnabled || keyboardLayout === "")
+            return;
+        if (liveKeyboardProc.running) {
+            liveKeyboardPending = true;     // runs again with the latest choice when done
+            return;
+        }
+        const x = keyboardXkb;
+        const args = x ? ["--xkb", x.layout, x.variant || "", x.options || ""] : [keyboardLayout, keyboardVariant];
+        const key = args.join("|");
+        if (key === liveKeyboardApplied)
+            return;
+        liveKeyboardApplied = key;
+        const helper = liveKeyboardOverride !== "" ? ["sh", "-c", liveKeyboardOverride + " \"$@\"", "live-keyboard"] : ["/usr/libexec/arctic/live-keyboard"];
+        liveKeyboardProc.command = helper.concat(args);
+        liveKeyboardProc.running = true;
+    }
+
+    Process {
+        id: liveKeyboardProc
+        stderr: SplitParser {
+            onRead: data => console.warn("installer: live-keyboard:", data)
+        }
+        onExited: exitCode => {
+            if (exitCode !== 0)
+                wiz.liveKeyboardApplied = "";   // try again with the next change
+            if (wiz.liveKeyboardPending) {
+                wiz.liveKeyboardPending = false;
+                wiz.applyLiveKeyboard();
+            }
+        }
+    }
+
+    // Which step owns a field the engine complained about (for errors on Summary).
+    readonly property var fieldSteps: ({
+            language: "welcome",
+            layout: "keyboard",
+            variant: "keyboard",
+            network: "network",
+            timezone: "timezone",
+            disk: "disk",
+            mode: "disk",
+            passphrase: "encryption",
+            full_name: "account",
+            username: "account",
+            hostname: "account",
+            password: "account"
+        })
+    function stepForField(name) {
+        if (fieldSteps[name] !== undefined)
+            return fieldSteps[name];
+        return "apps";                  // category ids (browser, terminal, …)
     }
 
     // Field errors show inline (and the footer says "Fix the highlighted field
-    // to continue."); anything else shows in the footer.
+    // to continue."); anything else shows in the footer. On Summary (no fields of
+    // its own) the first message shows instead, and errorStep says where to fix it.
     function showError(err) {
         const fields = (err && err.fields) ? err.fields : {};
+        const names = Object.keys(fields);
         fieldErrors = fields;
-        stepError = Object.keys(fields).length ? "" : ((err && err.message) ? err.message : "Something went wrong.");
+        errorStep = "";
+        if (names.length && (current === "summary" || current === "install")) {
+            stepError = fields[names[0]];
+            errorStep = stepForField(names[0]);
+            return;
+        }
+        stepError = names.length ? "" : ((err && err.message) ? err.message : "Something went wrong.");
     }
 
     function clearFieldError(name) {
@@ -189,8 +316,9 @@ Singleton {
         fieldErrors = f;
     }
 
-    // Next: the page has already committed its data (see shell.qml goNext).
+    // Next: the page has already committed its data (see Frame.qml goNext).
     function next() {
+        committing = false;
         busy = true;
         Engine.call("Next", null, (res, err) => {
             busy = false;
@@ -204,6 +332,8 @@ Singleton {
 
     function back() {
         if (current === "install" || current === "done" || current === railIds[0])
+            return;
+        if (busy || committing)
             return;
         busy = true;
         Engine.call("Back", null, (res, err) => {
@@ -241,11 +371,16 @@ Singleton {
                 return;
             }
             Engine.call("Start", null, (r, e) => {
-                busy = false;
                 if (e) {
-                    showError(e);
+                    // Nothing started (for example the disk changed): put the engine back
+                    // on Summary, where this page still is, and say why.
+                    Engine.call("Back", null, () => {
+                        busy = false;
+                        showError(e);
+                    });
                     return;
                 }
+                busy = false;
                 applyWizard(res);
                 if ((res && res.current) !== "install")
                     loadStep("install");
@@ -300,16 +435,36 @@ Singleton {
         });
     }
 
-    // Core failure: "Try again" starts the install again.
+    // Core failure: "Try again" starts the install again with the same answers.
+    // Progress is cleared before Start: the new run's first events (even an immediate
+    // failure) can arrive before Start's answer.
     function retryInstall() {
+        const previous = failure;
         busy = true;
+        stepError = "";
+        resetProgress();
         Engine.call("Start", null, (res, err) => {
+            busy = false;
+            if (err) {
+                if (failure === null)
+                    failure = previous;     // still failed: nothing started
+                showError(err);
+            }
+        });
+    }
+
+    // Core failure: "Change something" goes back to the Summary (the engine keeps every
+    // answer and the secrets), where each Change link opens its step.
+    function leaveFailure() {
+        busy = true;
+        stepError = "";
+        Engine.call("Back", null, (res, err) => {
             busy = false;
             if (err) {
                 showError(err);
                 return;
             }
-            failure = null;
+            applyWizard(res);
         });
     }
 
@@ -321,17 +476,19 @@ Singleton {
                 return;
             }
             lastLogPath = res.path || "";
+            lastLogMessage = res.message || "";
             if (done)
                 done(lastLogPath, "");
         });
     }
 
-    function reboot() {
+    // done(errorMessage): "" when the restart was accepted.
+    function reboot(done) {
         busy = true;
         Engine.call("Reboot", null, (res, err) => {
             busy = false;
-            if (err)
-                notify(err.message || "Couldn't restart. Restart from the power menu.");
+            if (done)
+                done(err ? (err.message || "Couldn’t restart.") : "");
         });
     }
 
@@ -370,7 +527,10 @@ Singleton {
             attention = ev;
             break;
         case "failed":
-            failure = ev;
+            // Before Hello is answered this is the bridge saying it has no engine
+            // (Engine.qml shows that); only an install can fail after that.
+            if (Engine.connected)
+                failure = ev;
             break;
         case "done":
             doneInfo = ev;
@@ -392,6 +552,8 @@ Singleton {
         function onReady() {
             wiz.reset();
             wiz.refresh();
+            wiz.liveKeyboardApplied = "";
+            wiz.syncKeyboard();
         }
     }
 }

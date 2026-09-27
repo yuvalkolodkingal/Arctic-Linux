@@ -19,6 +19,7 @@ Singleton {
     property int nextId: 1
     property var pending: ({})          // id -> callback(result, error)
     property string stderrTail: ""
+    property string bridgeMessage: ""   // the bridge's own "no engine" message ({"event":"failed"} before Hello)
 
     // Every event line ({"event": …}) is re-emitted here.
     signal event(var ev)
@@ -67,6 +68,7 @@ Singleton {
         if (proc.running)
             return;
         engine.failure = "";
+        engine.bridgeMessage = "";
         engine.connected = false;
         engine.starting = true;
         engine.pending = {};
@@ -95,6 +97,13 @@ Singleton {
             return;
         }
         if (msg.event !== undefined) {
+            // `arctic-install bridge` prints a failed event when it can't reach arcticd
+            // (and the details on stderr); before Hello is answered that is about the
+            // engine, not an install. Shown when the bridge exits.
+            if (msg.event === "failed" && !engine.connected) {
+                engine.bridgeMessage = msg.message || "";
+                return;
+            }
             engine.event(msg);
             return;
         }
@@ -171,7 +180,7 @@ Singleton {
             helloTimeout.stop();
             engine.connected = false;
             engine.starting = false;
-            engine.failure = "The installer engine stopped (exit code " + exitCode + ").";
+            engine.failure = engine.bridgeMessage || ("The installer engine stopped (exit code " + exitCode + ").");
             engine.failAll(engine.failure);
             console.warn("installer:", engine.failure, engine.stderrTail);
             if (restartTimer.pendingRestart) {

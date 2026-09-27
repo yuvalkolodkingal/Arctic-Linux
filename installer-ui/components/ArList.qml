@@ -78,7 +78,9 @@ FocusScope {
                     list.activated(view.currentIndex);
                 }
             }
-            else if (event.text !== "" && event.text.trim() !== "" && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier))) {
+            // type-ahead: printable text only (Esc, Enter, Tab… carry control characters and
+            // belong to the frame: quit, Next).
+            else if (event.text.trim() !== "" && !/[\x00-\x1f\x7f]/.test(event.text) && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier))) {
                 list.typed(event.text);
             } else {
                 event.accepted = false;

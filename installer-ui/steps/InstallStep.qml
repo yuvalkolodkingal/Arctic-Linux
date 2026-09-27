@@ -48,10 +48,9 @@ StepPage {
         const m = Math.ceil(s / 60);
         return "About " + m + " min left";
     }
+    // The engine's label; the active apps sub-step already reads "Installing your apps · 3 of 9".
     function subLabel(s) {
-        if (s.id === "apps" && s.state === "active" && Wizard.appsTotal > 0)
-            return s.label + " · " + Math.min(Wizard.appsTotal, Wizard.appsDone + 1) + " of " + Wizard.appsTotal;
-        return s.label;
+        return s.label || "";
     }
 
     Column {

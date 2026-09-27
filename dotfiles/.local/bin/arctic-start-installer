@@ -1,14 +1,30 @@
 #!/bin/sh
-# arctic-start-installer — start the installer (Super+I, or Install on the bar). Live session only.
+# arctic-start-installer — start the installer (Super+I, Install on the bar, the launcher, the
+# welcome card, the desktop entry; the live session's install mode). Live session only.
+# At most one installer runs: starting it again while it is open does nothing.
 if ! arctic-is-live; then
   notify-send -a "Arctic Linux" -i dialog-information "Arctic Linux is already installed" \
     "The installer only runs from the live USB." 2>/dev/null
   exit 0
 fi
-pgrep -f org.arcticlinux.Installer >/dev/null 2>&1 && exit 0
-if command -v arctic-installer >/dev/null 2>&1; then
-  exec arctic-installer
+if ! command -v arctic-installer >/dev/null 2>&1; then
+  notify-send -a "Arctic Linux" -i dialog-warning "The installer isn't on this USB" \
+    "This live image was built without the Arctic Linux installer." 2>/dev/null
+  exit 1
 fi
-notify-send -a "Arctic Linux" -i dialog-warning "The installer isn't on this USB" \
-  "This live image was built without the Arctic Linux installer." 2>/dev/null
-exit 1
+
+# An installer started another way (arctic-installer from a terminal) is already open.
+# arctic-installer runs `quickshell [-n] -p /usr/share/arctic/installer-ui`.
+if pgrep -u "$(id -u)" -f 'quickshell.* -p /usr/share/arctic/installer-ui' >/dev/null 2>&1; then
+  exit 0
+fi
+
+# Two clicks in a row both pass the check above before quickshell is running, so the
+# installer also holds a lock for as long as it runs: fd 9 stays open across the exec, and
+# the lock goes away with the process (and its bridge child).
+lock="${XDG_RUNTIME_DIR:-/tmp}/arctic-installer-$(id -u).lock"
+if command -v flock >/dev/null 2>&1 && (: >> "$lock") 2>/dev/null; then
+  exec 9>> "$lock"
+  flock -n 9 || exit 0
+fi
+exec arctic-installer

@@ -1,6 +1,8 @@
 // Step 8 — Choose your apps (INSTALL_STEPS[7], AppChecklist). Categories from
 // the engine catalog; "one" categories behave like radio groups, "any" like
-// checkboxes. The footer note is the engine's EstimateDownload label.
+// checkboxes. A "one" category that isn't required (Office) can be left empty:
+// clicking the ticked app unticks it. The footer note is the engine's
+// EstimateDownload label.
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -34,9 +36,10 @@ StepPage {
         return s;
     }
     property string estimate: ""
+    // First required category with nothing picked (the engine refuses those).
     readonly property string missingOne: {
         for (const c of categories)
-            if (isOne(c) && c.id === "browser" && !((selection[c.id] || []).length))
+            if (c.required && !((selection[c.id] || []).length))
                 return c.id;
         return "";
     }
@@ -56,7 +59,7 @@ StepPage {
         const s = Object.assign({}, selection);
         const cur = (s[c.id] || []).slice();
         if (isOne(c)) {
-            s[c.id] = [id];
+            s[c.id] = (!c.required && cur.indexOf(id) >= 0) ? [] : [id];
         } else {
             const i = cur.indexOf(id);
             if (i >= 0)
@@ -102,6 +105,13 @@ StepPage {
                 s[k] = (s[k] || []).filter(x => x !== id);
         }
         selection = s;
+        // like clicking the app's row
+        for (const id of (v.toggle || [])) {
+            const m = modules.find(x => x.id === id);
+            const c = m ? categories.find(x => x.id === m.category) : null;
+            if (c)
+                toggle(c, id);
+        }
         if (v.scroll !== undefined)
             flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, v.scroll));
         return "ok";
@@ -169,7 +179,7 @@ StepPage {
                             Accessible.role: Accessible.Heading
                         }
                         ArText {
-                            text: (page.isOne(section.cat) ? "Pick one" : "Pick any") + (section.cat.note ? " · " + section.cat.note : "")
+                            text: (page.isOne(section.cat) ? (section.cat.required ? "Pick one" : "Pick one or none") : "Pick any") + (section.cat.note ? " · " + section.cat.note : "")
                             size: 12
                             lh: 18
                             color: Theme.inkSubtle

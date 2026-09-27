@@ -9,6 +9,7 @@ The same checks can be pointed at the Go engine:
 import json
 import os
 import queue
+import re
 import shlex
 import subprocess
 import sys
@@ -180,6 +181,136 @@ class MockBridgeTest(unittest.TestCase):
         att = b.wait_event("attention", timeout=60)
         b.ok("SkipModule", {"id": att["module"]["id"]})
         b.wait_event("module", pred=lambda e: e["status"] == "skipped")
+        b.wait_event("done", timeout=60)
+
+    def test_core_failure_then_change_answers(self):
+        # After a core failure, Back returns to the Summary with every answer and secret
+        # kept (the UI's "Change your answers"); another disk can then be picked.
+        b = self.start(ARCTIC_MOCK_FATAL="1", ARCTIC_MOCK_WIRED="1")
+        self.walk_to("summary")
+        b.ok("Next")
+        b.ok("Start")
+        failed = b.wait_event("failed")
+        self.assertTrue(failed.get("details"))
+        self.assertTrue(failed.get("can_change"))
+        self.assertEqual(b.call("SetStep", {"id": "disk", "data": {"disk": "/dev/sda"}})["error"]["code"], "state")
+        self.assertEqual(b.ok("Back")["current"], "summary")
+        self.assertEqual(b.ok("Goto", {"id": "disk"})["current"], "disk")
+        disk = b.ok("GetStep", {"id": "disk"})
+        other = next(d for d in disk["options"]["disks"]
+                     if d["path"] != disk["data"]["disk"] and not d.get("too_small") and d["size_bytes"] >= 40 * 1000 ** 3)
+        b.ok("SetStep", {"id": "disk", "data": {"disk": other["path"], "mode": "erase"}})
+        self.assertTrue(b.ok("GetStep", {"id": "encryption"})["options"]["passphrase_set"])
+        self.assertTrue(b.ok("GetStep", {"id": "account"})["options"]["password_set"])
+        self.assertEqual(b.ok("Next")["current"], "summary")    # Change → Next returns to Summary
+        self.assertIn(other["model"] or other["path"], b.ok("GetSummary")["warning"])
+        self.assertEqual(b.ok("Next")["current"], "install")
+        b.ok("Start")
+        att = b.wait_event("attention", timeout=60)
+        b.ok("SkipModule", {"id": att["module"]["id"]})
+        b.wait_event("done", timeout=60)
+
+    def test_summary_next_checks_the_disk_passphrase(self):
+        # "Use this password for the disk passphrase too" with a weak password: the engine
+        # refuses at Summary with the passphrase field (the UI points to Encryption).
+        b = self.start(ARCTIC_MOCK_WIRED="1")
+        self.walk_to("account")
+        b.ok("SetStep", {"id": "account", "data": {"full_name": "Noa Levi", "username": "noa", "hostname": "noa-thinkpad"}})
+        b.ok("SetSecrets", {"user_password": "iloveyou", "luks_passphrase": "iloveyou"})
+        self.assertFalse(b.ok("CheckPassphrase", {"text": "iloveyou"})["ok"])
+        b.ok("Next")
+        b.ok("Next")
+        self.assertEqual(b.ok("GetWizard")["current"], "summary")
+        err = b.call("Next")["error"]
+        self.assertEqual(err["code"], "invalid")
+        self.assertIn("passphrase", err["fields"])
+
+    def test_back_from_install_before_start(self):
+        # Summary's Next moves to the install step; until Start, Back returns to Summary
+        # (the UI does that when Start is refused, or when it reconnects there).
+        b = self.start(ARCTIC_MOCK_WIRED="1")
+        self.walk_to("summary")
+        self.assertEqual(b.ok("Next")["current"], "install")
+        self.assertEqual(b.ok("Hello", {"client": "installer-ui", "version": "test"})["state"], "wizard")
+        self.assertEqual(b.ok("Back")["current"], "summary")
+        self.assertEqual(b.ok("Next")["current"], "install")
+        b.ok("Start")
+        self.assertEqual(b.call("Back")["error"]["code"], "state")
+        att = b.wait_event("attention", timeout=60)
+        b.ok("SkipModule", {"id": att["module"]["id"]})
+        b.wait_event("done", timeout=60)
+
+    def test_optional_pick_one_category_can_be_empty(self):
+        b = self.start()
+        apps = b.ok("GetStep", {"id": "apps"})
+        cats = {c["id"]: c for c in apps["options"]["categories"]}
+        self.assertEqual([k for k, c in cats.items() if c["required"]], ["browser", "terminal", "shell"])
+        self.assertEqual(cats["office"]["choice"], "one")
+        sel = apps["data"]["selection"]
+        before = b.ok("EstimateDownload", {"selection": sel})
+        sel["office"] = []
+        b.ok("SetStep", {"id": "apps", "data": {"selection": sel}})
+        after = b.ok("EstimateDownload", {"selection": sel})
+        self.assertEqual(after["apps"], before["apps"] - 1)
+        for cid in ("browser", "terminal"):
+            bad = dict(sel, **{cid: []})
+            err = b.call("SetStep", {"id": "apps", "data": {"selection": bad}})["error"]
+            self.assertIn(cid, err["fields"])
+
+    def test_disk_options_have_labels(self):
+        # The UI shows the engine's label (the path when there is no model, e.g. virtio)
+        # and alongside wording.
+        b = self.start()
+        disks = b.ok("GetStep", {"id": "disk"})["options"]["disks"]
+        for d in disks:
+            self.assertEqual(d["label"], f"{d['model'].strip() or d['path']} · {d['size_label']}")
+            if d["alongside_possible"]:
+                self.assertTrue(d["alongside_title"].startswith("Install alongside "), d)
+                self.assertTrue(d["alongside_description"], d)
+        self.assertTrue(any(d["alongside_possible"] for d in disks))
+
+    def test_change_language_from_summary_shows_keyboard(self):
+        b = self.start(ARCTIC_MOCK_WIRED="1")
+        self.walk_to("summary")
+        self.assertEqual(b.ok("Goto", {"id": "timezone"})["current"], "timezone")
+        self.assertEqual(b.ok("Next")["current"], "summary")
+        self.assertEqual(b.ok("Goto", {"id": "welcome"})["current"], "welcome")
+        b.ok("SetStep", {"id": "welcome", "data": {"language": "de_DE.UTF-8"}})
+        self.assertEqual(b.ok("Next")["current"], "keyboard")   # a new language: check the layout
+        self.assertEqual(b.ok("Next")["current"], "summary")
+
+    def test_keyboard_follows_language_until_picked(self):
+        b = self.start()
+        b.ok("SetStep", {"id": "welcome", "data": {"language": "he_IL.UTF-8"}})
+        self.assertEqual(b.ok("GetStep", {"id": "keyboard"})["data"]["layout"], "il")
+        b.ok("SetStep", {"id": "keyboard", "data": {"layout": "us", "variant": "intl"}})
+        b.ok("SetStep", {"id": "keyboard", "data": {"layout": "de"}})
+        kb = b.ok("GetStep", {"id": "keyboard"})["data"]
+        self.assertEqual((kb["layout"], kb["variant"]), ("de", ""))
+        b.ok("SetStep", {"id": "welcome", "data": {"language": "fr_FR.UTF-8"}})
+        self.assertEqual(b.ok("GetStep", {"id": "keyboard"})["data"]["layout"], "de")
+
+    def test_keyboard_xkb_for_the_live_session(self):
+        # The engine says what the layout becomes (the UI applies it to the live session):
+        # non-Latin layouts get "us" first and a switch.
+        b = self.start()
+        kb = b.ok("SetStep", {"id": "keyboard", "data": {"layout": "il", "variant": ""}})["data"]
+        self.assertEqual((kb["xkb"]["layout"], kb["xkb"]["options"], kb["xkb"]["latin"]), ("us,il", "grp:alt_shift_toggle", False))
+        kb = b.ok("SetStep", {"id": "keyboard", "data": {"layout": "de", "variant": "nodeadkeys"}})["data"]
+        self.assertEqual((kb["xkb"]["layout"], kb["xkb"]["variant"], kb["xkb"]["latin"]), ("de", "nodeadkeys", True))
+        self.assertEqual(b.ok("GetStep", {"id": "keyboard"})["data"]["xkb"]["layout"], "de")
+
+    def test_progress_counts_apps_in_the_substep(self):
+        b = self.start(ARCTIC_MOCK_WIRED="1")
+        self.walk_to("summary")
+        b.ok("Next")
+        b.ok("Start")
+        att = b.wait_event("attention", timeout=60)
+        self.assertTrue(att.get("details"))
+        labels = [e["substeps"][2]["label"] for e in b.events if e["event"] == "progress" and e["substeps"][2]["state"] == "active"]
+        self.assertTrue(labels)
+        self.assertTrue(all(re.fullmatch(r"Installing your apps · \d+ of \d+", lbl) for lbl in labels), labels[:3])
+        b.ok("SkipModule", {"id": att["module"]["id"]})
         b.wait_event("done", timeout=60)
 
 

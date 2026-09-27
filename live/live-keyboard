@@ -1,0 +1,93 @@
+#!/bin/sh
+# /usr/libexec/arctic/live-keyboard: apply a keyboard layout to the running live Mango
+# session (package arctic-live). The installer UI runs it, as liveuser, whenever the
+# Keyboard step's choice changes, so the "Try it" box, the disk passphrase and the account
+# password are typed with the layout the installed system will use.
+#
+#   live-keyboard --xkb LAYOUT VARIANT OPTIONS   exactly this (the engine's keyboard xkb,
+#                                                e.g. "us,ru" ",phonetic" "grp:alt_shift_toggle")
+#   live-keyboard LAYOUT [VARIANT]               a layout choice, turned into xkb here the
+#                                                way the engine does it (for older engines)
+#
+# It writes ~/.config/arctic/live-keyboard.conf, which /usr/share/arctic/mango/live.conf
+# sources (source-optional, after everything else), then asks Mango to reload its config;
+# `reload_config` recompiles the keymap of every connected keyboard.
+set -u
+
+usage() {
+  echo "usage: live-keyboard --xkb LAYOUT VARIANT OPTIONS | live-keyboard LAYOUT [VARIANT]" >&2
+  exit 2
+}
+# xkb names only: no '=', spaces or newlines (they would add config lines).
+check() { # check VALUE ALLOWED-CHARS
+  case "$1" in
+    *[!$2]*) usage ;;
+  esac
+}
+
+if [ "${1:-}" = --xkb ]; then
+  [ $# -eq 4 ] || usage
+  xkb_layout=$2 xkb_variant=$3 xkb_options=$4
+  [ -n "$xkb_layout" ] || usage
+  check "$xkb_layout" 'A-Za-z0-9_,-'
+  check "$xkb_variant" 'A-Za-z0-9_,-'
+  check "$xkb_options" 'A-Za-z0-9_,:-'
+else
+  [ $# -ge 1 ] && [ $# -le 2 ] || usage
+  layout=$1 variant=${2:-}
+  [ -n "$layout" ] || usage
+  check "$layout" 'A-Za-z0-9_-'
+  check "$variant" 'A-Za-z0-9_-'
+  # Layouts that can't type Latin letters get English (US) first plus Alt+Shift to switch,
+  # as the engine writes for the installed system (wizard.KeyboardConfig): a Latin password
+  # stays typeable, and the disk passphrase prompt has a Latin console keymap.
+  non_latin=" af am ara bd bg bt by et ge gr il in iq ir kg kh kz la lk mk mm mn mv np pk rs ru sy th tj ua "
+  case "$non_latin" in
+    *" $layout "*)
+      xkb_layout="us,$layout"
+      xkb_variant=${variant:+",$variant"}
+      xkb_options="grp:alt_shift_toggle"
+      ;;
+    *)
+      xkb_layout=$layout
+      xkb_variant=$variant
+      xkb_options=""
+      ;;
+  esac
+fi
+
+conf_dir="${HOME:?}/.config/arctic"
+conf="$conf_dir/live-keyboard.conf"
+
+content="# Written by /usr/libexec/arctic/live-keyboard (the installer's Keyboard step, live USB only).
+xkb_rules_layout=$xkb_layout"
+# Mango rejects "key=" with an empty value; an unset key is back to its default on reload.
+[ -n "$xkb_variant" ] && content="$content
+xkb_rules_variant=$xkb_variant"
+[ -n "$xkb_options" ] && content="$content
+xkb_rules_options=$xkb_options"
+
+# Nothing to do when the session already types with this layout (US is the live default).
+if [ -f "$conf" ]; then
+  [ "$(cat "$conf")" = "$content" ] && exit 0
+elif [ "$xkb_layout" = us ] && [ -z "$xkb_variant" ] && [ -z "$xkb_options" ]; then
+  exit 0
+fi
+
+mkdir -p "$conf_dir" || exit 1
+tmp="$conf.$$"
+if ! printf '%s\n' "$content" > "$tmp" || ! mv -f "$tmp" "$conf"; then
+  rm -f "$tmp"
+  echo "live-keyboard: couldn't write $conf" >&2
+  exit 1
+fi
+
+if ! command -v mmsg >/dev/null 2>&1; then
+  echo "live-keyboard: mmsg not found; the layout applies from the next Mango start" >&2
+  exit 1
+fi
+if ! mmsg dispatch reload_config >/dev/null 2>&1; then
+  echo "live-keyboard: Mango didn't reload its config (not running under Mango?)" >&2
+  exit 1
+fi
+exit 0
