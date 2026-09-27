@@ -9,8 +9,8 @@ import Quickshell.Services.UPower
 
 // The top bar (design TopBar): 34px frost with a 1px line along the bottom.
 // Left: fox mark (launcher) and workspaces 1–5, plus the "Live session" tag on the live USB.
-// Centre: the clock. Right: Install (live only), notifications and Bluetooth (quiet), tray,
-// network, volume, battery, power. Anything the system can't report is hidden, never faked.
+// Centre: the clock. Right: Install (live only) or Restart to update (updates waiting),
+// notifications and Bluetooth (quiet), tray, network, volume, battery, power. Anything the system can't report is hidden, never faked.
 PanelWindow {
     id: bar
     required property var modelData
@@ -114,6 +114,11 @@ PanelWindow {
             tooltip: 'Install Arctic Linux  (Super + I)'
             onClicked: Quickshell.execDetached(['arctic-start-installer'])
             onHoverChanged: h => h ? bar.hint(installItem, tooltip) : bar.unhint(installItem)
+        }
+        UpdateIndicator {
+            id: updateItem
+            onClicked: bar.shell.toggleUpdates(bar.screen, updateItem.mapToItem(null, updateItem.width / 2, 0).x)
+            onHoverChanged: h => h ? bar.hint(updateItem, tooltip) : bar.unhint(updateItem)
         }
 
         // Quiet group: notifications and Bluetooth sit in ink-muted.

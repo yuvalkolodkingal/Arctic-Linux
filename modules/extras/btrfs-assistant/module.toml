@@ -1,0 +1,21 @@
+# Btrfs Assistant: a window onto the snapshots snapper takes before and after every dnf
+# transaction (arctic-snapper.actions); browse them, compare files and restore. The snapper
+# configuration itself is set up by the installer whether or not this is ticked.
+id = "btrfs-assistant"
+name = "Btrfs Assistant"
+summary = "Browse and restore system snapshots."
+category = "extras"
+role = "snapshot manager"
+default = false
+tile = "btrfs-assistant"
+icon = "clock"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora's package (btrfs-assistant 2.2 in F44; Qt 6 Widgets, already in the image).
+method = "dnf"
+packages = ["btrfs-assistant"]
+download_mb = 1

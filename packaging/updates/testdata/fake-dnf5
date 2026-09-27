@@ -1,0 +1,169 @@
+#!/usr/bin/python3
+"""A scripted dnf5 for arctic-update's scenario tests (test_arctic_update.py).
+
+Everything happens under $ARCTIC_UPDATE_TEST_ROOT, the way dnf5 5.4 does it on Fedora 44: the
+offline state file, transaction.json and packages, /system-update. What the next command finds is
+in $ROOT/fake/dnf5.json:
+    {"updates": [["jq-1.8.1-3.fc44.x86_64", "Upgrade"], …] | null (Nothing to do),
+     "fail": "error text" (the check fails),
+     "stale": true (the system changed since the transaction was stored),
+     "rpmdb_changes": N (a dnf transaction finishes during each of the next N checks)}
+Every call is appended to $ROOT/fake/dnf5.log.
+"""
+import json
+import os
+import shutil
+import sys
+
+ROOT = os.environ["ARCTIC_UPDATE_TEST_ROOT"]
+FAKE = os.path.join(ROOT, "fake")
+DATADIR = os.path.join(ROOT, "usr/lib/sysimage/libdnf5/offline")
+STATE = os.path.join(DATADIR, "offline-transaction-state.toml")
+DESTDIR = os.path.join(ROOT, "var/lib/dnf/offline")
+PACKAGES = os.path.join(DESTDIR, "packages")
+MAGIC = os.path.join(ROOT, "system-update")
+REPOS = [
+    {"id": "fedora", "name": "Fedora 44 - x86_64", "is_enabled": True},
+    {"id": "updates", "name": "Fedora 44 - x86_64 - Updates", "is_enabled": True},
+    {"id": "arctic", "name": "Arctic Linux 44 - x86_64", "is_enabled": True},
+    {"id": "arctic-testing", "name": "Arctic Linux 44 - x86_64 - testing", "is_enabled": False},
+]
+STATE_TEMPLATE = '''[offline-transaction-state]
+rpmdb_cookie = "302d4f791681b80728445fbf06c0221988a60c3131e5c24d3aeec8c5406fd54f"
+module_platform_id = ""
+poweroff_after = false
+verb = "{verb}"
+system_releasever = "44"
+target_releasever = "44"
+cachedir = "/var/cache/libdnf5"
+status = "download-complete"
+cmd_line = "{cmd}"
+state_version = 2
+'''
+
+
+def scenario():
+    try:
+        with open(os.path.join(FAKE, "dnf5.json")) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def save(s):
+    with open(os.path.join(FAKE, "dnf5.json"), "w") as f:
+        json.dump(s, f)
+
+
+def status():
+    try:
+        text = open(STATE).read()
+    except FileNotFoundError:
+        return None, ""
+    import tomllib
+    table = tomllib.loads(text)["offline-transaction-state"]
+    return table.get("status"), table.get("cmd_line", "")
+
+
+def offline_status(s):
+    st, cmd = status()
+    if st is None or st == "download-incomplete":
+        print("No offline transaction is stored.")
+    elif st in ("download-complete", "ready") and s.get("stale"):
+        print("The system has been modified since the offline transaction was prepared. The offline "
+              "transaction initiated by the following command is no longer valid:")
+        print("  " + cmd)
+        print("To reschedule, run the command above. To clean up, run `dnf5 offline clean`.")
+    elif st in ("download-complete", "ready"):
+        print("An offline transaction was initiated by the following command:")
+        print("\t" + cmd)
+        print("Run `dnf5 offline reboot` to reboot and perform the offline transaction.")
+    elif st == "transaction-incomplete":
+        print("An offline transaction was started, but it did not finish. Run `dnf5 offline log` for more "
+              "information. The command that initiated the transaction was:")
+        print("\t" + cmd)
+    else:
+        print(f"Unknown offline transaction status: `{st}`")
+
+
+def clean():
+    if os.path.lexists(MAGIC):
+        os.unlink(MAGIC)
+    for d in (DATADIR, DESTDIR):
+        if os.path.isdir(d):
+            for name in os.listdir(d):
+                p = os.path.join(d, name)
+                shutil.rmtree(p) if os.path.isdir(p) and not os.path.islink(p) else os.unlink(p)
+
+
+def store(verb, argv, s):
+    if s.get("fail"):
+        print("Updating and loading repositories:")
+        print(s["fail"])
+        return 1
+    if s.get("rpmdb_changes"):
+        s["rpmdb_changes"] -= 1
+        save(s)
+        with open(os.path.join(FAKE, "rpmdb"), "a") as f:
+            f.write("something-new-1-1.noarch 1790000000\n")
+    updates = s.get("updates")
+    if not updates:
+        print("Nothing to do.")
+        return 0
+    st, cmd = status()
+    if st in ("download-complete", "ready"):
+        # dnf5 asks; -y cancels the old one (arctic-update always passes -y)
+        print("There is already an offline transaction queued, initiated by the following command:")
+        print("\t" + cmd)
+        print("Continuing will cancel the old offline transaction and replace it with this one.")
+    print("Total size of inbound packages is 949 KiB. Need to download 949 KiB.")
+    os.makedirs(PACKAGES, exist_ok=True)
+    os.makedirs(DATADIR, exist_ok=True)
+    rpms = []
+    for nevra, action in updates:
+        path = os.path.join(PACKAGES, nevra + ".rpm")
+        if os.path.exists(path):
+            print(f">>> Already downloaded {nevra}")
+        else:
+            with open(path, "wb") as f:
+                f.write(b"x" * 1000)
+        rpms.append({"nevra": nevra, "action": action, "reason": "User", "repo_id": "updates", "package_path": path})
+    with open(os.path.join(DATADIR, "transaction.json"), "w") as f:
+        json.dump({"rpms": rpms, "version": "1.0"}, f)
+    with open(STATE + ".tmp", "w") as f:
+        f.write(STATE_TEMPLATE.format(verb=verb, cmd="dnf5 " + " ".join(argv)))
+    os.replace(STATE + ".tmp", STATE)
+    s["stale"] = False
+    save(s)
+    print("Transaction stored to be performed offline.")
+    return 0
+
+
+def main(argv):
+    os.makedirs(FAKE, exist_ok=True)
+    with open(os.path.join(FAKE, "dnf5.log"), "a") as f:
+        f.write(" ".join(argv) + "\n")
+    s = scenario()
+    args = [a for a in argv if a != "-q"]
+    if args[:2] == ["repo", "list"]:
+        wanted = [a for a in args[2:] if not a.startswith("-")]
+        print(json.dumps([r for r in REPOS if not wanted or r["id"] in wanted]))
+        return 0
+    if args[:2] == ["offline", "status"]:
+        offline_status(s)
+        return 0
+    if args[:2] == ["offline", "clean"]:
+        clean()
+        return 0
+    if args[:2] == ["offline", "reboot"]:
+        return 0
+    if args[:2] == ["config-manager", "setopt"]:
+        return 0
+    if args and args[0] in ("upgrade", "distro-sync") and "--offline" in args:
+        return store(args[0], argv, s)
+    print("fake dnf5: unexpected command: " + " ".join(argv), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

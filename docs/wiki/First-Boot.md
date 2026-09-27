@@ -95,18 +95,17 @@ sudo systemctl start arctic-firstboot     # try again now, without restarting
 
 ## Keep it up to date
 
-Arctic Linux is built on Fedora 44 and uses Fedora's package repositories. Update everything
-from a terminal:
+Arctic Linux updates itself: about ten minutes after the first start, and every day after that,
+it downloads updates in the background, and installs them the next time the computer starts.
+When some are waiting, the bar shows **Restart to update**. See [Updates](Updates).
+
+The installer installs the system as it is on the USB stick, so the first check usually finds
+updates. To get them right away:
 
 ```sh
-sudo dnf upgrade      # the system and the apps installed with dnf
+arctic-update now     # download now; installed at the next restart
 flatpak update        # Flatpak apps (Zen, Zed, Collabora Office and others)
 ```
-
-The installer in version 0.1 doesn't download system updates while it installs, so it's worth
-running both commands soon after your first login. Arctic's own packages (the desktop, the
-shell, the branding and Mango) don't have an online repository yet; they change when you
-install a newer Arctic Linux release. See the [release notes](Release-Notes).
 
 ## If something went wrong
 

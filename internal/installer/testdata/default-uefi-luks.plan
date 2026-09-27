@@ -177,6 +177,9 @@ write /mnt/etc/xdg/mimeapps.list (0644)
 mkdir -p /mnt/var/log/arctic-install
 $ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install
 $ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt
+$ chroot /mnt snapper --no-dbus -c root create-config /
+$ chroot /mnt snapper --no-dbus -c root set-config NUMBER_CLEANUP=yes NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no
+$ setfiles -F -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt/.snapshots /mnt/etc/snapper /mnt/etc/sysconfig/snapper
 $ umount --recursive /mnt
 $ udevadm settle --timeout=30
 $ cryptsetup close luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad

@@ -50,7 +50,8 @@ jobs:
         run: |
           files=()
           for f in dotfiles/.local/bin/* tools/*.sh tools/lib/*.sh live/* iso/kiwi/config.sh \
-                   packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh; do
+                   packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh \
+                   packaging/updates/*.sh; do
             [ -f "$f" ] || continue
             case "$(head -n1 "$f")" in
               *python*|*node*) continue ;;
@@ -78,6 +79,8 @@ jobs:
         run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
       - name: Python unittest (packaging/firstboot)
         run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
+      - name: Python unittest (packaging/updates, arctic-update)
+        run: python3 -m unittest discover -s packaging/updates -p 'test_*.py' -v
       - name: Node tests (shell/tests)
         run: |
           for t in shell/tests/*.cjs shell/tests/*.mjs shell/tests/*.js; do
@@ -85,6 +88,36 @@ jobs:
             echo "== $t"
             node "$t"
           done
+
+  units:
+    name: systemd units (arctic-update)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: dnf -y install git systemd python3
+      - uses: actions/checkout@v4
+      - name: systemd-analyze verify
+        run: |
+          # ExecStart= must exist for verify: install the command where the package puts it.
+          install -m 0755 dotfiles/.local/bin/arctic-update /usr/bin/arctic-update
+          # --man=no: the container has no man pages (tsflags=nodocs), so the
+          # Documentation=man: check would fail although the page ships with dnf5.
+          systemd-analyze verify --man=no packaging/systemd/arctic-update-stage.service \
+            packaging/systemd/arctic-update-stage.timer packaging/systemd/arctic-update-restage.timer
+
+  dnf5-offline:
+    name: dnf5 offline updates (arctic-update, real dnf5)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: dnf -y install git dnf5-plugins libdnf5-plugin-actions rpm-build createrepo_c python3 util-linux
+      - uses: actions/checkout@v4
+      - name: packaging/updates/test-dnf5-offline.sh
+        # Downloads, schedules, installs (dnf5 offline _execute) and fails updates with a local
+        # repository, and pins the dnf5 behaviour and messages arctic-update relies on.
+        run: packaging/updates/test-dnf5-offline.sh
 
   qml:
     name: qmllint

@@ -5,20 +5,20 @@ import Quickshell
 import Quickshell.Io
 
 // Arctic Linux desktop shell (Quickshell): the bar, screen frame, launcher with Get apps,
-// wallpaper picker, power menu, keyboard shortcuts, OSD, lock screen, polkit agent and the
-// live-session welcome. It grew out of a personal Quickshell setup (bar + Rofi-style launcher,
+// wallpaper picker, power menu, keyboard shortcuts, OSD, lock screen, polkit agent, the
+// "updates ready" notice and the live-session welcome. It grew out of a personal Quickshell setup (bar + Rofi-style launcher,
 // install console, wallpaper picker, docking popovers, screen frame) and is styled entirely
 // from the Arctic design tokens (Theme.qml).
 //
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
-//   lock lock · keys toggle · welcome open · dnd refresh · shell reload
+//   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -45,6 +45,14 @@ ShellRoot {
         power.pointX = x !== undefined ? x : (target ? target.width - Theme.space2 - 17 : 0);
         present(power, target);
     }
+    // The updates popover, under the bar's "Restart to update" item (only while updates wait).
+    function toggleUpdates(screen, x) {
+        const target = screen || Outputs.focused;
+        if (updates.open && updates.screen === target) { updates.close(); return; }
+        if (!UpdateService.ready) return;
+        updates.pointX = x !== undefined ? x : (target ? target.width - 160 : 0);
+        present(updates, target);
+    }
     function toggleKeys() {
         if (keys.open) keys.close(); else present(keys, null);
     }
@@ -65,6 +73,7 @@ ShellRoot {
     Launcher { id: launcher; shell: shell }
     Wallpapers { id: wallpapers }
     PowerMenu { id: power; shell: shell }
+    UpdatePopover { id: updates }
     KeysSheet { id: keys }
     Osd { id: osd }
     LiveWelcome { id: welcome }
@@ -121,6 +130,11 @@ ShellRoot {
     IpcHandler {
         target: 'dnd'
         function refresh(): void { DndService.refresh(); }
+    }
+    IpcHandler {
+        target: 'updates'
+        function toggle(): void { shell.toggleUpdates(null, undefined); }
+        function refresh(): void { UpdateService.refresh(); }
     }
     IpcHandler {
         target: 'shell'

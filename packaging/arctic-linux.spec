@@ -11,7 +11,8 @@
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
-#                          dotfiles/.local/bin → /usr/bin
+#                          dotfiles/.local/bin → /usr/bin, packaging/updates/ (automatic updates,
+#                          snapper snapshots around dnf transactions)
 #   arctic-shell           shell/ → /usr/share/arctic/shell
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
@@ -47,6 +48,8 @@ BuildRequires:  systemd-rpm-macros
 BuildRequires:  desktop-file-utils
 BuildRequires:  findutils
 BuildRequires:  tar
+# %%check: packaging/updates' unit tests (arctic-update's helper)
+BuildRequires:  python3
 
 %description
 Arctic Linux is a Fedora %{dist_version} based desktop built around the Mango Wayland
@@ -177,12 +180,26 @@ Recommends:     waybar
 Recommends:     fuzzel
 Recommends:     lxqt-policykit
 Recommends:     network-manager-applet
+# arctic-update: offline updates (dnf5 upgrade --offline, dnf5-offline-transaction.service),
+# channels (dnf5 config-manager, in dnf5-plugins), snapshots around every dnf transaction
+# (the actions plugin runs snapper), the metered check (nmcli, when NetworkManager is there).
+Requires:       dnf5
+Requires:       dnf5-plugins
+Requires:       libdnf5-plugin-actions
+Requires:       snapper
+Requires:       btrfs-progs
+Requires:       findutils
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
 theme files and the keyboard cheat sheet in /usr/share/arctic (new home directories link to
 them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, zsh, GTK,
 waybar, fuzzel, mako), the arctic-* helper commands in /usr/bin and /etc/arctic/default-apps.
+Automatic updates: arctic-update-stage.timer downloads updates daily and
+schedules them to be installed at the next restart (dnf5 offline updates);
+arctic-update shows and changes that (/etc/arctic/update.conf). Snapper takes
+a snapshot before and after every dnf transaction once the installer has set
+it up for the root file system (arctic-snapper.actions, libdnf5 actions).
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
@@ -378,6 +395,10 @@ Requires:       python3-pillow
 Requires:       layer-shell-qt
 Requires:       tuned-ppd
 Requires:       mesa-dri-drivers
+# Updates and rollback (arctic-update, snapper snapshots of the btrfs root).
+Requires:       snapper
+Requires:       libdnf5-plugin-actions
+Requires:       btrfs-progs
 Recommends:     waybar
 Recommends:     lxqt-policykit
 Recommends:     adwaita-cursor-theme
@@ -537,6 +558,19 @@ cp -a dotfiles/.config/arctic/themes/. %{buildroot}%{_datadir}/arctic/themes/
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
+# Automatic updates (arctic-update, in /usr/bin with the helpers above) and snapshots.
+install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
+install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
+install -Dpm 0644 packaging/systemd/arctic-update-restage.timer %{buildroot}%{_unitdir}/arctic-update-restage.timer
+install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
+install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
+install -Dpm 0644 packaging/updates/snapper.actions \
+  %{buildroot}%{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
+install -Dpm 0644 packaging/updates/update.actions \
+  %{buildroot}%{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
+# The status file the shell's bar indicator watches (written by arctic-update).
+install -d %{buildroot}%{_sharedstatedir}/arctic
+touch %{buildroot}%{_sharedstatedir}/arctic/update-status.json
 # arctic-shell, arctic-shell-ipc and arctic-installer belong to their own subpackages.
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
@@ -638,12 +672,14 @@ if grep -qx 'enabled=1' $repos/arctic-testing.repo; then
   echo "error: arctic-testing.repo must be disabled by default" >&2; exit 1
 fi
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
-         %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer; do
+         %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer %{buildroot}%{_bindir}/arctic-update; do
   case "$(head -n1 "$s")" in
     *python*) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$s" ;;
     *) bash -n "$s" ;;
   esac
 done
+# arctic-update's file handling (update.conf, dnf5's offline state, the status file).
+python3 -m unittest discover -s packaging/updates -p 'test_*.py'
 test -f %{buildroot}%{_datadir}/sddm/themes/arctic/metadata.desktop || \
   { echo "error: branding/sddm/arctic has no metadata.desktop" >&2; exit 1; }
 test -f %{buildroot}%{_datadir}/plymouth/themes/arctic/arctic.plymouth || \
@@ -724,13 +760,20 @@ for f in .zshrc .zprofile; do \
 done
 
 %post -n arctic-desktop-config
-%systemd_post arctic-firstboot.service
+%systemd_post arctic-firstboot.service arctic-update-stage.timer
 
 %preun -n arctic-desktop-config
-%systemd_preun arctic-firstboot.service
+%systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# Systems installed before automatic updates existed (0.1) get the new timers once, as the
+# presets say (%%systemd_post presets only on a first install). Removing the marker doesn't
+# undo a choice: `arctic-update auto off` also sets AUTO=off, which the timer's check honours.
+if [ ! -e %{_sharedstatedir}/arctic/.update-presets ]; then
+  systemctl --no-reload preset arctic-update-stage.timer snapper-cleanup.timer >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.update-presets || :
+fi
 
 %triggerin -n arctic-desktop-config -- zsh
 %{arctic_skel_zsh}
@@ -854,6 +897,15 @@ fi
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
+%{_unitdir}/arctic-update-stage.service
+%{_unitdir}/arctic-update-stage.timer
+%{_unitdir}/arctic-update-restage.timer
+%{_libexecdir}/arctic/arctic-update-helper
+%config(noreplace) %{_sysconfdir}/arctic/update.conf
+%config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
+%config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
+%dir %{_sharedstatedir}/arctic
+%ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic

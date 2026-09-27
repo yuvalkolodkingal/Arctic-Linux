@@ -75,7 +75,7 @@ name = "Extras"
 choice = "any"
 note = "Nothing here is ticked by default."
 role = "app"
-modules = ["flathub", "steam", "gimp", "inkscape", "signal", "obs"]
+modules = ["flathub", "steam", "gimp", "inkscape", "signal", "obs", "btrfs-assistant"]
 
 # Download size (MB) of each shared Flatpak runtime, counted once per install.
 # Flathub API /api/v2/summary/<runtime> on 2026-09-27.

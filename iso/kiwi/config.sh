@@ -60,6 +60,11 @@ systemctl enable sddm.service
 systemctl enable livesys.service livesys-late.service
 systemctl enable arcticd.socket
 systemctl enable nix-daemon.service || :
+# Updates and snapshot cleanup for the installed system (both skip the live session: the timer
+# checks the kernel command line, and snapper has no configuration until the installer's).
+systemctl enable arctic-update-stage.timer || :
+systemctl enable snapper-cleanup.timer || :
+systemctl disable dnf5-automatic.timer 2>/dev/null || :
 # No SSH server on the live USB or (since the installer copies this root) installed systems;
 # 80-arctic.preset already says so, this makes sure whatever the install order was.
 systemctl disable sshd.service || :

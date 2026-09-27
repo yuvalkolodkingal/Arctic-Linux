@@ -28,6 +28,7 @@ A thin bar runs along the top of the screen.
 | Item | Click | Right-click / scroll |
 |---|---|---|
 | **Install** (amber, live USB only) | Opens the installer | — |
+| **Restart to update** (amber, only while updates wait) | Shows the updates and **Restart and install**; see [Updates](Updates) | — |
 | **Bell** | Turns do not disturb on or off | Right-click brings back the last notification |
 | **Bluetooth** (only with a Bluetooth adapter) | Opens the Bluetooth manager | — |
 | **Tray icons** from running apps | The app's own action or menu | Scrolling is passed to the app |

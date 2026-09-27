@@ -39,8 +39,9 @@ func TestLoadDirMatchesEmbedded(t *testing.T) {
 
 func TestDesignTiles(t *testing.T) {
 	c := load(t)
-	// Every real app tile of the design (bundle.js APPS minus "installer" and "settings").
-	want := strings.Fields("zen firefox chromium zed vscodium neovim helix kitty alacritty foot zsh fish bash yazi thunar nautilus collabora libreoffice onlyoffice vlc mpv celluloid flathub steam gimp inkscape signal obs")
+	// Every real app tile of the design (bundle.js APPS minus "installer" and "settings"), plus
+	// Btrfs Assistant (tile drawn in the same style, installer-ui/assets/tiles).
+	want := strings.Fields("zen firefox chromium zed vscodium neovim helix kitty alacritty foot zsh fish bash yazi thunar nautilus collabora libreoffice onlyoffice vlc mpv celluloid flathub steam gimp inkscape signal obs btrfs-assistant")
 	var got []string
 	for _, m := range c.Modules {
 		if !m.Hidden {
@@ -212,7 +213,7 @@ func TestNormalize(t *testing.T) {
 func TestPicker(t *testing.T) {
 	c := load(t)
 	p := c.Picker()
-	if len(p.Categories) != 8 || len(p.Modules) != 28 {
+	if len(p.Categories) != 8 || len(p.Modules) != 29 {
 		t.Fatalf("picker has %d categories, %d modules", len(p.Categories), len(p.Modules))
 	}
 	if p.Modules[0].ID != "zen" || p.Modules[0].Source != "Flathub" || p.Categories[0].Rule != "Pick one" {

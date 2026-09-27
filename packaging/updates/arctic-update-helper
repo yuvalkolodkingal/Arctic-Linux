@@ -1,0 +1,718 @@
+#!/usr/bin/python3
+"""arctic-update-helper — the file handling behind arctic-update.
+
+arctic-update (/usr/bin, bash) runs dnf5, systemctl and nmcli. What is easier to get right, and
+to test, in Python lives here (installed as /usr/libexec/arctic/arctic-update-helper):
+
+  config FILE                    the update settings, defaults filled in: "auto=…" and "metered=…"
+  set-config FILE KEY VALUE      change one setting in place, keeping the file's comments
+  inspect [--state …]            the stored offline transaction: status=, owner=ours|foreign|none,
+                                 hold=yes|no (someone else's: leave it alone), linked=, cmd_line=
+  offline-class STATUS           none | stored | stale | incomplete | invalid | unknown, from the
+                                 state file's status; for a pending one, stdin is
+                                 `LC_ALL=C dnf5 offline status` (only its "modified since" matters)
+  state FILE                     the stored offline transaction's status ("none" without one)
+  arm FILE                       mark a downloaded offline transaction ready for the next boot:
+                                 status "download-complete" → "ready", nothing else changes
+  disarm FILE                    the reverse (the download stays, not scheduled any more)
+  summary FILE                   "<packages> <bytes>" coming in with the stored transaction
+  prune FILE DIR                 delete downloaded packages in DIR the stored transaction no
+                                 longer uses (left behind when a newer check replaced it)
+  channel                        stable | testing | none, from `dnf5 repo list --all --json` (stdin)
+  write-status FILE KEY=VALUE…   update the status file the shell watches (world-readable JSON)
+  record-ready FILE …            the status file for a downloaded update (count, size, message)
+  get FILE KEY                   one value of the status file
+  boot-check …                   after a restart: was the update scheduled before it installed?
+  report [--json] …              what `arctic-update status` prints
+
+The offline transaction is dnf5's own (dnf5-offline(8)): `dnf5 upgrade --offline` stores it in
+/usr/lib/sysimage/libdnf5/offline as offline-transaction-state.toml + transaction.json, with the
+packages in /var/lib/dnf/offline/packages. Arming it is what `dnf5 offline reboot` does before
+it reboots: the state's status becomes "ready" and /system-update points at that directory.
+Other commands store their offline transactions in the same place (`dnf5 install --offline`,
+`dnf5 system-upgrade download`); the state's cmd_line says whose it is, and arctic-update
+leaves the others alone.
+"""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+import re
+import sys
+import tempfile
+import tomllib
+
+DATADIR = "/usr/lib/sysimage/libdnf5/offline"
+STATE = DATADIR + "/offline-transaction-state.toml"
+TRANSACTION = DATADIR + "/transaction.json"
+PACKAGES = "/var/lib/dnf/offline/packages"
+MAGIC = "/system-update"
+CONF = "/etc/arctic/update.conf"
+STATUS = "/var/lib/arctic/update-status.json"
+STATE_TABLE = "offline-transaction-state"
+# dnf5 records its command line (argv joined by spaces) in the state file: these are
+# arctic-update's own, with the verb dnf5 records for them.
+OUR_COMMANDS = {"dnf5 upgrade --offline -y --refresh": "upgrade",
+                "dnf5 distro-sync --offline -y --refresh": "distro-sync"}
+PENDING = ("download-complete", "ready")
+
+AUTO_MODES = ("download-and-install-on-reboot", "download-only", "off")
+METERED_MODES = ("skip", "allow")
+DEFAULTS = {"AUTO": AUTO_MODES[0], "METERED": "skip"}
+# Spellings people are likely to write in update.conf.
+ALIASES = {
+    "AUTO": {"on": AUTO_MODES[0], "yes": AUTO_MODES[0], "true": AUTO_MODES[0], "1": AUTO_MODES[0],
+             "install-on-reboot": AUTO_MODES[0], "download": "download-only",
+             "no": "off", "false": "off", "0": "off", "disabled": "off"},
+    "METERED": {"no": "skip", "false": "skip", "0": "skip", "yes": "allow", "true": "allow", "1": "allow"},
+}
+# Actions in dnf5's transaction.json that bring a package in (the rest: "Remove", "Replaced", …).
+INBOUND = {"Install", "Upgrade", "Downgrade", "Reinstall"}
+# Fields of the status file, and their types (anything else is kept as a string).
+STATUS_TYPES = {"packages": int, "download_mb": float, "armed": bool, "boot_failures": int}
+STATES = ("idle", "checking", "downloading", "ready", "failed")
+
+
+# ---- update.conf ---------------------------------------------------------------------------
+
+def _unquote(value):
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    # An unquoted value ends at a comment, as in the shell.
+    return re.split(r"\s+#", value, maxsplit=1)[0].strip()
+
+
+def parse_config(text):
+    """{"AUTO": …, "METERED": …} from update.conf (KEY=VALUE lines, # comments). Unknown keys
+    are ignored; a missing or unknown value means the default. Returns (settings, warnings)."""
+    raw = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if key.startswith("export "):
+            key = key[len("export "):].strip()
+        raw[key.upper()] = _unquote(value)
+    settings, warnings = dict(DEFAULTS), []
+    for key, allowed in (("AUTO", AUTO_MODES), ("METERED", METERED_MODES)):
+        if key not in raw:
+            continue
+        value = raw[key].strip().lower()
+        value = ALIASES[key].get(value, value)
+        if value in allowed:
+            settings[key] = value
+        else:
+            warnings.append(f"{key}={raw[key]!r} isn't one of {', '.join(allowed)}; using {DEFAULTS[key]}")
+    return settings, warnings
+
+
+def set_config(text, key, value):
+    """update.conf with KEY set to value: the last active KEY= line is rewritten (comments and
+    commented-out examples stay as they are), else the setting is appended."""
+    key = key.upper()
+    lines = text.splitlines(keepends=True)
+    pattern = re.compile(r"^(\s*(?:export\s+)?)" + re.escape(key) + r"\s*=.*?(\r?\n)?$", re.IGNORECASE)
+    for i in range(len(lines) - 1, -1, -1):
+        m = pattern.match(lines[i])
+        if m:
+            lines[i] = f"{m.group(1)}{key}={value}{m.group(2) or ''}"
+            return "".join(lines)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    lines.append(f"{key}={value}\n")
+    return "".join(lines)
+
+
+# ---- dnf5 offline --------------------------------------------------------------------------
+
+STALE_TEXT = "has been modified since the offline transaction was prepared"
+
+
+def offline_class(status, text=""):
+    """What arctic-update makes of the stored offline transaction, from the state file's status
+    (state_status) and, for a pending one, `LC_ALL=C dnf5 offline status` (text):
+    none        nothing stored (dnf5 treats "download-incomplete" the same way)
+    stored      downloaded, or ready for the boot, and still applies
+    stale       the system changed since it was prepared (a dnf transaction ran): dnf5 won't
+                run it, and the next `dnf5 upgrade --offline` replaces it
+    incomplete  it started at a boot and didn't finish
+    invalid     the state file can't be read
+    unknown     a status this doesn't know
+    Only dnf5's "modified since" sentence is read from its output (the rpmdb cookie can't be
+    checked from here); anything else it says means "trust the state file": at the boot,
+    `dnf5 offline _execute` checks the cookie again and refuses a stale transaction."""
+    if status in ("none", "download-incomplete"):
+        return "none"
+    if status == "invalid":
+        return "invalid"
+    if status == "transaction-incomplete":
+        return "incomplete"
+    if status in PENDING:
+        return "stale" if STALE_TEXT in text else "stored"
+    return "unknown"
+
+
+def load_state(text):
+    """The [offline-transaction-state] table of dnf5's state file (a dict; ValueError if it
+    isn't one)."""
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(f"not TOML: {e}") from None
+    table = data.get(STATE_TABLE)
+    if not isinstance(table, dict):
+        raise ValueError(f"no [{STATE_TABLE}] table")
+    return table
+
+
+def read_state(path):
+    """(status, table) of dnf5's state file: ("none", {}) without one, ("invalid", {}) when it
+    can't be read."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        return "none", {}
+    except OSError:
+        return "invalid", {}
+    try:
+        table = load_state(text)
+    except ValueError:
+        return "invalid", {}
+    return str(table.get("status", "invalid")), table
+
+
+def state_status(path):
+    """The stored transaction's status ("none" when there is no state file, "invalid" when it
+    can't be read)."""
+    return read_state(path)[0]
+
+
+def owner(status, table):
+    """ours | foreign | none: whose stored offline transaction this is. arctic-update's own
+    have one of its two command lines, the matching verb, and no release upgrade in them."""
+    if status in ("none", "invalid"):
+        return "none"
+    cmd = str(table.get("cmd_line", ""))
+    if (OUR_COMMANDS.get(cmd) == str(table.get("verb", ""))
+            and str(table.get("target_releasever", "")) == str(table.get("system_releasever", ""))):
+        return "ours"
+    return "foreign"
+
+
+def held(status, table):
+    """Someone else's offline transaction that arctic-update must leave alone: anything but
+    arctic-update's own, unless dnf5 itself considers nothing stored (download-incomplete)."""
+    return owner(status, table) == "foreign" and status != "download-incomplete"
+
+
+def printable(text):
+    """A command line on one line (dnf5 joins argv with spaces; an argument may hold anything)."""
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", str(text)).strip()
+
+
+def inspect(path, magic=MAGIC, datadir=DATADIR):
+    status, table = read_state(path)
+    return {"status": status, "owner": owner(status, table), "hold": "yes" if held(status, table) else "no",
+            "linked": "yes" if is_armed(magic, datadir) else "no",
+            "cmd_line": printable(table.get("cmd_line", ""))}
+
+
+def change_status(text, old, new):
+    """The state file with status old changed to new, and nothing else: only that one line is
+    edited, then both versions are parsed to prove it. Returns the new text, or raises
+    ValueError (the status is something else, or the file isn't what dnf5 writes)."""
+    before = load_state(text)
+    status = before.get("status")
+    if status != old:
+        raise ValueError(f"the stored transaction's status is {status!r}, not {old!r}")
+    pattern = re.compile(r'^(\s*status\s*=\s*)"' + re.escape(old) + r'"(\s*(?:#.*)?)$', re.MULTILINE)
+    changed, count = pattern.subn(lambda m: f'{m.group(1)}"{new}"{m.group(2)}', text)
+    if count != 1:
+        raise ValueError(f"expected one status line, found {count}")
+    expected = tomllib.loads(text)
+    expected[STATE_TABLE] = dict(before, status=new)
+    if tomllib.loads(changed) != expected:
+        raise ValueError("editing the status line changed other values")
+    return changed
+
+
+def arm_text(text):
+    """Scheduled for the next boot: "download-complete" → "ready" (as `dnf5 offline reboot`)."""
+    return change_status(text, "download-complete", "ready")
+
+
+def disarm_text(text):
+    """The reverse: "ready" → "download-complete". The update stays downloaded but isn't
+    scheduled; `dnf5 offline reboot` (arctic-update apply) takes either."""
+    return change_status(text, "ready", "download-complete")
+
+
+def write_atomic(path, text, mode=0o644):
+    """Replace path with text: a temporary file in the same directory, fsync, rename. The file
+    keeps the old one's permissions (else mode)."""
+    directory = os.path.dirname(os.path.abspath(path))
+    try:
+        mode = os.stat(path).st_mode & 0o7777
+    except FileNotFoundError:
+        pass
+    fd, tmp = tempfile.mkstemp(prefix=".arctic-update-", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def set_state_file(path, want):
+    """Mark the stored transaction "ready" or "download-complete" (idempotent). Returns a
+    message; raises ValueError."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        raise ValueError("no offline transaction is stored") from None
+    if load_state(text).get("status") == want:
+        return f"already {want}"
+    write_atomic(path, arm_text(text) if want == "ready" else disarm_text(text))
+    return want
+
+
+def arm(path):
+    return set_state_file(path, "ready")
+
+
+def disarm(path):
+    return set_state_file(path, "download-complete")
+
+
+def load_transaction(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    rpms = data.get("rpms") if isinstance(data, dict) else None
+    return [r for r in rpms if isinstance(r, dict)] if isinstance(rpms, list) else []
+
+
+def summarize(rpms, size=os.path.getsize):
+    """(packages coming in, bytes downloaded for them) of a stored transaction."""
+    count, total = 0, 0
+    for rpm in rpms:
+        if rpm.get("action") not in INBOUND:
+            continue
+        count += 1
+        package = rpm.get("package_path")
+        if package:
+            try:
+                total += size(package)
+            except OSError:
+                pass
+    return count, total
+
+
+def transaction_key(rpms):
+    """A short fingerprint of what a stored transaction brings in (its inbound NEVRAs): the same
+    updates downloaded again by the next daily check keep the same key, so they are announced
+    once."""
+    nevras = sorted(str(r.get("nevra", "")) + ":" + str(r.get("action")) for r in rpms if r.get("action") in INBOUND)
+    return hashlib.sha256("\n".join(nevras).encode()).hexdigest()[:16] if nevras else ""
+
+
+def unused_packages(rpms, names, directory):
+    """The *.rpm file names in directory (names: its listing) that no package_path of the
+    stored transaction points at."""
+    directory = os.path.normpath(directory)
+    used = {os.path.basename(r["package_path"]) for r in rpms
+            if r.get("package_path") and os.path.normpath(os.path.dirname(r["package_path"])) == directory}
+    return sorted(n for n in names if n.endswith(".rpm") and n not in used)
+
+
+def prune(transaction, directory):
+    """Delete downloaded packages the stored transaction doesn't use. Returns their names.
+    Without a readable transaction nothing is deleted (dnf5 offline clean does that)."""
+    rpms = load_transaction(transaction)
+    if not rpms:
+        return []
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return []
+    removed = []
+    for name in unused_packages(rpms, names, directory):
+        try:
+            os.unlink(os.path.join(directory, name))
+            removed.append(name)
+        except OSError:
+            pass
+    return removed
+
+
+# ---- channel -------------------------------------------------------------------------------
+
+def channel_from_repos(text):
+    """stable | testing | none, from `dnf5 repo list --all --json`: testing when arctic-testing is
+    enabled (it adds the development builds on top of stable), stable when only arctic is."""
+    try:
+        repos = json.loads(text)
+    except ValueError:
+        return "none"
+    enabled = {r.get("id"): bool(r.get("is_enabled")) for r in repos if isinstance(r, dict)} if isinstance(repos, list) else {}
+    if enabled.get("arctic-testing"):
+        return "testing"
+    if enabled.get("arctic"):
+        return "stable"
+    return "none"
+
+
+# ---- status file ---------------------------------------------------------------------------
+
+def now_iso():
+    return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def parse_assignment(item, now=now_iso):
+    """KEY=VALUE from the command line → (key, typed value). "@now" is the current time, an
+    empty value is null."""
+    key, sep, value = item.partition("=")
+    if not sep or not re.fullmatch(r"[a-z_]+", key):
+        raise ValueError(f"not KEY=VALUE: {item!r}")
+    if value == "":
+        return key, None
+    if value == "@now":
+        return key, now()
+    kind = STATUS_TYPES.get(key)
+    if kind is bool:
+        if value not in ("true", "false"):
+            raise ValueError(f"{key} must be true or false")
+        return key, value == "true"
+    if kind is int:
+        return key, int(value)
+    if kind is float:
+        return key, round(float(value), 1)
+    if key == "state" and value not in STATES:
+        raise ValueError(f"state must be one of {', '.join(STATES)}")
+    return key, value
+
+
+def merge_status(old, assignments, now=now_iso):
+    status = dict(old) if isinstance(old, dict) else {}
+    for item in assignments:
+        key, value = parse_assignment(item, now)
+        status[key] = value
+    status["updated_at"] = now()
+    return status
+
+
+def read_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_status(path, assignments):
+    status = merge_status(read_json(path), assignments)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    write_atomic(path, json.dumps(status, indent=2, sort_keys=True) + "\n", 0o644)
+    # The shell (the desktop user) reads it: never keep the temporary file's 0600.
+    os.chmod(path, 0o644)
+    return status
+
+
+def ready_message(count, armed):
+    if armed:
+        return f"{plural(count, 'update')} will be installed the next time you restart."
+    return f"{plural(count, 'update')} downloaded. Install {'it' if count == 1 else 'them'} with: arctic-update apply"
+
+
+def ready_assignments(old, rpms, armed, message=None, size=os.path.getsize):
+    """The status file's fields for a downloaded update. staged_at (when these updates were
+    downloaded; the shell announces each download once) stays as it was while the same
+    packages are waiting: the daily check stores the transaction again every day."""
+    count, total = summarize(rpms, size)
+    key = transaction_key(rpms)
+    keep = bool(key) and old.get("notify_key") == key and old.get("staged_at")
+    return ["state=ready", f"packages={count}", f"download_mb={megabytes(total)}",
+            f"staged_at={old['staged_at'] if keep else '@now'}", f"notify_key={key}",
+            "checked_at=@now", f"armed={'true' if armed else 'false'}",
+            f"message={message or ready_message(count, armed)}"]
+
+
+def epoch(iso):
+    try:
+        return int(datetime.datetime.fromisoformat(str(iso)).timestamp())
+    except (TypeError, ValueError):
+        return 0
+
+
+def boot_check(status_file, state, linked, boot_id):
+    """After a restart, what became of the update arctic-update scheduled before it (from the
+    status file: armed, armed_boot, armed_at)?
+    none         nothing to say (not scheduled, or scheduled since this boot started)
+    installed    no offline transaction is stored any more: installed (or removed by hand)
+    incomplete   dnf5 started installing it at the boot and didn't finish
+    not-started  still "ready", but /system-update is gone: dnf5 refused it at the boot (the
+                 system changed), or a dnf transaction before the restart invalidated it; the
+                 journal (dnf5-offline-transaction.service since armed_at) tells which
+    Returns (result, armed_at as seconds since the epoch)."""
+    s = status_file if isinstance(status_file, dict) else {}
+    armed_boot = s.get("armed_boot") or ""
+    if s.get("armed") is not True or not armed_boot or not boot_id or armed_boot == boot_id:
+        return "none", 0
+    since = epoch(s.get("armed_at"))
+    if state in ("none", "download-incomplete"):
+        return "installed", since
+    if state == "transaction-incomplete":
+        return "incomplete", since
+    if state == "ready" and not linked:
+        return "not-started", since
+    return "none", 0
+
+
+# ---- report (arctic-update status) --------------------------------------------------------
+
+def is_armed(magic=MAGIC, datadir=DATADIR):
+    """/system-update points at dnf5's offline directory (the trigger for the next boot)."""
+    try:
+        return os.path.islink(magic) and os.path.realpath(magic) == os.path.realpath(datadir)
+    except OSError:
+        return False
+
+
+def build_report(status_file, settings, state, armed, rpms, channel, offline="", busy=False,
+                 size=os.path.getsize, table=None):
+    """What `arctic-update status --json` prints: the status file corrected by what is on disk
+    now (it may be days old: the update may have been installed, or invalidated by a dnf
+    transaction since, which removes /system-update). table: the state file's contents."""
+    s = dict(status_file)
+    table = table or {}
+    stored = state in PENDING
+    stale = offline == "stale" and stored
+    report = {
+        "state": s.get("state") if s.get("state") in STATES else "idle",
+        "packages": 0, "download_mb": 0.0, "staged_at": s.get("staged_at"),
+        "checked_at": s.get("checked_at"), "channel": channel, "auto": settings["AUTO"],
+        "metered": settings["METERED"], "message": s.get("message") or "",
+        "armed": False, "stored": stored and not stale, "held": None,
+        "boot_failures": s.get("boot_failures") or 0, "install_error": s.get("install_error") or "",
+        "install_failed_at": s.get("install_failed_at"),
+    }
+    if report["state"] in ("checking", "downloading") and not busy:
+        report["state"] = "failed"
+        report["message"] = "The last check stopped before it finished."
+    if report["state"] in ("checking", "downloading"):
+        return report
+    if held(state, table):
+        # Someone else's (dnf5 install --offline, dnf5 system-upgrade download): never ours to
+        # install, schedule or remove.
+        cmd = printable(table.get("cmd_line", "")) or "another command"
+        report.update(state="idle", stored=False, held=cmd, message=held_message(state, cmd))
+        return report
+    if report["state"] == "failed" and report["boot_failures"] >= 2:
+        return report   # automatic installs are paused: the message says why
+    if stored and not stale and not (state == "ready" and not armed):
+        count, total = summarize(rpms, size)
+        report.update(state="ready", packages=count, download_mb=megabytes(total),
+                      armed=armed and state == "ready")
+        report["message"] = ready_message(count, report["armed"])
+        return report
+    if stored:
+        # dnf5 removes /system-update when a dnf transaction changes the system after the
+        # download: that update no longer applies as it was tested.
+        report["state"] = "idle"
+        report["stored"] = False
+        report["message"] = ("Software was installed or removed after the updates were downloaded, so "
+                             "they'll be checked and downloaded again soon.")
+        return report
+    if report["state"] == "ready":
+        report["state"] = "idle"
+        report["message"] = "No updates are waiting."
+    return report
+
+
+def held_message(state, cmd):
+    if state == "transaction-incomplete":
+        return (f"An offline transaction prepared with '{cmd}' didn't finish at a restart (dnf5 offline log "
+                f"shows why). Arctic's updates wait until it is removed: sudo dnf5 offline clean")
+    return (f"An offline transaction prepared with '{cmd}' is waiting; arctic-update leaves it alone. "
+            f"Install it with: sudo dnf5 offline reboot (or remove it: sudo dnf5 offline clean)")
+
+
+def megabytes(n):
+    """Bytes as MB with one decimal; anything downloaded shows as at least 0.1."""
+    return max(round(n / 1048576, 1), 0.1) if n > 0 else 0.0
+
+
+def plural(n, word):
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+AUTO_TEXT = {
+    "download-and-install-on-reboot": "on: downloads in the background, installs at the next restart",
+    "download-only": "download only: install with arctic-update apply",
+    "off": "off (arctic-update now checks by hand)",
+}
+CHANNEL_TEXT = {
+    "stable": "stable (released builds)",
+    "testing": "testing (development builds)",
+    "none": "none: the Arctic package repository isn't set up",
+}
+
+
+def when(iso):
+    if not iso:
+        return "never"
+    try:
+        return datetime.datetime.fromisoformat(iso).astimezone().strftime("%a %d %b %Y %H:%M")
+    except ValueError:
+        return iso
+
+
+def format_report(r):
+    rows = [("Channel", CHANNEL_TEXT.get(r["channel"], r["channel"])),
+            ("Automatic", AUTO_TEXT.get(r["auto"], r["auto"])),
+            ("Metered", "downloads on metered connections too" if r["metered"] == "allow"
+             else "no downloads on metered connections"),
+            ("Last check", when(r["checked_at"]))]
+    state = r["state"]
+    if state == "ready":
+        size = f" ({r['download_mb']:.1f} MB)" if r["download_mb"] else ""
+        waiting = f"{plural(r['packages'], 'update')}{size}, "
+        waiting += "installed the next time you restart" if r["armed"] else "downloaded; install with arctic-update apply"
+        rows.append(("Waiting", waiting))
+    elif state in ("checking", "downloading"):
+        rows.append(("Now", r["message"] or "Checking for updates…"))
+    elif state == "failed":
+        rows.append(("Problem", r["message"] or "The last check failed."))
+    else:
+        rows.append(("Waiting", r["message"] or "Nothing: the system is up to date."))
+    if r.get("boot_failures") and state != "failed":
+        when_failed = when(r.get("install_failed_at"))
+        rows.append(("Last restart", f"installing the updates failed ({when_failed})"
+                     + (f": {r['install_error']}" if r.get("install_error") else "")
+                     + "; they are tried again at the next restart"))
+    width = max(len(k) for k, _ in rows) + 2
+    return "\n".join(f"{k:<{width}}{v}" for k, v in rows)
+
+
+# ---- command line --------------------------------------------------------------------------
+
+def read_text(path, default=""):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return default
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="arctic-update-helper")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    c = sub.add_parser("config"); c.add_argument("file", nargs="?", default=CONF)
+    c = sub.add_parser("set-config"); c.add_argument("file"); c.add_argument("key"); c.add_argument("value")
+    c = sub.add_parser("inspect")
+    c.add_argument("--state", default=STATE); c.add_argument("--magic", default=MAGIC); c.add_argument("--datadir", default=DATADIR)
+    c = sub.add_parser("offline-class"); c.add_argument("status")
+    c = sub.add_parser("state"); c.add_argument("file", nargs="?", default=STATE)
+    c = sub.add_parser("arm"); c.add_argument("file", nargs="?", default=STATE)
+    c = sub.add_parser("disarm"); c.add_argument("file", nargs="?", default=STATE)
+    c = sub.add_parser("summary"); c.add_argument("file", nargs="?", default=TRANSACTION)
+    c = sub.add_parser("prune"); c.add_argument("file", nargs="?", default=TRANSACTION); c.add_argument("dir", nargs="?", default=PACKAGES)
+    sub.add_parser("channel")
+    c = sub.add_parser("write-status"); c.add_argument("file"); c.add_argument("assignments", nargs="*")
+    c = sub.add_parser("record-ready"); c.add_argument("file"); c.add_argument("--transaction", default=TRANSACTION)
+    c.add_argument("--armed", choices=("true", "false"), required=True); c.add_argument("--message")
+    c = sub.add_parser("get"); c.add_argument("file"); c.add_argument("key")
+    c = sub.add_parser("boot-check")
+    c.add_argument("--status-file", default=STATUS); c.add_argument("--state", default=STATE)
+    c.add_argument("--magic", default=MAGIC); c.add_argument("--datadir", default=DATADIR)
+    c.add_argument("--boot-id", default="")
+    c = sub.add_parser("report")
+    c.add_argument("--json", action="store_true")
+    c.add_argument("--channel", default="none")
+    c.add_argument("--offline", default="", help="offline-status class (root only)")
+    c.add_argument("--busy", default="no")
+    c.add_argument("--status-file", default=STATUS)
+    c.add_argument("--conf", default=CONF)
+    c.add_argument("--state", default=STATE)
+    c.add_argument("--transaction", default=TRANSACTION)
+    c.add_argument("--magic", default=MAGIC)
+    c.add_argument("--datadir", default=DATADIR)
+    a = p.parse_args(argv)
+
+    if a.cmd == "config":
+        settings, warnings = parse_config(read_text(a.file))
+        for w in warnings:
+            print(f"{a.file}: {w}", file=sys.stderr)
+        print(f"auto={settings['AUTO']}\nmetered={settings['METERED']}")
+    elif a.cmd == "set-config":
+        allowed = {"AUTO": AUTO_MODES, "METERED": METERED_MODES}.get(a.key.upper())
+        if allowed is None or a.value not in allowed:
+            p.error(f"{a.key}={a.value}: not a setting")
+        os.makedirs(os.path.dirname(os.path.abspath(a.file)), exist_ok=True)
+        write_atomic(a.file, set_config(read_text(a.file), a.key, a.value), 0o644)
+    elif a.cmd == "inspect":
+        for key, value in inspect(a.state, a.magic, a.datadir).items():
+            print(f"{key}={value}")
+    elif a.cmd == "offline-class":
+        print(offline_class(a.status, sys.stdin.read() if a.status in PENDING else ""))
+    elif a.cmd == "state":
+        print(state_status(a.file))
+    elif a.cmd in ("arm", "disarm"):
+        try:
+            print(arm(a.file) if a.cmd == "arm" else disarm(a.file))
+        except (ValueError, OSError) as e:
+            what = "mark the update ready" if a.cmd == "arm" else "unschedule the update"
+            print(f"can't {what}: {e}", file=sys.stderr)
+            return 1
+    elif a.cmd == "summary":
+        count, total = summarize(load_transaction(a.file))
+        print(count, total)
+    elif a.cmd == "prune":
+        for name in prune(a.file, a.dir):
+            print(name)
+    elif a.cmd == "channel":
+        print(channel_from_repos(sys.stdin.read()))
+    elif a.cmd == "write-status":
+        try:
+            write_status(a.file, a.assignments)
+        except ValueError as e:
+            p.error(str(e))
+    elif a.cmd == "record-ready":
+        write_status(a.file, ready_assignments(read_json(a.file), load_transaction(a.transaction),
+                                               a.armed == "true", a.message))
+    elif a.cmd == "get":
+        value = read_json(a.file).get(a.key)
+        print("" if value is None else str(value).lower() if isinstance(value, bool) else value)
+    elif a.cmd == "boot-check":
+        result, since = boot_check(read_json(a.status_file), state_status(a.state),
+                                   is_armed(a.magic, a.datadir), a.boot_id.strip())
+        print(result, since)
+    elif a.cmd == "report":
+        settings, _ = parse_config(read_text(a.conf))
+        state, table = read_state(a.state)
+        report = build_report(read_json(a.status_file), settings, state,
+                              is_armed(a.magic, a.datadir), load_transaction(a.transaction),
+                              a.channel, a.offline, a.busy == "yes", table=table)
+        print(json.dumps(report, indent=2) if a.json else format_report(report))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
