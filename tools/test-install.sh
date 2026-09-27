@@ -17,7 +17,12 @@
 #                                               instead of the ISO's, to test engine fixes
 #                                               without rebuilding the ISO
 #   tools/test-install.sh --boot-append 'ARGS'  kernel arguments for the installed system's first
-#                                               boot (edited in GRUB; default none)
+#                                               boot, edited into its GRUB entry. Default without
+#                                               KVM: plymouth.use-simpledrm. Fedora's Plymouth
+#                                               ignores simpledrm when the disk is encrypted and
+#                                               waits 8 s (DeviceTimeout) for the GPU driver,
+#                                               which TCG never loads in time, so the stock boot
+#                                               falls back to the text prompt. '' for none.
 #   tools/test-install.sh --out DIR             default out/test/install/<firmware>
 #
 # Stage "install": a fresh 40 GB sparse target disk (target.qcow2) and, for UEFI, a fresh
@@ -51,7 +56,7 @@ INSTALL_TIMEOUT=7200
 MEMORY=6144
 SMP=4
 KVM=0
-BOOT_APPEND=""
+BOOT_APPEND=auto
 INSTALLER=""
 OUT=""
 # Test secrets only (typed into the VM and passed to the installer).
@@ -68,10 +73,10 @@ while (( $# )); do
     --memory) MEMORY="$2"; shift 2 ;;
     --smp) SMP="$2"; shift 2 ;;
     --kvm) KVM=1; shift ;;
-    --boot-append) BOOT_APPEND="$BOOT_APPEND $2"; shift 2 ;;
+    --boot-append) BOOT_APPEND="$2"; shift 2 ;;
     --installer) INSTALLER="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
-    -h|--help) sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
@@ -89,6 +94,9 @@ OUT="$(cd "$OUT" && pwd)"
 if [[ "$STAGE" == boot ]]; then
   [[ -f "$OUT/target.qcow2" ]] || arctic_die "no installed disk at $OUT/target.qcow2 (run --stage install first)"
   rm -f "$OUT"/boot-*.png "$OUT/serial-boot.log" "$OUT/qemu-boot.log"
+  # Keep the log of the run that installed the disk; test.log starts afresh.
+  if [[ -f "$OUT/test.log" ]] && grep -q 'install stage' "$OUT/test.log"; then mv "$OUT/test.log" "$OUT/test-install-stage.log"; fi
+  rm -f "$OUT/test.log"
 else
   # A new install starts from a blank disk and a blank variable store.
   find "$OUT" -mindepth 1 -maxdepth 1 ! -name '.' -exec rm -rf {} +
@@ -178,6 +186,7 @@ sec "efibootmgr"; efibootmgr -v 2>&1 | head -20
 sec "flatpak"; flatpak remotes --system; flatpak list --system
 sec "default apps"; cat /etc/arctic/default-apps
 sec "plymouth"; plymouth-set-default-theme 2>/dev/null
+journalctl -b -o short-monotonic --no-pager | grep -iE 'plymouth|virtio.gpu|simpledrm|fbcon|\[drm\]|cryptsetup' | head -40
 sec "sddm"; ls /etc/sddm.conf.d/ /usr/lib/sddm/sddm.conf.d/ 2>&1; journalctl -b -u sddm --no-pager | tail -40
 sec "journalctl -b -p warning"; journalctl -b -p warning --no-pager
 sec "AVC denials"; journalctl -b --no-pager -g 'avc: +denied' | tail -40
@@ -192,6 +201,10 @@ engine="$(arctic_engine)"
 arctic_container_args
 kvm_args=()
 if (( KVM )) && [[ -e /dev/kvm ]]; then kvm_args=(--device /dev/kvm); fi
+if [[ "$BOOT_APPEND" == auto ]]; then
+  BOOT_APPEND=""
+  if ! (( KVM )) || [[ ! -e /dev/kvm ]]; then BOOT_APPEND="plymouth.use-simpledrm"; fi
+fi
 iso_args=()
 if [[ "$STAGE" != boot ]]; then iso_args=(-v "$ISO:/iso:ro"); fi
 
@@ -242,11 +255,12 @@ def wait_menu(vm, prefix, limit):
     log("boot menu not detected")
     return False
 
-def edit_entry(vm, prefix, args):
-    """GRUB: edit the selected entry, append kernel arguments to its linux line, boot."""
+def edit_entry(vm, prefix, args, line):
+    """GRUB: edit the selected entry, append kernel arguments to its linux line (`line`
+    lines below the first), boot."""
     vm.keys("e")
     time.sleep(1)
-    vm.keys("down", "down", "ctrl-e")
+    vm.keys(*(["down"] * line), "ctrl-e")
     vm.type_text(" " + args, gap=0.1)
     time.sleep(0.5)
     vm.shot(f"{prefix}-02-entry-edited")
@@ -268,7 +282,7 @@ def stage_install():
     try:
         if wait_menu(vm, "install", 300):
             vm.keys("home")
-            edit_entry(vm, "install", LIVE_APPEND)
+            edit_entry(vm, "install", LIVE_APPEND, 2)   # setparams, (empty), linux
             log("selected 'Try Arctic Linux' with the journal on the serial port")
         start = time.time()
         # The live session is up when live-session logs its mode (journal → serial).
@@ -350,7 +364,8 @@ def stage_boot():
     try:
         if wait_menu(vm, "boot", 240):
             if boot_append:
-                edit_entry(vm, "boot", boot_append)
+                # A BLS entry: load_video, set gfxpayload=keep, insmod gzio, linux, initrd.
+                edit_entry(vm, "boot", boot_append, 3)
                 log(f"booting with extra arguments: {boot_append}")
             else:
                 vm.keys("ret")

@@ -91,7 +91,7 @@ write /mnt/etc/default/grub (0644)
     | GRUB_DEFAULT=saved
     | GRUB_DISABLE_SUBMENU=true
     | GRUB_TERMINAL_OUTPUT="gfxterm"
-    | GRUB_CMDLINE_LINUX="rootflags=subvol=@ rhgb quiet"
+    | GRUB_CMDLINE_LINUX="rhgb quiet"
     | GRUB_DISABLE_RECOVERY="true"
     | GRUB_ENABLE_BLSCFG=true
     | GRUB_THEME="/boot/grub2/themes/arctic/theme.txt"

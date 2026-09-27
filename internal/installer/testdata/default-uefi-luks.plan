@@ -99,7 +99,7 @@ write /mnt/etc/default/grub (0644)
     | GRUB_DEFAULT=saved
     | GRUB_DISABLE_SUBMENU=true
     | GRUB_TERMINAL_OUTPUT="gfxterm"
-    | GRUB_CMDLINE_LINUX="rootflags=subvol=@ rd.luks.uuid=luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad rhgb quiet"
+    | GRUB_CMDLINE_LINUX="rd.luks.uuid=luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad rhgb quiet"
     | GRUB_DISABLE_RECOVERY="true"
     | GRUB_ENABLE_BLSCFG=true
     | GRUB_THEME="/boot/grub2/themes/arctic/theme.txt"

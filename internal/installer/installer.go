@@ -841,12 +841,21 @@ func (in *Installer) fstab() string {
 
 // ---- bootloader ----
 
+// kernelArgs are the arguments after "root=UUID=… ro" in /etc/kernel/cmdline (kernel-install
+// writes them into each BLS entry).
 func (in *Installer) kernelArgs() string {
-	args := "rootflags=subvol=@"
+	return "rootflags=subvol=@ " + in.grubArgs()
+}
+
+// grubArgs is GRUB_CMDLINE_LINUX. grub2-mkconfig rewrites the BLS entries' options from it,
+// and its 10_linux adds "rootflags=subvol=@" itself for a btrfs subvolume root, so it is not
+// repeated here (as Anaconda does; it would otherwise appear twice on the command line).
+func (in *Installer) grubArgs() string {
+	args := ""
 	if in.lay.luks {
-		args += " rd.luks.uuid=" + in.lay.luksName
+		args = "rd.luks.uuid=" + in.lay.luksName + " "
 	}
-	return args + " rhgb quiet"
+	return args + "rhgb quiet"
 }
 
 func (in *Installer) bootloaderPhase(ctx context.Context) error {
@@ -858,7 +867,7 @@ func (in *Installer) bootloaderPhase(ctx context.Context) error {
 		"GRUB_DEFAULT=saved",
 		"GRUB_DISABLE_SUBMENU=true",
 		`GRUB_TERMINAL_OUTPUT="gfxterm"`,
-		`GRUB_CMDLINE_LINUX="` + in.kernelArgs() + `"`,
+		`GRUB_CMDLINE_LINUX="` + in.grubArgs() + `"`,
 		`GRUB_DISABLE_RECOVERY="true"`,
 		"GRUB_ENABLE_BLSCFG=true",
 	}, "\n") + "\n"
