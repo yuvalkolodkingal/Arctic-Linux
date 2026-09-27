@@ -1,9 +1,9 @@
-# Arctic Linux testing: every push to the development branch, before it reaches main (the
-# stable channel, arctic.repo). Same key, same packages, newer and less tried. Off by default;
-# turn it on (and back off) with an override, which updates keep:
+# Arctic Linux testing: builds of the development branch, before it reaches main (the stable
+# channel, arctic.repo). Same key, same packages, newer and less tried. Off by default; turn it
+# on (and back off) with an override, which updates keep:
 #   sudo dnf config-manager setopt arctic-testing.enabled=1
 # Turned off again, the testing builds stay installed until the stable channel has newer
-# ones (the next build from main: every build's Release carries its build time).
+# ones (a build of a later commit: every build's Release starts with its commit's time).
 #
 # arctic-release installs this file as /usr/share/dnf5/repos.d/arctic-testing.repo and
 # replaces it on updates: don't edit it (docs/BUILD-SPEC.md §9).
@@ -13,7 +13,11 @@ baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/testing/fedora-$releaseve
 type=rpm-md
 enabled=0
 gpgcheck=1
-repo_gpgcheck=1
+# Every package is signed and checked (gpgcheck). repomd.xml is signed too (repomd.xml.asc),
+# but, as in Fedora's own repositories, not checked (repo_gpgcheck=0): that needs the key
+# in dnf's cache first, and every dnf run without -y (dnf-makecache.timer, a declined
+# prompt) would skip the repository until then. The site is served over HTTPS only.
+repo_gpgcheck=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic
 metadata_expire=6h
 skip_if_unavailable=True
@@ -25,7 +29,7 @@ baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/testing/fedora-$releaseve
 type=rpm-md
 enabled=0
 gpgcheck=1
-repo_gpgcheck=1
+repo_gpgcheck=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic
 metadata_expire=6h
 skip_if_unavailable=True

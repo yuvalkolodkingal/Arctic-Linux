@@ -14,7 +14,11 @@ baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/stable/fedora-$releasever
 type=rpm-md
 enabled=1
 gpgcheck=1
-repo_gpgcheck=1
+# Every package is signed and checked (gpgcheck). repomd.xml is signed too (repomd.xml.asc),
+# but, as in Fedora's own repositories, not checked (repo_gpgcheck=0): that needs the key
+# in dnf's cache first, and every dnf run without -y (dnf-makecache.timer, a declined
+# prompt) would skip the repository until then. The site is served over HTTPS only.
+repo_gpgcheck=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic
 metadata_expire=6h
 # The live USB and the installer work offline: an unreachable repository is skipped.
@@ -28,7 +32,7 @@ baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/stable/fedora-$releasever
 type=rpm-md
 enabled=0
 gpgcheck=1
-repo_gpgcheck=1
+repo_gpgcheck=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic
 metadata_expire=6h
 skip_if_unavailable=True
