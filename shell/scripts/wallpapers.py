@@ -1,115 +1,192 @@
-#!/home/bitzonx/.local/opt/quickshell-wallpaper-venv/bin/python
-import fcntl, hashlib, json, os, subprocess, sys, time
-from urllib.parse import unquote, urlparse
+#!/usr/bin/env python3
+"""Wallpaper picker backend: list wallpapers with thumbnails, choose a folder, apply one.
+
+    wallpapers.py list              JSON {items: [...], current, folder, theme}
+    wallpapers.py folder <path|url> remember an extra folder of your own pictures
+    wallpapers.py apply <key>       apply a wallpaper through `arctic-wallpaper <key>`
+
+Items are the Arctic design wallpapers (snowfield, aurora, fox) — shown in the active theme's
+variant and applied by name, so they follow Winter / Polar night switches — followed by the
+pictures in your folder (default ~/Pictures/Wallpapers). Design wallpapers are looked up in
+~/.local/share/arctic/wallpapers, then /usr/share/backgrounds/arctic.
+
+Thumbnails (480×300 JPEG, Pillow; SVGs rendered with rsvg-convert) are cached in
+~/.cache/arctic/thumbs. Settings live in ~/.config/arctic/wallpapers.json ({"folder": …}).
+The applied choice is kept by arctic-wallpaper in ~/.config/arctic/wallpaper.
+"""
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
-from PIL import Image, ImageOps
+from urllib.parse import unquote, urlparse
+
 HOME = Path.home()
-CACHE = HOME / '.cache/quickshell-wallpapers'
-CACHE.mkdir(parents=True, exist_ok=True)
-CONFIG = HOME / '.config/quickshell/wallpapers.json'
+CONFIG = Path(os.environ.get('XDG_CONFIG_HOME') or HOME / '.config') / 'arctic'
+CACHE = Path(os.environ.get('XDG_CACHE_HOME') or HOME / '.cache') / 'arctic' / 'thumbs'
+DATA = Path(os.environ.get('XDG_DATA_HOME') or HOME / '.local/share') / 'arctic' / 'wallpapers'
+SYSTEM = [DATA, Path('/usr/share/backgrounds/arctic')]
+SETTINGS = CONFIG / 'wallpapers.json'
+DESIGN = [('snowfield', 'Snowfield'), ('aurora', 'Aurora'), ('fox', 'Fox')]
+IMAGES = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.svg'}
+THUMB = (480, 300)
+
 
 def settings():
-    return json.loads(CONFIG.read_text())
+    try:
+        return json.loads(SETTINGS.read_text())
+    except (OSError, ValueError):
+        return {}
+
 
 def save(data):
-    temp = CONFIG.with_suffix('.tmp')
-    temp.write_text(json.dumps(data, indent=2)+'\n')
-    temp.replace(CONFIG)
+    SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    temp = SETTINGS.with_suffix('.tmp')
+    temp.write_text(json.dumps(data, indent=2) + '\n')
+    temp.replace(SETTINGS)
 
-def ensure_daemon():
-    if subprocess.run([str(HOME/'.local/bin/awww'), 'query'], capture_output=True).returncode == 0:
-        return
-    with (CACHE/'daemon.log').open('a') as log:
-        subprocess.Popen([str(HOME/'.local/bin/awww-daemon')], stdout=log, stderr=log, start_new_session=True)
-    for _ in range(40):
-        time.sleep(0.1)
-        if subprocess.run([str(HOME/'.local/bin/awww'), 'query'], capture_output=True).returncode == 0:
-            return
-    raise RuntimeError('Wallpaper service could not start.')
 
-def run(args):
-    result = subprocess.run([str(x) for x in args], capture_output=True, text=True)
-    if result.returncode:
-        raise RuntimeError((result.stderr or result.stdout).strip()[-500:])
-    return result.stdout
+def theme():
+    try:
+        name = (CONFIG / 'theme').read_text().strip()
+    except OSError:
+        name = ''
+    return name if name in ('winter', 'polar-night') else 'polar-night'
 
-def rgb(value):
-    return tuple(int(value[i:i+2], 16)/255 for i in (1,3,5))
 
-def hexcolor(values):
-    return '#' + ''.join(f'{round(v*255):02x}' for v in values)
+def current():
+    """The saved choice (a design name or a path); with none saved, the design wallpaper drawn
+    now (arctic-wallpaper records it), else the theme's default."""
+    try:
+        saved = (CONFIG / 'wallpaper').read_text().strip()
+    except OSError:
+        saved = ''
+    if saved:
+        return saved
+    try:
+        drawn = Path((CACHE.parent / 'wallpaper-current').read_text().strip()).stem
+    except OSError:
+        drawn = ''
+    for name, _label in DESIGN:
+        if drawn.startswith(name + '-'):
+            return name
+    return 'snowfield' if theme() == 'winter' else 'aurora'
 
-def mix(a, b, amount):
-    return tuple(x*(1-amount)+y*amount for x,y in zip(a,b))
 
-def luminance(values):
-    linear = [v/12.92 if v <= 0.04045 else ((v+0.055)/1.055)**2.4 for v in values]
-    return sum(v*w for v,w in zip(linear, (0.2126,0.7152,0.0722)))
+def default_folder():
+    pictures = HOME / 'Pictures'
+    try:
+        out = subprocess.run(['xdg-user-dir', 'PICTURES'], capture_output=True, text=True, timeout=2,
+                             env=dict(os.environ, HOME=str(HOME))).stdout.strip()
+        if out and Path(out) != HOME:   # xdg-user-dir answers $HOME when the folder isn't set up
+            pictures = Path(out)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return pictures / 'Wallpapers'
 
-def theme(path):
-    with (CACHE/'theme.lock').open('w') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        run([HOME/'.local/opt/quickshell-wallpaper-venv/bin/wal', '-i', path, '--backend', 'colorthief', '-n', '-s', '-t', '-e', '-q'])
-        palette = json.loads((HOME/'.cache/wal/colors.json').read_text())
-        # Preserve the wallpaper hue while ensuring readable UI controls.
-        bg = mix(rgb(palette['special']['background']), (0.08,0.08,0.09), 0.5)
-        accent = rgb(palette['colors']['color4'])
-        while luminance(accent) < 0.4:
-            accent = mix(accent, (1,1,1), 0.08)
-        palette['ui'] = dict(background=hexcolor(bg), surface=hexcolor(mix(bg,(1,1,1),0.07)), accent=hexcolor(accent))
-        target = CACHE/'theme.json'
-        temp = CACHE/'theme.tmp'
-        temp.write_text(json.dumps(palette))
-        temp.replace(target)
+
+def thumbnail(path):
+    """Cached thumbnail for an image, as a file path, or '' when it can't be read."""
+    from PIL import Image, ImageOps
+    stat = path.stat()
+    key = hashlib.sha256('{}\0{}\0{}'.format(path, stat.st_mtime_ns, stat.st_size).encode()).hexdigest()[:32]
+    thumb = CACHE / (key + '.jpg')
+    if thumb.exists():
+        return str(thumb)
+    CACHE.mkdir(parents=True, exist_ok=True)
+    source = path
+    temp = None
+    if path.suffix.lower() == '.svg':
+        if not shutil.which('rsvg-convert'):
+            return ''
+        temp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+        temp.close()
+        result = subprocess.run(['rsvg-convert', '-w', str(THUMB[0] * 2), '-o', temp.name, str(path)], capture_output=True)
+        if result.returncode:
+            os.unlink(temp.name)
+            return ''
+        source = Path(temp.name)
+    try:
+        with Image.open(source) as img:
+            img.seek(0)
+            ImageOps.fit(img.convert('RGB'), THUMB, Image.LANCZOS).save(thumb, quality=85)
+    finally:
+        if temp:
+            os.unlink(temp.name)
+    return str(thumb)
+
+
+def design_file(stem):
+    """The design wallpaper <stem> (e.g. aurora-winter): a rendered PNG if shipped, else the SVG."""
+    for folder in SYSTEM:
+        for suffix in ('.png', '.svg'):
+            candidate = folder / (stem + suffix)
+            if candidate.is_file():
+                return candidate
+    return None
+
 
 def library():
-    c = settings()
-    folder = Path(c.get('folder', '~/Pictures/wallpaper')).expanduser()
-    rows = []
-    for path in sorted(folder.rglob('*')):
-        if path.suffix.lower() not in {'.jpg','.jpeg','.png','.webp','.bmp','.gif'} or not path.is_file():
+    active = theme()
+    items = []
+    for name, label in DESIGN:
+        path = design_file('{}-{}'.format(name, active))
+        if path is None:
             continue
         try:
-            key = hashlib.sha256((str(path)+str(path.stat().st_mtime_ns)).encode()).hexdigest()
-            thumb = CACHE/(key+'.jpg')
-            with Image.open(path) as img:
-                width, height = img.size
-                if not thumb.exists():
-                    ImageOps.fit(img.convert('RGB'), (480,300)).save(thumb, quality=85)
-            rows.append(dict(path=str(path), name=path.stem.replace('-',' ').replace('_',' '), url=path.as_uri(), thumb=thumb.as_uri(), dimensions=f'{width} × {height}'))
+            thumb = thumbnail(path)
         except (OSError, ValueError):
-            continue
-    return dict(items=rows, current=str(Path(c.get('wallpaper','')).expanduser()), folder=str(folder))
+            thumb = ''
+        items.append(dict(key=name, name=label, path=str(path), thumb=thumb, arctic=True))
+    data = settings()
+    folder = Path(data.get('folder') or default_folder()).expanduser()
+    system = {p.resolve() for p in SYSTEM if p.is_dir()}
+    if folder.is_dir() and folder.resolve() not in system:
+        for path in sorted(folder.rglob('*')):
+            if path.suffix.lower() not in IMAGES or not path.is_file():
+                continue
+            try:
+                thumb = thumbnail(path)
+            except (OSError, ValueError, SyntaxError):
+                continue
+            if not thumb:
+                continue
+            items.append(dict(key=str(path), name=path.stem.replace('-', ' ').replace('_', ' '),
+                              path=str(path), thumb=thumb, arctic=False))
+    return dict(items=items, current=current(), folder=str(folder), folderExists=folder.is_dir(), theme=active)
 
-try:
-    action = sys.argv[1]
+
+def main():
+    action = sys.argv[1] if len(sys.argv) > 1 else 'list'
     if action == 'list':
         print(json.dumps(library()))
     elif action == 'folder':
-        path = Path(unquote(urlparse(sys.argv[2]).path) if sys.argv[2].startswith('file:') else sys.argv[2]).expanduser().resolve()
+        raw = sys.argv[2]
+        path = Path(unquote(urlparse(raw).path) if raw.startswith('file:') else raw).expanduser().resolve()
         if not path.is_dir():
             raise ValueError('Choose an existing folder.')
-        data = settings(); data['folder'] = str(path); save(data)
-        print(json.dumps(dict(ok=True)))
-    elif action in ('apply','theme','restore'):
-        path = Path(settings()['wallpaper'] if action == 'restore' else sys.argv[2]).expanduser().resolve()
-        if not path.is_file():
-            raise ValueError('Wallpaper file is missing.')
-        if action in ('apply', 'restore'):
-            ensure_daemon()
-            run([HOME/'.local/bin/awww','img',path,'--transition-type','fade','--transition-duration','0.6'])
-            query = run([HOME/'.local/bin/awww', 'query'])
-            if str(path) not in query:
-                raise RuntimeError('The wallpaper service did not confirm the selected image.')
-            data = settings(); data['wallpaper'] = str(path); save(data)
-        try:
-            theme(path)
-        except Exception as error:
-            if action == 'apply':
-                print(json.dumps(dict(ok=False, applied=True, error='Wallpaper applied, but colors could not update: '+str(error))))
-                sys.exit(0)
-            raise
-        print(json.dumps(dict(ok=True, applied=action=='apply', path=str(path))))
-except Exception as error:
-    print(json.dumps(dict(ok=False, error=str(error))))
-    sys.exit(1)
+        data = settings()
+        data['folder'] = str(path)
+        save(data)
+        print(json.dumps(dict(ok=True, folder=str(path))))
+    elif action == 'apply':
+        key = sys.argv[2]
+        if key not in {n for n, _ in DESIGN} and not Path(key).is_file():
+            raise ValueError('That picture is missing. Refresh the list and try again.')
+        result = subprocess.run(['arctic-wallpaper', key], capture_output=True, text=True, timeout=30)
+        if result.returncode:
+            raise RuntimeError((result.stderr or result.stdout).strip()[-300:] or 'The wallpaper could not be set.')
+        print(json.dumps(dict(ok=True, current=key)))
+    else:
+        raise ValueError('usage: wallpapers.py list | folder <path> | apply <key>')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:  # report every failure to the picker as a sentence
+        print(json.dumps(dict(ok=False, error=str(error) or error.__class__.__name__)))
+        sys.exit(1)

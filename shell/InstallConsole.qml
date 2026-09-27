@@ -1,27 +1,41 @@
+pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import "PackageSearch.js" as PackageSearch
 
+// Get apps: a small terminal for dnf and Flatpak inside the launcher (from the original
+// shell's install console). Type an app name to install it, or a dnf / flatpak command; the
+// commands run in a real PTY (scripts/install-terminal.py), so sudo's password prompt and
+// dnf's [y/N] are answered here. Password input is masked and never logged or stored.
+// Tab completes package names from a cached index (scripts/package-index.py).
 ColumnLayout {
     id: terminal
     property bool jobRunning: false
     property bool secret: false
     property string output: ''
     property string notice: ''
-    property bool started: false
     property bool submitting: false
     property var packages: []
+    property var index: PackageSearch.prepare([])
     property var matches: []
+    property string source: 'all'
+    property bool indexRefreshing: false
     property string indexError: ''
     property string completedText: '\u0000'
-    readonly property bool suggestionsOpen: !jobRunning && !secret && !submitting && completedText !== input.text && PackageSearch.context(input.text, input.cursorPosition).allowed
+    readonly property bool suggestionsOpen: !jobRunning && !secret && !submitting && input.text.length > 0
+                                            && completedText !== input.text && PackageSearch.context(input.text, input.cursorPosition).allowed
+    signal backRequested()
+    readonly property Item inputItem: input
+    spacing: Theme.space3
+
     function updateMatches() {
         if (jobRunning || secret || submitting) return;
         const ctx = PackageSearch.context(input.text, input.cursorPosition);
-        matches = ctx.allowed ? PackageSearch.search(packages, ctx.query) : [];
+        terminal.source = ctx.source;
+        matches = ctx.allowed ? PackageSearch.search(index, ctx.query, ctx.source).slice(0, 200) : [];
         packageList.currentIndex = matches.length ? 0 : -1;
     }
     function completeSelection() {
@@ -32,27 +46,8 @@ ColumnLayout {
         completedText = result.text;
         input.forceActiveFocus();
     }
-    Timer { id: filterTimer; interval: 60; onTriggered: terminal.updateMatches() }
-    Process {
-        id: packageIndex
-        command: ['python3', Quickshell.env('HOME') + '/.config/quickshell/scripts/package-index.py']
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const result = JSON.parse(text);
-                    terminal.packages = result.packages || [];
-                    terminal.indexError = result.error || '';
-                    terminal.updateMatches();
-                } catch (e) { terminal.indexError = 'Could not read the package list.'; }
-            }
-        }
-    }
-    signal backRequested()
-    spacing: 10
-    onVisibleChanged: if (visible) entrance.restart()
-    NumberAnimation { id: entrance; target: terminal; property: 'opacity'; from: 0; to: 1; duration: Theme.motionDuration; easing.type: Easing.OutCubic }
     function open() {
-        if (!backend.running) { started = true; backend.running = true; }
+        if (!backend.running) backend.running = true;
         if (!packages.length && !packageIndex.running) packageIndex.running = true;
         updateMatches();
         input.forceActiveFocus();
@@ -61,9 +56,30 @@ ColumnLayout {
         if (!backend.running) return;
         backend.write(JSON.stringify({action: action, text: text || '', secret: terminal.secret}) + '\n');
     }
+
+    Timer { id: filterTimer; interval: 60; onTriggered: terminal.updateMatches() }
+    Process {
+        id: packageIndex
+        command: ['python3', Session.scripts + '/package-index.py']
+        stdout: SplitParser {
+            onRead: data => {
+                try {
+                    const result = JSON.parse(data);
+                    if (result.packages.length || !terminal.packages.length) {
+                        terminal.packages = result.packages;
+                        terminal.index = PackageSearch.prepare(result.packages);
+                    }
+                    terminal.indexRefreshing = result.refreshing;
+                    terminal.indexError = result.error || '';
+                    terminal.updateMatches();
+                } catch (e) { terminal.indexError = 'Could not read the package list.'; }
+            }
+        }
+        onExited: terminal.indexRefreshing = false
+    }
     Process {
         id: backend
-        command: [Quickshell.env('HOME') + '/.config/quickshell/scripts/install-terminal.py']
+        command: ['python3', Session.scripts + '/install-terminal.py']
         stdinEnabled: true
         stdout: SplitParser {
             onRead: data => {
@@ -82,35 +98,58 @@ ColumnLayout {
         onExited: {
             terminal.jobRunning = false;
             terminal.secret = false;
+            terminal.submitting = false;
             input.clear();
-            terminal.notice = 'Console disconnected. Reopen Install to reconnect.';
+            terminal.notice = 'The console stopped. Open Get apps again to restart it.';
         }
     }
+
+    // ---- header -----------------------------------------------------------------------
     RowLayout {
         Layout.fillWidth: true
-        PickerButton { text: 'Back'; onClicked: terminal.backRequested() }
-        Text { text: 'Install'; color: Theme.text; font.family: Theme.font; font.pixelSize: 14 }
+        spacing: Theme.space2
+        ArcticButton { variant: 'ghost'; size: 'sm'; iconName: 'chevron-left'; text: 'Back'; onClicked: terminal.backRequested() }
+        Text {
+            text: 'Get apps'
+            color: Theme.ink
+            font.family: Theme.fontSans
+            font.pixelSize: 16
+            font.weight: Font.DemiBold
+        }
         Item { Layout.fillWidth: true }
-        PickerButton { text: 'Refresh'; enabled: !terminal.jobRunning && !terminal.submitting && !packageIndex.running; onClicked: { terminal.indexError = ''; packageIndex.running = true; } }
-        PickerButton { text: 'Clear'; enabled: !terminal.jobRunning; onClicked: terminal.send('clear') }
-        PickerButton { text: 'Ctrl+C'; enabled: terminal.jobRunning; onClicked: terminal.send('interrupt') }
+        ArcticButton {
+            variant: 'ghost'; size: 'sm'; iconName: 'refresh'; text: 'Refresh list'
+            enabled: !terminal.jobRunning && !packageIndex.running
+            onClicked: { terminal.indexError = ''; packageIndex.running = true; }
+        }
+        ArcticButton { variant: 'ghost'; size: 'sm'; text: 'Clear'; enabled: !terminal.jobRunning; onClicked: terminal.send('clear') }
+        ArcticButton { variant: 'secondary'; size: 'sm'; text: 'Stop  Ctrl+C'; enabled: terminal.jobRunning; onClicked: terminal.send('interrupt') }
     }
+
+    // ---- terminal well (or package suggestions while typing a name) -----------------------
     Rectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        color: Theme.surface
-        radius: 6
+        color: Theme.surfaceSunken
+        radius: Theme.radiusMd
+        border.width: 1
+        border.color: Theme.line
+
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 12
+            anchors.margins: Theme.space3
             visible: terminal.suggestionsOpen
-            spacing: 8
+            spacing: Theme.space2
             Text {
                 Layout.fillWidth: true
-                text: packageIndex.running ? 'Loading packages…' : terminal.indexError || terminal.matches.length + ' / ' + terminal.packages.length + ' packages · Tab to complete'
-                color: Theme.muted
-                font.family: Theme.font
-                font.pixelSize: 11
+                text: terminal.indexError ? terminal.indexError
+                      : !terminal.packages.length ? (terminal.indexRefreshing || packageIndex.running ? 'Getting the package list… this takes a minute the first time.' : 'No package list yet.')
+                      : terminal.matches.length + (terminal.matches.length >= 200 ? '+' : '') + ' matches · Tab or Enter completes'
+                           + (terminal.indexRefreshing ? ' · updating the list' : '')
+                color: Theme.inkMuted
+                font.family: Theme.fontSans
+                font.pixelSize: 12
+                font.weight: Font.Medium
             }
             ListView {
                 id: packageList
@@ -120,37 +159,53 @@ ColumnLayout {
                 model: terminal.matches
                 keyNavigationWraps: true
                 highlightMoveDuration: 0
+                spacing: 2
                 ScrollBar.vertical: ScrollBar {}
-                delegate: Button {
+                delegate: Rectangle {
                     id: suggestion
                     required property string modelData
                     required property int index
+                    readonly property bool selected: packageList.currentIndex === index
+                    readonly property bool app: modelData.startsWith('flathub:')
                     width: packageList.width
                     height: 30
-                    hoverEnabled: true
-                    focusPolicy: Qt.NoFocus
-                    onClicked: { packageList.currentIndex = index; terminal.completeSelection(); }
-                    background: Rectangle {
-                        radius: 4
-                        color: packageList.currentIndex === suggestion.index ? Theme.accent : suggestion.hovered ? Theme.background : 'transparent'
+                    radius: Theme.radiusSm
+                    color: selected ? Theme.accentSoft : hover.containsMouse ? Theme.surfaceRaised : 'transparent'
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.space2
+                        anchors.rightMargin: Theme.space2
+                        spacing: Theme.space2
+                        Icon { name: suggestion.app ? 'package' : 'download'; size: 16; color: Theme.inkMuted }
+                        Text {
+                            Layout.fillWidth: true
+                            text: suggestion.app ? suggestion.modelData.slice(8) : suggestion.modelData
+                            color: Theme.ink
+                            font.family: Theme.fontMono
+                            font.pixelSize: 13
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: suggestion.app ? 'Flathub' : 'Fedora'
+                            color: Theme.inkMuted
+                            font.family: Theme.fontSans
+                            font.pixelSize: 12
+                        }
                     }
-                    contentItem: Text {
-                        text: suggestion.modelData
-                        color: packageList.currentIndex === suggestion.index ? '#111318' : Theme.text
-                        font.family: 'DejaVu Sans Mono'
-                        font.pixelSize: 12
-                        elide: Text.ElideRight
-                        verticalAlignment: Text.AlignVCenter
+                    MouseArea {
+                        id: hover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: { packageList.currentIndex = suggestion.index; terminal.completeSelection(); }
                     }
-                    leftPadding: 8
                 }
                 Text {
                     anchors.centerIn: parent
-                    visible: !packageIndex.running && !terminal.indexError && packageList.count === 0
-                    text: terminal.packages.length ? 'No matching packages' : 'No packages found'
-                    color: Theme.muted
-                    font.family: Theme.font
-                    font.pixelSize: 12
+                    visible: terminal.packages.length > 0 && packageList.count === 0
+                    text: 'No matching packages'
+                    color: Theme.inkMuted
+                    font.family: Theme.fontSans
+                    font.pixelSize: 13
                 }
             }
         }
@@ -158,7 +213,7 @@ ColumnLayout {
             id: scroll
             visible: !terminal.suggestionsOpen
             anchors.fill: parent
-            anchors.margins: 12
+            anchors.margins: Theme.space3
             clip: true
             contentWidth: transcript.implicitWidth
             contentHeight: transcript.implicitHeight
@@ -169,39 +224,55 @@ ColumnLayout {
                 selectByMouse: true
                 textFormat: TextEdit.PlainText
                 wrapMode: TextEdit.NoWrap
-                font.family: 'DejaVu Sans Mono'
-                font.pixelSize: 12
-                color: Theme.text
+                font.family: Theme.fontMono
+                font.pixelSize: 13
+                color: Theme.ink
+                selectionColor: Theme.selection
+                selectedTextColor: Theme.ink
                 padding: 0
                 background: null
                 onTextChanged: Qt.callLater(() => { if (scroll.contentItem) scroll.contentItem.contentY = Math.max(0, scroll.contentHeight - scroll.availableHeight); })
             }
         }
     }
+
     Text {
         Layout.fillWidth: true
         visible: text.length > 0
         text: terminal.notice
-        color: Theme.muted
+        color: Theme.inkMuted
         wrapMode: Text.Wrap
-        font.family: Theme.font
-        font.pixelSize: 12
+        font.family: Theme.fontSans
+        font.pixelSize: 13
     }
+
+    // ---- input line ---------------------------------------------------------------------
     RowLayout {
         Layout.fillWidth: true
-        Text { text: terminal.secret ? 'Password' : terminal.jobRunning ? '›' : '$'; color: Theme.accent; font.family: 'DejaVu Sans Mono'; font.pixelSize: 13 }
-        TextField {
+        spacing: Theme.space2
+        Item {
+            Layout.preferredWidth: 20
+            Layout.preferredHeight: 20
+            Icon { anchors.centerIn: parent; visible: terminal.secret; name: 'lock'; size: 18; color: Theme.accentText }
+            Text {
+                anchors.centerIn: parent
+                visible: !terminal.secret
+                text: terminal.jobRunning ? '›' : '$'
+                color: Theme.accentText
+                font.family: Theme.fontMono
+                font.pixelSize: 15
+                font.weight: Font.Bold
+            }
+        }
+        ArcticField {
             id: input
             Layout.fillWidth: true
-            implicitHeight: 40
             enabled: backend.running
-            placeholderText: terminal.secret ? 'Password' : terminal.jobRunning ? 'Response…' : 'emerge --ask package'
+            font.family: Theme.fontMono
+            font.pixelSize: 13
+            placeholderText: terminal.secret ? 'Password (hidden)' : terminal.jobRunning ? 'Answer the prompt above…' : 'App name, or a dnf or flatpak command'
             echoMode: terminal.secret ? TextInput.Password : TextInput.Normal
             inputMethodHints: terminal.secret ? Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase : Qt.ImhNoPredictiveText
-            color: Theme.text
-            placeholderTextColor: Theme.muted
-            font.family: 'DejaVu Sans Mono'
-            font.pixelSize: 12
             selectByMouse: !terminal.secret
             onTextEdited: {
                 if (!terminal.jobRunning && !terminal.secret && !terminal.submitting) {
@@ -213,8 +284,9 @@ ColumnLayout {
             onAccepted: {
                 if (terminal.submitting) return;
                 if (filterTimer.running) { filterTimer.stop(); terminal.updateMatches(); }
-                if (terminal.suggestionsOpen && terminal.matches.length) {
-                    terminal.completeSelection(); return;
+                if (terminal.suggestionsOpen && terminal.matches.length && input.text !== terminal.matches[packageList.currentIndex]) {
+                    terminal.completeSelection();
+                    return;
                 }
                 if (!terminal.jobRunning && !text.trim()) return;
                 if (!terminal.jobRunning) terminal.submitting = true;
@@ -224,16 +296,20 @@ ColumnLayout {
             Keys.onPressed: event => {
                 if (terminal.suggestionsOpen && (event.key === Qt.Key_Down || event.key === Qt.Key_Up)) {
                     if (event.key === Qt.Key_Down) packageList.incrementCurrentIndex(); else packageList.decrementCurrentIndex();
-                    event.accepted = true; return;
+                    event.accepted = true;
+                    return;
                 }
                 if (terminal.suggestionsOpen && event.key === Qt.Key_Tab) {
-                    terminal.completeSelection(); event.accepted = true; return;
+                    terminal.completeSelection();
+                    event.accepted = true;
+                    return;
                 }
                 if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_C && terminal.jobRunning) {
-                    terminal.send('interrupt'); clear(); event.accepted = true;
+                    terminal.send('interrupt');
+                    clear();
+                    event.accepted = true;
                 }
             }
-            background: Rectangle { radius: 6; color: Theme.surface; border.width: input.activeFocus ? 1 : 0; border.color: Theme.accent }
         }
     }
 }

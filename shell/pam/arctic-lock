@@ -1,0 +1,4 @@
+# PAM service for the Arctic lock screen (Quickshell PamContext, loaded from this folder).
+# It only checks the password of the user who is logged in; pam_unix uses the unix_chkpwd
+# helper for that, so the shell needs no privileges.
+auth required pam_unix.so

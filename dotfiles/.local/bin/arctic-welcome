@@ -1,18 +1,30 @@
 #!/usr/bin/env bash
 # arctic-welcome — the "You're trying Arctic Linux" greeting in the live session.
-# Spec: design components/LiveDesktop. Shown once per live boot; closing it leaves the Install
-# item on the bar, and Super+I starts the installer from anywhere. Does nothing when installed.
-# Clicking the card starts the installer (mako runs the "default" action on click).
+# Spec: design components/LiveDesktop. Shown once per live boot, as the shell's frosted card
+# (Install Arctic Linux / Keep trying); closing it leaves the Install item on the bar and the
+# Install tile on the desktop, and Super+I starts the installer from anywhere.
+# Without the shell it falls back to a notification (click it to install).
+# Does nothing on an installed system.
 set -uo pipefail
 
 arctic-is-live || exit 0
 flag="${XDG_RUNTIME_DIR:-/tmp}/arctic-welcome-shown"
 [[ -e "$flag" ]] && exit 0
 touch "$flag"
-sleep 2   # let mako and the bar come up first
 
+if [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]]; then
+  # The shell starts alongside this script at login; give it a few seconds to come up.
+  for _ in $(seq 50); do
+    arctic-shell-ipc welcome open >/dev/null 2>&1 && exit 0
+    sleep 0.2
+  done
+fi
+
+sleep 2   # let mako and the bar come up first
+logo="${XDG_DATA_HOME:-$HOME/.local/share}/arctic/logos/arctic-mark-polar-night.svg"
+[[ -f "$logo" ]] || logo=/usr/share/arctic/logos/arctic-mark-polar-night.svg
 action="$(notify-send -a "Arctic Linux" -u normal -t 0 \
-  -i "${XDG_DATA_HOME:-$HOME/.local/share}/arctic/logos/arctic-mark-polar-night.svg" \
+  -i "$logo" \
   -A default="Install Arctic Linux" \
   "You’re trying Arctic Linux" \
   "Nothing is saved to this computer. Look around, open apps, then install when you’re ready.

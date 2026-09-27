@@ -12,6 +12,10 @@ Writes dotfiles/.config/arctic/themes/{winter,polar-night}/  — one folder per 
   fuzzel-colors.ini   [colors] section included by fuzzel.ini
   swaylock.conf       full swaylock config
   theme.env           ARCTIC_THEME, colour scheme and wallpapers, sourced by arctic-* scripts
+  theme.json          every token for the Quickshell desktop shell (shell/Theme.qml watches it)
+
+and shell/assets/theme-defaults.js, the shell's built-in Polar night (used until a theme.json
+can be read).
   icons/*.svg         design icons recoloured for the theme's ink, plus the 16px mark
 
 Run from the repo root:  python3 design/tools/gen-desktop-themes.py
@@ -28,6 +32,7 @@ GTK_EXPORT = os.path.join(ROOT, "design", "exports", "gtk-arctic-{}.css")
 ICONS_SRC = os.path.join(ROOT, "design", "icons")
 LOGOS_SRC = os.path.join(ROOT, "design", "logos")
 OUT = os.path.join(ROOT, "dotfiles", ".config", "arctic", "themes")
+SHELL_DEFAULTS = os.path.join(ROOT, "shell", "assets", "theme-defaults.js")
 
 THEMES = {
     # folder name: (token theme key, gsettings color-scheme, default wallpaper, lock wallpaper)
@@ -255,6 +260,64 @@ ARCTIC_LOCK_WALLPAPER={lock_wp}
 """
 
 
+def camel(name):
+    """design token name -> QML property name: surface-raised -> surfaceRaised, ansi-0 -> ansi0."""
+    head, *rest = name.split("-")
+    return head + "".join(p[:1].upper() + p[1:] for p in rest)
+
+
+def qml_color(c):
+    """#rrggbb stays; CSS #rrggbbaa -> QML #aarrggbb."""
+    c = c.lower()
+    if len(c) == 9:
+        return "#" + c[7:9] + c[1:7]
+    return c
+
+
+def px(v):
+    """'12px' -> 12, '120ms' -> 120, '-0.02em' -> -0.02 (numbers pass through)."""
+    if isinstance(v, (int, float)):
+        return v
+    m = re.match(r"^(-?[0-9.]+)", str(v))
+    n = float(m.group(1)) if m else 0
+    return int(n) if n == int(n) else n
+
+
+def bezier(v):
+    """'cubic-bezier(0.2, 0, 0, 1)' -> [0.2, 0, 0, 1]."""
+    return [px(x.strip()) for x in re.findall(r"\((.*)\)", v)[0].split(",")]
+
+
+def theme_json(tok, folder, key, scheme, wp, lock_wp):
+    """All tokens the Quickshell shell needs, in one file per theme (QML colour order)."""
+    t = tok["themes"][key]
+    colors = {camel(k): qml_color(v) for k, v in t.items()}
+    for k, v in tok["ramps"].items():
+        colors[camel(k)] = qml_color(v)
+    return json.dumps({
+        "_comment": HEADER + " Colours are QML #AARRGGBB.",
+        "id": folder,
+        "name": tok["themeNames"][key],
+        "dark": key == "dark",
+        "colorScheme": scheme,
+        "wallpaper": wp,
+        "lockWallpaper": lock_wp,
+        "colors": colors,
+        "fonts": dict(tok["font"]),
+        "type": {camel(k): {"size": px(v["fontSize"]), "lineHeight": px(v["lineHeight"]),
+                            "weight": v["fontWeight"], "family": v["family"],
+                            "letterSpacing": px(v.get("letterSpacing", 0))}
+                 for k, v in tok["type"].items()},
+        "spacing": {camel(k.replace("-0-5", "Half")): px(v) for k, v in tok["spacing"].items()},
+        "radius": {camel(k): px(v) for k, v in tok["radius"].items()},
+        "border": {camel(k): px(v) for k, v in tok["border"].items()},
+        "blur": {camel(k): px(v) for k, v in tok["blur"].items()},
+        "size": {camel(k): px(v) for k, v in tok["size"].items()},
+        "duration": {camel(k): px(v) for k, v in tok["duration"].items()},
+        "easing": {camel(k): bezier(v) for k, v in tok["easing"].items()},
+    }, indent=1, sort_keys=False) + "\n"
+
+
 def icons(t, dest):
     os.makedirs(dest, exist_ok=True)
     for fn in sorted(os.listdir(ICONS_SRC)):
@@ -296,9 +359,15 @@ def main():
         write(os.path.join(d, "fuzzel-colors.ini"), fuzzel(t, key))
         write(os.path.join(d, "swaylock.conf"), swaylock(t, key, lock_wp))
         write(os.path.join(d, "theme.env"), theme_env(t, folder, key, scheme, wp, lock_wp, tok["themeNames"]))
+        write(os.path.join(d, "theme.json"), theme_json(tok, folder, key, scheme, wp, lock_wp))
         icons(t, os.path.join(d, "icons"))
         mark(key, os.path.join(d, "icons"))
         print("wrote", os.path.relpath(d, ROOT))
+        if folder == "polar-night":
+            # The shell's built-in fallback (used before any theme.json is readable).
+            write(SHELL_DEFAULTS, ".pragma library\n// {}\n// Polar night, the default theme, used until a theme.json can be read.\nvar THEME = {};\n".format(
+                HEADER, theme_json(tok, folder, key, scheme, wp, lock_wp).rstrip()))
+            print("wrote", os.path.relpath(SHELL_DEFAULTS, ROOT))
 
 
 if __name__ == "__main__":

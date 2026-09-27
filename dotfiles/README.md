@@ -3,9 +3,15 @@
 The Arctic Linux desktop, built from the design system in [`../design`](../design)
 ([brand book](../design/brand-book.md), [platforms](../design/guidelines/10-platforms.md),
 [terminal and fetch](../design/guidelines/30-terminal-and-fetch.md)).
-It covers the Mango window manager, the top bar, launcher, notifications and on-screen display,
-lock screen, kitty, zsh with the animated fox greeting, GTK colours, wallpapers, and switching
-between the two themes: **Winter** (light) and **Polar night** (dark).
+It covers the Mango window manager, the desktop shell, notifications, kitty, zsh with the
+animated fox greeting, GTK colours, wallpapers, and switching between the two themes:
+**Winter** (light) and **Polar night** (dark).
+
+The shell — bar, launcher with Get apps, wallpaper picker, power menu, OSD, lock screen, polkit
+dialog and the live welcome card — is the Quickshell shell in [`../shell`](../shell), which
+grew out of the user's own Quickshell setup. These dotfiles start it (`arctic-session shell`)
+and every `arctic-*` helper drives it over IPC (`arctic-shell-ipc`), falling back to the
+waybar / fuzzel / swaylock / notification versions kept here when it isn't running.
 
 ## Install
 
@@ -13,8 +19,12 @@ between the two themes: **Winter** (light) and **Polar night** (dark).
 ./install.sh --deps             # Fedora: installs the packages, then the dotfiles into $HOME
 ./install.sh                    # dotfiles only (replaced files are backed up first)
 ./install.sh --theme winter     # start in Winter instead of Polar night
-./install.sh --target /etc/skel # packaging: copy for new users
+./install.sh --target /etc/skel # packaging: copy for new users (never copies the shell)
+./install.sh --no-shell         # into $HOME, but use the packaged shell in /usr/share/arctic/shell
 ```
+
+Installing into `$HOME` also copies [`../shell`](../shell) to `~/.config/quickshell/arctic`, so
+the desktop works without the `arctic-shell` package; `arctic-shell` prefers that copy.
 
 Then log in to the **Mango** session, or press `Super + Shift + R` in a running one.
 
@@ -27,15 +37,17 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `.config/mango/arctic/binds.conf` | Every shortcut (cheat sheet: `Super + /`) | Accessibility → Keyboard |
 | `.config/mango/arctic/apps.conf` | `Super+Enter/W/E/F` → your terminal, browser, editor, file manager via `arctic-open` | — |
 | `.config/mango/arctic/rules.conf` | Floating dialogs, full-screen installer, layer rules for blur and animation | — |
-| `.config/mango/arctic/autostart.conf` | Wallpaper, bar, notifications, polkit agent, network applet, clipboard, idle lock | — |
-| `.config/waybar/` | 34px frost bar: fox mark, workspaces 1–5, clock, notifications, Bluetooth, tray, network, volume, battery, power; live session adds "Live session" and an amber Install item | TopBar, LiveDesktop |
-| `.config/fuzzel/fuzzel.ini` | Launcher: 520px frosted card, 20px radius, amber-soft selection | Launcher |
+| `.config/mango/arctic/autostart.conf` | Theme, the shell (bar, launcher, OSD, lock, polkit agent), notifications, network applet, clipboard, idle lock, live welcome | — |
+| `.config/arctic/shell.json` | Shell settings: `{"frame": true}` (the rounded screen frame) | — |
+| `.config/waybar/` | **Fallback bar** (`ARCTIC_SHELL=waybar`): the same TopBar in waybar | TopBar, LiveDesktop |
+| `.config/fuzzel/fuzzel.ini` | **Fallback launcher**: 520px frosted card, 20px radius, amber-soft selection | Launcher |
 | `.config/mako/config` | Notifications: 340px raised cards, 14px radius, critical = red edge and no timeout; OSD pill | Notification, OSD |
-| `.config/swaylock/config` | Lock screen ring: amber while typing, red when wrong, green when accepted | LockScreen |
+| `.config/swaylock/config` | **Fallback lock**: ring amber while typing, red when wrong, green when accepted | LockScreen |
+| `.config/fontconfig/conf.d/60-arctic-figtree.conf` | Finds the design's Figtree files, which name their family "Figtree Light" | Typography |
 | `.config/kitty/` | JetBrains Mono 10.5, amber block cursor, the Arctic palette | Terminal |
 | `.config/gtk-3.0`, `gtk-4.0` | GTK and libadwaita colours, amber focus ring | Platforms → GTK |
 | `.zshrc`, `.zprofile`, `.bashrc.d/arctic.sh` | Prompt (`~ ❯`, amber arrow), history, completion, the fox greeting | Terminal |
-| `.config/arctic/themes/{winter,polar-night}/` | **Generated** colour files for every app above | tokens |
+| `.config/arctic/themes/{winter,polar-night}/` | **Generated** colour files for every app above, and `theme.json` (every token) for the shell | tokens |
 | `.config/arctic/current` | Symlink to the active theme; every app reads its colours through it | Theme switching |
 | `.local/bin/arctic-*` | The helper commands below | — |
 
@@ -43,18 +55,23 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 
 | Command | Does |
 |---|---|
-| `arctic-theme [winter\|polar-night\|toggle]` | Switch the whole desktop's theme (`Super + Shift + T`) |
-| `arctic-wallpaper [snowfield\|aurora\|fox]` | Pick a wallpaper; it follows theme switches |
+| `arctic-shell [--foreground\|--restart\|--stop\|--path]` | Start the desktop shell (Quickshell) |
+| `arctic-shell-ipc <target> <function>` | Talk to the shell, e.g. `arctic-shell-ipc launcher toggle` (targets in [`../shell/README.md`](../shell/README.md)) |
+| `arctic-theme [winter\|polar-night\|toggle]` | Switch the whole desktop's theme (`Super + Shift + T`); the shell restyles live |
+| `arctic-wallpaper [snowfield\|aurora\|fox\|<picture>]` | Pick a wallpaper; the Arctic ones follow theme switches. Also the shell's picker (`Super + Shift + W`) |
 | `arctic-fetch [--static]` | The animated fox greeting (runs when a terminal opens; any key skips it) |
 | `arctic-motion [on\|off]` | Reduced motion: no animations anywhere, still fox |
-| `arctic-launcher` | Open or close the launcher (`Super + Space`) |
+| `arctic-launcher ["=12*4"]` | Open or close the launcher (`Super + Space`), optionally with something typed |
 | `arctic-open terminal\|browser\|editor\|files\|files-tui` | Open the app you picked for a role |
-| `arctic-lock` | Lock the screen (`Super + L`) |
-| `arctic-power` | Lock, log out, suspend, restart, shut down (`Super + Esc`) |
+| `arctic-lock` | Lock the screen (`Super + L`); off in the live session |
+| `arctic-power [lock\|logout\|suspend\|restart\|poweroff]` | The power menu (`Super + Esc`), or do it now |
 | `arctic-osd volume\|brightness up\|down`, `volume mute`, `mic mute` | Hardware keys with the on-screen display |
 | `arctic-dnd [toggle]` | Do not disturb (`Super + Shift + N`) |
 | `arctic-screenshot area\|screen\|window` | `Print`, `Shift + Print`, `Super + Print` |
 | `arctic-keys` | Keyboard cheat sheet (`Super + /`) |
+| `arctic-shell-ipc apps install` | Get apps: install with dnf or Flatpak (`Super + Shift + A`) |
+| `arctic-session shell\|mako\|…` | Start one session service once (used by autostart) |
+| `arctic-welcome` | The live USB's welcome card, once per boot |
 | `arctic-start-installer` | Start the installer from the live USB (`Super + I`) |
 
 ## Changing things
@@ -74,27 +91,37 @@ The installer copies this tree into `/etc/skel` (package `arctic-desktop-config`
 account starts with it. The installer also writes `/etc/arctic/mango/keyboard.conf` (your keyboard
 layout) and `/etc/arctic/default-apps` (the apps you ticked); both are read at login.
 
+## The fallback desktop
+
+Put `env=ARCTIC_SHELL,waybar` in `~/.config/mango/user.conf` (or leave Quickshell uninstalled)
+and the session starts waybar, uses fuzzel as the launcher and power menu, swaylock as the lock
+screen, lxqt-policykit for passwords and a notification for the live welcome. Every helper
+tries the shell first and falls back on its own, so keybinds are the same either way.
+
 ## Where this differs from the design
 
-- **Launcher:** fuzzel finds and opens apps. The design's `=` calculator, `>` command mode and file
-  or settings results need a custom launcher.
-- **Bar keyboard access:** waybar can't be driven from the keyboard, so the design's `Super + B`
-  bar focus isn't available. Everything on the bar also has its own shortcut.
-- **Lock screen:** swaylock shows the ring over the fox wallpaper. The design's clock, avatar and
-  name card, and the blur, need a custom lock screen (planned with the SDDM theme, same QML).
-- **Live welcome card:** shown as a notification (click it to install) rather than the frosted
-  card in the mockup.
-- **Workspaces:** uses waybar's `ext/workspaces`. Fedora's waybar 0.15 has no `mango/workspaces`
-  module yet.
+- **Launcher and popovers** hang from the bar and can be docked to any screen edge (from the
+  original Quickshell setup) rather than floating 120px below it; the screen frame is also the
+  original shell's.
+- **Bar keyboard access:** the design's `Super + B` bar focus isn't there yet. Everything on the
+  bar also has its own shortcut.
+- **Lock screen:** "N notifications hidden" isn't shown, because mako can't count hidden
+  notifications.
+- **Fallback only:** waybar's workspaces use `ext/workspaces` (Fedora's waybar 0.15 has no
+  `mango/workspaces` module); fuzzel has no `=` / `>` modes.
 
 ## Not yet verified on a running system
 
 These configs are built from the design and checked against the Mango (0.17.3), waybar and
-mako sources and docs, but haven't been run on real Fedora + Mango yet. Check in the first VM
-boot:
+mako sources and docs. The shell was run and screenshotted under a headless sway on Fedora 44
+(`../shell/dev/headless.sh`), but not yet on real Fedora + Mango. Check in the first VM boot:
 
-- Frost blur on waybar, fuzzel and the OSD: blur strength vs the design's 28px, and whether
-  `blur_layer` also blurs notifications (harmless, since they're opaque).
+- The shell's layer rules (`rules.conf`, `^arctic-…$` regexes): the bar blurred, the frame and
+  popovers not; the frame's exclusive zones keeping tiled windows 8px inside it.
+- `mmsg watch all-tags` / `watch all-monitors` driving the workspaces and the focused screen.
+- The lock screen's PAM service (`pam_unix` from the shell's `pam/` folder) on a real account.
+- Frost blur on waybar, fuzzel and the OSD (fallback desktop): blur strength vs the design's
+  28px, and whether `blur_layer` also blurs notifications (harmless, since they're opaque).
 - mako: `anchor=` inside the `[app-name=arctic-osd]` section (needs mako ≥ 1.5), and the progress
   bar in the OSD.
 - fuzzel: `include=`, `placeholder=` and `y-margin=` (needs fuzzel ≥ 1.9).

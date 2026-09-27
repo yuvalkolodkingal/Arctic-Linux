@@ -5,6 +5,9 @@
 #   ./install.sh --target DIR    install into DIR instead (e.g. /etc/skel when packaging)
 #   ./install.sh --theme winter  start in Winter instead of Polar night
 #   ./install.sh --deps          also install the Fedora packages the desktop uses (sudo dnf)
+#   ./install.sh --shell         also copy the shell (../shell) to ~/.config/quickshell/arctic
+#                                (the default when installing into $HOME; packages use
+#                                /usr/share/arctic/shell instead, so --target never copies it)
 #
 # Copies: this folder's home tree, plus the design's fonts, wallpapers and logos from ../design.
 set -euo pipefail
@@ -14,23 +17,27 @@ DESIGN="$(cd "$HERE/../design" && pwd)"
 TARGET="$HOME"
 THEME="polar-night"
 DEPS=0
+SHELL_COPY=auto
 
 while (( $# )); do
   case "$1" in
     --target) TARGET="$2"; shift 2 ;;
     --theme)  THEME="$2"; shift 2 ;;
     --deps)   DEPS=1; shift ;;
-    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --shell)  SHELL_COPY=1; shift ;;
+    --no-shell) SHELL_COPY=0; shift ;;
+    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
 
 # Fedora packages (all in Fedora 44 except mangowm, which comes from the Arctic COPR or Terra).
 PACKAGES=(
-  kitty zsh waybar mako fuzzel swaybg swayidle swaylock
+  quickshell python3 python3-pillow python3-pyte
+  kitty zsh mako swaybg swayidle swaylock waybar fuzzel
   grim slurp wl-clipboard cliphist brightnessctl playerctl wireplumber pavucontrol
-  lxqt-policykit network-manager-applet blueman libnotify xdg-user-dirs
-  librsvg2-tools jetbrains-mono-fonts-all google-noto-sans-fonts python3
+  lxqt-policykit network-manager-applet NetworkManager-tui blueman libnotify xdg-user-dirs
+  librsvg2-tools jetbrains-mono-fonts-all google-noto-sans-fonts
 )
 
 if (( DEPS )); then
@@ -73,7 +80,16 @@ cp "$DESIGN"/fonts/*.woff2 "$TARGET/.local/share/fonts/arctic/"
 cp "$DESIGN"/wallpapers/*.svg "$TARGET/.local/share/arctic/wallpapers/"
 cp "$DESIGN"/logos/*.svg "$TARGET/.local/share/arctic/logos/"
 
-# 3. Pick the starting theme (arctic-theme keeps it from then on).
+# 3. The shell, for installs without the arctic-shell package.
+if [[ "$SHELL_COPY" == 1 || ( "$SHELL_COPY" == auto && "$TARGET" == "$HOME" ) ]]; then
+  if [[ -f "$HERE/../shell/shell.qml" ]]; then
+    dest="$TARGET/.config/quickshell/arctic"
+    rm -rf "$dest" && mkdir -p "$dest"
+    (cd "$HERE/../shell" && tar --exclude=./dev --exclude=./tests --exclude='./__pycache__' --exclude='*/__pycache__' -cf - .) | (cd "$dest" && tar -xf -)
+  fi
+fi
+
+# 4. Pick the starting theme (arctic-theme keeps it from then on).
 ln -sfn "themes/$THEME" "$TARGET/.config/arctic/current"
 echo "$THEME" > "$TARGET/.config/arctic/theme"
 

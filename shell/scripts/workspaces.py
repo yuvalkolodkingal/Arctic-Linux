@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Event-driven workspace bridge for Mango and Hyprland."""
+"""Event-driven workspace bridge for Mango, Hyprland and sway.
+
+    workspaces.py watch <monitor>          one JSON line per change:
+                                           {"workspaces": [{id, label, active, occupied, urgent}], "error": ""}
+    workspaces.py switch <monitor> <id>    focus that monitor and show workspace <id>
+    workspaces.py focus                    one JSON line per focus change: {"focused": "<output>"}
+
+Mango streams `mmsg watch all-tags` ({"all_tags": [{"monitor", "tags": [{index, is_active,
+is_urgent, client_count}]}]}, checked against mango 0.17.3 src/ipc/ipc.c); Hyprland reads its
+event socket; sway uses `swaymsg -t subscribe -m`. Nothing polls.
+"""
 import argparse
 import json
 import os
@@ -33,6 +43,82 @@ def normalize_mango(data, monitor):
 
 def emit(rows, error=''):
     print(json.dumps(dict(workspaces=rows, error=error)), flush=True)
+
+
+def sway_rows(monitor):
+    data = json.loads(run(['swaymsg', '-t', 'get_workspaces', '-r']))
+    entries = {w['num']: w for w in data if w.get('output') == monitor and w.get('num', -1) >= 0}
+    ids = sorted(set(range(1, 6)) | set(entries))
+    return [dict(id=i, label=str(i), active=bool(entries.get(i, {}).get('visible')),
+                 occupied=bool(entries.get(i, {}).get('focus')), urgent=bool(entries.get(i, {}).get('urgent')))
+            for i in ids]
+
+
+def sway_watch(monitor):
+    emit(sway_rows(monitor))
+    process = subprocess.Popen(['swaymsg', '-t', 'subscribe', '-m', '["workspace","window","output"]'],
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    try:
+        for _line in process.stdout:
+            emit(sway_rows(monitor))
+    finally:
+        process.terminate()
+        process.wait(timeout=3)
+
+
+def emit_focus(name):
+    print(json.dumps(dict(focused=name or '')), flush=True)
+
+
+def mango_focus():
+    process = subprocess.Popen(['mmsg', 'watch', 'all-monitors'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    last = None
+    try:
+        for line in process.stdout:
+            data = json.loads(line)
+            name = next((m.get('name') for m in data.get('monitors', []) if m.get('active')), '')
+            if name != last:
+                emit_focus(name)
+                last = name
+    finally:
+        process.terminate()
+        process.wait(timeout=3)
+
+
+def sway_focus():
+    def focused():
+        outputs = json.loads(run(['swaymsg', '-t', 'get_outputs', '-r']))
+        return next((o['name'] for o in outputs if o.get('focused')), '')
+    last = focused()
+    emit_focus(last)
+    process = subprocess.Popen(['swaymsg', '-t', 'subscribe', '-m', '["workspace","output"]'],
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    try:
+        for _line in process.stdout:
+            name = focused()
+            if name != last:
+                emit_focus(name)
+                last = name
+    finally:
+        process.terminate()
+        process.wait(timeout=3)
+
+
+def hypr_focus(instance):
+    monitors = json.loads(run(['hyprctl', '-i', instance, 'monitors', '-j']))
+    emit_focus(next((m['name'] for m in monitors if m.get('focused')), ''))
+    events = socket.socket(socket.AF_UNIX)
+    events.connect(str(Path(os.environ['XDG_RUNTIME_DIR']) / 'hypr' / instance / '.socket2.sock'))
+    buffer = b''
+    while True:
+        chunk = events.recv(65536)
+        if not chunk:
+            break
+        buffer += chunk
+        while b'\n' in buffer:
+            line, buffer = buffer.split(b'\n', 1)
+            if line.startswith(b'focusedmon>>'):
+                emit_focus(line[12:].decode(errors='replace').split(',')[0])
 
 
 def mango_watch(monitor):
@@ -73,12 +159,24 @@ def hypr_watch(monitor, instance):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=['watch','switch'])
-    parser.add_argument('monitor')
+    parser.add_argument('mode', choices=['watch','switch','focus'])
+    parser.add_argument('monitor', nargs='?', default='')
     parser.add_argument('workspace', nargs='?', type=int)
     args = parser.parse_args()
     mango = bool(os.environ.get('MANGO_INSTANCE_SIGNATURE'))
-    if args.mode == 'switch':
+    sway = bool(os.environ.get('SWAYSOCK'))
+    hyprland = bool(os.environ.get('HYPRLAND_INSTANCE_SIGNATURE'))
+    if not (mango or sway or hyprland):
+        emit([], 'No supported compositor')
+        raise SystemExit(2)   # nothing to reconnect to
+    if args.mode == 'focus':
+        if mango:
+            mango_focus()
+        elif sway:
+            sway_focus()
+        else:
+            hypr_focus(hypr_instance())
+    elif args.mode == 'switch':
         if args.workspace is None or args.workspace < 0:
             raise ValueError('Invalid workspace')
         if mango:
@@ -86,11 +184,15 @@ def main():
                 response = json.loads(run(['mmsg','dispatch',command]))
                 if not response.get('success'):
                     raise RuntimeError('Mango rejected workspace switch')
+        elif sway:
+            run(['swaymsg', f'focus output {args.monitor}; workspace number {args.workspace}'])
         else:
             instance = hypr_instance()
             run(['hyprctl','-i',instance,'dispatch',f'hl.dsp.focus({{ workspace = {args.workspace} }})'])
     elif mango:
         mango_watch(args.monitor)
+    elif sway:
+        sway_watch(args.monitor)
     else:
         hypr_watch(args.monitor, hypr_instance())
 

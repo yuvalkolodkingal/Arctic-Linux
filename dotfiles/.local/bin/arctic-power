@@ -1,18 +1,36 @@
 #!/usr/bin/env bash
-# arctic-power — the power menu (Super+Esc, or the power item on the bar).
+# arctic-power — the power menu (Super+Esc, or the power item on the bar), and its actions.
+#
+#   arctic-power                 open the menu: Lock screen, Log out, Suspend, Restart, Shut down
+#                                (the live session offers only Restart and Shut down)
+#   arctic-power lock|logout|suspend|restart|poweroff    do it now
+#
+# The menu is the shell's; without the shell a fuzzel menu opens instead.
 # Items name what will happen (design voice: buttons say the consequence).
 set -uo pipefail
 
+act() {
+  case "$1" in
+    lock)             exec arctic-lock ;;
+    logout)           mmsg dispatch quit >/dev/null 2>&1 || loginctl terminate-session "${XDG_SESSION_ID:-}" ;;
+    suspend)          systemctl suspend ;;
+    restart|reboot)   systemctl reboot ;;
+    poweroff|shutdown) systemctl poweroff ;;
+    *) echo "usage: arctic-power [lock|logout|suspend|restart|poweroff]" >&2; exit 2 ;;
+  esac
+}
+
+if [[ -n "${1:-}" ]]; then act "$1"; exit; fi
+arctic-shell-ipc power toggle >/dev/null 2>&1 && exit 0
+
 items=("Lock screen" "Log out" "Suspend" "Restart" "Shut down")
 arctic-is-live 2>/dev/null && items=("Restart" "Shut down")
-
 choice="$(printf '%s\n' "${items[@]}" | fuzzel --dmenu --prompt "  " --placeholder "Power" \
   --lines "${#items[@]}" --width 24 2>/dev/null)" || exit 0
-
 case "$choice" in
-  "Lock screen") arctic-lock ;;
-  "Log out")     mmsg dispatch quit ;;
-  "Suspend")     systemctl suspend ;;
-  "Restart")     systemctl reboot ;;
-  "Shut down")   systemctl poweroff ;;
+  "Lock screen") act lock ;;
+  "Log out")     act logout ;;
+  "Suspend")     act suspend ;;
+  "Restart")     act restart ;;
+  "Shut down")   act poweroff ;;
 esac

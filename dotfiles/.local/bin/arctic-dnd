@@ -8,7 +8,10 @@ set -uo pipefail
 
 MODE=do-not-disturb
 active() { makoctl mode 2>/dev/null | grep -qx "$MODE"; }
-refresh_bar() { pkill -RTMIN+8 -x waybar 2>/dev/null || true; }
+refresh_bar() {
+  arctic-shell-ipc dnd refresh >/dev/null 2>&1 || true
+  pkill -RTMIN+8 -x waybar 2>/dev/null || true
+}
 
 case "${1:-status}" in
   toggle) makoctl mode -t "$MODE" >/dev/null; refresh_bar ;;

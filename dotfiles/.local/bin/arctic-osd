@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # arctic-osd — volume and brightness keys with an on-screen display. Spec: design components/OSD.
 # A 280×48 frosted pill, bottom centre, 44px above the edge: 20px icon, 6px amber bar, value.
-# Shown for 1.2 s after the last key press (drawn by mako, see mako.ini [app-name=arctic-osd]).
+# Drawn by the shell (`arctic-shell-ipc osd volume|brightness`); without the shell, mako draws
+# it as a notification (see mako.ini [app-name=arctic-osd]). Shown for 1.2 s after the last press.
 #
 #   arctic-osd volume up|down|mute
 #   arctic-osd mic mute
@@ -12,7 +13,7 @@ STEP=5
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
 ICONS="$CONF/current/icons"
 
-show() {   # show <icon> <value 0-100> <label>
+show() {   # show <icon> <value 0-100> <label>  (notification fallback)
   notify-send -a arctic-osd -e -t 1200 \
     -h string:x-canonical-private-synchronous:arctic-osd \
     -h "int:value:$2" -i "$ICONS/$1.svg" "$3" 2>/dev/null || true
@@ -44,6 +45,8 @@ case "${1:-} ${2:-}" in
   *)
     echo "usage: arctic-osd volume up|down|mute | mic mute | brightness up|down" >&2; exit 2 ;;
 esac
+
+arctic-shell-ipc osd "$1" >/dev/null 2>&1 && exit 0
 
 case "$1" in
   volume)

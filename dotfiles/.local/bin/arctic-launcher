@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # arctic-launcher — the Super+Space launcher. Spec: design components/Launcher.
-# A frosted search box (fuzzel) that finds and opens apps. Pressing it again closes it.
+# Opens or closes the shell's launcher (apps, "=" calculator, ">" commands, Get apps,
+# Wallpapers, Fetch). Without the shell (ARCTIC_SHELL=waybar) it toggles fuzzel instead.
 #
-# Not yet here (the design's launcher does more): "=" calculator and ">" command modes,
-# file and settings results. Those arrive with the custom launcher.
+#   arctic-launcher            toggle the launcher
+#   arctic-launcher "=12*4"    open it with something already typed
+if (( $# )) && arctic-shell-ipc launcher search "$*" >/dev/null 2>&1; then exit 0; fi
+if (( ! $# )) && arctic-shell-ipc launcher toggle >/dev/null 2>&1; then exit 0; fi
 if pkill -x fuzzel 2>/dev/null; then exit 0; fi
-exec fuzzel "$@"
+exec fuzzel

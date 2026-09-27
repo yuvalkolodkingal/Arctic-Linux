@@ -2,7 +2,7 @@
 # arctic-motion — reduced motion (design: brand book "Motion" → "Reduced motion").
 #
 #   arctic-motion off      reduce motion: no window animations, GTK animations off,
-#                          the fetch fox stays on its still frame
+#                          the shell only fades, the fetch fox stays on its still frame
 #   arctic-motion on       normal motion
 #   arctic-motion          show the current setting
 set -euo pipefail
@@ -27,3 +27,4 @@ EOF
     echo "usage: arctic-motion [on|off]" >&2; exit 2 ;;
 esac
 mmsg dispatch reload_config >/dev/null 2>&1 || true
+arctic-shell-ipc shell reload >/dev/null 2>&1 || true

@@ -1,5 +1,7 @@
 import QtQuick
 
+// The small grip at the top of a popover card. Drag it and the card follows, then docks to
+// the nearest screen edge when released (DockPosition).
 MouseArea {
     id: handle
     property real windowX: 0
@@ -7,7 +9,7 @@ MouseArea {
     property point pressPoint
     property point startPosition
     signal moved(real nextX, real nextY)
-    implicitHeight: 18
+    implicitHeight: 14
     hoverEnabled: true
     cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
     preventStealing: true
@@ -24,9 +26,10 @@ MouseArea {
     Rectangle {
         anchors.centerIn: parent
         width: 36
-        height: 3
-        radius: 1.5
-        color: handle.containsMouse || handle.pressed ? Theme.accent : Theme.muted
-        opacity: handle.containsMouse || handle.pressed ? 1 : 0.45
+        height: 4
+        radius: 2
+        color: handle.containsMouse || handle.pressed ? Theme.inkMuted : Theme.lineStrong
+        opacity: handle.containsMouse || handle.pressed ? 1 : 0.6
+        Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     }
 }

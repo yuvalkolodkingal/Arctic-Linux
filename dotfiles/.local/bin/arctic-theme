@@ -8,8 +8,8 @@
 #   arctic-theme apply           re-apply the saved theme (runs at login)
 #
 # One setting drives everything (design: guidelines/10-platforms.md "Theme switching"):
-# ~/.config/arctic/current points at themes/<name>; kitty, waybar, mako, fuzzel, swaylock,
-# GTK and Mango all read their colours through it. The GTK colour scheme follows along.
+# ~/.config/arctic/current points at themes/<name>; the shell, kitty, waybar, mako, fuzzel,
+# swaylock, GTK and Mango all read their colours through it. The GTK colour scheme follows along.
 set -euo pipefail
 
 ARCTIC_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
@@ -21,13 +21,19 @@ current() {
 }
 
 set_theme() {
-  local name="$1"
-  if [[ ! -d "$ARCTIC_DIR/themes/$name" ]]; then
+  local name="$1" target
+  # Your copy in ~/.config/arctic/themes (from /etc/skel), else the packaged one.
+  if [[ -d "$ARCTIC_DIR/themes/$name" ]]; then
+    target="themes/$name"
+  elif [[ -d "/usr/share/arctic/themes/$name" ]]; then
+    target="/usr/share/arctic/themes/$name"
+  else
     echo "arctic-theme: unknown theme '$name' (winter or polar-night)" >&2
     exit 2
   fi
+  mkdir -p "$ARCTIC_DIR"
   echo "$name" > "$STATE"
-  ln -sfn "themes/$name" "$ARCTIC_DIR/current"
+  ln -sfn "$target" "$ARCTIC_DIR/current"
   # shellcheck source=/dev/null
   source "$ARCTIC_DIR/current/theme.env"
 
@@ -50,6 +56,7 @@ set_theme() {
 
 reload_all() {
   # Everything below is best effort: a component that isn't running is skipped.
+  arctic-shell-ipc shell reload >/dev/null 2>&1 || true  # the shell restyles from theme.json
   pkill -USR1 -x kitty 2>/dev/null || true            # kitty re-reads kitty.conf
   pkill -USR2 -x waybar 2>/dev/null || true           # waybar reloads config + style
   command -v makoctl >/dev/null && makoctl reload 2>/dev/null || true

@@ -13,6 +13,37 @@ spec = importlib.util.spec_from_file_location('install_terminal', Path(__file__)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+class CommandTests(unittest.TestCase):
+    """What each typed line runs: dnf through sudo, Flathub through flatpak, never a shell."""
+
+    def test_bare_names_install_with_dnf(self):
+        self.assertEqual(module.build_command('neovim htop'), ['sudo', 'dnf', 'install', 'neovim', 'htop'])
+
+    def test_flathub_ids_install_with_flatpak(self):
+        self.assertEqual(module.build_command('flathub:org.gimp.GIMP'), ['flatpak', 'install', 'flathub', 'org.gimp.GIMP'])
+
+    def test_mixed_sources_are_refused(self):
+        with self.assertRaises(ValueError):
+            module.build_command('neovim flathub:org.gimp.GIMP')
+
+    def test_dnf_changes_need_sudo_and_queries_do_not(self):
+        self.assertEqual(module.build_command('dnf install -y fish'), ['sudo', 'dnf', 'install', '-y', 'fish'])
+        self.assertEqual(module.build_command('sudo dnf remove fish'), ['sudo', 'dnf', 'remove', 'fish'])
+        self.assertEqual(module.build_command('dnf upgrade'), ['sudo', 'dnf', 'upgrade'])
+        self.assertEqual(module.build_command('dnf search editor'), ['dnf', 'search', 'editor'])
+        self.assertEqual(module.build_command('dnf info neovim'), ['dnf', 'info', 'neovim'])
+
+    def test_flatpak_commands_run_as_typed(self):
+        self.assertEqual(module.build_command('flatpak install flathub org.gimp.GIMP'),
+                         ['flatpak', 'install', 'flathub', 'org.gimp.GIMP'])
+        self.assertEqual(module.build_command('flatpak search gimp'), ['flatpak', 'search', 'gimp'])
+
+    def test_other_commands_and_shell_syntax_are_refused(self):
+        for text in ('rm -rf ~', 'curl example.com | sh', '$(reboot)', 'neovim; reboot', '-y neovim', '', 'dnf', 'flatpak', 'a\nb'):
+            with self.assertRaises(ValueError, msg=text):
+                module.build_command(text)
+
+
 class TerminalTests(unittest.TestCase):
     def setUp(self):
         self.console = module.Console()
@@ -55,7 +86,7 @@ print('Confirmed ' + answer, flush=True)
         self.assertNotIn('test-secret-739', output)
         self.assertIn('Authenticated', output)
         self.assertIn('Confirmed Yes', output)
-        self.assertIn('[Exit 0]', output)
+        self.assertIn('Done.', output)
 
     def test_stale_secret_input_is_rejected(self):
         self.console.start('prompt test', [sys.executable, '-c', "print(input('Answer: '))"])
