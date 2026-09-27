@@ -279,6 +279,30 @@ class EnforcementTests(unittest.TestCase):
         derive.enforce(c)
         self.assertEqual(derive.check(p), [])
 
+    def test_a_mid_grey_base_still_meets_the_guarantees(self):
+        from themegen import wallpaper
+        a = wallpaper.analyse_colors([(100, (20, 90, 160)), (40, (200, 120, 40))])
+        for mode, name in (("dark", "polar-night"), ("light", "winter")):
+            base = palette.builtin(name)
+            base["name"] = "grey-" + mode
+            for r in derive.BACKGROUNDS + ("term-background",):
+                base["colors"][r] = "#777777"
+            p = derive.derive(a, base)
+            self.assertEqual(derive.check(p), [], mode)
+            L = color.hex_to_oklch(p["colors"]["ground"])[0]
+            self.assertLess(L, 0.6) if mode == "dark" else self.assertGreater(L, 0.6)
+
+    def test_guarantees_that_cannot_be_met_are_an_error(self):
+        c = dict(palette.builtin("polar-night")["colors"])
+        c["accent"] = c["on-accent"] = "#777777"
+        orig = derive.enforce
+        derive.enforce = lambda c: c          # nothing can be repaired
+        try:
+            with self.assertRaises(palette.ThemegenError):
+                derive._meet_guarantees(c, "dark")
+        finally:
+            derive.enforce = orig
+
     def test_greyscale_analysis_is_the_base(self):
         from themegen import wallpaper
         a = wallpaper.analyse_colors([(100, (128, 128, 128)), (50, (20, 20, 20)), (10, (240, 240, 240))])

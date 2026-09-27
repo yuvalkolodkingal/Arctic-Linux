@@ -16,7 +16,9 @@ wallpaper come:
 Status colours (success, warning, error, info), on-error and warm stay as in the base.
 Greyscale / low-chroma wallpapers keep the base accent (and barely tint anything).
 
-Then contrast is enforced (lightness moved, hue kept) — see GUARANTEES — and checked.
+Then contrast is enforced (lightness moved, hue kept) — see GUARANTEES — and checked: when the
+foregrounds alone can't reach it (a mid-grey --base), the backgrounds are moved toward black
+(dark) or white (light) until they can; a palette that still fails raises ThemegenError.
 """
 import math
 import os
@@ -153,6 +155,27 @@ def enforce(c):
     return c
 
 
+def _meet_guarantees(c, mode, rounds=12, step=0.25):
+    """enforce() moves foregrounds; with a mid-grey base (--base) no foreground can reach the
+    ratio. Then move the backgrounds' lightness toward the mode's extreme (darker for dark,
+    lighter for light) a step at a time and enforce again. Raises ThemegenError if GUARANTEES
+    still fail, so a palette that breaks them is never returned."""
+    target = 0.0 if mode == "dark" else 1.0
+    for _ in range(rounds):
+        failures = check({"colors": c})
+        if not failures:
+            return
+        for r in BACKGROUNDS + ("term-background",):
+            alpha = color.alpha_of(c[r])
+            L, C, h = color.hex_to_oklch(c[r])
+            c[r] = color.oklch_to_hex((L + (target - L) * step, C, h), alpha)
+        enforce(c)
+    failures = check({"colors": c})
+    if failures:
+        raise ThemegenError("the palette can't meet its contrast guarantees: " + ", ".join(
+            "{} on {} {:.2f} < {:g}".format(fg, bg, r, need) for fg, bg, r, need in failures))
+
+
 def check(palette):
     """[(foreground, background, ratio, required)] for every GUARANTEES pair that fails."""
     c = palette["colors"]
@@ -217,8 +240,9 @@ def derive(analysis, base_palette, name="wallpaper", label="Wallpaper", image=No
             c[r] = _rotate(base[r], delta)
         for r, degrees in harmonize_ansi(base, sh).items():
             c[r] = _rotate(base[r], degrees)
-    enforce(c)
     mode = base_palette["mode"]
+    enforce(c)
+    _meet_guarantees(c, mode)
     p = {
         "name": name,
         "label": label,
