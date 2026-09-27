@@ -176,7 +176,7 @@ def retry(pending, firstboot):
         if ok:
             log(f"{name}: installed")
         else:
-            log(f"{name}: still can't be installed, trying again next boot")
+            log(f"{name}: still can't be installed, trying again in 15 minutes")
             left.append(module)
     return left
 
