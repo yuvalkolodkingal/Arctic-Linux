@@ -28,7 +28,7 @@ site, https://yuvalkolodkingal.github.io/O-Tism/, which `arctic-release` sets up
 | Channel | Built from | On an installed system |
 |---|---|---|
 | `stable` | every push to `main` | on |
-| `testing` | the development branch, published by hand (Actions → Repository → Run workflow on `main`, channel `testing`, ref `claude/busy-goodall-j42hmi`) | off; `sudo dnf config-manager setopt arctic-testing.enabled=1` to follow it, `=0` to go back |
+| `testing` | every push to the development branch (`claude/busy-goodall-j42hmi`) | off; `sudo dnf config-manager setopt arctic-testing.enabled=1` to follow it, `=0` to go back |
 
 Every build's Release carries its commit's UTC time, its UTC build time and the commit
 (`…-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44`), so builds of newer code update the

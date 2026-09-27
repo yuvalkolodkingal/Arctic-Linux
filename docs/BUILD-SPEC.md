@@ -263,15 +263,15 @@ arctic.repo, arctic-testing.repo               repo files for other Fedora 44 sy
 index.html, manifest.json                      landing page; every file with size and sha256
 ```
 
-Channels: `stable` ← pushes to `main`; `testing` ← Actions → Repository → Run workflow on `main`
-with channel `testing` and ref `claude/busy-goodall-j42hmi` (by hand: see *Pages setup* for why dev
-pushes don't publish it by themselves). Each directory keeps the newest 3 builds (distinct epoch:version-release in rpm order) of every
+Channels: `stable` ← pushes to `main`; `testing` ← pushes to `claude/busy-goodall-j42hmi`
+(`repo-testing.yml` starts `repo.yml` on `main` with channel `testing` and that commit, see *Pages
+setup*), or Actions → Repository → Run workflow with any channel and ref. Each directory keeps the newest 3 builds (distinct epoch:version-release in rpm order) of every
 package name. No debuginfo. One build is ~9 MB of RPMs + ~11 MB of SRPMs, so both channels
 stay far below the 900 MB budget `publish-repo.sh` enforces (Pages sites are limited to 1 GB).
 
 **On the system** (`arctic-release`): `/usr/share/dnf5/repos.d/arctic.repo` holds `[arctic]`
 (`baseurl=…/repo/stable/fedora-$releasever/$basearch/`, `enabled=1`, `gpgcheck=1`,
-`repo_gpgcheck=0`, `gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic`, `metadata_expire=6h`,
+`repo_gpgcheck=1`, `gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic`, `metadata_expire=6h`,
 `skip_if_unavailable=True` — the live USB and the installer work offline —, `priority=90`, before
 Fedora's 99) and `[arctic-source]` (off); `arctic-testing.repo` the same for testing, all off. They
 are package files, replaced on updates; choices are overrides in `/etc/dnf/repos.override.d/`
@@ -280,11 +280,12 @@ dnf5 5.4 on Fedora 44 reads `/etc/yum.repos.d`, `/etc/distro.repos.d` and `/usr/
 (`dnf5 --dump-main-config`); a file of the same name in `/etc/yum.repos.d` hides the one in
 `/usr/share/dnf5/repos.d`. Every package is signed and checked (`gpgcheck=1`): dnf imports the key
 into the rpmdb on first use (`-y`, as unattended updates run, accepts it; an interactive `dnf`
-asks once). `repomd.xml` is signed too (`repomd.xml.asc`) but not checked by default
-(`repo_gpgcheck=0`, as in Fedora's repositories; the site is HTTPS-only): with
-`repo_gpgcheck=1` every dnf run without `-y` — `dnf-makecache.timer`, a declined prompt — skips
-the repository until a `-y` run has imported the key into that cache (verified on F44: "repomd.xml
-GPG signature verification error: Signing key not found", exit status 0). Fedora's own
+asks once). `repomd.xml` is signed too (`repomd.xml.asc`) and checked (`repo_gpgcheck=1`): dnf
+imports the key for that check into the repository's cache on the first run with `-y`, which the
+automatic update check (`arctic-update stage`), `arctic-firstboot` and Get apps all use. Until
+then a dnf run without `-y` — `dnf-makecache.timer`, a declined prompt — skips the repository
+(verified on F44: "repomd.xml GPG signature verification error: Signing key not found", exit
+status 0), and so does any run after `dnf clean all` until the next `-y` run. Fedora's own
 `fedora`/`updates` repositories set `skip_if_unavailable=False`, so they, not Arctic's, are what
 fails offline; Arctic's are skipped quietly, which is why publishing checks the site with dnf5
 before deploying it (below).
@@ -356,13 +357,11 @@ cancelled) — the next push to main, or a re-run, publishes again.
 
 **Pages setup.** Settings → Pages → Source: GitHub Actions (step 1 fails until it is). Secrets
 `ARCTIC_GPG_PRIVATE_KEY`, `ARCTIC_GPG_PASSPHRASE` (may be empty), `ARCTIC_GPG_PUBLIC_KEY`; optional
-variable `ARCTIC_PAGES_URL` for a custom domain. Only pushes to `main` publish by themselves. The
-`github-pages` environment lets only the default branch deploy, and a dev push arriving while a
-run is in progress would replace a waiting stable run, so the testing channel is published by
-hand: Actions → Repository → Run workflow on `main`, channel `testing`, ref
-`claude/busy-goodall-j42hmi`. (Publishing testing on every dev push needs that branch in the
-environment's deployment branches and in repo.yml's `on.push.branches`, and accepts that waiting
-runs get superseded.)
+variable `ARCTIC_PAGES_URL` for a custom domain. The `github-pages` environment lets only the
+default branch deploy, and a new run waiting in the shared concurrency group would replace a
+waiting stable run. So pushes to `claude/busy-goodall-j42hmi` run `repo-testing.yml`, which waits
+until no publish is running or waiting and then starts `repo.yml` on `main` with channel `testing`
+and the pushed commit as `ref` (a newer push cancels an older forward that is still waiting).
 
 **Release ISOs** (`.github/workflows/iso.yml`) build with `ARCTIC_REQUIRE_GPG_KEY=1` in this
 repository (forks without the secret still build, with the Arctic repositories off), and a

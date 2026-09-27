@@ -4,17 +4,15 @@ name: Repository
 # (https://yuvalkolodkingal.github.io/O-Tism/repo/<channel>/fedora-44/…; docs/BUILD-SPEC.md §9):
 #
 #   push to main                          → channel stable
+#   push to claude/busy-goodall-j42hmi    → channel testing (via repo-testing.yml, below)
 #   Actions → Repository → Run workflow   → the channel you pick, built from `ref` (a branch,
 #                                           tag or commit; default: the commit it runs on).
-#                                           Testing: run it on main with channel "testing"
-#                                           and ref "claude/busy-goodall-j42hmi".
 #
-# Pushes to the development branch don't publish testing by themselves: the github-pages
-# environment only lets the default branch deploy, and every run shares one concurrency group
-# in which GitHub keeps a single waiting run, so frequent dev pushes would also cancel waiting
-# stable publishes. To publish testing on every dev push later: add the branch to the
-# environment's deployment branches, add it under on.push.branches with channel testing in
-# Plan, and accept that a waiting run can be superseded.
+# Pushes to the development branch (claude/busy-goodall-j42hmi) publish testing through
+# .github/workflows/repo-testing.yml, which starts this workflow on main (channel testing, ref =
+# the pushed commit) once no publish is running or waiting: the github-pages environment only
+# lets the default branch deploy, and every run shares one concurrency group in which GitHub
+# keeps a single waiting run (a testing publish must not supersede a waiting stable one).
 #
 # Both channels live in one Pages site. Every run starts from the site as published (the last
 # successful run's github-pages artifact when that is what is live or newer, else every file of
