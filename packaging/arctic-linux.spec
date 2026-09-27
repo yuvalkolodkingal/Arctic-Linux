@@ -186,6 +186,8 @@ Requires:       qt6-qtwayland
 Requires:       python3
 Requires:       python3-pillow
 Requires:       python3-pyte
+# pkexec, for Get apps
+Requires:       polkit
 Requires:       arctic-fonts = %{version}-%{release}
 
 %description -n arctic-shell
@@ -538,6 +540,9 @@ exec quickshell -p /usr/share/arctic/shell ipc call "$@"
 EOF
 fi
 chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-shell-ipc
+# Get apps: pkexec dnf5 with the password kept for a few minutes.
+install -Dpm 0644 packaging/polkit/org.arcticlinux.pkexec.dnf.policy \
+  %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
 
 # ---------------------------------------------------------------- arctic-installer
 install -pm 0755 _build/bin/arcticd _build/bin/arctic-install %{buildroot}%{_bindir}/
@@ -795,6 +800,7 @@ fi
 %{_bindir}/arctic-shell
 %{_bindir}/arctic-shell-ipc
 %{_datadir}/arctic/shell/
+%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
 
 %files -n arctic-installer
 %dir %{_datadir}/arctic

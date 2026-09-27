@@ -8,8 +8,9 @@ import "PackageSearch.js" as PackageSearch
 
 // Get apps: a small terminal for dnf and Flatpak inside the launcher (from the original
 // shell's install console). Type an app name to install it, or a dnf / flatpak command; the
-// commands run in a real PTY (scripts/install-terminal.py), so sudo's password prompt and
-// dnf's [y/N] are answered here. Password input is masked and never logged or stored.
+// commands run in a real PTY (scripts/install-terminal.py). Installs run unattended (-y) and
+// dnf gets root through pkexec, whose password dialog is the shell's PolkitDialog; anything a
+// program still asks is answered here, password input masked and never logged or stored.
 // Tab completes package names from a cached index (scripts/package-index.py).
 ColumnLayout {
     id: terminal

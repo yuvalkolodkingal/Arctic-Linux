@@ -17,28 +17,32 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class CommandTests(unittest.TestCase):
-    """What each typed line runs: dnf through sudo, Flathub through flatpak, never a shell."""
+    """What each typed line runs: dnf through pkexec, Flathub through flatpak, never a shell.
+    Changes never wait for a [y/N]: they get -y unless the line answers already."""
 
     def test_bare_names_install_with_dnf(self):
-        self.assertEqual(module.build_command('neovim htop'), ['sudo', 'dnf', 'install', 'neovim', 'htop'])
+        self.assertEqual(module.build_command('neovim htop'), ['pkexec', '/usr/bin/dnf5', 'install', '-y', 'neovim', 'htop'])
 
     def test_flathub_ids_install_with_flatpak(self):
-        self.assertEqual(module.build_command('flathub:org.gimp.GIMP'), ['flatpak', 'install', 'flathub', 'org.gimp.GIMP'])
+        self.assertEqual(module.build_command('flathub:org.gimp.GIMP'), ['flatpak', 'install', '-y', 'flathub', 'org.gimp.GIMP'])
 
     def test_mixed_sources_are_refused(self):
         with self.assertRaises(ValueError):
             module.build_command('neovim flathub:org.gimp.GIMP')
 
-    def test_dnf_changes_need_sudo_and_queries_do_not(self):
-        self.assertEqual(module.build_command('dnf install -y fish'), ['sudo', 'dnf', 'install', '-y', 'fish'])
-        self.assertEqual(module.build_command('sudo dnf remove fish'), ['sudo', 'dnf', 'remove', 'fish'])
-        self.assertEqual(module.build_command('dnf upgrade'), ['sudo', 'dnf', 'upgrade'])
+    def test_dnf_changes_need_pkexec_and_queries_do_not(self):
+        self.assertEqual(module.build_command('dnf install -y fish'), ['pkexec', '/usr/bin/dnf5', 'install', '-y', 'fish'])
+        self.assertEqual(module.build_command('sudo dnf remove fish'), ['pkexec', '/usr/bin/dnf5', 'remove', '-y', 'fish'])
+        self.assertEqual(module.build_command('dnf upgrade'), ['pkexec', '/usr/bin/dnf5', 'upgrade', '-y'])
+        self.assertEqual(module.build_command('dnf --refresh upgrade --assumeno'), ['pkexec', '/usr/bin/dnf5', '--refresh', 'upgrade', '--assumeno'])
         self.assertEqual(module.build_command('dnf search editor'), ['dnf', 'search', 'editor'])
         self.assertEqual(module.build_command('dnf info neovim'), ['dnf', 'info', 'neovim'])
 
     def test_flatpak_commands_run_as_typed(self):
         self.assertEqual(module.build_command('flatpak install flathub org.gimp.GIMP'),
-                         ['flatpak', 'install', 'flathub', 'org.gimp.GIMP'])
+                         ['flatpak', 'install', '-y', 'flathub', 'org.gimp.GIMP'])
+        self.assertEqual(module.build_command('flatpak --user uninstall --noninteractive org.gimp.GIMP'),
+                         ['flatpak', '--user', 'uninstall', '--noninteractive', 'org.gimp.GIMP'])
         self.assertEqual(module.build_command('flatpak search gimp'), ['flatpak', 'search', 'gimp'])
 
     def test_other_commands_and_shell_syntax_are_refused(self):
