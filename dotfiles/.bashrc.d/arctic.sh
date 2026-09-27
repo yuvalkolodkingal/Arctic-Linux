@@ -11,6 +11,10 @@ __arctic_ps1() {
 }
 PROMPT_COMMAND="__arctic_ps1${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 
+# fzf reads its colours from the active theme on every run; bat and delta use the terminal's palette.
+export FZF_DEFAULT_OPTS_FILE="${FZF_DEFAULT_OPTS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/fzf/fzfrc}"
+export BAT_THEME="${BAT_THEME:-ansi}"
+
 alias ls='ls --color=auto --group-directories-first'
 alias ll='ls -lh'
 alias la='ls -lAh'

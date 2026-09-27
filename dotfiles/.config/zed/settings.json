@@ -1,0 +1,10 @@
+{
+  "theme": "Arctic",
+  "ui_font_family": "Figtree",
+  "ui_font_size": 15,
+  "buffer_font_family": "JetBrains Mono",
+  "buffer_font_size": 14,
+  "terminal": {
+    "font_family": "JetBrains Mono"
+  }
+}

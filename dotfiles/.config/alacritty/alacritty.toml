@@ -1,0 +1,19 @@
+# Arctic Linux — Alacritty (when picked instead of kitty). Spec: design components/Terminal.
+# Colours: the active theme's term-* and ansi-* tokens, as in kitty.
+[general]
+import = ["~/.config/arctic/current/alacritty/colors.toml"]
+live_config_reload = true
+
+[font]
+normal = { family = "JetBrains Mono" }
+size = 10.5
+
+[window]
+padding = { x = 10, y = 12 }
+decorations = "None"
+
+[cursor]
+style = { shape = "Block", blinking = "Never" }
+
+[bell]
+duration = 0

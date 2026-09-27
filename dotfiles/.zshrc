@@ -30,14 +30,42 @@ zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
+# ---- Theme colours: the active theme's zsh/colors.zsh (prompt, completion menu, plugins),
+#      read again before the next prompt whenever the theme changes. fzf reads its colours
+#      from the theme on every run; bat and delta use the terminal's palette. -------
+export FZF_DEFAULT_OPTS_FILE="${FZF_DEFAULT_OPTS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/fzf/fzfrc}"
+export BAT_THEME="${BAT_THEME:-ansi}"
+zmodload -F zsh/stat b:zstat 2>/dev/null
+typeset -g _arctic_colors_seen=
+_arctic_colors() {   # source colors.zsh when the active theme (or its file) changed
+  local f=${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/zsh/colors.zsh stamp
+  local -a mtime
+  [[ -r $f ]] || return 0
+  zstat -A mtime +mtime -- $f 2>/dev/null
+  stamp="${f:A} ${mtime[1]:-}"
+  [[ $stamp == "$_arctic_colors_seen" ]] && return 0
+  _arctic_colors_seen=$stamp
+  source $f
+}
+
 # ---- Prompt: "~/projects ❯" — directory in green (color2), amber arrow (color3),
-#      git branch in dim color8, red arrow after a failed command. -------
+#      git branch in dim color8, red arrow after a failed command. With a 24-bit terminal
+#      (COLORTERM=truecolor, as in kitty) the theme's exact colours are used instead. -------
 autoload -Uz vcs_info
-zstyle ':vcs_info:git:*' formats ' %F{8}%b%f'
 zstyle ':vcs_info:*' enable git
-precmd() { vcs_info }
+typeset -g _ap_dir=2 _ap_arrow=3 _ap_error=1 _ap_git=8
+_arctic_prompt_colors() {
+  _arctic_colors
+  if [[ $COLORTERM == (truecolor|24bit) && -n ${ARCTIC_PROMPT_COLORS[dir]:-} ]]; then
+    _ap_dir=${ARCTIC_PROMPT_COLORS[dir]} _ap_arrow=${ARCTIC_PROMPT_COLORS[arrow]}
+    _ap_error=${ARCTIC_PROMPT_COLORS[error]} _ap_git=${ARCTIC_PROMPT_COLORS[git]}
+  fi
+  zstyle ':vcs_info:git:*' formats " %F{$_ap_git}%b%f"
+  [[ -n ${ARCTIC_MENU_SELECTION:-} ]] && zstyle ':completion:*:default' list-colors "${(s.:.)LS_COLORS}" "ma=$ARCTIC_MENU_SELECTION"
+}
+precmd() { _arctic_prompt_colors; vcs_info }
 setopt PROMPT_SUBST
-PROMPT='%F{2}%~%f${vcs_info_msg_0_} %(?.%F{3}.%F{1})❯%f '
+PROMPT='%F{$_ap_dir}%~%f${vcs_info_msg_0_} %(?.%F{$_ap_arrow}.%F{$_ap_error})❯%f '
 
 # ---- Aliases ------------------------------------------------------------
 alias ls='ls --color=auto --group-directories-first'
