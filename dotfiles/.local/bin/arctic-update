@@ -95,8 +95,11 @@ take_lock() {  # wait | try
     flock 9 || die "can't lock $LOCK"
   fi
 }
+# yes while a check holds the lock (any user may ask: a shared lock on the read-only file).
 busy() {
-  if [[ -e $LOCK ]] && ! flock -n -s "$LOCK" true 2>/dev/null; then echo yes; else echo no; fi
+  [[ -e $LOCK ]] || { echo no; return; }
+  flock -n -s -E 75 "$LOCK" true 2>/dev/null
+  if (( $? == 75 )); then echo yes; else echo no; fi
 }
 
 load_config() {
@@ -429,6 +432,10 @@ cmd_channel() {
     *) usage >&2; exit 2 ;;
   esac
   repo_defined arctic-testing || die "the Arctic package repositories (arctic, arctic-testing) aren't defined here: update arctic-release first"
+  if [[ "$(current_channel)" == "$want" ]]; then
+    say "You're already on the $want channel."
+    return 0
+  fi
   as_root
   local enable=0
   [[ $want == testing ]] && enable=1
