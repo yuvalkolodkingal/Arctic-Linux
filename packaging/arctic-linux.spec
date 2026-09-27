@@ -536,10 +536,13 @@ install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir
 # Automatic updates (arctic-update, in /usr/bin with the helpers above) and snapshots.
 install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
 install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
+install -Dpm 0644 packaging/systemd/arctic-update-restage.timer %{buildroot}%{_unitdir}/arctic-update-restage.timer
 install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
 install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
 install -Dpm 0644 packaging/updates/snapper.actions \
   %{buildroot}%{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
+install -Dpm 0644 packaging/updates/update.actions \
+  %{buildroot}%{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 # The status file the shell's bar indicator watches (written by arctic-update).
 install -d %{buildroot}%{_sharedstatedir}/arctic
 touch %{buildroot}%{_sharedstatedir}/arctic/update-status.json
@@ -701,7 +704,7 @@ done
 %systemd_post arctic-firstboot.service arctic-update-stage.timer
 
 %preun -n arctic-desktop-config
-%systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-stage.service
+%systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
@@ -835,9 +838,11 @@ fi
 %{_libexecdir}/arctic/arctic-firstboot
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer
+%{_unitdir}/arctic-update-restage.timer
 %{_libexecdir}/arctic/arctic-update-helper
 %config(noreplace) %{_sysconfdir}/arctic/update.conf
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
+%config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 %dir %{_sharedstatedir}/arctic
 %ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
 

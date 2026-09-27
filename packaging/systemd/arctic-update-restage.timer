@@ -1,0 +1,14 @@
+[Unit]
+Description=Check for Arctic Linux updates again after software was installed or removed
+Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates
+ConditionKernelCommandLine=!rd.live.image
+
+[Timer]
+# Started by `arctic-update after-transaction` (arctic-update.actions) when a dnf transaction
+# invalidated the downloaded updates: check again two minutes later, once for a burst of
+# transactions (starting it again while it waits changes nothing). Stops once it has fired,
+# so the next transaction can start it again. No [Install]: only started on demand.
+OnActiveSec=2min
+AccuracySec=15s
+RemainAfterElapse=no
+Unit=arctic-update-stage.service

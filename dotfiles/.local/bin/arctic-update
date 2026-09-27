@@ -3,31 +3,51 @@
 # the computer restarts, before the desktop starts. Nothing changes while you work.
 #
 #   arctic-update [status] [--json]          channel, automatic updates, last check, what's waiting
-#   arctic-update now [--sync]               check and download now; installed at the next restart
+#   arctic-update now [--sync] [--replace]   check and download now; installed at the next restart
 #   arctic-update apply [--yes]              restart now and install the downloaded updates
-#   arctic-update channel [stable|testing]   show or switch the update channel
+#   arctic-update channel [stable|testing] [--replace]
 #   arctic-update auto [on|off|download-only]
 #   arctic-update metered [skip|allow]
 #   arctic-update stage                      the daily check (arctic-update-stage.timer, root)
+#   arctic-update after-transaction          dnf's post-transaction hook (arctic-update.actions)
 #
 # How it works: `dnf5 upgrade --offline` downloads the updates and tests the transaction; this
 # script then marks it ready for the next boot the way `dnf5 offline reboot` does (status
 # "ready" in dnf5's state file, then the /system-update link), without rebooting. At the next
 # restart systemd boots into system-update.target, dnf5-offline-transaction.service installs
-# the updates and restarts into the updated system. Settings: /etc/arctic/update.conf. The
-# shell's bar indicator reads /var/lib/arctic/update-status.json. Wiki: Updates.
+# the updates and restarts into the updated system. Offline transactions prepared by anything
+# else (`dnf5 install --offline`, `dnf5 system-upgrade download`) are left alone. Settings:
+# /etc/arctic/update.conf. The shell's bar indicator reads /var/lib/arctic/update-status.json.
+# Wiki: Updates.
 set -uo pipefail
 
-CONF="${ARCTIC_UPDATE_CONF:-/etc/arctic/update.conf}"
-STATUS_FILE="${ARCTIC_UPDATE_STATUS:-/var/lib/arctic/update-status.json}"
-DATADIR=/usr/lib/sysimage/libdnf5/offline
+# Tests (packaging/updates/test_arctic_update.py) put every system path under a scratch
+# directory and run as an ordinary user; never for root started by systemd.
+TEST_ROOT=""
+if [[ -n ${ARCTIC_UPDATE_TEST_ROOT:-} ]]; then
+  if (( EUID == 0 )) && [[ -n ${INVOCATION_ID:-} ]]; then
+    printf 'arctic-update: ignoring ARCTIC_UPDATE_TEST_ROOT (root, started by systemd)\n' >&2
+  else
+    TEST_ROOT="${ARCTIC_UPDATE_TEST_ROOT%/}"
+  fi
+fi
+R=$TEST_ROOT
+
+CONF="${ARCTIC_UPDATE_CONF:-$R/etc/arctic/update.conf}"
+STATUS_FILE="${ARCTIC_UPDATE_STATUS:-$R/var/lib/arctic/update-status.json}"
+DATADIR=$R/usr/lib/sysimage/libdnf5/offline
 STATE="$DATADIR/offline-transaction-state.toml"
 TRANSACTION="$DATADIR/transaction.json"
-PACKAGES=/var/lib/dnf/offline/packages
-MAGIC=/system-update
-LOCK=/run/lock/arctic-update.lock
+PACKAGES=$R/var/lib/dnf/offline/packages
+MAGIC=$R/system-update
+LOCK=$R/run/lock/arctic-update.lock
 TIMER=arctic-update-stage.timer
+RESTAGE_TIMER=arctic-update-restage.timer
 OFFLINE_UNIT=dnf5-offline-transaction.service
+FIRSTBOOT_UNIT=arctic-firstboot.service
+# The daily check waits for arctic-firstboot's app installs: up to POLLS × POLL seconds.
+POLL=30 POLLS=120
+[[ -n $TEST_ROOT ]] && POLL=0
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 ARGV=("$@")
 
@@ -40,10 +60,13 @@ usage() {
 Arctic Linux updates: downloaded in the background, installed the next time you restart.
 
   arctic-update [status] [--json]          what's waiting, the channel, automatic updates
-  arctic-update now [--sync]               check and download now; installed at the next restart
-                                           (--sync: also go back to the channel's own builds)
+  arctic-update now [--sync] [--replace]   check and download now; installed at the next restart
+                                           (--sync: every package to the versions in the enabled
+                                           repositories; --replace: cancel an offline transaction
+                                           another command prepared)
   arctic-update apply [--yes]              restart now and install the downloaded updates
-  arctic-update channel [stable|testing]   show or switch the update channel
+  arctic-update channel [stable|testing] [--replace]
+                                           show or switch the update channel
   arctic-update auto [on|off|download-only]
                                            show or change automatic updates
   arctic-update metered [skip|allow]       downloads on metered connections
@@ -67,9 +90,11 @@ find_helper() {
 HELPER="$(find_helper)" || die "arctic-update-helper is missing (reinstall arctic-desktop-config)"
 helper() { python3 "$HELPER" "$@"; }
 
+is_root() { (( EUID == 0 )) || [[ -n $TEST_ROOT ]]; }
+
 # Run this command again as root: sudo in a terminal, else pkexec (the desktop's password dialog).
 as_root() {
-  (( EUID == 0 )) && return 0
+  is_root && return 0
   if [[ -t 0 ]] && command -v sudo >/dev/null 2>&1; then
     exec sudo -- "$SELF" "${ARGV[@]}"
   elif command -v pkexec >/dev/null 2>&1; then
@@ -78,12 +103,13 @@ as_root() {
   die "this needs administrator rights: sudo arctic-update ${ARGV[*]}"
 }
 
-is_live() { grep -qE '(^|[[:space:]])rd\.live\.image([[:space:]]|$)' /proc/cmdline 2>/dev/null; }
+is_live() { grep -qE '(^|[[:space:]])rd\.live\.image([[:space:]]|$)' "$R/proc/cmdline" 2>/dev/null; }
 refuse_live() {
   if is_live; then
     die "this is the live session: nothing here survives a restart. Install Arctic Linux to get updates."
   fi
 }
+boot_id() { cat "$R/proc/sys/kernel/random/boot_id" 2>/dev/null; }
 
 # One check at a time (the timer's and arctic-update now).
 take_lock() {  # wait | try
@@ -119,12 +145,10 @@ repo_defined() { dnf5 -q repo list --all --json "$1" 2>/dev/null | grep -q '"id"
 
 # The status file the shell watches (only root writes it; failures are not fatal).
 status_set() {
-  (( EUID == 0 )) || return 0
+  is_root || return 0
   helper write-status "$STATUS_FILE" "$@" || warn "couldn't update $STATUS_FILE"
 }
-
-# none | stored | stale | incomplete | unknown (dnf5 offline status needs root).
-offline_class() { LC_ALL=C dnf5 offline status 2>&1 | helper offline-status; }
+status_get() { helper get "$STATUS_FILE" "$1" 2>/dev/null; }
 
 # NetworkManager's view of the connection; "unknown" (nmcli missing, NetworkManager not
 # running) never stops a check.
@@ -138,54 +162,166 @@ plural() { if [[ $1 == 1 ]]; then printf '1 %s' "$2"; else printf '%s %ss' "$1" 
 them() { if [[ $1 == 1 ]]; then printf it; else printf them; fi; }
 summary() { read -r COUNT BYTES < <(helper summary "$TRANSACTION"); COUNT=${COUNT:-0} BYTES=${BYTES:-0}; }
 
+# ---- the stored offline transaction ----------------------------------------------------------
+
+# Read dnf5's state file: ST_STATUS (none | invalid | download-complete | ready | …), ST_OWNER
+# (ours | foreign | none), ST_HOLD (yes: someone else's, leave it alone), ST_LINKED (yes:
+# /system-update points at it), ST_CMD (the command that prepared it).
+inspect() {
+  local key value
+  ST_STATUS=none ST_OWNER=none ST_HOLD=no ST_LINKED=no ST_CMD=""
+  while IFS='=' read -r key value; do
+    case $key in
+      status) ST_STATUS=$value ;;
+      owner) ST_OWNER=$value ;;
+      hold) ST_HOLD=$value ;;
+      linked) ST_LINKED=$value ;;
+      cmd_line) ST_CMD=$value ;;
+    esac
+  done < <(helper inspect --state "$STATE" --magic "$MAGIC" --datadir "$DATADIR")
+}
+
+# none | stored | stale | incomplete | invalid | unknown: from the state file; dnf5 is asked only
+# whether a pending transaction still matches the installed packages (dnf5 offline status needs
+# root).
+offline_class() {
+  local st
+  st="$(helper state "$STATE")"
+  case $st in
+    download-complete|ready) LC_ALL=C dnf5 offline status 2>&1 | helper offline-class "$st" ;;
+    *) helper offline-class "$st" </dev/null ;;
+  esac
+}
+
+# Someone else's offline transaction, in a sentence (after inspect).
+held_message() {
+  if [[ $ST_STATUS == transaction-incomplete ]]; then
+    say "An offline transaction prepared with '$ST_CMD' didn't finish at a restart (see: dnf5 offline log)." \
+        "Arctic's updates wait until it is removed: sudo dnf5 offline clean"
+  else
+    say "An offline transaction prepared with '$ST_CMD' is waiting; arctic-update leaves it alone." \
+        "Install it with: sudo dnf5 offline reboot (or remove it: sudo dnf5 offline clean)"
+  fi
+}
+
 # ---- arming ----------------------------------------------------------------------------------
 
-ours() { [[ -L $MAGIC && "$(readlink "$MAGIC")" == "$DATADIR" ]]; }
-disarm() { if ours; then rm -f "$MAGIC"; fi; }
+ours_link() { [[ -L $MAGIC && "$(readlink "$MAGIC")" == "$DATADIR" ]]; }
+
+# Unschedule arctic-update's own transaction (with "force", whatever is stored): no
+# /system-update, status back to "download-complete". The download stays.
+disarm() {
+  inspect
+  [[ $ST_HOLD == yes && ${1:-} != force ]] && return 0
+  if ours_link; then rm -f "$MAGIC"; fi
+  if [[ $ST_STATUS == ready ]]; then helper disarm "$STATE" >/dev/null || warn "couldn't unschedule the stored update"; fi
+  status_set armed=false armed_boot= armed_at=
+}
 
 # dnf5 offline reboot checks this too: without it the boot would stop at system-update.target.
 offline_unit_wanted() {
   local d
-  for d in /etc/systemd/system /run/systemd/system /usr/lib/systemd/system; do
+  for d in "$R/etc/systemd/system" "$R/run/systemd/system" "$R/usr/lib/systemd/system"; do
     [[ -e "$d/system-update.target.wants/$OFFLINE_UNIT" ]] && return 0
   done
   systemctl show -p Wants --value system-update.target 2>/dev/null | grep -qw "$OFFLINE_UNIT"
 }
 
-# Schedule the stored transaction for the next boot, as `dnf5 offline reboot` does but without
-# the reboot: its status becomes "ready" (only if it is "download-complete"), then /system-update
-# points at dnf5's offline directory. dnf5 offline status must then still accept it.
+# Schedule arctic-update's stored transaction for the next boot, as `dnf5 offline reboot` does
+# but without the reboot: its status becomes "ready" (only if it is "download-complete"), then
+# /system-update points at dnf5's offline directory. dnf5 must then still accept it.
 arm() {
   if ! offline_unit_wanted; then
     warn "$OFFLINE_UNIT isn't wanted by system-update.target: the update can't be installed at the next restart"
     return 1
   fi
-  if [[ -e $MAGIC || -L $MAGIC ]] && ! ours; then
+  if [[ -e $MAGIC || -L $MAGIC ]] && ! ours_link; then
     warn "$MAGIC belongs to another offline update tool; not scheduling this update"
     return 1
   fi
+  inspect
+  if [[ $ST_OWNER != ours ]]; then
+    warn "the stored offline transaction wasn't prepared by arctic-update (${ST_CMD:-$ST_STATUS}); not scheduling it"
+    return 1
+  fi
   helper arm "$STATE" >/dev/null || return 1
-  if ! ours; then
+  if ! ours_link; then
     rm -f "$MAGIC.arctic-update"
     if ! { ln -s "$DATADIR" "$MAGIC.arctic-update" && mv -Tf "$MAGIC.arctic-update" "$MAGIC"; }; then
       rm -f "$MAGIC.arctic-update"
+      helper disarm "$STATE" >/dev/null
       warn "couldn't create $MAGIC"
       return 1
     fi
   fi
-  if command -v restorecon >/dev/null 2>&1; then restorecon -F "$MAGIC" "$STATE" >/dev/null 2>&1; fi
-  local class state
-  class="$(offline_class)" state="$(helper state "$STATE")"
-  if [[ $class != stored || $state != ready ]] || ! ours; then
-    disarm
-    warn "dnf5 doesn't accept the downloaded update (offline status: $class, state: $state)"
+  if [[ -z $TEST_ROOT ]] && command -v restorecon >/dev/null 2>&1; then restorecon -F "$MAGIC" "$STATE" >/dev/null 2>&1; fi
+  local class
+  class="$(offline_class)"
+  inspect
+  if [[ $class != stored || $ST_STATUS != ready || $ST_OWNER != ours ]] || ! ours_link; then
+    if ours_link; then rm -f "$MAGIC"; fi
+    if [[ $ST_STATUS == ready ]]; then helper disarm "$STATE" >/dev/null; fi
+    warn "dnf5 doesn't accept the downloaded update (offline status: $class, state: $ST_STATUS)"
     return 1
   fi
+  status_set armed=true "armed_boot=$(boot_id)" armed_at=@now
+}
+
+# ---- after a restart --------------------------------------------------------------------------
+
+# Did the update scheduled before the last restart get installed? A failure is recorded in the
+# status file (boot_failures, install_error, install_failed_at: the shell tells the user once).
+# Sets BOOT_FAILURES.
+check_last_install() {
+  local result since
+  read -r result since < <(helper boot-check --status-file "$STATUS_FILE" --state "$STATE" \
+    --magic "$MAGIC" --datadir "$DATADIR" --boot-id "$(boot_id)")
+  case ${result:-none} in
+    installed)
+      say "The updates scheduled before the last restart were installed (or removed by hand)."
+      status_set armed=false armed_boot= armed_at= boot_failures=0 install_error= ;;
+    incomplete)
+      install_failed "$since" ;;
+    not-started)
+      # dnf5 refused it at the boot (the system changed since it was prepared), or a dnf
+      # transaction before the restart invalidated it: only the first leaves a log.
+      if [[ -n "$(offline_journal "$since" -u "$OFFLINE_UNIT" | head -n 1)" ]]; then
+        install_failed "$since"
+      else
+        status_set armed=false armed_boot= armed_at=
+      fi ;;
+  esac
+  BOOT_FAILURES="$(status_get boot_failures)"
+  [[ $BOOT_FAILURES =~ ^[0-9]+$ ]] || BOOT_FAILURES=0
+}
+
+# dnf5's offline boot in the journal since SINCE (seconds since the epoch): `dnf5 offline log`
+# shows the same, a boot at a time.
+offline_journal() {
+  local since=$1; shift
+  (( since > 0 )) || return 0
+  journalctl -q --no-pager -o cat --since "@$since" "$@" 2>/dev/null
+}
+
+install_failed() {
+  local since=$1 detail n
+  # The last lines dnf5 printed (its own output, not systemd's lines about the unit).
+  detail="$(offline_journal "$since" "_SYSTEMD_UNIT=$OFFLINE_UNIT" | grep -v '^[[:space:]]*$' | tail -n 3 | tr '\n' ' ')"
+  detail="${detail%"${detail##*[![:space:]]}"}"
+  detail="${detail:0:240}"
+  n="$(status_get boot_failures)"
+  [[ $n =~ ^[0-9]+$ ]] || n=0
+  n=$(( n + 1 ))
+  warn "the updates scheduled for the last restart weren't installed (attempt $n)${detail:+: $detail}"
+  status_set armed=false armed_boot= armed_at= "boot_failures=$n" install_failed_at=@now \
+    "install_error=${detail:-see dnf5 offline log}"
 }
 
 # ---- checking and downloading -----------------------------------------------------------------
 
 stamp() { stat -c '%i:%.9Y:%s' "$STATE" 2>/dev/null || echo none; }
+# Changes whenever a package is installed, removed or reinstalled.
+rpmdb_mark() { rpm -qa --qf '%{NEVRA} %{INSTALLTIME}\n' 2>/dev/null | LC_ALL=C sort | cksum; }
 
 # Background output: pass it on to the journal, note when downloading starts and the last error.
 follow() {
@@ -205,47 +341,70 @@ follow() {
   done
 }
 
-# stage VERB MODE: store an offline transaction (VERB: upgrade | distro-sync) without arming it.
-# MODE: background (the timer: quiet, low priority) | interactive (arctic-update now: dnf5's
-# own progress on the terminal). Sets UPDATE=yes|no; returns 1 when dnf5 failed.
-stage() {
-  local verb=$1 mode=$2 class before after rc
-  UPDATE=no
-  class="$(offline_class)"
-  case $class in
-    incomplete|unknown)
-      say "Removing a stored offline update dnf5 can't use any more ($class)."
-      dnf5 -q offline clean || warn "dnf5 offline clean failed" ;;
-    # stale (a dnf transaction ran since): dnf5 replaces it below and keeps the packages it
-    # already downloaded; prune removes the ones no longer needed.
-  esac
-  # While dnf5 replaces the stored transaction, a restart must start the desktop as usual.
-  disarm
-  before="$(stamp)"
-  status_set state=checking "message=Checking for updates…"
-  if [[ $mode == interactive ]]; then
-    dnf5 "$verb" --offline -y --refresh
-    rc=$?
+run_dnf5() {  # VERB MODE
+  if [[ $2 == interactive ]]; then
+    dnf5 "$1" --offline -y --refresh
   else
-    LC_ALL=C dnf5 "$verb" --offline -y --refresh 2>&1 | follow
-    rc=${PIPESTATUS[0]}
+    LC_ALL=C dnf5 "$1" --offline -y --refresh 2>&1 | follow
+    return "${PIPESTATUS[0]}"
   fi
-  after="$(stamp)"
-  if (( rc != 0 )); then
-    return 1
+}
+
+# stage VERB MODE REPLACE: store an offline transaction (VERB: upgrade | distro-sync) without
+# arming it. MODE: background (the timer: quiet, low priority) | interactive (arctic-update now:
+# dnf5's own progress on the terminal). REPLACE=yes: an offline transaction someone else
+# prepared is cancelled, else it is left alone (UPDATE=held). Sets UPDATE=yes|no|held,
+# WAS_ARMED=yes|no (arctic-update had scheduled what was stored) and UNSAFE=yes (the stored
+# transaction may not fit the system: don't keep it); returns 1 when the check failed.
+stage() {
+  local verb=$1 mode=$2 replace=$3 before after mark tries=0 rc
+  UPDATE=no WAS_ARMED=no UNSAFE=no
+  inspect
+  if [[ $ST_HOLD == yes && $replace != yes ]]; then UPDATE=held; return 0; fi
+  if [[ $ST_OWNER == ours && "$(status_get armed)" == true ]]; then WAS_ARMED=yes; fi
+  if [[ $ST_STATUS == transaction-incomplete ]]; then
+    say "Removing an offline transaction that didn't finish at a restart."
+    dnf5 -q offline clean || warn "dnf5 offline clean failed"
   fi
-  if [[ $after == "$before" ]]; then
-    # dnf5 stored nothing new ("Nothing to do"). What an earlier check stored stays if dnf5
-    # still accepts it: an unreachable repository (skip_if_unavailable) also looks like
-    # nothing to do. One it no longer accepts (the system was updated by hand since) goes.
-    if [[ $after != none ]]; then
-      if [[ "$(offline_class)" == stored ]]; then UPDATE=yes; return 0; fi
-      dnf5 -q offline clean || warn "dnf5 offline clean failed"
+  # A stale one (a dnf transaction ran since): dnf5 replaces it below and keeps the packages it
+  # already downloaded; prune removes the ones no longer needed. While dnf5 replaces the stored
+  # transaction, a restart must start the desktop as usual.
+  disarm "$([[ $replace == yes ]] && echo force)"
+  while :; do
+    before="$(stamp)" mark="$(rpmdb_mark)"
+    status_set state=checking "message=Checking for updates…"
+    run_dnf5 "$verb" "$mode"
+    rc=$?
+    after="$(stamp)"
+    (( rc == 0 )) || return 1
+    [[ $after == "$before" ]] && break
+    # dnf5 resolves the transaction against the installed packages first and records their
+    # state last: a dnf transaction in between would make it not fit. Check again.
+    [[ "$(rpmdb_mark)" == "$mark" ]] && break
+    if (( ++tries >= 3 )); then
+      warn "software was installed or removed during every check; checking again later"
+      UNSAFE=yes
+      return 1
     fi
+    say "Software was installed or removed during the check; checking again."
+  done
+  if [[ $after == "$before" ]]; then
+    # dnf5 stored nothing new ("Nothing to do"). What arctic-update stored earlier stays if dnf5
+    # still accepts it: an unreachable repository (skip_if_unavailable) also looks like nothing
+    # to do. Anything else pending goes: arctic-update's own that no longer applies, the one a
+    # repeated check replaced, or (--replace) someone else's.
+    inspect
+    [[ $ST_STATUS == download-complete || $ST_STATUS == ready ]] || return 0
+    if [[ $ST_OWNER == ours ]] && (( tries == 0 )) && [[ "$(offline_class)" == stored ]]; then
+      UPDATE=yes
+      return 0
+    fi
+    dnf5 -q offline clean || warn "dnf5 offline clean failed"
     return 0
   fi
-  if [[ "$(helper state "$STATE")" != download-complete ]]; then
-    warn "dnf5 finished, but its offline state is '$(helper state "$STATE")'"
+  inspect
+  if [[ $ST_STATUS != download-complete || $ST_OWNER != ours ]]; then
+    warn "dnf5 finished, but its offline state is '$ST_STATUS' (${ST_CMD:-no command})"
     return 1
   fi
   helper prune "$TRANSACTION" "$PACKAGES" >/dev/null
@@ -253,29 +412,38 @@ stage() {
 }
 
 # After a failed check: the transaction stored by an earlier one is untouched (dnf5 writes its
-# state only once everything is downloaded and tested); keep it scheduled if dnf5 still takes it.
+# state only once everything is downloaded and tested). Keep it if it is arctic-update's own and
+# dnf5 still takes it; with "arm", schedule it again.
 keep_previous() {
-  local state
-  state="$(helper state "$STATE")"
-  [[ $state == download-complete || $state == ready ]] || return 1
+  inspect
+  [[ $ST_OWNER == ours ]] || return 1
+  [[ $ST_STATUS == download-complete || $ST_STATUS == ready ]] || return 1
   [[ "$(offline_class)" == stored ]] || return 1
-  if [[ $AUTO == download-and-install-on-reboot ]]; then arm || return 1; fi
+  if [[ ${1:-} == arm ]]; then arm || return 1; fi
   return 0
 }
 
-record_ready() {  # armed: true | false
-  summary
-  local msg
-  if [[ $1 == true ]]; then
-    msg="$(plural "$COUNT" update) will be installed the next time you restart."
-  else
-    msg="$(plural "$COUNT" update) downloaded. Install $(them "$COUNT") with: arctic-update apply"
-  fi
-  status_set state=ready "packages=$COUNT" "download_mb=$(mb "$BYTES")" staged_at=@now checked_at=@now \
-    "armed=$1" "message=$msg"
+record_ready() {  # armed: true | false; [message]
+  is_root || return 0
+  helper record-ready "$STATUS_FILE" --transaction "$TRANSACTION" --armed "$1" ${2:+--message "$2"} \
+    || warn "couldn't update $STATUS_FILE"
 }
 record_idle() {
-  status_set state=idle packages=0 download_mb=0 staged_at= armed=false checked_at=@now "message=$1"
+  status_set state=idle packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now "message=$1"
+}
+
+# arctic-firstboot installs the apps the installer put off; its dnf transactions would cancel a
+# scheduled update. Wait while it runs (not while it waits to retry: an app that can never be
+# installed must not stop updates).
+firstboot_running() { [[ "$(systemctl show -p SubState --value "$FIRSTBOOT_UNIT" 2>/dev/null)" == running ]]; }
+wait_for_firstboot() {
+  local i
+  for (( i = 0; i < POLLS; i++ )); do
+    firstboot_running || return 0
+    (( i == 0 )) && say "Waiting for $FIRSTBOOT_UNIT to finish installing apps…"
+    sleep "$POLL"
+  done
+  ! firstboot_running
 }
 
 # ---- commands ---------------------------------------------------------------------------------
@@ -287,20 +455,32 @@ cmd_status() {
     "") ;;
     *) usage >&2; exit 2 ;;
   esac
-  (( EUID == 0 )) && offline="$(offline_class)"
+  is_root && offline="$(offline_class)"
   helper report "${json[@]}" --channel "$(current_channel)" --offline "$offline" --busy "$(busy)" \
-    --status-file "$STATUS_FILE" --conf "$CONF"
+    --status-file "$STATUS_FILE" --conf "$CONF" --state "$STATE" --transaction "$TRANSACTION" \
+    --magic "$MAGIC" --datadir "$DATADIR"
 }
 
 # The daily check (arctic-update-stage.service, as root).
 cmd_stage() {
-  (( EUID == 0 )) || die "stage is what arctic-update-stage.service runs, as root; use: arctic-update now"
+  is_root || die "stage is what arctic-update-stage.service runs, as root; use: arctic-update now"
   if is_live; then say "Live session: no updates are downloaded."; return 0; fi
+  if ! wait_for_firstboot; then
+    say "$FIRSTBOOT_UNIT is still installing apps; the next check tries again."
+    return 0
+  fi
   take_lock try || { say "Another update check is running."; return 0; }
   load_config
   status_set "channel=$(current_channel)" "auto=$AUTO"
+  check_last_install
   if [[ $AUTO == off ]]; then
     say "Automatic updates are off ($CONF)."
+    return 0
+  fi
+  if (( BOOT_FAILURES >= 2 )); then
+    local msg="Installing updates failed at the last $BOOT_FAILURES restarts, so they aren't scheduled automatically any more. See: dnf5 offline log. Try again with: arctic-update now"
+    warn "$msg"
+    status_set state=failed armed=false checked_at=@now "message=$msg"
     return 0
   fi
   if [[ $METERED == skip ]] && connection_metered; then
@@ -314,61 +494,85 @@ cmd_stage() {
   fi
   ERRFILE="$(mktemp)"
   trap 'rm -f "$ERRFILE"' EXIT
-  if stage upgrade background; then
-    if [[ $UPDATE == no ]]; then
-      record_idle "The system is up to date."
-      say "The system is up to date."
-    elif [[ $AUTO == download-only ]]; then
-      record_ready false
-      say "Updates downloaded (AUTO=download-only): install them with arctic-update apply."
-    elif arm; then
-      record_ready true
-      say "Updates downloaded; they will be installed at the next restart."
-    else
-      status_set state=failed armed=false checked_at=@now \
-        "message=The updates were downloaded, but couldn't be scheduled for the next restart."
-      return 1
-    fi
+  if stage upgrade background no; then
+    case $UPDATE in
+      held)
+        local msg
+        msg="$(held_message | tr '\n' ' ')"
+        say "$msg"
+        status_set state=idle packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
+          "message=${msg% }" ;;
+      no)
+        record_idle "The system is up to date."
+        say "The system is up to date." ;;
+      yes)
+        # download-only: not scheduled, unless you scheduled it yourself (arctic-update now).
+        if [[ $AUTO == download-only && $WAS_ARMED != yes ]]; then
+          record_ready false
+          say "Updates downloaded (AUTO=download-only): install them with arctic-update apply."
+        elif arm; then
+          record_ready true
+          say "Updates downloaded; they will be installed at the next restart."
+        else
+          status_set state=failed armed=false checked_at=@now \
+            "message=The updates were downloaded, but couldn't be scheduled for the next restart."
+          return 1
+        fi ;;
+    esac
     return 0
   fi
   local err
   err="$(head -c 300 "$ERRFILE" 2>/dev/null)"
   warn "the check failed${err:+: $err}"
-  if keep_previous; then
-    record_ready "$(ours && echo true || echo false)"
-    status_set "message=The last check failed; the updates downloaded before are still ready."
-  else
-    status_set state=failed packages=0 download_mb=0 staged_at= armed=false checked_at=@now \
-      "message=Couldn't check for updates${err:+: $err}"
+  if [[ $UNSAFE == yes ]]; then
+    dnf5 -q offline clean || warn "dnf5 offline clean failed"
+  elif keep_previous "$([[ $AUTO == download-and-install-on-reboot || $WAS_ARMED == yes ]] && echo arm)"; then
+    record_ready "$(ours_link && echo true || echo false)" \
+      "The last check failed; the updates downloaded before are still ready."
+    return 1
   fi
+  status_set state=failed packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
+    "message=Couldn't check for updates${err:+: $err}"
   return 1
 }
 
 cmd_now() {
-  local verb=upgrade
-  case ${1:-} in
-    --sync) verb=distro-sync ;;
-    "") ;;
-    *) usage >&2; exit 2 ;;
-  esac
+  local verb=upgrade replace=no arg
+  for arg; do
+    case $arg in
+      --sync) verb=distro-sync ;;
+      --replace) replace=yes ;;
+      *) usage >&2; exit 2 ;;
+    esac
+  done
   refuse_live
   as_root
   take_lock wait
   load_config
   status_set "channel=$(current_channel)"
+  check_last_install
+  inspect
+  if [[ $ST_HOLD == yes && $replace != yes ]]; then
+    held_message >&2
+    die "not checking for updates. To cancel that transaction and check now: arctic-update now$([[ $verb == distro-sync ]] && echo " --sync") --replace"
+  fi
   if [[ $METERED == skip ]] && connection_metered; then
     say "You're on a metered connection; downloading anyway because you asked."
   fi
   say "Checking for updates…"
-  if ! stage "$verb" interactive; then
-    if keep_previous; then
-      status_set "message=The last check failed; the updates downloaded before are still ready."
+  if ! stage "$verb" interactive "$replace"; then
+    if [[ $UNSAFE == yes ]]; then
+      dnf5 -q offline clean || warn "dnf5 offline clean failed"
+    elif keep_previous arm; then
+      record_ready true "The last check failed; the updates downloaded before are still ready."
       die "the check failed; the updates downloaded earlier are still ready and will be installed at the next restart"
     fi
-    status_set state=failed packages=0 download_mb=0 staged_at= armed=false checked_at=@now \
+    status_set state=failed packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
       "message=Couldn't check for updates."
     die "the check failed (see the messages above)"
   fi
+  # You asked: automatic installs start again after failed ones.
+  status_set boot_failures=0 install_error= install_failed_at=
   if [[ $UPDATE == no ]]; then
     record_idle "The system is up to date."
     say "" "Your system is up to date."
@@ -397,6 +601,11 @@ cmd_apply() {
   refuse_live
   as_root
   take_lock wait
+  inspect
+  if [[ $ST_HOLD == yes ]]; then
+    held_message >&2
+    exit 1
+  fi
   case "$(offline_class)" in
     stored) ;;
     none) die "no updates are waiting. Check for them with: arctic-update now" ;;
@@ -409,43 +618,54 @@ cmd_apply() {
     local answer
     read -r -p "Restart now and install $(plural "$COUNT" update)? Save your work first. [y/N] " answer
     if [[ $answer != [yY]* ]]; then
-      if ours; then say "Not restarting. The updates will be installed the next time you restart."; fi
+      if ours_link; then say "Not restarting. The updates will be installed the next time you restart."; fi
       return 0
     fi
   fi
-  status_set state=ready armed=true
+  record_ready true
+  status_set "armed_boot=$(boot_id)" armed_at=@now
   exec dnf5 offline reboot -y
 }
 
 cmd_channel() {
-  local want=${1:-}
-  case $want in
-    "")
-      local ch; ch="$(current_channel)"
-      case $ch in
-        stable)  say "stable: released builds (from the main branch)" ;;
-        testing) say "testing: development builds (from the dev branch), newer than stable" ;;
-        *)       say "none: the Arctic package repository isn't set up on this system" ;;
-      esac
-      return 0 ;;
-    stable|testing) ;;
-    *) usage >&2; exit 2 ;;
-  esac
+  local want="" replace=no arg
+  for arg; do
+    case $arg in
+      stable|testing) want=$arg ;;
+      --replace) replace=yes ;;
+      *) usage >&2; exit 2 ;;
+    esac
+  done
+  if [[ -z $want ]]; then
+    [[ $replace == yes ]] && { usage >&2; exit 2; }
+    case "$(current_channel)" in
+      stable)  say "stable: released builds (from the main branch)" ;;
+      testing) say "testing: development builds (from the dev branch), newer than stable" ;;
+      *)       say "none: the Arctic package repository isn't set up on this system" ;;
+    esac
+    return 0
+  fi
   repo_defined arctic-testing || die "the Arctic package repositories (arctic, arctic-testing) aren't defined here: update arctic-release first"
   if [[ "$(current_channel)" == "$want" ]]; then
     say "You're already on the $want channel."
     return 0
   fi
   as_root
+  take_lock wait
+  # An update downloaded from the other channel's builds must not be installed any more; one
+  # another command prepared is removed only when you say so.
+  inspect
+  if [[ $ST_HOLD == yes && $replace != yes ]]; then
+    held_message >&2
+    die "switching the channel removes it. To do that: arctic-update channel $want --replace"
+  fi
   local enable=0
   [[ $want == testing ]] && enable=1
   dnf5 -q config-manager setopt arctic.enabled=1 "arctic-testing.enabled=$enable" \
     || die "dnf5 config-manager couldn't change the repositories"
-  # An update downloaded from the other channel's builds must not be installed any more.
-  take_lock wait
-  disarm
+  disarm force
   if [[ "$(helper state "$STATE")" != none ]]; then dnf5 -q offline clean || warn "dnf5 offline clean failed"; fi
-  status_set "channel=$want" state=idle packages=0 download_mb=0 staged_at= armed=false \
+  status_set "channel=$want" state=idle packages=0 download_mb=0 staged_at= notify_key= armed=false \
     "message=Switched to the $want channel."
   exec 9>&-
   if [[ $want == testing ]]; then
@@ -457,7 +677,8 @@ cmd_channel() {
   say "You're on the stable channel." \
       "Packages already updated from testing are newer than stable, so they stay until a newer" \
       "stable build replaces them. To go back to the stable builds now (installed at the next" \
-      "restart): arctic-update now --sync"
+      "restart; this syncs every package to the versions in the enabled repositories):" \
+      "arctic-update now --sync"
   if [[ -t 0 && -t 1 ]]; then
     local answer
     read -r -p "Go back to the stable builds now? [y/N] " answer
@@ -489,16 +710,25 @@ cmd_auto() {
   if [[ $mode == off ]]; then
     systemctl disable --now "$TIMER" >/dev/null 2>&1 || warn "couldn't disable $TIMER"
     say "Automatic updates are off. Check by hand with: arctic-update now"
-    return 0
+  else
+    systemctl enable --now "$TIMER" >/dev/null 2>&1 || warn "couldn't enable $TIMER"
   fi
-  systemctl enable --now "$TIMER" >/dev/null 2>&1 || warn "couldn't enable $TIMER"
-  if [[ $mode == download-only ]]; then
-    say "Updates will download in the background; install them with: arctic-update apply"
+  take_lock wait
+  inspect
+  if [[ $mode != download-and-install-on-reboot ]]; then
+    [[ $mode == download-only ]] && say "Updates will download in the background; install them with: arctic-update apply"
+    # An update already scheduled isn't installed at the next restart any more; it stays downloaded.
+    if [[ $ST_OWNER == ours && ( $ST_LINKED == yes || $ST_STATUS == ready ) ]]; then
+      disarm
+      [[ "$(offline_class)" == stored ]] && record_ready false
+      say "The updates already downloaded won't be installed at the next restart." \
+          "Install them with: arctic-update apply"
+    fi
     return 0
   fi
   say "Updates will download in the background and install the next time you restart."
   # Downloaded earlier in download-only mode: schedule it now.
-  if [[ "$(helper state "$STATE")" == download-complete ]] && [[ "$(offline_class)" == stored ]] && arm; then
+  if [[ $ST_OWNER == ours && $ST_STATUS == download-complete ]] && [[ "$(offline_class)" == stored ]] && arm; then
     record_ready true
     say "The updates downloaded earlier will be installed at the next restart."
   fi
@@ -520,17 +750,36 @@ cmd_metered() {
   else say "Updates won't download on metered connections."; fi
 }
 
+# libdnf5's actions plugin runs this after every dnf transaction on this system
+# (arctic-update.actions). dnf5 then invalidates a stored offline transaction: when it is
+# arctic-update's, check again in two minutes (arctic-update-restage.timer; more transactions
+# in the meantime make one check), reusing the packages already downloaded. The offline boot's
+# own transaction doesn't count: its state is "transaction-incomplete" while it runs. Silent:
+# the plugin reads this command's output.
+cmd_after_transaction() {
+  exec >/dev/null 2>&1
+  is_root || return 0
+  is_live && return 0
+  inspect
+  [[ $ST_OWNER == ours && ( $ST_STATUS == download-complete || $ST_STATUS == ready ) ]] || return 0
+  load_config
+  [[ $AUTO == off ]] && return 0
+  systemctl start --no-block "$RESTAGE_TIMER" || true
+  return 0
+}
+
 cmd=${1:-status}
 (( $# )) && shift
 case $cmd in
-  status)         cmd_status "$@" ;;
-  --json)         cmd_status --json ;;
-  now)            cmd_now "$@" ;;
-  apply)          cmd_apply "$@" ;;
-  channel)        cmd_channel "$@" ;;
-  auto)           cmd_auto "$@" ;;
-  metered)        cmd_metered "$@" ;;
-  stage)          cmd_stage ;;
-  help|-h|--help) usage ;;
-  *)              usage >&2; exit 2 ;;
+  status)            cmd_status "$@" ;;
+  --json)            cmd_status --json ;;
+  now)               cmd_now "$@" ;;
+  apply)             cmd_apply "$@" ;;
+  channel)           cmd_channel "$@" ;;
+  auto)              cmd_auto "$@" ;;
+  metered)           cmd_metered "$@" ;;
+  stage)             cmd_stage ;;
+  after-transaction) cmd_after_transaction ;;
+  help|-h|--help)    usage ;;
+  *)                 usage >&2; exit 2 ;;
 esac
