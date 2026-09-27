@@ -32,6 +32,9 @@ iso/kiwi/               kiwi-ng description for the live ISO
 tools/build-rpms.sh     builds all RPMs in a Fedora 44 container → out/repo (createrepo_c)
 tools/build-iso.sh      builds the ISO with kiwi-ng in a privileged Fedora 44 container → out/iso
 tools/test-iso.sh       boots the ISO in QEMU (no KVM needed), takes screenshots
+tools/test-install.sh   installs from the ISO to a VM disk (arctic-install unattended, profiles/ci/offline.toml),
+                        then boots it: LUKS prompt, SDDM login, desktop, logs over the serial port
+tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QMP helpers for the tests)
 .github/workflows/ci.yml   go test, shellcheck, python tests, node tests, qmllint
 .github/workflows/iso.yml  build RPMs + ISO, upload artifact, publish release (tag or manual)
 ```

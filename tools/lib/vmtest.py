@@ -1,4 +1,4 @@
-"""QEMU/QMP helpers shared by the VM test harnesses (tools/test-install.sh).
+"""QEMU/QMP helpers shared by the VM test harnesses (tools/test-iso.sh, tools/test-install.sh).
 
 Runs inside the Fedora test container (python3-pillow). A VM is one QEMU process with a QMP
 socket; screenshots are PNG files written by QMP screendump; keys go in with QMP send-key
@@ -31,13 +31,14 @@ class VM:
     """One QEMU process. argv is the full qemu command line; it must contain
     -qmp unix:<qmp>,server=on,wait=off."""
 
-    def __init__(self, argv, qmp_path, name):
+    def __init__(self, argv, qmp_path, name, qemu_log=None):
         self.name = name
         self.qmp_path = qmp_path
         if os.path.exists(qmp_path):
             os.remove(qmp_path)
-        self.proc = subprocess.Popen(argv, stdout=open(f"{OUT}/qemu-{name}.log", "w"), stderr=subprocess.STDOUT)
-        log(f"[{name}] qemu started: {' '.join(argv)}")
+        qemu_log = qemu_log or f"{OUT}/qemu-{name}.log"
+        self.proc = subprocess.Popen(argv, stdout=open(qemu_log, "w"), stderr=subprocess.STDOUT)
+        log(f"qemu started ({name}): {' '.join(argv)}")
         self.s = None
         for _ in range(300):
             try:
@@ -47,7 +48,7 @@ class VM:
                 break
             except OSError:
                 if self.proc.poll() is not None:
-                    raise SystemExit(f"qemu exited: see qemu-{name}.log")
+                    raise SystemExit(f"qemu exited: see {os.path.basename(qemu_log)}")
                 time.sleep(0.2)
         if self.s is None:
             raise SystemExit("no QMP socket")
@@ -90,16 +91,27 @@ class VM:
             return None
         return path
 
+    def press(self, chord):
+        """Press and release a chord (["shift", "a"]) in one input-send-event batch. With
+        send-key, QEMU releases the keys on a timer, and a guest lagging under TCG can see
+        the key held past its repeat delay ("suuuuudo"); here the release events arrive
+        together with the presses."""
+        down = [{"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": c}}} for c in chord]
+        up = [{"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": c}}} for c in reversed(chord)]
+        r = self.cmd("input-send-event", events=down + up)
+        if "error" in r:
+            # Older QEMU or no device for input-send-event: fall back to send-key.
+            self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 30})
+
     def keys(self, *names, gap=0.3):
         """Press keys one after the other; "ctrl-x" style names press a chord."""
         for k in names:
-            chord = k.split("-") if len(k) > 1 and "-" in k else [k]
-            self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord])
+            self.press(k.split("-") if len(k) > 1 and "-" in k else [k])
             time.sleep(gap)
 
     def type_text(self, text, gap=0.15):
         for ch in text:
-            self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord_for(ch)], **{"hold-time": 40})
+            self.press(chord_for(ch))
             time.sleep(gap)
 
     def quit(self):

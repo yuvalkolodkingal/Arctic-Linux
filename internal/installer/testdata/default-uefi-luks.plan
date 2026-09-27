@@ -16,6 +16,10 @@ $ mkfs.ext4 -F -q -L arctic-boot /dev/nvme0n1p3
 $ cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --label arctic-root --key-file - /dev/nvme0n1p4 < [secret: disk passphrase]
 $ blkid --match-tag UUID --output value /dev/nvme0n1p4
 $ cryptsetup open --allow-discards --key-file - /dev/nvme0n1p4 luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad < [secret: disk passphrase]
+mkdir -p /mnt
+$ findmnt --noheadings --output TARGET --mountpoint /mnt
+$ mount --bind /mnt /mnt
+$ mount --make-private /mnt
 $ mkfs.btrfs -f -q -L arctic /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad
 $ mount -o compress=zstd:1 /dev/mapper/luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad /mnt
 $ btrfs subvolume create /mnt/@
@@ -102,6 +106,7 @@ write /mnt/etc/default/grub (0644)
     | GRUB_DISABLE_RECOVERY="true"
     | GRUB_ENABLE_BLSCFG=true
     | GRUB_THEME="/boot/grub2/themes/arctic/theme.txt"
+    | GRUB_DISABLE_OS_PROBER=true
 write /mnt/etc/kernel/cmdline (0644)
     | root=UUID=acc15146-0000-4000-8000-bfd07b1d4766 ro rootflags=subvol=@ rd.luks.uuid=luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad rhgb quiet
 $ chroot /mnt kernel-install add 6.17.8-300.fc44.x86_64 /lib/modules/6.17.8-300.fc44.x86_64/vmlinuz
@@ -175,4 +180,6 @@ mkdir -p /mnt/var/log/arctic-install
 $ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install
 $ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt
 $ umount --recursive /mnt
+$ udevadm settle --timeout=30
 $ cryptsetup close luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad
+$ umount /mnt

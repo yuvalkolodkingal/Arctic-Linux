@@ -139,7 +139,10 @@ if [ "\$rc" != 0 ]; then
   say "ARCTIC-FAILURE-LOGS-BEGIN"
   ls -la /var/log/arctic-install/ >> "\$S" 2>&1
   for f in /var/log/arctic-install/*; do [ "\$f" = /var/log/arctic-install/engine.log ] || { echo "--- \$f"; cat "\$f"; } >> "\$S" 2>&1; done
-  findmnt -R /mnt >> "\$S" 2>&1
+  { findmnt -R /mnt; dmsetup info -c; ls -l /sys/block/dm-*/holders/
+    echo "processes whose mount namespace still has the target:"
+    for f in /proc/[0-9]*/mountinfo; do grep -q '/dev/mapper/luks-\| /mnt' "\$f" 2>/dev/null && { p=\${f%/mountinfo}; echo "\${p#/proc/} \$(cat "\$p/comm") \$(readlink "\$p/ns/mnt")"; }; done | sort -k3 -u
+  } >> "\$S" 2>&1
   journalctl -b -p warning --no-pager 2>&1 | tail -150 >> "\$S"
   say "ARCTIC-FAILURE-LOGS-END"
 fi

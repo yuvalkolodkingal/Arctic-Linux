@@ -84,121 +84,27 @@ arctic_container_args
 kvm_args=()
 if (( KVM )) && [[ -e /dev/kvm ]]; then kvm_args=(--device /dev/kvm); fi
 
-# ---- the QMP driver (runs in the container) ----------------------------------------------
+# ---- the QMP driver (runs in the container; tools/lib/vmtest.py has the QMP helpers) -------
 read -r -d '' DRIVER <<'PY' || true
-import json, os, socket, subprocess, sys, time
-from PIL import Image
+import os, sys, time
+sys.path.insert(0, "/arctic-lib")
+import vmtest
+from vmtest import log, looks_like_boot_menu
 
 out, mode, timeout, interval = os.environ["OUT"], os.environ["MODE"], int(os.environ["TIMEOUT"]), int(os.environ["INTERVAL"])
 append = os.environ.get("APPEND", "").strip()
 collect = os.environ.get("COLLECT") == "1"
-qemu = subprocess.Popen(sys.argv[1:], stdout=open(f"{out}/qemu.log", "w"), stderr=subprocess.STDOUT)
-
-def log(msg):
-    line = f"[{time.time() - t0:6.0f}s] {msg}"
-    print(line, flush=True)
-    with open(f"{out}/test.log", "a") as f:
-        f.write(line + "\n")
-
-class QMP:
-    def __init__(self, path):
-        for _ in range(300):
-            try:
-                self.s = socket.socket(socket.AF_UNIX)
-                self.s.connect(path)
-                break
-            except OSError:
-                if qemu.poll() is not None:
-                    raise SystemExit("qemu exited: see qemu.log")
-                time.sleep(0.2)
-        self.f = self.s.makefile("rw")
-        json.loads(self.f.readline())
-        self.cmd("qmp_capabilities")
-
-    def cmd(self, name, **args):
-        msg = {"execute": name}
-        if args:
-            msg["arguments"] = args
-        self.f.write(json.dumps(msg) + "\n")
-        self.f.flush()
-        while True:
-            reply = json.loads(self.f.readline())
-            if "return" in reply or "error" in reply:
-                return reply
-
-t0 = time.time()
-qmp = QMP(f"{out}/qmp.sock")
-log(f"qemu started: {' '.join(sys.argv[1:])}")
-
-def shot(name):
-    path = f"{out}/{name}.png"
-    r = qmp.cmd("screendump", filename=path, format="png")
-    if "error" in r:
-        log(f"screendump failed: {r['error']}")
-        return None
-    return path
-
-def keys(*names):
-    """Press keys one after the other; "ctrl-x" style names press a chord."""
-    for k in names:
-        chord = k.split("-") if len(k) > 1 and "-" in k else [k]
-        qmp.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord])
-        time.sleep(0.3)
-
-QCODE = {" ": "spc", "=": "equal", ",": "comma", ".": "dot", "-": "minus", "/": "slash",
-         ";": "semicolon", "'": "apostrophe", "\\": "backslash", "`": "grave_accent",
-         "[": "bracket_left", "]": "bracket_right"}
-SHIFTED = {"_": "minus", ":": "semicolon", "+": "equal", '"': "apostrophe", ">": "dot",
-           "<": "comma", "|": "backslash", "&": "7", "*": "8", "(": "9", ")": "0", "$": "4",
-           "~": "grave_accent", "!": "1", "@": "2", "#": "3", "%": "5", "^": "6",
-           "{": "bracket_left", "}": "bracket_right", "?": "slash"}
-
-def type_text(text):
-    for ch in text:
-        if ch.isalnum() and ch.isascii():
-            chord = ["shift", ch.lower()] if ch.isupper() else [ch]
-        elif ch in QCODE:
-            chord = [QCODE[ch]]
-        elif ch in SHIFTED:
-            chord = ["shift", SHIFTED[ch]]
-        else:
-            raise SystemExit(f"cannot type {ch!r}")
-        qmp.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 40})
-        time.sleep(0.2)
-
-def looks_like_boot_menu(path):
-    """The arctic GRUB theme: an amber (#f6bd55) selection bar. GRUB's text menu: a light
-    highlight bar spanning most of a text row."""
-    im = Image.open(path).convert("RGB")
-    w, h = im.size
-    if w < 320:
-        return False
-    small = im.resize((w // 4, h // 4))
-    px = small.load()
-    sw, sh = small.size
-    amber = 0
-    bar_rows = 0
-    for y in range(sh):
-        bright = 0
-        for x in range(sw):
-            r, g, b = px[x, y]
-            if abs(r - 246) < 30 and abs(g - 189) < 35 and abs(b - 85) < 40:
-                amber += 1
-            if r > 150 and g > 150 and b > 150:
-                bright += 1
-        if bright > sw * 0.6:
-            bar_rows += 1
-    return amber > 400 or 2 <= bar_rows <= sh // 6
+t0 = vmtest.T0
+vm = vmtest.VM(sys.argv[1:], f"{out}/qmp.sock", "iso", qemu_log=f"{out}/qemu.log")
+shot, keys, type_text = vm.shot, vm.keys, vm.type_text
 
 MENU_KEYS = {"try": [], "install": ["down"], "safe": ["down", "down"],
              "check": ["down", "down", "down"], "disk": ["down", "down", "down", "down"]}
 
 # 1. Wait for the boot menu (up to 5 min under TCG), then choose the entry.
 menu_seen = False
-n = 0
-while time.time() - t0 < min(300, timeout) and qemu.poll() is None:
+while time.time() - t0 < min(300, timeout) and vm.alive():
     p = shot("00-probe")
-    n += 1
     if p and looks_like_boot_menu(p):
         os.replace(p, f"{out}/01-boot-menu.png")
         log("boot menu on screen: 01-boot-menu.png")
@@ -220,7 +126,7 @@ else:
         keys("e")
         time.sleep(1)
         keys("down", "down", "ctrl-e")
-        type_text(" " + append)
+        type_text(" " + append, gap=0.2)
         time.sleep(0.5)
         shot("03-boot-entry-edited")
         keys("ctrl-x")
@@ -232,13 +138,13 @@ else:
 # 2. Splash and boot: every 10 s for the first 2 minutes, then every --interval seconds.
 start = time.time()
 i = 0
-while time.time() - t0 < timeout and qemu.poll() is None:
+while time.time() - t0 < timeout and vm.alive():
     elapsed = int(time.time() - start)
     i += 1
     shot(f"{10 + i:02d}-boot-{elapsed:04d}s")
     time.sleep(10 if elapsed < 120 else interval)
 
-if collect and qemu.poll() is None:
+if collect and vm.alive():
     # A terminal in the session (Super+Enter → arctic-open terminal), then logs to the serial port.
     shot("97-before-collect")
     keys("meta_l-ret")
@@ -248,19 +154,18 @@ if collect and qemu.poll() is None:
     shot("98-terminal")
     type_text("sudo sh -c '(echo ARCTIC-COLLECT-BEGIN; cat ~liveuser/.local/share/sddm/*.log; "
               "systemctl --failed --no-pager; journalctl -b -p warning --no-pager; getenforce; flatpak list; "
-              "echo ARCTIC-COLLECT-END) >/dev/ttyS0 2>&1'")
+              "echo ARCTIC-COLLECT-END) >/dev/ttyS0 2>&1'", gap=0.2)
     keys("ret")
     time.sleep(30)
     log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
 
-if qemu.poll() is None:
+if vm.alive():
     shot("99-final")
-    st = qmp.cmd("query-status")
+    st = vm.cmd("query-status")
     log(f"final screenshot 99-final.png, vm status: {st.get('return', st)}")
-    qmp.cmd("quit")
 else:
-    log(f"qemu exited early with code {qemu.returncode}")
-qemu.wait(timeout=30)
+    log(f"qemu exited early with code {vm.proc.returncode}")
+vm.quit()
 PY
 
 inner=$(cat <<'INNER'
@@ -302,7 +207,7 @@ arctic_log "booting $(basename "$ISO") ($FIRMWARE, mode $MODE, ${TIMEOUT}s) → 
   -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
   -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  -v "$ISO:/iso:ro" -v "$OUT:/out" \
+  -v "$ISO:/iso:ro" -v "$OUT:/out" -v "$HERE/lib:/arctic-lib:ro" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner"
 
 arctic_log "screenshots:"

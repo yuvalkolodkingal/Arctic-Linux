@@ -159,8 +159,10 @@ func (in *Installer) cleanup(ctx context.Context) {
 	in.R.Note("cleanup after failure")
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{"-R", in.Opt.Target}, AllowFail: true})
 	if in.lay.luksName != "" {
+		in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=15"}, AllowFail: true})
 		in.R.Run(ctx, Cmd{Name: "cryptsetup", Args: []string{"close", in.lay.luksName}, AllowFail: true})
 	}
+	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{in.Opt.Target}, AllowFail: true}) // the private bind
 }
 
 // ---- disk ----
@@ -226,6 +228,9 @@ func (in *Installer) diskPhase(ctx context.Context) error {
 		in.lay.rootDev = "/dev/mapper/" + in.lay.luksName
 	}
 	in.t.Update(0.7, "")
+	if err := in.privateTarget(ctx); err != nil {
+		return err
+	}
 	root, tgt := in.lay.rootDev, in.Opt.Target
 	steps := [][]string{
 		{"mkfs.btrfs", "-f", "-q", "-L", "arctic", root},
@@ -277,6 +282,27 @@ func (in *Installer) diskPhase(ctx context.Context) error {
 	}
 	in.t.Update(1, "")
 	return nil
+}
+
+// privateTarget makes the target directory a private mount point before anything is mounted
+// on it. "/" is a shared mount (systemd), so every mount below it is copied into the mount
+// namespaces of sandboxed services (ProtectSystem=, PrivateTmp=, …). Those copies drop out of
+// umount propagation once the API file systems are bound in with --make-rslave, stay mounted,
+// and keep the new btrfs alive, so closing LUKS at the end fails with "Device or resource
+// busy". Under a private mount point the new system's mounts stay in this namespace.
+func (in *Installer) privateTarget(ctx context.Context) error {
+	tgt := in.Opt.Target
+	if err := in.R.MkdirAll(tgt, 0o755); err != nil {
+		return err
+	}
+	mnt, err := in.output(ctx, "findmnt", "--noheadings", "--output", "TARGET", "--mountpoint", tgt)
+	if err != nil || strings.TrimSpace(mnt) == "" {
+		// Not a mount point yet (findmnt exits 1): bind the directory onto itself.
+		if err := in.run(ctx, "mount", "--bind", tgt, tgt); err != nil {
+			return err
+		}
+	}
+	return in.run(ctx, "mount", "--make-private", tgt)
 }
 
 // waitForDevices lets udev create the new partitions' device nodes (up to 15 s).
@@ -665,8 +691,12 @@ func (in *Installer) bootloaderPhase(ctx context.Context) error {
 	if in.R.Exists(in.tgt("/boot/grub2/themes/arctic/theme.txt")) {
 		grub += `GRUB_THEME="/boot/grub2/themes/arctic/theme.txt"` + "\n"
 	}
+	// os-prober lists the other systems for "alongside"; on an erased disk there are none, and
+	// running it from the chroot only mounts and probes the new system itself.
 	if job.Data.Disk.Mode == wizard.ModeAlongside {
 		grub += "GRUB_DISABLE_OS_PROBER=false\n"
+	} else {
+		grub += "GRUB_DISABLE_OS_PROBER=true\n"
 	}
 	cmdline := fmt.Sprintf("root=UUID=%s ro %s\n", in.lay.btrfsUUID, in.kernelArgs())
 	if err := in.write(in.tgt("/etc/default/grub"), grub, 0o644); err != nil {
@@ -1149,11 +1179,17 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 		return err
 	}
 	if in.lay.luks {
+		// udev may still be probing the mapper after the unmount.
+		if _, err := in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=30"}, AllowFail: true}); err != nil {
+			return err
+		}
 		if err := in.run(ctx, "cryptsetup", "close", in.lay.luksName); err != nil {
 			return err
 		}
 	}
-	return nil
+	// The private bind of the target directory (privateTarget).
+	_, err = in.R.Run(ctx, Cmd{Name: "umount", Args: []string{t}, AllowFail: true})
+	return err
 }
 
 // roleOrder is the order of /etc/arctic/default-apps (arctic-open roles).

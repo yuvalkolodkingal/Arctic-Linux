@@ -32,7 +32,7 @@ it to a USB stick (4 GB or more), for example with Fedora Media Writer or
 | `branding/` | Login screen (SDDM), boot menu (GRUB), boot splash (Plymouth), logos |
 | `packaging/` | RPM specs (`arctic-linux.spec`, `mangowm.spec`) and system files |
 | `live/`, `iso/kiwi/` | The live session and the kiwi-ng ISO description |
-| `tools/` | `build-rpms.sh`, `build-iso.sh`, `test-iso.sh` |
+| `tools/` | `build-rpms.sh`, `build-iso.sh`, `test-iso.sh`, `test-install.sh` |
 | `docs/` | `PLAN.md` (why) and `BUILD-SPEC.md` (the contracts between components) |
 
 ## Build
@@ -43,6 +43,7 @@ Needs Docker (the builds run in Fedora 44 containers; the ISO build needs `--pri
 tools/build-rpms.sh     # RPMs → out/repo
 tools/build-iso.sh      # live ISO → out/iso (about 20 minutes, ~15 GB scratch)
 tools/test-iso.sh --firmware uefi --mode try    # boot it in QEMU, screenshots in out/test
+tools/test-install.sh --firmware uefi           # install to a VM disk, boot it, log in (~1.5 h without KVM)
 ```
 
 CI (`.github/workflows/ci.yml`) runs the Go, Python and Node tests, shellcheck and qmllint.

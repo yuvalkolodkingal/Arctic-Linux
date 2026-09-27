@@ -9,6 +9,10 @@ $ sfdisk --append /dev/nvme0n1 <<'EOF'
     EOF
 $ udevadm settle --timeout=15
 $ mkfs.ext4 -F -q -L arctic-boot /dev/nvme0n1p6
+mkdir -p /mnt
+$ findmnt --noheadings --output TARGET --mountpoint /mnt
+$ mount --bind /mnt /mnt
+$ mount --make-private /mnt
 $ mkfs.btrfs -f -q -L arctic /dev/nvme0n1p7
 $ mount -o compress=zstd:1 /dev/nvme0n1p7 /mnt
 $ btrfs subvolume create /mnt/@
@@ -151,3 +155,4 @@ mkdir -p /mnt/var/log/arctic-install
 $ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install
 $ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt
 $ umount --recursive /mnt
+$ umount /mnt
