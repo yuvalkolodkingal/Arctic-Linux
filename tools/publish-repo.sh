@@ -302,8 +302,11 @@ if (( SIGN )); then
 fi
 
 # ---- 5. Metadata ---------------------------------------------------------------------------
+# The metadata a new repomd.xml replaces stays for 2 days (by mtime; the site's files keep theirs
+# through the Pages artifact): GitHub Pages lets caches serve a page for up to 10 minutes, and a
+# client that gets the old repomd.xml then still finds the files it names.
 for d in "${dirs[@]}"; do
-  createrepo_c --update --quiet "$d"
+  createrepo_c --update --retain-old-md-by-age=2d --quiet "$d"
   rm -f "$d/repodata/repomd.xml.asc"
   if (( SIGN )); then
     gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASSFILE" --local-user "$FPR" \
