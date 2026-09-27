@@ -11,10 +11,15 @@
 #   tools/build-rpms.sh --release-suffix auto|none|SUFFIX
 #                                       what follows "1" in the Release of both specs
 #                                       (Release: 1%{?arctic_snapshot}%{?dist}). auto (the
-#                                       default): .<UTC yyyymmddHHMM>.git<commit>, so every
-#                                       build is newer than the builds before it, e.g.
-#                                       arctic-shell-0.2.0-1.202609280310.gitabc1234.fc44;
-#                                       none: plain 1.fc44. Env: ARCTIC_RELEASE_SUFFIX.
+#                                       default): .<commit time>.<build time>.git<commit>,
+#                                       both UTC (yyyymmddHHMMSS of the commit's committer
+#                                       date, yyyymmddHHMM of the build), e.g.
+#                                       arctic-shell-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44:
+#                                       builds of newer code are newer packages, and so is a
+#                                       later build of the same commit; an old commit built
+#                                       again stays older than the newer code. Not a git
+#                                       checkout: the build time stands in for the commit
+#                                       time. none: plain 1.fc44. Env: ARCTIC_RELEASE_SUFFIX.
 #   tools/build-rpms.sh --gpg-public-key FILE
 #                                       the Arctic repository's public signing key, shipped by
 #                                       arctic-release as /etc/pki/rpm-gpg/RPM-GPG-KEY-arctic.
@@ -35,7 +40,8 @@
 #
 # Output: out/repo/*.rpm + repodata, out/srpms/*.src.rpm, out/debug/ (debuginfo),
 # out/logs/rpmbuild-*.log, and out/BUILD-INFO (key=value lines: version, release_suffix,
-# git_commit, gpg_key fingerprint, arctic_repos enabled|disabled, one rpm=/srpm= line per
+# build_time, commit_time, git_commit, git_dirty, gpg_key fingerprint,
+# arctic_repos enabled|disabled|not-built, one rpm=/srpm= line per
 # package NEVRA built by this run). Packages that earlier runs built from the same specs are
 # removed from out/repo and out/srpms first, so they hold one build of each package.
 # Needs docker or podman. Behind a proxy, HTTPS_PROXY and the CA bundle are passed through
@@ -87,15 +93,21 @@ trap 'rm -rf "$tmpdir"' EXIT
 # ---- 0. Release suffix ----------------------------------------------------------------
 is_git=0
 git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1 && is_git=1
-BUILD_TIME="$(date -u +%Y%m%d%H%M)"
+now="$(date -u +%s)"
+BUILD_TIME="$(date -u -d "@$now" +%Y%m%d%H%M)"
+# The commit's (committer) time orders builds by code first: an ISO built later from an older
+# commit must not outrank the repository's builds of newer commits.
+COMMIT_TIME="$(date -u -d "@$now" +%Y%m%d%H%M%S)"
 GIT_COMMIT=""; GIT_SHORT=""; GIT_DIRTY=""
 if (( is_git )); then
   GIT_COMMIT="$(git -C "$SRC" rev-parse HEAD)"
   GIT_SHORT="$(git -C "$SRC" rev-parse --short=7 HEAD)"
+  COMMIT_TIME="$(TZ=UTC git -C "$SRC" log -1 --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
   if [[ -n "$(git -C "$SRC" status --porcelain --untracked-files=normal 2>/dev/null)" ]]; then GIT_DIRTY=yes; else GIT_DIRTY=no; fi
 fi
+[[ "$COMMIT_TIME" =~ ^[0-9]{14}$ ]] || arctic_die "can't read the commit time of $SRC (got '$COMMIT_TIME')"
 case "$SUFFIX_MODE" in
-  auto) SUFFIX=".$BUILD_TIME"; [[ -n "$GIT_SHORT" ]] && SUFFIX+=".git$GIT_SHORT" ;;
+  auto) SUFFIX=".$COMMIT_TIME.$BUILD_TIME"; [[ -n "$GIT_SHORT" ]] && SUFFIX+=".git$GIT_SHORT" ;;
   none) SUFFIX="" ;;
   *)    SUFFIX="$SUFFIX_MODE"; [[ "$SUFFIX" == .* ]] || SUFFIX=".$SUFFIX" ;;
 esac
@@ -261,6 +273,7 @@ fi
   echo "version=$VERSION"
   echo "release_suffix=$RELEASE_SUFFIX"
   echo "build_time=$BUILD_TIME"
+  echo "commit_time=$COMMIT_TIME"
   echo "git_commit=$GIT_COMMIT"
   echo "git_dirty=$GIT_DIRTY"
   echo "specs=$SPECS"
@@ -282,7 +295,7 @@ INNER
 arctic_log "building ${specs[*]} in $ARCTIC_FEDORA_IMAGE ($engine)"
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${key_args[@]}" \
   -e SPECS="${specs[*]}" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  -e RELEASE_SUFFIX="$SUFFIX" -e VERSION="$VERSION" -e BUILD_TIME="$BUILD_TIME" \
+  -e RELEASE_SUFFIX="$SUFFIX" -e VERSION="$VERSION" -e BUILD_TIME="$BUILD_TIME" -e COMMIT_TIME="$COMMIT_TIME" \
   -e GIT_COMMIT="$GIT_COMMIT" -e GIT_DIRTY="$GIT_DIRTY" \
   -v "$SRC:/src:ro" -v "$OUT:/out" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner"

@@ -10,8 +10,8 @@
 
 Name:           mangowm
 Version:        0.17.3
-# tools/build-rpms.sh defines arctic_snapshot as .<UTC yyyymmddHHMM>.git<commit>, so every
-# build is newer than the ones before it (docs/BUILD-SPEC.md §9).
+# tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
+# so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Lightweight, high-performance Wayland compositor built on dwl
 License:        GPL-3.0-or-later AND MIT AND X11 AND CC0-1.0

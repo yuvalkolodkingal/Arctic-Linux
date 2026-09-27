@@ -29,8 +29,8 @@
 
 Name:           arctic-linux
 Version:        0.2.0
-# tools/build-rpms.sh defines arctic_snapshot as .<UTC yyyymmddHHMM>.git<commit>, so every
-# build is newer than the ones before it (docs/BUILD-SPEC.md §9).
+# tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
+# so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1

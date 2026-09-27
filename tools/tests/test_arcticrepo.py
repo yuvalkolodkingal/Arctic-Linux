@@ -58,12 +58,18 @@ VERCMP = [
     ("1.0^20160101^git1", "1.0^20160102", -1),
     ("1.0~rc1^git1", "1.0~rc1^git1", 0), ("1.0~rc1^git1", "1.0~rc1", 1), ("1.0~rc1", "1.0~rc1^git1", -1),
     ("1.0^git1~pre", "1.0^git1~pre", 0), ("1.0^git1", "1.0^git1~pre", 1), ("1.0^git1~pre", "1.0^git1", -1),
-    # Arctic: every build's Release is 1.<UTC yyyymmddHHMM>.git<commit>.fc44
+    # Arctic: every build's Release is 1.<UTC commit yyyymmddHHMMSS>.<UTC build yyyymmddHHMM>
+    # .git<commit>.fc44. Newer code wins, whenever it was built:
+    ("1.20260928031005.202609280310.gitabc1234.fc44", "1.20260928031006.202609280311.git0000000.fc44", -1),
+    ("1.20260927120000.202610050000.gitaaaaaaa.fc44", "1.20260928090000.202609280905.gitbbbbbbb.fc44", -1),
+    ("1.20261231235959.202701010000.gitabc1234.fc44", "1.20270101000000.202701010001.gitdef5678.fc44", -1),
+    # the same commit built again: the later build wins
+    ("1.20260928031005.202609280310.gitabc1234.fc44", "1.20260928031005.202609281200.gitabc1234.fc44", -1),
+    # every build of this scheme is newer than the builds of the earlier 1.<build time>.git… one
+    ("1.202612312359.gitabc1234.fc44", "1.20260927000000.202609270001.gitabc1234.fc44", -1),
     ("1.202609280310.gitabc1234.fc44", "1.202609280311.git0000000.fc44", -1),
-    ("1.202610010000.git0000000.fc44", "1.202609302359.gitfffffff.fc44", 1),
-    ("1.202612312359.gitabc1234.fc44", "1.202701010000.gitabc1234.fc44", -1),
     # an unsuffixed local build (--release-suffix none) is older than any snapshot build
-    ("1.fc44", "1.202609280310.gitabc1234.fc44", -1),
+    ("1.fc44", "1.20260928031005.202609280310.gitabc1234.fc44", -1),
 ]
 
 

@@ -172,7 +172,7 @@ iso="$OUT/$ISO_NAME"
 # What the packages on it are (tools/build-rpms.sh's BUILD-INFO next to the repository):
 # version, release suffix, commit, repository key and whether the Arctic repositories are on.
 if [[ -f "$(dirname "$REPO")/BUILD-INFO" ]]; then
-  grep -E '^(version|release_suffix|build_time|git_commit|gpg_key|arctic_repos)=' "$(dirname "$REPO")/BUILD-INFO" \
+  grep -E '^(version|release_suffix|build_time|commit_time|git_commit|gpg_key|arctic_repos)=' "$(dirname "$REPO")/BUILD-INFO" \
     >> "$OUT/${ISO_NAME%.iso}.build-info" || :
 fi
 size=$(stat -c %s "$iso")
