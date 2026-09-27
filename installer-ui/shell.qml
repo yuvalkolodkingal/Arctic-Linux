@@ -104,7 +104,10 @@ ShellRoot {
                 keyboard: Wizard.keyboardLayout + (Wizard.keyboardVariant ? ":" + Wizard.keyboardVariant : ""),
                 percent: Wizard.percent,
                 status: Wizard.status,
-                apps: Wizard.appsDone + "/" + Wizard.appsTotal
+                apps: Wizard.appsDone + "/" + Wizard.appsTotal,
+                note: frame.page ? frame.page.note : "",
+                // Page-specific test state (e.g. AppsStep: open groups, rows, search matches).
+                step: frame.page && frame.page.testState !== undefined ? frame.page.testState : null
             });
         }
         // Step 11: "Try again" / "Skip {App}" (or retry after a core failure).

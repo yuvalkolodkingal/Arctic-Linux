@@ -176,11 +176,29 @@ next
 
 # 8 Apps (tick Steam too: 9 apps, and the mock makes Steam fail later)
 wait_page apps
+# The optional groups start folded: only the design's seven sections have app rows.
+wait_for "d.get('step',{}).get('open')==[] and d.get('step',{}).get('rows')==38" "folded optional groups"
+wait_for "d.get('note')=='8 apps · 2.1 GB download'" "the default download estimate"
 fill '{"select": ["steam"]}'
+wait_for "d.get('step',{}).get('open')==['gaming'] and d.get('note','').startswith('9 apps')" "Steam ticked, Games open"
 shot 08-apps
 fill '{"scroll": 520}'
 shot 08b-apps-scrolled
 fill '{"scroll": 0}'
+# Search looks through every group and opens the ones with matches.
+fill '{"query": "pdf"}'
+wait_for "d.get('step',{}).get('matches',0)>=3 and d.get('step',{}).get('rows')==d.get('step',{}).get('matches')" "search results"
+shot 08c-apps-search
+fill '{"query": ""}'
+# Keyboard: Space on a folded group opens it; Left folds it again.
+if command -v wtype >/dev/null; then
+    fill '{"focus": "group:music"}'
+    key -k space
+    wait_for "'music' in d.get('step',{}).get('open',[])" "Space opens a group"
+    shot 08d-apps-group-open
+    key -k Left
+    wait_for "'music' not in d.get('step',{}).get('open',[])" "Left folds a group"
+fi
 next
 
 # 9 Summary
