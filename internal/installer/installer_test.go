@@ -270,6 +270,39 @@ func TestFallbackMethod(t *testing.T) {
 	}
 }
 
+func TestLivePackagesRemovedWithoutScriptlets(t *testing.T) {
+	// Real hardware, SELinux enforcing: the live packages' %preun scriptlets fail (exit 127).
+	// The install goes on: their units are disabled and the packages removed without scripts.
+	job := loadJob(t, "defaults.toml", "uefi")
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if s := c.String(); c.Name == "chroot" && strings.Contains(s, "dnf remove") && strings.Contains(s, "arctic-live") && !strings.Contains(s, "tsflags=noscripts") {
+			return "", errors.New("exit status 1")
+		}
+		return DefaultRespond(c)
+	}}
+	rep := newReporter()
+	if err := runPlan(t, job, rec, rep); err != nil {
+		t.Fatal(err)
+	}
+	plan := rec.Plan()
+	relabel := strings.Index(plan, "$ setfiles ")
+	remove := strings.Index(plan, "dnf remove -y --no-autoremove arctic-live")
+	if relabel < 0 || remove < 0 || relabel > remove {
+		t.Error("the target is not relabelled before the first command that runs inside it")
+	}
+	for _, want := range []string{
+		"$ systemctl --root=/mnt disable livesys.service livesys-late.service arcticd.socket arcticd.service",
+		"$ chroot /mnt dnf remove -y --no-autoremove --setopt=tsflags=noscripts arctic-live livesys-scripts arctic-installer dracut-live dracut-kiwi-live",
+	} {
+		if !strings.Contains(plan, want) {
+			t.Errorf("plan lacks %q", want)
+		}
+	}
+	if strings.Count(plan, "$ setfiles ") != 2 {
+		t.Errorf("want two relabels (after the copy and at the end), got %d", strings.Count(plan, "$ setfiles "))
+	}
+}
+
 func TestFatalFailureCleansUp(t *testing.T) {
 	job := loadJob(t, "defaults.toml", "uefi")
 	rec := &Recorder{Respond: func(c Cmd) (string, error) {

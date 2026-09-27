@@ -34,6 +34,7 @@ $ blkid --match-tag UUID --output value /dev/nvme0n1p6
 
 # == copy: Copying Arctic Linux…
 $ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--filter=-x security.selinux' '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' '--exclude=/boot/efi/*' '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/boot/vmlinuz-0-rescue-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
+$ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt
 $ mount --rbind /dev /mnt/dev
 $ mount --make-rslave /mnt/dev
 $ mount -t proc proc /mnt/proc

@@ -23,6 +23,11 @@
 #                                               waits 8 s (DeviceTimeout) for the GPU driver,
 #                                               which TCG never loads in time, so the stock boot
 #                                               falls back to the text prompt. '' for none.
+#   tools/test-install.sh --via service|sudo    how run.sh starts the engine. service (default):
+#                                               as a transient systemd service (systemd-run), the
+#                                               context the installer daemon arcticd runs in
+#                                               (SELinux unconfined_service_t, service
+#                                               environment); sudo: straight from the terminal
 #   tools/test-install.sh --out DIR             default out/test/install/<firmware>
 #
 # Stage "install": a fresh 40 GB sparse target disk (target.qcow2) and, for UEFI, a fresh
@@ -58,6 +63,7 @@ SMP=4
 KVM=0
 BOOT_APPEND=auto
 INSTALLER=""
+VIA=service
 OUT=""
 # Test secrets only (typed into the VM and passed to the installer).
 LUKS_PASSPHRASE="glacier lantern frost harbor"
@@ -75,6 +81,7 @@ while (( $# )); do
     --kvm) KVM=1; shift ;;
     --boot-append) BOOT_APPEND="$2"; shift 2 ;;
     --installer) INSTALLER="$2"; shift 2 ;;
+    --via) VIA="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     -h|--help) sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
@@ -125,11 +132,15 @@ say "ARCTIC-TEST-STARTED \$(date -u +%FT%TZ)"
 export ARCTIC_LUKS_PASSPHRASE=$(q "$LUKS_PASSPHRASE")
 export ARCTIC_USER_PASSWORD=$(q "$USER_PASSWORD")
 cp "\$D/profile.toml" /run/arctic-test-profile.toml
-AI=arctic-install
+AI=/usr/bin/arctic-install
 if [ -x "\$D/arctic-install" ]; then
-  cp "\$D/arctic-install" /run/arctic-install-test && AI=/run/arctic-install-test
+  # Under /usr/local/bin with its default label (bin_t), so that a service runs it in the
+  # same SELinux domain as the ISO's own binaries.
+  install -m 0755 "\$D/arctic-install" /usr/local/bin/arctic-install-test && AI=/usr/local/bin/arctic-install-test
+  restorecon "\$AI" 2>/dev/null
   say "using the arctic-install from the test data drive"
 fi
+VIA=$(q "$VIA")
 {
   echo "== live system"; cat /proc/cmdline; findmnt /run/rootfsbase; findmnt -t squashfs
   lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS
@@ -137,8 +148,18 @@ fi
   "\$AI" version
 } 2>&1 | tee -a "\$S"
 start=\$(date +%s)
-"\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
-rc=\${PIPESTATUS[0]}
+if [ "\$VIA" = service ]; then
+  # What arcticd.service gets: a system service's SELinux domain and environment.
+  say "running the install as a systemd service (\$(getenforce))"
+  systemd-run --wait --pipe --collect --quiet id -Z 2>&1 | tee -a "\$S"
+  systemd-run --wait --pipe --collect --quiet --unit=arctic-test-install \\
+    -E ARCTIC_LUKS_PASSPHRASE -E ARCTIC_USER_PASSWORD \\
+    "\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
+  rc=\${PIPESTATUS[0]}
+else
+  "\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
+  rc=\${PIPESTATUS[0]}
+fi
 say "ARCTIC-INSTALL-DURATION=\$(( \$(date +%s) - start ))s"
 say "ARCTIC-ENGINE-LOG-BEGIN"
 cat /var/log/arctic-install/engine.log >> "\$S" 2>&1

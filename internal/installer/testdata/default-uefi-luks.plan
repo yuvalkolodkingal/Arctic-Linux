@@ -47,6 +47,7 @@ $ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--filter=-x sec
 $ rsync -rt --omit-dir-times /run/rootfsbase/boot/efi/ /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/grub2/1:2.12-64.fc44/EFI /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/shim/16.1-5/EFI /mnt/boot/efi/
+$ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt
 $ mount --rbind /dev /mnt/dev
 $ mount --make-rslave /mnt/dev
 $ mount -t proc proc /mnt/proc

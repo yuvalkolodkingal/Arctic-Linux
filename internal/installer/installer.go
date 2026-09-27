@@ -630,6 +630,16 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 	if err := in.copyRoot(ctx, src); err != nil {
 		return err
 	}
+	in.t.Update(0.88, "")
+	// The copy has no SELinux labels (see copyRoot): label the new system before anything
+	// runs inside it. With SELinux enforcing, rpm runs scriptlets as rpm_script_t, which may
+	// not execute unlabelled files: every scriptlet in the chroot then fails with exit 127.
+	// The finalize phase relabels again, for the files the later steps create.
+	if code, err := in.relabel(ctx); err != nil {
+		return err
+	} else if code != 0 {
+		in.Rep.Logf("setfiles failed (exit %d); continuing, the finalize phase relabels again", code)
+	}
 	in.t.Update(0.9, "")
 	// API file systems for the chroot steps; /run carries the resolver stub for dnf.
 	for _, s := range [][]string{
@@ -645,7 +655,7 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 		}
 	}
 	// Live-only packages and files (livesys creates liveuser at boot, so the image has none).
-	if err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"remove", "-y", "--no-autoremove"}, LiveOnlyPackages...)}); err != nil {
+	if err := in.removeLivePackages(ctx); err != nil {
 		return err
 	}
 	for _, f := range []string{"/etc/sddm.conf.d/90-arctic-live.conf", "/etc/sysconfig/livesys"} {
@@ -657,6 +667,42 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 	return nil
 }
 
+// LiveOnlyUnits are the systemd units of LiveOnlyPackages that may be enabled in the image.
+var LiveOnlyUnits = []string{"livesys.service", "livesys-late.service", "arcticd.socket", "arcticd.service"}
+
+// removeLivePackages removes LiveOnlyPackages from the target. Should their scriptlets fail
+// (all they do is disable the packages' units), the units are disabled directly and the
+// packages removed without scriptlets: a live-only leftover must not stop the install.
+func (in *Installer) removeLivePackages(ctx context.Context) error {
+	args := append([]string{"remove", "-y", "--no-autoremove"}, LiveOnlyPackages...)
+	res, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "dnf", Args: args, AllowFail: true}))
+	if err != nil {
+		return err
+	}
+	if res.ExitCode == 0 {
+		return nil
+	}
+	in.Rep.Logf("removing the live-only packages failed (exit %d); removing them without their scriptlets", res.ExitCode)
+	if _, err := in.R.Run(ctx, Cmd{Name: "systemctl", Args: append([]string{"--root=" + in.Opt.Target, "disable"}, LiveOnlyUnits...), AllowFail: true}); err != nil {
+		return err
+	}
+	args = append([]string{"remove", "-y", "--no-autoremove", "--setopt=tsflags=noscripts"}, LiveOnlyPackages...)
+	return in.chroot(ctx, Cmd{Name: "dnf", Args: args})
+}
+
+// relabel sets the SELinux labels of the whole target (the API file systems and the vfat
+// ESP excepted) from the target's own file contexts. It returns setfiles' exit code.
+func (in *Installer) relabel(ctx context.Context) (int, error) {
+	t := in.Opt.Target
+	res, err := in.R.Run(ctx, Cmd{Name: "setfiles", Args: []string{"-F", "-r", t,
+		"-e", in.tgt("/proc"), "-e", in.tgt("/sys"), "-e", in.tgt("/dev"), "-e", in.tgt("/run"), "-e", in.tgt("/boot/efi"),
+		in.tgt("/etc/selinux/targeted/contexts/files/file_contexts"), t}, AllowFail: true})
+	if err != nil {
+		return 0, err
+	}
+	return res.ExitCode, nil
+}
+
 // copyRoot copies the live root to the target, then the ESP's files.
 //
 // The ESP is vfat, mounted at /boot/efi before the copy. The main rsync must not touch that
@@ -665,7 +711,8 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 // mounted there, and its files are copied separately without owners, permissions or xattrs,
 // as Anaconda does for live images. The security.selinux xattr is not copied at all (the
 // kiwi-built image has files whose label the running policy can't set or remove, another
-// exit-23 failure); setfiles relabels the whole target in the finalize phase.
+// exit-23 failure); setfiles relabels the whole target right after the copy (copyPhase) and
+// again in the finalize phase.
 func (in *Installer) copyRoot(ctx context.Context, src string) error {
 	esp := "/boot/efi/*" // no ESP mounted: keep the (empty) directory from the image
 	if in.lay.esp != "" {
@@ -1391,14 +1438,12 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	}
 	// SELinux labels before unmounting; fall back to a relabel at first boot.
 	t := in.Opt.Target
-	res, err := in.R.Run(ctx, Cmd{Name: "setfiles", Args: []string{"-F", "-r", t,
-		"-e", in.tgt("/proc"), "-e", in.tgt("/sys"), "-e", in.tgt("/dev"), "-e", in.tgt("/run"), "-e", in.tgt("/boot/efi"),
-		in.tgt("/etc/selinux/targeted/contexts/files/file_contexts"), t}, AllowFail: true})
+	code, err := in.relabel(ctx)
 	if err != nil {
 		return err
 	}
-	if res.ExitCode != 0 {
-		in.Rep.Logf("setfiles failed (exit %d); relabelling at first boot instead", res.ExitCode)
+	if code != 0 {
+		in.Rep.Logf("setfiles failed (exit %d); relabelling at first boot instead", code)
 		if err := in.write(in.tgt("/.autorelabel"), "-F\n", 0o644); err != nil {
 			return err
 		}

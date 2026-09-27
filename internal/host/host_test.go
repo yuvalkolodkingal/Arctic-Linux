@@ -174,6 +174,32 @@ func TestLogTargets(t *testing.T) {
 	}
 }
 
+func TestLogTargetsVentoy(t *testing.T) {
+	// A Ventoy stick: the ISO file lives on the exFAT data partition, and the live system maps
+	// it through device mapper, so the partition is held (the kernel refuses to mount it) and
+	// the stick is the install medium. A held partition on another disk is skipped too.
+	const doc = `{"blockdevices": [
+	  {"path": "/dev/sda", "type": "disk", "model": "Cruzer Blade", "tran": "usb", "rm": true, "ro": false, "hotplug": true, "mountpoints": [null],
+	   "children": [
+	     {"path": "/dev/sda1", "type": "part", "rm": true, "ro": false, "fstype": "exfat", "label": "Ventoy", "parttype": "0x7", "mountpoints": [null],
+	      "children": [
+	        {"path": "/dev/mapper/ventoy", "type": "dm", "rm": false, "ro": true, "fstype": "iso9660", "label": "Arctic-Linux-0.1", "mountpoints": ["/run/initramfs/live"]}
+	      ]},
+	     {"path": "/dev/sda2", "type": "part", "rm": true, "ro": false, "fstype": "vfat", "label": "VTOYEFI", "parttype": "0xef", "mountpoints": [null]}
+	   ]},
+	  {"path": "/dev/sdc", "type": "disk", "model": "DataTraveler 3.0", "tran": "usb", "rm": true, "ro": false, "hotplug": true, "mountpoints": [null],
+	   "children": [
+	     {"path": "/dev/sdc1", "type": "part", "rm": true, "ro": false, "fstype": "vfat", "label": "HELD", "parttype": "0xc", "mountpoints": [null],
+	      "children": [{"path": "/dev/mapper/x", "type": "dm", "rm": false, "ro": false, "mountpoints": [null]}]},
+	     {"path": "/dev/sdc2", "type": "part", "rm": true, "ro": false, "fstype": "vfat", "label": "LOGS", "parttype": "0xc", "mountpoints": [null]}
+	   ]}
+	]}`
+	got := LogTargets([]byte(doc), "Arctic-Linux")
+	if len(got) != 1 || got[0].Device != "/dev/sdc2" {
+		t.Fatalf("targets %+v, want only /dev/sdc2", got)
+	}
+}
+
 func TestWriteLogToMountedStick(t *testing.T) {
 	dir := t.TempDir()
 	res, err := writeLogToStick(context.Background(), LogTarget{Device: "/dev/sdc1", FSType: "vfat", Label: "KINGSTON", Mountpoint: dir}, "arctic-install-x.log", []byte("log\n"))
