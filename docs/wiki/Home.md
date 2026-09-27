@@ -54,4 +54,5 @@ Press `Super + /` on the desktop to see every shortcut.
 These pages live in [`docs/wiki`](https://github.com/yuvalkolodkingal/O-Tism/tree/main/docs/wiki)
 in the repository and are published here by GitHub Actions, so a change to the docs goes through
 the same review as a change to the code. The screenshots were taken from Arctic Linux 0.1
-running in a virtual machine.
+running in a virtual machine (`tools/screenshot-tour.sh`). The installer screenshots use its demo
+mode, so the disks, networks and names in them are examples.

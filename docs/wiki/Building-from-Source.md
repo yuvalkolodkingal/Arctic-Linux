@@ -147,8 +147,22 @@ downloaded apps (Zen, Zed, the codecs) are put off to `arctic-firstboot`.
 
 ## Screenshots for this wiki: `tools/screenshot-tour.sh`
 
-The screenshots on these pages are taken from the real system running in QEMU by
-`tools/screenshot-tour.sh`, and saved to `docs/wiki/images/`. Its options are described at the top of the script.
+Takes the screenshots in `docs/wiki/images/` from the real Arctic Linux in QEMU (UEFI, 1280×800),
+pressing the real shortcuts and waiting for the screen to settle before each shot.
+
+```sh
+tools/screenshot-tour.sh                     # both phases: the live USB, then the installed disk
+tools/screenshot-tour.sh --phase live        # boot menu, splash, live desktop, shell, terminal, installer
+tools/screenshot-tour.sh --phase installed   # passphrase prompt, login screen, desktop, lock screen
+tools/screenshot-tour.sh --only launcher,keys        # retake some images (--skip leaves some out)
+tools/screenshot-tour.sh --disk-dir DIR      # an install made by tools/test-install.sh (default out/test/install/uefi)
+tools/screenshot-tour.sh --kvm               # use /dev/kvm
+```
+
+The installer screenshots are taken in the live session with the engine's demo mode, which shows
+example disks and networks and never writes to a disk. The installed-system shots boot a copy of
+the disk `tools/test-install.sh` made (the original is never written). A full run takes about 45
+minutes without KVM. The other options are described at the top of the script.
 
 ## Unattended installs
 

@@ -13,7 +13,7 @@ installer problems, the log (see [Saving the installer log](#saving-the-installe
   first.
 - **Try another USB port**, preferably one directly on the computer rather than a hub.
 - **Write the stick again**, after [checking the download](Download-and-Create-a-USB#2-check-the-download).
-  A damaged download is the most common cause.
+  That rules out a damaged download or a badly written stick.
 - **Secure Boot:** the stick uses Fedora's signed boot loader, which most computers accept. If
   yours refuses it, turn Secure Boot off in the firmware settings, or look for an option to allow
   Microsoft's third-party UEFI certificate.
@@ -25,8 +25,8 @@ graphics (the `nomodeset` option), which works on almost any screen but may be s
 support every resolution. Arctic Linux also allows software drawing when there's no working
 graphics driver, which is what virtual machines and Safe graphics mode need.
 
-If Safe graphics mode works but the normal entry doesn't, your graphics card needs a driver the
-live USB doesn't have. Version 0.1 doesn't set up NVIDIA's own driver; see the
+If Safe graphics mode works but the normal entry doesn't, the graphics driver is the likely
+problem. Version 0.1 doesn't set up NVIDIA's own driver; see the
 [release notes](Release-Notes#known-limitations).
 
 ### Arctic Linux behaves strangely or crashes on the live USB
@@ -50,7 +50,7 @@ change first).
 
 ### "Install alongside" isn't offered
 
-It only appears when the disk has room. The installer says which of these is missing:
+The choice only appears when the disk you picked has all of these:
 
 - **At least 40 GB of free, unused space.** Arctic Linux doesn't shrink other systems; make the
   space first (for Windows, see [Installing alongside Windows](Install-Arctic-Linux#installing-alongside-windows)).

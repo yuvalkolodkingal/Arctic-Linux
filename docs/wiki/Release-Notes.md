@@ -26,7 +26,7 @@ desktop and the apps you pick.
   **Check USB for errors** and **Boot from first disk**, in the Arctic GRUB theme.
 - Try mode: the full desktop, with the "You're trying Arctic Linux" welcome card, a Live session
   tag and an Install item on the bar. Zen Browser is preinstalled when the image stays within
-  GitHub's 2 GiB limit; the release's own notes say whether this build has it.
+  GitHub's 2 GiB limit; the release's own notes mention it when this build has it.
 - Install mode opens the installer full screen.
 
 **Installer**

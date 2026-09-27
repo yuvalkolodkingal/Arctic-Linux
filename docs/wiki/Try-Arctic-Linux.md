@@ -49,8 +49,8 @@ explains the rest.
 ![Zen Browser in the live session](images/zen-browser.png)
 
 Some builds of the live USB include **Zen Browser**, so you can go online straight away
-(`Super + W`). The release notes on the download page say whether yours does; the ISO build
-leaves Zen out when including it would make the image larger than 2 GB.
+(`Super + W`). The release notes on the download page mention it when yours does; the ISO
+build leaves Zen out when including it would make the image larger than 2 GB.
 
 If your copy has no browser, you can add one for this session with **Get apps**
 (`Super + Shift + A`): type `firefox` and press `Enter`. It's gone again when you restart.

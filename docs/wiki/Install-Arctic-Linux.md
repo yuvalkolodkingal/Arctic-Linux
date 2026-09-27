@@ -7,6 +7,9 @@ screen.** Up to then you can go back, change anything, or quit.
 
 It takes about 10 minutes plus the time to download your apps.
 
+The screenshots on this page come from the installer's demo mode, so the disks, networks and
+names in them are examples.
+
 ## Before you start
 
 - **Back up** anything you want to keep. Installing can erase the whole disk.
@@ -50,7 +53,7 @@ Your mouse or touchpad works everywhere too.
 use."*
 
 - **Asks:** the language for your new system. Type in the search box to find it quickly.
-- **Already chosen:** the live session's language (English (US) unless you changed it).
+- **Already chosen:** the live session's language, which is usually English (US).
 - **Good to know:** in version 0.1 the installer's own screens are in English. The language you
   pick is the one your installed system uses. At the bottom it reminds you: *"Nothing is changed
   on this computer until the Summary step."*
@@ -112,8 +115,9 @@ If no networks show up, plug in a cable or move closer to your router. A wrong p
 - **Erase disk and install** (*Recommended*, already chosen): *"Replaces everything on this disk
   with Arctic Linux. Your files are encrypted, so they stay private if the laptop is lost."*
 - **Install alongside {your other system}**: keeps what's on the disk and uses its free space.
-  It only appears when the disk has at least 40 GB of free, unused space; it also shows how much
-  it will use. See [Installing alongside Windows](#installing-alongside-windows).
+  It only appears when the disk has at least 40 GB of free, unused space (and, on UEFI computers,
+  an EFI system partition to share); it also shows how much it will use. See
+  [Installing alongside Windows](#installing-alongside-windows).
 
 A warning reminds you: *"All files on this disk will be erased. Back up anything you want to keep
 first."* Nothing is erased yet; that only happens after the Summary step.

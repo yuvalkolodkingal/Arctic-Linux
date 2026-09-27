@@ -22,7 +22,7 @@ Open the [latest release](https://github.com/yuvalkolodkingal/O-Tism/releases/la
 | `Arctic-Linux-0.1-x86_64.iso` | The USB image |
 | `Arctic-Linux-0.1-x86_64.iso.sha256` | Its checksum, to check the download |
 
-The release notes also say whether this build has Zen Browser preinstalled for the live session.
+The release notes mention it when this build has Zen Browser preinstalled for the live session.
 
 ### If the release has `.part00`, `.part01` … files
 
@@ -113,8 +113,8 @@ your computer still won't start from it, see [Troubleshooting](Troubleshooting#t
 
 ![The Arctic Linux boot menu](images/boot-menu.png)
 
-After a few seconds the boot menu appears. If you don't press anything, **Try Arctic Linux**
-starts after 5 seconds.
+The boot menu appears first. If you don't press anything, **Try Arctic Linux** starts after 5
+seconds; the countdown is shown at the bottom.
 
 | Entry | What it does |
 |---|---|
@@ -124,6 +124,6 @@ starts after 5 seconds.
 | **Check USB for errors** | Checks the stick for damaged data before starting. Use it if Arctic Linux behaves strangely. |
 | **Boot from first disk** | Leaves the USB stick and starts whatever is installed on your computer. |
 
-Use the arrow keys to move and `Enter` to choose.
+Use `↑` and `↓` to move and `Enter` to start the selected entry.
 
 Next: [Try Arctic Linux](Try-Arctic-Linux) or [Install Arctic Linux](Install-Arctic-Linux).
