@@ -1,0 +1,70 @@
+# Arctic Linux — {{label}} for btop.
+# Rendered by arctic-themegen from design/themegen/templates/btop/arctic.theme.tmpl.
+# ~/.config/btop/themes/arctic.theme links to ~/.config/arctic/current/btop/arctic.theme and
+# ~/.config/btop/btop.conf selects it (color_theme = "arctic"); btop reads it when it starts.
+
+# Background (only drawn with theme_background = true; Arctic leaves the terminal's own).
+theme[main_bg]="{{term-background|hex}}"
+
+# Text
+theme[main_fg]="{{term-foreground|hex}}"
+theme[title]="{{ink|hex}}"
+theme[hi_fg]="{{accent-text|hex}}"
+theme[selected_bg]="{{accent-soft|hex}}"
+theme[selected_fg]="{{ink|hex}}"
+theme[inactive_fg]="{{ink-disabled|hex}}"
+theme[graph_text]="{{ink-subtle|hex}}"
+theme[meter_bg]="{{line|hex}}"
+theme[proc_misc]="{{accent-text|hex}}"
+
+# The process list's banner (paused / following a process) and the followed process
+theme[proc_banner_bg]="{{accent-soft|hex}}"
+theme[proc_banner_fg]="{{ink|hex}}"
+theme[proc_pause_bg]="{{warning-soft|hex}}"
+theme[proc_follow_bg]="{{info-soft|hex}}"
+theme[followed_bg]="{{accent-soft|hex}}"
+theme[followed_fg]="{{ink|hex}}"
+
+# Box outlines and dividers
+theme[cpu_box]="{{line-strong|hex}}"
+theme[mem_box]="{{line-strong|hex}}"
+theme[net_box]="{{line-strong|hex}}"
+theme[proc_box]="{{line-strong|hex}}"
+theme[div_line]="{{line|hex}}"
+
+# Gradients: start, middle, end
+theme[temp_start]="{{info|hex}}"
+theme[temp_mid]="{{warning|hex}}"
+theme[temp_end]="{{error|hex}}"
+
+theme[cpu_start]="{{success|hex}}"
+theme[cpu_mid]="{{accent|hex}}"
+theme[cpu_end]="{{error|hex}}"
+
+theme[free_start]="{{success|hex}}"
+theme[free_mid]="{{success|hex}}"
+theme[free_end]="{{ansi-10|hex}}"
+
+theme[cached_start]="{{info|hex}}"
+theme[cached_mid]="{{info|hex}}"
+theme[cached_end]="{{ansi-12|hex}}"
+
+theme[available_start]="{{ansi-6|hex}}"
+theme[available_mid]="{{ansi-6|hex}}"
+theme[available_end]="{{ansi-14|hex}}"
+
+theme[used_start]="{{accent|hex}}"
+theme[used_mid]="{{warning|hex}}"
+theme[used_end]="{{error|hex}}"
+
+theme[download_start]="{{info|hex}}"
+theme[download_mid]="{{ansi-12|hex}}"
+theme[download_end]="{{accent|hex}}"
+
+theme[upload_start]="{{ansi-5|hex}}"
+theme[upload_mid]="{{ansi-13|hex}}"
+theme[upload_end]="{{accent|hex}}"
+
+theme[process_start]="{{success|hex}}"
+theme[process_mid]="{{accent|hex}}"
+theme[process_end]="{{error|hex}}"
