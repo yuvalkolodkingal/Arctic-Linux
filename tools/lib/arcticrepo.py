@@ -12,7 +12,10 @@
         the other: from the last successful workflow run's github-pages artifact when it is
         the live site (or newer: the live site lagging behind), else by downloading every
         file listed in the live manifest.json (sha256-checked). A live site that exists but
-        can't be fetched completely is an error; no live site at all is a first publish.
+        can't be fetched completely is an error, and so is a GitHub API or artifact download
+        that keeps failing (retried first). No live site is a first publish only when the
+        workflow has never succeeded before (or without --github-repo); after earlier
+        publishes it is an error unless their artifact restores the site.
     arcticrepo.py channel-info --site DIR --channel NAME --releasever N [--build-info FILE]
         Write repo/<channel>/fedora-<N>/PUBLISH-INFO.json (when, from which commit and run).
     arcticrepo.py index --site DIR --base-url URL [--fingerprint FPR]
@@ -294,7 +297,24 @@ def verify_tree(site: str, doc: dict) -> list[str]:
 
 
 class FetchError(Exception):
-    pass
+    """The published site can't be fetched reliably: publishing now could lose a channel."""
+
+
+class GhNotFound(FetchError):
+    """gh api answered 404/410: the thing asked for doesn't exist (e.g. an expired artifact)."""
+
+
+class BadArtifact(FetchError):
+    """The artifact was downloaded but is unreadable or doesn't match its manifest."""
+
+
+class NoArtifact(Exception):
+    """There is no usable github-pages artifact, for a known reason (not an error). first_publish:
+    the runs query worked and the workflow has never succeeded, so nothing was ever deployed."""
+
+    def __init__(self, msg: str, first_publish: bool = False):
+        super().__init__(msg)
+        self.first_publish = first_publish
 
 
 def http_get(url: str, timeout: float = 60) -> tuple[int, bytes]:
@@ -390,31 +410,71 @@ def extract_pages_artifact(blob: bytes, dest: str) -> None:
             t.extractall(dest, members=members)
 
 
-def gh_api(args: list[str], binary: bool = False):
-    r = subprocess.run(["gh", "api", *args], capture_output=True, check=False)
-    if r.returncode != 0:
-        raise FetchError(f"gh api {' '.join(args)}: {r.stderr.decode(errors='replace').strip()}")
-    return r.stdout if binary else json.loads(r.stdout)
+_GH_NOT_FOUND = re.compile(r"\bHTTP (404|410)\b")
+
+
+def gh_api(args: list[str], binary: bool = False, attempts: int = 4, run=subprocess.run, sleep=time.sleep):
+    """`gh api ARGS`: the JSON answer (or the raw bytes). Retried with backoff; 404/410 raise
+    GhNotFound at once, anything else still failing after `attempts` tries raises FetchError."""
+    what = f"gh api {' '.join(args)}"
+    last = ""
+    for attempt in range(attempts):
+        r = run(["gh", "api", *args], capture_output=True, check=False)
+        if r.returncode == 0:
+            if binary:
+                return r.stdout
+            try:
+                return json.loads(r.stdout)
+            except ValueError as e:
+                last = f"not JSON: {e}"
+        else:
+            last = r.stderr.decode(errors="replace").strip() or f"exit status {r.returncode}"
+            if _GH_NOT_FOUND.search(last):
+                raise GhNotFound(f"{what}: {last}")
+        if attempt + 1 < attempts:
+            print(f"fetch: {what}: {last} (retrying)", file=sys.stderr)
+            sleep(min(5 * 2 ** attempt, 30))
+    raise FetchError(f"{what}: failed {attempts} times: {last}")
 
 
 def artifact_from_last_run(repo: str, workflow: str, dest: str, gh=gh_api) -> str:
-    """Extract the github-pages artifact of the workflow's last successful run into dest.
-    Returns a description; raises FetchError when there is none."""
+    """Extract the github-pages artifact of the workflow's last successful run into dest and
+    check it against its manifest.json. Returns a description. Raises NoArtifact when there is
+    none to use (no successful run yet, or it expired), BadArtifact when it is broken, FetchError
+    when the API or the download keeps failing."""
     current = os.environ.get("GITHUB_RUN_ID", "")
     runs = gh(["-X", "GET", f"repos/{repo}/actions/workflows/{workflow}/runs",
                "-f", "status=success", "-f", "per_page=20"]).get("workflow_runs", [])
     runs = [r for r in runs if str(r.get("id")) != current]
     if not runs:
-        raise FetchError(f"no successful {workflow} run")
+        raise NoArtifact(f"no successful {workflow} run yet", first_publish=True)
     runs.sort(key=lambda r: r.get("run_started_at") or r.get("created_at") or "", reverse=True)
     run = runs[0]
-    arts = gh([f"repos/{repo}/actions/runs/{run['id']}/artifacts"]).get("artifacts", [])
+    arts = gh([f"repos/{repo}/actions/runs/{run['id']}/artifacts", "-X", "GET", "-f", "per_page=100"]).get("artifacts", [])
     art = next((a for a in arts if a.get("name") == "github-pages" and not a.get("expired")), None)
     if art is None:
-        raise FetchError(f"run {run['id']} has no (unexpired) github-pages artifact")
-    blob = gh([f"repos/{repo}/actions/artifacts/{art['id']}/zip"], binary=True)
-    extract_pages_artifact(blob, dest)
-    return f"artifact {art['id']} of run {run['id']} ({run.get('head_branch')}, {run.get('run_started_at')})"
+        raise NoArtifact(f"run {run['id']} has no (unexpired) github-pages artifact")
+    what = f"artifact {art['id']} of run {run['id']} ({run.get('head_branch')}, {run.get('run_started_at')})"
+    try:
+        blob = gh([f"repos/{repo}/actions/artifacts/{art['id']}/zip"], binary=True)
+    except GhNotFound as e:  # expired since it was listed
+        raise NoArtifact(f"{what}: gone ({e})") from e
+    try:
+        extract_pages_artifact(blob, dest)
+        doc_path = os.path.join(dest, MANIFEST)
+        if not os.path.isfile(doc_path):
+            raise BadArtifact(f"{what}: no {MANIFEST}")
+        with open(doc_path) as f:
+            doc = json.load(f)
+        problems = verify_tree(dest, doc)
+        if problems:
+            raise BadArtifact(f"{what}: does not match its manifest: {'; '.join(problems[:5])}")
+    except BadArtifact:
+        raise
+    except (FetchError, OSError, ValueError, KeyError, TypeError, tarfile.TarError, zipfile.BadZipFile) as e:
+        raise BadArtifact(f"{what}: unreadable: {e}") from e
+    print(f"fetch: {what}: {len(doc['files'])} files, complete")
+    return what
 
 
 def fetch_previous(dest: str, base_url: str, repo: str | None, workflow: str | None,
@@ -429,25 +489,25 @@ def fetch_previous(dest: str, base_url: str, repo: str | None, workflow: str | N
     state, live = live_state(base_url, bust, get)
     print(f"fetch: live site {base_url}: {state}" + (f" ({len(live['files'])} files)" if live else ""))
 
+    # The last successful run's artifact. API and download failures are errors (after retries):
+    # guessing instead could start from a stale copy of the other channel, or from nothing.
     art_dir = None
+    no_artifact: NoArtifact | None = None
+    bad_artifact = ""
     if repo and workflow:
         tmp = tempfile.mkdtemp(prefix="pages-artifact-", dir=os.path.dirname(os.path.abspath(dest)))
         try:
-            what = artifact_from_last_run(repo, workflow, tmp, gh)
-            doc_path = os.path.join(tmp, MANIFEST)
-            if not os.path.isfile(doc_path):
-                raise FetchError(f"{what}: no {MANIFEST}")
-            with open(doc_path) as f:
-                art_doc = json.load(f)
-            problems = verify_tree(tmp, art_doc)
-            if problems:
-                raise FetchError(f"{what}: does not match its manifest: {'; '.join(problems[:5])}")
-            print(f"fetch: {what}: {len(art_doc['files'])} files, complete")
+            artifact_from_last_run(repo, workflow, tmp, gh)
             art_dir = tmp
-        except (FetchError, OSError, ValueError, tarfile.TarError, zipfile.BadZipFile) as e:
-            print(f"fetch: previous Pages artifact unavailable: {e}")
-            shutil.rmtree(tmp, ignore_errors=True)
-            art_dir = None
+        except NoArtifact as e:
+            print(f"fetch: no previous Pages artifact: {e}")
+            no_artifact = e
+        except BadArtifact as e:  # the live site may still be complete
+            print(f"fetch: previous Pages artifact unusable: {e}")
+            bad_artifact = str(e)
+        finally:
+            if art_dir is None:
+                shutil.rmtree(tmp, ignore_errors=True)
 
     def use_artifact() -> str:
         for name in os.listdir(art_dir):
@@ -479,8 +539,14 @@ def fetch_previous(dest: str, base_url: str, repo: str | None, workflow: str | N
         if art_dir:
             print("fetch: nothing is live; restoring the last published site from its artifact")
             return use_artifact()
-        print("fetch: nothing published yet: first publish")
-        return "fresh"
+        if not (repo and workflow) or (no_artifact is not None and no_artifact.first_publish):
+            print("fetch: nothing published yet: first publish")
+            return "fresh"
+        why = bad_artifact or str(no_artifact)
+        raise FetchError(f"{base_url} serves nothing, but {workflow} has published before and its last site "
+                         f"can't be restored ({why}): refusing to deploy a site without the other channel; "
+                         "rerun later (Pages may be briefly unavailable), or with --start-fresh to start the "
+                         "repository over")
     if art_dir:
         shutil.rmtree(art_dir, ignore_errors=True)
     if state == "foreign":

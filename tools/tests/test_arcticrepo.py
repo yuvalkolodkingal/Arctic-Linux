@@ -253,19 +253,65 @@ def pages_artifact(site: str) -> bytes:
     return zbuf.getvalue()
 
 
-def fake_gh(artifact: bytes | None):
+def fake_gh(artifact: bytes | None, runs: list | None = None, fail: dict | None = None):
+    """A gh_api stand-in: two successful runs (9 the newest) whose github-pages artifact is
+    `artifact` (None: expired). fail maps a path suffix to the exception that call raises."""
+    runs = [{"id": 7, "run_started_at": "2026-09-27T10:00:00Z", "head_branch": "main"},
+            {"id": 9, "run_started_at": "2026-09-28T10:00:00Z", "head_branch": "main"}] if runs is None else runs
+
     def gh(args, binary=False):
         path = next(a for a in args if a.startswith("repos/"))
+        for suffix, exc in (fail or {}).items():
+            if path.endswith(suffix):
+                raise exc
         if path.endswith("/runs"):
-            return {"workflow_runs": [
-                {"id": 7, "run_started_at": "2026-09-27T10:00:00Z", "head_branch": "main"},
-                {"id": 9, "run_started_at": "2026-09-28T10:00:00Z", "head_branch": "claude/busy-goodall-j42hmi"}]}
+            return {"workflow_runs": runs}
         if path.endswith("/runs/9/artifacts"):
             return {"artifacts": [{"id": 99, "name": "github-pages", "expired": artifact is None}]}
         if path.endswith("/artifacts/99/zip"):
             return artifact
         raise AssertionError(f"unexpected gh api {args}")
     return gh
+
+
+class _Done:
+    def __init__(self, returncode, stdout=b"", stderr=b""):
+        self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
+
+
+class GhApi(unittest.TestCase):
+    """gh_api retries what may be transient and tells 'not found' apart from failures."""
+
+    def call(self, answers, **kw):
+        calls, sleeps = [], []
+
+        def run(cmd, **_):
+            calls.append(cmd)
+            return answers[min(len(calls), len(answers)) - 1]
+        return ar.gh_api(["repos/o/r/x"], run=run, sleep=sleeps.append, **kw), calls, sleeps
+
+    def test_retries_then_succeeds(self):
+        got, calls, sleeps = self.call([_Done(1, stderr=b"HTTP 502: Bad Gateway"), _Done(1, stderr=b"timeout"),
+                                        _Done(0, stdout=b'{"ok": 1}')])
+        self.assertEqual(got, {"ok": 1})
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(sleeps), 2)
+
+    def test_not_found_is_not_retried(self):
+        with self.assertRaises(ar.GhNotFound):
+            self.call([_Done(1, stderr=b"gh: Not Found (HTTP 404)")])
+
+    def test_gives_up_with_a_fetch_error(self):
+        with self.assertRaises(ar.FetchError) as cm:
+            self.call([_Done(1, stderr=b"HTTP 500: Internal Server Error")], attempts=3)
+        self.assertNotIsInstance(cm.exception, ar.GhNotFound)
+        self.assertIn("failed 3 times", str(cm.exception))
+
+    def test_binary_and_bad_json(self):
+        got, _, _ = self.call([_Done(0, stdout=b"PK\x03\x04zip")], binary=True)
+        self.assertEqual(got, b"PK\x03\x04zip")
+        with self.assertRaises(ar.FetchError):
+            self.call([_Done(0, stdout=b"<html>")], attempts=2)
 
 
 class Fetch(unittest.TestCase):
@@ -359,6 +405,36 @@ class Fetch(unittest.TestCase):
     def test_expired_artifact_falls_back_to_the_live_site(self):
         make_site(self.live)
         self.assertEqual(self.fetch(gh=fake_gh(None)), "live")
+
+    def test_artifact_gone_while_downloading_falls_back_to_the_live_site(self):
+        make_site(self.live)
+        gone = ar.GhNotFound("gh api repos/o/r/actions/artifacts/99/zip: HTTP 410")
+        self.assertEqual(self.fetch(gh=fake_gh(b"x", fail={"/artifacts/99/zip": gone})), "live")
+
+    def test_broken_artifact_falls_back_to_the_live_site(self):
+        make_site(self.live)
+        self.assertEqual(self.fetch(gh=fake_gh(b"not a zip")), "live")
+
+    def test_api_errors_fail_even_with_a_live_site(self):
+        # The live site may be a stale CDN copy: without the API's answer, don't guess.
+        make_site(self.live)
+        for suffix in ("/runs", "/runs/9/artifacts", "/artifacts/99/zip"):
+            with self.subTest(suffix):
+                err = ar.FetchError(f"gh api {suffix}: failed 4 times: HTTP 502")
+                with self.assertRaises(ar.FetchError):
+                    self.fetch(gh=fake_gh(pages_artifact(self.live), fail={suffix: err}))
+                self.assertEqual(os.listdir(self.dest), [])
+
+    def test_first_publish_when_the_workflow_never_succeeded(self):
+        self.assertEqual(self.fetch(gh=fake_gh(None, runs=[])), "fresh")
+
+    def test_nothing_live_after_earlier_publishes_fails(self):
+        # Pages briefly answering 404 must not look like a first publish.
+        with self.assertRaises(ar.FetchError):
+            self.fetch(gh=fake_gh(None))
+        with self.assertRaises(ar.FetchError):
+            self.fetch(gh=fake_gh(b"not a zip"))
+        self.assertEqual(self.fetch(gh=fake_gh(None), start_fresh=True), "fresh")
 
     def test_artifact_restores_an_empty_site(self):
         src = os.path.join(self.tmp.name, "old")
