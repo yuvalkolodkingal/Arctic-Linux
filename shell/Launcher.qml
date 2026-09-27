@@ -73,12 +73,17 @@ Popover {
     }
     onResultsChanged: current = Math.min(current, Math.max(0, results.length - 1))
 
+    // Terminal apps, Fetch and Shift+Enter commands open in the terminal picked in the
+    // installer (arctic-open reads /etc/arctic/default-apps), which need not be kitty.
+    function inTerminal(command, hold) {
+        return ['arctic-open', 'terminal'].concat(hold ? ['--hold'] : [], ['-e'], command);
+    }
     function activate(item, alternate) {
         if (!item) return;
         switch (item.kind) {
         case 'app':
             if (item.entry.runInTerminal)
-                Quickshell.execDetached({ command: ['kitty', '-e'].concat(item.entry.command), workingDirectory: item.entry.workingDirectory || Session.home });
+                Quickshell.execDetached({ command: inTerminal(item.entry.command, false), workingDirectory: item.entry.workingDirectory || Session.home });
             else
                 item.entry.execute();
             close();
@@ -86,11 +91,11 @@ Popover {
         case 'apps': openView('apps'); break;
         case 'get': openView('get'); break;
         case 'wallpapers': close(); shell.openWallpapers(launcher.screen); break;
-        case 'fetch': Quickshell.execDetached(['kitty', '--hold', '-e', 'arctic-fetch']); close(); break;
+        case 'fetch': Quickshell.execDetached(inTerminal(['arctic-fetch'], true)); close(); break;
         case 'install': Quickshell.execDetached(['arctic-start-installer']); close(); break;
         case 'calc': Quickshell.execDetached(['wl-copy', '--', item.name]); close(); break;
         case 'command':
-            if (alternate) Quickshell.execDetached(['kitty', '--hold', 'sh', '-c', item.name]);
+            if (alternate) Quickshell.execDetached(inTerminal(['sh', '-c', item.name], true));
             else Quickshell.execDetached(['sh', '-c', item.name]);
             close();
             break;

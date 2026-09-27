@@ -23,7 +23,10 @@ Scope {
     property int attempt: 0
     property bool powerOpen: false
     property bool reveal: false
+    // locked: the lock is requested (true as soon as lock() runs). secure: the compositor has
+    // confirmed every screen is covered — only then is the session really locked.
     readonly property bool locked: lock.locked
+    readonly property bool secure: lock.secure
 
     function lock() {
         if (Session.live) {

@@ -1,0 +1,22 @@
+# Arctic Linux packages (arctic-release): the arctic-* packages and mangowm, which Fedora
+# doesn't ship. Installed as /usr/share/dnf5/repos.d/arctic.repo.
+#
+# DISABLED ON PURPOSE. The signed Arctic package repository (a Fedora COPR, see docs/PLAN.md)
+# is not published yet, so there is nothing to enable: the addresses below are placeholders,
+# not real ones. Until it exists, Arctic's own packages change only with a new Arctic release
+# (reinstall). Everything else keeps updating normally: the Fedora packages come from Fedora's
+# repositories (fedora-repos), which this file doesn't touch.
+#
+# Once the repository is published, an arctic-release update fills in its address and ships
+# its key in /usr/share/pki/rpm-gpg/ (gpgcheck stays on), then sets enabled=1.
+[arctic]
+name=Arctic Linux $releasever - $basearch
+baseurl=https://download.copr.fedorainfracloud.org/results/ARCTIC-COPR-OWNER/arctic-linux/fedora-$releasever-$basearch/
+type=rpm-md
+enabled=0
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/ARCTIC-COPR-OWNER/arctic-linux/pubkey.gpg
+repo_gpgcheck=0
+skip_if_unavailable=True
+# Before Fedora's repositories (priority 99), so arctic-* and mangowm come from here.
+priority=90

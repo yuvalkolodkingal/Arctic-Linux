@@ -9,12 +9,13 @@
 #   arctic-backgrounds     design/wallpapers/*.svg (+ PNG rendered here)
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
-#   arctic-desktop-config  dotfiles/ → /etc/skel, dotfiles/.local/bin → /usr/bin
+#   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
+#                          dotfiles/.local/bin → /usr/bin
 #   arctic-shell           shell/ → /usr/share/arctic/shell
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
 #   arctic-sddm-theme      branding/sddm/arctic/
-#   arctic-plymouth-theme  branding/plymouth/arctic/
+#   arctic-plymouth-theme  branding/plymouth/arctic/ (+ branding/plymouth/dracut/, the initrd hook)
 #   arctic-grub-theme      branding/grub/arctic/
 #   arctic-live            live/
 #   arctic-desktop         (metapackage)
@@ -69,8 +70,9 @@ Requires:       fedora-repos(%{dist_version})
 %description -n arctic-release
 Release files that identify the system as Arctic Linux %{arctic_version} on a Fedora
 %{dist_version} base: os-release, the rpm dist macros, /etc/issue, the systemd presets
-(Fedora's policy plus Arctic's: SDDM, the installer socket, nix-daemon) and dnf defaults.
-It replaces fedora-release; Fedora's repositories (fedora-repos) stay in use.
+(Fedora's policy plus Arctic's: SDDM, the installer socket, nix-daemon, no SSH server) and
+dnf defaults. It replaces fedora-release; Fedora's repositories (fedora-repos) stay in use.
+The Arctic package repository is defined but disabled until it is published.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-logos
@@ -168,9 +170,10 @@ Recommends:     lxqt-policykit
 Recommends:     network-manager-applet
 
 %description -n arctic-desktop-config
-The Arctic Linux home directory defaults (/etc/skel: Mango, kitty, zsh, GTK, the Winter and
-Polar night themes), the arctic-* helper commands in /usr/bin, the keyboard cheat sheet,
-the theme files in /usr/share/arctic/themes and /etc/arctic/default-apps.
+The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
+theme files and the keyboard cheat sheet in /usr/share/arctic (new home directories link to
+them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, zsh, GTK,
+waybar, fuzzel, mako), the arctic-* helper commands in /usr/bin and /etc/arctic/default-apps.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
@@ -266,8 +269,9 @@ Requires(post): plymouth-scripts
 
 %description -n arctic-plymouth-theme
 The Arctic Linux boot splash: the fox mark breathing over the Polar night ground with three
-amber dots, and the disk passphrase prompt. Installing it makes it the default theme (the
-initramfs is not rebuilt here).
+amber dots, and the disk passphrase prompt; with arctic.reduce_motion=1 on the kernel command
+line (a dracut module in the initramfs tells the splash) the mark and dots stay still.
+Installing it makes it the default theme (the initramfs is not rebuilt here).
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-grub-theme
@@ -422,6 +426,8 @@ ln -s ../usr/lib/issue.net %{buildroot}%{_sysconfdir}/issue.net
 install -Dpm 0644 $rel/macros.dist %{buildroot}%{_rpmconfigdir}/macros.d/macros.dist
 install -Dpm 0644 $rel/copr-arctic.conf %{buildroot}%{_sysconfdir}/dnf/plugins/copr.d/arctic.conf
 install -Dpm 0644 $rel/20-arctic-dnf-defaults.conf %{buildroot}%{_datadir}/dnf5/libdnf.conf.d/20-arctic-defaults.conf
+# Disabled until the Arctic COPR is published (see the file); Fedora's repos are unaffected.
+install -Dpm 0644 $rel/arctic.repo %{buildroot}%{_datadir}/dnf5/repos.d/arctic.repo
 install -Dpm 0644 $rel/80-arctic.preset %{buildroot}%{_presetdir}/80-arctic.preset
 install -pm 0644 $rel/85-display-manager.preset $rel/90-default.preset $rel/99-default-disable.preset %{buildroot}%{_presetdir}/
 install -Dpm 0644 $rel/80-arctic-user.preset %{buildroot}%{_userpresetdir}/80-arctic.preset
@@ -462,10 +468,30 @@ install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinu
 # It lives here, not in arctic-installer, because the installer is removed from the new system.
 install -Dpm 0644 packaging/systemd/arctic-firstboot.service %{buildroot}%{_unitdir}/arctic-firstboot.service
 install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir}/arctic/arctic-firstboot
+# New accounts start from /etc/skel. What Arctic keeps up to date is installed once, in
+# /usr/share/arctic, and the home directory only points at it, so package updates reach
+# accounts that already exist (a copy in the home directory would never change again):
+#   ~/.config/mango/arctic/*.conf  links to /usr/share/arctic/mango/*.conf; replacing a link
+#                                  with a copy keeps that file as the person edited it
+#   ~/.config/arctic/current       link to /usr/share/arctic/themes/polar-night (arctic-theme
+#                                  switches it; a theme copied to ~/.config/arctic/themes wins)
+#   keys.txt                       not copied: the shell and arctic-keys fall back to
+#                                  /usr/share/arctic/keys.txt
+# The links are absolute on purpose (rpmbuild warns): useradd copies them into home
+# directories, where a relative link would point elsewhere. dotfiles/install.sh (no packages)
+# copies all of these into the home directory instead.
 install -d %{buildroot}%{_sysconfdir}/skel
 tar -C dotfiles --exclude=./install.sh --exclude=./README.md --exclude=./.local/bin \
+    --exclude=./.local/share/arctic --exclude=./.config/mango/arctic \
+    --exclude=./.config/arctic/themes --exclude=./.config/arctic/current \
     --exclude=./.zshrc --exclude=./.zprofile -cf - . \
   | tar -C %{buildroot}%{_sysconfdir}/skel -xf -
+install -d %{buildroot}%{_datadir}/arctic/mango %{buildroot}%{_sysconfdir}/skel/.config/mango/arctic
+for f in dotfiles/.config/mango/arctic/*.conf; do
+  f="${f##*/}"
+  install -pm 0644 "dotfiles/.config/mango/arctic/$f" %{buildroot}%{_datadir}/arctic/mango/
+  ln -s "%{_datadir}/arctic/mango/$f" "%{buildroot}%{_sysconfdir}/skel/.config/mango/arctic/$f"
+done
 # zsh owns /etc/skel/.zshrc and .zprofile: Arctic's versions are kept here and copied over
 # zsh's (unmodified) ones by the %%posttrans / %%triggerin scriptlets below.
 install -d %{buildroot}%{_datadir}/arctic/skel
@@ -473,7 +499,7 @@ for f in .zshrc .zprofile; do
   if [ -f "dotfiles/$f" ]; then install -pm 0644 "dotfiles/$f" %{buildroot}%{_datadir}/arctic/skel/; fi
 done
 # The starting theme (dotfiles/install.sh does the same for a home directory).
-ln -sfn themes/polar-night %{buildroot}%{_sysconfdir}/skel/.config/arctic/current
+ln -sfn %{_datadir}/arctic/themes/polar-night %{buildroot}%{_sysconfdir}/skel/.config/arctic/current
 echo polar-night > %{buildroot}%{_sysconfdir}/skel/.config/arctic/theme
 install -d %{buildroot}%{_bindir}
 install -pm 0755 dotfiles/.local/bin/* %{buildroot}%{_bindir}/
@@ -486,6 +512,8 @@ install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir
 # arctic-shell, arctic-shell-ipc and arctic-installer belong to their own subpackages.
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
+# /usr/share/arctic/mango is shared with arctic-live (live.conf).
+(cd dotfiles/.config/mango/arctic && ls -- *.conf) | sed 's,^,%{_datadir}/arctic/mango/,' >> desktop-config.files
 
 # ---------------------------------------------------------------- arctic-shell
 install -d %{buildroot}%{_datadir}/arctic/shell
@@ -540,6 +568,13 @@ cp -a branding/sddm/arctic/. %{buildroot}%{_datadir}/sddm/themes/arctic/
 # ---------------------------------------------------------------- arctic-plymouth-theme
 install -d %{buildroot}%{_datadir}/plymouth/themes/arctic
 cp -a branding/plymouth/arctic/. %{buildroot}%{_datadir}/plymouth/themes/arctic/
+# The initrd hook for arctic.reduce_motion=1: it links /run/arctic/reduce-motion.png, which
+# arctic.script looks for. The scripts stay executable (the hook becomes an ExecStartPre).
+dracutmod=%{buildroot}%{_prefix}/lib/dracut/modules.d/90arctic-plymouth
+install -d "$dracutmod"
+install -pm 0755 branding/plymouth/dracut/90arctic-plymouth/module-setup.sh \
+                 branding/plymouth/dracut/90arctic-plymouth/arctic-reduce-motion.sh "$dracutmod/"
+install -pm 0644 branding/plymouth/dracut/90arctic-plymouth/arctic-reduce-motion.conf "$dracutmod/"
 
 # ---------------------------------------------------------------- arctic-grub-theme
 install -d %{buildroot}/boot/grub2/themes/arctic %{buildroot}%{_datadir}/arctic/grub-theme
@@ -564,10 +599,22 @@ test -f %{buildroot}%{_datadir}/sddm/themes/arctic/metadata.desktop || \
   { echo "error: branding/sddm/arctic has no metadata.desktop" >&2; exit 1; }
 test -f %{buildroot}%{_datadir}/plymouth/themes/arctic/arctic.plymouth || \
   { echo "error: branding/plymouth/arctic has no arctic.plymouth" >&2; exit 1; }
+for f in module-setup.sh arctic-reduce-motion.sh; do
+  test -x %{buildroot}%{_prefix}/lib/dracut/modules.d/90arctic-plymouth/$f || \
+    { echo "error: 90arctic-plymouth/$f is missing or not executable" >&2; exit 1; }
+  bash -n %{buildroot}%{_prefix}/lib/dracut/modules.d/90arctic-plymouth/$f
+done
 test -f %{buildroot}/boot/grub2/themes/arctic/theme.txt || \
   { echo "error: branding/grub/arctic has no theme.txt" >&2; exit 1; }
 test -f %{buildroot}%{_datadir}/pixmaps/system-logo-white.png || \
   { echo "error: branding/logos has no usr/share/pixmaps/system-logo-white.png" >&2; exit 1; }
+# The links /etc/skel keeps into /usr/share/arctic must resolve.
+skel_links="$(find %{buildroot}%{_sysconfdir}/skel -type l)"
+test -n "$skel_links"
+for l in $skel_links; do
+  t="$(readlink "$l")"
+  case "$t" in /*) test -e "%{buildroot}$t" || { echo "error: $l -> $t: not in the package" >&2; exit 1; } ;; esac
+done
 # Mango configs: validated when mangowm is installed in the build root (tools/build-rpms.sh
 # installs the freshly built one); `mango -c FILE -p` rejects unknown keys.
 if command -v mango >/dev/null 2>&1; then
@@ -575,6 +622,11 @@ if command -v mango >/dev/null 2>&1; then
   mango -c %{buildroot}%{_datadir}/arctic/mango/live.conf -p
   home="$PWD/_build/home"; rm -rf "$home"; mkdir -p "$home"
   cp -a %{buildroot}%{_sysconfdir}/skel/. "$home/"
+  # A new account as it will be: its links point into /usr/share, here still the buildroot.
+  for l in $(find "$home" -type l); do
+    t="$(readlink "$l")"
+    case "$t" in /*) ln -sfn "%{buildroot}$t" "$l" ;; esac
+  done
   HOME="$home" mango -c "$home/.config/mango/config.conf" -p
 fi
 
@@ -616,6 +668,30 @@ done
 
 %triggerin -n arctic-desktop-config -- zsh
 %{arctic_skel_zsh}
+
+# Removing zsh (unticked in the installer's app picker) saves the Arctic versions put in place
+# above as .zshrc.rpmsave / .zprofile.rpmsave, which useradd would then copy into every new
+# home directory. Drop them unless an administrator changed them.
+%triggerpostun -n arctic-desktop-config -- zsh
+if [ "$2" -eq 0 ]; then
+  for f in .zshrc .zprofile; do
+    if cmp -s %{_sysconfdir}/skel/$f.rpmsave %{_datadir}/arctic/skel/$f; then
+      rm -f %{_sysconfdir}/skel/$f.rpmsave
+    fi
+  done
+fi
+:
+
+# The live image sets livesys_session="arctic" in livesys-scripts' /etc/sysconfig/livesys
+# (iso/kiwi/config.sh), so removing livesys-scripts, as the installer does, would leave
+# /etc/sysconfig/livesys.rpmsave behind on every installed system. Drop it when that line is
+# all it holds.
+%triggerpostun -n arctic-desktop-config -- livesys-scripts
+if [ "$2" -eq 0 ] && [ -f %{_sysconfdir}/sysconfig/livesys.rpmsave ] && \
+   ! grep -Evq '^[[:space:]]*(#|$)|^livesys_session="?arctic"?[[:space:]]*$' %{_sysconfdir}/sysconfig/livesys.rpmsave; then
+  rm -f %{_sysconfdir}/sysconfig/livesys.rpmsave
+fi
+:
 
 %post -n arctic-installer
 %systemd_post arcticd.socket arcticd.service
@@ -662,6 +738,8 @@ fi
 %config(noreplace) %{_sysconfdir}/dnf/plugins/copr.d/arctic.conf
 %dir %{_datadir}/dnf5/libdnf.conf.d
 %{_datadir}/dnf5/libdnf.conf.d/20-arctic-defaults.conf
+%dir %{_datadir}/dnf5/repos.d
+%{_datadir}/dnf5/repos.d/arctic.repo
 %dir %{_presetdir}
 %{_presetdir}/80-arctic.preset
 %{_presetdir}/85-display-manager.preset
@@ -702,6 +780,7 @@ fi
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %dir %{_datadir}/arctic
+%dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt
 %{_datadir}/arctic/themes/
 %{_unitdir}/arctic-firstboot.service
@@ -742,6 +821,7 @@ fi
 
 %files -n arctic-plymouth-theme
 %{_datadir}/plymouth/themes/arctic/
+%{_prefix}/lib/dracut/modules.d/90arctic-plymouth/
 
 %files -n arctic-grub-theme
 %dir %{_datadir}/arctic

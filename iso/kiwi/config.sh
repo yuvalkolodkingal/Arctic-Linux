@@ -23,6 +23,16 @@ echo 'uninitialized' > /etc/machine-id
 rm -f /var/lib/systemd/random-seed
 
 #======================================
+# Remove the rescue kernel and images to save space (as Fedora's live kickstarts did)
+#--------------------------------------
+# kernel-install made them for the image build's machine id: the rescue initramfs (non-host-
+# only, ~210 MB, already compressed) and kernel, and a generic initramfs. The live USB boots
+# kiwi's own initrd (made after this script), and the installer runs kernel-install on the
+# new system, which makes that system's initramfs and rescue image. Left here, they would go
+# into the root image and push the ISO over its 2 GiB budget.
+rm -f /boot/*-rescue* /boot/loader/entries/*-0-rescue.conf /boot/initramfs-*.img
+
+#======================================
 # GRUB defaults for the installed system (the live root is copied to the target)
 #--------------------------------------
 {
@@ -50,6 +60,10 @@ systemctl enable sddm.service
 systemctl enable livesys.service livesys-late.service
 systemctl enable arcticd.socket
 systemctl enable nix-daemon.service || :
+# No SSH server on the live USB or (since the installer copies this root) installed systems;
+# 80-arctic.preset already says so, this makes sure whatever the install order was.
+systemctl disable sshd.service || :
+systemctl disable sshd.socket || :
 systemctl set-default graphical.target
 
 #======================================

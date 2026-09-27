@@ -4,8 +4,11 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
+import subprocess
 import sys
+import termios
 import time
 import unittest
 
@@ -87,6 +90,72 @@ print('Confirmed ' + answer, flush=True)
         self.assertIn('Authenticated', output)
         self.assertIn('Confirmed Yes', output)
         self.assertIn('Done.', output)
+
+    def lflag(self):
+        return termios.tcgetattr(self.console.master)[3]
+
+    def test_sudo_use_pty_confirmation_is_not_a_password(self):
+        # What sudo does on Fedora 44 (use_pty is the default since sudo 1.9.14): it asks for
+        # the password with echo off in canonical mode, then puts this terminal in raw mode
+        # (echo off too) while the command runs in a PTY of its own, where dnf asks [y/N].
+        program = '''import getpass, os, tty
+password = getpass.getpass(os.environ['SUDO_PROMPT'].replace('%p', getpass.getuser()))
+print('Authenticated' if password == 'test-secret-739' else 'Rejected', flush=True)
+tty.setraw(0)
+os.write(1, b'Is this ok [y/N]: ')
+answer = b''
+while not answer.endswith((b'\\n', b'\\r')):
+    answer += os.read(0, 1)
+os.write(1, b'\\r\\nConfirmed ' + answer.strip() + b'\\r\\n')
+'''
+        self.console.start('sudo dnf install test', [sys.executable, '-c', program])
+        self.wait_for(lambda: self.console.secret)
+        self.assertIn('[sudo] password for ', self.snapshot()['output'])
+        self.console.input('test-secret-739', True)
+        self.wait_for(lambda: 'Is this ok' in self.snapshot()['output'])
+        self.assertFalse(self.lflag() & (termios.ECHO | termios.ICANON))   # raw, as under sudo
+        self.console.read()
+        self.assertFalse(self.console.secret)
+        self.console.input('y', False)
+        self.assertEqual(self.console.notice, '')
+        self.wait_for(lambda: self.console.pid is None)
+        output = self.snapshot()['output']
+        self.assertNotIn('test-secret-739', output)
+        self.assertIn('Authenticated', output)
+        self.assertIn('Confirmed y', output)
+
+    def test_sudo_password_read_without_canonical_mode_is_secret(self):
+        # sudoers' pwfeedback makes sudo read the password with canonical mode off as well;
+        # its prompt still marks it as a password.
+        program = '''import getpass, os, termios
+attrs = termios.tcgetattr(0)
+attrs[3] &= ~(termios.ECHO | termios.ICANON)
+termios.tcsetattr(0, termios.TCSANOW, attrs)
+os.write(1, os.environ['SUDO_PROMPT'].replace('%p', getpass.getuser()).encode())
+password = b''
+while not password.endswith((b'\\n', b'\\r')):
+    password += os.read(0, 1)
+os.write(1, b'\\r\\n' + (b'Authenticated' if password.strip() == b'test-secret-739' else b'Rejected') + b'\\r\\n')
+'''
+        self.console.start('pwfeedback test', [sys.executable, '-c', program])
+        self.wait_for(lambda: self.console.secret)
+        self.console.input('test-secret-739', True)
+        self.wait_for(lambda: self.console.pid is None)
+        output = self.snapshot()['output']
+        self.assertNotIn('test-secret-739', output)
+        self.assertIn('Authenticated', output)
+
+    @unittest.skipUnless(shutil.which('sudo') and subprocess.run(['sudo', '-n', 'true'], capture_output=True).returncode == 0,
+                         'needs sudo without a password')
+    def test_real_sudo_confirmation_is_not_a_password(self):
+        self.console.start('sudo test', ['sudo', '-n', sys.executable, '-c', "print('Confirmed ' + input('Is this ok [y/N]: '))"])
+        self.wait_for(lambda: 'Is this ok' in self.snapshot()['output'])
+        self.console.read()
+        self.assertFalse(self.console.secret)
+        self.console.input('y', False)
+        self.assertEqual(self.console.notice, '')
+        self.wait_for(lambda: self.console.pid is None)
+        self.assertIn('Confirmed y', self.snapshot()['output'])
 
     def test_stale_secret_input_is_rejected(self):
         self.console.start('prompt test', [sys.executable, '-c', "print(input('Answer: '))"])

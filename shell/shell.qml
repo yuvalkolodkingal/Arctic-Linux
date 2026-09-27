@@ -109,7 +109,9 @@ ShellRoot {
     IpcHandler {
         target: 'lock'
         function lock(): void { shell.lock(); }
-        function isLocked(): bool { return lockScreen.locked; }
+        // Only once the compositor confirms it (WlSessionLock.secure), not when the lock is
+        // merely requested: arctic-lock waits on this before letting the machine sleep.
+        function isLocked(): bool { return lockScreen.secure; }
     }
     IpcHandler {
         target: 'welcome'

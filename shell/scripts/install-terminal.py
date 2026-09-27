@@ -12,10 +12,10 @@ What you can type:
   dnf search|info|list …           run as dnf … (no password needed)
   flatpak install flathub …        and other flatpak commands, as typed
 
-Passwords (sudo) and confirmations (dnf's [y/N]) are answered in the console. While the
-terminal has echo turned off the input line is masked, and a response typed for a prompt
-that has since changed is refused rather than sent, so a password can't land in a visible
-prompt. Nothing typed is written to a file or log.
+Passwords (sudo) and confirmations (dnf's [y/N]) are answered in the console. While a
+program reads a password the input line is masked (see Console.prompt_is_secret), and a
+response typed for a prompt that has since changed is refused rather than sent, so a password
+can't land in a visible prompt. Nothing typed is written to a file or log.
 """
 import fcntl
 import json
@@ -36,6 +36,10 @@ DNF_READONLY = {'search', 'info', 'list', 'repoquery', 'provides', 'whatprovides
                 'changelog', 'leaves', 'environment'}
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+@:-]*$')
 FLATHUB_PREFIX = 'flathub:'
+# sudo's password prompt, set through the environment (the commands stay plain `sudo dnf …`),
+# so the console can tell it apart from other prompts on the same line.
+SUDO_PROMPT = '[sudo] password for %p: '
+SUDO_PROMPT_SHOWN = re.compile(r'\[sudo\] password for \S+:$')
 WELCOME = ('Get apps\r\n'
            'Type an app name to install it, or a dnf or flatpak command.\r\n'
            'Examples: neovim  ·  dnf search editor  ·  flathub:org.gimp.GIMP\r\n\r\n')
@@ -97,11 +101,33 @@ class Console:
         self.stream.feed(text.encode())
         self.dirty = True
 
-    def echo_off(self):
+    def prompt_is_secret(self):
+        """Is the program in the PTY reading a password right now?
+
+        getpass() and sudo's own password prompt turn echo off and keep the terminal in
+        canonical (line) mode. Echo off alone is not enough: with use_pty (sudo's default
+        since 1.9.14, so on Fedora 44) sudo runs the command in a PTY of its own and puts this
+        one in raw mode — echo and canonical mode both off — for as long as the command runs.
+        dnf's "Is this ok [y/N]" arrives that way, and what is typed there is echoed back by
+        sudo's inner terminal. So raw mode counts only when the cursor sits right after sudo's
+        password prompt (sudo reads the password that way with the pwfeedback option).
+        """
+        if self.master is None:
+            return False
         try:
-            return self.master is not None and not (termios.tcgetattr(self.master)[3] & termios.ECHO)
+            lflag = termios.tcgetattr(self.master)[3]
         except termios.error:
             return False
+        if lflag & termios.ECHO:
+            return False
+        if lflag & termios.ICANON:
+            return True
+        return self.at_sudo_prompt()
+
+    def at_sudo_prompt(self):
+        cursor = self.screen.cursor
+        before_cursor = self.screen.display[cursor.y][:cursor.x].rstrip()
+        return bool(SUDO_PROMPT_SHOWN.search(before_cursor))
 
     def start(self, text, command=None):
         if self.pid is not None:
@@ -115,7 +141,8 @@ class Console:
         pid, fd = pty.fork()
         if pid == 0:
             env = os.environ.copy()
-            env.update(TERM='xterm', LC_ALL='C.UTF-8', COLUMNS=str(COLUMNS), LINES=str(ROWS))
+            env.update(TERM='xterm', LC_ALL='C.UTF-8', COLUMNS=str(COLUMNS), LINES=str(ROWS),
+                       SUDO_PROMPT=SUDO_PROMPT)
             try:
                 os.execvpe(command[0], command, env)
             except OSError as error:
@@ -130,7 +157,7 @@ class Console:
         if self.master is None:
             return
         # Refuse stale UI input rather than risk echoing a password at a new prompt.
-        if bool(secret) != bool(self.echo_off()):
+        if bool(secret) != self.prompt_is_secret():
             self.notice = 'The prompt changed. Please enter your response again.'
             self.dirty = True
             return
@@ -155,7 +182,7 @@ class Console:
                 self.dirty = True
             except (BlockingIOError, OSError):
                 break
-        secret = bool(self.echo_off())
+        secret = self.prompt_is_secret()
         if secret != self.secret:
             self.secret = secret
             self.dirty = True
