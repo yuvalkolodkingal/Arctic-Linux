@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -205,12 +206,41 @@ func ETALabel(d time.Duration, percent int) string {
 
 // InstallingStatus is "Installing Zed, your code editor…".
 func InstallingStatus(c *catalog.Catalog, m *catalog.Module) string {
+	if m.IsHardware() {
+		return fmt.Sprintf("Installing the %s for your %s…", driverNoun(m), m.Fill("{device}"))
+	}
 	return fmt.Sprintf("Installing %s, your %s…", m.Name, c.RoleFor(m))
+}
+
+// BuildingStatus is the status line while akmods builds a driver for the new system's kernel.
+func BuildingStatus(m *catalog.Module) string {
+	return fmt.Sprintf("Building the %s for this computer — this takes a few minutes…", driverNoun(m))
+}
+
+// driverNoun is a driver's name in a sentence: "NVIDIA driver", "Broadcom Wi-Fi driver".
+func driverNoun(m *catalog.Module) string {
+	if m.Short != "" && strings.HasSuffix(m.Short, "driver") {
+		return m.Short
+	}
+	return m.Name
 }
 
 // AttentionFor builds the optional-app failure event (design step 11).
 func AttentionFor(m *catalog.Module, message, details string) protocol.AttentionEvent {
 	name := m.Name
+	if m.IsHardware() {
+		return protocol.AttentionEvent{
+			Event:    protocol.EventAttention,
+			Module:   protocol.ModuleRef{ID: m.ID, Name: name},
+			Title:    "The " + driverNoun(m) + " couldn’t be installed",
+			Message:  message,
+			Help:     "Everything else is fine — Arctic Linux works without it, and your " + m.Fill("{device}") + " keeps the open-source driver until you add it later.",
+			Details:  details,
+			Optional: true,
+			Retry:    "Try again",
+			Skip:     "Skip the driver",
+		}
+	}
 	return protocol.AttentionEvent{
 		Event:    protocol.EventAttention,
 		Module:   protocol.ModuleRef{ID: m.ID, Name: name},

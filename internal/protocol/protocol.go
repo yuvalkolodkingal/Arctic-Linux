@@ -362,6 +362,40 @@ type DoneEvent struct {
 	Deferred      []string `json:"deferred,omitempty"`
 	Title         string   `json:"title"`
 	Help          string   `json:"help"`
+	// Drivers are the drivers the install put on (or put off), with a sentence for each.
+	Drivers []DriverResult `json:"drivers,omitempty"`
+	// SecureBoot is set when a driver's signing key has to be enrolled after the restart
+	// (Secure Boot is on): the one-time code and the steps of the firmware's MOK screen.
+	SecureBoot *SecureBootInfo `json:"secure_boot,omitempty"`
+}
+
+// Driver statuses (DriverResult.Status).
+const (
+	DriverInstalled = "installed" // built and installed; starts after the restart
+	DriverDeferred  = "deferred"  // installed at first boot, once online
+	DriverSkipped   = "skipped"   // the person skipped it after a failure
+)
+
+// DriverResult is one driver of the Done screen.
+type DriverResult struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Device string `json:"device"` // "NVIDIA GeForce RTX 4060 Max-Q / Mobile"
+	Status string `json:"status"` // installed | deferred | skipped
+	Text   string `json:"text"`   // "The NVIDIA driver for your … starts after you restart."
+}
+
+// SecureBootInfo tells the person how to enroll the driver signing key (a Machine Owner Key)
+// in shim's MokManager on the first restart. Code is the one-time password MokManager asks
+// for: digits only, typed with the number row (MokManager maps the keyboard as US QWERTY).
+// Failed means the enrolment couldn't be requested: Title/Steps then say how to do it later.
+type SecureBootInfo struct {
+	Code   string   `json:"code,omitempty"`
+	Title  string   `json:"title"`
+	Intro  string   `json:"intro"`
+	Steps  []string `json:"steps"`
+	Note   string   `json:"note"`
+	Failed bool     `json:"failed,omitempty"`
 }
 
 type WizardEvent struct {

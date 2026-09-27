@@ -83,6 +83,8 @@ func mockFlags(fs *flag.FlagSet, cfg *daemon.Config) {
 	fs.Float64Var(&cfg.MockOptions.Speed, "mock-speed", 1, "mock: divide every delay by this (env ARCTIC_MOCK_SPEED)")
 	fs.StringVar(&cfg.MockOptions.FailModule, "mock-fail", "", "mock: app whose first download fails; \"none\" for none (env ARCTIC_MOCK_FAIL)")
 	fs.BoolVar(&cfg.MockOptions.Wired, "mock-wired", false, "mock: start online on a cable (env ARCTIC_MOCK_WIRED=1)")
+	fs.StringVar(&cfg.MockOptions.Hardware, "mock-hw", "", "mock: hardware fixture, default nvidia-laptop (env ARCTIC_MOCK_HW)")
+	fs.BoolVar(&cfg.MockOptions.NoSecureBoot, "mock-no-secureboot", false, "mock: Secure Boot off (env ARCTIC_MOCK_SECUREBOOT=0)")
 	fs.StringVar(&cfg.CatalogDir, "catalog", "", "catalog directory (default: packaged, else embedded)")
 	fs.StringVar(&cfg.LogPath, "log", "", "engine log file, - for stderr")
 }

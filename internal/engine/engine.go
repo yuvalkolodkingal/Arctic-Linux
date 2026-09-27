@@ -6,6 +6,7 @@ package engine
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +46,7 @@ type Engine struct {
 	opts Options
 
 	disks    []hw.Disk
+	hw       hw.Hardware
 	sysNames map[string]bool
 	model    string
 	tzCache  wizard.Detected
@@ -102,9 +104,16 @@ func New(b backend.Backend, opts Options) (*Engine, error) {
 		e.log.Printf("disk probe failed: %v", err)
 	}
 	e.disks = disks
+	// Drivers are offered for the hardware found now; the wizard's defaults tick them.
+	e.hw = b.Hardware(ctx)
+	var found []string
+	for _, m := range e.cat.MarkDetected(e.hw) {
+		found = append(found, fmt.Sprintf("%s (%s)", m.ID, m.Device))
+	}
 	e.wiz = wizard.New(envAdapter{e}, b.Language())
 	e.log.Printf("engine %s started (mock=%v live=%v firmware=%s, %d disks, model %q)",
 		backend.EngineVersion, e.info.Mock, e.info.Live, e.info.Firmware, len(disks), e.model)
+	e.log.Printf("hardware: %s; drivers offered: %v", e.hw.Summary(), found)
 	return e, nil
 }
 
@@ -134,6 +143,7 @@ func (a envAdapter) Secrets() wizard.SecretsInfo {
 func (a envAdapter) Model() string                { return a.e.model }
 func (a envAdapter) Now() time.Time               { return a.e.opts.Now() }
 func (a envAdapter) Firmware() string             { return a.e.info.Firmware }
+func (a envAdapter) Hardware() hw.Hardware        { return a.e.hw }
 func (a envAdapter) SystemNames() map[string]bool { return a.e.sysNames }
 func (a envAdapter) DetectTimezone() wizard.Detected {
 	e := a.e
@@ -476,6 +486,7 @@ func (e *Engine) Start(ctx context.Context) *protocol.Error {
 	}
 	pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	fresh, err := e.b.Disks(pctx)
+	online := e.b.Network(pctx).Online
 	cancel()
 
 	e.mu.Lock()
@@ -514,7 +525,15 @@ func (e *Engine) Start(ctx context.Context) *protocol.Error {
 		sec.LUKS = nil
 	}
 	d.Apps.Selection = d.Apps.Selection.Clone()
-	job := &backend.Job{Data: d, Disk: disk, Firmware: e.info.Firmware, Catalog: e.cat, Secrets: sec, LogPath: e.opts.LogPath}
+	job := &backend.Job{Data: d, Disk: disk, Firmware: e.info.Firmware, Catalog: e.cat, Secrets: sec, LogPath: e.opts.LogPath,
+		Hardware: e.hw, Offline: !online}
+	if job.NeedsMOK() {
+		code, err := MOKCode()
+		if err != nil {
+			return protocol.Errorf(protocol.CodeInternal, "Couldn’t make a one-time code: %v", err)
+		}
+		job.MOKCode = code
+	}
 
 	e.wiz.BeginInstall()
 	e.running = true
@@ -525,8 +544,8 @@ func (e *Engine) Start(ctx context.Context) *protocol.Error {
 	}
 	rctx, rcancel := context.WithCancel(context.Background())
 	e.cancelRun = rcancel
-	e.log.Printf("install started: disk=%s (%s, serial %q) mode=%s encrypted=%v firmware=%s apps=%v",
-		disk.Path, disk.Model, disk.Serial, d.Disk.Mode, d.Encryption.Enabled, job.Firmware, d.Apps.Selection)
+	e.log.Printf("install started: disk=%s (%s, serial %q) mode=%s encrypted=%v firmware=%s apps=%v online=%v secure-boot=%v key-enrolment=%v",
+		disk.Path, disk.Model, disk.Serial, d.Disk.Mode, d.Encryption.Enabled, job.Firmware, d.Apps.Selection, online, e.hw.SecureBoot, job.MOKCode != "")
 	e.broadcastLocked(protocol.WizardEvent{Event: protocol.EventWizard, WizardResult: e.wiz.Snapshot()}, false)
 	go e.run(rctx, job)
 	return nil
@@ -599,16 +618,19 @@ func (e *Engine) run(ctx context.Context, job *backend.Job) {
 			deferred = append(deferred, id)
 		}
 	}
+	drivers, sb := e.driverResults(job)
+	e.wiz.SetDriverResults(drivers, sb)
 	e.wiz.Finish(installed)
 	first := wizard.FirstName(job.Data.Account.FullName)
 	res, _ := e.wiz.Get(wizard.StepDone)
-	ev := protocol.DoneEvent{Event: protocol.EventDone, AppsInstalled: installed, FirstName: first, Deferred: deferred, Title: res.Title, Help: res.Help}
+	ev := protocol.DoneEvent{Event: protocol.EventDone, AppsInstalled: installed, FirstName: first, Deferred: deferred, Title: res.Title, Help: res.Help,
+		Drivers: drivers, SecureBoot: sb}
 	e.doneEv = &ev
 	// The secrets are not needed any more.
 	wipe(e.secrets.LUKS)
 	wipe(e.secrets.Password)
 	e.secrets = backend.Secrets{}
-	e.log.Printf("install finished: %d apps installed, deferred %v", installed, deferred)
+	e.log.Printf("install finished: %d apps installed, deferred %v, drivers %+v, key enrolment %q", installed, deferred, job.Outcome.Drivers, job.Outcome.MOK)
 	e.broadcastLocked(ev, false)
 	e.broadcastLocked(protocol.WizardEvent{Event: protocol.EventWizard, WizardResult: e.wiz.Snapshot()}, false)
 }
@@ -732,4 +754,36 @@ func (e *Engine) DebugString() string {
 	}
 	sort.Strings(ids)
 	return fmt.Sprintf("phase=%s current=%s sessions=%v", e.wiz.Phase(), e.wiz.Current(), ids)
+}
+
+// driverResults turns the install's driver outcome into the Done screen's lines and, when
+// the signing key has to be enrolled, the MokManager steps with the one-time code.
+func (e *Engine) driverResults(job *backend.Job) ([]protocol.DriverResult, *protocol.SecureBootInfo) {
+	mok := job.Outcome.MOK == backend.MOKRequested
+	var out []protocol.DriverResult
+	for _, d := range job.Outcome.Drivers {
+		if m, ok := e.cat.Modules[d.ID]; ok {
+			out = append(out, wizard.DriverResult(m, d.Status, mok))
+		}
+	}
+	switch job.Outcome.MOK {
+	case backend.MOKRequested:
+		return out, wizard.SecureBootSteps(job.MOKCode)
+	case backend.MOKFailed:
+		return out, wizard.SecureBootFailed()
+	}
+	return out, nil
+}
+
+// MOKCode returns a random one-time password for MokManager: eight digits, which type the
+// same on every keyboard layout (MokManager reads the keys as US QWERTY).
+func MOKCode() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	for i := range b {
+		b[i] = '0' + b[i]%10
+	}
+	return string(b), nil
 }

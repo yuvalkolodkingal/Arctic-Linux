@@ -19,6 +19,7 @@ type fakeEnv struct {
 	secrets  SecretsInfo
 	firmware string
 	names    map[string]bool
+	hw       hw.Hardware
 }
 
 func (e *fakeEnv) Catalog() *catalog.Catalog      { return e.cat }
@@ -30,6 +31,7 @@ func (e *fakeEnv) DetectTimezone() Detected       { return Detected{"Asia/Jerusa
 func (e *fakeEnv) Now() time.Time                 { return time.Date(2026, 9, 27, 4, 42, 0, 0, time.UTC) }
 func (e *fakeEnv) Firmware() string               { return e.firmware }
 func (e *fakeEnv) SystemNames() map[string]bool   { return e.names }
+func (e *fakeEnv) Hardware() hw.Hardware          { return e.hw }
 
 func testDisks() []hw.Disk {
 	return []hw.Disk{
