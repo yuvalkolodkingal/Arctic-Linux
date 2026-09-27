@@ -76,6 +76,8 @@ jobs:
           fi
       - name: Python unittest (packaging/firstboot)
         run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
+      - name: Python unittest (packaging/updates, arctic-update)
+        run: python3 -m unittest discover -s packaging/updates -p 'test_*.py' -v
       - name: Node tests (shell/tests)
         run: |
           for t in shell/tests/*.cjs shell/tests/*.mjs shell/tests/*.js; do
@@ -83,6 +85,20 @@ jobs:
             echo "== $t"
             node "$t"
           done
+
+  units:
+    name: systemd units (arctic-update)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: dnf -y install git systemd python3
+      - uses: actions/checkout@v4
+      - name: systemd-analyze verify
+        run: |
+          # ExecStart= must exist for verify: install the command where the package puts it.
+          install -m 0755 dotfiles/.local/bin/arctic-update /usr/bin/arctic-update
+          systemd-analyze verify packaging/systemd/arctic-update-stage.service packaging/systemd/arctic-update-stage.timer
 
   qml:
     name: qmllint

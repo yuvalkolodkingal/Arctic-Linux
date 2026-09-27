@@ -1,0 +1,19 @@
+[Unit]
+Description=Arctic Linux: download updates to install at the next restart
+Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates man:dnf5-offline(8)
+# Never on the live USB: nothing there survives a restart.
+ConditionKernelCommandLine=!rd.live.image
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# `arctic-update stage`: dnf5 upgrade --offline (download and test, the running system is not
+# touched), then the transaction is scheduled for the next boot. It skips metered connections
+# (METERED= in /etc/arctic/update.conf) and does nothing with AUTO=off.
+Type=oneshot
+ExecStart=/usr/bin/arctic-update stage
+# In the background: the lowest CPU and disk priority.
+Nice=19
+IOSchedulingClass=idle
+# A slow mirror must not keep it running forever; the next check tries again.
+TimeoutStartSec=3h

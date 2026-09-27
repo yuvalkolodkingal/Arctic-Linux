@@ -122,6 +122,10 @@
 		<package name="glibc-langpack-uk"/>
 		<package name="isomd5sum"/>
 		<package name="btrfs-progs"/>
+		<!-- Rollback: snapper snapshots around every dnf transaction on the installed system
+		     (the installer copies this root and creates snapper's root configuration) -->
+		<package name="snapper"/>
+		<package name="libdnf5-plugin-actions"/>
 		<package name="udisks2-btrfs"/>
 		<package name="cryptsetup"/>
 		<package name="rsync"/>
