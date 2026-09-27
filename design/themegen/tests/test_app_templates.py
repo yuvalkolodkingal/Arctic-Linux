@@ -456,6 +456,12 @@ class DotfilesTest(unittest.TestCase):
     def test_qt_platform_theme_everywhere(self):
         envd = (DOTFILES / ".config/environment.d/10-arctic.conf").read_text(encoding="utf-8")
         self.assertIn("QT_QPA_PLATFORMTHEME=qt6ct", envd.splitlines())
+        # System-wide too, read after (and so replacing) older copies of 10-arctic.conf.
+        system = ROOT / "packaging/environment.d/50-arctic-qt.conf"
+        self.assertIn("QT_QPA_PLATFORMTHEME=qt6ct", system.read_text(encoding="utf-8").splitlines())
+        self.assertGreater(system.name, "10-arctic.conf")
+        spec = (ROOT / "packaging/arctic-linux.spec").read_text(encoding="utf-8")
+        self.assertIn("%{_prefix}/lib/environment.d/50-arctic-qt.conf\n", spec)
         look = (DOTFILES / ".config/mango/arctic/look.conf").read_text(encoding="utf-8")
         self.assertIn("env=QT_QPA_PLATFORMTHEME,qt6ct", look.splitlines())
         self.assertIn("cursor_theme=Adwaita", look.splitlines())

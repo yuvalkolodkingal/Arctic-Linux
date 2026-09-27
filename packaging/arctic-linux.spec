@@ -572,6 +572,9 @@ install -Dpm 0644 packaging/dconf/10-arctic %{buildroot}%{_sysconfdir}/dconf/db/
 # removes it and rpm -V knows it.
 touch %{buildroot}%{_sysconfdir}/dconf/db/distro
 install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/flatpak/overrides/global
+# QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
+# an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
+install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
 # arctic-shell, arctic-shell-ipc and arctic-installer belong to their own subpackages.
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
@@ -890,6 +893,7 @@ fi
 %ghost %{_sysconfdir}/dconf/db/distro
 %dir %{_localstatedir}/lib/flatpak/overrides
 %config(noreplace) %{_localstatedir}/lib/flatpak/overrides/global
+%{_prefix}/lib/environment.d/50-arctic-qt.conf
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
