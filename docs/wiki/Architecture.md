@@ -209,8 +209,9 @@ commands.
   (see [Building from source](Building-from-Source#build-the-rpms-toolsbuild-rpmssh));
   `packaging/mangowm.spec` builds Mango from upstream. `arctic-desktop` is the metapackage.
 - `arctic-release` replaces `fedora-release` (os-release `ID=arctic`, `ID_LIKE=fedora`,
-  `%fedora 44`) and keeps Fedora's repositories. An Arctic repository file is shipped disabled
-  until the Arctic COPR is published.
+  `%fedora 44`) and keeps Fedora's repositories. It adds the signed Arctic package repository
+  on GitHub Pages (the stable channel on, testing off) with its key; every build's Release
+  carries its build time, so each build updates the ones before it.
 - The ISO is built by kiwi-ng from `iso/kiwi/config.kiwi`, derived from Fedora's own kiwi
   descriptions: hybrid ISO, UEFI (Fedora's signed shim) and BIOS, erofs root, volume id
   `Arctic-Linux-0.2`. `config.sh` sets the live session, enables SDDM, `arcticd.socket` and

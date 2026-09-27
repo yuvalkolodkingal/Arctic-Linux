@@ -19,6 +19,22 @@ Download the ISO from the [releases](https://github.com/yuvalkolodkingal/O-Tism/
 it to a USB stick (4 GB or more), for example with Fedora Media Writer or
 `sudo dd if=Arctic-Linux-0.2-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync`, and boot it.
 
+## Updates
+
+Fedora's packages come from Fedora's repositories. Arctic's own packages (desktop, shell, installer,
+branding, Mango) come from the signed **Arctic package repository** on this project's GitHub Pages
+site, https://yuvalkolodkingal.github.io/O-Tism/, which `arctic-release` sets up with its key:
+
+| Channel | Built from | On an installed system |
+|---|---|---|
+| `stable` | every push to `main` | on |
+| `testing` | every push to the development branch | off; `sudo dnf config-manager setopt arctic-testing.enabled=1` to follow it, `=0` to go back |
+
+Every build's Release carries its UTC build time and commit (`…-0.2.0-1.202609280310.gitabc1234.fc44`),
+so each build updates the ones before it, including the packages an ISO installed.
+`.github/workflows/repo.yml` builds, signs and publishes each push; the details are in
+`docs/BUILD-SPEC.md` §9.
+
 ## Repository
 
 | Path | What |
@@ -32,7 +48,7 @@ it to a USB stick (4 GB or more), for example with Fedora Media Writer or
 | `branding/` | Login screen (SDDM), boot menu (GRUB), boot splash (Plymouth), logos |
 | `packaging/` | RPM specs (`arctic-linux.spec`, `mangowm.spec`) and system files |
 | `live/`, `iso/kiwi/` | The live session and the kiwi-ng ISO description |
-| `tools/` | `build-rpms.sh`, `build-iso.sh`, `test-iso.sh`, `test-install.sh` |
+| `tools/` | `build-rpms.sh`, `build-iso.sh`, `test-iso.sh`, `test-install.sh`, `publish-repo.sh` and `test-repo.sh` (the package repository) |
 | `docs/` | `PLAN.md` (why) and `BUILD-SPEC.md` (the contracts between components) |
 
 ## Build
@@ -46,5 +62,7 @@ tools/test-iso.sh --firmware uefi --mode try    # boot it in QEMU, screenshots i
 tools/test-install.sh --firmware uefi           # install to a VM disk, boot it, log in (~1.5 h without KVM)
 ```
 
-CI (`.github/workflows/ci.yml`) runs the Go, Python and Node tests, shellcheck and qmllint.
-`.github/workflows/iso.yml` builds the ISO and publishes a release for `v*` tags.
+CI (`.github/workflows/ci.yml`) runs the Go, Python and Node tests, shellcheck and qmllint, builds
+the RPMs and checks an unsigned test repository with dnf5. `.github/workflows/iso.yml` builds the
+ISO and publishes a release for `v*` tags; `.github/workflows/repo.yml` publishes the package
+repository.
