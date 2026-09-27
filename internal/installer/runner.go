@@ -426,6 +426,7 @@ func DefaultExists(path string) bool {
 	case path == "/run/rootfsbase",
 		strings.HasSuffix(path, "/boot/efi"),
 		strings.HasSuffix(path, "/boot/grub2/themes/arctic/theme.txt"),
+		strings.HasSuffix(path, "/usr/bin/snapper"),
 		path == "/etc/NetworkManager/system-connections",
 		strings.HasPrefix(path, "/dev/"), strings.HasPrefix(path, "/sys/class/block/"):
 		return true

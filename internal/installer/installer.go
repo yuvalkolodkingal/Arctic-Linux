@@ -1448,6 +1448,9 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := in.setupSnapper(ctx); err != nil {
+		return err
+	}
 	in.t.Update(0.8, "")
 	if err := in.run(ctx, "umount", "--recursive", t); err != nil {
 		return err
@@ -1464,6 +1467,49 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	// The private bind of the target directory (privateTarget).
 	_, err = in.R.Run(ctx, Cmd{Name: "umount", Args: []string{t}, AllowFail: true})
 	return err
+}
+
+// SnapperPolicy is the cleanup policy of snapper's root configuration: the snapshot pairs
+// around dnf transactions (arctic-snapper.actions) use the number algorithm, of which the newest
+// 10 are kept (5 marked important); no hourly timeline. Members of wheel may list and compare
+// snapshots (the ACL on /.snapshots follows ALLOW_GROUPS).
+var SnapperPolicy = []string{"NUMBER_CLEANUP=yes", "NUMBER_LIMIT=10", "NUMBER_LIMIT_IMPORTANT=5",
+	"TIMELINE_CREATE=no", "ALLOW_GROUPS=wheel", "SYNC_ACL=yes"}
+
+// setupSnapper creates snapper's "root" configuration for the @ subvolume, which makes
+// /.snapshots a nested subvolume of @ (no fstab entry, as on Fedora). From then on every dnf
+// transaction on the new system gets a snapshot before and after it (arctic-snapper.actions
+// acts only once this configuration exists). It runs last, after the final relabel: nothing
+// the installer itself did is snapshotted, and only what snapper created needs labels.
+// Snapshots are a safety net: a failure here is logged, never fatal.
+func (in *Installer) setupSnapper(ctx context.Context) error {
+	if !in.R.Exists(in.tgt("/usr/bin/snapper")) {
+		in.Rep.Logf("snapper isn't in the new system; updates won't be snapshotted")
+		return nil
+	}
+	cmds := []Cmd{
+		Chroot(in.Opt.Target, Cmd{Name: "snapper", Args: []string{"--no-dbus", "-c", "root", "create-config", "/"}, AllowFail: true}),
+		Chroot(in.Opt.Target, Cmd{Name: "snapper", Args: append([]string{"--no-dbus", "-c", "root", "set-config"}, SnapperPolicy...), AllowFail: true}),
+		{Name: "setfiles", Args: []string{"-F", "-r", in.Opt.Target, in.tgt("/etc/selinux/targeted/contexts/files/file_contexts"),
+			in.tgt("/.snapshots"), in.tgt("/etc/snapper"), in.tgt("/etc/sysconfig/snapper")}, AllowFail: true},
+	}
+	for _, c := range cmds {
+		res, err := in.R.Run(ctx, c)
+		if err == nil && res.ExitCode == 0 {
+			continue
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if c.Name == "setfiles" {
+			// The first boot relabels (/.autorelabel) rather than leave /.snapshots unlabelled.
+			in.Rep.Logf("warning: labelling snapper's files failed (exit %d); relabelling at first boot", res.ExitCode)
+			return in.write(in.tgt("/.autorelabel"), "-F\n", 0o644)
+		}
+		in.Rep.Logf("warning: %s failed (exit %d, %v); updates won't be snapshotted", c.String(), res.ExitCode, err)
+		return nil
+	}
+	return nil
 }
 
 // roleOrder is the order of /etc/arctic/default-apps (arctic-open roles).
