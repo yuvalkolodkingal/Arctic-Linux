@@ -52,7 +52,7 @@ included via `git stash create`). noarch unless it contains Go binaries.
 | `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
-| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (skel's `~/.config/arctic/current` links there), `/etc/arctic/default-apps` (defaults) | Requires the desktop runtime (§3). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
+| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (skel's `~/.config/arctic/current` links there), `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/dconf/db/distro.d/10-arctic`, `/var/lib/flatpak/overrides/global` | Requires the desktop runtime (§3) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
 | `sddm-wayland-mango` | `/usr/lib/sddm/sddm.conf.d/10-arctic.conf`, `/usr/libexec/arctic/sddm-compositor-mango`, `/usr/share/arctic/sddm/greeter.conf` | Provides+Conflicts `sddm-greeter-displayserver`. Requires sddm, mangowm, layer-shell-qt. Config per PLAN §7. If the mango greeter can't be made to work in the VM test, ship `10-arctic.conf` for `sddm-wayland-generic` (weston) instead and note it. |
@@ -71,7 +71,8 @@ pipewire-pulseaudio, pavucontrol, network-manager-applet, NetworkManager-wifi, b
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
 gnome-keyring-pam, Thunar, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
-fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow.
+fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
+adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop.
 
 ## 3. Desktop session (installed and live)
 
@@ -86,6 +87,73 @@ Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
 `lock lock`, `keys toggle`. Mango binds call these.
+
+### 3.1 App theming
+
+Every app and menu follows the active theme (`~/.config/arctic/current`, switched by
+`arctic-theme`): either it reads its colours through that link, or a theme hook updates it.
+App colour files are templates in `design/themegen/templates/` (placeholder syntax: the theme
+engine's interface; checked by `design/themegen/tests/test_app_templates.py`), rendered into
+every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
+
+**Toolkits and system settings**
+
+| What | Mechanism | Files |
+|---|---|---|
+| GTK 3 apps (Thunar, Zen's menus, Inkscape, …) | Theme `adw-gtk3` / `adw-gtk3-dark` (package `adw-gtk3-theme`), which uses libadwaita's named colours, so the theme's `gtk.css` recolours it | `~/.config/gtk-3.0/gtk.css` imports `arctic-colors.css` (dotfiles: link to `../arctic/current/gtk.css`; the 10-gtk hook replaces it with a copy); `settings.ini` (`gtk-theme-name=adw-gtk3`, dark variant via `gtk-application-prefer-dark-theme`) |
+| GTK 4 / libadwaita apps (Nautilus, Celluloid, GNOME apps) | `color-scheme` through the settings portal; colours from `~/.config/gtk-4.0/gtk.css` | `~/.config/gtk-4.0/{gtk.css,arctic-colors.css,settings.ini}` (no `gtk-application-prefer-dark-theme`: libadwaita rejects it) |
+| gsettings defaults | dconf **distro** database (Fedora's `/etc/dconf/profile/user` reads user → local → site → distro; `local.d` stays the administrator's) | `packaging/dconf/10-arctic` → `/etc/dconf/db/distro.d/10-arctic`, `dconf update` in `%posttrans`: `org.gnome.desktop.interface` gtk-theme `adw-gtk3-dark`, color-scheme `prefer-dark`, accent-color `yellow`, icon-theme `Adwaita`, cursor-theme `Adwaita`, cursor-size 24, font-name `Figtree 11`, document-font-name `Figtree 11`, monospace-font-name `JetBrains Mono 10` |
+| Portals | Mango's `/usr/share/xdg-desktop-portal/mango-portals.conf` (`default=gtk`): xdg-desktop-portal-gtk implements `org.freedesktop.impl.portal.Settings` (color-scheme, contrast, and the `org.gnome.desktop.interface` keys). It has no `accent-color`: libadwaita's accent comes from `gtk.css` | — |
+| Qt 5 and Qt 6 apps (VLC, OBS, …) | `QT_QPA_PLATFORMTHEME=qt6ct` (qt5ct and qt6ct both register the keys `qt5ct` and `qt6ct`): Fusion, the theme's palette, Figtree 11 / JetBrains Mono 10, Adwaita icons, portal file dialogs. qt5ct/qt6ct watch their config folder and re-read the palette ~3 s after it changes (20-qt hook). Kvantum is not used: Fedora's build pulls the same KDE Frameworks, and its themes are SVGs, not a palette | `templates/qt6ct/colors/arctic.conf.tmpl` (22 roles), `templates/qt5ct/colors/arctic.conf.tmpl` (21); `~/.config/qt6ct/qt6ct.conf`, `~/.config/qt5ct/qt5ct.conf` (`color_scheme_path=~/.config/arctic/current/qt*ct/colors/arctic.conf`, `custom_palette=true`); `env=QT_QPA_PLATFORMTHEME,qt6ct` in `~/.config/mango/arctic/look.conf` (apps started from the desktop) and `~/.config/environment.d/10-arctic.conf` (D-Bus/systemd activated apps) |
+| Icons | Adwaita (+ AdwaitaLegacy, in the image already) for GTK and Qt. Papirus (with amber folders) was considered: 116 MB installed, and `papirus-folders` is not in Fedora | dconf, `settings.ini`, `qt*ct.conf` |
+| Cursor | Adwaita 24 px (in the image already; Bibata is not in Fedora). Mango's `cursor_theme`/`cursor_size` also export `XCURSOR_THEME`/`XCURSOR_SIZE` to apps and to systemd/D-Bus | `~/.config/mango/arctic/look.conf`, dconf, `settings.ini`, `environment.d` |
+| Flatpak apps | Global override `filesystems=xdg-config/gtk-3.0:ro;xdg-config/gtk-4.0:ro;xdg-config/fontconfig:ro;` (Flatpak also binds these into the app's own config folder, which is where GTK looks). They can't see `/usr/share/arctic`, hence the copy in `arctic-colors.css`. No `GTK_THEME` (it would replace libadwaita's stylesheet). GTK 3 Flatpaks load the theme named by the portal's `gtk-theme` from the runtime extensions `org.gtk.Gtk3theme.adw-gtk3` / `-dark`: hidden catalog modules `modules/_system/adw-gtk3-flatpak`, `adw-gtk3-dark-flatpak` (always installed from Flathub, deferred to first boot when offline; Flatpak also fetches the active one itself with any app install, since the dconf default names it). `tools/build-iso.sh` adds both when it preinstalls Zen. Host icon themes are visible to Flatpak apps in `/run/host/share/icons` | `packaging/flatpak/global` → `/var/lib/flatpak/overrides/global` (`%config(noreplace)`; `flatpak override --system` edits the same file) |
+
+**Apps**
+
+| App | Mechanism | Template → theme file | Wiring | Live |
+|---|---|---|---|---|
+| Quickshell shell, launcher, OSD, lock | `shell/Theme.qml` watches `theme.json` | (engine) | — | yes |
+| Mango, kitty, mako, fuzzel, swaylock, waybar | the engine's existing outputs | (engine) | `include`/`source=` of `~/.config/arctic/current/…` | built-in reloads |
+| Thunar | GTK 3 (above) | — | — | light/dark: yes; colours: next start (GTK reads `gtk.css` once) |
+| VLC | Qt 5 via qt5ct (above) | `qt5ct/colors/arctic.conf` | `~/.config/qt5ct/qt5ct.conf` | yes (20-qt) |
+| Zed (Flatpak `dev.zed.Zed`, or native) | theme family "Arctic" (one theme, `appearance` = the palette's mode), Zed schema v0.2.0 | `zed/themes/arctic.json` | 30-zed hook copies it to `~/.var/app/dev.zed.Zed/config/zed/themes/` (Flatpak) and `~/.config/zed/themes/` (native, if that folder exists) and writes `settings.json` (`"theme": "Arctic"`, fonts) only where none exists; skel ships `~/.config/zed/settings.json` | yes (Zed reloads theme files) |
+| yazi | `theme.toml` (keys of yazi 26.x's preset only) | `yazi/theme.toml` | `~/.config/yazi/theme.toml` → `../arctic/current/yazi/theme.toml` | next start |
+| btop | theme file | `btop/arctic.theme` | `~/.config/btop/themes/arctic.theme` → `../../arctic/current/btop/arctic.theme`; `~/.config/btop/btop.conf` `color_theme = "arctic"`, `theme_background = false` | next start |
+| zsh prompt, completion menu, zsh plugins | `ARCTIC_PROMPT_COLORS` (24-bit when `COLORTERM=truecolor`, else ANSI 2/3/1/8), `ma=` selection colour, `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE`, `ZSH_HIGHLIGHT_STYLES` | `zsh/colors.zsh` | `~/.zshrc` sources it and re-sources it before the next prompt when the link or file changes | next prompt |
+| fzf | options file | `fzf/fzfrc` | `FZF_DEFAULT_OPTS_FILE` in `~/.zshrc` and `~/.bashrc.d/arctic.sh` (your `FZF_DEFAULT_OPTS` still apply on top) | every run |
+| bat, delta (not installed) | `BAT_THEME=ansi` (delta honours it): the terminal's palette | — | `~/.zshrc`, `~/.bashrc.d/arctic.sh` | yes |
+| bash prompt | ANSI colours (the terminal palette) | — | — | yes |
+| foot, Alacritty (terminal alternatives) | same palette as kitty | `foot/colors.ini` (`[colors-<mode>]` + `initial-color-theme`), `alacritty/colors.toml` | `~/.config/foot/foot.ini` `include=~/.config/arctic/current/foot/colors.ini`; `~/.config/alacritty/alacritty.toml` `general.import` | new windows |
+| Zen Browser | light/dark through the portal (`prefers-color-scheme`); optional accent: pref `zen.theme.accent-color` | `zen/user.js` | 40-zen hook, only with `"zen_theme": true` in `~/.config/arctic/settings.json`: a marked block in each profile's `user.js` (Flatpak `~/.var/app/app.zen_browser.zen/.zen`, `~/.zen`, `~/.config/zen`), removed again when off. userChrome.css is not used (needs a legacy-stylesheet pref and breaks with Zen updates) | next start |
+| Collabora Office (Flatpak, KDE runtime, a Qt WebEngine shell around the Collabora Online UI) | light/dark through the portal (Qt's colour scheme → the web UI's `prefers-color-scheme`); no accent | — | — | — |
+| Firefox, Chromium, Electron apps (Signal) | portal colour scheme | — | — | yes |
+| Nautilus, Celluloid, LibreOffice (GTK 3 VCL), GIMP, Inkscape | GTK 3/4 (above) | — | — | as GTK |
+| Not themed: Helix, Neovim, VSCodium, OnlyOffice, Steam, mpv's OSD, fish (uses the terminal's ANSI colours) | their own themes | — | — | — |
+| GTK/Qt context menus, tray menus, dialogs | inherit their toolkit's theme; Mango draws no menus | — | — | — |
+
+**Theme hooks** (`packaging/theme-hooks.d/` → `/usr/share/arctic/theme-hooks.d/`, run by
+`arctic-theme reload` after the built-in reloads with `ARCTIC_THEME_DIR` and
+`ARCTIC_THEME_MODE=dark|light`; each is quick, exits 0 and touches only files it wrote or links
+it shipped):
+
+| Hook | Does |
+|---|---|
+| `10-gtk` | `gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark\|adw-gtk3` when it differs (arctic-theme's own GTK reload should set the same names, so this is a no-op then); `~/.config/gtk-{3,4}.0/arctic-colors.css` = copy of `$ARCTIC_THEME_DIR/gtk.css`; `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini` |
+| `20-qt` | replaces `~/.config/qt5ct/qt5ct.conf` and `qt6ct.conf` with identical copies, which makes running Qt apps re-read the palette |
+| `30-zed` | copies `zed/themes/arctic.json` into Zed's themes folders (above) |
+| `40-zen` | the optional Zen accent (above) |
+
+**Packages** (`arctic-desktop-config` Requires, also listed in `iso/kiwi/config.kiwi`):
+`adw-gtk3-theme`, `qt6ct`, `qt5ct`, `adwaita-icon-theme`, `adwaita-cursor-theme`, `dconf`,
+`flatpak`; `arctic-desktop` Recommends `btop`. Added to the image (dnf5 against Fedora 44, vs the
+0.1 image's package list): adw-gtk3-theme 1.1 MB, btop 1.8 MB (+ rocm-smi 2.9 MB, its weak
+dependency), qt5ct + qt6ct about 150 MB installed / 63 MB download, because Fedora builds them
+with KDE colour-scheme support: KDE Frameworks 5 and 6 (ki18n 17 + 18 MB, kwidgetsaddons 7 + 5 MB,
+…), `breeze-icon-theme` 26 MB and `kf6-breeze-icons` 25 MB (kf5/kf6-kiconthemes) and
+`plasma-breeze-common` 40 MB (mostly Plasma's "Next" wallpaper, via kf5-kconfigwidgets). qt6ct
+alone is 80 MB of that; no default app is a Qt 6 widget app, so it is the first thing to drop if
+the ISO needs room (Qt 5 apps stay themed through qt5ct, which also answers to "qt6ct").
 
 ## 4. Engine ↔ installer UI protocol
 
