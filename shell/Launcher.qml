@@ -9,7 +9,7 @@ import "assets/Icons.js" as Icons
 
 // The launcher (design Launcher, Super+Space): a 520px frosted card that hangs from the bar
 // over a scrim. Type to find apps; "=" is a calculator, ">" runs a command. With nothing
-// typed it offers Apps, Get apps, Wallpapers and Fetch (the original shell's categories), and
+// typed it offers Apps, Get apps, Wallpapers, Settings and Fetch (the original shell's), and
 // on the live USB "Install Arctic Linux" first. Keyboard first: ↑/↓ or Tab move, Enter opens,
 // Esc goes back or closes. The card can be dragged to any screen edge, where it docks.
 Popover {
@@ -50,6 +50,7 @@ Popover {
         list.push({ kind: 'apps', name: 'Apps', desc: 'Every app on this computer', glyph: 'grid', keywords: 'applications programs all' });
         list.push({ kind: 'get', name: 'Get apps', desc: 'Install apps with dnf or Flatpak', glyph: 'package', keywords: 'install software packages dnf flatpak flathub store' });
         list.push({ kind: 'wallpapers', name: 'Wallpapers', desc: 'Change the desktop picture', glyph: 'image', keywords: 'background picture desktop' });
+        list.push({ kind: 'settings', name: 'Settings', desc: 'Appearance, displays, keyboard, apps and more · Super + S', glyph: 'sliders', keywords: 'preferences control panel options configure theme' });
         list.push({ kind: 'fetch', name: 'Fetch', desc: 'The Arctic greeting in a terminal', glyph: 'terminal', keywords: 'fastfetch neofetch system info' });
         return list;
     }
@@ -69,7 +70,8 @@ Popover {
                                 : { kind: 'none', name: 'Run a command', desc: 'Type a command after >, like > htop', glyph: 'prompt' }];
         if (view === 'apps') return LauncherSearch.rank(apps, parsed.text);
         if (!parsed.text) return specials;
-        return LauncherSearch.rank(specials.concat(apps), parsed.text).slice(0, 50);
+        // Settings is one of the specials, so its desktop entry would show twice.
+        return LauncherSearch.rank(specials.concat(apps.filter(a => a.entry.id !== 'org.arcticlinux.Settings')), parsed.text).slice(0, 50);
     }
     onResultsChanged: current = Math.min(current, Math.max(0, results.length - 1))
 
@@ -91,6 +93,7 @@ Popover {
         case 'apps': openView('apps'); break;
         case 'get': openView('get'); break;
         case 'wallpapers': close(); shell.openWallpapers(launcher.screen); break;
+        case 'settings': Quickshell.execDetached(['arctic-settings']); close(); break;
         case 'fetch': Quickshell.execDetached(inTerminal(['arctic-fetch'], true)); close(); break;
         case 'install': Quickshell.execDetached(['arctic-start-installer']); close(); break;
         case 'calc': Quickshell.execDetached(['wl-copy', '--', item.name]); close(); break;
