@@ -20,8 +20,9 @@ const written = JSON.stringify({
 });
 const ready = U.parse(written);
 assert.deepEqual(plain(ready), {
-    state: 'ready', packages: 12, download_mb: 84.3, staged_at: '2026-09-27T21:53:15+00:00', armed: true,
+    state: 'ready', packages: 12, download_mb: 84.3, staged_at: '2026-09-27T21:53:15+00:00', notify_key: '', armed: true,
     message: '12 updates will be installed the next time you restart.',
+    boot_failures: 0, install_error: '', install_failed_at: '',
 });
 // Missing, empty, broken or odd files mean "nothing waiting", never an exception.
 for (const bad of ['', '{', 'null', '[]', '42', '"ready"', '{"state": 3, "packages": "many", "armed": "true"}']) {
@@ -56,5 +57,30 @@ assert.equal(U.shouldNotify(ready, true, '2026-09-27T21:53:15+00:00\n'), false);
 assert.equal(U.shouldNotify(ready, true, '2026-09-26T06:12:00+00:00'), true);      // a newer download
 assert.equal(U.shouldNotify(ready, false, ''), false);
 assert.equal(U.shouldNotify(U.parse('{"state": "ready", "armed": true, "packages": 2}'), true, ''), false);   // no staged_at: can't remember it
+// The daily check stores the same updates again (a new staged_at on older systems): the key
+// is the set of packages, so it isn't announced again; other packages are.
+const keyed = U.parse(JSON.stringify(Object.assign(JSON.parse(written), { notify_key: '3f1c0a9be27d4e51' })));
+assert.equal(U.notifyKey(keyed), '3f1c0a9be27d4e51');
+assert.equal(U.shouldNotify(keyed, true, '3f1c0a9be27d4e51'), false);
+assert.equal(U.shouldNotify(Object.assign({}, keyed, { staged_at: '2026-09-28T06:10:00+00:00' }), true, '3f1c0a9be27d4e51'), false);
+assert.equal(U.shouldNotify(Object.assign({}, keyed, { notify_key: '77aa01be90cc3d12' }), true, '3f1c0a9be27d4e51'), true);
+
+// ---- installing at the restart failed ------------------------------------------------------
+const failed = U.parse(JSON.stringify({
+    state: 'ready', armed: true, packages: 3, boot_failures: 1, install_failed_at: '2026-09-28T07:02:11+00:00',
+    install_error: 'Transaction failed: Rpm transaction failed.',
+}));
+assert.equal(U.failureKey(failed), '2026-09-28T07:02:11+00:00');
+assert.equal(U.shouldNotifyFailure(failed, false, ''), true);
+assert.equal(U.shouldNotifyFailure(failed, false, '2026-09-28T07:02:11+00:00\n'), false);   // already told
+assert.equal(U.shouldNotifyFailure(failed, true, ''), false);                                // never on the live USB
+assert.equal(U.shouldNotifyFailure(ready, false, ''), false);                                // nothing failed
+assert.equal(U.shouldNotifyFailure(U.parse('{"boot_failures": 0, "install_failed_at": "x"}'), false, ''), false);   // reset by arctic-update now
+assert.equal(U.failureNotification(failed),
+    "The updates couldn't be installed at the last restart (Transaction failed: Rpm transaction failed.). They will be tried again at the next restart.");
+const paused = Object.assign({}, failed, { boot_failures: 2, install_error: 'see dnf5 offline log' });
+assert.equal(U.failureNotification(paused),
+    'Installing updates failed again at the last restart. Automatic updates are paused: run arctic-update now to try again.');
+assert.equal(U.parse('{"boot_failures": "lots"}').boot_failures, 0);
 
 console.log('update status: ok');

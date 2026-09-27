@@ -16,10 +16,12 @@ Singleton {
     readonly property bool ready: UpdateStatus.isReady(status, linked, Session.live)
     readonly property string summary: UpdateStatus.summary(status)
     readonly property string detail: UpdateStatus.detail(status)
-    // staged_at of the update already announced (kept in ~/.cache/arctic, so a shell restart
-    // doesn't announce it again).
+    // The update already announced (its notify_key, kept in ~/.cache/arctic, so a shell restart
+    // doesn't announce it again), and the failed install at a restart already reported.
     property string notified: ''
     property bool notifiedLoaded: false
+    property string failureNotified: ''
+    property bool failureNotifiedLoaded: false
 
     function refresh() {
         statusView.reload();
@@ -38,6 +40,18 @@ Singleton {
     }
     onReadyChanged: announce()
     onNotifiedLoadedChanged: announce()
+
+    // Installing the updates at the last restart failed: say so once.
+    function announceFailure() {
+        if (!failureNotifiedLoaded || !UpdateStatus.shouldNotifyFailure(status, Session.live, failureNotified)) return;
+        failureNotified = UpdateStatus.failureKey(status);
+        const file = Session.arcticCache + '/update-failure-notified';
+        Quickshell.execDetached(['sh', '-c', 'mkdir -p "${1%/*}" && printf "%s\\n" "$2" > "$1"', 'sh', file, failureNotified]);
+        Quickshell.execDetached(['notify-send', '-a', 'Arctic Linux', '-u', 'critical', '-i', 'dialog-warning',
+                                 'Updates weren\'t installed', UpdateStatus.failureNotification(status)]);
+    }
+    onStatusChanged: announceFailure()
+    onFailureNotifiedLoadedChanged: announceFailure()
 
     FileView {
         id: statusView
@@ -70,5 +84,11 @@ Singleton {
         printErrors: false
         onLoaded: { updates.notified = text().trim(); updates.notifiedLoaded = true; }
         onLoadFailed: { updates.notified = ''; updates.notifiedLoaded = true; }
+    }
+    FileView {
+        path: Session.arcticCache + '/update-failure-notified'
+        printErrors: false
+        onLoaded: { updates.failureNotified = text().trim(); updates.failureNotifiedLoaded = true; }
+        onLoadFailed: { updates.failureNotified = ''; updates.failureNotifiedLoaded = true; }
     }
 }
