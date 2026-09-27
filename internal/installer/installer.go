@@ -62,6 +62,9 @@ type Installer struct {
 	deferred   []string
 	flatpakRan bool
 	bootNum    string // firmware boot entry this run created (removed again on failure)
+	// Drivers (drivers.go).
+	drvStatus   map[string]string
+	akmodsReady bool
 }
 
 type layout struct {
@@ -1077,9 +1080,17 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	// 3. Download what the live image doesn't have. dnf/COPR modules go in one transaction.
 	var todo []*catalog.Module
 	for _, m := range resolved {
-		if !inLive(m) {
-			todo = append(todo, m)
+		if inLive(m) {
+			continue
 		}
+		// Without a connection a driver would only fail; arctic-firstboot installs it once
+		// the new system is online.
+		if m.IsHardware() && in.Job.Offline {
+			in.Rep.Logf("%s: offline, putting it off to first boot", m.ID)
+			in.deferred = append(in.deferred, m.ID)
+			continue
+		}
+		todo = append(todo, m)
 	}
 	extra := []string{in.langpack()}
 	if in.Job.Data.Disk.Mode == wizard.ModeAlongside {
@@ -1147,6 +1158,9 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 		}
 		step()
 	}
+	if err := in.finishDrivers(ctx); err != nil {
+		return err
+	}
 	if in.flatpakRan {
 		if err := in.write(in.tgt("/var/lib/flatpak/.fedora-initialized"), "", 0o644); err != nil {
 			return err
@@ -1193,6 +1207,8 @@ func (in *Installer) installWithAttention(ctx context.Context, m *catalog.Module
 		if in.isApp(m) {
 			in.t.Update(0, backend.InstallingStatus(in.cat, m))
 			in.Rep.Module(protocol.ModuleEvent{ID: m.ID, Name: m.Name, Status: protocol.ModDownloading})
+		} else if m.IsHardware() {
+			in.t.Update(0, backend.InstallingStatus(in.cat, m))
 		}
 		var lastErr error
 		for _, meth := range m.Install {
@@ -1301,6 +1317,11 @@ func (in *Installer) dnfInstall(ctx context.Context, mods, ensure []*catalog.Mod
 		if err := in.setupRepos(ctx, p); err != nil {
 			return err
 		}
+		if m.AkmodName() != "" {
+			if err := in.prepareAkmods(ctx); err != nil {
+				return err
+			}
+		}
 		pkgs = append(pkgs, p.Packages...)
 	}
 	for _, m := range ensure {
@@ -1326,6 +1347,11 @@ func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth 
 	case catalog.MethodDNF, catalog.MethodCopr:
 		if err := in.setupRepos(ctx, meth); err != nil {
 			return err
+		}
+		if m.AkmodName() != "" {
+			if err := in.prepareAkmods(ctx); err != nil {
+				return err
+			}
 		}
 		return in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, meth.Packages...), OnLine: func(l string) {
 			if d, t, ok := ParseDNF(l); ok {
@@ -1411,18 +1437,31 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	if len(in.deferred) > 0 {
 		// Version 2 carries each module's install methods, because the catalog leaves the
 		// installed system together with arctic-installer (arctic-firstboot reads this).
+		// Drivers also carry what happens after their packages are in: the akmod to build
+		// and the kernel arguments to add; mok_hash is the one-time code's hash for
+		// enrolling the akmods key when Secure Boot is on (pendingDriverKey).
 		type pendingModule struct {
-			ID      string            `json:"id"`
-			Name    string            `json:"name"`
-			Install []catalog.Install `json:"install"`
+			ID         string            `json:"id"`
+			Name       string            `json:"name"`
+			Install    []catalog.Install `json:"install"`
+			Akmod      *catalog.Akmod    `json:"akmod,omitempty"`
+			KernelArgs []string          `json:"kernel_args,omitempty"`
 		}
 		var mods []pendingModule
 		for _, id := range in.deferred {
 			if m := in.cat.Modules[id]; m != nil {
-				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install})
+				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install, Akmod: m.Akmod, KernelArgs: m.KernelArgs(in.lay.luks)})
 			}
 		}
-		b, _ := json.MarshalIndent(map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}, "", "  ")
+		doc := map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}
+		hashPath, err := in.pendingDriverKey(ctx)
+		if err != nil {
+			return err
+		}
+		if hashPath != "" {
+			doc["mok_hash"] = hashPath
+		}
+		b, _ := json.MarshalIndent(doc, "", "  ")
 		if err := in.write(in.tgt("/var/lib/arctic/pending.json"), string(b)+"\n", 0o644); err != nil {
 			return err
 		}
