@@ -269,6 +269,8 @@ info info-soft aurora-1 aurora-2 aurora-3 term-background term-foreground term-c
 term-cursor-text-color term-selection-background term-selection-foreground ansi-0 … ansi-15`.
 Extra roles (`[a-z][a-z0-9-]*`) are allowed and usable in templates. The engine adds `shadow`
 (the design's window-shadow colour: `#000000cc` dark, `#12171e33` light) when it is missing.
+Optional roles (`shadow`) are always present in a rendered palette, so templates may use them;
+a renderer or test with its own role list (e.g. the app-template tests) must include them.
 `label`, `base`, `wallpaper` and `lock_wallpaper` default from the mode's static theme.
 Static palettes: `arctic-themegen builtin winter|polar-night` (from `arctic-tokens.json`).
 
