@@ -499,7 +499,6 @@ def reload(redraw=True):
     info = active_info()
     dark = info["mode"] == "dark"
     uid = str(os.getuid())
-    reload_gtk(dark)
     if os.environ.get("MANGO_INSTANCE_SIGNATURE") and have("mmsg"):
         run_quiet(["mmsg", "dispatch", "reload_config"])        # Mango re-reads mango-colors.conf
     if have("pkill"):
@@ -512,6 +511,9 @@ def reload(redraw=True):
     if redraw and have("arctic-wallpaper"):
         spawn(["arctic-wallpaper"])                     # Arctic's wallpapers come in both variants
     run_hooks(info)
+    # GTK last: the 10-gtk hook refreshes the copies of gtk.css GTK apps read
+    # (~/.config/gtk-{3,4}.0/arctic-colors.css), and GTK re-reads them when the theme changes.
+    reload_gtk(dark)
 
 
 # ---- commands ------------------------------------------------------------------------------------

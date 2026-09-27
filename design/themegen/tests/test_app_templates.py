@@ -514,10 +514,14 @@ class HooksTest(unittest.TestCase):
             f = self.home / ".config" / gtk / "arctic-colors.css"
             self.assertFalse(f.is_symlink())
             self.assertIn("gtk polar-night", f.read_text())
-        self.assertIn("gtk-application-prefer-dark-theme=1", ini.read_text())
-        self.run_hook("10-gtk", "winter")
-        self.assertIn("gtk winter", (self.home / ".config/gtk-4.0/arctic-colors.css").read_text())
+        # settings.ini and gtk-theme belong to arctic-theme (ArcticThemeReloadTest).
         self.assertIn("gtk-application-prefer-dark-theme=0", ini.read_text())
+        copy = self.home / ".config/gtk-4.0/arctic-colors.css"
+        inode = copy.stat().st_ino
+        self.run_hook("10-gtk", "polar-night")                 # unchanged: left alone
+        self.assertEqual(copy.stat().st_ino, inode)
+        self.run_hook("10-gtk", "winter")
+        self.assertIn("gtk winter", copy.read_text())
         # A file of your own is left alone.
         own = self.home / ".config/gtk-3.0/arctic-colors.css"
         own.write_text("/* mine */\n")
@@ -580,6 +584,103 @@ class HooksTest(unittest.TestCase):
         settings.write_text('{"zen_theme": false}')
         self.run_hook("40-zen")
         self.assertEqual(user_js.read_text(), 'user_pref("browser.startup.page", 3);\n')
+
+
+ARCTIC_THEME = DOTFILES / ".local/bin/arctic-theme"
+# gsettings that keeps its values in a file and logs every set; when gtk-theme is set it also
+# saves the arctic-colors.css GTK would read at that moment.
+FAKE_GSETTINGS = r"""#!/bin/sh
+state="$ARCTIC_TEST_DIR/gsettings"
+case "$1" in
+  get) v=$(sed -n "s/^$2 $3=//p" "$state" 2>/dev/null); echo "'${v:-adw-gtk3-dark}'" ;;
+  set) echo "set $3 $4" >> "$ARCTIC_TEST_DIR/log"
+       grep -v "^$2 $3=" "$state" > "$state.new" 2>/dev/null; echo "$2 $3=$4" >> "$state.new"
+       mv "$state.new" "$state"
+       if [ "$3" = gtk-theme ] && [ -n "$4" ]; then
+         n=$(ls "$ARCTIC_TEST_DIR" | grep -c '^css-'); cp "$HOME/.config/gtk-3.0/arctic-colors.css" "$ARCTIC_TEST_DIR/css-$n"
+       fi ;;
+esac
+exit 0
+"""
+
+
+@unittest.skipIf(shutil.which("bash") is None, "bash is needed")
+class ArcticThemeReloadTest(unittest.TestCase):
+    """The real `arctic-theme reload` with the real hooks, a stub gsettings and a new account."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.root = root
+        share = root / "share/arctic"
+        for name, pal in builtin_palettes().items():
+            render_all(pal, share / "themes" / name)
+        (share / "theme-hooks.d").symlink_to(HOOKS)
+        self.share = share
+        self.home = root / "home"
+        cfg = self.home / ".config"
+        for gtk in ("gtk-3.0", "gtk-4.0"):
+            (cfg / gtk).mkdir(parents=True)
+            (cfg / gtk / "arctic-colors.css").symlink_to("../arctic/current/gtk.css")
+        (cfg / "gtk-3.0/settings.ini").write_text(
+            "[Settings]\ngtk-theme-name=adw-gtk3-dark\ngtk-application-prefer-dark-theme=1\n")
+        (cfg / "arctic").mkdir()
+        (cfg / "arctic/current").symlink_to(share / "themes/polar-night")
+        (cfg / "arctic/theme").write_text("polar-night\n")
+        # A user hook that records what hooks are given.
+        (cfg / "arctic/theme-hooks.d").mkdir()
+        rec = cfg / "arctic/theme-hooks.d/90-record"
+        rec.write_text('#!/bin/sh\necho "$ARCTIC_THEME_NAME $ARCTIC_THEME_MODE $ARCTIC_THEME_DIR" >> "$ARCTIC_TEST_DIR/hooks"\n')
+        rec.chmod(0o755)
+        self.test_dir = root / "t"
+        self.test_dir.mkdir()
+        fakes = root / "fakes"
+        fakes.mkdir()
+        (fakes / "gsettings").write_text(FAKE_GSETTINGS)
+        (fakes / "gsettings").chmod(0o755)
+        for name in ("adw-gtk3", "adw-gtk3-dark"):          # installed, as in the image
+            (root / "sysdata/themes" / name / "gtk-3.0").mkdir(parents=True)
+        self.env = {
+            "HOME": str(self.home), "LANG": "C.UTF-8", "ARCTIC_TEST_DIR": str(self.test_dir),
+            "XDG_DATA_DIRS": str(root / "sysdata"), "XDG_DATA_HOME": str(root / "data"),
+            "XDG_CACHE_HOME": str(root / "cache"), "ARCTIC_DATA_DIR": str(share),
+            "ARCTIC_BACKGROUNDS_DIR": str(root / "backgrounds"),
+            "ARCTIC_THEMEGEN_DIR": str(ROOT / "design/themegen"), "ARCTIC_THEME_HOOK_TIMEOUT": "2",
+            "PATH": os.pathsep.join([str(fakes), "/usr/bin", "/bin"]),
+        }
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def arctic_theme(self, *args):
+        r = subprocess.run([str(ARCTIC_THEME), *args], env=self.env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("hook", r.stderr)           # no hook failed or timed out
+        return r
+
+    def lines(self, name):
+        p = self.test_dir / name
+        return p.read_text().splitlines() if p.exists() else []
+
+    def test_reload_runs_the_hooks_then_sets_gtk_once(self):
+        self.arctic_theme("reload")
+        current = os.path.realpath(self.home / ".config/arctic/current")
+        self.assertEqual(self.lines("hooks"), ["polar-night dark " + current])
+        self.arctic_theme("set", "winter")
+        current = os.path.realpath(self.home / ".config/arctic/current")
+        self.assertEqual(current, os.path.realpath(self.share / "themes/winter"))
+        self.assertEqual(self.lines("hooks")[-1], "winter light " + current)
+        themes = [l.split(" ", 2)[2] if l.count(" ") >= 2 else "" for l in self.lines("log")
+                  if l.startswith("set gtk-theme")]
+        self.assertTrue(themes, self.lines("log"))
+        self.assertFalse([t for t in themes if t.startswith("Adwaita")], themes)
+        self.assertEqual(themes[-1], "adw-gtk3")
+        self.assertIn("set color-scheme prefer-light", self.lines("log"))
+        # GTK was told after 10-gtk had copied the new colours.
+        css = sorted(self.test_dir.glob("css-*"), key=lambda p: int(p.name[4:]))[-1].read_text()
+        self.assertIn((self.share / "themes/winter/gtk.css").read_text(), css)
+        ini = (self.home / ".config/gtk-3.0/settings.ini").read_text()
+        self.assertIn("gtk-application-prefer-dark-theme=0", ini)
 
 
 # Zed theme schema v0.2.0 (https://zed.dev/schema/themes/v0.2.0.json): ThemeStyleContent keys.

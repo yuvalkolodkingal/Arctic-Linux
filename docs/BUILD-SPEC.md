@@ -134,13 +134,17 @@ every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
 | GTK/Qt context menus, tray menus, dialogs | inherit their toolkit's theme; Mango draws no menus | — | — | — |
 
 **Theme hooks** (`packaging/theme-hooks.d/` → `/usr/share/arctic/theme-hooks.d/`, run by
-`arctic-theme reload` after the built-in reloads with `ARCTIC_THEME_DIR` and
-`ARCTIC_THEME_MODE=dark|light`; each is quick, exits 0 and touches only files it wrote or links
-it shipped):
+`arctic-theme reload` after the built-in reloads with `ARCTIC_THEME_DIR` (realpath of `current`),
+`ARCTIC_THEME_MODE=dark|light` and `ARCTIC_THEME_NAME`, 5 s each; each is quick, exits 0 and
+touches only files it wrote or links it shipped). GTK has one owner: after the hooks,
+arctic-theme sets `color-scheme` and `gtk-theme` (`adw-gtk3-dark`/`adw-gtk3`, through `''` when
+the name is unchanged so GTK re-reads `gtk.css`; plain Adwaita only when adw-gtk3 is missing)
+and `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini`, so GTK apps restyle
+once, with the copies `10-gtk` just made:
 
 | Hook | Does |
 |---|---|
-| `10-gtk` | `gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark\|adw-gtk3` when it differs (arctic-theme's own GTK reload should set the same names, so this is a no-op then); `~/.config/gtk-{3,4}.0/arctic-colors.css` = copy of `$ARCTIC_THEME_DIR/gtk.css`; `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini` |
+| `10-gtk` | `~/.config/gtk-{3,4}.0/arctic-colors.css` = copy of `$ARCTIC_THEME_DIR/gtk.css` (replaces the shipped link or its own earlier copy, never your file) |
 | `20-qt` | replaces `~/.config/qt5ct/qt5ct.conf` and `qt6ct.conf` with identical copies, which makes running Qt apps re-read the palette |
 | `30-zed` | copies `zed/themes/arctic.json` into Zed's themes folders (above) |
 | `40-zen` | the optional Zen accent (above) |
