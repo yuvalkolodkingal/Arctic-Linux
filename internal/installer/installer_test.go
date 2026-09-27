@@ -621,7 +621,7 @@ func TestSnapperSetUpLast(t *testing.T) {
 		return found
 	}
 	create := index("$ chroot /mnt snapper --no-dbus -c root create-config /", false)
-	set := index("$ chroot /mnt snapper --no-dbus -c root set-config NUMBER_CLEANUP=yes NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no ALLOW_GROUPS=wheel SYNC_ACL=yes", false)
+	set := index("$ chroot /mnt snapper --no-dbus -c root set-config NUMBER_CLEANUP=yes NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no", false)
 	label := index("$ setfiles -F -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt/.snapshots /mnt/etc/snapper /mnt/etc/sysconfig/snapper", false)
 	relabel := index("$ setfiles -F -r /mnt -e ", true)
 	dnf := index("$ chroot /mnt dnf", true)
@@ -631,6 +631,11 @@ func TestSnapperSetUpLast(t *testing.T) {
 	}
 	if !(dnf < relabel && relabel < create && create < set && set < label && label < umount) {
 		t.Errorf("order: last dnf %d, final relabel %d, create-config %d, set-config %d, label %d, umount %d", dnf, relabel, create, set, label, umount)
+	}
+	// Snapshots stay root's: ALLOW_GROUPS would let any wheel process create, delete and
+	// undochange snapshots through snapperd without a password.
+	if strings.Contains(cmds[set], "ALLOW_") || strings.Contains(cmds[set], "SYNC_ACL") {
+		t.Errorf("snapper grants access to non-root users: %s", cmds[set])
 	}
 
 	// Not in the image: nothing to set up, the install goes on.

@@ -1471,10 +1471,11 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 
 // SnapperPolicy is the cleanup policy of snapper's root configuration: the snapshot pairs
 // around dnf transactions (arctic-snapper.actions) use the number algorithm, of which the newest
-// 10 are kept (5 marked important); no hourly timeline. Members of wheel may list and compare
-// snapshots (the ACL on /.snapshots follows ALLOW_GROUPS).
+// 10 are kept (5 marked important); no hourly timeline. Snapshots stay root's: no ALLOW_GROUPS
+// (snapperd would let every wheel process create, delete and undochange snapshots without a
+// password). The CLI works with sudo, and Btrfs Assistant asks through polkit.
 var SnapperPolicy = []string{"NUMBER_CLEANUP=yes", "NUMBER_LIMIT=10", "NUMBER_LIMIT_IMPORTANT=5",
-	"TIMELINE_CREATE=no", "ALLOW_GROUPS=wheel", "SYNC_ACL=yes"}
+	"TIMELINE_CREATE=no"}
 
 // setupSnapper creates snapper's "root" configuration for the @ subvolume, which makes
 // /.snapshots a nested subvolume of @ (no fstab entry, as on Fedora). From then on every dnf

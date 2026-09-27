@@ -168,17 +168,17 @@ them, and neither are `/var/log` and `/nix`: they are separate subvolumes, so go
 loses your files.
 
 ```sh
-snapper -c root list                           # the pairs: pre and post, with the dnf command
-snapper -c root status 41..42                  # which files changed between snapshot 41 and 42
-snapper -c root diff 41..42 /etc/some.conf     # how one file changed
-sudo snapper -c root undochange 41..42         # put every changed file back as it was in 41
+sudo snapper -c root list                           # the pairs: pre and post, with the dnf command
+sudo snapper -c root status 41..42                  # which files changed between snapshot 41 and 42
+sudo snapper -c root diff 41..42 /etc/some.conf     # how one file changed
+sudo snapper -c root undochange 41..42              # put every changed file back as it was in 41
 ```
 
 After `undochange`, restart. It restores files, not the list of installed packages that dnf
 shows, so prefer `dnf history undo` when it works; use `undochange` when dnf itself is broken, or
-to get back one configuration file (`undochange 41..42 /etc/some.conf`). Administrators (the
-account you made in the installer) can run `snapper -c root list`, `status` and `diff` without
-`sudo`.
+to get back one configuration file (`undochange 41..42 /etc/some.conf`). Every `snapper` command
+needs `sudo`: the snapshots are the whole system as it was, so only administrators, with their
+password, can see, delete or restore them.
 
 **Btrfs Assistant** shows the same snapshots in a window: browse them, compare files and restore
 them. Tick it under **Extras** in the installer, or install it with `sudo dnf install
@@ -193,7 +193,7 @@ updated Arctic packages, turn them on:
 
 ```sh
 sudo snapper -c root create-config /
-sudo snapper -c root set-config NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no ALLOW_GROUPS=wheel SYNC_ACL=yes
+sudo snapper -c root set-config NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no
 ```
 
 ## Flatpak and Nix apps
