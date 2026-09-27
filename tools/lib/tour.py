@@ -835,8 +835,7 @@ class Tour:
         self.next("keyboard")
         self.fill({"try": "The quick arctic fox"})
         self.ishot("installer-02-keyboard")
-        d = self.state()
-        self.next("network") if True else None
+        self.next("network")
         self.fill({"ssid": "Tundra-5G", "password": "polarnight"})
         self.wait_state(lambda d: d.get("valid") and not d.get("busy"), "the Wi-Fi connection", 90)
         time.sleep(2)
@@ -909,7 +908,7 @@ class Tour:
                         break
                 else:
                     still = 0
-                prev = self.keep(cur, "luks-wait") if False else shutil.copy(cur, f"{OUT}/luks-prev.png")
+                prev = shutil.copy(cur, f"{OUT}/luks-prev.png")
                 time.sleep(4)
             if not p:
                 raise TourError("no passphrase prompt")
