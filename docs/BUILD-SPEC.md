@@ -25,6 +25,7 @@ branding/plymouth/arctic/  Plymouth script theme
 branding/logos/         generated PNG/SVG logos for system-logos
 dotfiles/               user home tree → /etc/skel
 design/                 design system sources (read-only input)
+design/themegen/        theme engine (arctic-themegen): palettes → theme folders, templates, wallpaper colours (§9)
 packaging/arctic-linux.spec   ONE spec, many subpackages (§2), Source0 = repo tarball
 packaging/mangowm.spec        Mango built from upstream
 live/                   live-session files (livesys session, arctic-live-session, sddm live conf)
@@ -52,7 +53,7 @@ included via `git stash create`). noarch unless it contains Go binaries.
 | `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
-| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (skel's `~/.config/arctic/current` links there), `/etc/arctic/default-apps` (defaults) | Requires the desktop runtime (§3). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
+| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §9), `/usr/share/arctic/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults) | Requires the desktop runtime (§3) and python3-pillow (wallpaper colours). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
 | `sddm-wayland-mango` | `/usr/lib/sddm/sddm.conf.d/10-arctic.conf`, `/usr/libexec/arctic/sddm-compositor-mango`, `/usr/share/arctic/sddm/greeter.conf` | Provides+Conflicts `sddm-greeter-displayserver`. Requires sddm, mangowm, layer-shell-qt. Config per PLAN §7. If the mango greeter can't be made to work in the VM test, ship `10-arctic.conf` for `sddm-wayland-generic` (weston) instead and note it. |
@@ -216,3 +217,180 @@ SVG strings) can be exported by running the design bundle in node:
   when `$HTTPS_PROXY` / the CA file exist) so they also work on GitHub runners.
 - `--privileged` is needed for kiwi (loop devices). No KVM: QEMU runs with TCG (slow).
 - Disk budget ≈ 30 GB free: clean container caches and intermediate kiwi roots.
+
+## 9. Theming (theme engine, palettes, `arctic-theme`)
+
+The contract between the theme engine, the desktop and the apps that call it (the Arctic
+Settings app, the wallpaper picker). Keep these CLIs and formats stable; extend, don't change.
+
+### 9.1 Pieces and paths
+
+| What | Where |
+|---|---|
+| Theme engine (Python package `themegen`, stdlib + Pillow for wallpapers) | `design/themegen/` → `/usr/share/arctic/themegen/` (+ `data/`: `exports/arctic-tokens.json`, `exports/gtk-arctic-*.css`, `icons/*.svg`, `logos/arctic-mark-16-*.svg`); `dotfiles/install.sh` copies it to `~/.local/share/arctic/themegen/` |
+| Engine CLI | `/usr/bin/arctic-themegen` (← `dotfiles/.local/bin/arctic-themegen`; finds the engine in `$ARCTIC_THEMEGEN_DIR`, the repository, `~/.local/share/arctic/themegen`, `/usr/share/arctic/themegen`) |
+| Templates | `design/themegen/templates/**/<file>.tmpl` → `<theme>/<file>`; your own extra ones in `~/.config/arctic/templates/` (used by `arctic-theme` for the themes it makes) |
+| Static themes | `/usr/share/arctic/themes/{winter,polar-night}/`, rendered by the engine in the spec's `%build`; the same files are committed in `dotfiles/.config/arctic/themes/` (regenerate with `python3 design/tools/gen-desktop-themes.py`; a unit test fails when they are stale) |
+| Themes of your own | `~/.config/arctic/themes/<name>/` (wins over a system theme of the same name); `wallpaper` is the one made from the wallpaper |
+| Active theme | `~/.config/arctic/current` → the theme folder (absolute link for system themes, `themes/<name>` for yours); `~/.config/arctic/theme` holds its name (the shell watches this file) |
+| Settings | `~/.config/arctic/settings.json`: `"auto_colors"` (bool, **default true** when missing), `"wallpaper_mode"` (`auto`\|`dark`\|`light`, default `auto`). Other programs may add keys; `arctic-theme` keeps them |
+| Hooks | `/usr/share/arctic/theme-hooks.d/` (owned by arctic-desktop-config; packages drop executables here) and `~/.config/arctic/theme-hooks.d/` |
+
+A theme folder holds: `theme.json` (every design token for the shell; colours as QML
+`#AARRGGBB`), `gtk.css` (GTK3/4 + libadwaita colours), `theme.env` (sourced by the arctic-*
+scripts: `ARCTIC_THEME`, `ARCTIC_THEME_NAME`, `ARCTIC_GROUND`, `ARCTIC_COLOR_SCHEME`,
+`ARCTIC_GTK_PREFER_DARK` 1/0, `ARCTIC_WALLPAPER`, `ARCTIC_LOCK_WALLPAPER`, `ARCTIC_THEME_MODE`,
+`ARCTIC_THEME_BASE`; values shell-quoted), `palette.json` (the palette it was made from),
+`icons/*.svg` (design icons in the theme's ink, `mark.svg`, `download-on-accent.svg`) — these five
+are made by code — plus one file per template: `mango-colors.conf`, `kitty.conf`,
+`waybar-colors.css`, `mako.ini`, `fuzzel-colors.ini`, `swaylock.conf`, and whatever other
+templates add (e.g. `templates/qt6ct/colors/arctic.conf.tmpl` → `qt6ct/colors/arctic.conf`).
+
+### 9.2 Palette (JSON)
+
+```json
+{
+  "name": "polar-night",            // [a-z0-9][a-z0-9._-]{0,63}: the theme folder name
+  "label": "Polar night",           // shown to people; one line
+  "mode": "dark",                   // dark | light
+  "base": "polar-night",            // the static theme it builds on (defaults: by mode)
+  "colors": { "ground": "#12171e", "frost": "#1a212ad1", "...": "every role below" },
+  "wallpaper": "aurora-polar-night",     // a design wallpaper name or an absolute path
+  "lock_wallpaper": "fox-polar-night",
+  "source": { "...": "optional, informational (palettes made from a wallpaper)" }
+}
+```
+
+Colour roles (all required, `#rrggbb` or `#rrggbbaa`): `ground surface surface-raised
+surface-sunken frost scrim line line-strong ink ink-muted ink-subtle ink-disabled ink-inverse
+accent accent-hover accent-pressed on-accent accent-text accent-soft accent-edge focus selection
+warm warm-soft success success-soft warning warning-soft error error-soft on-error error-hover
+info info-soft aurora-1 aurora-2 aurora-3 term-background term-foreground term-cursor
+term-cursor-text-color term-selection-background term-selection-foreground ansi-0 … ansi-15`.
+Extra roles (`[a-z][a-z0-9-]*`) are allowed and usable in templates. The engine adds `shadow`
+(the design's window-shadow colour: `#000000cc` dark, `#12171e33` light) when it is missing.
+`label`, `base`, `wallpaper` and `lock_wallpaper` default from the mode's static theme.
+Static palettes: `arctic-themegen builtin winter|polar-night` (from `arctic-tokens.json`).
+
+### 9.3 Templates
+
+`templates/**/<file>.tmpl` renders to `<theme>/<file>` (path relative to `templates/`, `.tmpl`
+dropped). Placeholders, and nothing else (no conditionals, no loops):
+
+| Placeholder | Output |
+|---|---|
+| `{{role}}` | the palette value as written |
+| `{{role\|hex}}` / `{{role\|hexa}}` | `#rrggbb` (alpha dropped) / `#rrggbbaa` (`ff` if none) |
+| `{{role\|nohash}}` / `{{role\|nohasha}}` | `rrggbb` / `rrggbbaa` |
+| `{{role\|rgb}}` | `r, g, b` |
+| `{{role\|rgba}}` | `rgba(r, g, b, a)`, a from the palette alpha (1 if none), up to 3 decimals |
+| `{{role\|alpha:0.35}}` | `rgba(r, g, b, 0.35)` |
+| `{{role\|argb}}` | `#aarrggbb` (Qt) |
+| `{{name}}` `{{label}}` `{{mode}}` `{{wallpaper}}` `{{lock_wallpaper}}` | palette fields |
+| `{{scheme}}` / `{{is_dark}}` | `prefer-dark`\|`prefer-light` / `true`\|`false` |
+| `{{font.sans}}` / `{{font.mono}}` | `Figtree` / `JetBrains Mono` (design tokens) |
+
+An unknown placeholder or filter, whitespace inside the braces, a filter on a non-colour, a bad
+`alpha:` value or an unterminated `{{` is an error naming `file:line` (render exits 2). A
+template may not produce `theme.json`, `gtk.css`, `theme.env`, `palette.json` or `icons/…`.
+Later template directories override earlier ones file by file (`--templates DIR`).
+
+Rendering writes each file atomically (temp file + rename, unchanged files untouched),
+`theme.json` last, and removes files a previous render left behind. It refuses a non-empty
+folder without `palette.json` unless `--force`.
+
+### 9.4 Colours from a wallpaper
+
+`arctic-themegen palette --from-wallpaper IMG` (PNG, JPEG, WebP, GIF, BMP, TIFF, SVG via
+rsvg-convert): the picture is decoded at ≤ 256 px (JPEG draft mode), reduced to 128 colours
+(median cut) and clustered by weighted k-means in OKLab. The accent seed is the cluster with the
+best mix of chroma (≥ 0.04 OKLCH) and hue share (the colourfulness-weighted part of the picture
+within ±15°, ≥ 1%), as in Material You's scoring (matugen); wallust (Lab/LCH k-means, contrast
+check) and pywal (median cut in RGB) were the other references. From the base palette (Polar
+night for dark, Winter for light, or `--base`) every role keeps its OKLab lightness, so the
+design's steps survive; then:
+
+- neutrals (grounds, surfaces, lines, inks, terminal background/foreground, ANSI 0/7/8/15) are
+  tinted toward the picture's colour cast (its mean OKLab a/b), at most 1.3× their base chroma;
+- the accent family (accent, hover, pressed, text, soft, edge, focus, selection, terminal
+  cursor/selection) takes the seed's hue and its chroma, clamped to 0.10–0.19;
+- aurora-1…3 rotate with the seed; ANSI 1–6 and 9–14 move toward the seed hue by half the
+  difference, at most 15°, scaled down so neighbouring hues keep ≥ 80% of their distance;
+- status colours (success, warning, error, info, on-error) and warm stay as in the base.
+
+Guaranteed (WCAG 2 contrast, enforced by moving lightness, checked by
+`arctic-themegen check`): ink on ground/surface ≥ 7:1 (also on raised/sunken); ink-muted
+≥ 4.5:1; accent-text on ground ≥ 4.5:1; on-accent on accent ≥ 4.5:1; focus on ground ≥ 3:1;
+ANSI 1–6 and 9–14 on term-background ≥ 4.5:1. Greyscale / low-chroma pictures keep the base
+accent (a grey picture gives exactly the base palette). `--mode auto` picks light when the
+picture's mean OKLab lightness is above 0.62, else dark; with `--base`, auto means the base's
+mode and a clash with `--mode` is an error. Output is deterministic; a 3840×2160 picture takes
+≈ 0.1–0.2 s (tested < 1 s). The palette's `source` records `image`, `size`, `mtime_ns`,
+`mode_setting`, `seed`, `fallback`, `cast`, `mean_lightness` (and, from arctic-theme,
+`fingerprint` of the engine and templates).
+
+### 9.5 `arctic-themegen`
+
+```
+arctic-themegen render --palette FILE|-|winter|polar-night --out DIR [--templates DIR]... [--force] [--quiet]
+arctic-themegen palette --from-wallpaper IMG [--mode auto|dark|light] [--base NAME|FILE] [--name wallpaper] [--label Wallpaper]
+arctic-themegen builtin winter|polar-night
+arctic-themegen check --palette FILE [--json]
+```
+
+Palettes go to stdout as JSON. Exit status 0 ok, 1 a contrast guarantee fails (`check`), 2 bad
+input (message on stderr, `arctic-themegen: …`).
+
+### 9.6 `arctic-theme`
+
+| Command | Does |
+|---|---|
+| `arctic-theme` / `arctic-theme current` | print the active theme's name |
+| `arctic-theme current --json` | `{"name", "label", "mode", "base", "dir", "source": "system"\|"user", "colors": {role: "#…"}, "auto_colors": bool, "wallpaper_mode": "auto"\|"dark"\|"light", "wallpaper": saved choice (design name, path or "")}` |
+| `arctic-theme list [--json]` | themes you can switch to; JSON: `[{"name", "label", "mode", "base", "dir", "source", "active": bool, "swatches": {"ground", "surface", "accent", "ink"}}]`; text: `* name<TAB>label<TAB>mode<TAB>source` |
+| `arctic-theme set NAME` | switch to NAME (`winter`, `polar-night`, `wallpaper`, or yours). Any NAME but `wallpaper` turns auto colours off. `set wallpaper` (re)makes the wallpaper theme from the current wallpaper — even an Arctic one — and leaves auto colours as they are |
+| `arctic-theme auto [on\|off]` | print or set auto colours. `on` follows the wallpaper now; `off` while the wallpaper theme is active goes back to Winter / Polar night of the same mode |
+| `arctic-theme mode [auto\|dark\|light]` | print or set light/dark for wallpaper colours; re-applies when auto colours are on or the wallpaper theme is active |
+| `arctic-theme toggle` | light ⇄ dark: flips `mode` when auto colours are on (or the wallpaper theme is active), else Winter ⇄ Polar night (Super+Shift+T) |
+| `arctic-theme reload` | built-in reloads + hooks for the active theme |
+| `arctic-theme apply` | at login (Mango autostart): follow the wallpaper if auto colours are on, else re-link the saved theme; then reload |
+| `arctic-theme sync [--force] [--no-redraw]` | if auto colours are on, follow the wallpaper now (no-op when up to date); `arctic-wallpaper` runs it |
+| `arctic-theme winter\|polar-night\|light\|dark` | kept from v0.1: `winter`/`polar-night` = `set`; `light`/`dark` = `mode` when auto colours are on, else `set winter`/`set polar-night` |
+
+Following the wallpaper: Arctic's own wallpapers (snowfield, aurora, fox — by name or any file
+under the design wallpaper folders) keep the static palettes — Winter or Polar night by
+`wallpaper_mode`, or the current light/dark for `auto` — so first boot (Polar night, aurora)
+looks exactly like the design. Any other picture makes `~/.config/arctic/themes/wallpaper`
+(`label` "Wallpaper", `lock_wallpaper` the base's) and switches to it; it is remade only when
+the picture (path, size, mtime), `wallpaper_mode` or the engine/templates changed.
+Exit status: 0 ok, 1 failure (message on stderr), 2 usage / unknown theme. Commands that
+change things take a lock (`~/.config/arctic/.theme.lock`).
+
+`arctic-wallpaper NAME|PICTURE` saves the choice, runs `arctic-theme sync --no-redraw` (skip with
+`ARCTIC_WALLPAPER_NO_SYNC=1`), then draws the wallpaper; Arctic wallpapers are drawn in the
+theme's variant (`ARCTIC_THEME_BASE` when it is winter/polar-night, else by `ARCTIC_THEME_MODE`).
+Without arguments it only redraws (no sync). The wallpaper picker's "Match colours to wallpaper"
+switch runs `arctic-theme auto on|off` and reads `settings.json`.
+
+### 9.7 Live reload and hooks
+
+After a switch `arctic-theme` links `current` (atomic rename), rewrites `~/.config/arctic/theme`,
+and reloads, best effort (a program that isn't running is skipped):
+
+| Program | How |
+|---|---|
+| Shell (Quickshell) | automatic: `Theme.qml` watches `~/.config/arctic/theme` and `current/theme.json`; also `arctic-shell-ipc shell reload` (background) |
+| Mango | `mmsg dispatch reload_config` (when `MANGO_INSTANCE_SIGNATURE` is set; mango ≥ 0.17.3 IPC) |
+| kitty | `pkill -USR1 -u $UID -x kitty` |
+| waybar (fallback bar) | `pkill -USR2 -u $UID -x waybar` |
+| mako | `makoctl reload` |
+| GTK | `gsettings set org.gnome.desktop.interface color-scheme prefer-dark\|prefer-light` and `gtk-theme Adwaita-dark\|Adwaita` (set to `''` first when unchanged, so GTK re-reads gtk.css); `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini` |
+| Wallpaper | `arctic-wallpaper` (background redraw; not for `sync --no-redraw`) |
+
+Then every executable in `/usr/share/arctic/theme-hooks.d/` and `~/.config/arctic/theme-hooks.d/`
+runs, in file-name order (a file of yours replaces the system hook with the same name; a
+non-executable one disables it; `*~`, `.rpmnew`, `.rpmsave`, `.disabled` and dot files are
+skipped), with `ARCTIC_THEME_DIR=<real path of the active theme folder>`,
+`ARCTIC_THEME_MODE=dark|light`, `ARCTIC_THEME_NAME=<name>`, stdin from /dev/null and stdout sent
+to stderr. Hooks must be fast: each is stopped (its process group killed) after 5 s. A failing or
+slow hook is reported on stderr and never fails the switch.

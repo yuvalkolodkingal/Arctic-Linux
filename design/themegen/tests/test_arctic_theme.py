@@ -280,6 +280,7 @@ class ArcticThemeTests(unittest.TestCase):
             for fn in os.listdir(system_hooks):
                 os.unlink(os.path.join(system_hooks, fn))
 
+    @unittest.skipUnless(shutil.which("setsid"), "arctic-wallpaper needs setsid (util-linux)")
     def test_arctic_wallpaper_switches_the_colours(self):
         env = dict(self.env, PATH=os.pathsep.join([self.fakes, BIN, "/usr/bin", "/bin"]))
         run = lambda *a: subprocess.run([os.path.join(BIN, "arctic-wallpaper")] + list(a), env=env,  # noqa: E731

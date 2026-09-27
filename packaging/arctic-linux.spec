@@ -10,7 +10,8 @@
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
-#                          dotfiles/.local/bin → /usr/bin
+#                          dotfiles/.local/bin → /usr/bin, design/themegen → /usr/share/arctic/themegen
+#                          (the theme engine; Winter and Polar night are rendered with it here)
 #   arctic-shell           shell/ → /usr/share/arctic/shell
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
@@ -44,6 +45,9 @@ BuildRequires:  systemd-rpm-macros
 BuildRequires:  desktop-file-utils
 BuildRequires:  findutils
 BuildRequires:  tar
+# The theme engine renders the static themes in %%build; %%check runs its tests.
+BuildRequires:  python3
+BuildRequires:  python3-pillow
 
 %description
 Arctic Linux is a Fedora %{dist_version} based desktop built around the Mango Wayland
@@ -143,6 +147,8 @@ Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-logos = %{version}-%{release}
 Requires:       bash
 Requires:       python3
+# arctic-themegen: colours from wallpapers
+Requires:       python3-pillow
 %{?systemd_requires}
 # kitty and zsh are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
@@ -174,6 +180,9 @@ The Arctic Linux desktop configuration: the Mango configuration, the Winter and 
 theme files and the keyboard cheat sheet in /usr/share/arctic (new home directories link to
 them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, zsh, GTK,
 waybar, fuzzel, mako), the arctic-* helper commands in /usr/bin and /etc/arctic/default-apps.
+It also has the theme engine (arctic-themegen, /usr/share/arctic/themegen), which makes a
+theme from the wallpaper when colours follow it (arctic-theme auto on), and the folder for
+theme hooks, /usr/share/arctic/theme-hooks.d.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
@@ -401,6 +410,16 @@ fi
 # ---- SELinux module ----
 make -C packaging/selinux -f %{_datadir}/selinux/devel/Makefile arctic-nix.pp
 
+# ---- Static themes: Winter and Polar night, rendered by the theme engine (design/themegen)
+# from the design tokens. dotfiles/.config/arctic/themes holds the same files, for
+# dotfiles/install.sh; %%check makes sure they match.
+export PYTHONDONTWRITEBYTECODE=1
+rm -rf _build/themes
+for t in winter polar-night; do
+  PYTHONPATH=design python3 -m themegen builtin "$t" \
+    | PYTHONPATH=design python3 -m themegen render --palette - --out "_build/themes/$t" --quiet
+done
+
 # ---- Wallpapers: SVG → 3840×2160 PNG ----
 mkdir -p _build/backgrounds
 for svg in design/wallpapers/*.svg; do
@@ -508,7 +527,16 @@ install -d %{buildroot}%{_bindir}
 install -pm 0755 dotfiles/.local/bin/* %{buildroot}%{_bindir}/
 install -Dpm 0644 dotfiles/.local/share/arctic/keys.txt %{buildroot}%{_datadir}/arctic/keys.txt
 install -d %{buildroot}%{_datadir}/arctic/themes
-cp -a dotfiles/.config/arctic/themes/. %{buildroot}%{_datadir}/arctic/themes/
+cp -a _build/themes/. %{buildroot}%{_datadir}/arctic/themes/
+# The theme engine (arctic-themegen, run by arctic-theme) and the design data it reads.
+themegen=%{buildroot}%{_datadir}/arctic/themegen
+install -d "$themegen/data/exports" "$themegen/data/icons" "$themegen/data/logos"
+tar -C design/themegen --exclude=./tests --exclude=__pycache__ -cf - . | tar -C "$themegen" -xf -
+install -pm 0644 design/exports/arctic-tokens.json design/exports/gtk-arctic-*.css "$themegen/data/exports/"
+install -pm 0644 design/icons/*.svg "$themegen/data/icons/"
+install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
+# Theme hooks: executables run after every theme switch (other packages may add theirs).
+install -d %{buildroot}%{_datadir}/arctic/theme-hooks.d
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
@@ -595,6 +623,17 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
+# The theme engine: colour maths, templates, wallpaper palettes and their contrast guarantees,
+# arctic-theme / arctic-wallpaper, and that dotfiles/.config/arctic/themes is current.
+# (ARCTIC_PERF_BUDGET: builders are slower and busier than a desktop.)
+ARCTIC_PERF_BUDGET=10 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s design/themegen/tests
+# The installed engine renders from the installed data exactly what %%build made.
+tg="%{buildroot}%{_bindir}/arctic-themegen"
+ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTECODE=1 python3 "$tg" builtin winter > _build/winter.json
+rm -rf _build/check-theme
+ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTECODE=1 \
+  python3 "$tg" render --palette _build/winter.json --out _build/check-theme --quiet
+diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer; do
   case "$(head -n1 "$s")" in
@@ -790,6 +829,8 @@ fi
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt
 %{_datadir}/arctic/themes/
+%{_datadir}/arctic/themegen/
+%dir %{_datadir}/arctic/theme-hooks.d
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
