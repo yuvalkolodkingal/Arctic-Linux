@@ -42,13 +42,21 @@ func TestDesignTiles(t *testing.T) {
 	// Every real app tile of the design (bundle.js APPS minus "installer" and "settings").
 	want := strings.Fields("zen firefox chromium zed vscodium neovim helix kitty alacritty foot zsh fish bash yazi thunar nautilus collabora libreoffice onlyoffice vlc mpv celluloid flathub steam gimp inkscape signal obs")
 	var got []string
+	var drivers []string
 	for _, m := range c.Modules {
-		if !m.Hidden {
+		switch {
+		case m.IsHardware():
+			drivers = append(drivers, m.ID)
+		case !m.Hidden:
 			got = append(got, m.ID)
 		}
 	}
 	sort.Strings(got)
 	sort.Strings(want)
+	sort.Strings(drivers)
+	if strings.Join(drivers, " ") != "amd-video broadcom-wl intel-media nvidia nvidia-580xx" {
+		t.Fatalf("drivers %v", drivers)
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("visible modules\n got %v\nwant %v", got, want)
 	}
@@ -66,7 +74,7 @@ func TestDesignTiles(t *testing.T) {
 	for _, cat := range c.Categories {
 		cats = append(cats, cat.ID+":"+cat.Choice)
 	}
-	if strings.Join(cats, " ") != "browser:one editor:any terminal:one shell:one files:any office:one video:any extras:any" {
+	if strings.Join(cats, " ") != "drivers:any browser:one editor:any terminal:one shell:one files:any office:one video:any extras:any" {
 		t.Fatalf("categories %v", cats)
 	}
 }
@@ -77,6 +85,7 @@ func TestDefaults(t *testing.T) {
 	want := Selection{
 		"browser": {"zen"}, "editor": {"zed"}, "terminal": {"kitty"}, "shell": {"zsh"},
 		"files": {"yazi", "thunar"}, "office": {"collabora"}, "video": {"vlc"}, "extras": {},
+		"drivers": {}, // nothing detected
 	}
 	if !reflect.DeepEqual(sel, want) {
 		t.Fatalf("defaults\n got %v\nwant %v", sel, want)

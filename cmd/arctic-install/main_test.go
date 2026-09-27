@@ -59,11 +59,15 @@ func TestCatalogJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Categories) != 8 || len(doc.Modules) != 32 || doc.Estimate["label"] != "8 apps · 2.1 GB download" {
+	if len(doc.Categories) != 9 || len(doc.Modules) != 37 || doc.Estimate["label"] != "8 apps · 2.1 GB download" {
 		t.Fatalf("catalog json: %d categories, %d modules, %v", len(doc.Categories), len(doc.Modules), doc.Estimate)
 	}
-	if doc.Modules[0]["id"] != "zen" || doc.Modules[0]["install"].([]any)[0].(map[string]any)["ref"] != "app.zen_browser.zen" {
+	// Drivers come first (their category leads catalog.toml), then the browsers.
+	if doc.Modules[0]["id"] != "nvidia" || doc.Modules[0]["detect"] == nil {
 		t.Errorf("first module %v", doc.Modules[0])
+	}
+	if doc.Modules[5]["id"] != "zen" || doc.Modules[5]["install"].([]any)[0].(map[string]any)["ref"] != "app.zen_browser.zen" {
+		t.Errorf("first app %v", doc.Modules[5])
 	}
 }
 

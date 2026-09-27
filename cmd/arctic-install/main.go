@@ -43,6 +43,7 @@ import (
 const usage = `usage:
   arctic-install bridge [--socket PATH] [--mock]
   arctic-install plan --profile FILE [--firmware uefi|bios] [--inventory mock|system]
+                      [--hardware none|system|mock:NAME [--secure-boot]] [--offline]
   arctic-install unattended --profile FILE [--mock]
   arctic-install catalog [--json]
   arctic-install version
@@ -197,6 +198,9 @@ func cmdPlan(args []string, out io.Writer) int {
 	inventory := fs.String("inventory", "", "mock (the fake machine) or system (probe this machine read-only); default: system on the live ISO, else mock")
 	catalogDir := fs.String("catalog", "", "catalog directory")
 	target := fs.String("target", "/mnt", "mount point for the new system")
+	hardware := fs.String("hardware", "", "driver detection: none, system (this machine's PCI devices and Secure Boot) or mock:NAME ("+strings.Join(hw.FixtureNames(), ", ")+"); default: system with --inventory system, else none")
+	secureBoot := fs.Bool("secure-boot", false, "with --hardware mock:NAME: Secure Boot on")
+	offline := fs.Bool("offline", false, "plan as if there were no internet connection (drivers are put off to first boot)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -244,6 +248,30 @@ func cmdPlan(args []string, out io.Writer) int {
 	if *firmware != "uefi" && *firmware != "bios" {
 		return fail("plan: --firmware must be uefi or bios")
 	}
+	hwName := *hardware
+	if hwName == "" {
+		hwName = "none"
+		if inv == "system" {
+			hwName = "system"
+		}
+	}
+	var machine hw.Hardware
+	switch {
+	case hwName == "none":
+	case hwName == "system":
+		machine = host.ProbeHardware("/")
+	case strings.HasPrefix(hwName, "mock:"):
+		var ok bool
+		if machine, ok = hw.Fixture(strings.TrimPrefix(hwName, "mock:"), *secureBoot); !ok {
+			return fail("plan: no hardware fixture %q (have %s)", hwName, strings.Join(hw.FixtureNames(), ", "))
+		}
+	default:
+		return fail("plan: --hardware must be none, system or mock:NAME")
+	}
+	var found []string
+	for _, m := range cat.MarkDetected(machine) {
+		found = append(found, m.ID+" ("+m.Device+")")
+	}
 	data, disk, err := p.Data(cat, disks, model)
 	if err != nil {
 		return fail("plan: %v", err)
@@ -251,8 +279,14 @@ func cmdPlan(args []string, out io.Writer) int {
 	fmt.Fprintf(out, "# arctic-install plan — dry run: nothing below is executed.\n")
 	fmt.Fprintf(out, "# profile: %s (%s)\n# inventory: %s · firmware: %s · catalog: %s\n", *profilePath, p.Description, inv, *firmware, where)
 	fmt.Fprintf(out, "# secrets are never printed: the disk passphrase reaches cryptsetup on stdin, the password is\n# hashed in Go (SHA-512 crypt) and redacted here.\n")
+	if hwName != "none" {
+		fmt.Fprintf(out, "# hardware: %s\n# drivers offered: %s\n", machine.Summary(), strings.Join(found, ", "))
+	}
 	job := &backend.Job{Data: data, Disk: disk, Firmware: *firmware, Catalog: cat, LogPath: daemon.DefaultLogPath,
-		Secrets: &backend.Secrets{LUKS: []byte("dry-run"), Password: []byte("dry-run")}}
+		Secrets: &backend.Secrets{LUKS: []byte("dry-run"), Password: []byte("dry-run")}, Hardware: machine, Offline: *offline}
+	if job.NeedsMOK() {
+		job.MOKCode = "00000000" // dry run: only its hash is used, and never printed
+	}
 	if !data.Encryption.Enabled {
 		job.Secrets.LUKS = nil
 	}
