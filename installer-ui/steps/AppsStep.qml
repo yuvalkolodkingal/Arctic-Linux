@@ -62,7 +62,7 @@ StepPage {
     }
     property int rowCount: 0            // AppRows that exist (open groups only)
     // For tests (IPC state().step): open folded groups, app rows, search matches.
-    readonly property var testState: ({
+    testState: ({
             open: categories.filter(c => c.collapsed && isOpen(c)).map(c => c.id),
             rows: rowCount,
             matches: matching.length,
