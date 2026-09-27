@@ -41,6 +41,7 @@ It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `p
 | Launcher | `Launcher.qml`, `LauncherSearch.js`, `Calc.js`, `AppTile.qml` | Super+Space. 520px frosted card that hangs from the bar over a scrim; drag the grip to dock it to any edge. Apps (design app tiles for the Arctic apps), `=` calculator (a small parser: arithmetic only, never `eval`), `>` run a command (Shift+Enter: in your terminal, via `arctic-open terminal -e`). Empty query: Apps, Get apps, Wallpapers, Fetch (+ Install Arctic Linux on the live USB). |
 | Get apps | `InstallConsole.qml`, `PackageSearch.js`, `scripts/install-terminal.py`, `scripts/package-index.py` | Type an app name to install it, or a `dnf` / `flatpak` command. `dnf install|remove|upgrade` run as `sudo dnf …`, queries without sudo, `flathub:<id>` or `flatpak install flathub …` through Flatpak — in a real PTY, so sudo's password and dnf's `[y/N]` are answered in the console. Password input is masked, never logged or stored; a reply typed for a prompt that has since changed is refused. Ctrl+C stops the job. Tab completes names from a cached index (`~/.cache/arctic/packages.txt` from `dnf5 repoquery`, `flathub.txt` from `flatpak remote-ls`), refreshed in the background once a day. |
 | Wallpapers | `Wallpapers.qml`, `scripts/wallpapers.py` | Searchable thumbnail grid. The Arctic wallpapers (from `~/.local/share/arctic/wallpapers` or `/usr/share/backgrounds/arctic`) show the active theme's variant and follow Winter / Polar night; your own pictures come from `~/Pictures/Wallpapers` or a folder you choose. Applies through `arctic-wallpaper`. Thumbnails (Pillow; SVGs via rsvg-convert) in `~/.cache/arctic/thumbs`, settings in `~/.config/arctic/wallpapers.json`. |
+| Updates | `UpdateIndicator.qml`, `UpdatePopover.qml`, `UpdateService.qml`, `UpdateStatus.js` | While updates wait for the next restart (`/var/lib/arctic/update-status.json` from `arctic-update` says `ready` and `/system-update` exists): the amber "Restart to update" pill on the bar, a card with the number and size of the updates and **Restart and install** (`arctic-power restart`), and one notification per download (remembered in `~/.cache/arctic/update-notified`). Never on the live USB. |
 | Power menu | `PowerMenu.qml` | Under the power item or Super+Esc: Lock screen, Log out, Suspend, Restart, Shut down (live: Restart, Shut down). Runs `arctic-power <action>`. |
 | Keyboard shortcuts | `KeysSheet.qml` | Super+/: `keys.txt` from `~/.local/share/arctic` or `/usr/share/arctic`. |
 | OSD | `Osd.qml`, `AudioService.qml` | 280×48 frosted pill, bottom centre. Follows PipeWire volume changes directly; brightness when `arctic-osd` calls `arctic-shell-ipc osd brightness` (brightnessctl). 1.2 s, then fades. |
@@ -81,6 +82,7 @@ notifications.
 | `lock` | `lock`, `isLocked` (true once the compositor confirms the lock covers every screen) |
 | `welcome` | `open` |
 | `dnd` | `refresh` |
+| `updates` | `toggle` (the updates card, only while updates wait), `refresh` |
 | `shell` | `reload` (theme, motion, settings), `live` |
 
 ## Developing
@@ -89,13 +91,16 @@ notifications.
 python3 -m unittest discover -s shell/tests     # PTY console, command building, package index, wallpapers
 node shell/tests/test-package-search.cjs        # completion
 node shell/tests/test-launcher.cjs              # launcher ranking, calculator
+node shell/tests/test-update-status.cjs         # the "Restart to update" logic
 /usr/lib64/qt6/bin/qmllint -I /usr/lib64/qt6/qml shell/*.qml
 shell/dev/headless.sh --fixtures demo ipc launcher search ze sleep 1 shot launcher
 ```
 
 `dev/headless.sh` runs the shell in a headless sway (1280×800) with a throwaway HOME (the
 dotfiles installed with `install.sh --target`) and saves screenshots to `dev/screenshots/`
-(`--theme winter`, `--live` = `ARCTIC_FORCE_LIVE=1`, which exists only for such tests).
+(`--theme winter`, `--live` = `ARCTIC_FORCE_LIVE=1`, which exists only for such tests;
+`ARCTIC_UPDATE_STATUS=<file>` shows the updates pill from a status file of your own, with a
+`/system-update` link in place).
 
 ## Design notes
 
