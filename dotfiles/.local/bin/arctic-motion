@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# arctic-motion — reduced motion (design: brand book "Motion" → "Reduced motion").
+#
+#   arctic-motion off      reduce motion: no window animations, GTK animations off,
+#                          the shell only fades, the fetch fox stays on its still frame
+#   arctic-motion on       normal motion
+#   arctic-motion          show the current setting
+set -euo pipefail
+
+FILE="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/motion.conf"
+
+case "${1:-}" in
+  off|reduce)
+    mkdir -p "$(dirname "$FILE")"
+    cat > "$FILE" <<'EOF'
+# Written by arctic-motion: reduced motion is on. Sourced last by ~/.config/mango/config.conf.
+animations=0
+layer_animations=0
+EOF
+    gsettings set org.gnome.desktop.interface enable-animations false 2>/dev/null || true ;;
+  on)
+    rm -f "$FILE"
+    gsettings set org.gnome.desktop.interface enable-animations true 2>/dev/null || true ;;
+  "")
+    if [[ -f "$FILE" ]]; then echo "reduced"; else echo "normal"; fi; exit 0 ;;
+  *)
+    echo "usage: arctic-motion [on|off]" >&2; exit 2 ;;
+esac
+mmsg dispatch reload_config >/dev/null 2>&1 || true
+arctic-shell-ipc shell reload >/dev/null 2>&1 || true

@@ -1,0 +1,9 @@
+/* Arctic Linux — GTK 3 colours from the active theme (Winter / Polar night). */
+@import url("../arctic/current/gtk.css");
+
+/* Keyboard focus: 2px amber ring with a 2px gap (focus token).
+   GTK 3 only draws focus outlines while the window is in keyboard-focus mode. */
+*:focus {
+  outline: 2px solid @arctic_focus;
+  outline-offset: 2px;
+}

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Arctic Linux
+Description=The Arctic Linux fox breathing on polar night, with a calm passphrase prompt
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/arctic
+ScriptFile=/usr/share/plymouth/themes/arctic/arctic.script

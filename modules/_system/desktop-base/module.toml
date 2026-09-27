@@ -1,0 +1,19 @@
+# Mandatory desktop runtime (PLAN §4.2). Always in the live image; never removed.
+id = "desktop-base"
+name = "Arctic desktop"
+summary = "Mango, SDDM, portals, audio, networking and the Arctic shell."
+category = "system"
+hidden = true
+always = true
+in_live_image = true
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ["mangowm", "sddm", "sddm-wayland-mango", "arctic-sddm-theme", "arctic-desktop", "layer-shell-qt", "xdg-desktop-portal-wlr", "xdg-desktop-portal-gtk", "slurp", "grim", "wl-clipboard", "cliphist", "pipewire", "pipewire-pulseaudio", "pipewire-alsa", "wireplumber", "NetworkManager-wifi", "network-manager-applet", "xorg-x11-server-Xwayland", "qt5-qtwayland", "qt6-qtwayland", "polkit", "gnome-keyring", "gnome-keyring-pam", "xdg-user-dirs", "xdg-utils", "libnotify", "brightnessctl", "playerctl", "tuned-ppd", "mesa-dri-drivers"]
+download_mb = 0
+
+[session]
+services = ["sddm.service", "NetworkManager.service"]

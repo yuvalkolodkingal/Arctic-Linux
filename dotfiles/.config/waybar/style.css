@@ -1,0 +1,224 @@
+/* Arctic Linux — top bar. Spec: design components/TopBar and assets/Exports/waybar-arctic.css.
+   34px frost bar, 1px line bottom edge; 26px pill items, 13px label text, 16px icons.
+   Workspaces: active = accent pill (the one amber thing on the desktop), occupied = line-strong ring,
+   empty = ink-muted number, urgent = error ring.
+   Colours come from the active theme (arctic-theme swaps ~/.config/arctic/current). */
+@import url("../arctic/current/waybar-colors.css");
+
+* {
+  font-family: "Figtree", "Noto Sans", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+window#waybar {
+  background: @frost;
+  color: @ink;
+  border-bottom: 1px solid @line;
+}
+
+tooltip {
+  background: @ink;
+  border-radius: 6px;
+}
+tooltip label {
+  color: @surface_sunken;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+/* ---- Pills ------------------------------------------------------------ */
+#custom-launcher,
+#custom-live,
+#clock,
+#custom-install,
+#custom-notifications,
+#bluetooth,
+#tray,
+#network,
+#pulseaudio,
+#battery,
+#custom-power {
+  min-height: 26px;
+  margin: 4px 2px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  color: @ink;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: 8px center;
+  background-size: 16px 16px;
+  transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+#custom-launcher:hover,
+#clock:hover,
+#custom-notifications:hover,
+#bluetooth:hover,
+#network:hover,
+#pulseaudio:hover,
+#battery:hover,
+#custom-power:hover {
+  background-color: @surface_sunken;
+}
+
+/* Icon-only items: 16px glyph centred in a 26px pill. */
+#custom-launcher,
+#custom-notifications,
+#bluetooth,
+#network,
+#custom-power {
+  min-width: 16px;
+  padding: 0 5px;
+  background-position: center;
+}
+
+/* Items with an icon and a value: icon 8px in, text after it. */
+#pulseaudio,
+#battery,
+#custom-install {
+  padding-left: 30px;
+}
+
+/* ---- Launcher mark ---------------------------------------------------- */
+#custom-launcher {
+  margin-left: 6px;
+  background-image: url("../arctic/current/icons/mark.svg");
+  background-size: 18px 18px;
+  min-width: 18px;
+}
+
+/* ---- Workspaces ------------------------------------------------------- */
+#workspaces {
+  margin: 0 4px;
+}
+#workspaces button {
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0 4px;
+  margin: 6px 2px;
+  border-radius: 9999px;
+  color: @ink_muted;
+  background: transparent;
+  transition: all 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+#workspaces button:not(.hidden) {
+  color: @ink;
+  box-shadow: inset 0 0 0 1.5px @line_strong;
+}
+#workspaces button.active {
+  min-width: 30px;
+  background: @accent;
+  color: @on_accent;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px @accent_edge;
+}
+#workspaces button.urgent {
+  color: @error;
+  box-shadow: inset 0 0 0 1.5px @error;
+}
+#workspaces button:hover {
+  background: @surface_sunken;
+}
+#workspaces button.active:hover {
+  background: @accent_hover;
+}
+
+/* ---- Live session ----------------------------------------------------- */
+#custom-live {
+  margin-left: 6px;
+  padding: 0 10px;
+  background-color: @info_soft;
+  color: @info;
+  font-size: 12px;
+  font-weight: 600;
+}
+#custom-install {
+  background-color: @accent;
+  background-image: url("../arctic/current/icons/download-on-accent.svg");
+  background-size: 15px 15px;
+  color: @on_accent;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px @accent_edge;
+}
+#custom-install:hover {
+  background-color: @accent_hover;
+}
+
+/* ---- Clock ------------------------------------------------------------ */
+#clock {
+  font-weight: 600;
+  font-feature-settings: "tnum";
+}
+
+/* ---- Quiet group: notifications + Bluetooth (ink-muted icons) ---------- */
+#custom-notifications {
+  background-image: url("../arctic/current/icons/bell.svg");
+}
+#custom-notifications.dnd {
+  background-image: url("../arctic/current/icons/bell-off.svg");
+}
+#bluetooth {
+  background-image: url("../arctic/current/icons/bluetooth.svg");
+}
+#bluetooth.off,
+#bluetooth.disabled,
+#bluetooth.no-controller {
+  opacity: 0.5;
+}
+
+/* ---- Network ---------------------------------------------------------- */
+#network {
+  background-image: url("../arctic/current/icons/wifi.svg");
+}
+#network.ethernet,
+#network.linked {
+  background-image: url("../arctic/current/icons/ethernet.svg");
+}
+#network.disconnected,
+#network.disabled {
+  background-image: url("../arctic/current/icons/wifi-off.svg");
+}
+
+/* ---- Audio ------------------------------------------------------------ */
+#pulseaudio {
+  background-image: url("../arctic/current/icons/volume.svg");
+  font-feature-settings: "tnum";
+}
+#pulseaudio.muted {
+  background-image: url("../arctic/current/icons/volume-mute.svg");
+  color: @ink_muted;
+}
+
+/* ---- Battery (status colour always travels with the number) ----------- */
+#battery {
+  background-image: url("../arctic/current/icons/battery.svg");
+  font-feature-settings: "tnum";
+}
+#battery.charging,
+#battery.plugged {
+  background-image: url("../arctic/current/icons/battery-charging.svg");
+}
+#battery.warning:not(.charging) {
+  color: @warning;
+}
+#battery.critical:not(.charging) {
+  color: @error;
+}
+
+/* ---- Power ------------------------------------------------------------ */
+#custom-power {
+  margin-right: 6px;
+  background-image: url("../arctic/current/icons/power.svg");
+}
+
+/* ---- Tray ------------------------------------------------------------- */
+#tray > .needs-attention {
+  box-shadow: inset 0 0 0 1.5px @error;
+  border-radius: 9999px;
+}

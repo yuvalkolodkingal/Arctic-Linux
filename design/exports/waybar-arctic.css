@@ -1,0 +1,26 @@
+/* Arctic Linux — waybar top bar. @import "arctic-tokens-gtk.css" first, or paste the @define-color lines. */
+@define-color frost rgba(26, 33, 42, 0.82);   /* Winter: rgba(251, 252, 253, 0.80) */
+@define-color ink #e9eef3;       /* Winter #151a21 */
+@define-color ink_muted #aeb9c5; /* Winter #4a5663 */
+@define-color line #2f3945;      /* Winter #d5dde4 */
+@define-color line_strong #6b7a8a; /* Winter #7c8a99 */
+@define-color accent #f6bd55;    /* Winter #efa637 */
+@define-color accent_edge #f6bd55; /* Winter #a86812 */
+@define-color on_accent #151a21;
+@define-color sunken #0f141a;    /* Winter #e8edf1 */
+@define-color error #ff9189;     /* Winter #b3261e */
+
+* { font-family: "Figtree", "Noto Sans", sans-serif; font-size: 13px; font-weight: 500; min-height: 0; }
+window#waybar { background: @frost; color: @ink; border-bottom: 1px solid @line; }   /* height: 34 in config.jsonc */
+#workspaces { margin: 0 4px; }
+#workspaces button { min-width: 22px; padding: 0 4px; margin: 4px 2px; border-radius: 9999px; color: @ink_muted; background: transparent; border: none; }
+#workspaces button.occupied, #workspaces button:not(.empty) { color: @ink; box-shadow: inset 0 0 0 1.5px @line_strong; }
+#workspaces button.active, #workspaces button.focused { background: @accent; color: @on_accent; min-width: 30px; box-shadow: inset 0 0 0 1px @accent_edge; }
+#workspaces button.urgent { color: @error; box-shadow: inset 0 0 0 1.5px @error; }
+#workspaces button:focus { box-shadow: 0 0 0 2px @accent_edge; }
+#clock { font-weight: 600; }
+#clock, #network, #pulseaudio, #battery, #tray, #custom-power, #custom-install { padding: 0 8px; margin: 4px 2px; border-radius: 9999px; }
+#clock:hover, #network:hover, #pulseaudio:hover, #battery:hover, #custom-power:hover { background: @sunken; }
+#battery.warning { color: #f4a270; } #battery.critical { color: @error; }
+#custom-install { background: @accent; color: @on_accent; font-weight: 600; }
+tooltip { background: @ink; color: @sunken; border-radius: 6px; }

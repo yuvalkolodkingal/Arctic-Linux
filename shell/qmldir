@@ -1,0 +1,33 @@
+singleton Theme 1.0 Theme.qml
+singleton Session 1.0 Session.qml
+singleton Outputs 1.0 Outputs.qml
+singleton AudioService 1.0 AudioService.qml
+singleton NetworkService 1.0 NetworkService.qml
+singleton DndService 1.0 DndService.qml
+AppTile 1.0 AppTile.qml
+ArcticButton 1.0 ArcticButton.qml
+ArcticField 1.0 ArcticField.qml
+Bar 1.0 Bar.qml
+BarItem 1.0 BarItem.qml
+BarTooltip 1.0 BarTooltip.qml
+DockPosition 1.0 DockPosition.qml
+DragHandle 1.0 DragHandle.qml
+FocusRing 1.0 FocusRing.qml
+Icon 1.0 Icon.qml
+InstallConsole 1.0 InstallConsole.qml
+Kbd 1.0 Kbd.qml
+KeysSheet 1.0 KeysSheet.qml
+Launcher 1.0 Launcher.qml
+LiveWelcome 1.0 LiveWelcome.qml
+LockScreen 1.0 LockScreen.qml
+Mark 1.0 Mark.qml
+Osd 1.0 Osd.qml
+PolkitDialog 1.0 PolkitDialog.qml
+Popover 1.0 Popover.qml
+PopupSurface 1.0 PopupSurface.qml
+PowerMenu 1.0 PowerMenu.qml
+RoundedImage 1.0 RoundedImage.qml
+ScreenFrame 1.0 ScreenFrame.qml
+Tip 1.0 Tip.qml
+Wallpapers 1.0 Wallpapers.qml
+Workspaces 1.0 Workspaces.qml

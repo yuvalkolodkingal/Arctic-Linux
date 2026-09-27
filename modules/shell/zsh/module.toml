@@ -1,0 +1,21 @@
+# Default login shell (PLAN D11). In the live image.
+id = "zsh"
+name = "zsh"
+summary = "Friendly shell with smart completion."
+category = "shell"
+default = true
+tile = "zsh"
+icon = "prompt"
+in_live_image = true
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ["zsh"]
+remove = ["zsh", "zsh-autosuggestions", "zsh-syntax-highlighting"]
+download_mb = 4
+
+[defaults]
+shell = "/bin/zsh"

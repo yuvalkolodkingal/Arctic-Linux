@@ -1,0 +1,35 @@
+id = "collabora"
+name = "Collabora Office"
+short = "Collabora"
+summary = "Documents, spreadsheets and slides."
+category = "office"
+default = true
+tile = "collabora"
+icon = "document"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# com.collabora.Office is the wrong id (PLAN §4.2).
+method = "flatpak"
+remote = "flathub"
+ref = "com.collaboraoffice.Office"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 454
+
+[defaults]
+desktop_id = "com.collaboraoffice.Office.desktop"
+mime = [
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]

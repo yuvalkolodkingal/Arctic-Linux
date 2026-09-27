@@ -1,0 +1,20 @@
+id = "flathub"
+name = "Flathub"
+summary = "Adds the Flathub app store (Flatpak)."
+category = "extras"
+role = "app store"
+default = false
+tile = "flathub"
+icon = "package"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# No ref: only adds the flathub remote system-wide, so the Software app can browse it.
+method = "flatpak"
+remote = "flathub"
+ref = ""
+verified = true
+download_mb = 0

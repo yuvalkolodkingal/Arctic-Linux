@@ -1,0 +1,33 @@
+# Default browser (PLAN D11). Not preinstalled in the v0.1 live ISO, so it is downloaded.
+id = "zen"
+name = "Zen Browser"
+short = "Zen"
+summary = "Calm, privacy-first browser with vertical tabs."
+category = "browser"
+default = true
+tile = "zen"
+icon = "compass"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Flathub, verified. Terra's zen-browser RPM is the documented alternative.
+method = "flatpak"
+remote = "flathub"
+ref = "app.zen_browser.zen"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 160
+
+[defaults]
+desktop_id = "app.zen_browser.zen.desktop"
+role = "browser"
+command = "gtk-launch app.zen_browser.zen"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]

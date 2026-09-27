@@ -1,0 +1,26 @@
+id = "nautilus"
+name = "Files (Nautilus)"
+short = "Nautilus"
+summary = "GNOME's file manager."
+category = "files"
+default = false
+tile = "nautilus"
+icon = "folder"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: nautilus 50 (2.6 MB + GNOME libraries)
+method = "dnf"
+packages = ["nautilus"]
+download_mb = 25
+
+[defaults]
+desktop_id = "org.gnome.Nautilus.desktop"
+role = "files"
+command = "nautilus"
+mime = [
+  "inode/directory",
+]

@@ -1,0 +1,24 @@
+#!/bin/sh
+# sddm-compositor-mango: the Wayland compositor SDDM starts for its greeter
+# ([Wayland] CompositorCommand in /usr/lib/sddm/sddm.conf.d/10-arctic.conf).
+#
+# Runs mango as the sddm user with a config that has no key bindings and no autostart
+# (/usr/share/arctic/sddm/greeter.conf). SDDM waits for the Wayland socket, then starts
+# sddm-greeter-qt6 on it.
+
+# The greeter must not reach a session bus left in SDDM's environment (mango would export
+# its environment there and start units on it).
+unset DBUS_SESSION_BUS_ADDRESS
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=mango
+
+# Virtual machines and "Safe graphics mode" (nomodeset → simpledrm) only have software
+# rendering. wlroots refuses it unless allowed; scenefx needs GLES, so no pixman here.
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+case "$(systemd-detect-virt --vm 2>/dev/null)" in
+  none|"") ;;
+  *) export WLR_NO_HARDWARE_CURSORS=1 ;;
+esac
+
+exec /usr/bin/mango -c /usr/share/arctic/sddm/greeter.conf "$@"

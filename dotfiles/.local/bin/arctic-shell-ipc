@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# arctic-shell-ipc — talk to the running Arctic shell (used by keybinds and the arctic-* helpers).
+#
+#   arctic-shell-ipc <target> <function> [arguments…]
+#
+# Targets: launcher toggle|open|close · apps install · wallpapers toggle|open · power toggle
+#          keys toggle · osd volume|brightness · lock lock|isLocked · welcome open
+#          dnd refresh · shell reload|live
+# Exits non-zero when the shell isn't running, so callers can fall back to something else.
+set -uo pipefail
+(( $# >= 2 )) || { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+command -v quickshell >/dev/null 2>&1 || exit 1
+dir="$(arctic-shell --path 2>/dev/null)" || exit 1
+# `quickshell ipc call` exits non-zero when no instance of this shell is running.
+exec quickshell ipc -p "$dir" call "$@" 2>/dev/null

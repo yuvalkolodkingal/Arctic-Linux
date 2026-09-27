@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# arctic-wallpaper — draw the wallpaper with swaybg.
+#
+#   arctic-wallpaper                    the saved choice, else the theme's default
+#                                       (Winter: snowfield, Polar night: aurora)
+#   arctic-wallpaper fox                an Arctic wallpaper (snowfield, aurora, fox); it follows theme switches
+#   arctic-wallpaper ~/Pictures/x.jpg   any picture of your own (stays the same across theme switches)
+#   arctic-wallpaper render             only render the PNG cache (used by arctic-lock)
+#   arctic-wallpaper current            print the picture in use
+#
+# Arctic wallpapers are looked up in ~/.local/share/arctic/wallpapers, then
+# /usr/share/backgrounds/arctic: 1920×1080 SVGs, one per theme (plus rendered PNGs when packaged).
+# SVGs are rendered once to 3840×2160 PNGs in ~/.cache/arctic/wallpapers (rsvg-convert).
+# The choice is saved in ~/.config/arctic/wallpaper (a name or a path). The picture actually
+# drawn is recorded in ~/.cache/arctic/wallpaper-current (the lock screen blurs it).
+# The wallpaper picker in the shell (launcher → Wallpapers) uses this command too.
+set -euo pipefail
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/arctic"
+CACHE="$CACHE_DIR/wallpapers"
+DIRS=("${XDG_DATA_HOME:-$HOME/.local/share}/arctic/wallpapers" /usr/share/backgrounds/arctic)
+NAMES="snowfield aurora fox"
+
+env_file="$CONF/current/theme.env"
+[[ -f "$env_file" ]] || env_file=/usr/share/arctic/themes/polar-night/theme.env
+# shellcheck source=/dev/null
+[[ -f "$env_file" ]] && source "$env_file"
+ARCTIC_THEME="${ARCTIC_THEME:-polar-night}"
+ARCTIC_WALLPAPER="${ARCTIC_WALLPAPER:-aurora-polar-night}"
+ARCTIC_GROUND="${ARCTIC_GROUND:-#12171e}"
+
+find_design() {   # find_design <stem> -> the PNG (preferred) or SVG for it
+  local d
+  for d in "${DIRS[@]}"; do
+    if [[ -f "$d/$1.png" ]]; then echo "$d/$1.png"; return 0; fi
+    if [[ -f "$d/$1.svg" ]]; then echo "$d/$1.svg"; return 0; fi
+  done
+  return 1
+}
+
+render() {   # render <image> -> an image swaybg draws well (SVGs rendered to a cached PNG)
+  local src="$1" png
+  if [[ "$src" != *.svg ]]; then echo "$src"; return; fi
+  png="$CACHE/$(basename "$src" .svg).png"
+  if [[ -f "$png" && "$png" -nt "$src" ]]; then echo "$png"; return; fi
+  if command -v rsvg-convert >/dev/null 2>&1; then
+    mkdir -p "$CACHE"
+    if rsvg-convert -w 3840 -h 2160 -o "$png.tmp" "$src"; then mv "$png.tmp" "$png"; echo "$png"; return; fi
+    rm -f "$png.tmp"
+  fi
+  echo "$src"
+}
+
+is_name() { [[ " $NAMES " == *" $1 "* ]]; }
+
+img=""
+case "${1:-}" in
+  render)
+    for d in "${DIRS[@]}"; do
+      for f in "$d"/*.svg; do [[ -f "$f" ]] && render "$f" >/dev/null; done
+    done
+    exit 0 ;;
+  current)
+    cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true
+    exit 0 ;;
+  -h|--help)
+    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  "")
+    saved="$(cat "$CONF/wallpaper" 2>/dev/null || true)"
+    if is_name "$saved"; then
+      img="$(find_design "$saved-$ARCTIC_THEME" || true)"
+    elif [[ -n "$saved" && -f "$saved" ]]; then
+      img="$saved"
+    fi ;;
+  *)
+    mkdir -p "$CONF"
+    if is_name "$1"; then
+      printf '%s\n' "$1" > "$CONF/wallpaper"
+      img="$(find_design "$1-$ARCTIC_THEME" || true)"
+    elif [[ -f "$1" ]]; then
+      path="$(readlink -f "$1")"
+      case "${path,,}" in
+        *.png|*.jpg|*.jpeg|*.webp|*.bmp|*.gif|*.svg|*.tif|*.tiff) ;;
+        *) echo "arctic-wallpaper: $1 isn't a picture (PNG, JPEG, WebP, SVG…)" >&2; exit 2 ;;
+      esac
+      printf '%s\n' "$path" > "$CONF/wallpaper"
+      img="$path"
+    else
+      echo "usage: arctic-wallpaper [snowfield|aurora|fox|<picture>|render|current]" >&2; exit 2
+    fi ;;
+esac
+
+[[ -n "$img" ]] || img="$(find_design "$ARCTIC_WALLPAPER" || true)"
+if [[ -z "$img" ]]; then
+  echo "arctic-wallpaper: no Arctic wallpapers found in ${DIRS[*]}" >&2
+  exit 1
+fi
+img="$(render "$img")"
+mkdir -p "$CACHE_DIR"
+printf '%s\n' "$img" > "$CACHE_DIR/wallpaper-current"
+
+command -v swaybg >/dev/null 2>&1 || { echo "arctic-wallpaper: swaybg is not installed" >&2; exit 1; }
+# Replace the running swaybg without a flash: start the new one, then stop the old.
+old="$(pgrep -u "$UID" -x swaybg || true)"
+setsid -f swaybg -m fill -c "$ARCTIC_GROUND" -i "$img" >/dev/null 2>&1
+sleep 0.3
+if [[ -n "$old" ]]; then
+  # shellcheck disable=SC2086
+  kill $old 2>/dev/null || true
+fi

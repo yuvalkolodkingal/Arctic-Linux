@@ -1,0 +1,39 @@
+id = "mpv"
+name = "mpv"
+summary = "Minimal, keyboard-driven player."
+category = "video"
+default = false
+tile = "mpv"
+icon = "play"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: mpv 0.41
+method = "dnf"
+packages = ["mpv"]
+download_mb = 6
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "io.mpv.Mpv"
+runtime = "org.freedesktop.Platform//25.08"
+desktop_id = "io.mpv.Mpv.desktop"
+verified = false
+download_mb = 99
+
+[defaults]
+desktop_id = "mpv.desktop"
+mime = [
+  "video/mp4",
+  "video/x-matroska",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+  "audio/mpeg",
+  "audio/flac",
+  "audio/ogg",
+]

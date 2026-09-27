@@ -1,0 +1,15 @@
+NAME="Arctic Linux"
+VERSION="0.1 (Fedora 44 base)"
+ID=arctic
+ID_LIKE=fedora
+VERSION_ID=0.1
+PLATFORM_ID="platform:f44"
+PRETTY_NAME="Arctic Linux 0.1 (Fedora 44 base)"
+ANSI_COLOR="0;38;2;239;166;55"
+LOGO=arctic-logo-icon
+CPE_NAME="cpe:/o:arcticlinux:arctic_linux:0.1"
+DEFAULT_HOSTNAME="arctic"
+HOME_URL="https://github.com/yuvalkolodkingal/O-Tism"
+DOCUMENTATION_URL="https://github.com/yuvalkolodkingal/O-Tism/tree/main/docs"
+SUPPORT_URL="https://github.com/yuvalkolodkingal/O-Tism/issues"
+BUG_REPORT_URL="https://github.com/yuvalkolodkingal/O-Tism/issues"

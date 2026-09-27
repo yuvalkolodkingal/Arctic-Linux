@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# arctic-launcher — the Super+Space launcher. Spec: design components/Launcher.
+# Opens or closes the shell's launcher (apps, "=" calculator, ">" commands, Get apps,
+# Wallpapers, Fetch). Without the shell (ARCTIC_SHELL=waybar) it toggles fuzzel instead.
+#
+#   arctic-launcher            toggle the launcher
+#   arctic-launcher "=12*4"    open it with something already typed
+if (( $# )) && arctic-shell-ipc launcher search "$*" >/dev/null 2>&1; then exit 0; fi
+if (( ! $# )) && arctic-shell-ipc launcher toggle >/dev/null 2>&1; then exit 0; fi
+if pkill -x fuzzel 2>/dev/null; then exit 0; fi
+exec fuzzel

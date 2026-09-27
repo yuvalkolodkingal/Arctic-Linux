@@ -1,0 +1,146 @@
+name: ISO
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub release with the ISO
+        type: boolean
+        default: false
+      tag:
+        description: Release tag (default v0.1.0-build.<run number>)
+        type: string
+        default: ""
+      boot_test:
+        description: Boot the ISO in QEMU and upload screenshots
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iso-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ISO: Arctic-Linux-0.1-x86_64.iso
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          df -h / /mnt
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/boost /usr/local/share/powershell /usr/share/swift \
+                      "$AGENT_TOOLSDIRECTORY" || true
+          sudo docker image prune --all --force || true
+          sudo mkdir -p /mnt/arctic && sudo chown "$(id -u):$(id -g)" /mnt/arctic
+          df -h / /mnt
+
+      - name: Build RPMs
+        run: tools/build-rpms.sh
+
+      - name: Build ISO
+        run: tools/build-iso.sh --work /mnt/arctic/kiwi-work
+
+      - name: Size and split
+        id: size
+        run: |
+          cd out/iso
+          size=$(stat -c %s "$ISO")
+          echo "ISO size: $size bytes ($((size / 1024 / 1024)) MiB)"
+          echo "bytes=$size" >> "$GITHUB_OUTPUT"
+          if [ "$size" -gt 2147483648 ]; then
+            # GitHub release assets are limited to 2 GiB.
+            split -b 1900M -d -a 2 "$ISO" "$ISO.part"
+            echo "split=true" >> "$GITHUB_OUTPUT"
+            ls -l "$ISO".part*
+          else
+            echo "split=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the ISO (workflow artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: arctic-linux-iso
+          path: |
+            out/iso/${{ env.ISO }}
+            out/iso/${{ env.ISO }}.sha256
+            out/iso/*.packages
+            out/iso/*.build-info
+          compression-level: 0
+          retention-days: 14
+
+      - name: Boot test in QEMU (UEFI, Try mode)
+        if: ${{ github.event_name == 'push' || inputs.boot_test }}
+        continue-on-error: true
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; kvm=--kvm; timeout=420; else kvm=; timeout=900; fi
+          tools/test-iso.sh --firmware uefi --mode try --timeout "$timeout" --interval 30 $kvm
+          tools/test-iso.sh --firmware bios --mode install --timeout "$timeout" --interval 30 $kvm
+
+      - name: Upload screenshots
+        if: ${{ always() && (github.event_name == 'push' || inputs.boot_test) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-test
+          path: out/test/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish release
+        if: ${{ github.event_name == 'push' || inputs.release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPLIT: ${{ steps.size.outputs.split }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            tag="$GITHUB_REF_NAME"; pre=""
+          else
+            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v0.1.0-build.$GITHUB_RUN_NUMBER"
+            pre="--prerelease"
+          fi
+          sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
+          {
+            echo "Arctic Linux 0.1 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
+            echo
+            echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
+            echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."
+            echo "The boot menu offers **Try Arctic Linux** and **Install Arctic Linux**."
+            if grep -q 'zen_preinstalled=1' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
+              echo "Zen Browser is preinstalled in the live session."
+            fi
+            echo
+            echo "Updates: Fedora's packages update as usual (\`sudo dnf upgrade\`). Arctic's own packages"
+            echo "(desktop, shell, branding, Mango) have no online repository yet, so they only change"
+            echo "with a new Arctic release (packaging/release/arctic.repo is there, disabled, for when it exists)."
+            echo
+            echo "SHA-256: \`$sha\`"
+            if [ "$SPLIT" = true ]; then
+              echo
+              echo "The ISO is larger than GitHub's 2 GiB asset limit, so it is split into parts."
+              echo "Download every \`$ISO.partNN\` file and \`$ISO.sha256\`, then join and check them:"
+              echo
+              echo '```'
+              echo "cat $ISO.part* > $ISO"
+              echo "sha256sum -c $ISO.sha256"
+              echo '```'
+              echo
+              echo "On Windows (PowerShell): \`cmd /c copy /b $ISO.part00+$ISO.part01 $ISO\` (list every part)."
+            fi
+          } > notes.md
+          if [ "$SPLIT" = true ]; then
+            files=(out/iso/"$ISO".part* "out/iso/$ISO.sha256")
+          else
+            files=("out/iso/$ISO" "out/iso/$ISO.sha256")
+          fi
+          gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
+            --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre

@@ -1,0 +1,22 @@
+id = "foot"
+name = "foot"
+summary = "Lightweight Wayland terminal."
+category = "terminal"
+default = false
+tile = "foot"
+icon = "terminal"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: foot 1.27
+method = "dnf"
+packages = ["foot"]
+download_mb = 1
+
+[defaults]
+desktop_id = "foot.desktop"
+role = "terminal"
+command = "foot"

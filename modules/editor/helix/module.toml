@@ -1,0 +1,22 @@
+id = "helix"
+name = "Helix"
+summary = "Modal editor that works out of the box."
+category = "editor"
+default = false
+tile = "helix"
+icon = "prompt"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: helix 25.07 (6.4 MB)
+method = "dnf"
+packages = ["helix"]
+download_mb = 7
+
+[defaults]
+desktop_id = "Helix.desktop"
+role = "editor"
+command = "{terminal} -e hx"

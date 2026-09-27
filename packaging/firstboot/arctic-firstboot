@@ -1,0 +1,209 @@
+#!/usr/bin/python3
+"""arctic-firstboot — finish installing apps the installer had to put off.
+
+When an optional app can't be downloaded during installation (and the person chose to
+continue), the installer records it in /var/lib/arctic/pending.json, with the app's install
+methods from the catalog (the catalog itself isn't kept on the installed system). The file is
+written by internal/installer (finalizePhase); each method is a catalog.Install in its JSON
+form, whose empty fields are left out ("ref", "packages", "repos", "swap", …):
+    {"version": 2, "nixpkgs": "github:NixOS/nixpkgs/<rev>",
+     "modules": [{"id": "zed", "name": "Zed",
+                  "install": [{"method": "flatpak", "remote": "flathub", "ref": "dev.zed.Zed", …}]}]}
+This runs at boot (arctic-firstboot.service, after the network is up), tries each module's
+methods in order until one works — doing what the installer does for each method
+(installMethod / setupRepos) — and removes the modules that succeed. When nothing is left,
+the file is deleted and the service no longer starts. It never blocks login: it runs in the
+background.
+"""
+import json
+import os
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+PENDING = Path("/var/lib/arctic/pending.json")
+CATALOG = Path("/usr/share/arctic/catalog")
+NIX_PROFILE = "/nix/var/nix/profiles/default"
+# internal/installer FlatpakRemotes: the catalog's remote names and their .flatpakrepo files.
+FLATPAK_REMOTES = {"flathub": "https://dl.flathub.org/repo/flathub.flatpakrepo"}
+# internal/installer Options.FedoraRelease's default.
+DEFAULT_FEDORA_RELEASE = "44"
+
+
+def log(msg):
+    print(msg, flush=True)
+
+
+def run(cmd, quiet=False):
+    """Run a command (no shell); True when it succeeded. quiet: a check, not an action."""
+    if not quiet:
+        log("$ " + " ".join(cmd))
+    out = subprocess.DEVNULL if quiet else None
+    try:
+        return subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=out, stderr=out).returncode == 0
+    except OSError as e:
+        if not quiet:
+            log(f"{cmd[0]}: {e.strerror}")
+        return False
+
+
+def fedora_release():
+    """The Fedora release underneath, for the RPM Fusion URLs and keys. Not os-release's
+    VERSION_ID, which is Arctic's own version (0.1): the %fedora macro (arctic-release's
+    macros.dist), else PLATFORM_ID="platform:f44"."""
+    try:
+        out = subprocess.run(["rpm", "-E", "%fedora"], capture_output=True, text=True).stdout.strip()
+        if out.isdigit():
+            return out
+    except OSError:
+        pass
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            key, _, value = line.partition("=")
+            value = value.strip().strip('"')
+            if key == "PLATFORM_ID" and value.startswith("platform:f") and value[10:].isdigit():
+                return value[10:]
+    except OSError:
+        pass
+    return DEFAULT_FEDORA_RELEASE
+
+
+def find_manifest(module_id):
+    for path in CATALOG.rglob("module.toml"):
+        try:
+            data = tomllib.loads(path.read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if data.get("id") == module_id:
+            return data
+    return None
+
+
+class FirstBoot:
+    """What the installer's installMethod does for one install method, on the running system.
+    `run` executes a command and returns whether it worked (tests pass a fake)."""
+
+    def __init__(self, run=run, release=None, nixpkgs=""):
+        self.run = run
+        self.release = release or fedora_release()
+        self.nixpkgs = nixpkgs or "nixpkgs"
+        self.repos_done = set()
+        self.copr_done = set()
+        self.remotes_done = set()
+
+    def installed(self, package):
+        return self.run(["rpm", "-q", "--quiet", package], quiet=True)
+
+    def setup_repos(self, method):
+        """internal/installer setupRepos: the RPM Fusion release packages (keys from
+        distribution-gpg-keys, never --nogpgcheck), the COPR, then the package swaps
+        (ffmpeg-free → ffmpeg). Steps already done by an earlier run are skipped."""
+        for repo in method.get("repos") or []:
+            if repo in self.repos_done:
+                continue
+            kind = repo.removeprefix("rpmfusion-")   # free | nonfree
+            if not self.installed(f"rpmfusion-{kind}-release"):
+                rel = self.release
+                key = f"/usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KEY-rpmfusion-{kind}-fedora-{rel}"
+                url = f"https://mirrors.rpmfusion.org/{kind}/fedora/rpmfusion-{kind}-release-{rel}.noarch.rpm"
+                if not (self.run(["rpm", "--import", key]) and self.run(["dnf", "install", "-y", url])):
+                    return False
+            self.repos_done.add(repo)
+        copr = method.get("copr")
+        if method.get("method") == "copr" and copr not in self.copr_done:
+            if not copr or not self.run(["dnf", "copr", "enable", "-y", copr]):
+                return False
+            self.copr_done.add(copr)
+        for swap in method.get("swap") or []:
+            old, _, new = swap.partition("=")
+            # Already swapped (or never there): nothing to replace.
+            if not self.installed(old):
+                continue
+            if not self.run(["dnf", "swap", "-y", "--allowerasing", old, new]):
+                return False
+        return True
+
+    def try_method(self, method):
+        kind = method.get("method")
+        if kind in ("dnf", "copr"):
+            packages = method.get("packages") or []
+            return (bool(packages) and self.setup_repos(method)
+                    and self.run(["dnf", "install", "-y", *packages]))
+        if kind == "flatpak":
+            remote = method.get("remote") or "flathub"
+            if remote not in self.remotes_done:
+                url = FLATPAK_REMOTES.get(remote)
+                if not url:
+                    log(f"unknown flatpak remote {remote!r}")
+                    return False
+                if not self.run(["flatpak", "remote-add", "--system", "--if-not-exists", remote, url]):
+                    return False
+                self.remotes_done.add(remote)
+            ref = method.get("ref")
+            if not ref:   # a module that only adds the remote (Flathub)
+                return True
+            return self.run(["flatpak", "install", "--system", "-y", "--noninteractive", remote, ref])
+        if kind == "nix":
+            attr = method.get("attr")
+            if not attr:
+                return False
+            return self.run(["nix", "--extra-experimental-features", "nix-command flakes", "profile", "add",
+                             "--profile", NIX_PROFILE, f"{self.nixpkgs}#{attr}"])
+        log(f"unknown install method {kind!r}")
+        return False
+
+    def install(self, module):
+        """Try a module's methods in order; True when one worked."""
+        return any(self.try_method(m) for m in module.get("install") or [] if isinstance(m, dict))
+
+
+def retry(pending, firstboot):
+    """Try every pending module; returns the ones still left."""
+    left = []
+    for entry in pending.get("modules") or []:
+        # Version 1 listed bare ids; look those up in the catalog if it's still installed.
+        module = entry if isinstance(entry, dict) else find_manifest(entry)
+        if not module:
+            log(f"{entry}: no install methods known, dropping it")
+            continue
+        name = module.get("name") or module.get("id") or "?"
+        try:
+            ok = firstboot.install(module)
+        except Exception as e:   # one bad entry must not stop the others or the rewrite
+            log(f"{name}: {e!r}")
+            ok = False
+        if ok:
+            log(f"{name}: installed")
+        else:
+            log(f"{name}: still can't be installed, trying again next boot")
+            left.append(module)
+    return left
+
+
+def main(runner=run):
+    if os.geteuid() != 0:
+        sys.exit("arctic-firstboot must run as root")
+    try:
+        pending = json.loads(PENDING.read_text())
+    except FileNotFoundError:
+        return 0
+    except (OSError, ValueError) as e:
+        log(f"can't read {PENDING}: {e}")
+        return 1
+    if not isinstance(pending, dict):
+        log(f"can't read {PENDING}: not a JSON object")
+        return 1
+    nixpkgs = pending.get("nixpkgs") or ""
+    left = retry(pending, FirstBoot(run=runner, nixpkgs=nixpkgs))
+    if left:
+        tmp = PENDING.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"version": 2, "nixpkgs": nixpkgs, "modules": left}, indent=2) + "\n")
+        tmp.replace(PENDING)
+        return 1
+    PENDING.unlink(missing_ok=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

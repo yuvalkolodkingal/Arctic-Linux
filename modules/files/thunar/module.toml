@@ -1,0 +1,26 @@
+id = "thunar"
+name = "Thunar"
+summary = "Simple windowed file manager."
+category = "files"
+default = true
+tile = "thunar"
+icon = "folder"
+in_live_image = true
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Capital T; pulls gvfs and tumbler.
+method = "dnf"
+packages = ["Thunar"]
+remove = ["Thunar", "thunar-volman", "thunar-archive-plugin"]
+download_mb = 2
+
+[defaults]
+desktop_id = "thunar.desktop"
+role = "files"
+command = "thunar"
+mime = [
+  "inode/directory",
+]

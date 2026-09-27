@@ -1,0 +1,8 @@
+# Arctic Linux default apps, read by arctic-open (Super+Enter/W/E/F).
+# One role=command line per role. The installer rewrites this file with the apps you picked;
+# override any line in ~/.config/arctic/default-apps.
+terminal=kitty
+browser=gtk-launch app.zen_browser.zen
+editor=gtk-launch dev.zed.Zed
+files=thunar
+files-tui=kitty -e yazi

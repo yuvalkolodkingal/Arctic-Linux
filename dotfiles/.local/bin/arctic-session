@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# arctic-session — start one desktop service for the Mango session, once.
+# Used by ~/.config/mango/arctic/autostart.conf. If the service is already running
+# (for example as a systemd user unit from arctic-desktop-config), nothing happens.
+#
+#   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle
+#
+# `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
+# With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
+# ~/.config/mango/user.conf), or when Quickshell isn't installed, it starts the fallback desktop
+# instead: waybar for the bar and lxqt-policykit for passwords (fuzzel is the launcher).
+set -uo pipefail
+
+run_once() {   # run_once <process name> <command...>
+  local name="$1"; shift
+  pgrep -u "$UID" -x "$name" >/dev/null 2>&1 && return 0
+  command -v "$1" >/dev/null 2>&1 || [[ -x "$1" ]] || return 0
+  setsid -f "$@" >/dev/null 2>&1
+}
+
+case "${1:-}" in
+  shell)
+    if [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]] && command -v quickshell >/dev/null 2>&1 \
+       && arctic-shell --path >/dev/null 2>&1; then
+      arctic-shell   # quickshell -n: exits at once if it already runs
+    else
+      run_once waybar waybar
+      "$0" polkit
+    fi ;;
+  waybar)    run_once waybar waybar ;;
+  mako)      run_once mako mako ;;
+  polkit)
+    for agent in /usr/libexec/lxqt-policykit-agent /usr/libexec/polkit-mate-authentication-agent-1 /usr/libexec/xfce-polkit; do
+      if [[ -x "$agent" ]]; then run_once "$(basename "$agent" | cut -c1-15)" "$agent"; break; fi
+    done ;;
+  nm-applet) run_once nm-applet nm-applet --indicator ;;
+  clipboard)
+    pgrep -u "$UID" -f "wl-paste --watch cliphist" >/dev/null 2>&1 || \
+      { command -v cliphist >/dev/null && setsid -f wl-paste --watch cliphist store >/dev/null 2>&1; } ;;
+  idle)
+    # Lock after 5 min, suspend after 15 min; lock before any suspend. The live session only dims.
+    if arctic-is-live 2>/dev/null; then exit 0; fi
+    run_once swayidle swayidle -w \
+      timeout 300 'arctic-lock' \
+      timeout 900 'systemctl suspend' \
+      before-sleep 'arctic-lock' ;;
+  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle" >&2; exit 2 ;;
+esac

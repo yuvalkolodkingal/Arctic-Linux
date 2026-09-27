@@ -1,0 +1,49 @@
+# Arctic Linux — default unattended profile.
+#
+# Answers every wizard step with the same defaults a person gets by pressing Enter on each
+# screen: English (US), erase the chosen disk, LUKS2 encryption, and the default apps
+# (Zen, Zed, kitty, zsh + bash, yazi, Thunar, Collabora Office, VLC).
+#
+# Profiles are for CI and automation only (PLAN D12). They reference module ids — never
+# commands. Secrets come from the environment:
+#   ARCTIC_LUKS_PASSPHRASE   disk passphrase (required when encryption is on)
+#   ARCTIC_USER_PASSWORD     account password
+#
+#   arctic-install plan --profile profiles/defaults.toml            # print the command plan
+#   arctic-install unattended --profile profiles/defaults.toml      # install (root, live ISO)
+
+description = "Defaults: erase + LUKS2, default apps"
+
+[welcome]
+language = "en_US.UTF-8"
+
+[keyboard]
+layout = "us"
+variant = ""
+
+[timezone]
+timezone = "UTC"
+auto_time = true
+
+[disk]
+disk = ""          # empty = the wizard's choice: largest internal SSD, never the USB stick
+mode = "erase"
+
+[encryption]
+enabled = true
+
+[account]
+full_name = "Arctic User"
+username = "arctic-user"
+hostname = ""      # empty = {username}-{model} from DMI
+autologin = false
+
+[apps]
+browser = ["zen"]
+editor = ["zed"]
+terminal = ["kitty"]
+shell = ["zsh"]
+files = ["yazi", "thunar"]
+office = ["collabora"]
+video = ["vlc"]
+extras = []

@@ -1,0 +1,33 @@
+# Arctic Linux system services (arctic-release). Read before Fedora's 85/90/99 presets,
+# so these win.
+
+# Login screen: SDDM with the arctic theme (greeter on mango, sddm-wayland-mango).
+enable sddm.service
+disable gdm.service
+disable lightdm.service
+disable plasmalogin.service
+
+# Installer engine, socket-activated on /run/arcticd.sock (group wheel).
+enable arcticd.socket
+disable arcticd.service
+# Finishes app installs the installer had to put off (only runs when pending.json exists).
+enable arctic-firstboot.service
+
+# Nix (Fedora's nix-daemon package). The service, not the socket, until CI shows no AVC
+# denials with the socket (docs/PLAN.md §6.6).
+enable nix-daemon.service
+disable nix-daemon.socket
+
+# Live media: Fedora's livesys scripts set up the live user (also in 90-default.preset).
+enable livesys.service
+enable livesys-late.service
+
+# Power profiles on laptops (tuned-ppd, as Fedora Workstation).
+enable tuned.service
+enable tuned-ppd.service
+
+# No SSH server by default, as on Fedora's desktop editions (their 81-desktop.preset):
+# 90-default.preset would enable it, and firewalld's default zone lets ssh in. Turn it on
+# with `sudo systemctl enable --now sshd`.
+disable sshd.service
+disable sshd.socket

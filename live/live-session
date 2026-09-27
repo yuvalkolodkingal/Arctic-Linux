@@ -1,0 +1,47 @@
+#!/bin/sh
+# /usr/libexec/arctic/live-session: started once by Mango in the live session
+# (exec-once in /usr/share/arctic/mango/live.conf).
+#
+# The boot menu picks the mode with a kernel argument:
+#   arctic.mode=install  → the installer, full screen (a layer surface over the desktop).
+#                          Quitting it (Esc, or Keep trying at the end) leaves the live desktop.
+#   arctic.mode=try      → the normal desktop; the shell shows the "You're trying Arctic
+#   (or nothing)           Linux" welcome card and the Install item.
+#
+# livesys-arctic also wrote the mode to /run/arctic/live-mode at boot (for the shell).
+
+mode=try
+# shellcheck disable=SC2013  # kernel arguments are words, not lines
+for arg in $(cat /proc/cmdline 2>/dev/null); do
+  case "$arg" in
+    arctic.mode=*) mode="${arg#arctic.mode=}" ;;
+  esac
+done
+case "$mode" in
+  install|try) ;;
+  *) mode=try ;;
+esac
+
+log() { logger -t arctic-live-session "$*" 2>/dev/null || printf '%s\n' "$*" >&2; }
+log "live session mode: $mode"
+
+if [ "$mode" = install ]; then
+  # The installer opens by itself, so the welcome notification (arctic-welcome) is skipped.
+  : > "${XDG_RUNTIME_DIR:-/tmp}/arctic-welcome-shown"
+  if command -v arctic-installer >/dev/null 2>&1; then
+    # Let the compositor finish starting the shell first.
+    sleep 1
+    # Through arctic-start-installer, which keeps it to one installer (Super+I, the bar's
+    # Install item and so on then leave the open one alone).
+    if command -v arctic-start-installer >/dev/null 2>&1; then
+      exec arctic-start-installer
+    fi
+    exec arctic-installer
+  fi
+  log "arctic-installer is not installed; staying on the live desktop"
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "Arctic Linux" -i dialog-warning "The installer isn't on this USB" \
+      "This live image was built without the Arctic Linux installer."
+  fi
+fi
+exit 0

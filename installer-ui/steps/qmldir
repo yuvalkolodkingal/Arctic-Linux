@@ -1,0 +1,13 @@
+StepPage 1.0 StepPage.qml
+WelcomeStep 1.0 WelcomeStep.qml
+KeyboardStep 1.0 KeyboardStep.qml
+NetworkStep 1.0 NetworkStep.qml
+TimezoneStep 1.0 TimezoneStep.qml
+DiskStep 1.0 DiskStep.qml
+EncryptionStep 1.0 EncryptionStep.qml
+AccountStep 1.0 AccountStep.qml
+AppsStep 1.0 AppsStep.qml
+SummaryStep 1.0 SummaryStep.qml
+InstallStep 1.0 InstallStep.qml
+AttentionView 1.0 AttentionView.qml
+DoneStep 1.0 DoneStep.qml

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# arctic-screenshot — Print (area), Shift+Print (whole screen), Super+Print (focused window).
+# Saves to ~/Pictures/Screenshots and copies the image to the clipboard.
+set -uo pipefail
+
+dir="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots"
+mkdir -p "$dir"
+file="$dir/Screenshot $(date '+%Y-%m-%d %H.%M.%S').png"
+
+case "${1:-area}" in
+  area)
+    geom="$(slurp -d 2>/dev/null)" || exit 0
+    grim -g "$geom" "$file" ;;
+  screen)
+    grim "$file" ;;
+  window)
+    geom="$(mmsg get focusing-client 2>/dev/null | python3 -c '
+import json, sys
+def find(o):
+    if isinstance(o, dict):
+        if all(k in o for k in ("x", "y", "width", "height")):
+            return o
+        for v in o.values():
+            r = find(v)
+            if r: return r
+    elif isinstance(o, list):
+        for v in o:
+            r = find(v)
+            if r: return r
+c = find(json.load(sys.stdin))
+if c and c["width"] > 0:
+    print("{},{} {}x{}".format(int(c["x"]), int(c["y"]), int(c["width"]), int(c["height"])))
+' 2>/dev/null)"
+    if [[ -n "$geom" ]]; then grim -g "$geom" "$file"; else grim "$file"; fi ;;
+  *) echo "usage: arctic-screenshot area|screen|window" >&2; exit 2 ;;
+esac
+
+[[ -f "$file" ]] || exit 1
+wl-copy --type image/png < "$file"
+notify-send -a "Screenshot" -i "$file" "Screenshot saved" "Copied to the clipboard · ${file/#$HOME/\~}" 2>/dev/null || true

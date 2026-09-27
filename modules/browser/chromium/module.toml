@@ -1,0 +1,38 @@
+id = "chromium"
+name = "Chromium"
+summary = "Open-source base of Chrome."
+category = "browser"
+default = false
+tile = "chromium"
+icon = "globe"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: chromium 154 (139 MB)
+method = "dnf"
+packages = ["chromium"]
+download_mb = 140
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "io.github.ungoogled_software.ungoogled_chromium"
+runtime = "org.freedesktop.Platform//26.08"
+desktop_id = "io.github.ungoogled_software.ungoogled_chromium.desktop"
+command = "gtk-launch io.github.ungoogled_software.ungoogled_chromium"
+verified = true
+download_mb = 163
+
+[defaults]
+desktop_id = "chromium-browser.desktop"
+role = "browser"
+command = "chromium-browser"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]

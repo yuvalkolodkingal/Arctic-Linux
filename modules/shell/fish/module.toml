@@ -1,0 +1,20 @@
+id = "fish"
+name = "fish"
+summary = "Shell with suggestions as you type."
+category = "shell"
+default = false
+tile = "fish"
+icon = "prompt"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: fish 4.6
+method = "dnf"
+packages = ["fish"]
+download_mb = 6
+
+[defaults]
+shell = "/usr/bin/fish"

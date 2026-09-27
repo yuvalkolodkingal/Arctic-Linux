@@ -1,0 +1,18 @@
+[Unit]
+Description=Arctic Linux installer engine
+Documentation=file:///usr/share/doc/arctic-installer/README.md
+Requires=arcticd.socket
+After=arcticd.socket network.target
+
+[Service]
+Type=simple
+# Socket activation: arcticd takes the listening socket from systemd (LISTEN_FDS).
+ExecStart=/usr/bin/arcticd
+# The engine partitions disks, mounts, chroots and relabels: it needs full root.
+User=root
+# Keep running after the last client disconnects: an install must never stop because the
+# installer window closed.
+KillMode=mixed
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# arctic-lock — lock the screen (Super+L, the power menu, and swayidle before sleep).
+# Spec: design components/LockScreen.
+#
+# The shell's lock screen: the wallpaper blurred under frost, the clock, your name and the
+# password field (ring amber while you type, red when wrong, green when accepted). It uses the
+# ext-session-lock protocol, so the session stays locked even if the shell stops.
+# Falls back to swaylock (same colours) when the shell isn't running.
+# The live session has no password, so locking is off there.
+set -uo pipefail
+
+if arctic-is-live 2>/dev/null; then
+  notify-send -a "Arctic Linux" -i system-lock-screen "Locking is off in the live session" \
+    "The live user has no password. Install Arctic Linux to lock your screen." 2>/dev/null
+  exit 0
+fi
+
+if arctic-shell-ipc lock lock >/dev/null 2>&1; then
+  # Wait until the compositor confirms the lock (isLocked reports WlSessionLock.secure: every
+  # screen covered), so "lock before sleep" really locks first.
+  for _ in $(seq 40); do
+    [[ "$(arctic-shell-ipc lock isLocked 2>/dev/null)" == true ]] && exit 0
+    sleep 0.05
+  done
+fi
+
+pgrep -u "$UID" -x swaylock >/dev/null && exit 0
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
+# shellcheck source=/dev/null
+source "$CONF/current/theme.env" 2>/dev/null || true
+img="$(arctic-wallpaper current 2>/dev/null)"
+if [[ -z "$img" || ! -f "$img" ]]; then
+  CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/arctic/wallpapers"
+  [[ -f "$CACHE/${ARCTIC_LOCK_WALLPAPER:-fox-polar-night}.png" ]] || arctic-wallpaper render >/dev/null 2>&1
+  img="$CACHE/${ARCTIC_LOCK_WALLPAPER:-fox-polar-night}.png"
+fi
+args=(-f)
+[[ -f "$img" ]] && args+=(-i "$img")
+exec swaylock "${args[@]}" "$@"

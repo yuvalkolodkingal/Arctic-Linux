@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# arctic-shell — the Arctic desktop shell (Quickshell): bar, screen frame, launcher and Get apps,
+# wallpapers, power menu, OSD, lock screen, polkit agent and the live-session welcome.
+#
+#   arctic-shell              start it in the background (nothing happens if it already runs)
+#   arctic-shell --foreground run it in this terminal, with its log (for debugging)
+#   arctic-shell --restart    stop the running shell and start it again
+#   arctic-shell --stop       stop it
+#   arctic-shell --path       print the shell folder it runs
+#
+# The shell folder is the first one found of:
+#   $ARCTIC_SHELL_DIR               an explicit choice (development)
+#   ~/.config/quickshell/arctic     your own copy, if you made one
+#   /usr/share/arctic/shell         the installed shell (package arctic-shell)
+#   <repo>/shell                    the checkout this script lives in (development)
+set -uo pipefail
+
+shell_dir() {
+  local here d
+  here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+  for d in "${ARCTIC_SHELL_DIR:-}" \
+           "${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/arctic" \
+           /usr/share/arctic/shell \
+           "$here/../../../shell"; do
+    if [[ -n "$d" && -f "$d/shell.qml" ]]; then (cd "$d" && pwd -P); return 0; fi
+  done
+  return 1
+}
+
+dir="$(shell_dir)" || { echo "arctic-shell: no shell found (is the arctic-shell package installed?)" >&2; exit 1; }
+command -v quickshell >/dev/null 2>&1 || { echo "arctic-shell: quickshell is not installed" >&2; exit 1; }
+
+case "${1:-}" in
+  --path)       echo "$dir" ;;
+  --foreground) shift; exec quickshell -n -p "$dir" "$@" ;;
+  --stop)       quickshell kill -p "$dir" >/dev/null 2>&1 ;;
+  --restart)    quickshell kill -p "$dir" >/dev/null 2>&1; sleep 0.3; exec quickshell -n -d -p "$dir" ;;
+  "")           exec quickshell -n -d -p "$dir" ;;
+  -h|--help)    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *)            echo "usage: arctic-shell [--foreground|--restart|--stop|--path]" >&2; exit 2 ;;
+esac

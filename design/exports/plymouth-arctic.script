@@ -1,0 +1,23 @@
+# Arctic Linux — Plymouth script theme (arctic.plymouth: ModuleName=script, ImageDir=/usr/share/plymouth/themes/arctic)
+# Images: mark.png (224px, fox with amber eyes), mark-blink.png, dot.png (6px amber #f6bd55), glow.png (aurora glow 1040x440, 35% opacity)
+Window.SetBackgroundTopColor(0.047, 0.063, 0.082);     # nose #0c1015 (Winter: #f3f6f8)
+Window.SetBackgroundBottomColor(0.047, 0.063, 0.082);
+
+cx = Window.GetWidth() / 2; cy = Window.GetHeight() * 0.44;
+glow = Sprite(Image("glow.png")); glow.SetPosition(cx - glow.GetImage().GetWidth()/2, cy - glow.GetImage().GetHeight()/2, 0);
+mark_img = Image("mark.png"); blink_img = Image("mark-blink.png");
+mark = Sprite(mark_img); mark.SetZ(10);
+for (i = 0; i < 3; i++) { dot[i] = Sprite(Image("dot.png")); dot[i].SetPosition(cx - 17 + i * 14, cy + 90, 10); }
+
+t = 0; reduce = 0;   # set reduce = 1 when the kernel cmdline has arctic.reduce_motion=1
+fun refresh() {
+  t++;
+  s = 1;
+  if (!reduce) s = 1 + 0.0175 * (1 - Math.Cos(t / 50 * 3.14159 * 2 / 2.4 * 1.0));   # breathe, ~2.4 s at 50 fps
+  img = mark_img; if (!reduce && (t % 250) < 7) img = blink_img;                       # blink every ~5 s
+  scaled = img.Scale(img.GetWidth() * s, img.GetHeight() * s);
+  mark.SetImage(scaled); mark.SetPosition(cx - scaled.GetWidth()/2, cy - scaled.GetHeight()/2, 10);
+  for (i = 0; i < 3; i++) { o = 0.25; if (!reduce) o = 0.25 + 0.75 * Math.Max(0, Math.Sin((t - i * 10) / 60 * 3.14159)); else o = 1; dot[i].SetOpacity(o); }
+}
+Plymouth.SetRefreshFunction(refresh);
+# Passphrase: draw the Input (lg) — frost box, 1px accent-edge border, bullets in #e9eef3 — 120px below the mark.

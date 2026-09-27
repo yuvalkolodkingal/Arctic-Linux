@@ -1,0 +1,6 @@
+AGENTS.md
+__pycache__/
+*.pyc
+/out/
+/build/
+*.iso

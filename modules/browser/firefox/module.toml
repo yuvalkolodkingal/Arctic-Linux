@@ -1,0 +1,37 @@
+id = "firefox"
+name = "Firefox"
+summary = "The classic open-source browser."
+category = "browser"
+default = false
+tile = "firefox"
+icon = "globe"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: firefox 156 (94 MB)
+method = "dnf"
+packages = ["firefox"]
+download_mb = 100
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.mozilla.firefox"
+runtime = "org.freedesktop.Platform//25.08"
+command = "gtk-launch org.mozilla.firefox"
+verified = true
+download_mb = 126
+
+[defaults]
+desktop_id = "org.mozilla.firefox.desktop"
+role = "browser"
+command = "firefox"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]

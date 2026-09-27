@@ -1,0 +1,49 @@
+  Keyboard shortcuts                                     Arctic Linux
+
+  Everyday
+    Super + Space            Apps (press again to close)
+    Super + Enter            Terminal
+    Super + W                Browser
+    Super + E                Code editor
+    Super + F                Files
+    Super + Shift + F        Files in the terminal (yazi)
+    Super + V                Clipboard history
+    Super + Shift + A        Get apps (install with dnf or Flatpak)
+    Super + Shift + W        Wallpapers
+    Super + /                This sheet
+
+  Windows
+    Super + Q                Close
+    Super + ← → ↑ ↓          Move focus
+    Super + Shift + ← → ↑ ↓  Swap with the neighbour
+    Super + Ctrl + ← →       Narrower / wider main area
+    Super + Ctrl + ↑ ↓       More / fewer main windows
+    Super + Z                Swap with the main window
+    Super + T                Float / tile
+    Super + M                Maximise
+    Super + Shift + M        Full screen
+    Super + Tab              Next window
+    Super + O                Overview
+    Super + N                Next layout
+    Super + drag             Move (left button) / resize (right button)
+
+  Workspaces
+    Super + 1 … 5            Go to workspace
+    Super + Shift + 1 … 5    Move window to workspace
+    Super + Page Up / Down   Previous / next workspace
+    Super + , / .            Focus the other monitor
+
+  System
+    Super + L                Lock
+    Super + Esc              Power menu
+    Super + I                Install Arctic Linux (live USB)
+    Super + Delete           Dismiss notification (Shift: all)
+    Super + Shift + N        Do not disturb
+    Super + Shift + T        Switch Winter / Polar night
+    Super + Shift + R        Reload the desktop config
+    Print                    Screenshot an area (Shift: screen, Super: window)
+
+  Touchpad
+    3 fingers                Move focus
+    4 fingers ← →            Previous / next workspace
+    4 fingers ↑ ↓            Overview

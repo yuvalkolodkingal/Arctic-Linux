@@ -1,0 +1,3 @@
+# From Fedora's fedora-release-common 44-18 (MIT), shipped unchanged by arctic-release
+# so Arctic Linux keeps Fedora's default-service policy. Arctic's own choices are in 80-arctic*.preset.
+disable *

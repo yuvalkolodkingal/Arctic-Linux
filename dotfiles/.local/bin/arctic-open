@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# arctic-open — open the app you picked for a role.
+#
+#   arctic-open terminal | browser | editor | files | files-tui
+#   arctic-open terminal [--hold] -e COMMAND [ARGUMENTS…]
+#                        run a command in your terminal (--hold: keep it open afterwards);
+#                        the launcher uses this for terminal apps, Fetch and "> command"
+#
+# The installer writes your picks to /etc/arctic/default-apps; you can override any of them in
+# ~/.config/arctic/default-apps. Both files are simple  role=command  lines, e.g.
+#     browser=gtk-launch org.mozilla.firefox
+# If the chosen app is missing, the next app in the role's fallback list is used. To run a
+# command, the terminal must take `-e COMMAND…` and `--hold`, as kitty, foot and alacritty do.
+set -uo pipefail
+
+usage() {
+  echo "usage: arctic-open terminal|browser|editor|files|files-tui" >&2
+  echo "       arctic-open terminal [--hold] -e COMMAND [ARGUMENTS…]" >&2
+  exit 2
+}
+
+role="${1:-}"
+[[ -n "$role" ]] || usage
+shift
+
+# Running a command in the terminal: [--hold] -e COMMAND…
+exec_args=()
+if (( $# )); then
+  [[ "$role" == terminal ]] || usage
+  hold=0
+  while (( $# )); do
+    case "$1" in
+      --hold) hold=1; shift ;;
+      -e) shift; break ;;
+      *) usage ;;
+    esac
+  done
+  (( $# )) || usage
+  (( hold )) && exec_args+=(--hold)
+  exec_args+=(-e "$@")
+fi
+
+declare -A FALLBACK=(
+  [terminal]="kitty|foot|alacritty"
+  [browser]="gtk-launch app.zen_browser.zen|gtk-launch org.mozilla.firefox|firefox|gtk-launch com.brave.Browser|chromium-browser"
+  [editor]="gtk-launch dev.zed.Zed|zeditor|zed|gtk-launch com.vscodium.codium|kitty -e nvim|foot -e nvim|alacritty -e nvim"
+  [files]="thunar|nautilus|pcmanfm-qt|kitty -e yazi|foot -e yazi|alacritty -e yazi"
+  [files-tui]="kitty -e yazi|foot -e yazi|alacritty -e yazi|kitty -e ranger"
+)
+
+configured=""
+for f in /etc/arctic/default-apps "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/default-apps"; do
+  [[ -r "$f" ]] || continue
+  line="$(grep -E "^${role}=" "$f" | tail -n1 || true)"
+  [[ -n "$line" ]] && configured="${line#*=}"
+done
+
+available() {   # available <command line> — is its program (or desktop entry) present?
+  local cmd="$1" prog
+  prog="${cmd%% *}"
+  if [[ "$prog" == gtk-launch ]]; then
+    local id="${cmd#gtk-launch }"
+    local dirs="${XDG_DATA_HOME:-$HOME/.local/share}:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}:/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share"
+    local d
+    IFS=: read -ra ds <<<"$dirs"
+    for d in "${ds[@]}"; do [[ -f "$d/applications/$id.desktop" ]] && return 0; done
+    return 1
+  fi
+  command -v "$prog" >/dev/null 2>&1
+}
+
+IFS='|' read -ra candidates <<<"${configured:+$configured|}${FALLBACK[$role]:-}"
+for c in "${candidates[@]}"; do
+  [[ -n "$c" ]] || continue
+  # A desktop entry can't be handed a command to run.
+  (( ${#exec_args[@]} )) && [[ "$c" == gtk-launch* ]] && continue
+  if available "$c"; then
+    # Detach so the app outlives the keybinding's process. The role's command line is a
+    # command line (word-split by sh); the command to run is passed as separate arguments.
+    setsid -f sh -c "exec $c \"\$@\"" arctic-open "${exec_args[@]}" >/dev/null 2>&1
+    exit 0
+  fi
+done
+
+notify-send -a "Arctic Linux" -i dialog-warning "No app set for $role" \
+  "Pick one with the Software app, or set $role= in ~/.config/arctic/default-apps." 2>/dev/null
+exit 1

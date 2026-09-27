@@ -1,0 +1,135 @@
+// Arctic Linux — top bar. Spec: design components/TopBar.
+// Left: launcher mark, workspaces 1–5 (+ "Live session" tag). Centre: clock.
+// Right: Install (live only), notifications + Bluetooth (quiet), tray, network, audio, battery, power.
+// Icons are the design's SVGs, drawn by style.css from ~/.config/arctic/current/icons.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 34,
+  "spacing": 0,
+  "margin": "0",
+  "reload_style_on_change": true,
+
+  "modules-left": ["custom/launcher", "ext/workspaces", "custom/live"],
+  "modules-center": ["clock"],
+  "modules-right": [
+    "custom/install",
+    "group/quiet",
+    "tray",
+    "network",
+    "pulseaudio",
+    "battery",
+    "custom/power"
+  ],
+
+  "custom/launcher": {
+    "format": " ",
+    "tooltip-format": "Apps  (Super + Space)",
+    "on-click": "arctic-launcher"
+  },
+
+  // Fedora's waybar 0.15 has no mango/* modules yet; ext/workspaces works with Mango's
+  // ext-workspace-v1 support. Switch to "mango/workspaces" once a newer waybar lands.
+  "ext/workspaces": {
+    "format": "{name}",
+    "on-click": "activate",
+    "sort-by-id": true,
+    "ignore-hidden": false
+  },
+
+  "custom/live": {
+    "exec": "echo Live session",
+    "exec-if": "arctic-is-live",
+    "interval": "once",
+    "tooltip-format": "Nothing you do here is saved to this computer"
+  },
+
+  "clock": {
+    "format": "{:%a %d %b · %H:%M}",
+    "tooltip-format": "<big>{:%A %d %B %Y}</big>\n<tt><small>{calendar}</small></tt>",
+    "calendar": {
+      "mode": "month",
+      "weeks-pos": "",
+      "format": {
+        "today": "<b><u>{}</u></b>"
+      }
+    }
+  },
+
+  "custom/install": {
+    "exec": "echo Install",
+    "exec-if": "arctic-is-live",
+    "interval": "once",
+    "tooltip-format": "Install Arctic Linux  (Super + I)",
+    "on-click": "arctic-start-installer"
+  },
+
+  "group/quiet": {
+    "orientation": "horizontal",
+    "modules": ["custom/notifications", "bluetooth"]
+  },
+
+  "custom/notifications": {
+    "exec": "arctic-dnd status",
+    "return-type": "json",
+    "interval": "once",
+    "signal": 8,
+    "format": " ",
+    "on-click": "arctic-dnd toggle",
+    "on-click-right": "makoctl restore"
+  },
+
+  "bluetooth": {
+    "format": " ",
+    "format-disabled": "",
+    "format-no-controller": "",
+    "tooltip-format": "Bluetooth on",
+    "tooltip-format-off": "Bluetooth off",
+    "tooltip-format-connected": "Connected to {device_alias}",
+    "on-click": "blueman-manager"
+  },
+
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8
+  },
+
+  "network": {
+    "format-wifi": " ",
+    "format-ethernet": " ",
+    "format-linked": " ",
+    "format-disconnected": " ",
+    "format-disabled": " ",
+    "tooltip-format-wifi": "{essid} · Connected",
+    "tooltip-format-ethernet": "Wired · Connected",
+    "tooltip-format-disconnected": "Not connected",
+    "tooltip-format-disabled": "Networking is off",
+    "on-click": "nm-connection-editor"
+  },
+
+  "pulseaudio": {
+    "format": "{volume}%",
+    "format-muted": "Muted",
+    "format-bluetooth": "{volume}%",
+    "tooltip-format": "{desc} · {volume}%",
+    "scroll-step": 5,
+    "max-volume": 100,
+    "on-click": "pavucontrol",
+    "on-click-right": "arctic-osd volume mute"
+  },
+
+  "battery": {
+    "states": { "warning": 20, "critical": 10 },
+    "format": "{capacity}%",
+    "format-charging": "{capacity}%",
+    "format-plugged": "{capacity}%",
+    "tooltip-format": "{timeTo}",
+    "interval": 30
+  },
+
+  "custom/power": {
+    "format": " ",
+    "tooltip-format": "Power  (Super + Esc)",
+    "on-click": "arctic-power"
+  }
+}

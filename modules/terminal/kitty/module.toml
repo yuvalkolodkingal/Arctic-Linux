@@ -1,0 +1,23 @@
+# In the live image (arctic-desktop requires it).
+id = "kitty"
+name = "kitty"
+summary = "Fast, GPU-drawn terminal."
+category = "terminal"
+default = true
+tile = "kitty"
+icon = "terminal"
+in_live_image = true
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ["kitty", "kitty-shell-integration"]
+remove = ["kitty", "kitty-shell-integration", "kitty-kitten"]
+download_mb = 5
+
+[defaults]
+desktop_id = "kitty.desktop"
+role = "terminal"
+command = "kitty"
