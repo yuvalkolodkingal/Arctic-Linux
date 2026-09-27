@@ -1,0 +1,18 @@
+/* Arctic Linux — GTK 4 / libadwaita colours from the active theme (Winter / Polar night).
+   The theme file defines the arctic_* colours and maps them onto libadwaita's named colours
+   (accent_bg_color → accent, window_bg_color → surface, …). */
+@import url("../arctic/current/gtk.css");
+
+button, entry, spinbutton, dropdown > button {
+  border-radius: 10px;
+}
+popover > contents, .card {
+  border-radius: 14px;
+}
+window.dialog, dialog-host > dialog > widget {
+  border-radius: 20px;
+}
+*:focus-visible {
+  outline: 2px solid @arctic_focus;
+  outline-offset: 2px;
+}

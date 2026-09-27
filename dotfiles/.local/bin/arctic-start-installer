@@ -1,0 +1,14 @@
+#!/bin/sh
+# arctic-start-installer — start the installer (Super+I, or Install on the bar). Live session only.
+if ! arctic-is-live; then
+  notify-send -a "Arctic Linux" -i dialog-information "Arctic Linux is already installed" \
+    "The installer only runs from the live USB." 2>/dev/null
+  exit 0
+fi
+pgrep -f org.arcticlinux.Installer >/dev/null 2>&1 && exit 0
+if command -v arctic-installer >/dev/null 2>&1; then
+  exec arctic-installer
+fi
+notify-send -a "Arctic Linux" -i dialog-warning "The installer isn't on this USB" \
+  "This live image was built without the Arctic Linux installer." 2>/dev/null
+exit 1

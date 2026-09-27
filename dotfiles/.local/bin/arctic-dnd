@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# arctic-dnd — Do not disturb (Super+Shift+N, or click the bell on the bar).
+# Hides every notification except critical ones (mako mode "do-not-disturb").
+#
+#   arctic-dnd toggle | on | off | status
+# `status` prints JSON for the waybar bell (class "dnd" switches it to the bell-off icon).
+set -uo pipefail
+
+MODE=do-not-disturb
+active() { makoctl mode 2>/dev/null | grep -qx "$MODE"; }
+refresh_bar() { pkill -RTMIN+8 -x waybar 2>/dev/null || true; }
+
+case "${1:-status}" in
+  toggle) makoctl mode -t "$MODE" >/dev/null; refresh_bar ;;
+  on)     active || makoctl mode -a "$MODE" >/dev/null; refresh_bar ;;
+  off)    active && makoctl mode -r "$MODE" >/dev/null; refresh_bar ;;
+  status)
+    if active; then
+      printf '{"text":" ","tooltip":"Do not disturb is on · only urgent notifications show","class":"dnd"}\n'
+    else
+      printf '{"text":" ","tooltip":"Notifications","class":"on"}\n'
+    fi ;;
+  *) echo "usage: arctic-dnd toggle|on|off|status" >&2; exit 2 ;;
+esac

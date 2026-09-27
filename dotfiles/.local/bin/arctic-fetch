@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# arctic-fetch — the Arctic Linux terminal greeting. Spec: design components/Fetch and
+# guidelines/30-terminal-and-fetch.md.
+#
+# A block-art fox (same silhouette as the mark) beside system info. The fox blinks, twitches
+# an ear and flicks its tail (≈2.9 s), plays that twice, then rests. Any key skips to the rest
+# frame. Reduced motion (ARCTIC_REDUCE_MOTION=1, `arctic-motion off`, or --static) draws the
+# rest frame once.
+#
+#   arctic-fetch            animate (interactive terminals only)
+#   arctic-fetch --static   draw the rest frame once
+#
+# Colours are terminal palette slots, so the greeting follows the active theme:
+# fox = foreground, eyes = color3 (amber), labels = color6, user = color3 bold,
+# separator and dim text = color8, then two rows of swatches (colours 0–7, 8–15).
+
+FOX_W=24
+
+# Column maths below counts characters, so make sure the shell works in UTF-8.
+case "$(locale charmap 2>/dev/null)" in
+  UTF-8|utf8) ;;
+  *) export LC_CTYPE=C.UTF-8 ;;
+esac
+
+fox_frame() {   # fox_frame <rest|blink|ear|tail> -> sets array F
+  F=(
+    "  ▗█▖         ▗█▖      "
+    "  ███▙       ▟███   ▗▄ "
+    "  ████▙▄▄▄▄▄▟████   ██▌"
+    "  ███A███████A███   ▐█▌"
+    "   ▜███████████▛    ▟█▘"
+    " ▄   ▜███████▛     ▟██ "
+    " ▜▙    ▜███▛    ▗▟██▛  "
+    "  ▀██▄▄▄▄▄▄▄▄▄▄███▀▘   "
+  )
+  case "$1" in
+    blink) F[3]="  ███████████████   ▐█▌" ;;
+    ear)   F[0]="               ▗█▖      "
+           F[1]="  ▀██▙       ▟███   ▗▄ " ;;
+    tail)  F[1]="  ███▙       ▟███       "
+           F[2]="  ████▙▄▄▄▄▄▟████   ▗█▖ "
+           F[3]="  ███A███████A███   ▐██▌"
+           F[4]="   ▜███████████▛    ▐█▌ "
+           F[5]=" ▄   ▜███████▛     ▟██▘ " ;;
+  esac
+}
+
+# One fox row: pad to FOX_W columns, eyes (A) in amber.
+fox_row() {
+  local row="$1"
+  while (( ${#row} < FOX_W )); do row+=" "; done
+  row="${row:0:FOX_W}"
+  printf '%s' "${row//A/$'\e[33m'█$'\e[39m'}"
+}
+
+# ---- system info --------------------------------------------------------
+info_lines() {
+  local os base kernel wm shell term theme up user host
+  user="${USER:-$(id -un)}"
+  host="$(cat /etc/hostname 2>/dev/null || hostname 2>/dev/null || echo localhost)"
+  host="${host%%.*}"
+
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    os="$(. /etc/os-release; echo "${NAME:-Linux} ${VERSION_ID:-}")"
+    base="$(. /etc/os-release
+      if [[ "${ID:-}" == fedora ]]; then echo "Fedora ${VERSION_ID:-}"
+      elif [[ " ${ID_LIKE:-} " == *" fedora "* ]]; then echo "Fedora $(rpm -E %fedora 2>/dev/null || echo "${VERSION_ID:-}")"
+      else echo "${ID_LIKE:-${ID:-}}"; fi)"
+  else
+    os="$(uname -s)"; base=""
+  fi
+  kernel="$(uname -r)"; kernel="${kernel%%-*}"
+
+  if [[ -n "${MANGO_INSTANCE_SIGNATURE:-}" || "${XDG_CURRENT_DESKTOP:-}" == mango* ]]; then
+    wm=$'Mango \e[90m· Wayland\e[39m'
+  elif [[ -n "${XDG_CURRENT_DESKTOP:-}" ]]; then
+    wm="${XDG_CURRENT_DESKTOP}"
+  else
+    wm="—"
+  fi
+
+  local sh="${SHELL##*/}"
+  case "$sh" in
+    zsh)  shell="zsh $(zsh --version 2>/dev/null | awk '{print $2}')" ;;
+    bash) shell="bash ${BASH_VERSION%%(*}" ;;
+    *)    shell="$sh" ;;
+  esac
+
+  if [[ -n "${KITTY_WINDOW_ID:-}" ]]; then
+    term="kitty $(kitty --version 2>/dev/null | awk '{print $2}')"
+  else
+    term="${TERM_PROGRAM:-${TERM:-—}}"
+  fi
+
+  theme="Polar night"
+  local env="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/theme.env"
+  # shellcheck source=/dev/null
+  if [[ -r "$env" ]]; then theme="$(. "$env"; echo "$ARCTIC_THEME_NAME")"; fi
+
+  local s; s="$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)"
+  local d=$((s / 86400)) h=$((s % 86400 / 3600)) m=$((s % 3600 / 60))
+  if (( d > 0 )); then up="$d d $h h"; elif (( h > 0 )); then up="$h h $m min"; else up="$m min"; fi
+
+  INFO=()
+  INFO+=($'\e[1;33m'"$user"$'\e[0;90m@\e[0;1m'"$host"$'\e[0m')
+  INFO+=($'\e[90m────────────────────\e[0m')
+  local k v
+  for k in os base kernel wm shell term theme uptime; do
+    case "$k" in
+      os) v="$os" ;; base) v="$base" ;; kernel) v="$kernel" ;; wm) v="$wm" ;;
+      shell) v="$shell" ;; term) v="$term" ;; theme) v="$theme" ;; uptime) v="$up" ;;
+    esac
+    INFO+=("$(printf '\e[36m%-7s\e[39m%s' "$k" "$v")")
+  done
+  local sw1="" sw2="" i
+  for i in 0 1 2 3 4 5 6 7; do sw1+=$'\e[4'"$i"$'m   '; sw2+=$'\e[10'"$i"$'m   '; done
+  INFO+=("$sw1"$'\e[0m' "$sw2"$'\e[0m')
+}
+
+draw_all() {   # full greeting, rest frame
+  fox_frame rest
+  local n=${#INFO[@]} j
+  (( n < ${#F[@]} )) && n=${#F[@]}
+  for (( j = 0; j < n; j++ )); do
+    if (( j < ${#F[@]} )); then fox_row "${F[j]}"; else printf '%*s' "$FOX_W" ""; fi
+    printf '  %s\e[0m\n' "${INFO[j]:-}"
+  done
+  TOTAL_ROWS=$n
+}
+
+redraw_fox() {  # redraw only the fox columns in place
+  fox_frame "$1"
+  printf '\e[%dA' "$TOTAL_ROWS"
+  local j
+  for (( j = 0; j < ${#F[@]}; j++ )); do printf '\r'; fox_row "${F[j]}"; printf '\n'; done
+  (( TOTAL_ROWS > ${#F[@]} )) && printf '\e[%dB' $((TOTAL_ROWS - ${#F[@]}))
+  printf '\r'
+}
+
+reduce_motion() {
+  [[ -n "${ARCTIC_REDUCE_MOTION:-}" && "${ARCTIC_REDUCE_MOTION}" != 0 ]] && return 0
+  [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/motion.conf" ]] && return 0
+  [[ -n "${NO_MOTION:-}" ]] && return 0
+  return 1
+}
+
+main() {
+  local static=0
+  [[ "${1:-}" == --static ]] && static=1
+  [[ -t 1 ]] || static=1
+  (( ${COLUMNS:-$(tput cols 2>/dev/null || echo 80)} < 60 )) && static=1
+  reduce_motion && static=1
+
+  info_lines
+  printf '\n'
+  draw_all
+  (( static )) && { printf '\n'; return 0; }
+
+  # Frame sequence (ms): rest 900 · blink 140 · rest 500 · ear 180 · rest 260 · ear 140 ·
+  # rest 420 · tail 220 · rest 200 · tail 180 — played twice, then rest.
+  local frames=(rest blink rest ear rest ear rest tail rest tail)
+  local waits=(0.90 0.14 0.50 0.18 0.26 0.14 0.42 0.22 0.20 0.18)
+  local stty_old; stty_old="$(stty -g 2>/dev/null || true)"
+  trap 'printf "\e[?25h"; [[ -n "$stty_old" ]] && stty "$stty_old" 2>/dev/null' EXIT INT TERM
+  printf '\e[?25l'
+  stty -echo -icanon 2>/dev/null || true
+  local _loop i _key
+  for _loop in 1 2; do
+    for i in "${!frames[@]}"; do
+      redraw_fox "${frames[i]}"
+      # Any key ends the animation early (and is swallowed, like a pager).
+      if IFS= read -rsn1 -t "${waits[i]}" _key 2>/dev/null; then break 2; fi
+    done
+  done
+  redraw_fox rest
+  printf '\e[?25h\n'
+}
+
+main "$@"

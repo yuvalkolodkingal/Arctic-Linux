@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# arctic-welcome — the "You're trying Arctic Linux" greeting in the live session.
+# Spec: design components/LiveDesktop. Shown once per live boot; closing it leaves the Install
+# item on the bar, and Super+I starts the installer from anywhere. Does nothing when installed.
+# Clicking the card starts the installer (mako runs the "default" action on click).
+set -uo pipefail
+
+arctic-is-live || exit 0
+flag="${XDG_RUNTIME_DIR:-/tmp}/arctic-welcome-shown"
+[[ -e "$flag" ]] && exit 0
+touch "$flag"
+sleep 2   # let mako and the bar come up first
+
+action="$(notify-send -a "Arctic Linux" -u normal -t 0 \
+  -i "${XDG_DATA_HOME:-$HOME/.local/share}/arctic/logos/arctic-mark-polar-night.svg" \
+  -A default="Install Arctic Linux" \
+  "You’re trying Arctic Linux" \
+  "Nothing is saved to this computer. Look around, open apps, then install when you’re ready.
+Click here or press Super + I to install · Super + Space for apps" 2>/dev/null)"
+
+[[ "$action" == default ]] && exec arctic-start-installer
+exit 0

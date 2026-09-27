@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# arctic-keys — keyboard cheat sheet (Super+/). Everything on this desktop has a shortcut.
+if pgrep -f 'class org.arcticlinux.Keys' >/dev/null; then pkill -f 'class org.arcticlinux.Keys'; exit 0; fi
+sheet="${XDG_DATA_HOME:-$HOME/.local/share}/arctic/keys.txt"
+exec kitty --class org.arcticlinux.Keys --title "Keyboard shortcuts" \
+  -o window_padding_width=16 sh -c "less -R --prompt='Esc or q to close' '$sheet'"

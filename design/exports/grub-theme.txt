@@ -1,0 +1,59 @@
+# Arctic Linux — GRUB theme (live USB). Polar night variant.
+# Files: background.png (aurora-polar-night at 1920x1080 with a #0c1015 70% overlay baked in),
+#        mark.png (the fox mark + wordmark, 360x72), select_{nw,n,ne,w,c,e,sw,s,se}.png (9-slice, radius 10, fill #f6bd55),
+#        figtree-17.pf2, figtree-bold-17.pf2, jetbrains-mono-12.pf2  (grub2-mkfont -s 17 Figtree-500.ttf ...)
+# Winter variant: background from snowfield-winter, overlay #f3f6f8 70%, item_color #151a21, select fill #efa637 with a #a86812 1px edge.
+
+title-text: ""
+desktop-image: "background.png"
+desktop-image-scale-method: "crop"
+desktop-color: "#0c1015"
+terminal-font: "JetBrains Mono Regular 12"
+terminal-box: "terminal_box_*.png"
+
++ image {
+  top = 15%
+  left = 50%-180
+  width = 360
+  height = 72
+  file = "mark.png"
+}
+
++ boot_menu {
+  left = 50%-210
+  top = 15%+108
+  width = 420
+  height = 260
+  item_font = "Figtree Medium 17"
+  selected_item_font = "Figtree Bold 17"
+  item_color = "#e9eef3"
+  selected_item_color = "#151a21"
+  item_height = 40
+  item_padding = 16
+  item_spacing = 4
+  icon_width = 0
+  icon_height = 0
+  selected_item_pixmap_style = "select_*.png"
+  scrollbar = false
+}
+
++ label {
+  id = "__timeout__"
+  left = 0
+  top = 100%-60
+  width = 100%
+  align = "center"
+  font = "JetBrains Mono Regular 12"
+  color = "#aeb9c5"
+  text = "Starting in %d s"
+}
+
++ label {
+  left = 0
+  top = 100%-36
+  width = 100%
+  align = "center"
+  font = "JetBrains Mono Regular 12"
+  color = "#8f9cab"
+  text = "↑ ↓ choose · Enter start · e edit · c command line"
+}

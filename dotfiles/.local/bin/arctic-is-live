@@ -1,0 +1,4 @@
+#!/bin/sh
+# arctic-is-live — exit 0 when running from the live USB ("Try Arctic Linux"), 1 otherwise.
+# Fedora live media boot with rd.live.image on the kernel command line.
+grep -qw 'rd.live.image' /proc/cmdline 2>/dev/null

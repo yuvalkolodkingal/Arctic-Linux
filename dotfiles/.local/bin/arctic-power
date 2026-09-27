@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# arctic-power — the power menu (Super+Esc, or the power item on the bar).
+# Items name what will happen (design voice: buttons say the consequence).
+set -uo pipefail
+
+items=("Lock screen" "Log out" "Suspend" "Restart" "Shut down")
+arctic-is-live 2>/dev/null && items=("Restart" "Shut down")
+
+choice="$(printf '%s\n' "${items[@]}" | fuzzel --dmenu --prompt "  " --placeholder "Power" \
+  --lines "${#items[@]}" --width 24 2>/dev/null)" || exit 0
+
+case "$choice" in
+  "Lock screen") arctic-lock ;;
+  "Log out")     mmsg dispatch quit ;;
+  "Suspend")     systemctl suspend ;;
+  "Restart")     systemctl reboot ;;
+  "Shut down")   systemctl poweroff ;;
+esac

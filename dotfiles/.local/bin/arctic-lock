@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# arctic-lock — lock the screen (Super+L). Spec: design components/LockScreen.
+# The theme's fox wallpaper under the frosted ring; the ring is amber while you type,
+# red when the password is wrong, green when it is accepted.
+set -uo pipefail
+
+if arctic-is-live 2>/dev/null; then
+  notify-send -a "Arctic Linux" -i system-lock-screen "Locking is off in the live session" \
+    "The live user has no password. Install Arctic Linux to lock your screen." 2>/dev/null
+  exit 0
+fi
+pgrep -x swaylock >/dev/null && exit 0
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
+# shellcheck source=/dev/null
+source "$CONF/current/theme.env"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/arctic/wallpapers"
+[[ -f "$CACHE/$ARCTIC_LOCK_WALLPAPER.png" ]] || arctic-wallpaper render >/dev/null 2>&1
+
+args=(-f)
+if [[ -f "$CACHE/$ARCTIC_LOCK_WALLPAPER.png" ]]; then
+  args+=(-i "$CACHE/$ARCTIC_LOCK_WALLPAPER.png")
+fi
+exec swaylock "${args[@]}" "$@"

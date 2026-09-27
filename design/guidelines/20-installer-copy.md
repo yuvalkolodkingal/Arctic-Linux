@@ -1,0 +1,20 @@
+# Installer copy
+
+One decision per screen. The recommended choice is always pre-selected, so a person who only presses Enter gets a good, encrypted system. Nothing touches the disk before step 9.
+
+| # | Title | Help text | Content and defaults | Primary |
+|---|---|---|---|---|
+| 1 | Welcome to Arctic Linux | This takes about 10 minutes. First, pick the language you'd like to use. | Searchable language list; system language pre-selected. Aurora band. Note: "Nothing is changed on this computer until the Summary step." | Next |
+| 2 | Choose your keyboard layout | This is how the keys on your keyboard will type. You can add more layouts later. | Layout list, the one matching the language pre-selected and labelled "Suggested for your language"; a "Try it" field. | Next |
+| 3 | Connect to the internet | Pick a Wi-Fi network or plug in a cable. | Info banner "Why do I need the internet? Arctic Linux downloads the apps you pick and the latest security updates while it installs, so you start up to date." Network list; a wired connection skips this step automatically. Next is disabled until online. | Next |
+| 4 | Where are you? | We use this to set your clock and time zone. | Detected city card ("Found from your network"), Region + City dropdowns, "Set the time automatically" on. | Next |
+| 5 | How should we install? | — | Disk dropdown; choice cards: **Erase disk and install** (Recommended, encrypted, pre-selected) and **Install alongside {OS}** (only when free space ≥ 40 GB, shows how much it will use). Warning banner "All files on this disk will be erased. Back up anything you want to keep first." | Next |
+| 6 | Create an encryption passphrase | You'll type this each time the computer starts, before logging in. | Passphrase + confirm with the strength meter ("Strong · 4 words"), "Suggest a passphrase" ghost button, warning "If you forget this passphrase, no one can recover your files — not even us." Next from "Fair" upward. | Next |
+| 7 | Create your account | — | Your name → Username auto-filled (lowercase, editable) → Password + confirm → Computer name auto-suggested as `{username}-{model}` ("Suggested from your name and computer"). Errors inline: "Passwords don't match yet." | Next |
+| 8 | Choose your apps | We've ticked our favourites. Change anything — you can add or remove apps later. | App checklist (Browser, Editor, Terminal, Shell, File manager, Office, Video, Extras). Footer: "9 apps · 1.4 GB download". | Next |
+| 9 | Ready to install | Check everything below. Nothing has been written to your disk yet. | Summary rows with "Change" links back to each step; warning "Installing will erase everything on {disk}. This can't be undone." | **Erase disk and install** (or **Install alongside {OS}**) |
+| 10 | Installing Arctic Linux | You can leave this running. Keep the computer plugged in. | Progress with a friendly status line ("Installing Zed, your code editor…"), time left, four sub-steps with icons, a shortcuts tip card. No Back. | — |
+| 11 | One app needs attention | — | Progress paused in `error`; error banner "{App} couldn't be downloaded. The download server didn't answer. Everything else is fine — {App} is optional and you can add it later from the Software app." Buttons **Try again** (primary) and **Skip {App}**. Core system failures instead show "Something went wrong while installing" with **Save log to USB** and **Try again**. | Try again |
+| 12 | Arctic Linux is ready | Everything is installed, including {n} apps. Welcome aboard, {first name}. | Card "Remove the USB stick — take it out now, then restart. Your computer will start Arctic Linux and ask for your disk passphrase." Aurora band. | **Restart now** (ghost: Keep trying) |
+
+**Status lines during install** (rotate with the real task): "Preparing the disk…", "Copying Arctic Linux…", "Installing {App}, your {role}…", "Setting up your account…", "Almost there — tidying up…".
