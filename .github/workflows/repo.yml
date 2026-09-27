@@ -168,6 +168,16 @@ jobs:
             --base-url "$BASE_URL" --budget-mb 900 --summary "$GITHUB_STEP_SUMMARY" $RESIGN_OLD
           echo "manifest_sha256=$(sha256sum site/manifest.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
+      - name: Check the signed site with dnf5, as installed systems use it
+        env:
+          CHANNEL: ${{ steps.plan.outputs.channel }}
+          SRC_DIR: ${{ steps.plan.outputs.src }}
+        run: |
+          # arctic-release from this build in place of fedora-release, only its key, every check
+          # on (gpgcheck, repo_gpgcheck, skip_if_unavailable=0): repomd.xml.asc and package
+          # signatures verified by dnf5 itself, not only by gpg and rpmkeys.
+          tools/test-repo.sh --signed --channel "$CHANNEL" --rpms out/repo --site site --src "$SRC_DIR"
+
       - name: Upload the site
         uses: actions/upload-pages-artifact@v5
         with:
