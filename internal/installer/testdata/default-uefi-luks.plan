@@ -39,7 +39,7 @@ $ blkid --match-tag UUID --output value /dev/nvme0n1p3
 $ blkid --match-tag UUID --output value /dev/nvme0n1p2
 
 # == copy: Copying Arctic Linux…
-$ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' '--exclude=/boot/efi/*' '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
+$ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' --exclude=/boot/efi '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/boot/vmlinuz-0-rescue-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
 $ rsync -rt /run/rootfsbase/boot/efi/ /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/grub2/1:2.12-64.fc44/EFI /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/shim/16.1-5/EFI /mnt/boot/efi/

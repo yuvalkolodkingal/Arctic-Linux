@@ -45,12 +45,41 @@ def run(cmd):
     return subprocess.run(cmd, stdin=subprocess.DEVNULL).returncode == 0
 
 
+def fedora_release():
+    for line in Path("/etc/os-release").read_text().splitlines():
+        if line.startswith("VERSION_ID="):
+            return line.split("=", 1)[1].strip().strip('"')
+    return ""
+
+
+def setup_repos(method):
+    """What the installer does before a dnf module (internal/installer setupRepos): the RPM
+    Fusion release packages (keys from distribution-gpg-keys, never --nogpgcheck), then the
+    package swaps (ffmpeg-free → ffmpeg)."""
+    rel = fedora_release()
+    for repo in method.get("repos", []):
+        kind = repo.removeprefix("rpmfusion-")   # free | nonfree
+        if subprocess.run(["rpm", "-q", f"rpmfusion-{kind}-release"], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL).returncode == 0:
+            continue
+        key = f"/usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KEY-rpmfusion-{kind}-fedora-{rel}"
+        url = f"https://mirrors.rpmfusion.org/{kind}/fedora/rpmfusion-{kind}-release-{rel}.noarch.rpm"
+        if not (run(["rpm", "--import", key]) and run(["dnf", "-y", "install", url])):
+            return False
+    for swap in method.get("swap", []):
+        old, _, new = swap.partition("=")
+        if not run(["dnf", "-y", "swap", "--allowerasing", old, new]):
+            return False
+    return True
+
+
 def try_method(method):
     kind = method.get("method")
     if kind == "dnf":
-        return run(["dnf", "-y", "install", *method.get("packages", [])])
+        return setup_repos(method) and run(["dnf", "-y", "install", *method.get("packages", [])])
     if kind == "copr":
         return (run(["dnf", "-y", "copr", "enable", method["copr"]])
+                and setup_repos(method)
                 and run(["dnf", "-y", "install", *method.get("packages", [])]))
     if kind == "flatpak":
         remote = method.get("remote", "flathub")

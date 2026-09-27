@@ -89,8 +89,8 @@ func TestAllProfilesValid(t *testing.T) {
 		}
 		return nil
 	})
-	if n != 3 {
-		t.Errorf("found %d profiles, want 3", n)
+	if n != 4 { // defaults + ci/{default,alternative,offline}
+		t.Errorf("found %d profiles, want 4", n)
 	}
 }
 

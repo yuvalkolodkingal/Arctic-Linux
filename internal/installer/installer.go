@@ -465,8 +465,13 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 		return err
 	}
 	in.source = src
+	// /boot/efi is excluded as a whole, not only its contents: it is the ESP's (vfat) mount
+	// point, which takes no owner, mode, ACL or SELinux xattr, so -aAX on it fails the copy
+	// (rsync exit 23). Its files are copied below without attributes. The live image's rescue
+	// kernel belongs to its machine id; kernel-install makes one for the new system.
 	excludes := []string{"/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "/media/*", "/var/tmp/*",
-		"/boot/efi/*", "/boot/loader/entries/*", "/boot/initramfs-*", "/var/cache/dnf/*", "/var/cache/libdnf5/*",
+		"/boot/efi", "/boot/loader/entries/*", "/boot/initramfs-*", "/boot/vmlinuz-0-rescue-*",
+		"/var/cache/dnf/*", "/var/cache/libdnf5/*",
 		"/etc/machine-id", "/lost+found"}
 	args := []string{"-aAXH", "--numeric-ids", "--info=progress2", "--no-inc-recursive"}
 	for _, e := range excludes {
@@ -482,7 +487,11 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 	}
 	// The ESP is vfat: copy its files without owners/permissions, then make sure the signed
 	// shim and GRUB are there (F44 also keeps them under /usr/lib/efi).
-	if in.lay.esp != "" {
+	if in.lay.esp == "" {
+		if err := in.R.MkdirAll(in.tgt("/boot/efi"), 0o700); err != nil {
+			return err
+		}
+	} else {
 		if in.R.Exists(path.Join(src, "boot/efi")) {
 			if err := in.run(ctx, "rsync", "-rt", path.Join(src, "boot/efi")+"/", in.tgt("/boot/efi")+"/"); err != nil {
 				return err

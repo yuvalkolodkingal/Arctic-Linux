@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -161,15 +162,25 @@ func (r *ExecRunner) Run(ctx context.Context, c Cmd) (Result, error) {
 		sc := bufio.NewScanner(pr)
 		sc.Buffer(make([]byte, 64*1024), 1024*1024)
 		sc.Split(scanLinesCR)
+		// Progress meters (rsync --info=progress2, flatpak) print thousands of lines; only
+		// the last one goes to the log, so the tail keeps the error messages.
+		lastProgress := ""
 		for sc.Scan() {
 			l := sc.Text()
 			if strings.TrimSpace(l) == "" {
 				continue
 			}
-			tail.add(l)
 			if c.OnLine != nil {
 				c.OnLine(l)
+				if IsProgressLine(l) {
+					lastProgress = l
+					continue
+				}
 			}
+			tail.add(l)
+		}
+		if lastProgress != "" {
+			tail.add(lastProgress)
 		}
 		io.Copy(io.Discard, pr)
 	}()
@@ -246,6 +257,15 @@ func (r *ExecRunner) Exists(path string) bool {
 
 // Glob implements Runner.
 func (r *ExecRunner) Glob(pattern string) ([]string, error) { return filepath.Glob(pattern) }
+
+var progressWords = regexp.MustCompile(`(?i)error|fail|denied|warning|not |cannot|can't|unable`)
+
+// IsProgressLine reports whether an output line is only a progress meter ("NN%" and no
+// error words), e.g. rsync's "  2,963,717,822  92%  5.10MB/s  0:09:14 (xfr#51636, …)".
+func IsProgressLine(l string) bool {
+	_, ok := ParsePercent(l)
+	return ok && !progressWords.MatchString(l)
+}
 
 func scanLinesCR(data []byte, atEOF bool) (int, []byte, error) {
 	for i, b := range data {

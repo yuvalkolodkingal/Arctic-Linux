@@ -318,6 +318,39 @@ func TestParsers(t *testing.T) {
 	if d, n, ok := ParseDNF("[ 3/45] Installing kitty-0:0.47.1-1.fc44.x86_64"); !ok || d != 3 || n != 45 {
 		t.Errorf("dnf %d/%d %v", d, n, ok)
 	}
+	// Progress meters stay out of the log tail; errors (even with a percent) stay in.
+	for line, want := range map[string]bool{
+		"  2,963,717,822  92%    5.10MB/s    0:09:14 (xfr#51636, to-chk=88/76683)":                                            true,
+		"Installing 2/3… ████████   67%  3.1 MB/s  00:02":                                                                     true,
+		`rsync: [receiver] rsync_xal_set: lsetxattr("/mnt/boot/efi","security.selinux") failed: Operation not supported (95)`: false,
+		"error: download failed at 45%": false,
+		"sent 2,966,895,947 bytes":      false,
+	} {
+		if got := IsProgressLine(line); got != want {
+			t.Errorf("IsProgressLine(%q) = %v, want %v", line, got, want)
+		}
+	}
+}
+
+func TestRunnerLogKeepsErrorsNotProgress(t *testing.T) {
+	var log strings.Builder
+	r := &ExecRunner{Log: &log}
+	script := `for i in $(seq 1 100); do printf '  %d,000  %d%%  1.0MB/s  0:00:01 (xfr#%d, to-chk=1/2)\r' $i $i $i; done
+echo 'rsync: failed to set permissions on "/mnt/boot/efi": Operation not permitted (1)' >&2
+printf '  100,000  100%%  1.0MB/s  0:00:01 (xfr#100, to-chk=0/2)\n'
+exit 23`
+	_, err := r.Run(context.Background(), Cmd{Name: "sh", Args: []string{"-c", script}, OnLine: func(string) {}})
+	var ce *CmdError
+	if !errors.As(err, &ce) {
+		t.Fatalf("want a CmdError, got %v", err)
+	}
+	out := ce.Output
+	if !strings.Contains(out, "Operation not permitted") {
+		t.Errorf("the error line is missing:\n%s", out)
+	}
+	if n := strings.Count(out, "to-chk="); n != 1 {
+		t.Errorf("want only the last progress line, got %d:\n%s", n, out)
+	}
 }
 
 func TestRedact(t *testing.T) {
