@@ -11,6 +11,7 @@ import sys
 import termios
 import time
 import unittest
+import unittest.mock
 
 spec = importlib.util.spec_from_file_location('install_terminal', Path(__file__).parents[1]/'scripts/install-terminal.py')
 module = importlib.util.module_from_spec(spec)
@@ -176,6 +177,42 @@ os.write(1, b'\\r\\n' + (b'Authenticated' if password.strip() == b'test-secret-7
         self.console.interrupt()
         self.wait_for(lambda: self.console.pid is None)
         self.assertIn('[Exit ', self.snapshot()['output'])
+
+
+class FlatpakThemeHookTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.share = Path(self.tmp.name) / 'share'
+        (self.share / 'theme-hooks.d').mkdir(parents=True)
+        self.out = Path(self.tmp.name) / 'ran'
+        hook = self.share / 'theme-hooks.d/30-zed'
+        hook.write_text('#!/bin/sh\necho ran > "{}"\n'.format(self.out))
+        hook.chmod(0o755)
+        self.env = {'ARCTIC_DATA_DIR': str(self.share), 'XDG_CONFIG_HOME': str(Path(self.tmp.name) / 'config')}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_zed_hook_runs_after_a_flatpak_install(self):
+        with unittest.mock.patch.dict(os.environ, self.env):
+            self.assertEqual(module.after_flatpak_install(['pkexec', '/usr/bin/dnf5', 'install', '-y', 'zed']), [])
+            self.assertEqual(module.after_flatpak_install(['flatpak', 'update', '-y']), [])
+            started = module.after_flatpak_install(['flatpak', 'install', '-y', 'flathub', 'dev.zed.Zed'])
+        self.assertEqual(started, [str(self.share / 'theme-hooks.d/30-zed')])
+        deadline = time.monotonic() + 5
+        while not self.out.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.out.read_text(), 'ran\n')
+
+    def test_your_own_hook_wins_and_a_missing_one_is_skipped(self):
+        own = Path(self.env['XDG_CONFIG_HOME']) / 'arctic/theme-hooks.d/30-zed'
+        own.parent.mkdir(parents=True)
+        own.write_text('#!/bin/sh\nexit 0\n')
+        own.chmod(0o755)
+        with unittest.mock.patch.dict(os.environ, self.env):
+            self.assertEqual(module.theme_hook('30-zed'), str(own))
+            self.assertIsNone(module.theme_hook('99-none'))
 
 if __name__ == '__main__':
     unittest.main()
