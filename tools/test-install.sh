@@ -28,6 +28,9 @@
 #                                               context the installer daemon arcticd runs in
 #                                               (SELinux unconfined_service_t, service
 #                                               environment); sudo: straight from the terminal
+#   tools/test-install.sh --boot-append '… systemd.debug_shell=tty9'   when collecting through
+#                                               a session fails (a failed login), collect.sh runs
+#                                               from the root debug shell on tty9 instead
 #   tools/test-install.sh --out DIR             default out/test/install/<firmware>
 #
 # Stage "install": a fresh 40 GB sparse target disk (target.qcow2) and, for UEFI, a fresh
@@ -192,6 +195,8 @@ sec() { echo; echo "== $*"; }
 echo ARCTIC-COLLECT-BEGIN
 sec "terminal shell"; echo "pid $pid: $(cat "/proc/$pid/comm" 2>/dev/null) ($(readlink "/proc/$pid/exe" 2>/dev/null))"
 sec "user"; getent passwd "$u"; id "$u"
+sec "home"; findmnt /home; ls -ldnZ / /home /home/* 2>&1; stat "/home/$u" 2>&1; getfacl -p /home "/home/$u" 2>&1 | head -20
+ls -lanZ "/home/$u" 2>&1 | head -30
 sec "getenforce"; getenforce
 sec "cmdline"; cat /proc/cmdline
 sec "os-release"; grep -E '^(NAME|VERSION|PRETTY_NAME)=' /etc/os-release
@@ -511,6 +516,22 @@ def stage_boot():
                 log(f"collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt {attempt})")
                 break
             log(f"collect.sh did not finish (attempt {attempt})")
+        if not collected and "systemd.debug_shell" in boot_append:
+            # No session (e.g. the login failed): collect from the root debug shell on tty9.
+            log("collecting from the debug shell on tty9")
+            vm.keys("ctrl-alt-f9")
+            time.sleep(10)
+            vm.type_text("sh /dev/sr0", gap=0.3)
+            vm.keys("ret")
+            t = time.time()
+            while time.time() - t < 300 and vm.alive():
+                if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
+                    collected = True
+                    break
+                time.sleep(5)
+            vm.shot("boot-59-debug-shell")
+            log("collected from the debug shell" if collected else "debug shell collect did not finish")
+            ok = False   # the session itself didn't work
         if not collected:
             ok = False
         time.sleep(5)
