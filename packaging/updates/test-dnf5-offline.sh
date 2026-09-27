@@ -179,8 +179,10 @@ linked || fail "not scheduled again"
 expect "replaced, scheduled again" "$(state_get status)/$(offline_status | python3 "$HELPER" offline-class ready)" ready/stored
 
 step "The boot installs it"
+: > /run/fake-systemctl.log
 boot_execute
 expect "installed" "$(rpm -q arctic-a)" arctic-a-1-2.noarch
+expect "the hook ignores the offline boot's own transaction" "$(grep -c restage /run/fake-systemctl.log || true)" 0
 expect "dnf5 cleaned up" "$(offline_status)" "$TEXT_NONE"
 linked && fail "/system-update still there"
 reboot_
