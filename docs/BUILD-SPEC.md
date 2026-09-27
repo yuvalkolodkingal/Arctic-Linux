@@ -183,7 +183,11 @@ greeter's copy and vconsole.conf; non-Latin layouts as `us,<layout>` + `grp:alt_
 with a Latin console keymap),
 `/etc/arctic/default-apps`, kernel-install/dracut, grub2-mkconfig, efibootmgr/grub2-install,
 app diff (dnf remove/install in chroot, flatpak from host with FLATPAK_* into /mnt, nix via
-`nix --store /mnt profile add`), setfiles relabel, unmount. Every command goes through a
+`nix --store /mnt profile add`; a Flatpak app the image ships — Zen when the ISO fits in 2 GiB —
+counts as in the live image whatever the catalog says: kept when ticked, uninstalled with its
+unused runtimes when not), setfiles relabel, unmount. The target directory is made a private
+mount point first (its mounts must not leak into services' mount namespaces, or LUKS can't be
+closed at the end); os-prober only runs for "alongside". Every command goes through a
 `Runner` interface; `--dry-run` prints the plan; unit tests use a fake Runner and golden files.
 
 ## 7. Live ISO

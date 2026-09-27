@@ -338,6 +338,8 @@ class Tour:
         if disk:
             a += ["-drive", f"file={disk},if=none,id=disk,discard=unmap",
                   "-device", "virtio-blk-pci,drive=disk,bootindex=1"]
+        if vars_path == "bios":
+            return a             # SeaBIOS: a disk installed in BIOS mode
         if vars_path is None:
             vars_path = f"{OUT}/OVMF_VARS-{name}.fd"
             shutil.copy("/usr/share/edk2/ovmf/OVMF_VARS.fd", vars_path)
@@ -441,11 +443,24 @@ class Tour:
         Mango's hot corner for the overview)."""
         self.pointer(W - 1, H - 1)
 
-    def dismiss(self, base, what, key="esc", tries=4):
-        """Press Esc until the screen is back to `base` (the desktop before a popup)."""
-        for _ in range(tries):
-            self.vm.keys(key)
-            if self.wait_for(lambda p: vmtest.changed_fraction(base, p) < 0.01, f"{what} closed", 12, 1.0):
+    # A point on the empty desktop, outside every shell card: clicking it closes the open
+    # popover (they close on a click outside; see the notes on keyboard focus below).
+    OUTSIDE = (1180, 760)
+
+    def empty_desktop(self, p):
+        return vmtest.changed_fraction(self.desktop, p) < 0.03
+
+    def close_popover(self, what, ipc=None):
+        """Close the open shell popover with a click outside it (fallback: its IPC call) and
+        wait for the empty desktop."""
+        self.click(*self.OUTSIDE)
+        self.park()
+        if self.wait_for(self.empty_desktop, f"{what} closed", 90, 3.0):
+            return True
+        if ipc and self.agent and self.agent.hello.is_set():
+            log(f"{what}: still open after a click outside; closing it over IPC ({ipc})")
+            self.sh(f"arctic-shell-ipc {ipc}", check=False)
+            if self.wait_for(self.empty_desktop, f"{what} closed", 90, 3.0):
                 return True
         log(f"warning: {what} did not close")
         return False
@@ -458,23 +473,28 @@ class Tour:
         if not self.agent:
             self.agent = Agent(self.port, files)
         cmd = (f"curl -fsSo /tmp/tour-agent.sh 10.0.2.2:{self.port}/agent && "
-               "setsid -f bash /tmp/tour-agent.sh >/tmp/tour-agent.log 2>&1 </dev/null; exit")
+               "setsid -f bash /tmp/tour-agent.sh >/dev/null 2>&1 </dev/null; exit")
         for attempt in (1, 2, 3):
-            base = self.settle("before-agent", timeout=30, need=1)
+            base = self.settle("before-agent", timeout=60, interval=3, need=1)
             self.vm.keys("meta_l-ret")
-            if not self.wait_change(base, "a terminal", 90):
+            if not self.wait_change(base, "a terminal", 120, thresh=0.1, every=2.0):
                 log(f"agent: no terminal opened (attempt {attempt})")
                 continue
-            self.settle("agent-terminal", timeout=60, need=2)
-            self.vm.type_text(cmd, gap=0.12)
+            # kitty draws its prompt a little after the window appears; keys typed before
+            # that are lost under TCG.
+            time.sleep(10)
+            self.settle("agent-terminal", timeout=90, interval=3, need=2)
+            self.vm.type_text(cmd, gap=0.25)
             self.vm.keys("ret")
-            if self.agent.hello.wait(90):
+            if self.agent.hello.wait(120):
                 log(f"agent: running in the guest ({self.agent.hello_info})")
-                self.wait_for(lambda p: vmtest.changed_fraction(base, p) < 0.01, "the terminal closed", 30)
+                if not self.wait_for(lambda p: vmtest.changed_fraction(base, p) < 0.02, "the terminal closed", 90, 3.0):
+                    log("agent: the terminal is still open")
                 return
             log(f"agent: no hello from the guest (attempt {attempt})")
+            self.grab(f"agent-attempt-{attempt}")
             self.vm.keys("meta_l-q")
-            time.sleep(5)
+            time.sleep(20)
         raise TourError("could not start the guest agent")
 
     def sh(self, cmd, timeout=180, check=True):
@@ -538,6 +558,9 @@ class Tour:
         return {"error": f"unknown op {op}"}
 
     # ================================================================ live phase
+    # Under TCG the live desktop answers slowly: Mango renders with llvmpipe (no 3D in the VM)
+    # and keeps several vCPUs busy, so anything drawn can lag a key press by 10-30 s. Every
+    # step therefore waits for what it expects to see on the screen, not for a fixed time.
     def phase_live(self):
         iso = E["ISO"]
         self.vm = vmtest.VM(self.qemu_argv("live", iso=iso), f"{OUT}/qmp-live.sock", "live",
@@ -545,6 +568,8 @@ class Tour:
         try:
             self.live_boot()
             self.live_desktop()
+            self.start_agent()
+            self.prepare_session()
             for name, fn in (("osd-volume", self.osd_volume), ("launcher", self.launcher),
                              ("launcher-calculator", self.launcher_calc), ("wallpapers", self.wallpapers),
                              ("get-apps", self.get_apps), ("power-menu", self.power_menu), ("keys", self.keys_sheet)):
@@ -577,6 +602,15 @@ class Tour:
             self.grab(f"{name}-failed")
             self.skipped.setdefault(name, f"failed: {e}")
             self.write_manifest()
+            # Leave the desktop as the next step expects it.
+            try:
+                self.sh("arctic-shell-ipc launcher close; pkill -f 'quickshell.*installer-ui'; "
+                        "pkill -x kitty; pkill -x thunar; flatpak kill app.zen_browser.zen; true", check=False)
+                self.click(*self.OUTSIDE)
+                self.park()
+                self.wait_for(self.empty_desktop, "the empty desktop", 120, 3.0)
+            except (TourError, vmtest.QMPError) as e2:
+                log(f"cleanup after {name}: {e2}")
 
     def live_boot(self):
         # 1. The boot menu (drawn at the firmware's 1920x1080 mode; scaled to 1280x720).
@@ -620,10 +654,11 @@ class Tour:
 
     def live_desktop(self):
         # 3. The welcome card ("You're trying Arctic Linux") on the settled desktop.
-        p = self.wait_for(welcome_card, "the welcome card", 240, 3.0)
+        p = self.wait_for(welcome_card, "the welcome card", 300, 3.0)
         self.park()
         if not p:
             log("warning: no welcome card seen")
+        time.sleep(10)
         p = self.settle("live-welcome", timeout=120, interval=3, need=2)
         card = welcome_card(p)
         if card:
@@ -633,221 +668,247 @@ class Tour:
             for attempt in (1, 2):
                 self.click(x, y)
                 self.park()
-                if self.wait_for(lambda q: not welcome_card(q), "the card closed", 90, 2.0):
+                if self.wait_for(lambda q: not welcome_card(q), "the card closed", 120, 3.0):
                     break
                 log(f"the welcome card is still open after clicking Keep trying (attempt {attempt})")
         else:
             self.skipped_because("live-welcome", "the welcome card was not on screen")
-        time.sleep(3)
-        p = self.settle("live-desktop", timeout=60, need=2)
+        time.sleep(10)
+        p = self.settle("live-desktop", timeout=90, interval=3, need=2)
         self.save(p, "live-desktop")
         self.desktop = p
 
+    def prepare_session(self):
+        """Once, through the agent (nothing of this is in any picture):
+        - the Get apps console's package index. The VM has no internet, so the caches that
+          package-index.py would fill (`dnf5 repoquery`, `flatpak remote-ls flathub`, in
+          ~/.cache/arctic) get the real Fedora 44 and Flathub name lists screenshot-tour.sh
+          fetched on the host;
+        - keys.txt in ~/.local/share/arctic (a copy of /usr/share/arctic/keys.txt): the shortcut
+          sheet of this build stays empty when that file is missing (its FileView never falls
+          back to /usr/share/arctic/keys.txt), so the shell is restarted to read it."""
+        seeded = []
+        for n in ("packages.txt", "flathub.txt"):
+            if os.path.exists(f"{OUT}/{n}"):
+                self.sh(f"mkdir -p ~/.cache/arctic && curl -fsS -o ~/.cache/arctic/{n} "
+                        f"10.0.2.2:{self.port}/file/{n} && touch ~/.cache/arctic/{n}")
+                seeded.append(n)
+        log(f"prepare: seeded the Get apps index with {seeded or 'nothing'}")
+        out = self.sh("top -b -n1 -d 2 | sed -n '7,11p'", check=False)
+        log("prepare: guest load:\n" + out)
+        if self.want("keys"):
+            self.sh("mkdir -p ~/.local/share/arctic && cp -n /usr/share/arctic/keys.txt ~/.local/share/arctic/keys.txt")
+            self.sh("quickshell kill -p /usr/share/arctic/shell >/dev/null 2>&1; sleep 2; "
+                    "setsid -f quickshell -n -p /usr/share/arctic/shell >/tmp/tour-shell.log 2>&1 </dev/null; echo ok")
+            log("prepare: restarted the shell to read ~/.local/share/arctic/keys.txt")
+            time.sleep(20)
+            if not self.wait_for(bar_up, "the bar again", 300, 3.0):
+                raise TourError("the shell did not come back")
+            time.sleep(20)
+            self.settle("shell-restarted", timeout=120, interval=3, need=2)
+
     def osd_volume(self):
-        base = self.settle("osd-base", timeout=30, need=1)
-        box = (440, 640, 840, 790)          # the OSD pill: bottom centre, 44 px above the edge
-        best, best_d = None, 0.0
+        # The OSD pill is dark on a dark desktop: look for its amber level bar.
+        box = (440, 680, 840, 790)
+        best, best_n = None, 0
         for attempt in (1, 2, 3):
             self.vm.keys("volumeup")
             t = time.time()
             frames = []
-            while time.time() - t < 20:
+            while time.time() - t < 45:
                 p = self.grab("osd")
-                d = region_diff(base, p, box)
-                frames.append((p, d))
-                if d > best_d:
-                    best, best_d = p, d
-                # Seen, and it has had time to finish its entrance: stop.
-                if best_d > 0.05 and d < best_d * 0.5:
-                    break
-                time.sleep(0.1)
-            for p, _ in frames:
+                n, _ = amber_box(p, box)
+                frames.append(p)
+                if n > best_n:
+                    best, best_n = p, n
+                if best_n > 150 and n < best_n * 0.5:
+                    break        # seen at full strength and fading again
+                time.sleep(0.2)
+            for p in frames:
                 if p != best:
                     os.remove(p)
-            if best_d > 0.05:
+            if best_n > 150:
                 break
             log(f"osd: nothing seen after the volume key (attempt {attempt})")
-            time.sleep(3)
-        if best_d > 0.05:
+            time.sleep(10)
+        if best_n > 150:
             self.save(best, "osd-volume")
         else:
             raise TourError("the volume OSD did not appear")
+        self.wait_for(self.empty_desktop, "the OSD gone", 90, 3.0)
 
     def type_checked(self, text, region, what, tries=3):
-        """Type into the focused field and check that the region changed (under TCG a surface
-        that has just opened can miss the first keys); clears the field and types again if not."""
-        before = self.probe()
-        before = shutil.copy(before, f"{OUT}/type-before.png")
+        """Type into the focused field and wait until the region shows it; clears the field and
+        types again if it doesn't (keys can be lost while the guest is busy)."""
+        before = shutil.copy(self.probe(), f"{OUT}/type-before.png")
         for attempt in range(1, tries + 1):
-            self.vm.type_text(text, gap=0.2)
-            if self.wait_for(lambda p: region_diff(before, p, region) > 0.02, f"{what}: typed text", 30, 1.0):
+            self.vm.type_text(text, gap=0.3)
+            if self.wait_for(lambda p: region_diff(before, p, region) > 0.01, f"{what}: typed text", 60, 2.0):
                 return True
             log(f"{what}: the typed text didn't show (attempt {attempt}); typing again")
-            self.vm.keys(*(["ctrl-a", "backspace"]))
-            time.sleep(2)
+            self.vm.keys("ctrl-a", "backspace")
+            time.sleep(5)
         return False
 
-    def popup(self, name, chord, what, typed=None, field=None, ready=None, timeout=120, settle_timeout=90):
-        """Open a shell surface with its shortcut (optionally type into its field), wait until it
-        shows what it should (ready(path)), screenshot it and close it again with Esc."""
-        base = self.settle(f"{name}-base", timeout=30, need=1)
+    def popup(self, name, chord, what, ipc_open, ipc_close, field=None, typed=None, check=None,
+              ready=None, settle_timeout=120):
+        """Open a shell surface with its shortcut (IPC if the shortcut shows nothing), type into
+        its field if asked, wait until it shows what it should, screenshot it, close it.
+
+        Keyboard focus: in this build the shell's popovers ask for exclusive keyboard focus only
+        after they are mapped, and Mango doesn't hand it over then, so typed keys (and Esc) go
+        nowhere until the card is clicked. The tour clicks into the field before typing, as a
+        person would after seeing nothing happen."""
+        self.wait_for(self.empty_desktop, "the empty desktop", 60, 3.0)
+        base = self.probe()
+        base = shutil.copy(base, f"{OUT}/popup-base.png")
         self.vm.keys(chord)
-        if not self.wait_change(base, what, timeout):
-            raise TourError(f"{what} did not open ({chord})")
-        self.settle(f"{name}-open", timeout=30, interval=1.5, need=2)
-        time.sleep(2)
+        how = "shortcut"
+        if not self.wait_change(base, what, 120, thresh=0.01, every=2.0):
+            log(f"{what}: nothing after {chord}; opening it over IPC ({ipc_open})")
+            self.sh(f"arctic-shell-ipc {ipc_open}", check=False)
+            how = "IPC"
+            if not self.wait_change(base, what, 120, thresh=0.01, every=2.0):
+                raise TourError(f"{what} did not open")
+        time.sleep(8)
+        self.settle(f"{name}-open", timeout=90, interval=3, need=2)
         if typed:
-            if not self.type_checked(typed, field or (0, 0, W, H), what):
+            self.click(*field)
+            time.sleep(5)
+            if not self.type_checked(typed, check, what):
                 raise TourError(f"{what}: typing {typed!r} had no effect")
+            self.park()
         if ready and not self.wait_for(ready, f"{what} ready", settle_timeout, 3.0):
             log(f"warning: {what} never looked ready")
-        p = self.settle(name, timeout=settle_timeout, interval=2, need=2)
-        self.save(p, name)
-        self.dismiss(base, what)
+        time.sleep(6)
+        p = self.settle(name, timeout=settle_timeout, interval=3, need=2)
+        self.save(p, name, note=f"opened with {chord if how == 'shortcut' else 'IPC: ' + ipc_open}")
+        self.close_popover(what, ipc_close)
 
-    # The launcher's search field, just under the bar (it hangs from the bar's left end).
-    LAUNCHER_FIELD = (30, 50, 530, 100)
+    # The launcher's search field hangs from the bar: docked left (x 30-525) or centred
+    # (x 392-887); x=470 is inside it either way.
+    LAUNCHER_FIELD = (470, 76)
+    LAUNCHER_CHECK = (30, 52, 890, 100)
 
     def launcher(self):
-        self.popup("launcher", "meta_l-spc", "the launcher", typed=self.launcher_query, field=self.LAUNCHER_FIELD)
+        self.popup("launcher", "meta_l-spc", "the launcher", "launcher open", "launcher close",
+                   field=self.LAUNCHER_FIELD, typed=self.launcher_query, check=self.LAUNCHER_CHECK)
 
     def launcher_calc(self):
-        self.popup("launcher-calculator", "meta_l-spc", "the launcher", typed="=12*4", field=self.LAUNCHER_FIELD)
+        self.popup("launcher-calculator", "meta_l-spc", "the launcher", "launcher open", "launcher close",
+                   field=self.LAUNCHER_FIELD, typed="=12*4", check=self.LAUNCHER_CHECK)
 
     def wallpapers(self):
         # Thumbnails are made on first open (Pillow, slow under TCG): wait until the grid below
         # the search field has pictures in it (it reads "Loading your wallpapers…" until then).
         def grid_filled(p):
             return busy(p, (42, 190, 874, 600)) > 12
-        self.popup("wallpapers", "meta_l-shift-w", "the wallpaper picker", ready=grid_filled, settle_timeout=400)
+        self.popup("wallpapers", "meta_l-shift-w", "the wallpaper picker", "wallpapers open", "wallpapers toggle",
+                   ready=grid_filled, settle_timeout=600)
 
     def get_apps(self):
-        # The VM has no internet: the console's package index (normally `dnf5 repoquery` and
-        # `flatpak remote-ls flathub`, cached in ~/.cache/arctic) is seeded with the real
-        # Fedora 44 / Flathub name lists fetched by screenshot-tour.sh on the host.
-        self.start_agent()
-        seeded = []
-        for n in ("packages.txt", "flathub.txt"):
-            if os.path.exists(f"{OUT}/{n}"):
-                self.sh(f"mkdir -p ~/.cache/arctic && curl -fsS -o ~/.cache/arctic/{n} 10.0.2.2:{self.port}/file/{n} && touch ~/.cache/arctic/{n}")
-                seeded.append(n)
-        log(f"get-apps: seeded {seeded or 'nothing'}")
-        self.popup("get-apps", "meta_l-shift-a", "Get apps", typed=E.get("GETAPPS_QUERY", "gimp"), settle_timeout=120)
+        # The console's input line is at the bottom of its card (centred: x 300-1007).
+        self.popup("get-apps", "meta_l-shift-a", "Get apps", "apps install", "apps toggle",
+                   field=(640, 604), typed=E.get("GETAPPS_QUERY", "gimp"), check=(260, 90, 1020, 630))
 
     def power_menu(self):
-        self.popup("power-menu", "meta_l-esc", "the power menu")
+        self.popup("power-menu", "meta_l-esc", "the power menu", "power toggle", "power toggle")
 
     def keys_sheet(self):
-        self.popup("keys", "meta_l-slash", "the shortcut sheet")
+        def filled(p):
+            return busy(p, (250, 120, 1030, 700)) > 20
+        self.popup("keys", "meta_l-slash", "the shortcut sheet", "keys toggle", "keys toggle",
+                   ready=filled, settle_timeout=180)
 
     def windows(self):
         """terminal-fetch, tiling and theme-winter: kitty with the fox greeting, a second kitty
         and Thunar tiled, then the same desktop in the Winter theme."""
-        base = self.settle("term-base", timeout=30, need=1)
+        self.wait_for(self.empty_desktop, "the empty desktop", 60, 3.0)
+        base = shutil.copy(self.probe(), f"{OUT}/term-base.png")
         self.vm.keys("meta_l-ret")
-        if not self.wait_change(base, "a terminal", 90):
+        if not self.wait_change(base, "a terminal", 120, thresh=0.1, every=2.0):
             raise TourError("no terminal opened")
-        self.settle("term-open", timeout=60, need=2)
-        # The live user's shell is bash (no greeting); the greeting is `arctic-fetch`.
-        self.vm.type_text("clear; arctic-fetch", gap=0.15)
-        self.vm.keys("ret")
-        # The greeting prints once it has read the system info (kitty --version and friends are
-        # slow under TCG): wait for the fox's white blocks, then for the animation to end.
-        if not self.wait_for(lambda q: busy(q, (20, 60, 300, 250)) > 25, "the fox greeting", 120, 2.0):
-            log("warning: no fox greeting seen in the terminal")
         time.sleep(10)
-        p = self.settle("terminal-fetch", timeout=120, interval=2, need=3)
+        self.settle("term-open", timeout=90, interval=3, need=2)
+        # The live user's shell is bash (no greeting); the greeting is `arctic-fetch`.
+        self.vm.type_text("clear; arctic-fetch", gap=0.25)
+        self.vm.keys("ret")
+        # It prints once it has read the system info (kitty --version and friends are slow
+        # under TCG): wait for the fox's white blocks, then for the animation to end.
+        if not self.wait_for(lambda q: busy(q, (20, 60, 300, 250)) > 25, "the fox greeting", 180, 3.0):
+            log("warning: no fox greeting seen in the terminal")
+        time.sleep(20)
+        p = self.settle("terminal-fetch", timeout=120, interval=3, need=3)
         self.save(p, "terminal-fetch")
         if not self.want_any(["tiling", "theme-winter"]):
-            self.vm.keys("meta_l-q")
+            self.close_windows()
             return
-        self.start_agent_if_needed_quietly()
-        cur = self.probe()
+        cur = p
         self.vm.keys("meta_l-ret")
-        self.wait_change(cur, "a second terminal", 90, thresh=0.05)
-        self.settle("term2-open", timeout=60, need=2)
-        self.vm.type_text("cat /etc/os-release", gap=0.15)
+        self.wait_change(cur, "a second terminal", 120, thresh=0.05, every=2.0)
+        time.sleep(10)
+        self.settle("term2-open", timeout=90, interval=3, need=2)
+        self.vm.type_text("cat /etc/os-release", gap=0.25)
         self.vm.keys("ret")
-        time.sleep(3)
-        cur = self.settle("term2", timeout=30, need=1)
-        if self.agent and self.agent.hello.is_set():
-            self.sh("setsid -f arctic-open files >/dev/null 2>&1 </dev/null; echo ok")
-        else:
-            self.vm.keys("meta_l-spc")
-            time.sleep(3)
-            self.vm.type_text("files", gap=0.2)
-            time.sleep(2)
-            self.vm.keys("ret")
-        self.wait_change(cur, "the file manager", 120, thresh=0.05)
-        time.sleep(5)
-        p = self.settle("tiling", timeout=120, interval=2, need=3)
+        time.sleep(10)
+        cur = self.settle("term2", timeout=60, interval=3, need=1)
+        # Thunar through arctic-open (what Super+F runs).
+        self.sh("setsid -f arctic-open files >/dev/null 2>&1 </dev/null; echo ok")
+        self.wait_change(cur, "the file manager", 180, thresh=0.05, every=3.0)
+        time.sleep(20)
+        p = self.settle("tiling", timeout=180, interval=4, need=3)
         self.save(p, "tiling")
         if self.want("theme-winter"):
             # Everything restyles one after the other (shell, kitty, GTK, Mango's borders, the
-            # wallpaper's Winter variant); under TCG that takes a while, so wait for the bar and
-            # the terminal to be light before the picture.
+            # wallpaper's Winter variant): wait for the bar and the terminal to be light.
             self.vm.keys("meta_l-shift-t")
             if not self.wait_for(lambda q: rmean(q, (300, 2, 980, 30)) > 170 and rmean(q, (40, 420, 620, 760)) > 170,
                                  "the Winter theme everywhere", 300, 3.0):
                 log("warning: the Winter theme did not reach the bar and the terminal")
-            time.sleep(15)
+            time.sleep(30)
             p = self.settle("theme-winter", timeout=180, interval=4, need=3)
             self.save(p, "theme-winter")
             self.vm.keys("meta_l-shift-t")
             if not self.wait_for(lambda q: rmean(q, (300, 2, 980, 30)) < 70 and rmean(q, (40, 420, 620, 760)) < 70,
                                  "Polar night again", 300, 3.0):
-                log("warning: Polar night did not come back everywhere")
-            time.sleep(15)
+                log("warning: Polar night did not come back everywhere; setting it over the agent")
+                self.sh("arctic-theme polar-night", check=False)
+            time.sleep(30)
             self.settle("theme-back", timeout=180, interval=4, need=2)
         self.close_windows()
 
     def close_windows(self):
         """Back to the empty desktop (cleanup between pictures, not part of any of them)."""
-        if self.agent and self.agent.hello.is_set():
-            self.sh("pkill -x thunar; pkill -x Thunar; pkill -x kitty; pkill -f zen_browser; true", check=False)
-        else:
-            for _ in range(4):
-                self.vm.keys("meta_l-q")
-                time.sleep(15)
-        if not self.wait_for(lambda q: vmtest.changed_fraction(self.desktop, q) < 0.03, "the empty desktop", 180, 3.0):
+        self.sh("pkill -x thunar; pkill -x Thunar; pkill -x kitty; flatpak kill app.zen_browser.zen; true", check=False)
+        if not self.wait_for(self.empty_desktop, "the empty desktop", 180, 3.0):
             log("warning: the desktop is not empty again")
-        self.settle("windows-closed", timeout=60, need=2)
-
-    def start_agent_if_needed_quietly(self):
-        if self.agent and self.agent.hello.is_set():
-            return
-        # The agent starts from a terminal of its own; keep the fetch terminal where it is by
-        # doing it on workspace 5 and coming back.
-        self.vm.keys("meta_l-5")
-        time.sleep(3)
-        try:
-            self.start_agent()
-        finally:
-            self.vm.keys("meta_l-1")
-            time.sleep(3)
+        self.settle("windows-closed", timeout=90, interval=3, need=2)
 
     def zen(self):
-        self.start_agent()
         rc, out = self.agent.run("flatpak info app.zen_browser.zen >/dev/null 2>&1 && echo yes || echo no")
         if out.strip() != "yes":
             self.skipped_because("zen-browser", "Zen Browser is not preinstalled in this ISO")
             return
-        base = self.settle("zen-base", timeout=30, need=1)
-        # Through the launcher, as a person would.
+        self.wait_for(self.empty_desktop, "the empty desktop", 60, 3.0)
+        base = shutil.copy(self.probe(), f"{OUT}/zen-base.png")
+        # Through the launcher, as a person would (click into the field: see popup()).
         self.vm.keys("meta_l-spc")
-        if not self.wait_change(base, "the launcher", 60):
+        if not self.wait_change(base, "the launcher", 120, every=2.0):
             raise TourError("the launcher did not open")
-        time.sleep(2)
-        self.vm.type_text("zen", gap=0.2)
-        time.sleep(3)
+        time.sleep(8)
+        self.click(*self.LAUNCHER_FIELD)
+        time.sleep(5)
+        if not self.type_checked("zen", self.LAUNCHER_CHECK, "the launcher"):
+            raise TourError("could not type into the launcher")
+        self.park()
+        time.sleep(10)
         self.vm.keys("ret")
         # The launcher closes, then Zen's window fills the screen (a cold start of a Flatpak
         # Firefox under TCG takes minutes).
-        self.wait_for(lambda q: region_diff(base, q, (20, 34, 540, 420)) < 0.03, "the launcher closed", 60, 2.0)
-        if not self.wait_change(base, "Zen", 400, thresh=0.3, every=5):
+        if not self.wait_change(base, "Zen", 600, thresh=0.3, every=5.0):
             raise TourError("Zen did not open")
-        time.sleep(30)
-        p = self.settle("zen-browser", timeout=300, interval=5, need=3)
+        time.sleep(60)
+        p = self.settle("zen-browser", timeout=400, interval=5, need=3)
         self.save(p, "zen-browser")
         self.close_windows()
 
@@ -872,7 +933,7 @@ class Tour:
             d = self.state()
             if d and pred(d):
                 return d
-            time.sleep(1.5)
+            time.sleep(2)
         raise TourError(f"installer: timed out waiting for {what} (state {d})")
 
     def fill(self, values):
@@ -881,81 +942,93 @@ class Tour:
             raise TourError(f"installer: fill {values} → {r}")
 
     def next(self, expect):
-        for _ in range(40):
+        for _ in range(60):
             r = self.inst("next")
             if r == "ok":
                 break
             if r in ("not ready",):
-                time.sleep(1.5)
+                time.sleep(2)
                 continue
             raise TourError(f"installer: next → {r} (state {self.state()})")
         self.wait_state(lambda d: d.get("page") == expect and d.get("ready"), f"page {expect}")
 
-    def ishot(self, name, **kw):
-        kw.setdefault("timeout", 60)
-        kw.setdefault("interval", 1.5)
-        p = self.settle(name, **kw)
+    # The installer's header (step overline + title): it changes with every step.
+    HEADER = (260, 30, 1000, 130)
+
+    def ishot(self, name, prev, grab_only=False):
+        """Screenshot an installer view once the screen shows it (the header differs from the
+        previous view's picture) and has settled."""
+        if prev and not self.wait_for(lambda p: region_diff(prev, p, self.HEADER) > 0.01, f"{name} drawn", 120, 2.0):
+            log(f"warning: {name}: the header did not change")
+        if grab_only:
+            p = self.grab(name)
+        else:
+            time.sleep(5)
+            p = self.settle(name, timeout=120, interval=3, need=2)
         self.save(p, name, note="installer demo mode (ARCTIC_INSTALLER_MOCK=1)")
+        return p
 
     def installer_demo(self):
-        self.start_agent()
-        speed = E.get("MOCK_SPEED", "0.5")
+        speed = E.get("MOCK_SPEED", "0.3")
+        self.wait_for(self.empty_desktop, "the empty desktop", 60, 3.0)
+        desktop = shutil.copy(self.probe(), f"{OUT}/installer-base.png")
         self.sh("pkill -f 'quickshell.*installer-ui' || true", check=False)
         self.sh(f"ARCTIC_INSTALLER_MOCK=1 ARCTIC_MOCK_SPEED={speed} setsid -f arctic-installer "
                 ">/tmp/tour-installer.log 2>&1 </dev/null; echo started")
         self.wait_state(lambda d: d.get("connected") and d.get("page") == "welcome" and d.get("ready"),
-                        "the Welcome step", 300)
+                        "the Welcome step", 400)
         self.park()
-        self.ishot("installer-01-welcome")
+        if not self.wait_change(desktop, "the installer", 180, thresh=0.3, every=3.0):
+            raise TourError("the installer window did not appear")
+        time.sleep(10)
+        prev = self.ishot("installer-01-welcome", None)
         self.next("keyboard")
         self.fill({"try": "The quick arctic fox"})
-        self.ishot("installer-02-keyboard")
+        prev = self.ishot("installer-02-keyboard", prev)
         self.next("network")
         self.fill({"ssid": "Tundra-5G", "password": "polarnight"})
-        self.wait_state(lambda d: d.get("valid") and not d.get("busy"), "the Wi-Fi connection", 90)
-        time.sleep(2)
-        self.ishot("installer-03-network")
+        self.wait_state(lambda d: d.get("valid") and not d.get("busy"), "the Wi-Fi connection", 120)
+        prev = self.ishot("installer-03-network", prev)
         self.next("timezone")
-        self.ishot("installer-04-timezone")
+        prev = self.ishot("installer-04-timezone", prev)
         self.next("disk")
-        self.ishot("installer-05-disk")
+        prev = self.ishot("installer-05-disk", prev)
         self.next("encryption")
         self.fill({"passphrase": "correct horse battery staple", "confirm": "correct horse battery staple",
                    "focus": "confirm"})
-        self.wait_state(lambda d: d.get("valid"), "a valid passphrase", 60)
-        self.ishot("installer-06-encryption")
+        self.wait_state(lambda d: d.get("valid"), "a valid passphrase", 90)
+        prev = self.ishot("installer-06-encryption", prev)
         self.next("account")
         self.fill({"full_name": "Noa Levi", "password": "snowy-owl-42", "confirm": "snowy-owl-42"})
-        self.wait_state(lambda d: d.get("valid"), "a valid account", 60)
-        time.sleep(3)
-        self.ishot("installer-07-account")
+        self.wait_state(lambda d: d.get("valid"), "a valid account", 90)
+        time.sleep(5)
+        prev = self.ishot("installer-07-account", prev)
         self.next("apps")
         self.fill({"select": ["steam"]})
-        self.ishot("installer-08-apps")
+        prev = self.ishot("installer-08-apps", prev)
         self.next("summary")
-        self.ishot("installer-09-summary")
+        prev = self.ishot("installer-09-summary", prev)
         # The Summary's primary action ("Erase disk and install"): the demo engine only pretends.
-        for _ in range(40):
-            r = self.inst("next")
-            if r == "ok":
+        for _ in range(60):
+            if self.inst("next") == "ok":
                 break
-            time.sleep(1.5)
-        self.wait_state(lambda d: d.get("page") == "install" and "Installing " in d.get("status", "")
-                        and int((d.get("apps") or "0/0").split("/")[0] or 0) >= 2,
-                        "the apps phase of the install", 400)
-        p = self.grab("installer-10-installing")
-        self.save(p, "installer-10-installing", note="installer demo mode (ARCTIC_INSTALLER_MOCK=1)")
-        self.wait_state(lambda d: d.get("page") == "attention", "the attention view", 400)
-        time.sleep(2)
-        self.ishot("installer-11-attention")
+            time.sleep(2)
+        self.wait_state(lambda d: d.get("page") in ("install", "attention"), "the install", 300)
+        # Mid-way: the progress bar and the sub-steps (the screen lags the engine a little).
+        self.wait_state(lambda d: d.get("page") != "install" or int(d.get("percent") or 0) >= 30,
+                        "the install at 30 %", 400)
+        prev = self.ishot("installer-10-installing", prev, grab_only=True)
+        self.wait_state(lambda d: d.get("page") == "attention", "the attention view", 600)
+        prev = self.ishot("installer-11-attention", prev)
         self.inst("retry")
-        self.wait_state(lambda d: d.get("page") == "done" and d.get("ready"), "the Done step", 400)
-        time.sleep(2)
-        self.ishot("installer-12-done")
+        self.wait_state(lambda d: d.get("page") == "done" and d.get("ready"), "the Done step", 600)
+        self.ishot("installer-12-done", prev)
+        self.sh("pkill -f 'quickshell.*installer-ui' || true", check=False)
 
     # ================================================================ installed phase
     def phase_installed(self):
-        disk, vars_path = E["DISK_COPY"], E["VARS_COPY"]
+        # No OVMF variable store next to the disk: it was installed in BIOS mode.
+        disk, vars_path = E["DISK_COPY"], E.get("VARS_COPY") or "bios"
         luks, password = E["LUKS_PASSPHRASE"], E["USER_PASSWORD"]
         argv = self.qemu_argv("installed", disk=disk, vars_path=vars_path)
         argv[argv.index("virtio-blk-pci,drive=disk,bootindex=1")] = "virtio-blk-pci,drive=disk,bootindex=0"
@@ -987,10 +1060,11 @@ class Tour:
                 time.sleep(4)
             if not p:
                 raise TourError("no passphrase prompt")
-            time.sleep(3)
+            time.sleep(5)
+            # A few characters typed (the entry shows bullets), then the picture, then the rest.
             self.vm.type_text(luks[:9], gap=0.3)
-            time.sleep(2)
-            p = self.grab("luks-prompt")
+            time.sleep(8)
+            p = self.settle("luks-prompt", timeout=40, interval=2, need=2)
             self.save(p, "luks-prompt", note=f"classify={vmtest.classify(p)}")
             self.vm.type_text(luks[9:], gap=0.3)
             self.vm.keys("ret")
@@ -1012,13 +1086,13 @@ class Tour:
             self.save(p, "installed-desktop")
             base = p
             self.vm.keys("meta_l-l")
-            if not self.wait_change(base, "the lock screen", 120, thresh=0.2):
+            if not self.wait_change(base, "the lock screen", 180, thresh=0.2, every=2.0):
                 raise TourError("the lock screen did not appear")
-            time.sleep(5)
-            self.settle("lock-open", timeout=90, interval=2, need=2)
+            time.sleep(15)
+            self.settle("lock-open", timeout=120, interval=3, need=2)
             self.vm.type_text(password[:6], gap=0.3)
-            time.sleep(1.5)
-            p = self.grab("lock-screen")
+            time.sleep(10)
+            p = self.settle("lock-screen", timeout=60, interval=2, need=2)
             self.save(p, "lock-screen")
             self.hold("end of the installed phase")
         except Exception:

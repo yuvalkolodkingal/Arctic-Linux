@@ -11,9 +11,10 @@
 #                         installer-*); --skip NAME[,NAME…] leaves some out. The boot and the
 #                         steps an image depends on still run.
 #   --iso PATH            default out/rc/iso/Arctic-Linux-0.1-x86_64.iso (else out/iso/…)
-#   --disk-dir DIR        an install made by tools/test-install.sh (target.qcow2, OVMF_VARS.fd;
-#                         default out/test/install/uefi). Both are copied to the work dir and the
-#                         copies are deleted afterwards; the originals are never written.
+#   --disk-dir DIR        an install made by tools/test-install.sh (target.qcow2, and OVMF_VARS.fd
+#                         for a UEFI install; default out/test/install/uefi). Both are copied to
+#                         the work dir and the copies are deleted afterwards; the originals are
+#                         never written. Without OVMF_VARS.fd the copy boots with SeaBIOS.
 #   --luks PASS --password PASS   the installed system's secrets (default: test-install.sh's)
 #   --out DIR             where the images go (default docs/wiki/images)
 #   --work DIR            raw screendumps, logs, manifest.json (default out/tour)
@@ -30,8 +31,14 @@
 # seed the Get apps package index (the VM has no internet: the real Fedora 44 and Flathub name
 # lists are fetched here first), open Thunar, and start and walk the installer against the
 # engine's demo mode (ARCTIC_INSTALLER_MOCK=1: nothing is written to any disk) through its IPC.
+# Two things this build needs help with, both done the way a person would get past them: the
+# shell's popovers don't get keyboard focus from Mango when opened with their shortcut, so the
+# tour clicks into the launcher / Get apps field before typing and closes popovers with a click
+# outside; and the shortcut sheet is empty unless ~/.local/share/arctic/keys.txt exists, so the
+# tour copies /usr/share/arctic/keys.txt there and restarts the shell once.
 # The installed-system shots boot a copy of the disk tools/test-install.sh installed.
-# Takes about 45 minutes without KVM.
+# Takes about 75 minutes without KVM (the live desktop redraws slowly under TCG); progress in
+# <work>/test.log, what each picture shows (and anything left out) in <work>/manifest.json.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,7 +80,7 @@ while (( $# )); do
     --kvm) KVM=1; shift ;;
     --hold) HOLD="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
-    -h|--help) sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
@@ -96,7 +103,7 @@ DISK_COPY=""
 VARS_COPY=""
 NO_DISK_REASON=""
 if [[ "$PHASES" == *installed* ]]; then
-  if [[ ! -f "$DISK_DIR/target.qcow2" || ! -f "$DISK_DIR/OVMF_VARS.fd" ]]; then
+  if [[ ! -f "$DISK_DIR/target.qcow2" ]]; then
     NO_DISK_REASON="no installed disk in $DISK_DIR (run tools/test-install.sh first)"
     arctic_log "$NO_DISK_REASON: the installed-system shots are skipped"
   elif pgrep -f "qemu-system.*$DISK_DIR/target.qcow2" >/dev/null 2>&1; then
@@ -106,9 +113,13 @@ if [[ "$PHASES" == *installed* ]]; then
     mkdir -p "$WORK/installed"
     arctic_log "copying the installed disk from $DISK_DIR"
     cp --sparse=always "$DISK_DIR/target.qcow2" "$WORK/installed/target.qcow2"
-    cp "$DISK_DIR/OVMF_VARS.fd" "$WORK/installed/OVMF_VARS.fd"
     DISK_COPY="$WORK/installed/target.qcow2"
-    VARS_COPY="$WORK/installed/OVMF_VARS.fd"
+    # With an OVMF variable store the disk was installed in UEFI mode (its boot entry lives
+    # there); without one, in BIOS mode (SeaBIOS).
+    if [[ -f "$DISK_DIR/OVMF_VARS.fd" ]]; then
+      cp "$DISK_DIR/OVMF_VARS.fd" "$WORK/installed/OVMF_VARS.fd"
+      VARS_COPY="$WORK/installed/OVMF_VARS.fd"
+    fi
   fi
 fi
 

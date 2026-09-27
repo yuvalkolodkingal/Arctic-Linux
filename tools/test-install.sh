@@ -195,6 +195,18 @@ echo
 echo ARCTIC-COLLECT-END
 EOF
 chmod 0755 "$DATA/run.sh" "$DATA/collect.sh"
+# The launcher goes into the data CD's system area (its first 32 KiB, which ISO 9660 leaves
+# unused), so the command typed into the VM is only `sudo sh /dev/sr0`: under TCG a busy guest
+# can lose keys (QEMU's PS/2 queue holds 16 bytes), and the shorter the command the better.
+# bash stops at the exec, before the NUL padding and the file system behind it.
+cat > "$OUT/sysarea.sh" <<'EOF'
+#!/bin/bash
+# tools/test-install.sh: first bytes of the test data CD, run as `sudo sh /dev/sr0 [PID]`.
+mkdir -p /run/t
+mountpoint -q /run/t || mount -o ro /dev/disk/by-label/ARCTICTEST /run/t || exit 1
+if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
+exit 1
+EOF
 
 arctic_ensure_engine
 engine="$(arctic_engine)"
@@ -230,11 +242,11 @@ def qemu_argv(name, with_iso):
          "-drive", f"file={out}/target.qcow2,if=none,id=disk,discard=unmap",
          "-device", f"virtio-blk-pci,drive=disk,bootindex={1 if with_iso else 0}",
          "-drive", f"file={out}/data.iso,media=cdrom,readonly=on,if=none,id=data",
-         "-device", "ide-cd,drive=data,bus=ide.1",
+         "-device", "ide-cd,drive=data,bus=ide.0",   # sr0: `sudo sh /dev/sr0` runs its launcher
          "-netdev", "user,id=net0", "-device", "virtio-net-pci,netdev=net0",
          "-device", "qemu-xhci", "-device", "usb-tablet", "-rtc", "base=utc"]
     if with_iso:
-        a += ["-drive", "file=/iso,media=cdrom,readonly=on,if=none,id=cd", "-device", "ide-cd,drive=cd,bus=ide.0,bootindex=0"]
+        a += ["-drive", "file=/iso,media=cdrom,readonly=on,if=none,id=cd", "-device", "ide-cd,drive=cd,bus=ide.1,bootindex=0"]
     if fw == "uefi":
         a += ["-drive", "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd",
               "-drive", f"if=pflash,format=raw,unit=1,file={out}/OVMF_VARS.fd"]
@@ -306,7 +318,7 @@ def stage_install():
         started = False
         for attempt in (1, 2, 3):
             open_terminal(vm, f"install-2{attempt}")
-            vm.type_text("sudo mount -m -L ARCTICTEST /run/t; sudo bash /run/t/run.sh")
+            vm.type_text("sudo sh /dev/sr0", gap=0.3)
             vm.keys("ret")
             t = time.time()
             while time.time() - t < 240 and vm.alive():
@@ -383,13 +395,35 @@ def stage_boot():
             vm.shot("boot-31-no-prompt-detected")
             log("no passphrase prompt detected; typing the passphrase anyway")
             ok = False
-        vm.type_text(luks, gap=0.25)
-        time.sleep(1)
-        vm.shot("boot-32-luks-typed")
-        vm.keys("ret")
-        time.sleep(15)
-        vm.shot("boot-33-unlocking")
-        p = wait_for(vm, "boot-40", {"login"}, 1500, every=10)
+        # A dropped key means a wrong passphrase: Plymouth asks again (after the splash was
+        # back on screen), and the passphrase is typed again, up to three times.
+        p = None
+        for attempt in (1, 2, 3):
+            vm.type_text(luks, gap=0.3)
+            time.sleep(1)
+            vm.shot(f"boot-32-luks-typed-{attempt}")
+            vm.keys("ret")
+            time.sleep(15)
+            vm.shot(f"boot-33-unlocking-{attempt}")
+            t = time.time()
+            left_prompt = False
+            again = False
+            while time.time() - t < 1500 and vm.alive():
+                q = vm.shot("boot-40-probe")
+                kind = vmtest.classify(q) if q else "none"
+                if kind == "login":
+                    p = q
+                    break
+                if kind != "prompt":
+                    left_prompt = True
+                elif left_prompt:
+                    again = True
+                    break
+                time.sleep(10)
+            if not again:
+                break
+            log(f"the passphrase prompt is back (attempt {attempt}): typing it again")
+            vm.shot(f"boot-34-prompt-again-{attempt}")
         if p:
             time.sleep(30)
             vm.shot("boot-41-login")
@@ -398,10 +432,24 @@ def stage_boot():
             vm.shot("boot-41-no-login-detected")
             log("no login screen detected; typing the password anyway")
             ok = False
-        vm.type_text(password, gap=0.25)
-        time.sleep(1)
-        vm.shot("boot-42-password-typed")
-        vm.keys("ret")
+        for attempt in (1, 2, 3):
+            vm.type_text(password, gap=0.3)
+            time.sleep(1)
+            vm.shot(f"boot-42-password-typed-{attempt}")
+            vm.keys("ret")
+            # SDDM clears the field and says so when the password was wrong; the card stays.
+            t = time.time()
+            gone = False
+            while time.time() - t < 150 and vm.alive():
+                time.sleep(10)
+                q = vm.shot("boot-43-probe")
+                if q and vmtest.classify(q) != "login":
+                    gone = True
+                    break
+            if gone:
+                break
+            log(f"still on the login screen after the password (attempt {attempt}): typing it again")
+            vm.shot(f"boot-43-login-again-{attempt}")
         # The desktop: the login card is gone and the screen settles.
         t = time.time()
         prev = None
@@ -425,11 +473,11 @@ def stage_boot():
         collected = False
         for attempt in (1, 2, 3):
             open_terminal(vm, f"boot-5{attempt + 1}")
-            vm.type_text("sudo mount -m -L ARCTICTEST /run/t; sudo bash /run/t/collect.sh $$")
+            vm.type_text("sudo sh /dev/sr0 $$", gap=0.3)
             vm.keys("ret")
             time.sleep(10)
             vm.shot(f"boot-5{attempt + 1}-sudo")
-            vm.type_text(password, gap=0.2)
+            vm.type_text(password, gap=0.3)
             vm.keys("ret")
             t = time.time()
             while time.time() - t < 240 and vm.alive():
@@ -467,7 +515,7 @@ inner=$(cat <<'INNER'
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow xorriso
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
 dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
-xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -o "$OUT/data.iso" "$OUT/data"
+xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
 if [ "$STAGE" != boot ]; then
   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
   [ "$FIRMWARE" = uefi ] && cp /usr/share/edk2/ovmf/OVMF_VARS.fd "$OUT/OVMF_VARS.fd"
