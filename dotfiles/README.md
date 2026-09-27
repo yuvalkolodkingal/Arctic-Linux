@@ -70,6 +70,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-dnd [toggle]` | Do not disturb (`Super + Shift + N`) |
 | `arctic-screenshot area\|screen\|window` | `Print`, `Shift + Print`, `Super + Print` |
 | `arctic-keys` | Keyboard cheat sheet (`Super + /`) |
+| `arctic-settings [page]` | Settings (`Super + S`): appearance, windows, displays, keyboard and mouse, shortcuts, default apps, network, sound, updates, power, startup apps ([`../settings/README.md`](../settings/README.md)) |
 | `arctic-shell-ipc apps install` | Get apps: install with dnf or Flatpak (`Super + Shift + A`) |
 | `arctic-session shell\|mako\|…` | Start one session service once (used by autostart) |
 | `arctic-welcome` | The live USB's welcome card, once per boot |
@@ -77,6 +78,8 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 
 ## Changing things
 
+- **Settings** (`Super + S`) writes what you change there to `~/.config/mango/settings.conf`,
+  which `config.conf` reads just before `user.conf`.
 - **Your own settings** go in files Arctic never overwrites: `~/.config/mango/user.conf`,
   `~/.config/kitty/user.conf`, `~/.zshrc.local`, `~/.config/arctic/default-apps`.
 - **Colours** come from the design tokens. Change `design/tokens.json`, re-export

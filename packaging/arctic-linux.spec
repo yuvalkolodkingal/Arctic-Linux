@@ -12,6 +12,7 @@
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
 #                          dotfiles/.local/bin → /usr/bin
 #   arctic-shell           shell/ → /usr/share/arctic/shell
+#   arctic-settings        settings/ → /usr/share/arctic/settings, arctic-settings, packaging/settings/
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
 #   arctic-sddm-theme      branding/sddm/arctic/
@@ -44,6 +45,7 @@ BuildRequires:  systemd-rpm-macros
 BuildRequires:  desktop-file-utils
 BuildRequires:  findutils
 BuildRequires:  tar
+BuildRequires:  python3
 
 %description
 Arctic Linux is a Fedora %{dist_version} based desktop built around the Mango Wayland
@@ -196,6 +198,34 @@ the get-apps console, on-screen display, lock screen and the live-session welcom
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
 
 # ---------------------------------------------------------------------------------------------
+%package -n arctic-settings
+Summary:        Arctic Settings, the settings app of Arctic Linux
+BuildArch:      noarch
+Requires:       quickshell
+Requires:       qt6-qtdeclarative
+Requires:       qt6-qtsvg
+Requires:       qt6-qtwayland
+Requires:       python3
+Requires:       hicolor-icon-theme
+# arctic-theme, arctic-motion, arctic-wallpaper, arctic-session, arctic-open; the wallpaper list
+Requires:       arctic-desktop-config = %{version}-%{release}
+Requires:       arctic-shell = %{version}-%{release}
+Requires:       arctic-fonts = %{version}-%{release}
+# Displays: list modes and try a layout (wlr-output-management)
+Requires:       wlr-randr
+# The tools the Network, Bluetooth and Sound pages open (arctic-desktop pulls them in too)
+Recommends:     nm-connection-editor
+Recommends:     blueman
+Recommends:     pavucontrol
+Recommends:     xdg-utils
+
+%description -n arctic-settings
+Arctic Settings: appearance and themes, windows (Mango gaps, borders, animations, focus,
+layout), displays, keyboard and mouse, shortcuts, default apps, network, Bluetooth, sound,
+updates, power and lock, startup apps. Changes go to ~/.config/mango/settings.conf and the
+Arctic helpers; nothing needs root. Start it with arctic-settings (Super+S).
+
+# ---------------------------------------------------------------------------------------------
 %package -n arctic-installer
 Summary:        Arctic Linux installer: engine (arcticd), CLI, app catalog and wizard UI
 Requires:       quickshell
@@ -312,6 +342,7 @@ Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-selinux = %{version}-%{release}
 Requires:       arctic-desktop-config = %{version}-%{release}
 Requires:       arctic-shell = %{version}-%{release}
+Requires:       arctic-settings = %{version}-%{release}
 Requires:       sddm-wayland-mango = %{version}-%{release}
 Requires:       arctic-sddm-theme = %{version}-%{release}
 Requires:       arctic-plymouth-theme = %{version}-%{release}
@@ -512,8 +543,8 @@ cp -a dotfiles/.config/arctic/themes/. %{buildroot}%{_datadir}/arctic/themes/
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
-# arctic-shell, arctic-shell-ipc and arctic-installer belong to their own subpackages.
-(cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-installer' \
+# arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own subpackages.
+(cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
 # /usr/share/arctic/mango is shared with arctic-live (live.conf).
 (cd dotfiles/.config/mango/arctic && ls -- *.conf) | sed 's,^,%{_datadir}/arctic/mango/,' >> desktop-config.files
@@ -543,6 +574,16 @@ chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-she
 # Get apps: pkexec dnf5 with the password kept for a few minutes.
 install -Dpm 0644 packaging/polkit/org.arcticlinux.pkexec.dnf.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
+
+# ---------------------------------------------------------------- arctic-settings
+# /usr/bin/arctic-settings was installed with the other helpers (dotfiles/.local/bin).
+install -d %{buildroot}%{_datadir}/arctic/settings
+# tests/ and dev/ (headless screenshots) are development-only.
+tar -C settings --exclude=./tests --exclude=./dev --exclude=./README.md -cf - . | tar -C %{buildroot}%{_datadir}/arctic/settings -xf -
+chmod 0755 %{buildroot}%{_datadir}/arctic/settings/scripts/arctic_settings.py
+desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/settings/org.arcticlinux.Settings.desktop
+install -Dpm 0644 packaging/settings/org.arcticlinux.Settings.svg \
+  %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg
 
 # ---------------------------------------------------------------- arctic-installer
 install -pm 0755 _build/bin/arcticd _build/bin/arctic-install %{buildroot}%{_bindir}/
@@ -595,6 +636,9 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
+desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Settings.desktop
+# Settings' backend: the file formats it reads and writes (uses `mango -p` when installed).
+python3 -m unittest discover -s settings/tests -p 'test_*.py'
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer; do
   case "$(head -n1 "$s")" in
@@ -801,6 +845,15 @@ fi
 %{_bindir}/arctic-shell-ipc
 %{_datadir}/arctic/shell/
 %{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
+
+%files -n arctic-settings
+%dir %{_datadir}/arctic
+%license LICENSE
+%doc settings/README.md
+%{_bindir}/arctic-settings
+%{_datadir}/arctic/settings/
+%{_datadir}/applications/org.arcticlinux.Settings.desktop
+%{_datadir}/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg
 
 %files -n arctic-installer
 %dir %{_datadir}/arctic

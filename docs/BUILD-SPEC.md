@@ -19,6 +19,7 @@ modules/<slot>/<id>/module.toml   app catalog (see §5)
 profiles/defaults.toml, profiles/ci/*.toml
 shell/                  Quickshell desktop shell (bar, launcher, wallpapers, get-apps console, OSD, lock, live welcome)
 installer-ui/           Quickshell installer frontend (the 12-step wizard)
+settings/               Arctic Settings, the settings app (Quickshell; §3.1)
 branding/sddm/arctic/   SDDM Qt6 QML login theme
 branding/grub/arctic/   GRUB theme (live ISO boot menu + installed system)
 branding/plymouth/arctic/  Plymouth script theme
@@ -54,6 +55,7 @@ included via `git stash create`). noarch unless it contains Go binaries.
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
 | `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (skel's `~/.config/arctic/current` links there), `/etc/arctic/default-apps` (defaults) | Requires the desktop runtime (§3). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte. |
+| `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
 | `sddm-wayland-mango` | `/usr/lib/sddm/sddm.conf.d/10-arctic.conf`, `/usr/libexec/arctic/sddm-compositor-mango`, `/usr/share/arctic/sddm/greeter.conf` | Provides+Conflicts `sddm-greeter-displayserver`. Requires sddm, mangowm, layer-shell-qt. Config per PLAN §7. If the mango greeter can't be made to work in the VM test, ship `10-arctic.conf` for `sddm-wayland-generic` (weston) instead and note it. |
 | `arctic-sddm-theme` | `/usr/share/sddm/themes/arctic/` ← `branding/sddm/arctic/` | Requires sddm, qt6-qtdeclarative, qt6-qt5compat only if used. |
@@ -63,7 +65,7 @@ included via `git stash create`). noarch unless it contains Go binaries.
 | `mangowm` (packaging/mangowm.spec) | upstream mango 0.17.3 | BuildRequires meson, gcc, `pkgconfig(wlroots-0.20)`, `pkgconfig(scenefx-0.5)`, wayland-devel, wayland-protocols-devel, libinput-devel, libxkbcommon-devel, pcre2-devel, pixman-devel, cjson-devel, pango-devel, libdrm-devel, xcb deps (`xorg-x11-server-Xwayland-devel`/libxcb-devel, xcb-util-wm-devel). `Source0: https://github.com/mangowm/mango/archive/refs/tags/0.17.3.tar.gz`. `/etc/mango/config.conf` marked `%config(noreplace)`. |
 
 Metapackage: `arctic-desktop` (subpackage, no files) Requires everything a desktop needs:
-mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-desktop-config,
+mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-settings, arctic-desktop-config,
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
 arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, mako, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
@@ -86,6 +88,47 @@ Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
 `lock lock`, `keys toggle`. Mango binds call these.
+
+### 3.1 Settings app (arctic-settings)
+
+A standalone Quickshell app (`settings/shell.qml`, a `FloatingWindow` titled "Arctic Settings";
+Mango floats it by title, `rules.conf`), opened by `arctic-settings [page]` (`Super + S`; the
+launcher; the first item of the shell's power menu and of `arctic-power`'s fuzzel fallback).
+Pages: appearance, windows, displays, input, shortcuts, apps, network, bluetooth, sound,
+updates, power, startup, about. It looks native because it reuses the installer's components
+(`settings/components` = `installer-ui/components`, checked by `settings/tests/test_app_files.py`)
+on the live tokens (`~/.config/arctic/current/theme.json`, like the shell's Theme.qml).
+Every read and write goes through `settings/scripts/arctic_settings.py` (JSON out, tested).
+
+**Files it writes** (user-level only; atomic; validated with its key table and `mango -c FILE -p`;
+previous versions in `~/.local/state/arctic/settings-backups/`):
+
+| File | Contents |
+|---|---|
+| `~/.config/mango/settings.conf` | Mango options (only keys Mango 0.17.3 parses: gaps, borders, radius, animations + durations, blur, shadows, opacity, focus, `new_is_master`, `default_mfact`, cursor, repeat, `xkb_rules_*` (empty = `key= # none`), trackpad and mouse), `tagrule=id:*,layout_name:<layout>`, `monitorrule=name:^<out>$,…`, `keymode=default` + `bind=MODS,KEY,spawn_shell,COMMAND`, `exec-once=` startup apps; unknown lines are kept at the end |
+| `~/.config/mango/config.conf` | `source-optional=~/.config/mango/settings.conf` inserted before the `user.conf` line when missing (the skel copy has it) |
+| `~/.config/arctic/default-apps` | `role=command` for browser, terminal, files, editor (read by `arctic-open` after `/etc/arctic/default-apps`) |
+| `~/.config/mimeapps.list` | `[Default Applications]` for links and files (as `xdg-mime default`) |
+| `~/.config/arctic/idle.conf` | `lock_after=`, `suspend_after=` (seconds, 0 = never), read by `arctic-session idle` |
+| `$XDG_RUNTIME_DIR/arctic-settings-display.json` | the display layout to go back to while a change waits to be kept |
+
+**Commands it calls** (each missing one hides or explains its controls): `mmsg dispatch
+reload_config`, `mmsg get all-devices|all-clients`, `mango -p`; `arctic-theme set <name>|auto
+on|off|mode auto|dark|light|current --json|list --json` (the theming engine; falls back to
+`arctic-theme winter|polar-night`); `arctic-update status --json|now|apply|channel
+stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
+`scripts/wallpapers.py list|apply` (→ `arctic-wallpaper`); `arctic-session idle --restart`;
+`wlr-randr --json` / `wlr-randr --output …`; `nmcli`; `gdbus` (power profiles, tuned-ppd);
+`gsettings` (GTK text size, cursor); tools it opens: `nm-connection-editor`, `blueman-manager`,
+`pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install`, `xdg-open`.
+Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
+
+Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
+watchdog (`arctic_settings.py display-revert --if-pending TOKEN --after 20`) puts the old layout
+back even if Settings is gone; kept layouts become `monitorrule` lines.
+
+IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|search|page|pages|ready|set|value|quit`
+(`arctic-settings` uses `page`/`open`; `settings/dev/headless.sh` the rest).
 
 ## 4. Engine ↔ installer UI protocol
 

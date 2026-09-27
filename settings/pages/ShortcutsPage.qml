@@ -63,6 +63,7 @@ Page {
                     onClicked: Backend.call(["bind-remove", String(mineRow.modelData.index)], r => {
                         if (r.ok) {
                             page.binds = r;
+                            Backend.refresh();
                             Backend.notify("success", "Shortcut removed", true);
                         }
                     })
@@ -173,6 +174,7 @@ Page {
                 if (r.ok) {
                     page.binds = r;
                     addDialog.close();
+                    Backend.refresh();
                     Backend.notify("success", "Shortcut added: " + addDialog.keyLabel, true);
                 } else {
                     addDialog.error = r.error;

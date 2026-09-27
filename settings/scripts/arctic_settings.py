@@ -23,7 +23,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     display-revert                go back to the layout from before display-try
     display-forget [NAME…]        drop saved monitor rules (Arctic's defaults apply again)
     devices                       connected keyboards, mice and touchpads (mmsg get all-devices)
-    power-profile [NAME]          power mode: power-saver, balanced, performance (powerprofilesctl)
+    power-profile [NAME]          power mode: power-saver, balanced, performance (tuned-ppd over D-Bus)
     apps                          default apps per role (browser, terminal, files, editor, …)
     app-set ROLE DESKTOP-ID       ~/.config/arctic/default-apps (arctic-open) + mimeapps.list
     idle | idle-set LOCK SUSPEND  lock / suspend timeouts in seconds (0 = never), for swayidle
@@ -411,31 +411,37 @@ class SettingsFile:
         return model
 
     def render(self):
-        out = [HEADER]
+        out = [HEADER.rstrip('\n')]
         if self.options:
-            out.append('\n# ---- Options')
+            out.append('')
+            out.append('# ---- Options')
             for key in OPTIONS:
                 if key in self.options:
                     value = self.options[key]
                     out.append('{}= # none'.format(key) if value == '' else '{}={}'.format(key, value))
         if self.layout:
-            out.append('\n# ---- Default layout for every workspace')
+            out.append('')
+            out.append('# ---- Default layout for every workspace')
             out.append('tagrule=id:*,layout_name:{}'.format(self.layout))
         if self.monitors:
-            out.append('\n# ---- Displays')
+            out.append('')
+            out.append('# ---- Displays')
             for rule in self.monitors:
                 out.append('monitorrule=' + format_monitor_rule(rule))
         if self.binds:
-            out.append('\n# ---- Your shortcuts (Mango uses the first bind for a key, so these add, never replace)')
+            out.append('')
+            out.append('# ---- Your shortcuts (Mango uses the first bind for a key, so these add, never replace)')
             out.append('keymode=default')
             for bind in self.binds:
                 out.append('bind={},{},spawn_shell,{}'.format(bind['mods'], bind['key'], bind['command']))
         if self.startup:
-            out.append('\n# ---- Startup apps (run once when you log in)')
+            out.append('')
+            out.append('# ---- Startup apps (run once when you log in)')
             for command in self.startup:
                 out.append('exec-once=' + command)
         if self.extra:
-            out.append('\n# ---- Kept from before (not written by Settings)')
+            out.append('')
+            out.append('# ---- Kept from before (not written by Settings)')
             out.extend(self.extra)
         text = '\n'.join(out).rstrip('\n') + '\n'
         for line in text.splitlines():
@@ -1184,24 +1190,46 @@ def cmd_devices(paths, _args):
 
 
 PROFILES = ['power-saver', 'balanced', 'performance']
+# Arctic ships tuned-ppd, which serves the power-profiles D-Bus API but no powerprofilesctl;
+# gdbus (glib2) talks to it directly. Both bus names are tried (new, then the older one).
+PPD_BUSES = [('org.freedesktop.UPower.PowerProfiles', '/org/freedesktop/UPower/PowerProfiles'),
+             ('net.hadess.PowerProfiles', '/net/hadess/PowerProfiles')]
+
+
+def _ppd(method, *args):
+    for name, path in PPD_BUSES:
+        code, out, err = run(['gdbus', 'call', '--system', '--dest', name, '--object-path', path,
+                              '--method', 'org.freedesktop.DBus.Properties.' + method, name] + list(args), timeout=10)
+        if code == 0:
+            return out, ''
+        last = err
+    return None, last
 
 
 def cmd_power_profile(paths, args):
-    """The power mode (powerprofilesctl, from tuned-ppd or power-profiles-daemon)."""
-    if not which('powerprofilesctl'):
-        return dict(ok=True, available=False)
-    if args:
-        if args[0] not in PROFILES:
-            raise Failure('There’s no power mode called “{}”.'.format(args[0]))
-        code, _out, err = run(['powerprofilesctl', 'set', args[0]], timeout=10)
-        if code != 0:
-            raise Failure(strip_ansi(err).strip().splitlines()[-1] if err.strip() else 'The power mode couldn’t be changed.')
-    code, out, _err = run(['powerprofilesctl', 'get'], timeout=5)
-    if code != 0:
-        return dict(ok=True, available=False)
-    code, listing, _err = run(['powerprofilesctl', 'list'], timeout=5)
-    offered = [p for p in PROFILES if re.search(r'^\*?\s*{}:'.format(re.escape(p)), listing, re.M)] or PROFILES
-    return dict(ok=True, available=True, current=out.strip(), profiles=offered)
+    """The power mode: power-saver, balanced or performance (tuned-ppd / power-profiles-daemon)."""
+    if args and args[0] not in PROFILES:
+        raise Failure('There’s no power mode called “{}”.'.format(args[0]))
+    if which('gdbus'):
+        if args:
+            out, err = _ppd('Set', 'ActiveProfile', "<'{}'>".format(args[0]))
+            if out is None:
+                raise Failure('The power mode couldn’t be changed ({}).'.format(strip_ansi(err).strip()[:100] or 'no power-profiles service'))
+        out, _err = _ppd('Get', 'ActiveProfile')
+        if out is not None:
+            match = re.search(r"'([a-z-]+)'", out)
+            listing, _e = _ppd('Get', 'Profiles')
+            offered = [p for p in PROFILES if listing and "'{}'".format(p) in listing] or PROFILES
+            return dict(ok=True, available=bool(match), current=match.group(1) if match else '', profiles=offered)
+    if which('powerprofilesctl'):
+        if args:
+            code, _out, err = run(['powerprofilesctl', 'set', args[0]], timeout=10)
+            if code != 0:
+                raise Failure('The power mode couldn’t be changed.')
+        code, out, _err = run(['powerprofilesctl', 'get'], timeout=5)
+        if code == 0:
+            return dict(ok=True, available=True, current=out.strip(), profiles=PROFILES)
+    return dict(ok=True, available=False)
 
 
 # ---- desktop entries and default apps -------------------------------------------------------------

@@ -588,6 +588,28 @@ class NetworkTest(Home):
         self.assertFalse(self.helper('network')['available'])
 
 
+class PowerProfileTest(Home):
+    def test_missing(self):
+        self.assertFalse(self.helper('power-profile')['available'])
+
+    def test_tuned_ppd_over_dbus(self):
+        state = self.tmp / 'profile'
+        state.write_text('balanced')
+        stub(self.bin, 'gdbus', '''\
+            case "$*" in
+              *net.hadess*) exit 1 ;;
+              *"Get org.freedesktop.UPower.PowerProfiles ActiveProfile"*) echo "(<'$(cat "{0}")'>,)" ;;
+              *"Get org.freedesktop.UPower.PowerProfiles Profiles"*) echo "(<[{{'Profile': <'power-saver'>}}, {{'Profile': <'balanced'>}}]>,)" ;;
+              *"Set org.freedesktop.UPower.PowerProfiles ActiveProfile"*) echo "$*" | sed "s/.*<'\\(.*\\)'>.*/\\1/" > "{0}"; echo "()" ;;
+              *) exit 1 ;;
+            esac
+            '''.format(state))
+        data = self.helper('power-profile')
+        self.assertEqual((data['available'], data['current'], data['profiles']), (True, 'balanced', ['power-saver', 'balanced']))
+        self.assertEqual(self.helper('power-profile', 'power-saver')['current'], 'power-saver')
+        self.helper('power-profile', 'turbo', ok=False)
+
+
 class MiscTest(Home):
     def test_about(self):
         data = self.helper('about')

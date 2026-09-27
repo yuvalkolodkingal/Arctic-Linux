@@ -6,7 +6,7 @@ with an identity drawn from the arctic fox. One live USB: boot it to **Try Arcti
 and it only downloads the apps you pick.
 
 - **Desktop:** Mango, a Quickshell shell (bar, launcher with calculator and commands, wallpaper
-  picker, Get apps console, OSD, lock screen), mako, kitty + zsh with the animated `arctic-fetch`
+  picker, Get apps console, OSD, lock screen), Arctic Settings (`Super + S`), mako, kitty + zsh with the animated `arctic-fetch`
   fox, two themes (Winter and Polar night) switched with `Super + Shift + T`.
 - **Default apps (all swappable in the installer):** Zen, Zed, kitty, zsh, yazi, Thunar,
   Collabora Office, VLC. Nix and Flatpak come preinstalled.
@@ -27,6 +27,7 @@ it to a USB stick (4 GB or more), for example with Fedora Media Writer or
 | `shell/` | The desktop shell (Quickshell/QML), grown from a personal Quickshell setup |
 | `dotfiles/` | The home directory defaults (`/etc/skel`) and `arctic-*` helper commands |
 | `installer-ui/` | The installer wizard (Quickshell/QML) |
+| `settings/` | Arctic Settings, the settings app (Quickshell/QML, `Super + S`) |
 | `cmd/`, `internal/` | The installer engine (Go, standard library only) |
 | `modules/`, `profiles/` | The app catalog and install profiles |
 | `branding/` | Login screen (SDDM), boot menu (GRUB), boot splash (Plymouth), logos |

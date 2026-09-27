@@ -150,14 +150,20 @@ Singleton {
         onLoadFailed: if (!fallback) fallback = true
     }
     // `arctic-theme` swaps the ~/.config/arctic/current link, which a watch on
-    // current/theme.json doesn't see; it rewrites ~/.config/arctic/theme, watched here.
+    // current/theme.json doesn't see; it rewrites ~/.config/arctic/theme, watched here. It
+    // writes that file just before it swaps the link, so read theme.json a moment later.
     FileView {
         id: stateView
         path: theme.arcticConfig + "/theme"
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: {
+        onLoaded: later.restart()
+    }
+    Timer {
+        id: later
+        interval: 250
+        onTriggered: {
             themeView.fallback = false;
             themeView.reload();
         }

@@ -47,9 +47,13 @@ Page {
         });
     }
     onShown: load()
+    // The theme changed elsewhere too (Super + Shift + T, the shell): follow it.
     Connections {
         target: Theme
-        function onThemeIdChanged() { page.loadWallpapers(); }
+        function onThemeIdChanged() {
+            Backend.call(["theme"], r => { if (r.ok) page.theme = r; }, true);
+            page.loadWallpapers();
+        }
     }
 
     readonly property var swatches: ({

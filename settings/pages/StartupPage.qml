@@ -17,6 +17,7 @@ Page {
         Backend.call(["startup-add"].concat(args), r => {
             if (r.ok) {
                 page.list = r;
+                Backend.refresh();
                 Backend.notify("success", "Added. It starts the next time you log in.", true);
             }
         });
@@ -48,6 +49,7 @@ Page {
                     onClicked: Backend.call(["startup-remove", String(item.modelData.index)], r => {
                         if (r.ok) {
                             page.list = r;
+                            Backend.refresh();
                             Backend.notify("success", "Removed", true);
                         }
                     })
