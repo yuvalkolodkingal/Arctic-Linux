@@ -1,0 +1,16 @@
+[SddmGreeterTheme]
+Name=Arctic
+Description=Arctic Linux login screen: the fox on a polar-night snowfield, a frosted card, keyboard first
+Author=Arctic Linux
+Copyright=(c) 2026 Arctic Linux contributors
+License=MIT (fonts: SIL OFL 1.1)
+Type=sddm-theme
+Version=0.1.0
+Website=https://github.com/yuvalkolodkingal/O-Tism
+Screenshot=preview.png
+MainScript=Main.qml
+ConfigFile=theme.conf
+TranslationsDirectory=translations
+Theme-Id=arctic
+Theme-API=2.0
+QtVersion=6

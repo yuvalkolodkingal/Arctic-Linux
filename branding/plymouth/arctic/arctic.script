@@ -1,0 +1,182 @@
+// Arctic Linux — Plymouth script theme (design: BootSplash, Polar night).
+//
+// The fox mark centred on `nose`, a faint aurora glow behind it and three
+// amber dots below. The mark breathes (scale 1 -> 1.035 over 2.4 s), the eyes
+// blink about every 5 s and the dots pulse in sequence. The disk passphrase
+// prompt is the Input (lg) component under the mark.
+//
+// Reduced motion: with arctic.reduce_motion=1 on the kernel command line the
+// dracut hook (branding/plymouth/dracut) links /run/arctic/reduce-motion.png
+// before plymouthd starts; then the mark and dots stay still. Script themes
+// cannot read /proc/cmdline, hence the flag file.
+//
+// Layout is scaled from the 960x600 mockup: k = screen height / 600.
+
+Window.SetBackgroundTopColor(0.047, 0.063, 0.082);      // nose #0c1015
+Window.SetBackgroundBottomColor(0.047, 0.063, 0.082);
+
+W = Window.GetWidth();
+H = Window.GetHeight();
+k = Math.Clamp(H / 600, 0.8, 4);
+u = k * 0.7;                                   // passphrase UI: a calmer scale than the art
+cx = W / 2;
+cy = H * 0.44;
+
+reduce = 0;
+flag = Image("../../../../../run/arctic/reduce-motion.png");
+if (flag) reduce = 1;
+
+// ---- aurora glow ------------------------------------------------------------
+glow_src = Image("glow.png");
+glow_img = glow_src.Scale(Math.Int(glow_src.GetWidth() * k), Math.Int(glow_src.GetHeight() * k));
+glow = Sprite(glow_img);
+glow.SetPosition(cx - glow_img.GetWidth() / 2, cy - glow_img.GetHeight() / 2, 0);
+
+// ---- the mark (group of mark + 28 gap + dots is centred on 44 %) --------------
+mark_size = Math.Int(112 * k);
+if (mark_size > 224) {
+    mark_src = Image("mark@2x.png");
+    blink_src = Image("mark-blink@2x.png");
+} else {
+    mark_src = Image("mark.png");
+    blink_src = Image("mark-blink.png");
+}
+mark_cy = cy - 17 * k;
+// breathing frames: one image per pixel of growth (up to +3.5 %)
+grow = Math.Int(mark_size * 0.035 + 0.5);
+for (d = 0; d <= grow; d++) {
+    open_frame[d] = mark_src.Scale(mark_size + d, mark_size + d);
+    blink_frame[d] = blink_src.Scale(mark_size + d, mark_size + d);
+}
+mark = Sprite(open_frame[0]);
+mark.SetPosition(cx - mark_size / 2, mark_cy - mark_size / 2, 10);
+
+// ---- dots -----------------------------------------------------------------------
+dot_size = Math.Max(4, Math.Int(6 * k + 0.5));
+dot_img = Image("dot.png").Scale(dot_size, dot_size);
+dot_pitch = 14 * k;
+dots_top = cy + 67 * k;
+for (i = 0; i < 3; i++) {
+    dot[i] = Sprite(dot_img);
+    dot[i].SetPosition(cx + (i - 1) * dot_pitch - dot_size / 2, dots_top, 10);
+    if (reduce) dot[i].SetOpacity(1); else dot[i].SetOpacity(0.25);
+}
+
+// ---- passphrase prompt (hidden until asked) --------------------------------------
+fun scaled(name) {
+    img = Image(name);
+    return img.Scale(Math.Max(1, Math.Int(img.GetWidth() * global.u / 2)),
+                     Math.Max(1, Math.Int(img.GetHeight() * global.u / 2)));
+}
+label_img = scaled("prompt.png");
+entry_img = scaled("entry.png");
+lock_img = scaled("lock.png");
+bullet_img = scaled("bullet.png");
+caret_img = scaled("caret.png");
+caps_img = scaled("capslock.png");
+
+label_top = cy + 63 * k;
+entry_x = cx - entry_img.GetWidth() / 2;
+entry_y = label_top + label_img.GetHeight() + 8 * u;
+
+label = Sprite(label_img);
+label.SetPosition(cx - label_img.GetWidth() / 2, label_top, 20);
+entry = Sprite(entry_img);
+entry.SetPosition(entry_x, entry_y, 20);
+lock = Sprite(lock_img);
+lock.SetPosition(entry_x + 12 * u, entry_y + (entry_img.GetHeight() - lock_img.GetHeight()) / 2, 21);
+caret = Sprite(caret_img);
+caps = Sprite(caps_img);
+caps.SetPosition(cx - caps_img.GetWidth() / 2, entry_y + entry_img.GetHeight() + 12 * u, 20);
+
+bullets_x = entry_x + 38 * u;
+bullet_pitch = 13 * u;
+bullet_y = entry_y + (entry_img.GetHeight() - bullet_img.GetHeight()) / 2;
+max_bullets = Math.Int((entry_img.GetWidth() - 38 * u - 16 * u) / bullet_pitch);
+shown_bullets = 0;
+prompt_mode = 0;
+
+fun set_prompt_opacity(o) {
+    global.label.SetOpacity(o);
+    global.entry.SetOpacity(o);
+    global.lock.SetOpacity(o);
+    global.caret.SetOpacity(o);
+    if (o == 0) global.caps.SetOpacity(0);
+    for (i = 0; i < global.shown_bullets; i++) global.bullet[i].SetOpacity(o);
+}
+set_prompt_opacity(0);
+
+fun show_bullets(n) {
+    if (n > global.max_bullets) n = global.max_bullets;
+    for (i = global.shown_bullets; i < n; i++) {
+        if (!global.bullet[i]) {
+            global.bullet[i] = Sprite(global.bullet_img);
+            global.bullet[i].SetPosition(global.bullets_x + i * global.bullet_pitch, global.bullet_y, 22);
+        }
+        global.bullet[i].SetOpacity(1);
+    }
+    for (i = n; i < global.shown_bullets; i++) global.bullet[i].SetOpacity(0);
+    global.shown_bullets = n;
+    global.caret.SetPosition(global.bullets_x + n * global.bullet_pitch + 1 * global.u,
+                             global.entry_y + (global.entry_img.GetHeight() - global.caret_img.GetHeight()) / 2, 22);
+}
+
+fun display_password(prompt, bullets) {
+    global.prompt_mode = 1;
+    for (i = 0; i < 3; i++) global.dot[i].SetOpacity(0);
+    set_prompt_opacity(1);
+    show_bullets(bullets);
+}
+
+fun display_normal() {
+    global.prompt_mode = 0;
+    set_prompt_opacity(0);
+    for (i = 0; i < global.shown_bullets; i++) global.bullet[i].SetOpacity(0);
+    global.shown_bullets = 0;
+    for (i = 0; i < 3; i++) {
+        if (global.reduce) global.dot[i].SetOpacity(1); else global.dot[i].SetOpacity(0.25);
+    }
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password);
+Plymouth.SetDisplayNormalFunction(display_normal);
+
+// ---- messages (e.g. "Press Ctrl-D to continue"): ink-muted, 40 px from the bottom ----
+message = Sprite();
+fun display_message(text) {
+    img = Image.Text(text, 0.682, 0.725, 0.773, 1, "Sans 13");
+    global.message.SetImage(img);
+    global.message.SetPosition(global.cx - img.GetWidth() / 2, global.H - 40 * global.k - img.GetHeight(), 30);
+    global.message.SetOpacity(1);
+}
+fun hide_message(text) {
+    global.message.SetOpacity(0);
+}
+Plymouth.SetDisplayMessageFunction(display_message);
+Plymouth.SetHideMessageFunction(hide_message);
+
+// ---- animation --------------------------------------------------------------------
+t = 0;
+fun refresh() {
+    global.t++;
+    if (global.prompt_mode) {
+        if (Plymouth.GetCapslockState()) global.caps.SetOpacity(1); else global.caps.SetOpacity(0);
+    }
+    if (global.reduce) return;
+
+    // breathe: ~2.4 s period at 50 fps, eased by the cosine
+    s = 0.5 * (1 - Math.Cos(global.t / 50 * 6.2831853 / 2.4));
+    d = Math.Int(s * global.grow + 0.5);
+    size = global.mark_size + d;
+    if ((global.t % 250) < 7) img = global.blink_frame[d]; else img = global.open_frame[d];
+    global.mark.SetImage(img);
+    global.mark.SetPosition(global.cx - size / 2, global.mark_cy - size / 2, 10);
+
+    if (!global.prompt_mode) {
+        for (i = 0; i < 3; i++) {
+            o = 0.25 + 0.75 * Math.Max(0, Math.Sin((global.t - i * 10) / 60 * 3.14159265));
+            global.dot[i].SetOpacity(o);
+        }
+    }
+}
+Plymouth.SetRefreshFunction(refresh);

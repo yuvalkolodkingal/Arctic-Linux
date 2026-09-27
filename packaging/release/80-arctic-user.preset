@@ -1,0 +1,13 @@
+# Arctic Linux user services (arctic-release). Fedora's 90-default-user.preset already
+# enables D-Bus, PipeWire (+ pulse socket), WirePlumber and xdg-user-dirs; the Mango
+# session starts mango-session.target, which binds graphical-session.target.
+
+enable pipewire.socket
+enable pipewire-pulse.socket
+enable wireplumber.service
+enable xdg-user-dirs.service
+
+# Desktop pieces are started by Mango (exec-once in ~/.config/mango/arctic/autostart.conf)
+# through arctic-session, which skips anything already running. arctic-desktop-config may
+# ship user units later; they are enabled here by name so a preset-all picks them up.
+enable arctic-*.service

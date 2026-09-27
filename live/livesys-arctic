@@ -1,0 +1,86 @@
+#!/bin/sh
+#
+# livesys-arctic: Arctic Linux (Mango) setup for Fedora's livesys-scripts.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Sourced by /usr/libexec/livesys/livesys-main on the first boot of the live image, after it
+# created "liveuser" (no password, in wheel) from /etc/skel, when /etc/sysconfig/livesys has
+# livesys_session="arctic". Modeled on livesys-sway and livesys-miraclewm.
+# livesys-main chowns and restorecons /home/liveuser afterwards.
+
+ARCTIC_SESSION_FILE="mango.desktop"
+ARCTIC_LIVE_CONF="/usr/share/arctic/mango/live.conf"
+
+# 0. The boot menu's mode (arctic.mode=try|install) for anything in the session that needs it
+#    before it could parse /proc/cmdline itself (the shell's welcome card: try only).
+arctic_mode=try
+# shellcheck disable=SC2013  # kernel arguments are words, not lines
+for arctic_arg in $(cat /proc/cmdline 2>/dev/null); do
+  case "$arctic_arg" in
+    arctic.mode=install) arctic_mode=install ;;
+  esac
+done
+mkdir -p /run/arctic
+printf '%s\n' "$arctic_mode" > /run/arctic/live-mode
+chmod 0644 /run/arctic/live-mode
+
+# 1. SDDM logs liveuser straight into Mango. A drop-in instead of editing /etc/sddm.conf.
+#    Kernel argument arctic.greeter=1 skips autologin (to test the login screen).
+mkdir -p /etc/sddm.conf.d
+if grep -qw 'arctic.greeter=1' /proc/cmdline 2>/dev/null; then
+  rm -f /etc/sddm.conf.d/90-arctic-live.conf
+else
+  cat > /etc/sddm.conf.d/90-arctic-live.conf << SDDM_EOF
+# Written by livesys-arctic (live USB only).
+[Autologin]
+User=liveuser
+Session=${ARCTIC_SESSION_FILE}
+Relogin=false
+SDDM_EOF
+fi
+
+# 2. Mango for liveuser: the normal Arctic desktop from /etc/skel, then the live additions
+#    (live-session launcher, installer window rule). Mango reads only
+#    ~/.config/mango/config.conf, so the live file is sourced from there, last.
+MANGO_DIR=/home/liveuser/.config/mango
+mkdir -p "$MANGO_DIR"
+if [ -f "$MANGO_DIR/config.conf" ]; then
+  if ! grep -qF "$ARCTIC_LIVE_CONF" "$MANGO_DIR/config.conf"; then
+    printf '\n# Live USB (livesys-arctic): installer / welcome, no lock screen.\nsource=%s\n' \
+      "$ARCTIC_LIVE_CONF" >> "$MANGO_DIR/config.conf"
+  fi
+else
+  # No Arctic skel (arctic-desktop-config missing): Mango's stock config + live additions.
+  cat > "$MANGO_DIR/config.conf" << MANGO_EOF
+# Written by livesys-arctic (live USB only).
+source=/etc/mango/config.conf
+source=${ARCTIC_LIVE_CONF}
+MANGO_EOF
+fi
+
+# 3. No screen locking in the live session: liveuser has no password. arctic-lock and
+#    arctic-session idle already refuse to lock when arctic-is-live; this flag is for
+#    anything else (the Quickshell lock screen checks it too).
+mkdir -p /home/liveuser/.config/arctic
+: > /home/liveuser/.config/arctic/no-lock
+
+# 4. Passwordless sudo for liveuser, as on Fedora's live media (liveuser has no password).
+cat > /etc/sudoers.d/90-arctic-liveuser << SUDO_EOF
+# Written by livesys-arctic (live USB only).
+liveuser ALL=(ALL) NOPASSWD: ALL
+SUDO_EOF
+chmod 0440 /etc/sudoers.d/90-arctic-liveuser
+
+# 5. Polkit: liveuser may do anything without a password (installer, NetworkManager, disks).
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/90-arctic-liveuser.rules << POLKIT_EOF
+// Written by livesys-arctic (live USB only).
+polkit.addRule(function(action, subject) {
+    if (subject.user == "liveuser") {
+        return polkit.Result.YES;
+    }
+});
+POLKIT_EOF
+
+# 6. The installer is also in the launcher and a terminal hint, as on Fedora spins.
+echo "echo 'Run arctic-installer (or press Super + I) to install Arctic Linux'" >> /home/liveuser/.bashrc

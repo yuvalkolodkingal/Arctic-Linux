@@ -1,0 +1,26 @@
+# arctic-nix: SELinux file contexts for the Nix store on Arctic Linux (Fedora 44, targeted).
+#
+# Derived from the NixOS nix-installer's policy (src/action/linux/selinux/nix.te, LGPL-2.1),
+# renamed so it cannot clash with a policy module Fedora's own nix packages may ship later.
+# Without these contexts everything under /nix is default_t: systemd cannot follow the
+# nix-daemon unit symlinks and confined domains cannot execute store binaries.
+#
+# The contexts themselves are in arctic-nix.fc; the one rule below lets systemd (init_t)
+# read symlinks that are still default_t before the first relabel.
+
+policy_module(arctic-nix, 1.0.0)
+
+gen_require(`
+	type bin_t;
+	type lib_t;
+	type man_t;
+	type usr_t;
+	type etc_t;
+	type var_run_t;
+	type systemd_unit_file_t;
+	type default_t;
+	type init_t;
+	class lnk_file read;
+')
+
+allow init_t default_t:lnk_file read;

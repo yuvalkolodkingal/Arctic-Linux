@@ -1,0 +1,16 @@
+[Unit]
+Description=Arctic Linux installer engine socket
+Documentation=file:///usr/share/doc/arctic-installer/README.md
+# Only useful on the live USB, where the installer runs.
+ConditionKernelCommandLine=|rd.live.image
+ConditionKernelCommandLine=|arctic.installer=1
+
+[Socket]
+ListenStream=/run/arcticd.sock
+SocketMode=0660
+SocketUser=root
+SocketGroup=wheel
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Install Arctic Linux
+GenericName=Installer
+Comment=Install Arctic Linux on this computer
+Exec=arctic-start-installer
+TryExec=arctic-installer
+Icon=arctic-logo-icon
+Terminal=false
+Categories=System;
+Keywords=install;installer;setup;disk;
+StartupNotify=false
+StartupWMClass=org.arcticlinux.Installer
