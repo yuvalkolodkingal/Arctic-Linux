@@ -384,7 +384,7 @@ and reloads, best effort (a program that isn't running is skipped):
 | kitty | `pkill -USR1 -u $UID -x kitty` |
 | waybar (fallback bar) | `pkill -USR2 -u $UID -x waybar` |
 | mako | `makoctl reload` |
-| GTK | `gsettings set org.gnome.desktop.interface color-scheme prefer-dark\|prefer-light` and `gtk-theme Adwaita-dark\|Adwaita` (set to `''` first when unchanged, so GTK re-reads gtk.css); `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini` |
+| GTK | `gsettings set org.gnome.desktop.interface color-scheme prefer-dark\|prefer-light` and `gtk-theme adw-gtk3-dark\|adw-gtk3` (plain `Adwaita-dark\|Adwaita` only when adw-gtk3 is not installed; set to `''` first when unchanged, so GTK re-reads gtk.css). arctic-theme is the one writer of `gtk-theme` on a switch; the dconf defaults and the GTK theme hook use the same names, so a switch changes it once; `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini` |
 | Wallpaper | `arctic-wallpaper` (background redraw; not for `sync --no-redraw`) |
 
 Then every executable in `/usr/share/arctic/theme-hooks.d/` and `~/.config/arctic/theme-hooks.d/`

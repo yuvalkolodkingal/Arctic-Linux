@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover
     Image = None
 
 FAKES = {
-    "gsettings": 'echo "gsettings $*" >> "$ARCTIC_TEST_LOG"; [ "$1" = get ] && echo "\'Adwaita-dark\'"; exit 0',
+    "gsettings": 'echo "gsettings $*" >> "$ARCTIC_TEST_LOG"; [ "$1" = get ] && echo "\'adw-gtk3-dark\'"; exit 0',
     "pkill": 'echo "pkill $*" >> "$ARCTIC_TEST_LOG"; exit 1',
     "makoctl": 'echo "makoctl $*" >> "$ARCTIC_TEST_LOG"',
     "mmsg": 'echo "mmsg $*" >> "$ARCTIC_TEST_LOG"; echo \'{"success":true}\'',
@@ -88,11 +88,14 @@ class ArcticThemeTests(unittest.TestCase):
         self.env = dict(
             os.environ, HOME=os.path.join(root, "home"), XDG_CONFIG_HOME=os.path.join(root, "config"),
             XDG_DATA_HOME=os.path.join(root, "data"), XDG_CACHE_HOME=os.path.join(root, "cache"),
+            XDG_DATA_DIRS=os.path.join(root, "sysdata"),
             ARCTIC_DATA_DIR=self.share, ARCTIC_BACKGROUNDS_DIR=self.backgrounds,
             ARCTIC_THEMEGEN_DIR=os.path.join(DESIGN, "themegen"), ARCTIC_TEST_LOG=self.log,
             MANGO_INSTANCE_SIGNATURE="/nonexistent", ARCTIC_THEME_HOOK_TIMEOUT="1",
             PATH=os.pathsep.join([self.fakes, self.stubs, "/usr/bin", "/bin"]))
         self.env.pop("ARCTIC_THEMEGEN_DATA", None)
+        for name in ("adw-gtk3", "adw-gtk3-dark"):     # installed, as the image has them
+            os.makedirs(os.path.join(root, "sysdata", "themes", name, "gtk-3.0"))
         # A new account: current -> polar-night, as /etc/skel has it.
         os.symlink(os.path.join(self.share, "themes", "polar-night"), os.path.join(self.config, "current"))
         with open(os.path.join(self.config, "theme"), "w") as f:
@@ -149,7 +152,7 @@ class ArcticThemeTests(unittest.TestCase):
         calls = self.calls()
         uid = str(os.getuid())
         for expected in ("gsettings set org.gnome.desktop.interface color-scheme prefer-light",
-                         "gsettings set org.gnome.desktop.interface gtk-theme Adwaita",
+                         "gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3",
                          "mmsg dispatch reload_config", "pkill -USR1 -u {} -x kitty".format(uid),
                          "pkill -USR2 -u {} -x waybar".format(uid), "makoctl reload"):
             self.assertIn(expected, calls)
@@ -161,10 +164,16 @@ class ArcticThemeTests(unittest.TestCase):
         self.assertIn("arctic-wallpaper ", self.calls())
 
     def test_same_gtk_theme_is_flipped_to_force_a_reload(self):
-        self.theme("set", "polar-night")      # the fake gsettings reports Adwaita-dark already
+        self.theme("set", "polar-night")      # the fake gsettings reports adw-gtk3-dark already
         calls = [c for c in self.calls() if "gtk-theme" in c and c.startswith("gsettings set")]
         self.assertEqual(calls, ["gsettings set org.gnome.desktop.interface gtk-theme ",
-                                 "gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark"])
+                                 "gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark"])
+
+    def test_plain_adwaita_without_adw_gtk3(self):
+        shutil.rmtree(os.path.join(self.root, "sysdata"))
+        self.theme("set", "winter")
+        calls = [c for c in self.calls() if "gtk-theme" in c and c.startswith("gsettings set")]
+        self.assertEqual(calls, ["gsettings set org.gnome.desktop.interface gtk-theme Adwaita"])
 
     def test_old_verbs_still_work(self):
         self.theme("winter")

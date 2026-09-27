@@ -395,9 +395,28 @@ def have(cmd):
     return shutil.which(cmd) is not None
 
 
+def gtk3_theme_installed(name):
+    data_home = os.environ.get("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share")
+    dirs = [os.path.join(data_home, "themes"), os.path.join(HOME, ".themes")]
+    for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":"):
+        if d:
+            dirs.append(os.path.join(d, "themes"))
+    return any(os.path.isdir(os.path.join(d, name, "gtk-3.0")) for d in dirs)
+
+
+def gtk3_theme(dark):
+    """GTK 3's theme: adw-gtk3(-dark), which takes the Arctic colours (the 10-gtk hook and the
+    dconf defaults use the same names, so a switch changes it once); plain Adwaita only when
+    adw-gtk3 is not installed."""
+    name = "adw-gtk3-dark" if dark else "adw-gtk3"
+    if gtk3_theme_installed(name):
+        return name
+    return "Adwaita-dark" if dark else "Adwaita"
+
+
 def reload_gtk(dark):
     scheme = "prefer-dark" if dark else "prefer-light"
-    gtk_theme = "Adwaita-dark" if dark else "Adwaita"
+    gtk_theme = gtk3_theme(dark)
     if have("gsettings"):
         key = "org.gnome.desktop.interface"
         run_quiet(["gsettings", "set", key, "color-scheme", scheme])
