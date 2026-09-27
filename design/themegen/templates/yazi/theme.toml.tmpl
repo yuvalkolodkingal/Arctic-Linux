@@ -109,11 +109,11 @@ rules = [
 	# Virtual file system
 	{ mime = "vfs/{absent,stale}", fg = "{{ink-subtle|hex}}" },
 	# Special file
-	{ url = "*", is = "orphan", bg = "{{error|hex}}" },
+	{ url = "*", is = "orphan", fg = "{{on-error|hex}}", bg = "{{error|hex}}" },
 	{ url = "*", is = "exec", fg = "{{success|hex}}" },
 	# Dummy file
-	{ url = "*", is = "dummy", bg = "{{error|hex}}" },
-	{ url = "*/", is = "dummy", bg = "{{error|hex}}" },
+	{ url = "*", is = "dummy", fg = "{{on-error|hex}}", bg = "{{error|hex}}" },
+	{ url = "*/", is = "dummy", fg = "{{on-error|hex}}", bg = "{{error|hex}}" },
 	# Fallback
 	{ url = "*/", fg = "{{info|hex}}" }
 ]

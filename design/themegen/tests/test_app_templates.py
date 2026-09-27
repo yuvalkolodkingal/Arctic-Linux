@@ -1,57 +1,48 @@
 """App theme templates and theme hooks (docs/BUILD-SPEC.md "App theming").
 
-The theme engine (design/themegen, arctic-themegen) is built separately, so these tests carry
-their own small renderer that implements exactly the placeholder syntax of the shared interface:
-
-    {{role}}                  the palette value as written
-    {{role|hex}}              #rrggbb (alpha dropped)       {{role|hexa}}     #rrggbbaa
-    {{role|nohash}}           rrggbb                        {{role|nohasha}}  rrggbbaa
-    {{role|rgb}}              "r, g, b"                     {{role|argb}}     #aarrggbb (Qt)
-    {{role|rgba}}             "rgba(r, g, b, a)" (a from the palette, 1 if none, <= 3 decimals)
-    {{role|alpha:0.35}}       "rgba(r, g, b, 0.35)"
-    {{name}} {{label}} {{mode}} {{scheme}} {{is_dark}} {{wallpaper}} {{lock_wallpaper}}
-    {{font.sans}} {{font.mono}}
-
-Unknown placeholders or filters and whitespace inside the braces are errors. Both built-in
-palettes (Winter, Polar night) are built from design/exports/arctic-tokens.json. Every template
-is rendered with both; the app templates are then parsed the way their app reads them (JSON,
-TOML, INI, btop's theme lines, zsh, fzf) and checked against what the app accepts. The hooks in
+The app templates (Qt, Zed, yazi, btop, zsh, fzf, Zen, foot, Alacritty) are rendered with the
+theme engine itself (design/themegen: render.outputs) for both built-in palettes (Winter, Polar
+night), then parsed the way their app reads them (JSON, TOML, INI, btop's theme lines, zsh, fzf)
+and checked against what the app accepts. The placeholder syntax is the engine's and is tested
+in test_template.py. ContrastTest checks the foreground/background pairs each template actually
+draws, for the built-ins and for palettes derived from solid-colour wallpapers. The hooks in
 packaging/theme-hooks.d run against a temporary home directory.
 
-Run: python3 -m unittest discover -s design/themegen/tests -p 'test_*.py' -v
+Run: python3 -m unittest discover -s design/themegen/tests -v
 """
+import colorsys
 import configparser
 import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-TOKENS = ROOT / "design" / "exports" / "arctic-tokens.json"
+sys.path.insert(0, str(ROOT / "design"))
+
+from themegen import color, palette, render  # noqa: E402
+
+try:
+    from themegen import derive
+    from PIL import Image
+except ImportError:          # Pillow missing: derived palettes are skipped
+    derive = Image = None
+
 TEMPLATES = ROOT / "design" / "themegen" / "templates"
 HOOKS = ROOT / "packaging" / "theme-hooks.d"
 DOTFILES = ROOT / "dotfiles"
 
-# The colour roles every palette has (the shared interface).
-ROLES = (
-    "ground surface surface-raised surface-sunken frost scrim line line-strong ink ink-muted "
-    "ink-subtle ink-disabled ink-inverse accent accent-hover accent-pressed on-accent accent-text "
-    "accent-soft accent-edge focus selection warm warm-soft success success-soft warning "
-    "warning-soft error error-soft on-error error-hover info info-soft aurora-1 aurora-2 aurora-3 "
-    "term-background term-foreground term-cursor term-cursor-text-color term-selection-background "
-    "term-selection-foreground"
-).split() + ["ansi-%d" % i for i in range(16)]
-SCALARS = ("name", "label", "mode", "scheme", "is_dark", "wallpaper", "lock_wallpaper",
-           "font.sans", "font.mono")
-PLACEHOLDER = re.compile(r"\{\{(.*?)\}\}")
+# The colour roles every palette has, plus the ones the engine fills in.
+ROLES = palette.ROLES + palette.OPTIONAL_ROLES
 HEX = re.compile(r"^#[0-9a-f]{6}([0-9a-f]{2})?$")
 
-# The templates this change adds (the engine's own templates are only checked for syntax).
+# The templates this change adds (the engine's own templates are tested by the engine).
 APP_TEMPLATES = (
     "qt6ct/colors/arctic.conf", "qt5ct/colors/arctic.conf", "zed/themes/arctic.json",
     "yazi/theme.toml", "btop/arctic.theme", "zsh/colors.zsh", "fzf/fzfrc", "zen/user.js",
@@ -59,146 +50,34 @@ APP_TEMPLATES = (
 )
 
 
-class TemplateError(ValueError):
-    pass
-
-
 def builtin_palettes():
-    """Winter and Polar night as interface palettes, from the flat token export."""
-    tok = json.loads(TOKENS.read_text(encoding="utf-8"))
-    names = tok["themeNames"]
-    return {
-        "winter": {"name": "winter", "label": names["light"], "mode": "light", "base": "winter",
-                   "colors": dict(tok["themes"]["light"]),
-                   "wallpaper": "snowfield-winter", "lock_wallpaper": "fox-winter"},
-        "polar-night": {"name": "polar-night", "label": names["dark"], "mode": "dark",
-                        "base": "polar-night", "colors": dict(tok["themes"]["dark"]),
-                        "wallpaper": "aurora-polar-night", "lock_wallpaper": "fox-polar-night"},
-    }, dict(tok["font"])
+    """Winter and Polar night, as the engine builds them from the design tokens."""
+    return {name: palette.builtin(name) for name in palette.BUILTINS}
 
 
-def _rgba(value):
-    if not HEX.match(value.lower()):
-        raise TemplateError("not a #rrggbb[aa] colour: %r" % value)
-    v = value.lower()[1:]
-    r, g, b = int(v[0:2], 16), int(v[2:4], 16), int(v[4:6], 16)
-    a = int(v[6:8], 16) if len(v) == 8 else 255
-    return r, g, b, a
-
-
-def _num(x):
-    return ("%.3f" % x).rstrip("0").rstrip(".") or "0"
-
-
-def apply_filter(value, filt):
-    r, g, b, a = _rgba(value)
-    if filt == "hex":
-        return "#%02x%02x%02x" % (r, g, b)
-    if filt == "hexa":
-        return "#%02x%02x%02x%02x" % (r, g, b, a)
-    if filt == "nohash":
-        return "%02x%02x%02x" % (r, g, b)
-    if filt == "nohasha":
-        return "%02x%02x%02x%02x" % (r, g, b, a)
-    if filt == "rgb":
-        return "%d, %d, %d" % (r, g, b)
-    if filt == "rgba":
-        return "rgba(%d, %d, %d, %s)" % (r, g, b, _num(a / 255))
-    if filt == "argb":
-        return "#%02x%02x%02x%02x" % (a, r, g, b)
-    if filt.startswith("alpha:"):
-        arg = filt[len("alpha:"):]
-        if not re.fullmatch(r"(0|1)(\.\d+)?|\.\d+", arg) or not 0 <= float(arg) <= 1:
-            raise TemplateError("bad alpha %r" % arg)
-        return "rgba(%d, %d, %d, %s)" % (r, g, b, arg)
-    raise TemplateError("unknown filter %r" % filt)
-
-
-def render(text, palette, fonts):
-    scalars = {
-        "name": palette["name"], "label": palette["label"], "mode": palette["mode"],
-        "scheme": "prefer-dark" if palette["mode"] == "dark" else "prefer-light",
-        "is_dark": "true" if palette["mode"] == "dark" else "false",
-        "wallpaper": palette["wallpaper"], "lock_wallpaper": palette["lock_wallpaper"],
-        "font.sans": fonts["sans"], "font.mono": fonts["mono"],
-    }
-
-    def one(m):
-        inner = m.group(1)
-        if not inner or re.search(r"\s", inner) or "{" in inner:
-            raise TemplateError("bad placeholder %r" % m.group(0))
-        name, _, filt = inner.partition("|")
-        if name in scalars:
-            if filt:
-                raise TemplateError("filters only apply to colour roles: %r" % m.group(0))
-            return scalars[name]
-        if name not in ROLES:
-            raise TemplateError("unknown placeholder %r" % m.group(0))
-        value = palette["colors"][name]
-        return apply_filter(value, filt) if filt else value
-
-    out = PLACEHOLDER.sub(one, text)
-    if "{{" in out or "}}" in out:
-        raise TemplateError("unresolved braces left in the output")
-    return out
-
-
-def render_all(palette, fonts, dest, only=None):
-    """Render templates/**/<file>.tmpl into dest/<file> (the engine's layout)."""
-    for tmpl in sorted(TEMPLATES.rglob("*.tmpl")):
-        rel = tmpl.relative_to(TEMPLATES).as_posix()[:-len(".tmpl")]
+def render_all(pal, dest, only=None):
+    """Write the engine's output for `pal` into dest (only the files in `only`, if given)."""
+    dest = Path(dest)
+    for rel, text in render.outputs(pal).items():
         if only is not None and rel not in only:
             continue
-        out = Path(dest) / rel
+        out = dest / rel
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(render(tmpl.read_text(encoding="utf-8"), palette, fonts), encoding="utf-8")
-    return Path(dest)
-
-
-class RendererTest(unittest.TestCase):
-    """The test renderer itself follows the interface."""
-
-    def setUp(self):
-        self.pal = {"name": "t", "label": "T", "mode": "dark", "wallpaper": "w", "lock_wallpaper": "l",
-                    "colors": {r: "#102030" for r in ROLES}}
-        self.pal["colors"]["frost"] = "#1a212ad1"
-        self.fonts = {"sans": "Figtree", "mono": "JetBrains Mono"}
-
-    def r(self, text):
-        return render(text, self.pal, self.fonts)
-
-    def test_filters(self):
-        self.assertEqual(self.r("{{frost}}"), "#1a212ad1")
-        self.assertEqual(self.r("{{frost|hex}}"), "#1a212a")
-        self.assertEqual(self.r("{{ink|hexa}}"), "#102030ff")
-        self.assertEqual(self.r("{{frost|nohash}}"), "1a212a")
-        self.assertEqual(self.r("{{frost|nohasha}}"), "1a212ad1")
-        self.assertEqual(self.r("{{frost|rgb}}"), "26, 33, 42")
-        self.assertEqual(self.r("{{frost|rgba}}"), "rgba(26, 33, 42, 0.82)")
-        self.assertEqual(self.r("{{ink|rgba}}"), "rgba(16, 32, 48, 1)")
-        self.assertEqual(self.r("{{ink|alpha:0.35}}"), "rgba(16, 32, 48, 0.35)")
-        self.assertEqual(self.r("{{frost|argb}}"), "#d11a212a")
-        self.assertEqual(self.r("{{mode}} {{scheme}} {{is_dark}} {{font.mono}}"),
-                         "dark prefer-dark true JetBrains Mono")
-
-    def test_errors(self):
-        for bad in ("{{nope}}", "{{ink|nope}}", "{{ ink }}", "{{ink| hex}}", "{{mode|hex}}",
-                    "{{ink|alpha:2}}", "{{}}", "{{{ink}}}"):
-            with self.subTest(bad=bad), self.assertRaises(TemplateError):
-                self.r(bad)
-
-    def test_single_braces_pass_through(self):
-        self.assertEqual(self.r('{ fg = "{{ink|hex}}" }'), '{ fg = "#102030" }')
+        if isinstance(text, bytes):
+            out.write_bytes(text)
+        else:
+            out.write_text(text, encoding="utf-8")
+    return dest
 
 
 class TemplatesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.palettes, cls.fonts = builtin_palettes()
+        cls.palettes = builtin_palettes()
         cls.tmp = tempfile.TemporaryDirectory()
         cls.out = {}
         for name, pal in cls.palettes.items():
-            cls.out[name] = render_all(pal, cls.fonts, Path(cls.tmp.name) / name)
+            cls.out[name] = render_all(pal, Path(cls.tmp.name) / name)
 
     @classmethod
     def tearDownClass(cls):
@@ -217,7 +96,7 @@ class TemplatesTest(unittest.TestCase):
                 self.assertRegex(value.lower(), HEX, "%s %s" % (name, role))
 
     def test_every_template_follows_the_interface(self):
-        # render_all already raised on anything the interface doesn't allow; all app templates exist.
+        # render.outputs already raised on anything the interface doesn't allow; all app templates exist.
         for rel in APP_TEMPLATES:
             self.assertTrue((TEMPLATES / (rel + ".tmpl")).is_file(), rel)
         for tmpl in TEMPLATES.rglob("*.tmpl"):
@@ -373,6 +252,170 @@ class TemplatesTest(unittest.TestCase):
             self.assertEqual(conf["colors"]["normal"]["red"], pal["colors"]["ansi-1"])
 
 
+# ---- contrast of what the templates draw ---------------------------------------------------
+
+TEXT = 4.5      # WCAG AA for text
+GLYPH = 3.0     # non-text marks that must be seen (fzf pointer, prompt arrows are text anyway)
+
+
+def _qt(value):
+    cols = [c.strip() for c in value.split(",")]
+    return ["#" + c[3:] for c in cols]           # #aarrggbb -> #rrggbb
+
+
+def used_pairs(files, pal):
+    """[(where, fg, bg, ratio)] for the text each app template draws on a background."""
+    c = pal["colors"]
+    term_bg = c["term-background"]
+    pairs = []
+
+    def add(where, fg, bg, ratio=TEXT):
+        pairs.append((where, fg.lower()[:7], bg.lower()[:7], ratio))
+
+    # Alacritty / foot: terminal text, cursor, selection, hints and search matches.
+    a = tomllib.loads(files["alacritty/colors.toml"])["colors"]
+    bg = a["primary"]["background"]
+    add("alacritty primary", a["primary"]["foreground"], bg)
+    add("alacritty cursor", a["cursor"]["text"], a["cursor"]["cursor"])
+    add("alacritty selection", a["selection"]["text"], a["selection"]["background"])
+    for k in ("hints.start", "hints.end", "search.matches", "search.focused_match"):
+        d = a
+        for part in k.split("."):
+            d = d[part]
+        add("alacritty " + k, d["foreground"], d["background"])
+    for group in ("normal", "bright"):
+        for name, v in a[group].items():
+            if name not in ("black", "white"):
+                add("alacritty %s.%s" % (group, name), v, bg)
+    foot = configparser.ConfigParser(interpolation=None)
+    foot.read_string(files["foot/colors.ini"])
+    f = foot["colors-" + pal["mode"]]
+    fbg = "#" + f["background"]
+    add("foot foreground", "#" + f["foreground"], fbg)
+    cur_text, cur = f["cursor"].split()
+    add("foot cursor", "#" + cur_text, "#" + cur)
+    add("foot selection", "#" + f["selection-foreground"], "#" + f["selection-background"])
+    add("foot urls", "#" + f["urls"], fbg)
+
+    # fzf: "-1" is the terminal's background.
+    fz = {}
+    for line in files["fzf/fzfrc"].splitlines():
+        if line.startswith("--color="):
+            for pair in line[len("--color="):].split(","):
+                k, v = pair.split(":")
+                fz[k] = term_bg if v == "-1" else v
+    for k in ("fg", "hl", "info", "prompt", "header", "query", "marker"):
+        add("fzf " + k, fz[k], fz["bg"])
+    for k in ("pointer", "spinner"):
+        add("fzf " + k, fz[k], fz["bg"], GLYPH)
+    for k in ("fg+", "hl+"):
+        add("fzf " + k, fz[k], fz["bg+"])
+
+    # Qt: text roles on the roles they are drawn on (active group).
+    for tool in ("qt5ct", "qt6ct"):
+        ini = configparser.ConfigParser(interpolation=None, comment_prefixes=(";",))
+        ini.read_string(files[tool + "/colors/arctic.conf"])
+        q = _qt(ini["ColorScheme"]["active_colors"])
+        for fg, bg, what in ((0, 10, "WindowText/Window"), (6, 9, "Text/Base"),
+                             (6, 16, "Text/AlternateBase"), (8, 1, "ButtonText/Button"),
+                             (13, 12, "HighlightedText/Highlight"), (19, 18, "ToolTipText/ToolTipBase"),
+                             (14, 9, "Link/Base"), (15, 9, "LinkVisited/Base"),
+                             (20, 9, "PlaceholderText/Base")):
+            add("%s %s" % (tool, what), q[fg], q[bg])
+
+    # yazi: styles with a text colour, on their own background or the terminal's.
+    y = tomllib.loads(files["yazi/theme.toml"])
+    skip = re.compile(r"border|sep|marker_|progress_normal|progress_error|symbol")
+    for section, keys in y.items():
+        if section in ("filetype", "flavor", "icon"):
+            continue
+        for key, style in keys.items():
+            if not isinstance(style, dict) or "fg" not in style or skip.search(key):
+                continue
+            sbg = style.get("bg", "reset")
+            add("yazi %s.%s" % (section, key), style["fg"], term_bg if sbg == "reset" else sbg)
+    for rule in y["filetype"]["rules"]:
+        add("yazi filetype %s" % (rule.get("mime") or rule.get("is") or rule.get("url")),
+            rule.get("fg", c["term-foreground"]), rule.get("bg", term_bg))
+
+    # btop.
+    bt = dict(re.findall(r'^theme\[([a-z_]+)\]="(#[0-9a-f]{6})"', files["btop/arctic.theme"], re.M))
+    for k in ("main_fg", "title", "hi_fg", "graph_text", "proc_misc"):
+        add("btop " + k, bt[k], bt["main_bg"])
+    for fg, bg in (("selected_fg", "selected_bg"), ("proc_banner_fg", "proc_banner_bg"),
+                   ("followed_fg", "followed_bg"), ("main_fg", "proc_pause_bg"),
+                   ("main_fg", "proc_follow_bg")):
+        add("btop %s/%s" % (fg, bg), bt[fg], bt[bg])
+
+    # zsh: prompt and highlighting on the terminal background, the completion menu selection.
+    z = files["zsh/colors.zsh"]
+    for k, v in re.findall(r"^\s+(dir|arrow|error|git)\s+'(#[0-9a-f]{6})'", z, re.M):
+        add("zsh prompt " + k, v, term_bg)
+    for k, v in re.findall(r"^(?:ZSH_HIGHLIGHT_STYLES\[([a-z-]+)\]|(?:typeset -g )?ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE)='fg=(#[0-9a-f]{6})", z, re.M):
+        add("zsh highlight " + (k or "autosuggest"), v, term_bg)
+    m = re.search(r'ARCTIC_MENU_SELECTION="48;2;([\d, ]+);38;2;([\d, ]+)"', z)
+    rgb = [tuple(int(x) for x in g.split(",")) for g in m.groups()]
+    add("zsh menu selection", color.to_hex(rgb[1]), color.to_hex(rgb[0]))
+
+    # Zed: UI text on the surfaces, code on the editor, the terminal.
+    st = json.loads(files["zed/themes/arctic.json"])["themes"][0]["style"]
+    for fg in ("text", "text.muted", "text.accent", "text.placeholder"):
+        for bg in ("background", "surface.background", "elevated_surface.background",
+                   "editor.background", "panel.background", "tab.active_background"):
+            add("zed %s on %s" % (fg, bg), st[fg], st[bg])
+    for k in ("error", "warning", "success", "info", "modified", "created", "deleted", "hint"):
+        add("zed " + k, st[k], st["editor.background"])
+    add("zed editor", st["editor.foreground"], st["editor.background"])
+    add("zed active line number", st["editor.active_line_number"], st["editor.background"])
+    add("zed terminal", st["terminal.foreground"], st["terminal.background"])
+    for scope, hl in st["syntax"].items():
+        add("zed syntax " + scope, hl["color"], hl.get("background_color", st["editor.background"]))
+    return pairs
+
+
+def derived_palettes(folder):
+    """Palettes from solid black, white and pure-hue pictures, in dark and light."""
+    if derive is None:
+        return {}
+    pics = {"black": (0, 0, 0), "white": (255, 255, 255)}
+    for h in range(0, 360, 45):
+        r, g, b = colorsys.hsv_to_rgb(h / 360, 1, 1)
+        pics["hue%03d" % h] = (round(r * 255), round(g * 255), round(b * 255))
+    out = {}
+    for name, rgb in pics.items():
+        path = os.path.join(folder, name + ".png")
+        Image.new("RGB", (32, 32), rgb).save(path)
+        for mode in ("dark", "light"):
+            out["%s-%s" % (name, mode)] = derive.from_wallpaper(path, mode)
+    return out
+
+
+class ContrastTest(unittest.TestCase):
+    """What each app template draws is readable, for every palette the engine can make."""
+
+    def test_pairs_the_templates_use(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pals = dict(builtin_palettes())
+            pals.update(derived_palettes(tmp))
+        self.assertGreater(len(pals), 2 if derive is None else 20)
+        failures = []
+        for name, pal in pals.items():
+            files = render.outputs(pal)
+            pairs = used_pairs(files, pal)
+            self.assertGreater(len(pairs), 100)
+            for where, fg, bg, ratio in pairs:
+                r = color.contrast(fg, bg)
+                if r < ratio:
+                    failures.append("%s: %s: %s on %s = %.2f < %s" % (name, where, fg, bg, r, ratio))
+        self.assertEqual(failures, [], "\n" + "\n".join(failures))
+
+    def test_alacritty_search_matches_use_ink_on_accent_soft(self):
+        for name, pal in builtin_palettes().items():
+            a = tomllib.loads(render.outputs(pal)["alacritty/colors.toml"])["colors"]
+            self.assertEqual(a["search"]["matches"], {"foreground": pal["colors"]["ink"].lower()[:7],
+                                                      "background": pal["colors"]["accent-soft"].lower()[:7]})
+
+
 class DotfilesTest(unittest.TestCase):
     """The home directory defaults point the apps at the active theme."""
 
@@ -423,7 +466,7 @@ class HooksTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.palettes, cls.fonts = builtin_palettes()
+        cls.palettes = builtin_palettes()
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -431,7 +474,7 @@ class HooksTest(unittest.TestCase):
         self.home.mkdir()
         self.themes = {}
         for name, pal in self.palettes.items():
-            d = render_all(pal, self.fonts, Path(self.tmp.name) / "themes" / name, only=APP_TEMPLATES)
+            d = render_all(pal, Path(self.tmp.name) / "themes" / name, only=APP_TEMPLATES)
             (d / "gtk.css").write_text("/* gtk %s */\n" % name, encoding="utf-8")
             self.themes[name] = d
         # No gsettings, flatpak or running apps: only what the hooks do on disk is tested.
