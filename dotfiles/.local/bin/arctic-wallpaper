@@ -14,21 +14,42 @@
 # The choice is saved in ~/.config/arctic/wallpaper (a name or a path). The picture actually
 # drawn is recorded in ~/.cache/arctic/wallpaper-current (the lock screen blurs it).
 # The wallpaper picker in the shell (launcher → Wallpapers) uses this command too.
+#
+# Choosing a wallpaper also runs `arctic-theme sync`: with auto colours on (the default), your
+# own pictures colour the desktop (the 'wallpaper' theme) and Arctic's wallpapers bring back
+# Winter / Polar night. ARCTIC_WALLPAPER_NO_SYNC=1 skips that.
 set -euo pipefail
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/arctic"
 CACHE="$CACHE_DIR/wallpapers"
-DIRS=("${XDG_DATA_HOME:-$HOME/.local/share}/arctic/wallpapers" /usr/share/backgrounds/arctic)
+DIRS=("${XDG_DATA_HOME:-$HOME/.local/share}/arctic/wallpapers" "${ARCTIC_BACKGROUNDS_DIR:-/usr/share/backgrounds/arctic}")
 NAMES="snowfield aurora fox"
 
-env_file="$CONF/current/theme.env"
-[[ -f "$env_file" ]] || env_file=/usr/share/arctic/themes/polar-night/theme.env
-# shellcheck source=/dev/null
-[[ -f "$env_file" ]] && source "$env_file"
-ARCTIC_THEME="${ARCTIC_THEME:-polar-night}"
-ARCTIC_WALLPAPER="${ARCTIC_WALLPAPER:-aurora-polar-night}"
-ARCTIC_GROUND="${ARCTIC_GROUND:-#12171e}"
+load_theme() {   # the active theme's theme.env; VARIANT = which design wallpapers fit it
+  local env_file="$CONF/current/theme.env"
+  [[ -f "$env_file" ]] || env_file=/usr/share/arctic/themes/polar-night/theme.env
+  ARCTIC_THEME="" ARCTIC_THEME_BASE="" ARCTIC_THEME_MODE="" ARCTIC_WALLPAPER="" ARCTIC_GROUND=""
+  # shellcheck source=/dev/null
+  [[ -f "$env_file" ]] && source "$env_file"
+  ARCTIC_THEME="${ARCTIC_THEME:-polar-night}"
+  ARCTIC_WALLPAPER="${ARCTIC_WALLPAPER:-aurora-polar-night}"
+  ARCTIC_GROUND="${ARCTIC_GROUND:-#12171e}"
+  # Arctic's wallpapers come in a Winter and a Polar night drawing: the theme's own, or (for
+  # themes made from a picture or your own) the one matching light / dark.
+  case "${ARCTIC_THEME_BASE:-$ARCTIC_THEME}" in
+    winter|polar-night) VARIANT="${ARCTIC_THEME_BASE:-$ARCTIC_THEME}" ;;
+    *) if [[ "${ARCTIC_THEME_MODE:-dark}" == light ]]; then VARIANT=winter; else VARIANT=polar-night; fi ;;
+  esac
+}
+load_theme
+
+sync_colours() {   # after a new choice: colours follow the wallpaper (arctic-theme decides)
+  [[ "${ARCTIC_WALLPAPER_NO_SYNC:-0}" == 1 ]] && return 0
+  command -v arctic-theme >/dev/null 2>&1 || return 0
+  arctic-theme sync --no-redraw || echo "arctic-wallpaper: the colours could not follow the wallpaper" >&2
+  load_theme
+}
 
 find_design() {   # find_design <stem> -> the PNG (preferred) or SVG for it
   local d
@@ -65,11 +86,11 @@ case "${1:-}" in
     cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true
     exit 0 ;;
   -h|--help)
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   "")
     saved="$(cat "$CONF/wallpaper" 2>/dev/null || true)"
     if is_name "$saved"; then
-      img="$(find_design "$saved-$ARCTIC_THEME" || true)"
+      img="$(find_design "$saved-$VARIANT" || true)"
     elif [[ -n "$saved" && -f "$saved" ]]; then
       img="$saved"
     fi ;;
@@ -77,7 +98,8 @@ case "${1:-}" in
     mkdir -p "$CONF"
     if is_name "$1"; then
       printf '%s\n' "$1" > "$CONF/wallpaper"
-      img="$(find_design "$1-$ARCTIC_THEME" || true)"
+      sync_colours
+      img="$(find_design "$1-$VARIANT" || true)"
     elif [[ -f "$1" ]]; then
       path="$(readlink -f "$1")"
       case "${path,,}" in
@@ -85,13 +107,17 @@ case "${1:-}" in
         *) echo "arctic-wallpaper: $1 isn't a picture (PNG, JPEG, WebP, SVG…)" >&2; exit 2 ;;
       esac
       printf '%s\n' "$path" > "$CONF/wallpaper"
+      sync_colours
       img="$path"
     else
       echo "usage: arctic-wallpaper [snowfield|aurora|fox|<picture>|render|current]" >&2; exit 2
     fi ;;
 esac
 
-[[ -n "$img" ]] || img="$(find_design "$ARCTIC_WALLPAPER" || true)"
+if [[ -z "$img" ]]; then
+  if [[ "$ARCTIC_WALLPAPER" == /* && -f "$ARCTIC_WALLPAPER" ]]; then img="$ARCTIC_WALLPAPER"
+  else img="$(find_design "$ARCTIC_WALLPAPER" || find_design "aurora-$VARIANT" || true)"; fi
+fi
 if [[ -z "$img" ]]; then
   echo "arctic-wallpaper: no Arctic wallpapers found in ${DIRS[*]}" >&2
   exit 1
