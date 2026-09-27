@@ -246,7 +246,7 @@ var APPS = {
  },
  "flathub": {
   "name": "Flathub",
-  "category": "utilities",
+  "category": "extras",
   "glyph": "package",
   "summary": "Adds the Flathub app store (Flatpak).",
   "default": false
@@ -939,55 +939,48 @@ var APPS = {
  },
  "bazaar": {
   "name": "Bazaar",
-  "category": "utilities",
+  "category": "extras",
   "glyph": "grid",
   "summary": "Browse and install apps from Flathub.",
   "default": false
  },
  "flatseal": {
   "name": "Flatseal",
-  "category": "utilities",
+  "category": "extras",
   "glyph": "shield-check",
   "summary": "Review what each Flatpak app may access.",
   "default": false
  },
  "mission-center": {
   "name": "Mission Center",
-  "category": "utilities",
+  "category": "extras",
   "glyph": "cpu",
   "summary": "See what's using your CPU, memory and GPU.",
   "default": false
  },
- "btrfs-assistant": {
-  "name": "Btrfs Assistant",
-  "category": "utilities",
-  "glyph": "disk",
-  "summary": "Manage snapshots and Btrfs subvolumes.",
-  "default": false
- },
  "gnome-disks": {
   "name": "GNOME Disks",
-  "category": "utilities",
+  "category": "extras",
   "glyph": "disk",
   "summary": "Format drives and write disk images.",
   "default": false
  },
  "pika-backup": {
   "name": "Pika Backup",
-  "category": "utilities",
+  "category": "extras",
   "glyph": "clock",
   "summary": "Easy, encrypted backups of your files.",
   "default": false
  },
  "file-roller": {
   "name": "File Roller",
-  "category": "utilities",
+  "category": "extras",
   "glyph": "package",
   "summary": "Open and create zip and other archives.",
   "default": false
  }
 };
-var CATEGORIES = [["browser","Browser","one","Becomes your default browser."],["editor","Editor","many",""],["terminal","Terminal","one","Opens with Super + Enter."],["shell","Shell","one","What runs inside the terminal."],["files","File manager","many",""],["office","Office","one",""],["video","Video","many",""],["music","Music & audio","many",""],["photos","Photos","many",""],["graphics","Graphics & design","many",""],["recording","Recording & editing","many",""],["chat","Chat & calls","many",""],["email","Email & calendar","many",""],["notes","Notes & tasks","many",""],["reading","PDF & e-books","many",""],["gaming","Games","many",""],["security","Passwords & privacy","many",""],["sync","Downloads & sync","many",""],["dev","Developer tools","many",""],["containers","Containers & VMs","many",""],["utilities","Utilities","many",""]];
+var CATEGORIES = [["browser","Browser","one","Becomes your default browser."],["editor","Editor","many",""],["terminal","Terminal","one","Opens with Super + Enter."],["shell","Shell","one","What runs inside the terminal."],["files","File manager","many",""],["office","Office","one",""],["video","Video","many",""],["music","Music & audio","many",""],["photos","Photos","many",""],["graphics","Graphics & design","many",""],["recording","Recording & editing","many",""],["chat","Chat & calls","many",""],["email","Email & calendar","many",""],["notes","Notes & tasks","many",""],["reading","PDF & e-books","many",""],["gaming","Games","many",""],["security","Passwords & privacy","many",""],["sync","Downloads & sync","many",""],["dev","Developer tools","many",""],["containers","Containers & VMs","many",""],["extras","Utilities","many",""]];
 var STEP_NAMES = ["Welcome","Keyboard","Network","Time zone","Disk","Encryption","Account","Apps","Summary","Install"];
 // Build an SVG data URI for icon `name` stroked with `color` (a #rrggbb string).
 function svg(name, color, stroke) {

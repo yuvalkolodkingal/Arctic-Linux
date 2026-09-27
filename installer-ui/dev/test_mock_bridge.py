@@ -114,12 +114,12 @@ class MockBridgeTest(unittest.TestCase):
         self.assertEqual([c["id"] for c in cats],
                          ["browser", "editor", "terminal", "shell", "files", "office", "video",
                           "music", "photos", "graphics", "recording", "chat", "email", "notes", "reading",
-                          "gaming", "security", "sync", "dev", "containers", "utilities"])
+                          "gaming", "security", "sync", "dev", "containers", "extras"])
         # The design's seven sections are open; the optional groups start collapsed.
         self.assertEqual([c["id"] for c in cats if not c["collapsed"]],
                          ["browser", "editor", "terminal", "shell", "files", "office", "video"])
         mods = {m["id"]: m for m in apps["options"]["modules"]}
-        self.assertEqual(len(mods), 126)
+        self.assertEqual(len(mods), 125)
         self.assertEqual((mods["steam"]["category"], mods["steam"]["source"], mods["steam"]["proprietary"]),
                          ("gaming", "RPM Fusion", True))
         self.assertEqual(mods["zen"]["source"], "Flathub")

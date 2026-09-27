@@ -61,7 +61,7 @@ func TestDesignTiles(t *testing.T) {
 		qbittorrent transmission syncthing nextcloud localsend
 		git lazygit meld dbeaver bruno
 		podman podman-desktop distrobox gnome-boxes virt-manager waydroid
-		flathub bazaar flatseal mission-center btrfs-assistant gnome-disks pika-backup file-roller`)
+		flathub bazaar flatseal mission-center gnome-disks pika-backup file-roller`)
 	var got []string
 	for _, m := range c.Modules {
 		if !m.Hidden {
@@ -89,7 +89,7 @@ func TestDesignTiles(t *testing.T) {
 	}
 	wantCats := "browser:one editor:any terminal:one shell:one files:any office:one video:any " +
 		"music:any photos:any graphics:any recording:any chat:any email:any notes:any reading:any " +
-		"gaming:any security:any sync:any dev:any containers:any utilities:any"
+		"gaming:any security:any sync:any dev:any containers:any extras:any"
 	if strings.Join(cats, " ") != wantCats {
 		t.Fatalf("categories %v", cats)
 	}
@@ -162,7 +162,7 @@ func TestDefaults(t *testing.T) {
 		"browser": {"zen"}, "editor": {"zed"}, "terminal": {"kitty"}, "shell": {"zsh"},
 		"files": {"yazi", "thunar"}, "office": {"collabora"}, "video": {"vlc"},
 		"music": {}, "photos": {}, "graphics": {}, "recording": {}, "chat": {}, "email": {}, "notes": {},
-		"reading": {}, "gaming": {}, "security": {}, "sync": {}, "dev": {}, "containers": {}, "utilities": {},
+		"reading": {}, "gaming": {}, "security": {}, "sync": {}, "dev": {}, "containers": {}, "extras": {},
 	}
 	if !reflect.DeepEqual(sel, want) {
 		t.Fatalf("defaults\n got %v\nwant %v", sel, want)
@@ -254,10 +254,9 @@ func TestValidate(t *testing.T) {
 		{"no terminal", func(s Selection) { delete(s, "terminal") }, "terminal", "Pick a terminal."},
 		{"unknown app", func(s Selection) { s["editor"] = []string{"sublime"} }, "editor", `We don't know an app called "sublime".`},
 		{"wrong category", func(s Selection) { s["editor"] = []string{"vlc"} }, "editor", "VLC belongs under Video."},
-		{"hidden module", func(s Selection) { s["utilities"] = []string{"codecs"} }, "utilities", `We don't know an app called "codecs".`},
+		{"hidden module", func(s Selection) { s["extras"] = []string{"codecs"} }, "extras", `We don't know an app called "codecs".`},
 		{"unknown category", func(s Selection) { s["games"] = []string{"steam"} }, "games", "This isn't one of the app groups."},
-		{"old extras group", func(s Selection) { s["extras"] = []string{"steam"} }, "extras", "This isn't one of the app groups."},
-		{"moved app", func(s Selection) { s["utilities"] = []string{"steam"} }, "utilities", "Steam belongs under Games."},
+		{"moved app", func(s Selection) { s["extras"] = []string{"steam"} }, "extras", "Steam belongs under Games."},
 		{"needs podman", func(s Selection) { s["containers"] = []string{"podman-desktop"} }, "containers", "Podman Desktop needs Podman. Tick it too."},
 		{"needs git", func(s Selection) { s["dev"] = []string{"lazygit"} }, "dev", "lazygit needs Git. Tick it too."},
 		{"two office", func(s Selection) { s["office"] = []string{"collabora", "onlyoffice"} }, "office", "Pick just one office."},
@@ -315,7 +314,7 @@ func TestNormalize(t *testing.T) {
 func TestPicker(t *testing.T) {
 	c := load(t)
 	p := c.Picker()
-	if len(p.Categories) != 21 || len(p.Modules) != 126 {
+	if len(p.Categories) != 21 || len(p.Modules) != 125 {
 		t.Fatalf("picker has %d categories, %d modules", len(p.Categories), len(p.Modules))
 	}
 	if p.Modules[0].ID != "zen" || p.Modules[0].Source != "Flathub" || p.Categories[0].Rule != "Pick one" {

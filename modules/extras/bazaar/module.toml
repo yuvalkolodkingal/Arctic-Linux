@@ -1,7 +1,7 @@
 id = "bazaar"
 name = "Bazaar"
 summary = "Browse and install apps from Flathub."
-category = "utilities"
+category = "extras"
 role = "app store"
 default = false
 tile = "bazaar"

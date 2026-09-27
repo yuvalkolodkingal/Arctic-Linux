@@ -59,8 +59,8 @@ func TestCatalogJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	// 21 picker sections; 126 visible modules + 4 system modules.
-	if len(doc.Categories) != 21 || len(doc.Modules) != 130 || doc.Estimate["label"] != "8 apps · 2.1 GB download" {
+	// 21 picker sections; 125 visible modules + 4 system modules.
+	if len(doc.Categories) != 21 || len(doc.Modules) != 129 || doc.Estimate["label"] != "8 apps · 2.1 GB download" {
 		t.Fatalf("catalog json: %d categories, %d modules, %v", len(doc.Categories), len(doc.Modules), doc.Estimate)
 	}
 	if doc.Modules[0]["id"] != "zen" || doc.Modules[0]["install"].([]any)[0].(map[string]any)["ref"] != "app.zen_browser.zen" {

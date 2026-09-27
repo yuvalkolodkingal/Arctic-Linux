@@ -2,8 +2,8 @@
 #
 # Categories are the installer's app picker sections, in picker order: the design's seven core
 # sections (design bundle.js CATEGORIES + components/AppChecklist) first, then the optional
-# groups that replaced Extras. `modules` fixes the order of the tiles inside each section (the
-# first ticked app in that order wins a MIME type); every visible module must be listed in
+# groups; Extras (last) now holds the utilities. `modules` fixes the order of the tiles inside
+# each section (the first ticked app in that order wins a MIME type); every visible module must be listed in
 # exactly one category. `collapsed = true` sections start folded in the picker ("More apps":
 # nothing in them is ticked by default) and cannot be required.
 # Each module lives in modules/<category>/<id>/module.toml; hidden, always-installed modules in
@@ -190,13 +190,13 @@ role = "virtualization tool"
 modules = ["podman", "podman-desktop", "distrobox", "gnome-boxes", "virt-manager", "waydroid"]
 
 [[category]]
-id = "utilities"
+id = "extras"
 name = "Utilities"
 choice = "any"
 collapsed = true
 note = ""
 role = "utility"
-modules = ["flathub", "bazaar", "flatseal", "mission-center", "btrfs-assistant", "gnome-disks", "pika-backup", "file-roller"]
+modules = ["flathub", "bazaar", "flatseal", "mission-center", "gnome-disks", "pika-backup", "file-roller"]
 
 # Download size (MB) of each shared Flatpak runtime, counted once per install.
 # Flathub API /api/v2/summary/<runtime> on 2026-09-27. The defaults already pull

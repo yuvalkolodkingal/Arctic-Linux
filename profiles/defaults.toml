@@ -46,5 +46,4 @@ shell = ["zsh"]
 files = ["yazi", "thunar"]
 office = ["collabora"]
 video = ["vlc"]
-# The optional groups (music, photos, graphics, …, utilities) tick nothing by default;
-# a category left out keeps the catalog defaults.
+extras = []

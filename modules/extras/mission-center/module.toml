@@ -1,7 +1,7 @@
 id = "mission-center"
 name = "Mission Center"
 summary = "See what's using your CPU, memory and GPU."
-category = "utilities"
+category = "extras"
 role = "system monitor"
 default = false
 tile = "mission-center"

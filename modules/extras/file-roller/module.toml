@@ -1,7 +1,7 @@
 id = "file-roller"
 name = "File Roller"
 summary = "Open and create zip and other archives."
-category = "utilities"
+category = "extras"
 role = "archive manager"
 default = false
 tile = "file-roller"

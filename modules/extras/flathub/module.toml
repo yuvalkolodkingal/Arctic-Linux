@@ -1,7 +1,7 @@
 id = "flathub"
 name = "Flathub"
 summary = "Adds the Flathub app store (Flatpak)."
-category = "utilities"
+category = "extras"
 role = "app store"
 default = false
 tile = "flathub"

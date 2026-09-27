@@ -47,7 +47,7 @@ const APP_TINT = {
   office: 'success-soft', video: 'warning-soft', extras: 'surface-sunken', system: 'surface-sunken',
   music: 'warning-soft', photos: 'warm-soft', graphics: 'warm-soft', recording: 'warning-soft', chat: 'info-soft',
   email: 'info-soft', notes: 'success-soft', reading: 'success-soft', gaming: 'slate-900', security: 'surface-sunken',
-  sync: 'info-soft', dev: 'surface-sunken', containers: 'surface-sunken', utilities: 'surface-sunken',
+  sync: 'info-soft', dev: 'surface-sunken', containers: 'surface-sunken',
 };
 const SNOW_INK = new Set(['terminal', 'gaming']);
 

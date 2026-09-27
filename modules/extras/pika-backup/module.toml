@@ -1,7 +1,7 @@
 id = "pika-backup"
 name = "Pika Backup"
 summary = "Easy, encrypted backups of your files."
-category = "utilities"
+category = "extras"
 role = "backup app"
 default = false
 tile = "pika-backup"

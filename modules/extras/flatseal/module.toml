@@ -1,7 +1,7 @@
 id = "flatseal"
 name = "Flatseal"
 summary = "Review what each Flatpak app may access."
-category = "utilities"
+category = "extras"
 role = "permissions tool"
 default = false
 tile = "flatseal"
