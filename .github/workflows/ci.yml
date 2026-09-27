@@ -67,7 +67,7 @@ jobs:
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Install tools
-        run: dnf -y install git python3 python3-pyte python3-pillow nodejs
+        run: dnf -y install git python3 python3-pyte python3-pillow python3-rpm nodejs
       - uses: actions/checkout@v4
       - name: Python unittest (shell/tests)
         run: |
@@ -76,6 +76,8 @@ jobs:
           fi
       - name: Python unittest (packaging/firstboot)
         run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
+      - name: Python unittest (tools/tests, the repository publishing helpers)
+        run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
       - name: Node tests (shell/tests)
         run: |
           for t in shell/tests/*.cjs shell/tests/*.mjs shell/tests/*.js; do
@@ -127,12 +129,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: tools/build-rpms.sh
+        env:
+          # Empty in forks and pull requests from them: arctic-release then ships the Arctic
+          # repositories disabled (tools/build-rpms.sh warns).
+          ARCTIC_GPG_PUBLIC_KEY: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY }}
+        run: |
+          tools/build-rpms.sh
+          cat out/BUILD-INFO
+      - name: Repository (unsigned test publish, dnf5 checks)
+        run: |
+          tools/publish-repo.sh --no-sign --site out/site --channel testing
+          tools/publish-repo.sh --no-sign --site out/site --channel stable
+          tools/test-repo.sh --rpms out/repo --site out/site
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: rpms
           path: |
             out/repo/*.rpm
+            out/BUILD-INFO
             out/logs/
           retention-days: 7
