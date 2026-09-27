@@ -1,0 +1,11 @@
+# Arctic Linux: Flatpak overrides for every app (arctic-desktop-config), installed as
+# /var/lib/flatpak/overrides/global, the file `flatpak override --system` edits.
+# docs/BUILD-SPEC.md "App theming".
+#
+# GTK 3/4 and libadwaita apps read ~/.config/gtk-3.0 and ~/.config/gtk-4.0 (gtk.css with the
+# active theme's colours in arctic-colors.css, which the 10-gtk theme hook keeps as a copy).
+# The light/dark scheme, GTK theme, icons, cursor and fonts come through the settings portal;
+# GTK 3 apps load the theme from the org.gtk.Gtk3theme.adw-gtk3(-dark) extensions. No
+# GTK_THEME: it would override libadwaita's own stylesheet.
+[Context]
+filesystems=xdg-config/gtk-3.0:ro;xdg-config/gtk-4.0:ro;xdg-config/fontconfig:ro;

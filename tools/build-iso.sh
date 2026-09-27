@@ -116,6 +116,10 @@ elif [ "$ZEN" != no ]; then
     branch=$(flatpak info --system --show-runtime app.zen_browser.zen | awk -F/ '{print $NF}')
     flatpak install --system -y --noninteractive --no-related flathub \
       "org.freedesktop.Platform.GL.default//$branch" "org.freedesktop.Platform.codecs-extra//$branch-extra" || :
+    # Zen's GTK 3 menus and dialogs in Winter and Polar night (adw-gtk3, docs/BUILD-SPEC.md
+    # "App theming"); a few hundred KB.
+    flatpak install --system -y --noninteractive --no-related flathub \
+      org.gtk.Gtk3theme.adw-gtk3 org.gtk.Gtk3theme.adw-gtk3-dark || :
     zen=1
     flatpak list --system --columns=application,version,size || :
   else

@@ -10,7 +10,8 @@
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
-#                          dotfiles/.local/bin → /usr/bin
+#                          dotfiles/.local/bin → /usr/bin, packaging/theme-hooks.d → /usr/share/arctic,
+#                          packaging/dconf, packaging/flatpak (app theming defaults)
 #   arctic-shell           shell/ → /usr/share/arctic/shell
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
@@ -164,6 +165,19 @@ Requires:       brightnessctl
 Requires:       playerctl
 Requires:       fastfetch
 Requires:       jetbrains-mono-fonts-all
+# App theming (docs/BUILD-SPEC.md "App theming"): GTK 3 apps use adw-gtk3, which takes the
+# theme's colours from ~/.config/gtk-3.0/gtk.css; Qt 5/6 apps use qt5ct/qt6ct (Fusion + the
+# theme's palette); the dconf defaults name Adwaita icons and cursors.
+Requires:       adw-gtk3-theme
+Requires:       qt6ct
+Requires:       qt5ct
+Requires:       adwaita-icon-theme
+Requires:       adwaita-cursor-theme
+Requires:       dconf
+# /var/lib/flatpak/overrides/global (Flatpak apps read the GTK colours).
+Requires:       flatpak
+Requires(posttrans): dconf
+Requires(postun): dconf
 Recommends:     waybar
 Recommends:     fuzzel
 Recommends:     lxqt-policykit
@@ -174,6 +188,9 @@ The Arctic Linux desktop configuration: the Mango configuration, the Winter and 
 theme files and the keyboard cheat sheet in /usr/share/arctic (new home directories link to
 them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, zsh, GTK,
 waybar, fuzzel, mako), the arctic-* helper commands in /usr/bin and /etc/arctic/default-apps.
+App theming: the theme hooks in /usr/share/arctic/theme-hooks.d (GTK, Qt, Zed, Zen), the GTK,
+icon, cursor and font defaults for GTK/libadwaita and Flatpak apps (dconf distro database)
+and the Flatpak overrides that let Flatpak apps read the GTK colours.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
@@ -372,6 +389,12 @@ Requires:       mesa-dri-drivers
 Recommends:     waybar
 Recommends:     lxqt-policykit
 Recommends:     adwaita-cursor-theme
+# Toolkit theming (also required by arctic-desktop-config): GTK 3 and Qt 5/6 apps.
+Requires:       adw-gtk3-theme
+Requires:       qt6ct
+Requires:       qt5ct
+# The terminal system monitor, themed like the rest (btop/arctic.theme).
+Recommends:     btop
 
 %description -n arctic-desktop
 Pulls in everything an Arctic Linux desktop needs: Mango, SDDM with the arctic theme and
@@ -512,6 +535,13 @@ cp -a dotfiles/.config/arctic/themes/. %{buildroot}%{_datadir}/arctic/themes/
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
+# App theming (docs/BUILD-SPEC.md "App theming"): the hooks `arctic-theme reload` runs after a
+# theme change, GTK/icon/cursor/font defaults in dconf's "distro" database (Fedora's dconf
+# profile reads it after the user's and the administrator's), and Flatpak overrides.
+install -d %{buildroot}%{_datadir}/arctic/theme-hooks.d
+install -pm 0755 packaging/theme-hooks.d/* %{buildroot}%{_datadir}/arctic/theme-hooks.d/
+install -Dpm 0644 packaging/dconf/10-arctic %{buildroot}%{_sysconfdir}/dconf/db/distro.d/10-arctic
+install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/flatpak/overrides/global
 # arctic-shell, arctic-shell-ipc and arctic-installer belong to their own subpackages.
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
@@ -596,7 +626,8 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
-         %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer; do
+         %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer \
+         %{buildroot}%{_datadir}/arctic/theme-hooks.d/*; do
   case "$(head -n1 "$s")" in
     *python*) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$s" ;;
     *) bash -n "$s" ;;
@@ -672,6 +703,11 @@ done
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# Compile /etc/dconf/db/distro.d (the Arctic GTK/icon/cursor/font defaults).
+if [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
+
+%postun -n arctic-desktop-config
+if [ "$1" -eq 0 ] && [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
 
 %triggerin -n arctic-desktop-config -- zsh
 %{arctic_skel_zsh}
@@ -790,6 +826,11 @@ fi
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt
 %{_datadir}/arctic/themes/
+%dir %{_datadir}/arctic/theme-hooks.d
+%{_datadir}/arctic/theme-hooks.d/*
+%config(noreplace) %{_sysconfdir}/dconf/db/distro.d/10-arctic
+%dir %{_localstatedir}/lib/flatpak/overrides
+%config(noreplace) %{_localstatedir}/lib/flatpak/overrides/global
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
