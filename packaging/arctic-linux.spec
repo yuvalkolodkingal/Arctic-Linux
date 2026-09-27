@@ -10,8 +10,10 @@
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
-#                          dotfiles/.local/bin → /usr/bin, packaging/theme-hooks.d → /usr/share/arctic,
-#                          packaging/dconf, packaging/flatpak (app theming defaults)
+#                          dotfiles/.local/bin → /usr/bin, design/themegen → /usr/share/arctic/themegen
+#                          (the theme engine; Winter and Polar night are rendered with it here),
+#                          packaging/theme-hooks.d → /usr/share/arctic, packaging/dconf, packaging/flatpak
+#                          (app theming defaults)
 #   arctic-shell           shell/ → /usr/share/arctic/shell
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
@@ -45,6 +47,9 @@ BuildRequires:  systemd-rpm-macros
 BuildRequires:  desktop-file-utils
 BuildRequires:  findutils
 BuildRequires:  tar
+# The theme engine renders the static themes in %%build; %%check runs its tests.
+BuildRequires:  python3
+BuildRequires:  python3-pillow
 
 %description
 Arctic Linux is a Fedora %{dist_version} based desktop built around the Mango Wayland
@@ -144,6 +149,8 @@ Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-logos = %{version}-%{release}
 Requires:       bash
 Requires:       python3
+# arctic-themegen: colours from wallpapers
+Requires:       python3-pillow
 %{?systemd_requires}
 # kitty and zsh are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
@@ -188,9 +195,11 @@ The Arctic Linux desktop configuration: the Mango configuration, the Winter and 
 theme files and the keyboard cheat sheet in /usr/share/arctic (new home directories link to
 them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, zsh, GTK,
 waybar, fuzzel, mako), the arctic-* helper commands in /usr/bin and /etc/arctic/default-apps.
-App theming: the theme hooks in /usr/share/arctic/theme-hooks.d (GTK, Qt, Zed, Zen), the GTK,
-icon, cursor and font defaults for GTK/libadwaita and Flatpak apps (dconf distro database)
-and the Flatpak overrides that let Flatpak apps read the GTK colours.
+It also has the theme engine (arctic-themegen, /usr/share/arctic/themegen), which makes a
+theme from the wallpaper when colours follow it (arctic-theme auto on), and the theme hooks
+in /usr/share/arctic/theme-hooks.d (GTK, Qt, Zed, Zen). App theming: the GTK, icon, cursor
+and font defaults for GTK/libadwaita and Flatpak apps (dconf distro database) and the Flatpak
+overrides that let Flatpak apps read the GTK colours.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
@@ -424,6 +433,16 @@ fi
 # ---- SELinux module ----
 make -C packaging/selinux -f %{_datadir}/selinux/devel/Makefile arctic-nix.pp
 
+# ---- Static themes: Winter and Polar night, rendered by the theme engine (design/themegen)
+# from the design tokens. dotfiles/.config/arctic/themes holds the same files, for
+# dotfiles/install.sh; %%check makes sure they match.
+export PYTHONDONTWRITEBYTECODE=1
+rm -rf _build/themes
+for t in winter polar-night; do
+  PYTHONPATH=design python3 -m themegen builtin "$t" \
+    | PYTHONPATH=design python3 -m themegen render --palette - --out "_build/themes/$t" --quiet
+done
+
 # ---- Wallpapers: SVG → 3840×2160 PNG ----
 mkdir -p _build/backgrounds
 for svg in design/wallpapers/*.svg; do
@@ -531,16 +550,27 @@ install -d %{buildroot}%{_bindir}
 install -pm 0755 dotfiles/.local/bin/* %{buildroot}%{_bindir}/
 install -Dpm 0644 dotfiles/.local/share/arctic/keys.txt %{buildroot}%{_datadir}/arctic/keys.txt
 install -d %{buildroot}%{_datadir}/arctic/themes
-cp -a dotfiles/.config/arctic/themes/. %{buildroot}%{_datadir}/arctic/themes/
+cp -a _build/themes/. %{buildroot}%{_datadir}/arctic/themes/
+# The theme engine (arctic-themegen, run by arctic-theme) and the design data it reads.
+themegen=%{buildroot}%{_datadir}/arctic/themegen
+install -d "$themegen/data/exports" "$themegen/data/icons" "$themegen/data/logos"
+tar -C design/themegen --exclude=./tests --exclude=__pycache__ -cf - . | tar -C "$themegen" -xf -
+install -pm 0644 design/exports/arctic-tokens.json design/exports/gtk-arctic-*.css "$themegen/data/exports/"
+install -pm 0644 design/icons/*.svg "$themegen/data/icons/"
+install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
 # App theming (docs/BUILD-SPEC.md "App theming"): the hooks `arctic-theme reload` runs after a
 # theme change, GTK/icon/cursor/font defaults in dconf's "distro" database (Fedora's dconf
 # profile reads it after the user's and the administrator's), and Flatpak overrides.
+# theme-hooks.d: executables run after every theme switch (other packages may add theirs).
 install -d %{buildroot}%{_datadir}/arctic/theme-hooks.d
 install -pm 0755 packaging/theme-hooks.d/* %{buildroot}%{_datadir}/arctic/theme-hooks.d/
 install -Dpm 0644 packaging/dconf/10-arctic %{buildroot}%{_sysconfdir}/dconf/db/distro.d/10-arctic
+# The compiled database `dconf update` writes in %%posttrans: owned (%%ghost) so that erase
+# removes it and rpm -V knows it.
+touch %{buildroot}%{_sysconfdir}/dconf/db/distro
 install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/flatpak/overrides/global
 # arctic-shell, arctic-shell-ipc and arctic-installer belong to their own subpackages.
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-installer' \
@@ -625,6 +655,17 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
+# The theme engine: colour maths, templates, wallpaper palettes and their contrast guarantees,
+# arctic-theme / arctic-wallpaper, and that dotfiles/.config/arctic/themes is current.
+# (ARCTIC_PERF_BUDGET: builders are slower and busier than a desktop.)
+ARCTIC_PERF_BUDGET=10 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s design/themegen/tests
+# The installed engine renders from the installed data exactly what %%build made.
+tg="%{buildroot}%{_bindir}/arctic-themegen"
+ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTECODE=1 python3 "$tg" builtin winter > _build/winter.json
+rm -rf _build/check-theme
+ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTECODE=1 \
+  python3 "$tg" render --palette _build/winter.json --out _build/check-theme --quiet
+diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer \
          %{buildroot}%{_datadir}/arctic/theme-hooks.d/*; do
@@ -652,6 +693,22 @@ test -n "$skel_links"
 for l in $skel_links; do
   t="$(readlink "$l")"
   case "$t" in /*) test -e "%{buildroot}$t" || { echo "error: $l -> $t: not in the package" >&2; exit 1; } ;; esac
+done
+# Relative links (yazi, btop, GTK, qt*ct colour schemes …) go through ~/.config/arctic/current:
+# in a copy of skel whose `current` is the buildroot's theme, every link must resolve.
+lhome="$PWD/_build/linkhome"; rm -rf "$lhome"; mkdir -p "$lhome"
+cp -a %{buildroot}%{_sysconfdir}/skel/. "$lhome/"
+for l in $(find "$lhome" -type l); do
+  t="$(readlink "$l")"
+  case "$t" in /*) ln -sfn "%{buildroot}$t" "$l" ;; esac
+done
+dangling="$(find -L "$lhome" -type l)"
+if [ -n "$dangling" ]; then echo "error: dangling links in /etc/skel:" >&2; echo "$dangling" >&2; exit 1; fi
+# The qt*ct colour schemes are absolute paths inside ~/.config/arctic/current.
+for q in qt5ct qt6ct; do
+  p="$(sed -n 's,^color_scheme_path=,,p' "$lhome/.config/$q/$q.conf")"
+  case "$p" in "~/"*) p="$lhome/${p#\~/}" ;; esac
+  test -z "$p" || test -f "$p" || { echo "error: $q color_scheme_path $p is missing" >&2; exit 1; }
 done
 # Mango configs: validated when mangowm is installed in the build root (tools/build-rpms.sh
 # installs the freshly built one); `mango -c FILE -p` rejects unknown keys.
@@ -826,9 +883,11 @@ fi
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt
 %{_datadir}/arctic/themes/
+%{_datadir}/arctic/themegen/
 %dir %{_datadir}/arctic/theme-hooks.d
 %{_datadir}/arctic/theme-hooks.d/*
 %config(noreplace) %{_sysconfdir}/dconf/db/distro.d/10-arctic
+%ghost %{_sysconfdir}/dconf/db/distro
 %dir %{_localstatedir}/lib/flatpak/overrides
 %config(noreplace) %{_localstatedir}/lib/flatpak/overrides/global
 %{_unitdir}/arctic-firstboot.service

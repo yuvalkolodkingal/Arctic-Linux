@@ -51,7 +51,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `.config/yazi/theme.toml`, `.config/btop/` | Links to the active theme's yazi and btop themes | — |
 | `.config/foot`, `.config/alacritty` | The other terminals, with kitty's palette from the active theme | Terminal |
 | `.zshrc`, `.zprofile`, `.bashrc.d/arctic.sh` | Prompt (`~ ❯`, amber arrow; the theme's `zsh/colors.zsh`), history, completion, fzf colours (`fzf/fzfrc`), the fox greeting | Terminal |
-| `.config/arctic/themes/{winter,polar-night}/` | **Generated** colour files for every app above, and `theme.json` (every token) for the shell | tokens |
+| `.config/arctic/themes/{winter,polar-night}/` | **Generated** (by the theme engine, `design/themegen`) colour files for every app above, `theme.json` (every token) for the shell and `palette.json` | tokens |
 | `.config/arctic/current` | Symlink to the active theme; every app reads its colours through it | Theme switching |
 | `.local/bin/arctic-*` | The helper commands below | — |
 
@@ -61,8 +61,9 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 |---|---|
 | `arctic-shell [--foreground\|--restart\|--stop\|--path]` | Start the desktop shell (Quickshell) |
 | `arctic-shell-ipc <target> <function>` | Talk to the shell, e.g. `arctic-shell-ipc launcher toggle` (targets in [`../shell/README.md`](../shell/README.md)) |
-| `arctic-theme [winter\|polar-night\|toggle]` | Switch the whole desktop's theme (`Super + Shift + T`); the shell restyles live |
-| `arctic-wallpaper [snowfield\|aurora\|fox\|<picture>]` | Pick a wallpaper; the Arctic ones follow theme switches. Also the shell's picker (`Super + Shift + W`) |
+| `arctic-theme [set <theme>\|toggle\|auto on\|off\|mode auto\|dark\|light\|list\|current]` | Switch the whole desktop's theme (`Super + Shift + T` toggles light / dark); the shell restyles live. With auto colours on (the default) your own wallpapers colour the desktop |
+| `arctic-themegen render\|palette\|builtin\|check` | The theme engine: render a palette into a theme folder, make a palette from a picture |
+| `arctic-wallpaper [snowfield\|aurora\|fox\|<picture>]` | Pick a wallpaper; the Arctic ones follow theme switches, your pictures set the colours when auto colours are on. Also the shell's picker (`Super + Shift + W`, with a "Match colours to wallpaper" switch) |
 | `arctic-fetch [--static]` | The animated fox greeting (runs when a terminal opens; any key skips it) |
 | `arctic-motion [on\|off]` | Reduced motion: no animations anywhere, still fox |
 | `arctic-launcher ["=12*4"]` | Open or close the launcher (`Super + Space`), optionally with something typed |
@@ -85,7 +86,13 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
   `~/.config/kitty/user.conf`, `~/.zshrc.local`, `~/.config/arctic/default-apps`.
 - **Colours** come from the design tokens. Change `design/tokens.json`, re-export
   `design/exports/arctic-tokens.json` from the design system, then run
-  `python3 design/tools/gen-desktop-themes.py` to regenerate both themes.
+  `python3 design/tools/gen-desktop-themes.py` to regenerate both themes (the per-app files
+  are templates in `design/themegen/templates/`).
+- **Colours from your wallpaper** are on by default (`arctic-theme auto on|off`): a picture of
+  yours becomes the `wallpaper` theme in `~/.config/arctic/themes/wallpaper`; Arctic's own
+  wallpapers keep Winter / Polar night. Scripts in `~/.config/arctic/theme-hooks.d/` run after
+  every theme change (with `ARCTIC_THEME_DIR` and `ARCTIC_THEME_MODE`); extra templates of
+  your own go in `~/.config/arctic/templates/`.
 - **Default apps** are read by `arctic-open` from `/etc/arctic/default-apps` (written by the
   installer) and `~/.config/arctic/default-apps`, as `role=command` lines, e.g.
   `browser=gtk-launch org.mozilla.firefox`.

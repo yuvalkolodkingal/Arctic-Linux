@@ -14,7 +14,8 @@ component specs and screen mockups; this folder holds what the OS build needs.
 | `logos/` | The fox mark: colour versions for Winter and Polar night, 16px versions |
 | `icons/` | The system icons the desktop uses (24px grid, 1.75px stroke, charcoal ink) |
 | `wallpapers/` | Snowfield, aurora and fox, each in Winter and Polar night (1920×1080 SVG) |
-| `tools/gen-desktop-themes.py` | Generates the desktop theme files in `../dotfiles/.config/arctic/themes/` from `exports/arctic-tokens.json` |
+| `themegen/` | The theme engine (`arctic-themegen`): renders a palette into a theme folder through `themegen/templates/`, and makes palettes from wallpapers ([`docs/BUILD-SPEC.md`](../docs/BUILD-SPEC.md) §9) |
+| `tools/gen-desktop-themes.py` | Renders Winter and Polar night through the engine into `../dotfiles/.config/arctic/themes/` (and `../shell/assets/theme-defaults.js`) |
 
 Only the icons and logos the desktop uses are copied here; the full set (78 icons, 30 app tiles,
 lockups) lives in the artifact.

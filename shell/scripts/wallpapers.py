@@ -50,6 +50,21 @@ def save(data):
 
 
 def theme():
+    """Which drawing of the Arctic wallpapers fits the active theme: winter or polar-night.
+    A theme made from a picture (or your own) uses its base, else its light / dark mode."""
+    env = {}
+    try:
+        for line in (CONFIG / 'current' / 'theme.env').read_text().splitlines():
+            key, sep, value = line.partition('=')
+            if sep and key.startswith('ARCTIC_'):
+                env[key] = value.strip().strip('"\'')
+    except OSError:
+        pass
+    for name in (env.get('ARCTIC_THEME_BASE'), env.get('ARCTIC_THEME')):
+        if name in ('winter', 'polar-night'):
+            return name
+    if env.get('ARCTIC_THEME_MODE') in ('dark', 'light'):
+        return 'winter' if env['ARCTIC_THEME_MODE'] == 'light' else 'polar-night'
     try:
         name = (CONFIG / 'theme').read_text().strip()
     except OSError:

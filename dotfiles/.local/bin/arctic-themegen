@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""arctic-themegen — the Arctic Linux theme engine (docs/BUILD-SPEC.md, Theming).
+
+  arctic-themegen render --palette FILE --out DIR     render a palette into a theme folder
+  arctic-themegen palette --from-wallpaper IMG [--mode auto|dark|light] [--base NAME]
+  arctic-themegen builtin winter|polar-night          print a static palette
+  arctic-themegen check --palette FILE                contrast report
+
+The engine (a Python package, `themegen`) is looked up in $ARCTIC_THEMEGEN_DIR, the
+repository this script sits in (design/themegen), ~/.local/share/arctic/themegen
+(dotfiles/install.sh) and /usr/share/arctic/themegen (arctic-desktop-config).
+"""
+import os
+import sys
+
+
+def find_engine():
+    here = os.path.dirname(os.path.realpath(__file__))
+    data_home = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    for d in (os.environ.get("ARCTIC_THEMEGEN_DIR"),
+              os.path.join(here, "..", "..", "..", "design", "themegen"),
+              os.path.join(data_home, "arctic", "themegen"),
+              "/usr/share/arctic/themegen"):
+        if d and os.path.isfile(os.path.join(d, "cli.py")):
+            return os.path.realpath(d)
+    return None
+
+
+engine = find_engine()
+if engine is None:
+    sys.exit("arctic-themegen: the theme engine is missing (/usr/share/arctic/themegen)")
+# The package directory is called "themegen" in the repository and when installed.
+sys.path.insert(0, os.path.dirname(engine))
+from themegen.cli import main  # noqa: E402
+
+sys.exit(main())

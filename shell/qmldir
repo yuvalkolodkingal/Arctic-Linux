@@ -5,6 +5,7 @@ singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 AppTile 1.0 AppTile.qml
+ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
 ArcticField 1.0 ArcticField.qml
 Bar 1.0 Bar.qml

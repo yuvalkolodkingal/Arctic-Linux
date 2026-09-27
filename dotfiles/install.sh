@@ -9,7 +9,8 @@
 #                                (the default when installing into $HOME; packages use
 #                                /usr/share/arctic/shell instead, so --target never copies it)
 #
-# Copies: this folder's home tree, plus the design's fonts, wallpapers and logos from ../design.
+# Copies: this folder's home tree, plus the design's fonts, wallpapers and logos and the theme
+# engine (../design/themegen) from ../design.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -79,6 +80,15 @@ mkdir -p "$TARGET/.local/share/fonts/arctic" "$TARGET/.local/share/arctic/wallpa
 cp "$DESIGN"/fonts/*.woff2 "$TARGET/.local/share/fonts/arctic/"
 cp "$DESIGN"/wallpapers/*.svg "$TARGET/.local/share/arctic/wallpapers/"
 cp "$DESIGN"/logos/*.svg "$TARGET/.local/share/arctic/logos/"
+
+# 2b. The theme engine (arctic-themegen; arctic-theme makes wallpaper colours with it) and the
+# design data it reads — the packages put the same in /usr/share/arctic/themegen.
+engine="$TARGET/.local/share/arctic/themegen"
+rm -rf "$engine" && mkdir -p "$engine/data/exports" "$engine/data/icons" "$engine/data/logos"
+(cd "$DESIGN/themegen" && tar --exclude=./tests --exclude='__pycache__' -cf - .) | (cd "$engine" && tar -xf -)
+cp "$DESIGN"/exports/arctic-tokens.json "$DESIGN"/exports/gtk-arctic-*.css "$engine/data/exports/"
+cp "$DESIGN"/icons/*.svg "$engine/data/icons/"
+cp "$DESIGN"/logos/arctic-mark-16-*.svg "$engine/data/logos/"
 
 # 3. The shell, for installs without the arctic-shell package.
 if [[ "$SHELL_COPY" == 1 || ( "$SHELL_COPY" == auto && "$TARGET" == "$HOME" ) ]]; then

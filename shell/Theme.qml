@@ -4,11 +4,13 @@ import Quickshell
 import Quickshell.Io
 import "assets/theme-defaults.js" as Defaults
 
-// The Arctic design tokens for the active theme (Winter or Polar night).
+// The Arctic design tokens for the active theme (Winter, Polar night, the one made from your
+// wallpaper, or a theme of your own).
 //
 // Read from ~/.config/arctic/current/theme.json, which `arctic-theme` switches, falling back to
 // /usr/share/arctic/themes/polar-night/theme.json and then to the built-in Polar night.
-// Every file is generated from design/tokens.json by design/tools/gen-desktop-themes.py.
+// Every theme.json is rendered by the theme engine (design/themegen, arctic-themegen) from a
+// palette; the static ones from design/tokens.json.
 // `arctic-theme` also writes ~/.config/arctic/theme and calls `arctic-shell-ipc shell reload`,
 // so the whole shell restyles live.
 Singleton {
@@ -133,7 +135,10 @@ Singleton {
         onLoadFailed: if (!fallback) fallback = true
     }
     // `arctic-theme` swaps the ~/.config/arctic/current symlink, which a file watch on
-    // current/theme.json can't see; the theme name file it rewrites is watched instead.
+    // current/theme.json can't see (inotify watches the file the link pointed at). It rewrites
+    // the theme name file after every switch, and that is watched instead: reloading themeView
+    // re-reads theme.json through the new link and re-creates its watch on the new target (so
+    // a theme regenerated in place, like the wallpaper one, is picked up too).
     FileView {
         id: stateView
         path: Session.arcticConfig + '/theme'
