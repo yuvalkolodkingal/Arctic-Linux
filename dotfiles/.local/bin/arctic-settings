@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# arctic-settings — Arctic Settings, the settings app (Super+S, the launcher, the power menu).
+#
+#   arctic-settings [page]    open Settings, on a page if you name one: appearance, windows,
+#                             displays, input, shortcuts, apps, network, bluetooth, sound,
+#                             updates, power, startup, about. If it is open already, it shows
+#                             that page and comes to the front.
+#   arctic-settings --path    print the folder the app runs from
+#
+# The app is the first folder found of $ARCTIC_SETTINGS_DIR, /usr/share/arctic/settings
+# (package arctic-settings) and the checkout this script lives in (<repo>/settings).
+# What it changes: ~/.config/mango/settings.conf (sourced by config.conf), and the files and
+# commands listed in settings/README.md.
+set -uo pipefail
+
+settings_dir() {
+  local here d
+  here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+  for d in "${ARCTIC_SETTINGS_DIR:-}" /usr/share/arctic/settings "$here/../../../settings"; do
+    if [[ -n "$d" && -f "$d/shell.qml" ]]; then (cd "$d" && pwd -P); return 0; fi
+  done
+  return 1
+}
+
+usage() {
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+page="${1:-}"
+case "$page" in
+  -h|--help) usage; exit 0 ;;
+  --path|"") ;;
+  *) [[ "$page" =~ ^[a-z]+$ ]] || { usage >&2; exit 2; } ;;
+esac
+
+dir="$(settings_dir)" || {
+  echo "arctic-settings: the Settings app isn't installed (package arctic-settings)" >&2
+  exit 1
+}
+if [[ "$page" == --path ]]; then echo "$dir"; exit 0; fi
+if ! command -v quickshell >/dev/null 2>&1; then
+  notify-send -a "Arctic Linux" -i dialog-warning "Settings can't start" \
+    "Quickshell isn't installed." 2>/dev/null
+  echo "arctic-settings: quickshell is not installed" >&2
+  exit 1
+fi
+
+# Already open: show the page and bring the window to the front (Mango focuses the client
+# whose title is "Arctic Settings").
+if quickshell ipc -p "$dir" call settings page >/dev/null 2>&1; then
+  if [[ -n "$page" ]]; then quickshell ipc -p "$dir" call settings open "$page" >/dev/null 2>&1; fi
+  if command -v mmsg >/dev/null 2>&1; then
+    id="$(mmsg get all-clients 2>/dev/null | python3 -c '
+import json, sys
+for c in json.load(sys.stdin).get("clients", []):
+    if c.get("title") == "Arctic Settings":
+        print(c.get("id"))
+        break' 2>/dev/null)"
+    if [[ -n "$id" ]]; then mmsg dispatch focusid "client,$id" >/dev/null 2>&1; fi
+  fi
+  exit 0
+fi
+
+# -n: a second start while this one is still coming up does nothing.
+ARCTIC_SETTINGS_PAGE="$page" exec quickshell -n -d -p "$dir"

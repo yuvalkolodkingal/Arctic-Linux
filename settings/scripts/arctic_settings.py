@@ -21,6 +21,9 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     display-try JSON              apply a layout now (wlr-randr); it reverts by itself after 20 s
     display-keep                  keep it: written as monitorrule lines
     display-revert                go back to the layout from before display-try
+    display-forget [NAME…]        drop saved monitor rules (Arctic's defaults apply again)
+    devices                       connected keyboards, mice and touchpads (mmsg get all-devices)
+    power-profile [NAME]          power mode: power-saver, balanced, performance (powerprofilesctl)
     apps                          default apps per role (browser, terminal, files, editor, …)
     app-set ROLE DESKTOP-ID       ~/.config/arctic/default-apps (arctic-open) + mimeapps.list
     idle | idle-set LOCK SUSPEND  lock / suspend timeouts in seconds (0 = never), for swayidle
@@ -1022,7 +1025,8 @@ def wlr_randr_args(layout):
                 mode += '@{:.3f}Hz'.format(o['refresh'])
             argv += ['--mode', mode]
         argv += ['--pos', '{},{}'.format(o['x'], o['y']),
-                 '--scale', format_number(o['scale']), '--transform', o['transform']]
+                 '--scale', format_number(o['scale']), '--transform', o['transform'],
+                 '--adaptive-sync', 'enabled' if o.get('adaptiveSync') else 'disabled']
     return argv
 
 
@@ -1140,6 +1144,64 @@ def cmd_display_revert(paths, args):
     if not token:
         result.update(cmd_displays(paths, []))
     return result
+
+
+def cmd_display_forget(paths, args):
+    """Drop saved monitor rules (all of them, or one display's): Arctic's defaults apply again
+    the next time Mango reads its config."""
+    model = load_settings(paths)
+    before = len(model.monitors)
+    model.monitors = [r for r in model.monitors if args and r['name'] not in args]
+    if len(model.monitors) == before:
+        raise Failure('There’s no saved display layout to forget.')
+    result = save_settings(paths, model)
+    result.update(cmd_displays(paths, []))
+    return result
+
+
+# ---- input devices, power profiles -------------------------------------------------------------
+
+def cmd_devices(paths, _args):
+    """Which kinds of pointer devices are connected (mmsg get all-devices), so Settings can hide
+    the touchpad group on a desktop. Unknown (no Mango IPC) shows everything."""
+    if not which('mmsg'):
+        return dict(ok=True, known=False, trackpad=True, mouse=True, devices=[])
+    code, out, _err = run(['mmsg', 'get', 'all-devices'], timeout=5)
+    data = _loads(out) if code == 0 else None
+    items = data.get('devices', []) if isinstance(data, dict) else data if isinstance(data, list) else None
+    if not isinstance(items, list):
+        return dict(ok=True, known=False, trackpad=True, mouse=True, devices=[])
+    devices = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        kinds = item.get('types') or item.get('type') or []
+        kinds = [kinds] if isinstance(kinds, str) else [str(k) for k in kinds]
+        devices.append(dict(name=str(item.get('name', '')), types=kinds))
+    kinds = {k for d in devices for k in d['types']}
+    return dict(ok=True, known=True, trackpad=bool(kinds & {'trackpad', 'touchpad'}),
+                mouse='pointer' in kinds or not kinds & {'trackpad', 'touchpad'}, devices=devices)
+
+
+PROFILES = ['power-saver', 'balanced', 'performance']
+
+
+def cmd_power_profile(paths, args):
+    """The power mode (powerprofilesctl, from tuned-ppd or power-profiles-daemon)."""
+    if not which('powerprofilesctl'):
+        return dict(ok=True, available=False)
+    if args:
+        if args[0] not in PROFILES:
+            raise Failure('There’s no power mode called “{}”.'.format(args[0]))
+        code, _out, err = run(['powerprofilesctl', 'set', args[0]], timeout=10)
+        if code != 0:
+            raise Failure(strip_ansi(err).strip().splitlines()[-1] if err.strip() else 'The power mode couldn’t be changed.')
+    code, out, _err = run(['powerprofilesctl', 'get'], timeout=5)
+    if code != 0:
+        return dict(ok=True, available=False)
+    code, listing, _err = run(['powerprofilesctl', 'list'], timeout=5)
+    offered = [p for p in PROFILES if re.search(r'^\*?\s*{}:'.format(re.escape(p)), listing, re.M)] or PROFILES
+    return dict(ok=True, available=True, current=out.strip(), profiles=offered)
 
 
 # ---- desktop entries and default apps -------------------------------------------------------------
@@ -1429,8 +1491,9 @@ def cmd_idle_set(paths, args):
 
 # ---- keyboard data ------------------------------------------------------------------------------
 
-SWITCH_KEYS = ['grp:alt_shift_toggle', 'grp:ctrl_shift_toggle', 'grp:caps_toggle', 'grp:win_space_toggle',
-               'grp:alt_space_toggle', 'grp:shifts_toggle', 'grp:toggle', 'grp:lalt_lshift_toggle']
+# Layout-switch keys offered in Settings. Not Win+Space: Super + Space opens the launcher.
+SWITCH_KEYS = ['grp:alt_shift_toggle', 'grp:ctrl_shift_toggle', 'grp:caps_toggle', 'grp:alt_space_toggle',
+               'grp:shifts_toggle', 'grp:toggle', 'grp:lalt_lshift_toggle', 'grp:alt_caps_toggle']
 CAPS_OPTIONS = ['caps:escape', 'ctrl:nocaps', 'caps:backspace', 'caps:super', 'caps:none', 'caps:swapescape']
 
 
@@ -1852,7 +1915,7 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
          'pwvucontrol': 'pwvucontrol', 'wdisplays': 'wdisplays', 'arcticTheme': 'arctic-theme',
          'arcticUpdate': 'arctic-update', 'arcticMotion': 'arctic-motion', 'arcticWallpaper': 'arctic-wallpaper',
          'gsettings': 'gsettings', 'swayidle': 'swayidle', 'gtkLaunch': 'gtk-launch', 'xdgOpen': 'xdg-open',
-         'arcticSession': 'arctic-session'}
+         'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl'}
 
 
 def cmd_caps(paths, _args):
@@ -1879,7 +1942,8 @@ COMMANDS = {
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
     'displays': cmd_displays, 'display-try': cmd_display_try, 'display-keep': cmd_display_keep,
-    'display-revert': cmd_display_revert, 'apps': cmd_apps, 'app-set': cmd_app_set, 'idle': cmd_idle,
+    'display-revert': cmd_display_revert, 'display-forget': cmd_display_forget, 'devices': cmd_devices,
+    'power-profile': cmd_power_profile, 'apps': cmd_apps, 'app-set': cmd_app_set, 'idle': cmd_idle,
     'idle-set': cmd_idle_set, 'keyboard-data': cmd_keyboard_data, 'cursor-themes': cmd_cursor_themes,
     'theme': cmd_theme, 'theme-set': cmd_theme_set, 'theme-auto': cmd_theme_auto, 'theme-mode': cmd_theme_mode,
     'motion': cmd_motion, 'motion-set': cmd_motion_set, 'text-scale': cmd_text_scale,

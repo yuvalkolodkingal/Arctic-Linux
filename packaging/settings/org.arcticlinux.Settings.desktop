@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=Settings
+Comment=Appearance, windows, displays, keyboard and mouse, default apps, network, sound and more
+Exec=arctic-settings
+TryExec=arctic-settings
+Icon=org.arcticlinux.Settings
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=settings;preferences;control;center;panel;theme;wallpaper;display;monitor;keyboard;mouse;touchpad;shortcuts;default;apps;network;wifi;bluetooth;sound;volume;updates;power;startup;about;
+StartupNotify=false
