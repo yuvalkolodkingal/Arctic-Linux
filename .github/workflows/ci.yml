@@ -98,7 +98,9 @@ jobs:
         run: |
           # ExecStart= must exist for verify: install the command where the package puts it.
           install -m 0755 dotfiles/.local/bin/arctic-update /usr/bin/arctic-update
-          systemd-analyze verify packaging/systemd/arctic-update-stage.service packaging/systemd/arctic-update-stage.timer
+          # --man=no: the container has no man pages (tsflags=nodocs), so the
+          # Documentation=man: check would fail although the page ships with dnf5.
+          systemd-analyze verify --man=no packaging/systemd/arctic-update-stage.service packaging/systemd/arctic-update-stage.timer
 
   qml:
     name: qmllint
