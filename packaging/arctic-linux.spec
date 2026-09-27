@@ -47,6 +47,8 @@ BuildRequires:  findutils
 BuildRequires:  tar
 # The theme engine renders the static themes in %%build; %%check runs its tests.
 BuildRequires:  python3
+# %%py_byte_compile
+BuildRequires:  python3-rpm-macros
 BuildRequires:  python3-pillow
 
 %description
@@ -535,6 +537,9 @@ tar -C design/themegen --exclude=./tests --exclude=__pycache__ -cf - . | tar -C 
 install -pm 0644 design/exports/arctic-tokens.json design/exports/gtk-arctic-*.css "$themegen/data/exports/"
 install -pm 0644 design/icons/*.svg "$themegen/data/icons/"
 install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
+# Outside site-packages brp-python-bytecompile skips it: compile here, or every run would
+# compile from source (and fail to write __pycache__ into /usr/share).
+%py_byte_compile %{python3} %{buildroot}%{_datadir}/arctic/themegen
 # Theme hooks: executables run after every theme switch (other packages may add theirs).
 install -d %{buildroot}%{_datadir}/arctic/theme-hooks.d
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
