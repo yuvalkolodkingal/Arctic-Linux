@@ -1,0 +1,55 @@
+#!/usr/bin/bash
+# Arctic Linux theme hook: GTK apps (docs/BUILD-SPEC.md "App theming").
+#
+# `arctic-theme reload` runs every hook in /usr/share/arctic/theme-hooks.d and
+# ~/.config/arctic/theme-hooks.d after a theme change, with ARCTIC_THEME_DIR (the active theme
+# folder) and ARCTIC_THEME_MODE (dark|light). Hooks are quick and never fail the switch.
+#
+# - gtk-theme adw-gtk3-dark / adw-gtk3: GTK 3 apps (Thunar), and Flatpak GTK 3 apps through the
+#   settings portal (with the org.gtk.Gtk3theme.adw-gtk3* extensions). Written only when it
+#   differs, so GTK apps restyle once when arctic-theme already set it.
+# - ~/.config/gtk-{3,4}.0/arctic-colors.css: a copy of the theme's gtk.css, which gtk.css there
+#   imports. The dotfiles ship it as a link to ../arctic/current/gtk.css; Flatpak apps see those
+#   folders (/var/lib/flatpak/overrides/global) but not /usr/share/arctic, so the link becomes a
+#   copy. Only the link or an earlier copy is replaced, never a file of your own. GTK reads it
+#   when an app starts.
+# - ~/.config/gtk-3.0/settings.ini gtk-application-prefer-dark-theme (GTK 3 on X11).
+set -u
+
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+dir="${ARCTIC_THEME_DIR:-$cfg/arctic/current}"
+marker="/* arctic-colors.css: the active theme's gtk.css, copied by the 10-gtk theme hook */"
+
+if [[ "${ARCTIC_THEME_MODE:-dark}" == light ]]; then
+  theme=adw-gtk3 dark=0
+else
+  theme=adw-gtk3-dark dark=1
+fi
+
+if command -v gsettings >/dev/null 2>&1; then
+  current="$(timeout 2 gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null)"
+  if [[ "$current" != "'$theme'" ]]; then
+    timeout 2 gsettings set org.gnome.desktop.interface gtk-theme "$theme" >/dev/null 2>&1
+  fi
+fi
+
+if [[ -r "$dir/gtk.css" ]]; then
+  for gtk in gtk-3.0 gtk-4.0; do
+    [[ -d "$cfg/$gtk" ]] || continue
+    f="$cfg/$gtk/arctic-colors.css"
+    if [[ -L "$f" || ! -e "$f" ]] || { head -n1 "$f" | grep -qxF "$marker"; } 2>/dev/null; then
+      tmp="$(mktemp "$f.XXXXXX" 2>/dev/null)" || continue
+      if { printf '%s\n' "$marker"; cat "$dir/gtk.css"; } > "$tmp" 2>/dev/null; then
+        chmod 0644 "$tmp" && mv -f "$tmp" "$f"
+      fi
+      rm -f "$tmp"
+    fi
+  done
+fi
+
+ini="$cfg/gtk-3.0/settings.ini"
+if [[ -f "$ini" && ! -L "$ini" ]] && ! grep -qx "gtk-application-prefer-dark-theme=$dark" "$ini"; then
+  sed -i "s/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=$dark/" "$ini" 2>/dev/null
+fi
+
+exit 0
