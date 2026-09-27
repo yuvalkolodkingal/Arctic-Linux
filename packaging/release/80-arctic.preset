@@ -25,3 +25,9 @@ enable livesys-late.service
 # Power profiles on laptops (tuned-ppd, as Fedora Workstation).
 enable tuned.service
 enable tuned-ppd.service
+
+# No SSH server by default, as on Fedora's desktop editions (their 81-desktop.preset):
+# 90-default.preset would enable it, and firewalld's default zone lets ssh in. Turn it on
+# with `sudo systemctl enable --now sshd`.
+disable sshd.service
+disable sshd.socket

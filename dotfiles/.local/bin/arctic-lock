@@ -16,7 +16,8 @@ if arctic-is-live 2>/dev/null; then
 fi
 
 if arctic-shell-ipc lock lock >/dev/null 2>&1; then
-  # Wait until the compositor confirms the lock, so "lock before sleep" really locks first.
+  # Wait until the compositor confirms the lock (isLocked reports WlSessionLock.secure: every
+  # screen covered), so "lock before sleep" really locks first.
   for _ in $(seq 40); do
     [[ "$(arctic-shell-ipc lock isLocked 2>/dev/null)" == true ]] && exit 0
     sleep 0.05

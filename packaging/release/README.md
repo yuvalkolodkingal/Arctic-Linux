@@ -12,6 +12,7 @@ Installed by the `arctic-release` subpackage of `packaging/arctic-linux.spec`:
 | `90-default-user.preset`, `99-default-disable-user.preset` | Fedora's user presets, unchanged |
 | `20-arctic-dnf-defaults.conf` | `/usr/share/dnf5/libdnf.conf.d/20-arctic-defaults.conf` (Fedora's dnf5 defaults) |
 | `copr-arctic.conf` | `/etc/dnf/plugins/copr.d/arctic.conf` |
+| `arctic.repo` | `/usr/share/dnf5/repos.d/arctic.repo`: the Arctic package repository, **disabled** until it is published (placeholder address; Fedora's repositories are unaffected) |
 | `issue`, `issue.net` | `/usr/lib/issue{,.net}` (+ `/etc` symlinks) |
 
 The Fedora preset and dnf files come from `fedora-release-common-44-18` (MIT license).

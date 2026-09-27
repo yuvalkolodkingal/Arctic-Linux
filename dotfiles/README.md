@@ -32,7 +32,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 
 | Path | What it does | Design spec |
 |---|---|---|
-| `.config/mango/config.conf` | Entry point: sources the files below in order, then `user.conf` last | — |
+| `.config/mango/config.conf` | Entry point: sources the files below in order, then `user.conf` last (packaged: the files below live in `/usr/share/arctic/mango`, see below) | — |
 | `.config/mango/arctic/look.conf` | 2px borders, 10px radius, 8px gaps, 5 workspaces, frost blur on the bar, launcher and OSD, shadows on floating windows only, 180/120ms fade + scale motion | WindowFrame, Motion, Elevation and frost |
 | `.config/mango/arctic/binds.conf` | Every shortcut (cheat sheet: `Super + /`) | Accessibility → Keyboard |
 | `.config/mango/arctic/apps.conf` | `Super+Enter/W/E/F` → your terminal, browser, editor, file manager via `arctic-open` | — |
@@ -63,6 +63,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-motion [on\|off]` | Reduced motion: no animations anywhere, still fox |
 | `arctic-launcher ["=12*4"]` | Open or close the launcher (`Super + Space`), optionally with something typed |
 | `arctic-open terminal\|browser\|editor\|files\|files-tui` | Open the app you picked for a role |
+| `arctic-open terminal [--hold] -e <command…>` | Run a command in the terminal you picked (the launcher's terminal apps, Fetch, Shift+Enter) |
 | `arctic-lock` | Lock the screen (`Super + L`); off in the live session |
 | `arctic-power [lock\|logout\|suspend\|restart\|poweroff]` | The power menu (`Super + Esc`), or do it now |
 | `arctic-osd volume\|brightness up\|down`, `volume mute`, `mic mute` | Hardware keys with the on-screen display |
@@ -87,9 +88,20 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 
 ## How this plugs into the OS
 
-The installer copies this tree into `/etc/skel` (package `arctic-desktop-config`), so every new
-account starts with it. The installer also writes `/etc/arctic/mango/keyboard.conf` (your keyboard
-layout) and `/etc/arctic/default-apps` (the apps you ticked); both are read at login.
+The package `arctic-desktop-config` puts this tree into `/etc/skel`, so every new account starts
+with it. The parts Arctic keeps up to date are installed once, in `/usr/share/arctic`, and the
+home directory only points at them, so `dnf upgrade` reaches accounts that already exist:
+
+| In the home directory | Is |
+|---|---|
+| `~/.config/mango/arctic/*.conf` | links to `/usr/share/arctic/mango/*.conf`. To change one of these files, replace its link with a copy (see `config.conf`); a copy stays as you leave it |
+| `~/.config/arctic/current` | a link to `/usr/share/arctic/themes/<theme>` (`arctic-theme` switches it; a theme folder of your own in `~/.config/arctic/themes/` is used first) |
+| `keys.txt` | not copied: the cheat sheet is read from `/usr/share/arctic/keys.txt` unless `~/.local/share/arctic/keys.txt` exists |
+
+The other files (kitty, GTK, waybar, fuzzel, mako, zsh) are ordinary copies that are yours to
+edit. `install.sh` (no packages) copies everything, including the files above, into the home
+directory. The installer also writes `/etc/arctic/mango/keyboard.conf` (your keyboard layout)
+and `/etc/arctic/default-apps` (the apps you ticked); both are read at login.
 
 ## The fallback desktop
 

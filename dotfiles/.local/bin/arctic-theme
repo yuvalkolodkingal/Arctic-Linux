@@ -22,7 +22,8 @@ current() {
 
 set_theme() {
   local name="$1" target
-  # Your copy in ~/.config/arctic/themes (from /etc/skel), else the packaged one.
+  # A theme folder in ~/.config/arctic/themes (dotfiles/install.sh, or your own), else the
+  # packaged one, which Arctic updates (new accounts start linked to it).
   if [[ -d "$ARCTIC_DIR/themes/$name" ]]; then
     target="themes/$name"
   elif [[ -d "/usr/share/arctic/themes/$name" ]]; then

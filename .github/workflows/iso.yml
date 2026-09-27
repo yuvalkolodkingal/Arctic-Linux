@@ -119,6 +119,10 @@ jobs:
               echo "Zen Browser is preinstalled in the live session."
             fi
             echo
+            echo "Updates: Fedora's packages update as usual (\`sudo dnf upgrade\`). Arctic's own packages"
+            echo "(desktop, shell, branding, Mango) have no online repository yet, so they only change"
+            echo "with a new Arctic release (packaging/release/arctic.repo is there, disabled, for when it exists)."
+            echo
             echo "SHA-256: \`$sha\`"
             if [ "$SPLIT" = true ]; then
               echo

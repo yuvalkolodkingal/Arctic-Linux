@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # arctic-keys — keyboard cheat sheet (Super+/). Everything on this desktop has a shortcut.
-# Shown by the shell; without it, in a kitty window. The sheet is keys.txt from
-# ~/.local/share/arctic, else /usr/share/arctic.
+# Shown by the shell; without it, in a floating kitty window (or, without kitty, in your
+# terminal). The sheet is keys.txt from ~/.local/share/arctic, else /usr/share/arctic.
 arctic-shell-ipc keys toggle >/dev/null 2>&1 && exit 0
 if pgrep -f 'class org.arcticlinux.Keys' >/dev/null; then pkill -f 'class org.arcticlinux.Keys'; exit 0; fi
 sheet="${XDG_DATA_HOME:-$HOME/.local/share}/arctic/keys.txt"
 [[ -f "$sheet" ]] || sheet=/usr/share/arctic/keys.txt
-exec kitty --class org.arcticlinux.Keys --title "Keyboard shortcuts" \
-  -o window_padding_width=16 sh -c "less -R --prompt='Esc or q to close' '$sheet'"
+if command -v kitty >/dev/null 2>&1; then
+  exec kitty --class org.arcticlinux.Keys --title "Keyboard shortcuts" \
+    -o window_padding_width=16 sh -c "less -R --prompt='Esc or q to close' '$sheet'"
+fi
+exec arctic-open terminal -e less -R --prompt='Esc or q to close' "$sheet"
