@@ -1,0 +1,17 @@
+const fs = require('fs');
+const vm = require('vm');
+const assert = require('assert');
+const context = {};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(__dirname + '/../PackageSearch.js', 'utf8').replace('.pragma library', ''), context);
+const packages = ['app-editors/neovim', 'app-editors/vim', 'app-shells/fish', 'dev-libs/libuv'];
+assert.equal(context.search(packages, 'nvim')[0], 'app-editors/neovim');
+assert.equal(context.search(packages, 'vim')[0], 'app-editors/vim');
+assert.equal(context.search(packages, 'FISH')[0], 'app-shells/fish');
+assert.equal(context.search(packages, 'nonexistentzzz').length, 0);
+assert.equal(context.search(packages, '').length, 4);
+assert.equal(context.complete('emerge --ask nvim', 17, 'app-editors/neovim').text, 'emerge --ask app-editors/neovim');
+assert.equal(context.complete('emerge', 6, 'app-shells/fish').text, 'emerge app-shells/fish');
+assert.equal(context.complete('emerge nvim app-shells/fish', 10, 'app-editors/neovim').text, 'emerge app-editors/neovim app-shells/fish');
+assert.equal(context.context('emerge --ask', 12).allowed, false);
+console.log('Package search and command completion checks passed.');
