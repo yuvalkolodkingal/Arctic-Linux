@@ -3,7 +3,9 @@
 //
 // Everything the installer can put on a system is a module. Visible modules are the app tiles
 // of the design's Ninite-style picker; hidden modules under modules/_system are always
-// installed. Profiles and API input only ever name module ids — never commands.
+// installed. Modules of a hardware category (drivers) carry [[detect]] rules and are only
+// offered when MarkDetected finds a matching device. Profiles and API input only ever name
+// module ids — never commands.
 package catalog
 
 import (
@@ -30,12 +32,15 @@ const (
 
 // Category is one picker section (design CATEGORIES).
 type Category struct {
-	ID       string   `toml:"id" json:"id"`
-	Name     string   `toml:"name" json:"name"`
-	Choice   string   `toml:"choice" json:"choice"` // one | any
-	Required bool     `toml:"required" json:"required"`
-	Note     string   `toml:"note" json:"note"`
-	Role     string   `toml:"role" json:"role"` // used in "Installing Zed, your code editor…"
+	ID       string `toml:"id" json:"id"`
+	Name     string `toml:"name" json:"name"`
+	Choice   string `toml:"choice" json:"choice"` // one | any
+	Required bool   `toml:"required" json:"required"`
+	Note     string `toml:"note" json:"note"`
+	Role     string `toml:"role" json:"role"` // used in "Installing Zed, your code editor…"
+	// Hardware categories (drivers) list modules that are offered only when their [[detect]]
+	// rules match this computer; the category is left out of the picker otherwise.
+	Hardware bool     `toml:"hardware" json:"hardware,omitempty"`
 	Modules  []string `toml:"modules" json:"modules"`
 }
 
@@ -81,6 +86,73 @@ type Session struct {
 	GlobalServices []string `toml:"global_services" json:"global_services,omitempty"` // systemctl --global enable
 }
 
+// Detect is one hardware rule of a driver module: a device on the bus with this vendor, one
+// of these classes (class + subclass, "0300") and either one of Devices or a device id in
+// [DeviceMin, DeviceMax], and not in Exclude. Ids are four lower-case hex digits.
+type Detect struct {
+	Bus       string   `toml:"bus" json:"bus"` // "pci"
+	Vendor    string   `toml:"vendor" json:"vendor"`
+	Class     []string `toml:"class" json:"class"`
+	Devices   []string `toml:"devices" json:"devices,omitempty"`
+	DeviceMin string   `toml:"device_min" json:"device_min,omitempty"`
+	DeviceMax string   `toml:"device_max" json:"device_max,omitempty"`
+	Exclude   []string `toml:"exclude" json:"exclude,omitempty"`
+}
+
+// Matches reports whether a PCI device satisfies the rule.
+func (d Detect) Matches(p hw.PCIDevice) bool {
+	if d.Bus != "pci" || p.Vendor != d.Vendor {
+		return false
+	}
+	classOK := false
+	for _, c := range d.Class {
+		if c == p.Class {
+			classOK = true
+		}
+	}
+	if !classOK {
+		return false
+	}
+	for _, x := range d.Exclude {
+		if x == p.Device {
+			return false
+		}
+	}
+	if len(d.Devices) > 0 {
+		for _, x := range d.Devices {
+			if x == p.Device {
+				return true
+			}
+		}
+		return false
+	}
+	lo, hi := d.DeviceMin, d.DeviceMax
+	if lo == "" {
+		lo = "0000"
+	}
+	if hi == "" {
+		hi = "ffff"
+	}
+	// Four lower-case hex digits compare like numbers.
+	return p.Device >= lo && p.Device <= hi
+}
+
+// Akmod names a kernel module that akmods builds on the computer (RPM Fusion's akmod-<name>
+// package) and the module file checked after the build.
+type Akmod struct {
+	Name   string `toml:"name" json:"name"`     // akmods --akmod <name>
+	Module string `toml:"module" json:"module"` // modinfo -k <kernel> <module>
+}
+
+// Boot holds kernel command line arguments a driver needs (added with grubby once it is
+// installed, removed by nothing: the driver's own packages remove theirs).
+type Boot struct {
+	KernelArgs []string `toml:"kernel_args" json:"kernel_args,omitempty"`
+	// LUKSDisplayArgs are added too when the disk is encrypted and the matched device drives
+	// the boot screen (plymouth.use-simpledrm=1: the passphrase prompt shows at once).
+	LUKSDisplayArgs []string `toml:"luks_display_args" json:"luks_display_args,omitempty"`
+}
+
 // Hooks are fixed scripts shipped inside the catalog (none in v0.1).
 type Hooks struct {
 	Post []string `toml:"post" json:"post,omitempty"`
@@ -107,8 +179,58 @@ type Module struct {
 	Defaults    Defaults  `toml:"defaults" json:"defaults"`
 	Session     Session   `toml:"session" json:"session"`
 	Hooks       Hooks     `toml:"hooks" json:"-"`
+	// Drivers (modules of a hardware category) only.
+	Detect      []Detect `toml:"detect" json:"detect,omitempty"`
+	Akmod       *Akmod   `toml:"akmod" json:"akmod,omitempty"`
+	Boot        *Boot    `toml:"boot" json:"boot,omitempty"`
+	NetworkHint string   `toml:"network_hint" json:"network_hint,omitempty"` // Network step, {device} filled in
 
 	Dir string `toml:"-" json:"-"`
+	// Set by MarkDetected: a device matched (Device is its label, BootDisplay whether it
+	// drives the boot screen).
+	Detected    bool   `toml:"-" json:"-"`
+	Device      string `toml:"-" json:"-"`
+	BootDisplay bool   `toml:"-" json:"-"`
+	hardware    bool
+}
+
+// IsHardware reports whether the module is a driver (listed in a hardware category).
+func (m *Module) IsHardware() bool { return m.hardware }
+
+// AkmodName is the akmods name of a driver built on the computer ("" for everything else).
+func (m *Module) AkmodName() string {
+	if m.Akmod == nil {
+		return ""
+	}
+	return m.Akmod.Name
+}
+
+// KernelArgs are the arguments the driver adds to the kernel command line; luks says the
+// disk is encrypted (then the display arguments apply when the device drives the screen).
+func (m *Module) KernelArgs(luks bool) []string {
+	if m.Boot == nil {
+		return nil
+	}
+	args := append([]string{}, m.Boot.KernelArgs...)
+	if luks && m.BootDisplay {
+		args = append(args, m.Boot.LUKSDisplayArgs...)
+	}
+	return args
+}
+
+// Fill replaces {device} in a driver's copy with the detected device's label.
+func (m *Module) Fill(s string) string {
+	dev := m.Device
+	if dev == "" {
+		dev = "hardware"
+	}
+	return strings.ReplaceAll(s, "{device}", dev)
+}
+
+// Available reports whether the picker may offer the module: visible, and for drivers only
+// when their hardware was detected.
+func (m *Module) Available() bool {
+	return !m.Hidden && (len(m.Detect) == 0 || m.Detected)
 }
 
 // DisplayShort is the short name used in summaries ("Zen", "Collabora").
@@ -238,6 +360,13 @@ func Load(fsys fs.FS) (*Catalog, error) {
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
+	for _, cat := range c.Categories {
+		for _, id := range cat.Modules {
+			if m, ok := c.Modules[id]; ok && cat.Hardware {
+				m.hardware = true
+			}
+		}
+	}
 	if err := c.check(); err != nil {
 		return nil, err
 	}
@@ -296,6 +425,9 @@ func (c *Catalog) check() error {
 		if cat.Required && defaults == 0 {
 			bad("category %q is required but has no default", cat.ID)
 		}
+		if cat.Hardware && (cat.Choice != "any" || cat.Required) {
+			bad("category %q: hardware categories must be choice = \"any\" and not required", cat.ID)
+		}
 	}
 	for id, m := range c.Modules {
 		if !idRe.MatchString(id) {
@@ -340,11 +472,6 @@ func (c *Catalog) check() error {
 				if in.Remote == "" {
 					bad("%s: flatpak installs must name their remote", where)
 				}
-				if in.Runtime != "" {
-					if _, ok := c.Runtimes[in.Runtime]; !ok {
-						bad("%s: runtime %q has no size in catalog.toml [runtimes]", where, in.Runtime)
-					}
-				}
 			case MethodNix:
 				if in.Attr == "" {
 					bad("%s: nix needs attr", where)
@@ -360,15 +487,103 @@ func (c *Catalog) check() error {
 					bad("%s: unknown repo %q", where, r)
 				}
 			}
+			// A shared download (Flatpak runtime, the kernel module build tools) is counted
+			// once per install, so it needs its size in catalog.toml.
+			if in.Runtime != "" {
+				if _, ok := c.Runtimes[in.Runtime]; !ok {
+					bad("%s: runtime %q has no size in catalog.toml [runtimes]", where, in.Runtime)
+				}
+			}
 		}
 		for _, r := range append(append([]string{}, m.Requires...), m.Conflicts...) {
 			if _, ok := c.Modules[r]; !ok {
 				bad("module %q: requires/conflicts names unknown module %q", id, r)
 			}
 		}
+		c.checkDriver(m, bad)
 	}
 	return errors.Join(errs...)
 }
+
+var (
+	akmodNameRe   = regexp.MustCompile(`^[a-z0-9-]+$`)
+	akmodModuleRe = regexp.MustCompile(`^[a-z0-9_]+$`)
+	// One kernel argument: name[=value], no spaces or quotes (grubby gets them as one word).
+	kernelArgRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+(=[A-Za-z0-9_.,:/-]+)?$`)
+)
+
+// checkDriver validates the hardware fields: [[detect]] only (and always) on modules of a
+// hardware category, strict ids, [akmod] only with an RPM Fusion nonfree dnf method, and
+// kernel arguments that are single plain words.
+func (c *Catalog) checkDriver(m *Module, bad func(string, ...any)) {
+	id := m.ID
+	switch {
+	case m.hardware && len(m.Detect) == 0:
+		bad("module %q: modules of a hardware category need at least one [[detect]]", id)
+	case !m.hardware && len(m.Detect) > 0:
+		bad("module %q: [[detect]] is only allowed in a hardware category", id)
+	}
+	if !m.hardware && (m.Akmod != nil || m.Boot != nil || m.NetworkHint != "") {
+		bad("module %q: [akmod], [boot] and network_hint are only allowed in a hardware category", id)
+	}
+	if m.hardware && (m.Always || m.Hidden) {
+		bad("module %q: drivers can't be hidden or always installed", id)
+	}
+	for i, d := range m.Detect {
+		where := fmt.Sprintf("module %q detect[%d]", id, i)
+		if d.Bus != "pci" {
+			bad("%s: bus must be \"pci\"", where)
+		}
+		if !hex4Re.MatchString(d.Vendor) {
+			bad("%s: vendor %q must be four lower-case hex digits", where, d.Vendor)
+		}
+		if len(d.Class) == 0 {
+			bad("%s: needs at least one class", where)
+		}
+		for _, list := range [][]string{d.Class, d.Devices, d.Exclude} {
+			for _, x := range list {
+				if !hex4Re.MatchString(x) {
+					bad("%s: %q must be four lower-case hex digits", where, x)
+				}
+			}
+		}
+		for _, x := range []string{d.DeviceMin, d.DeviceMax} {
+			if x != "" && !hex4Re.MatchString(x) {
+				bad("%s: device range %q must be four lower-case hex digits", where, x)
+			}
+		}
+		if len(d.Devices) > 0 && (d.DeviceMin != "" || d.DeviceMax != "") {
+			bad("%s: use devices or device_min/device_max, not both", where)
+		}
+		if d.DeviceMin != "" && d.DeviceMax != "" && d.DeviceMin > d.DeviceMax {
+			bad("%s: device_min %s is above device_max %s", where, d.DeviceMin, d.DeviceMax)
+		}
+	}
+	if a := m.Akmod; a != nil {
+		if !akmodNameRe.MatchString(a.Name) || !akmodModuleRe.MatchString(a.Module) {
+			bad("module %q: [akmod] needs name (a-z, 0-9, -) and module (a-z, 0-9, _)", id)
+		}
+		p := m.Primary()
+		nonfree := false
+		for _, r := range p.Repos {
+			if r == "rpmfusion-nonfree" {
+				nonfree = true
+			}
+		}
+		if p.Method != MethodDNF || !nonfree {
+			bad("module %q: [akmod] drivers need a first [[install]] with method = \"dnf\" and repos including rpmfusion-nonfree", id)
+		}
+	}
+	if b := m.Boot; b != nil {
+		for _, a := range append(append([]string{}, b.KernelArgs...), b.LUKSDisplayArgs...) {
+			if !kernelArgRe.MatchString(a) {
+				bad("module %q: kernel argument %q is not a single name[=value] word", id, a)
+			}
+		}
+	}
+}
+
+var hex4Re = regexp.MustCompile(`^[0-9a-f]{4}$`)
 
 // KnownRepos are the extra repositories a dnf method may ask for. Setting them up is code
 // owned by the installer (keys from distribution-gpg-keys, never --nogpgcheck).
