@@ -1,6 +1,9 @@
 package host
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/yuvalkolodkingal/o-tism/internal/hw"
@@ -103,5 +106,88 @@ func TestParseWifiList(t *testing.T) {
 func TestKeyfileEscape(t *testing.T) {
 	if got := keyfileEscape(" a\\b\nc"); got != `\sa\\b\nc` {
 		t.Errorf("got %q", got)
+	}
+}
+
+// UEFI alongside on an MBR disk: lsblk says "0xef"; the ESP must be found (types are
+// normalised: GPT GUIDs upper case, MBR types lower case).
+func TestParseLsblkMBR(t *testing.T) {
+	const doc = `{"blockdevices": [
+	  {"path": "/dev/sda", "type": "disk", "size": 256060514304, "model": "WDC WDS250G2B0A", "serial": "1234ABCD", "wwn": "0x5001b448b9c1d2e3",
+	   "tran": "sata", "rota": false, "rm": false, "ro": false, "hotplug": false, "pttype": "dos", "ptuuid": "a1b2c3d4", "log-sec": 512, "mountpoints": [null],
+	   "children": [
+	     {"path": "/dev/sda1", "type": "part", "size": 104857600, "fstype": "vfat", "parttype": "0xef", "partn": 1, "start": 2048, "mountpoints": [null]},
+	     {"path": "/dev/sda2", "type": "part", "size": 100000000000, "fstype": "ntfs", "label": "Windows", "parttype": "0x7", "partn": 2, "start": 206848, "mountpoints": [null]}
+	   ]}
+	]}`
+	disks, err := ParseLsblk([]byte(doc), "Arctic-Linux")
+	if err != nil || len(disks) != 1 {
+		t.Fatalf("%v %+v", err, disks)
+	}
+	d := disks[0]
+	if esp, ok := d.ESP(); !ok || esp.Path != "/dev/sda1" || esp.Type != "0xef" {
+		t.Errorf("MBR ESP not found: %+v", d.Partitions)
+	}
+	if d.Serial != "1234ABCD" || d.WWN != "0x5001b448b9c1d2e3" || d.PTUUID != "a1b2c3d4" {
+		t.Errorf("identity %+v", d)
+	}
+	if len(d.ExistingOS) != 1 || d.ExistingOS[0] != "Windows" {
+		t.Errorf("os %v", d.ExistingOS)
+	}
+	if d.Partitions[1].Type != "0x7" {
+		t.Errorf("mbr type %q", d.Partitions[1].Type)
+	}
+}
+
+func TestLogTargets(t *testing.T) {
+	// The dd-written install stick (ISO 9660 + the EFI image inside it), an internal NVMe with
+	// its ESP, a second USB stick (FAT, not mounted) and an SD card (exFAT, automounted).
+	const doc = `{"blockdevices": [
+	  {"path": "/dev/sda", "type": "disk", "model": "SanDisk Ultra", "tran": "usb", "rm": true, "ro": false, "hotplug": true,
+	   "fstype": "iso9660", "label": "Arctic-Linux-0.1", "mountpoints": [null],
+	   "children": [
+	     {"path": "/dev/sda1", "type": "part", "rm": true, "ro": false, "fstype": "iso9660", "label": "Arctic-Linux-0.1", "mountpoints": ["/run/initramfs/live"]},
+	     {"path": "/dev/sda2", "type": "part", "rm": true, "ro": false, "fstype": "vfat", "label": "ARCTIC_EFI", "parttype": "0xef", "mountpoints": [null]}
+	   ]},
+	  {"path": "/dev/nvme0n1", "type": "disk", "model": "Samsung SSD 980", "tran": "nvme", "rm": false, "ro": false, "hotplug": false, "mountpoints": [null],
+	   "children": [
+	     {"path": "/dev/nvme0n1p1", "type": "part", "rm": false, "ro": false, "fstype": "vfat", "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "mountpoints": [null]}
+	   ]},
+	  {"path": "/dev/sdc", "type": "disk", "model": "DataTraveler 3.0", "tran": "usb", "rm": true, "ro": false, "hotplug": true, "mountpoints": [null],
+	   "children": [
+	     {"path": "/dev/sdc1", "type": "part", "rm": true, "ro": false, "fstype": "vfat", "label": "KINGSTON", "parttype": "0xc", "mountpoints": [null]}
+	   ]},
+	  {"path": "/dev/mmcblk0", "type": "disk", "model": null, "tran": "mmc", "rm": false, "ro": false, "hotplug": false, "mountpoints": [null],
+	   "children": [
+	     {"path": "/dev/mmcblk0p1", "type": "part", "rm": false, "ro": false, "fstype": "exfat", "label": null, "parttype": "0x7", "mountpoints": ["/run/media/liveuser/3A1F-22C0"]}
+	   ]}
+	]}`
+	got := LogTargets([]byte(doc), "Arctic-Linux")
+	if len(got) != 2 {
+		t.Fatalf("targets %+v", got)
+	}
+	if got[0].Device != "/dev/mmcblk0p1" || got[0].Mountpoint != "/run/media/liveuser/3A1F-22C0" || got[0].FSType != "exfat" || got[0].Label != "/dev/mmcblk0p1" {
+		t.Errorf("mounted first: %+v", got[0])
+	}
+	if got[1].Device != "/dev/sdc1" || got[1].Label != "KINGSTON" || got[1].Mountpoint != "" || got[1].FSType != "vfat" {
+		t.Errorf("stick: %+v", got[1])
+	}
+}
+
+func TestWriteLogToMountedStick(t *testing.T) {
+	dir := t.TempDir()
+	res, err := writeLogToStick(context.Background(), LogTarget{Device: "/dev/sdc1", FSType: "vfat", Label: "KINGSTON", Mountpoint: dir}, "arctic-install-x.log", []byte("log\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Path != filepath.Join(dir, "arctic-install-x.log") || !res.OnUSB || res.SafeToRemove || res.Label != "KINGSTON" {
+		t.Errorf("result %+v", res)
+	}
+	if b, _ := os.ReadFile(res.Path); string(b) != "log\n" {
+		t.Errorf("content %q", b)
+	}
+	// Never overwrite a file that is already there.
+	if _, err := writeLogToStick(context.Background(), LogTarget{Mountpoint: dir}, "arctic-install-x.log", []byte("again")); err == nil {
+		t.Error("overwrote an existing file")
 	}
 }

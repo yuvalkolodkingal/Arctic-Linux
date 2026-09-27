@@ -1,11 +1,11 @@
 # Arctic Linux install: alongside Samsung SSD 980 · 512 GB (/dev/nvme0n1), firmware bios, encryption false, 7 apps
 
 # == disk: Preparing the disk…
-$ lsblk --noheadings --raw --output MOUNTPOINTS /dev/nvme0n1
+$ lsblk --json --tree --output PATH,TYPE,MOUNTPOINTS /dev/nvme0n1
 $ sfdisk --append /dev/nvme0n1 <<'EOF'
-    start=644771840, size=2048, type=21686148-6449-6E6F-744E-656564454649, name="BIOS boot"
-    start=644773888, size=4194304, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="Arctic boot"
-    start=648968192, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="Arctic root"
+    /dev/nvme0n1p5 : start=644771840, size=2048, type=21686148-6449-6E6F-744E-656564454649, name="BIOS boot"
+    /dev/nvme0n1p6 : start=644773888, size=4194304, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="Arctic boot"
+    /dev/nvme0n1p7 : start=648968192, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="Arctic root"
     EOF
 $ udevadm settle --timeout=15
 $ mkfs.ext4 -F -q -L arctic-boot /dev/nvme0n1p6
@@ -33,8 +33,7 @@ $ blkid --match-tag UUID --output value /dev/nvme0n1p7
 $ blkid --match-tag UUID --output value /dev/nvme0n1p6
 
 # == copy: Copying Arctic Linux…
-$ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' --exclude=/boot/efi '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/boot/vmlinuz-0-rescue-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
-mkdir -p /mnt/boot/efi
+$ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--filter=-x security.selinux' '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' '--exclude=/boot/efi/*' '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/boot/vmlinuz-0-rescue-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
 $ mount --rbind /dev /mnt/dev
 $ mount --make-rslave /mnt/dev
 $ mount -t proc proc /mnt/proc

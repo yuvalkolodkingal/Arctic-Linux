@@ -22,6 +22,10 @@ type Env interface {
 	Model() string // machine word for hostnames ("thinkpad")
 	DetectTimezone() Detected
 	Now() time.Time
+	Firmware() string // uefi | bios
+	// SystemNames are the user and group names the copied system already has; the new
+	// account can't use them (useradd --user-group would fail).
+	SystemNames() map[string]bool
 }
 
 // SecretsInfo tells validation whether secrets were set, never what they are.
@@ -110,6 +114,8 @@ type Wizard struct {
 	phase      string
 	netSkipped bool
 	returnTo   bool            // Next goes back to Summary (after Goto from Summary)
+	returnLang string          // language when Goto left Summary (a change also shows Keyboard)
+	diskStale  bool            // the disk changed after it was picked: the Disk step must be seen again
 	userSet    map[string]bool // fields the person chose (not overwritten by suggestions)
 	autoUser   string          // last suggested username / hostname
 	autoHost   string
@@ -237,8 +243,14 @@ func (w *Wizard) Next() *protocol.Error {
 		return err
 	}
 	w.done[id] = true
+	if id == StepDisk {
+		w.diskStale = false
+	}
 	target := w.cur + 1
-	if w.returnTo {
+	if w.returnTo && id == StepWelcome && w.Data.Welcome.Language != w.returnLang {
+		// A new language suggests other layouts: show Keyboard before going back to Summary.
+		w.returnLang = w.Data.Welcome.Language
+	} else if w.returnTo {
 		w.returnTo = false
 		all := true
 		for i := target; i < StepIndex(StepSummary); i++ {
@@ -266,8 +278,15 @@ func (w *Wizard) Next() *protocol.Error {
 	return nil
 }
 
-// Back moves to the previous step (skipping an auto-skipped network step).
+// Back moves to the previous step (skipping an auto-skipped network step). After a failed
+// install it goes back to Summary, so the answers can be changed before trying again.
 func (w *Wizard) Back() *protocol.Error {
+	if w.phase == PhaseFailed {
+		w.reopen()
+		w.returnTo = false
+		w.cur = StepIndex(StepSummary)
+		return nil
+	}
 	if w.phase != PhaseWizard {
 		return stateErr("You can’t go back while installing.")
 	}
@@ -285,9 +304,10 @@ func (w *Wizard) Back() *protocol.Error {
 	return nil
 }
 
-// Goto jumps to a done step (Summary "Change" links).
+// Goto jumps to a done step (Summary "Change" links). From the install screen (before Start,
+// or after a failed install) it can also go to Summary.
 func (w *Wizard) Goto(id string) *protocol.Error {
-	if w.phase != PhaseWizard {
+	if w.phase != PhaseWizard && w.phase != PhaseFailed {
 		return stateErr("You can’t change answers while installing.")
 	}
 	i := StepIndex(id)
@@ -297,18 +317,44 @@ func (w *Wizard) Goto(id string) *protocol.Error {
 	if i == w.cur {
 		return nil
 	}
+	fromInstall := Steps[w.cur].ID == StepInstall
+	if id == StepSummary && fromInstall {
+		w.reopen()
+		w.returnTo = false
+		w.cur = i
+		return nil
+	}
 	if !w.done[id] || i >= StepIndex(StepSummary) {
 		return stateErr("You can only go back to steps you’ve finished.")
 	}
-	w.returnTo = Steps[w.cur].ID == StepSummary || Steps[w.cur].ID == StepInstall
+	w.returnTo = Steps[w.cur].ID == StepSummary || fromInstall
+	w.returnLang = w.Data.Welcome.Language
+	w.reopen()
 	w.cur = i
 	return nil
 }
+
+// reopen returns to the wizard after a failed install (the answers and secrets are kept;
+// Start re-checks everything, the disk included).
+func (w *Wizard) reopen() {
+	if w.phase == PhaseFailed {
+		w.phase = PhaseWizard
+		w.done[StepSummary] = false
+		w.done[StepInstall] = false
+	}
+}
+
+// DiskChanged records that the chosen disk is no longer what the person picked (found by the
+// engine's probe before Start). Installing is refused until the Disk step is passed again.
+func (w *Wizard) DiskChanged() { w.diskStale = true }
 
 // ReadyToInstall checks that every step before Summary is done and still valid.
 func (w *Wizard) ReadyToInstall() *protocol.Error {
 	if id := Steps[w.cur].ID; id != StepSummary && id != StepInstall {
 		return stateErr("Finish the steps before Summary first.")
+	}
+	if w.diskStale {
+		return stateErr(MsgDiskChanged)
 	}
 	for _, s := range Steps[:StepIndex(StepSummary)] {
 		if !w.done[s.ID] {
@@ -356,7 +402,7 @@ func (w *Wizard) Get(id string) (protocol.StepResult, *protocol.Error) {
 		res.Data = w.Data.Welcome
 		res.Options = map[string]any{"languages": Languages, "suggested": GuessLanguage(w.Data.Welcome.Language)}
 	case StepKeyboard:
-		res.Data = w.Data.Keyboard
+		res.Data = KeyboardView{w.Data.Keyboard, KeyboardConfig(w.Data.Keyboard)}
 		res.Options = map[string]any{
 			"layouts":  LayoutsFor(w.Data.Welcome.Language),
 			"try_it":   "Try it",
@@ -475,7 +521,7 @@ func (w *Wizard) diskOptions() []DiskOption {
 		o := DiskOption{
 			Path: d.Path, Model: d.Model, Label: d.Label(), SizeBytes: d.SizeBytes, SizeLabel: hw.SizeLabel(d.SizeBytes),
 			Removable: d.Removable, ExistingOS: append([]string{}, d.ExistingOS...), TooSmall: d.SizeBytes < hw.MinInstallBytes,
-			AlongsidePossible: d.AlongsidePossible(), FreeBytes: free,
+			AlongsidePossible: d.AlongsidePossibleFor(w.env.Firmware()), FreeBytes: free,
 		}
 		if o.AlongsidePossible {
 			o.AlongsideLabel = "Uses " + hw.SizeLabel(free) + " of free space"
@@ -509,7 +555,11 @@ func (w *Wizard) SelectedDisk() (hw.Disk, bool) { return w.disk(w.Data.Disk.Disk
 // were sent. The draft is stored even when field errors are returned. Any step before
 // Summary can be set at any time during the wizard; Next still walks them in order.
 func (w *Wizard) Set(id string, raw json.RawMessage) (any, *protocol.Error) {
-	if w.phase != PhaseWizard {
+	switch w.phase {
+	case PhaseWizard:
+	case PhaseFailed:
+		return nil, stateErr("Go back to the %s step first (Back, or Change on the Summary).", stepName(id))
+	default:
 		return nil, stateErr("The installer is already running.")
 	}
 	i := StepIndex(id)
@@ -555,7 +605,7 @@ func (w *Wizard) Set(id string, raw json.RawMessage) (any, *protocol.Error) {
 		}
 		w.userSet["keyboard"] = true
 		w.Data.Keyboard = d
-		data = d
+		data = KeyboardView{d, KeyboardConfig(d)}
 	case StepNetwork:
 		data = NetworkData{}
 	case StepTimezone:
@@ -640,10 +690,54 @@ func (w *Wizard) Set(id string, raw json.RawMessage) (any, *protocol.Error) {
 	return data, nil
 }
 
-// SuggestAccount derives username and hostname from a full name.
+// SuggestAccount derives username and hostname from a full name (never a name the system
+// already uses).
 func (w *Wizard) SuggestAccount(fullName string) (string, string) {
-	u := SuggestUsername(fullName)
+	u := SuggestUsernameAvoiding(fullName, w.env.SystemNames())
 	return u, SuggestHostname(u, w.env.Model())
+}
+
+// usernameError is ValidateUsername plus the users and groups the copied system has.
+func (w *Wizard) usernameError(u string) string {
+	if m := ValidateUsername(u); m != "" {
+		return m
+	}
+	if w.env.SystemNames()[u] {
+		return MsgNameTaken
+	}
+	return ""
+}
+
+// alongsideProblem says why installing alongside on d isn't possible ("" when it is).
+func alongsideProblem(d hw.Disk, firmware string) string {
+	switch {
+	case d.AlongsidePossibleFor(firmware):
+		return ""
+	case d.PTType == "" || d.LargestFree().SizeBytes < hw.MinInstallBytes:
+		return "There isn’t enough free space to install alongside. Arctic Linux needs 40 GB."
+	case !d.AlongsidePossible():
+		return "This disk has no room for two more partitions, so Arctic Linux can’t install alongside. Erase the disk instead."
+	default:
+		return "This disk has no EFI system partition to share, so Arctic Linux can’t start alongside it. Erase the disk instead."
+	}
+}
+
+// MsgDiskChanged is the Start error when the chosen disk changed after it was picked.
+const MsgDiskChanged = "The disk changed since you picked it. Go back to the Disk step and check your choice."
+
+// KeyboardView is the keyboard step's data as GetStep and SetStep return it: the choice plus
+// the configuration it gives (xkb, read-only: SetStep ignores it). The live session applies
+// xkb so passwords are typed on the same layouts as on the installed system.
+type KeyboardView struct {
+	KeyboardData
+	XKB XKB `json:"xkb"`
+}
+
+func stepName(id string) string {
+	if def, ok := FindStep(id); ok {
+		return def.Name
+	}
+	return id
 }
 
 // ---- validation ----
@@ -690,8 +784,10 @@ func (w *Wizard) fieldErrors(id string, full bool) map[string]string {
 		switch w.Data.Disk.Mode {
 		case ModeErase:
 		case ModeAlongside:
-			if ok && !d.AlongsidePossible() {
-				f["mode"] = "There isn’t enough free space to install alongside. Arctic Linux needs 40 GB."
+			if ok {
+				if m := alongsideProblem(d, w.env.Firmware()); m != "" {
+					f["mode"] = m
+				}
 			}
 		default:
 			f["mode"] = "Pick how to install."
@@ -711,7 +807,7 @@ func (w *Wizard) fieldErrors(id string, full bool) map[string]string {
 		if m := ValidateFullName(a.FullName); m != "" {
 			f["full_name"] = m
 		}
-		if m := ValidateUsername(a.Username); m != "" {
+		if m := w.usernameError(a.Username); m != "" {
 			f["username"] = m
 		}
 		if m := ValidateHostname(a.Hostname); m != "" {
@@ -749,9 +845,13 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 		tz += " (" + off + ")"
 	}
 	disk, _ := w.SelectedDisk()
-	enc := "encrypted"
+	enc := "On — you’ll type your passphrase each time the computer starts"
 	if !d.Encryption.Enabled {
-		enc = "not encrypted"
+		enc = "Off — anyone with this computer can read your files"
+	}
+	keyboard := kb.Name + " layout"
+	if x := KeyboardConfig(d.Keyboard); !x.Latin {
+		keyboard += ", plus English (US) for passwords — Alt+Shift switches"
 	}
 	diskName := strings.TrimSpace(disk.Model)
 	if diskName == "" {
@@ -760,11 +860,11 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 	var diskValue, warning, primary string
 	if d.Disk.Mode == ModeAlongside {
 		free := hw.SizeLabel(disk.LargestFree().SizeBytes)
-		diskValue = fmt.Sprintf("Next to %s on %s (uses %s), %s", disk.OSName(), disk.Label(), free, enc)
+		diskValue = fmt.Sprintf("Next to %s on %s (uses %s)", disk.OSName(), disk.Label(), free)
 		warning = fmt.Sprintf("Arctic Linux will use %s of free space on %s. %s and its files stay as they are.", free, diskName, capitalize(disk.OSName()))
 		primary = "Install alongside " + disk.OSName()
 	} else {
-		diskValue = fmt.Sprintf("Erase %s, %s", disk.Label(), enc)
+		diskValue = fmt.Sprintf("Erase %s", disk.Label())
 		warning = fmt.Sprintf("Installing will erase everything on %s. This can’t be undone.", diskName)
 		primary = "Erase disk and install"
 	}
@@ -781,9 +881,11 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 	}
 	return protocol.SummaryResult{
 		Rows: []protocol.SummaryRow{
-			{Step: StepWelcome, Icon: "language", Label: "Language and keyboard", Value: lang.Name + " · " + kb.Name + " layout"},
+			{Step: StepWelcome, Icon: "language", Label: "Language", Value: lang.Name},
+			{Step: StepKeyboard, Icon: "keyboard", Label: "Keyboard", Value: keyboard},
 			{Step: StepTimezone, Icon: "clock", Label: "Time zone", Value: tz},
 			{Step: StepDisk, Icon: "disk", Label: "Disk", Value: diskValue},
+			{Step: StepEncryption, Icon: "shield-lock", Label: "Encryption", Value: enc},
 			{Step: StepAccount, Icon: "user", Label: "Account", Value: account},
 			{Step: StepApps, Icon: "grid", Label: "Apps", Value: strings.Join(apps, ", ")},
 		},

@@ -11,9 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yuvalkolodkingal/o-tism/internal/backend"
 	"github.com/yuvalkolodkingal/o-tism/internal/catalog"
+	"github.com/yuvalkolodkingal/o-tism/internal/hw"
 	"github.com/yuvalkolodkingal/o-tism/internal/mock"
 	"github.com/yuvalkolodkingal/o-tism/internal/protocol"
+	"github.com/yuvalkolodkingal/o-tism/internal/wizard"
 	"github.com/yuvalkolodkingal/o-tism/modules"
 )
 
@@ -112,16 +115,21 @@ func (c *client) waitEvent(pred func(map[string]any) bool, timeout time.Duration
 
 func newEngine(t *testing.T, mopts mock.Options, unattended bool) *Engine {
 	t.Helper()
-	cat, err := catalog.Load(modules.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if mopts.Speed == 0 {
 		mopts.Speed = 400
 	}
 	mopts.LogDir = t.TempDir()
+	return newEngineWith(t, mock.New(mopts), unattended)
+}
+
+func newEngineWith(t *testing.T, b backend.Backend, unattended bool) *Engine {
+	t.Helper()
+	cat, err := catalog.Load(modules.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
 	logBuf := &strings.Builder{}
-	e, err := New(mock.New(mopts), Options{Catalog: cat, Log: &lockedWriter{w: logBuf}, Unattended: unattended})
+	e, err := New(b, Options{Catalog: cat, Log: &lockedWriter{w: logBuf}, Unattended: unattended})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +241,7 @@ func fullWizard(t *testing.T, c *client) {
 	}
 	c.ok("Next", nil)
 	sum := c.ok("GetSummary", nil)
-	if sum["primary_label"] != "Erase disk and install" || len(sum["rows"].([]any)) != 5 {
+	if sum["primary_label"] != "Erase disk and install" || len(sum["rows"].([]any)) != 7 {
 		t.Fatalf("summary %v", sum)
 	}
 	// Summary's primary button: Next moves to the install screen, Start begins.
@@ -355,6 +363,152 @@ func TestFatalFailureAndTryAgain(t *testing.T) {
 	c.waitEvent(func(m map[string]any) bool { return m["event"] == "done" }, 30*time.Second)
 }
 
+// After a fatal failure the person can go back, change answers and start again.
+func TestFatalFailureBackAndChange(t *testing.T) {
+	e := newEngine(t, mock.Options{FailCore: true, FailModule: "none"}, false)
+	c, stop := newClient(t, e)
+	defer stop()
+	fullWizard(t, c)
+	c.ok("Start", nil)
+	f := c.waitEvent(func(m map[string]any) bool { return m["event"] == "failed" }, 20*time.Second)
+	if f["can_change"] != true || !strings.Contains(f["message"].(string), "go back and change your choices") {
+		t.Fatalf("failed %v", f)
+	}
+	if _, err := c.call("SetStep", map[string]any{"id": "disk", "data": map[string]any{"disk": "/dev/sda"}}); err == nil || err["code"] != "state" {
+		t.Fatalf("SetStep while failed: %v", err)
+	}
+	// "Change" on the disk: leaves the failure for the wizard; every UI hears about it.
+	w := c.ok("Goto", map[string]any{"id": "disk"})
+	if w["state"] != "wizard" || w["current"] != "disk" {
+		t.Fatalf("Goto disk after failure: %v", w)
+	}
+	ev := c.waitEvent(func(m map[string]any) bool { return m["event"] == "wizard" && m["state"] == "wizard" }, 5*time.Second)
+	if ev["current"] != "disk" {
+		t.Fatalf("wizard event %v", ev)
+	}
+	if h := c.ok("Hello", map[string]any{"client": "installer-ui"}); h["state"] != "wizard" {
+		t.Fatalf("hello state %v", h)
+	}
+	if st := c.ok("GetStep", map[string]any{"id": "install"}); st["options"].(map[string]any)["failed"] != nil {
+		t.Fatalf("the failure must be forgotten: %v", st["options"])
+	}
+	c.ok("SetStep", map[string]any{"id": "disk", "data": map[string]any{"disk": "/dev/sda", "mode": "erase"}})
+	if w := c.ok("Next", nil); w["current"] != "summary" {
+		t.Fatalf("Next after the change: %v", w)
+	}
+	if sum := c.ok("GetSummary", nil); !strings.Contains(sum["warning"].(string), "WDC WD10EZEX") {
+		t.Fatalf("summary %v", sum)
+	}
+	c.ok("Next", nil)
+	c.ok("Start", nil)
+	c.waitEvent(func(m map[string]any) bool { return m["event"] == "done" }, 30*time.Second)
+	if p := c.ok("SaveLog", nil); p["message"] == "" || p["on_usb"] != false {
+		t.Fatalf("save log %v", p)
+	}
+}
+
+// Back from a failure goes to Summary.
+func TestFatalFailureBack(t *testing.T) {
+	e := newEngine(t, mock.Options{FailCore: true, FailModule: "none"}, false)
+	c, stop := newClient(t, e)
+	defer stop()
+	fullWizard(t, c)
+	c.ok("Start", nil)
+	c.waitEvent(func(m map[string]any) bool { return m["event"] == "failed" }, 20*time.Second)
+	if w := c.ok("Back", nil); w["state"] != "wizard" || w["current"] != "summary" {
+		t.Fatalf("Back after failure: %v", w)
+	}
+	// A UI that connects now sees the wizard, not the old failure.
+	c2, stop2 := newClient(t, e)
+	defer stop2()
+	c2.ok("Subscribe", nil)
+	select {
+	case ev := <-c2.events:
+		t.Fatalf("replayed %v after going back", ev)
+	case <-time.After(100 * time.Millisecond):
+	}
+	c.ok("Next", nil)
+	c.ok("Start", nil)
+	c.waitEvent(func(m map[string]any) bool { return m["event"] == "done" }, 30*time.Second)
+}
+
+// diskSwapBackend is the mock with a disk inventory the test can change.
+type diskSwapBackend struct {
+	*mock.Backend
+	mu    sync.Mutex
+	disks []hw.Disk
+}
+
+func (b *diskSwapBackend) Disks(ctx context.Context) ([]hw.Disk, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]hw.Disk{}, b.disks...), nil
+}
+
+func (b *diskSwapBackend) set(disks []hw.Disk) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.disks = disks
+}
+
+// Start re-probes: a different disk at the chosen path (or a changed partition table in
+// alongside mode) is refused until the person looks at the Disk step again.
+func TestStartRechecksTheDisk(t *testing.T) {
+	b := &diskSwapBackend{Backend: mock.New(mock.Options{Speed: 400, FailModule: "none", LogDir: t.TempDir()}), disks: mock.Inventory()}
+	e := newEngineWith(t, b, false)
+	c, stop := newClient(t, e)
+	defer stop()
+	fullWizard(t, c)
+	swapped := mock.Inventory()
+	swapped[0].Model, swapped[0].Serial = "Other SSD", "OTHER123"
+	b.set(swapped)
+	if _, err := c.call("Start", nil); err == nil || err["code"] != "state" || !strings.Contains(err["message"].(string), "The disk changed") {
+		t.Fatalf("Start with a swapped disk: %v", err)
+	}
+	if w := c.ok("GetWizard", nil); w["state"] != "wizard" {
+		t.Fatalf("nothing may start: %v", w)
+	}
+	// Pressing the button again is not enough: the Disk step has to be seen again.
+	if _, err := c.call("Start", nil); err == nil || !strings.Contains(err["message"].(string), "The disk changed") {
+		t.Fatalf("second Start: %v", err)
+	}
+	c.ok("Goto", map[string]any{"id": "disk"})
+	if st := c.ok("GetStep", map[string]any{"id": "disk"}); st["options"].(map[string]any)["disks"].([]any)[0].(map[string]any)["model"] != "Other SSD" {
+		t.Fatalf("disk step %v", st["options"])
+	}
+	c.ok("Next", nil)
+	if sum := c.ok("GetSummary", nil); !strings.Contains(sum["warning"].(string), "Other SSD") {
+		t.Fatalf("summary after the probe %v", sum)
+	}
+	c.ok("Next", nil)
+	c.ok("Start", nil)
+	c.waitEvent(func(m map[string]any) bool { return m["event"] == "done" }, 30*time.Second)
+
+	// Alongside: the free space changed since the Summary.
+	b2 := &diskSwapBackend{Backend: mock.New(mock.Options{Speed: 400, FailModule: "none", LogDir: t.TempDir()}), disks: mock.Inventory()}
+	e2 := newEngineWith(t, b2, false)
+	c2, stop2 := newClient(t, e2)
+	defer stop2()
+	fullWizard(t, c2)
+	c2.ok("Goto", map[string]any{"id": "disk"})
+	c2.ok("SetStep", map[string]any{"id": "disk", "data": map[string]any{"disk": "/dev/nvme0n1", "mode": "alongside"}})
+	c2.ok("Next", nil)
+	c2.ok("Next", nil)
+	changed := mock.Inventory()
+	changed[0].Partitions = append(changed[0].Partitions, hw.Partition{Path: "/dev/nvme0n1p5", Number: 5, StartByte: changed[0].FreeRegions[0].StartByte, SizeBytes: 10 * hw.GB, Type: hw.TypeLinux})
+	changed[0].FreeRegions[0].StartByte += 10 * hw.GB
+	changed[0].FreeRegions[0].SizeBytes -= 10 * hw.GB
+	b2.set(changed)
+	if _, err := c2.call("Start", nil); err == nil || !strings.Contains(err["message"].(string), "The disk changed") {
+		t.Fatalf("Start with a changed table: %v", err)
+	}
+	// The disk vanished.
+	b2.set(mock.Inventory()[1:])
+	if _, err := c2.call("Start", nil); err == nil || !strings.Contains(err["message"].(string), "gone") {
+		t.Fatalf("Start without the disk: %v", err)
+	}
+}
+
 func TestUnattendedDefers(t *testing.T) {
 	e := newEngine(t, mock.Options{FailModule: "zed"}, true)
 	c, stop := newClient(t, e)
@@ -411,5 +565,41 @@ func TestHandleWithoutSession(t *testing.T) {
 	resp := e.Handle(context.Background(), nil, protocol.Request{Method: "Subscribe"})
 	if resp.Error == nil {
 		t.Fatal("Subscribe without a session must fail")
+	}
+}
+
+// kbBackend records what the live session was told to use.
+type kbBackend struct {
+	*mock.Backend
+	mu      sync.Mutex
+	applied []wizard.XKB
+}
+
+func (b *kbBackend) ApplyKeyboard(ctx context.Context, x wizard.XKB) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.applied = append(b.applied, x)
+	return nil
+}
+
+// A layout that is set is applied to the live session with the same layouts the installed
+// system gets (us first for non-Latin layouts); a rejected one is not.
+func TestKeyboardAppliedLive(t *testing.T) {
+	b := &kbBackend{Backend: mock.New(mock.Options{Speed: 400, LogDir: t.TempDir()})}
+	e := newEngineWith(t, b, false)
+	c, stop := newClient(t, e)
+	defer stop()
+	res := c.ok("SetStep", map[string]any{"id": "keyboard", "data": map[string]any{"layout": "ru"}})
+	x := res["data"].(map[string]any)["xkb"].(map[string]any)
+	if x["layout"] != "us,ru" || x["options"] != "grp:alt_shift_toggle" || x["keymap"] != "ru" {
+		t.Fatalf("xkb %v", x)
+	}
+	if _, err := c.call("SetStep", map[string]any{"id": "keyboard", "data": map[string]any{"layout": "xx"}}); err == nil {
+		t.Fatal("unknown layout accepted")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.applied) != 1 || b.applied[0].Layout != "us,ru" {
+		t.Fatalf("applied %+v", b.applied)
 	}
 }

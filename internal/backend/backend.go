@@ -5,6 +5,8 @@ package backend
 
 import (
 	"context"
+	"fmt"
+	"path"
 
 	"github.com/yuvalkolodkingal/o-tism/internal/catalog"
 	"github.com/yuvalkolodkingal/o-tism/internal/hw"
@@ -38,8 +40,18 @@ type Backend interface {
 	// is installed (optional apps may have been skipped or deferred) and an error for a
 	// fatal failure.
 	Install(ctx context.Context, job *Job, r Reporter) error
-	SaveLog(ctx context.Context) (string, error)
+	// SaveLog copies the engine log where the person can keep it: a USB stick when one is
+	// plugged in (never the install medium), else a folder of the live session.
+	SaveLog(ctx context.Context) (protocol.SaveLogResult, error)
 	Reboot(ctx context.Context) error
+	// SystemNames are the user and group names of the system the install copies (the new
+	// account must not reuse them).
+	SystemNames() []string
+	// ApplyKeyboard makes the live session use the keyboard layouts the person picked, so the
+	// passphrase and password are typed as they will be on the installed system. The real
+	// backend writes the live system's /etc/arctic/mango/keyboard.conf (sourced by the live
+	// session's mango config); the UI then reloads mango's config.
+	ApplyKeyboard(ctx context.Context, x wizard.XKB) error
 }
 
 // Secrets are held in memory only and wiped after the install.
@@ -88,4 +100,17 @@ type Reporter interface {
 	Module(ev protocol.ModuleEvent)
 	Attention(ctx context.Context, ev protocol.AttentionEvent) Decision
 	Logf(format string, a ...any)
+}
+
+// SavedLogMessage is the sentence the UI shows after SaveLog.
+func SavedLogMessage(r protocol.SaveLogResult) string {
+	name := path.Base(r.Path)
+	switch {
+	case r.OnUSB && r.SafeToRemove:
+		return fmt.Sprintf("Saved %s to the USB stick %s. You can unplug it now.", name, r.Label)
+	case r.OnUSB:
+		return fmt.Sprintf("Saved %s to the USB stick %s (%s).", name, r.Label, path.Dir(r.Path))
+	default:
+		return fmt.Sprintf("Saved the log to %s. It’s lost when the computer restarts — plug in a USB stick and save it again to keep it.", r.Path)
+	}
 }

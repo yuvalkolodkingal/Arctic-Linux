@@ -13,10 +13,12 @@ import (
 )
 
 type fakeEnv struct {
-	cat     *catalog.Catalog
-	disks   []hw.Disk
-	net     protocol.NetworkState
-	secrets SecretsInfo
+	cat      *catalog.Catalog
+	disks    []hw.Disk
+	net      protocol.NetworkState
+	secrets  SecretsInfo
+	firmware string
+	names    map[string]bool
 }
 
 func (e *fakeEnv) Catalog() *catalog.Catalog      { return e.cat }
@@ -26,11 +28,14 @@ func (e *fakeEnv) Secrets() SecretsInfo           { return e.secrets }
 func (e *fakeEnv) Model() string                  { return "thinkpad" }
 func (e *fakeEnv) DetectTimezone() Detected       { return Detected{"Asia/Jerusalem", "network"} }
 func (e *fakeEnv) Now() time.Time                 { return time.Date(2026, 9, 27, 4, 42, 0, 0, time.UTC) }
+func (e *fakeEnv) Firmware() string               { return e.firmware }
+func (e *fakeEnv) SystemNames() map[string]bool   { return e.names }
 
 func testDisks() []hw.Disk {
 	return []hw.Disk{
 		{Path: "/dev/nvme0n1", Model: "Samsung SSD 980", SizeBytes: 512 * hw.GB, PTType: "gpt", Transport: "nvme",
-			ExistingOS: []string{"Windows 11"}, FreeRegions: []hw.Region{{StartByte: 332 * hw.GB, SizeBytes: 180 * hw.GB}}},
+			ExistingOS: []string{"Windows 11"}, FreeRegions: []hw.Region{{StartByte: 332 * hw.GB, SizeBytes: 180 * hw.GB}},
+			Partitions: []hw.Partition{{Path: "/dev/nvme0n1p1", Number: 1, StartByte: hw.MiB, SizeBytes: 100 * hw.MiB, Type: hw.TypeESP, FSType: "vfat"}}},
 		{Path: "/dev/sda", Model: "WDC WD10EZEX", SizeBytes: 1 * hw.TB, Rotational: true, Transport: "sata", PTType: "gpt"},
 		{Path: "/dev/sdb", Model: "SanDisk Ultra", SizeBytes: 32 * hw.GB, Removable: true, InstallMedia: true, Transport: "usb"},
 	}
@@ -42,7 +47,7 @@ func newTest(t *testing.T) (*Wizard, *fakeEnv) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := &fakeEnv{cat: cat, disks: testDisks()}
+	env := &fakeEnv{cat: cat, disks: testDisks(), firmware: "uefi", names: map[string]bool{"man": true, "video": true, "nixbld7": true}}
 	return New(env, "en_US.UTF-8"), env
 }
 
@@ -147,11 +152,19 @@ func TestHappyPathAndSummary(t *testing.T) {
 		got = append(got, r.Label+": "+r.Value)
 	}
 	want := []string{
-		"Language and keyboard: English (US) · English (US) layout",
+		"Language: English (US)",
+		"Keyboard: English (US) layout",
 		"Time zone: Jerusalem (UTC+3)",
-		"Disk: Erase Samsung SSD 980 · 512 GB, encrypted",
+		"Disk: Erase Samsung SSD 980 · 512 GB",
+		"Encryption: On — you’ll type your passphrase each time the computer starts",
 		"Account: Noa Levi (noa) on noa-thinkpad",
 		"Apps: Zen, Zed, kitty, zsh, yazi, Thunar, Collabora, VLC",
+	}
+	// Every row's Change link reaches its step.
+	for _, r := range s.Rows {
+		if i := StepIndex(r.Step); i < 0 || i >= StepIndex(StepSummary) {
+			t.Errorf("row %q links to %q", r.Label, r.Step)
+		}
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("summary\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -233,7 +246,7 @@ func TestGotoOnlyDoneStepsAndReturnToSummary(t *testing.T) {
 		t.Fatalf("Next after Change should return to summary, at %s", w.Current())
 	}
 	s := w.Summary()
-	if s.PrimaryLabel != "Install alongside Windows 11" || !strings.Contains(s.Rows[2].Value, "Next to Windows 11") {
+	if s.PrimaryLabel != "Install alongside Windows 11" || !strings.Contains(s.Rows[3].Value, "Next to Windows 11") {
 		t.Errorf("alongside summary %+v", s)
 	}
 	if err := w.Goto("summary"); err != nil {
@@ -419,5 +432,187 @@ func TestAppsStep(t *testing.T) {
 	r, _ := w.Get("apps")
 	if !strings.HasPrefix(r.Note, "9 apps · ") {
 		t.Errorf("apps footer %q", r.Note)
+	}
+}
+
+func TestSummaryChangeReachesKeyboardAndEncryption(t *testing.T) {
+	w, env := newTest(t)
+	walk(t, w, env)
+	for _, id := range []string{StepKeyboard, StepEncryption} {
+		if err := w.Goto(id); err != nil || w.Current() != id {
+			t.Fatalf("Goto %s: %v (at %s)", id, err, w.Current())
+		}
+		mustNext(t, w)
+		if w.Current() != StepSummary {
+			t.Fatalf("Next after changing %s: at %s", id, w.Current())
+		}
+	}
+	// Changing the language from Summary shows Keyboard (new suggestions), then Summary.
+	if err := w.Goto(StepWelcome); err != nil {
+		t.Fatal(err)
+	}
+	set(t, w, "welcome", `{"language":"de_DE.UTF-8"}`)
+	mustNext(t, w)
+	if w.Current() != StepKeyboard {
+		t.Fatalf("after a language change: at %s, want keyboard", w.Current())
+	}
+	mustNext(t, w)
+	if w.Current() != StepSummary {
+		t.Fatalf("after keyboard: at %s, want summary", w.Current())
+	}
+	// Same language: straight back to Summary.
+	w.Goto(StepWelcome)
+	mustNext(t, w)
+	if w.Current() != StepSummary {
+		t.Fatalf("unchanged language: at %s, want summary", w.Current())
+	}
+}
+
+func TestBackToWizardAfterFailure(t *testing.T) {
+	w, env := newTest(t)
+	walk(t, w, env)
+	mustNext(t, w) // summary → install
+	w.BeginInstall()
+	w.SetPhase(PhaseFailed)
+	if _, err := set(t, w, "disk", `{"mode":"alongside"}`); err == nil || err.Code != protocol.CodeState || !strings.Contains(err.Message, "Disk step") {
+		t.Errorf("SetStep while failed: %v", err)
+	}
+	// Change on the Summary: Goto a done step leaves the failure and returns to Summary after.
+	if err := w.Goto(StepDisk); err != nil {
+		t.Fatal(err)
+	}
+	if w.Phase() != PhaseWizard || w.Current() != StepDisk {
+		t.Fatalf("after Goto: phase %s at %s", w.Phase(), w.Current())
+	}
+	if _, err := set(t, w, "disk", `{"disk":"/dev/sda"}`); err != nil {
+		t.Fatal(err)
+	}
+	mustNext(t, w)
+	if w.Current() != StepSummary {
+		t.Fatalf("at %s, want summary", w.Current())
+	}
+	if st := w.Snapshot(); st.Steps[StepIndex(StepSummary)].State != "current" || st.Steps[StepIndex(StepInstall)].State != "todo" || st.State != PhaseWizard {
+		t.Errorf("snapshot after reopening %+v", st)
+	}
+	if err := w.ReadyToInstall(); err != nil {
+		t.Fatal(err)
+	}
+	// Back from a failure goes to Summary; Goto summary from the install screen too.
+	mustNext(t, w)
+	w.BeginInstall()
+	w.SetPhase(PhaseFailed)
+	if err := w.Back(); err != nil || w.Phase() != PhaseWizard || w.Current() != StepSummary {
+		t.Fatalf("Back after failure: %v, %s at %s", err, w.Phase(), w.Current())
+	}
+	mustNext(t, w)
+	w.BeginInstall()
+	w.SetPhase(PhaseFailed)
+	if err := w.Goto(StepSummary); err != nil || w.Phase() != PhaseWizard || w.Current() != StepSummary {
+		t.Fatalf("Goto summary after failure: %v, %s at %s", err, w.Phase(), w.Current())
+	}
+	// While installing, nothing moves.
+	mustNext(t, w)
+	w.BeginInstall()
+	if err := w.Back(); err == nil {
+		t.Error("Back while installing must fail")
+	}
+	if err := w.Goto(StepDisk); err == nil {
+		t.Error("Goto while installing must fail")
+	}
+}
+
+func TestUsernameAvoidsSystemNames(t *testing.T) {
+	w, env := newTest(t)
+	walk(t, w, env)
+	w.Goto("account")
+	d, err := set(t, w, "account", `{"full_name":"Man Li","username":"","hostname":""}`)
+	if a := d.(AccountData); err != nil || a.Username != "man1" {
+		t.Errorf("suggestion for a taken group: %+v %v", a, err)
+	}
+	for _, u := range []string{"man", "video", "nixbld7", "tty", "kvm", "nixbld12"} {
+		if _, err := set(t, w, "account", `{"username":"`+u+`"}`); err == nil || err.Fields["username"] != MsgNameTaken {
+			t.Errorf("%s accepted: %v", u, err)
+		}
+	}
+	if _, err := set(t, w, "account", `{"username":"mani"}`); err != nil {
+		t.Errorf("mani: %v", err)
+	}
+	if got := SuggestUsernameAvoiding("Man Li", map[string]bool{"man1": true}); got != "man2" {
+		t.Errorf("second suggestion %q", got)
+	}
+	if names := ReadAccountNames(strings.NewReader("root:x:0:0::/root:/bin/bash\n# comment\n\nman:x:15:\n")); strings.Join(names, ",") != "root,man" {
+		t.Errorf("names %v", names)
+	}
+}
+
+func TestAlongsideNeedsESPOnUEFI(t *testing.T) {
+	w, env := newTest(t)
+	env.disks[0].Partitions = nil // no ESP
+	r, _ := w.Get("disk")
+	if opts := r.Options.(map[string]any)["disks"].([]DiskOption); opts[0].AlongsidePossible {
+		t.Errorf("UEFI alongside offered without an ESP: %+v", opts[0])
+	}
+	_, err := set(t, w, "disk", `{"disk":"/dev/nvme0n1","mode":"alongside"}`)
+	if err == nil || !strings.Contains(err.Fields["mode"], "no EFI system partition") {
+		t.Errorf("got %v", err)
+	}
+	env.firmware = "bios"
+	if _, err := set(t, w, "disk", `{"disk":"/dev/nvme0n1","mode":"alongside"}`); err != nil {
+		t.Errorf("BIOS alongside needs no ESP: %v", err)
+	}
+	// MBR ESP types are matched in any case; a full MBR table can't take two more partitions.
+	env.firmware = "uefi"
+	env.disks[0].PTType = "dos"
+	env.disks[0].Partitions = []hw.Partition{{Number: 1, Type: "0xEF"}}
+	if _, err := set(t, w, "disk", `{"disk":"/dev/nvme0n1","mode":"alongside"}`); err != nil {
+		t.Errorf("MBR disk with an ESP: %v", err)
+	}
+	env.disks[0].Partitions = []hw.Partition{{Number: 1, Type: "0xef"}, {Number: 2, Type: "0x7"}, {Number: 3, Type: "0x27"}}
+	if _, err := set(t, w, "disk", `{"disk":"/dev/nvme0n1","mode":"alongside"}`); err == nil || !strings.Contains(err.Fields["mode"], "no room") {
+		t.Errorf("full MBR table: %v", err)
+	}
+}
+
+func TestKeyboardConfig(t *testing.T) {
+	cases := []struct {
+		kb   KeyboardData
+		want XKB
+	}{
+		{KeyboardData{"us", ""}, XKB{Layout: "us", Keymap: "us", Latin: true}},
+		{KeyboardData{"de", "nodeadkeys"}, XKB{Layout: "de", Variant: "nodeadkeys", Keymap: "de-nodeadkeys", Latin: true}},
+		{KeyboardData{"il", ""}, XKB{Layout: "us,il", Options: "grp:alt_shift_toggle", Keymap: "us"}},
+		{KeyboardData{"ru", ""}, XKB{Layout: "us,ru", Options: "grp:alt_shift_toggle", Keymap: "ru"}},
+		{KeyboardData{"ua", ""}, XKB{Layout: "us,ua", Options: "grp:alt_shift_toggle", Keymap: "ua-utf"}},
+		{KeyboardData{"gr", ""}, XKB{Layout: "us,gr", Options: "grp:alt_shift_toggle", Keymap: "gr"}},
+		{KeyboardData{"ara", ""}, XKB{Layout: "us,ara", Options: "grp:alt_shift_toggle", Keymap: "us"}},
+	}
+	for _, c := range cases {
+		if got := KeyboardConfig(c.kb); got != c.want {
+			t.Errorf("%+v: got %+v, want %+v", c.kb, got, c.want)
+		}
+	}
+	// Every offered layout maps to something.
+	for _, l := range Layouts {
+		if x := KeyboardConfig(KeyboardData{l.Layout, l.Variant}); x.Layout == "" || x.Keymap == "" {
+			t.Errorf("%s: %+v", l.Key(), x)
+		}
+	}
+	w, _ := newTest(t)
+	d, err := set(t, w, "keyboard", `{"layout":"il"}`)
+	if v, ok := d.(KeyboardView); err != nil || !ok || v.XKB.Layout != "us,il" || v.Layout != "il" {
+		t.Errorf("SetStep keyboard: %#v %v", d, err)
+	}
+	r, _ := w.Get("keyboard")
+	b, _ := json.Marshal(r.Data)
+	if string(b) != `{"layout":"il","variant":"","xkb":{"layout":"us,il","variant":"","options":"grp:alt_shift_toggle","keymap":"us","latin":false}}` {
+		t.Errorf("GetStep keyboard data %s", b)
+	}
+	// The xkb object sent back is ignored.
+	if _, err := set(t, w, "keyboard", string(b)); err != nil || w.Data.Keyboard != (KeyboardData{"il", ""}) {
+		t.Errorf("round trip: %v %+v", err, w.Data.Keyboard)
+	}
+	s := w.Summary()
+	if s.Rows[1].Value != "Hebrew layout, plus English (US) for passwords — Alt+Shift switches" {
+		t.Errorf("summary keyboard row %q", s.Rows[1].Value)
 	}
 }

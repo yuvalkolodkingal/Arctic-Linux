@@ -61,6 +61,7 @@ type Installer struct {
 	skipped    map[string]bool
 	deferred   []string
 	flatpakRan bool
+	bootNum    string // firmware boot entry this run created (removed again on failure)
 }
 
 type layout struct {
@@ -68,6 +69,7 @@ type layout struct {
 	biosBoot, esp, boot, root  string
 	espNum                     int
 	espNew                     bool
+	created                    []int // partitions sfdisk --append added (alongside), removed again on failure
 	luks                       bool
 	luksName, luksUUID         string
 	rootDev                    string
@@ -154,7 +156,10 @@ func (in *Installer) Run(ctx context.Context) error {
 	return nil
 }
 
-// cleanup unmounts and closes after a failure so "Try again" starts clean.
+// cleanup unmounts and closes after a failure so "Try again" starts clean. In alongside mode
+// it also removes the partitions this run added (wiping their signatures first), so the other
+// system's disk is left as it was and a retry finds the same free space, and it removes the
+// firmware boot entry this run created.
 func (in *Installer) cleanup(ctx context.Context) {
 	in.R.Note("cleanup after failure")
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{"-R", in.Opt.Target}, AllowFail: true})
@@ -163,6 +168,20 @@ func (in *Installer) cleanup(ctx context.Context) {
 		in.R.Run(ctx, Cmd{Name: "cryptsetup", Args: []string{"close", in.lay.luksName}, AllowFail: true})
 	}
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{in.Opt.Target}, AllowFail: true}) // the private bind
+	if len(in.lay.created) > 0 {
+		args := []string{"--delete", in.lay.disk}
+		for _, n := range in.lay.created {
+			in.R.Run(ctx, Cmd{Name: "wipefs", Args: []string{"--all", hw.PartitionPath(in.lay.disk, n)}, AllowFail: true})
+			args = append(args, strconv.Itoa(n))
+		}
+		in.R.Run(ctx, Cmd{Name: "sfdisk", Args: args, AllowFail: true})
+		in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=15"}, AllowFail: true})
+	}
+	// A boot entry for an install that failed would start first next time (and, alongside,
+	// instead of the other system).
+	if in.bootNum != "" {
+		in.R.Run(ctx, Cmd{Name: "efibootmgr", Args: []string{"--delete-bootnum", "--bootnum", in.bootNum}, AllowFail: true})
+	}
 }
 
 // ---- disk ----
@@ -173,14 +192,11 @@ func (in *Installer) diskPhase(ctx context.Context) error {
 	if !in.R.Exists(disk.Path) {
 		return fmt.Errorf("%s is gone", disk.Path)
 	}
-	mounts, err := in.output(ctx, "lsblk", "--noheadings", "--raw", "--output", "MOUNTPOINTS", disk.Path)
-	if err != nil {
+	in.lay = layout{disk: disk.Path, luks: job.Data.Encryption.Enabled}
+	if err := in.releaseDisk(ctx, disk.Path); err != nil {
 		return err
 	}
-	if m := strings.TrimSpace(mounts); m != "" {
-		return fmt.Errorf("%s is in use (mounted at %s)", disk.Path, strings.Join(strings.Fields(m), ", "))
-	}
-	in.lay = layout{disk: disk.Path, luks: job.Data.Encryption.Enabled}
+	var err error
 	if job.Data.Disk.Mode == wizard.ModeAlongside {
 		err = in.partitionAlongside(ctx)
 	} else {
@@ -334,6 +350,119 @@ func (in *Installer) waitForDevices(ctx context.Context, devs ...string) error {
 	return fmt.Errorf("the new partitions on %s did not appear", in.lay.disk)
 }
 
+// blockNode is one device of `lsblk --json --tree --output PATH,TYPE,MOUNTPOINTS`: the disk,
+// its partitions and, below them, their holders (md arrays, device-mapper devices).
+type blockNode struct {
+	Path        string      `json:"path"`
+	Type        string      `json:"type"`
+	Mountpoints []*string   `json:"mountpoints"`
+	Children    []blockNode `json:"children"`
+}
+
+type diskMount struct{ dev, mountpoint string }
+
+// diskUse lists what uses a disk: mounted file systems and swap anywhere below it, and the
+// holders below its partitions (deepest first, each once).
+func diskUse(nodes []blockNode) (mounts []diskMount, holders []blockNode) {
+	seen := map[string]bool{}
+	var walk func(n blockNode, depth int)
+	walk = func(n blockNode, depth int) {
+		for _, c := range n.Children {
+			walk(c, depth+1)
+		}
+		for _, m := range n.Mountpoints {
+			if m != nil && strings.TrimSpace(*m) != "" {
+				mounts = append(mounts, diskMount{n.Path, strings.TrimSpace(*m)})
+			}
+		}
+		if depth > 0 && n.Type != "part" && !seen[n.Path] {
+			seen[n.Path] = true
+			holders = append(holders, n)
+		}
+	}
+	for _, n := range nodes {
+		walk(n, 0)
+	}
+	// Unmount nested mount points before their parents.
+	sort.SliceStable(mounts, func(i, j int) bool { return len(mounts[i].mountpoint) > len(mounts[j].mountpoint) })
+	return mounts, holders
+}
+
+func (in *Installer) diskTree(ctx context.Context, disk string) ([]blockNode, error) {
+	out, err := in.output(ctx, "lsblk", "--json", "--tree", "--output", "PATH,TYPE,MOUNTPOINTS", disk)
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		Blockdevices []blockNode `json:"blockdevices"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil || len(doc.Blockdevices) == 0 {
+		return nil, fmt.Errorf("couldn’t list what uses %s (lsblk: %v)", disk, err)
+	}
+	return doc.Blockdevices, nil
+}
+
+// releasable reports whether the installer may unmount a mount point of the target disk:
+// the live session's automounts (a partition opened in the file manager), swap, and
+// leftovers of an earlier attempt under the target.
+func (in *Installer) releasable(mp string) bool {
+	t := strings.TrimSuffix(in.Opt.Target, "/")
+	return mp == "[SWAP]" || strings.HasPrefix(mp, "/run/media/") || mp == t || strings.HasPrefix(mp, t+"/")
+}
+
+// releaseDisk makes sure nothing on the live system holds the target disk before the first
+// destructive command: sfdisk refuses a disk that is in use, and in erase mode wipefs would
+// already have cleared the table by then. Automounts, swap and leftovers of an earlier attempt
+// are unmounted; md arrays that udev assembled and device-mapper devices (activated LVM, an
+// open LUKS mapping) are stopped — deactivating them changes no data. Anything else mounted is
+// left alone and the install stops before touching the disk.
+func (in *Installer) releaseDisk(ctx context.Context, disk string) error {
+	nodes, err := in.diskTree(ctx, disk)
+	if err != nil {
+		return err
+	}
+	mounts, holders := diskUse(nodes)
+	for _, m := range mounts {
+		if !in.releasable(m.mountpoint) {
+			return fmt.Errorf("%s is in use (%s is mounted at %s)", disk, m.dev, m.mountpoint)
+		}
+	}
+	if len(mounts) == 0 && len(holders) == 0 {
+		return nil
+	}
+	in.R.Note("releasing %s: %d mounts, %d holders", disk, len(mounts), len(holders))
+	for _, m := range mounts {
+		c := Cmd{Name: "umount", Args: []string{m.mountpoint}, AllowFail: true}
+		if m.mountpoint == "[SWAP]" {
+			c = Cmd{Name: "swapoff", Args: []string{m.dev}, AllowFail: true}
+		}
+		if _, err := in.R.Run(ctx, c); err != nil {
+			return err
+		}
+	}
+	for _, h := range holders {
+		c := Cmd{Name: "dmsetup", Args: []string{"remove", h.Path}, AllowFail: true}
+		if strings.HasPrefix(h.Type, "raid") || h.Type == "md" {
+			c = Cmd{Name: "mdadm", Args: []string{"--stop", h.Path}, AllowFail: true}
+		}
+		if _, err := in.R.Run(ctx, c); err != nil {
+			return err
+		}
+	}
+	in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=15"}, AllowFail: true})
+	if nodes, err = in.diskTree(ctx, disk); err != nil {
+		return err
+	}
+	mounts, holders = diskUse(nodes)
+	if len(mounts) > 0 {
+		return fmt.Errorf("%s is still in use (%s is mounted at %s)", disk, mounts[0].dev, mounts[0].mountpoint)
+	}
+	if len(holders) > 0 {
+		return fmt.Errorf("%s is still in use by %s (%s)", disk, holders[0].Path, holders[0].Type)
+	}
+	return nil
+}
+
 var subvolumes = []struct{ name, mount string }{
 	{"@", "/"}, {"@home", "/home"}, {"@var_log", "/var/log"}, {"@nix", "/nix"},
 }
@@ -393,8 +522,12 @@ func (in *Installer) partitionAlongside(ctx context.Context) error {
 	gpt := disk.PTType == "gpt"
 	next := disk.NextPartitionNumber()
 	var lines []string
+	var nums []int
 	add := func(size int64, gptType, mbrType, name string) string {
-		l := fmt.Sprintf("start=%d", start/sector)
+		// The device name pins the partition number: sfdisk refuses the line if that slot is
+		// taken, so the paths used below are exactly the partitions this run creates.
+		p := hw.PartitionPath(disk.Path, next)
+		l := fmt.Sprintf("%s : start=%d", p, start/sector)
 		if size > 0 {
 			l += fmt.Sprintf(", size=%d", size/sector)
 			start += size
@@ -405,7 +538,7 @@ func (in *Installer) partitionAlongside(ctx context.Context) error {
 			l += ", type=" + mbrType
 		}
 		lines = append(lines, l)
-		p := hw.PartitionPath(disk.Path, next)
+		nums = append(nums, next)
 		next++
 		return p
 	}
@@ -433,8 +566,11 @@ func (in *Installer) partitionAlongside(ctx context.Context) error {
 		}
 		in.lay.esp, in.lay.espNum = esp.Path, esp.Number
 	}
-	_, err := in.R.Run(ctx, Cmd{Name: "sfdisk", Args: []string{"--append", disk.Path}, Stdin: []byte(strings.Join(lines, "\n") + "\n")})
-	return err
+	if _, err := in.R.Run(ctx, Cmd{Name: "sfdisk", Args: []string{"--append", disk.Path}, Stdin: []byte(strings.Join(lines, "\n") + "\n")}); err != nil {
+		return err
+	}
+	in.lay.created = nums
+	return nil
 }
 
 // ---- copy ----
@@ -491,45 +627,8 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 		return err
 	}
 	in.source = src
-	// /boot/efi is excluded as a whole, not only its contents: it is the ESP's (vfat) mount
-	// point, which takes no owner, mode, ACL or SELinux xattr, so -aAX on it fails the copy
-	// (rsync exit 23). Its files are copied below without attributes. The live image's rescue
-	// kernel belongs to its machine id; kernel-install makes one for the new system.
-	excludes := []string{"/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "/media/*", "/var/tmp/*",
-		"/boot/efi", "/boot/loader/entries/*", "/boot/initramfs-*", "/boot/vmlinuz-0-rescue-*",
-		"/var/cache/dnf/*", "/var/cache/libdnf5/*",
-		"/etc/machine-id", "/lost+found"}
-	args := []string{"-aAXH", "--numeric-ids", "--info=progress2", "--no-inc-recursive"}
-	for _, e := range excludes {
-		args = append(args, "--exclude="+e)
-	}
-	args = append(args, strings.TrimSuffix(src, "/")+"/", strings.TrimSuffix(in.Opt.Target, "/")+"/")
-	if _, err := in.R.Run(ctx, Cmd{Name: "rsync", Args: args, OnLine: func(l string) {
-		if p, ok := ParsePercent(l); ok {
-			in.t.Update(float64(p)/100*0.85, "")
-		}
-	}}); err != nil {
+	if err := in.copyRoot(ctx, src); err != nil {
 		return err
-	}
-	// The ESP is vfat: copy its files without owners/permissions, then make sure the signed
-	// shim and GRUB are there (F44 also keeps them under /usr/lib/efi).
-	if in.lay.esp == "" {
-		if err := in.R.MkdirAll(in.tgt("/boot/efi"), 0o700); err != nil {
-			return err
-		}
-	} else {
-		if in.R.Exists(path.Join(src, "boot/efi")) {
-			if err := in.run(ctx, "rsync", "-rt", path.Join(src, "boot/efi")+"/", in.tgt("/boot/efi")+"/"); err != nil {
-				return err
-			}
-		}
-		dirs, _ := in.R.Glob(in.tgt("/usr/lib/efi/*/*/EFI"))
-		sort.Strings(dirs)
-		for _, dir := range dirs {
-			if err := in.run(ctx, "cp", "-rn", dir, in.tgt("/boot/efi")+"/"); err != nil {
-				return err
-			}
-		}
 	}
 	in.t.Update(0.9, "")
 	// API file systems for the chroot steps; /run carries the resolver stub for dnf.
@@ -558,6 +657,56 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 	return nil
 }
 
+// copyRoot copies the live root to the target, then the ESP's files.
+//
+// The ESP is vfat, mounted at /boot/efi before the copy. The main rsync must not touch that
+// mount point at all: -X would try to set the image's SELinux label on the vfat root, which
+// fails (EOPNOTSUPP) and makes rsync exit 23. So /boot/efi/ itself is excluded when an ESP is
+// mounted there, and its files are copied separately without owners, permissions or xattrs,
+// as Anaconda does for live images. The security.selinux xattr is not copied at all (the
+// kiwi-built image has files whose label the running policy can't set or remove, another
+// exit-23 failure); setfiles relabels the whole target in the finalize phase.
+func (in *Installer) copyRoot(ctx context.Context, src string) error {
+	esp := "/boot/efi/*" // no ESP mounted: keep the (empty) directory from the image
+	if in.lay.esp != "" {
+		esp = "/boot/efi/"
+	}
+	excludes := []string{"/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "/media/*", "/var/tmp/*",
+		esp, "/boot/loader/entries/*", "/boot/initramfs-*", "/boot/vmlinuz-0-rescue-*",
+		// The live image's rescue kernel belongs to its machine id; kernel-install makes one.
+		"/var/cache/dnf/*", "/var/cache/libdnf5/*",
+		"/etc/machine-id", "/lost+found"}
+	args := []string{"-aAXH", "--numeric-ids", "--info=progress2", "--no-inc-recursive", "--filter=-x security.selinux"}
+	for _, e := range excludes {
+		args = append(args, "--exclude="+e)
+	}
+	args = append(args, strings.TrimSuffix(src, "/")+"/", strings.TrimSuffix(in.Opt.Target, "/")+"/")
+	if _, err := in.R.Run(ctx, Cmd{Name: "rsync", Args: args, OnLine: func(l string) {
+		if p, ok := ParsePercent(l); ok {
+			in.t.Update(float64(p)/100*0.85, "")
+		}
+	}}); err != nil {
+		return err
+	}
+	// The ESP's files without owners/permissions/xattrs (and without touching the vfat root's
+	// times), then the signed shim and GRUB (F44 also keeps them under /usr/lib/efi).
+	if in.lay.esp != "" {
+		if in.R.Exists(path.Join(src, "boot/efi")) {
+			if err := in.run(ctx, "rsync", "-rt", "--omit-dir-times", path.Join(src, "boot/efi")+"/", in.tgt("/boot/efi")+"/"); err != nil {
+				return err
+			}
+		}
+		dirs, _ := in.R.Glob(in.tgt("/usr/lib/efi/*/*/EFI"))
+		sort.Strings(dirs)
+		for _, dir := range dirs {
+			if err := in.run(ctx, "cp", "-rn", dir, in.tgt("/boot/efi")+"/"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // ---- configure ----
 
 func (in *Installer) configurePhase(ctx context.Context) error {
@@ -573,20 +722,18 @@ func (in *Installer) configurePhase(ctx context.Context) error {
 		return err
 	}
 	in.t.Update(0.3, "")
-	kb := d.Keyboard
-	keymap := kb.Layout
-	if kb.Variant != "" {
-		keymap += "-" + kb.Variant
-	}
+	kb := wizard.KeyboardConfig(d.Keyboard)
+	first, _, _ := strings.Cut(kb.Layout, ",")
 	files := []struct {
 		path, content string
 		perm          uint32
 	}{
-		{"/etc/vconsole.conf", fmt.Sprintf("KEYMAP=%s\nXKBLAYOUT=%s\nXKBVARIANT=%s\n", keymap, kb.Layout, kb.Variant), 0o644},
-		{"/etc/arctic/mango/keyboard.conf", keyboardConf(kb), 0o644},
-		{"/etc/arctic/sddm-keyboard.conf", keyboardConf(kb), 0o644},
-		// The login screen's Wayland greeter can't report the layout, so the theme reads it here.
-		{"/usr/share/sddm/themes/arctic/theme.conf.user", fmt.Sprintf("# Written by the Arctic Linux installer: the keyboard layout you picked.\n[General]\nkeyboardLayout=%s\n", kb.Layout), 0o644},
+		{"/etc/vconsole.conf", vconsoleConf(kb), 0o644},
+		{"/etc/arctic/mango/keyboard.conf", KeyboardConf(kb), 0o644},
+		{"/etc/arctic/sddm-keyboard.conf", KeyboardConf(kb), 0o644},
+		// The login screen's Wayland greeter can't report the layout, so the theme reads the
+		// one it starts with here.
+		{"/usr/share/sddm/themes/arctic/theme.conf.user", fmt.Sprintf("# Written by the Arctic Linux installer: the keyboard layout you picked.\n[General]\nkeyboardLayout=%s\n", first), 0o644},
 		{"/etc/fstab", in.fstab(), 0o644},
 	}
 	if in.lay.luks {
@@ -644,8 +791,35 @@ func (in *Installer) configurePhase(ctx context.Context) error {
 	return nil
 }
 
-func keyboardConf(kb wizard.KeyboardData) string {
-	return fmt.Sprintf("# Written by the Arctic Linux installer: the keyboard layout you picked.\nxkb_rules_layout=%s\nxkb_rules_variant=%s\n", kb.Layout, kb.Variant)
+// KeyboardConf is the mango (session and login screen) keyboard file. Empty values are left
+// out: mango rejects a "key=" line with no value.
+func KeyboardConf(kb wizard.XKB) string {
+	var b strings.Builder
+	b.WriteString("# Written by the Arctic Linux installer: the keyboard layout you picked.\n")
+	if !kb.Latin {
+		b.WriteString("# English (US) comes first so passwords are typed the same everywhere; Alt+Shift switches.\n")
+	}
+	b.WriteString("xkb_rules_layout=" + kb.Layout + "\n")
+	if kb.Variant != "" {
+		b.WriteString("xkb_rules_variant=" + kb.Variant + "\n")
+	}
+	if kb.Options != "" {
+		b.WriteString("xkb_rules_options=" + kb.Options + "\n")
+	}
+	return b.String()
+}
+
+// vconsoleConf is /etc/vconsole.conf: the console keymap (in the initramfs, where the disk
+// passphrase is typed) and the X11 layouts for tools that read them.
+func vconsoleConf(kb wizard.XKB) string {
+	s := "KEYMAP=" + kb.Keymap + "\nXKBLAYOUT=" + kb.Layout + "\n"
+	if kb.Variant != "" {
+		s += "XKBVARIANT=" + kb.Variant + "\n"
+	}
+	if kb.Options != "" {
+		s += "XKBOPTIONS=" + kb.Options + "\n"
+	}
+	return s
 }
 
 func (in *Installer) fstab() string {
@@ -732,10 +906,12 @@ func (in *Installer) bootloaderPhase(ctx context.Context) error {
 		if err := in.write(in.tgt("/boot/efi/EFI/fedora/grub.cfg"), stub, 0o600); err != nil {
 			return err
 		}
-		if err := in.run(ctx, "efibootmgr", "--create", "--disk", in.lay.disk, "--part", strconv.Itoa(in.lay.espNum),
-			"--label", "Arctic Linux", "--loader", `\EFI\fedora\shimx64.efi`); err != nil {
+		out, err := in.output(ctx, "efibootmgr", "--create", "--disk", in.lay.disk, "--part", strconv.Itoa(in.lay.espNum),
+			"--label", bootLabel, "--loader", `\EFI\fedora\shimx64.efi`)
+		if err != nil {
 			return err
 		}
+		in.bootNum = newBootEntry(out, bootLabel)
 	} else {
 		if err := in.chroot(ctx, Cmd{Name: "grub2-install", Args: []string{"--target=i386-pc", in.lay.disk}}); err != nil {
 			return err
@@ -743,6 +919,31 @@ func (in *Installer) bootloaderPhase(ctx context.Context) error {
 	}
 	in.t.Update(1, "")
 	return nil
+}
+
+// bootLabel names the firmware boot entry.
+const bootLabel = "Arctic Linux"
+
+// newBootEntry finds the entry `efibootmgr --create` just added in its output: the first one
+// in BootOrder (new entries go first), if it carries our label. "" when unsure.
+func newBootEntry(out, label string) string {
+	var first string
+	for _, l := range strings.Split(out, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(l), "BootOrder:"); ok {
+			first, _, _ = strings.Cut(strings.TrimSpace(v), ",")
+			break
+		}
+	}
+	if first == "" {
+		return ""
+	}
+	for _, l := range strings.Split(out, "\n") {
+		l = strings.TrimSpace(l)
+		if rest, ok := strings.CutPrefix(l, "Boot"+first); ok && strings.HasPrefix(strings.TrimLeft(strings.TrimPrefix(rest, "*"), " "), label) {
+			return first
+		}
+	}
+	return ""
 }
 
 // ---- apps ----

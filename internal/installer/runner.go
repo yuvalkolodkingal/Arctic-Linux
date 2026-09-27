@@ -446,11 +446,16 @@ func DefaultGlob(pattern string) []string {
 	return nil
 }
 
-// DefaultRespond fakes command output: stable UUIDs for blkid, nothing mounted, no errors.
+// DefaultRespond fakes command output: stable UUIDs for blkid, a disk nobody uses for lsblk,
+// no errors.
 func DefaultRespond(c Cmd) (string, error) {
 	if c.Name == "blkid" && len(c.Args) > 0 {
 		dev := c.Args[len(c.Args)-1]
 		return FakeUUID(dev) + "\n", nil
+	}
+	if c.Name == "lsblk" && len(c.Args) > 0 && c.Args[0] == "--json" {
+		dev := c.Args[len(c.Args)-1]
+		return `{"blockdevices": [{"path": "` + dev + `", "type": "disk", "mountpoints": [null]}]}` + "\n", nil
 	}
 	return "", nil
 }

@@ -289,19 +289,167 @@ func TestFatalFailureCleansUp(t *testing.T) {
 }
 
 func TestDiskInUse(t *testing.T) {
+	// A partition mounted somewhere the installer doesn't own: stop before touching the disk.
 	job := loadJob(t, "defaults.toml", "uefi")
 	rec := &Recorder{Respond: func(c Cmd) (string, error) {
 		if c.Name == "lsblk" {
-			return "\n/run/media/liveuser/Windows\n", nil
+			return `{"blockdevices": [{"path": "/dev/nvme0n1", "type": "disk", "mountpoints": [null], "children": [
+				{"path": "/dev/nvme0n1p3", "type": "part", "mountpoints": ["/home/liveuser/win"]}]}]}`, nil
 		}
 		return DefaultRespond(c)
 	}}
 	err := runPlan(t, job, rec, newReporter())
-	if err == nil || !strings.Contains(err.Error(), "is in use") {
+	if err == nil || !strings.Contains(err.Error(), "is in use (/dev/nvme0n1p3 is mounted at /home/liveuser/win)") {
+		t.Fatalf("got %v", err)
+	}
+	if strings.Contains(rec.Plan(), "wipefs") || strings.Contains(rec.Plan(), "$ umount /home") {
+		t.Errorf("touched a disk that is in use:\n%s", rec.Plan())
+	}
+}
+
+// An md array that udev assembled (with LVM on it), swap and a file-manager automount are
+// released before the disk is erased; the array is stopped once, after the LV above it.
+func TestReleaseDisk(t *testing.T) {
+	busy := `{"blockdevices": [{"path": "/dev/nvme0n1", "type": "disk", "mountpoints": [null], "children": [
+		{"path": "/dev/nvme0n1p1", "type": "part", "mountpoints": ["/run/media/liveuser/DATA"]},
+		{"path": "/dev/nvme0n1p2", "type": "part", "mountpoints": ["[SWAP]"]},
+		{"path": "/dev/nvme0n1p3", "type": "part", "mountpoints": [null], "children": [
+			{"path": "/dev/md127", "type": "raid1", "mountpoints": [null], "children": [
+				{"path": "/dev/mapper/vg-data", "type": "lvm", "mountpoints": [null]}]}]},
+		{"path": "/dev/nvme0n1p4", "type": "part", "mountpoints": [null], "children": [
+			{"path": "/dev/md127", "type": "raid1", "mountpoints": [null], "children": [
+				{"path": "/dev/mapper/vg-data", "type": "lvm", "mountpoints": [null]}]}]}]}]}`
+	calls := 0
+	respond := func(stillBusy bool) func(c Cmd) (string, error) {
+		return func(c Cmd) (string, error) {
+			if c.Name == "lsblk" {
+				calls++
+				if calls == 1 || stillBusy {
+					return busy, nil
+				}
+			}
+			return DefaultRespond(c)
+		}
+	}
+	job := loadJob(t, "defaults.toml", "uefi")
+	rec := &Recorder{Respond: respond(false)}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	cmds := strings.Join(rec.Commands(), "\n")
+	want := []string{
+		"$ lsblk --json --tree --output PATH,TYPE,MOUNTPOINTS /dev/nvme0n1",
+		"$ umount /run/media/liveuser/DATA",
+		"$ swapoff /dev/nvme0n1p2",
+		"$ dmsetup remove /dev/mapper/vg-data",
+		"$ mdadm --stop /dev/md127",
+		"$ udevadm settle --timeout=15",
+		"$ lsblk --json --tree --output PATH,TYPE,MOUNTPOINTS /dev/nvme0n1",
+		"$ wipefs --all --force /dev/nvme0n1",
+	}
+	if !strings.HasPrefix(cmds, strings.Join(want, "\n")) {
+		t.Errorf("release sequence:\n%s", cmds)
+	}
+	if strings.Count(cmds, "mdadm --stop") != 1 {
+		t.Errorf("the array must be stopped once:\n%s", cmds)
+	}
+	// Still busy after that: stop with a clear message before wipefs.
+	calls = 0
+	rec = &Recorder{Respond: respond(true)}
+	err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, newReporter())
+	if err == nil || !strings.Contains(err.Error(), "still in use") {
 		t.Fatalf("got %v", err)
 	}
 	if strings.Contains(rec.Plan(), "wipefs") {
-		t.Error("wiped a disk that is in use")
+		t.Error("wiped a disk that is still in use")
+	}
+}
+
+// A failed alongside install removes the partitions it added (and only those).
+func TestAlongsideFailureRemovesItsPartitions(t *testing.T) {
+	job := loadJob(t, "ci/alternative.toml", "bios")
+	job.Secrets.LUKS = nil
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.Name == "mkfs.ext4" {
+			return "", errors.New("mkfs failed")
+		}
+		return DefaultRespond(c)
+	}}
+	err := runPlan(t, job, rec, newReporter())
+	if err == nil || !strings.HasPrefix(err.Error(), "disk: ") {
+		t.Fatalf("got %v", err)
+	}
+	plan := rec.Plan()
+	for _, want := range []string{"$ wipefs --all /dev/nvme0n1p5", "$ wipefs --all /dev/nvme0n1p7", "$ sfdisk --delete /dev/nvme0n1 5 6 7"} {
+		if !strings.Contains(plan, want) {
+			t.Errorf("cleanup lacks %q:\n%s", want, plan)
+		}
+	}
+	// sfdisk itself failed: nothing was added, nothing is deleted.
+	job = loadJob(t, "ci/alternative.toml", "bios")
+	job.Secrets.LUKS = nil
+	rec = &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.Name == "sfdisk" {
+			return "", errors.New("Sector 644771840 already used")
+		}
+		return DefaultRespond(c)
+	}}
+	if err := runPlan(t, job, rec, newReporter()); err == nil {
+		t.Fatal("want an error")
+	}
+	if strings.Contains(rec.Plan(), "--delete") || strings.Contains(rec.Plan(), "$ wipefs") {
+		t.Errorf("deleted partitions it did not create:\n%s", rec.Plan())
+	}
+}
+
+// A failure after the bootloader step removes the firmware boot entry the run created.
+func TestLateFailureRemovesBootEntry(t *testing.T) {
+	job := loadJob(t, "defaults.toml", "uefi")
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		switch c.Name {
+		case "efibootmgr":
+			return "BootCurrent: 0001\nTimeout: 0 seconds\nBootOrder: 0004,0000,0001\nBoot0000* Windows Boot Manager\tHD(1,GPT,…)\nBoot0001* UEFI QEMU DVD-ROM\nBoot0004* Arctic Linux\tHD(2,GPT,…)/File(\\EFI\\fedora\\shimx64.efi)\n", nil
+		case "useradd":
+			return "", errors.New("useradd: group 'man' already exists")
+		}
+		return DefaultRespond(c)
+	}}
+	err := runPlan(t, job, rec, newReporter())
+	if err == nil || !strings.HasPrefix(err.Error(), "finalize: ") {
+		t.Fatalf("got %v", err)
+	}
+	if !strings.Contains(rec.Plan(), "$ efibootmgr --delete-bootnum --bootnum 0004") {
+		t.Errorf("boot entry not removed:\n%s", rec.Plan())
+	}
+	if got := newBootEntry("BootOrder: 0000,0004\nBoot0000* Windows Boot Manager\n", "Arctic Linux"); got != "" {
+		t.Errorf("took someone else's entry: %q", got)
+	}
+}
+
+// Non-Latin layouts get "us" first plus a switch, and a Latin console keymap for the disk
+// passphrase at boot; empty values are never written (mango rejects "key=").
+func TestKeyboardFiles(t *testing.T) {
+	job := loadJob(t, "defaults.toml", "uefi")
+	job.Data.Keyboard.Layout, job.Data.Keyboard.Variant = "ru", ""
+	rec := &Recorder{}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	plan := rec.Plan()
+	for _, want := range []string{
+		"write /mnt/etc/vconsole.conf (0644)\n    | KEYMAP=ru\n    | XKBLAYOUT=us,ru\n    | XKBOPTIONS=grp:alt_shift_toggle\n",
+		"    | xkb_rules_layout=us,ru\n    | xkb_rules_options=grp:alt_shift_toggle\n",
+		"keyboardLayout=us\n",
+	} {
+		if !strings.Contains(plan, want) {
+			t.Errorf("plan lacks %q", want)
+		}
+	}
+	if strings.Count(plan, "xkb_rules_layout=us,ru") != 2 {
+		t.Error("mango and the login screen must both get the layouts")
+	}
+	if strings.Contains(plan, "xkb_rules_variant=\n") || strings.Contains(plan, "XKBVARIANT=\n") {
+		t.Error("empty variant written")
 	}
 }
 
