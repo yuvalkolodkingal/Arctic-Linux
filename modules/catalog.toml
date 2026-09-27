@@ -6,9 +6,22 @@
 # Each module lives in modules/<category>/<id>/module.toml; hidden, always-installed modules in
 # modules/_system/<id>/module.toml. Profiles and the UI only ever reference module ids.
 
+# The drivers category is special (hardware = true): its modules carry [[detect]] rules and are
+# offered, ticked, only when a matching device is found on the computer; with none found the
+# section isn't shown at all.
+
 # Pinned nixpkgs for Nix-installed modules: head of nixos-26.05 on 2026-09-27
 # (git ls-remote https://github.com/NixOS/nixpkgs refs/heads/nixos-26.05).
 nixpkgs = "github:NixOS/nixpkgs/5e2305d577ca00acbba631b05cb1094d172b29f3"
+
+[[category]]
+id = "drivers"
+name = "Drivers"
+choice = "any"
+hardware = true
+note = "Found on this computer. These come from RPM Fusion and aren’t open source."
+role = "driver"
+modules = ["nvidia", "nvidia-580xx", "broadcom-wl", "intel-media", "amd-video"]
 
 [[category]]
 id = "browser"
@@ -77,9 +90,12 @@ note = "Nothing here is ticked by default."
 role = "app"
 modules = ["flathub", "steam", "gimp", "inkscape", "signal", "obs"]
 
-# Download size (MB) of each shared Flatpak runtime, counted once per install.
-# Flathub API /api/v2/summary/<runtime> on 2026-09-27.
+# Download size (MB) of each shared download, counted once per install: the Flatpak runtimes
+# (Flathub API /api/v2/summary/<runtime> on 2026-09-27) and "akmods", the tools that build a
+# driver for the kernel (akmods, kernel-devel, gcc, rpm-build; about 550 MB on a bare Fedora 44
+# container on 2026-09-27, roughly half that on top of the live image).
 [runtimes]
+"akmods" = 300
 "org.freedesktop.Platform//25.08" = 259
 "org.freedesktop.Platform//26.08" = 281
 "org.freedesktop.Sdk//25.08" = 609

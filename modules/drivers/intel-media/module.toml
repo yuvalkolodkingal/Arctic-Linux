@@ -1,0 +1,159 @@
+# Intel's VA-API video driver with every codec (RPM Fusion nonfree intel-media-driver
+# 26.1.5 for Fedora 44), in place of Fedora's libva-intel-media-driver, which leaves out the
+# patent-encumbered ones (H.264, HEVC and VC-1 on some parts). It drives Broadwell (Gen8) and
+# every later Intel GPU; older ones use i965 (libva-intel-driver) and are not listed.
+id = "intel-media"
+name = "Intel video acceleration"
+short = "Intel video"
+summary = "Plays and records H.264 and H.265 video on your {device} instead of the processor."
+category = "drivers"
+role = "video driver"
+default = true
+tile = "driver-media"
+icon = "film"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+# Display (0300) and display-other (0380) devices of vendor 8086, by generation (device ids
+# from the Linux i915/xe PCI id tables and pci.ids).
+[[detect]] # Broadwell
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "1600"
+device_max = "163f"
+
+[[detect]] # Skylake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "1900"
+device_max = "193f"
+
+[[detect]] # Broxton, Apollo Lake, Gemini Lake, Amber Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+devices = ["0a84", "1a84", "1a85", "5a84", "5a85", "3184", "3185", "87c0", "87ca"]
+
+[[detect]] # Kaby Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "5900"
+device_max = "593f"
+
+[[detect]] # Coffee Lake, Whiskey Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "3e90"
+device_max = "3ebf"
+
+[[detect]] # Comet Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "9b00"
+device_max = "9bff"
+
+[[detect]] # Ice Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "8a50"
+device_max = "8a7f"
+
+[[detect]] # Elkhart Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "4500"
+device_max = "457f"
+
+[[detect]] # Jasper Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "4e00"
+device_max = "4e7f"
+
+[[detect]] # Tiger Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "9a00"
+device_max = "9aff"
+
+[[detect]] # Rocket Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "4c80"
+device_max = "4c9f"
+
+[[detect]] # Alder Lake, Alder Lake-N, Twin Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "4600"
+device_max = "46ff"
+
+[[detect]] # DG1
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "4900"
+device_max = "490f"
+
+[[detect]] # Arc A-series (Alchemist)
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "5690"
+device_max = "56cf"
+
+[[detect]] # Lunar Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "6400"
+device_max = "64ff"
+
+[[detect]] # Meteor Lake, Arrow Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "7d00"
+device_max = "7dff"
+
+[[detect]] # Raptor Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "a700"
+device_max = "a7ff"
+
+[[detect]] # Panther Lake
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "b080"
+device_max = "b0ff"
+
+[[detect]] # Arc B-series (Battlemage)
+bus = "pci"
+vendor = "8086"
+class = ["0300", "0380"]
+device_min = "e200"
+device_max = "e2ff"
+
+[[install]]
+# dnf swap works whether or not the Fedora package is installed.
+method = "dnf"
+packages = ["intel-media-driver"]
+repos = ["rpmfusion-free", "rpmfusion-nonfree"]
+swap = ["libva-intel-media-driver=intel-media-driver"]
+download_mb = 8
