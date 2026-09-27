@@ -1,0 +1,102 @@
+#!/usr/bin/python3
+"""arctic-firstboot — finish installing apps the installer had to put off.
+
+When an optional app can't be downloaded during installation (and the person chose to
+continue), the installer records it in /var/lib/arctic/pending.json, with the app's install
+methods from the catalog (the catalog itself isn't kept on the installed system):
+    {"version": 2, "nixpkgs": "github:NixOS/nixpkgs/<rev>",
+     "modules": [{"id": "zed", "name": "Zed", "install": [{"method": "flatpak", ...}]}]}
+This runs at boot (arctic-firstboot.service, after the network is up), tries each module's
+methods in order until one works, and removes the ones that succeed. When nothing is left, the file
+is deleted and the service no longer starts. It never blocks login: it runs in the background.
+"""
+import json
+import os
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+PENDING = Path("/var/lib/arctic/pending.json")
+CATALOG = Path("/usr/share/arctic/catalog")
+NIX_PROFILE = "/nix/var/nix/profiles/default"
+
+
+def log(msg):
+    print(msg, flush=True)
+
+
+def find_manifest(module_id):
+    for path in CATALOG.rglob("module.toml"):
+        try:
+            data = tomllib.loads(path.read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if data.get("id") == module_id:
+            return data
+    return None
+
+
+NIXPKGS = "nixpkgs"   # replaced by the pin recorded in pending.json
+
+
+def run(cmd):
+    log("$ " + " ".join(cmd))
+    return subprocess.run(cmd, stdin=subprocess.DEVNULL).returncode == 0
+
+
+def try_method(method):
+    kind = method.get("method")
+    if kind == "dnf":
+        return run(["dnf", "-y", "install", *method.get("packages", [])])
+    if kind == "copr":
+        return (run(["dnf", "-y", "copr", "enable", method["copr"]])
+                and run(["dnf", "-y", "install", *method.get("packages", [])]))
+    if kind == "flatpak":
+        remote = method.get("remote", "flathub")
+        run(["flatpak", "remote-add", "--system", "--if-not-exists", "flathub",
+             "https://dl.flathub.org/repo/flathub.flatpakrepo"])
+        return run(["flatpak", "install", "--system", "-y", "--noninteractive", remote, method["ref"]])
+    if kind == "nix":
+        return run(["nix", "--extra-experimental-features", "nix-command flakes", "profile", "add",
+                    "--profile", NIX_PROFILE, f"{NIXPKGS}#{method['attr']}"])
+    log(f"unknown install method {kind!r}")
+    return False
+
+
+def main():
+    if os.geteuid() != 0:
+        sys.exit("arctic-firstboot must run as root")
+    try:
+        pending = json.loads(PENDING.read_text())
+    except FileNotFoundError:
+        return 0
+    except (OSError, ValueError) as e:
+        log(f"can't read {PENDING}: {e}")
+        return 1
+    global NIXPKGS
+    NIXPKGS = pending.get("nixpkgs") or NIXPKGS
+    left = []
+    for entry in pending.get("modules", []):
+        # Version 1 listed bare ids; look those up in the catalog if it's still installed.
+        module = entry if isinstance(entry, dict) else find_manifest(entry)
+        if not module:
+            log(f"{entry}: no install methods known, dropping it")
+            continue
+        name = module.get("name") or module.get("id")
+        if any(try_method(m) for m in module.get("install", [])):
+            log(f"{name}: installed")
+        else:
+            log(f"{name}: still can't be installed, trying again next boot")
+            left.append(module)
+    if left:
+        tmp = PENDING.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"version": 2, "nixpkgs": NIXPKGS, "modules": left}, indent=2) + "\n")
+        tmp.replace(PENDING)
+        return 1
+    PENDING.unlink(missing_ok=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

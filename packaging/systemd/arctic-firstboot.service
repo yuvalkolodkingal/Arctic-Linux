@@ -1,0 +1,18 @@
+[Unit]
+Description=Arctic Linux: finish installing apps put off during installation
+Documentation=file:///usr/share/doc/arctic-installer
+# Only when the installer left something to do (see /usr/libexec/arctic/arctic-firstboot).
+ConditionPathExists=/var/lib/arctic/pending.json
+Wants=network-online.target
+After=network-online.target nix-daemon.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/arctic/arctic-firstboot
+# Downloads can be large; don't hold up anything waiting on this unit.
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

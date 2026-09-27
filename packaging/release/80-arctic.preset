@@ -10,6 +10,8 @@ disable plasmalogin.service
 # Installer engine, socket-activated on /run/arcticd.sock (group wheel).
 enable arcticd.socket
 disable arcticd.service
+# Finishes app installs the installer had to put off (only runs when pending.json exists).
+enable arctic-firstboot.service
 
 # Nix (Fedora's nix-daemon package). The service, not the socket, until CI shows no AVC
 # denials with the socket (docs/PLAN.md §6.6).

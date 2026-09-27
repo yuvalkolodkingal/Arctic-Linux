@@ -3,8 +3,8 @@
 @define-color arctic_surface #fbfcfd;
 @define-color arctic_surface_raised #ffffff;
 @define-color arctic_surface_sunken #e8edf1;
-@define-color arctic_frost #fbfcfdcc;
-@define-color arctic_scrim #12171e66;
+@define-color arctic_frost rgba(251, 252, 253, 0.80);
+@define-color arctic_scrim rgba(18, 23, 30, 0.40);
 @define-color arctic_line #d5dde4;
 @define-color arctic_line_strong #7c8a99;
 @define-color arctic_ink #151a21;

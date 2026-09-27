@@ -8,15 +8,19 @@
 set -uo pipefail
 
 arctic-is-live || exit 0
+# "Install Arctic Linux" in the boot menu opens the installer instead (live-session).
+[[ "$(cat /run/arctic/live-mode 2>/dev/null)" == install ]] && exit 0
+grep -qw 'arctic.mode=install' /proc/cmdline 2>/dev/null && exit 0
 flag="${XDG_RUNTIME_DIR:-/tmp}/arctic-welcome-shown"
 [[ -e "$flag" ]] && exit 0
 touch "$flag"
 
 if [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]]; then
-  # The shell starts alongside this script at login; give it a few seconds to come up.
-  for _ in $(seq 50); do
+  # The shell starts alongside this script at login. On a slow machine (or a VM without
+  # acceleration) that can take a while, so wait up to a minute before falling back.
+  for _ in $(seq 120); do
     arctic-shell-ipc welcome open >/dev/null 2>&1 && exit 0
-    sleep 0.2
+    sleep 0.5
   done
 fi
 

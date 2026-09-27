@@ -354,7 +354,10 @@ def main():
         write(os.path.join(d, "mango-colors.conf"), mango(t, key))
         write(os.path.join(d, "kitty.conf"), kitty(t, term, key, name))
         write(os.path.join(d, "waybar-colors.css"), waybar(t, key))
-        shutil.copy(GTK_EXPORT.format(folder), os.path.join(d, "gtk.css"))
+        # GTK CSS has no 8-digit hex (#rrggbbaa), so translucent colours become rgba().
+        with open(GTK_EXPORT.format(folder), encoding="utf-8") as f:
+            gtk = re.sub(r"#([0-9a-fA-F]{8})\b", lambda m: css_rgba("#" + m.group(1)), f.read())
+        write(os.path.join(d, "gtk.css"), gtk)
         write(os.path.join(d, "mako.ini"), mako(t, key, name))
         write(os.path.join(d, "fuzzel-colors.ini"), fuzzel(t, key))
         write(os.path.join(d, "swaylock.conf"), swaylock(t, key, lock_wp))

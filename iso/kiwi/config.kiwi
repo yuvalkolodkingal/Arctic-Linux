@@ -63,6 +63,13 @@
 		<namedCollection name="guest-desktop-agents"/>
 		<!-- The Arctic desktop, the installer and the live session -->
 		<package name="arctic-desktop"/>
+		<!-- Default apps the installer treats as already in the live image (in_live_image in
+		     modules/): listed explicitly because arctic-desktop only recommends them. -->
+		<package name="kitty"/>
+		<package name="kitty-shell-integration"/>
+		<package name="zsh"/>
+		<package name="Thunar"/>
+		<package name="vlc"/>
 		<package name="arctic-installer"/>
 		<package name="arctic-live"/>
 		<package name="livesys-scripts"/>

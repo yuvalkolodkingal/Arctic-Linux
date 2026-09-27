@@ -140,8 +140,12 @@ Requires:       arctic-backgrounds = %{version}-%{release}
 Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-logos = %{version}-%{release}
 Requires:       bash
-Requires:       zsh
-Requires:       kitty
+Requires:       python3
+%{?systemd_requires}
+# kitty and zsh are the default terminal and shell, but the installer lets people pick others
+# and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
+Recommends:     zsh
+Recommends:     kitty
 Requires:       libnotify
 Requires:       procps-ng
 Requires:       util-linux
@@ -307,9 +311,13 @@ Requires:       arctic-plymouth-theme = %{version}-%{release}
 Requires:       arctic-grub-theme = %{version}-%{release}
 Requires:       mangowm >= 0.17.1
 Requires:       sddm
-Requires:       kitty
-Requires:       kitty-shell-integration
-Requires:       zsh
+# Swappable in the installer's app picker (terminal, shell, file manager, video): weak deps,
+# so unticking one doesn't remove this metapackage.
+Recommends:     kitty
+Recommends:     kitty-shell-integration
+Recommends:     zsh
+Recommends:     Thunar
+Recommends:     vlc
 Requires:       fastfetch
 Requires:       mako
 Requires:       swaybg
@@ -343,7 +351,6 @@ Requires:       google-noto-sans-cjk-vf-fonts
 Requires:       polkit
 Requires:       gnome-keyring
 Requires:       gnome-keyring-pam
-Requires:       Thunar
 Requires:       qt6-qtwayland
 Requires:       qt5-qtwayland
 Requires:       xorg-x11-server-Xwayland
@@ -377,7 +384,7 @@ if [ -f go.mod ]; then
   export GOCACHE="$PWD/_build/gocache" GOPATH="$PWD/_build/gopath"
   mkdir -p _build/bin
   for cmd in arcticd arctic-install; do
-    go build -ldflags "-B gobuildid -X main.version=%{version}" -o "_build/bin/$cmd" "./cmd/$cmd"
+    go build -ldflags "-B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
   done
 else
   echo "error: go.mod is missing: the installer engine (cmd/, internal/) is not in the tree" >&2
@@ -451,6 +458,10 @@ fi
 install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinux/packages/arctic-nix.pp
 
 # ---------------------------------------------------------------- arctic-desktop-config
+# arctic-firstboot finishes app installs the installer put off (/var/lib/arctic/pending.json).
+# It lives here, not in arctic-installer, because the installer is removed from the new system.
+install -Dpm 0644 packaging/systemd/arctic-firstboot.service %{buildroot}%{_unitdir}/arctic-firstboot.service
+install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir}/arctic/arctic-firstboot
 install -d %{buildroot}%{_sysconfdir}/skel
 tar -C dotfiles --exclude=./install.sh --exclude=./README.md --exclude=./.local/bin \
     --exclude=./.zshrc --exclude=./.zprofile -cf - . \
@@ -503,7 +514,7 @@ chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-she
 install -pm 0755 _build/bin/arcticd _build/bin/arctic-install %{buildroot}%{_bindir}/
 install -d %{buildroot}%{_datadir}/arctic/catalog %{buildroot}%{_datadir}/arctic/profiles %{buildroot}%{_datadir}/arctic/installer-ui
 tar -C modules --exclude='*.go' -cf - . | tar -C %{buildroot}%{_datadir}/arctic/catalog -xf -
-tar -C profiles -cf - . | tar -C %{buildroot}%{_datadir}/arctic/profiles -xf -
+tar -C profiles --exclude='*.go' -cf - . | tar -C %{buildroot}%{_datadir}/arctic/profiles -xf -
 tar -C installer-ui --exclude=./tests --exclude=./dev -cf - . | tar -C %{buildroot}%{_datadir}/arctic/installer-ui -xf -
 [ -f dotfiles/.local/bin/arctic-installer ] || cat > %{buildroot}%{_bindir}/arctic-installer << 'EOF'
 #!/bin/sh
@@ -544,7 +555,10 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer; do
-  bash -n "$s"
+  case "$(head -n1 "$s")" in
+    *python*) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$s" ;;
+    *) bash -n "$s" ;;
+  esac
 done
 test -f %{buildroot}%{_datadir}/sddm/themes/arctic/metadata.desktop || \
   { echo "error: branding/sddm/arctic has no metadata.desktop" >&2; exit 1; }
@@ -590,6 +604,12 @@ for f in .zshrc .zprofile; do \
   fi; \
   cp -p "$src" "$dst" || :; \
 done
+
+%post -n arctic-desktop-config
+%systemd_post arctic-firstboot.service
+
+%preun -n arctic-desktop-config
+%systemd_preun arctic-firstboot.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
@@ -684,6 +704,9 @@ fi
 %dir %{_datadir}/arctic
 %{_datadir}/arctic/keys.txt
 %{_datadir}/arctic/themes/
+%{_unitdir}/arctic-firstboot.service
+%dir %{_libexecdir}/arctic
+%{_libexecdir}/arctic/arctic-firstboot
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic

@@ -56,6 +56,10 @@ write /mnt/etc/arctic/sddm-keyboard.conf (0644)
     | # Written by the Arctic Linux installer: the keyboard layout you picked.
     | xkb_rules_layout=de
     | xkb_rules_variant=nodeadkeys
+write /mnt/usr/share/sddm/themes/arctic/theme.conf.user (0644)
+    | # Written by the Arctic Linux installer: the keyboard layout you picked.
+    | [General]
+    | keyboardLayout=de
 write /mnt/etc/fstab (0644)
     | # /etc/fstab — written by the Arctic Linux installer.
     | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /          btrfs subvol=@,compress=zstd:1,x-systemd.device-timeout=0 0 0

@@ -11,12 +11,20 @@ Scope {
     id: root
     property bool cardOpen: false
     property bool cardMapped: false
+    // Asked for before Session has read /proc/cmdline: show it once we know we're live.
+    property bool wanted: false
     readonly property var screen: Outputs.focused
 
     function show() {
+        wanted = true;
         if (!Session.live) return;
+        wanted = false;
         cardMapped = true;
         cardOpen = true;
+    }
+    Connections {
+        target: Session
+        function onLiveChanged() { if (root.wanted && Session.live) root.show(); }
     }
     function dismiss() { cardOpen = false; }
     function install() {

@@ -550,6 +550,8 @@ func (in *Installer) configurePhase(ctx context.Context) error {
 		{"/etc/vconsole.conf", fmt.Sprintf("KEYMAP=%s\nXKBLAYOUT=%s\nXKBVARIANT=%s\n", keymap, kb.Layout, kb.Variant), 0o644},
 		{"/etc/arctic/mango/keyboard.conf", keyboardConf(kb), 0o644},
 		{"/etc/arctic/sddm-keyboard.conf", keyboardConf(kb), 0o644},
+		// The login screen's Wayland greeter can't report the layout, so the theme reads it here.
+		{"/usr/share/sddm/themes/arctic/theme.conf.user", fmt.Sprintf("# Written by the Arctic Linux installer: the keyboard layout you picked.\n[General]\nkeyboardLayout=%s\n", kb.Layout), 0o644},
 		{"/etc/fstab", in.fstab(), 0o644},
 	}
 	if in.lay.luks {
@@ -1092,7 +1094,20 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 		}
 	}
 	if len(in.deferred) > 0 {
-		b, _ := json.MarshalIndent(map[string]any{"version": 1, "modules": in.deferred}, "", "  ")
+		// Version 2 carries each module's install methods, because the catalog leaves the
+		// installed system together with arctic-installer (arctic-firstboot reads this).
+		type pendingModule struct {
+			ID      string            `json:"id"`
+			Name    string            `json:"name"`
+			Install []catalog.Install `json:"install"`
+		}
+		var mods []pendingModule
+		for _, id := range in.deferred {
+			if m := in.cat.Modules[id]; m != nil {
+				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install})
+			}
+		}
+		b, _ := json.MarshalIndent(map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}, "", "  ")
 		if err := in.write(in.tgt("/var/lib/arctic/pending.json"), string(b)+"\n", 0o644); err != nil {
 			return err
 		}
