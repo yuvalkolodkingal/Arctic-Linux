@@ -102,13 +102,9 @@ In version 0.1 that's **Get apps** (`Super + Shift + A`).
 
 ### How do I update?
 
-```sh
-sudo dnf upgrade
-flatpak update
-```
-
-Arctic's own desktop packages are updated by installing a newer Arctic Linux release for now. See
-[First boot](First-Boot#keep-it-up-to-date).
+You don't have to: updates download in the background every day and are installed the next time
+the computer starts (the bar shows **Restart to update** when some are waiting). To check now,
+run `arctic-update now`; Flatpak apps update with `flatpak update`. See [Updates](Updates).
 
 ### How do I switch to a light theme?
 

@@ -20,6 +20,7 @@ per screen, encrypts your disk by default and only downloads the apps you pick.
 | Know what happens the first time it starts | [First boot](First-Boot) |
 | Learn your way around the desktop | [Desktop tour](Desktop-Tour) and [Keyboard shortcuts](Keyboard-Shortcuts) |
 | Add, remove or change apps | [Apps and software](Apps-and-Software) |
+| Keep it up to date, or undo an update | [Updates](Updates) |
 | Change colours, wallpaper and settings | [Themes and customisation](Themes-and-Customisation) |
 | Use the terminal | [Terminal and shell](Terminal-and-Shell) |
 | Fix something that isn't working | [Troubleshooting](Troubleshooting) and [FAQ](FAQ) |
