@@ -130,6 +130,10 @@ License:        LGPL-2.1-or-later
 Requires:       selinux-policy-%{selinuxtype}
 Requires(post): selinux-policy-%{selinuxtype}
 Requires(post): policycoreutils
+# %%pre / %%post compare the module with the installed one (cp, cmp).
+Requires(pre):  coreutils
+Requires(post): coreutils
+Requires(post): diffutils
 Requires(postun): policycoreutils
 %{?selinux_requires}
 
@@ -676,11 +680,28 @@ if command -v mango >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------------------------
+# Every build has a new Release, so every Arctic update updates arctic-selinux too; its module
+# rarely changes. semodule rebuilds the whole policy (the slowest step of an update), so an
+# update skips it when the module is byte-for-byte the one installed (the build is
+# reproducible) and semodule has it; anything else installs it as usual.
+%global arctic_selinux_state %{_localstatedir}/lib/rpm-state/arctic-selinux
+
 %pre -n arctic-selinux
 %selinux_relabel_pre -s %{selinuxtype}
+rm -rf %{arctic_selinux_state} || :
+if [ $1 -gt 1 ] && [ -f %{_datadir}/selinux/packages/arctic-nix.pp ]; then
+  mkdir -p %{arctic_selinux_state} && \
+    cp -p %{_datadir}/selinux/packages/arctic-nix.pp %{arctic_selinux_state}/arctic-nix.pp || :
+fi
 
 %post -n arctic-selinux
+if [ $1 -gt 1 ] && cmp -s %{arctic_selinux_state}/arctic-nix.pp %{_datadir}/selinux/packages/arctic-nix.pp && \
+   [ -e %{_sharedstatedir}/selinux/%{selinuxtype}/active/modules/200/arctic-nix ]; then
+  : # the same module is installed already
+else
 %selinux_modules_install -s %{selinuxtype} %{_datadir}/selinux/packages/arctic-nix.pp
+fi
+rm -rf %{arctic_selinux_state} || :
 
 %postun -n arctic-selinux
 %selinux_modules_uninstall -s %{selinuxtype} arctic-nix
@@ -748,8 +769,11 @@ fi
 %systemd_postun arcticd.socket arcticd.service
 
 %post -n arctic-plymouth-theme
-# Make arctic the default splash; the initramfs is rebuilt by the image build / installer.
-if [ -x %{_sbindir}/plymouth-set-default-theme ]; then
+# Make arctic the default splash when the package is first installed (the image build; the
+# installer copies that system and rebuilds the initramfs). Updates leave the chosen theme alone.
+# The splash is in the initramfs: a changed theme shows once it is rebuilt (the next kernel
+# update, or `sudo dracut -f`).
+if [ $1 -eq 1 ] && [ -x %{_sbindir}/plymouth-set-default-theme ]; then
   %{_sbindir}/plymouth-set-default-theme arctic || :
 fi
 
@@ -890,8 +914,10 @@ fi
 * Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.0-1
 - Arctic Linux 0.2: arctic-release enables the signed Arctic package repository (GitHub
   Pages; stable channel on, testing channel off) and ships its public key
-- Every build has its own Release, 1.<UTC build time>.git<commit>, so each build
-  updates the ones before it
+- Every build has its own Release, 1.<UTC commit time>.<UTC build time>.git<commit>,
+  so builds of newer code update the ones before them
+- arctic-plymouth-theme sets the default splash on the first install only; arctic-selinux
+  skips reinstalling an unchanged module on updates
 
 * Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.1.0-1
 - Arctic Linux 0.1: first build of all subpackages from one spec
