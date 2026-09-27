@@ -132,14 +132,16 @@ Open a new terminal afterwards so the new commands are found.
 ## Updates
 
 ```sh
-sudo dnf upgrade      # the system and apps from Fedora and RPM Fusion
+sudo dnf upgrade      # the system and apps: Fedora, RPM Fusion and Arctic's own packages
 flatpak update        # Flatpak apps
 nix profile upgrade --all    # Nix packages in your profile (with the options above)
 ```
 
-Arctic's own packages (the desktop, shell, branding and Mango) don't have an online repository
-yet, so `dnf upgrade` doesn't change them. They're updated by installing a newer Arctic Linux
-release. See the [release notes](Release-Notes).
+Arctic's own packages (the desktop, shell, branding and Mango) come from the signed Arctic
+package repository and update together with Fedora's. You don't have to run `dnf upgrade`
+yourself: updates download in the background and are installed at the next restart. See
+[Updates](Updates). Installed Arctic Linux 0.1? Its Arctic repository is switched off; see
+[Upgrading from 0.1](Release-Notes#upgrading-from-01).
 
 ## Changing which app opens
 

@@ -35,7 +35,8 @@ close one and the other grows back. You can still make any window float with `Su
 ### What's Mango?
 
 [Mango](https://github.com/mangowm/mango) (MangoWM) is the Wayland window manager Arctic Linux
-uses. It draws the windows, borders, gaps and animations. Arctic Linux 0.1 ships Mango 0.17.3.
+uses. It draws the windows, borders, gaps and animations. Arctic Linux 0.2 ships Mango 0.17.3, packaged
+as `mangowm` in the Arctic package repository, so it updates with the rest of the system.
 
 ## Trying and installing
 
@@ -129,7 +130,7 @@ Yes. Any app from Fedora or Flathub runs, whichever desktop it was made for.
 
 ### Can I install a different desktop?
 
-Arctic Linux 0.1 has one desktop session, Mango. Fedora's other desktops are in its repositories,
+Arctic Linux has one desktop session, Mango. Fedora's other desktops are in its repositories,
 but mixing them with Arctic's desktop isn't something we've tested.
 
 ### Where are my settings?

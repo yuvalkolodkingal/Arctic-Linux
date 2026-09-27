@@ -28,12 +28,15 @@ site, https://yuvalkolodkingal.github.io/O-Tism/, which `arctic-release` sets up
 | Channel | Built from | On an installed system |
 |---|---|---|
 | `stable` | every push to `main` | on |
-| `testing` | every push to the development branch | off; `sudo dnf config-manager setopt arctic-testing.enabled=1` to follow it, `=0` to go back |
+| `testing` | the development branch, published by hand (Actions → Repository → Run workflow on `main`, channel `testing`, ref `claude/busy-goodall-j42hmi`) | off; `sudo dnf config-manager setopt arctic-testing.enabled=1` to follow it, `=0` to go back |
 
-Every build's Release carries its UTC build time and commit (`…-0.2.0-1.202609280310.gitabc1234.fc44`),
-so each build updates the ones before it, including the packages an ISO installed.
-`.github/workflows/repo.yml` builds, signs and publishes each push; the details are in
-`docs/BUILD-SPEC.md` §9.
+Every build's Release carries its commit's UTC time, its UTC build time and the commit
+(`…-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44`), so builds of newer code update the
+ones before them, including the packages an ISO installed. Each push to `main` is therefore a
+full update of Arctic's packages (about 9 MB) for every stable system.
+`.github/workflows/repo.yml` builds, signs, checks with dnf5 and publishes each push; the
+details are in `docs/BUILD-SPEC.md` §9. Installed Arctic Linux 0.1? See the
+[0.2.0 release notes](docs/wiki/Release-Notes.md#upgrading-from-01) to switch it to the repository.
 
 ## Repository
 

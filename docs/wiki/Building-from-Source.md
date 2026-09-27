@@ -44,10 +44,11 @@ tools/build-rpms.sh --release-suffix none            # Release 1.fc44 instead of
 tools/build-rpms.sh --gpg-public-key FILE            # the Arctic repository key for arctic-release
 ```
 
-- Every build gets its own Release: `1.<UTC yyyymmddHHMM>.git<commit>`, for example
-  `arctic-shell-0.2.0-1.202609280310.gitabc1234.fc44`, so each build is newer than the ones
-  before it and `dnf upgrade` picks it up. `--release-suffix` (or `ARCTIC_RELEASE_SUFFIX`) takes
-  `auto` (that, the default), `none` or a suffix of your own.
+- Every build gets its own Release: `1.<commit time>.<build time>.git<commit>` (both UTC), for
+  example `arctic-shell-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44`. A build of a newer
+  commit is always newer, however late an older commit gets built, and `dnf upgrade` picks it
+  up; the same commit built again is newer than its earlier build. `--release-suffix` (or
+  `ARCTIC_RELEASE_SUFFIX`) takes `auto` (that, the default), `none` or a suffix of your own.
 - `arctic-release` ships the Arctic package repository's public key. It comes from
   `--gpg-public-key FILE`, the `ARCTIC_GPG_PUBLIC_KEY` environment variable (the key itself) or
   a committed `packaging/release/RPM-GPG-KEY-arctic`. Without one the build still works, but
@@ -217,8 +218,8 @@ QML is checked with `qmllint` (`/usr/lib64/qt6/bin/qmllint`, from `qt6-qtdeclara
 | Workflow | Runs on | Does |
 |---|---|---|
 | `.github/workflows/ci.yml` | Every push and pull request | `go vet` and `go test`; ShellCheck on the scripts; the Python and Node tests (shell, `arctic-firstboot`, the repository tools); `qmllint` on the shell, installer and login theme; `rpmspec` parses both specs; then a full `tools/build-rpms.sh`, an unsigned test publish and `tools/test-repo.sh` (dnf5 against it), with the RPMs uploaded as an artifact |
-| `.github/workflows/repo.yml` | Pushes to `main` (stable) and `claude/busy-goodall-j42hmi` (testing), or by hand | Builds the RPMs, signs them and publishes them to the Arctic package repository on GitHub Pages (see below) |
-| `.github/workflows/iso.yml` | Tags `v*`, or by hand | Builds the RPMs and the ISO, uploads them as an artifact, boots the ISO in QEMU (UEFI Try and BIOS Install) with screenshots, and publishes a GitHub release |
+| `.github/workflows/repo.yml` | Pushes to `main` (stable), or by hand (testing, or any channel from any `ref`) | Builds the RPMs, signs them, checks the signed site with dnf5 and publishes it to the Arctic package repository on GitHub Pages (see below) |
+| `.github/workflows/iso.yml` | Tags `v*`, or by hand | Builds the RPMs (the repository key is required) and the ISO, uploads them as an artifact, boots the ISO in QEMU (UEFI Try and BIOS Install) with screenshots, and publishes a GitHub release (refused if the ISO's Arctic repositories are off) |
 | `.github/workflows/wiki.yml` | Pushes to `main` that change `docs/wiki/`, or by hand | Publishes `docs/wiki/` to this wiki |
 
 ### The package repository
@@ -229,12 +230,18 @@ GitHub Pages site, https://yuvalkolodkingal.github.io/O-Tism/, with two channels
 | Channel | Built from | On an Arctic system |
 |---|---|---|
 | `stable` | every push to `main` | `[arctic]`, on |
-| `testing` | every push to `claude/busy-goodall-j42hmi` | `[arctic-testing]`, off: `sudo dnf config-manager setopt arctic-testing.enabled=1` |
+| `testing` | `claude/busy-goodall-j42hmi`, by hand: **Actions → Repository → Run workflow** on `main`, channel `testing`, ref `claude/busy-goodall-j42hmi` | `[arctic-testing]`, off: `sudo dnf config-manager setopt arctic-testing.enabled=1` |
 
 `repo.yml` builds the RPMs, signs every new package and the metadata with the repository key
-(the `ARCTIC_GPG_*` secrets), keeps the last three builds of each package and deploys the site
-with both channels. **Actions → Repository → Run workflow** publishes a channel by hand, from any
-branch, tag or commit (`ref`). To try the tooling locally without a key:
+(the `ARCTIC_GPG_*` secrets), keeps the last three builds of each package, checks the result with
+dnf5 the way installed systems read it (`tools/test-repo.sh --signed`: signatures on, only the
+key from `arctic-release`) and deploys the site with both channels. **Actions → Repository → Run
+workflow** publishes a channel by hand, from any branch, tag or commit (`ref`). Pushes to the
+development branch don't publish testing by themselves: the `github-pages` environment only lets
+`main` deploy, and all runs share one queue in which a new run replaces a waiting one. It fails
+straight away, saying what to change, when GitHub Pages isn't set to **GitHub Actions** (Settings
+→ Pages). Every push to `main` is a new Release of every Arctic package, so it is a full (small)
+Arctic update for every stable system. To try the tooling locally without a key:
 
 ```sh
 tools/build-rpms.sh

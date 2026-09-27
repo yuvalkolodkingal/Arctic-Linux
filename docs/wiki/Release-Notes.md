@@ -1,5 +1,53 @@
 # Release notes
 
+## Arctic Linux 0.2.0
+
+Arctic Linux now updates itself, its own packages included.
+
+**Download:** [GitHub releases](https://github.com/yuvalkolodkingal/O-Tism/releases). The image is
+`Arctic-Linux-0.2-x86_64.iso` with its `.sha256`. See
+[Download and create a USB](Download-and-Create-a-USB).
+
+### Updates
+
+- **Arctic's own packages update online.** The desktop, the shell, the installer, the branding
+  and Mango come from the Arctic package repository on the project's GitHub Pages site,
+  <https://yuvalkolodkingal.github.io/O-Tism/>, which `arctic-release` sets up together with its
+  signing key. Fedora's packages keep coming from Fedora's repositories.
+- **Signed.** Every package in the repository is signed, and dnf checks each signature before it
+  installs anything. Each release of the repository is checked with dnf before it goes online.
+- **Two channels.** **stable** (on) is built from every change to the main branch; **testing**
+  (off) carries development builds for people who want to try them first. Every change to stable
+  is a new build of all of Arctic's packages, a download of about 9 MB.
+- **Automatic updates.** Updates download in the background and are installed the next time the
+  computer starts, never into the running desktop; the bar shows **Restart to update** when some
+  are waiting. `arctic-update` shows and changes all of this, including the channel. See
+  [Updates](Updates).
+- **Undo.** dnf's history, the previous kernels and system snapshots taken around every update
+  give you ways back. See [Updates](Updates#undoing-an-update).
+
+### Upgrading from 0.1
+
+Arctic Linux 0.1 shipped with the Arctic repository switched off, so a 0.1 system doesn't see the
+new packages until you add the repository once:
+
+```sh
+sudo dnf config-manager addrepo --from-repofile=https://yuvalkolodkingal.github.io/O-Tism/arctic.repo
+sudo dnf upgrade
+```
+
+dnf asks whether to import the Arctic Linux key. Check that the fingerprint it shows is the one on
+<https://yuvalkolodkingal.github.io/O-Tism/>, then answer `y`. The upgrade brings the 0.2
+`arctic-release`, which has the repository built in. Remove the file the first command added, so
+the system follows `arctic-release`'s settings from now on, and restart:
+
+```sh
+sudo rm /etc/yum.repos.d/arctic.repo
+sudo systemctl reboot
+```
+
+From then on, updates arrive by themselves.
+
 ## Arctic Linux 0.1.0
 
 The first release of Arctic Linux: one live USB image that you can try without changing your
