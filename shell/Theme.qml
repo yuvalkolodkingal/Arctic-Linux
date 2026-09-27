@@ -126,8 +126,11 @@ Singleton {
     FileView {
         id: themeView
         property bool fallback: false
+        // Toggled on every switch: two spellings of the same file, so the path changes and
+        // FileView re-creates its watch (it sets one up only when `path` changes).
+        property bool respell: false
         path: fallback ? '/usr/share/arctic/themes/polar-night/theme.json'
-                       : Session.arcticConfig + '/current/theme.json'
+                       : Session.arcticConfig + (respell ? '/current/./theme.json' : '/current/theme.json')
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
@@ -135,16 +138,21 @@ Singleton {
         onLoadFailed: if (!fallback) fallback = true
     }
     // `arctic-theme` swaps the ~/.config/arctic/current symlink, which a file watch on
-    // current/theme.json can't see (inotify watches the file the link pointed at). It rewrites
-    // the theme name file after every switch, and that is watched instead: reloading themeView
-    // re-reads theme.json through the new link and re-creates its watch on the new target (so
-    // a theme regenerated in place, like the wallpaper one, is picked up too).
+    // current/theme.json can't see (the watch follows the link once, to the file it pointed at
+    // then, and a FileView only re-creates it when its path changes). arctic-theme rewrites the
+    // theme name file after every switch, and that is watched instead: on a change themeView's
+    // path is respelled, so it reads theme.json through the new link and watches the new
+    // target (a theme regenerated in place, like the wallpaper one, is then picked up too).
     FileView {
         id: stateView
         path: Session.arcticConfig + '/theme'
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: { themeView.fallback = false; themeView.reload(); }
+        onLoaded: {
+            themeView.fallback = false;
+            themeView.respell = !themeView.respell;
+            themeView.reload();
+        }
     }
 }
