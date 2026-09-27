@@ -285,6 +285,22 @@ class ArcticThemeTests(unittest.TestCase):
         self.theme("sync", "--force")             # asked for: Arctic's colours
         self.assertEqual(self.theme().stdout, "polar-night\n")
 
+    def test_an_engine_update_remakes_the_wallpaper_theme(self):
+        engine = os.path.join(self.root, "engine", "themegen")
+        shutil.copytree(os.path.join(DESIGN, "themegen"), engine, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+        self.env.update(ARCTIC_THEMEGEN_DIR=engine, ARCTIC_THEMEGEN_DATA=DESIGN)
+        self.choose(self.sea)
+        self.theme("sync")
+        palette_json = os.path.join(self.config, "themes", "wallpaper", "palette.json")
+        with open(palette_json) as f:
+            before = json.load(f)["source"]["fingerprint"]
+        derive_py = os.path.join(engine, "derive.py")
+        st = os.stat(derive_py)
+        os.utime(derive_py, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))   # an RPM update of derive.py
+        self.theme("sync")
+        with open(palette_json) as f:
+            self.assertNotEqual(json.load(f)["source"]["fingerprint"], before)
+
     def test_settings_keep_other_keys(self):
         with open(os.path.join(self.config, "settings.json"), "w") as f:
             json.dump({"other_app": {"x": 1}}, f)

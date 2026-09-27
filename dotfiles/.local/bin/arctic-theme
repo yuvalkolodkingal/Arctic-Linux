@@ -275,8 +275,14 @@ def template_dirs():
 
 
 def fingerprint(tg):
-    """Changes when the engine, its templates or yours change (the wallpaper theme is then remade)."""
+    """Changes when the engine (its code or version), its templates or yours change (the wallpaper theme is then remade)."""
     parts = [getattr(tg, "__version__", "")]
+    engine = os.path.dirname(os.path.abspath(tg.__file__))
+    for fn in sorted(os.listdir(engine)):
+        if fn.endswith(".py"):              # derive.py, wallpaper.py, ...: an update remakes it
+            with contextlib.suppress(OSError):
+                st = os.stat(os.path.join(engine, fn))
+                parts.append("engine/{}:{}:{}".format(fn, st.st_size, st.st_mtime_ns))
     for d in [tg.render.TEMPLATES_DIR] + template_dirs():
         for root, _dirs, files in os.walk(d):
             for fn in sorted(files):
