@@ -1,0 +1,269 @@
+name: Repository
+
+# Builds the RPMs and publishes them, signed, to the Arctic package repository on GitHub Pages
+# (https://yuvalkolodkingal.github.io/O-Tism/repo/<channel>/fedora-44/…; docs/BUILD-SPEC.md §9):
+#
+#   push to main                          → channel stable
+#   Actions → Repository → Run workflow   → the channel you pick, built from `ref` (a branch,
+#                                           tag or commit; default: the commit it runs on).
+#                                           Testing: run it on main with channel "testing"
+#                                           and ref "claude/busy-goodall-j42hmi".
+#
+# Pushes to the development branch don't publish testing by themselves: the github-pages
+# environment only lets the default branch deploy, and every run shares one concurrency group
+# in which GitHub keeps a single waiting run, so frequent dev pushes would also cancel waiting
+# stable publishes. To publish testing on every dev push later: add the branch to the
+# environment's deployment branches, add it under on.push.branches with channel testing in
+# Plan, and accept that a waiting run can be superseded.
+#
+# Both channels live in one Pages site. Every run starts from the site as published (the last
+# successful run's github-pages artifact when that is what is live or newer, else every file of
+# the live site, sha256-checked), adds its build to its channel, keeps the last 3 builds per package,
+# re-signs that channel's metadata, checks the result with dnf5 the way installed systems use it
+# (tools/test-repo.sh --signed) and deploys the whole site again. If the live site exists but
+# can't be fetched completely, or the GitHub API fails, the run fails instead of deploying a site
+# without the other channel. All runs share one concurrency group, so they never overlap. (A
+# run that gets superseded while waiting shows as cancelled; the next push to main, or a re-run,
+# publishes again, and every stable run builds the commit it was started for.)
+#
+# One-time setup:
+#   - Settings → Pages → Build and deployment → Source: GitHub Actions. The first step checks
+#     this (and the site's URL) and fails with instructions when it isn't so.
+#   - Secrets: ARCTIC_GPG_PRIVATE_KEY (armored secret key), ARCTIC_GPG_PASSPHRASE (may be empty),
+#     ARCTIC_GPG_PUBLIC_KEY (armored public key of the same key).
+#   - Optional variable ARCTIC_PAGES_URL: the site's URL if it isn't
+#     https://<owner>.github.io/<repository> (a custom domain).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Channel to publish to
+        type: choice
+        options: [testing, stable]
+        default: testing
+      ref:
+        description: Branch, tag or commit to build (default the commit this runs on)
+        type: string
+        default: ""
+      resign_old:
+        description: Re-sign published packages that don't verify with the current key (after changing the key)
+        type: boolean
+        default: false
+      start_fresh:
+        description: Discard the published site, BOTH channels, and start over
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arctic-repository-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build, sign and assemble the site
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read   # the previous run's github-pages artifact
+      pages: read     # check that Pages is set up before building
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      base_url: ${{ steps.plan.outputs.base_url }}
+      manifest_sha256: ${{ steps.publish.outputs.manifest_sha256 }}
+    steps:
+      - name: Plan
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_CHANNEL: ${{ inputs.channel }}
+          IN_REF: ${{ inputs.ref }}
+          PAGES_URL: ${{ vars.ARCTIC_PAGES_URL }}
+        run: |
+          case "$EVENT" in
+            push)
+              case "$GITHUB_REF_NAME" in
+                main) channel=stable ;;
+                *) echo "::error::no channel for branch $GITHUB_REF_NAME"; exit 1 ;;
+              esac
+              ref="$GITHUB_SHA"; ref_name="$GITHUB_REF_NAME" ;;
+            workflow_dispatch)
+              channel="$IN_CHANNEL"
+              if [ -n "$IN_REF" ]; then ref="$IN_REF"; ref_name="$IN_REF"; else ref="$GITHUB_SHA"; ref_name="$GITHUB_REF_NAME"; fi ;;
+            *) echo "::error::unexpected event $EVENT"; exit 1 ;;
+          esac
+          case "$channel" in stable|testing) ;; *) echo "::error::bad channel '$channel'"; exit 1 ;; esac
+          if [ "$channel" = stable ] && [ "$ref_name" != main ]; then
+            echo "::warning::publishing $ref_name to the STABLE channel"
+          fi
+          if [ "$ref" = "$GITHUB_SHA" ]; then src=.; else src=src; fi
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          base_url="${PAGES_URL:-https://$owner.github.io/${GITHUB_REPOSITORY#*/}}"
+          {
+            echo "channel=$channel"
+            echo "ref=$ref"
+            echo "ref_name=$ref_name"
+            echo "src=$src"
+            echo "base_url=${base_url%/}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Publishing \`$ref_name\` to the **$channel** channel of ${base_url%/}/" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check GitHub Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_URL: ${{ steps.plan.outputs.base_url }}
+        run: |
+          # Deploying needs Pages with the source "GitHub Actions", and the site's URL must be the
+          # one arctic-release and the published .repo files point at.
+          settings="Settings → Pages → Build and deployment → Source: GitHub Actions"
+          out=""
+          for i in 1 2 3 4; do
+            if out="$(gh api "repos/$GITHUB_REPOSITORY/pages" 2>"$RUNNER_TEMP/gh.err")"; then break; fi
+            err="$(cat "$RUNNER_TEMP/gh.err")"
+            case "$err" in
+              *"HTTP 404"*)
+                echo "::error title=GitHub Pages is not set up::$GITHUB_REPOSITORY has no GitHub Pages site. $settings, then re-run this workflow."
+                exit 1 ;;
+            esac
+            echo "attempt $i: $err"; out=""; sleep $((i * 10))
+          done
+          if [ -z "$out" ]; then
+            echo "::error title=GitHub API::could not read the Pages settings of $GITHUB_REPOSITORY; re-run later"
+            exit 1
+          fi
+          build_type="$(jq -r '.build_type // ""' <<<"$out")"
+          html_url="$(jq -r '.html_url // ""' <<<"$out")"
+          echo "Pages: build_type=$build_type, url=$html_url"
+          if [ "$build_type" != workflow ]; then
+            echo "::error title=GitHub Pages source::Pages builds from '${build_type:-?}', not from GitHub Actions: $settings."
+            exit 1
+          fi
+          norm() { local u="${1%/}"; printf '%s' "${u#*://}" | tr '[:upper:]' '[:lower:]'; }
+          if [ "$(norm "$html_url")" != "$(norm "$BASE_URL")" ]; then
+            echo "::error title=Site URL::GitHub Pages serves $html_url, but the repository is published for $BASE_URL/ (arctic-release's baseurl). Set the repository variable ARCTIC_PAGES_URL to $html_url, or fix the Pages domain."
+            exit 1
+          fi
+
+      - name: Check the signing secrets
+        env:
+          HAVE_PRIVATE: ${{ secrets.ARCTIC_GPG_PRIVATE_KEY != '' }}
+          HAVE_PUBLIC: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY != '' }}
+        run: |
+          if [ "$HAVE_PRIVATE" != true ] || [ "$HAVE_PUBLIC" != true ]; then
+            echo "::error title=No signing key::Set the repository secrets ARCTIC_GPG_PRIVATE_KEY and ARCTIC_GPG_PUBLIC_KEY (and ARCTIC_GPG_PASSPHRASE if the key has one). The repository is never published unsigned."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Check out the sources to build
+        if: steps.plan.outputs.src == 'src'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.plan.outputs.ref }}
+          path: src
+
+      - name: Build RPMs
+        env:
+          # Built into arctic-release (/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic); required here.
+          ARCTIC_GPG_PUBLIC_KEY: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY }}
+          ARCTIC_REQUIRE_GPG_KEY: "1"
+          SRC_DIR: ${{ steps.plan.outputs.src }}
+        run: |
+          tools/build-rpms.sh --src "$SRC_DIR"
+          cat out/BUILD-INFO
+
+      - name: Fetch the published site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_URL: ${{ steps.plan.outputs.base_url }}
+          START_FRESH: ${{ inputs.start_fresh && '--start-fresh' || '' }}
+        run: |
+          # shellcheck disable=SC2086 # START_FRESH is empty or one flag
+          python3 tools/lib/arcticrepo.py fetch --dest site --base-url "$BASE_URL" \
+            --github-repo "$GITHUB_REPOSITORY" --workflow repo.yml $START_FRESH
+
+      - name: Sign and publish into the site
+        id: publish
+        env:
+          ARCTIC_GPG_PRIVATE_KEY: ${{ secrets.ARCTIC_GPG_PRIVATE_KEY }}
+          ARCTIC_GPG_PASSPHRASE: ${{ secrets.ARCTIC_GPG_PASSPHRASE }}
+          ARCTIC_GPG_PUBLIC_KEY: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY }}
+          ARCTIC_SOURCE_REF: ${{ steps.plan.outputs.ref_name }}
+          CHANNEL: ${{ steps.plan.outputs.channel }}
+          BASE_URL: ${{ steps.plan.outputs.base_url }}
+          SRC_DIR: ${{ steps.plan.outputs.src }}
+          RESIGN_OLD: ${{ inputs.resign_old && '--resign-old' || '' }}
+        run: |
+          # shellcheck disable=SC2086 # RESIGN_OLD is empty or one flag
+          tools/publish-repo.sh --site site --channel "$CHANNEL" --src "$SRC_DIR" \
+            --rpms out/repo --srpms out/srpms --build-info out/BUILD-INFO --keep 3 \
+            --base-url "$BASE_URL" --budget-mb 900 --summary "$GITHUB_STEP_SUMMARY" $RESIGN_OLD
+          echo "manifest_sha256=$(sha256sum site/manifest.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Check the signed site with dnf5, as installed systems use it
+        env:
+          CHANNEL: ${{ steps.plan.outputs.channel }}
+          SRC_DIR: ${{ steps.plan.outputs.src }}
+        run: |
+          # arctic-release from this build in place of fedora-release, only its key, every check
+          # on (gpgcheck, repo_gpgcheck, skip_if_unavailable=0): repomd.xml.asc and package
+          # signatures verified by dnf5 itself, not only by gpg and rpmkeys.
+          tools/test-repo.sh --signed --channel "$CHANNEL" --rpms out/repo --site site --src "$SRC_DIR"
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+          # The next run starts from this artifact: keep it well past any quiet spell.
+          retention-days: 90
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+      - name: Check the live site
+        env:
+          BASE_URL: ${{ needs.build.outputs.base_url }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          WANT: ${{ needs.build.outputs.manifest_sha256 }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
+        run: |
+          # arctic-release and the published .repo files point at BASE_URL: a site deployed
+          # anywhere else is one no system reads.
+          norm() { local u="${1%/}"; printf '%s' "${u#*://}" | tr '[:upper:]' '[:lower:]'; }
+          if [ "$(norm "$PAGE_URL")" != "$(norm "$BASE_URL")" ]; then
+            echo "::error title=Site URL::deployed to $PAGE_URL, but the repository is published for $BASE_URL/ (set ARCTIC_PAGES_URL or fix the Pages domain)"
+            exit 1
+          fi
+          # GitHub Pages serves a new deployment within a minute or two.
+          for i in $(seq 1 20); do
+            got="$(curl -fsSL "$BASE_URL/manifest.json?cb=$(date +%s)$i" | sha256sum | cut -d' ' -f1)" || got=""
+            if [ "$got" = "$WANT" ]; then
+              echo "live: $BASE_URL/ ($CHANNEL published)"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::warning::$BASE_URL/manifest.json isn't the one just deployed yet (CDN delay?); check the site"

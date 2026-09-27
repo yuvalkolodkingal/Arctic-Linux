@@ -27,7 +27,7 @@ import sys
 import threading
 import time
 
-VERSION = "0.1.0-mock"
+VERSION = "0.2.0-mock"
 ENV = os.environ
 
 

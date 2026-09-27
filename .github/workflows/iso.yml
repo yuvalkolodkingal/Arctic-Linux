@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v0.1.0-build.<run number>)
+        description: Release tag (default v0.2.0-build.<run number>)
         type: string
         default: ""
       boot_test:
@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ISO: Arctic-Linux-0.1-x86_64.iso
+  ISO: Arctic-Linux-0.2-x86_64.iso
 
 jobs:
   iso:
@@ -46,7 +46,18 @@ jobs:
           df -h / /mnt
 
       - name: Build RPMs
-        run: tools/build-rpms.sh
+        env:
+          # The Arctic repository's public key goes into arctic-release, which then enables the
+          # repository (updates for Arctic's own packages). Here the key is required: an ISO
+          # without it would install systems that never get Arctic updates. Forks (no secret)
+          # still build, with the Arctic repositories disabled.
+          ARCTIC_GPG_PUBLIC_KEY: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY }}
+          ARCTIC_REQUIRE_GPG_KEY: ${{ github.repository == 'yuvalkolodkingal/O-Tism' && '1' || '0' }}
+        run: |
+          # Every build gets its own Release (1.<UTC commit time>.<UTC build time>.git<commit>):
+          # the repository's builds of newer commits update the packages on the ISO.
+          tools/build-rpms.sh
+          cat out/BUILD-INFO
 
       - name: Build ISO
         run: tools/build-iso.sh --work /mnt/arctic/kiwi-work
@@ -76,6 +87,7 @@ jobs:
             out/iso/${{ env.ISO }}.sha256
             out/iso/*.packages
             out/iso/*.build-info
+            out/BUILD-INFO
           compression-level: 0
           retention-days: 14
 
@@ -101,16 +113,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SPLIT: ${{ steps.size.outputs.split }}
+          CANONICAL: ${{ github.repository == 'yuvalkolodkingal/O-Tism' }}
         run: |
+          # A released ISO must install systems that get Arctic's updates.
+          if [ "$CANONICAL" = true ] && ! grep -qx 'arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
+            echo "::error title=Arctic repositories disabled::out/iso/${ISO%.iso}.build-info lacks arctic_repos=enabled: arctic-release was built without the repository key (ARCTIC_GPG_PUBLIC_KEY). Not publishing a release whose systems would never get Arctic updates."
+            exit 1
+          fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v0.1.0-build.$GITHUB_RUN_NUMBER"
+            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v0.2.0-build.$GITHUB_RUN_NUMBER"
             pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
-            echo "Arctic Linux 0.1 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
+            echo "Arctic Linux 0.2 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
             echo
             echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
             echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."
@@ -119,9 +137,14 @@ jobs:
               echo "Zen Browser is preinstalled in the live session."
             fi
             echo
-            echo "Updates: Fedora's packages update as usual (\`sudo dnf upgrade\`). Arctic's own packages"
-            echo "(desktop, shell, branding, Mango) have no online repository yet, so they only change"
-            echo "with a new Arctic release (packaging/release/arctic.repo is there, disabled, for when it exists)."
+            if grep -q '^arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
+              echo "Updates: Fedora's packages come from Fedora's repositories, Arctic's own packages (desktop,"
+              echo "shell, installer, branding, Mango) from the signed Arctic package repository,"
+              echo "https://yuvalkolodkingal.github.io/O-Tism/ (the stable channel; the testing channel is off)."
+            else
+              echo "Updates: Fedora's packages update as usual. This ISO was built without the Arctic repository"
+              echo "key, so the Arctic package repository is disabled on it."
+            fi
             echo
             echo "SHA-256: \`$sha\`"
             if [ "$SPLIT" = true ]; then

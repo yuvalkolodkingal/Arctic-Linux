@@ -156,7 +156,7 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 func fullWizard(t *testing.T, c *client) {
 	t.Helper()
 	h := c.ok("Hello", map[string]any{"client": "installer-ui", "version": 1})
-	if h["mock"] != true || h["firmware"] != "uefi" || h["engine_version"] != "0.1.0" {
+	if h["mock"] != true || h["firmware"] != "uefi" || h["engine_version"] != backend.EngineVersion {
 		t.Fatalf("hello %v", h)
 	}
 	c.ok("Subscribe", nil)

@@ -1,4 +1,4 @@
-# Arctic Linux v0.1 — build spec (contracts between components)
+# Arctic Linux v0.2 — build spec (contracts between components)
 
 This is the contract every component is built against. `docs/PLAN.md` explains the *why*;
 this file fixes the *what*: paths, package names, the engine ↔ UI protocol, and the wizard.
@@ -29,25 +29,34 @@ packaging/arctic-linux.spec   ONE spec, many subpackages (§2), Source0 = repo t
 packaging/mangowm.spec        Mango built from upstream
 live/                   live-session files (livesys session, arctic-live-session, sddm live conf)
 iso/kiwi/               kiwi-ng description for the live ISO
-tools/build-rpms.sh     builds all RPMs in a Fedora 44 container → out/repo (createrepo_c)
+tools/build-rpms.sh     builds all RPMs in a Fedora 44 container → out/repo (createrepo_c), out/BUILD-INFO;
+                        every build gets its own Release (§9)
 tools/build-iso.sh      builds the ISO with kiwi-ng in a privileged Fedora 44 container → out/iso
+tools/publish-repo.sh   adds a build to one channel of the package repository site: signs, prunes,
+                        createrepo_c, repomd.xml.asc, index + manifest (§9); --no-sign for local tests
+tools/test-repo.sh      dnf5 checks in Fedora 44 containers: arctic-release, offline behaviour,
+                        repoquery against a published site
+tools/lib/arcticrepo.py prune / manifest / fetch (the published site) / index for the repository
+tools/tests/            unit tests for tools/lib (python3 -m unittest discover -s tools/tests)
 tools/test-iso.sh       boots the ISO in QEMU (no KVM needed), takes screenshots
 tools/test-install.sh   installs from the ISO to a VM disk (arctic-install unattended, profiles/ci/offline.toml),
                         then boots it: LUKS prompt, SDDM login, desktop, logs over the serial port
 tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QMP helpers for the tests)
 .github/workflows/ci.yml   go test, shellcheck, python tests, node tests, qmllint
 .github/workflows/iso.yml  build RPMs + ISO, upload artifact, publish release (tag or manual)
+.github/workflows/repo.yml build, sign and publish the RPMs to the package repository on GitHub Pages (§9)
 ```
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 0.1.0, Release 1%{?dist}. `Source0: arctic-linux-%{version}.tar.gz` made by
-`git archive --prefix=arctic-linux-0.1.0/ HEAD` (tools/build-rpms.sh; uncommitted changes are
-included via `git stash create`). noarch unless it contains Go binaries.
+Version 0.2.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.0/` of the
+working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
+throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 
 | Subpackage | Installs | Notes |
 |---|---|---|
-| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.1, PRETTY_NAME="Arctic Linux 0.1 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` (the Arctic package repository, `enabled=0` with a placeholder address until the Arctic COPR is published), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
+| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
 | `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
 | `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
@@ -200,7 +209,9 @@ livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO s
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.
-Volume id `Arctic-Linux-0.1`. Output `out/iso/Arctic-Linux-0.1-x86_64.iso` + `.sha256`.
+Volume id `Arctic-Linux-0.2` (the installer finds its media by the `Arctic-Linux` prefix). Output
+`out/iso/Arctic-Linux-0.2-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
+Release suffix, commit and `arctic_repos=enabled|disabled` from out/BUILD-INFO.
 
 Design assets not copied into `design/` (all 78 icons, 30 app tiles, lockups, wallpapers as
 SVG strings) can be exported by running the design bundle in node:
@@ -216,3 +227,168 @@ SVG strings) can be exported by running the design bundle in node:
   when `$HTTPS_PROXY` / the CA file exist) so they also work on GitHub runners.
 - `--privileged` is needed for kiwi (loop devices). No KVM: QEMU runs with TCG (slow).
 - Disk budget ≈ 30 GB free: clean container caches and intermediate kiwi roots.
+
+## 9. Package repository: versions, channels, publishing
+
+Arctic's own packages (all of `arctic-linux.spec` and `mangowm`) update from a signed dnf
+repository on the project's GitHub Pages site; Fedora's packages keep coming from Fedora. No COPR.
+
+**Versions.** Both specs: `Release: 1%{?arctic_snapshot}%{?dist}`. `tools/build-rpms.sh` defines
+`arctic_snapshot` as `.<commit time>.<build time>.git<commit, 7 hex>` (`--release-suffix auto`,
+the default; `none` gives `1.fc44`; any other value is used as given; env
+`ARCTIC_RELEASE_SUFFIX`): the commit's committer date as UTC `yyyymmddHHMMSS`, then the build's UTC
+`yyyymmddHHMM`, e.g. `arctic-shell-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44`. rpm
+compares the commit time first, so a build of newer code is always the newer package, whenever it
+was built: the repository's builds of later commits update what an ISO installed, even an ISO
+built afterwards from an older commit (a re-run for an old tag), and a stable build of a later
+commit updates a testing build. The same commit built twice: the later build wins. (Outside a
+git checkout the build time stands in for the commit time.) Every build of every commit is a new
+Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
+every stable system, and every package's scriptlets run again: they are written for that
+(arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
+when its module is unchanged). Version stays the spec's (arctic-linux 0.2.0, mangowm 0.17.3); a
+release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
+the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
+`build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
+`arctic_repos` (`enabled|disabled|not-built`), one `rpm=`/`srpm=` line per package built.
+
+**Site layout** (https://yuvalkolodkingal.github.io/O-Tism/):
+
+```
+repo/<channel>/fedora-<releasever>/x86_64/     x86_64 + noarch RPMs, repodata/ (+ repomd.xml.asc)
+repo/<channel>/fedora-<releasever>/source/     SRPMs, repodata/ (+ repomd.xml.asc)
+repo/<channel>/fedora-<releasever>/PUBLISH-INFO.json   when, which commit, ref and workflow run
+RPM-GPG-KEY-arctic                             the public signing key
+arctic.repo, arctic-testing.repo               repo files for other Fedora 44 systems (enabled, https gpgkey)
+index.html, manifest.json                      landing page; every file with size and sha256
+```
+
+Channels: `stable` ← pushes to `main`; `testing` ← Actions → Repository → Run workflow on `main`
+with channel `testing` and ref `claude/busy-goodall-j42hmi` (by hand: see *Pages setup* for why dev
+pushes don't publish it by themselves). Each directory keeps the newest 3 builds (distinct epoch:version-release in rpm order) of every
+package name. No debuginfo. One build is ~9 MB of RPMs + ~11 MB of SRPMs, so both channels
+stay far below the 900 MB budget `publish-repo.sh` enforces (Pages sites are limited to 1 GB).
+
+**On the system** (`arctic-release`): `/usr/share/dnf5/repos.d/arctic.repo` holds `[arctic]`
+(`baseurl=…/repo/stable/fedora-$releasever/$basearch/`, `enabled=1`, `gpgcheck=1`,
+`repo_gpgcheck=0`, `gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic`, `metadata_expire=6h`,
+`skip_if_unavailable=True` — the live USB and the installer work offline —, `priority=90`, before
+Fedora's 99) and `[arctic-source]` (off); `arctic-testing.repo` the same for testing, all off. They
+are package files, replaced on updates; choices are overrides in `/etc/dnf/repos.override.d/`
+(`sudo dnf config-manager setopt arctic-testing.enabled=1` writes `99-config_manager.repo`).
+dnf5 5.4 on Fedora 44 reads `/etc/yum.repos.d`, `/etc/distro.repos.d` and `/usr/share/dnf5/repos.d`
+(`dnf5 --dump-main-config`); a file of the same name in `/etc/yum.repos.d` hides the one in
+`/usr/share/dnf5/repos.d`. Every package is signed and checked (`gpgcheck=1`): dnf imports the key
+into the rpmdb on first use (`-y`, as unattended updates run, accepts it; an interactive `dnf`
+asks once). `repomd.xml` is signed too (`repomd.xml.asc`) but not checked by default
+(`repo_gpgcheck=0`, as in Fedora's repositories; the site is HTTPS-only): with
+`repo_gpgcheck=1` every dnf run without `-y` — `dnf-makecache.timer`, a declined prompt — skips
+the repository until a `-y` run has imported the key into that cache (verified on F44: "repomd.xml
+GPG signature verification error: Signing key not found", exit status 0). Fedora's own
+`fedora`/`updates` repositories set `skip_if_unavailable=False`, so they, not Arctic's, are what
+fails offline; Arctic's are skipped quietly, which is why publishing checks the site with dnf5
+before deploying it (below).
+
+**The key.** `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` is installed from
+`packaging/release/RPM-GPG-KEY-arctic`, which is not committed yet: `tools/build-rpms.sh` puts the
+key into Source0 from `--gpg-public-key FILE` or `ARCTIC_GPG_PUBLIC_KEY` (its content; ci.yml,
+iso.yml and repo.yml pass the repository secret). Without any key the build still succeeds but
+warns, and arctic-release ships both repo files with `enabled=0`; `--require-gpg-key`
+(`ARCTIC_REQUIRE_GPG_KEY=1`, repo.yml) makes that an error. The spec's `%check` enforces: key ⇔
+`[arctic]` enabled, testing always off, no secret key material. To commit the key later:
+`curl -fsSL https://yuvalkolodkingal.github.io/O-Tism/RPM-GPG-KEY-arctic -o packaging/release/RPM-GPG-KEY-arctic`
+(publishing then checks it is the signing key). No tool here ever generates or stores a secret
+key; signing happens only in repo.yml with the secrets.
+
+**Publishing** (`.github/workflows/repo.yml`; the steps are scripts that run locally too):
+
+1. Channel from the event (push to main → stable, `workflow_dispatch` → input `channel` built
+   from input `ref`, default the workflow's commit). Then `gh api repos/<repo>/pages`
+   (`pages: read`): no Pages site, a source other than GitHub Actions, or a site URL other than
+   the one the packages point at fails the run at once, with what to change.
+2. `tools/build-rpms.sh --src <checkout of ref>` with `ARCTIC_GPG_PUBLIC_KEY` and
+   `ARCTIC_REQUIRE_GPG_KEY=1`.
+3. `tools/lib/arcticrepo.py fetch`: the site as published, so a publish of one channel keeps the
+   other. Source: the last successful repo.yml run's `github-pages` artifact (uploaded with
+   `retention-days: 90`, downloaded with `gh api` and `actions: read`) when its manifest.json is
+   the live one, or newer (the live site still serving the deployment before); else every file
+   listed in the live manifest.json, fetched with a cache-busting query and checked against size
+   and sha256. Nothing live (404) → the artifact if there is one; a first publish only when
+   the runs query worked and repo.yml has never succeeded (else Pages may just be briefly
+   unavailable: the run fails). `gh api` calls are retried with backoff; one that keeps failing
+   fails the run (404/410 for an artifact that expired meanwhile falls back to the live site, as
+   does an artifact that doesn't match its manifest). A live site that can't be fetched
+   completely, or one without manifest.json, fails the run; the `start_fresh` input starts both
+   channels over on purpose.
+4. `tools/publish-repo.sh` (in a fedora:44 container): imports `ARCTIC_GPG_PRIVATE_KEY`
+   (`--pinentry-mode loopback`, `ARCTIC_GPG_PASSPHRASE` through a passphrase file; empty works),
+   takes its fingerprint and requires `ARCTIC_GPG_PUBLIC_KEY` and a committed
+   `packaging/release/RPM-GPG-KEY-arctic` to have the same one; signs every new RPM and SRPM
+   (packages already published — same `SHA256HEADER` — are skipped) with
+   `rpmsign --addsign` (RPM 6: `%_openpgp_sign gpg`, `%_openpgp_sign_id <fingerprint>`,
+   `%_gpg_path`, `%_gpg_sign_cmd_extra_args --batch --yes --pinentry-mode loopback
+   --passphrase-file …`) and checks each with `rpmkeys -Kv` against an rpmdb holding only the
+   public key; refuses a new arctic-release without that key or with `[arctic]` disabled (it
+   would switch updates off for everyone who installs it); prunes; requires every package left
+   in the channel to verify (`--resign-old` / the `resign_old` input re-signs after a key
+   change); `createrepo_c --update --retain-old-md-by-age=2d` (the metadata a new repomd.xml
+   replaces stays two days: Pages lets caches serve the old repomd.xml for up to 10 minutes, and
+   the files it names must still be there; the mtimes survive through the Pages artifact); signs
+   `repodata/repomd.xml` (detached, armored, checked with gpg); writes the key, the .repo files,
+   PUBLISH-INFO.json, index.html and manifest.json; fails over the size budget.
+5. `tools/test-repo.sh --signed --channel <channel>`: in fedora:44 with `--network none`, the
+   new arctic-release replaces fedora-release, and dnf5 reads the site through `file://` the way
+   clients do, with every check on (`gpgcheck=1`, `repo_gpgcheck=1`, `skip_if_unavailable=0`):
+   `dnf5 -y makecache` verifies `repomd.xml.asc` (librepo, through rpm-sequoia on F44) for the
+   binary and source repositories, `repoquery` lists exactly the channel's files, and dnf5
+   installs arctic-backgrounds and reinstalls the new arctic-release from it, checking their
+   signatures against the key from arctic-release. Any error fails the run before anything is
+   uploaded (gpg and rpmkeys alone in step 4 don't prove what dnf5 accepts).
+6. `actions/upload-pages-artifact` (`retention-days: 90`), then the deploy job:
+   `actions/deploy-pages` in the `github-pages` environment (`pages: write`, `id-token: write`),
+   a check that the deployment's `page_url` is the base URL (fails otherwise) and that the live
+   manifest.json is the one just deployed (warns: the CDN may lag).
+
+Permissions: `contents: read` (build job also `actions: read`, `pages: read`). All runs share the
+concurrency group `arctic-repository-pages` (`cancel-in-progress: false`), so no two publishes
+overlap; GitHub keeps one waiting run per group, so a waiting run can be superseded (shown as
+cancelled) — the next push to main, or a re-run, publishes again.
+
+**Pages setup.** Settings → Pages → Source: GitHub Actions (step 1 fails until it is). Secrets
+`ARCTIC_GPG_PRIVATE_KEY`, `ARCTIC_GPG_PASSPHRASE` (may be empty), `ARCTIC_GPG_PUBLIC_KEY`; optional
+variable `ARCTIC_PAGES_URL` for a custom domain. Only pushes to `main` publish by themselves. The
+`github-pages` environment lets only the default branch deploy, and a dev push arriving while a
+run is in progress would replace a waiting stable run, so the testing channel is published by
+hand: Actions → Repository → Run workflow on `main`, channel `testing`, ref
+`claude/busy-goodall-j42hmi`. (Publishing testing on every dev push needs that branch in the
+environment's deployment branches and in repo.yml's `on.push.branches`, and accepts that waiting
+runs get superseded.)
+
+**Release ISOs** (`.github/workflows/iso.yml`) build with `ARCTIC_REQUIRE_GPG_KEY=1` in this
+repository (forks without the secret still build, with the Arctic repositories off), and a
+release is refused unless the ISO's `.build-info` says `arctic_repos=enabled`: an ISO whose
+arctic-release lacks the key would install systems that never get Arctic updates.
+
+**Changing the key** needs a transition release: installed systems only trust the key their
+arctic-release carries, so an arctic-release that trusts both keys has to reach them (signed with
+the old key) before packages are signed with the new one (`resign_old`). The checks above expect
+exactly one key everywhere today; a key change starts by relaxing them for the transition.
+
+**Locally, without a key:** `tools/publish-repo.sh --no-sign --site out/site --channel testing`
+(unsigned packages, no repomd.xml.asc) and `tools/test-repo.sh`: arctic-release replaces
+fedora-release, `dnf5 repolist --all`, the testing override, `dnf5 makecache`/`repoquery` with
+`--network none` succeed (the Arctic repositories are skipped) and fail with
+`skip_if_unavailable=0`, and `dnf5 repoquery --repo arctic` / `--repo arctic-testing` against the
+site served over HTTP lists exactly its packages (gpgcheck and repo_gpgcheck off for that
+unsigned test repository only). `tools/test-repo.sh --signed` against such an unsigned site
+fails, as it must ("GPG verification is enabled, but GPG signature is not available"; with only
+`repo_gpgcheck` off: "The package is not signed"); it passes only on a site signed with the key
+arctic-release carries, i.e. in repo.yml.
+
+**A new Fedora release** (F45): the site keeps one tree per release,
+`repo/<channel>/fedora-<releasever>/`, and arctic-release's `baseurl` uses `$releasever`, so each
+system reads its own. Build with `dist_version` 45 (and `ARCTIC_FEDORA_IMAGE` set to the F45
+image) and publish: the builds land in `fedora-45` next to `fedora-44`, which keeps its last
+builds. Publish fedora-45 before F44 systems upgrade (`dnf system-upgrade` then finds Arctic's F45
+packages); fedora-44 gets no new builds once main moves on. The landing page's "Fedora 44" text
+(`tools/lib/arcticrepo.py`) and the size budget (two trees) need a look then.

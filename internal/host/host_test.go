@@ -23,10 +23,10 @@ const lsblkSample = `{
            "fstype": "ntfs", "label": "Windows", "parttype": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7", "partlabel": "Basic data partition", "partn": 3, "start": 239616, "log-sec": 512, "mountpoints": [null]}
        ]},
       {"path": "/dev/sda", "type": "disk", "size": 30752000000, "model": "Ultra", "tran": "usb", "rota": false, "rm": true, "ro": false, "hotplug": true,
-       "pttype": "dos", "fstype": "iso9660", "label": "Arctic-Linux-0.1", "parttype": null, "partlabel": null, "partn": null, "start": null, "log-sec": 512, "mountpoints": [null],
+       "pttype": "dos", "fstype": "iso9660", "label": "Arctic-Linux-0.2", "parttype": null, "partlabel": null, "partn": null, "start": null, "log-sec": 512, "mountpoints": [null],
        "children": [
           {"path": "/dev/sda1", "type": "part", "size": 2000000000, "model": null, "tran": "usb", "rota": "0", "rm": "1", "ro": "0", "hotplug": "1", "pttype": "dos",
-           "fstype": "iso9660", "label": "Arctic-Linux-0.1", "parttype": "0x0", "partlabel": null, "partn": 1, "start": 0, "log-sec": 512, "mountpoints": ["/run/initramfs/live"]}
+           "fstype": "iso9660", "label": "Arctic-Linux-0.2", "parttype": "0x0", "partlabel": null, "partn": 1, "start": 0, "log-sec": 512, "mountpoints": ["/run/initramfs/live"]}
        ]},
       {"path": "/dev/loop0", "type": "loop", "size": 1900000000, "model": null, "tran": null, "rota": false, "rm": false, "ro": true, "hotplug": false,
        "pttype": null, "fstype": "squashfs", "label": null, "parttype": null, "partlabel": null, "partn": null, "start": null, "log-sec": 512, "mountpoints": ["/run/rootfsbase"]}
@@ -144,9 +144,9 @@ func TestLogTargets(t *testing.T) {
 	// its ESP, a second USB stick (FAT, not mounted) and an SD card (exFAT, automounted).
 	const doc = `{"blockdevices": [
 	  {"path": "/dev/sda", "type": "disk", "model": "SanDisk Ultra", "tran": "usb", "rm": true, "ro": false, "hotplug": true,
-	   "fstype": "iso9660", "label": "Arctic-Linux-0.1", "mountpoints": [null],
+	   "fstype": "iso9660", "label": "Arctic-Linux-0.2", "mountpoints": [null],
 	   "children": [
-	     {"path": "/dev/sda1", "type": "part", "rm": true, "ro": false, "fstype": "iso9660", "label": "Arctic-Linux-0.1", "mountpoints": ["/run/initramfs/live"]},
+	     {"path": "/dev/sda1", "type": "part", "rm": true, "ro": false, "fstype": "iso9660", "label": "Arctic-Linux-0.2", "mountpoints": ["/run/initramfs/live"]},
 	     {"path": "/dev/sda2", "type": "part", "rm": true, "ro": false, "fstype": "vfat", "label": "ARCTIC_EFI", "parttype": "0xef", "mountpoints": [null]}
 	   ]},
 	  {"path": "/dev/nvme0n1", "type": "disk", "model": "Samsung SSD 980", "tran": "nvme", "rm": false, "ro": false, "hotplug": false, "mountpoints": [null],
@@ -183,7 +183,7 @@ func TestLogTargetsVentoy(t *testing.T) {
 	   "children": [
 	     {"path": "/dev/sda1", "type": "part", "rm": true, "ro": false, "fstype": "exfat", "label": "Ventoy", "parttype": "0x7", "mountpoints": [null],
 	      "children": [
-	        {"path": "/dev/mapper/ventoy", "type": "dm", "rm": false, "ro": true, "fstype": "iso9660", "label": "Arctic-Linux-0.1", "mountpoints": ["/run/initramfs/live"]}
+	        {"path": "/dev/mapper/ventoy", "type": "dm", "rm": false, "ro": true, "fstype": "iso9660", "label": "Arctic-Linux-0.2", "mountpoints": ["/run/initramfs/live"]}
 	      ]},
 	     {"path": "/dev/sda2", "type": "part", "rm": true, "ro": false, "fstype": "vfat", "label": "VTOYEFI", "parttype": "0xef", "mountpoints": [null]}
 	   ]},
@@ -215,5 +215,22 @@ func TestWriteLogToMountedStick(t *testing.T) {
 	// Never overwrite a file that is already there.
 	if _, err := writeLogToStick(context.Background(), LogTarget{Mountpoint: dir}, "arctic-install-x.log", []byte("again")); err == nil {
 		t.Error("overwrote an existing file")
+	}
+}
+
+// The install media is recognised by the ISO's volume id prefix ("Arctic-Linux"), so a stick
+// written from any release (Arctic-Linux-0.1, Arctic-Linux-0.2, …) counts, even unmounted.
+func TestIsMediaVolumeIDPrefix(t *testing.T) {
+	label := func(s string) lsblkDev { return lsblkDev{Path: "/dev/sdb1", Type: "part", Label: &s} }
+	for l, want := range map[string]bool{
+		"Arctic-Linux-0.1":  true,
+		"Arctic-Linux-0.2":  true,
+		"Arctic-Linux-1.0":  true,
+		"Fedora-WS-Live-44": false,
+		"":                  false,
+	} {
+		if got := isMedia(label(l), New(Options{}).opts.VolumeID); got != want {
+			t.Errorf("isMedia(label %q) = %v, want %v", l, got, want)
+		}
 	}
 }

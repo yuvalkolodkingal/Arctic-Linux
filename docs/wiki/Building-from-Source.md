@@ -40,21 +40,36 @@ tools/build-rpms.sh --only arctic    # only packaging/arctic-linux.spec
 tools/build-rpms.sh --only mangowm   # only packaging/mangowm.spec
 tools/build-rpms.sh --src DIR        # build from another directory
 tools/build-rpms.sh --out DIR        # output directory (default out/)
+tools/build-rpms.sh --release-suffix none            # Release 1.fc44 instead of a snapshot
+tools/build-rpms.sh --gpg-public-key FILE            # the Arctic repository key for arctic-release
 ```
+
+- Every build gets its own Release: `1.<commit time>.<build time>.git<commit>` (both UTC), for
+  example `arctic-shell-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44`. A build of a newer
+  commit is always newer, however late an older commit gets built, and `dnf upgrade` picks it
+  up; the same commit built again is newer than its earlier build. `--release-suffix` (or
+  `ARCTIC_RELEASE_SUFFIX`) takes `auto` (that, the default), `none` or a suffix of your own.
+- `arctic-release` ships the Arctic package repository's public key. It comes from
+  `--gpg-public-key FILE`, the `ARCTIC_GPG_PUBLIC_KEY` environment variable (the key itself) or
+  a committed `packaging/release/RPM-GPG-KEY-arctic`. Without one the build still works, but
+  warns loudly and `arctic-release` ships the Arctic repositories **disabled**: fine for a local
+  test, not for a system that should get updates.
+- `out/BUILD-INFO` lists what the build produced (version, Release suffix, commit, key
+  fingerprint, `arctic_repos=enabled|disabled`, every package).
 
 - `packaging/arctic-linux.spec` builds every Arctic package from one source tarball. The tarball
   is made from your working tree, **including uncommitted and untracked files**, so you can test
   changes without committing.
 - `packaging/mangowm.spec` builds Mango 0.17.3 from upstream. The release tarball is downloaded
   once and cached in `out/sources/`.
-- Output: `out/repo/*.rpm` + repodata, `out/srpms/`, `out/debug/`, and build logs in
-  `out/logs/rpmbuild-*.log`.
+- Output: `out/repo/*.rpm` + repodata, `out/srpms/`, `out/debug/`, `out/BUILD-INFO`, and build
+  logs in `out/logs/rpmbuild-*.log`. Earlier builds of the same spec are removed from `out/`.
 
 The packages it builds:
 
 | Package | What it installs |
 |---|---|
-| `arctic-release` | os-release ("Arctic Linux 0.1 (Fedora 44 base)"), dnf and systemd presets; replaces `fedora-release` |
+| `arctic-release` | os-release ("Arctic Linux 0.2 (Fedora 44 base)"), dnf and systemd presets, the Arctic package repository (stable on, testing off) and its key; replaces `fedora-release` |
 | `arctic-logos` | The fox mark under the names Fedora's logo packages use |
 | `arctic-backgrounds` | The six wallpapers, SVG and 3840×2160 PNG |
 | `arctic-fonts` | Figtree |
@@ -79,7 +94,7 @@ Builds the live ISO with kiwi-ng from `iso/kiwi/` in a privileged Fedora 44 cont
 Fedora 44 + updates and the local repository from `build-rpms.sh`.
 
 ```sh
-tools/build-iso.sh                        # → out/iso/Arctic-Linux-0.1-x86_64.iso (+ .sha256)
+tools/build-iso.sh                        # → out/iso/Arctic-Linux-0.2-x86_64.iso (+ .sha256)
 tools/build-iso.sh --repo DIR             # the local RPM repository (default out/repo)
 tools/build-iso.sh --work DIR             # kiwi scratch space (default out/kiwi-work, ~15 GB)
 tools/build-iso.sh --keep-work            # keep the scratch space afterwards
@@ -202,19 +217,50 @@ QML is checked with `qmllint` (`/usr/lib64/qt6/bin/qmllint`, from `qt6-qtdeclara
 
 | Workflow | Runs on | Does |
 |---|---|---|
-| `.github/workflows/ci.yml` | Every push and pull request | `go vet` and `go test`; ShellCheck on the scripts; the Python and Node tests (shell and `arctic-firstboot`); `qmllint` on the shell, installer and login theme; `rpmspec` parses both specs; then a full `tools/build-rpms.sh` with the RPMs uploaded as an artifact |
-| `.github/workflows/iso.yml` | Tags `v*`, or by hand | Builds the RPMs and the ISO, uploads them as an artifact, boots the ISO in QEMU (UEFI Try and BIOS Install) with screenshots, and publishes a GitHub release |
+| `.github/workflows/ci.yml` | Every push and pull request | `go vet` and `go test`; ShellCheck on the scripts; the Python and Node tests (shell, `arctic-firstboot`, the repository tools); `qmllint` on the shell, installer and login theme; `rpmspec` parses both specs; then a full `tools/build-rpms.sh`, an unsigned test publish and `tools/test-repo.sh` (dnf5 against it), with the RPMs uploaded as an artifact |
+| `.github/workflows/repo.yml` | Pushes to `main` (stable), or by hand (testing, or any channel from any `ref`) | Builds the RPMs, signs them, checks the signed site with dnf5 and publishes it to the Arctic package repository on GitHub Pages (see below) |
+| `.github/workflows/iso.yml` | Tags `v*`, or by hand | Builds the RPMs (the repository key is required) and the ISO, uploads them as an artifact, boots the ISO in QEMU (UEFI Try and BIOS Install) with screenshots, and publishes a GitHub release (refused if the ISO's Arctic repositories are off) |
 | `.github/workflows/wiki.yml` | Pushes to `main` that change `docs/wiki/`, or by hand | Publishes `docs/wiki/` to this wiki |
+
+### The package repository
+
+Installed systems update Arctic's own packages from a signed dnf repository on this project's
+GitHub Pages site, https://yuvalkolodkingal.github.io/O-Tism/, with two channels:
+
+| Channel | Built from | On an Arctic system |
+|---|---|---|
+| `stable` | every push to `main` | `[arctic]`, on |
+| `testing` | `claude/busy-goodall-j42hmi`, by hand: **Actions → Repository → Run workflow** on `main`, channel `testing`, ref `claude/busy-goodall-j42hmi` | `[arctic-testing]`, off: `sudo dnf config-manager setopt arctic-testing.enabled=1` |
+
+`repo.yml` builds the RPMs, signs every new package and the metadata with the repository key
+(the `ARCTIC_GPG_*` secrets), keeps the last three builds of each package, checks the result with
+dnf5 the way installed systems read it (`tools/test-repo.sh --signed`: signatures on, only the
+key from `arctic-release`) and deploys the site with both channels. **Actions → Repository → Run
+workflow** publishes a channel by hand, from any branch, tag or commit (`ref`). Pushes to the
+development branch don't publish testing by themselves: the `github-pages` environment only lets
+`main` deploy, and all runs share one queue in which a new run replaces a waiting one. It fails
+straight away, saying what to change, when GitHub Pages isn't set to **GitHub Actions** (Settings
+→ Pages). Every push to `main` is a new Release of every Arctic package, so it is a full (small)
+Arctic update for every stable system. To try the tooling locally without a key:
+
+```sh
+tools/build-rpms.sh
+tools/publish-repo.sh --no-sign --site out/site --channel testing   # unsigned, local only
+tools/test-repo.sh                                                    # dnf5 against it, offline checks
+```
+
+The details (layout, pruning, signing, the Pages setup): `docs/BUILD-SPEC.md` §9 in the
+repository.
 
 ### Making a release
 
-Push a tag that starts with `v`, for example `v0.1.0`. `iso.yml` builds everything and creates the
-release **Arctic Linux 0.1.0** with the ISO and its `.sha256`, and writes release notes that say
+Push a tag that starts with `v`, for example `v0.2.0`. `iso.yml` builds everything and creates the
+release **Arctic Linux 0.2.0** with the ISO and its `.sha256`, and writes release notes that say
 whether Zen is preinstalled. If the ISO is larger than 2 GiB, it's split into `.partNN` files with
 instructions for joining them.
 
 Running `iso.yml` by hand (**Actions → ISO → Run workflow**) builds the ISO as an artifact.
-Tick **release** to also publish a prerelease (tag `v0.1.0-build.<run number>` unless you give
+Tick **release** to also publish a prerelease (tag `v0.2.0-build.<run number>` unless you give
 one), and untick **boot_test** to skip the QEMU boot.
 
 ### Publishing the wiki

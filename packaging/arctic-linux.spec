@@ -4,7 +4,8 @@
 # tools/build-rpms.sh, which also includes uncommitted work). The subpackages install straight
 # from the repository tree:
 #
-#   arctic-release         packaging/release/                  os-release, macros.dist, presets
+#   arctic-release         packaging/release/                  os-release, macros.dist, presets,
+#                                                              the Arctic repositories + key
 #   arctic-logos           branding/logos/ (install-path tree) system-logos
 #   arctic-backgrounds     design/wallpapers/*.svg (+ PNG rendered here)
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
@@ -21,14 +22,16 @@
 #   arctic-desktop         (metapackage)
 
 %global dist_version    44
-%global arctic_version  0.1
+%global arctic_version  0.2
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
 
 Name:           arctic-linux
-Version:        0.1.0
-Release:        1%{?dist}
+Version:        0.2.0
+# tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
+# so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
+Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
 URL:            https://github.com/yuvalkolodkingal/O-Tism
@@ -70,9 +73,11 @@ Requires:       fedora-repos(%{dist_version})
 %description -n arctic-release
 Release files that identify the system as Arctic Linux %{arctic_version} on a Fedora
 %{dist_version} base: os-release, the rpm dist macros, /etc/issue, the systemd presets
-(Fedora's policy plus Arctic's: SDDM, the installer socket, nix-daemon, no SSH server) and
-dnf defaults. It replaces fedora-release; Fedora's repositories (fedora-repos) stay in use.
-The Arctic package repository is defined but disabled until it is published.
+(Fedora's policy plus Arctic's: SDDM, the installer socket, nix-daemon, no SSH
+server) and dnf defaults. It replaces fedora-release; Fedora's repositories
+(fedora-repos) stay in use. It adds the signed Arctic package repository (the
+stable channel on, the testing channel off) and the key its packages are signed
+with.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-logos
@@ -125,6 +130,10 @@ License:        LGPL-2.1-or-later
 Requires:       selinux-policy-%{selinuxtype}
 Requires(post): selinux-policy-%{selinuxtype}
 Requires(post): policycoreutils
+# %%pre / %%post compare the module with the installed one (cp, cmp).
+Requires(pre):  coreutils
+Requires(post): coreutils
+Requires(post): diffutils
 Requires(postun): policycoreutils
 %{?selinux_requires}
 
@@ -429,8 +438,24 @@ ln -s ../usr/lib/issue.net %{buildroot}%{_sysconfdir}/issue.net
 install -Dpm 0644 $rel/macros.dist %{buildroot}%{_rpmconfigdir}/macros.d/macros.dist
 install -Dpm 0644 $rel/copr-arctic.conf %{buildroot}%{_sysconfdir}/dnf/plugins/copr.d/arctic.conf
 install -Dpm 0644 $rel/20-arctic-dnf-defaults.conf %{buildroot}%{_datadir}/dnf5/libdnf.conf.d/20-arctic-defaults.conf
-# Disabled until the Arctic COPR is published (see the file); Fedora's repos are unaffected.
-install -Dpm 0644 $rel/arctic.repo %{buildroot}%{_datadir}/dnf5/repos.d/arctic.repo
+# The Arctic repositories (docs/BUILD-SPEC.md §9), signed with the key in
+# packaging/release/RPM-GPG-KEY-arctic: committed, or put into Source0 by tools/build-rpms.sh
+# (--gpg-public-key / ARCTIC_GPG_PUBLIC_KEY). Without the key nothing from them could pass
+# gpgcheck, so they are shipped disabled; the build still succeeds (local test builds).
+install -d %{buildroot}%{_datadir}/dnf5/repos.d
+printf '%%s\n' %{_datadir}/dnf5/repos.d/arctic.repo %{_datadir}/dnf5/repos.d/arctic-testing.repo > release.files
+if [ -s $rel/RPM-GPG-KEY-arctic ]; then
+  install -Dpm 0644 $rel/RPM-GPG-KEY-arctic %{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic
+  echo %{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic >> release.files
+  install -pm 0644 $rel/arctic.repo $rel/arctic-testing.repo %{buildroot}%{_datadir}/dnf5/repos.d/
+else
+  echo "warning: $rel/RPM-GPG-KEY-arctic is missing: arctic-release ships the Arctic repositories DISABLED" >&2
+  for f in arctic.repo arctic-testing.repo; do
+    sed -e '1i # DISABLED: this arctic-release was built without the repository key (tools/build-rpms.sh).' \
+        -e 's/^enabled=1$/enabled=0/' $rel/$f > %{buildroot}%{_datadir}/dnf5/repos.d/$f
+    touch -r $rel/$f %{buildroot}%{_datadir}/dnf5/repos.d/$f
+  done
+fi
 install -Dpm 0644 $rel/80-arctic.preset %{buildroot}%{_presetdir}/80-arctic.preset
 install -pm 0644 $rel/85-display-manager.preset $rel/90-default.preset $rel/99-default-disable.preset %{buildroot}%{_presetdir}/
 install -Dpm 0644 $rel/80-arctic-user.preset %{buildroot}%{_userpresetdir}/80-arctic.preset
@@ -595,6 +620,23 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
+# arctic-release: the key and enabled repositories go together; never secret key material;
+# the testing channel is always off by default.
+key=%{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic
+repos=%{buildroot}%{_datadir}/dnf5/repos.d
+for id in arctic arctic-source arctic-testing arctic-testing-source; do
+  grep -qx "\[$id\]" $repos/arctic.repo $repos/arctic-testing.repo || { echo "error: no [$id] repository" >&2; exit 1; }
+done
+if [ -e "$key" ]; then
+  grep -q -- '-----BEGIN PGP PUBLIC KEY BLOCK-----' "$key" || { echo "error: $key is not an armored public key" >&2; exit 1; }
+  if grep -q 'PRIVATE KEY' "$key"; then echo "error: $key holds a private key" >&2; exit 1; fi
+  grep -qx 'enabled=1' $repos/arctic.repo || { echo "error: arctic.repo is not enabled" >&2; exit 1; }
+elif grep -qx 'enabled=1' $repos/arctic.repo; then
+  echo "error: arctic.repo is enabled without its key" >&2; exit 1
+fi
+if grep -qx 'enabled=1' $repos/arctic-testing.repo; then
+  echo "error: arctic-testing.repo must be disabled by default" >&2; exit 1
+fi
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer; do
   case "$(head -n1 "$s")" in
@@ -638,11 +680,28 @@ if command -v mango >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------------------------
+# Every build has a new Release, so every Arctic update updates arctic-selinux too; its module
+# rarely changes. semodule rebuilds the whole policy (the slowest step of an update), so an
+# update skips it when the module is byte-for-byte the one installed (the build is
+# reproducible) and semodule has it; anything else installs it as usual.
+%global arctic_selinux_state %{_localstatedir}/lib/rpm-state/arctic-selinux
+
 %pre -n arctic-selinux
 %selinux_relabel_pre -s %{selinuxtype}
+rm -rf %{arctic_selinux_state} || :
+if [ $1 -gt 1 ] && [ -f %{_datadir}/selinux/packages/arctic-nix.pp ]; then
+  mkdir -p %{arctic_selinux_state} && \
+    cp -p %{_datadir}/selinux/packages/arctic-nix.pp %{arctic_selinux_state}/arctic-nix.pp || :
+fi
 
 %post -n arctic-selinux
+if [ $1 -gt 1 ] && cmp -s %{arctic_selinux_state}/arctic-nix.pp %{_datadir}/selinux/packages/arctic-nix.pp && \
+   [ -e %{_sharedstatedir}/selinux/%{selinuxtype}/active/modules/200/arctic-nix ]; then
+  : # the same module is installed already
+else
 %selinux_modules_install -s %{selinuxtype} %{_datadir}/selinux/packages/arctic-nix.pp
+fi
+rm -rf %{arctic_selinux_state} || :
 
 %postun -n arctic-selinux
 %selinux_modules_uninstall -s %{selinuxtype} arctic-nix
@@ -710,8 +769,11 @@ fi
 %systemd_postun arcticd.socket arcticd.service
 
 %post -n arctic-plymouth-theme
-# Make arctic the default splash; the initramfs is rebuilt by the image build / installer.
-if [ -x %{_sbindir}/plymouth-set-default-theme ]; then
+# Make arctic the default splash when the package is first installed (the image build; the
+# installer copies that system and rebuilds the initramfs). Updates leave the chosen theme alone.
+# The splash is in the initramfs: a changed theme shows once it is rebuilt (the next kernel
+# update, or `sudo dracut -f`).
+if [ $1 -eq 1 ] && [ -x %{_sbindir}/plymouth-set-default-theme ]; then
   %{_sbindir}/plymouth-set-default-theme arctic || :
 fi
 
@@ -723,7 +785,7 @@ if [ $1 -eq 0 ] && [ -x %{_sbindir}/plymouth-set-default-theme ]; then
 fi
 
 # ---------------------------------------------------------------------------------------------
-%files -n arctic-release
+%files -n arctic-release -f release.files
 %license LICENSE
 %doc packaging/release/README.md
 %{_prefix}/lib/os-release
@@ -746,7 +808,6 @@ fi
 %dir %{_datadir}/dnf5/libdnf.conf.d
 %{_datadir}/dnf5/libdnf.conf.d/20-arctic-defaults.conf
 %dir %{_datadir}/dnf5/repos.d
-%{_datadir}/dnf5/repos.d/arctic.repo
 %dir %{_presetdir}
 %{_presetdir}/80-arctic.preset
 %{_presetdir}/85-display-manager.preset
@@ -850,5 +911,13 @@ fi
 # metapackage: no files
 
 %changelog
+* Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.0-1
+- Arctic Linux 0.2: arctic-release enables the signed Arctic package repository (GitHub
+  Pages; stable channel on, testing channel off) and ships its public key
+- Every build has its own Release, 1.<UTC commit time>.<UTC build time>.git<commit>,
+  so builds of newer code update the ones before them
+- arctic-plymouth-theme sets the default splash on the first install only; arctic-selinux
+  skips reinstalling an unchanged module on updates
+
 * Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.1.0-1
 - Arctic Linux 0.1: first build of all subpackages from one spec

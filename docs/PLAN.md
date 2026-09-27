@@ -97,7 +97,8 @@ O-Tism/  (repo; product = Arctic Linux)
 ├── modules/                  # catalog manifests, one dir per module (see §4)
 ├── profiles/{defaults.toml,ci/*.toml}
 ├── iso/kiwi/                 # kiwi-ng description (derived from fedora-kiwi-descriptions)
-├── packaging/                # RPM specs, built in the Arctic COPR (all signed)
+├── packaging/                # RPM specs; built by tools/build-rpms.sh, signed and published to the
+│                             #   Arctic package repository on GitHub Pages (BUILD-SPEC §9; no COPR)
 │   ├── mangowm.spec              # fork of Terra's spec, built on Fedora's wlroots 0.20 + scenefx 0.5
 │   ├── arctic-release.spec       # modeled on generic-release (os-release, macros.dist, repos, copr conf)
 │   ├── arctic-logos.spec         # Provides system-logos (Fedora trademark rules)
@@ -163,11 +164,11 @@ Hooks are fixed scripts in the signed `arctic-installer` RPM.
 | Code editor | single/none | **Zed** | Flatpak `dev.zed.Zed` (community, unverified, ~940 MB runtime) · Terra `zed` | VSCodium `com.vscodium.codium`, Neovim (dnf) |
 | Terminal | single | **kitty** | dnf `kitty` (+ `kitty-shell-integration`) | foot, alacritty (dnf) |
 | Shell | single default + extras | **zsh** (default), bash (always) | dnf | fish (dnf) |
-| File manager (TUI) | multi | **yazi** | Arctic COPR / COPR `lihaohong/yazi` (26.9.1) · nix `yazi` | — |
+| File manager (TUI) | multi | **yazi** | COPR `lihaohong/yazi` (26.9.1) · nix `yazi` | — |
 | File manager (GUI) | multi | **Thunar** | dnf `Thunar` (capital T; pulls gvfs, tumbler) | Nautilus, PCManFM-Qt (dnf) |
 | Office | single/none | **Collabora Office** | Flatpak `com.collaboraoffice.Office` (verified) | LibreOffice (dnf / `org.libreoffice.LibreOffice`), ONLYOFFICE `org.onlyoffice.desktopeditors` |
 | Video | single | **VLC** | dnf `vlc` + RPM Fusion `vlc-plugins-freeworld` | mpv (dnf) |
-| Fetch | single/none | **arctic-fetch** | Arctic COPR (wraps `fastfetch`) | fastfetch plain |
+| Fetch | single/none | **arctic-fetch** | Arctic repository (wraps `fastfetch`) | fastfetch plain |
 | Extras | multi | — | per module | e.g. Steam, OBS, Discord, GIMP, Spotify … (added over time) |
 
 **Collapsed "Desktop components" group**, with defaults most users never touch:
@@ -331,7 +332,7 @@ Every step is idempotent, checkpointed, logged and has a dry-run mode.
 - **Build:** kiwi-ng, derived from Fedora's own `fedora-kiwi-descriptions` ✅ (F44 branch). The ISO is hybrid, UEFI and BIOS, and keeps Fedora's signed shim, so Secure Boot works.
 - **Contents:**
   - Everything in the default install except the online-only apps. That covers desktop-base, kitty, zsh, yazi, Thunar, VLC, arctic-fetch, Nix and **Zen (Flatpak preinstalled)**, so Try mode has a working browser.
-  - Plus `livesys-scripts`, `arctic-live`, `arctic-installer`, the RPM Fusion and Arctic COPR repo files, `distribution-gpg-keys`, `policycoreutils`, and the same `selinux-policy-targeted` as the target. SELinux stays enabled in the live system.
+  - Plus `livesys-scripts`, `arctic-live`, `arctic-installer`, the RPM Fusion repo files and arctic-release's Arctic repository files, `distribution-gpg-keys`, `policycoreutils`, and the same `selinux-policy-targeted` as the target. SELinux stays enabled in the live system.
   - **Size target: ≤ 2 GiB**, because GitHub Releases limits each asset to 2 GiB. If it's over, see §12.
 - **Boot menu:** the entries in §2. Every entry has `rd.live.image` plus `arctic.mode=try|install`.
   - 🔍 P2: how kiwi lets us customize the GRUB (EFI and BIOS) menu entries: a kiwi template/option, or post-processing grub.cfg.
@@ -346,7 +347,7 @@ Every step is idempotent, checkpointed, logged and has a dry-run mode.
 | Phase | Weeks | Work | Done when |
 |---|---|---|---|
 | **P0 Foundations** | 1 | Go module, lint, CI. `catalog`, `profile` and `wizard` packages. `catalog.json` export. Planner with dry-run. | `arctic-install --profile profiles/defaults.toml --dry-run` prints the full plan. Every wizard step validates in unit tests. |
-| **P1 Packaging & COPR** | 2–3 | Arctic COPR (signed). mangowm fork spec. arctic-release/logos/selinux. sddm-wayland-mango. Placeholder theme. arctic-desktop-config, arctic-fetch, arctic-live. | A plain Fedora 44 VM with these RPMs boots SDDM on the mango greeter, logs into Mango, and has portals, polkit agent, notifications and bar. No AVC denials. |
+| **P1 Packaging & repository** | 2–3 | Arctic package repository (signed, GitHub Pages). mangowm fork spec. arctic-release/logos/selinux. sddm-wayland-mango. Placeholder theme. arctic-desktop-config, arctic-fetch, arctic-live. | A plain Fedora 44 VM with these RPMs boots SDDM on the mango greeter, logs into Mango, and has portals, polkit agent, notifications and bar. No AVC denials. |
 | **P2 Live ISO** | 4 | kiwi description, boot menu, livesys-arctic, Try and Install modes, Zen preinstalled. | The ISO boots UEFI and BIOS in QEMU. Try mode shows the desktop and the install button. Install mode shows the placeholder installer full-screen. Size ≤ 2 GiB. |
 | **P3 Engine core** | 5–6 | Spike on the copy approach first (else Appendix A). Then disk, copy, system, bootloader, relabel. | From the ISO, unattended install of the default layout on UEFI and BIOS, with and without LUKS. Reboots to SDDM, logs in, zsh is the default shell. Under 5 minutes before apps. |
 | **P4 Apps stage** | 7 | dnf, Flatpak and Nix backends. Diff and remove. Progress parsing. Deferred retry service. Codecs. NVIDIA. | The default profile and one alternative profile (Firefox + foot + mpv + LibreOffice) install exactly the chosen apps. `nix run nixpkgs#hello` works as a user. No `fedora` flatpak remote. `/nix/store/*/bin` is labeled `bin_t`. |
@@ -362,7 +363,11 @@ visuals, the dotfiles (mango/waybar/kitty/zsh configs) and the fetch animation. 
 
 - `releasever` is pinned per ISO build: 44 now.
 - A new Fedora stable becomes the base only after it's GA **and** CI passes with it:
-  1. Rebuild the COPR for the new chroot.
+  1. Build Arctic's packages for it (`dist_version`, the build image) and publish them: the
+     repository keeps one tree per Fedora release (`repo/<channel>/fedora-$releasever/`, and
+     arctic-release's `baseurl` uses `$releasever`), so the new builds go into `fedora-45` next to
+     `fedora-44`. Publish them before F44 systems upgrade; `fedora-44` keeps its last builds.
+     BUILD-SPEC §9 ("A new Fedora release") has the details.
   2. Re-verify the catalog.
   3. Rebuild the ISO.
 - F45-specific changes the engine already accounts for ✅:
@@ -388,13 +393,13 @@ visuals, the dotfiles (mango/waybar/kitty/zsh configs) and the fetch animation. 
 
 | Risk | Mitigation |
 |---|---|
-| mangowm isn't in Fedora, and Terra's spec is lightly maintained | Own COPR fork built on Fedora's wlroots 0.20 and scenefx 0.5 ✅, pinned version, Terra (`includepkgs=mangowm`) as the emergency fallback |
+| mangowm isn't in Fedora, and Terra's spec is lightly maintained | Own fork of the spec, built on Fedora's wlroots 0.20 and scenefx 0.5 and published in the Arctic repository ✅, pinned version, Terra (`includepkgs=mangowm`) as the emergency fallback |
 | Mango as the SDDM greeter compositor is untested | The weston greeter (`sddm-wayland-generic`) as a catalog fallback, and a CI check |
 | SDDM lost Fedora KDE to Plasma Login Manager in F44 ✅, so upstream may slow down | The login manager is a slot. greetd + tuigreet is the emergency alternative. |
 | Nix with SELinux enforcing (Fedora bugs 2525943, 2416675) | arctic-selinux file contexts, `auto-optimise-store=false`, enforcing CI |
 | The live-image copy approach has an unknown detail | P3 spike first. The dnf installroot fallback is already researched (Appendix A). |
 | The ISO is over 2 GiB (GitHub asset limit) | Move Zen to online-only, or host the ISO elsewhere (open question) |
-| Zed Flatpak is community-made and adds ~940 MB | Accepted for v1 (Flatpak is OK). Switch to Terra or an own COPR RPM later if needed. |
+| Zed Flatpak is community-made and adds ~940 MB | Accepted for v1 (Flatpak is OK). Switch to Terra or an own RPM in the Arctic repository later if needed. |
 | Flathub IDs change (as the Collabora ID did) | Catalog CI checks IDs on every build |
 | Slow network makes "minutes" slip | Defaults ship in the ISO. Only Zed and Collabora download. Optional apps can be deferred to first boot. |
 | Fedora 45 changes | Handled in §10, re-verified at F45 GA |
@@ -404,7 +409,7 @@ visuals, the dotfiles (mango/waybar/kitty/zsh configs) and the fetch animation. 
 1. **Autologin:** should "Log in automatically" default to on when disk encryption is on? That's the Omarchy style: one password at boot, but the keyring isn't unlocked automatically.
 2. **Snapshots:** add snapper with btrfs snapshots as an optional module, and should it be on by default?
 3. **ISO hosting** if it grows past 2 GiB: GitHub Releases, or a mirror or CDN?
-4. **Zed source:** keep the unverified Flathub build, or package the official release in the Arctic COPR?
+4. **Zed source:** keep the unverified Flathub build, or package the official release in the Arctic repository?
 
 ---
 

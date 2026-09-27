@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the Arctic Linux live ISO with kiwi-ng in a privileged Fedora 44 container.
 #
-#   tools/build-iso.sh                  → out/iso/Arctic-Linux-0.1-x86_64.iso (+ .sha256)
+#   tools/build-iso.sh                  → out/iso/Arctic-Linux-0.2-x86_64.iso (+ .sha256)
 #   tools/build-iso.sh --repo DIR       local RPM repository (default out/repo, from
 #                                       tools/build-rpms.sh)
 #   tools/build-iso.sh --work DIR       kiwi build root and scratch space (default out/kiwi-work;
@@ -13,6 +13,10 @@
 #                                       a failed create) and only run the create step
 #   tools/build-iso.sh --zen auto|yes|no  preinstall Zen Browser (Flathub) in the live image:
 #                                       auto (default) keeps it only while the ISO is ≤ 2 GiB
+#
+# The packages keep the Release tools/build-rpms.sh gave them (1.<UTC time>.git<commit>), so
+# every later build published to the Arctic repository updates them. out/iso/*.build-info gets
+# the build's version, commit, key and arctic_repos=enabled|disabled from out/BUILD-INFO.
 #
 # Uses iso/kiwi/ (config.kiwi, config.sh, grub template), Fedora 44 + updates from the
 # mirrors, and the local repository for mangowm and the arctic-* packages.
@@ -33,7 +37,7 @@ KEEP_WORK=0
 DEBUG=""
 ZEN=auto
 CREATE_ONLY=0
-ISO_NAME="Arctic-Linux-0.1-x86_64.iso"
+ISO_NAME="Arctic-Linux-0.2-x86_64.iso"
 
 while (( $# )); do
   case "$1" in
@@ -45,7 +49,7 @@ while (( $# )); do
     --debug) DEBUG="--debug"; shift ;;
     --zen) ZEN="$2"; shift 2 ;;
     --create-only) CREATE_ONLY=1; shift ;;
-    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
@@ -165,6 +169,12 @@ start=$(date +%s)
 
 iso="$OUT/$ISO_NAME"
 [[ -f "$iso" ]] || arctic_die "no ISO produced"
+# What the packages on it are (tools/build-rpms.sh's BUILD-INFO next to the repository):
+# version, release suffix, commit, repository key and whether the Arctic repositories are on.
+if [[ -f "$(dirname "$REPO")/BUILD-INFO" ]]; then
+  grep -E '^(version|release_suffix|build_time|commit_time|git_commit|gpg_key|arctic_repos)=' "$(dirname "$REPO")/BUILD-INFO" \
+    >> "$OUT/${ISO_NAME%.iso}.build-info" || :
+fi
 size=$(stat -c %s "$iso")
 arctic_log "built $iso: $(( size / 1024 / 1024 )) MiB in $(( ($(date +%s) - start) / 60 )) min"
 if (( size > 2147483648 )); then

@@ -131,15 +131,14 @@ Open a new terminal afterwards so the new commands are found.
 
 ## Updates
 
+Everything installed with dnf (the system, Arctic's own packages, apps from Fedora and RPM
+Fusion) updates by itself: downloaded in the background every day and installed the next time
+the computer starts. See [Updates](Updates). Flatpak and Nix apps you update yourself:
+
 ```sh
-sudo dnf upgrade      # the system and apps from Fedora and RPM Fusion
 flatpak update        # Flatpak apps
 nix profile upgrade --all    # Nix packages in your profile (with the options above)
 ```
-
-Arctic's own packages (the desktop, shell, branding and Mango) don't have an online repository
-yet, so `dnf upgrade` doesn't change them. They're updated by installing a newer Arctic Linux
-release. See the [release notes](Release-Notes).
 
 ## Changing which app opens
 
