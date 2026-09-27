@@ -269,6 +269,22 @@ class ArcticThemeTests(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("broken.png", r.stderr)
 
+    def test_login_keeps_wallpaper_colours_when_the_picture_is_not_there_yet(self):
+        pic = os.path.join(self.pictures, "usb-sea.png")
+        shutil.copy(self.sea, pic)
+        self.choose(pic)
+        self.theme("sync")
+        self.assertEqual(self.theme().stdout, "wallpaper\n")
+        os.rename(pic, pic + ".away")             # its drive is not mounted yet
+        r = self.theme("apply")
+        self.assertIn("keeping its colours", r.stderr)
+        self.assertEqual(self.theme().stdout, "wallpaper\n")
+        self.assertEqual(self.linked(), os.path.join(self.config, "themes", "wallpaper"))
+        self.theme("sync")
+        self.assertEqual(self.theme().stdout, "wallpaper\n")
+        self.theme("sync", "--force")             # asked for: Arctic's colours
+        self.assertEqual(self.theme().stdout, "polar-night\n")
+
     def test_settings_keep_other_keys(self):
         with open(os.path.join(self.config, "settings.json"), "w") as f:
             json.dump({"other_app": {"x": 1}}, f)

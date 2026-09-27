@@ -356,6 +356,11 @@ def follow_wallpaper(force=False):
     choice = saved_wallpaper()
     picture = None if is_design_wallpaper(choice) else choice
     if picture and not os.path.isfile(picture):
+        # At login the picture's drive may not be mounted yet: keep its colours unless forced.
+        made = os.path.isfile(os.path.join(USER_THEMES, WALLPAPER_THEME, "theme.json"))
+        if not force and made and current["name"] == WALLPAPER_THEME:
+            warn("the wallpaper {} is missing; keeping its colours".format(picture))
+            return WALLPAPER_THEME, False
         warn("the wallpaper {} is missing; keeping Arctic's colours".format(picture))
         picture = None
     if picture is None:
