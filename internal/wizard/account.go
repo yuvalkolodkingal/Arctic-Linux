@@ -1,7 +1,10 @@
 package wizard
 
 import (
+	"bufio"
+	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -10,18 +13,49 @@ import (
 // start with a lowercase letter or _, then lowercase letters, digits, - and _, at most 32.
 var usernameRe = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
 
-// reservedUsers are names taken by Fedora system accounts (and the live session's user).
+// reservedUsers are names taken by Fedora system accounts and groups (and the live session's
+// user). It is the floor when the image's /etc/passwd and /etc/group can't be read (mock,
+// dry runs); the engine also checks the names the copied system really has (Env.SystemNames),
+// because `useradd --user-group` fails when a user or a group of that name exists.
 var reservedUsers = map[string]bool{}
 
 func init() {
+	// Users and groups of Fedora's setup package (uidgid), systemd's sysusers and the
+	// packages of the live image.
 	for _, n := range strings.Fields(`root bin daemon adm lp sync shutdown halt mail operator games ftp nobody
+		sys tty disk mem kmem wheel cdrom man dialout floppy tape video lock audio users utmp utempter
+		input kvm render sgx clock systemd-journal ssh_keys printadmin
 		dbus polkitd sddm liveuser tss systemd-coredump systemd-network systemd-oom systemd-resolve
-		systemd-timesync systemd-journal-remote rtkit pipewire avahi colord geoclue chrony unbound
+		systemd-timesync systemd-journal-remote systemd-upload rtkit pipewire avahi colord geoclue chrony unbound
 		dnsmasq nm-openconnect nm-openvpn openvpn usbmuxd saned flatpak gluster qemu setroubleshoot
 		sshd tcpdump abrt brlapi nixbld wheel users admin arctic`) {
 		reservedUsers[n] = true
 	}
+	for i := 1; i <= 32; i++ {
+		reservedUsers["nixbld"+strconv.Itoa(i)] = true
+	}
 }
+
+// ReadAccountNames returns the first field of every line of an /etc/passwd or /etc/group
+// style file (the user or group names).
+func ReadAccountNames(r io.Reader) []string {
+	var out []string
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, _, _ := strings.Cut(line, ":")
+		if name = strings.TrimSpace(name); name != "" && !strings.HasPrefix(name, "+") && !strings.HasPrefix(name, "-") {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// MsgNameTaken is shown when the username is a user or group the system already has.
+const MsgNameTaken = "That name is taken by the system. Pick another one."
 
 // ValidateUsername returns an error message, or "" when the username is fine.
 func ValidateUsername(u string) string {
@@ -35,7 +69,7 @@ func ValidateUsername(u string) string {
 	case !usernameRe.MatchString(u):
 		return "Start with a lowercase letter."
 	case reservedUsers[u] || strings.HasPrefix(u, "systemd-"):
-		return "That name is taken by the system. Pick another one."
+		return MsgNameTaken
 	}
 	return ""
 }
@@ -110,7 +144,24 @@ func asciiFold(s string) string {
 
 // SuggestUsername derives a username from a full name: the first name, lowercased and
 // ASCII-folded ("Noa Levi" → "noa", "Zoë" → "zoe"). Names with no Latin letters give "user".
-func SuggestUsername(full string) string {
+func SuggestUsername(full string) string { return SuggestUsernameAvoiding(full, nil) }
+
+// SuggestUsernameAvoiding is SuggestUsername that also skips the names in taken (users and
+// groups the system already has): "Man Li" → "man1" when the group "man" exists.
+func SuggestUsernameAvoiding(full string, taken map[string]bool) string {
+	free := func(u string) bool { return ValidateUsername(u) == "" && !taken[u] }
+	numbered := func(u string) string {
+		u = strings.TrimRight(u, "-_")
+		if len(u) > 30 {
+			u = u[:30]
+		}
+		for n := 1; n < 100; n++ {
+			if c := u + strconv.Itoa(n); free(c) {
+				return c
+			}
+		}
+		return ""
+	}
 	for _, word := range strings.Fields(full) {
 		var b strings.Builder
 		for _, r := range asciiFold(word) {
@@ -125,16 +176,18 @@ func SuggestUsername(full string) string {
 		if u == "" {
 			continue
 		}
-		if ValidateUsername(u) != "" {
-			u = strings.TrimRight(u, "-_")
-			if len(u) > 30 {
-				u = u[:30]
-			}
-			u += "1"
-		}
-		if ValidateUsername(u) == "" {
+		if free(u) {
 			return u
 		}
+		if c := numbered(u); c != "" {
+			return c
+		}
+	}
+	if free("user") {
+		return "user"
+	}
+	if c := numbered("user"); c != "" {
+		return c
 	}
 	return "user"
 }

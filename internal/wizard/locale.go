@@ -134,6 +134,52 @@ var Layouts = []Layout{
 	{Layout: "ua", Name: "Ukrainian"},
 }
 
+// nonLatinConsoleKeymaps lists the offered layouts that can't type Latin letters, with the
+// console keymap used for them. Passwords and the disk passphrase are typed in Latin letters
+// on these systems: the session and the login screen get "us" first plus the native layout
+// (Alt+Shift switches, as Anaconda sets up), and the console — where the disk passphrase is
+// typed at boot — gets a keymap whose base layer is Latin: kbd's ru, gr and ua-utf are Latin
+// with a key that switches to the native letters; kbd has no Latin-based Hebrew or Arabic
+// keymap (Fedora's converted il is Hebrew-first), so those use us.
+var nonLatinConsoleKeymaps = map[string]string{
+	"il":  "us",
+	"ara": "us",
+	"gr":  "gr",
+	"ru":  "ru",
+	"ua":  "ua-utf",
+}
+
+// LayoutSwitchOption is the XKB option that switches between "us" and a non-Latin layout.
+const LayoutSwitchOption = "grp:alt_shift_toggle"
+
+// XKB is the keyboard configuration written for (and applied live from) a layout choice.
+type XKB struct {
+	Layout  string `json:"layout"`  // xkb_rules_layout / XKBLAYOUT, e.g. "de" or "us,ru"
+	Variant string `json:"variant"` // xkb_rules_variant / XKBVARIANT, e.g. "nodeadkeys", ",phonetic" or ""
+	Options string `json:"options"` // xkb_rules_options / XKBOPTIONS, e.g. "grp:alt_shift_toggle" or ""
+	Keymap  string `json:"keymap"`  // console KEYMAP (vconsole.conf, initramfs), e.g. "de-nodeadkeys", "ru"
+	// Latin is false for layouts that can't type Latin letters (a "us" layout is added first).
+	Latin bool `json:"latin"`
+}
+
+// KeyboardConfig turns the chosen layout into the session, login screen and console
+// configuration. Latin layouts are used alone; a non-Latin layout comes second after "us",
+// with Alt+Shift to switch, and a Latin-capable console keymap.
+func KeyboardConfig(kb KeyboardData) XKB {
+	if keymap, ok := nonLatinConsoleKeymaps[kb.Layout]; ok {
+		x := XKB{Layout: "us," + kb.Layout, Options: LayoutSwitchOption, Keymap: keymap}
+		if kb.Variant != "" {
+			x.Variant = "," + kb.Variant
+		}
+		return x
+	}
+	keymap := kb.Layout
+	if kb.Variant != "" {
+		keymap += "-" + kb.Variant
+	}
+	return XKB{Layout: kb.Layout, Variant: kb.Variant, Keymap: keymap, Latin: true}
+}
+
 // FindLayout looks up a layout/variant pair.
 func FindLayout(layout, variant string) (Layout, bool) {
 	for _, l := range Layouts {

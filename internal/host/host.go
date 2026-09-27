@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/yuvalkolodkingal/o-tism/internal/backend"
@@ -120,7 +121,9 @@ func output(ctx context.Context, name string, args ...string) (string, error) {
 }
 
 // lsblkColumns are requested from lsblk (util-linux ≥ 2.39 for PARTN).
-const lsblkColumns = "PATH,TYPE,SIZE,MODEL,TRAN,ROTA,RM,RO,HOTPLUG,PTTYPE,FSTYPE,LABEL,PARTTYPE,PARTLABEL,PARTN,START,LOG-SEC,MOUNTPOINTS"
+// SERIAL, WWN and PTUUID identify the disk, so Start can tell that the disk the person
+// confirmed is still the one at that path.
+const lsblkColumns = "PATH,TYPE,SIZE,MODEL,SERIAL,WWN,TRAN,ROTA,RM,RO,HOTPLUG,PTTYPE,PTUUID,FSTYPE,LABEL,PARTTYPE,PARTLABEL,PARTN,START,LOG-SEC,MOUNTPOINTS"
 
 // Disks implements backend.Backend.
 func (b *Backend) Disks(ctx context.Context) ([]hw.Disk, error) {
@@ -150,12 +153,15 @@ type lsblkDev struct {
 	Type        string     `json:"type"`
 	Size        int64      `json:"size"`
 	Model       *string    `json:"model"`
+	Serial      *string    `json:"serial"`
+	WWN         *string    `json:"wwn"`
 	Tran        *string    `json:"tran"`
 	Rota        flexBool   `json:"rota"`
 	RM          flexBool   `json:"rm"`
 	RO          flexBool   `json:"ro"`
 	Hotplug     flexBool   `json:"hotplug"`
 	PTType      *string    `json:"pttype"`
+	PTUUID      *string    `json:"ptuuid"`
 	FSType      *string    `json:"fstype"`
 	Label       *string    `json:"label"`
 	PartType    *string    `json:"parttype"`
@@ -197,9 +203,9 @@ func ParseLsblk(data []byte, volumeID string) ([]hw.Disk, error) {
 			continue
 		}
 		d := hw.Disk{
-			Path: dev.Path, Model: str(dev.Model), SizeBytes: dev.Size, Transport: str(dev.Tran),
+			Path: dev.Path, Model: str(dev.Model), Serial: str(dev.Serial), WWN: str(dev.WWN), SizeBytes: dev.Size, Transport: str(dev.Tran),
 			Rotational: bool(dev.Rota), Removable: bool(dev.RM) || bool(dev.Hotplug), ReadOnly: bool(dev.RO),
-			PTType: str(dev.PTType), SectorSize: dev.LogSec,
+			PTType: str(dev.PTType), PTUUID: strings.ToLower(str(dev.PTUUID)), SectorSize: dev.LogSec,
 		}
 		if d.SectorSize == 0 {
 			d.SectorSize = 512
@@ -212,7 +218,7 @@ func ParseLsblk(data []byte, volumeID string) ([]hw.Disk, error) {
 			if c.Type != "part" {
 				continue
 			}
-			p := hw.Partition{Path: c.Path, SizeBytes: c.Size, Type: strings.ToUpper(str(c.PartType)),
+			p := hw.Partition{Path: c.Path, SizeBytes: c.Size, Type: partType(str(c.PartType)),
 				FSType: str(c.FSType), Label: str(c.Label), PartLabel: str(c.PartLabel)}
 			if c.PartN != nil {
 				p.Number = *c.PartN
@@ -229,6 +235,15 @@ func ParseLsblk(data []byte, volumeID string) ([]hw.Disk, error) {
 		disks = append(disks, d)
 	}
 	return disks, nil
+}
+
+// partType normalises lsblk's PARTTYPE: GPT type GUIDs upper case (as the hw.Type*
+// constants), MBR types lower case ("0xef", as hw.MBRTypeESP).
+func partType(t string) string {
+	if strings.HasPrefix(strings.ToLower(t), "0x") {
+		return strings.ToLower(t)
+	}
+	return strings.ToUpper(t)
 }
 
 func isMedia(dev lsblkDev, volumeID string) bool {
@@ -266,7 +281,7 @@ func guessOS(d hw.Disk) []string {
 	}
 	for _, p := range d.Partitions {
 		switch {
-		case p.FSType == "ntfs" && (strings.EqualFold(p.Type, hw.TypeMSData) || p.Type == "0X7" || p.Type == "0x7") && !strings.Contains(strings.ToLower(p.PartLabel), "recovery"):
+		case p.FSType == "ntfs" && (strings.EqualFold(p.Type, hw.TypeMSData) || strings.EqualFold(p.Type, "0x7")) && !strings.Contains(strings.ToLower(p.PartLabel), "recovery"):
 			add("Windows")
 		case p.FSType == "BitLocker":
 			add("Windows")
@@ -497,20 +512,225 @@ func (b *Backend) Install(ctx context.Context, job *backend.Job, r backend.Repor
 	return installer.New(runner, job, r, installer.Options{Target: b.opts.Target, LogPath: b.opts.LogPath}).Run(ctx)
 }
 
-// SaveLog implements backend.Backend: next to the live image when writable, else /tmp.
-func (b *Backend) SaveLog(ctx context.Context) (string, error) {
+// SaveLog implements backend.Backend. It prefers a FAT or exFAT file system on a removable
+// disk that isn't the install medium (the live ISO is read-only ISO 9660, and the EFI image
+// inside it must stay intact): one that is already mounted is written in place; otherwise the
+// engine mounts it, writes and syncs the log and unmounts it again, so the stick can be
+// unplugged. With no such stick the log goes to the live user's home (reachable from the
+// live session, but lost on restart), else the temp dir, and the result says so.
+func (b *Backend) SaveLog(ctx context.Context) (protocol.SaveLogResult, error) {
 	data, err := os.ReadFile(b.opts.LogPath)
 	if err != nil {
-		return "", err
+		return protocol.SaveLogResult{}, err
 	}
 	name := "arctic-install-" + time.Now().Format("20060102-150405") + ".log"
-	for _, dir := range []string{"/run/initramfs/live", os.TempDir()} {
+	if out, err := output(ctx, "lsblk", "--json", "--tree", "--output", logTargetColumns); err == nil {
+		for _, t := range LogTargets([]byte(out), b.opts.VolumeID) {
+			res, err := writeLogToStick(ctx, t, name, data)
+			if err != nil {
+				b.logf("save log: %s: %v", t.Device, err)
+				continue
+			}
+			res.Message = backend.SavedLogMessage(res)
+			return res, nil
+		}
+	} else {
+		b.logf("save log: %v", err)
+	}
+	for _, dir := range []string{"/home/liveuser", os.TempDir()} {
+		st, err := os.Stat(dir)
+		if err != nil || !st.IsDir() {
+			continue
+		}
 		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, data, 0o644); err == nil {
-			return p, nil
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			b.logf("save log: %s: %v", p, err)
+			continue
+		}
+		// The live user must be able to open, copy and delete it.
+		if sys, ok := st.Sys().(*syscall.Stat_t); ok {
+			os.Chown(p, int(sys.Uid), int(sys.Gid))
+		}
+		res := protocol.SaveLogResult{Path: p}
+		res.Message = backend.SavedLogMessage(res)
+		return res, nil
+	}
+	return protocol.SaveLogResult{}, errors.New("no writable place for the log")
+}
+
+func (b *Backend) logf(format string, a ...any) {
+	if b.opts.Log != nil {
+		fmt.Fprintf(b.opts.Log, format+"\n", a...)
+	}
+}
+
+// logTargetColumns are the lsblk columns LogTargets reads.
+const logTargetColumns = "PATH,TYPE,MODEL,TRAN,RM,RO,HOTPLUG,FSTYPE,LABEL,PARTTYPE,MOUNTPOINTS"
+
+// LogTarget is a file system SaveLog can write to.
+type LogTarget struct {
+	Device     string // /dev/sdc1
+	FSType     string // vfat | exfat
+	Label      string // file system label, else the disk model, else the device
+	Mountpoint string // where it is mounted now ("" = not mounted)
+}
+
+// LogTargets finds FAT/exFAT file systems on removable disks (USB, SD cards) in `lsblk
+// --json --tree` output: never on the install medium, never an EFI system partition, never
+// read-only. Mounted ones come first.
+func LogTargets(data []byte, volumeID string) []LogTarget {
+	var doc struct {
+		Blockdevices []lsblkDev `json:"blockdevices"`
+	}
+	if json.Unmarshal(data, &doc) != nil {
+		return nil
+	}
+	var mounted, unmounted []LogTarget
+	for _, dev := range doc.Blockdevices {
+		if dev.Type != "disk" || bool(dev.RO) {
+			continue
+		}
+		tran := str(dev.Tran)
+		if !bool(dev.RM) && !bool(dev.Hotplug) && tran != "usb" && tran != "mmc" {
+			continue
+		}
+		media := isMedia(dev, volumeID) || str(dev.FSType) == "iso9660"
+		for _, c := range dev.Children {
+			if isMedia(c, volumeID) || str(c.FSType) == "iso9660" {
+				media = true
+			}
+		}
+		if media {
+			continue
+		}
+		cands := append([]lsblkDev{dev}, dev.Children...)
+		for _, c := range cands {
+			fs := str(c.FSType)
+			if (fs != "vfat" && fs != "exfat") || bool(c.RO) || (c.Type != "disk" && c.Type != "part") {
+				continue
+			}
+			if p := (hw.Partition{Type: partType(str(c.PartType))}); p.IsESP() {
+				continue
+			}
+			t := LogTarget{Device: c.Path, FSType: fs, Label: str(c.Label)}
+			if t.Label == "" {
+				t.Label = str(dev.Model)
+			}
+			if t.Label == "" {
+				t.Label = c.Path
+			}
+			for _, m := range c.Mountpoints {
+				if mp := str(m); mp != "" && t.Mountpoint == "" {
+					t.Mountpoint = mp
+				}
+			}
+			if t.Mountpoint != "" {
+				mounted = append(mounted, t)
+			} else {
+				unmounted = append(unmounted, t)
+			}
 		}
 	}
-	return "", errors.New("no writable place for the log")
+	return append(mounted, unmounted...)
+}
+
+// writeLogToStick writes the log to t: in place when mounted, else through a private mount
+// that is unmounted again.
+func writeLogToStick(ctx context.Context, t LogTarget, name string, data []byte) (protocol.SaveLogResult, error) {
+	res := protocol.SaveLogResult{OnUSB: true, Device: t.Device, Label: t.Label}
+	if t.Mountpoint != "" {
+		p := filepath.Join(t.Mountpoint, name)
+		if err := writeSynced(p, data); err != nil {
+			return res, err
+		}
+		res.Path = p
+		return res, nil
+	}
+	dir, err := os.MkdirTemp("/run", "arctic-savelog-")
+	if err != nil {
+		return res, err
+	}
+	if _, err := output(ctx, "mount", "-t", t.FSType, "-o", "rw,nosuid,nodev,noexec", t.Device, dir); err != nil {
+		os.Remove(dir)
+		return res, err
+	}
+	werr := writeSynced(filepath.Join(dir, name), data)
+	if _, err := output(context.Background(), "umount", dir); err != nil {
+		if werr != nil {
+			return res, werr
+		}
+		// Still mounted: the file is there and synced; say where.
+		res.Path = filepath.Join(dir, name)
+		return res, nil
+	}
+	os.Remove(dir)
+	if werr != nil {
+		return res, werr
+	}
+	res.Path = "/" + name
+	res.SafeToRemove = true
+	return res, nil
+}
+
+// writeSynced writes a new file and flushes it and its directory entry to the device.
+func writeSynced(p string, data []byte) error {
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(p)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if d, err := os.Open(filepath.Dir(p)); err == nil {
+		d.Sync()
+		d.Close()
+	}
+	return nil
+}
+
+// LiveKeyboardConf is the live session's keyboard file: liveuser's mango config sources it
+// (source-optional), like the installed system's.
+const LiveKeyboardConf = "/etc/arctic/mango/keyboard.conf"
+
+// ApplyKeyboard implements backend.Backend: on the live system it writes the layouts to
+// LiveKeyboardConf (the copy source, /run/rootfsbase, is not affected). The installer UI then
+// runs mango's reload_config in the session.
+func (b *Backend) ApplyKeyboard(ctx context.Context, x wizard.XKB) error {
+	if !IsLive() {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(LiveKeyboardConf), 0o755); err != nil {
+		return err
+	}
+	tmp := LiveKeyboardConf + ".new"
+	if err := os.WriteFile(tmp, []byte(installer.KeyboardConf(x)), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, LiveKeyboardConf)
+}
+
+// SystemNames implements backend.Backend: the users and groups of the image the install copies
+// (/run/rootfsbase) and of the running live system.
+func (b *Backend) SystemNames() []string {
+	var names []string
+	for _, f := range []string{"/run/rootfsbase/etc/passwd", "/run/rootfsbase/etc/group", "/etc/passwd", "/etc/group"} {
+		fh, err := os.Open(f)
+		if err != nil {
+			continue
+		}
+		names = append(names, wizard.ReadAccountNames(fh)...)
+		fh.Close()
+	}
+	return names
 }
 
 // Reboot implements backend.Backend.

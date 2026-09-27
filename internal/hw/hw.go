@@ -36,6 +36,8 @@ const (
 type Disk struct {
 	Path         string      `json:"path"` // /dev/nvme0n1
 	Model        string      `json:"model"`
+	Serial       string      `json:"serial,omitempty"`
+	WWN          string      `json:"wwn,omitempty"`
 	SizeBytes    int64       `json:"size_bytes"`
 	Transport    string      `json:"transport"` // nvme | sata | usb | virtio | …
 	Rotational   bool        `json:"rotational"`
@@ -43,6 +45,7 @@ type Disk struct {
 	InstallMedia bool        `json:"install_media"`
 	ReadOnly     bool        `json:"read_only"`
 	PTType       string      `json:"pttype"` // gpt | dos | "" (blank disk)
+	PTUUID       string      `json:"ptuuid,omitempty"`
 	SectorSize   int64       `json:"sector_size"`
 	Partitions   []Partition `json:"partitions"`
 	FreeRegions  []Region    `json:"free_regions"` // unallocated space, largest first not required
@@ -55,7 +58,7 @@ type Partition struct {
 	Number    int    `json:"number"`
 	StartByte int64  `json:"start_bytes"`
 	SizeBytes int64  `json:"size_bytes"`
-	Type      string `json:"type"` // GPT type GUID (upper case) or MBR type ("0x83")
+	Type      string `json:"type"` // GPT type GUID (upper case) or MBR type (lower case, "0x83")
 	FSType    string `json:"fstype"`
 	Label     string `json:"label"`
 	PartLabel string `json:"partlabel"`
@@ -78,10 +81,18 @@ func (d Disk) LargestFree() Region {
 	return best
 }
 
+// MBRTypeESP is the MBR partition type of an EFI system partition.
+const MBRTypeESP = "0xef"
+
+// IsESP reports whether the partition is an EFI system partition (GPT or MBR).
+func (p Partition) IsESP() bool {
+	return strings.EqualFold(p.Type, TypeESP) || strings.EqualFold(p.Type, MBRTypeESP)
+}
+
 // ESP returns the first EFI system partition.
 func (d Disk) ESP() (Partition, bool) {
 	for _, p := range d.Partitions {
-		if strings.EqualFold(p.Type, TypeESP) || p.Type == "0xef" {
+		if p.IsESP() {
 			return p, true
 		}
 	}
@@ -170,9 +181,54 @@ func trimFloat(f float64, prec int) string {
 	return s
 }
 
-// AlongsidePossible reports whether the disk has a partition table and enough free space.
+// AlongsidePossible reports whether the disk has a partition table, enough free space and,
+// on an MBR table, room for the two primary partitions the installer adds. Firmware needs
+// (an ESP to share on UEFI) are checked by AlongsidePossibleFor.
 func (d Disk) AlongsidePossible() bool {
-	return d.PTType != "" && d.LargestFree().SizeBytes >= MinInstallBytes
+	if d.PTType == "" || d.LargestFree().SizeBytes < MinInstallBytes {
+		return false
+	}
+	if d.PTType == "dos" && len(d.Partitions) > 2 {
+		return false
+	}
+	return true
+}
+
+// AlongsidePossibleFor is AlongsidePossible for a firmware: UEFI shares the disk's existing
+// EFI system partition, so the disk must have one.
+func (d Disk) AlongsidePossibleFor(firmware string) bool {
+	if !d.AlongsidePossible() {
+		return false
+	}
+	if firmware == "uefi" {
+		if _, ok := d.ESP(); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// SameDevice reports whether two probes describe the same physical disk (path, model,
+// serial, WWN, size and transport). A different disk that took over the device name, or a
+// disk that was swapped, does not match.
+func (d Disk) SameDevice(o Disk) bool {
+	return d.Path == o.Path && d.Model == o.Model && d.Serial == o.Serial && d.WWN == o.WWN &&
+		d.SizeBytes == o.SizeBytes && d.Transport == o.Transport
+}
+
+// SameLayout reports whether two probes of a disk show the same partition table: the same
+// table id, the same partitions (number, start, size, type) and the same largest free region.
+func (d Disk) SameLayout(o Disk) bool {
+	if d.PTType != o.PTType || d.PTUUID != o.PTUUID || len(d.Partitions) != len(o.Partitions) || d.LargestFree() != o.LargestFree() {
+		return false
+	}
+	for i, p := range d.Partitions {
+		q := o.Partitions[i]
+		if p.Number != q.Number || p.StartByte != q.StartByte || p.SizeBytes != q.SizeBytes || !strings.EqualFold(p.Type, q.Type) {
+			return false
+		}
+	}
+	return true
 }
 
 // OSName is the first detected OS, or a neutral name.

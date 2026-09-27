@@ -1,7 +1,7 @@
 # Arctic Linux install: erase Samsung SSD 980 · 512 GB (/dev/nvme0n1), firmware uefi, encryption true, 8 apps
 
 # == disk: Preparing the disk…
-$ lsblk --noheadings --raw --output MOUNTPOINTS /dev/nvme0n1
+$ lsblk --json --tree --output PATH,TYPE,MOUNTPOINTS /dev/nvme0n1
 $ wipefs --all --force /dev/nvme0n1
 $ sfdisk --wipe always --wipe-partitions always /dev/nvme0n1 <<'EOF'
     label: gpt
@@ -39,8 +39,8 @@ $ blkid --match-tag UUID --output value /dev/nvme0n1p3
 $ blkid --match-tag UUID --output value /dev/nvme0n1p2
 
 # == copy: Copying Arctic Linux…
-$ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' '--exclude=/boot/efi/*' '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
-$ rsync -rt /run/rootfsbase/boot/efi/ /mnt/boot/efi/
+$ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--filter=-x security.selinux' '--exclude=/dev/*' '--exclude=/proc/*' '--exclude=/sys/*' '--exclude=/run/*' '--exclude=/tmp/*' '--exclude=/mnt/*' '--exclude=/media/*' '--exclude=/var/tmp/*' --exclude=/boot/efi/ '--exclude=/boot/loader/entries/*' '--exclude=/boot/initramfs-*' '--exclude=/var/cache/dnf/*' '--exclude=/var/cache/libdnf5/*' --exclude=/etc/machine-id --exclude=/lost+found /run/rootfsbase/ /mnt/
+$ rsync -rt --omit-dir-times /run/rootfsbase/boot/efi/ /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/grub2/1:2.12-64.fc44/EFI /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/shim/16.1-5/EFI /mnt/boot/efi/
 $ mount --rbind /dev /mnt/dev
@@ -60,15 +60,12 @@ $ systemd-firstboot --root=/mnt --force --locale=en_US.UTF-8 --timezone=UTC --ho
 write /mnt/etc/vconsole.conf (0644)
     | KEYMAP=us
     | XKBLAYOUT=us
-    | XKBVARIANT=
 write /mnt/etc/arctic/mango/keyboard.conf (0644)
     | # Written by the Arctic Linux installer: the keyboard layout you picked.
     | xkb_rules_layout=us
-    | xkb_rules_variant=
 write /mnt/etc/arctic/sddm-keyboard.conf (0644)
     | # Written by the Arctic Linux installer: the keyboard layout you picked.
     | xkb_rules_layout=us
-    | xkb_rules_variant=
 write /mnt/usr/share/sddm/themes/arctic/theme.conf.user (0644)
     | # Written by the Arctic Linux installer: the keyboard layout you picked.
     | [General]

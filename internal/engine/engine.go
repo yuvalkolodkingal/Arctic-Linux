@@ -45,6 +45,7 @@ type Engine struct {
 	opts Options
 
 	disks    []hw.Disk
+	sysNames map[string]bool
 	model    string
 	tzCache  wizard.Detected
 	tzAt     time.Time
@@ -66,6 +67,8 @@ type Engine struct {
 	decision  chan backend.Decision
 	retried   map[string]int
 	cancelRun context.CancelFunc
+	// startMu serialises Start: it re-probes the disks without holding mu.
+	startMu sync.Mutex
 }
 
 // New creates an engine for a backend.
@@ -88,6 +91,10 @@ func New(b backend.Backend, opts Options) (*Engine, error) {
 		retried:  map[string]int{},
 	}
 	e.model = wizard.ModelName(b.DMI())
+	e.sysNames = map[string]bool{}
+	for _, n := range b.SystemNames() {
+		e.sysNames[n] = true
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	disks, err := b.Disks(ctx)
@@ -124,8 +131,10 @@ func (a envAdapter) Secrets() wizard.SecretsInfo {
 		PasswordSet: len(a.e.secrets.Password) > 0, Password: a.e.password,
 	}
 }
-func (a envAdapter) Model() string  { return a.e.model }
-func (a envAdapter) Now() time.Time { return a.e.opts.Now() }
+func (a envAdapter) Model() string                { return a.e.model }
+func (a envAdapter) Now() time.Time               { return a.e.opts.Now() }
+func (a envAdapter) Firmware() string             { return a.e.info.Firmware }
+func (a envAdapter) SystemNames() map[string]bool { return a.e.sysNames }
 func (a envAdapter) DetectTimezone() wizard.Detected {
 	e := a.e
 	if e.tzCache.Source == "network" {
@@ -234,11 +243,19 @@ func (e *Engine) dispatch(ctx context.Context, sess *Session, req protocol.Reque
 		if perr != nil {
 			return nil, perr
 		}
+		if v, ok := data.(wizard.KeyboardView); ok {
+			// The live session types with the chosen layouts from now on (the UI reloads
+			// mango's config after this answer).
+			if err := e.b.ApplyKeyboard(ctx, v.XKB); err != nil {
+				e.log.Printf("applying the keyboard layout to the live session failed: %v", err)
+			}
+		}
 		return protocol.SetStepResult{OK: true, Data: data}, nil
 
 	case protocol.MethodNext, protocol.MethodBack:
 		e.mu.Lock()
 		defer e.mu.Unlock()
+		before := e.wiz.Phase()
 		var perr *protocol.Error
 		if req.Method == protocol.MethodNext {
 			perr = e.wiz.Next()
@@ -248,6 +265,7 @@ func (e *Engine) dispatch(ctx context.Context, sess *Session, req protocol.Reque
 		if perr != nil {
 			return nil, perr
 		}
+		e.reopenedLocked(before)
 		return e.wiz.Snapshot(), nil
 
 	case protocol.MethodGoto:
@@ -257,9 +275,11 @@ func (e *Engine) dispatch(ctx context.Context, sess *Session, req protocol.Reque
 		}
 		e.mu.Lock()
 		defer e.mu.Unlock()
+		before := e.wiz.Phase()
 		if perr := e.wiz.Goto(p.ID); perr != nil {
 			return nil, perr
 		}
+		e.reopenedLocked(before)
 		return e.wiz.Snapshot(), nil
 
 	case protocol.MethodScanWifi:
@@ -362,7 +382,7 @@ func (e *Engine) dispatch(ctx context.Context, sess *Session, req protocol.Reque
 		return e.wiz.Summary(), nil
 
 	case protocol.MethodStart:
-		if perr := e.Start(); perr != nil {
+		if perr := e.Start(ctx); perr != nil {
 			return nil, perr
 		}
 		return protocol.OKResult{OK: true}, nil
@@ -382,11 +402,12 @@ func (e *Engine) dispatch(ctx context.Context, sess *Session, req protocol.Reque
 		return protocol.OKResult{OK: true}, nil
 
 	case protocol.MethodSaveLog:
-		path, err := e.b.SaveLog(ctx)
+		res, err := e.b.SaveLog(ctx)
 		if err != nil {
 			return nil, protocol.Errorf(protocol.CodeInternal, "Couldn’t save the log: %v", err)
 		}
-		return protocol.SaveLogResult{Path: path}, nil
+		e.log.Printf("log saved to %s (usb=%v device=%s)", res.Path, res.OnUSB, res.Device)
+		return res, nil
 
 	case protocol.MethodReboot:
 		e.mu.Lock()
@@ -440,30 +461,52 @@ func (e *Engine) refreshDisks(ctx context.Context) {
 
 // ---- install run ----
 
-// Start begins the install (also "Try again" after a fatal failure).
-func (e *Engine) Start() *protocol.Error {
+// Start begins the install (also "Try again" after a fatal failure). It re-probes the disks
+// first: the chosen disk must still be the one the person confirmed on the Summary (same
+// model, serial, WWN and size; in alongside mode also the same partitions and free space),
+// else nothing is touched and the person is sent back to the Disk step.
+func (e *Engine) Start(ctx context.Context) *protocol.Error {
+	e.startMu.Lock()
+	defer e.startMu.Unlock()
+	e.mu.Lock()
+	perr := e.startableLocked()
+	e.mu.Unlock()
+	if perr != nil {
+		return perr
+	}
+	pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	fresh, err := e.b.Disks(pctx)
+	cancel()
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	switch e.wiz.Phase() {
-	case wizard.PhaseInstalling, wizard.PhaseAttention:
-		return protocol.Errorf(protocol.CodeState, "The install is already running.")
-	case wizard.PhaseDone:
-		return protocol.Errorf(protocol.CodeState, "Arctic Linux is already installed.")
-	case wizard.PhaseWizard:
-		if perr := e.wiz.ReadyToInstall(); perr != nil {
-			return perr
-		}
+	if perr := e.startableLocked(); perr != nil {
+		return perr
+	}
+	if err != nil {
+		e.log.Printf("disk probe before start failed: %v", err)
+		return protocol.Errorf(protocol.CodeInternal, "Couldn’t check the disk before installing. Try again.")
 	}
 	d := e.wiz.Data
+	confirmed, known := e.wiz.SelectedDisk()
+	e.disks = fresh // Summary and the Disk step show what is there now
+	disk, ok := e.wiz.SelectedDisk()
+	switch {
+	case !known || !ok:
+		return protocol.Errorf(protocol.CodeState, "The chosen disk is gone. Go back to the Disk step.")
+	case disk.InstallMedia || !disk.SameDevice(confirmed) || (d.Disk.Mode == wizard.ModeAlongside && !disk.SameLayout(confirmed)):
+		e.log.Printf("disk changed since it was confirmed: was %+v, now %+v", confirmed, disk)
+		e.wiz.DiskChanged()
+		return protocol.Errorf(protocol.CodeState, wizard.MsgDiskChanged)
+	}
+	if perr := e.wiz.ReadyToInstall(); perr != nil {
+		return perr
+	}
 	if d.Encryption.Enabled && len(e.secrets.LUKS) == 0 {
 		return protocol.Errorf(protocol.CodeState, "The encryption passphrase is missing. Go back to the Encryption step.")
 	}
 	if len(e.secrets.Password) == 0 {
 		return protocol.Errorf(protocol.CodeState, "The account password is missing. Go back to the Account step.")
-	}
-	disk, ok := e.wiz.SelectedDisk()
-	if !ok {
-		return protocol.Errorf(protocol.CodeState, "The chosen disk is gone. Go back to the Disk step.")
 	}
 	sec := &backend.Secrets{LUKS: append([]byte{}, e.secrets.LUKS...), Password: append([]byte{}, e.secrets.Password...)}
 	if !d.Encryption.Enabled {
@@ -475,21 +518,51 @@ func (e *Engine) Start() *protocol.Error {
 
 	e.wiz.BeginInstall()
 	e.running = true
-	e.lastProg, e.attention, e.failed, e.doneEv = nil, nil, nil, nil
-	e.modules = map[string]protocol.ModuleEvent{}
-	e.modOrder = nil
-	e.retried = map[string]int{}
+	e.clearRunLocked()
 	select { // drop a stale decision
 	case <-e.decision:
 	default:
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	e.cancelRun = cancel
-	e.log.Printf("install started: disk=%s mode=%s encrypted=%v firmware=%s apps=%v",
-		disk.Path, d.Disk.Mode, d.Encryption.Enabled, job.Firmware, d.Apps.Selection)
+	rctx, rcancel := context.WithCancel(context.Background())
+	e.cancelRun = rcancel
+	e.log.Printf("install started: disk=%s (%s, serial %q) mode=%s encrypted=%v firmware=%s apps=%v",
+		disk.Path, disk.Model, disk.Serial, d.Disk.Mode, d.Encryption.Enabled, job.Firmware, d.Apps.Selection)
 	e.broadcastLocked(protocol.WizardEvent{Event: protocol.EventWizard, WizardResult: e.wiz.Snapshot()}, false)
-	go e.run(ctx, job)
+	go e.run(rctx, job)
 	return nil
+}
+
+// startableLocked checks the session phase for Start.
+func (e *Engine) startableLocked() *protocol.Error {
+	switch e.wiz.Phase() {
+	case wizard.PhaseInstalling, wizard.PhaseAttention:
+		return protocol.Errorf(protocol.CodeState, "The install is already running.")
+	case wizard.PhaseDone:
+		return protocol.Errorf(protocol.CodeState, "Arctic Linux is already installed.")
+	}
+	if e.running {
+		return protocol.Errorf(protocol.CodeState, "The install is already running.")
+	}
+	return nil
+}
+
+// clearRunLocked forgets the last install run (progress, modules, attention, failure).
+func (e *Engine) clearRunLocked() {
+	e.lastProg, e.attention, e.failed, e.doneEv = nil, nil, nil, nil
+	e.modules = map[string]protocol.ModuleEvent{}
+	e.modOrder = nil
+	e.retried = map[string]int{}
+}
+
+// reopenedLocked follows Back / Goto: when they left a failed install for the wizard, the
+// failure is cleared (a reconnecting UI must not show it again) and every UI is told.
+func (e *Engine) reopenedLocked(before string) {
+	if before != wizard.PhaseFailed || e.wiz.Phase() != wizard.PhaseWizard {
+		return
+	}
+	e.log.Printf("back to the wizard after the failed install (at %s)", e.wiz.Current())
+	e.clearRunLocked()
+	e.broadcastLocked(protocol.WizardEvent{Event: protocol.EventWizard, WizardResult: e.wiz.Snapshot()}, false)
 }
 
 func (e *Engine) run(ctx context.Context, job *backend.Job) {
@@ -504,8 +577,8 @@ func (e *Engine) run(ctx context.Context, job *backend.Job) {
 		e.wiz.SetPhase(wizard.PhaseFailed)
 		ev := protocol.FailedEvent{
 			Event: protocol.EventFailed, Title: "Something went wrong while installing",
-			Message: "Arctic Linux couldn’t finish installing. Your files on other disks are untouched. Save the log to the USB stick and try again.",
-			Details: err.Error(), Fatal: true,
+			Message: "Arctic Linux couldn’t finish installing. Your files on other disks are untouched. Save the log to a USB stick, then try again or go back and change your choices.",
+			Details: err.Error(), Fatal: true, CanChange: true,
 		}
 		e.failed = &ev
 		e.broadcastLocked(ev, false)

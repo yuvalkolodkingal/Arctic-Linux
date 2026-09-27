@@ -92,8 +92,8 @@ func (b *Backend) DMI() wizard.DMI {
 func Inventory() []hw.Disk {
 	mib := func(n int64) int64 { return n * hw.MiB }
 	nvme := hw.Disk{
-		Path: "/dev/nvme0n1", Model: "Samsung SSD 980", SizeBytes: 512_110_190_592, Transport: "nvme",
-		PTType: "gpt", SectorSize: 512, ExistingOS: []string{"Windows 11"},
+		Path: "/dev/nvme0n1", Model: "Samsung SSD 980", Serial: "S69ENF0R804412X", SizeBytes: 512_110_190_592, Transport: "nvme",
+		PTType: "gpt", PTUUID: "5b6f0c61-3a2e-4d4b-9f1e-2c7d8e9a0b1c", SectorSize: 512, ExistingOS: []string{"Windows 11"},
 		Partitions: []hw.Partition{
 			{Path: "/dev/nvme0n1p1", Number: 1, StartByte: mib(1), SizeBytes: mib(100), Type: hw.TypeESP, FSType: "vfat", PartLabel: "EFI system partition"},
 			{Path: "/dev/nvme0n1p2", Number: 2, StartByte: mib(101), SizeBytes: mib(16), Type: hw.TypeMSR, PartLabel: "Microsoft reserved partition"},
@@ -103,14 +103,14 @@ func Inventory() []hw.Disk {
 		FreeRegions: []hw.Region{{StartByte: mib(314830), SizeBytes: mib(171661)}},
 	}
 	sata := hw.Disk{
-		Path: "/dev/sda", Model: "WDC WD10EZEX", SizeBytes: 1_000_204_886_016, Transport: "sata", Rotational: true,
+		Path: "/dev/sda", Model: "WDC WD10EZEX", Serial: "WD-WCC6Y4KZ1234", SizeBytes: 1_000_204_886_016, Transport: "sata", Rotational: true,
 		PTType: "gpt", SectorSize: 512,
 		Partitions: []hw.Partition{
 			{Path: "/dev/sda1", Number: 1, StartByte: mib(1), SizeBytes: 1_000_204_886_016 - mib(2), Type: hw.TypeLinux, FSType: "ext4", Label: "data"},
 		},
 	}
 	usb := hw.Disk{
-		Path: "/dev/sdb", Model: "SanDisk Ultra", SizeBytes: 30_752_000_000, Transport: "usb", Removable: true,
+		Path: "/dev/sdb", Model: "SanDisk Ultra", Serial: "4C530001230512117284", SizeBytes: 30_752_000_000, Transport: "usb", Removable: true,
 		InstallMedia: true, ReadOnly: false, PTType: "dos", SectorSize: 512,
 		Partitions: []hw.Partition{
 			{Path: "/dev/sdb1", Number: 1, StartByte: 0, SizeBytes: 2_000_000_000, Type: "0x0", FSType: "iso9660", Label: "Arctic-Linux-0.1"},
@@ -181,8 +181,9 @@ func (b *Backend) DetectTimezone(ctx context.Context) wizard.Detected {
 	return wizard.Detected{}
 }
 
-// SaveLog implements backend.Backend.
-func (b *Backend) SaveLog(ctx context.Context) (string, error) {
+// SaveLog implements backend.Backend. The mock has no USB stick: it writes to LogDir (default
+// the temp dir) and answers like the real backend does without a stick.
+func (b *Backend) SaveLog(ctx context.Context) (protocol.SaveLogResult, error) {
 	dir := b.opts.LogDir
 	if dir == "" {
 		dir = os.TempDir()
@@ -192,9 +193,20 @@ func (b *Backend) SaveLog(ctx context.Context) (string, error) {
 	b.mu.Unlock()
 	path := filepath.Join(dir, fmt.Sprintf("arctic-install-mock-%d.log", os.Getpid()))
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return "", err
+		return protocol.SaveLogResult{}, err
 	}
-	return path, nil
+	return protocol.SaveLogResult{Path: path, Message: backend.SavedLogMessage(protocol.SaveLogResult{Path: path})}, nil
+}
+
+// ApplyKeyboard implements backend.Backend (logged only).
+func (b *Backend) ApplyKeyboard(ctx context.Context, x wizard.XKB) error {
+	b.logf("keyboard for the live session: layout %s variant %q options %q", x.Layout, x.Variant, x.Options)
+	return nil
+}
+
+// SystemNames implements backend.Backend: a few of the users and groups a Fedora image has.
+func (b *Backend) SystemNames() []string {
+	return []string{"root", "bin", "daemon", "adm", "wheel", "man", "video", "audio", "input", "render", "kvm", "sddm", "nixbld", "nixbld1"}
 }
 
 // Reboot implements backend.Backend (does nothing).

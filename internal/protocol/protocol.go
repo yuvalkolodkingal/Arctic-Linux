@@ -15,7 +15,11 @@
 //   - GetWizard step titles are the short rail labels ("Time zone"); GetStep titles are the
 //     screen headings ("Where are you?").
 //   - After Goto from Summary, Next on the edited step returns straight to Summary as long as
-//     every step in between is still done.
+//     every step in between is still done (a changed language shows Keyboard first).
+//   - After a fatal failure (state "failed"), Back goes to Summary and Goto to a done step (or
+//     Summary); both return to the wizard with every answer and secret kept. Start retries.
+//   - Start re-probes the disks and refuses (code "state") when the chosen disk changed since
+//     it was picked, until the Disk step is passed again.
 package protocol
 
 import (
@@ -242,8 +246,24 @@ type SummaryResult struct {
 	PrimaryLabel string       `json:"primary_label"`
 }
 
+// SaveLogResult says where SaveLog put the log. Path is the file's real path when it was
+// written: under a mount point that stays reachable (an already mounted stick, the live
+// user's home, /tmp), or, for a USB stick the engine mounted itself and unmounted again (so it
+// can be unplugged), the file's path from the root of that stick with Device and Label set.
 type SaveLogResult struct {
 	Path string `json:"path"`
+	// OnUSB is true when the log is on a removable disk (it survives a restart).
+	OnUSB bool `json:"on_usb"`
+	// Device is the partition written to (USB only), e.g. "/dev/sdc1".
+	Device string `json:"device,omitempty"`
+	// Label names the stick (file system label, else the disk model), e.g. "KINGSTON".
+	Label string `json:"label,omitempty"`
+	// SafeToRemove is true when the stick was unmounted again after writing.
+	SafeToRemove bool `json:"safe_to_remove"`
+	// Message is the sentence to show, e.g. "Saved arctic-install-….log to the USB stick
+	// KINGSTON. You can unplug it now." or, without a stick, where the file is and that it is
+	// lost when the computer restarts.
+	Message string `json:"message"`
 }
 
 // ---- events ----
@@ -330,6 +350,9 @@ type FailedEvent struct {
 	Message string `json:"message"`
 	Details string `json:"details,omitempty"`
 	Fatal   bool   `json:"fatal"`
+	// CanChange is true when Back / Goto may leave the failure to change answers (then
+	// Start again). Start alone retries with the same answers.
+	CanChange bool `json:"can_change,omitempty"`
 }
 
 type DoneEvent struct {

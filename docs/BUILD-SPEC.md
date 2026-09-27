@@ -107,8 +107,8 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 | `GetWizard` | — | `{steps:[{id,title,state:"done"\|"current"\|"todo"\|"error"}], current}` |
 | `GetStep` | `{id}` | `{id, title, help, data:{…current values…}, options:{…}}` (per step, §4.1) |
 | `SetStep` | `{id, data}` | `{ok:true, data}` or error with `fields` |
-| `Next` / `Back` | — | `GetWizard` result (Next validates the current step first; network step only passes when online) |
-| `Goto` | `{id}` | `GetWizard` result (only to done steps — used by Summary "Change" links) |
+| `Next` / `Back` | — | `GetWizard` result (Next validates the current step first; network step only passes when online). After a fatal failure (`state:"failed"`) Back returns to the wizard at Summary |
+| `Goto` | `{id}` | `GetWizard` result (only to done steps — used by Summary "Change" links; from the install screen also `summary`). After a fatal failure Goto returns to the wizard (answers and secrets kept; SetStep is refused until then); every UI gets a `wizard` event |
 | `ScanWifi` | — | `{networks:[{ssid,signal:0-100,secure:bool,connected:bool}]}` |
 | `ConnectWifi` | `{ssid, password}` | `{ok}` or error `{code:"auth"\|"timeout", message}` |
 | `NetworkState` | — | `{online:bool, wired:bool, ssid?:string}` |
@@ -117,17 +117,17 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 | `SuggestAccount` | `{full_name}` | `{username, hostname}` (hostname = `{username}-{model}` from DMI, lowercased, `-` joined) |
 | `SetSecrets` | `{luks_passphrase?, user_password?}` | `{ok}` (kept in memory only, never logged or written) |
 | `EstimateDownload` | `{selection}` | `{apps:int, bytes:int, label:"9 apps · 1.4 GB download"}` |
-| `GetSummary` | — | `{rows:[{step, label, value}], warning, primary_label}` (primary "Erase disk and install" or "Install alongside {OS}") |
-| `Start` | — | `{ok}` then events |
+| `GetSummary` | — | `{rows:[{step, icon, label, value}], warning, primary_label}` (rows for welcome, keyboard, timezone, disk, encryption, account, apps — each `step` is a Goto target; primary "Erase disk and install" or "Install alongside {OS}") |
+| `Start` | — | `{ok}` then events. Also "Try again" after a failure. Re-probes the disks first: if the chosen disk is gone, is not the same device (model/serial/WWN/size) or, alongside, its partitions or free space changed, it answers `{code:"state"}` and refuses until the Disk step is passed again |
 | `RetryModule` / `SkipModule` | `{id}` | `{ok}` |
-| `SaveLog` | — | `{path}` (copies the log to the live USB if writable, else /tmp) |
+| `SaveLog` | — | `{path, on_usb, device?, label?, safe_to_remove, message}`: to a FAT/exFAT file system on a removable disk that is not the install medium (mounted in place, else mounted, written, synced and unmounted: `path` is then the file's path on the stick and `safe_to_remove` true), else `/home/liveuser` or /tmp (lost on restart). `message` is the sentence to show |
 | `Reboot` | — | `{ok}` |
 | `Subscribe` | — | `{ok}` then events on this connection |
 
 - Events:
   - `{"event":"progress","percent":0-100,"phase":"disk"|"copy"|"configure"|"bootloader"|"apps"|"finalize","status":"Installing Zed, your code editor…","eta_seconds":420,"substeps":[{"id":"disk","label":"Preparing the disk","state":"done"|"active"|"todo"},…4 items: disk, system ("Copying Arctic Linux"), apps ("Installing your apps"), finish ("Setting up your account")]}`
   - `{"event":"module","id":"zed","name":"Zed","status":"queued"|"downloading"|"installed"|"failed"|"skipped"|"deferred","percent":0-100}`
-  - `{"event":"attention","module":{"id","name"},"message":"The download server didn't answer.","optional":true}` → UI shows step 11 (Try again / Skip {App}); core failures: `{"event":"failed","message":"…","fatal":true}` → Save log / Try again.
+  - `{"event":"attention","module":{"id","name"},"message":"The download server didn't answer.","optional":true}` → UI shows step 11 (Try again / Skip {App}); core failures: `{"event":"failed","message":"…","fatal":true,"can_change":true}` → Save log / Try again / Change (Back or Goto).
   - `{"event":"done","apps_installed":9,"first_name":"Noa"}`
   - Status lines follow `design/guidelines/20-installer-copy.md`.
 
@@ -136,12 +136,12 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 | # | id | data | options |
 |---|---|---|---|
 | 1 | `welcome` | `{language:"en_US.UTF-8"}` | `{languages:[{id,name(native),english}], suggested}` |
-| 2 | `keyboard` | `{layout:"us", variant:""}` | `{layouts:[{layout,variant,name,description,suggested:bool}]}` |
+| 2 | `keyboard` | `{layout:"us", variant:"", xkb:{layout, variant, options, keymap, latin}}` (`xkb` is read-only, what the choice gives: Latin layouts alone; non-Latin ones as `us,<layout>` with `grp:alt_shift_toggle` and a Latin console keymap). A valid SetStep also writes `xkb` to the live system's `/etc/arctic/mango/keyboard.conf` (sourced by the live session); the UI then runs `mmsg dispatch reload_config`, so passwords are typed as on the installed system | `{layouts:[{layout,variant,name,description,suggested:bool}]}` |
 | 3 | `network` | `{}` | `{online,wired,ssid}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online |
 | 4 | `timezone` | `{timezone:"Asia/Jerusalem", auto_time:true}` | `{detected:{city,timezone,source:"network"\|"default"}, regions:{Europe:[{city,timezone}],…}}` |
-| 5 | `disk` | `{disk:"/dev/nvme0n1", mode:"erase"\|"alongside"}` | `{disks:[{path,model,size_bytes,size_label,removable,install_media:bool,existing_os:[…],alongside_possible:bool,alongside_label:"Uses 120 GB of free space"}]}` (install media excluded; alongside needs ≥ 40 GB free) |
+| 5 | `disk` | `{disk:"/dev/nvme0n1", mode:"erase"\|"alongside"}` | `{disks:[{path,model,size_bytes,size_label,removable,install_media:bool,existing_os:[…],alongside_possible:bool,alongside_label:"Uses 120 GB of free space"}]}` (install media excluded; alongside needs ≥ 40 GB free, on UEFI an ESP to share, on MBR room for two primary partitions) |
 | 6 | `encryption` | `{enabled:true}` | `{min_score:2}` (passphrase via SetSecrets) |
-| 7 | `account` | `{full_name, username, hostname, autologin:false}` | `{hostname_hint:"Suggested from your name and computer"}` (password via SetSecrets) |
+| 7 | `account` | `{full_name, username, hostname, autologin:false}` (username: not a user or group the copied system has) | `{hostname_hint:"Suggested from your name and computer"}` (password via SetSecrets) |
 | 8 | `apps` | `{selection:{browser:["zen"],editor:["zed"],…}}` | catalog: `{categories:[{id,name,choice:"one"\|"any",note}], modules:[{id,name,summary,category,default,tile,download_mb,source,in_live_image}]}` |
 | 9 | `summary` | — | via GetSummary |
 | 10 | `install` | — | events |
@@ -168,10 +168,16 @@ reference module ids only.
 
 Real mode implements PLAN §6: preflight, disk (erase layout: 1 MiB bios_grub, 1 GiB ESP, 2 GiB
 ext4 /boot, LUKS2 + btrfs @ @home @var_log @nix; alongside: reuse ESP, new /boot + LUKS in free
-space), copy the live root (`/run/rootfsbase` if present else the mounted squashfs; rsync -aAXH),
+space, partitions numbered explicitly in the sfdisk script and deleted again if the install
+fails; before the first destructive command automounts/swap are released and md/device-mapper
+holders stopped, anything else mounted stops the install), copy the live root (`/run/rootfsbase`
+if present else the mounted squashfs; rsync -aAXH without `security.selinux` and without
+touching the mounted vfat ESP — `/boot/efi/` excluded, its files copied with `rsync -rt`),
 remove live-only packages (arctic-live, livesys-scripts, arctic-installer, dracut-live),
 machine-id, systemd-firstboot, fstab/crypttab, user (useradd -R, pre-hashed yescrypt/SHA-512 via
-`openssl passwd -6` or Go crypt), sddm enable, `/etc/arctic/mango/keyboard.conf`,
+`openssl passwd -6` or Go crypt), sddm enable, `/etc/arctic/mango/keyboard.conf` (+ the
+greeter's copy and vconsole.conf; non-Latin layouts as `us,<layout>` + `grp:alt_shift_toggle`
+with a Latin console keymap),
 `/etc/arctic/default-apps`, kernel-install/dracut, grub2-mkconfig, efibootmgr/grub2-install,
 app diff (dnf remove/install in chroot, flatpak from host with FLATPAK_* into /mnt, nix via
 `nix --store /mnt profile add`), setfiles relabel, unmount. Every command goes through a
