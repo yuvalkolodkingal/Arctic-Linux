@@ -48,12 +48,14 @@ jobs:
       - name: Build RPMs
         env:
           # The Arctic repository's public key goes into arctic-release, which then enables the
-          # repository (updates for Arctic's own packages). Without the secret (forks) the ISO
-          # still builds, with the Arctic repositories disabled.
+          # repository (updates for Arctic's own packages). Here the key is required: an ISO
+          # without it would install systems that never get Arctic updates. Forks (no secret)
+          # still build, with the Arctic repositories disabled.
           ARCTIC_GPG_PUBLIC_KEY: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY }}
+          ARCTIC_REQUIRE_GPG_KEY: ${{ github.repository == 'yuvalkolodkingal/O-Tism' && '1' || '0' }}
         run: |
-          # Every build gets its own Release (1.<UTC time>.git<commit>): the packages on the ISO
-          # are older than every later build published to the repository.
+          # Every build gets its own Release (1.<UTC commit time>.<UTC build time>.git<commit>):
+          # the repository's builds of newer commits update the packages on the ISO.
           tools/build-rpms.sh
           cat out/BUILD-INFO
 
@@ -111,7 +113,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SPLIT: ${{ steps.size.outputs.split }}
+          CANONICAL: ${{ github.repository == 'yuvalkolodkingal/O-Tism' }}
         run: |
+          # A released ISO must install systems that get Arctic's updates.
+          if [ "$CANONICAL" = true ] && ! grep -qx 'arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
+            echo "::error title=Arctic repositories disabled::out/iso/${ISO%.iso}.build-info lacks arctic_repos=enabled: arctic-release was built without the repository key (ARCTIC_GPG_PUBLIC_KEY). Not publishing a release whose systems would never get Arctic updates."
+            exit 1
+          fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
