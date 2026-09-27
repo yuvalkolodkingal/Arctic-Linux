@@ -186,11 +186,12 @@ type Module struct {
 	NetworkHint string   `toml:"network_hint" json:"network_hint,omitempty"` // Network step, {device} filled in
 
 	Dir string `toml:"-" json:"-"`
-	// Set by MarkDetected: a device matched (Device is its label, BootDisplay whether it
-	// drives the boot screen).
-	Detected    bool   `toml:"-" json:"-"`
-	Device      string `toml:"-" json:"-"`
-	BootDisplay bool   `toml:"-" json:"-"`
+	// Set by MarkDetected: a device matched (Device is its label, PCI the device, BootDisplay
+	// whether it drives the boot screen).
+	Detected    bool         `toml:"-" json:"-"`
+	Device      string       `toml:"-" json:"-"`
+	PCI         hw.PCIDevice `toml:"-" json:"-"`
+	BootDisplay bool         `toml:"-" json:"-"`
 	hardware    bool
 }
 
@@ -637,18 +638,86 @@ func (s Selection) Contains(id string) bool {
 	return false
 }
 
-// DefaultSelection is what the picker starts with.
+// DefaultSelection is what the picker starts with. Drivers are ticked only when their device
+// was detected, and not when an earlier driver that conflicts with them is ticked already
+// (a machine with two NVIDIA cards of different generations gets the first one's driver).
 func (c *Catalog) DefaultSelection() Selection {
 	sel := Selection{}
 	for _, cat := range c.Categories {
 		sel[cat.ID] = []string{}
 		for _, id := range cat.Modules {
-			if c.Modules[id].Default {
+			m := c.Modules[id]
+			if !m.Default || (m.hardware && !m.Detected) {
+				continue
+			}
+			clash := false
+			for _, x := range m.Conflicts {
+				if sel.Contains(x) {
+					clash = true
+				}
+			}
+			for _, prev := range sel[cat.ID] {
+				for _, x := range c.Modules[prev].Conflicts {
+					if x == id {
+						clash = true
+					}
+				}
+			}
+			if !clash {
 				sel[cat.ID] = append(sel[cat.ID], id)
 			}
 		}
 	}
 	return sel
+}
+
+// MarkDetected matches the drivers' [[detect]] rules against the machine's PCI devices and
+// records the first matching device on each driver (Detected, Device, PCI, BootDisplay).
+// Drivers that match nothing are not offered. It returns the detected drivers in catalog
+// order. Call it once, before DefaultSelection, Picker and Validate are used.
+func (c *Catalog) MarkDetected(h hw.Hardware) []*Module {
+	boot, hasBoot := h.BootDisplay()
+	var out []*Module
+	for _, id := range c.Order {
+		m := c.Modules[id]
+		if !m.hardware {
+			continue
+		}
+		m.Detected, m.Device, m.PCI, m.BootDisplay = false, "", hw.PCIDevice{}, false
+		for _, p := range h.PCI {
+			if !m.MatchesDevice(p) {
+				continue
+			}
+			m.Detected, m.Device, m.PCI = true, p.Label(), p
+			m.BootDisplay = hasBoot && p.IsDisplay() && p.Slot == boot.Slot
+			break
+		}
+		if m.Detected {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// MatchesDevice reports whether any of the module's [[detect]] rules matches the device.
+func (m *Module) MatchesDevice(p hw.PCIDevice) bool {
+	for _, d := range m.Detect {
+		if d.Matches(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// DetectedDrivers are the drivers MarkDetected found hardware for, in catalog order.
+func (c *Catalog) DetectedDrivers() []*Module {
+	var out []*Module
+	for _, id := range c.Order {
+		if m := c.Modules[id]; m.hardware && m.Detected {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // Normalize orders each category's ids in catalog order and drops duplicates. Unknown ids are
@@ -710,6 +779,8 @@ func (c *Catalog) Validate(sel Selection) map[string]string {
 			m, ok := c.Modules[id]
 			if !ok || m.Hidden {
 				set(k, fmt.Sprintf("We don't know an app called %q.", id))
+			} else if m.hardware && !m.Detected {
+				set(k, fmt.Sprintf("%s is only for hardware this computer doesn’t have.", m.Name))
 			} else if m.Category != k {
 				set(k, fmt.Sprintf("%s belongs under %s.", m.Name, c.catName(m.Category)))
 			}
@@ -772,7 +843,19 @@ func (c *Catalog) Resolve(sel Selection) []*Module {
 func (c *Catalog) Apps(sel Selection) []*Module {
 	var out []*Module
 	for _, m := range c.Resolve(sel) {
-		if !m.Hidden && sel.Contains(m.ID) {
+		if !m.Hidden && !m.hardware && sel.Contains(m.ID) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// Drivers are the drivers a selection installs (modules of a hardware category), in catalog
+// order. They are not counted as apps.
+func (c *Catalog) Drivers(sel Selection) []*Module {
+	var out []*Module
+	for _, m := range c.Resolve(sel) {
+		if m.hardware && sel.Contains(m.ID) {
 			out = append(out, m)
 		}
 	}
@@ -781,9 +864,10 @@ func (c *Catalog) Apps(sel Selection) []*Module {
 
 // Estimate is the picker footer.
 type Estimate struct {
-	Apps  int    `json:"apps"`
-	Bytes int64  `json:"bytes"`
-	Label string `json:"label"`
+	Apps    int    `json:"apps"`
+	Drivers int    `json:"drivers,omitempty"`
+	Bytes   int64  `json:"bytes"`
+	Label   string `json:"label"`
 }
 
 // EstimateDownload counts the apps a selection installs and sums what has to be downloaded:
@@ -791,9 +875,12 @@ type Estimate struct {
 func (c *Catalog) EstimateDownload(sel Selection) Estimate {
 	var mb float64
 	runtimes := map[string]bool{}
-	apps := 0
+	apps, drivers := 0, 0
 	for _, m := range c.Resolve(sel) {
-		if !m.Hidden && sel.Contains(m.ID) {
+		switch {
+		case m.hardware && sel.Contains(m.ID):
+			drivers++
+		case !m.Hidden && sel.Contains(m.ID):
 			apps++
 		}
 		if m.InLiveImage {
@@ -807,15 +894,22 @@ func (c *Catalog) EstimateDownload(sel Selection) Estimate {
 		}
 	}
 	bytes := int64(mb * hw.MB)
-	noun := "apps"
-	if apps == 1 {
-		noun = "app"
+	count := plural(apps, "app", "apps")
+	if drivers > 0 {
+		count += " + " + plural(drivers, "driver", "drivers")
 	}
-	label := fmt.Sprintf("%d %s · %s download", apps, noun, hw.DownloadLabel(bytes))
+	label := fmt.Sprintf("%s · %s download", count, hw.DownloadLabel(bytes))
 	if bytes == 0 {
-		label = fmt.Sprintf("%d %s · nothing to download", apps, noun)
+		label = fmt.Sprintf("%s · nothing to download", count)
 	}
-	return Estimate{Apps: apps, Bytes: bytes, Label: label}
+	return Estimate{Apps: apps, Drivers: drivers, Bytes: bytes, Label: label}
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, one)
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }
 
 // PickerCategory / PickerModule are the JSON shapes of the apps step options.
@@ -826,6 +920,8 @@ type PickerCategory struct {
 	Required bool   `json:"required"`
 	Rule     string `json:"rule"`
 	Note     string `json:"note"`
+	// Hardware marks the drivers section (only present when a driver was detected).
+	Hardware bool `json:"hardware,omitempty"`
 }
 
 type PickerModule struct {
@@ -842,6 +938,8 @@ type PickerModule struct {
 	Method      string  `json:"method"`
 	Verified    bool    `json:"verified"`
 	InLiveImage bool    `json:"in_live_image"`
+	// Device names the detected hardware a driver is for ("NVIDIA GeForce RTX 4060 …").
+	Device string `json:"device,omitempty"`
 }
 
 // Picker is the catalog as the apps step shows it.
@@ -850,20 +948,34 @@ type Picker struct {
 	Modules    []PickerModule   `json:"modules"`
 }
 
-// Picker returns the visible catalog in picker order.
+// Picker returns the visible catalog in picker order. Drivers appear only when their
+// hardware was detected, and a hardware category only when it offers a driver.
 func (c *Catalog) Picker() Picker {
-	var p Picker
+	p := Picker{Categories: []PickerCategory{}, Modules: []PickerModule{}}
+	def := c.DefaultSelection()
 	for _, cat := range c.Categories {
-		p.Categories = append(p.Categories, PickerCategory{ID: cat.ID, Name: cat.Name, Choice: cat.Choice, Required: cat.Required, Rule: cat.Rule(), Note: cat.Note})
+		var mods []PickerModule
 		for _, id := range cat.Modules {
 			m := c.Modules[id]
+			if !m.Available() {
+				continue
+			}
 			in := m.Primary()
-			p.Modules = append(p.Modules, PickerModule{
+			pm := PickerModule{
 				ID: m.ID, Name: m.Name, Summary: m.Summary, Category: m.Category, Default: m.Default, Always: m.Always,
 				Tile: m.Tile, Icon: m.Icon, DownloadMB: m.DownloadMB(), Source: SourceLabel(in), Method: in.Method,
 				Verified: in.Verified, InLiveImage: m.InLiveImage,
-			})
+			}
+			if m.hardware {
+				pm.Summary, pm.Device, pm.Default = m.Fill(m.Summary), m.Device, def.Contains(m.ID)
+			}
+			mods = append(mods, pm)
 		}
+		if cat.Hardware && len(mods) == 0 {
+			continue
+		}
+		p.Categories = append(p.Categories, PickerCategory{ID: cat.ID, Name: cat.Name, Choice: cat.Choice, Required: cat.Required, Rule: cat.Rule(), Note: cat.Note, Hardware: cat.Hardware})
+		p.Modules = append(p.Modules, mods...)
 	}
 	return p
 }
