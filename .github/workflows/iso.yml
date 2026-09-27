@@ -46,7 +46,16 @@ jobs:
           df -h / /mnt
 
       - name: Build RPMs
-        run: tools/build-rpms.sh
+        env:
+          # The Arctic repository's public key goes into arctic-release, which then enables the
+          # repository (updates for Arctic's own packages). Without the secret (forks) the ISO
+          # still builds, with the Arctic repositories disabled.
+          ARCTIC_GPG_PUBLIC_KEY: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY }}
+        run: |
+          # Every build gets its own Release (1.<UTC time>.git<commit>): the packages on the ISO
+          # are older than every later build published to the repository.
+          tools/build-rpms.sh
+          cat out/BUILD-INFO
 
       - name: Build ISO
         run: tools/build-iso.sh --work /mnt/arctic/kiwi-work
@@ -76,6 +85,7 @@ jobs:
             out/iso/${{ env.ISO }}.sha256
             out/iso/*.packages
             out/iso/*.build-info
+            out/BUILD-INFO
           compression-level: 0
           retention-days: 14
 
@@ -119,9 +129,14 @@ jobs:
               echo "Zen Browser is preinstalled in the live session."
             fi
             echo
-            echo "Updates: Fedora's packages update as usual (\`sudo dnf upgrade\`). Arctic's own packages"
-            echo "(desktop, shell, branding, Mango) have no online repository yet, so they only change"
-            echo "with a new Arctic release (packaging/release/arctic.repo is there, disabled, for when it exists)."
+            if grep -q '^arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
+              echo "Updates: Fedora's packages come from Fedora's repositories, Arctic's own packages (desktop,"
+              echo "shell, installer, branding, Mango) from the signed Arctic package repository,"
+              echo "https://yuvalkolodkingal.github.io/O-Tism/ (the stable channel; the testing channel is off)."
+            else
+              echo "Updates: Fedora's packages update as usual. This ISO was built without the Arctic repository"
+              echo "key, so the Arctic package repository is disabled on it."
+            fi
             echo
             echo "SHA-256: \`$sha\`"
             if [ "$SPLIT" = true ]; then
