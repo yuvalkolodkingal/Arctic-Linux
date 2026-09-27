@@ -32,9 +32,21 @@ zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
 # ---- Theme colours: the active theme's zsh/colors.zsh (prompt, completion menu, plugins),
 #      read again before the next prompt whenever the theme changes. fzf reads its colours
-#      from the theme on every run; bat and delta use the terminal's palette. -------
-export FZF_DEFAULT_OPTS_FILE="${FZF_DEFAULT_OPTS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/fzf/fzfrc}"
+#      from the theme's fzf/fzfrc on every run, but refuses to start when
+#      FZF_DEFAULT_OPTS_FILE names a missing file: so it is set only while the file is
+#      there (checked before every prompt; your own FZF_DEFAULT_OPTS_FILE is never touched).
+#      bat and delta use the terminal's palette. -------
 export BAT_THEME="${BAT_THEME:-ansi}"
+_arctic_fzf() {
+  local f=${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/fzf/fzfrc
+  [[ -n ${FZF_DEFAULT_OPTS_FILE:-} && $FZF_DEFAULT_OPTS_FILE != "$f" ]] && return 0
+  if [[ -r $f ]]; then
+    export FZF_DEFAULT_OPTS_FILE=$f
+  else
+    unset FZF_DEFAULT_OPTS_FILE
+  fi
+}
+_arctic_fzf
 zmodload -F zsh/stat b:zstat 2>/dev/null
 typeset -g _arctic_colors_seen=
 _arctic_colors() {   # source colors.zsh when the active theme (or its file) changed
@@ -55,6 +67,7 @@ autoload -Uz vcs_info
 zstyle ':vcs_info:*' enable git
 typeset -g _ap_dir=2 _ap_arrow=3 _ap_error=1 _ap_git=8
 _arctic_prompt_colors() {
+  _arctic_fzf
   _arctic_colors
   if [[ $COLORTERM == (truecolor|24bit) && -n ${ARCTIC_PROMPT_COLORS[dir]:-} ]]; then
     _ap_dir=${ARCTIC_PROMPT_COLORS[dir]} _ap_arrow=${ARCTIC_PROMPT_COLORS[arrow]}

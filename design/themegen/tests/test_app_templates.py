@@ -461,6 +461,70 @@ class DotfilesTest(unittest.TestCase):
         self.assertIn("cursor_theme=Adwaita", look.splitlines())
 
 
+class ShellFzfTest(unittest.TestCase):
+    """bash and zsh set FZF_DEFAULT_OPTS_FILE only while the theme has fzf/fzfrc (fzf exits
+    when it names a missing file) and never replace your own."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self.tmp.name) / "home"
+        self.arctic = self.home / ".config/arctic"
+        self.empty = Path(self.tmp.name) / "empty-theme"
+        self.empty.mkdir()
+        self.full = render_all(builtin_palettes()["polar-night"], Path(self.tmp.name) / "polar-night",
+                               only=("fzf/fzfrc",))
+        self.arctic.mkdir(parents=True)
+        (self.arctic / "current").symlink_to(self.empty)
+        self.rc = self.full / "fzf/fzfrc"
+        self.ours = str(self.arctic / "current/fzf/fzfrc")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def switch(self):
+        return 'ln -sfn "%s" "%s"' % (self.full, self.arctic / "current")
+
+    def run_shell(self, argv, script, **env):
+        e = {"HOME": str(self.home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+             "TERM": "dumb", "ARCTIC_FETCH": "0", "LANG": "C.UTF-8"}
+        e.update(env)
+        r = subprocess.run(argv + [script], env=e, capture_output=True, text=True, timeout=30,
+                           stdin=subprocess.DEVNULL)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout.split()
+
+    def check(self, argv, prelude, prompt):
+        show = 'echo "${FZF_DEFAULT_OPTS_FILE-unset}"; '
+        # No fzf/fzfrc in the theme: not set; after a switch to a theme with one, the next prompt sets it.
+        out = self.run_shell(argv, prelude + show + self.switch() + "; " + prompt + "; " + show)
+        self.assertEqual(out, ["unset", self.ours])
+        # Back to a theme without it: unset again.
+        (self.arctic / "current").unlink()
+        (self.arctic / "current").symlink_to(self.full)
+        out = self.run_shell(argv, prelude + show + 'ln -sfn "%s" "%s"; ' % (self.empty, self.arctic / "current")
+                             + prompt + "; " + show)
+        self.assertEqual(out, [self.ours, "unset"])
+        # Your own value stays.
+        out = self.run_shell(argv, prelude + prompt + "; " + show, FZF_DEFAULT_OPTS_FILE="/my/fzfrc")
+        self.assertEqual(out, ["/my/fzfrc"])
+        if shutil.which("fzf"):
+            (self.arctic / "current").unlink()
+            (self.arctic / "current").symlink_to(self.empty)
+            self.run_shell(argv, prelude + "printf 'abc\\n' | fzf --filter a >/dev/null")
+            (self.arctic / "current").unlink()
+            (self.arctic / "current").symlink_to(self.full)
+            self.run_shell(argv, prelude + "printf 'abc\\n' | fzf --filter a >/dev/null")
+
+    def test_bash(self):
+        rc = DOTFILES / ".bashrc.d/arctic.sh"
+        self.check(["bash", "--norc", "--noprofile", "-ic"], 'source "%s"; ' % rc, 'eval "$PROMPT_COMMAND"')
+
+    @unittest.skipIf(shutil.which("zsh") is None, "zsh is not installed")
+    def test_zsh(self):
+        shutil.copy(DOTFILES / ".zshrc", self.home / ".zshrc")
+        self.check(["zsh", "-ic"], "", "precmd")
+
+
 class HooksTest(unittest.TestCase):
     """packaging/theme-hooks.d against a throwaway home directory."""
 
