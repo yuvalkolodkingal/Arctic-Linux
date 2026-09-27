@@ -247,6 +247,19 @@ class ArcticThemeTests(unittest.TestCase):
         self.theme("set", "wallpaper")
         self.assertEqual(self.theme().stdout, "wallpaper\n")
 
+    def test_login_survives_a_broken_picture(self):
+        broken = os.path.join(self.pictures, "broken.png")
+        with open(broken, "wb") as f:
+            f.write(b"not a picture")
+        self.choose(broken)
+        r = self.theme("apply")                 # auto colours on by default
+        self.assertIn("keeping polar-night", r.stderr)
+        self.assertEqual(self.linked(), os.path.join(self.share, "themes", "polar-night"))
+        self.assertIn("makoctl reload", self.calls())
+        r = self.theme("sync", ok=False)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("broken.png", r.stderr)
+
     def test_settings_keep_other_keys(self):
         with open(os.path.join(self.config, "settings.json"), "w") as f:
             json.dump({"other_app": {"x": 1}}, f)

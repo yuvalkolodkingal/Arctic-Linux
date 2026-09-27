@@ -537,7 +537,12 @@ def cmd_toggle():
 
 
 def cmd_apply():
-    name = follow_wallpaper()[0] if auto_colors() else active_name()
+    name = active_name()
+    if auto_colors():
+        try:
+            name = follow_wallpaper()[0]
+        except Error as e:      # login must always end with a theme applied
+            warn("{}; keeping {}".format(e, name))
     if theme_dir(name)[0] is None:
         warn("theme '{}' is missing; using {}".format(name, DEFAULT_THEME))
         name = DEFAULT_THEME
