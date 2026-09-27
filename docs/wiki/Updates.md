@@ -16,7 +16,8 @@ while you work, and it never restarts the computer by itself.
 2. **Downloaded in the background.** The updates are downloaded at the lowest priority and
    tested: dnf checks that they install cleanly, without installing anything yet. Your running
    system isn't touched.
-3. **Ready.** The bar shows **Restart to update**, and a notification says so once.
+3. **Ready.** The bar shows **Restart to update**, and a notification says so once (the same
+   updates downloaded again by the next day's check aren't announced again).
 4. **Installed at the next start.** The next time the computer starts (a restart, or when you
    switch it on again after shutting down), it installs the updates before the desktop appears,
    then restarts once more into the updated system. The boot screen stays up while it works;
@@ -37,9 +38,14 @@ now (save your work first); **Later** closes the card, and the updates wait for 
 `arctic-shell-ipc updates toggle` opens the card from a key binding.
 
 If you install or remove software after the updates were downloaded (with `dnf` or Get apps),
-they no longer fit the system exactly, so they aren't installed and the item disappears. The
-next daily check prepares them again, reusing what it already downloaded; `arctic-update now`
-does it right away.
+they no longer fit the system exactly, so they aren't installed and the item disappears. Two
+minutes later Arctic Linux prepares them again, reusing what it already downloaded, and the item
+comes back; `arctic-update now` does it right away.
+
+If installing the updates fails during a restart, the computer starts normally without them and
+a notification says so; `arctic-update` shows what went wrong (`dnf5 offline log` has the whole
+story). They are downloaded and tried again at the next restart. After two failures in a row,
+Arctic Linux stops scheduling updates by itself until you run `arctic-update now`.
 
 ## The `arctic-update` command
 
@@ -51,7 +57,8 @@ password.
 | `arctic-update` | Shows the channel, automatic updates, the last check and what's waiting |
 | `arctic-update status --json` | The same as JSON, for scripts |
 | `arctic-update now` | Checks and downloads now, with progress. The updates are installed at the next restart. |
-| `arctic-update now --sync` | The same, and also moves packages back to your channel's own builds (after leaving testing) |
+| `arctic-update now --sync` | The same, but syncs every package to the versions in the enabled repositories: after leaving testing, packages go back to the stable builds (this also downgrades anything newer than the repositories have, such as packages from updates-testing or your own builds) |
+| `arctic-update now --replace` | Checks even when another command prepared an offline transaction (see [below](#offline-transactions-of-your-own)), and cancels that one |
 | `arctic-update apply` | Restarts now and installs the waiting updates (asks first; `--yes` doesn't) |
 | `arctic-update channel` | Shows the channel; `channel stable` or `channel testing` switches |
 | `arctic-update auto` | Shows automatic updates; `auto on`, `auto download-only` or `auto off` changes them |
@@ -99,6 +106,10 @@ right away:
 arctic-update now --sync         # installed at the next restart
 ```
 
+`--sync` is a `dnf distro-sync`: every package goes to the version in the repositories that are
+enabled, not only Arctic's. Packages you installed from a repository that is disabled now
+(updates-testing, say) or built yourself are moved back too; `dnf history` shows what changed.
+
 Switching channels drops updates that were downloaded but not installed yet; the next check
 downloads the right ones.
 
@@ -110,9 +121,31 @@ arctic-update auto off             # no daily check; arctic-update now checks by
 arctic-update auto on              # back to the default
 ```
 
+Updates that were already waiting for the next restart stay downloaded but are no longer
+installed by themselves after `auto off` or `auto download-only`: `arctic-update apply` installs
+them. Updates you check for yourself with `arctic-update now` are always installed at the next
+restart, whatever this setting.
+
 The settings live in `/etc/arctic/update.conf`, which you can also edit (`AUTO=` and
 `METERED=`); the next check reads them. `journalctl -u arctic-update-stage` shows what each
 check did.
+
+## Offline transactions of your own
+
+dnf can prepare other changes for the next restart too: `sudo dnf install --offline <package>`,
+or `sudo dnf system-upgrade download --releasever=45` for the next Fedora release. There is room
+for one such change at a time, so Arctic Linux leaves yours alone: the daily check doesn't
+download its updates while yours waits (`arctic-update` says so), and `arctic-update now` and
+`arctic-update channel` stop and ask you to decide:
+
+```sh
+sudo dnf5 offline status           # what is waiting
+sudo dnf5 offline reboot           # restart now and do it
+sudo dnf5 offline clean            # or throw it away
+arctic-update now --replace        # or cancel it and get Arctic's updates instead
+```
+
+Once yours is done or removed, the daily updates carry on.
 
 ## Metered connections
 
