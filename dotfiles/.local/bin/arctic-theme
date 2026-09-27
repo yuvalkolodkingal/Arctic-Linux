@@ -23,7 +23,8 @@ fuzzel, swaylock, waybar and GTK read their colours through it. Settings live in
 ~/.config/arctic/settings.json ("auto_colors", default on; "wallpaper_mode", default auto).
 After a switch, every executable in /usr/share/arctic/theme-hooks.d and
 ~/.config/arctic/theme-hooks.d runs with ARCTIC_THEME_DIR, ARCTIC_THEME_MODE and ARCTIC_THEME_NAME
-(a file of yours replaces the system hook of the same name; 5 s limit; failures are ignored).
+(a file of yours replaces the system hook of the same name; 5 s limit; failures are ignored;
+what a hook prints is passed on as a warning).
 """
 import contextlib
 import fcntl
@@ -34,6 +35,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 
 HOME = os.path.expanduser("~")
 CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "arctic")
@@ -55,6 +57,7 @@ BUILTIN_FOR_MODE = {"dark": "polar-night", "light": "winter"}
 WALLPAPER_THEME = "wallpaper"
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 HOOK_TIMEOUT = float(os.environ.get("ARCTIC_THEME_HOOK_TIMEOUT", "5"))
+HOOK_OUTPUT_MAX = 4096                # bytes of a hook's output passed on as a warning
 
 
 class Error(Exception):
@@ -453,21 +456,30 @@ def run_hooks(info):
         path = hooks[fn]
         if not (os.path.isfile(path) and os.access(path, os.X_OK)):
             continue
-        try:
-            proc = subprocess.Popen([path], env=env, stdin=subprocess.DEVNULL, stdout=sys.stderr.fileno(),
-                                    start_new_session=True)
-        except OSError as e:
-            warn("hook {}: {}".format(path, e))
-            continue
-        try:
-            rc = proc.wait(timeout=HOOK_TIMEOUT)
-            if rc:
-                warn("hook {} failed (exit {})".format(path, rc))
-        except subprocess.TimeoutExpired:
-            with contextlib.suppress(OSError):
-                os.killpg(proc.pid, signal.SIGKILL)
-            proc.wait()
-            warn("hook {} took longer than {:g}s and was stopped".format(path, HOOK_TIMEOUT))
+        # The hook's output goes to an unlinked file, never to our own stdout/stderr: a program
+        # a hook leaves running would otherwise hold the caller's pipe open (arctic-wallpaper and
+        # the shell collect arctic-theme's output and would wait for it).
+        with tempfile.TemporaryFile() as out:
+            try:
+                proc = subprocess.Popen([path], env=env, stdin=subprocess.DEVNULL, stdout=out,
+                                        stderr=subprocess.STDOUT, start_new_session=True)
+            except OSError as e:
+                warn("hook {}: {}".format(path, e))
+                continue
+            try:
+                rc = proc.wait(timeout=HOOK_TIMEOUT)
+                problem = "failed (exit {})".format(rc) if rc else None
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(OSError):
+                    os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
+                problem = "took longer than {:g}s and was stopped".format(HOOK_TIMEOUT)
+            out.seek(0)
+            text = out.read(HOOK_OUTPUT_MAX).decode("utf-8", "replace").rstrip()
+        if text:
+            warn("hook {}: {}".format(path, text.replace("\n", "\n  ")))
+        if problem:
+            warn("hook {} {}".format(path, problem))
 
 
 def reload(redraw=True):

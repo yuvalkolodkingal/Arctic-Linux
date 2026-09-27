@@ -302,6 +302,15 @@ class ArcticThemeTests(unittest.TestCase):
             for fn in os.listdir(system_hooks):
                 os.unlink(os.path.join(system_hooks, fn))
 
+    def test_hook_background_programs_do_not_hold_the_output(self):
+        user_hooks = os.path.join(self.config, "theme-hooks.d")
+        os.makedirs(user_hooks)
+        write_exec(os.path.join(user_hooks, "10-daemon"), "sleep 30 &\necho started a daemon")
+        t = time.monotonic()
+        r = self.theme("reload")           # captured output: waits for EOF on arctic-theme's pipes
+        self.assertLess(time.monotonic() - t, 5)
+        self.assertIn("10-daemon: started a daemon", r.stderr)
+
     @unittest.skipUnless(shutil.which("setsid"), "arctic-wallpaper needs setsid (util-linux)")
     def test_arctic_wallpaper_switches_the_colours(self):
         env = dict(self.env, PATH=os.pathsep.join([self.fakes, BIN, "/usr/bin", "/bin"]))
