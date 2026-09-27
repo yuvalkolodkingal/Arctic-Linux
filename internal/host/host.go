@@ -83,6 +83,16 @@ func IsLive() bool {
 	return strings.Contains(readTrim("/proc/cmdline"), "rd.live.image")
 }
 
+// ImageHasFlatpak reports whether the live image (the read-only root the installer copies,
+// else /) has a Flatpak app installed system-wide.
+func ImageHasFlatpak(ref string) bool {
+	root := "/run/rootfsbase"
+	if !exists(root) {
+		root = "/"
+	}
+	return exists(filepath.Join(root, "var/lib/flatpak/app", ref))
+}
+
 // Info implements backend.Backend.
 func (b *Backend) Info() backend.Info {
 	return backend.Info{Mock: false, Live: IsLive(), Firmware: Firmware()}

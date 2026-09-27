@@ -100,6 +100,12 @@ def busy(path, box):
     return ImageStat.Stat(Image.open(path).convert("L").crop(box)).stddev[0]
 
 
+def rmean(path, box):
+    """Mean luminance (0-255) inside box."""
+    from PIL import ImageStat
+    return ImageStat.Stat(Image.open(path).convert("L").crop(box)).mean[0]
+
+
 def region_diff(a, b, box):
     ia = Image.open(a).convert("L").crop(box)
     ib = Image.open(b).convert("L").crop(box)
@@ -745,7 +751,11 @@ class Tour:
         # The live user's shell is bash (no greeting); the greeting is `arctic-fetch`.
         self.vm.type_text("clear; arctic-fetch", gap=0.15)
         self.vm.keys("ret")
-        time.sleep(8)
+        # The greeting prints once it has read the system info (kitty --version and friends are
+        # slow under TCG): wait for the fox's white blocks, then for the animation to end.
+        if not self.wait_for(lambda q: busy(q, (20, 60, 300, 250)) > 25, "the fox greeting", 120, 2.0):
+            log("warning: no fox greeting seen in the terminal")
+        time.sleep(10)
         p = self.settle("terminal-fetch", timeout=120, interval=2, need=3)
         self.save(p, "terminal-fetch")
         if not self.want_any(["tiling", "theme-winter"]):
@@ -773,22 +783,34 @@ class Tour:
         p = self.settle("tiling", timeout=120, interval=2, need=3)
         self.save(p, "tiling")
         if self.want("theme-winter"):
-            cur = p
+            # Everything restyles one after the other (shell, kitty, GTK, Mango's borders, the
+            # wallpaper's Winter variant); under TCG that takes a while, so wait for the bar and
+            # the terminal to be light before the picture.
             self.vm.keys("meta_l-shift-t")
-            self.wait_change(cur, "the Winter theme", 60, thresh=0.2)
-            time.sleep(5)
-            p = self.settle("theme-winter", timeout=120, interval=2, need=3)
+            if not self.wait_for(lambda q: rmean(q, (300, 2, 980, 30)) > 170 and rmean(q, (40, 420, 620, 760)) > 170,
+                                 "the Winter theme everywhere", 300, 3.0):
+                log("warning: the Winter theme did not reach the bar and the terminal")
+            time.sleep(15)
+            p = self.settle("theme-winter", timeout=180, interval=4, need=3)
             self.save(p, "theme-winter")
             self.vm.keys("meta_l-shift-t")
-            self.wait_change(p, "Polar night again", 60, thresh=0.2)
-            time.sleep(5)
-            self.settle("theme-back", timeout=90, need=2)
-        # Close the three windows.
-        for _ in range(3):
-            cur = self.probe()
-            self.vm.keys("meta_l-q")
-            self.wait_change(cur, "a window closed", 30, thresh=0.02)
-            time.sleep(2)
+            if not self.wait_for(lambda q: rmean(q, (300, 2, 980, 30)) < 70 and rmean(q, (40, 420, 620, 760)) < 70,
+                                 "Polar night again", 300, 3.0):
+                log("warning: Polar night did not come back everywhere")
+            time.sleep(15)
+            self.settle("theme-back", timeout=180, interval=4, need=2)
+        self.close_windows()
+
+    def close_windows(self):
+        """Back to the empty desktop (cleanup between pictures, not part of any of them)."""
+        if self.agent and self.agent.hello.is_set():
+            self.sh("pkill -x thunar; pkill -x Thunar; pkill -x kitty; pkill -f zen_browser; true", check=False)
+        else:
+            for _ in range(4):
+                self.vm.keys("meta_l-q")
+                time.sleep(15)
+        if not self.wait_for(lambda q: vmtest.changed_fraction(self.desktop, q) < 0.03, "the empty desktop", 180, 3.0):
+            log("warning: the desktop is not empty again")
         self.settle("windows-closed", timeout=60, need=2)
 
     def start_agent_if_needed_quietly(self):
@@ -819,13 +841,15 @@ class Tour:
         self.vm.type_text("zen", gap=0.2)
         time.sleep(3)
         self.vm.keys("ret")
-        if not self.wait_change(base, "Zen", 300, thresh=0.3, every=5):
+        # The launcher closes, then Zen's window fills the screen (a cold start of a Flatpak
+        # Firefox under TCG takes minutes).
+        self.wait_for(lambda q: region_diff(base, q, (20, 34, 540, 420)) < 0.03, "the launcher closed", 60, 2.0)
+        if not self.wait_change(base, "Zen", 400, thresh=0.3, every=5):
             raise TourError("Zen did not open")
-        time.sleep(20)
-        p = self.settle("zen-browser", timeout=300, interval=4, need=3)
+        time.sleep(30)
+        p = self.settle("zen-browser", timeout=300, interval=5, need=3)
         self.save(p, "zen-browser")
-        self.vm.keys("meta_l-q")
-        self.wait_for(lambda q: vmtest.changed_fraction(base, q) < 0.02, "Zen closed", 60)
+        self.close_windows()
 
     # -- the installer against the engine's demo mode
     def inst(self, *args, timeout=120):

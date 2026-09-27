@@ -980,10 +980,11 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	sel := in.Job.Data.Apps.Selection
 	resolved := in.cat.Resolve(sel)
 	visible := in.isApp
+	inLive := in.inLiveImage
 
 	// 1. Apps already in the live image are installed by the copy.
 	for _, m := range resolved {
-		if m.InLiveImage {
+		if inLive(m) {
 			in.usedMethod[m.ID] = m.Primary()
 			if visible(m) {
 				in.Rep.Module(protocol.ModuleEvent{ID: m.ID, Name: m.Name, Status: protocol.ModInstalled, Percent: 100})
@@ -995,7 +996,7 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	var rmPkgs, rmRefs []string
 	for _, id := range in.cat.Order {
 		m := in.cat.Modules[id]
-		if !m.InLiveImage || m.Always || sel.Contains(id) {
+		if !inLive(m) || m.Always || sel.Contains(id) {
 			continue
 		}
 		p := m.Primary()
@@ -1019,11 +1020,17 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 			in.Rep.Logf("removing %s failed (continuing): %v", ref, err)
 		}
 	}
+	if len(rmRefs) > 0 {
+		// The runtimes only the removed apps used (e.g. the Zen image's Platform and GL driver).
+		if _, err := in.R.Run(ctx, Cmd{Name: "flatpak", Args: []string{"uninstall", "--system", "-y", "--noninteractive", "--unused"}, Env: in.flatpakEnv()}); err != nil {
+			in.Rep.Logf("removing unused runtimes failed (continuing): %v", err)
+		}
+	}
 
 	// 3. Download what the live image doesn't have. dnf/COPR modules go in one transaction.
 	var todo []*catalog.Module
 	for _, m := range resolved {
-		if !m.InLiveImage {
+		if !inLive(m) {
 			todo = append(todo, m)
 		}
 	}
@@ -1041,7 +1048,7 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	// when the ISO was built without RPM Fusion): installed packages are a no-op for dnf.
 	var ensure []*catalog.Module
 	for _, m := range resolved {
-		if m.InLiveImage && in.isApp(m) && m.Primary().Method == catalog.MethodDNF {
+		if inLive(m) && in.isApp(m) && m.Primary().Method == catalog.MethodDNF {
 			ensure = append(ensure, m)
 			extra = append(extra, m.Primary().Packages...)
 		}
@@ -1100,6 +1107,18 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	}
 	in.t.Update(1, "")
 	return nil
+}
+
+// inLiveImage reports whether the copy already brought the module: in_live_image in the
+// catalog, or a Flatpak app the live image happens to ship. tools/build-iso.sh preinstalls
+// Zen only while the ISO stays under 2 GiB (BUILD-SPEC §7), so the copied
+// /var/lib/flatpak decides, not the catalog.
+func (in *Installer) inLiveImage(m *catalog.Module) bool {
+	if m.InLiveImage {
+		return true
+	}
+	p := m.Primary()
+	return p.Method == catalog.MethodFlatpak && p.Ref != "" && in.R.Exists(in.tgt("/var/lib/flatpak/app/"+p.Ref))
 }
 
 func (in *Installer) batchStatus(batch []*catalog.Module) string {

@@ -127,6 +127,22 @@ func (in Install) RemovePackages() []string {
 	return in.Packages
 }
 
+// MarkPreinstalled sets InLiveImage on the Flatpak apps the live image ships although the
+// catalog doesn't list them there (the ISO build preinstalls Zen only while the ISO stays
+// under 2 GiB). has reports whether a ref is installed in the image. It returns the ids.
+func (c *Catalog) MarkPreinstalled(has func(ref string) bool) []string {
+	var ids []string
+	for _, id := range c.Order {
+		m := c.Modules[id]
+		p := m.Primary()
+		if !m.InLiveImage && p.Method == MethodFlatpak && p.Ref != "" && has(p.Ref) {
+			m.InLiveImage = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // Primary is the preferred install method.
 func (m *Module) Primary() Install {
 	if len(m.Install) == 0 {

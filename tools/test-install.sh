@@ -270,7 +270,11 @@ def open_terminal(vm, prefix):
     vm.keys("meta_l-ret")
     time.sleep(75)
     vm.shot(f"{prefix}-terminal")
-    vm.keys("ret")        # skips the fetch animation (any key does) and gives a fresh prompt
+    # The fetch animation in .zshrc reads keys (any key skips it): press Enter, then give the
+    # prompt time to come up so the command isn't eaten by the animation.
+    vm.keys("ret")
+    time.sleep(15)
+    vm.keys("ret")
     time.sleep(5)
 
 def serial(name):
@@ -418,23 +422,28 @@ def stage_boot():
         log(f"session settled after {time.time() - t:.0f}s")
         time.sleep(30)
         vm.shot("boot-51-desktop")
-        open_terminal(vm, "boot-52")
-        vm.type_text("sudo mount -m -L ARCTICTEST /run/t; sudo bash /run/t/collect.sh $$")
-        vm.keys("ret")
-        time.sleep(10)
-        vm.shot("boot-53-sudo")
-        vm.type_text(password, gap=0.2)
-        vm.keys("ret")
-        t = time.time()
-        while time.time() - t < 300 and vm.alive():
-            if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
-                log("collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END)")
+        collected = False
+        for attempt in (1, 2, 3):
+            open_terminal(vm, f"boot-5{attempt + 1}")
+            vm.type_text("sudo mount -m -L ARCTICTEST /run/t; sudo bash /run/t/collect.sh $$")
+            vm.keys("ret")
+            time.sleep(10)
+            vm.shot(f"boot-5{attempt + 1}-sudo")
+            vm.type_text(password, gap=0.2)
+            vm.keys("ret")
+            t = time.time()
+            while time.time() - t < 240 and vm.alive():
+                if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
+                    collected = True
+                    break
+                time.sleep(5)
+            vm.shot(f"boot-5{attempt + 1}-collected")
+            if collected:
+                log(f"collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt {attempt})")
                 break
-            time.sleep(5)
-        else:
-            log("collect.sh did not finish")
+            log(f"collect.sh did not finish (attempt {attempt})")
+        if not collected:
             ok = False
-        vm.shot("boot-54-collected")
         time.sleep(5)
         vm.shot("boot-99-final")
         return 0 if ok else 1

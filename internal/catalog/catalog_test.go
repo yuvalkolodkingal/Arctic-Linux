@@ -275,3 +275,19 @@ func TestShippedManifestsHaveNoUnknownKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMarkPreinstalled(t *testing.T) {
+	c, err := Load(modules.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := c.EstimateDownload(c.DefaultSelection()).Bytes
+	ids := c.MarkPreinstalled(func(ref string) bool { return ref == "app.zen_browser.zen" || ref == "org.mozilla.firefox" })
+	// Firefox's primary method is dnf, so only Zen counts.
+	if len(ids) != 1 || ids[0] != "zen" || !c.Modules["zen"].InLiveImage || c.Modules["firefox"].InLiveImage {
+		t.Fatalf("marked %v", ids)
+	}
+	if after := c.EstimateDownload(c.DefaultSelection()).Bytes; after >= before {
+		t.Errorf("estimate %d → %d: Zen's download should no longer count", before, after)
+	}
+}

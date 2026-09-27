@@ -517,3 +517,49 @@ func TestQuote(t *testing.T) {
 		t.Errorf("got %s", got)
 	}
 }
+
+// The ISO may ship Zen as a Flatpak (tools/build-iso.sh, only under 2 GiB) although the catalog
+// can't say so: the copied /var/lib/flatpak decides.
+func TestPreinstalledFlatpakFromTheImage(t *testing.T) {
+	zenInImage := func(p string) bool {
+		return DefaultExists(p) || p == "/mnt/var/lib/flatpak/app/app.zen_browser.zen"
+	}
+	// Ticked: kept from the copy, never downloaded, reported installed.
+	job := loadJob(t, "ci/default.toml", "uefi")
+	rec := &Recorder{ExistsFn: zenInImage}
+	rep := newReporter()
+	if err := runPlan(t, job, rec, rep); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range rec.Commands() {
+		if strings.Contains(c, "install") && strings.Contains(c, "app.zen_browser.zen") {
+			t.Errorf("downloads Zen although the image has it: %s", c)
+		}
+	}
+	if rep.modules["zen"] != protocol.ModInstalled {
+		t.Errorf("zen: %q, want installed", rep.modules["zen"])
+	}
+	if !strings.Contains(rec.Plan(), "browser=gtk-launch app.zen_browser.zen") {
+		t.Error("Zen is not the default browser")
+	}
+
+	// Unticked (Firefox instead): uninstalled from the target with its unused runtimes.
+	job = loadJob(t, "ci/default.toml", "uefi")
+	job.Data.Apps.Selection["browser"] = []string{"firefox"}
+	rec = &Recorder{ExistsFn: zenInImage}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	plan := rec.Plan()
+	for _, want := range []string{
+		"flatpak uninstall --system -y --noninteractive app.zen_browser.zen",
+		"flatpak uninstall --system -y --noninteractive --unused",
+	} {
+		if !strings.Contains(plan, want) {
+			t.Errorf("plan lacks %q", want)
+		}
+	}
+	if strings.Contains(plan, "browser=gtk-launch app.zen_browser.zen") {
+		t.Error("Zen is still the default browser")
+	}
+}
