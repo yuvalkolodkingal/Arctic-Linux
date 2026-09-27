@@ -207,6 +207,8 @@ Requires:       qt6-qtsvg
 Requires:       qt6-qtwayland
 Requires:       python3
 Requires:       hicolor-icon-theme
+# gdbus (power modes over D-Bus) and gsettings (GTK text size, pointer)
+Requires:       glib2
 # arctic-theme, arctic-motion, arctic-wallpaper, arctic-session, arctic-open; the wallpaper list
 Requires:       arctic-desktop-config = %{version}-%{release}
 Requires:       arctic-shell = %{version}-%{release}

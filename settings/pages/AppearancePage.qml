@@ -47,6 +47,11 @@ Page {
         });
     }
     onShown: load()
+    // /home/you/Pictures/Wallpapers → ~/Pictures/Wallpapers
+    function tildePath(path) {
+        const home = Theme.home;
+        return home && (path === home || String(path).startsWith(home + "/")) ? "~" + String(path).slice(home.length) : path;
+    }
     // The theme changed elsewhere too (Super + Shift + T, the shell): follow it.
     Connections {
         target: Theme
@@ -141,7 +146,7 @@ Page {
 
     Group {
         title: "Wallpaper"
-        desc: page.walls.folder ? "Your own pictures come from " + page.walls.folder + "." : ""
+        desc: page.walls.folder ? "Your own pictures come from " + page.tildePath(page.walls.folder) + "." : ""
         SettingRow {
             searchKey: "appearance.wallpaper"
             title: "Wallpaper"

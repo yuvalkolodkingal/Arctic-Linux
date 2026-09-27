@@ -63,6 +63,13 @@
 		<namedCollection name="guest-desktop-agents"/>
 		<!-- The Arctic desktop, the installer and the live session -->
 		<package name="arctic-desktop"/>
+		<!-- Arctic Settings (arctic-desktop requires it too; named so it is never left out)
+		     and the tools its Network, Bluetooth and Sound pages open. -->
+		<package name="arctic-settings"/>
+		<package name="nm-connection-editor"/>
+		<package name="blueman"/>
+		<package name="pavucontrol"/>
+		<package name="wlr-randr"/>
 		<!-- Default apps the installer treats as already in the live image (in_live_image in
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
 		<package name="kitty"/>
