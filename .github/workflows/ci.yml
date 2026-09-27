@@ -74,10 +74,10 @@ jobs:
           if ls shell/tests/test_*.py >/dev/null 2>&1; then
             python3 -m unittest discover -s shell/tests -p 'test_*.py' -v
           fi
-      - name: Python unittest (packaging/firstboot)
-        run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
       - name: Python unittest (tools/tests, the repository publishing helpers)
         run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
+      - name: Python unittest (packaging/firstboot)
+        run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
       - name: Node tests (shell/tests)
         run: |
           for t in shell/tests/*.cjs shell/tests/*.mjs shell/tests/*.js; do
