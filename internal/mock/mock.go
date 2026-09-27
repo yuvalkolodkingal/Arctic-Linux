@@ -113,7 +113,7 @@ func Inventory() []hw.Disk {
 		Path: "/dev/sdb", Model: "SanDisk Ultra", Serial: "4C530001230512117284", SizeBytes: 30_752_000_000, Transport: "usb", Removable: true,
 		InstallMedia: true, ReadOnly: false, PTType: "dos", SectorSize: 512,
 		Partitions: []hw.Partition{
-			{Path: "/dev/sdb1", Number: 1, StartByte: 0, SizeBytes: 2_000_000_000, Type: "0x0", FSType: "iso9660", Label: "Arctic-Linux-0.1"},
+			{Path: "/dev/sdb1", Number: 1, StartByte: 0, SizeBytes: 2_000_000_000, Type: "0x0", FSType: "iso9660", Label: "Arctic-Linux-0.2"},
 		},
 	}
 	return []hw.Disk{nvme, sata, usb}

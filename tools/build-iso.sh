@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the Arctic Linux live ISO with kiwi-ng in a privileged Fedora 44 container.
 #
-#   tools/build-iso.sh                  → out/iso/Arctic-Linux-0.1-x86_64.iso (+ .sha256)
+#   tools/build-iso.sh                  → out/iso/Arctic-Linux-0.2-x86_64.iso (+ .sha256)
 #   tools/build-iso.sh --repo DIR       local RPM repository (default out/repo, from
 #                                       tools/build-rpms.sh)
 #   tools/build-iso.sh --work DIR       kiwi build root and scratch space (default out/kiwi-work;
@@ -33,7 +33,7 @@ KEEP_WORK=0
 DEBUG=""
 ZEN=auto
 CREATE_ONLY=0
-ISO_NAME="Arctic-Linux-0.1-x86_64.iso"
+ISO_NAME="Arctic-Linux-0.2-x86_64.iso"
 
 while (( $# )); do
   case "$1" in

@@ -8,7 +8,7 @@
 #                                       with placeholder files); DIR need not be a git repo
 #   tools/build-rpms.sh --out DIR       output directory (default: <repo>/out)
 #
-# Source0 of arctic-linux.spec is `git archive --prefix=arctic-linux-0.1.0/` of the working
+# Source0 of arctic-linux.spec is `git archive --prefix=arctic-linux-0.2.0/` of the working
 # tree: the committed tree plus every uncommitted change, including untracked (not ignored)
 # files. (Plain `git stash create` would miss untracked files, so a throwaway index is used.)
 # The mango release tarball is downloaded once and cached in out/sources/.
@@ -27,7 +27,7 @@ ROOT="$(arctic_repo_root)"
 SRC="$ROOT"
 OUT="$ROOT/out"
 ONLY=""
-VERSION="0.1.0"
+VERSION="0.2.0"
 MANGO_VERSION="0.17.3"
 MANGO_URL="https://github.com/mangowm/mango/archive/refs/tags/${MANGO_VERSION}.tar.gz"
 

@@ -21,13 +21,13 @@
 #   arctic-desktop         (metapackage)
 
 %global dist_version    44
-%global arctic_version  0.1
+%global arctic_version  0.2
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
 
 Name:           arctic-linux
-Version:        0.1.0
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
@@ -850,5 +850,11 @@ fi
 # metapackage: no files
 
 %changelog
+* Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.0-1
+- Arctic Linux 0.2: arctic-release enables the signed Arctic package repository (GitHub
+  Pages; stable channel on, testing channel off) and ships its public key
+- Every build has its own Release, 1.<UTC build time>.git<commit>, so each build
+  updates the ones before it
+
 * Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.1.0-1
 - Arctic Linux 0.1: first build of all subpackages from one spec

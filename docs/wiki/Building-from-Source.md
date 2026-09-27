@@ -54,7 +54,7 @@ The packages it builds:
 
 | Package | What it installs |
 |---|---|
-| `arctic-release` | os-release ("Arctic Linux 0.1 (Fedora 44 base)"), dnf and systemd presets; replaces `fedora-release` |
+| `arctic-release` | os-release ("Arctic Linux 0.2 (Fedora 44 base)"), dnf and systemd presets; replaces `fedora-release` |
 | `arctic-logos` | The fox mark under the names Fedora's logo packages use |
 | `arctic-backgrounds` | The six wallpapers, SVG and 3840×2160 PNG |
 | `arctic-fonts` | Figtree |
@@ -79,7 +79,7 @@ Builds the live ISO with kiwi-ng from `iso/kiwi/` in a privileged Fedora 44 cont
 Fedora 44 + updates and the local repository from `build-rpms.sh`.
 
 ```sh
-tools/build-iso.sh                        # → out/iso/Arctic-Linux-0.1-x86_64.iso (+ .sha256)
+tools/build-iso.sh                        # → out/iso/Arctic-Linux-0.2-x86_64.iso (+ .sha256)
 tools/build-iso.sh --repo DIR             # the local RPM repository (default out/repo)
 tools/build-iso.sh --work DIR             # kiwi scratch space (default out/kiwi-work, ~15 GB)
 tools/build-iso.sh --keep-work            # keep the scratch space afterwards
@@ -208,13 +208,13 @@ QML is checked with `qmllint` (`/usr/lib64/qt6/bin/qmllint`, from `qt6-qtdeclara
 
 ### Making a release
 
-Push a tag that starts with `v`, for example `v0.1.0`. `iso.yml` builds everything and creates the
-release **Arctic Linux 0.1.0** with the ISO and its `.sha256`, and writes release notes that say
+Push a tag that starts with `v`, for example `v0.2.0`. `iso.yml` builds everything and creates the
+release **Arctic Linux 0.2.0** with the ISO and its `.sha256`, and writes release notes that say
 whether Zen is preinstalled. If the ISO is larger than 2 GiB, it's split into `.partNN` files with
 instructions for joining them.
 
 Running `iso.yml` by hand (**Actions → ISO → Run workflow**) builds the ISO as an artifact.
-Tick **release** to also publish a prerelease (tag `v0.1.0-build.<run number>` unless you give
+Tick **release** to also publish a prerelease (tag `v0.2.0-build.<run number>` unless you give
 one), and untick **boot_test** to skip the QEMU boot.
 
 ### Publishing the wiki
