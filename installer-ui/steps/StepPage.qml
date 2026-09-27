@@ -25,16 +25,26 @@ FocusScope {
     property real availableHeight: 400    // set by the frame
     property string helpText: ""          // F1 help
     property bool keyboardUsed: true
+    // The primary action only works this long after the page appeared: a double click or
+    // a key press meant for the previous page must not land on this one.
+    property int armDelay: 400
+    property bool armVisible: false       // show the primary button disabled until then
+    // Enter anywhere on the page presses the primary action (Summary: only the button).
+    property bool enterActivates: true
 
     // Save this step (SetSecrets / SetStep). Call done(true) to continue.
     function commit(done) {
         done(true);
     }
-    // Primary footer action. Default: commit, then Next.
+    // Primary footer action. Default: commit, then Next. `committing` keeps a second
+    // press out until Next has answered (Wizard.next() then holds `busy`).
     function primary() {
+        Wizard.committing = true;
         commit(ok => {
             if (ok)
                 Wizard.next();
+            else
+                Wizard.committing = false;
         });
     }
     function secondary() {

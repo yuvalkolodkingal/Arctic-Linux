@@ -3,8 +3,8 @@
 # (exec-once in /usr/share/arctic/mango/live.conf).
 #
 # The boot menu picks the mode with a kernel argument:
-#   arctic.mode=install  → the installer, full screen (Mango's window rule for
-#                          org.arcticlinux.Installer). Closing it leaves the live desktop.
+#   arctic.mode=install  → the installer, full screen (a layer surface over the desktop).
+#                          Quitting it (Esc, or Keep trying at the end) leaves the live desktop.
 #   arctic.mode=try      → the normal desktop; the shell shows the "You're trying Arctic
 #   (or nothing)           Linux" welcome card and the Install item.
 #
@@ -31,6 +31,11 @@ if [ "$mode" = install ]; then
   if command -v arctic-installer >/dev/null 2>&1; then
     # Let the compositor finish starting the shell first.
     sleep 1
+    # Through arctic-start-installer, which keeps it to one installer (Super+I, the bar's
+    # Install item and so on then leave the open one alone).
+    if command -v arctic-start-installer >/dev/null 2>&1; then
+      exec arctic-start-installer
+    fi
     exec arctic-installer
   fi
   log "arctic-installer is not installed; staying on the live desktop"

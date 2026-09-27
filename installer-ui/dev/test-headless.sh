@@ -49,6 +49,10 @@ export ARCTIC_INSTALLER_BRIDGE="python3 $here/dev/mock-bridge.py"
 export ARCTIC_INSTALLER_THEME=$theme
 export ARCTIC_MOCK_SPEED=${ARCTIC_MOCK_SPEED:-1.5}
 export ARCTIC_MOCK_LOG="$work/mock.log"
+# The live keyboard helper (live/live-keyboard): here a stub that records its arguments.
+printf '#!/bin/sh\necho "$*" >> %s/live-keyboard.log\n' "$work" > "$work/live-keyboard"
+chmod +x "$work/live-keyboard"
+export ARCTIC_LIVE_KEYBOARD="$work/live-keyboard"
 start_ui() { # start_ui [VAR=value …]: (re)start quickshell with extra mock settings
     if [ -n "${qs:-}" ]; then kill "$qs" 2>/dev/null || true; wait "$qs" 2>/dev/null || true; fi
     env "$@" quickshell -p "$here" > "$work/qs.log" 2>&1 &
@@ -67,7 +71,8 @@ wait_for() { # wait_for <python-expr over d> <what>
     done
     fail "timed out waiting for $2 (state: $(state))"
 }
-wait_page() { wait_for "d.get('page')=='$1' and not d.get('busy')" "page $1"; }
+# ready: the page has been up for its arm delay (the primary action works) and nothing is saving.
+wait_page() { wait_for "d.get('page')=='$1' and d.get('ready')" "page $1"; }
 shot() { sleep "${2:-0.7}"; grim "$out/$1.png"; log "screenshot $1.png"; }
 next() { r=$(ipc next); [ "$r" = "ok" ] || fail "next on $(field page): $r"; }
 fill() { r=$(ipc fill "$1"); [ "$r" = "ok" ] || fail "fill $1: $r"; }
@@ -102,6 +107,12 @@ fi
 
 # 2 Keyboard
 wait_page keyboard
+# Picking a layout applies it to the live session (live-keyboard with the engine's choice).
+fill '{"layout": "de"}'
+for _ in $(seq 50); do grep -qE '^(--xkb )?de( |$)' "$work/live-keyboard.log" 2>/dev/null && break; sleep 0.1; done
+grep -qE '^(--xkb )?de( |$)' "$work/live-keyboard.log" || fail "the German layout wasn't applied live ($(cat "$work/live-keyboard.log" 2>/dev/null))"
+fill '{"layout": "us"}'
+wait_for "d.get('keyboard') == 'us'" "the US layout saved again"
 fill '{"try": "The quick arctic fox"}'
 shot 02-keyboard
 next
@@ -175,6 +186,15 @@ next
 # 9 Summary
 wait_page summary
 shot 09-summary
+# Enter doesn't start the install from Summary (only the button does), Esc asks first.
+if command -v wtype >/dev/null; then
+    key -k Return
+    sleep 0.5
+    [ "$(field page)" = "summary" ] || fail "Enter on Summary started the install"
+fi
+r=$(ipc quit); [ "$r" = "asking" ] || fail "Esc on Summary should ask first: $r"
+shot 09b-quit-dialog
+if command -v wtype >/dev/null; then key -k Escape; sleep 0.4; fi
 next
 
 # 10 Installing
@@ -193,7 +213,7 @@ shot 12-done 1.0
 
 # ---- scenario 2: wired (network step skipped) + a core failure, Winter theme
 log "scenario 2: wired, core failure"
-start_ui ARCTIC_MOCK_WIRED=1 ARCTIC_MOCK_FATAL=1 ARCTIC_INSTALLER_THEME=light
+start_ui ARCTIC_MOCK_WIRED=1 ARCTIC_MOCK_FATAL=2 ARCTIC_INSTALLER_THEME=light
 wait_for "d.get('connected')" "engine connection (2)"
 wait_page welcome
 next
@@ -229,8 +249,16 @@ wait_for "d.get('fields',{}).get('username')" "the engine's username error"
 shot 07w-account-engine-error-winter
 fill '{"username": "ada"}'
 wait_for "d.get('valid')" "account form (2)"
+# The password as the disk passphrase too: it must pass as a passphrase (Fair or better).
+fill '{"same_as_disk": true, "password": "iloveyou", "confirm": "iloveyou"}'
+sleep 0.6
+[ "$(field valid)" = "False" ] || fail "a Weak password can't be the disk passphrase too"
+fill '{"same_as_disk": false, "password": "glacier-lake-7", "confirm": "glacier-lake-7"}'
+wait_for "d.get('valid')" "account form (3)"
 next
 wait_page apps
+# Office is "pick one" but optional: clicking the ticked suite unticks it.
+fill '{"toggle": ["collabora"]}'
 next
 wait_page summary
 shot 09w-summary-winter
@@ -239,6 +267,29 @@ wait_for "d.get('page')=='failed'" "the core failure view"
 shot 11b-failed-winter
 ipc savelog >/dev/null
 shot 11c-failed-log-saved-winter
+fill '{"show_details": true}'
+shot 11d-failed-details-winter
+# Change your answers: back to the Summary, pick the other disk, install again.
+r=$(ipc change); [ "$r" = "ok" ] || fail "change after failure: $r"
+wait_page summary
+ipc goto disk >/dev/null
+wait_page disk
+fill '{"disk": "/dev/nvme0n1", "mode": "erase"}'
+next
+wait_page summary         # Change → Next goes back to Summary
+ipc goto encryption >/dev/null
+wait_page encryption      # the passphrase is kept: Next works with empty fields
+[ "$(field valid)" = "True" ] || fail "a kept passphrase should allow Next"
+shot 06x-encryption-kept-winter
+next
+wait_page summary
+ipc goto account >/dev/null
+wait_page account         # so is the password
+[ "$(field valid)" = "True" ] || fail "a kept password should allow Next"
+next
+wait_page summary
+next
+wait_for "d.get('page')=='failed'" "the core failure view (2)"
 r=$(ipc retry); [ "$r" = "ok" ] || fail "retry after failure: $r"
 wait_for "d.get('page')=='attention'" "the optional app failure (2)"
 r=$(ipc skip); [ "$r" = "ok" ] || fail "skip: $r"
@@ -250,6 +301,31 @@ log "scenario 3: engine not reachable"
 start_ui ARCTIC_INSTALLER_BRIDGE='sh -c "echo arctic-install: cannot connect to /run/arcticd.sock >&2; exit 3"'
 wait_for "d.get('failure')" "the engine failure message"
 shot 00b-engine-down
+# As `arctic-install bridge` does it: a failed event on stdout. It is about the engine (the
+# "couldn't start" screen with its message), not a failed install.
+cat > "$work/no-engine-bridge" << 'EOF'
+#!/bin/sh
+echo '{"event":"failed","title":"The installer could not start","message":"The installer engine is not running.","details":"dial unix /run/arcticd.sock: no such file","fatal":true}'
+echo "arctic-install bridge: dial unix /run/arcticd.sock: no such file" >&2
+exit 1
+EOF
+chmod +x "$work/no-engine-bridge"
+start_ui ARCTIC_INSTALLER_BRIDGE="$work/no-engine-bridge"
+wait_for "'engine is not running' in d.get('failure','') and d.get('page') == ''" "the bridge's own message"
+shot 00c-engine-down-bridge-message
+
+# ---- Esc on the first step quits straight away (nothing to lose)
+start_ui
+wait_for "d.get('connected')" "engine connection (4)"
+wait_page welcome
+if command -v wtype >/dev/null; then
+    key -k Escape
+else
+    ipc quit >/dev/null || true
+fi
+for _ in $(seq 50); do kill -0 "$qs" 2>/dev/null || break; sleep 0.1; done
+if kill -0 "$qs" 2>/dev/null; then fail "Esc on Welcome didn't quit the installer"; fi
+grep -q '"office": \[\]' "$work/mock.log" || fail "unticking the office suite didn't reach the engine"
 
 log "mock engine requests:"
 grep -c ' < ' "$work/mock.log" || true

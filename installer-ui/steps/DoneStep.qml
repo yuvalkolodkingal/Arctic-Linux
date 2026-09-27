@@ -20,8 +20,11 @@ StepPage {
     secondaryLabel: "Keep trying"
     helpText: "Take the USB stick out and restart. Your computer will start Arctic Linux. Keep trying closes the installer so you can keep using Arctic Linux from the USB stick."
 
+    property string rebootError: ""
+
     function primary() {
-        Wizard.reboot();
+        rebootError = "";
+        Wizard.reboot(err => page.rebootError = err);
     }
     function secondary() {
         Qt.quit();
@@ -36,6 +39,15 @@ StepPage {
             iconName: "usb"
             title: "Remove the USB stick"
             desc: "Take it out now, then restart. Your computer will start Arctic Linux" + (Wizard.encryptionEnabled ? " and ask for your disk passphrase." : ".")
+        }
+
+        // Restart refused or failed: say so, and how else to restart.
+        ArBanner {
+            visible: page.rebootError !== ""
+            width: parent.width
+            kind: "error"
+            strong: true
+            text: page.rebootError.replace(/&/g, "&amp;").replace(/</g, "&lt;") + " Choose Keep trying, then restart from the power button on the top bar."
         }
 
         ArBanner {

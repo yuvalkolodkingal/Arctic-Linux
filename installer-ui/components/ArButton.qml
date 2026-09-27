@@ -1,6 +1,6 @@
 // .ar-btn — primary (the one amber action), secondary, ghost, destructive;
 // sizes sm 28 / md 36 / lg 44. States: hover, pressed, keyboard focus (ring),
-// disabled, error. Enter and Space activate.
+// disabled, error. Enter and Space activate (not their key repeat).
 import QtQuick
 import QtQuick.Templates as T
 import ".."
@@ -27,15 +27,24 @@ T.Button {
     Accessible.role: Accessible.Button
     Accessible.name: text
 
+    // A held key repeats (press/release pairs): only a fresh press activates.
     Keys.onReturnPressed: event => {
-        if (control.enabled)
+        if (control.enabled && !event.isAutoRepeat)
             control.clicked();
         event.accepted = true;
     }
     Keys.onEnterPressed: event => {
-        if (control.enabled)
+        if (control.enabled && !event.isAutoRepeat)
             control.clicked();
         event.accepted = true;
+    }
+    Keys.onPressed: event => {
+        if (event.isAutoRepeat && event.key === Qt.Key_Space)
+            event.accepted = true;
+    }
+    Keys.onReleased: event => {
+        if (event.isAutoRepeat && event.key === Qt.Key_Space)
+            event.accepted = true;
     }
 
     background: Rectangle {

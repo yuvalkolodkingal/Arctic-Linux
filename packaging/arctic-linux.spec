@@ -291,7 +291,8 @@ Recommends:     arctic-installer = %{version}-%{release}
 %description -n arctic-live
 Live USB pieces: the livesys session "arctic" (SDDM autologin of liveuser into Mango,
 no screen lock, passwordless sudo), and the live-session launcher that opens the installer
-full screen when the boot menu's "Install Arctic Linux" entry was chosen.
+full screen when the boot menu's "Install Arctic Linux" entry was chosen, and the helper
+that applies the installer's keyboard layout to the live session.
 Only for the live image; the installer removes it from installed systems.
 
 # ---------------------------------------------------------------------------------------------
@@ -549,6 +550,7 @@ cp -a branding/grub/arctic/. %{buildroot}%{_datadir}/arctic/grub-theme/
 # ---------------------------------------------------------------- arctic-live
 install -Dpm 0755 live/livesys-arctic %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic
 install -Dpm 0755 live/live-session %{buildroot}%{_libexecdir}/arctic/live-session
+install -Dpm 0755 live/live-keyboard %{buildroot}%{_libexecdir}/arctic/live-keyboard
 install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 
 %check
@@ -754,6 +756,7 @@ fi
 %{_libexecdir}/livesys/sessions.d/livesys-arctic
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/live-session
+%{_libexecdir}/arctic/live-keyboard
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/mango/live.conf
 

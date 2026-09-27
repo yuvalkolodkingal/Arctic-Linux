@@ -13,7 +13,8 @@ It never touches the system. Knobs (environment):
     ARCTIC_MOCK_FAIL=<id>     optional app that fails to download (default: steam if
                               selected, else the last selected extra/video app)
     ARCTIC_MOCK_FAIL_TWICE=1  the failing app also fails its retry
-    ARCTIC_MOCK_FATAL=1       a core step fails (shows the "Something went wrong" view)
+    ARCTIC_MOCK_FATAL=<n>     a core step fails the first n installs (1 = once; shows the
+                              "Something went wrong" view)
     ARCTIC_MOCK_SPEED=<f>     install speed multiplier (default 1.0 = about 40 s)
     ARCTIC_MOCK_LOG=<path>    append every request/response to this file
 """
@@ -62,6 +63,7 @@ LAYOUTS = [
     ("il", "", "Hebrew", "Standard", ["he_IL"]),
     ("gb", "", "English (UK)", "", ["en_GB"]),
     ("de", "", "German", "", ["de_DE"]),
+    ("de", "nodeadkeys", "German (no dead keys)", "", []),
     ("es", "", "Spanish", "", ["es_ES"]),
     ("fr", "", "French", "AZERTY", ["fr_FR"]),
     ("jp", "", "Japanese", "", ["ja_JP"]),
@@ -74,9 +76,23 @@ LAYOUTS = [
     ("tr", "", "Turkish", "Q layout", ["tr_TR"]),
     ("ua", "", "Ukrainian", "", ["uk_UA"]),
     ("ara", "", "Arabic", "", ["ar_EG"]),
+    ("gr", "", "Greek", "", []),
     ("us", "dvorak", "English (Dvorak)", "", []),
     ("us", "colemak", "English (Colemak)", "", []),
 ]
+
+# Like the engine (wizard.KeyboardConfig): layouts that can't type Latin letters get "us"
+# first, Alt+Shift to switch, and a console keymap whose base layer is Latin.
+NON_LATIN_KEYMAPS = {"il": "us", "ara": "us", "gr": "gr", "ru": "ru", "ua": "ua-utf"}
+
+
+def keyboard_xkb(kb):
+    layout, variant = kb["layout"], kb.get("variant") or ""
+    if layout in NON_LATIN_KEYMAPS:
+        return {"layout": f"us,{layout}", "variant": f",{variant}" if variant else "", "options": "grp:alt_shift_toggle",
+                "keymap": NON_LATIN_KEYMAPS[layout], "latin": False}
+    return {"layout": layout, "variant": variant, "options": "", "keymap": layout + (f"-{variant}" if variant else ""), "latin": True}
+
 
 REGIONS = {
     "Africa": [("Cairo", "Africa/Cairo"), ("Johannesburg", "Africa/Johannesburg"), ("Lagos", "Africa/Lagos"), ("Nairobi", "Africa/Nairobi")],
@@ -99,7 +115,17 @@ DISKS = [
      "install_media": False, "existing_os": [], "alongside_possible": False, "alongside_label": ""},
     {"path": "/dev/sdb", "model": "SanDisk Ultra USB", "size_bytes": 32 * GB, "size_label": "32 GB", "removable": True,
      "install_media": True, "existing_os": [], "alongside_possible": False, "alongside_label": ""},
+    # virtio-blk (the QEMU test VM): no model, so the label falls back to the path
+    {"path": "/dev/vda", "model": "", "size_bytes": 64 * GB, "size_label": "64 GB", "removable": False,
+     "install_media": False, "existing_os": [], "alongside_possible": False, "alongside_label": ""},
 ]
+# Like the Go engine (hw.Disk.Label, wizard.diskOptions): label, and the alongside card's wording.
+for _d in DISKS:
+    _d["label"] = f"{_d['model'] or _d['path']} · {_d['size_label']}"
+    if _d["alongside_possible"]:
+        _os = _d["existing_os"][0] if _d["existing_os"] else "the other system"
+        _d["alongside_title"] = f"Install alongside {_os}"
+        _d["alongside_description"] = f"Keeps {_os}. You choose which one to start each time. {_d['alongside_label']}."
 
 WIFI = [
     {"ssid": "Tundra-5G", "signal": 86, "secure": True},
@@ -109,16 +135,17 @@ WIFI = [
 ]
 WIFI_PASSWORDS = {"Tundra-5G": "polarnight", "Snowfield": "snowfield", "Aurora Guest": "guest1234"}
 
-# Categories and apps from the design bundle (CATEGORIES / APPS). choice "one" | "any".
+# Categories and apps from the design bundle (CATEGORIES / APPS). choice "one" | "any";
+# required as in modules/catalog.toml (Office is "one" but may be left empty).
 CATEGORIES = [
-    ("browser", "Browser", "one", "Becomes your default browser."),
-    ("editor", "Editor", "any", ""),
-    ("terminal", "Terminal", "one", "Opens with Super + Enter."),
-    ("shell", "Shell", "one", "What runs inside the terminal."),
-    ("files", "File manager", "any", ""),
-    ("office", "Office", "one", ""),
-    ("video", "Video", "any", ""),
-    ("extras", "Extras", "any", "Nothing here is ticked by default."),
+    ("browser", "Browser", "one", "Becomes your default browser.", True),
+    ("editor", "Editor", "any", "", False),
+    ("terminal", "Terminal", "one", "Opens with Super + Enter.", True),
+    ("shell", "Shell", "one", "What runs inside the terminal.", True),
+    ("files", "File manager", "any", "", False),
+    ("office", "Office", "one", "", False),
+    ("video", "Video", "any", "", False),
+    ("extras", "Extras", "any", "Nothing here is ticked by default.", False),
 ]
 # id, name, category, summary, default, download_mb, source, in_live_image, role
 MODULES = [
@@ -197,15 +224,20 @@ class MockEngine:
         self.subscribed = False
         self.current = 0
         self.visited = {0}
+        self.done = set()          # steps passed with Next
+        self.return_to = False     # Next goes back to Summary (after a Change link), like the engine
+        self.return_lang = ""      # language when Change left Summary (a new one also shows Keyboard)
         self.wired = env_on("ARCTIC_MOCK_WIRED")
         self.ssid = "Tundra-5G" if env_on("ARCTIC_MOCK_ONLINE") and not self.wired else ""
         self.secrets = {}
+        self.keyboard_set = False  # the person picked a layout (a new language then keeps it)
         self.install_thread = None
         self.install_state = "idle"  # idle | running | attention | failed | done
         self.retry_event = threading.Event()
         self.retry_action = None
         self.fail_attempts = {}
-        self.fatal_used = False
+        fatal = ENV.get("ARCTIC_MOCK_FATAL", "")
+        self.fatal_left = int(fatal) if fatal.isdigit() else int(env_on("ARCTIC_MOCK_FATAL"))  # core failures to come
         self.speed = max(0.05, float(ENV.get("ARCTIC_MOCK_SPEED", "1") or 1))
         self.data = {
             "welcome": {"language": "en_US.UTF-8"},
@@ -328,6 +360,7 @@ class MockEngine:
         if sid == "welcome":
             options = {"languages": [{"id": l[0], "name": l[1], "english": l[2]} for l in LANGUAGES], "suggested": "en_US.UTF-8"}
         elif sid == "keyboard":
+            data["xkb"] = keyboard_xkb(data)
             lang = self.data["welcome"]["language"].split(".")[0]
             layouts = []
             for l in LAYOUTS:
@@ -344,9 +377,11 @@ class MockEngine:
         elif sid == "encryption":
             options = {"min_score": 2, "passphrase_set": "luks_passphrase" in self.secrets}
         elif sid == "account":
-            options = {"hostname_hint": "Suggested from your name and computer", "password_set": "user_password" in self.secrets}
+            options = {"hostname_hint": "Suggested from your name and computer", "password_set": "user_password" in self.secrets,
+                       "encryption": self.data["encryption"].get("enabled", True)}
         elif sid == "apps":
-            options = {"categories": [{"id": c[0], "name": c[1], "choice": c[2], "note": c[3]} for c in CATEGORIES],
+            options = {"categories": [{"id": c[0], "name": c[1], "choice": c[2], "note": c[3], "required": c[4],
+                                       "rule": "Pick one" if c[2] == "one" else "Pick any"} for c in CATEGORIES],
                        "modules": [{"id": m[0], "name": m[1], "summary": m[3], "category": m[2], "default": m[4], "tile": m[0],
                                     "download_mb": m[5], "source": m[6], "in_live_image": m[7]} for m in MODULES]}
         elif sid == "done":
@@ -398,20 +433,35 @@ class MockEngine:
                 chosen = [i for i in sel.get(c[0], []) if i in MOD and MOD[i][2] == c[0]]
                 if c[2] == "one" and len(chosen) > 1:
                     fields[c[0]] = f"Pick one {c[1].lower()}."
-            if not (sel.get("browser")):
-                fields["browser"] = "Pick a browser."
+                elif c[4] and not chosen:
+                    fields[c[0]] = f"Pick a {c[1].lower()}."
         if fields:
             raise InvalidError("Some fields need attention.", fields)
 
     def set_step(self, sid, data):
+        if self.install_state != "idle":
+            raise InvalidError("The installer is already running.", code="state")
         if sid not in self.data:
             raise InvalidError(f"Step {sid} has no settings.", code="not_found")
         merged = dict(self.data[sid])
         merged.update(data or {})
         if sid == "keyboard":
+            merged.pop("xkb", None)  # read-only
+            if "layout" in (data or {}) and "variant" not in data:
+                merged["variant"] = ""
             merged["variant"] = merged.get("variant") or ""
         self.validate(sid, merged)
+        if sid == "welcome" and merged["language"] != self.data["welcome"]["language"] and not self.keyboard_set:
+            # Like the engine: a new language suggests its layout until one is picked.
+            lang = merged["language"].split(".")[0]
+            for l in LAYOUTS:
+                if lang in l[4]:
+                    self.data["keyboard"] = {"layout": l[0], "variant": l[1]}
+                    break
         self.data[sid] = merged
+        if sid == "keyboard":
+            self.keyboard_set = True
+            return {"ok": True, "data": dict(merged, xkb=keyboard_xkb(merged))}
         return {"ok": True, "data": merged}
 
     def check_can_leave(self, sid):
@@ -434,16 +484,43 @@ class MockEngine:
         sid = self.step_id()
         if sid in ("install", "done"):
             raise InvalidError("The install can't be skipped.", code="state")
+        if sid == "summary":
+            # ReadyToInstall: every answer again (a passphrase set through the account
+            # step's "use it for the disk too" is only checked here).
+            for prev in STEP_IDS[:STEP_IDS.index("summary")]:
+                if prev != "network":
+                    self.check_can_leave(prev)
         self.check_can_leave(sid)
-        self.current += 1
+        self.done.add(sid)
+        target = self.current + 1
+        summary = STEP_IDS.index("summary")
+        if self.return_to and sid == "welcome" and self.data["welcome"]["language"] != self.return_lang:
+            self.return_lang = self.data["welcome"]["language"]   # show Keyboard first
+        elif self.return_to:
+            self.return_to = False
+            if all(STEP_IDS[k] in self.done or (STEP_IDS[k] == "network" and self.wired) for k in range(target, summary)):
+                target = summary
+        self.current = target
         if self.step_id() == "network" and self.wired:
             self.current += 1  # wired and online: skip the network step
         self.visited.add(self.current)
         return self.wizard()
 
+    def leave_failed(self):
+        """After a core failure, Back / Goto return to the wizard (answers and secrets kept)."""
+        if self.step_id() == "install" and self.install_state == "failed":
+            self.install_state = "idle"
+            self.current = STEP_IDS.index("summary")
+            self.return_to = False
+            return True
+        return False
+
     def back(self):
-        if self.step_id() in ("install", "done"):
+        if self.leave_failed():
+            return self.wizard()
+        if self.step_id() == "done" or self.install_state != "idle":
             raise InvalidError("You can't go back while installing.", code="state")
+        self.return_to = False
         if self.current > 0:
             self.current -= 1
             if self.step_id() == "network" and self.wired:
@@ -454,8 +531,15 @@ class MockEngine:
         if sid not in STEP_IDS:
             raise InvalidError(f"Unknown step {sid}.", code="not_found")
         i = STEP_IDS.index(sid)
-        if i > self.current or self.step_id() in ("install", "done"):
+        if self.step_id() == "install" and self.install_state == "failed" and i <= STEP_IDS.index("summary"):
+            self.leave_failed()
+        if self.step_id() == "done" or self.install_state != "idle":
+            raise InvalidError("You can't change answers while installing.", code="state")
+        if i > self.current or i >= STEP_IDS.index("summary") and self.step_id() != "install":
             raise InvalidError("You can only go back to a finished step.", code="state")
+        if i != self.current:
+            self.return_to = self.step_id() == "summary"
+            self.return_lang = self.data["welcome"]["language"]
         self.current = i
         return self.wizard()
 
@@ -469,14 +553,15 @@ class MockEngine:
         offset = {"Asia/Jerusalem": "UTC+2"}.get(self.data["timezone"]["timezone"], "")
         apps = [MOD[i][1].replace(" Browser", "").replace(" Office", "") for i in self.selected_ids() if i in MOD]
         os_name = (d["existing_os"] or ["the other system"])[0] if d else ""
+        name = (d["model"] or d["path"]) if d else ""
         if mode == "alongside":
-            disk_value = f"Alongside {os_name} on {d['model']} · {d['alongside_label'].replace('Uses ', 'uses ')}"
+            disk_value = f"Alongside {os_name} on {name} · {d['alongside_label'].replace('Uses ', 'uses ')}"
             primary = f"Install alongside {os_name}"
-            warning = f"Installing will use free space on {d['model']}. {os_name} and its files stay as they are."
+            warning = f"Installing will use free space on {name}. {os_name} and its files stay as they are."
         else:
-            disk_value = f"Erase {d['model']} · {d['size_label']}"
+            disk_value = f"Erase {d['label']}"
             primary = "Erase disk and install"
-            warning = f"Installing will **erase everything on {d['model']}**. This can't be undone."
+            warning = f"Installing will **erase everything on {name}**. This can't be undone."
         disk_value += ", encrypted" if enc else ", not encrypted"
         rows = [
             {"step": "welcome", "label": "Language and keyboard",
@@ -495,9 +580,12 @@ class MockEngine:
                 self.current = STEP_IDS.index("install")
             else:
                 raise InvalidError("Finish the steps before installing.", code="state")
-        if self.install_state == "running":
-            return {"ok": True}
+        if self.install_state in ("running", "attention"):
+            raise InvalidError("The install is already running.", code="state")
+        if self.install_state == "done":
+            raise InvalidError("Arctic Linux is already installed.", code="state")
         self.install_state = "running"
+        self.module_status = {}
         self.install_thread = threading.Thread(target=self.run_install, daemon=True)
         self.install_thread.start()
         return {"ok": True}
@@ -508,7 +596,13 @@ class MockEngine:
     def substeps(self, active):
         order = [("disk", "Preparing the disk"), ("system", "Copying Arctic Linux"), ("apps", "Installing your apps"), ("finish", "Setting up your account")]
         idx = [o[0] for o in order].index(active) if active else len(order)
-        return [{"id": k, "label": lbl, "state": "done" if i < idx else ("active" if i == idx else "todo")} for i, (k, lbl) in enumerate(order)]
+        out = [{"id": k, "label": lbl, "state": "done" if i < idx else ("active" if i == idx else "todo")} for i, (k, lbl) in enumerate(order)]
+        # Like the engine (backend/progress.go): the active apps sub-step counts, "· 3 of 9".
+        total = len(self.module_status)
+        if active == "apps" and total:
+            done = sum(1 for st in self.module_status.values() if st in ("installed", "skipped", "deferred"))
+            out[2]["label"] += f" · {min(done + 1, total)} of {total}"
+        return out
 
     def progress(self, percent, phase, status, sub, eta):
         self.emit({"event": "progress", "percent": round(percent, 1), "phase": phase, "status": status,
@@ -536,10 +630,13 @@ class MockEngine:
             p = 8 + i * 1.3
             self.progress(p, "copy", "Copying Arctic Linux…", "system", eta(p))
             self.sleep(0.2)
-            if env_on("ARCTIC_MOCK_FATAL") and not self.fatal_used and i == 12:
-                self.fatal_used = True
+            if self.fatal_left > 0 and i == 12:
+                self.fatal_left -= 1
                 self.install_state = "failed"
-                self.emit({"event": "failed", "message": "Copying the system failed: the disk stopped responding (I/O error on /dev/nvme0n1p3).", "fatal": True})
+                self.emit({"event": "failed", "title": "Something went wrong while installing",
+                           "message": "Copying the system failed: the disk stopped responding (I/O error on /dev/nvme0n1p3).",
+                           "details": "copy: rsync -aAXH /run/rootfsbase/ /mnt/: exit status 23\nrsync: write failed on \"/mnt/usr/lib64/libLLVM.so.19\": Input/output error (5)",
+                           "fatal": True, "can_change": True})
                 return
         for i in range(4):
             p = 47 + i * 1.5
@@ -582,7 +679,11 @@ class MockEngine:
                 self.module_status[i] = "failed"
                 self.install_state = "attention"
                 self.emit({"event": "module", "id": i, "name": name, "status": "failed", "percent": 50})
-                self.emit({"event": "attention", "module": {"id": i, "name": name}, "message": "The download server didn't answer.", "optional": True})
+                self.emit({"event": "attention", "module": {"id": i, "name": name}, "title": f"{name} couldn’t be downloaded",
+                           "message": "The download server didn't answer.",
+                           "help": f"Everything else is fine — {name} is optional and you can add it later from the Software app.",
+                           "details": f"flatpak install --system -y flathub {i}\nerror: Unable to connect to dl.flathub.org: Could not resolve hostname",
+                           "optional": True, "retry_label": "Try again", "skip_label": f"Skip {name}"})
                 self.retry_event.clear()
                 self.retry_event.wait()
                 self.install_state = "running"
@@ -615,7 +716,8 @@ class MockEngine:
         p = params or {}
         with self.lock:
             if method == "Hello":
-                return {"engine_version": VERSION, "mock": True, "live": True, "firmware": "uefi"}
+                phase = {"idle": "wizard", "running": "installing"}.get(self.install_state, self.install_state)
+                return {"engine_version": VERSION, "mock": True, "live": True, "firmware": "uefi", "state": phase}
             if method == "Subscribe":
                 self.subscribed = True
                 return {"ok": True}
@@ -676,7 +778,8 @@ class MockEngine:
             if method == "SkipModule":
                 return self.resume("skip", p.get("id"))
             if method == "SaveLog":
-                return {"path": "/run/initramfs/live/arctic-install.log"}
+                return {"path": "/run/initramfs/live/arctic-install.log", "on_usb": True,
+                        "message": "Saved the log to the USB stick (arctic-install.log)."}
             if method == "Reboot":
                 return {"ok": True}
         if method == "ConnectWifi":

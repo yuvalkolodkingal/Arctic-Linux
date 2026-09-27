@@ -29,8 +29,12 @@ StepPage {
 
     onDiskChanged: if (!canAlongside && mode === "alongside") mode = "erase"
 
+    // The engine's label ("Samsung SSD 980 · 1 TB"; the path when there is no model,
+    // as for virtio disks).
     function label(d) {
-        return d.model + " · " + d.size_label;
+        if (d.label)
+            return d.label;
+        return (d.model ? d.model : d.path) + " · " + d.size_label;
     }
     function commit(done) {
         Wizard.selectedDiskLabel = disk ? label(disk) : "";
@@ -101,8 +105,9 @@ StepPage {
             choice: true
             radio: true
             selected: page.mode === "alongside"
-            title: "Install alongside " + (page.otherOs || "the other system")
-            desc: "Keeps " + (page.otherOs || "the other system") + ". You choose which one to start each time. " + (page.disk && page.disk.alongside_label ? page.disk.alongside_label + "." : "")
+            // The engine's wording, so it matches the Summary's "Install alongside …" button.
+            title: page.disk && page.disk.alongside_title ? page.disk.alongside_title : "Install alongside " + (page.otherOs || "the other system")
+            desc: page.disk && page.disk.alongside_description ? page.disk.alongside_description : "Keeps " + (page.otherOs || "the other system") + ". You choose which one to start each time. " + (page.disk && page.disk.alongside_label ? page.disk.alongside_label + "." : "")
             onClicked: page.mode = "alongside"
             Keys.onUpPressed: event => {
                 page.mode = "erase";

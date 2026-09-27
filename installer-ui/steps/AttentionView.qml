@@ -1,6 +1,7 @@
 // Step 11 — One app needs attention / Something went wrong (INSTALL_STEPS[10]).
 // Replaces the Install page while the engine waits: an optional app failed
-// (Try again / Skip {App}) or a core step failed (Try again / Save log to USB).
+// (Try again / Skip {App}) or a core step failed (Try again / Change your answers,
+// back to the Summary / Save log to USB). Show details has the engine's own error.
 import QtQuick
 import ".."
 import "../components"
@@ -16,13 +17,27 @@ StepPage {
     measure: 560
     showBack: false
     showNext: false
-    caption: fatal ? "Don’t remove the USB stick yet." : "Your system is installed. Only optional apps are affected."
-    helpText: fatal ? "A part of the system couldn’t be installed. Try again first. If it keeps failing, save the log to the USB stick and share it with us when you ask for help." : "An optional app couldn’t be downloaded. Try again, or skip it — you can add it later from the Software app. The rest of your system is fine."
+    // Attention comes while the apps install, before the account is set up.
+    caption: fatal ? "Don’t remove the USB stick yet." : "Only optional apps are affected. The install carries on once you choose."
+    helpText: fatal ? "A part of the system couldn’t be installed. Try again first. If the problem is one of your answers (for example the disk), use Change your answers to go back to the Summary. If it keeps failing, save the log to the USB stick and share it with us when you ask for help." : "An optional app couldn’t be downloaded. Try again, or skip it — you can add it later from the Software app. The rest of your system is fine."
 
     property bool showDetails: false
     readonly property string logPath: Wizard.lastLogPath
     property string logError: ""
+    readonly property string detailsText: {
+        const lines = [];
+        if (!fatal && ev.module)
+            lines.push("module: " + ev.module.id);
+        if (ev.details)
+            lines.push(ev.details);
+        else if (ev.message)
+            lines.push(ev.message);
+        return lines.join("\n");
+    }
 
+    function escaped(t) {
+        return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
     function primary() {
         if (fatal)
             Wizard.retryInstall();
@@ -54,14 +69,14 @@ StepPage {
         ArBanner {
             width: parent.width
             kind: "error"
-            title: page.fatal ? "The install stopped" : page.appName + " couldn’t be downloaded"
-            text: page.fatal ? (page.ev.message || "") : (page.ev.message || "The download server didn’t answer.") + " Everything else is fine — " + page.appName + " is optional and you can add it later from the Software app."
-            actionText: page.fatal ? "" : (page.showDetails ? "Hide details" : "Show details")
+            title: page.fatal ? "The install stopped" : (page.ev.title || page.appName + " couldn’t be downloaded")
+            text: page.escaped(page.fatal ? page.ev.message : (page.ev.message || "The download server didn’t answer.") + " " + (page.ev.help || "Everything else is fine — " + page.appName + " is optional and you can add it later from the Software app."))
+            actionText: page.detailsText === "" ? "" : (page.showDetails ? "Hide details" : "Show details")
             onAction: page.showDetails = !page.showDetails
         }
 
         Rectangle {
-            visible: page.showDetails && !page.fatal
+            visible: page.showDetails && page.detailsText !== ""
             width: parent.width
             height: details.implicitHeight + 2 * Theme.space3
             radius: Theme.radiusMd
@@ -72,10 +87,11 @@ StepPage {
                 y: Theme.space3
                 width: parent.width - 2 * Theme.space3
                 wrapMode: Text.WrapAnywhere
+                textFormat: Text.PlainText
                 color: Theme.inkMuted
                 font.family: Theme.fontMono
                 font.pixelSize: 12
-                text: "module: " + (page.ev.module ? page.ev.module.id : "") + "\nmessage: " + (page.ev.message || "") + "\noptional: " + (page.ev.optional ? "yes" : "no")
+                text: page.detailsText
             }
         }
 
@@ -96,9 +112,19 @@ StepPage {
                 enabled: !Wizard.busy
                 onClicked: Wizard.skipModule()
             }
+            // Back to the Summary with every answer kept, to pick another disk and so on
+            // (when the engine allows it: can_change).
+            ArButton {
+                visible: page.fatal && !!page.ev.can_change
+                variant: "secondary"
+                iconName: "chevron-left"
+                text: "Change your answers"
+                enabled: !Wizard.busy
+                onClicked: Wizard.leaveFailure()
+            }
             ArButton {
                 visible: page.fatal
-                variant: "secondary"
+                variant: "ghost"
                 iconName: "download"
                 text: "Save log to USB"
                 onClicked: Wizard.saveLog((path, err) => page.logError = err)
@@ -109,7 +135,7 @@ StepPage {
             visible: page.logPath !== "" || page.logError !== ""
             width: parent.width
             kind: page.logError !== "" ? "error" : "success"
-            text: page.logError !== "" ? page.logError : "Saved the log to " + page.logPath + "."
+            text: page.escaped(page.logError !== "" ? page.logError : (Wizard.lastLogMessage || "Saved the log to " + page.logPath + "."))
         }
     }
 }
