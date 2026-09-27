@@ -649,6 +649,16 @@ class HooksTest(unittest.TestCase):
         self.run_hook("40-zen")
         self.assertEqual(user_js.read_text(), 'user_pref("browser.startup.page", 3);\n')
 
+    def test_zen_xdg_profile_in_the_flatpak(self):
+        base = self.home / ".var/app/app.zen_browser.zen/config/zen"
+        (base / "xyz.Default").mkdir(parents=True)
+        (base / "profiles.ini").write_text("[Profile0]\nName=Default\nIsRelative=1\nPath=xyz.Default\n")
+        settings = self.home / ".config/arctic/settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text('{"zen_theme": true}')
+        self.run_hook("40-zen", "winter")
+        self.assertIn(self.palettes["winter"]["colors"]["accent"], (base / "xyz.Default/user.js").read_text())
+
 
 ARCTIC_THEME = DOTFILES / ".local/bin/arctic-theme"
 # gsettings that keeps its values in a file and logs every set; when gtk-theme is set it also
@@ -745,6 +755,19 @@ class ArcticThemeReloadTest(unittest.TestCase):
         self.assertIn((self.share / "themes/winter/gtk.css").read_text(), css)
         ini = (self.home / ".config/gtk-3.0/settings.ini").read_text()
         self.assertIn("gtk-application-prefer-dark-theme=0", ini)
+
+    def test_zen_setting(self):
+        base = self.home / ".var/app/app.zen_browser.zen/.zen"
+        (base / "p.Default").mkdir(parents=True)
+        (base / "profiles.ini").write_text("[Profile0]\nPath=p.Default\nIsRelative=1\n")
+        user_js = base / "p.Default/user.js"
+        self.assertEqual(self.arctic_theme("zen").stdout, "off\n")
+        self.arctic_theme("zen", "on")
+        self.assertEqual(self.arctic_theme("zen").stdout, "on\n")
+        self.assertTrue(json.loads(self.arctic_theme("current", "--json").stdout)["zen_theme"])
+        self.assertIn("zen.theme.accent-color", user_js.read_text())
+        self.arctic_theme("zen", "off")
+        self.assertNotIn("zen.theme.accent-color", user_js.read_text())
 
 
 # Zed theme schema v0.2.0 (https://zed.dev/schema/themes/v0.2.0.json): ThemeStyleContent keys.

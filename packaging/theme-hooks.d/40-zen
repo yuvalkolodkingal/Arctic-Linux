@@ -4,10 +4,11 @@
 Run by `arctic-theme reload` with ARCTIC_THEME_DIR and ARCTIC_THEME_MODE; quick, never fails.
 
 Zen follows light and dark by itself (the desktop portal's colour scheme). With
-"zen_theme": true in ~/.config/arctic/settings.json this hook also gives it the theme's accent:
-the user_pref lines of the active theme's zen/user.js go into a marked block at the end of the
-user.js of every Zen profile (the Flatpak's ~/.var/app/app.zen_browser.zen/.zen, and ~/.zen or
-~/.config/zen for other builds). Zen reads user.js when it starts. With the setting off (the
+"zen_theme": true in ~/.config/arctic/settings.json (`arctic-theme zen on`) this hook also gives
+it the theme's accent: the user_pref lines of the active theme's zen/user.js go into a marked
+block at the end of the user.js of every Zen profile (the Flatpak's
+~/.var/app/app.zen_browser.zen/.zen or, in newer builds, its XDG folder
+~/.var/app/app.zen_browser.zen/config/zen; ~/.zen or ~/.config/zen for other builds). Zen reads user.js when it starts. With the setting off (the
 default) the block is removed again; nothing else in user.js is touched.
 """
 import configparser
@@ -22,6 +23,7 @@ END = "// <<< arctic-theme"
 
 def profile_dirs(home, cfg):
     for base in (os.path.join(home, ".var/app/app.zen_browser.zen/.zen"),
+                 os.path.join(home, ".var/app/app.zen_browser.zen/config/zen"),
                  os.path.join(home, ".zen"), os.path.join(cfg, "zen")):
         ini = configparser.ConfigParser(interpolation=None, strict=False)
         try:
