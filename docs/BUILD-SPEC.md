@@ -92,7 +92,8 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 ### 3.1 Settings app (arctic-settings)
 
 A standalone Quickshell app (`settings/shell.qml`, a `FloatingWindow` titled "Arctic Settings";
-Mango floats it by title, `rules.conf`), opened by `arctic-settings [page]` (`Super + S`; the
+Mango floats it by title, `rules.conf`), opened by `arctic-settings [page]` (`Super + S`, since
+`Super + ,`/`.` already move focus between monitors in `binds.conf`; the
 launcher; the first item of the shell's power menu and of `arctic-power`'s fuzzel fallback).
 Pages: appearance, windows, displays, input, shortcuts, apps, network, bluetooth, sound,
 updates, power, startup, about. It looks native because it reuses the installer's components
@@ -126,6 +127,9 @@ Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Serv
 Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
 watchdog (`arctic_settings.py display-revert --if-pending TOKEN --after 20`) puts the old layout
 back even if Settings is gone; kept layouts become `monitorrule` lines.
+
+The live image (`iso/kiwi/config.kiwi`, and so the installed system) lists `arctic-settings`,
+`nm-connection-editor`, `blueman`, `pavucontrol` and `wlr-randr` explicitly.
 
 IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|search|page|pages|ready|set|value|quit`
 (`arctic-settings` uses `page`/`open`; `settings/dev/headless.sh` the rest).
