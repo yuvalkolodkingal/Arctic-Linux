@@ -1197,7 +1197,7 @@ func (in *Installer) batchStatus(batch []*catalog.Module) string {
 
 // isApp reports whether a module is one of the apps the person ticked (progress, events).
 func (in *Installer) isApp(m *catalog.Module) bool {
-	return !m.Hidden && in.Job.Data.Apps.Selection.Contains(m.ID)
+	return !m.Hidden && !m.IsHardware() && in.Job.Data.Apps.Selection.Contains(m.ID)
 }
 
 // installWithAttention tries every method of a module; when all fail it asks the person
