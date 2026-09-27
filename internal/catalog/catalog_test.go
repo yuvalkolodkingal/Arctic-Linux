@@ -59,7 +59,7 @@ func TestDesignTiles(t *testing.T) {
 		}
 	}
 	sort.Strings(sys)
-	if !reflect.DeepEqual(sys, []string{"codecs", "desktop-base", "flatpak", "nix"}) {
+	if !reflect.DeepEqual(sys, []string{"adw-gtk3-dark-flatpak", "adw-gtk3-flatpak", "codecs", "desktop-base", "flatpak", "nix"}) {
 		t.Fatalf("system modules %v", sys)
 	}
 	var cats []string
@@ -88,7 +88,7 @@ func TestDefaults(t *testing.T) {
 	for _, m := range c.Resolve(sel) {
 		ids = append(ids, m.ID)
 	}
-	if strings.Join(ids, " ") != "zen zed kitty zsh bash yazi thunar collabora vlc codecs desktop-base flatpak nix" {
+	if strings.Join(ids, " ") != "zen zed kitty zsh bash yazi thunar collabora vlc adw-gtk3-dark-flatpak adw-gtk3-flatpak codecs desktop-base flatpak nix" {
 		t.Fatalf("resolve = %v", ids)
 	}
 }
@@ -106,7 +106,7 @@ func TestLiveImageFlags(t *testing.T) {
 			t.Errorf("%s should be in the live image", id)
 		}
 	}
-	for _, id := range []string{"zen", "zed", "collabora", "yazi", "codecs"} {
+	for _, id := range []string{"zen", "zed", "collabora", "yazi", "codecs", "adw-gtk3-flatpak", "adw-gtk3-dark-flatpak"} {
 		if live[id] {
 			t.Errorf("%s should be downloaded", id)
 		}
@@ -117,10 +117,11 @@ func TestEstimateDownload(t *testing.T) {
 	c := load(t)
 	est := c.EstimateDownload(c.DefaultSelection())
 	// zen 160 + Platform 25.08 259 + zed 132 + Sdk 26.08 656 + yazi 12 + collabora 454 + KDE 6.10 392 + codecs 40
+	// + the adw-gtk3 themes for Flatpak apps 2 × 0.5
 	if est.Apps != 8 {
 		t.Errorf("apps = %d, want 8 (the ticked defaults; bash is installed but not counted)", est.Apps)
 	}
-	if est.Bytes != 2105*1000*1000 {
+	if est.Bytes != 2106*1000*1000 {
 		t.Errorf("bytes = %d", est.Bytes)
 	}
 	if est.Label != "8 apps · 2.1 GB download" {
@@ -130,12 +131,12 @@ func TestEstimateDownload(t *testing.T) {
 	// Shared runtimes count once: Firefox (dnf) + two Platform 25.08 flatpaks.
 	sel := Selection{"browser": {"firefox"}, "terminal": {"kitty"}, "shell": {"zsh"}, "extras": {"obs"}, "office": {"libreoffice"}}
 	est = c.EstimateDownload(sel)
-	// firefox 100 + obs 199 + libreoffice 327 + Platform 25.08 259 (once) + codecs 40
-	if est.Bytes != 925*1000*1000 || est.Label != "5 apps · 925 MB download" {
+	// firefox 100 + obs 199 + libreoffice 327 + Platform 25.08 259 (once) + codecs 40 + Flatpak themes 1
+	if est.Bytes != 926*1000*1000 || est.Label != "5 apps · 926 MB download" {
 		t.Errorf("got %+v", est)
 	}
 
-	// Only live-image apps: nothing but codecs to download.
+	// Only live-image apps: nothing but codecs and the Flatpak themes to download.
 	sel = Selection{"browser": {"zen"}, "terminal": {"kitty"}, "shell": {"bash"}}
 	est = c.EstimateDownload(sel)
 	if est.Apps != 3 {
