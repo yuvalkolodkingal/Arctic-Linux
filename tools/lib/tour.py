@@ -94,6 +94,12 @@ def size(path):
     return Image.open(path).size
 
 
+def busy(path, box):
+    """Standard deviation of the luminance in box: ~0 for an empty panel, high for pictures."""
+    from PIL import ImageStat
+    return ImageStat.Stat(Image.open(path).convert("L").crop(box)).stddev[0]
+
+
 def region_diff(a, b, box):
     ia = Image.open(a).convert("L").crop(box)
     ib = Image.open(b).convert("L").crop(box)
@@ -618,10 +624,12 @@ class Tour:
             self.save(p, "live-welcome")
             # 4. Keep trying: the text button right of the amber Install button.
             x, y = card[2] + 68, (card[1] + card[3]) // 2
-            self.click(x, y)
-            self.park()
-            if not self.wait_for(lambda q: not welcome_card(q), "the card closed", 30, 1.0):
-                self.vm.keys("esc")
+            for attempt in (1, 2):
+                self.click(x, y)
+                self.park()
+                if self.wait_for(lambda q: not welcome_card(q), "the card closed", 90, 2.0):
+                    break
+                log(f"the welcome card is still open after clicking Keep trying (attempt {attempt})")
         else:
             self.skipped_because("live-welcome", "the welcome card was not on screen")
         time.sleep(3)
@@ -631,55 +639,81 @@ class Tour:
 
     def osd_volume(self):
         base = self.settle("osd-base", timeout=30, need=1)
-        box = (440, 640, 840, 790)
+        box = (440, 640, 840, 790)          # the OSD pill: bottom centre, 44 px above the edge
         best, best_d = None, 0.0
-        for attempt in (1, 2):
+        for attempt in (1, 2, 3):
             self.vm.keys("volumeup")
             t = time.time()
             frames = []
-            while time.time() - t < 8:
-                frames.append(self.grab("osd"))
-                time.sleep(0.15)
-            for p in frames:
+            while time.time() - t < 20:
+                p = self.grab("osd")
                 d = region_diff(base, p, box)
+                frames.append((p, d))
                 if d > best_d:
                     best, best_d = p, d
-            for p in frames:
+                # Seen, and it has had time to finish its entrance: stop.
+                if best_d > 0.05 and d < best_d * 0.5:
+                    break
+                time.sleep(0.1)
+            for p, _ in frames:
                 if p != best:
                     os.remove(p)
             if best_d > 0.05:
                 break
             log(f"osd: nothing seen after the volume key (attempt {attempt})")
+            time.sleep(3)
         if best_d > 0.05:
             self.save(best, "osd-volume")
         else:
             raise TourError("the volume OSD did not appear")
 
-    def popup(self, name, chord, what, typed=None, timeout=60, settle_timeout=90, after_type=None):
-        """Open a shell surface with its shortcut (optionally type into it), screenshot it and
-        close it again with Esc."""
+    def type_checked(self, text, region, what, tries=3):
+        """Type into the focused field and check that the region changed (under TCG a surface
+        that has just opened can miss the first keys); clears the field and types again if not."""
+        before = self.probe()
+        before = shutil.copy(before, f"{OUT}/type-before.png")
+        for attempt in range(1, tries + 1):
+            self.vm.type_text(text, gap=0.2)
+            if self.wait_for(lambda p: region_diff(before, p, region) > 0.02, f"{what}: typed text", 30, 1.0):
+                return True
+            log(f"{what}: the typed text didn't show (attempt {attempt}); typing again")
+            self.vm.keys(*(["ctrl-a", "backspace"]))
+            time.sleep(2)
+        return False
+
+    def popup(self, name, chord, what, typed=None, field=None, ready=None, timeout=120, settle_timeout=90):
+        """Open a shell surface with its shortcut (optionally type into its field), wait until it
+        shows what it should (ready(path)), screenshot it and close it again with Esc."""
         base = self.settle(f"{name}-base", timeout=30, need=1)
         self.vm.keys(chord)
         if not self.wait_change(base, what, timeout):
             raise TourError(f"{what} did not open ({chord})")
-        self.settle(f"{name}-open", timeout=30, interval=1.5, need=1)
+        self.settle(f"{name}-open", timeout=30, interval=1.5, need=2)
+        time.sleep(2)
         if typed:
-            self.vm.type_text(typed, gap=0.2)
-            if after_type:
-                after_type()
+            if not self.type_checked(typed, field or (0, 0, W, H), what):
+                raise TourError(f"{what}: typing {typed!r} had no effect")
+        if ready and not self.wait_for(ready, f"{what} ready", settle_timeout, 3.0):
+            log(f"warning: {what} never looked ready")
         p = self.settle(name, timeout=settle_timeout, interval=2, need=2)
         self.save(p, name)
         self.dismiss(base, what)
 
+    # The launcher's search field, just under the bar (it hangs from the bar's left end).
+    LAUNCHER_FIELD = (30, 50, 530, 100)
+
     def launcher(self):
-        self.popup("launcher", "meta_l-spc", "the launcher", typed=self.launcher_query)
+        self.popup("launcher", "meta_l-spc", "the launcher", typed=self.launcher_query, field=self.LAUNCHER_FIELD)
 
     def launcher_calc(self):
-        self.popup("launcher-calculator", "meta_l-spc", "the launcher", typed="=12*4")
+        self.popup("launcher-calculator", "meta_l-spc", "the launcher", typed="=12*4", field=self.LAUNCHER_FIELD)
 
     def wallpapers(self):
-        # Thumbnails are made on first open (Pillow, slow under TCG): wait for the grid to settle.
-        self.popup("wallpapers", "meta_l-shift-w", "the wallpaper picker", settle_timeout=240)
+        # Thumbnails are made on first open (Pillow, slow under TCG): wait until the grid below
+        # the search field has pictures in it (it reads "Loading your wallpapers…" until then).
+        def grid_filled(p):
+            return busy(p, (42, 190, 874, 600)) > 12
+        self.popup("wallpapers", "meta_l-shift-w", "the wallpaper picker", ready=grid_filled, settle_timeout=400)
 
     def get_apps(self):
         # The VM has no internet: the console's package index (normally `dnf5 repoquery` and
@@ -692,7 +726,7 @@ class Tour:
                 self.sh(f"mkdir -p ~/.cache/arctic && curl -fsS -o ~/.cache/arctic/{n} 10.0.2.2:{self.port}/file/{n} && touch ~/.cache/arctic/{n}")
                 seeded.append(n)
         log(f"get-apps: seeded {seeded or 'nothing'}")
-        self.popup("get-apps", "meta_l-shift-a", "Get apps", typed=E.get("GETAPPS_QUERY", "gimp"))
+        self.popup("get-apps", "meta_l-shift-a", "Get apps", typed=E.get("GETAPPS_QUERY", "gimp"), settle_timeout=120)
 
     def power_menu(self):
         self.popup("power-menu", "meta_l-esc", "the power menu")
