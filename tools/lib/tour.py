@@ -102,8 +102,8 @@ def region_diff(a, b, box):
 
 
 def fox(path):
-    """The Plymouth splash: a compact white fox mark with amber dots under it.
-    Returns {"count", "centered", "w"} or None."""
+    """The Plymouth splash: a compact, mostly filled white fox mark on a dark screen.
+    Returns {"count", "centered", "w", "cx"} or None."""
     im = Image.open(path).convert("L")
     w, h = im.size
     m = im.point(lambda v: 255 if v > 225 else 0)
@@ -112,13 +112,31 @@ def fox(path):
     if not bb or cnt < 0.004 * w * h:
         return None
     bw, bh = bb[2] - bb[0], bb[3] - bb[1]
-    if bw > 0.3 * w or bh > 0.4 * h:
-        return None          # text or a desktop, not the mark
-    dots, _ = amber_box(path, (bb[0], bb[3], bb[2], min(h, bb[3] + 120)))
-    if dots < 20:
-        return None
+    if bw > 0.3 * w or bh > 0.4 * h or cnt < 0.3 * bw * bh:
+        return None          # text, a menu or a desktop, not the mark
     cx = (bb[0] + bb[2]) / 2
     return {"count": cnt, "centered": abs(cx - w / 2) < 0.04 * w, "w": w, "cx": cx}
+
+
+def amber_block(path, box, min_row=100):
+    """Bounding box (screen coordinates) of a solid amber block inside box: the rows with at
+    least min_row amber pixels, and the columns amber in at least a third of those rows (so
+    anti-aliased text and small marks around it don't count). None when there is none."""
+    try:
+        im = Image.open(path).convert("RGB").crop(box)
+    except OSError:
+        return None
+    m = _amber_mask(im)
+    wd, ht = m.size
+    data = m.tobytes()
+    rows = [y for y in range(ht) if data[y * wd:(y + 1) * wd].count(255) >= min_row]
+    if len(rows) < 8:
+        return None
+    y0, y1 = rows[0], rows[-1]
+    cols = [x for x in range(wd) if sum(1 for y in rows if data[y * wd + x] == 255) >= len(rows) / 3]
+    if not cols:
+        return None
+    return (cols[0] + box[0], y0 + box[1], cols[-1] + 1 + box[0], y1 + 1 + box[1])
 
 
 def bar_up(path):
@@ -130,11 +148,10 @@ def bar_up(path):
 
 
 def welcome_card(path):
-    """The live welcome card: its amber "Install Arctic Linux" button in the middle."""
+    """The live welcome card: the bounding box of its amber "Install Arctic Linux" button."""
     if size(path) != (W, H):
         return None
-    n, bb = amber_box(path, (380, 300, 900, 620))
-    return bb if n > 3000 else None
+    return amber_block(path, (380, 300, 900, 620), min_row=100)
 
 
 def save_png(src, dst, resize=None):
@@ -568,7 +585,7 @@ class Tour:
             if not self.vm.alive():
                 raise TourError("the VM stopped while booting")
             p = self.probe()
-            f = fox(p)
+            f = None if vmtest.looks_like_boot_menu(p) else fox(p)
             if f and sum(1 for x in found if x[1]["w"] == f["w"] and x[1]["centered"] == f["centered"]) < 4:
                 found.append((self.keep(p, f"splash-{f['w']}-{'c' if f['centered'] else 'off'}"), f))
             if bar_up(p):
