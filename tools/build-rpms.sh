@@ -118,6 +118,7 @@ for spec in $SPECS; do
   [[ "$spec" == mangowm ]] && install_mango /root/rpmbuild/RPMS/x86_64
 done
 mkdir -p /out/debug
+rm -f /out/repo/*-debuginfo-*.rpm /out/repo/*-debugsource-*.rpm
 find /root/rpmbuild/RPMS -name '*.rpm' \( -name '*-debuginfo-*' -o -name '*-debugsource-*' \) -exec cp -f {} /out/debug/ \;
 find /root/rpmbuild/RPMS -name '*.rpm' ! -name '*-debuginfo-*' ! -name '*-debugsource-*' -exec cp -f {} /out/repo/ \;
 cp -f /root/rpmbuild/SRPMS/*.src.rpm /out/srpms/

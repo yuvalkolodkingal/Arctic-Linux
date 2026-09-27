@@ -86,7 +86,33 @@
 		<package name="systemd-resolved"/>
 		<package name="plymouth"/>
 		<!-- LiveInstall: what the installer needs from the live system -->
-		<package name="glibc-all-langpacks"/>
+		<!-- Locales for the installer's languages (internal/wizard/locale.go), not all 227 MB of
+		     glibc-all-langpacks: keeps room for Zen under the 2 GiB release-asset limit. Add the
+		     langpack here when the installer gains a language. -->
+		<package name="glibc-langpack-en"/>
+		<package name="glibc-langpack-he"/>
+		<package name="glibc-langpack-de"/>
+		<package name="glibc-langpack-es"/>
+		<package name="glibc-langpack-fr"/>
+		<package name="glibc-langpack-ja"/>
+		<package name="glibc-langpack-ar"/>
+		<package name="glibc-langpack-zh"/>
+		<package name="glibc-langpack-cs"/>
+		<package name="glibc-langpack-da"/>
+		<package name="glibc-langpack-nl"/>
+		<package name="glibc-langpack-fi"/>
+		<package name="glibc-langpack-el"/>
+		<package name="glibc-langpack-hu"/>
+		<package name="glibc-langpack-it"/>
+		<package name="glibc-langpack-ko"/>
+		<package name="glibc-langpack-nb"/>
+		<package name="glibc-langpack-pl"/>
+		<package name="glibc-langpack-pt"/>
+		<package name="glibc-langpack-ro"/>
+		<package name="glibc-langpack-ru"/>
+		<package name="glibc-langpack-sv"/>
+		<package name="glibc-langpack-tr"/>
+		<package name="glibc-langpack-uk"/>
 		<package name="isomd5sum"/>
 		<package name="btrfs-progs"/>
 		<package name="udisks2-btrfs"/>
@@ -101,6 +127,8 @@
 		<package name="adwaita-icon-theme"/>
 		<package name="bash-completion"/>
 		<package name="nano"/>
+		<!-- Time sync (Fedora presets enable chronyd; livesys adjusts chrony.conf) -->
+		<package name="chrony"/>
 		<!-- Never: Fedora branding, other greeters/display servers, Anaconda first boot -->
 		<ignore name="fedora-release"/>
 		<ignore name="fedora-release-*"/>
@@ -125,6 +153,7 @@
 		<!-- Weak dependencies nothing here uses: EPS for kimageformats, cpp for xrdb (~70 MB) -->
 		<ignore name="ghostscript"/>
 		<ignore name="cpp"/>
+		<ignore name="glibc-all-langpacks"/>
 	</packages>
 
 	<packages type="iso" patternType="plusRecommended">

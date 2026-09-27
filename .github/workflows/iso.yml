@@ -75,6 +75,7 @@ jobs:
             out/iso/${{ env.ISO }}
             out/iso/${{ env.ISO }}.sha256
             out/iso/*.packages
+            out/iso/*.build-info
           compression-level: 0
           retention-days: 14
 
@@ -114,6 +115,9 @@ jobs:
             echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
             echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."
             echo "The boot menu offers **Try Arctic Linux** and **Install Arctic Linux**."
+            if grep -q 'zen_preinstalled=1' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
+              echo "Zen Browser is preinstalled in the live session."
+            fi
             echo
             echo "SHA-256: \`$sha\`"
             if [ "$SPLIT" = true ]; then

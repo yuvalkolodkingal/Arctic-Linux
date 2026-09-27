@@ -2,7 +2,11 @@
 
 `tools/build-iso.sh` builds this description with kiwi-ng 11 in a privileged Fedora 44
 container, adding the local RPM repository from `tools/build-rpms.sh` (`out/repo`) with
-`--add-repo`. Output: `out/iso/Arctic-Linux-0.1-x86_64.iso` and its `.sha256`.
+`--add-repo`. It runs `kiwi-ng system prepare` (packages + `config.sh`), installs Zen Browser
+from Flathub into the image root from outside the chroot (`--zen auto`: kept only while the ISO
+stays ≤ 2 GiB), then `kiwi-ng system create` (SELinux labels, live initrd, erofs, ISO).
+Output: `out/iso/Arctic-Linux-0.1-x86_64.iso`, its `.sha256`, the package list and
+`.build-info` (whether Zen is in it).
 
 | File | What it is |
 |---|---|

@@ -335,6 +335,11 @@ Requires:       libnotify
 Requires:       librsvg2-tools
 Requires:       jetbrains-mono-fonts-all
 Requires:       google-noto-sans-fonts
+# Scripts the installer's language list (and the installed system) needs beyond Latin,
+# Greek and Cyrillic: Hebrew, Arabic, Chinese/Japanese/Korean.
+Requires:       google-noto-sans-hebrew-fonts
+Requires:       google-noto-sans-arabic-vf-fonts
+Requires:       google-noto-sans-cjk-vf-fonts
 Requires:       polkit
 Requires:       gnome-keyring
 Requires:       gnome-keyring-pam

@@ -15,6 +15,9 @@
 #   tools/test-iso.sh --debug                 --append 'console=tty0 console=ttyS0,115200
 #                                             systemd.journald.forward_to_console=1': the whole
 #                                             journal (system and session) lands in serial.log
+#   tools/test-iso.sh --collect               at the end, open a terminal (Super+Enter) in the
+#                                             live session and copy the session log, failed
+#                                             units and warnings to serial.log
 #   tools/test-iso.sh --secureboot            UEFI with Secure Boot on (OVMF secboot, MS keys)
 #
 # QEMU runs headless in a Fedora 44 container (qemu-system-x86-core, edk2-ovmf) with a QMP
@@ -42,6 +45,7 @@ KVM=0
 SECUREBOOT=0
 VGA=virtio
 APPEND=""
+COLLECT=0
 OUTBASE="$ROOT/out/test"
 
 while (( $# )); do
@@ -56,6 +60,7 @@ while (( $# )); do
     --kvm) KVM=1; shift ;;
     --vga) VGA="$2"; shift 2 ;;
     --append) APPEND="$APPEND $2"; shift 2 ;;
+    --collect) COLLECT=1; shift ;;
     --debug) APPEND="$APPEND console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"; shift ;;
     --secureboot) SECUREBOOT=1; FIRMWARE=uefi; shift ;;
     --out) OUTBASE="$2"; shift 2 ;;
@@ -86,6 +91,7 @@ from PIL import Image
 
 out, mode, timeout, interval = os.environ["OUT"], os.environ["MODE"], int(os.environ["TIMEOUT"]), int(os.environ["INTERVAL"])
 append = os.environ.get("APPEND", "").strip()
+collect = os.environ.get("COLLECT") == "1"
 qemu = subprocess.Popen(sys.argv[1:], stdout=open(f"{out}/qemu.log", "w"), stderr=subprocess.STDOUT)
 
 def log(msg):
@@ -140,8 +146,12 @@ def keys(*names):
         time.sleep(0.3)
 
 QCODE = {" ": "spc", "=": "equal", ",": "comma", ".": "dot", "-": "minus", "/": "slash",
-         ";": "semicolon", "'": "apostrophe"}
-SHIFTED = {"_": "minus", ":": "semicolon", "+": "equal", '"': "apostrophe"}
+         ";": "semicolon", "'": "apostrophe", "\\": "backslash", "`": "grave_accent",
+         "[": "bracket_left", "]": "bracket_right"}
+SHIFTED = {"_": "minus", ":": "semicolon", "+": "equal", '"': "apostrophe", ">": "dot",
+           "<": "comma", "|": "backslash", "&": "7", "*": "8", "(": "9", ")": "0", "$": "4",
+           "~": "grave_accent", "!": "1", "@": "2", "#": "3", "%": "5", "^": "6",
+           "{": "bracket_left", "}": "bracket_right", "?": "slash"}
 
 def type_text(text):
     for ch in text:
@@ -153,8 +163,8 @@ def type_text(text):
             chord = ["shift", SHIFTED[ch]]
         else:
             raise SystemExit(f"cannot type {ch!r}")
-        qmp.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord])
-        time.sleep(0.08)
+        qmp.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 40})
+        time.sleep(0.2)
 
 def looks_like_boot_menu(path):
     """The arctic GRUB theme: an amber (#f6bd55) selection bar. GRUB's text menu: a light
@@ -205,11 +215,11 @@ else:
     time.sleep(0.5)
     shot("02-boot-menu-selected")
     if append:
-        # Edit the entry. Fedora's GRUB shows "setparams '<title>'" as line 1; the linux line
-        # is line 2: go to its end, add the arguments, boot with Ctrl+X.
+        # Edit the entry. GRUB shows "setparams '<title>'", an empty line, then the entry's
+        # linux line: go to its end, add the arguments, boot with Ctrl+X.
         keys("e")
         time.sleep(1)
-        keys("down", "ctrl-e")
+        keys("down", "down", "ctrl-e")
         type_text(" " + append)
         time.sleep(0.5)
         shot("03-boot-entry-edited")
@@ -227,6 +237,21 @@ while time.time() - t0 < timeout and qemu.poll() is None:
     i += 1
     shot(f"{10 + i:02d}-boot-{elapsed:04d}s")
     time.sleep(10 if elapsed < 120 else interval)
+
+if collect and qemu.poll() is None:
+    # A terminal in the session (Super+Enter → arctic-open terminal), then logs to the serial port.
+    shot("97-before-collect")
+    keys("meta_l-ret")
+    time.sleep(60)
+    keys("ret")          # skips the fetch animation (any key does) and gives a fresh prompt
+    time.sleep(5)
+    shot("98-terminal")
+    type_text("sudo sh -c '(echo ARCTIC-COLLECT-BEGIN; cat ~liveuser/.local/share/sddm/*.log; "
+              "systemctl --failed --no-pager; journalctl -b -p warning --no-pager; getenforce; flatpak list; "
+              "echo ARCTIC-COLLECT-END) >/dev/ttyS0 2>&1'")
+    keys("ret")
+    time.sleep(30)
+    log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
 
 if qemu.poll() is None:
     shot("99-final")
@@ -275,7 +300,7 @@ INNER
 arctic_log "booting $(basename "$ISO") ($FIRMWARE, mode $MODE, ${TIMEOUT}s) → $OUT"
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
-  -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
+  -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ISO:/iso:ro" -v "$OUT:/out" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner"

@@ -9,6 +9,8 @@
 #   tools/build-iso.sh --cache DIR      keep kiwi's dnf package cache in DIR between builds
 #   tools/build-iso.sh --out DIR        output directory (default out/iso)
 #   tools/build-iso.sh --debug          kiwi --debug
+#   tools/build-iso.sh --create-only    reuse the image root kept in the work dir (--keep-work or
+#                                       a failed create) and only run the create step
 #   tools/build-iso.sh --zen auto|yes|no  preinstall Zen Browser (Flathub) in the live image:
 #                                       auto (default) keeps it only while the ISO is ≤ 2 GiB
 #
@@ -30,6 +32,7 @@ CACHE=""
 KEEP_WORK=0
 DEBUG=""
 ZEN=auto
+CREATE_ONLY=0
 ISO_NAME="Arctic-Linux-0.1-x86_64.iso"
 
 while (( $# )); do
@@ -41,7 +44,8 @@ while (( $# )); do
     --keep-work) KEEP_WORK=1; shift ;;
     --debug) DEBUG="--debug"; shift ;;
     --zen) ZEN="$2"; shift 2 ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --create-only) CREATE_ONLY=1; shift ;;
+    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
@@ -73,23 +77,45 @@ dnf -y install kiwi-cli kiwi-systemdeps-iso-media kiwi-systemdeps-filesystems \
   distribution-gpg-keys erofs-utils flatpak >/dev/null 2>&1 || \
   dnf -y install kiwi-cli kiwi-systemdeps-iso-media kiwi-systemdeps-filesystems distribution-gpg-keys erofs-utils flatpak
 kiwi-ng --version || :
+# kiwi 11.0.2 (Fedora 44): `system create` reads command_args['help'], which its typer CLI
+# never sets (KeyError: 'help'). Harmless to patch; a fixed kiwi already has .get().
+for f in /usr/lib/python3*/site-packages/kiwi/tasks/system_create.py; do
+  [ -f "$f" ] && sed -i "s/if self.command_args\['help'\]:/if self.command_args.get('help'):/" "$f" || :
+done
 # kiwi needs loop devices for the EFI image on some hosts.
 for i in $(seq 0 7); do [ -e /dev/loop$i ] || mknod -m 0660 /dev/loop$i b 7 $i 2>/dev/null || :; done
-rm -rf /work/build /work/root
+if [ "$CREATE_ONLY" = 1 ]; then
+  [ -d /work/root/image ] || { echo "--create-only: no image root in the work dir" >&2; exit 1; }
+else
+  rm -rf /work/build /work/root
+fi
+cleanup() { if [ "$KEEP_WORK" != 1 ]; then rm -rf /work/build /work/root; fi; }
+trap cleanup EXIT
 fail() { echo "kiwi failed: $1; last lines of out/logs/$2:" >&2; tail -n 80 "/logs/$2" >&2 || :; exit 1; }
 
 # 1. prepare: install the packages into /work/root and run config.sh.
+if [ "$CREATE_ONLY" != 1 ]; then
 kiwi-ng $KIWI_DEBUG --logfile /logs/kiwi-prepare.log --color-output system prepare \
   --description /desc --root /work/root \
   --add-repo dir:///repo,rpm-md,arctic-local,1,false,false || fail prepare kiwi-prepare.log
+fi
+# `system create` reads the description from /work/root/image, where prepare copied only the
+# kiwi file and scripts: add the files it refers to (the GRUB template).
+cp -f /desc/*.iso-template /work/root/image/
 
 # 2. Zen Browser from Flathub, installed into the image from outside (no chroot), so "Try"
 #    has a browser. Kept only while the ISO stays within GitHub's 2 GiB asset limit.
 zen=0
-if [ "$ZEN" != no ]; then
+if [ "$CREATE_ONLY" = 1 ] && [ -d /work/root/var/lib/flatpak/app/app.zen_browser.zen ]; then
+  zen=1
+elif [ "$ZEN" != no ]; then
   export FLATPAK_SYSTEM_DIR=/work/root/var/lib/flatpak
+  # Only what the browser needs: no translations, no second ("-extra") GL driver build.
   if flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo &&
-     flatpak install --system -y --noninteractive flathub app.zen_browser.zen; then
+     flatpak install --system -y --noninteractive --no-related flathub app.zen_browser.zen; then
+    branch=$(flatpak info --system --show-runtime app.zen_browser.zen | awk -F/ '{print $NF}')
+    flatpak install --system -y --noninteractive --no-related flathub \
+      "org.freedesktop.Platform.GL.default//$branch" "org.freedesktop.Platform.codecs-extra//$branch-extra" || :
     zen=1
     flatpak list --system --columns=application,version,size || :
   else
@@ -102,7 +128,11 @@ fi
 create() {
   rm -rf /work/build
   kiwi-ng $KIWI_DEBUG --logfile /logs/kiwi-create.log --color-output system create \
-    --root /work/root --target-dir /work/build || fail create kiwi-create.log
+    --root /work/root --target-dir /work/build || {
+      KEEP_WORK=1
+      echo "the image root stays in the work dir: retry with --create-only, or delete it" >&2
+      fail create kiwi-create.log
+    }
 }
 
 # 3. create: SELinux labels, live initrd, erofs root, ISO.
@@ -121,14 +151,13 @@ cp -f "$iso" "/out/$ISO_NAME"
 ( cd /out && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256" )
 cp -f /work/build/*.packages "/out/${ISO_NAME%.iso}.packages" 2>/dev/null || :
 chown "$HOST_UID:$HOST_GID" /out/* /logs/kiwi-*.log 2>/dev/null || :
-if [ "$KEEP_WORK" != 1 ]; then rm -rf /work/build /work/root; fi
 INNER
 )
 
 arctic_log "building the ISO with kiwi-ng in $ARCTIC_FEDORA_IMAGE ($engine, privileged)"
 start=$(date +%s)
 "$engine" run --rm --privileged "${ARCTIC_CONTAINER_ARGS[@]}" "${cache_args[@]}" \
-  -e ISO_NAME="$ISO_NAME" -e KIWI_DEBUG="$DEBUG" -e ZEN="$ZEN" -e KEEP_WORK="$KEEP_WORK" \
+  -e ISO_NAME="$ISO_NAME" -e KIWI_DEBUG="$DEBUG" -e ZEN="$ZEN" -e CREATE_ONLY="$CREATE_ONLY" -e KEEP_WORK="$KEEP_WORK" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ROOT/iso/kiwi:/desc:ro" -v "$REPO:/repo:ro" -v "$WORK:/work" -v "$OUT:/out" -v "$LOGS:/logs" \
   "$ARCTIC_FEDORA_IMAGE" bash ${ARCTIC_TRACE:+-x} -c "$ARCTIC_CONTAINER_PROLOGUE$inner"

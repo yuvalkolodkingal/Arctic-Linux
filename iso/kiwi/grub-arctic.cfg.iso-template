@@ -30,7 +30,8 @@ else
 	set basicgfx="nomodeset vga=791"
 fi
 
-set gfxmode=auto
+# Largest common mode first (BIOS VBE would otherwise pick 640x480).
+set gfxmode=1920x1080,1600x900,1280x800,1280x720,1024x768,auto
 set gfxpayload=keep
 terminal_input console
 
