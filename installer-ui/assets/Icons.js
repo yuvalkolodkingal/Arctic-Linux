@@ -934,7 +934,7 @@ var APPS = {
   "name": "Waydroid",
   "category": "containers",
   "glyph": "phone",
-  "summary": "Android apps. Fetches 1 GB on first start.",
+  "summary": "Android apps. Gets 1 GB on first run.",
   "default": false
  },
  "bazaar": {

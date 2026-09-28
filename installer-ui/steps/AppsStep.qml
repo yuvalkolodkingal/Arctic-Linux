@@ -214,17 +214,6 @@ StepPage {
             flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, p.y + item.height - flick.height + 56));
     }
 
-    // Scroll so the first flagged group's message (the end of its section) shows.
-    function revealError() {
-        for (let i = 0; i < sectionRepeater.count; i++) {
-            const s = sectionRepeater.itemAt(i);
-            if (s && s.cat.id === firstError && s.visible) {
-                ensureVisible(s.errorLine);
-                return;
-            }
-        }
-    }
-
     // Test hook (IPC "fill"): select / unselect / toggle app ids (a folded group
     // opens to show them), query, open / close group ids, scroll, focus
     // ("search", an app id or "group:<id>").
@@ -291,15 +280,6 @@ StepPage {
                 o[c.id] = true;
         opened = o;
         refreshEstimate();
-    }
-    // After a refused Next, bring the first flagged group into view.
-    Connections {
-        target: Wizard
-        function onFieldErrorsChanged() {
-            // After the flagged group has opened and laid out its rows.
-            if (page.firstError !== "")
-                Qt.callLater(page.revealError);
-        }
     }
     Timer {
         id: estimateTimer
@@ -386,7 +366,6 @@ StepPage {
                     readonly property int picked: (page.selection[cat.id] || []).length
                     readonly property string rule: page.isOne(cat) ? (cat.required ? "Pick one" : "Pick one or none") : "Pick any"
                     property alias header: groupHeader
-                    property alias errorLine: errorLine
                     visible: !page.searching || apps.length > 0
                     width: sections.width
                     spacing: Theme.space2
@@ -394,6 +373,24 @@ StepPage {
                     topPadding: section.index > 0 && section.open ? Theme.space2 : 0
                     Accessible.role: Accessible.Grouping
                     Accessible.name: cat.name
+
+                    // After a refused Next, the first flagged group scrolls its message into view.
+                    function reveal() {
+                        if (!section.visible || page.firstError !== section.cat.id)
+                            return;
+                        // The group may have just opened: place its rows before measuring.
+                        appGrid.forceLayout();
+                        section.forceLayout();
+                        sections.forceLayout();
+                        page.ensureVisible(errorLine);
+                    }
+                    Connections {
+                        target: Wizard
+                        function onFieldErrorsChanged() {
+                            if (page.firstError === section.cat.id)
+                                Qt.callLater(section.reveal);
+                        }
+                    }
 
                     function rowList() {
                         const out = [];
@@ -491,6 +488,7 @@ StepPage {
                     }
 
                     Grid {
+                        id: appGrid
                         visible: section.open
                         columns: 2
                         columnSpacing: Theme.space2
