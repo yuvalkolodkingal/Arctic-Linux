@@ -31,6 +31,10 @@ the bar.
   and be a hotspot at once, so turning it on while you're on Wi-Fi asks first.
 - **VPN** switches appear when you have VPN or WireGuard connections. Import them in
   **Settings → Network** or with **Edit connections…**.
+- **Tailscale** has a switch there too when it's installed. Signed out, turning it on opens the
+  sign-in page in your browser. If Tailscale says only its operator may switch it, **Let Arctic
+  switch Tailscale** asks for your password once and makes you the operator. **Exit node** picks
+  another of your devices to go online through.
 - **Edit connections…** opens NetworkManager's connection editor for proxies, fixed addresses and
   certificate logins.
 
