@@ -167,6 +167,39 @@ jobs:
           path: /tmp/settings-shots/*.png
           retention-days: 7
 
+  shell-menus:
+    name: Shell bar menus (headless smoke test)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: |
+          dnf -y install git quickshell qt6-qtsvg qt6-qtwayland sway grim python3 python3-pillow python3-pyte \
+            python3-dbus python3-gobject-base librsvg2-tools dbus-daemon swaybg fontconfig google-noto-sans-fonts \
+            procps-ng pipewire wireplumber pipewire-utils libcap findutils which glib2
+      - uses: actions/checkout@v4
+      - name: Every menu opens without QML errors (network from test data, both themes)
+        run: |
+          set -u
+          for theme in polar-night winter; do
+            shell/dev/headless.sh --fixtures --theme "$theme" "menus-$theme" \
+              ipc panel open network sleep 1 shot "ci-menu-network-$theme" \
+              ipc panel open sound sleep 1 shot "ci-menu-sound-$theme" \
+              ipc panel open calendar sleep 1 shot "ci-menu-calendar-$theme" \
+              ipc quick toggle sleep 1 shot "ci-menu-quick-$theme" \
+              ipc quick open display sleep 1 shot "ci-menu-display-$theme" \
+              ipc power toggle sleep 1 shot "ci-menu-power-$theme"
+            if grep -a -E "TypeError|ReferenceError|SyntaxError|Failed to load|is not a type|unavailable|Cannot assign|Unable to assign" /tmp/arctic-shell.log; then
+              echo "QML errors in the shell log ($theme)"; exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shell-menu-screenshots
+          path: shell/dev/screenshots/ci-menu-*.png
+          retention-days: 7
+
   specs:
     name: RPM specs parse
     runs-on: ubuntu-latest
