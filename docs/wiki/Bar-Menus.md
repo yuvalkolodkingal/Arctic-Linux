@@ -17,6 +17,9 @@ the bar.
   for networks only while the menu is open.
 - Click a network to join it. If it needs a password, the menu asks for it right there. Networks
   you joined before connect without asking.
+- **Company and school networks** ("Company login (802.1X)", such as eduroam) open a page for your
+  username, the sign-in method (PEAP with MSCHAPv2 is the usual one), the certificate check and
+  your password. Signing in with a certificate of your own is set up in **Edit connections…**.
 - **Join another network…** is for networks that don't show their name (hidden networks): type
   the name, pick the security and enter the password.
 - Right-click a network (or press the Menu key, or `Delete` for forget) for **Disconnect**,
@@ -24,7 +27,7 @@ the bar.
 - **VPN** switches appear when you have VPN or WireGuard connections. Import them in
   **Settings → Network** or with **Edit connections…**.
 - **Edit connections…** opens NetworkManager's connection editor for proxies, fixed addresses and
-  company (802.1X) logins.
+  certificate logins.
 
 Your password goes straight to NetworkManager: it is never put on a command line or in a log.
 

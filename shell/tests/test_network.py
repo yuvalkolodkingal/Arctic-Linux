@@ -214,6 +214,40 @@ class Commands(unittest.TestCase):
         self.assertFalse(any('delete' in a for a in self.argv()))
         self.assertEqual(self.secrets(), '802-11-wireless-security.psk:%s\n' % SECRET)
 
+    def test_company_network(self):
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'eduroam' (%s) successfully added.\n" % UUID}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--eap', 'ttls', '--phase2', 'pap',
+                                    '--identity', 'ada@uni.example', '--anonymous-identity', 'anon@uni.example',
+                                    '--domain', 'uni.example', '--system-ca', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out), (0, {'ok': True, 'uuid': UUID}))
+        add = next(a for a in self.argv() if a[:2] == ['connection', 'add'])
+        pairs = dict(zip(add[10::2], add[11::2]))
+        self.assertEqual(pairs['802-1x.eap'], 'ttls')
+        self.assertEqual(pairs['802-1x.phase2-auth'], 'pap')
+        self.assertEqual(pairs['802-1x.identity'], 'ada@uni.example')
+        self.assertEqual(pairs['802-1x.anonymous-identity'], 'anon@uni.example')
+        self.assertEqual(pairs['802-1x.domain-suffix-match'], 'uni.example')
+        self.assertEqual(pairs['802-1x.system-ca-certs'], 'yes')
+        self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
+        self.assertNoSecretOnArgv()
+
+    def test_company_network_refusals(self):
+        with self.assertRaises(network.Failure):
+            network.enterprise_settings('tls', 'mschapv2', 'ada')
+        with self.assertRaises(network.Failure):
+            network.enterprise_settings('peap', 'mschapv2', '')
+        self.assertIn('no', network.enterprise_settings('peap', 'mschapv2', 'ada', system_ca=False))
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'eduroam' (%s) successfully added.\n" % UUID}
+        scenario['connection up'] = {'code': 4, 'err': 'Error: Connection activation failed: Secrets were required, but not provided.\n'}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--identity', 'ada', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out['code']), (1, 'auth'))
+        self.assertIn('username or password', out['error'])
+        self.assertIn(['connection', 'delete', 'uuid', UUID], self.argv())
+
     def test_open_network_needs_no_secret(self):
         scenario = {'device status': STATUS['device status'],
                     'connection add': {'out': "Connection 'Airport' (%s) successfully added.\n" % UUID}}

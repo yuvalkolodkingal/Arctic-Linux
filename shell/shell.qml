@@ -86,6 +86,9 @@ ShellRoot {
         const target = screen || Outputs.focused;
         const sameItem = !options || options.item === undefined || options.item === menuHost.options.item;
         if (menuHost.open && menuHost.screen === target && menuHost.panel === name && sameItem && !(options && options.page)) { menuHost.close(); return; }
+        // A menu without a bar item here (battery on a desktop) opened as a Quick Settings page.
+        if (menuHost.open && menuHost.screen === target && menuHost.panel === 'quick' && menuHost.options.page === name
+            && panelAnchor(target, name) === null) { menuHost.close(); return; }
         openPanel(name, target, x, options);
     }
     function openPanel(name, screen, x, options) {

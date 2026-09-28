@@ -8,6 +8,8 @@
     network.py saved                 {"ok":true,"saved":[…],"vpn":[…]}
     network.py connect --uuid U [--ask]
     network.py connect --ssid S --security open|owe|wep|wpa-psk|sae [--hidden] [--ask]
+    network.py enterprise --ssid S --eap peap|ttls --phase2 mschapv2|pap|gtc --identity ID
+                          [--anonymous-identity A] [--domain D] (--system-ca|--no-ca) [--hidden] --ask
     network.py disconnect --uuid U
     network.py forget (--uuid U… | --ssid S)
     network.py autoconnect --uuid U on|off
@@ -257,8 +259,25 @@ def read_secret(stream):
 
 
 def secret_setting(security):
-    return {'wep': '802-11-wireless-security.wep-key0', 'vpn': 'vpn.secrets.password'}.get(
-        security, '802-11-wireless-security.psk')
+    return {'wep': '802-11-wireless-security.wep-key0', 'vpn': 'vpn.secrets.password',
+            'enterprise': '802-1x.password'}.get(security, '802-11-wireless-security.psk')
+
+
+def enterprise_settings(eap, phase2, identity, anonymous='', domain='', system_ca=True):
+    """nmcli settings for a company (802.1X) network with a username and password: PEAP or TTLS,
+    checked against the system's certificates unless told not to. EAP-TLS (a certificate of your
+    own) is set up in the connection editor."""
+    if eap not in ('peap', 'ttls') or phase2 not in ('mschapv2', 'pap', 'gtc'):
+        raise Failure('needs_certificate', 'This sign-in method needs the connection editor.')
+    if not identity or '\n' in identity:
+        raise Failure('usage', 'Type your username first.')
+    out = ['wifi-sec.key-mgmt', 'wpa-eap', '802-1x.eap', eap, '802-1x.phase2-auth', phase2, '802-1x.identity', identity]
+    if anonymous:
+        out += ['802-1x.anonymous-identity', anonymous]
+    if domain:
+        out += ['802-1x.domain-suffix-match', domain]
+    out += ['802-1x.system-ca-certs', 'yes' if system_ca else 'no']
+    return out
 
 
 def wep_key_type(secret):
@@ -389,6 +408,33 @@ def cmd_connect(args, stdin):
         activate(uuid, ssid, secret_setting(security), secret)
     except Failure:
         nmcli('connection', 'delete', 'uuid', uuid)
+        raise
+    return {'ok': True, 'uuid': uuid}
+
+
+def cmd_enterprise(args, stdin):
+    secret = read_secret(stdin)
+    settings = enterprise_settings(args.eap, args.phase2, args.identity or '', args.anonymous_identity or '',
+                                   args.domain or '', not args.no_ca)
+    if FIXTURE:
+        return {'ok': True, 'uuid': 'fixture-' + args.ssid}
+    device = wifi_device()
+    if not device:
+        raise Failure('radio_off', 'There is no Wi-Fi on this computer.')
+    add = ['connection', 'add', 'type', 'wifi', 'ifname', device, 'con-name', args.ssid, 'ssid', args.ssid]
+    if args.hidden:
+        add += ['802-11-wireless.hidden', 'yes']
+    code, out, err = nmcli(*(add + settings))
+    m = re.search(r'\(([0-9a-f-]{36})\)', out)
+    if code != 0 or not m:
+        raise Failure(*error_for(code, err, args.ssid))
+    uuid = m.group(1)
+    try:
+        activate(uuid, args.ssid, secret_setting('enterprise'), secret)
+    except Failure as e:
+        nmcli('connection', 'delete', 'uuid', uuid)
+        if e.code == 'auth':
+            raise Failure('auth', 'That username or password didn’t work for “%s”. Check them and try again.' % args.ssid)
         raise
     return {'ok': True, 'uuid': uuid}
 
@@ -566,6 +612,18 @@ def parse(argv):
     c.add_argument('--security', choices=['open', 'owe', 'wep', 'wpa-psk', 'sae', 'enterprise'])
     c.add_argument('--hidden', action='store_true')
     c.add_argument('--ask', action='store_true')
+    e = sub.add_parser('enterprise')
+    e.add_argument('--ssid', required=True)
+    e.add_argument('--eap', default='peap')
+    e.add_argument('--phase2', default='mschapv2')
+    e.add_argument('--identity', required=True)
+    e.add_argument('--anonymous-identity')
+    e.add_argument('--domain')
+    ca = e.add_mutually_exclusive_group()
+    ca.add_argument('--system-ca', action='store_true')
+    ca.add_argument('--no-ca', action='store_true')
+    e.add_argument('--hidden', action='store_true')
+    e.add_argument('--ask', action='store_true')
     d = sub.add_parser('disconnect')
     d.add_argument('--uuid', required=True)
     f = sub.add_parser('forget')
@@ -607,6 +665,8 @@ def main(argv=None, stdin=None):
                 out = {'ok': True, 'saved': reader.wifi_profiles(), 'vpn': state['vpn']}
         elif args.cmd == 'connect':
             out = cmd_connect(args, stdin)
+        elif args.cmd == 'enterprise':
+            out = cmd_enterprise(args, stdin)
         elif args.cmd == 'disconnect':
             out = simple('connection', 'down', 'uuid', args.uuid)
         elif args.cmd == 'forget':

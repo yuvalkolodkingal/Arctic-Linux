@@ -5,13 +5,14 @@ import Quickshell
 
 // The network menu (bar network item, Super + Ctrl + W): Wi-Fi on/off, the wired link, nearby
 // Wi-Fi networks (scanned only while this is open), joining with the password asked right under
-// the network, hidden networks, a network's actions (disconnect, connect automatically, forget),
-// VPN switches, and Settings / the connection editor. Everything goes through network.py
+// the network, company (802.1X) networks with a username and password, hidden networks, a
+// network's actions (disconnect, connect automatically, forget), VPN switches, and Settings /
+// the connection editor. Everything goes through network.py
 // (NetworkService.run); a password travels to it on stdin and is cleared from the field.
 FocusScope {
     id: panel
     property var menu: null
-    property string page: ''            // '', 'actions', 'join'
+    property string page: ''            // '', 'actions', 'join', 'company'
     property var target: null           // the network whose actions page is open
     property string pending: ''         // SSID being joined
     property string asking: ''          // SSID whose password field is open
@@ -24,7 +25,7 @@ FocusScope {
     readonly property bool wifiOn: wifi !== null && wifi.enabled && wifi.hardware
 
     implicitWidth: 340
-    implicitHeight: (page === '' ? main : page === 'actions' ? actions : join).implicitHeight
+    implicitHeight: (page === '' ? main : page === 'actions' ? actions : page === 'company' ? company : join).implicitHeight
 
     Component.onCompleted: { NetworkService.setScanning(true); sync(NetworkService.networks); showPage(''); }
     // Opened for a saved network whose password changed: its password field is open.
@@ -73,10 +74,7 @@ FocusScope {
     function activate(n) {
         setError(n.ssid, '');
         if (n.in_use) { openActions(n); return; }
-        if (n.security === 'enterprise') {
-            setError(n.ssid, '“' + n.ssid + '” needs a company login. Set it up in Edit connections.');
-            return;
-        }
+        if (n.security === 'enterprise') { openCompany(n.ssid, false); return; }
         if (n.saved || n.security === 'open' || n.security === 'owe') connect(n, null);
         else { askError = ''; asking = n.ssid; }
     }
@@ -103,6 +101,27 @@ FocusScope {
             }
             if (panel.page === 'join') panel.joinError = r.error;
             else panel.setError(n.ssid, r.error);
+        });
+    }
+    function openCompany(ssid, hidden) {
+        companySsid = ssid;
+        companyHidden = hidden;
+        companyError = '';
+        page = 'company';
+    }
+    function joinCompany(secret) {
+        companyError = '';
+        pending = companySsid;
+        const args = ['enterprise', '--ssid', companySsid, '--eap', companyEap, '--phase2', companyPhase2,
+                      '--identity', companyUser.text.trim(), companyCheck ? '--system-ca' : '--no-ca', '--ask'];
+        if (companyAnon.text.trim()) args.push('--anonymous-identity', companyAnon.text.trim());
+        if (companyDomain.text.trim()) args.push('--domain', companyDomain.text.trim());
+        if (companyHidden) args.push('--hidden');
+        NetworkService.run(args, secret, r => {
+            panel.pending = '';
+            if (r.ok) { panel.page = ''; return; }
+            panel.companyError = r.error;
+            companyPassword.selectAll();
         });
     }
     function openActions(n) {
@@ -383,13 +402,19 @@ FocusScope {
         MenuSection { text: 'Security' }
         Repeater {
             model: [{ id: 'open', label: 'None' }, { id: 'wpa-psk', label: 'WPA or WPA2 Personal' },
-                    { id: 'sae', label: 'WPA3 Personal' }, { id: 'wep', label: 'WEP' }]
+                    { id: 'sae', label: 'WPA3 Personal' }, { id: 'wep', label: 'WEP' },
+                    { id: 'enterprise', label: 'WPA or WPA2 Enterprise (company login)' }]
             MenuRow {
                 required property var modelData
                 label: modelData.label
                 selected: panel.joinSecurity === modelData.id
+                trailing: modelData.id === 'enterprise' ? 'chevron' : ''
                 Accessible.role: Accessible.RadioButton
-                onActivated: panel.joinSecurity = modelData.id
+                onActivated: {
+                    if (modelData.id !== 'enterprise') { panel.joinSecurity = modelData.id; return; }
+                    if (joinName.text.trim() === '') { panel.joinError = 'Type the network’s name first.'; join.focusItem(joinName); return; }
+                    panel.openCompany(joinName.text.trim(), true);
+                }
             }
         }
         MenuField {
@@ -417,6 +442,94 @@ FocusScope {
             busy: panel.pending !== '' && panel.pending === joinName.text
             enabled: joinName.text.trim() !== ''
             onActivated: panel.connect({ ssid: joinName.text.trim(), security: 'open', hidden: true, uuid: '' }, null)
+        }
+    }
+
+    // ---- a company (802.1X) network: username and password -------------------------------------
+    property string companySsid: ''
+    property bool companyHidden: false
+    property string companyEap: 'peap'
+    property string companyPhase2: 'mschapv2'
+    property bool companyCheck: true
+    property string companyError: ''
+    MenuPage {
+        id: company
+        anchors.fill: parent
+        visible: panel.page === 'company'
+        focus: visible
+        title: panel.companySsid
+        detail: 'Company or school login (802.1X)'
+        backText: 'Wi-Fi'
+        onBack: panel.closePage()
+        onVisibleChanged: if (visible) Qt.callLater(() => company.focusItem(companyUser))
+
+        MenuField {
+            id: companyUser
+            label: 'Username'
+            placeholder: 'name@example.org'
+            showButtons: false
+            onSubmitted: company.focusItem(companyPassword)
+        }
+        MenuSection { text: 'Sign-in method' }
+        Repeater {
+            model: [{ eap: 'peap', phase2: 'mschapv2', label: 'PEAP with MSCHAPv2', detail: 'The usual one (eduroam, Windows networks)' },
+                    { eap: 'ttls', phase2: 'pap', label: 'TTLS with PAP', detail: '' },
+                    { eap: 'ttls', phase2: 'mschapv2', label: 'TTLS with MSCHAPv2', detail: '' },
+                    { eap: 'peap', phase2: 'gtc', label: 'PEAP with GTC', detail: '' }]
+            MenuRow {
+                required property var modelData
+                label: modelData.label
+                detail: modelData.detail
+                selected: panel.companyEap === modelData.eap && panel.companyPhase2 === modelData.phase2
+                Accessible.role: Accessible.RadioButton
+                onActivated: { panel.companyEap = modelData.eap; panel.companyPhase2 = modelData.phase2; }
+            }
+        }
+        MenuSwitchRow {
+            label: 'Check the network’s certificate'
+            detail: panel.companyCheck ? 'With the certificates this computer trusts'
+                                       : 'Not recommended: another network could pretend to be this one'
+            checked: panel.companyCheck
+            onToggled: on => panel.companyCheck = on
+        }
+        MenuField {
+            id: companyDomain
+            label: 'Domain (optional)'
+            placeholder: 'example.org'
+            showButtons: false
+            onSubmitted: company.focusItem(companyPassword)
+        }
+        MenuField {
+            id: companyAnon
+            label: 'Anonymous identity (optional)'
+            placeholder: 'anonymous@example.org'
+            showButtons: false
+            onSubmitted: company.focusItem(companyPassword)
+        }
+        MenuField {
+            id: companyPassword
+            label: 'Password'
+            secret: true
+            primaryText: 'Join'
+            showCancel: false
+            errorText: panel.companyError
+            busy: panel.pending !== '' && panel.pending === panel.companySsid
+            onSubmitted: text => {
+                if (companyUser.text.trim() === '') { panel.companyError = 'Type your username first.'; company.focusItem(companyUser); return; }
+                panel.joinCompany(text);
+                companyPassword.clear();
+            }
+        }
+        Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.space3
+            Layout.rightMargin: Theme.space3
+            Layout.bottomMargin: Theme.space2
+            text: 'Signing in with a certificate of your own (EAP-TLS) is set up in Edit connections.'
+            wrapMode: Text.WordWrap
+            color: Theme.inkSubtle
+            font.family: Theme.fontSans
+            font.pixelSize: 12
         }
     }
 }

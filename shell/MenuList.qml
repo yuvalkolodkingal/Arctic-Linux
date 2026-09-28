@@ -70,8 +70,9 @@ FocusScope {
         if (top < flick.contentY) flick.contentY = Math.max(0, top);
         else if (bottom > flick.contentY + flick.height) flick.contentY = Math.min(flick.contentHeight - flick.height, bottom - flick.height);
     }
-    // Nothing focused yet when the list gets focus: the first stop.
-    onActiveFocusChanged: if (activeFocus && currentIn(stops()) < 0) Qt.callLater(start)
+    // Nothing focused yet when the list gets focus: where the keyboard starts. Checked again
+    // later, as a page may put the focus on a field of its own meanwhile.
+    onActiveFocusChanged: if (activeFocus) Qt.callLater(() => { if (list.activeFocus && currentIn(stops()) < 0) start(); })
 
     Keys.onPressed: event => {
         MenuState.keyboardNav = true;
