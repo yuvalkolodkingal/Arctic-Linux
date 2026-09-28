@@ -26,8 +26,35 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: 'arctic-bar'
 
-    function hint(item, text) { tipPopup.request(item, text); }
+    // The menu open on this bar, if any: tooltips stay quiet meanwhile.
+    readonly property var menuHost: bar.shell ? bar.shell.barMenu : null
+    readonly property bool menuHere: menuHost !== null && menuHost.open && menuHost.screen === bar.screen
+    function menuOpen(name) { return menuHere && menuHost.panel === name; }
+    function hint(item, text) { if (!menuHere) tipPopup.request(item, text); }
     function unhint(item) { tipPopup.release(item); }
+    onMenuHereChanged: if (menuHere) tipPopup.dismiss()
+    // Where a panel's menu hangs: the centre x of the visible bar item that owns it, else null.
+    function ownerOf(name) {
+        const owners = {
+            network: networkItem,
+            bluetooth: bluetoothItem,
+            sound: volumeItem,
+            battery: batteryItem,
+            notifications: bellItem,
+        };
+        const item = owners[name] || null;
+        return item && item.visible ? item : null;
+    }
+    function anchorFor(name) {
+        const item = ownerOf(name);
+        return item ? item.mapToItem(null, item.width / 2, 0).x : null;
+    }
+    // The menus on this bar from left to right (Ctrl+Tab in a menu).
+    function panelOrder() {
+        return Object.keys(bar.menuHost.panels)
+            .filter(n => ownerOf(n) !== null)
+            .sort((a, b) => anchorFor(a) - anchorFor(b));
+    }
 
     SystemClock { id: clock; precision: SystemClock.Minutes }
     BarTooltip { id: tipPopup; anchor.window: bar }
@@ -178,24 +205,15 @@ PanelWindow {
 
         BarItem {
             id: networkItem
-            // Click: nm-applet's network menu when it runs (pick a Wi-Fi network), else the editor.
-            readonly property var applet: SystemTray.items.values.find(i => i.id === 'nm-applet') || null
+            // Click: the network menu (Wi-Fi, wired, VPN); right click: Settings → Network.
             visible: NetworkService.available
+            hasMenu: true
+            active: bar.menuOpen('network')
             iconName: NetworkService.iconName
-            tooltip: NetworkService.summary
-            onClicked: {
-                if (applet && applet.hasMenu) networkMenu.open();
-                else Quickshell.execDetached(['nm-connection-editor']);
-            }
-            onRightClicked: Quickshell.execDetached(['nm-connection-editor'])
+            tooltip: NetworkService.summary + (NetworkService.vpnActive ? ' · VPN on' : '') + '  (Super + Ctrl + W)'
+            onClicked: bar.shell.togglePanel('network', bar.screen, networkItem.mapToItem(null, networkItem.width / 2, 0).x)
+            onRightClicked: Quickshell.execDetached(['arctic-settings', 'network'])
             onHoverChanged: h => h ? bar.hint(networkItem, tooltip) : bar.unhint(networkItem)
-            QsMenuAnchor {
-                id: networkMenu
-                menu: networkItem.applet ? networkItem.applet.menu : null
-                anchor.item: networkItem
-                anchor.edges: Edges.Bottom
-                anchor.gravity: Edges.Bottom
-            }
         }
         BarItem {
             id: volumeItem

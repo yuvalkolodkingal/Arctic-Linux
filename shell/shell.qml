@@ -13,12 +13,15 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
+//   panel toggle|open|close <network|bluetooth|sound|battery|calendar|media|display> ·
+//   quick toggle|open [page] · toggle set|get|states · bar focus
+// The bar's menus all open in one BarMenu (one menu at a time); Quick Settings is its `quick` panel.
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, menuHost].forEach(p => { if (p !== except && p.open) p.close(); });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -61,11 +64,58 @@ ShellRoot {
         lockScreen.lock();
     }
 
+    // ---- bar menus (BarMenu) --------------------------------------------------------------------
+    readonly property var barMenu: menuHost
+    // A dialog that needs the keyboard is open over a menu: the menu lets go of it meanwhile.
+    readonly property bool modalOpen: polkit.active
+    function barOn(screen) {
+        const all = bars.instances;
+        for (let i = 0; i < all.length; i++) if (screen && all[i].screen && all[i].screen.name === screen.name) return all[i];
+        return null;
+    }
+    // The x of the bar item that owns a panel on that screen, or null when it isn't shown.
+    function panelAnchor(screen, name) {
+        const bar = barOn(screen);
+        return bar ? bar.anchorFor(name) : null;
+    }
+    function togglePanel(name, screen, x, options) {
+        const target = screen || Outputs.focused;
+        if (menuHost.open && menuHost.screen === target && menuHost.panel === name && !(options && options.page)) { menuHost.close(); return; }
+        openPanel(name, target, x, options);
+    }
+    function openPanel(name, screen, x, options) {
+        const target = screen || Outputs.focused;
+        if (!target || !menuHost.panels[name]) return;
+        const anchor = x !== undefined && x !== null ? x : panelAnchor(target, name);
+        // No bar item for it (hidden, or a panel without one): Quick Settings shows it as a page.
+        if (anchor === null && name !== 'quick') {
+            if (menuHost.panels.quick && ['battery', 'display', 'sound', 'network', 'bluetooth', 'media'].indexOf(name) >= 0)
+                openPanel('quick', target, undefined, Object.assign({}, options || {}, { page: name }));
+            return;
+        }
+        menuHost.panel = name;
+        menuHost.options = options || {};
+        menuHost.pointX = anchor !== null ? anchor : target.width - Theme.space2 - Theme.frameWidth - 190;
+        if (menuHost.open && menuHost.screen === target) { menuHost.focusContent(); return; }
+        present(menuHost, target);
+    }
+    function closePanel() { menuHost.close(); }
+    // Ctrl+Tab in a menu: the next (dir 1) or previous (-1) bar item that has a menu.
+    function cyclePanel(screen, dir) {
+        const bar = barOn(screen);
+        if (!bar || menuHost.panel === 'quick') return;
+        const order = bar.panelOrder();
+        const at = order.indexOf(menuHost.panel);
+        if (at < 0 || order.length < 2) return;
+        openPanel(order[(at + dir + order.length) % order.length], screen, undefined, { keyboard: true });
+    }
+
     Variants {
         model: Quickshell.screens
         ScreenFrame {}
     }
     Variants {
+        id: bars
         model: Quickshell.screens
         Bar { shell: shell }
     }
@@ -78,7 +128,8 @@ ShellRoot {
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
-    PolkitDialog {}
+    PolkitDialog { id: polkit }
+    BarMenu { id: menuHost; shell: shell }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
     IpcHandler {
@@ -135,6 +186,14 @@ ShellRoot {
         target: 'updates'
         function toggle(): void { shell.toggleUpdates(null, undefined); }
         function refresh(): void { UpdateService.refresh(); }
+    }
+    // `panel toggle network` etc. (Super + Ctrl + W / B / A / P / T / M). No function is
+    // called `show` or `list` (quickshell ipc reads those as its own subcommands).
+    IpcHandler {
+        target: 'panel'
+        function toggle(name: string): void { shell.togglePanel(name, null, undefined, { keyboard: true }); }
+        function open(name: string): void { shell.openPanel(name, null, undefined, { keyboard: true }); }
+        function close(): void { shell.closePanel(); }
     }
     IpcHandler {
         target: 'shell'

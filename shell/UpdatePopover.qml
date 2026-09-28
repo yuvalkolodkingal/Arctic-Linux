@@ -11,6 +11,7 @@ Popover {
     scrim: false
     cardColor: Theme.surfaceRaised
     cardRadius: Theme.radiusLg
+    shadow: 2
     cardWidth: 340
     cardHeight: column.implicitHeight + 2 * Theme.space4
     focusItem: restartButton

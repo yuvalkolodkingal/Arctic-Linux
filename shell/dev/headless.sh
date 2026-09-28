@@ -18,7 +18,8 @@
 #
 # Options: --live (ARCTIC_FORCE_LIVE=1), --theme winter|polar-night, --size WxH, --keep-home,
 #          --fixtures (add desktop entries for Zed, Zen Browser and yazi, as in the design
-#          mockups, so launcher screenshots have something to find; test data only)
+#          mockups, so launcher screenshots have something to find, and point the network menu
+#          at shell/tests/fixtures/network.json; test data only)
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -58,6 +59,8 @@ if (( FIXTURES )); then
   fixture dev.zed.Zed Zed "Code editor" false
   fixture app.zen_browser.zen "Zen Browser" "Web browser" false
   fixture yazi yazi "Terminal file manager" true
+  # The network menu answers from test data (network.py's fixture mode) instead of NetworkManager.
+  export ARCTIC_NETWORK_FIXTURE="$REPO/shell/tests/fixtures/network.json"
 fi
 export PATH="$HOME/.local/bin:$PATH"
 export ARCTIC_SHELL_DIR="$REPO/shell"

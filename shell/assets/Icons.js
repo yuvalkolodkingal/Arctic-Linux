@@ -1,5 +1,6 @@
 .pragma library
 .import "design-data.js" as Data
+.import "icons-extra.js" as Extra
 
 // SVG builders for the design's line icons, the fox mark and app tiles.
 // Images are data: URLs, so each icon is drawn in exactly the token colour asked for.
@@ -15,15 +16,23 @@ function url(svg) {
 }
 
 function has(name) {
-    return Object.prototype.hasOwnProperty.call(Data.ICONS, name);
+    return Object.prototype.hasOwnProperty.call(Data.ICONS, name)
+        || Object.prototype.hasOwnProperty.call(Extra.EXTRA, name);
+}
+
+// The glyph body: the design bundle first, then the shell's extra glyphs (icons-extra.js).
+function body(name) {
+    if (Object.prototype.hasOwnProperty.call(Data.ICONS, name)) return Data.ICONS[name];
+    if (Object.prototype.hasOwnProperty.call(Extra.EXTRA, name)) return Extra.EXTRA[name];
+    return Data.ICONS.help;
 }
 
 // A 24-grid line icon: 1.75 stroke, round caps and joins (brand book "Iconography").
 function icon(name, color, stroke) {
     const ink = hex(color);
-    const body = (Data.ICONS[name] || Data.ICONS.help).replace(/currentColor/g, ink);
+    const glyph = body(name).replace(/currentColor/g, ink);
     return url('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="'
-        + ink + '" stroke-width="' + (stroke || 1.75) + '" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>');
+        + ink + '" stroke-width="' + (stroke || 1.75) + '" stroke-linecap="round" stroke-linejoin="round">' + glyph + '</svg>');
 }
 
 // The fox mark on its 48-unit grid (design bundle mark()). At 20px and below the -16 drawing

@@ -5,12 +5,16 @@ singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 singleton UpdateService 1.0 UpdateService.qml
+singleton MenuState 1.0 MenuState.qml
+singleton Tools 1.0 Tools.qml
 AppTile 1.0 AppTile.qml
+ArcticSlider 1.0 ArcticSlider.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
 ArcticField 1.0 ArcticField.qml
 Bar 1.0 Bar.qml
 BarItem 1.0 BarItem.qml
+BarMenu 1.0 BarMenu.qml
 BarTooltip 1.0 BarTooltip.qml
 DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
@@ -23,6 +27,16 @@ Launcher 1.0 Launcher.qml
 LiveWelcome 1.0 LiveWelcome.qml
 LockScreen 1.0 LockScreen.qml
 Mark 1.0 Mark.qml
+MenuField 1.0 MenuField.qml
+MenuHeader 1.0 MenuHeader.qml
+MenuList 1.0 MenuList.qml
+MenuPage 1.0 MenuPage.qml
+MenuRow 1.0 MenuRow.qml
+MenuSection 1.0 MenuSection.qml
+MenuSeparator 1.0 MenuSeparator.qml
+MenuSlider 1.0 MenuSlider.qml
+MenuSwitchRow 1.0 MenuSwitchRow.qml
+NetworkPanel 1.0 NetworkPanel.qml
 Osd 1.0 Osd.qml
 PolkitDialog 1.0 PolkitDialog.qml
 Popover 1.0 Popover.qml
@@ -30,6 +44,9 @@ PopupSurface 1.0 PopupSurface.qml
 PowerMenu 1.0 PowerMenu.qml
 RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml
+ShadowLayers 1.0 ShadowLayers.qml
+SignalIcon 1.0 SignalIcon.qml
+Spinner 1.0 Spinner.qml
 Tip 1.0 Tip.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml

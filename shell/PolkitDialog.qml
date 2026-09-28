@@ -10,6 +10,8 @@ Scope {
     id: root
     readonly property var flow: agent.flow
     property string password: ''
+    // Asking right now (a bar menu lets go of the keyboard meanwhile: shell.modalOpen).
+    readonly property bool active: dialog.open
 
     PolkitAgent { id: agent }
     Connections {

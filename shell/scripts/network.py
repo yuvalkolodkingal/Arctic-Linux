@@ -1,0 +1,597 @@
+#!/usr/bin/env python3
+"""NetworkManager for the shell's network menu, through nmcli (no D-Bus bindings needed).
+
+    network.py watch                 long-running (NetworkService.qml); commands on stdin:
+                                     {"op":"scan","on":true|false}  {"op":"rescan"}
+    network.py status                one "state" object
+    network.py scan [--rescan]       {"ok":true,"networks":[…]}
+    network.py saved                 {"ok":true,"saved":[…],"vpn":[…]}
+    network.py connect --uuid U [--ask]
+    network.py connect --ssid S --security open|owe|wep|wpa-psk|sae [--hidden] [--ask]
+    network.py disconnect --uuid U
+    network.py forget (--uuid U… | --ssid S)
+    network.py autoconnect --uuid U on|off
+    network.py radio wifi on|off
+    network.py vpn-up --uuid U [--ask]  |  vpn-down --uuid U
+
+One-shot commands print one JSON line: {"ok":true,…} or {"ok":false,"error":"<sentence>",
+"code":"<code>"} and exit 0/1. `watch` prints one object per line with a "type": "state"
+whenever NetworkManager reports a change (nmcli monitor, 250 ms debounce) and "networks" every
+8 s while a menu asked for a scan.
+
+Secrets (--ask): the password comes on stdin as one JSON line {"secret":"…"} and reaches nmcli
+only through a pipe (`passwd-file /dev/fd/N`): never on a command line, in the environment, in
+a file or in a log. Joining a new network adds a profile without a secret first and deletes it
+again if the activation fails; a saved profile is kept.
+
+ARCTIC_NETWORK_FIXTURE=<file.json> answers watch/status/scan/saved from the file and lets
+every change succeed without running anything (screenshots and tests).
+"""
+import json
+import os
+import re
+import selectors
+import subprocess
+import sys
+import time
+
+FIXTURE = os.environ.get('ARCTIC_NETWORK_FIXTURE', '')
+SECRET_MAX = 4096
+SCAN_INTERVAL = 8.0
+DEBOUNCE = 0.25
+TYPES = {'802-11-wireless': 'wifi', 'wifi': 'wifi', '802-3-ethernet': 'ethernet', 'ethernet': 'ethernet',
+         'vpn': 'vpn', 'wireguard': 'wireguard'}
+
+
+class Failure(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + '\n')
+    sys.stdout.flush()
+
+
+# ---- nmcli ------------------------------------------------------------------------------------
+def split_terse(line):
+    """Split one line of `nmcli -t` output: fields separated by ':', with '\\:' and '\\\\' escapes."""
+    out, cur, i = [], [], 0
+    while i < len(line):
+        c = line[i]
+        if c == '\\' and i + 1 < len(line):
+            cur.append(line[i + 1])
+            i += 2
+            continue
+        if c == ':':
+            out.append(''.join(cur))
+            cur = []
+        else:
+            cur.append(c)
+        i += 1
+    out.append(''.join(cur))
+    return out
+
+
+def nmcli(*args, pass_fds=(), timeout=60):
+    """Run nmcli; returns (exit status, stdout, stderr). Missing nmcli is exit 127."""
+    try:
+        p = subprocess.run(['nmcli', *args], capture_output=True, text=True, pass_fds=pass_fds,
+                           timeout=timeout, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return 127, '', 'nmcli is not installed'
+    except subprocess.TimeoutExpired:
+        return 3, '', 'timed out'
+    return p.returncode, p.stdout, p.stderr
+
+
+def rows(*args):
+    code, out, _ = nmcli('-t', *args)
+    if code != 0:
+        return None
+    return [split_terse(l) for l in out.splitlines() if l.strip()]
+
+
+# ---- parsing (pure) ---------------------------------------------------------------------------
+def security_of(sec):
+    """nmcli's SECURITY column → open, owe, wep, enterprise, sae or wpa-psk."""
+    s = (sec or '').strip()
+    if s in ('', '--'):
+        return 'open'
+    if 'OWE' in s and 'WPA' not in s:
+        return 'owe'
+    if 'WEP' in s:
+        return 'wep'
+    if '802.1X' in s:
+        return 'enterprise'
+    if 'WPA3' in s and 'WPA2' not in s and 'WPA1' not in s:
+        return 'sae'
+    return 'wpa-psk'
+
+
+def band_of(freq):
+    m = re.match(r'\s*(\d+)', freq or '')
+    if not m:
+        return ''
+    mhz = int(m.group(1))
+    return '6 GHz' if mhz >= 5925 else '5 GHz' if mhz >= 4900 else '2.4 GHz'
+
+
+def parse_wifi_list(text, saved=None):
+    """`nmcli -t -f IN-USE,SSID,SIGNAL,FREQ,SECURITY device wifi list` → one entry per SSID
+    (best signal kept, hidden networks left out), sorted connected → saved → signal → name.
+    `saved` maps SSID → the most recently used profile's uuid."""
+    saved = saved or {}
+    best = {}
+    for line in (text or '').splitlines():
+        f = split_terse(line)
+        if len(f) < 5 or f[1].strip() in ('', '--'):
+            continue
+        try:
+            signal = int(f[2])
+        except ValueError:
+            signal = 0
+        n = {'ssid': f[1], 'signal': max(0, min(100, signal)), 'band': band_of(f[3]),
+             'security': security_of(f[4]), 'in_use': f[0].strip() == '*'}
+        old = best.get(n['ssid'])
+        if old:
+            n['in_use'] = n['in_use'] or old['in_use']
+            if old['signal'] >= n['signal']:
+                n.update(signal=old['signal'], band=old['band'], security=old['security'])
+        best[n['ssid']] = n
+    out = []
+    for n in best.values():
+        uuid = saved.get(n['ssid'])
+        n['saved'] = uuid is not None
+        n['uuid'] = uuid
+        n['hidden'] = False
+        out.append(n)
+    out.sort(key=lambda n: (not n['in_use'], not n['saved'], -n['signal'], n['ssid'].lower()))
+    return out
+
+
+def device_state(text):
+    s = (text or '').split(' ')[0]
+    if s.startswith('connected'):
+        return 'connected'
+    if s.startswith('connecting'):
+        return 'connecting'
+    if s in ('unavailable', 'unmanaged'):
+        return s
+    return 'disconnected'
+
+
+def build_state(devices, active, profiles, radio):
+    """The watch "state" object from `device status`, `connection show --active`,
+    `connection show` and `radio` rows (already split)."""
+    wifi = None
+    wired = []
+    for f in devices or []:
+        if len(f) < 4:
+            continue
+        dev, kind, st, con = f[0], f[1], f[2], f[3]
+        if kind == 'wifi' and wifi is None:
+            wifi = {'device': dev, 'state': device_state(st)}
+        elif kind == 'ethernet':
+            wired.append({'device': dev, 'state': device_state(st), 'connection': '' if con == '--' else con})
+    hw = en = True
+    if radio and len(radio[0]) >= 2:
+        hw, en = radio[0][0] == 'enabled', radio[0][1] == 'enabled'
+    if wifi is not None:
+        wifi.update(hardware=hw, enabled=en)
+    act = []
+    active_uuids = set()
+    for f in active or []:
+        if len(f) < 5:
+            continue
+        name, uuid, kind, dev, st = f[:5]
+        active_uuids.add(uuid)
+        act.append({'uuid': uuid, 'name': name, 'type': TYPES.get(kind, kind), 'device': '' if dev == '--' else dev,
+                    'state': st or 'activated'})
+    vpn = []
+    for f in profiles or []:
+        if len(f) < 4:
+            continue
+        name, uuid, kind, ts = f[:4]
+        if TYPES.get(kind) not in ('vpn', 'wireguard'):
+            continue
+        try:
+            last = int(ts)
+        except ValueError:
+            last = 0
+        vpn.append({'uuid': uuid, 'name': name, 'kind': TYPES[kind], 'active': uuid in active_uuids, 'last_used': last})
+    vpn.sort(key=lambda v: v['name'].lower())
+    return {'type': 'state', 'nm_running': True, 'wifi': wifi, 'wired': wired, 'active': act, 'vpn': vpn}
+
+
+def error_for(code, stderr, name):
+    """nmcli's exit status and message → (code, sentence) for the menu."""
+    msg = (stderr or '').strip()
+    low = msg.lower()
+    quoted = '“%s”' % name if name else 'The network'
+    if 'not authorized' in low or 'insufficient privileges' in low or 'not allowed' in low:
+        return 'denied', 'Arctic needs your permission to change this network.'
+    if code == 8 or 'networkmanager is not running' in low:
+        return 'nm_down', 'NetworkManager isn’t running, so Wi-Fi can’t be changed.'
+    if code == 3 or 'timed out' in low or 'timeout' in low:
+        return 'timeout', '%s didn’t answer. Move closer to the router and try again.' % quoted
+    if code == 10 or 'no network with ssid' in low:
+        return 'not_found', '%s is out of range now.' % quoted
+    if 'secrets were required' in low or 'no-secrets' in low or '802.1x supplicant' in low or 'reason 7' in low \
+            or 'reason 8' in low or 'wrong password' in low:
+        return 'auth', 'That password didn’t work for %s. Check it and try again.' % quoted
+    first = next((l for l in msg.splitlines() if l.strip()), '')
+    first = re.sub(r'^Error:\s*', '', first).strip()[:100]
+    sentence = 'Couldn’t connect to %s.' % quoted if name else 'That didn’t work.'
+    return 'failed', (sentence + ' ' + first).strip()
+
+
+def read_secret(stream):
+    """One JSON line {"secret": "…"} from stdin; refused when empty, too long or multi-line."""
+    raw = stream.readline(SECRET_MAX + 64)
+    try:
+        secret = json.loads(raw).get('secret', '')
+    except (ValueError, AttributeError):
+        raise Failure('bad_secret', 'The password didn’t arrive. Try again.')
+    if not isinstance(secret, str) or not secret:
+        raise Failure('bad_secret', 'Type the password first.')
+    if len(secret.encode()) > SECRET_MAX or '\n' in secret or '\r' in secret or '\0' in secret:
+        raise Failure('bad_secret', 'That password can’t be used: it is too long or has a line break.')
+    return secret
+
+
+def secret_setting(security):
+    return {'wep': '802-11-wireless-security.wep-key0', 'vpn': 'vpn.secrets.password'}.get(
+        security, '802-11-wireless-security.psk')
+
+
+def wep_key_type(secret):
+    """WEP keys of 5/13 characters or 10/26 hex digits are keys; anything else a passphrase."""
+    if len(secret) in (5, 13) or (len(secret) in (10, 26) and re.fullmatch(r'[0-9A-Fa-f]+', secret)):
+        return 'key'
+    return 'passphrase'
+
+
+def with_secret(setting, secret, run):
+    """Call run(extra_args, pass_fds) with `passwd-file /dev/fd/N` reading one setting line."""
+    r, w = os.pipe()
+    try:
+        os.write(w, ('%s:%s\n' % (setting, secret)).encode())
+        os.close(w)
+        w = -1
+        return run(['passwd-file', '/dev/fd/%d' % r], (r,))
+    finally:
+        if w >= 0:
+            os.close(w)
+        os.close(r)
+
+
+# ---- reading NetworkManager -------------------------------------------------------------------
+class Reader:
+    def __init__(self):
+        self.ssids = {}                  # profile uuid → SSID (profiles rarely change their SSID)
+
+    def profiles(self):
+        return rows('-f', 'NAME,UUID,TYPE,TIMESTAMP,AUTOCONNECT', 'connection', 'show') or []
+
+    def wifi_profiles(self, profiles=None):
+        out = []
+        for f in profiles if profiles is not None else self.profiles():
+            if len(f) >= 4 and TYPES.get(f[2]) == 'wifi':
+                uuid = f[1]
+                if uuid not in self.ssids:
+                    code, text, _ = nmcli('-g', '802-11-wireless.ssid', 'connection', 'show', 'uuid', uuid)
+                    self.ssids[uuid] = split_terse(text.strip())[0] if code == 0 else f[0]
+                try:
+                    last = int(f[3])
+                except ValueError:
+                    last = 0
+                out.append({'uuid': uuid, 'name': f[0], 'ssid': self.ssids[uuid], 'last_used': last,
+                            'autoconnect': len(f) < 5 or f[4] != 'no'})
+        return out
+
+    def saved_map(self, profiles=None):
+        best = {}
+        for p in sorted(self.wifi_profiles(profiles), key=lambda p: p['last_used']):
+            best[p['ssid']] = p['uuid']
+        return best
+
+    def state(self):
+        devices = rows('-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device', 'status')
+        if devices is None:
+            return {'type': 'state', 'nm_running': False, 'wifi': None, 'wired': [], 'active': [], 'vpn': []}
+        active = rows('-f', 'NAME,UUID,TYPE,DEVICE,STATE', 'connection', 'show', '--active')
+        profiles = self.profiles()
+        radio = rows('-f', 'WIFI-HW,WIFI', 'radio')
+        state = build_state(devices, active, profiles, radio)
+        known = {p[1] for p in profiles if len(p) > 1}
+        self.ssids = {u: s for u, s in self.ssids.items() if u in known}
+        state['saved'] = [{'uuid': p['uuid'], 'ssid': p['ssid'], 'autoconnect': p['autoconnect']}
+                          for p in self.wifi_profiles(profiles)]
+        return state
+
+    def networks(self, rescan=False):
+        if rescan:
+            nmcli('device', 'wifi', 'rescan')        # NetworkManager may refuse (rate limit): fine
+        code, text, _ = nmcli('-t', '-f', 'IN-USE,SSID,SIGNAL,FREQ,SECURITY', 'device', 'wifi', 'list', '--rescan', 'no')
+        return parse_wifi_list(text if code == 0 else '', self.saved_map())
+
+
+def load_fixture():
+    with open(FIXTURE, encoding='utf-8') as f:
+        return json.load(f)
+
+
+# ---- commands -----------------------------------------------------------------------------------
+def wifi_device():
+    for f in rows('-f', 'DEVICE,TYPE', 'device', 'status') or []:
+        if len(f) >= 2 and f[1] == 'wifi':
+            return f[0]
+    return ''
+
+
+def activate(uuid, name, setting=None, secret=None, wait='40'):
+    def run(extra, fds):
+        return nmcli('--wait', wait, 'connection', 'up', 'uuid', uuid, *extra, pass_fds=fds, timeout=int(wait) + 15)
+    code, _, err = with_secret(setting, secret, run) if secret is not None else run([], ())
+    if code != 0:
+        raise Failure(*error_for(code, err, name))
+
+
+def cmd_connect(args, stdin):
+    secret = read_secret(stdin) if args.ask else None
+    if args.uuid:
+        if FIXTURE:
+            return {'ok': True, 'uuid': args.uuid}
+        activate(args.uuid, args.name or '', secret_setting(args.security or 'wpa-psk'), secret)
+        return {'ok': True, 'uuid': args.uuid}
+    ssid, security = args.ssid, args.security or 'open'
+    if not ssid:
+        raise Failure('usage', 'Type the network’s name first.')
+    if security == 'enterprise':
+        raise Failure('needs_certificate', '“%s” needs a company login. Set it up in Edit connections.' % ssid)
+    if security not in ('open', 'owe') and secret is None:
+        raise Failure('auth', 'That network needs a password.')
+    if FIXTURE:
+        return {'ok': True, 'uuid': 'fixture-' + ssid}
+    device = wifi_device()
+    if not device:
+        raise Failure('radio_off', 'There is no Wi-Fi on this computer.')
+    add = ['connection', 'add', 'type', 'wifi', 'ifname', device, 'con-name', ssid, 'ssid', ssid]
+    if args.hidden:
+        add += ['802-11-wireless.hidden', 'yes']
+    if security in ('wpa-psk', 'sae', 'owe'):
+        add += ['wifi-sec.key-mgmt', security]
+    elif security == 'wep':
+        add += ['wifi-sec.key-mgmt', 'none', 'wifi-sec.wep-key-type', wep_key_type(secret)]
+    code, out, err = nmcli(*add)
+    m = re.search(r'\(([0-9a-f-]{36})\)', out)
+    if code != 0 or not m:
+        raise Failure(*error_for(code, err, ssid))
+    uuid = m.group(1)
+    try:
+        activate(uuid, ssid, secret_setting(security), secret)
+    except Failure:
+        nmcli('connection', 'delete', 'uuid', uuid)
+        raise
+    return {'ok': True, 'uuid': uuid}
+
+
+def simple(*args, name=''):
+    if FIXTURE:
+        return {'ok': True}
+    code, _, err = nmcli(*args)
+    if code != 0:
+        raise Failure(*error_for(code, err, name))
+    return {'ok': True}
+
+
+def cmd_forget(args):
+    uuids = list(args.uuid or [])
+    if args.ssid and not FIXTURE:
+        uuids += [p['uuid'] for p in Reader().wifi_profiles() if p['ssid'] == args.ssid]
+    if not uuids and not FIXTURE:
+        raise Failure('not_found', 'That network isn’t saved.')
+    return simple('connection', 'delete', *[x for u in uuids for x in ('uuid', u)], name=args.ssid or '')
+
+
+def cmd_vpn_up(args, stdin):
+    secret = read_secret(stdin) if args.ask else None
+    if FIXTURE:
+        return {'ok': True}
+    try:
+        activate(args.uuid, args.name or 'the VPN', 'vpn.secrets.password' if secret is not None else None, secret, wait='60')
+    except Failure as e:
+        if e.code == 'auth':
+            raise Failure('auth', 'Type the password for %s.' % ('“%s”' % args.name if args.name else 'the VPN')
+                          if secret is None else 'That password didn’t work for %s.' % ('“%s”' % args.name if args.name else 'the VPN'))
+        raise
+    return {'ok': True}
+
+
+# ---- watch ------------------------------------------------------------------------------------
+def lines_of(fd, buf):
+    """Read what is available on fd; returns (complete lines, rest, eof)."""
+    try:
+        chunk = os.read(fd, 65536)
+    except BlockingIOError:
+        return [], buf, False
+    if not chunk:
+        return ([buf.decode(errors='replace')] if buf else []), b'', True
+    buf += chunk
+    parts = buf.split(b'\n')
+    return [p.decode(errors='replace') for p in parts[:-1]], parts[-1], False
+
+
+def watch_fixture():
+    data = load_fixture()
+    state = dict(data.get('state', {}), type='state')
+    state.setdefault('nm_running', True)
+    emit(state)
+    scanning = False
+    for line in sys.stdin:
+        try:
+            op = json.loads(line)
+        except ValueError:
+            continue
+        if op.get('op') == 'scan':
+            scanning = bool(op.get('on'))
+        if scanning and op.get('op') in ('scan', 'rescan'):
+            emit({'type': 'networks', 'networks': data.get('networks', [])})
+    return 0
+
+
+def watch():
+    if FIXTURE:
+        return watch_fixture()
+    reader = Reader()
+    try:
+        monitor = subprocess.Popen(['nmcli', 'monitor'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        emit({'type': 'error', 'error': 'nmcli isn’t installed.', 'code': 'nm_down'})
+        return 2
+    last = None
+
+    def publish():
+        nonlocal last
+        state = reader.state()
+        text = json.dumps(state, sort_keys=True)
+        if text != last:
+            last = text
+            emit(state)
+
+    publish()
+    sel = selectors.DefaultSelector()
+    os.set_blocking(sys.stdin.fileno(), False)
+    os.set_blocking(monitor.stdout.fileno(), False)
+    sel.register(sys.stdin.fileno(), selectors.EVENT_READ, 'stdin')
+    sel.register(monitor.stdout.fileno(), selectors.EVENT_READ, 'monitor')
+    bufs = {'stdin': b'', 'monitor': b''}
+    scanning, next_scan, refresh_at = False, 0.0, 0.0
+    try:
+        while True:
+            now = time.monotonic()
+            deadlines = [d for d in (refresh_at if refresh_at else None, next_scan if scanning else None) if d]
+            timeout = max(0.0, min(deadlines) - now) if deadlines else None
+            for key, _ in sel.select(timeout):
+                lines, bufs[key.data], eof = lines_of(key.fd, bufs[key.data])
+                if key.data == 'monitor':
+                    if lines:
+                        refresh_at = refresh_at or time.monotonic() + DEBOUNCE
+                    if eof:
+                        return 1                 # NetworkService restarts the helper
+                    continue
+                if eof:
+                    return 0                     # the shell went away
+                for line in lines:
+                    try:
+                        op = json.loads(line)
+                    except ValueError:
+                        continue
+                    if op.get('op') == 'scan':
+                        scanning = bool(op.get('on'))
+                        if scanning:
+                            emit({'type': 'networks', 'networks': reader.networks(rescan=True)})
+                            next_scan = time.monotonic() + SCAN_INTERVAL
+                    elif op.get('op') == 'rescan':
+                        emit({'type': 'networks', 'networks': reader.networks(rescan=True)})
+                        next_scan = time.monotonic() + SCAN_INTERVAL
+            now = time.monotonic()
+            if refresh_at and now >= refresh_at:
+                refresh_at = 0.0
+                publish()
+            if scanning and now >= next_scan:
+                emit({'type': 'networks', 'networks': reader.networks(rescan=True)})
+                next_scan = time.monotonic() + SCAN_INTERVAL
+    finally:
+        monitor.terminate()
+
+
+# ---- main -------------------------------------------------------------------------------------
+def parse(argv):
+    import argparse
+    p = argparse.ArgumentParser(prog='network.py')
+    sub = p.add_subparsers(dest='cmd', required=True)
+    sub.add_parser('watch')
+    sub.add_parser('status')
+    s = sub.add_parser('scan')
+    s.add_argument('--rescan', action='store_true')
+    sub.add_parser('saved')
+    c = sub.add_parser('connect')
+    c.add_argument('--uuid')
+    c.add_argument('--ssid')
+    c.add_argument('--name', help='shown in messages')
+    c.add_argument('--security', choices=['open', 'owe', 'wep', 'wpa-psk', 'sae', 'enterprise'])
+    c.add_argument('--hidden', action='store_true')
+    c.add_argument('--ask', action='store_true')
+    d = sub.add_parser('disconnect')
+    d.add_argument('--uuid', required=True)
+    f = sub.add_parser('forget')
+    f.add_argument('--uuid', action='append')
+    f.add_argument('--ssid')
+    a = sub.add_parser('autoconnect')
+    a.add_argument('--uuid', required=True)
+    a.add_argument('mode', choices=['on', 'off'])
+    r = sub.add_parser('radio')
+    r.add_argument('what', choices=['wifi'])
+    r.add_argument('mode', choices=['on', 'off'])
+    u = sub.add_parser('vpn-up')
+    u.add_argument('--uuid', required=True)
+    u.add_argument('--name')
+    u.add_argument('--ask', action='store_true')
+    v = sub.add_parser('vpn-down')
+    v.add_argument('--uuid', required=True)
+    return p.parse_args(argv)
+
+
+def main(argv=None, stdin=None):
+    args = parse(sys.argv[1:] if argv is None else argv)
+    stdin = stdin or sys.stdin
+    if args.cmd == 'watch':
+        return watch()
+    try:
+        if args.cmd == 'status':
+            out = dict(load_fixture().get('state', {}), type='state') if FIXTURE else Reader().state()
+            out['ok'] = True
+        elif args.cmd == 'scan':
+            out = {'ok': True, 'networks': load_fixture().get('networks', []) if FIXTURE else Reader().networks(args.rescan)}
+        elif args.cmd == 'saved':
+            if FIXTURE:
+                data = load_fixture()
+                out = {'ok': True, 'saved': data.get('saved', []), 'vpn': data.get('state', {}).get('vpn', [])}
+            else:
+                reader = Reader()
+                state = reader.state()
+                out = {'ok': True, 'saved': reader.wifi_profiles(), 'vpn': state['vpn']}
+        elif args.cmd == 'connect':
+            out = cmd_connect(args, stdin)
+        elif args.cmd == 'disconnect':
+            out = simple('connection', 'down', 'uuid', args.uuid)
+        elif args.cmd == 'forget':
+            out = cmd_forget(args)
+        elif args.cmd == 'autoconnect':
+            out = simple('connection', 'modify', 'uuid', args.uuid, 'connection.autoconnect',
+                         'yes' if args.mode == 'on' else 'no')
+        elif args.cmd == 'radio':
+            out = simple('radio', 'wifi', args.mode)
+        elif args.cmd == 'vpn-up':
+            out = cmd_vpn_up(args, stdin)
+        elif args.cmd == 'vpn-down':
+            out = simple('connection', 'down', 'uuid', args.uuid)
+        else:
+            raise Failure('usage', 'Unknown command.')
+    except Failure as e:
+        emit({'ok': False, 'error': e.message, 'code': e.code})
+        return 1
+    except (OSError, ValueError) as e:
+        emit({'ok': False, 'error': 'Couldn’t read the network settings (%s).' % e.__class__.__name__, 'code': 'failed'})
+        return 1
+    emit(out)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
