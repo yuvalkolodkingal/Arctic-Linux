@@ -36,100 +36,119 @@ StepPage {
         Qt.quit();
     }
 
-    Column {
-        width: page.width
-        spacing: Theme.space4
+    // Scrolls when the driver and Secure Boot cards don't fit above the footer.
+    fade: doneColumn.height + 8 > page.availableHeight + 4
 
-        ArCard {
-            width: parent.width
-            iconName: "usb"
-            title: "Remove the USB stick"
-            desc: "Take it out now, then restart. Your computer will start Arctic Linux" + (Wizard.encryptionEnabled ? " and ask for your disk passphrase." : ".")
-        }
+    Flickable {
+        id: doneFlick
+        width: page.width + 8
+        x: -4
+        y: -4
+        height: Math.min(doneColumn.height + 8, page.availableHeight + 4)
+        contentHeight: doneColumn.height + (page.fade ? 48 : 8) // room above the footer's fade
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        Accessible.role: Accessible.Pane
 
-        ArCard {
-            visible: page.drivers.length > 0
-            width: parent.width
-            iconName: "cpu"
-            title: page.drivers.length === 1 ? "Driver" : "Drivers"
-            desc: page.drivers.map(d => d.text).join("\n")
-        }
+        Column {
+            id: doneColumn
+            x: 4
+            y: 4
+            width: page.width
+            spacing: Theme.space4
 
-        // Secure Boot: enroll the driver's signing key on the first restart.
-        ArCard {
-            id: mokCard
-            visible: page.secureBoot !== null
-            width: parent.width
-            iconName: "shield-lock"
-            iconColor: page.secureBoot && page.secureBoot.failed ? Theme.warning : Theme.inkMuted
-            title: page.secureBoot ? page.secureBoot.title : ""
-            desc: page.secureBoot ? page.secureBoot.intro : ""
-
-            Item {
+            ArCard {
                 width: parent.width
-                height: Theme.space2
+                iconName: "usb"
+                title: "Remove the USB stick"
+                desc: "Take it out now, then restart. Your computer will start Arctic Linux" + (Wizard.encryptionEnabled ? " and ask for your disk passphrase." : ".")
             }
-            Repeater {
-                model: page.secureBoot ? page.secureBoot.steps : []
-                delegate: ArText {
-                    required property var modelData
-                    required property int index
-                    width: mokCard.width - 2 * mokCard.pad - 24 - Theme.space3
-                    text: (index + 1) + ". " + modelData
-                    size: 14
-                    lh: 20
-                    wrapMode: Text.WordWrap
-                    color: Theme.ink
+
+            // Secure Boot: enroll the driver's signing key on the first restart.
+            ArCard {
+                id: mokCard
+                visible: page.secureBoot !== null
+                width: parent.width
+                iconName: "shield-lock"
+                iconColor: page.secureBoot && page.secureBoot.failed ? Theme.warning : Theme.inkMuted
+                title: page.secureBoot ? page.secureBoot.title : ""
+                desc: page.secureBoot ? page.secureBoot.intro : ""
+
+                Item {
+                    width: parent.width
+                    height: Theme.space2
                 }
-            }
-            // The code, large, so it can be copied onto paper or a phone before restarting.
-            Row {
-                visible: page.secureBoot !== null && (page.secureBoot.code || "") !== ""
-                spacing: Theme.space3
-                topPadding: Theme.space2
-                bottomPadding: Theme.space1
+                Repeater {
+                    model: page.secureBoot ? page.secureBoot.steps : []
+                    delegate: ArText {
+                        required property var modelData
+                        required property int index
+                        width: mokCard.width - 2 * mokCard.pad - 24 - Theme.space3
+                        text: (index + 1) + ". " + modelData
+                        size: 14
+                        lh: 20
+                        wrapMode: Text.WordWrap
+                        color: Theme.ink
+                    }
+                }
+                // The code, large, so it can be copied onto paper or a phone before restarting.
+                Row {
+                    visible: page.secureBoot !== null && (page.secureBoot.code || "") !== ""
+                    spacing: Theme.space3
+                    topPadding: Theme.space2
+                    bottomPadding: Theme.space1
+                    ArText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "One-time code"
+                        size: 13
+                        lh: 18
+                        color: Theme.inkMuted
+                    }
+                    ArText {
+                        text: page.secureBoot ? page.secureBoot.code || "" : ""
+                        font.family: Theme.fontMono
+                        size: 22
+                        lh: 30
+                        weight: Font.Bold
+                        tracking: 0.12
+                        Accessible.name: "One-time code " + (page.secureBoot && page.secureBoot.code ? page.secureBoot.code.split("").join(" ") : "")
+                    }
+                }
                 ArText {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "One-time code"
+                    visible: page.secureBoot !== null && (page.secureBoot.note || "") !== ""
+                    width: mokCard.width - 2 * mokCard.pad - 24 - Theme.space3
+                    text: page.secureBoot ? page.secureBoot.note || "" : ""
                     size: 13
                     lh: 18
+                    wrapMode: Text.WordWrap
                     color: Theme.inkMuted
                 }
-                ArText {
-                    text: page.secureBoot ? page.secureBoot.code || "" : ""
-                    font.family: Theme.fontMono
-                    size: 22
-                    lh: 30
-                    weight: Font.Bold
-                    tracking: 0.12
-                    Accessible.name: "One-time code " + (page.secureBoot && page.secureBoot.code ? page.secureBoot.code.split("").join(" ") : "")
-                }
             }
-            ArText {
-                visible: page.secureBoot !== null && (page.secureBoot.note || "") !== ""
-                width: mokCard.width - 2 * mokCard.pad - 24 - Theme.space3
-                text: page.secureBoot ? page.secureBoot.note || "" : ""
-                size: 13
-                lh: 18
-                wrapMode: Text.WordWrap
-                color: Theme.inkMuted
+
+            ArCard {
+                visible: page.drivers.length > 0
+                width: parent.width
+                iconName: "cpu"
+                title: page.drivers.length === 1 ? "Driver" : "Drivers"
+                desc: page.drivers.map(d => d.text).join("\n")
             }
-        }
 
-        // Restart refused or failed: say so, and how else to restart.
-        ArBanner {
-            visible: page.rebootError !== ""
-            width: parent.width
-            kind: "error"
-            strong: true
-            text: page.rebootError.replace(/&/g, "&amp;").replace(/</g, "&lt;") + " Choose Keep trying, then restart from the power button on the top bar."
-        }
+            // Restart refused or failed: say so, and how else to restart.
+            ArBanner {
+                visible: page.rebootError !== ""
+                width: parent.width
+                kind: "error"
+                strong: true
+                text: page.rebootError.replace(/&/g, "&amp;").replace(/</g, "&lt;") + " Choose Keep trying, then restart from the power button on the top bar."
+            }
 
-        ArBanner {
-            visible: Wizard.deferredApps.length > 0
-            width: parent.width
-            kind: "info"
-            text: Wizard.deferredApps.join(", ") + (Wizard.deferredApps.length === 1 ? " isn’t" : " aren’t") + " installed. You can add " + (Wizard.deferredApps.length === 1 ? "it" : "them") + " later from the Software app."
+            ArBanner {
+                visible: Wizard.deferredApps.length > 0
+                width: parent.width
+                kind: "info"
+                text: Wizard.deferredApps.join(", ") + (Wizard.deferredApps.length === 1 ? " isn’t" : " aren’t") + " installed. You can add " + (Wizard.deferredApps.length === 1 ? "it" : "them") + " later from the Software app."
+            }
         }
     }
 }
