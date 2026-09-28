@@ -7,6 +7,7 @@ selecting with slurp and the capturing with grim; this answers what needs parsin
     arctic-capture window            the focused window without its border (mmsg get focusing-client)
     arctic-capture output [NAME]     the focused (or that) monitor (mmsg get all-monitors)
     arctic-capture rects             visible windows as slurp's predefined rectangles (text lines)
+    arctic-capture sources           monitors and windows to share, "label<TAB>xdpw choice" lines
     arctic-capture pixel < FRAME.ppm the top-left pixel of a grim -t ppm frame, as hex/rgb/hsl
     arctic-capture ocr FILE          the text in a picture (tesseract), in your languages
     arctic-capture qr FILE           the QR codes in a picture (zxing-cpp, else zbarimg)
@@ -14,7 +15,7 @@ selecting with slurp and the capturing with grim; this answers what needs parsin
     arctic-capture same FILE FILE    exit 0 when two pictures have the same pixels (Pillow)
     arctic-capture swatch HEX FILE   a small SVG swatch for the colour notification
 
-Every command but `rects` prints one JSON line: {"ok": true, …} or
+Every command but `rects` and `sources` prints one JSON line: {"ok": true, …} or
 {"ok": false, "code": "…", "error": "One sentence."}.
 """
 import colorsys
@@ -175,6 +176,29 @@ def cmd_rects(_args):
     return None
 
 
+def cmd_sources(_args):
+    """What an app may share (the screen-share picker): "label<TAB>Monitor: NAME" for every
+    monitor, then "label<TAB>Window: ID" for every window (ext-foreign-toplevel identifiers)."""
+    outs = monitors()
+    for m in outs:
+        scale = m.get('scale') or 1
+        sys.stdout.write('Screen · {} ({} × {})\tMonitor: {}\n'.format(
+            m['name'], round(m['width'] * scale), round(m['height'] * scale), m['name']))
+    try:
+        clients = mmsg('all-clients').get('clients', [])
+    except Failure:
+        clients = []
+    for c in clients:
+        ident = c.get('foreign_toplevel_id') if isinstance(c, dict) else None
+        if not ident or c.get('is_namedscratchpad'):
+            continue
+        title = re.sub(r'\s+', ' ', c.get('title') or '').strip()
+        app = c.get('appid') or c.get('app_id') or 'Window'
+        label = 'Window · {}{}'.format(app, ' — ' + title if title and title != app else '')
+        sys.stdout.write('{}\tWindow: {}\n'.format(label[:120], ident))
+    return None
+
+
 # ---- colour --------------------------------------------------------------------------------------
 
 def ppm_first_pixel(data):
@@ -330,7 +354,7 @@ def cmd_uri(args):
     return dict(uri=Path(os.path.abspath(args[0])).as_uri())
 
 
-COMMANDS = {'window': cmd_window, 'output': cmd_output, 'rects': cmd_rects, 'pixel': cmd_pixel,
+COMMANDS = {'window': cmd_window, 'output': cmd_output, 'rects': cmd_rects, 'sources': cmd_sources, 'pixel': cmd_pixel,
             'swatch': cmd_swatch, 'ocr': cmd_ocr, 'qr': cmd_qr, 'uri': cmd_uri, 'same': cmd_same}
 
 

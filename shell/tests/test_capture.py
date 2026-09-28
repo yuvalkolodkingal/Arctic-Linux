@@ -106,6 +106,26 @@ class CaptureTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out.splitlines(), ['303,203 494x294 org.arcticlinux.Settings', '11,43 594x394 kitty'])
 
+    def test_sources_for_the_share_picker(self):
+        for c in CLIENTS['clients']:
+            c['foreign_toplevel_id'] = 'id-{}'.format(c['id'])
+        self.write_mmsg()
+        code, out = self.run_helper('sources')
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            'Screen · eDP-1 (1920 × 1200)\tMonitor: eDP-1', 'Screen · HDMI-A-1 (1920 × 1080)\tMonitor: HDMI-A-1',
+            'Window · kitty — zsh\tWindow: id-1', 'Window · firefox — Arctic\tWindow: id-2',
+            'Window · org.arcticlinux.Settings — Arctic Settings\tWindow: id-3'])
+
+    def test_share_picker_is_the_portals_chooser(self):
+        repo = HELPER.parents[3]
+        ini = (repo / 'packaging/desktop/xdg-desktop-portal-wlr.ini').read_text()
+        self.assertIn('chooser_type=simple\nchooser_cmd=/usr/libexec/arctic/arctic-share-picker\n', ini)
+        spec = (repo / 'packaging/arctic-linux.spec').read_text()
+        self.assertIn('%{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango\n', spec)
+        self.assertIn('%{buildroot}%{_libexecdir}/arctic/arctic-share-picker\n', spec)
+        self.assertIn('packaging/desktop/arctic-share-picker', (repo / '.github/workflows/ci.yml').read_text())
+
     def test_pixel_from_a_grim_frame(self):
         frame = b'P6\n# grim\n2 2\n255\n' + bytes([30, 42, 56]) + bytes(9)
         data = self.json('pixel', stdin=frame)

@@ -686,6 +686,9 @@ install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/fla
 # QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
 # an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
 install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 4 (capture): the screen-share picker xdg-desktop-portal-wlr runs in Mango sessions.
+install -Dpm 0644 packaging/desktop/xdg-desktop-portal-wlr.ini %{buildroot}%{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+install -Dpm 0755 packaging/desktop/arctic-share-picker %{buildroot}%{_libexecdir}/arctic/arctic-share-picker
 # arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own subpackages.
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
@@ -1075,6 +1078,10 @@ fi
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 %dir %{_sharedstatedir}/arctic
 %ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
+# Stream 4 (capture): the screen-share picker.
+%dir %{_sysconfdir}/xdg/xdg-desktop-portal-wlr
+%config(noreplace) %{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+%{_libexecdir}/arctic/arctic-share-picker
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic
