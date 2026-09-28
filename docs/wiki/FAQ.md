@@ -18,9 +18,9 @@ its own, and adds its desktop on top. It's an independent project, not an offici
 
 Yes. Arctic Linux's own code is under the MIT licence; the fonts are under the SIL Open Font
 Licence, and the Nix SELinux policy under the LGPL. The apps it installs keep their own licences.
-Apps that aren't open source are marked **Proprietary** in the installer, and the drivers it
-offers for your hardware come from RPM Fusion and aren't open source either; you can untick all of
-them.
+Apps that aren't open source are marked **Proprietary** in the installer. The drivers it offers
+for your hardware come from RPM Fusion: the NVIDIA and Broadcom drivers aren't open source, and
+the Intel and AMD video drivers include formats Fedora can't ship. You can untick all of them.
 
 ### Who is it for?
 
