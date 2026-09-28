@@ -160,23 +160,72 @@ class MethodTests(unittest.TestCase):
                                         ['dnf', 'install', '-y', 'yazi']])
 
 
+KVER = '6.17.8-300.fc44.x86_64'
+NEW_KVER = '7.2.7-200.fc44.x86_64'
+
+
+def fake_root(tmp, kernels=(KVER,), devel=(KVER,)):
+    """A root with these kernels in /lib/modules and kernel-devel for `devel`."""
+    root = Path(tmp)
+    for k in kernels:
+        (root / 'lib/modules' / k).mkdir(parents=True, exist_ok=True)
+        (root / 'lib/modules' / k / 'vmlinuz').write_text('')
+    for k in devel:
+        (root / 'usr/src/kernels' / k).mkdir(parents=True, exist_ok=True)
+        (root / 'usr/src/kernels' / k / 'Makefile').write_text('')
+    return root
+
+
 class DriverTests(unittest.TestCase):
+    NVIDIA = ['dnf', 'install', '-y', 'akmod-nvidia', 'xorg-x11-drv-nvidia-cuda', 'libva-nvidia-driver']
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = fake_root(self.tmp.name)
+
     def fb(self, runner):
-        return firstboot.FirstBoot(run=runner, release='44')
+        return firstboot.FirstBoot(run=runner, release='44', root=self.root)
 
     def test_nvidia_is_built_and_gets_its_kernel_arguments(self):
         run = FakeRunner()
-        with mock.patch.object(firstboot.os, 'uname', return_value=mock.Mock(release='6.17.8-300.fc44.x86_64')):
-            self.assertTrue(self.fb(run).install(engine_entry('drivers/nvidia')))
+        self.assertTrue(self.fb(run).install(engine_entry('drivers/nvidia')))
         cmds = run.commands
-        self.assertIn(['dnf', 'install', '-y', 'akmod-nvidia', 'xorg-x11-drv-nvidia-cuda', 'libva-nvidia-driver'], cmds)
-        i = cmds.index(['dnf', 'install', '-y', 'akmod-nvidia', 'xorg-x11-drv-nvidia-cuda', 'libva-nvidia-driver'])
+        i = cmds.index(self.NVIDIA)
         self.assertEqual(cmds[i + 1:], [
-            ['kmodgenca', '-a'],
-            ['akmods', '--force', '--akmod', 'nvidia'],
-            ['modinfo', '-k', '6.17.8-300.fc44.x86_64', '-F', 'version', 'nvidia'],
+            ['akmods', '--force', '--kernels', KVER, '--akmod', 'nvidia'],
+            ['modinfo', '-k', KVER, '-F', 'version', 'nvidia'],
             ['grubby', '--update-kernel=ALL', '--args=rd.driver.blacklist=nouveau,nova_core modprobe.blacklist=nouveau,nova_core nvidia-drm.modeset=1'],
         ])
+
+    def test_key_is_made_before_the_akmod_is_installed(self):
+        # The akmod's %posttrans starts a build at once; it signs only with a key already there.
+        run = FakeRunner()
+        self.assertTrue(self.fb(run).install(engine_entry('drivers/nvidia')))
+        cmds = run.commands
+        self.assertLess(cmds.index(['dnf', 'install', '-y', 'akmods', f'kernel-devel-matched-{KVER}']),
+                        cmds.index(['kmodgenca', '-a']))
+        self.assertLess(cmds.index(['kmodgenca', '-a']), cmds.index(self.NVIDIA))
+
+    def test_newest_complete_kernel_when_the_devel_files_are_gone(self):
+        # The installed kernel's kernel-devel-matched left the repositories: a whole new kernel
+        # comes with its development files (not just kernel-core), and the driver is built for
+        # the kernel that has them, not for the running one.
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        self.root = fake_root(other.name, kernels=(KVER, NEW_KVER), devel=(NEW_KVER,))
+        run = FakeRunner(fail=[['dnf', 'install', '-y', 'akmods', f'kernel-devel-matched-{KVER}']])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertTrue(self.fb(run).install(engine_entry('drivers/nvidia')))
+        cmds = run.commands
+        self.assertIn(['dnf', 'install', '-y', 'akmods', f'kernel-devel-matched-{KVER}', f'kernel-devel-matched-{NEW_KVER}'], cmds)
+        fallback = ['dnf', 'install', '-y', 'akmods', 'kernel', 'kernel-core', 'kernel-modules',
+                    'kernel-modules-core', 'kernel-modules-extra', 'kernel-devel-matched']
+        self.assertIn(fallback, cmds)
+        self.assertLess(cmds.index(fallback), cmds.index(self.NVIDIA))
+        builds = [c for c in cmds if c[0] in ('akmods', 'modinfo')]
+        self.assertEqual(builds, [['akmods', '--force', '--kernels', NEW_KVER, '--akmod', 'nvidia'],
+                                  ['modinfo', '-k', NEW_KVER, '-F', 'version', 'nvidia']])
 
     def test_failed_build_keeps_the_driver_pending_and_sets_no_arguments(self):
         run = FakeRunner(fail=[['akmods']])
@@ -188,6 +237,13 @@ class DriverTests(unittest.TestCase):
         self.assertTrue(self.fb(run).install(engine_entry('drivers/intel-media')))
         self.assertFalse(any(c[0] in ('akmods', 'kmodgenca', 'grubby') for c in run.commands))
 
+    def test_amd_media_driver_never_swaps_the_va_driver(self):
+        # F44: mesa-dri-drivers provides mesa-va-drivers; only the Vulkan package is swapped.
+        run = FakeRunner(installed={'rpmfusion-free-release', 'rpmfusion-nonfree-release', 'mesa-vulkan-drivers'})
+        self.assertTrue(self.fb(run).install(engine_entry('drivers/amd-video')))
+        swaps = [c for c in run.commands if c[:2] == ['dnf', 'swap']]
+        self.assertEqual(swaps, [['dnf', 'swap', '-y', '--allowerasing', 'mesa-vulkan-drivers', 'mesa-vulkan-drivers-freeworld']])
+
 
 class MainTests(unittest.TestCase):
     def setUp(self):
@@ -195,7 +251,8 @@ class MainTests(unittest.TestCase):
         self.pending = Path(self.dir.name) / 'pending.json'
         patches = [mock.patch.object(firstboot, 'PENDING', self.pending),
                    mock.patch.object(firstboot.os, 'geteuid', return_value=0),
-                   mock.patch.object(firstboot, 'fedora_release', return_value='44')]
+                   mock.patch.object(firstboot, 'fedora_release', return_value='44'),
+                   mock.patch.object(firstboot, 'ROOT', fake_root(Path(self.dir.name) / 'root'))]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
