@@ -70,7 +70,7 @@ throwaway index, and so is the repository key, §9). noarch unless it contains G
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
 | `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf`; fastfetch (§3.1): `/usr/share/arctic/fastfetch/{greeting.jsonc,logo.txt}` ← `dotfiles/.local/share/arctic/fastfetch/`, `/etc/xdg/fastfetch/config.jsonc` → the Polar night theme's `fastfetch/config.jsonc` (accounts without the skel link: root, older accounts); `neofetch`: `/usr/libexec/arctic/neofetch` ← `dotfiles/.local/bin/neofetch` (fastfetch with the theme's `fastfetch/neofetch.jsonc`; a real neofetch found on `PATH` runs instead) and `%ghost /usr/bin/neofetch` → it, created in `%posttrans` only when that name is free: a `%ghost` never conflicts with another package's file, so a neofetch package (none in Fedora 44) installs over it, and `%triggerpostun -- neofetch` links it again when that package goes (rpm leaves the shared path's file behind) | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1), fastfetch. Provides `neofetch = %{version}-%{release}` (satisfies what depends on neofetch; `dnf install neofetch` says it is there, and would install a real neofetch package by name). No `Conflicts: neofetch`: it would make installing a real neofetch remove arctic-desktop-config (and arctic-desktop). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
-| `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte, polkit (pkexec, for Get apps); Recommends appstream-data (Fedora app names and icons in Get apps). %check runs `shell/tests/test_apps.py`. |
+| `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte, polkit (pkexec, for Get apps), python3-dbus, python3-gobject-base (the Bluetooth pairing agent), glib2, pipewire-utils; Recommends appstream-data (Fedora app names and icons in Get apps), ddcutil (external monitors' brightness), qrencode (Wi-Fi share), NetworkManager-openvpn. %check runs `shell/tests/test_apps.py`. |
 | `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
 | `arctic-webapps` | `/usr/bin/arctic-webapp`, `/usr/libexec/arctic/arctic-webapp-host` | arch x86_64. The manager is pure Go; the host is cgo against WebKitGTK 6.0 and GTK 4 (BuildRequires gcc, `pkgconfig(webkitgtk-6.0)`, `pkgconfig(gtk4)`, `pkgconfig(libsoup-3.0)`). Requires `webkitgtk6.0 >=` the version built against, librsvg2-tools, hicolor-icon-theme, publicsuffix-list. %check: the host's NEEDED, no NEEDED in the manager, `--version` of both, `render-sample` + desktop-file-validate. Required by `arctic-desktop`; Recommended by `arctic-shell` (§11). |
@@ -86,13 +86,15 @@ mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-setti
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
 arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
-pipewire-pulseaudio, pavucontrol, network-manager-applet, NetworkManager-wifi, blueman,
+pipewire-pulseaudio, NetworkManager-wifi, bluez,
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
 gnome-keyring-pam, Thunar, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
 fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
 adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop, mako (the waybar session's notification
-daemon; the shell is its own notification server). arctic-shell Requires glib2 (gdbus).
+daemon; the shell is its own notification server), pavucontrol, network-manager-applet and
+blueman (the shell draws its own sound, network and Bluetooth menus and pairs with its own
+agent; the waybar session and the menus' "More…" links still use them). arctic-shell Requires glib2 (gdbus).
 
 ## 3. Desktop session (installed and live)
 
@@ -111,11 +113,15 @@ waybar/fuzzel configs stay in the dotfiles as a fallback (`ARCTIC_SHELL=waybar`)
 Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <target> <fn>`,
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install|remove|open <page>|source <name>|search <page> <text>|uninstall
-<desktop-id>` (Get apps), `power toggle`, `osd volume|brightness`, `lock lock`, `keys toggle`,
+<desktop-id>` (Get apps), `power toggle`, `osd volume|brightness|brightnessLevel`, `lock lock`, `keys toggle`,
 `notifications center|dismiss|dismissAll|invoke|dnd <mode>` (through `arctic-notify` and
 `arctic-dnd`, which fall back to makoctl), `keyboard next|set|menu`, `clipboard toggle`,
-`emoji toggle`, `record open|refresh`, `share pick <fifo>`, `capture freeze <dir>|thaw`. Mango
-binds and the arctic-* helpers call these.
+`emoji toggle`, `record open|refresh`, `share pick <fifo>`, `capture freeze <dir>|thaw`, and for
+the bar's own menus `panel toggle|open|close <name>` (network, bluetooth, sound, battery,
+calendar, media, display, notifications, keyboard), `quick toggle|open [page]` (Quick Settings),
+`toggle set|get|states|refresh`, `bar focus` (keyboard mode), `bluetooth pair`,
+`media playPause|next|previous`, `audio nextOutput`. Mango binds (Super + A,
+Super + Ctrl + W/B/A/P/D/T/M, Super + Alt + B) and the arctic-* helpers call these.
 Capture (arctic-desktop-config): `arctic-screenshot`, `arctic-ocr`, `arctic-colorpick` and
 `arctic-record` select with slurp and capture with grim / wf-recorder; `arctic-capture` parses
 Mango's IPC for them. Screen sharing in Mango sessions: `/etc/xdg/xdg-desktop-portal-wlr/mango`
@@ -166,7 +172,8 @@ every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
 | Firefox, Chromium, Electron apps (Signal) | portal colour scheme | — | — | yes |
 | Nautilus, Celluloid, LibreOffice (GTK 3 VCL), GIMP, Inkscape | GTK 3/4 (above) | — | — | as GTK |
 | Not themed: Helix, Neovim, VSCodium, OnlyOffice, Steam, mpv's OSD, fish (uses the terminal's ANSI colours) | their own themes | — | — | — |
-| GTK/Qt context menus, tray menus, dialogs | inherit their toolkit's theme; Mango draws no menus | — | — | — |
+| Tray menus | drawn by the shell (QsMenuOpener) in the bar-menu style, from the shell's tokens | — | — | yes |
+| GTK/Qt context menus, dialogs | inherit their toolkit's theme; Mango draws no menus | — | — | — |
 
 **Theme hooks** (`packaging/theme-hooks.d/` → `/usr/share/arctic/theme-hooks.d/`, run by
 `arctic-theme reload` after the built-in reloads with `ARCTIC_THEME_DIR` (realpath of `current`),

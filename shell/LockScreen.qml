@@ -6,7 +6,6 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Pam
-import Quickshell.Services.UPower
 
 // The lock screen (design LockScreen): the wallpaper blurred under frost, the clock, your
 // avatar and name, and the password field, whose ring is amber while you type, red when the
@@ -399,13 +398,44 @@ Scope {
                     font.pixelSize: 12
                     font.weight: Font.Medium
                 }
+                // What is playing (only while a player exists): title — artist, play/pause, next.
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: false
+                    Layout.maximumWidth: 340
+                    Layout.topMargin: Theme.space2
+                    visible: MediaService.available
+                    spacing: Theme.space1
+                    Icon { name: 'music'; size: 16; color: Theme.inkMuted }
+                    Text {
+                        Layout.maximumWidth: 250
+                        elide: Text.ElideRight
+                        text: MediaService.title + (MediaService.artist ? ' — ' + MediaService.artist : '')
+                        color: Theme.inkMuted
+                        font.family: Theme.fontSans
+                        font.pixelSize: 12
+                    }
+                    ArcticButton {
+                        variant: 'ghost'; size: 'sm'; iconOnly: true
+                        iconName: MediaService.playing ? 'pause' : 'play'
+                        label: MediaService.playing ? 'Pause' : 'Play'
+                        enabled: MediaService.available && MediaService.active.canTogglePlaying
+                        onClicked: { MediaService.playPause(); field.forceActiveFocus(); }
+                    }
+                    ArcticButton {
+                        variant: 'ghost'; size: 'sm'; iconOnly: true
+                        iconName: 'skip-forward'
+                        label: 'Next'
+                        enabled: MediaService.available && MediaService.active.canGoNext
+                        onClicked: { MediaService.next(); field.forceActiveFocus(); }
+                    }
+                }
             }
 
             // Battery, Wi-Fi and power, bottom-right.
             Rectangle {
                 id: statusPill
-                readonly property var battery: UPower.displayDevice
-                readonly property bool hasBattery: battery !== null && battery.ready && battery.isLaptopBattery
+                readonly property bool hasBattery: BatteryService.present
                 anchors { right: parent.right; bottom: parent.bottom; rightMargin: 16; bottomMargin: 14 }
                 implicitWidth: statusRow.implicitWidth + 2 * Theme.space1
                 implicitHeight: Theme.controlMd + 2
@@ -424,13 +454,13 @@ Scope {
                         visible: statusPill.hasBattery || NetworkService.available
                         Icon {
                             visible: statusPill.hasBattery
-                            name: statusPill.hasBattery && statusPill.battery.state === UPowerDeviceState.Charging ? 'battery-charging' : 'battery'
+                            name: BatteryService.charging ? 'battery-charging' : 'battery'
                             size: 16
                             color: Theme.ink
                         }
                         Text {
                             visible: statusPill.hasBattery
-                            text: statusPill.hasBattery ? Math.round(statusPill.battery.percentage > 1 ? statusPill.battery.percentage : statusPill.battery.percentage * 100) + '%' : ''
+                            text: statusPill.hasBattery ? BatteryService.percent + '%' : ''
                             color: Theme.ink
                             font.family: Theme.fontSans
                             font.pixelSize: 12

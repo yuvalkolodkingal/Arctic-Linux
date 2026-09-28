@@ -39,6 +39,39 @@
 - Upgrading? If you replaced `~/.config/mango/arctic/binds.conf` or `apps.conf` with your own copy,
   it doesn't get the new keys: compare it with `/usr/share/arctic/mango/`.
 
+### Menus on the bar
+
+- **Every item on the bar opens Arctic's own menu**, in the desktop's style, instead of a separate
+  app: see [Menus on the bar](Bar-Menus).
+  - **Network:** Wi-Fi networks with their signal, the password asked right under the network,
+    hidden networks and company or school Wi-Fi (eduroam), VPN and Tailscale switches (with
+    exit nodes), airplane mode, a hotspot, and **Share with a phone…** (a QR code of a saved
+    network).
+  - **Bluetooth:** your devices with their battery, and pairing, with the codes in Arctic's own
+    dialog.
+  - **Sound:** where sound plays, the microphone, a volume for each app, and headphone or speaker
+    ports and profiles.
+  - **Battery:** power mode, **Limit charging to 80 %** on laptops that support it, battery
+    health and your mouse's or headphones' battery. Arctic warns once when the battery is low and
+    again when it's about to run out.
+  - **The clock** opens a calendar with week numbers; **what's playing** sits next to it, with
+    its own menu, and on the lock screen.
+  - **Tray icons'** menus are drawn in the same style.
+- **Quick settings** on `Super + A`: Wi-Fi, Bluetooth, do not disturb, dark style, power mode,
+  microphone, VPN and airplane mode, with volume and brightness sliders.
+- **Keys:** `Super + Ctrl + W`, `B`, `A`, `P`, `T`, `M` and `D` open the network, Bluetooth,
+  sound, battery, calendar, media and brightness menus; `Super + Alt + B` walks the bar with the
+  arrow keys. In a menu, the arrow keys, `Enter` and `Esc` do what you'd expect, and `Ctrl + Tab`
+  moves to the next menu. `Shift + Mute` sends sound to the next output.
+- **The brightness keys** change the screen you're on, external monitors included when they
+  accept DDC/CI.
+- **"Mic", "Camera" and "Sharing"** show next to the clock while an app uses them.
+- **A saved Wi-Fi network whose password changed** asks for the new one in a notification.
+- nm-applet no longer starts with the Arctic shell (the waybar fallback still has it), and
+  Blueman's tray icon is hidden: the menus do their work. nm-applet, Blueman and the volume
+  control (pavucontrol) are still installed, but you can now remove them without removing the
+  desktop.
+
 ## Arctic Linux 0.2.1
 
 A fix release for 0.2, with a few additions to Settings and the terminal.

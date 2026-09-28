@@ -1,7 +1,8 @@
 // Power and lock: when the screen locks and the computer suspends when you're away (swayidle,
 // started by `arctic-session idle`, reads ~/.config/arctic/idle.conf), the power mode
-// (powerprofilesctl, from tuned-ppd), and what closing the lid does (arctic-display; logind
-// suspends unless `arctic-session lid` holds its lid switch for "lock" or "screen off").
+// (powerprofilesctl, from tuned-ppd), the battery (charge limit and the low-battery warning,
+// through the shell's battery.py and shell.json), and what closing the lid does (arctic-display;
+// logind suspends unless `arctic-session lid` holds its lid switch for "lock" or "screen off").
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -13,6 +14,7 @@ Page {
     lede: "What happens when you step away, and how hard the computer works."
     property var idle: ({ lock: 300, suspend: 900, live: false })
     property var profile: ({ available: false })
+    property var battery: ({ present: false, warnings: true })
     readonly property var lockChoices: [0, 60, 120, 180, 300, 600, 900, 1800]
     readonly property var suspendChoices: [0, 300, 600, 900, 1200, 1800, 2700, 3600, 7200]
     function words(s) {
@@ -33,6 +35,7 @@ Page {
     onShown: {
         Backend.call(["idle"], r => { if (r.ok) page.idle = r; });
         Backend.call(["power-profile"], r => { if (r.ok) page.profile = r; }, true);
+        Backend.call(["battery"], r => { if (r.ok) page.battery = r; }, true);
     }
 
     ArBanner {
@@ -194,6 +197,40 @@ Page {
                 model: (page.profile.profiles || []).map(p => ({ value: p, label: ({ "power-saver": "Power saver", balanced: "Balanced", performance: "Performance" })[p] || p }))
                 value: page.profile.current || "balanced"
                 onActivated: v => Backend.call(["power-profile", v], r => { if (r.ok) page.profile = r; })
+            }
+        }
+    }
+
+    Group {
+        visible: page.battery.present === true
+        title: "Battery"
+        SettingRow {
+            visible: page.battery.threshold_supported === true
+            searchKey: "power.limit"
+            title: "Limit charging to " + page.battery.threshold_end + " %"
+            desc: "Better for the battery when the laptop stays plugged in. The number is the one your laptop uses."
+            resettable: false
+            RowSwitch {
+                checked: page.battery.threshold_enabled === true
+                Accessible.name: "Limit charging"
+                onToggled: Backend.call(["battery", "limit", checked ? "on" : "off"], r => {
+                    if (r.ok) page.battery = r;
+                    else checked = page.battery.threshold_enabled === true;
+                })
+            }
+        }
+        SettingRow {
+            searchKey: "power.warnings"
+            title: "Warn me when the battery is low"
+            desc: "Once per discharge, at " + (page.battery.percentage_low || 20) + " %. The warning just before the battery runs out always shows."
+            resettable: false
+            RowSwitch {
+                checked: page.battery.warnings !== false
+                Accessible.name: "Warn me when the battery is low"
+                onToggled: Backend.call(["shell-set", "batteryWarnings", checked ? "true" : "false"], r => {
+                    if (r.ok) page.battery = Object.assign({}, page.battery, { warnings: r.batteryWarnings });
+                    else checked = page.battery.warnings !== false;
+                })
             }
         }
     }

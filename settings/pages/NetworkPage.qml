@@ -1,20 +1,28 @@
 // Network: what NetworkManager is connected to, Wi-Fi on/off (nmcli), and the full editor
-// (nm-connection-editor) for everything else: VPNs, proxies, static addresses. Joining a
-// Wi-Fi network is done from the bar's network menu (nm-applet) or the editor.
+// (nm-connection-editor) for everything else: proxies, static addresses, company logins.
+// Joining a Wi-Fi network happens in the shell's network menu on the bar (network.py).
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import ".."
 import "../components"
 
 Page {
     id: page
     title: "Network"
-    lede: "Your connections. Join a Wi-Fi network from the network icon on the bar."
+    lede: "Your connections. Join a Wi-Fi network from the network menu on the bar (Super + Ctrl + W)."
     property var net: ({ available: true, devices: [], wifi: true, hasWifi: false })
+    property var saved: ({ available: false, saved: [], vpn: [] })
     function load() {
         Backend.call(["network"], r => { if (r.ok) page.net = r; }, true);
     }
-    onShown: load()
+    function loadSaved() {
+        Backend.call(["network-saved"], r => { if (r.ok) page.saved = r; }, true);
+    }
+    function savedCall(args) {
+        Backend.call(args, r => { if (r.ok) page.saved = r; else page.loadSaved(); });
+    }
+    onShown: { load(); loadSaved(); }
     Timer {
         interval: 4000
         repeat: true
@@ -81,6 +89,94 @@ Page {
                 }
             }
         }
+    }
+
+    Group {
+        visible: page.saved.available === true && page.saved.saved.length > 0
+        title: "Saved Wi-Fi networks"
+        Repeater {
+            model: page.saved.saved || []
+            SettingRow {
+                id: savedRow
+                required property var modelData
+                required property int index
+                searchKey: index === 0 ? "network.saved" : ""
+                title: savedRow.modelData.ssid || savedRow.modelData.name
+                desc: savedRow.modelData.enterprise === true
+                      ? "Company login · " + (savedRow.modelData.ca_cert ? "checked with " + savedRow.modelData.ca_cert.split("/").pop()
+                                                                          : "checked with the system’s certificates")
+                      : savedRow.modelData.autoconnect === false ? "Joins only when you pick it" : "Joins by itself when it is near"
+                resettable: false
+                Row {
+                    spacing: Theme.space2
+                    ArButton {
+                        // A company network whose IT department gave you its own certificate file.
+                        visible: savedRow.modelData.enterprise === true
+                        text: "Certificate…"
+                        variant: "ghost"
+                        size: "sm"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: { caDialog.uuid = savedRow.modelData.uuid; caDialog.open(); }
+                    }
+                    ArButton {
+                        text: "Forget"
+                        variant: "ghost"
+                        size: "sm"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: page.savedCall(["network-forget", savedRow.modelData.uuid])
+                    }
+                }
+            }
+        }
+    }
+
+    Group {
+        visible: page.saved.available === true
+        title: "VPN"
+        Repeater {
+            model: page.saved.vpn || []
+            SettingRow {
+                id: vpnRow
+                required property var modelData
+                title: vpnRow.modelData.name
+                desc: (vpnRow.modelData.active ? "Connected" : "Not connected") + " · " + (vpnRow.modelData.kind === "wireguard" ? "WireGuard" : "VPN")
+                resettable: false
+                ArButton {
+                    text: vpnRow.modelData.active ? "Disconnect" : "Connect"
+                    variant: "secondary"
+                    size: "sm"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: page.savedCall(["vpn", vpnRow.modelData.active ? "down" : "up", vpnRow.modelData.uuid])
+                }
+            }
+        }
+        SettingRow {
+            searchKey: "network.vpn"
+            title: "Import a VPN file"
+            desc: "An OpenVPN (.ovpn) or WireGuard (.conf) file from your VPN provider. It then has a switch in the network menu."
+            resettable: false
+            ArButton {
+                text: "Import…"
+                iconName: "plus"
+                gapColor: Theme.surfaceRaised
+                onClicked: vpnDialog.open()
+            }
+        }
+    }
+
+    FileDialog {
+        id: caDialog
+        property string uuid: ""
+        title: "Pick your network's certificate"
+        nameFilters: ["Certificates (*.pem *.crt *.cer *.der)", "All files (*)"]
+        onAccepted: page.savedCall(["network-ca-set", uuid, String(selectedFile)])
+    }
+
+    FileDialog {
+        id: vpnDialog
+        title: "Import a VPN file"
+        nameFilters: ["VPN files (*.ovpn *.conf)", "All files (*)"]
+        onAccepted: page.savedCall(["vpn", "import", String(selectedFile)])
     }
 
     Group {

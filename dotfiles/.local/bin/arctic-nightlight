@@ -439,6 +439,17 @@ def tell(result):
         pass
 
 
+def refresh_shell():
+    """The shell's Quick Settings tile and indicator read the new state (nothing without it)."""
+    if not which('arctic-shell-ipc'):
+        return
+    try:
+        subprocess.run(['arctic-shell-ipc', 'toggle', 'refresh', 'night-light'], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def main(argv):
     verb = argv[0] if argv else 'status'
     rest = argv[1:]
@@ -453,6 +464,7 @@ def main(argv):
         if (state.get('until') or 0) == int(until):
             state.pop('timer', None)
             apply(state)
+            refresh_shell()
         return 0
     if verb == 'status':
         result = status()
@@ -482,6 +494,8 @@ def main(argv):
     else:
         print('usage: arctic-nightlight on|off|toggle|status [--json]|set KEY=VALUE…|apply', file=sys.stderr)
         return 2
+    if verb != 'status':
+        refresh_shell()
     print(json.dumps(result))
     return 0
 

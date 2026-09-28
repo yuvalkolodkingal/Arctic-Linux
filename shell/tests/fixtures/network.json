@@ -1,0 +1,30 @@
+{
+  "comment": "Test data for network.py's fixture mode (ARCTIC_NETWORK_FIXTURE): screenshots and tests only.",
+  "state": {
+    "nm_running": true,
+    "wifi": {"device": "wlp2s0", "state": "connected", "hardware": true, "enabled": true, "ap_capable": true},
+    "wired": [{"device": "enp3s0", "state": "unavailable", "connection": ""}],
+    "active": [{"uuid": "5d9f0c55-0000-4000-8000-000000000001", "name": "Fjord", "type": "wifi", "device": "wlp2s0", "state": "activated"}],
+    "vpn": [{"uuid": "5d9f0c55-0000-4000-8000-000000000009", "name": "Work VPN", "kind": "wireguard", "active": false, "last_used": 1759000000}],
+    "saved": [{"uuid": "5d9f0c55-0000-4000-8000-000000000001", "ssid": "Fjord", "autoconnect": true},
+              {"uuid": "5d9f0c55-0000-4000-8000-000000000002", "ssid": "Library", "autoconnect": true}],
+    "hotspot": {"active": false, "uuid": null, "ssid": null}
+  },
+  "tailscale": {"state": "running", "tailnet": "ada@example.com", "exit_node": "",
+                "exit_nodes": [{"ip": "100.64.0.2", "name": "home-nas", "online": true, "active": false},
+                               {"ip": "100.64.0.9", "name": "vps-helsinki", "online": false, "active": false}]},
+  "networks": [
+    {"ssid": "Fjord", "signal": 84, "band": "5 GHz", "security": "wpa-psk", "in_use": true, "saved": true, "uuid": "5d9f0c55-0000-4000-8000-000000000001", "hidden": false},
+    {"ssid": "Library", "signal": 58, "band": "2.4 GHz", "security": "open", "in_use": false, "saved": true, "uuid": "5d9f0c55-0000-4000-8000-000000000002", "hidden": false},
+    {"ssid": "Office", "signal": 71, "band": "5 GHz", "security": "sae", "in_use": false, "saved": false, "uuid": null, "hidden": false},
+    {"ssid": "Harbour Café", "signal": 44, "band": "2.4 GHz", "security": "wpa-psk", "in_use": false, "saved": false, "uuid": null, "hidden": false},
+    {"ssid": "eduroam", "signal": 39, "band": "5 GHz", "security": "enterprise", "in_use": false, "saved": false, "uuid": null, "hidden": false},
+    {"ssid": "Guest", "signal": 22, "band": "2.4 GHz", "security": "owe", "in_use": false, "saved": false, "uuid": null, "hidden": false}
+  ],
+  "saved": [
+    {"uuid": "5d9f0c55-0000-4000-8000-000000000001", "name": "Fjord", "ssid": "Fjord", "last_used": 1759070000, "autoconnect": true},
+    {"uuid": "5d9f0c55-0000-4000-8000-000000000002", "name": "Library", "ssid": "Library", "last_used": 1758000000, "autoconnect": true},
+    {"uuid": "5d9f0c55-0000-4000-8000-000000000003", "name": "eduroam", "ssid": "eduroam", "last_used": 1757000000, "autoconnect": true,
+     "enterprise": true, "ca_cert": ""}
+  ]
+}

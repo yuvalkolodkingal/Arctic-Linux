@@ -1,6 +1,6 @@
 // Sound: the output and input devices and their volume, through PipeWire
-// (Quickshell.Services.Pipewire, as the bar and OSD use). Per-app volumes and device
-// profiles are in pavucontrol (or pwvucontrol when installed).
+// (Quickshell.Services.Pipewire, as the bar and OSD use). Per-app volumes are in the sound
+// menu on the bar; device profiles and routing in pavucontrol (or pwvucontrol).
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Services.Pipewire
@@ -115,7 +115,18 @@ Page {
     Group {
         title: "More"
         SettingRow {
-            title: "Volume per app and device profiles"
+            visible: Backend.caps.shellIpc === true
+            title: "Volume per app"
+            desc: "The sound menu on the bar has a volume for every app playing (Super + Ctrl + A)."
+            resettable: false
+            ArButton {
+                text: "Open the sound menu"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.launch(["arctic-shell-ipc", "panel", "open", "sound"])
+            }
+        }
+        SettingRow {
+            title: "Device profiles and routing"
             desc: "For example to send one app to the headphones."
             resettable: false
             enabled: Backend.caps.pavucontrol === true || Backend.caps.pwvucontrol === true

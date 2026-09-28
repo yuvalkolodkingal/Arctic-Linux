@@ -304,12 +304,25 @@ Requires:       google-noto-color-emoji-fonts
 Recommends:     wtype
 # Get apps → Web apps and Remove apps → Web apps (stream 1); hidden when it is missing
 Recommends:     arctic-webapps = %{version}-%{release}
+# Stream 3a (bar menus): the Bluetooth pairing agent and battery.py talk D-Bus with
+# python3-dbus and a GLib main loop; gdbus (glib2, above) checks for the power-profiles
+# service; audio.py reads ports and profiles with pw-dump and pw-cli; ddcutil sets external
+# monitors' brightness. (The network menu hides itself without nmcli.)
+Requires:       python3-dbus
+Requires:       python3-gobject-base
+Requires:       pipewire-utils
+Recommends:     ddcutil
+# Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
+Recommends:     qrencode
+Recommends:     NetworkManager-openvpn
 
 %description -n arctic-shell
-The Arctic Linux desktop shell, written for Quickshell: top bar, launcher with Get apps
-(Flathub, Fedora packages, web apps, terminal apps, a console) and Remove apps, wallpaper
-picker, on-screen display, lock screen, the live-session welcome card, and the notification
-server with its pop-ups and notification centre.
+The Arctic Linux desktop shell, written for Quickshell: top bar with its own menus (network
+and Wi-Fi, Bluetooth with a pairing agent, sound, battery and power mode, calendar, media,
+tray menus) and Quick Settings, launcher with Get apps (Flathub, Fedora packages, web apps,
+terminal apps, a console) and Remove apps, wallpaper picker, on-screen display, lock screen,
+the live-session welcome card, and the notification server with its pop-ups and notification
+centre.
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
 
 # ---------------------------------------------------------------------------------------------
@@ -521,10 +534,14 @@ Requires:       brightnessctl
 Requires:       playerctl
 Requires:       wireplumber
 Requires:       pipewire-pulseaudio
-Requires:       pavucontrol
-Requires:       network-manager-applet
+# Stream 3a (bar menus): the shell draws the network, Bluetooth and sound menus and pairs with
+# its own agent, so the applet, the Bluetooth manager and the mixer are weak dependencies (the
+# waybar session and the menus' "Edit connections…" links still use them); BlueZ itself stays.
+Recommends:     pavucontrol
+Recommends:     network-manager-applet
 Requires:       NetworkManager-wifi
-Requires:       blueman
+Recommends:     blueman
+Requires:       bluez
 Requires:       xdg-desktop-portal-wlr
 Requires:       xdg-desktop-portal-gtk
 Requires:       xdg-user-dirs

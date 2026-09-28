@@ -60,6 +60,11 @@ Row {
             readonly property bool active: modelData.active
             readonly property bool occupied: modelData.occupied
             readonly property bool urgent: modelData.urgent && !modelData.active
+            // The bar's keyboard mode (Bar.qml) moves through the pills too.
+            property bool keyboardFocused: false
+            readonly property bool barStop: true
+            function press() { workspaces.activate(pill.modelData.id); }
+            FocusRing { targetRadius: pill.radius; shown: pill.keyboardFocused }
             anchors.verticalCenter: parent ? parent.verticalCenter : undefined
             width: active ? 30 : 22
             height: 22

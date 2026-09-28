@@ -79,6 +79,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -2646,6 +2647,125 @@ def cmd_wifi(paths, args):
     return cmd_network(paths, [])
 
 
+# ---- battery (the shell's battery.py) and shell settings ----------------------------------------
+
+SHELL_KEYS = {'batteryWarnings': ('true', 'false')}
+
+
+def shell_settings(paths):
+    try:
+        data = json.loads((paths.config / 'arctic/shell.json').read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def cmd_battery(paths, args):
+    """The laptop battery as the battery menu sees it (battery.py status: charge limit), plus
+    whether the low-battery warning is on. `battery limit on|off` sets UPower's charge limit."""
+    warnings = shell_settings(paths).get('batteryWarnings') is not False
+    script = shell_script(paths, 'battery.py')
+    if not script:
+        return dict(ok=True, present=False, warnings=warnings)
+    if args[:1] == ['limit'] and args[1:] in (['on'], ['off']):
+        code, out, _err = run([sys.executable, str(script), 'limit', args[1]], timeout=60)
+    elif not args:
+        code, out, _err = run([sys.executable, str(script), 'status'], timeout=20)
+    else:
+        raise Failure('usage: battery [limit on|off]')
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = dict(ok=False, error='The battery helper didn’t answer.')
+    if args and data.get('ok'):
+        return cmd_battery(paths, [])
+    if not data.get('ok'):
+        if args:
+            raise Failure(data.get('error') or 'That didn’t work.')
+        return dict(ok=True, present=False, warnings=warnings)
+    data['warnings'] = warnings
+    return data
+
+
+def cmd_shell_set(paths, args):
+    """shell-set KEY VALUE: one of the shell's own settings in ~/.config/arctic/shell.json
+    (read by the shell's Session.qml), keeping the others."""
+    if len(args) != 2 or args[0] not in SHELL_KEYS or args[1] not in SHELL_KEYS[args[0]]:
+        raise Failure('usage: shell-set batteryWarnings true|false')
+    data = shell_settings(paths)
+    data[args[0]] = args[1] == 'true'
+    atomic_write(paths.config / 'arctic/shell.json', json.dumps(data, indent=2) + '\n')
+    return dict(ok=True, **{args[0]: data[args[0]]})
+
+
+# ---- saved networks and VPNs (the shell's network.py) --------------------------------------------
+
+def network_script(paths, args):
+    script = shell_script(paths, 'network.py')
+    if not script:
+        raise Failure('The shell’s network helper isn’t installed.')
+    _code, out, _err = run([sys.executable, str(script)] + args, timeout=90)
+    try:
+        data = json.loads(out.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise Failure('The network helper didn’t answer.')
+    if not data.get('ok'):
+        raise Failure(data.get('error') or 'That didn’t work.')
+    return data
+
+
+def cmd_network_saved(paths, _args):
+    """Saved Wi-Fi networks and VPN connections."""
+    try:
+        data = network_script(paths, ['saved'])
+    except Failure:
+        return dict(ok=True, available=False, saved=[], vpn=[])
+    return dict(ok=True, available=True, saved=data.get('saved', []), vpn=data.get('vpn', []))
+
+
+def cmd_network_forget(paths, args):
+    if not args or not all(re.fullmatch(r'[0-9a-fA-F-]{36}', a) for a in args):
+        raise Failure('usage: network-forget UUID…')
+    network_script(paths, ['forget'] + [x for a in args for x in ('--uuid', a)])
+    return cmd_network_saved(paths, [])
+
+
+def local_path(arg):
+    """A path, or a file:// URL from a file dialog (percent-encoded)."""
+    return urllib.parse.unquote(arg[7:]) if arg.startswith('file://') else arg
+
+
+def cmd_network_ca_set(paths, args):
+    """network-ca-set UUID PATH: a company (802.1X) network checks its server with this certificate."""
+    if len(args) != 2 or not re.fullmatch(r'[0-9a-fA-F-]{36}', args[0]):
+        raise Failure('usage: network-ca-set UUID PATH')
+    network_script(paths, ['ca-set', '--uuid', args[0], '--file', local_path(args[1])])
+    return cmd_network_saved(paths, [])
+
+
+def cmd_vpn(paths, args):
+    """vpn-up|vpn-down UUID, vpn-import PATH."""
+    verb = args[0] if args else ''
+    if verb in ('up', 'down') and len(args) == 2 and re.fullmatch(r'[0-9a-fA-F-]{36}', args[1]):
+        network_script(paths, ['vpn-' + verb, '--uuid', args[1]])
+    elif verb == 'import' and len(args) == 2:
+        network_script(paths, ['vpn-import', '--file', local_path(args[1])])
+    else:
+        raise Failure('usage: vpn up|down UUID | vpn import PATH')
+    return cmd_network_saved(paths, [])
+
+
+def cmd_bluetooth_pair(_paths, _args):
+    """Pair a device: the shell's Bluetooth menu on its pairing page (codes come up in Arctic's
+    own dialog); without the shell, the Bluetooth manager."""
+    code, _out, _err = run(['arctic-shell-ipc', 'bluetooth', 'pair'], timeout=10)
+    if code == 0:
+        return dict(ok=True, opened='shell')
+    if which('blueman-manager'):
+        subprocess.Popen(['blueman-manager'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return dict(ok=True, opened='blueman')
+    raise Failure('The Arctic shell isn’t running, and the Bluetooth manager isn’t installed.')
 # ---- notifications --------------------------------------------------------------------------------
 # The shell's notification server (shell/NotificationService.qml) reads
 # ~/.config/arctic/notifications.json (written here) and keeps its own state in
@@ -2877,7 +2997,7 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
          'arcticUpdate': 'arctic-update', 'arcticMotion': 'arctic-motion', 'arcticWallpaper': 'arctic-wallpaper',
          'gsettings': 'gsettings', 'swayidle': 'swayidle', 'gtkLaunch': 'gtk-launch', 'xdgOpen': 'xdg-open',
          'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl',
-         'arcticDnd': 'arctic-dnd'}
+         'shellIpc': 'arctic-shell-ipc', 'arcticDnd': 'arctic-dnd'}
 
 
 # ---- web apps (stream 1) -------------------------------------------------------------------------
@@ -2996,6 +3116,9 @@ COMMANDS = {
     'wallpaper-delete': cmd_wallpaper_delete, 'wallpaper-rename': cmd_wallpaper_rename, 'wallhaven': cmd_wallhaven,
     'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
+    'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,
+    'network-saved': cmd_network_saved, 'network-forget': cmd_network_forget, 'vpn': cmd_vpn,
+    'network-ca-set': cmd_network_ca_set,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
     'notifications': cmd_notifications, 'notification-set': cmd_notification_set,
     'notification-rule-set': cmd_notification_rule_set, 'notification-history-clear': cmd_notification_history_clear,
@@ -3014,7 +3137,7 @@ COMMANDS.update({
 # one at a time (settings_lock). display-revert takes the lock itself, after its wait.
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
-           'ensure-source', 'notification-set', 'notification-rule-set'}
+           'ensure-source', 'shell-set', 'notification-set', 'notification-rule-set'}
 
 
 # Stream 5 (system): night light, keep awake, XDG autostart, printers, date and time, Flatpak

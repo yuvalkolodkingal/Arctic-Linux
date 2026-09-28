@@ -13,6 +13,7 @@
 #
 # `mako` does nothing in the shell's session: the shell is the notification server there.
 # The shell runs `mako --fallback` itself when it couldn't take the name (like the polkit agent).
+# `nm-applet` starts only with the fallback desktop: the shell has its own network menu.
 set -uo pipefail
 
 shell_session() {   # the Arctic shell runs this session (not the waybar fallback)
@@ -62,7 +63,7 @@ case "${1:-}" in
     for agent in /usr/libexec/lxqt-policykit-agent /usr/libexec/polkit-mate-authentication-agent-1 /usr/libexec/xfce-polkit; do
       if [[ -x "$agent" ]]; then run_once "$(basename "$agent" | cut -c1-15)" "$agent"; break; fi
     done ;;
-  nm-applet) run_once nm-applet nm-applet --indicator ;;
+  nm-applet) shell_session || run_once nm-applet nm-applet --indicator ;;
   clipboard)
     # Clipboard history (cliphist, Super + V). Settings (Keyboard and mouse) turns it off with
     # history=off in ~/.config/arctic/clipboard.conf and applies that with `clipboard --restart`.

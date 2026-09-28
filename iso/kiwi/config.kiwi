@@ -64,7 +64,7 @@
 		<!-- The Arctic desktop, the installer and the live session -->
 		<package name="arctic-desktop"/>
 		<!-- Arctic Settings (arctic-desktop requires it too; named so it is never left out)
-		     and the tools its Network, Bluetooth and Sound pages open. -->
+		     and the tools behind the bar menus' and Settings' "More…" links. -->
 		<package name="arctic-settings"/>
 		<package name="nm-connection-editor"/>
 		<package name="blueman"/>

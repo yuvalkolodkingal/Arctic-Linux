@@ -19,6 +19,12 @@ PopupWindow {
         if (pending === item) { pending = null; delay.stop(); }
         if (target === item) visible = false;
     }
+    // A menu opened: nothing shows until the pointer moves to an item again.
+    function dismiss() {
+        pending = null;
+        delay.stop();
+        visible = false;
+    }
 
     anchor.item: target
     anchor.rect.x: 0

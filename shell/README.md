@@ -29,16 +29,21 @@ checkout. Mango starts it at login (`arctic-session shell` in the dotfiles' auto
 lxqt-policykit fallback instead.
 
 It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails), `python3-pyte`
-(the Get apps console) and `glib2` (`gdbus`, to check who owns notifications); the bar uses
-NetworkManager (`nmcli`), PipeWire, UPower, BlueZ, Mango (`mmsg`, the keyboard layout) and
-`brightnessctl` when they are there and hides what isn't. The shell is the notification server;
-mako is only the fallback (the waybar session, or when the shell can't take the name).
+(the Get apps console), `glib2` (`gdbus`, to check who owns notifications) and `python3-dbus`
+with `python3-gobject-base` (the Bluetooth pairing agent, battery details); the bar uses
+NetworkManager (`nmcli`), PipeWire, UPower and power-profiles (tuned-ppd), BlueZ, MPRIS players,
+Mango (`mmsg`, the keyboard layout), `brightnessctl` and `ddcutil` when they are there and hides
+what isn't. The shell is the notification server; mako is only the fallback (the waybar session,
+or when the shell can't take the name).
 
 ## What's in it
 
 | Surface | Files | Notes |
 |---|---|---|
 | Top bar | `Bar.qml`, `BarItem.qml`, `BarTooltip.qml`, `Workspaces.qml`, `scripts/workspaces.py` | 34px frost, 1px `line` bottom. Fox mark (launcher), workspaces 1–5 (active amber pill, occupied ring, empty muted, urgent error ring), clock with tabular figures, notifications bell (the notification centre; right click: do not disturb), keyboard layout (with two or more), Bluetooth, tray, network, volume, battery (hidden without one), power. Live USB: "Live session" tag and the amber Install item. Tooltips on every icon-only item. |
+| Bar menus | `BarMenu.qml`, `NetworkPanel.qml`, `BluetoothPanel.qml`, `SoundPanel.qml`, `BatteryPanel.qml`, `CalendarPanel.qml`, `MediaPanel.qml`, `TrayPanel.qml`, `DisplayPanel.qml`, services (`NetworkService`, `BluetoothService`, `AudioService`, `BatteryService`, `PowerService`, `MediaService`, `BrightnessService`, `PrivacyService`), `scripts/network.py`, `scripts/battery.py`, `scripts/brightness.py` | Every bar item opens Arctic's own menu in one host (one menu at a time; Ctrl+Tab moves to the neighbouring item's). Network: Wi-Fi on/off, wired, nearby networks (scanned only while open), joining with the password asked under the network (to nmcli through a pipe, never a command line), hidden networks, forget, connect automatically, VPN switches. Bluetooth: power, your devices, pairing. Sound: output/input devices and volume, a volume per app. Battery: power mode, the charge limit UPower offers, health, other devices; low and critical warnings. Clock: calendar with week numbers. Media (right of the clock, while a player exists). Tray icons: their DBusMenu drawn by the shell (QsMenuOpener). "Edit connections…", "More Bluetooth options…" and "Volume control…" open the stock tools. Toolkit: `MenuList.qml` (+ `MenuNav.js`), `MenuRow`, `MenuSwitchRow`, `MenuSlider`, `MenuSection`, `MenuHeader`, `MenuPage`, `MenuField`, `Spinner`, `SignalIcon`, `ShadowLayers`; extra glyphs in `assets/icons-extra.js`. |
+| Quick Settings | `QuickSettingsPanel.qml`, `QuickTile.qml`, `Toggle.qml`, `HelperToggle.qml`, `ToggleRegistry.qml`, `ModeIndicators.qml` | Super+A: battery, Settings / Lock / Power, volume and brightness, a tile per registry toggle (Wi-Fi, Bluetooth, do not disturb, night light and keep awake when their helpers are installed, dark style, power mode, microphone, VPN), what is playing; chevrons open the menus above as pages. Left of the clock: "Mic" / "Camera" / "Sharing" pills while something records, and the modes that are on. |
+| Bluetooth pairing | `BluetoothPairDialog.qml`, `scripts/bt-agent.py` | BlueZ's default agent (python3-dbus): confirmation codes, passkeys, PINs and service requests in a design dialog, shielded in screen captures. |
 | Screen frame | `ScreenFrame.qml` | Ground-coloured surround with a `line` hairline. It reserves its width on each edge, so Mango keeps its 8px gap inside it and window corners are concentric with the frame's. `{"frame": false}` in `~/.config/arctic/shell.json` turns it off. |
 | Launcher | `Launcher.qml`, `LauncherSearch.js`, `Calc.js`, `AppTile.qml` | Super+Space. 520px frosted card that hangs from the bar over a scrim; drag the grip to dock it to any edge. Apps (design app tiles for the Arctic apps), `=` calculator (a small parser: arithmetic only, never `eval`), `>` run a command (Shift+Enter: in your terminal, via `arctic-open terminal -e`). Empty query: Apps, Get apps, Remove apps, Wallpapers, Settings, Fetch (+ Install Arctic Linux on the live USB). Shift+Delete (or Delete at the end of the text), the row's trash button or a right-click removes an app after `getapps/RemoveSheet` shows what goes; a search with no app offers "Find … in Get apps". |
 | Get apps | `AppsService.qml`, `WebAppClient.qml`, `WebAppProtocol.js`, `getapps/` (`GetApps.qml` router, `ChooserPage`, `SourcePage`, `WebAppPage`, `TerminalAppPage`, `RemovePage`, `RemoveSheet`, `ConsolePage`, `GetApps.js`), `PackageSearch.js`, `scripts/apps.py`, `scripts/appslib.py`, `scripts/install-terminal.py`, `scripts/package-index.py`, `scripts/protected-packages.conf`, `assets/featured.json` (Arctic picks, from `arctic-install catalog --featured`) | Super+Shift+A. A chooser (Flathub apps, Fedora packages, Web apps, Terminal apps, Remove apps, Console); Esc goes back one step. Installs and removals are jobs of `AppsService`, run one at a time in the runner's PTY (`install-terminal.py run`, commands built by `appslib.build_job`: `pkexec /usr/bin/dnf5 install|remove -y …`, `flatpak install|uninstall --system|--user -y --noninteractive …`), so they outlive the launcher; a notification says when one ends out of sight. `apps.py` answers the read-only questions as you: AppStream catalogues, installed apps per source, dnf removal previews (`dnf5 remove --store`, as you), launcher-entry owners (Delete in the launcher). Protected packages (`protected-packages.conf`, `/etc/arctic/protected-packages.d/`, the hard closure of `arctic-desktop`, your login shell, your only terminal) are never removed. Web apps go through `arctic-webapp serve`. The Console takes `dnf` / `flatpak` commands in a real PTY; typed removals list what goes and ask `[y/N]`. |
@@ -96,6 +101,13 @@ notifications.
 | `notifications` | `center` / `toggle`, `open`, `close`, `dismiss` (newest pop-up), `dismissAll`, `invoke` (newest), `count`, `history` (JSON lines), `clearHistory`, `reload` (Settings wrote notifications.json), `dnd <on\|off\|toggle\|1h\|tomorrow\|status>` → `on`/`off`, or `unowned` when another daemon has notifications |
 | `keyboard` | `next`, `set <index>`, `menu` |
 | `updates` | `toggle` (the updates card, only while updates wait), `refresh` |
+| `panel` | `toggle <menu>`, `open <menu>`, `close` — network, bluetooth, sound, battery, calendar, media, display |
+| `quick` | `toggle`, `open <page>` (network, bluetooth, sound, battery, display, media; empty for the main page) |
+| `toggle` | `set <key> on\|off\|toggle`, `get <key>`, `states` (JSON), `refresh [key]` — keys: wifi, bluetooth, dnd, night-light, keep-awake, dark-mode, power-mode, mic, vpn |
+| `bar` | `focus` (keyboard mode: ← → move, Enter opens, Esc leaves) |
+| `bluetooth` | `pair` (the Bluetooth menu on its pairing page) |
+| `media` | `playPause`, `next`, `previous` |
+| `audio` | `nextOutput` |
 | `shell` | `reload` (theme, motion, settings), `live` |
 | `clipboard` | `toggle` (clipboard history, Super + V) |
 | `emoji` | `toggle` (the emoji picker, Super + Ctrl + E) |
@@ -110,6 +122,9 @@ python3 -m unittest discover -s shell/tests     # PTY console, command building,
 node shell/tests/test-package-search.cjs        # completion
 node shell/tests/test-launcher.cjs              # launcher ranking, calculator
 node shell/tests/test-update-status.cjs         # the "Restart to update" logic
+node shell/tests/test-menu-nav.cjs              # keyboard movement in the bar menus
+node shell/tests/test-calendar-grid.cjs         # the calendar's month grid and ISO weeks
+node shell/tests/test-icons.cjs                 # every icon name in the QML resolves
 node shell/tests/test-notification-rules.cjs    # do not disturb, per-app rules, history, grouping
 /usr/lib64/qt6/bin/qmllint -I /usr/lib64/qt6/qml shell/*.qml
 shell/dev/headless.sh --fixtures demo ipc launcher search ze sleep 1 shot launcher
@@ -120,7 +135,9 @@ dotfiles installed with `install.sh --target`) and saves screenshots to `dev/scr
 (`--theme winter`, `--live` = `ARCTIC_FORCE_LIVE=1`, which exists only for such tests;
 `ARCTIC_UPDATE_STATUS=<file>` shows the updates pill from a status file of your own, with a
 `/system-update` link in place; `--mako` starts mako first, to test the hand-over of the
-notification name; `sh notify-send …` steps show toasts).
+notification name; `sh notify-send …` steps show toasts). `--fixtures` also points the network
+menu at `tests/fixtures/network.json` (`ARCTIC_NETWORK_FIXTURE`: network.py answers from the file
+and changes nothing) and adds the test tray icon `tests/fixtures/sni-menu.py`.
 
 ## Design notes
 

@@ -1256,6 +1256,82 @@ class NetworkTest(Home):
         self.assertFalse(self.helper('network')['available'])
 
 
+class BluetoothPairTest(Home):
+    def test_opens_the_shell_menu(self):
+        stub(self.bin, 'arctic-shell-ipc', 'echo "ipc $*" >> "{}"\n'.format(self.log))
+        self.assertEqual(self.helper('bluetooth-pair')['opened'], 'shell')
+        self.assertIn('ipc bluetooth pair', self.calls())
+
+    def test_falls_back_to_blueman(self):
+        stub(self.bin, 'arctic-shell-ipc', 'exit 1\n')
+        stub(self.bin, 'blueman-manager', 'echo blueman >> "{}"\n'.format(self.log))
+        self.assertEqual(self.helper('bluetooth-pair')['opened'], 'blueman')
+
+    def test_neither(self):
+        stub(self.bin, 'arctic-shell-ipc', 'exit 1\n')
+        self.assertIn('isn’t running', self.helper('bluetooth-pair', ok=False)['error'])
+
+
+class BatteryTest(Home):
+    def setUp(self):
+        super().setUp()
+        shell = self.tmp / 'shell/scripts'
+        shell.mkdir(parents=True)
+        (shell / 'battery.py').write_text(
+            'import json, sys\n'
+            'if sys.argv[1:] == ["status"]:\n'
+            '    print(json.dumps({"ok": True, "present": True, "threshold_supported": True, "threshold_end": 80}))\n'
+            'else:\n'
+            '    open(sys.argv[0] + ".log", "a").write(" ".join(sys.argv[1:]) + "\\n"); print(json.dumps({"ok": True}))\n')
+        self.env['ARCTIC_SHELL_DIR'] = str(self.tmp / 'shell')
+        self.log_file = shell / 'battery.py.log'
+
+    def test_status_and_limit(self):
+        data = self.helper('battery')
+        self.assertEqual((data['present'], data['threshold_end'], data['warnings']), (True, 80, True))
+        self.helper('battery', 'limit', 'on')
+        self.assertEqual(self.log_file.read_text(), 'limit on\n')
+        self.helper('battery', 'limit', 'maybe', ok=False)
+
+    def test_warnings_switch_keeps_other_shell_settings(self):
+        (self.home / '.config/arctic/shell.json').write_text('{"frame": false}')
+        self.assertFalse(self.helper('shell-set', 'batteryWarnings', 'false')['batteryWarnings'])
+        self.assertEqual(json.loads((self.home / '.config/arctic/shell.json').read_text()),
+                         {'frame': False, 'batteryWarnings': False})
+        self.assertFalse(self.helper('battery')['warnings'])
+        self.helper('shell-set', 'frame', 'true', ok=False)
+        self.helper('shell-set', 'batteryWarnings', 'maybe', ok=False)
+
+
+class SavedNetworksTest(Home):
+    UUID = '11111111-2222-3333-4444-555555555555'
+
+    def setUp(self):
+        super().setUp()
+        shell = self.tmp / 'shell/scripts'
+        shell.mkdir(parents=True)
+        (shell / 'network.py').write_text(
+            'import json, sys\n'
+            'open(sys.argv[0] + ".log", "a").write(" ".join(sys.argv[1:]) + "\\n")\n'
+            'print(json.dumps({"ok": True, "saved": [{"uuid": "%s", "ssid": "Home"}], "vpn": []}))\n' % self.UUID)
+        self.env['ARCTIC_SHELL_DIR'] = str(self.tmp / 'shell')
+        self.log_file = shell / 'network.py.log'
+
+    def test_saved_forget_and_vpn(self):
+        self.assertEqual(self.helper('network-saved')['saved'][0]['ssid'], 'Home')
+        self.helper('network-forget', self.UUID)
+        self.helper('network-forget', 'not-a-uuid', ok=False)
+        self.helper('vpn', 'up', self.UUID)
+        self.helper('vpn', 'import', 'file:///home/ada/My%20VPN/work.conf')
+        self.helper('vpn', 'sideways', self.UUID, ok=False)
+        self.helper('network-ca-set', self.UUID, 'file:///home/ada/uni-ca.pem')
+        self.helper('network-ca-set', 'not-a-uuid', '/tmp/x.pem', ok=False)
+        self.assertEqual(self.log_file.read_text().splitlines(), [
+            'saved', 'forget --uuid %s' % self.UUID, 'saved', 'vpn-up --uuid %s' % self.UUID, 'saved',
+            'vpn-import --file /home/ada/My VPN/work.conf', 'saved',
+            'ca-set --uuid %s --file /home/ada/uni-ca.pem' % self.UUID, 'saved'])
+
+
 class NotificationsTest(Home):
     """Settings → Notifications writes ~/.config/arctic/notifications.json for the shell
     (shell/NotificationRules.js reads it) and drives do not disturb through arctic-dnd."""

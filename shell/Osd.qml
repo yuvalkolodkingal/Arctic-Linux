@@ -8,14 +8,18 @@ import Quickshell.Wayland
 // bottom centre, 44px above the edge; 20px icon, 6px progress bar, value in tabular figures.
 // Muted shows the mute icon and 0. A keyboard-layout switch shows the layout's name instead of
 // the bar. Visible for 1.2 s after the last change, then fades out over duration-base. Volume follows PipeWire directly (any change, from keys or apps);
-// brightness is shown when `arctic-osd brightness …` calls `arctic-shell-ipc osd brightness`.
+// brightness is shown when `arctic-osd brightness …` calls `arctic-shell-ipc osd brightness`, or
+// `osd brightnessLevel <percent> <monitor>` after it stepped the focused monitor (the monitor's
+// name shows when there is more than one screen). Plugging in or unplugging a laptop shows
+// "Charging" / "On battery".
 Scope {
     id: osd
     property string kind: 'volume'
     property int value: 0
     property bool muted: false
     property bool showing: false
-    property string label: ''           // the layout's name (kind 'layout')
+    property string label: ''           // the layout's name (kind 'layout'), the power source, a monitor
+    readonly property bool textOnly: kind === 'layout' || kind === 'power'
     readonly property var screen: Outputs.focused
 
     function showVolume() {
@@ -34,6 +38,18 @@ Scope {
     }
     function showBrightness() {
         if (!brightness.running) brightness.running = true;
+    }
+    function showBrightnessLevel(percent, monitor) {
+        kind = 'brightness';
+        muted = false;
+        value = Math.max(0, Math.min(100, percent));
+        label = Quickshell.screens.length > 1 ? monitor : '';
+        reveal();
+    }
+    function showPower(onBattery) {
+        kind = 'power';
+        label = onBattery ? 'On battery' : BatteryService.full ? 'Plugged in' : 'Charging';
+        reveal();
     }
     function reveal() {
         fadeOut.stop();
@@ -61,6 +77,14 @@ Scope {
         target: KeyboardService
         function onSwitched(name) { osd.showLayout(name); }
     }
+    // Plugged in or unplugged, on a laptop; not UPower's first report after start-up.
+    Timer { id: powerSettle; interval: 5000; running: true }
+    Connections {
+        target: BatteryService
+        function onOnBatteryChanged() {
+            if (!powerSettle.running && BatteryService.present) osd.showPower(BatteryService.onBattery);
+        }
+    }
     Process {
         id: brightness
         command: ['brightnessctl', '-m']
@@ -72,6 +96,7 @@ Scope {
                 if (isNaN(percent)) return;
                 osd.kind = 'brightness';
                 osd.muted = false;
+                osd.label = '';
                 osd.value = percent;
                 osd.reveal();
             }
@@ -103,7 +128,8 @@ Scope {
             border.color: Theme.line
             opacity: osd.pillOpacity
             Accessible.role: Accessible.StatusBar
-            Accessible.name: osd.kind === 'layout' ? 'Keyboard layout ' + osd.label : (osd.kind === 'brightness' ? 'Brightness ' : 'Volume ') + osd.value + '%'
+            Accessible.name: osd.kind === 'layout' ? 'Keyboard layout ' + osd.label : osd.kind === 'power' ? osd.label
+                             : (osd.kind === 'brightness' ? 'Brightness ' + (osd.label ? osd.label + ' ' : '') : 'Volume ') + osd.value + '%'
 
             RowLayout {
                 anchors.fill: parent
@@ -112,11 +138,22 @@ Scope {
                 spacing: Theme.space3
                 Icon {
                     size: 20
-                    name: osd.kind === 'layout' ? 'keyboard' : osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
+                    name: osd.kind === 'layout' ? 'keyboard' : osd.kind === 'power' ? (osd.label === 'On battery' ? 'battery' : 'battery-charging')
+                          : osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
                     color: Theme.ink
                 }
+                Text {
+                    // Which monitor the brightness keys changed (with more than one screen).
+                    visible: osd.kind === 'brightness' && osd.label !== ''
+                    Layout.maximumWidth: 88
+                    elide: Text.ElideRight
+                    text: osd.label
+                    color: Theme.inkMuted
+                    font.family: Theme.fontSans
+                    font.pixelSize: 12
+                }
                 Rectangle {
-                    visible: osd.kind !== 'layout'
+                    visible: !osd.textOnly
                     Layout.fillWidth: true
                     implicitHeight: 6
                     radius: 3
@@ -135,7 +172,7 @@ Scope {
                     }
                 }
                 Text {
-                    readonly property bool layout: osd.kind === 'layout'
+                    readonly property bool layout: osd.textOnly
                     Layout.preferredWidth: layout ? -1 : 32
                     Layout.fillWidth: layout
                     horizontalAlignment: layout ? Text.AlignLeft : Text.AlignRight

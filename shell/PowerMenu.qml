@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 
@@ -10,11 +9,11 @@ import Quickshell.Io
 // The actions run `arctic-power <action>`; Settings runs `arctic-settings`.
 // Hibernate and "Restart into firmware setup" show only when logind says this computer can
 // (`arctic-power can --json`, asked each time the menu opens). Log out, Restart and Shut down
-// close the windows first and ask when one stays open (arctic-power prepare).
+// close the windows first and ask when one stays open (arctic-power prepare). Rows and keys are
+// the bar menus' (MenuList, MenuRow): arrows, Home/End, a letter jumps, Enter runs, Esc closes.
 Popover {
     id: menu
     required property var shell
-    property int current: 0
     property bool canHibernate: false
     property bool canFirmware: false
     readonly property var actions: base.filter(a => a.id !== 'hibernate' || canHibernate)
@@ -36,11 +35,14 @@ Popover {
     scrim: false
     cardColor: Theme.surfaceRaised
     cardRadius: Theme.radiusLg
+    shadow: 2
     cardWidth: 232
-    cardHeight: column.implicitHeight + 2 * Theme.space1
-    focusItem: column
+    cardHeight: list.implicitHeight
+    focusItem: list
+    // The first row is highlighted on open, from the keyboard (Super + Esc) or a click, as before.
     onOpened: {
-        current = 0;
+        MenuState.keyboardNav = true;
+        Qt.callLater(() => list.start());
         can.running = true;
     }
     Process {
@@ -53,6 +55,8 @@ Popover {
                     menu.canHibernate = r.hibernate === true;
                     menu.canFirmware = r.firmware === true;
                 } catch (e) {}
+                // New rows replace the old ones: put the keyboard back on the first.
+                Qt.callLater(() => { if (menu.open && list.currentIn(list.stops()) < 0) list.start(); });
             }
         }
     }
@@ -64,51 +68,18 @@ Popover {
         else Quickshell.execDetached(['arctic-power', action.id]);
     }
 
-    Column {
-        id: column
+    MenuList {
+        id: list
         anchors.fill: parent
-        anchors.margins: Theme.space1
-        spacing: 0
         focus: true
-        Keys.onDownPressed: menu.current = (menu.current + 1) % menu.actions.length
-        Keys.onUpPressed: menu.current = (menu.current - 1 + menu.actions.length) % menu.actions.length
-        Keys.onTabPressed: menu.current = (menu.current + 1) % menu.actions.length
-        Keys.onReturnPressed: menu.run(menu.actions[menu.current])
-        Keys.onEnterPressed: menu.run(menu.actions[menu.current])
-        Keys.onEscapePressed: menu.close()
         Repeater {
             model: menu.actions
-            Rectangle {
-                id: item
+            MenuRow {
                 required property var modelData
-                required property int index
-                readonly property bool selected: menu.current === index
-                width: column.width
-                height: 34
-                radius: Theme.radiusSm
-                color: selected ? Theme.surfaceSunken : 'transparent'
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.space3
-                    anchors.rightMargin: Theme.space3
-                    spacing: Theme.space2
-                    Icon { name: item.modelData.icon; size: 18; color: Theme.ink }
-                    Text {
-                        Layout.fillWidth: true
-                        text: item.modelData.label
-                        color: Theme.ink
-                        font.family: Theme.fontSans
-                        font.pixelSize: 15
-                    }
-                    Kbd { visible: !!item.modelData.keys; text: item.modelData.keys || '' }
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onPositionChanged: menu.current = item.index
-                    onClicked: menu.run(item.modelData)
-                }
+                icon: modelData.icon
+                label: modelData.label
+                kbd: modelData.keys || ''
+                onActivated: menu.run(modelData)
             }
         }
     }

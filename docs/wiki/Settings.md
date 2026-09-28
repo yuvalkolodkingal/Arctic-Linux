@@ -236,9 +236,14 @@ or Remove apps (`arctic-shell-ipc apps install|remove`).
 
 ![The Network page](images/settings-network.png)
 
-Your connections and a Wi-Fi switch. Join a Wi-Fi network from the network icon on the bar.
-**Open the editor** starts the connection editor (`nm-connection-editor`) for VPNs, proxies and
-fixed addresses; **Open nmtui** lists the Wi-Fi networks around you in a terminal.
+Your connections and a Wi-Fi switch. Join a Wi-Fi network from the network menu on the bar
+(`Super + Ctrl + W`, see [Menus on the bar](Bar-Menus)). **Saved Wi-Fi networks** lists the ones
+you joined, with **Forget**; a company or school network also has **Certificate…**, for the
+certificate file your IT department gives you to check the network with. **VPN** has a button per VPN connection and **Import…** for an
+OpenVPN (`.ovpn`) or WireGuard (`.conf`) file from your VPN provider; each VPN then has a switch
+in the network menu. **Open the editor** starts the connection editor (`nm-connection-editor`) for
+proxies, fixed addresses and certificate logins; **Open nmtui** lists the Wi-Fi networks around
+you in a terminal.
 
 ## Sharing
 
@@ -256,16 +261,18 @@ password (once for a few minutes). Remote login is hidden in the live session.
 ![The Bluetooth page](images/settings-bluetooth.png)
 
 Bluetooth on or off, and your devices, with **Connect**, **Disconnect** and **Forget**. **Pair a
-device** opens the Bluetooth manager (`blueman-manager`), which also asks for pairing codes. On a
-computer without a Bluetooth adapter the page says so.
+device** opens the Bluetooth menu on the bar on its pairing page; pairing codes appear in Arctic's
+own dialog (without the Arctic shell, the Bluetooth manager `blueman-manager` opens instead).
+**Open the Bluetooth manager** is there for file transfer and advanced settings. On a computer
+without a Bluetooth adapter the page says so.
 
 ## Sound
 
 ![The Sound page](images/settings-sound.png)
 
 Where sound plays (**Play sound on**) and its volume, and which microphone you speak into and its
-volume. **Open the volume control** starts the full mixer, for the volume of each app and device
-profiles.
+volume. **Open the sound menu** shows the menu on the bar, with a volume for each app;
+**Open the volume control** starts the full mixer for device profiles and routing.
 
 ## Notifications
 
@@ -304,6 +311,9 @@ afterwards), and **Take snapshot** takes one now.
   by default, or Never). A key or the mouse brings either back. Keep awake (`Super + Ctrl + I`)
   and apps that play video or hold a call pause all of this.
 - **Power mode:** Power saver, Balanced or Performance (when the computer offers them).
+- **Battery** (laptops): **Limit charging** to the level your laptop supports (often 80 %), when
+  it offers a charge limit, and **Warn me when the battery is low**. The battery menu on the bar
+  has both too; see [Menus on the bar](Bar-Menus#battery-and-power-mode-super--ctrl--p).
 - **Laptop lid** (on laptops): **When you close the lid** — **Suspend** (the default; it locks
   first), **Lock and turn the screen off**, or **Keep running, screen off**. With another screen
   plugged in, closing the lid turns the laptop screen off and your windows move to the other

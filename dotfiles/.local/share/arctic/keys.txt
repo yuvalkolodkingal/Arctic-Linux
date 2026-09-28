@@ -45,6 +45,18 @@
     Super + , / .            Focus the other monitor
     Super + `                Scratch workspace (Shift: move the window)
 
+  Menus
+    Super + A                Quick settings
+    Super + Ctrl + W         Network and Wi-Fi
+    Super + Ctrl + B         Bluetooth
+    Super + Ctrl + A         Sound
+    Super + Ctrl + P         Battery and power mode
+    Super + Ctrl + D         Brightness
+    Super + Ctrl + T         Calendar
+    Super + Ctrl + M         Media
+    Super + Alt + B          Use the bar with the keyboard
+    Shift + Mute key         Next sound output
+
   System
     Super + L                Lock
     Super + Esc              Power menu
