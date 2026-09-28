@@ -374,7 +374,11 @@ Singleton {
         atomicWrites: true
         onLoaded: service.apps = Rules.parseApps(text())
     }
+    // Settings also calls `arctic-shell-ipc notifications reload` after writing it (a file that
+    // didn't exist yet has no watch).
+    function reloadConfig() { configFile.reload(); }
     FileView {
+        id: configFile
         path: Session.arcticConfig + '/notifications.json'
         watchChanges: true
         printErrors: false

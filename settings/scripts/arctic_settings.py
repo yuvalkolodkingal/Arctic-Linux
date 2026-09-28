@@ -2022,6 +2022,8 @@ def read_notification_config(paths):
 
 def write_notification_config(paths, config):
     atomic_write(notifications_file(paths), json.dumps(config, indent=1, sort_keys=True) + '\n')
+    if which('arctic-shell-ipc'):       # the shell re-reads it (its watch needs the file to exist)
+        run(['arctic-shell-ipc', 'notifications', 'reload'], timeout=5)
 
 
 def cmd_notifications(paths, _args):

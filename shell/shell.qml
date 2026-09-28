@@ -14,7 +14,7 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
-//   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory
+//   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory|reload
 //   keyboard next|set|menu
 ShellRoot {
     id: shell
@@ -170,6 +170,7 @@ ShellRoot {
         function count(): int { return NotificationService.count; }
         function history(): string { return NotificationService.historyLines(); }
         function clearHistory(): void { NotificationService.clearAll(); }
+        function reload(): void { NotificationService.reloadConfig(); }
         function dnd(mode: string): string {
             if (!NotificationService.owned) return 'unowned';
             return NotificationService.setDnd(mode);
