@@ -251,11 +251,13 @@ Requires:       python3-pyte
 Requires:       polkit
 Requires:       arctic-fonts = %{version}-%{release}
 # Stream 3a (bar menus): the Bluetooth pairing agent and battery.py talk D-Bus with
-# python3-dbus and a GLib main loop; gdbus checks for the power-profiles service; ddcutil
-# sets external monitors' brightness. (The network menu hides itself without nmcli.)
+# python3-dbus and a GLib main loop; gdbus checks for the power-profiles service; audio.py
+# reads ports and profiles with pw-dump and pw-cli; ddcutil sets external monitors'
+# brightness. (The network menu hides itself without nmcli.)
 Requires:       python3-dbus
 Requires:       python3-gobject-base
 Requires:       glib2
+Requires:       pipewire-utils
 Recommends:     ddcutil
 
 %description -n arctic-shell
