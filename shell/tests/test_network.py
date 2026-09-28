@@ -346,6 +346,29 @@ class Commands(unittest.TestCase):
         code, out = self.run_helper('tailscale', 'status')
         self.assertEqual((code, out['state']), (0, 'stopped'))
 
+    def test_company_certificate(self):
+        pem = self.bin / 'uni ca.pem'
+        pem.write_text('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n')
+        home = self.bin / 'home'
+        home.mkdir()
+        code, out = self.run_helper('ca-set', '--uuid', UUID, '--file', str(pem), env={'HOME': str(home)})
+        self.assertEqual((code, out), (0, {'ok': True}))
+        dest = home / ('.cert/arctic/%s.pem' % UUID)
+        self.assertEqual(dest.read_text(), pem.read_text())
+        self.assertIn(['connection', 'modify', 'uuid', UUID, '802-1x.ca-cert', str(dest), '802-1x.system-ca-certs', 'no'],
+                      self.argv())
+        notes = self.bin / 'notes.txt'
+        notes.write_text('hello\n')
+        code, out = self.run_helper('ca-set', '--uuid', UUID, '--file', str(notes), env={'HOME': str(home)})
+        self.assertEqual((code, out['code']), (1, 'usage'))
+
+    def test_saved_tells_company_networks(self):
+        scenario = {'key-mgmt connection show uuid': {'out': 'wpa-eap\n'},     # before STATUS's broader keys
+                    'ca-cert connection show uuid': {'out': 'file\\:///home/ada/.cert/arctic/x.pem\n'}, **STATUS}
+        code, out = self.run_helper('saved', scenario=scenario)
+        self.assertEqual(out['saved'][0]['enterprise'], True)
+        self.assertEqual(out['saved'][0]['ca_cert'], '/home/ada/.cert/arctic/x.pem')
+
     def test_company_network_refusals(self):
         with self.assertRaises(network.Failure):
             network.enterprise_settings('tls', 'mschapv2', 'ada')

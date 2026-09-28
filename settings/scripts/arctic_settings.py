@@ -72,6 +72,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -2704,14 +2705,26 @@ def cmd_network_forget(paths, args):
     return cmd_network_saved(paths, [])
 
 
+def local_path(arg):
+    """A path, or a file:// URL from a file dialog (percent-encoded)."""
+    return urllib.parse.unquote(arg[7:]) if arg.startswith('file://') else arg
+
+
+def cmd_network_ca_set(paths, args):
+    """network-ca-set UUID PATH: a company (802.1X) network checks its server with this certificate."""
+    if len(args) != 2 or not re.fullmatch(r'[0-9a-fA-F-]{36}', args[0]):
+        raise Failure('usage: network-ca-set UUID PATH')
+    network_script(paths, ['ca-set', '--uuid', args[0], '--file', local_path(args[1])])
+    return cmd_network_saved(paths, [])
+
+
 def cmd_vpn(paths, args):
     """vpn-up|vpn-down UUID, vpn-import PATH."""
     verb = args[0] if args else ''
     if verb in ('up', 'down') and len(args) == 2 and re.fullmatch(r'[0-9a-fA-F-]{36}', args[1]):
         network_script(paths, ['vpn-' + verb, '--uuid', args[1]])
     elif verb == 'import' and len(args) == 2:
-        path = args[1][7:] if args[1].startswith('file://') else args[1]
-        network_script(paths, ['vpn-import', '--file', path])
+        network_script(paths, ['vpn-import', '--file', local_path(args[1])])
     else:
         raise Failure('usage: vpn up|down UUID | vpn import PATH')
     return cmd_network_saved(paths, [])
@@ -3000,6 +3013,7 @@ COMMANDS = {
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,
     'network-saved': cmd_network_saved, 'network-forget': cmd_network_forget, 'vpn': cmd_vpn,
+    'network-ca-set': cmd_network_ca_set,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
     'notifications': cmd_notifications, 'notification-set': cmd_notification_set,
     'notification-rule-set': cmd_notification_rule_set, 'notification-history-clear': cmd_notification_history_clear,

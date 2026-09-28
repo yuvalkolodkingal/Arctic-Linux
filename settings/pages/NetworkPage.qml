@@ -102,14 +102,29 @@ Page {
                 required property int index
                 searchKey: index === 0 ? "network.saved" : ""
                 title: savedRow.modelData.ssid || savedRow.modelData.name
-                desc: savedRow.modelData.autoconnect === false ? "Joins only when you pick it" : "Joins by itself when it is near"
+                desc: savedRow.modelData.enterprise === true
+                      ? "Company login · " + (savedRow.modelData.ca_cert ? "checked with " + savedRow.modelData.ca_cert.split("/").pop()
+                                                                          : "checked with the system’s certificates")
+                      : savedRow.modelData.autoconnect === false ? "Joins only when you pick it" : "Joins by itself when it is near"
                 resettable: false
-                ArButton {
-                    text: "Forget"
-                    variant: "ghost"
-                    size: "sm"
-                    gapColor: Theme.surfaceRaised
-                    onClicked: page.savedCall(["network-forget", savedRow.modelData.uuid])
+                Row {
+                    spacing: Theme.space2
+                    ArButton {
+                        // A company network whose IT department gave you its own certificate file.
+                        visible: savedRow.modelData.enterprise === true
+                        text: "Certificate…"
+                        variant: "ghost"
+                        size: "sm"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: { caDialog.uuid = savedRow.modelData.uuid; caDialog.open(); }
+                    }
+                    ArButton {
+                        text: "Forget"
+                        variant: "ghost"
+                        size: "sm"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: page.savedCall(["network-forget", savedRow.modelData.uuid])
+                    }
                 }
             }
         }
@@ -147,6 +162,14 @@ Page {
                 onClicked: vpnDialog.open()
             }
         }
+    }
+
+    FileDialog {
+        id: caDialog
+        property string uuid: ""
+        title: "Pick your network's certificate"
+        nameFilters: ["Certificates (*.pem *.crt *.cer *.der)", "All files (*)"]
+        onAccepted: page.savedCall(["network-ca-set", uuid, String(selectedFile)])
     }
 
     FileDialog {

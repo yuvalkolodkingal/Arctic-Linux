@@ -18,6 +18,10 @@
     network.py share --uuid U [--reveal]   a QR code (SVG) a phone camera joins with
     network.py vpn-up --uuid U [--ask]  |  vpn-down --uuid U
     network.py vpn-import --file PATH [--type openvpn|wireguard]
+    network.py ca-set --uuid U --file PATH
+                                     a company (802.1X) network checks its server against this
+                                     certificate (copied to ~/.cert/arctic/, where NetworkManager
+                                     may read it) instead of the system's
     network.py tailscale status|up|down|operator  |  tailscale exit-node IP|none
                                      Tailscale, when it is installed: `up` hands back the sign-in
                                      page when signed out; `operator` lets this user switch it
@@ -647,6 +651,42 @@ def vpn_type(path):
     raise Failure('usage', 'That file isn’t an OpenVPN or WireGuard configuration.')
 
 
+def company_details(uuid):
+    """For Settings' saved networks: is it a company (802.1X) network, and which certificate file
+    does it check the server with ('' = the system's). Profiles without 802.1X answer neither."""
+    code, text, _ = nmcli('-g', '802-11-wireless-security.key-mgmt', 'connection', 'show', 'uuid', uuid)
+    if code != 0 or text.strip() != 'wpa-eap':
+        return {'enterprise': False}
+    code, text, _ = nmcli('-g', '802-1x.ca-cert', 'connection', 'show', 'uuid', uuid)
+    ca = re.sub(r'\\(.)', r'\1', text.strip()) if code == 0 else ''     # one value: only unescape
+    return {'enterprise': True, 'ca_cert': ca[7:] if ca.startswith('file://') else ca}
+
+
+CERT_DIR = os.path.join(os.path.expanduser('~'), '.cert', 'arctic')
+
+
+def cmd_ca_set(args):
+    path = os.path.abspath(args.file)
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(65536)
+    except OSError:
+        raise Failure('not_found', 'That file can’t be read.')
+    pem = b'-----BEGIN CERTIFICATE-----' in head
+    if not pem and not (head[:1] == b'\x30' and len(head) > 100):
+        raise Failure('usage', 'That file isn’t a certificate (a .pem, .crt, .cer or .der file).')
+    if FIXTURE:
+        return {'ok': True}
+    # ~/.cert is where SELinux lets NetworkManager read a person's certificates.
+    os.makedirs(CERT_DIR, mode=0o700, exist_ok=True)
+    dest = os.path.join(CERT_DIR, '%s.%s' % (args.uuid, 'pem' if pem else 'der'))
+    if os.path.abspath(dest) != path:
+        with open(path, 'rb') as src, open(dest + '.tmp', 'wb') as out:
+            out.write(src.read())
+        os.replace(dest + '.tmp', dest)
+    return simple('connection', 'modify', 'uuid', args.uuid, '802-1x.ca-cert', dest, '802-1x.system-ca-certs', 'no')
+
+
 def cmd_vpn_import(args):
     kind = args.type or vpn_type(args.file)
     if FIXTURE:
@@ -1001,6 +1041,9 @@ def parse(argv):
     u.add_argument('--uuid', required=True)
     u.add_argument('--name')
     u.add_argument('--ask', action='store_true')
+    cs = sub.add_parser('ca-set')
+    cs.add_argument('--uuid', required=True)
+    cs.add_argument('--file', required=True)
     vi = sub.add_parser('vpn-import')
     vi.add_argument('--file', required=True)
     vi.add_argument('--type', choices=['openvpn', 'wireguard'])
@@ -1033,7 +1076,8 @@ def main(argv=None, stdin=None):
             else:
                 reader = Reader()
                 state = reader.state()
-                out = {'ok': True, 'saved': reader.wifi_profiles(), 'vpn': state['vpn']}
+                saved = [dict(p, **company_details(p['uuid'])) for p in reader.wifi_profiles()]
+                out = {'ok': True, 'saved': saved, 'vpn': state['vpn']}
         elif args.cmd == 'connect':
             out = cmd_connect(args, stdin)
         elif args.cmd == 'enterprise':
@@ -1055,6 +1099,8 @@ def main(argv=None, stdin=None):
             out = cmd_vpn_up(args, stdin)
         elif args.cmd == 'vpn-import':
             out = cmd_vpn_import(args)
+        elif args.cmd == 'ca-set':
+            out = cmd_ca_set(args)
         elif args.cmd == 'vpn-down':
             out = simple('connection', 'down', 'uuid', args.uuid)
         elif args.cmd == 'hotspot':

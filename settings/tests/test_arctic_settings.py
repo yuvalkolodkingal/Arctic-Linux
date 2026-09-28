@@ -1307,11 +1307,14 @@ class SavedNetworksTest(Home):
         self.helper('network-forget', self.UUID)
         self.helper('network-forget', 'not-a-uuid', ok=False)
         self.helper('vpn', 'up', self.UUID)
-        self.helper('vpn', 'import', 'file:///home/ada/work.conf')
+        self.helper('vpn', 'import', 'file:///home/ada/My%20VPN/work.conf')
         self.helper('vpn', 'sideways', self.UUID, ok=False)
+        self.helper('network-ca-set', self.UUID, 'file:///home/ada/uni-ca.pem')
+        self.helper('network-ca-set', 'not-a-uuid', '/tmp/x.pem', ok=False)
         self.assertEqual(self.log_file.read_text().splitlines(), [
             'saved', 'forget --uuid %s' % self.UUID, 'saved', 'vpn-up --uuid %s' % self.UUID, 'saved',
-            'vpn-import --file /home/ada/work.conf', 'saved'])
+            'vpn-import --file /home/ada/My VPN/work.conf', 'saved',
+            'ca-set --uuid %s --file /home/ada/uni-ca.pem' % self.UUID, 'saved'])
 
 
 class NotificationsTest(Home):

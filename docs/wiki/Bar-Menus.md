@@ -19,7 +19,9 @@ the bar.
   you joined before connect without asking.
 - **Company and school networks** ("Company login (802.1X)", such as eduroam) open a page for your
   username, the sign-in method (PEAP with MSCHAPv2 is the usual one), the certificate check and
-  your password. Signing in with a certificate of your own is set up in **Edit connections…**.
+  your password. If your IT department gives you a certificate file to check the network with,
+  pick it in **Settings → Network** (**Certificate…** next to the network). Signing in with a
+  certificate of your own is set up in **Edit connections…**.
 - **Join another network…** is for networks that don't show their name (hidden networks): type
   the name, pick the security and enter the password.
 - Right-click a network (or press the Menu key, or `Delete` for forget) for **Disconnect**,

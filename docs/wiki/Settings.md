@@ -225,7 +225,8 @@ or Remove apps (`arctic-shell-ipc apps install|remove`).
 
 Your connections and a Wi-Fi switch. Join a Wi-Fi network from the network menu on the bar
 (`Super + Ctrl + W`, see [Menus on the bar](Bar-Menus)). **Saved Wi-Fi networks** lists the ones
-you joined, with **Forget**. **VPN** has a button per VPN connection and **Import…** for an
+you joined, with **Forget**; a company or school network also has **Certificate…**, for the
+certificate file your IT department gives you to check the network with. **VPN** has a button per VPN connection and **Import…** for an
 OpenVPN (`.ovpn`) or WireGuard (`.conf`) file from your VPN provider; each VPN then has a switch
 in the network menu. **Open the editor** starts the connection editor (`nm-connection-editor`) for
 proxies, fixed addresses and certificate logins; **Open nmtui** lists the Wi-Fi networks around

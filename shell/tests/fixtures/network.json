@@ -23,6 +23,8 @@
   ],
   "saved": [
     {"uuid": "5d9f0c55-0000-4000-8000-000000000001", "name": "Fjord", "ssid": "Fjord", "last_used": 1759070000, "autoconnect": true},
-    {"uuid": "5d9f0c55-0000-4000-8000-000000000002", "name": "Library", "ssid": "Library", "last_used": 1758000000, "autoconnect": true}
+    {"uuid": "5d9f0c55-0000-4000-8000-000000000002", "name": "Library", "ssid": "Library", "last_used": 1758000000, "autoconnect": true},
+    {"uuid": "5d9f0c55-0000-4000-8000-000000000003", "name": "eduroam", "ssid": "eduroam", "last_used": 1757000000, "autoconnect": true,
+     "enterprise": true, "ca_cert": ""}
   ]
 }
