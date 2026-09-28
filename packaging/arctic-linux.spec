@@ -174,7 +174,9 @@ Requires:       libnotify
 Requires:       procps-ng
 Requires:       util-linux
 Requires:       librsvg2-tools
-Requires:       mako
+# Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
+# waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
+Recommends:     mako
 Requires:       swaybg
 Requires:       swayidle
 Requires:       swaylock
@@ -249,11 +251,14 @@ Requires:       python3-pillow
 Requires:       python3-pyte
 # pkexec, for Get apps
 Requires:       polkit
+# Stream 3b (notifications): gdbus checks who owns org.freedesktop.Notifications.
+Requires:       glib2
 Requires:       arctic-fonts = %{version}-%{release}
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,
-the get-apps console, on-screen display, lock screen and the live-session welcome card.
+the get-apps console, on-screen display, lock screen, the live-session welcome card, and the
+notification server with its pop-ups and notification centre.
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
 
 # ---------------------------------------------------------------------------------------------
@@ -424,7 +429,9 @@ Recommends:     zsh
 Recommends:     Thunar
 Recommends:     vlc
 Requires:       fastfetch
-Requires:       mako
+# Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
+# waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
+Recommends:     mako
 Requires:       swaybg
 Requires:       swayidle
 Requires:       swaylock

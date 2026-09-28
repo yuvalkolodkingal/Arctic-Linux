@@ -30,7 +30,8 @@ A thin bar runs along the top of the screen.
 |---|---|---|
 | **Install** (amber, live USB only) | Opens the installer | — |
 | **Restart to update** (amber, only while updates wait) | Shows the updates and **Restart and install**; see [Updates](Updates) | — |
-| **Bell** | Turns do not disturb on or off | Right-click brings back the last notification |
+| **Bell** (a dot: something new) | Opens the [notification centre](Notifications) (`Super + Alt + N`) | Right-click turns do not disturb on or off |
+| **Keyboard layout** (`EN`, `HE`; only with two or more layouts) | Switches to the next layout | Right-click lists the layouts |
 | **Bluetooth** (only with a Bluetooth adapter) | Opens the Bluetooth manager | — |
 | **Tray icons** from running apps | The app's own action or menu | Scrolling is passed to the app |
 | **Network** | The network menu, to pick a Wi-Fi network | Right-click opens the connection editor |
@@ -157,12 +158,16 @@ to use it, or search by name.
 ## Notifications and do not disturb
 
 Notifications appear as cards in the top-right corner of the screen and go away after a few
-seconds; urgent ones have a red edge and stay until you dismiss them.
+seconds; urgent ones have a red edge and stay until you dismiss them. Everything also waits in
+the notification centre under the bell (`Super + Alt + N`), grouped by app.
 
-- `Super + Delete` dismisses the newest one, `Super + Shift + Delete` dismisses them all.
-- **Do not disturb** (`Super + Shift + N`, or click the bell) hides everything except urgent
-  notifications. The bell icon changes while it's on.
-- Right-click the bell to bring back the last notification you dismissed.
+- `Super + Delete` closes the newest pop-up, `Super + Shift + Delete` closes them all (they stay
+  in the centre); `Super + Alt + ,` acts on the newest one.
+- **Do not disturb** (`Super + Shift + N`, right-click the bell, or the switch in the centre)
+  keeps pop-ups quiet, for an hour, until tomorrow or on a schedule. Urgent notifications and
+  Arctic's own alerts still show. The bell icon changes while it's on.
+
+All of it, with the per-app choices in Settings: [Notifications](Notifications).
 
 ## Volume and brightness
 

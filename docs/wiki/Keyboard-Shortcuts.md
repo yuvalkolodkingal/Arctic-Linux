@@ -66,14 +66,22 @@ screen at any time.
 | `Super + L` | Lock the screen (not in the live session) |
 | `Super + Esc` | Power menu |
 | `Super + I` | Install Arctic Linux (live USB only) |
-| `Super + Delete` | Dismiss the newest notification |
-| `Super + Shift + Delete` | Dismiss all notifications |
+| `Super + Delete` | Close the newest notification pop-up (it stays in the centre) |
+| `Super + Shift + Delete` | Close all notification pop-ups |
+| `Super + Alt + N` | Notification centre |
+| `Super + Alt + ,` | Act on the newest notification (like clicking it) |
 | `Super + Shift + N` | Do not disturb on / off |
 | `Super + Shift + T` | Switch between light and dark (Winter and Polar night, or your wallpaper's colours) |
 | `Super + Shift + R` | Reload the desktop configuration |
 | `Print` | Screenshot of an area you select |
 | `Shift + Print` | Screenshot of the whole screen |
 | `Super + Print` | Screenshot of the current window |
+
+With two or more keyboard layouts, the key that switches between them is set in Settings →
+Keyboard and mouse (**Switch layouts with**), and the bar shows the active layout (`EN`, `HE`):
+click it for the next one, right-click for the list. If that key is Right Alt, press the
+`Super + Alt` shortcuts with the left Alt. In the notification centre, the arrow keys, `Enter`,
+`Tab` and `Delete` work as described in [Notifications](Notifications#the-notification-centre).
 
 ## Hardware keys
 

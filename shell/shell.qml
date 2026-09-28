@@ -6,19 +6,22 @@ import Quickshell.Io
 
 // Arctic Linux desktop shell (Quickshell): the bar, screen frame, launcher with Get apps,
 // wallpaper picker, power menu, keyboard shortcuts, OSD, lock screen, polkit agent, the
-// "updates ready" notice and the live-session welcome. It grew out of a personal Quickshell setup (bar + Rofi-style launcher,
+// "updates ready" notice, the live-session welcome, and the notification server with its toasts
+// and centre. It grew out of a personal Quickshell setup (bar + Rofi-style launcher,
 // install console, wallpaper picker, docking popovers, screen frame) and is styled entirely
 // from the Arctic design tokens (Theme.qml).
 //
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
+//   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory|reload
+//   keyboard next|set|menu
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, notificationCenter, keyboardPanel].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -53,6 +56,25 @@ ShellRoot {
         updates.pointX = x !== undefined ? x : (target ? target.width - 160 : 0);
         present(updates, target);
     }
+    // The notification centre, under the bar's bell (right-aligned when opened by a key).
+    function toggleNotifications(screen, x) {
+        const target = screen || Outputs.focused;
+        if (notificationCenter.open && notificationCenter.screen === target) { notificationCenter.close(); return; }
+        openNotifications(target, x);
+    }
+    function openNotifications(screen, x) {
+        const target = screen || Outputs.focused;
+        notificationCenter.pointX = x !== undefined ? x : (target ? target.width : 0);
+        present(notificationCenter, target);
+    }
+    // The keyboard-layout menu, under the bar's layout chip.
+    function toggleKeyboardMenu(screen, x) {
+        const target = screen || Outputs.focused;
+        if (keyboardPanel.open && keyboardPanel.screen === target) { keyboardPanel.close(); return; }
+        if (!KeyboardService.multiple) return;
+        keyboardPanel.pointX = x !== undefined ? x : (target ? target.width : 0);
+        present(keyboardPanel, target);
+    }
     function toggleKeys() {
         if (keys.open) keys.close(); else present(keys, null);
     }
@@ -79,6 +101,9 @@ ShellRoot {
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
     PolkitDialog {}
+    NotificationCenter { id: notificationCenter }
+    Toasts { shell: shell }
+    KeyboardPanel { id: keyboardPanel }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
     IpcHandler {
@@ -130,6 +155,32 @@ ShellRoot {
     IpcHandler {
         target: 'dnd'
         function refresh(): void { DndService.refresh(); }
+    }
+    // `arctic-notify` and `arctic-dnd`. dnd(): on, off, toggle, 1h, tomorrow, status → on / off,
+    // or "unowned" when another daemon (or mako) has the notifications.
+    IpcHandler {
+        target: 'notifications'
+        function center(): void { shell.toggleNotifications(null, undefined); }
+        function toggle(): void { shell.toggleNotifications(null, undefined); }
+        function open(): void { if (!notificationCenter.open) shell.openNotifications(null, undefined); }
+        function close(): void { notificationCenter.close(); }
+        function dismiss(): void { NotificationService.dismissNewest(); }
+        function dismissAll(): void { NotificationService.dismissToasts(); }
+        function invoke(): void { NotificationService.invokeNewest(); }
+        function count(): int { return NotificationService.count; }
+        function history(): string { return NotificationService.historyLines(); }
+        function clearHistory(): void { NotificationService.clearAll(); }
+        function reload(): void { NotificationService.reloadConfig(); }
+        function dnd(mode: string): string {
+            if (!NotificationService.owned) return 'unowned';
+            return NotificationService.setDnd(mode);
+        }
+    }
+    IpcHandler {
+        target: 'keyboard'
+        function next(): void { KeyboardService.next(); }
+        function set(index: int): void { KeyboardService.set(index); }
+        function menu(): void { shell.toggleKeyboardMenu(null, undefined); }
     }
     IpcHandler {
         target: 'updates'

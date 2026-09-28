@@ -1151,6 +1151,85 @@ class NetworkTest(Home):
         self.assertFalse(self.helper('network')['available'])
 
 
+class NotificationsTest(Home):
+    """Settings → Notifications writes ~/.config/arctic/notifications.json for the shell
+    (shell/NotificationRules.js reads it) and drives do not disturb through arctic-dnd."""
+
+    def shell_answers(self, answer, code=0):
+        stub(self.bin, 'arctic-shell-ipc', 'echo "arctic-shell-ipc $*" >> "{}"\necho {}\nexit {}\n'.format(self.log, answer, code))
+
+    def test_defaults_without_the_shell(self):
+        data = self.helper('notifications')
+        self.assertEqual((data['owned'], data['dnd'], data['history'], data['apps']), (False, False, True, []))
+        self.assertEqual(data['schedule'], {'enabled': False, 'from': '22:00', 'to': '07:00'})
+
+    def test_owned_by_the_shell_and_apps_seen(self):
+        self.shell_answers('on')
+        state = self.home / '.local/state/arctic/notifications'
+        state.mkdir(parents=True)
+        (state / 'apps.json').write_text(json.dumps({'version': 1, 'apps': [
+            {'key': 'org.signal.Signal', 'app_name': 'Signal', 'desktop_entry': 'org.signal.Signal', 'last_seen': 5},
+            {'key': ''}, 'junk', {'key': 'Firefox', 'app_name': 'Firefox'}]}))
+        self.helper('notification-rule-set', 'Old app', 'toasts', 'off')
+        data = self.helper('notifications')
+        self.assertTrue(data['owned'])
+        self.assertTrue(data['dnd'])
+        self.assertEqual([a['key'] for a in data['apps']], ['org.signal.Signal', 'Firefox', 'Old app'])
+        self.assertEqual(data['apps'][0]['rule'], {'toasts': True, 'history': True, 'allow_during_dnd': False, 'silence_urgent': False})
+        self.assertFalse(data['apps'][2]['rule']['toasts'])
+
+    def test_settings_and_rules(self):
+        self.helper('notification-set', 'schedule', 'on')
+        self.helper('notification-set', 'schedule-from', '7:30')
+        self.helper('notification-set', 'history', 'off')
+        self.helper('notification-rule-set', 'org.signal.Signal', 'silence_urgent', 'on', 'history', 'off')
+        written = json.loads((self.home / '.config/arctic/notifications.json').read_text())
+        self.assertEqual(written, {'history': False, 'dnd_schedule': {'enabled': True, 'from': '07:30', 'to': '07:00'},
+                                   'apps': {'org.signal.Signal': {'history': False, 'silence_urgent': True}}})
+        # Back to the defaults: the rule disappears.
+        self.helper('notification-rule-set', 'org.signal.Signal', 'silence_urgent', 'off', 'history', 'on')
+        written = json.loads((self.home / '.config/arctic/notifications.json').read_text())
+        self.assertEqual(written['apps'], {})
+        for bad in (['schedule-from', '25:00'], ['history', 'maybe'], ['colour', 'on'], ['history']):
+            self.helper('notification-set', *bad, ok=False)
+        for bad in (['x', 'toasts', 'maybe'], ['x', 'loud', 'on'], ['x', 'toasts'], ['a\nb', 'toasts', 'on']):
+            self.helper('notification-rule-set', *bad, ok=False)
+
+    @unittest.skipUnless(shutil.which('node'), 'node is not installed')
+    def test_the_shell_reads_what_settings_writes(self):
+        self.helper('notification-set', 'schedule', 'on')
+        self.helper('notification-rule-set', 'Alarms', 'allow_during_dnd', 'on')
+        script = textwrap.dedent('''\
+            const fs = require('fs'), vm = require('vm'), c = {};
+            vm.createContext(c);
+            vm.runInContext(fs.readFileSync(process.argv[1], 'utf8').replace('.pragma library', ''), c);
+            const config = c.parseConfig(fs.readFileSync(process.argv[2], 'utf8'));
+            const n = { appName: 'Alarms', urgency: 'normal', hints: {} };
+            console.log(JSON.stringify([config.dnd_schedule.enabled, c.decide(n, 'on', config).toast,
+                                        c.decide({ appName: 'Mail', urgency: 'normal', hints: {} }, 'on', config).toast]));
+            ''')
+        out = subprocess.run(['node', '-e', script, str(REPO / 'shell/NotificationRules.js'),
+                              str(self.home / '.config/arctic/notifications.json')], capture_output=True, text=True, timeout=30)
+        self.assertEqual(json.loads(out.stdout), [True, True, False], out.stderr)
+
+    def test_dnd_and_history_clear(self):
+        stub(self.bin, 'arctic-dnd', 'echo "arctic-dnd $*" >> "{}"\necho \'{{"class":"on"}}\'\n'.format(self.log))
+        self.helper('dnd-set', '1h')
+        self.helper('dnd-set', 'tomorrow')
+        self.helper('dnd-set', 'forever', ok=False)
+        self.assertEqual([c for c in self.calls() if c.startswith('arctic-dnd') and 'status' not in c],
+                         ['arctic-dnd for 1h', 'arctic-dnd until-tomorrow'])
+        # Without the shell the saved history is removed; with it, the shell clears it.
+        history = self.home / '.local/state/arctic/notifications/history.json'
+        history.parent.mkdir(parents=True)
+        history.write_text('{"version": 1, "items": []}')
+        self.helper('notification-history-clear')
+        self.assertFalse(history.exists())
+        self.shell_answers('')
+        self.helper('notification-history-clear')
+        self.assertIn('arctic-shell-ipc notifications clearHistory', self.calls())
+
+
 class PowerProfileTest(Home):
     def test_missing(self):
         self.assertFalse(self.helper('power-profile')['available'])

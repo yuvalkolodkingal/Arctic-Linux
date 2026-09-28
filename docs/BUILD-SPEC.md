@@ -80,28 +80,35 @@ throwaway index, and so is the repository key, §9). noarch unless it contains G
 Metapackage: `arctic-desktop` (subpackage, no files) Requires everything a desktop needs:
 mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-settings, arctic-desktop-config,
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
-arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, mako, swaybg, swayidle,
+arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
 pipewire-pulseaudio, pavucontrol, network-manager-applet, NetworkManager-wifi, blueman,
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
 gnome-keyring-pam, Thunar, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
 fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
-adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop.
+adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop, mako (the waybar session's notification
+daemon; the shell is its own notification server). arctic-shell Requires glib2 (gdbus).
 
 ## 3. Desktop session (installed and live)
 
 SDDM (theme `arctic`, greeter on mango or weston) → `mango.desktop` → `~/.config/mango/config.conf`
 (from /etc/skel). Autostart (`dotfiles/.config/mango/arctic/autostart.conf`):
 `arctic-theme apply`, `arctic-shell` (Quickshell: bar, launcher, wallpapers, OSD, lock, live
-welcome), `arctic-session mako|nm-applet|clipboard|idle`. The Quickshell polkit agent is used if
-`Quickshell.Services.Polkit` works, else lxqt-policykit via `arctic-session polkit`.
+welcome, notification server), `arctic-session mako|nm-applet|clipboard|idle`. The Quickshell
+polkit agent is used if `Quickshell.Services.Polkit` works, else lxqt-policykit via
+`arctic-session polkit`. Notifications work the same way: the shell owns
+`org.freedesktop.Notifications` (toasts, the notification centre, do not disturb), so
+`arctic-session mako` does nothing in the shell's session; the shell stops a mako started early by
+D-Bus activation and runs `arctic-session mako --fallback` if nobody could take the name.
 waybar/fuzzel configs stay in the dotfiles as a fallback (`ARCTIC_SHELL=waybar`).
 
 Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <target> <fn>`,
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
-`lock lock`, `keys toggle`. Mango binds call these.
+`lock lock`, `keys toggle`, `notifications center|dismiss|dismissAll|invoke|dnd <mode>` (through
+`arctic-notify` and `arctic-dnd`, which fall back to makoctl), `keyboard next|set|menu`. Mango binds
+call these.
 
 ### 3.1 App theming
 

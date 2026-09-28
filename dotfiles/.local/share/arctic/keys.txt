@@ -39,6 +39,8 @@
     Super + S                Settings
     Super + I                Install Arctic Linux (live USB)
     Super + Delete           Dismiss notification (Shift: all)
+    Super + Alt + N          Notifications
+    Super + Alt + ,          Open the newest notification
     Super + Shift + N        Do not disturb
     Super + Shift + T        Switch Winter / Polar night
     Super + Shift + R        Reload the desktop config

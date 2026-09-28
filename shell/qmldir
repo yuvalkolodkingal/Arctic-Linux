@@ -5,6 +5,8 @@ singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 singleton UpdateService 1.0 UpdateService.qml
+singleton NotificationService 1.0 NotificationService.qml
+singleton KeyboardService 1.0 KeyboardService.qml
 AppTile 1.0 AppTile.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
@@ -18,11 +20,15 @@ FocusRing 1.0 FocusRing.qml
 Icon 1.0 Icon.qml
 InstallConsole 1.0 InstallConsole.qml
 Kbd 1.0 Kbd.qml
+KeyboardItem 1.0 KeyboardItem.qml
+KeyboardPanel 1.0 KeyboardPanel.qml
 KeysSheet 1.0 KeysSheet.qml
 Launcher 1.0 Launcher.qml
 LiveWelcome 1.0 LiveWelcome.qml
 LockScreen 1.0 LockScreen.qml
 Mark 1.0 Mark.qml
+NotificationCard 1.0 NotificationCard.qml
+NotificationCenter 1.0 NotificationCenter.qml
 Osd 1.0 Osd.qml
 PolkitDialog 1.0 PolkitDialog.qml
 Popover 1.0 Popover.qml
@@ -31,6 +37,8 @@ PowerMenu 1.0 PowerMenu.qml
 RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml
 Tip 1.0 Tip.qml
+ToastCard 1.0 ToastCard.qml
+Toasts 1.0 Toasts.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml
 Wallpapers 1.0 Wallpapers.qml
