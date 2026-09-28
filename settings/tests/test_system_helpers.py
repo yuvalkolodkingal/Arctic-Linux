@@ -319,7 +319,7 @@ class AutostartTest(Home):
     def test_packaging(self):
         """The drop-ins the spec installs: the session wants the autostart target, and the
         entries Settings hides are the ones Arctic switches off."""
-        import arctic_settings as S
+        import arctic_system as S
         root = DOTFILES.parent / 'packaging/desktop/autostart'
         self.assertIn('Wants=xdg-desktop-autostart.target', (root / 'mango-session-autostart.conf').read_text())
         self.assertIn('ConditionEnvironment=!XDG_CURRENT_DESKTOP=mango', (root / 'arctic-starts-it.conf').read_text())
