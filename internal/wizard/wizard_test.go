@@ -2,6 +2,7 @@ package wizard
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -614,5 +615,21 @@ func TestKeyboardConfig(t *testing.T) {
 	s := w.Summary()
 	if s.Rows[1].Value != "Hebrew layout, plus English (US) for passwords — Alt+Shift switches" {
 		t.Errorf("summary keyboard row %q", s.Rows[1].Value)
+	}
+}
+
+// The Summary doesn't scroll: a long pick lists the first names and how many more.
+func TestSummaryAppsListIsCapped(t *testing.T) {
+	names := make([]string, 0, 40)
+	for i := 1; i <= 40; i++ {
+		names = append(names, fmt.Sprintf("App%d", i))
+	}
+	if got := appList(names[:summaryApps]); got != strings.Join(names[:summaryApps], ", ") {
+		t.Errorf("%d apps: %q", summaryApps, got)
+	}
+	got := appList(names)
+	want := strings.Join(names[:summaryApps], ", ") + fmt.Sprintf(" and %d more", 40-summaryApps)
+	if got != want {
+		t.Errorf("40 apps: %q, want %q", got, want)
 	}
 }

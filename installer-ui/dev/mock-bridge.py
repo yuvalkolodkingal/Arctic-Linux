@@ -181,6 +181,14 @@ def load_catalog(root):
 
 
 CATEGORIES, MODULES, SYSTEM, RUNTIMES, LINKS = load_catalog(CATALOG_DIR)
+SUMMARY_APPS = 12   # like the engine's wizard.appList: the Summary doesn't scroll
+
+
+def app_list(names):
+    if len(names) <= SUMMARY_APPS:
+        return ", ".join(names)
+    return f"{', '.join(names[:SUMMARY_APPS])} and {len(names) - SUMMARY_APPS} more"
+
 MOD = {m[0]: m for m in MODULES}
 OPTIONAL_GROUPS = {c[0] for c in CATEGORIES if c[5]}   # the collapsed "More apps" sections
 
@@ -601,7 +609,7 @@ class MockEngine:
             {"step": "timezone", "label": "Time zone", "value": f"{city} ({offset})" if offset else city},
             {"step": "disk", "label": "Disk", "value": disk_value},
             {"step": "account", "label": "Account", "value": f"{acct['full_name']} ({acct['username']}) on {acct['hostname']}"},
-            {"step": "apps", "label": "Apps", "value": ", ".join(apps) if apps else "No extra apps"},
+            {"step": "apps", "label": "Apps", "value": app_list(apps) if apps else "No extra apps"},
         ]
         return {"rows": rows, "warning": warning, "primary_label": primary}
 
