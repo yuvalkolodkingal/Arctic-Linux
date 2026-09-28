@@ -27,6 +27,8 @@ Scope {
     // confirmed every screen is covered — only then is the session really locked.
     readonly property bool locked: lock.locked
     readonly property bool secure: lock.secure
+    // Toasts hide and the count above starts while locked (NotificationService).
+    Binding { target: NotificationService; property: 'locked'; value: root.locked }
 
     function lock() {
         if (Session.live) {
@@ -141,6 +143,17 @@ Scope {
                     font.family: Theme.fontSans
                     font.pixelSize: 17
                     font.weight: Font.Medium
+                }
+                // How many arrived while locked: the count only, never what they say.
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: Theme.space2
+                    visible: NotificationService.lockedCount > 0
+                    text: NotificationService.lockedCount + (NotificationService.lockedCount === 1 ? ' notification' : ' notifications')
+                    color: Theme.inkMuted
+                    font.family: Theme.fontSans
+                    font.pixelSize: 13
+                    font.features: { 'tnum': 1 }
                 }
             }
 
