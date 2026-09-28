@@ -207,8 +207,8 @@ There's no lock screen in the live session.
   `Shift + Print` takes the screen you're on, `Super + Print` the current window, and
   `Ctrl + Print` copies an area without saving it. Screenshots are saved in
   `~/Pictures/Screenshots` and copied to the clipboard. Click the notification to open the
-  picture; its buttons show it in your file manager, open it in the editor (swappy: arrows,
-  text, boxes and blur) or move it to the trash.
+  picture; middle-click it for the rest: show it in your file manager, open it in the editor
+  (swappy: arrows, text, boxes and blur) or move it to the trash.
 - **Text from the screen:** `Super + Ctrl + Print`, then select the text: it's recognised and
   copied. It reads your language and your keyboard layouts' languages; when one isn't installed,
   a notification offers to add it. `arctic-ocr --qr` copies what a QR code says instead, and keeps
@@ -224,7 +224,8 @@ There's no lock screen in the live session.
   `Enter` copies an entry again, `Shift + Enter` also pastes it, `Delete` removes it. Clipboard
   history is blacked out in screenshots and screen shares.
 - **Emoji:** `Super + Ctrl + E`, type a word (`heart`, `thumbs`), then `Enter` types the emoji
-  where you were typing; `Shift + Enter` copies it. The ones you use come first.
+  where you were typing; `Shift + Enter` copies it, and `Alt + 1` … `6` picks the skin tone. The
+  ones you use come first.
 
 ## Password prompts
 

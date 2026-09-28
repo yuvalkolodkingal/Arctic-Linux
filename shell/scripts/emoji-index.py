@@ -2,11 +2,12 @@
 """Emoji for the shell's picker (Super + Ctrl + E) and arctic-emoji's fuzzel fallback, from
 unicode-emoji's emoji-test.txt (standard library only).
 
-    emoji-index.py             {"ok": true, "unicode": "18.0", "recent": ["👍", …],
+    emoji-index.py             {"ok": true, "unicode": "18.0", "recent": ["👍", …], "tone": 0,
                                 "emoji": [{"e": "👍", "name": "thumbs up", "group": "People & Body",
                                            "keys": "hand prop", "tones": ["👍🏻", …]}, …]}
     emoji-index.py --lines     "👍<TAB>thumbs up  hand prop" lines for fuzzel
     emoji-index.py --used 👍   put it first in the recent emoji (~/.local/state/arctic/emoji.json)
+    emoji-index.py --tone N    the skin tone to use: 0 none (yellow), 1 light … 5 dark
 
 Only fully-qualified emoji are listed; skin-tone variants are folded into their base emoji
 (`tones`). CLDR keywords are added when cldr-emoji-annotation is installed. The list is cached
@@ -114,33 +115,49 @@ def index():
     return data
 
 
-def recent():
-    try:
-        value = json.loads(STATE.read_text(encoding='utf-8')).get('recent', [])
-        return [e for e in value if isinstance(e, str)][:RECENT]
-    except (OSError, ValueError, AttributeError):
-        return []
-
-
-def used(char):
-    if not char or len(char) > 16:
-        return
-    state = {}
+def load_state():
     try:
         state = json.loads(STATE.read_text(encoding='utf-8'))
     except (OSError, ValueError):
-        pass
-    state = state if isinstance(state, dict) else {}
-    state['recent'] = ([char] + [e for e in recent() if e != char])[:RECENT]
+        state = {}
+    return state if isinstance(state, dict) else {}
+
+
+def save_state(state):
     STATE.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE.with_suffix('.tmp')
     tmp.write_text(json.dumps(state, ensure_ascii=False), encoding='utf-8')
     os.replace(tmp, STATE)
 
 
+def recent():
+    value = load_state().get('recent', [])
+    return [e for e in value if isinstance(e, str)][:RECENT] if isinstance(value, list) else []
+
+
+def tone():
+    value = load_state().get('tone', 0)
+    return value if isinstance(value, int) and 0 <= value <= 5 else 0
+
+
+def used(char):
+    if not char or len(char) > 16:
+        return
+    state = load_state()
+    state['recent'] = ([char] + [e for e in recent() if e != char])[:RECENT]
+    save_state(state)
+
+
 def main(argv):
     if argv[:1] == ['--used']:
         used(argv[1] if len(argv) > 1 else '')
+        return 0
+    if argv[:1] == ['--tone']:
+        if len(argv) < 2 or argv[1] not in ('0', '1', '2', '3', '4', '5'):
+            return 2
+        state = load_state()
+        state['tone'] = int(argv[1])
+        save_state(state)
         return 0
     try:
         data = index()
@@ -151,7 +168,8 @@ def main(argv):
         for e in data['emoji']:
             sys.stdout.write('{}\t{}  {}\n'.format(e['e'], e['name'], e['keys']))
         return 0
-    print(json.dumps(dict(ok=True, unicode=data['unicode'], recent=recent(), emoji=data['emoji']), ensure_ascii=False))
+    print(json.dumps(dict(ok=True, unicode=data['unicode'], recent=recent(), tone=tone(), emoji=data['emoji']),
+                     ensure_ascii=False))
     return 0
 
 

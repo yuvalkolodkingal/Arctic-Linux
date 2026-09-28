@@ -87,6 +87,10 @@ class EmojiIndexTest(unittest.TestCase):
         for e in ('👍', '😀', '👍'):
             self.assertEqual(run('emoji-index.py', '--used', e, env=self.env)[0], 0)
         self.assertEqual(self.index()['recent'], ['👍', '😀'])
+        self.assertEqual(self.index()['tone'], 0)
+        self.assertEqual(run('emoji-index.py', '--tone', '3', env=self.env)[0], 0)
+        self.assertEqual(run('emoji-index.py', '--tone', '9', env=self.env)[0], 2)
+        self.assertEqual((self.index()['tone'], self.index()['recent']), (3, ['👍', '😀']))
         code, out = run('emoji-index.py', '--lines', env=self.env)
         self.assertEqual(code, 0)
         self.assertTrue(out.splitlines()[2].startswith('👍\tthumbs up  hand fingers closed'))

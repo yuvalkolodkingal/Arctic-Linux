@@ -8,7 +8,8 @@ import "LauncherSearch.js" as LauncherSearch
 
 // Emoji (Super + Ctrl + E): type to search by name or keyword (English, and your language when
 // the CLDR keywords are installed); the ones you used last come first. Enter types the emoji
-// into the window you were in (wtype, once this card is gone), Shift + Enter copies it.
+// into the window you were in (wtype, once this card is gone), Shift + Enter copies it, and
+// Alt + 1…6 picks the skin tone of the emoji that have one (kept for next time).
 // The list is scripts/emoji-index.py, from unicode-emoji's emoji-test.txt.
 Popover {
     id: picker
@@ -16,17 +17,19 @@ Popover {
     property var recent: []
     property string query: ''
     property int current: 0
+    property int tone: 0                // 0 yellow, 1 light … 5 dark
     property string error: ''
     readonly property int columns: 10
     readonly property string helper: Session.scripts + '/emoji-index.py'
-    readonly property var candidates: emoji.map(e => ({ e: e.e, name: e.name, keywords: e.keys, group: e.group }))
+    readonly property var candidates: emoji.map(e => ({ e: tone > 0 && e.tones.length === 5 ? e.tones[tone - 1] : e.e,
+                                                        base: e.e, tones: e.tones, name: e.name, keywords: e.keys, group: e.group }))
     readonly property var results: {
         const q = query.trim();
         if (q) return LauncherSearch.rank(candidates, q).slice(0, 300);
         const byChar = {};
-        candidates.forEach(c => byChar[c.e] = c);
-        const first = recent.map(e => byChar[e]).filter(c => c);
-        return first.concat(candidates.filter(c => recent.indexOf(c.e) < 0));
+        candidates.forEach(c => [c.base].concat(c.tones).forEach(e => byChar[e] = c));
+        const first = recent.map(e => byChar[e]).filter((c, i, all) => c && all.indexOf(c) === i);
+        return first.concat(candidates.filter(c => first.indexOf(c) < 0));
     }
     readonly property var selected: results[current] || null
 
@@ -42,6 +45,10 @@ Popover {
     }
     onResultsChanged: current = Math.min(current, Math.max(0, results.length - 1))
 
+    function setTone(n) {
+        tone = n;
+        Quickshell.execDetached(['python3', helper, '--tone', String(n)]);
+    }
     function move(delta) {
         if (!results.length) return;
         current = Math.max(0, Math.min(results.length - 1, current + delta));
@@ -78,6 +85,7 @@ Popover {
                 if (data.ok) {
                     picker.emoji = data.emoji;
                     picker.recent = data.recent;
+                    picker.tone = data.tone || 0;
                 }
             }
         }
@@ -135,6 +143,10 @@ Popover {
                     Keys.onPressed: event => {
                         if (event.key === Qt.Key_PageDown) { picker.move(4 * picker.columns); event.accepted = true; }
                         else if (event.key === Qt.Key_PageUp) { picker.move(-4 * picker.columns); event.accepted = true; }
+                        else if ((event.modifiers & Qt.AltModifier) && event.key >= Qt.Key_1 && event.key <= Qt.Key_6) {
+                            picker.setTone(event.key - Qt.Key_1);
+                            event.accepted = true;
+                        }
                     }
                     Keys.onEscapePressed: { if (field.text) field.text = ''; else picker.close(); }
                     Keys.onReturnPressed: event => picker.pick(picker.selected, event.modifiers & Qt.ShiftModifier)
@@ -228,6 +240,7 @@ Popover {
             }
             Hint { label: 'type'; keys: [ Kbd { text: 'Enter' } ] }
             Hint { label: 'copy'; keys: [ Kbd { text: 'Shift' }, Kbd { text: 'Enter' } ] }
+            Hint { label: 'skin tone'; keys: [ Kbd { text: 'Alt' }, Kbd { text: '1…6' } ] }
         }
     }
 }

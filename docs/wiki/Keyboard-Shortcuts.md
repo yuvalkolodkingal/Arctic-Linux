@@ -20,7 +20,7 @@ screen at any time, and type to find one (`screen`, `window`, `Alt`…).
 | `Super + F` | Open your file manager |
 | `Super + Shift + F` | Open the file manager in the terminal (yazi) |
 | `Super + V` | Clipboard history: `Enter` copies an entry again, `Shift + Enter` also pastes it |
-| `Super + Ctrl + E` | Emoji: type to search, `Enter` types it, `Shift + Enter` copies it |
+| `Super + Ctrl + E` | Emoji: type to search, `Enter` types it, `Shift + Enter` copies it, `Alt + 1` … `6` picks the skin tone |
 | `Super + S` | [Settings](Settings) |
 | `Super + Shift + A` | Get apps: install apps with dnf or Flatpak |
 | `Super + Shift + W` | Wallpapers |
@@ -100,9 +100,9 @@ was on `Super + W` before Arctic Linux 0.3; `Super + W` is now free for a shortc
 | `Super + Shift + C` | Pick a colour anywhere on the screen and copy it as `#rrggbb` |
 | `Super + Alt + R` | Record the screen: click a screen or drag an area; press again to stop |
 
-Screenshots are saved in `~/Pictures/Screenshots` and copied to the clipboard. The notification
-opens the picture, shows it in your file manager, lets you draw on it (**Edit**, with swappy) or
-moves it to the trash. Recordings go to `~/Videos/Screencasts`. While you select an area, the same
+Screenshots are saved in `~/Pictures/Screenshots` and copied to the clipboard. Click the
+notification to open the picture; its other actions (middle-click it) show it in your file
+manager, let you draw on it (**Edit**, with swappy) or move it to the trash. Recordings go to `~/Videos/Screencasts`. While you select an area, the same
 key again (or `Esc`) cancels. See [Desktop tour](Desktop-Tour#capture-and-the-clipboard).
 
 ## Hardware keys
