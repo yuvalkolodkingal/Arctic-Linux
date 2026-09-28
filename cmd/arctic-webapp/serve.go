@@ -14,7 +14,7 @@ import (
 )
 
 // server answers `serve` requests: JSON lines on stdin/stdout in the internal/protocol
-// envelope (docs/BUILD-SPEC.md §11). Inspect, Install and Update run in the background so
+// envelope (docs/BUILD-SPEC.md §11). Inspect, Install, Update and Set run in the background so
 // Cancel and other requests are answered meanwhile; a new Inspect cancels the previous one.
 type server struct {
 	m   *manage.Manager
@@ -218,11 +218,11 @@ func (s *server) handle(req protocol.Request) {
 			s.reply(req.ID, nil, err)
 			return
 		}
-		res, err := m.Set(context.Background(), p)
-		s.reply(req.ID, res, err)
-		if err == nil {
-			s.changed(p.ID)
-		}
+		// In the background: "get the icon from the site again" reads the site.
+		s.background(req, func(ctx context.Context) (any, []string, error) {
+			res, err := m.Set(ctx, p)
+			return res, []string{p.ID}, err
+		})
 	case api.MethodRemove:
 		var p api.RemoveParams
 		if err := decode(req.Params, &p); err != nil {
