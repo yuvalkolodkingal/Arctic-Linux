@@ -37,6 +37,12 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     network | wifi on|off         NetworkManager status (nmcli)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
+    webapps                       web apps and kept sign-in data, with sizes (arctic-webapp list)
+    webapp-set ID KEY VALUE       change a web app (KEY: name links notifications devtools rendering
+                                  runtime category mail-links add-domain remove-domain
+                                  forget-certificate icon)
+    webapp-reset-permissions ID | webapp-refresh ID | webapp-clear ID | webapp-open ID | webapp-runtimes
+    webapp-remove ID keep|delete | webapp-forget ID
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2080,6 +2086,86 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
          'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl'}
 
 
+# ---- web apps (stream 1) -------------------------------------------------------------------------
+# The Web apps page runs arctic-webapp with an argv and passes its one line of --json through:
+# it already has ok and error (a sentence).
+
+WEBAPP_KEYS = {'name': '--name', 'links': '--links', 'notifications': '--notifications', 'devtools': '--devtools',
+               'rendering': '--rendering', 'runtime': '--runtime', 'category': '--category',
+               'mail-links': '--mail-links', 'add-domain': '--add-domain', 'remove-domain': '--remove-domain',
+               'forget-certificate': '--forget-certificate', 'icon': '--icon'}
+
+
+def run_webapp(args, timeout=60):
+    exe = which('arctic-webapp')
+    if not exe:
+        raise Failure('Web apps aren’t installed (package arctic-webapps).')
+    try:
+        proc = subprocess.run([exe] + args + ['--json'], capture_output=True, text=True, timeout=timeout,
+                              stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        raise Failure('Web apps took too long to answer. Try again.') from None
+    lines = [line for line in proc.stdout.splitlines() if line.strip()]
+    try:
+        result = json.loads(lines[-1]) if lines else None
+    except ValueError:
+        result = None
+    if not isinstance(result, dict) or 'ok' not in result:
+        raise Failure('Web apps answered with something Settings can’t read.')
+    return result
+
+
+def webapp_id(args, count=1):
+    if len(args) != count or not re.fullmatch(r'org\.arcticlinux\.WebApp\.[A-Za-z][A-Za-z0-9]{0,31}_[0-9a-f]{6,8}', args[0]):
+        raise Failure('That isn’t a web app.')
+    return args[0]
+
+
+def cmd_webapps(_paths, _args):
+    return run_webapp(['list', '--kept', '--sizes'])
+
+
+def cmd_webapp_set(_paths, args):
+    if len(args) != 3:
+        raise Failure('Expected a web app, a setting and a value.')
+    app, key, value = webapp_id(args[:1]), args[1], args[2]
+    if key not in WEBAPP_KEYS:
+        raise Failure('Settings can’t change “{}” for a web app.'.format(key))
+    if '\n' in value or '\0' in value or len(value) > 2048:
+        raise Failure('That value isn’t valid.')
+    return run_webapp(['set', app, WEBAPP_KEYS[key] + '=' + value])
+
+
+def cmd_webapp_reset_permissions(_paths, args):
+    return run_webapp(['set', webapp_id(args), '--reset-permissions'])
+
+
+def cmd_webapp_refresh(_paths, args):
+    return run_webapp(['update', webapp_id(args)], timeout=90)
+
+
+def cmd_webapp_clear(_paths, args):
+    return run_webapp(['clear-data', webapp_id(args)])
+
+
+def cmd_webapp_open(_paths, args):
+    return run_webapp(['launch', webapp_id(args)])
+
+
+def cmd_webapp_remove(_paths, args):
+    if len(args) != 2 or args[1] not in ('keep', 'delete'):
+        raise Failure('Expected a web app and keep or delete.')
+    return run_webapp(['remove', webapp_id(args[:1])] + (['--keep-data'] if args[1] == 'keep' else []))
+
+
+def cmd_webapp_forget(_paths, args):
+    return run_webapp(['forget', webapp_id(args)])
+
+
+def cmd_webapp_runtimes(_paths, _args):
+    return run_webapp(['runtimes'])
+
+
 def cmd_caps(paths, _args):
     out = {key: bool(which(cmd)) for key, cmd in TOOLS.items()}
     out.update(ok=True, live=is_live(paths))
@@ -2113,6 +2199,13 @@ COMMANDS = {
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
 }
+# Web apps (stream 1)
+TOOLS['arcticWebapp'] = 'arctic-webapp'
+COMMANDS.update({
+    'webapps': cmd_webapps, 'webapp-set': cmd_webapp_set, 'webapp-reset-permissions': cmd_webapp_reset_permissions,
+    'webapp-refresh': cmd_webapp_refresh, 'webapp-clear': cmd_webapp_clear, 'webapp-open': cmd_webapp_open,
+    'webapp-remove': cmd_webapp_remove, 'webapp-forget': cmd_webapp_forget, 'webapp-runtimes': cmd_webapp_runtimes,
+})
 
 
 # Commands that read, change and write back settings.conf (or another file of ours): they run
