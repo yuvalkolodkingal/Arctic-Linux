@@ -5,7 +5,8 @@ so if you just press `Enter` on each screen you get a good, encrypted system wit
 apps. **Nothing is written to your disk until you press the install button on the Summary
 screen.** Up to then you can go back, change anything, or quit.
 
-It takes about 10 minutes plus the time to download your apps.
+It takes about 10 minutes plus the time to download your apps (and to build a graphics or
+Wi-Fi driver, if your computer needs one).
 
 The screenshots on this page come from the installer's demo mode, so the disks, networks and
 names in them are examples.
@@ -47,14 +48,14 @@ Your mouse or touchpad works everywhere too.
 
 ## 1. Welcome
 
-![Installer step 1: Welcome to Arctic Linux, with the language list](images/installer-01-welcome.png)
+![Installer step 1: Welcome to Arctic Linux, with the language list searched for "de"](images/installer-01-welcome.png)
 
 **Welcome to Arctic Linux.** *"This takes about 10 minutes. First, pick the language you'd like to
 use."*
 
 - **Asks:** the language for your new system. Type in the search box to find it quickly.
 - **Already chosen:** the live session's language, which is usually English (US).
-- **Good to know:** in version 0.1 the installer's own screens are in English. The language you
+- **Good to know:** the installer's own screens are in English. The language you
   pick is the one your installed system uses. At the bottom it reminds you: *"Nothing is changed
   on this computer until the Summary step."*
 
@@ -89,6 +90,11 @@ use."*
 
 If no networks show up, plug in a cable or move closer to your router. A wrong password says
 *"Wrong password. Check it and try again."*
+
+**A Broadcom Wi-Fi card that needs a driver:** some Broadcom chips only work once Broadcom's driver
+is installed, so the installer can't use them yet. It tells you so on this screen (*"Your … needs
+Broadcom's driver, which Arctic Linux installs for you. Until then, connect a network cable or
+share your phone's connection over USB."*), and ticks the driver for you on the Apps step.
 
 ## 4. Time zone
 
@@ -170,28 +176,68 @@ is locked.
 
 ## 8. Apps
 
-![Installer step 8: Choose your apps, with categories and app tiles](images/installer-08-apps.png)
+![Installer step 8: Choose your apps, with the search box, the Drivers section and app tiles](images/installer-08-apps.png)
 
 **Choose your apps.** *"We've ticked our favourites. Change anything — you can add or remove apps
 later."*
 
+The picker has 126 apps in 21 sections, plus a **Drivers** section when your computer needs one.
+The first seven sections are always open, with our favourites ticked:
+
 | Section | Rule | Ticked for you | Also on offer |
 |---|---|---|---|
-| Browser | Pick one · *becomes your default browser* | Zen Browser | Firefox, Chromium |
-| Editor | Pick any | Zed | VSCodium, Neovim, Helix |
-| Terminal | Pick one · *opens with `Super + Enter`* | kitty | Alacritty, foot |
+| Browser | Pick one · *becomes your default browser* | Zen Browser | Firefox, Brave, Google Chrome, LibreWolf, Chromium, Vivaldi |
+| Editor | Pick any | Zed | Visual Studio Code, VSCodium, Neovim, Helix, Kate, Emacs, Text Editor |
+| Terminal | Pick one · *opens with `Super + Enter`* | kitty | Ghostty, Alacritty, foot, Konsole |
 | Shell | Pick one · *what runs inside the terminal* | zsh | fish, bash |
-| File manager | Pick any | yazi, Thunar | Nautilus |
+| File manager | Pick any | yazi, Thunar | Files (Nautilus), Dolphin, Nemo, PCManFM-Qt |
 | Office | Pick one or none | Collabora Office | LibreOffice, ONLYOFFICE |
-| Video | Pick any | VLC | mpv, Celluloid |
-| Extras | Pick any · *nothing here is ticked by default* | — | Flathub, Steam, GIMP, Inkscape, Signal, OBS Studio |
+| Video | Pick any | VLC | mpv, Celluloid, Haruna, Kodi, Jellyfin Media Player |
 
-Use the arrow keys to move between apps and `Space` to tick them. The footer adds up how many apps
-you picked and how much will be downloaded. Apps that are already on the USB stick (kitty, zsh,
-Thunar, VLC) are copied from it instead of downloaded; if you untick them, the installer removes
-them from your new system. `bash` is always installed, whatever shell you pick.
+Below them, under **More apps**, fourteen more sections start folded, with nothing ticked:
+Music & audio, Photos, Graphics & design, Recording & editing, Chat & calls, Email & calendar,
+Notes & tasks, PDF & e-books, Games, Passwords & privacy, Downloads & sync, Developer tools,
+Containers & VMs and Utilities. Open one to see its apps; a folded section shows how many you
+picked in it.
 
-More about each app and where it comes from: [Apps and software](Apps-and-Software).
+- **Search:** type in the **Search 126 apps** box to find an app by name, by what it does
+  (*music*, *PDF*, *games*) or by section. Sections with matches open.
+- **Proprietary** marks apps that aren't open source (for example Google Chrome, Visual Studio
+  Code, Spotify, Discord and Steam).
+- **Keys:** the arrow keys move between apps and sections, `Space` ticks an app, and `Space` or
+  `Enter` opens a folded section.
+- **Needs another app:** Podman Desktop needs Podman, and lazygit needs Git. If you tick one
+  without the other, Next says so under the section.
+
+The footer adds up how many apps (and drivers) you picked and how much will be downloaded, for
+example *"9 apps + 2 drivers · 3.2 GB download"*. Apps that are already on the USB stick (kitty,
+zsh, Thunar, VLC) are copied from it instead of downloaded; if you untick them, the installer
+removes them from your new system. `bash` is always installed, whatever shell you pick.
+
+Every app, section by section, and where each comes from: [Apps and software](Apps-and-Software).
+
+### Drivers
+
+When the installer finds a graphics card or Wi-Fi chip that works better with a driver that isn't
+open source, a **Drivers** section comes first: *"Found on this computer. These come from RPM
+Fusion and aren't open source."* The driver is already ticked and names your hardware, for
+example *"NVIDIA's own driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile"*. Untick it to
+keep the open-source driver.
+
+| Driver | Offered for |
+|---|---|
+| **NVIDIA driver** | GeForce RTX 20 series (Turing) and newer, also the NVIDIA card in a hybrid laptop |
+| **NVIDIA driver (580 series)** | GeForce GTX 750 to GTX 1080 Ti and Titan V |
+| **Intel video acceleration** | Intel graphics from Broadwell on, and Arc |
+| **AMD video acceleration** | AMD Radeon graphics and APUs with a video decoder |
+| **Broadcom Wi-Fi driver** | Broadcom Wi-Fi chips with no working open driver |
+
+The NVIDIA and Broadcom drivers are built for your kernel during the install, which adds a few
+minutes. On a laptop with both Intel or AMD graphics and an NVIDIA card, the desktop keeps
+running on the built-in graphics. If your computer uses **Secure Boot**,
+you confirm the driver's key once after restarting; see
+[Secure Boot and your driver](#secure-boot-and-your-driver). More on each driver:
+[Drivers](Drivers).
 
 ## 9. Summary
 
@@ -199,8 +245,15 @@ More about each app and where it comes from: [Apps and software](Apps-and-Softwa
 
 **Ready to install.** *"Check everything below. Nothing has been written to your disk yet."*
 
-Each row (language, keyboard, time zone, disk, encryption, account, apps) has a **Change** link
-that takes you back to that step; your other answers are kept. The warning says exactly what will
+Each row (language and keyboard, time zone, disk and encryption, account, apps) has a **Change**
+link that takes you back to that step; your other answers are kept. The apps row lists up to 12
+apps, then *"and N more"*.
+
+When a driver was found, a **Drivers** row follows, for example *"NVIDIA driver for your NVIDIA
+GeForce RTX 4060 Max-Q / Mobile; Intel video acceleration for your Intel Iris Xe Graphics"*. With
+Secure Boot on it adds *"Secure Boot is on: you'll confirm the driver's key once after
+restarting"*. If you unticked every driver it says *"None — your hardware keeps its open-source
+drivers"*. The warning says exactly what will
 happen, for example *"Installing will erase everything on Samsung SSD 980. This can't be undone."*
 
 The button names what it does: **Erase disk and install**, or **Install alongside Windows**
@@ -245,18 +298,56 @@ be installed. You get three buttons:
 - **Change your answers**: back to the Summary with all your answers kept, for example to pick
   another disk.
 - **Save log to USB**: saves the installer's log to a USB stick, so you can share it when you ask
-  for help. See [Troubleshooting](Troubleshooting#saving-the-installer-log).
+  for help. It uses a FAT or exFAT USB stick other than the one you started from; a Ventoy stick
+  holding the Arctic Linux image counts as the one you started from, so plug in a second stick.
+  See [Troubleshooting](Troubleshooting#saving-the-installer-log).
 
 ## 12. Done
 
-![Installer step 12: Arctic Linux is ready](images/installer-12-done.png)
+![Installer step 12: Arctic Linux is ready, with the Secure Boot steps and the one-time code](images/installer-12-done.png)
 
 **Arctic Linux is ready.** *"Everything is installed, including 9 apps. Welcome aboard, Noa."*
 
 **Remove the USB stick**: take it out now, then press **Restart now**. Your computer starts
 Arctic Linux and asks for your disk passphrase. If you skipped an app, this screen lists it.
 
+If you picked a driver, a **Drivers** card says what happened to each one, for example *"The
+NVIDIA driver for your … starts after you restart"*. A driver that couldn't be installed because
+you were offline is installed the first time Arctic Linux is online; restart once more after that.
+
 **Keep trying** closes the installer and leaves you on the live desktop.
+
+### Secure Boot and your driver
+
+With Secure Boot on, your computer only starts drivers it trusts. The NVIDIA and Broadcom drivers
+are built on your computer, so Arctic Linux signs them with a key of its own and asks your
+computer to trust that key. You confirm it once, on a blue screen that appears the first time
+the computer restarts. The Done screen shows **One more step when the computer restarts** with a
+**one-time code** of eight digits. Note the code, then:
+
+1. **Restart.** A blue screen, **Perform MOK management**, appears. Press any key within 10
+   seconds.
+2. Choose **Enroll MOK**, then **Continue**, then **Yes**.
+3. Type the one-time code with the number keys above the letters (not the number pad), then
+   press `Enter`.
+4. Choose **Reboot**. Your driver starts from now on.
+
+This only happens once: later updates of the driver are signed with the same key.
+
+*"Missed the blue screen? Arctic Linux still starts, only without the driver."* To get the blue
+screen again, run this in a terminal, pick any password, restart, and type that password on the
+blue screen instead of the code:
+
+```sh
+sudo mokutil --import /etc/pki/akmods/certs/public_key.der
+```
+
+If the installer couldn't ask your computer to trust the key, the card is titled **Your driver
+needs Secure Boot's approval** and gives the same `mokutil` steps. Turning Secure Boot off in
+your computer's firmware settings works too. If the driver is only installed at first boot
+(because you were offline), the card says **One more step once your driver is installed**: keep
+the code for the restart after the driver is installed. See also
+[Drivers](Drivers#secure-boot-confirming-the-drivers-key).
 
 Next: [First boot](First-Boot).
 

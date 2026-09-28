@@ -214,8 +214,8 @@ needs `sudo`: the snapshots are the whole system as it was, so only administrato
 password, can see, delete or restore them.
 
 **Btrfs Assistant** shows the same snapshots in a window: browse them, compare files and restore
-them. Tick it under **Extras** in the installer, or install it with `sudo dnf install
-btrfs-assistant`.
+them. Tick it under **Utilities** (in **More apps**) in the installer, or install it with
+`sudo dnf install btrfs-assistant`.
 
 The boot menu can't start the computer from a snapshot: snapshots are for putting files back
 from a running system (or from the live USB, with the disk opened there). To get back a system

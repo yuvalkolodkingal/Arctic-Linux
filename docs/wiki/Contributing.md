@@ -41,10 +41,13 @@ Open an [issue](https://github.com/yuvalkolodkingal/O-Tism/issues) and include:
 | The installer screens | `installer-ui/steps/`, `installer-ui/components/` |
 | The apps on offer | `modules/` |
 | The bar, launcher, lock screen, OSD, Get apps | `shell/` |
+| Arctic Settings | `settings/` (pages in `settings/pages/`, reads and writes in `settings/scripts/arctic_settings.py`) |
+| Drivers and their detection | `modules/drivers/`, `internal/hw/`, `internal/installer/drivers.go` |
 | Keyboard shortcuts | `dotfiles/.config/mango/arctic/binds.conf` and `dotfiles/.local/share/arctic/keys.txt` (keep both in step) |
 | Window manager look and behaviour | `dotfiles/.config/mango/arctic/` |
 | The `arctic-*` commands | `dotfiles/.local/bin/` |
 | Colours | `design/tokens.json`, then `design/tools/gen-desktop-themes.py` |
+| The theme engine and which apps it themes | `design/themegen/` (templates in `design/themegen/templates/`), `packaging/theme-hooks.d/` |
 | Login screen, boot menu, splash, logos | `branding/` |
 | Packages | `packaging/arctic-linux.spec` |
 | The live session | `live/`, `iso/kiwi/` |
@@ -60,6 +63,10 @@ python3 -m unittest discover -s shell/tests                      # shell helpers
 node shell/tests/test-launcher.cjs                               # launcher ranking, calculator
 node shell/tests/test-package-search.cjs                         # Get apps completion
 python3 -m unittest discover -s packaging/firstboot              # arctic-firstboot
+python3 -m unittest discover -s packaging/updates -p 'test_*.py' # arctic-update
+python3 -m unittest discover -s design/themegen/tests            # theme engine, wallpaper colours, arctic-theme
+python3 -m unittest discover -s settings/tests -p 'test_*.py'    # Arctic Settings' helper
+python3 -m unittest discover -s tools/tests -p 'test_*.py'       # repository publishing
 python3 -m unittest installer-ui/dev/test_mock_bridge.py         # installer protocol
 shellcheck -x dotfiles/.local/bin/* tools/*.sh live/live-* live/livesys-arctic   # scripts
 ```
@@ -70,6 +77,8 @@ Then look at it running:
   `installer-ui/dev/test-headless.sh` walks every step in a headless sway and saves screenshots.
 - **Shell:** `shell/dev/headless.sh --fixtures demo ipc launcher search ze sleep 1 shot launcher`
   runs it headless and takes a screenshot.
+- **Settings:** `settings/dev/headless.sh --smoke --fixtures` opens every page in a headless sway
+  and saves screenshots.
 - **Whole system:** build the RPMs and ISO and boot it with `tools/test-iso.sh`; for installer
   engine changes, `tools/test-install.sh --installer <your arctic-install build>` tests them
   without rebuilding the ISO.

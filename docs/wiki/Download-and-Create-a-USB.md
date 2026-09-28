@@ -8,8 +8,8 @@ from the stick, and choose whether to try Arctic Linux or install it.
 - **A 64-bit PC** (x86_64). Newer computers (UEFI) and older ones (BIOS) both work.
 - **A USB stick of 4 GB or more.** Writing Arctic Linux to it erases everything on it.
 - **To install:** at least **40 GB** of disk space and an **internet connection** (Wi-Fi or a
-  cable). The installer downloads the apps you pick and the latest updates while it runs.
-  Trying Arctic Linux needs neither.
+  cable). The installer downloads the apps you pick, and any driver your computer needs, while
+  it runs. Trying Arctic Linux needs neither.
 - **Memory:** our tests run the live USB with 4 GB and the installer with 6 GB.
 
 ## 1. Download the image
@@ -98,6 +98,20 @@ diskutil list                         # find the stick, for example /dev/disk4
 diskutil unmountDisk /dev/disk4
 sudo dd if=Arctic-Linux-0.2-x86_64.iso of=/dev/rdisk4 bs=4m
 ```
+
+### With Ventoy
+
+[Ventoy](https://www.ventoy.net) lets one USB stick hold several ISO images and shows a menu of
+them when the computer starts. Arctic Linux 0.2 works from it: copy
+`Arctic-Linux-0.2-x86_64.iso` onto the Ventoy stick like any other file, start the computer from
+the stick and pick it in Ventoy's menu. The other files on the stick stay as they are. Check
+the download first (step 2), and join the parts if the release has them. Both **Try Arctic Linux** and **Install Arctic Linux**
+work, and the installer never offers the Ventoy stick as a disk to install on.
+
+One difference: the installer's **Save log to USB** can't write to the Ventoy stick you started
+from (its partition is in use while Arctic Linux runs), so plug in a second USB stick if you need
+the log. With Secure Boot on, Ventoy asks you to enroll its own key the first time; see Ventoy's
+documentation.
 
 ## 4. Start your computer from the USB stick
 

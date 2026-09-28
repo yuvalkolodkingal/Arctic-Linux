@@ -2,6 +2,15 @@
 
 You've pressed **Restart now** and taken the USB stick out. Here's what happens next.
 
+## Only with a driver and Secure Boot: the blue screen
+
+If the installer set up the NVIDIA or Broadcom Wi-Fi driver and Secure Boot is on, the Done
+screen showed a one-time code. At this first restart a blue **Perform MOK management** screen
+appears before anything else: press any key within 10 seconds, choose **Enroll MOK**,
+**Continue**, **Yes**, type the code with the number keys above the letters, then choose
+**Reboot**. This happens once. Missed it? Arctic Linux still starts, only without the driver; see
+[Drivers](Drivers#missed-the-blue-screen).
+
 ## 1. The boot menu
 
 For a few seconds you may see the Arctic Linux boot menu. If you installed alongside another
@@ -76,6 +85,9 @@ Sometimes an app can't be downloaded during the install.
 - **If you used the installer**, it asked you: **Try again** or **Skip**. An app you skipped isn't
   installed and isn't retried by itself. The Done screen listed it; add it with
   [Get apps](Apps-and-Software#get-apps) (`Super + Shift + A`) whenever you like.
+- **Drivers, when you installed offline**, are installed, built and set up by arctic-firstboot
+  the first time the computer is online; restart once more after that (the Done screen said so).
+  See [Drivers](Drivers#installing-offline).
 - **In an automated (unattended) install**, an app that can't be downloaded is retried once and
   then put off until later. It's written to `/var/lib/arctic/pending.json`, and the
   **arctic-firstboot** service installs it after the computer starts and is online.

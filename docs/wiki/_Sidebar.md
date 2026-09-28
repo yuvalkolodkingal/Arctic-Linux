@@ -9,7 +9,9 @@
 **Use it**
 - [Desktop tour](Desktop-Tour)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
+- [Settings](Settings)
 - [Apps and software](Apps-and-Software)
+- [Drivers](Drivers)
 - [Updates](Updates)
 - [Themes and customisation](Themes-and-Customisation)
 - [Terminal and shell](Terminal-and-Shell)

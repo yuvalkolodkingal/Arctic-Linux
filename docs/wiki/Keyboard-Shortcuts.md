@@ -19,6 +19,7 @@ screen at any time.
 | `Super + F` | Open your file manager |
 | `Super + Shift + F` | Open the file manager in the terminal (yazi) |
 | `Super + V` | Clipboard history |
+| `Super + S` | [Settings](Settings) |
 | `Super + Shift + A` | Get apps: install apps with dnf or Flatpak |
 | `Super + Shift + W` | Wallpapers |
 | `Super + /` | The shortcut sheet |
@@ -68,7 +69,7 @@ screen at any time.
 | `Super + Delete` | Dismiss the newest notification |
 | `Super + Shift + Delete` | Dismiss all notifications |
 | `Super + Shift + N` | Do not disturb on / off |
-| `Super + Shift + T` | Switch between Winter and Polar night |
+| `Super + Shift + T` | Switch between light and dark (Winter and Polar night, or your wallpaper's colours) |
 | `Super + Shift + R` | Reload the desktop configuration |
 | `Print` | Screenshot of an area you select |
 | `Shift + Print` | Screenshot of the whole screen |
@@ -115,6 +116,18 @@ Tap to click and natural scrolling are on for touchpads.
 | `Enter` | Run what you typed |
 | `Ctrl + C` | Stop the running command |
 
+## In Settings
+
+| Key | Does |
+|---|---|
+| `Ctrl + F` or `/` | Search every setting (or just type in the page list) |
+| `↑` / `↓` in the page list | Switch pages |
+| `Tab` | Go into the page |
+| `Esc` | Back to the page list |
+| `Ctrl + Page Up` / `Page Down` | Previous / next page |
+| `Ctrl + Z` | Undo the last change |
+| `Ctrl + Q` | Close Settings |
+
 ## In the installer
 
 | Key | Does |
@@ -137,6 +150,10 @@ Tap to click and natural scrolling are on for touchpads.
 | `Esc` | Clear the password field, or close a menu |
 
 ## Changing a shortcut
+
+The easiest way to add your own is the **Shortcuts** page of [Settings](Settings#shortcuts)
+(`Super + S`): press the keys, then type a command or pick an app. It saves them in
+`~/.config/mango/settings.conf` and refuses keys that are already taken.
 
 The shortcuts live in `/usr/share/arctic/mango/binds.conf`, and your home folder links to it. To
 add your own, put `bind=` lines in `~/.config/mango/user.conf`. To change one of Arctic's, see

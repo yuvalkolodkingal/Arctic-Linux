@@ -31,10 +31,11 @@ flowchart TD
 | `modules/`, `profiles/` | The app catalog and unattended install profiles |
 | `installer-ui/` | The installer wizard (Quickshell / QML) |
 | `shell/` | The desktop shell (Quickshell / QML, Python helpers) |
+| `settings/` | Arctic Settings (Quickshell / QML, a Python helper that does every read and write) |
 | `dotfiles/` | The home directory defaults (`/etc/skel`) and the `arctic-*` commands |
 | `live/` | Live session files |
 | `branding/` | SDDM theme, GRUB theme, Plymouth theme, logos, fonts |
-| `design/` | The design system sources: tokens, brand book, exports, fonts, logos, wallpapers |
+| `design/` | The design system sources: tokens, brand book, exports, fonts, logos, wallpapers, and the theme engine (`design/themegen`) |
 | `packaging/` | RPM specs and the system files they install |
 | `iso/kiwi/` | The kiwi-ng description of the live ISO |
 | `tools/` | Build and VM test scripts |
@@ -74,6 +75,7 @@ group `wheel`, only on the live USB). It owns the whole flow:
 | `internal/catalog` | Loads `modules/*/*/module.toml`: categories, apps, install methods, download sizes |
 | `internal/engine` | Holds the wizard, the secrets (in memory only) and the install run; answers requests and sends events |
 | `internal/protocol` | The message types |
+| `internal/hw` | Hardware detection: the PCI devices (vendor, device, class) the drivers' `[[detect]]` rules match, and whether Secure Boot is on |
 | `internal/host` | The real machine: disks (`lsblk`, `sfdisk`), Wi-Fi (`nmcli`), time zone (Fedora's GeoIP service), the live keyboard, SaveLog, reboot |
 | `internal/installer` | The install pipeline, every command going through a `Runner` (real, dry-run or fake) |
 | `internal/mock` | A simulated machine for development: disks, Wi-Fi, a realistic install with one optional-app failure |
@@ -140,9 +142,12 @@ What `arcticd` does after **Start** (`internal/installer`):
    root; alongside: `/boot` and root in the largest free region, sharing the ESP); `mkfs`; LUKS2
    (argon2id) when encryption is on; btrfs with `@`, `@home`, `@var_log`, `@nix` (zstd:1).
 3. **Copy:** `rsync -aAXH` of the live root (`/run/rootfsbase`, else the mounted squashfs) without
-   `security.selinux`; the ESP's files are copied separately. Then `dnf remove` of the live-only
+   `security.selinux`; the ESP's files are copied separately. Then `setfiles` labels the whole
+   copy (every mounted subvolume and `/boot`) before anything runs in it: with SELinux enforcing,
+   rpm's scriptlets can't run unlabelled files (exit 127). Then `dnf remove` of the live-only
    packages (`arctic-live`, `livesys-scripts`, `arctic-installer`, `dracut-live`,
-   `dracut-kiwi-live`).
+   `dracut-kiwi-live`); if their scriptlets still fail, their units are disabled and they are
+   removed without scriptlets.
 4. **Configure:** machine-id, `systemd-firstboot` (locale, time zone, hostname), keyboard files
    (`/etc/vconsole.conf`, `/etc/arctic/mango/keyboard.conf`, the greeter's copy and the SDDM
    theme's layout), `fstab`, `crypttab`, autologin, services, the live session's Wi-Fi profiles.
@@ -153,7 +158,12 @@ What `arcticd` does after **Start** (`internal/installer`):
    and COPR apps (plus the language pack, os-prober for alongside, and RPM Fusion for the codecs);
    Flatpak from the live host into the target with `FLATPAK_*` variables (no chroot); Nix with
    `nix --store /mnt profile add`. An app that fails raises an `attention` event (Try again / Skip);
-   unattended installs retry once, then put it off to `/var/lib/arctic/pending.json`.
+   unattended installs retry once, then put it off to `/var/lib/arctic/pending.json`. Ticked
+   drivers go into the same dnf transaction; an akmod driver is then built with `akmods` for
+   every installed kernel (after `akmods`, the kernel's `kernel-devel` and a signing key from
+   `kmodgenca -a`), checked with `modinfo`, and gets its kernel arguments with `grubby`. With
+   Secure Boot on, the key is queued with `mokutil --import`, its password the Done screen's
+   one-time code (see [Drivers](Drivers)). Offline, drivers go to `pending.json` too.
 7. **Finalize:** the user (`useradd --groups wheel`, pre-hashed password), `root` locked,
    `/etc/arctic/default-apps` and `/etc/xdg/mimeapps.list` from the picked apps, the engine log
    copied to `/var/log/arctic-install/`, `setfiles` relabel (else `/.autorelabel`), unmount, close
@@ -167,11 +177,17 @@ removed again.
 
 Each app is `modules/<category>/<id>/module.toml`: name, summary, category, whether it's a default,
 whether it's already in the live image, and an ordered list of install methods
-(`dnf`, `copr`, `flatpak`, `nix`) with download sizes, plus `[defaults]` (the role it fills in
+(`dnf`, `copr`, `flatpak`, `nix`) with download sizes, whether it's proprietary, plus `[defaults]` (the role it fills in
 `/etc/arctic/default-apps`, its desktop id and the file types it opens). `modules/catalog.toml`
-holds the categories, their order and rules (`one` / `any`, required), the pinned nixpkgs revision
-and the Flatpak runtime sizes. Hidden, always-installed modules live in `modules/_system/`
-(`desktop-base`, `flatpak`, `nix`, `codecs`). Profiles and the UI reference module ids only, never
+holds the categories, their order and rules (`one` / `any`, required, `collapsed` for the
+folded **More apps** sections), the pinned nixpkgs revision and the Flatpak runtime sizes: 126
+apps in 21 sections. Hidden, always-installed modules live in `modules/_system/`
+(`desktop-base`, `flatpak`, `nix`, `codecs`, and the adw-gtk3 themes for Flatpak).
+
+The `drivers` category (`hardware = true`) lives in `modules/drivers/`: each driver has
+`[[detect]]` rules (PCI vendor, class and device ids or ranges), an optional `[akmod]` (the
+kernel module akmods builds) and `[boot]` kernel arguments. It is offered, ticked, only when
+`internal/hw` finds a matching device. Profiles and the UI reference module ids only, never
 commands.
 
 ## The desktop
@@ -182,7 +198,7 @@ commands.
 - **Mango** reads `~/.config/mango/config.conf`, which sources, in order: `arctic/look.conf`, the
   theme's `mango-colors.conf`, `arctic/input.conf`, `/etc/arctic/mango/keyboard.conf`,
   `arctic/apps.conf`, `arctic/binds.conf`, `arctic/rules.conf`, `arctic/autostart.conf`,
-  `~/.config/arctic/motion.conf`, then `user.conf`. The `arctic/*.conf` files are links to
+  `~/.config/arctic/motion.conf`, `settings.conf` (written by Arctic Settings), then `user.conf`. The `arctic/*.conf` files are links to
   `/usr/share/arctic/mango/`, so package updates reach existing accounts.
 - **Autostart:** `arctic-theme apply`, `arctic-session shell|mako|nm-applet|clipboard|idle`,
   `arctic-welcome`.
@@ -192,12 +208,18 @@ commands.
   through `scripts/workspaces.py`.
 - **Keybinds and helpers talk to the shell over IPC:** `arctic-shell-ipc <target> <function>`
   (`quickshell ipc call`). Targets: `launcher`, `apps`, `wallpapers`, `power`, `keys`, `osd`,
-  `lock`, `welcome`, `dnd`, `shell`. It exits non-zero when the shell isn't running, so every
+  `lock`, `welcome`, `dnd`, `updates`, `shell`. It exits non-zero when the shell isn't running, so every
   `arctic-*` helper falls back to fuzzel, swaylock or a notification. `ARCTIC_SHELL=waybar`
   selects the waybar fallback desktop.
 - **Themes:** `~/.config/arctic/current` links to `/usr/share/arctic/themes/<theme>`; every app
   reads its colours through it (`theme.json` for the shell, `kitty.conf`, `mako.ini`,
-  `mango-colors.conf`, GTK CSS, …). `arctic-theme` switches the link and reloads each component.
+  `mango-colors.conf`, GTK CSS, …). `arctic-theme` switches the link, reloads each component and
+  runs the theme hooks (`/usr/share/arctic/theme-hooks.d`). Every theme is rendered from one
+  `palette.json` by the theme engine (`arctic-themegen`, from `design/themegen`), which also makes
+  the theme from your wallpaper and enforces the contrast guarantees.
+- **Arctic Settings** (`settings/`, run by `arctic-settings` as `quickshell -p
+  /usr/share/arctic/settings`) writes `~/.config/mango/settings.conf` and drives the other
+  helpers (`arctic-theme`, `arctic-motion`, `arctic-update`, …); see [Settings](Settings).
 - **Default apps:** `arctic-open <role>` reads `/etc/arctic/default-apps` then
   `~/.config/arctic/default-apps`, with a fallback list per role.
 - **arctic-firstboot** (in `arctic-desktop-config`, because the installer is removed from the new
