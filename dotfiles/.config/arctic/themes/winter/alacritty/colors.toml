@@ -1,0 +1,52 @@
+# Arctic Linux — Winter for Alacritty (terminal; kitty is the default).
+# Rendered by arctic-themegen from design/themegen/templates/alacritty/colors.toml.tmpl.
+# ~/.config/alacritty/alacritty.toml imports ~/.config/arctic/current/alacritty/colors.toml.
+# Same palette as kitty (the term-* and ansi-* tokens).
+
+[colors.primary]
+background = "#f7f9fb"
+foreground = "#1d242d"
+
+[colors.cursor]
+text = "#f7f9fb"
+cursor = "#9a5e0f"
+
+[colors.selection]
+text = "#1d242d"
+background = "#fbdea3"
+
+[colors.hints.start]
+foreground = "#151a21"
+background = "#efa637"
+
+[colors.hints.end]
+foreground = "#151a21"
+background = "#fdf0d6"
+
+[colors.search.matches]
+foreground = "#151a21"
+background = "#fdf0d6"
+
+[colors.search.focused_match]
+foreground = "#151a21"
+background = "#efa637"
+
+[colors.normal]
+black = "#1d242d"
+red = "#b3261e"
+green = "#1d7350"
+yellow = "#84500d"
+blue = "#1f5f9e"
+magenta = "#8a3d86"
+cyan = "#136c76"
+white = "#66727f"
+
+[colors.bright]
+black = "#5f6b79"
+red = "#c43a2c"
+green = "#237f5b"
+yellow = "#a35f0c"
+blue = "#2e6eb0"
+magenta = "#9c4b98"
+cyan = "#1a7c87"
+white = "#3e4a58"

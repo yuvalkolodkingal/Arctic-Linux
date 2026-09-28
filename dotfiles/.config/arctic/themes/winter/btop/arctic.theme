@@ -1,0 +1,70 @@
+# Arctic Linux — Winter for btop.
+# Rendered by arctic-themegen from design/themegen/templates/btop/arctic.theme.tmpl.
+# ~/.config/btop/themes/arctic.theme links to ~/.config/arctic/current/btop/arctic.theme and
+# ~/.config/btop/btop.conf selects it (color_theme = "arctic"); btop reads it when it starts.
+
+# Background (only drawn with theme_background = true; Arctic leaves the terminal's own).
+theme[main_bg]="#f7f9fb"
+
+# Text
+theme[main_fg]="#1d242d"
+theme[title]="#151a21"
+theme[hi_fg]="#84500d"
+theme[selected_bg]="#fdf0d6"
+theme[selected_fg]="#151a21"
+theme[inactive_fg]="#a9b5c1"
+theme[graph_text]="#5f6b79"
+theme[meter_bg]="#d5dde4"
+theme[proc_misc]="#84500d"
+
+# The process list's banner (paused / following a process) and the followed process
+theme[proc_banner_bg]="#fdf0d6"
+theme[proc_banner_fg]="#151a21"
+theme[proc_pause_bg]="#fbeadf"
+theme[proc_follow_bg]="#e2eefa"
+theme[followed_bg]="#fdf0d6"
+theme[followed_fg]="#151a21"
+
+# Box outlines and dividers
+theme[cpu_box]="#7c8a99"
+theme[mem_box]="#7c8a99"
+theme[net_box]="#7c8a99"
+theme[proc_box]="#7c8a99"
+theme[div_line]="#d5dde4"
+
+# Gradients: start, middle, end
+theme[temp_start]="#1f5f9e"
+theme[temp_mid]="#9a4812"
+theme[temp_end]="#b3261e"
+
+theme[cpu_start]="#1d7350"
+theme[cpu_mid]="#efa637"
+theme[cpu_end]="#b3261e"
+
+theme[free_start]="#1d7350"
+theme[free_mid]="#1d7350"
+theme[free_end]="#237f5b"
+
+theme[cached_start]="#1f5f9e"
+theme[cached_mid]="#1f5f9e"
+theme[cached_end]="#2e6eb0"
+
+theme[available_start]="#136c76"
+theme[available_mid]="#136c76"
+theme[available_end]="#1a7c87"
+
+theme[used_start]="#efa637"
+theme[used_mid]="#9a4812"
+theme[used_end]="#b3261e"
+
+theme[download_start]="#1f5f9e"
+theme[download_mid]="#2e6eb0"
+theme[download_end]="#efa637"
+
+theme[upload_start]="#8a3d86"
+theme[upload_mid]="#9c4b98"
+theme[upload_end]="#efa637"
+
+theme[process_start]="#1d7350"
+theme[process_mid]="#efa637"
+theme[process_end]="#b3261e"

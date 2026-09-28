@@ -1,0 +1,19 @@
+# The adw-gtk3-dark GTK 3 theme for Flatpak apps (Polar night, the default theme); see
+# modules/_system/adw-gtk3-flatpak/module.toml and docs/BUILD-SPEC.md "App theming".
+id = "adw-gtk3-dark-flatpak"
+name = "Dark theme for Flatpak apps"
+summary = "adw-gtk3-dark for GTK 3 apps from Flathub (Polar night)."
+category = "system"
+hidden = true
+always = true
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gtk.Gtk3theme.adw-gtk3-dark"
+verified = false
+download_mb = 0.5

@@ -1,5 +1,8 @@
-/* Arctic Linux — GTK 3 colours from the active theme (Winter / Polar night). */
-@import url("../arctic/current/gtk.css");
+/* Arctic Linux — GTK 3 colours from the active theme (Winter / Polar night), over the adw-gtk3
+   theme. arctic-colors.css is the active theme's gtk.css: a link to ../arctic/current/gtk.css,
+   which the 10-gtk theme hook replaces with a copy of it, so that Flatpak apps (which see this
+   folder, but not /usr/share/arctic) get the same colours. docs/BUILD-SPEC.md "App theming". */
+@import url("arctic-colors.css");
 
 /* Keyboard focus: 2px amber ring with a 2px gap (focus token).
    GTK 3 only draws focus outlines while the window is in keyboard-focus mode. */

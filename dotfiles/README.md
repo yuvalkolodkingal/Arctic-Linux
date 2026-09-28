@@ -45,8 +45,12 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `.config/swaylock/config` | **Fallback lock**: ring amber while typing, red when wrong, green when accepted | LockScreen |
 | `.config/fontconfig/conf.d/60-arctic-figtree.conf` | Finds the design's Figtree files, which name their family "Figtree Light" | Typography |
 | `.config/kitty/` | JetBrains Mono 10.5, amber block cursor, the Arctic palette | Terminal |
-| `.config/gtk-3.0`, `gtk-4.0` | GTK and libadwaita colours, amber focus ring | Platforms → GTK |
-| `.zshrc`, `.zprofile`, `.bashrc.d/arctic.sh` | Prompt (`~ ❯`, amber arrow), history, completion, the fox greeting | Terminal |
+| `.config/gtk-3.0`, `gtk-4.0` | GTK (adw-gtk3) and libadwaita colours from `arctic-colors.css` (a link to the theme's `gtk.css`, which the theme hook turns into a copy that Flatpak apps can read), amber focus ring, Adwaita icons and cursor, Figtree | Platforms → GTK |
+| `.config/qt5ct`, `.config/qt6ct` | Qt 5 (VLC) and Qt 6 apps: Fusion with the active theme's palette (`QT_QPA_PLATFORMTHEME=qt6ct`, set in `mango/arctic/look.conf` and `environment.d`) | Platforms |
+| `.config/zed/settings.json` | Zed: the "Arctic" theme (the theme hook puts it in Zed's themes folder, also for the Flatpak) and the Arctic fonts | — |
+| `.config/yazi/theme.toml`, `.config/btop/` | Links to the active theme's yazi and btop themes | — |
+| `.config/foot`, `.config/alacritty` | The other terminals, with kitty's palette from the active theme | Terminal |
+| `.zshrc`, `.zprofile`, `.bashrc.d/arctic.sh` | Prompt (`~ ❯`, amber arrow; the theme's `zsh/colors.zsh`), history, completion, fzf colours (`fzf/fzfrc`), the fox greeting | Terminal |
 | `.config/arctic/themes/{winter,polar-night}/` | **Generated** (by the theme engine, `design/themegen`) colour files for every app above, `theme.json` (every token) for the shell and `palette.json` | tokens |
 | `.config/arctic/current` | Symlink to the active theme; every app reads its colours through it | Theme switching |
 | `.local/bin/arctic-*` | The helper commands below | — |
@@ -105,8 +109,12 @@ home directory only points at them, so `dnf upgrade` reaches accounts that alrea
 | `~/.config/arctic/current` | a link to `/usr/share/arctic/themes/<theme>` (`arctic-theme` switches it; a theme folder of your own in `~/.config/arctic/themes/` is used first) |
 | `keys.txt` | not copied: the cheat sheet is read from `/usr/share/arctic/keys.txt` unless `~/.local/share/arctic/keys.txt` exists |
 
-The other files (kitty, GTK, waybar, fuzzel, mako, zsh) are ordinary copies that are yours to
-edit. `install.sh` (no packages) copies everything, including the files above, into the home
+The other files (kitty, GTK, Qt, Zed, btop, waybar, fuzzel, mako, zsh) are ordinary copies that
+are yours to edit. The links into `~/.config/arctic/current` (yazi's `theme.toml`, btop's
+`themes/arctic.theme`, GTK's `arctic-colors.css`) follow the theme; replace one with a copy to
+keep it as you leave it. After a theme switch, the hooks in `/usr/share/arctic/theme-hooks.d`
+update what can't follow a link (GTK for Flatpak apps, running Qt apps, Zed; docs/BUILD-SPEC.md
+§3.1). `install.sh` (no packages) copies everything, including the files above, into the home
 directory. The installer also writes `/etc/arctic/mango/keyboard.conf` (your keyboard layout)
 and `/etc/arctic/default-apps` (the apps you ticked); both are read at login.
 

@@ -10,6 +10,8 @@
                                     keep Winter / Polar night). Without on|off, print on or off.
   arctic-theme mode [auto|dark|light]   light or dark for wallpaper colours (auto: from the picture)
   arctic-theme toggle               light <-> dark (Super+Shift+T)
+  arctic-theme zen [on|off]         give Zen Browser the theme's accent colour (read when Zen
+                                    starts; default off). Without on|off, print on or off.
   arctic-theme current [--json]     the active theme (JSON: name, label, mode, colours, settings)
   arctic-theme list [--json]        the themes you can switch to
   arctic-theme reload               re-apply the active theme to running apps and run the hooks
@@ -20,7 +22,8 @@
 
 ~/.config/arctic/current links to the active theme folder; the shell, Mango, kitty, mako,
 fuzzel, swaylock, waybar and GTK read their colours through it. Settings live in
-~/.config/arctic/settings.json ("auto_colors", default on; "wallpaper_mode", default auto).
+~/.config/arctic/settings.json ("auto_colors", default on; "wallpaper_mode", default auto;
+"zen_theme", default off).
 After a switch, every executable in /usr/share/arctic/theme-hooks.d and
 ~/.config/arctic/theme-hooks.d runs with ARCTIC_THEME_DIR, ARCTIC_THEME_MODE and ARCTIC_THEME_NAME
 (a file of yours replaces the system hook of the same name; 5 s limit; failures are ignored;
@@ -499,7 +502,6 @@ def reload(redraw=True):
     info = active_info()
     dark = info["mode"] == "dark"
     uid = str(os.getuid())
-    reload_gtk(dark)
     if os.environ.get("MANGO_INSTANCE_SIGNATURE") and have("mmsg"):
         run_quiet(["mmsg", "dispatch", "reload_config"])        # Mango re-reads mango-colors.conf
     if have("pkill"):
@@ -512,6 +514,9 @@ def reload(redraw=True):
     if redraw and have("arctic-wallpaper"):
         spawn(["arctic-wallpaper"])                     # Arctic's wallpapers come in both variants
     run_hooks(info)
+    # GTK last: the 10-gtk hook refreshes the copies of gtk.css GTK apps read
+    # (~/.config/gtk-{3,4}.0/arctic-colors.css), and GTK re-reads them when the theme changes.
+    reload_gtk(dark)
 
 
 # ---- commands ------------------------------------------------------------------------------------
@@ -569,6 +574,20 @@ def cmd_mode(value):
             activate(WALLPAPER_THEME)
 
 
+def zen_theme(settings=None):
+    return (settings if settings is not None else load_settings()).get("zen_theme") is True
+
+
+def cmd_zen(value):
+    if value is None:
+        print("on" if zen_theme() else "off")
+        return
+    if value not in ("on", "off"):
+        raise Error("usage: arctic-theme zen on|off", 2)
+    save_settings(zen_theme=value == "on")
+    run_hooks(active_info())        # the 40-zen hook adds or removes the accent in user.js
+
+
 def cmd_toggle():
     info = active_info()
     other = "light" if info["mode"] == "dark" else "dark"
@@ -597,7 +616,8 @@ def cmd_current(as_json):
         print(info["name"])
         return
     settings = load_settings()
-    info.update(auto_colors=auto_colors(settings), wallpaper_mode=wallpaper_mode(settings), wallpaper=saved_wallpaper())
+    info.update(auto_colors=auto_colors(settings), wallpaper_mode=wallpaper_mode(settings), wallpaper=saved_wallpaper(),
+                zen_theme=zen_theme(settings))
     print(json.dumps(info, indent=2))
 
 
@@ -644,6 +664,8 @@ def main(argv):
             cmd_auto(rest[0] if rest else None)
         elif verb == "mode" and len(rest) <= 1:
             cmd_mode(rest[0] if rest else None)
+        elif verb == "zen" and len(rest) <= 1:
+            cmd_zen(rest[0] if rest else None)
         elif verb == "toggle" and not rest:
             cmd_toggle()
         elif verb == "apply" and not rest:

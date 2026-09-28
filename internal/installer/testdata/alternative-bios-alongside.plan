@@ -114,6 +114,8 @@ $ chroot /mnt dnf swap -y --allowerasing ffmpeg-free ffmpeg
 $ chroot /mnt dnf install -y firefox neovim foot fish nautilus mpv openh264 mozilla-openh264 gstreamer1-plugin-openh264 glibc-langpack-de os-prober
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub org.libreoffice.LibreOffice
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub org.gtk.Gtk3theme.adw-gtk3-dark
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub org.gtk.Gtk3theme.adw-gtk3
 write /mnt/var/lib/flatpak/.fedora-initialized (0644, empty)
 
 # == finalize: Setting up your account…

@@ -1,0 +1,119 @@
+# Arctic Linux — Polar night for yazi (the terminal file manager).
+# Rendered by arctic-themegen from design/themegen/templates/yazi/theme.toml.tmpl.
+# ~/.config/yazi/theme.toml links to ~/.config/arctic/current/yazi/theme.toml, so yazi uses the
+# active theme the next time it starts. To change something, replace that link with a copy of
+# this file. Only keys of yazi's own preset theme (26.x) are set; the rest keep yazi's defaults.
+
+[mgr]
+cwd = { fg = "#f6bd55" }
+
+find_keyword  = { fg = "#f6bd55", bold = true, italic = true, underline = true }
+find_position = { fg = "#d49ccf", bg = "reset", bold = true, italic = true }
+
+symlink_target = { fg = "#72cfd3", italic = true }
+
+marker_copied   = { fg = "#6fd3a3", bg = "#6fd3a3" }
+marker_cut      = { fg = "#ff9189", bg = "#ff9189" }
+marker_marked   = { fg = "#86bdf5", bg = "#86bdf5" }
+marker_selected = { fg = "#f6bd55", bg = "#f6bd55" }
+
+count_copied   = { fg = "#1a212a", bg = "#6fd3a3" }
+count_cut      = { fg = "#1a212a", bg = "#ff9189" }
+count_selected = { fg = "#151a21", bg = "#f6bd55" }
+
+border_style = { fg = "#2f3945" }
+
+[tabs]
+active   = { fg = "#151a21", bg = "#f6bd55", bold = true }
+inactive = { fg = "#aeb9c5", bg = "#0f141a" }
+
+[mode]
+normal_main = { fg = "#151a21", bg = "#f6bd55", bold = true }
+normal_alt  = { fg = "#f6bd55", bg = "#0f141a" }
+select_main = { fg = "#1a212a", bg = "#86bdf5", bold = true }
+select_alt  = { fg = "#86bdf5", bg = "#0f141a" }
+unset_main  = { fg = "#151a21", bg = "#ff9189", bold = true }
+unset_alt   = { fg = "#ff9189", bg = "#0f141a" }
+
+[indicator]
+parent  = { fg = "#e9eef3", bg = "#232b36" }
+current = { fg = "#e9eef3", bg = "#3a2d16" }
+preview = { underline = true }
+
+[status]
+perm_sep   = { fg = "#4d5967" }
+perm_type  = { fg = "#6fd3a3" }
+perm_read  = { fg = "#f6bd55" }
+perm_write = { fg = "#ff9189" }
+perm_exec  = { fg = "#86bdf5" }
+
+progress_label  = { fg = "#e9eef3", bold = true }
+progress_normal = { fg = "#f6bd55", bg = "#0f141a" }
+progress_error  = { fg = "#ff9189", bg = "#0f141a" }
+
+[which]
+border          = { fg = "#f6bd55" }
+mask            = { bg = "#232b36" }
+cand            = { fg = "#f6bd55" }
+rest            = { fg = "#8f9cab" }
+desc            = { fg = "#aeb9c5" }
+separator_style = { fg = "#4d5967" }
+
+[confirm]
+border  = { fg = "#f6bd55" }
+title   = { fg = "#f6bd55" }
+btn_yes = { fg = "#151a21", bg = "#f6bd55" }
+
+[spot]
+border   = { fg = "#f6bd55" }
+title    = { fg = "#f6bd55" }
+tbl_col  = { fg = "#f6bd55" }
+tbl_cell = { fg = "#151a21", bg = "#f6bd55" }
+
+[notify]
+title_info  = { fg = "#86bdf5" }
+title_warn  = { fg = "#f4a270" }
+title_error = { fg = "#ff9189" }
+
+[pick]
+border = { fg = "#f6bd55" }
+active = { fg = "#f6bd55", bold = true }
+
+[input]
+border   = { fg = "#f6bd55" }
+selected = { bg = "#5a4520" }
+
+[cmp]
+border = { fg = "#f6bd55" }
+active = { fg = "#e9eef3", bg = "#3a2d16" }
+
+[tasks]
+border  = { fg = "#f6bd55" }
+hovered = { fg = "#f6bd55", bold = true }
+
+[help]
+border  = { fg = "#f6bd55" }
+chord   = { fg = "#f6bd55" }
+hovered = { fg = "#e9eef3", bg = "#3a2d16", bold = true }
+
+[filetype]
+rules = [
+	# Image
+	{ mime = "**/image/*", fg = "#f2b857" },
+	# Media
+	{ mime = "**/{audio,video}/*", fg = "#d49ccf" },
+	# Archive
+	{ mime = "**/application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#ef8a84" },
+	# Document
+	{ mime = "**/application/{pdf,doc,rtf}", fg = "#72cfd3" },
+	# Virtual file system
+	{ mime = "vfs/{absent,stale}", fg = "#8f9cab" },
+	# Special file
+	{ url = "*", is = "orphan", fg = "#151a21", bg = "#ff9189" },
+	{ url = "*", is = "exec", fg = "#6fd3a3" },
+	# Dummy file
+	{ url = "*", is = "dummy", fg = "#151a21", bg = "#ff9189" },
+	{ url = "*/", is = "dummy", fg = "#151a21", bg = "#ff9189" },
+	# Fallback
+	{ url = "*/", fg = "#86bdf5" }
+]

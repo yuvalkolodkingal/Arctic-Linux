@@ -1,0 +1,51 @@
+#!/usr/bin/bash
+# Arctic Linux theme hook: Zed (docs/BUILD-SPEC.md "App theming").
+# Run by `arctic-theme reload` with ARCTIC_THEME_DIR and ARCTIC_THEME_MODE; quick, never fails.
+#
+# Puts the active theme's Zed theme family ("Arctic", zed/themes/arctic.json) into Zed's themes
+# folder, where Zed notices the change and restyles open windows:
+#   ~/.config/zed/themes/                        Zed installed natively (the folder exists)
+#   ~/.var/app/dev.zed.Zed/config/zed/themes/    the Flatpak (the default; it has its own config)
+# A copy, not a link: the Flatpak can't see /usr/share/arctic. When that folder has no
+# settings.json yet, one choosing the "Arctic" theme and the Arctic fonts is written; an
+# existing settings.json is never touched.
+set -u
+
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+src="${ARCTIC_THEME_DIR:-$cfg/arctic/current}/zed/themes/arctic.json"
+[[ -r "$src" ]] || exit 0
+
+targets=()
+[[ -d "$cfg/zed" ]] && targets+=("$cfg/zed")
+if [[ -d "$HOME/.var/app/dev.zed.Zed" || -d /var/lib/flatpak/app/dev.zed.Zed ||
+      -d "$HOME/.local/share/flatpak/app/dev.zed.Zed" ]]; then
+  targets+=("$HOME/.var/app/dev.zed.Zed/config/zed")
+fi
+
+for zed in "${targets[@]}"; do
+  mkdir -p "$zed/themes" 2>/dev/null || continue
+  dst="$zed/themes/arctic.json"
+  if ! cmp -s "$src" "$dst" 2>/dev/null; then
+    tmp="$(mktemp "$dst.XXXXXX" 2>/dev/null)" || continue
+    if cp "$src" "$tmp" 2>/dev/null; then
+      chmod 0644 "$tmp" && mv -f "$tmp" "$dst"
+    fi
+    rm -f "$tmp"
+  fi
+  if [[ ! -e "$zed/settings.json" && ! -L "$zed/settings.json" ]]; then
+    cat > "$zed/settings.json" 2>/dev/null << 'EOF'
+{
+  "theme": "Arctic",
+  "ui_font_family": "Figtree",
+  "ui_font_size": 15,
+  "buffer_font_family": "JetBrains Mono",
+  "buffer_font_size": 14,
+  "terminal": {
+    "font_family": "JetBrains Mono"
+  }
+}
+EOF
+  fi
+done
+
+exit 0

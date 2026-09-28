@@ -1,0 +1,119 @@
+# Arctic Linux — {{label}} for yazi (the terminal file manager).
+# Rendered by arctic-themegen from design/themegen/templates/yazi/theme.toml.tmpl.
+# ~/.config/yazi/theme.toml links to ~/.config/arctic/current/yazi/theme.toml, so yazi uses the
+# active theme the next time it starts. To change something, replace that link with a copy of
+# this file. Only keys of yazi's own preset theme (26.x) are set; the rest keep yazi's defaults.
+
+[mgr]
+cwd = { fg = "{{accent-text|hex}}" }
+
+find_keyword  = { fg = "{{accent-text|hex}}", bold = true, italic = true, underline = true }
+find_position = { fg = "{{ansi-5|hex}}", bg = "reset", bold = true, italic = true }
+
+symlink_target = { fg = "{{ansi-6|hex}}", italic = true }
+
+marker_copied   = { fg = "{{success|hex}}", bg = "{{success|hex}}" }
+marker_cut      = { fg = "{{error|hex}}", bg = "{{error|hex}}" }
+marker_marked   = { fg = "{{info|hex}}", bg = "{{info|hex}}" }
+marker_selected = { fg = "{{accent|hex}}", bg = "{{accent|hex}}" }
+
+count_copied   = { fg = "{{surface|hex}}", bg = "{{success|hex}}" }
+count_cut      = { fg = "{{surface|hex}}", bg = "{{error|hex}}" }
+count_selected = { fg = "{{on-accent|hex}}", bg = "{{accent|hex}}" }
+
+border_style = { fg = "{{line|hex}}" }
+
+[tabs]
+active   = { fg = "{{on-accent|hex}}", bg = "{{accent|hex}}", bold = true }
+inactive = { fg = "{{ink-muted|hex}}", bg = "{{surface-sunken|hex}}" }
+
+[mode]
+normal_main = { fg = "{{on-accent|hex}}", bg = "{{accent|hex}}", bold = true }
+normal_alt  = { fg = "{{accent-text|hex}}", bg = "{{surface-sunken|hex}}" }
+select_main = { fg = "{{surface|hex}}", bg = "{{info|hex}}", bold = true }
+select_alt  = { fg = "{{info|hex}}", bg = "{{surface-sunken|hex}}" }
+unset_main  = { fg = "{{on-error|hex}}", bg = "{{error|hex}}", bold = true }
+unset_alt   = { fg = "{{error|hex}}", bg = "{{surface-sunken|hex}}" }
+
+[indicator]
+parent  = { fg = "{{ink|hex}}", bg = "{{surface-raised|hex}}" }
+current = { fg = "{{ink|hex}}", bg = "{{accent-soft|hex}}" }
+preview = { underline = true }
+
+[status]
+perm_sep   = { fg = "{{ink-disabled|hex}}" }
+perm_type  = { fg = "{{success|hex}}" }
+perm_read  = { fg = "{{accent-text|hex}}" }
+perm_write = { fg = "{{error|hex}}" }
+perm_exec  = { fg = "{{info|hex}}" }
+
+progress_label  = { fg = "{{ink|hex}}", bold = true }
+progress_normal = { fg = "{{accent|hex}}", bg = "{{surface-sunken|hex}}" }
+progress_error  = { fg = "{{error|hex}}", bg = "{{surface-sunken|hex}}" }
+
+[which]
+border          = { fg = "{{accent-edge|hex}}" }
+mask            = { bg = "{{surface-raised|hex}}" }
+cand            = { fg = "{{accent-text|hex}}" }
+rest            = { fg = "{{ink-subtle|hex}}" }
+desc            = { fg = "{{ink-muted|hex}}" }
+separator_style = { fg = "{{ink-disabled|hex}}" }
+
+[confirm]
+border  = { fg = "{{accent-edge|hex}}" }
+title   = { fg = "{{accent-text|hex}}" }
+btn_yes = { fg = "{{on-accent|hex}}", bg = "{{accent|hex}}" }
+
+[spot]
+border   = { fg = "{{accent-edge|hex}}" }
+title    = { fg = "{{accent-text|hex}}" }
+tbl_col  = { fg = "{{accent-text|hex}}" }
+tbl_cell = { fg = "{{on-accent|hex}}", bg = "{{accent|hex}}" }
+
+[notify]
+title_info  = { fg = "{{info|hex}}" }
+title_warn  = { fg = "{{warning|hex}}" }
+title_error = { fg = "{{error|hex}}" }
+
+[pick]
+border = { fg = "{{accent-edge|hex}}" }
+active = { fg = "{{accent-text|hex}}", bold = true }
+
+[input]
+border   = { fg = "{{accent-edge|hex}}" }
+selected = { bg = "{{selection|hex}}" }
+
+[cmp]
+border = { fg = "{{accent-edge|hex}}" }
+active = { fg = "{{ink|hex}}", bg = "{{accent-soft|hex}}" }
+
+[tasks]
+border  = { fg = "{{accent-edge|hex}}" }
+hovered = { fg = "{{accent-text|hex}}", bold = true }
+
+[help]
+border  = { fg = "{{accent-edge|hex}}" }
+chord   = { fg = "{{accent-text|hex}}" }
+hovered = { fg = "{{ink|hex}}", bg = "{{accent-soft|hex}}", bold = true }
+
+[filetype]
+rules = [
+	# Image
+	{ mime = "**/image/*", fg = "{{ansi-3|hex}}" },
+	# Media
+	{ mime = "**/{audio,video}/*", fg = "{{ansi-5|hex}}" },
+	# Archive
+	{ mime = "**/application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "{{ansi-1|hex}}" },
+	# Document
+	{ mime = "**/application/{pdf,doc,rtf}", fg = "{{ansi-6|hex}}" },
+	# Virtual file system
+	{ mime = "vfs/{absent,stale}", fg = "{{ink-subtle|hex}}" },
+	# Special file
+	{ url = "*", is = "orphan", fg = "{{on-error|hex}}", bg = "{{error|hex}}" },
+	{ url = "*", is = "exec", fg = "{{success|hex}}" },
+	# Dummy file
+	{ url = "*", is = "dummy", fg = "{{on-error|hex}}", bg = "{{error|hex}}" },
+	{ url = "*/", is = "dummy", fg = "{{on-error|hex}}", bg = "{{error|hex}}" },
+	# Fallback
+	{ url = "*/", fg = "{{info|hex}}" }
+]

@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+# Arctic Linux theme hook: Qt apps (VLC and other Qt 5/6 apps; docs/BUILD-SPEC.md "App theming").
+# Run by `arctic-theme reload` with ARCTIC_THEME_DIR and ARCTIC_THEME_MODE; quick, never fails.
+#
+# qt5ct/qt6ct read the palette from color_scheme_path (~/.config/arctic/current/qt*ct/colors/
+# arctic.conf, so it already follows the switch), and a running Qt app re-reads it about three
+# seconds after something in ~/.config/qt5ct or ~/.config/qt6ct changes. Replacing the config
+# file with an identical copy is such a change: open Qt windows restyle live.
+set -u
+
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+for tool in qt5ct qt6ct; do
+  f="$cfg/$tool/$tool.conf"
+  [[ -f "$f" && ! -L "$f" ]] || continue
+  tmp="$(mktemp "$f.XXXXXX" 2>/dev/null)" || continue
+  if cp -p "$f" "$tmp" 2>/dev/null; then
+    mv -f "$tmp" "$f"
+  fi
+  rm -f "$tmp"
+done
+
+exit 0

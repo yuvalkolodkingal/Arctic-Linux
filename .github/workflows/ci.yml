@@ -51,7 +51,7 @@ jobs:
           files=()
           for f in dotfiles/.local/bin/* tools/*.sh tools/lib/*.sh live/* iso/kiwi/config.sh \
                    packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh \
-                   packaging/updates/*.sh; do
+                   packaging/updates/*.sh packaging/theme-hooks.d/* dotfiles/.bashrc.d/*.sh; do
             [ -f "$f" ] || continue
             case "$(head -n1 "$f")" in
               *python*|*node*) continue ;;
@@ -68,9 +68,11 @@ jobs:
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Install tools
-        run: dnf -y install git python3 python3-pyte python3-pillow python3-rpm nodejs librsvg2-tools util-linux procps-ng
+        # zsh, fzf and foot let the app theme tests run the apps' own checks (zsh -n, fzf's
+        # option parser, foot --check-config); without them those checks are skipped.
+        run: dnf -y install git python3 python3-pyte python3-pillow python3-rpm nodejs librsvg2-tools util-linux procps-ng zsh fzf foot
       - uses: actions/checkout@v4
-      - name: Python unittest (design/themegen — theme engine, wallpaper colours, arctic-theme)
+      - name: Python unittest (design/themegen — theme engine, wallpaper colours, arctic-theme, app templates and theme hooks)
         run: python3 -m unittest discover -s design/themegen/tests -v
       - name: Python unittest (shell/tests)
         run: |

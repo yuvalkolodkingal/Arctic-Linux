@@ -70,6 +70,14 @@
 		<package name="zsh"/>
 		<package name="Thunar"/>
 		<package name="vlc"/>
+		<!-- App theming (docs/BUILD-SPEC.md "App theming"; arctic-desktop-config requires them):
+		     adw-gtk3 for GTK 3 apps, qt5ct/qt6ct for Qt 5 (VLC) and Qt 6 apps, btop (recommended
+		     by arctic-desktop). Fedora builds qt5ct/qt6ct with KDE colour-scheme support, which
+		     pulls KDE Frameworks 5/6 libraries, Breeze icons and plasma-breeze-common. -->
+		<package name="adw-gtk3-theme"/>
+		<package name="qt5ct"/>
+		<package name="qt6ct"/>
+		<package name="btop"/>
 		<package name="arctic-installer"/>
 		<package name="arctic-live"/>
 		<package name="livesys-scripts"/>

@@ -29,6 +29,7 @@ import re
 import selectors
 import shlex
 import struct
+import subprocess
 import sys
 import termios
 
@@ -47,6 +48,9 @@ FLATPAK_CHANGES = {'install', 'uninstall', 'remove', 'update', 'upgrade', 'repai
 FLATPAK_YES = {'-y', '--assumeyes', '--noninteractive'}
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+@:-]*$')
 FLATHUB_PREFIX = 'flathub:'
+# Theme hooks that set up a newly installed Flatpak app (30-zed: the Arctic theme and fonts in
+# the Zed Flatpak's own config folder). Otherwise that happens at the next login or theme switch.
+FLATPAK_THEME_HOOKS = ('30-zed',)
 # sudo's password prompt, set through the environment (the commands stay plain `sudo dnf …`),
 # so the console can tell it apart from other prompts on the same line.
 SUDO_PROMPT = '[sudo] password for %p: '
@@ -96,6 +100,39 @@ def build_command(text):
     return [*PKEXEC_DNF, 'install', '-y', *packages]
 
 
+def theme_hook(name):
+    """The theme hook `name` as arctic-theme would run it (a file of yours wins), or None."""
+    config = os.environ.get('XDG_CONFIG_HOME') or os.path.join(os.path.expanduser('~'), '.config')
+    for d in (os.path.join(config, 'arctic', 'theme-hooks.d'),
+              os.path.join(os.environ.get('ARCTIC_DATA_DIR') or '/usr/share/arctic', 'theme-hooks.d')):
+        path = os.path.join(d, name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
+
+
+def after_flatpak_install(command):
+    """Run the theme hooks for Flatpak apps after `flatpak install` succeeded (in the
+    background; their output is not shown)."""
+    if not command or os.path.basename(command[0]) != 'flatpak':
+        return []
+    verb = next((a for a in command[1:] if not a.startswith('-')), None)
+    if verb != 'install':
+        return []
+    started = []
+    for name in FLATPAK_THEME_HOOKS:
+        path = theme_hook(name)
+        if path is None:
+            continue
+        try:
+            subprocess.Popen([path], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            started.append(path)
+        except OSError:
+            pass
+    return started
+
+
 def with_yes(args, verb, answers, flag):
     """args with `flag` right after the verb, unless an answer (-y, --assumeno …) is given."""
     if any(a in answers for a in args):
@@ -110,6 +147,7 @@ class Console:
         self.stream = pyte.ByteStream(self.screen)
         self.master = None
         self.pid = None
+        self.command = None
         self.secret = False
         self.notice = ''
         self.dirty = True
@@ -172,7 +210,7 @@ class Console:
             except OSError as error:
                 os.write(1, ('{}: {}\r\n'.format(command[0], error.strerror)).encode())
                 os._exit(127)
-        self.pid, self.master = pid, fd
+        self.pid, self.master, self.command = pid, fd, command
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', ROWS, COLUMNS, 0, 0))
         os.set_blocking(fd, False)
         self.dirty = True
@@ -225,6 +263,9 @@ class Console:
             self.master = self.pid = None
             self.secret = False
             code = os.waitstatus_to_exitcode(status)
+            if code == 0:
+                after_flatpak_install(self.command)
+            self.command = None
             self.write_output('\r\n' + ('Done.' if code == 0 else '[Exit ' + str(code) + ']') + '\r\n\r\n')
 
 

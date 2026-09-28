@@ -1,0 +1,8 @@
+# Arctic Linux — Winter for fzf (fuzzy finder), read on every run.
+# Rendered by arctic-themegen from design/themegen/templates/fzf/fzfrc.tmpl. The shells set
+# FZF_DEFAULT_OPTS_FILE=~/.config/arctic/current/fzf/fzfrc; your own FZF_DEFAULT_OPTS still
+# apply on top of it.
+--color=fg:#151a21,bg:-1,hl:#84500d
+--color=fg+:#151a21,bg+:#fdf0d6,hl+:#84500d,gutter:-1
+--color=info:#5f6b79,prompt:#84500d,pointer:#84500d,marker:#1d7350
+--color=spinner:#84500d,header:#4a5663,border:#d5dde4,query:#151a21
