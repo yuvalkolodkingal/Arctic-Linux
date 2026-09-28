@@ -428,6 +428,31 @@ class Fetch(unittest.TestCase):
     def test_first_publish_when_the_workflow_never_succeeded(self):
         self.assertEqual(self.fetch(gh=fake_gh(None, runs=[])), "fresh")
 
+    def test_dry_runs_are_not_publishes(self):
+        # A successful dry run (artifact site-dry-run, no github-pages) deployed nothing: with
+        # nothing live it is still a first publish, and an older deploying run is still found.
+        dry = {"id": 11, "run_started_at": "2026-09-29T10:00:00Z", "head_branch": "main"}
+
+        def gh(args, binary=False):
+            path = next(a for a in args if a.startswith("repos/"))
+            if path.endswith("/runs"):
+                return {"workflow_runs": [dry]}
+            if path.endswith("/runs/11/artifacts"):
+                return {"artifacts": [{"id": 111, "name": "site-dry-run", "expired": False}]}
+            raise AssertionError(f"unexpected gh api {args}")
+        self.assertEqual(self.fetch(gh=gh), "fresh")
+        older = fake_gh(None)
+
+        def gh2(args, binary=False):
+            path = next(a for a in args if a.startswith("repos/"))
+            if path.endswith("/runs"):
+                return {"workflow_runs": [dry] + older(args)["workflow_runs"]}
+            if path.endswith("/runs/11/artifacts"):
+                return gh(args)
+            return older(args, binary)
+        with self.assertRaises(ar.FetchError):   # run 9 deployed; its artifact expired
+            self.fetch(gh=gh2)
+
     def test_nothing_live_after_earlier_publishes_fails(self):
         # Pages briefly answering 404 must not look like a first publish.
         with self.assertRaises(ar.FetchError):

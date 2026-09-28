@@ -446,11 +446,17 @@ def artifact_from_last_run(repo: str, workflow: str, dest: str, gh=gh_api) -> st
     runs = gh(["-X", "GET", f"repos/{repo}/actions/workflows/{workflow}/runs",
                "-f", "status=success", "-f", "per_page=20"]).get("workflow_runs", [])
     runs = [r for r in runs if str(r.get("id")) != current]
-    if not runs:
-        raise NoArtifact(f"no successful {workflow} run yet", first_publish=True)
     runs.sort(key=lambda r: r.get("run_started_at") or r.get("created_at") or "", reverse=True)
-    run = runs[0]
-    arts = gh([f"repos/{repo}/actions/runs/{run['id']}/artifacts", "-X", "GET", "-f", "per_page=100"]).get("artifacts", [])
+    # The last run that deployed: successful runs without a github-pages artifact (dry runs,
+    # which upload "site-dry-run") published nothing.
+    run = arts = None
+    for r in runs:
+        a = gh([f"repos/{repo}/actions/runs/{r['id']}/artifacts", "-X", "GET", "-f", "per_page=100"]).get("artifacts", [])
+        if any(x.get("name") == "github-pages" for x in a):
+            run, arts = r, a
+            break
+    if run is None:
+        raise NoArtifact(f"no {workflow} run has deployed yet", first_publish=True)
     art = next((a for a in arts if a.get("name") == "github-pages" and not a.get("expired")), None)
     if art is None:
         raise NoArtifact(f"run {run['id']} has no (unexpired) github-pages artifact")
