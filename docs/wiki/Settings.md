@@ -86,6 +86,13 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   picture), Dark or Light.
 - **More themes:** Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine and Everforest, drawn from
   their own colours; a pair (Catppuccin Latte and Mocha) switches as one with `Super + Shift + T`.
+- **Weather** (off until you turn it on; nothing is asked before): **Weather in the calendar**
+  shows the weather now and for five days under the month, from
+  [Open-Meteo](https://open-meteo.com) (no account). **Place** is your time zone's city unless you
+  search for your town (Enter searches; pick one of the results); the light/dark schedule's
+  sunrise and sunset use the same place. **Units**: automatic (°F for US English, else °C), °C or
+  °F. **Show the temperature on the bar** puts it next to the clock. Only the rounded coordinates
+  of the place (about 1 km) are sent, about once an hour while it is on.
 - **Icons in the terminal:** whether the Nerd Font symbols yazi, eza and prompts use are
   installed (`arctic-fonts-symbols`), with a way to get them when they aren't.
 - **Code font:** the monospace font for the terminals (kitty, foot, alacritty), GTK's monospace

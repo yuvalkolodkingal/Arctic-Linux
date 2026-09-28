@@ -45,7 +45,9 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     network | wifi on|off         NetworkManager status (nmcli)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
-    shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch
+    shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch,
+                                  weather, weatherUnits, barWeather
+    weather-place [search TEXT | set NAME LAT LON [DETAIL] | zone]    where the weather is for
     daylight | daylight-set off|sun|hours LIGHT DARK      light and dark by the clock (arctic-daylight)
     accessibility                 what the Accessibility page needs (the keyboard pointer, wl-kbptr,
                                   high contrast)
@@ -2583,9 +2585,17 @@ def _web_search_ok(value):
     return value in dict(WEB_ENGINES) or bool(re.fullmatch(r'https://[^\s"\\]{1,200}', value) and '%s' in value)
 
 
+def _as_bool(value):
+    return value == 'true'
+
+
 SHELL_OPTIONS = {
-    # key: (default, check(value) -> bool)
+    # key: (default, check(value) -> bool[, convert(value) -> what shell.json holds])
     'webSearch': ('duckduckgo', _web_search_ok),
+    # Weather (WeatherService.qml): off until turned on; units; the temperature on the bar.
+    'weather': (False, lambda v: v in ('true', 'false'), _as_bool),
+    'weatherUnits': ('auto', lambda v: v in ('auto', 'metric', 'imperial')),
+    'barWeather': (False, lambda v: v in ('true', 'false'), _as_bool),
 }
 
 
@@ -2596,7 +2606,7 @@ def read_shell_json(paths):
 
 def cmd_shell_options(paths, _args):
     data = read_shell_json(paths)
-    out = {key: data.get(key, default) for key, (default, _check) in SHELL_OPTIONS.items()}
+    out = {key: data.get(key, spec[0]) for key, spec in SHELL_OPTIONS.items()}
     out.update(ok=True, engines=[dict(id=i, name=n) for i, n in WEB_ENGINES])
     return out
 
@@ -2605,12 +2615,52 @@ def cmd_shell_option_set(paths, args):
     if len(args) != 2 or args[0] not in SHELL_OPTIONS:
         raise Failure('usage: shell-option-set {} VALUE'.format('|'.join(SHELL_OPTIONS)))
     key, value = args
-    if not SHELL_OPTIONS[key][1](value):
+    spec = SHELL_OPTIONS[key]
+    if not spec[1](value):
         raise Failure('That isn’t a value Arctic can use for this.')
     data = read_shell_json(paths)
-    data[key] = value
+    data[key] = spec[2](value) if len(spec) > 2 else value
     atomic_write(paths.arctic / 'shell.json', json.dumps(data, indent=2) + '\n')
     return cmd_shell_options(paths, [])
+
+
+# ---- where you are, for the weather (shell/scripts/weather.py, Open-Meteo) ------------------------
+
+def cmd_weather_place(paths, args):
+    """weather-place                       the place the weather is for
+    weather-place search TEXT           places called that (asks Open-Meteo's geocoding)
+    weather-place set NAME LAT LON [DETAIL]   use that place (~/.config/arctic/location.json)
+    weather-place zone                  back to your time zone's city"""
+    script = shell_script(paths, 'weather.py')
+    if not script:
+        return dict(ok=True, available=False)
+    location = paths.arctic / 'location.json'
+    if args and args[0] == 'search' and len(args) == 2:
+        code, out, _err = run([sys.executable, str(script), 'geocode', args[1], '--json'], timeout=20)
+        data = _loads(out.strip())
+        if not isinstance(data, dict) or not data.get('ok'):
+            raise Failure((data or {}).get('error') if isinstance(data, dict) else 'Places couldn’t be searched.')
+        return dict(ok=True, available=True, places=data.get('places', []))
+    if args and args[0] == 'set' and len(args) in (4, 5):
+        try:
+            lat, lon = float(args[2]), float(args[3])
+        except ValueError:
+            raise Failure('A place needs a latitude and a longitude.') from None
+        name, detail = args[1].strip(), (args[4].strip() if len(args) == 5 else '')
+        if not (0 < len(name) <= 80 and len(detail) <= 120 and -90 <= lat <= 90 and -180 <= lon <= 180):
+            raise Failure('That isn’t a place Arctic can use.')
+        atomic_write(location, json.dumps(dict(name=name, detail=detail, lat=round(lat, 4), lon=round(lon, 4))) + '\n')
+    elif args == ['zone']:
+        with contextlib.suppress(FileNotFoundError):
+            location.unlink()
+    elif args:
+        raise Failure('usage: weather-place [search TEXT | set NAME LAT LON [DETAIL] | zone]')
+    code, out, _err = run([sys.executable, str(script), 'place', '--json'], timeout=10)
+    data = _loads(out.strip())
+    if not isinstance(data, dict) or not data.get('ok'):
+        return dict(ok=True, available=True, place=None)
+    return dict(ok=True, available=True, place=dict(name=data.get('name'), detail=data.get('detail', ''),
+                                                     source=data.get('source')))
 
 
 # ---- light and dark by the clock (arctic-daylight) ------------------------------------------------
@@ -2753,8 +2803,9 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
 COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
                  'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
                  'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
+                 'weather-place': cmd_weather_place,
                  'fonts': cmd_fonts, 'font-set': cmd_font_set})
-WRITERS |= {'shell-option-set'}
+WRITERS |= {'shell-option-set', 'weather-place'}
 
 
 def main(argv=None):

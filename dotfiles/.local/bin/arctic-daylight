@@ -10,8 +10,9 @@
 
 Switching is `arctic-theme light|dark`: Winter and Polar night, or the light or dark take on
 your wallpaper's colours. Switching by hand still works; the schedule takes over again at the
-next sunrise or sunset. Sunrise and sunset come from the coordinates tzdata gives your time
-zone (/usr/share/zoneinfo/zone1970.tab): no location service, nothing leaves the computer.
+next sunrise or sunset. Sunrise and sunset come from the place chosen for the weather
+(~/.config/arctic/location.json), else the coordinates tzdata gives your time zone
+(/usr/share/zoneinfo/zone1970.tab): no location service, nothing leaves the computer.
 The next change is a transient systemd user timer (arctic-daylight) on the wall clock, so it
 also happens when the computer wakes after sleeping through it.
 Settings: ~/.config/arctic/daylight.json.
@@ -81,7 +82,16 @@ def time_zone():
 
 
 def location():
-    """(lat, lon, zone) from the time zone, or None."""
+    """(lat, lon, where): the place chosen for the weather (Settings > Appearance > Weather,
+    ~/.config/arctic/location.json), else your time zone's coordinates; or None."""
+    try:
+        with open(os.path.join(CONFIG, "location.json"), encoding="utf-8") as f:
+            chosen = json.load(f)
+        lat, lon = float(chosen["lat"]), float(chosen["lon"])
+        if -90 <= lat <= 90 and -180 <= lon <= 180 and isinstance(chosen.get("name"), str) and chosen["name"]:
+            return (lat, lon, chosen["name"][:80])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
     zone = time_zone()
     if not zone:
         return None

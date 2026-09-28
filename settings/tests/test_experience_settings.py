@@ -105,6 +105,35 @@ class TextSizeTest(Home):
         self.helper('text-scale', '3', ok=False)
 
 
+class WeatherTest(Home):
+    def test_options(self):
+        data = self.helper('shell-options')
+        self.assertEqual((data['weather'], data['weatherUnits'], data['barWeather']), (False, 'auto', False))
+        self.helper('shell-option-set', 'weather', 'true')
+        self.helper('shell-option-set', 'weatherUnits', 'imperial')
+        stored = json.loads((self.home / '.config/arctic/shell.json').read_text())
+        self.assertEqual(stored, {'weather': True, 'weatherUnits': 'imperial'})      # a real true
+        for key, value in (('weather', 'yes'), ('weatherUnits', 'kelvin'), ('barWeather', '1')):
+            self.helper('shell-option-set', key, value, ok=False)
+
+    def test_place(self):
+        zoneinfo = self.tmp / 'zoneinfo'
+        zoneinfo.mkdir()
+        (zoneinfo / 'zone1970.tab').write_text('IL\t+314650+0351326\tAsia/Jerusalem\n')
+        self.env.update(ARCTIC_ZONEINFO=str(zoneinfo), ARCTIC_TIMEZONE='Asia/Jerusalem',
+                        ARCTIC_GEOCODE_API='http://127.0.0.1:9/v1/search', no_proxy='*')
+        self.assertEqual(self.helper('weather-place')['place'], {'name': 'Jerusalem', 'detail': 'Asia/Jerusalem', 'source': 'zone'})
+        data = self.helper('weather-place', 'set', 'Haifa', '32.81841', '34.9885', 'Haifa District, Israel')
+        self.assertEqual(data['place'], {'name': 'Haifa', 'detail': 'Haifa District, Israel', 'source': 'chosen'})
+        saved = json.loads((self.home / '.config/arctic/location.json').read_text())
+        self.assertEqual((saved['lat'], saved['lon']), (32.8184, 34.9885))
+        self.assertEqual(self.helper('weather-place', 'zone')['place']['source'], 'zone')
+        self.assertFalse((self.home / '.config/arctic/location.json').exists())
+        for bad in (('set', 'X', '99', '0'), ('set', '', '1', '1'), ('set', 'X', 'north', '1'), ('move',)):
+            self.helper('weather-place', *bad, ok=False)
+        self.assertIn('reach', self.helper('weather-place', 'search', 'Haifa', ok=False)['error'])
+
+
 class WallpaperRotateTest(Home):
     def test_rotate(self):
         self.assertEqual(self.helper('wallpaper-rotate')['available'], False)

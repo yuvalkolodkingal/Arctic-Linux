@@ -22,6 +22,9 @@ Page {
     property var daylight: ({ available: false, mode: "off" })
     property var fonts: ({ available: false, fonts: [] })
     property var rotate: ({ available: false, every: "off" })
+    property var shellOptions: ({ weather: false, weatherUnits: "auto", barWeather: false })
+    property var weatherPlace: ({ available: false, place: null })
+    property var placeResults: []
     property string busyTheme: ""
     property string busyWall: ""
     property bool importing: false
@@ -31,7 +34,31 @@ Page {
         Backend.call(["daylight"], r => { if (r.ok) page.daylight = r; }, true);
         Backend.call(["fonts"], r => { if (r.ok) page.fonts = r; }, true);
         Backend.call(["wallpaper-rotate"], r => { if (r.ok) page.rotate = r; }, true);
+        Backend.call(["shell-options"], r => { if (r.ok) page.shellOptions = r; }, true);
+        Backend.call(["weather-place"], r => { if (r.ok) page.weatherPlace = r; }, true);
         loadWallpapers();
+    }
+    function setShellOption(key, value, done) {
+        Backend.call(["shell-option-set", key, String(value)], r => {
+            if (r.ok) {
+                page.shellOptions = r;
+                if (done) Backend.notify("success", done, false);
+            }
+        });
+    }
+    function setPlace(args) {
+        Backend.call(["weather-place"].concat(args), r => {
+            if (r.ok) {
+                page.weatherPlace = r;
+                page.placeResults = [];
+                Backend.notify("success", "The weather is for " + (r.place ? r.place.name : "your time zone") + " now", false);
+            }
+        });
+    }
+    function placeText() {
+        const p = page.weatherPlace.place;
+        if (!p) return "Arctic doesn't know where you are: search for your town.";
+        return p.source === "zone" ? p.name + " (from your time zone)" : p.name + (p.detail ? ", " + p.detail : "");
     }
     // A new picture every so often (arctic-wallpaper rotate): from your folder or Arctic's own.
     function setRotate(every, folder, shuffle) {
@@ -56,7 +83,8 @@ Page {
     function daylightText() {
         const d = page.daylight;
         if (d.message) return d.message;
-        if (d.mode === "sun" && d.today) return "Light from sunrise (" + d.today.light + " today), dark from sunset (" + d.today.dark + "), where your time zone is. Super + Shift + T still switches until the next one.";
+        if (d.mode === "sun" && d.today) return "Light from sunrise (" + d.today.light + " today), dark from sunset (" + d.today.dark + "), "
+            + (d.zone && d.zone.indexOf("/") < 0 && d.zone !== "UTC" ? "in " + d.zone : "where your time zone is") + ". Super + Shift + T still switches until the next one.";
         if (d.mode === "hours") return "Light from " + d.light + ", dark from " + d.dark + ". Super + Shift + T still switches until the next change.";
         return "Only when you switch: here or with Super + Shift + T.";
     }
@@ -355,6 +383,93 @@ Page {
                 text: "Get them"
                 gapColor: Theme.surfaceRaised
                 onClicked: Backend.launch(["arctic-shell-ipc", "apps", "install"])
+            }
+        }
+    }
+
+    // Weather in the calendar (WeatherService.qml, scripts/weather.py): off until turned on.
+    Group {
+        title: "Weather"
+        visible: page.weatherPlace.available === true
+        desc: "From Open-Meteo.com, for the place below. Nothing is asked until this is on."
+        SettingRow {
+            searchKey: "appearance.weather"
+            title: "Weather in the calendar"
+            desc: "Now and the next five days, under the month."
+            resettable: false
+            RowSwitch {
+                checked: page.shellOptions.weather === true
+                Accessible.name: "Weather in the calendar"
+                onToggled: page.setShellOption("weather", checked, checked ? "The calendar shows the weather now" : "")
+            }
+        }
+        SettingRow {
+            searchKey: "appearance.weatherplace"
+            title: "Place"
+            desc: page.placeText()
+            visible: page.shellOptions.weather === true
+            resettable: false
+            stacked: true
+            Column {
+                width: parent.width
+                spacing: Theme.space2
+                Row {
+                    spacing: Theme.space2
+                    ArInput {
+                        id: placeSearch
+                        width: 240
+                        placeholder: "Search for a town"
+                        accessibleName: "Search for a town"
+                        onAccepted: Backend.call(["weather-place", "search", placeSearch.text.trim()], r => {
+                            if (r.ok) {
+                                page.placeResults = r.places || [];
+                                if (!page.placeResults.length) Backend.notify("info", "No place called that.", false);
+                            }
+                        })
+                    }
+                    ArButton {
+                        visible: !!page.weatherPlace.place && page.weatherPlace.place.source === "chosen"
+                        text: "Use my time zone"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: page.setPlace(["zone"])
+                    }
+                }
+                Flow {
+                    width: parent.width
+                    spacing: Theme.space2
+                    visible: page.placeResults.length > 0
+                    Repeater {
+                        model: page.placeResults
+                        ArButton {
+                            required property var modelData
+                            text: modelData.name + (modelData.detail ? ", " + modelData.detail : "")
+                            gapColor: Theme.surfaceRaised
+                            onClicked: page.setPlace(["set", modelData.name, String(modelData.lat), String(modelData.lon), modelData.detail || ""])
+                        }
+                    }
+                }
+            }
+        }
+        SettingRow {
+            title: "Units"
+            visible: page.shellOptions.weather === true
+            resettable: false
+            ArSegmented {
+                accessibleName: "Units"
+                model: [{ value: "auto", label: "Automatic" }, { value: "metric", label: "°C" }, { value: "imperial", label: "°F" }]
+                value: page.shellOptions.weatherUnits || "auto"
+                onActivated: v => page.setShellOption("weatherUnits", v, "")
+            }
+        }
+        SettingRow {
+            title: "Show the temperature on the bar"
+            desc: "Next to the clock."
+            visible: page.shellOptions.weather === true
+            resettable: false
+            RowSwitch {
+                checked: page.shellOptions.barWeather === true
+                Accessible.name: "Show the temperature on the bar"
+                onToggled: page.setShellOption("barWeather", checked, "")
             }
         }
     }

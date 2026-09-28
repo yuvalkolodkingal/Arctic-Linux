@@ -6,6 +6,7 @@ singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 singleton UpdateService 1.0 UpdateService.qml
 singleton SettingsIndex 1.0 SettingsIndex.qml
+singleton WeatherService 1.0 WeatherService.qml
 AppTile 1.0 AppTile.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
@@ -38,4 +39,6 @@ Tip 1.0 Tip.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml
 Wallpapers 1.0 Wallpapers.qml
+WeatherCard 1.0 WeatherCard.qml
+WeatherItem 1.0 WeatherItem.qml
 Workspaces 1.0 Workspaces.qml

@@ -136,6 +136,15 @@ class ScheduleTests(unittest.TestCase):
         self.assertFalse(info['located'])
         self.assertEqual(info['today'], {'light': '07:00', 'dark': '19:00'})
         self.assertIn('time zone', info['message'])
+        # A place chosen for the weather wins over the time zone.
+        config = Path(self.env['XDG_CONFIG_HOME']) / 'arctic'
+        config.mkdir(parents=True, exist_ok=True)
+        (config / 'location.json').write_text('{"name": "Haifa", "lat": 32.8184, "lon": 34.9885}')
+        info = self.daylight('--json')
+        self.assertTrue(info['located'])
+        self.assertEqual(info['zone'], 'Haifa')
+        (config / 'location.json').write_text('{"name": "Haifa", "lat": 132, "lon": 0}')
+        self.assertFalse(self.daylight('--json')['located'])              # a bad file is ignored
 
     def test_plan_across_midnight(self):
         d = load()
