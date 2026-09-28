@@ -6,13 +6,13 @@ import Quickshell
 // The network menu (bar network item, Super + Ctrl + W): Wi-Fi on/off, the wired link, nearby
 // Wi-Fi networks (scanned only while this is open), joining with the password asked right under
 // the network, company (802.1X) networks with a username and password, hidden networks, a
-// network's actions (disconnect, connect automatically, forget), a hotspot, VPN switches, and
-// Settings / the connection editor. Everything goes through network.py
+// network's actions (disconnect, connect automatically, forget), a hotspot, VPN switches,
+// Tailscale (with its exit nodes), and Settings / the connection editor. Everything goes through network.py
 // (NetworkService.run); a password travels to it on stdin and is cleared from the field.
 FocusScope {
     id: panel
     property var menu: null
-    property string page: ''            // '', 'actions', 'join', 'company'
+    property string page: ''            // '', 'actions', 'join', 'company', 'exit' (Tailscale's exit node)
     property var target: null           // the network whose actions page is open
     property string pending: ''         // SSID being joined
     property string asking: ''          // SSID whose password field is open
@@ -22,15 +22,20 @@ FocusScope {
     property string vpnAsking: ''
     property string vpnError: ''
     property bool hotspotPending: false
+    property var tailscale: null        // network.py tailscale status, when Tailscale is installed
+    property bool tailscalePending: false
+    property bool tailscaleDenied: false
+    property string tailscaleError: ''
     property bool hotspotConfirm: false   // "This disconnects “Home”" asked, not yet answered
     property string hotspotError: ''
     readonly property var wifi: NetworkService.wifi
     readonly property bool wifiOn: wifi !== null && wifi.enabled && wifi.hardware
 
     implicitWidth: 340
-    implicitHeight: (page === '' ? main : page === 'actions' ? actions : page === 'company' ? company : join).implicitHeight
+    implicitHeight: (page === '' ? main : page === 'actions' ? actions : page === 'company' ? company
+                     : page === 'exit' ? exitPage : join).implicitHeight
 
-    Component.onCompleted: { NetworkService.setScanning(true); sync(NetworkService.networks); showPage(''); }
+    Component.onCompleted: { NetworkService.setScanning(true); sync(NetworkService.networks); showPage(''); refreshTailscale(); }
     // Opened for a saved network whose password changed: its password field is open.
     function showPage(_name) {
         if (menu && menu.options && menu.options.ask) { page = ''; askError = ''; asking = menu.options.ask; }
@@ -261,6 +266,7 @@ FocusScope {
         }
         MenuRow {
             visible: hotspotRow.visible && panel.hotspotConfirm && NetworkService.wifiActive !== null
+            icon: 'hotspot'
             label: 'Turn on the hotspot'
             detail: 'This disconnects “' + (NetworkService.wifiActive ? NetworkService.wifiActive.name : '') + '”.'
             onActivated: panel.setHotspot(true)
@@ -273,7 +279,7 @@ FocusScope {
         }
 
         MenuSection {
-            visible: NetworkService.vpn.length > 0
+            visible: NetworkService.vpn.length > 0 || tailscaleRow.visible
             text: 'VPN'
         }
         Repeater {
@@ -306,6 +312,36 @@ FocusScope {
             }
         }
 
+        // Tailscale (when it is installed and its service runs).
+        MenuSwitchRow {
+            id: tailscaleRow
+            readonly property var ts: panel.tailscale
+            visible: ts !== null && ts.state !== 'no_daemon'
+            icon: 'key'
+            label: 'Tailscale'
+            checked: ts !== null && ts.state === 'running'
+            busy: panel.tailscalePending || (ts !== null && ts.state === 'starting')
+            detail: ts === null ? '' : ts.state === 'running' ? (ts.tailnet || 'Connected') + (ts.exit_node ? ' · through ' + ts.exit_node : '')
+                    : ts.state === 'signed_out' ? 'Signed out · turn on to sign in' : 'Off'
+            errorText: panel.tailscaleError
+            onToggled: on => panel.tailscaleRun([on ? 'up' : 'down'], false)
+        }
+        MenuRow {
+            visible: tailscaleRow.visible && panel.tailscaleDenied
+            icon: 'lock'
+            label: 'Let Arctic switch Tailscale'
+            detail: 'Asks for your password once'
+            onActivated: panel.tailscaleRun(['operator'], true)
+        }
+        MenuRow {
+            visible: tailscaleRow.visible && tailscaleRow.checked && tailscaleRow.ts.exit_nodes.length > 0
+            icon: 'globe'
+            label: 'Exit node'
+            detail: tailscaleRow.ts && tailscaleRow.ts.exit_node ? tailscaleRow.ts.exit_node : 'None'
+            trailing: 'chevron'
+            onActivated: panel.page = 'exit'
+        }
+
         MenuRow {
             visible: Tools.has('arctic-settings')
             icon: 'key'
@@ -327,6 +363,35 @@ FocusScope {
             trailing: 'external'
             onActivated: panel.external(['nm-connection-editor'])
         }
+    }
+
+    function refreshTailscale() {
+        if (!Tools.has('tailscale')) return;
+        NetworkService.run(['tailscale', 'status'], null, r => { if (r.ok) panel.tailscale = r; });
+    }
+    // Tailscale's state changes outside Arctic too (another device, its own CLI): read it again
+    // every few seconds while the menu is open.
+    Timer { interval: 5000; repeat: true; running: panel.tailscale !== null; onTriggered: panel.refreshTailscale() }
+    Connections {
+        target: Tools
+        function onReadyChanged() { panel.refreshTailscale(); }
+    }
+    // `thenUp`: after "Let Arctic switch Tailscale" worked, turn it on as was asked.
+    function tailscaleRun(args, thenUp) {
+        tailscaleError = '';
+        tailscalePending = true;
+        NetworkService.run(['tailscale'].concat(args), null, r => {
+            panel.tailscalePending = false;
+            if (r.ok && r.login_url) { panel.external(['xdg-open', r.login_url]); return; }
+            if (!r.ok) {
+                panel.tailscaleError = r.code === 'cancelled' ? '' : r.error;
+                panel.tailscaleDenied = r.code === 'denied' || (panel.tailscaleDenied && r.code === 'cancelled');
+            } else {
+                panel.tailscaleDenied = false;
+                if (thenUp) { panel.tailscaleRun(['up'], false); return; }
+            }
+            panel.refreshTailscale();
+        });
     }
 
     function setHotspot(on) {
@@ -440,6 +505,40 @@ FocusScope {
                         panel.closePage();
                     }
                 }
+            }
+        }
+    }
+
+    // ---- Tailscale's exit node ------------------------------------------------------------------
+    MenuPage {
+        id: exitPage
+        anchors.fill: parent
+        visible: panel.page === 'exit'
+        focus: visible
+        title: 'Exit node'
+        detail: 'Go online through another of your devices'
+        backText: panel.wifi ? 'Wi-Fi' : 'Network'
+        onBack: panel.closePage()
+        onVisibleChanged: if (visible) Qt.callLater(() => exitPage.first())
+
+        MenuRow {
+            readonly property bool current: panel.tailscale !== null && !panel.tailscale.exit_node
+            label: 'None'
+            detail: 'Your own connection'
+            selected: current
+            trailing: current ? 'check' : ''
+            onActivated: { panel.tailscaleRun(['exit-node', 'none'], false); panel.closePage(); }
+        }
+        Repeater {
+            model: panel.tailscale ? panel.tailscale.exit_nodes : []
+            MenuRow {
+                required property var modelData
+                label: modelData.name
+                detail: modelData.online ? modelData.ip : 'Offline'
+                enabled: modelData.online
+                selected: modelData.active
+                trailing: modelData.active ? 'check' : ''
+                onActivated: { panel.tailscaleRun(['exit-node', modelData.ip], false); panel.closePage(); }
             }
         }
     }

@@ -151,6 +151,22 @@ class Parsing(unittest.TestCase):
         self.assertEqual(len(pw), 12)
         self.assertTrue(set(pw) <= set(network.PASSWORD_CHARS))
 
+    def test_tailscale_status(self):
+        text = json.dumps({'BackendState': 'Running', 'CurrentTailnet': {'Name': 'ada@example.com'}, 'Peer': {
+            'nodekey:a': {'HostName': 'nas', 'DNSName': 'nas.tail1234.ts.net.', 'TailscaleIPs': ['100.64.0.2', 'fd7a::2'],
+                          'Online': True, 'ExitNodeOption': True, 'ExitNode': True},
+            'nodekey:b': {'HostName': 'Phone', 'DNSName': 'phone.tail1234.ts.net.', 'TailscaleIPs': ['100.64.0.3'],
+                          'Online': True, 'ExitNodeOption': False},
+            'nodekey:c': {'HostName': 'vps', 'DNSName': '', 'TailscaleIPs': ['fd7a::4'], 'Online': False,
+                          'ExitNodeOption': True}}})
+        view = network.parse_tailscale(text)
+        self.assertEqual((view['state'], view['tailnet'], view['exit_node']), ('running', 'ada@example.com', 'nas'))
+        self.assertEqual(view['exit_nodes'], [{'ip': '100.64.0.2', 'name': 'nas', 'online': True, 'active': True},
+                                              {'ip': 'fd7a::4', 'name': 'vps', 'online': False, 'active': False}])
+        self.assertEqual(network.parse_tailscale(json.dumps({'BackendState': 'NeedsLogin'}))['state'], 'signed_out')
+        self.assertIsNone(network.parse_tailscale('failed to connect to local tailscaled; it doesn’t appear to be running'))
+        self.assertEqual(network.tailscale_failure('Access denied: prefs write access denied').code, 'denied')
+
     def test_wep_key_type(self):
         self.assertEqual(network.wep_key_type('abcde'), 'key')
         self.assertEqual(network.wep_key_type('0123456789'), 'key')
@@ -297,6 +313,38 @@ class Commands(unittest.TestCase):
         code, out = self.run_helper('status', scenario=scenario)
         self.assertEqual([s['ssid'] for s in out['saved']], ['Home'])
         self.assertEqual(out['hotspot']['uuid'], '77777777-2222-3333-4444-555555555555')
+
+    def tailscale_bin(self, status, up=''):
+        (self.bin / 'tailscale').write_text('#!/bin/sh\necho "tailscale $*" >> "%s/ts.log"\n'
+                                            'case "$1" in status) cat "%s/ts-status.json" ;; up) %s ;; esac\n'
+                                            % (self.bin, self.bin, up or 'exit 0'))
+        (self.bin / 'tailscale').chmod(0o755)
+        (self.bin / 'ts-status.json').write_text(json.dumps(status))
+
+    def ts_log(self):
+        f = self.bin / 'ts.log'
+        return f.read_text().splitlines() if f.exists() else []
+
+    def test_tailscale_up_down_and_exit_node(self):
+        self.tailscale_bin({'BackendState': 'Stopped'})
+        self.assertEqual(self.run_helper('tailscale', 'up'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'exit-node', '100.64.0.2'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'exit-node', 'none'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'down'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'exit-node', '$(reboot)')[0], 1)
+        self.assertEqual(self.ts_log(), ['tailscale status --json', 'tailscale up --timeout=30s',
+                                         'tailscale set --exit-node=100.64.0.2', 'tailscale set --exit-node=', 'tailscale down'])
+
+    def test_tailscale_sign_in_and_denied(self):
+        self.tailscale_bin({'BackendState': 'NeedsLogin'},
+                           up='printf "\\nTo authenticate, visit:\\n\\n\\thttps://login.tailscale.com/a/abc123\\n\\n"; sleep 3')
+        code, out = self.run_helper('tailscale', 'up')
+        self.assertEqual((code, out), (0, {'ok': True, 'login_url': 'https://login.tailscale.com/a/abc123'}))
+        self.tailscale_bin({'BackendState': 'Stopped'}, up='echo "Access denied: prefs write access denied" >&2; exit 1')
+        code, out = self.run_helper('tailscale', 'up')
+        self.assertEqual((code, out['code']), (1, 'denied'))
+        code, out = self.run_helper('tailscale', 'status')
+        self.assertEqual((code, out['state']), (0, 'stopped'))
 
     def test_company_network_refusals(self):
         with self.assertRaises(network.Failure):

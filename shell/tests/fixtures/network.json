@@ -10,6 +10,9 @@
               {"uuid": "5d9f0c55-0000-4000-8000-000000000002", "ssid": "Library", "autoconnect": true}],
     "hotspot": {"active": false, "uuid": null, "ssid": null}
   },
+  "tailscale": {"state": "running", "tailnet": "ada@example.com", "exit_node": "",
+                "exit_nodes": [{"ip": "100.64.0.2", "name": "home-nas", "online": true, "active": false},
+                               {"ip": "100.64.0.9", "name": "vps-helsinki", "online": false, "active": false}]},
   "networks": [
     {"ssid": "Fjord", "signal": 84, "band": "5 GHz", "security": "wpa-psk", "in_use": true, "saved": true, "uuid": "5d9f0c55-0000-4000-8000-000000000001", "hidden": false},
     {"ssid": "Library", "signal": 58, "band": "2.4 GHz", "security": "open", "in_use": false, "saved": true, "uuid": "5d9f0c55-0000-4000-8000-000000000002", "hidden": false},

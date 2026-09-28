@@ -18,6 +18,10 @@
     network.py share --uuid U [--reveal]   a QR code (SVG) a phone camera joins with
     network.py vpn-up --uuid U [--ask]  |  vpn-down --uuid U
     network.py vpn-import --file PATH [--type openvpn|wireguard]
+    network.py tailscale status|up|down|operator  |  tailscale exit-node IP|none
+                                     Tailscale, when it is installed: `up` hands back the sign-in
+                                     page when signed out; `operator` lets this user switch it
+                                     (pkexec tailscale set --operator=USER, polkit asks)
     network.py hotspot on [--ssid NAME] | off
                                      this computer as a Wi-Fi access point ("Arctic hotspot"),
                                      sharing its connection; the share card shows its password
@@ -39,6 +43,7 @@ every change succeed without running anything (screenshots and tests).
 """
 import json
 import os
+import pwd
 import re
 import secrets
 import selectors
@@ -703,6 +708,126 @@ def cmd_hotspot(args):
     return {'ok': True, 'active': True, 'uuid': m.group(1), 'ssid': ssid}
 
 
+# ---- Tailscale ----------------------------------------------------------------------------------
+TS_STATES = {'Running': 'running', 'Starting': 'starting', 'Stopped': 'stopped', 'NeedsLogin': 'signed_out',
+             'NeedsMachineAuth': 'signed_out', 'NoState': 'signed_out'}
+TS_NONE = {'state': 'no_daemon', 'tailnet': '', 'exit_node': '', 'exit_nodes': []}
+
+
+def parse_tailscale(text):
+    """`tailscale status --json` → {state, tailnet, exit_node (its name, '' for none),
+    exit_nodes: [{ip, name, online, active}]}; None when it isn't that JSON (no tailscaled)."""
+    try:
+        data = json.loads(text or '')
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or 'BackendState' not in data:
+        return None
+    nodes, current = [], ''
+    for peer in (data.get('Peer') or {}).values():
+        if not isinstance(peer, dict) or not (peer.get('ExitNodeOption') or peer.get('ExitNode')):
+            continue
+        ips = [ip for ip in peer.get('TailscaleIPs') or [] if isinstance(ip, str)]
+        ip = next((i for i in ips if '.' in i), ips[0] if ips else '')
+        if not ip:
+            continue
+        name = (peer.get('DNSName') or '').split('.')[0] or peer.get('HostName') or ip
+        node = {'ip': ip, 'name': name, 'online': peer.get('Online') is True, 'active': peer.get('ExitNode') is True}
+        if node['active']:
+            current = name
+        nodes.append(node)
+    nodes.sort(key=lambda n: (not n['online'], n['name'].lower()))
+    return {'state': TS_STATES.get(data.get('BackendState'), 'stopped'),
+            'tailnet': (data.get('CurrentTailnet') or {}).get('Name') or '', 'exit_node': current, 'exit_nodes': nodes}
+
+
+def tailscale(*args, timeout=30):
+    try:
+        p = subprocess.run(['tailscale', *args], capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Failure('not_installed', 'Tailscale isn’t installed.')
+    except subprocess.TimeoutExpired:
+        raise Failure('timeout', 'Tailscale didn’t answer. Try again.')
+    return p.returncode, p.stdout, p.stderr
+
+
+def tailscale_failure(text):
+    low = (text or '').lower()
+    if 'access denied' in low or 'permission denied' in low or 'prefs write access denied' in low:
+        return Failure('denied', 'Only Tailscale’s operator can switch it. Let Arctic switch it (asks for your password once).')
+    if "failed to connect to local tailscale" in low or 'is tailscaled running' in low:
+        return Failure('no_daemon', 'Tailscale’s service isn’t running.')
+    first = next((l.strip() for l in (text or '').splitlines() if l.strip()), '')[:100]
+    return Failure('failed', ('Tailscale couldn’t do that. ' + first).strip())
+
+
+def tailscale_login():
+    """Signed out: `tailscale up` prints a sign-in page and then waits (here up to 15 minutes, on
+    its own) for the browser sign-in to finish; the page goes back to the menu, which opens it."""
+    try:
+        p = subprocess.Popen(['tailscale', 'up', '--timeout=15m'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             stdin=subprocess.DEVNULL, start_new_session=True)
+    except FileNotFoundError:
+        raise Failure('not_installed', 'Tailscale isn’t installed.')
+    fd = p.stdout.fileno()
+    os.set_blocking(fd, False)
+    sel = selectors.DefaultSelector()
+    sel.register(fd, selectors.EVENT_READ)
+    deadline, said, buf, eof = time.monotonic() + 20, '', b'', False
+    while not eof and time.monotonic() < deadline and sel.select(max(0.0, deadline - time.monotonic())):
+        lines, buf, eof = lines_of(fd, buf)
+        for line in lines:
+            m = re.search(r'https://\S+', line)
+            if m:
+                return {'ok': True, 'login_url': m.group(0)}
+            said += line + '\n'
+    if eof:
+        try:
+            p.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+    if p.poll() == 0:
+        return {'ok': True}
+    raise tailscale_failure(said) if said else Failure('timeout', 'Tailscale didn’t answer. Try again.')
+
+
+def cmd_tailscale(args):
+    action, value = args.action, args.value
+    if action == 'exit-node' and not (value == 'none' or re.fullmatch(r'[0-9A-Fa-f.:]{2,45}', value or '')):
+        raise Failure('usage', 'usage: tailscale exit-node IP|none')
+    if FIXTURE:
+        return dict(load_fixture().get('tailscale') or TS_NONE, ok=True) if action == 'status' else {'ok': True}
+    if action == 'status':
+        _code, out, _err = tailscale('status', '--json', timeout=10)
+        return dict(parse_tailscale(out) or TS_NONE, ok=True)
+    if action == 'up':
+        _code, out, _err = tailscale('status', '--json', timeout=10)
+        view = parse_tailscale(out)
+        if view is None:
+            raise Failure('no_daemon', 'Tailscale’s service isn’t running.')
+        if view['state'] == 'signed_out':
+            return tailscale_login()
+        code, out, err = tailscale('up', '--timeout=30s', timeout=45)
+    elif action == 'down':
+        code, out, err = tailscale('down')
+    elif action == 'exit-node':
+        code, out, err = tailscale('set', '--exit-node=' + ('' if value == 'none' else value))
+    elif action == 'operator':
+        try:
+            p = subprocess.run(['pkexec', 'tailscale', 'set', '--operator=' + pwd.getpwuid(os.getuid()).pw_name],
+                               capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            raise Failure('failed', 'Arctic couldn’t ask for your password.')
+        if p.returncode in (126, 127):
+            raise Failure('cancelled', 'Tailscale wasn’t changed.')
+        code, out, err = p.returncode, p.stdout, p.stderr
+    else:
+        raise Failure('usage', 'usage: tailscale status|up|down|operator|exit-node IP|none')
+    if code != 0:
+        raise tailscale_failure(err or out)
+    return {'ok': True}
+
+
 # ---- watch ------------------------------------------------------------------------------------
 def lines_of(fd, buf):
     """Read what is available on fd; returns (complete lines, rest, eof)."""
@@ -881,6 +1006,9 @@ def parse(argv):
     vi.add_argument('--type', choices=['openvpn', 'wireguard'])
     v = sub.add_parser('vpn-down')
     v.add_argument('--uuid', required=True)
+    ts = sub.add_parser('tailscale')
+    ts.add_argument('action', choices=['status', 'up', 'down', 'operator', 'exit-node'])
+    ts.add_argument('value', nargs='?')
     hs = sub.add_parser('hotspot')
     hs.add_argument('mode', choices=['on', 'off'])
     hs.add_argument('--ssid')
@@ -931,6 +1059,8 @@ def main(argv=None, stdin=None):
             out = simple('connection', 'down', 'uuid', args.uuid)
         elif args.cmd == 'hotspot':
             out = cmd_hotspot(args)
+        elif args.cmd == 'tailscale':
+            out = cmd_tailscale(args)
         else:
             raise Failure('usage', 'Unknown command.')
     except Failure as e:
