@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v0.2.0-build.<run number>)
+        description: Release tag (default v0.2.1-build.<run number>)
         type: string
         default: ""
       boot_test:
@@ -123,7 +123,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v0.2.0-build.$GITHUB_RUN_NUMBER"
+            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v0.2.1-build.$GITHUB_RUN_NUMBER"
             pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"

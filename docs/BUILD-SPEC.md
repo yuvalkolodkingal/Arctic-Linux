@@ -42,7 +42,10 @@ tools/lib/arcticrepo.py prune / manifest / fetch (the published site) / index fo
 tools/tests/            unit tests for tools/lib (python3 -m unittest discover -s tools/tests)
 tools/test-iso.sh       boots the ISO in QEMU (no KVM needed), takes screenshots
 tools/test-install.sh   installs from the ISO to a VM disk (arctic-install unattended, profiles/ci/offline.toml),
-                        then boots it: LUKS prompt, SDDM login, desktop, logs over the serial port
+                        then boots it: LUKS prompt, SDDM login, desktop, logs over the serial port;
+                        --test-hardware nvidia-laptop --online-via-proxy with profiles/ci/nvidia.toml
+                        builds the NVIDIA akmod online (arctic-install unattended --test-hardware
+                        NAME --test-online: VM-test aids that fake the PCI devices / the online check)
 tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QMP helpers for the tests)
 .github/workflows/ci.yml   go test, shellcheck, python tests, node tests, qmllint
 .github/workflows/iso.yml  build RPMs + ISO, upload artifact, publish release (tag or manual)
@@ -51,8 +54,8 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 0.2.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.0/` of the
+Version 0.2.1, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.1/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 
@@ -194,6 +197,8 @@ previous versions in `~/.local/state/arctic/settings-backups/`):
 | `~/.config/mimeapps.list` | `[Default Applications]` for links and files (as `xdg-mime default`) |
 | `~/.config/arctic/idle.conf` | `lock_after=`, `suspend_after=` (seconds, 0 = never), read by `arctic-session idle` |
 | `$XDG_RUNTIME_DIR/arctic-settings-display.json` | the display layout to go back to while a change waits to be kept |
+| `~/Pictures/Wallpapers/` (your wallpaper folder) | pictures you add (copied after Pillow decodes them; renamed/deleted only inside that folder, never the one in use); Wallhaven downloads in `wallhaven/wallhaven-<id>.<ext>` |
+| `~/.config/arctic/wallhaven.json` (mode 600) | Wallhaven filters (`categories`, `purity` — NSFW only with a key —, `sorting`, `range`, `fit`) and the optional `api_key` (never sent to the UI) |
 
 **Commands it calls** (each missing one hides or explains its controls): `mmsg dispatch
 reload_config`, `mmsg get all-devices|all-clients`, `mango -p`; `arctic-theme set <name>|auto
@@ -205,6 +210,17 @@ stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
 `gsettings` (GTK text size, cursor); tools it opens: `nm-connection-editor`, `blueman-manager`,
 `pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install`, `xdg-open`.
 Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
+
+Wallpapers (Appearance): the shell's `scripts/wallpapers.py` (`list`, `apply`, `import`, `delete`,
+`rename`) and `scripts/wallhaven.py` (`search`, `preview`, `download`, `set`, `state`, `key`,
+`prefs`; stdlib urllib + Pillow), through the helper's `wallpaper-import|delete|rename` and
+`wallhaven …`. Only wallhaven.py talks to the network: https://wallhaven.cc/api/v1/search (and
+`/settings` to check a key), thumbnails and pictures from th./w.wallhaven.cc (URLs checked); API
+calls are counted in `~/.cache/arctic/wallhaven/api-calls.json` under a lock (45 a minute: wait up
+to 8 s, else `{"wait": N}`), searches cached 15 min, thumbnails in `~/.cache/arctic/wallhaven/`;
+offline answers `{"ok": false, "offline": true}`. "Fit my screens" = `atleast` of the largest
+enabled output and each output's `ratios` (`wlr-randr --json`, rotation applied). "Add pictures…"
+is QtQuick.Dialogs' FileDialog (the portal through qt6ct), plus a DropArea for `file://` URLs.
 
 Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
 watchdog (`arctic_settings.py display-revert --if-pending TOKEN --after 20`) puts the old layout
@@ -260,7 +276,7 @@ IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|sea
   - `{"event":"progress","percent":0-100,"phase":"disk"|"copy"|"configure"|"bootloader"|"apps"|"finalize","status":"Installing Zed, your code editor…","eta_seconds":420,"substeps":[{"id":"disk","label":"Preparing the disk","state":"done"|"active"|"todo"},…4 items: disk, system ("Copying Arctic Linux"), apps ("Installing your apps"), finish ("Setting up your account")]}`
   - `{"event":"module","id":"zed","name":"Zed","status":"queued"|"downloading"|"installed"|"failed"|"skipped"|"deferred","percent":0-100}`
   - `{"event":"attention","module":{"id","name"},"message":"The download server didn't answer.","optional":true}` → UI shows step 11 (Try again / Skip {App}); core failures: `{"event":"failed","message":"…","fatal":true,"can_change":true}` → Save log / Try again / Change (Back or Goto).
-  - `{"event":"done","apps_installed":9,"first_name":"Noa","drivers"?:[{id,name,device,status:"installed"|"deferred"|"skipped",text}],"secure_boot"?:{code,title,intro,steps:[…],note,failed?}}` — `drivers` lists what happened to each ticked driver with a sentence for it (drivers get no `module` events and are not in `apps_installed`); `secure_boot` is present when the akmods signing key waits for enrolment in shim's MokManager on the next restart (Secure Boot enforced, UEFI, a driver built by akmods): `code` is the one-time password (8 digits, typed on the number row — MokManager reads the keyboard as US QWERTY), `steps` the MokManager screens. With `failed:true` (mokutil refused) there is no code and the steps say how to enroll the key by hand. Driver failures use the `attention` event like apps (title "The NVIDIA driver couldn’t be installed", skip label "Skip the driver").
+  - `{"event":"done","apps_installed":9,"first_name":"Noa","notes"?:["…"],"drivers"?:[{id,name,device,status:"installed"|"deferred"|"skipped",text}],"secure_boot"?:{code,title,intro,steps:[…],note,failed?}}` — `drivers` lists what happened to each ticked driver with a sentence for it (drivers get no `module` events and are not in `apps_installed`); `secure_boot` is present when the akmods signing key waits for enrolment in shim's MokManager on the next restart (Secure Boot enforced, UEFI, a driver built by akmods): `code` is the one-time password (8 digits, typed on the number row — MokManager reads the keyboard as US QWERTY), `steps` the MokManager screens. `notes`: sentences about a success with a caveat (the new disk couldn’t be closed at the end), a banner on the Done screen. With `failed:true` (mokutil refused) there is no code and the steps say how to enroll the key by hand. Driver failures use the `attention` event like apps (title "The NVIDIA driver couldn’t be installed", skip label "Skip the driver").
   - Status lines follow `design/guidelines/20-installer-copy.md`.
 
 ### 4.1 Wizard steps (ids fixed; copy = design/guidelines/20-installer-copy.md)
@@ -382,6 +398,19 @@ drivers are not tried: they go to `/var/lib/arctic/pending.json` with `akmod` an
 `kernel_args`, plus `"mok_hash":"/var/lib/arctic/mok.hash"` (Secure Boot), and
 arctic-firstboot installs (akmods with kernel-devel and the key before the driver, as the
 engine), builds, adds the arguments and queues the key once online.
+After the driver transaction the engine also waits (≤ 20 min) until no process runs inside the
+target any more (root under /mnt: the background akmods build may take its lock after the
+flock). Finalize (internal/installer/release.go): wait for work left in the target, SIGTERM then
+SIGKILL helpers (gpg-agent, keyboxd, dbus …) — only processes whose root is the target; `umount
+--recursive` (3 tries, then lazy), `sync`, then for LUKS: unmount leftover copies of the target's
+mounts in other mount namespaces (`nsenter --target PID --mount -- umount --recursive --lazy`;
+services started during the install copy every mount), `udevadm settle` and `cryptsetup close`
+with a 0/1/2/4/8 s backoff, `dmsetup remove --retry`, `dmsetup remove --deferred`. The install
+is `committed` once the user exists (bootloader done): cleanup then never removes the boot entry
+or partitions (the MOK request is still revoked). Once the system is complete (relabelled,
+snapper), a release failure is not a failure: logged, the Done event gets a note. dnf in the
+chroot and flatpak install/remote-add are run again after 5/15/45 s when they fail on the network
+(curl/librepo errors; dnf5's own retries=10 covers downloads, not the metalink).
 Hybrid laptops keep rendering on the integrated GPU (wlroots uses the `boot_vga` card);
 `/etc/profile.d/arctic-graphics.sh` sets `LIBVA_DRIVER_NAME=nvidia`, `NVD_BACKEND=direct` and
 `__GLX_VENDOR_LIBRARY_NAME=nvidia` only when NVIDIA's driver drives the boot display. The target directory is made a private
@@ -436,7 +465,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 0.2.0, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 0.2.1, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),

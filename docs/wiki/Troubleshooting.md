@@ -107,6 +107,15 @@ The installer pauses on **One app needs attention**. Press **Try again** first: 
 problems are brief. If it keeps failing, press **Skip {app}**. The rest of the install carries on
 and you can add the app later with [Get apps](Apps-and-Software#get-apps).
 
+### The install failed at the very end (Arctic Linux 0.2.0, encrypted disk)
+
+On some computers (seen on an NVIDIA laptop) 0.2.0 finished installing and then failed at
+**Setting up your account** with *"cryptsetup close … Device or resource busy"*: the encrypted
+disk was still held by something the install had started, and the installer then removed the
+new boot entry. Install again with 0.2.1: it lets go of the disk properly, and a disk that still
+can't be closed at the very end no longer counts as a failure. The Done screen then says so;
+restarting closes it and nothing is lost.
+
 ### "Something went wrong while installing"
 
 A part of the system itself couldn't be installed.
@@ -230,6 +239,23 @@ own in `~/.config/mango/` is the cause, move `user.conf` away and press `Super +
   nmcli device wifi list
   nmcli device wifi connect "My network" --ask
   ```
+
+### Updates stopped after the repository was renamed
+
+The project moved from `github.com/yuvalkolodkingal/O-Tism` to
+`github.com/yuvalkolodkingal/Arctic-Linux`, and its package repository moved with it to
+<https://yuvalkolodkingal.github.io/Arctic-Linux/>. GitHub Pages doesn't forward the old
+address, so a system installed from **0.2.0** looks for Arctic's updates in the wrong place (dnf
+skips the repository quietly). Fedora's updates are not affected. Run this once:
+
+```sh
+sudo dnf upgrade --refresh --setopt=arctic.baseurl=https://yuvalkolodkingal.github.io/Arctic-Linux/repo/stable/fedora-44/x86_64/ arctic-release
+```
+
+It brings the new `arctic-release`, which has the new address built in; from then on updates
+work as before (`sudo dnf upgrade`, or wait for the automatic update). Nothing is left behind to
+undo. If you use the testing channel, run it with `arctic-testing.baseurl=…/repo/testing/…`
+instead.
 
 ### An app is missing after installing
 

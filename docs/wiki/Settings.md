@@ -84,7 +84,23 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   wallpaper picker (`Super + Shift + W`).
 - **Light or dark:** for the theme made from your wallpaper: Automatic (whatever suits the
   picture), Dark or Light.
-- **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers`.
+- **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers` (the same
+  list as the wallpaper picker). **Add pictures…** opens the file chooser; you can also drag
+  pictures here from Files. Added pictures are copied into `~/Pictures/Wallpapers` (only real
+  pictures: JPEG, PNG, WebP, BMP or GIF). Point at one of your own pictures to **rename** or
+  **delete** it (or select it and press `F2` or `Delete`). The picture in use can't be deleted.
+- **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
+  press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
+  pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at
+  least as large as your largest screen, in your screens' shapes. Click a picture for a larger
+  look, then **Download and set**: it's saved in `~/Pictures/Wallpapers/wallhaven` and becomes
+  your wallpaper, and with **Match colours to the wallpaper** on, the colours follow it. Nothing
+  is downloaded until you search. Without internet the section says so; the rest of Settings
+  works as usual. Wallhaven allows 45 searches a minute; Settings waits or tells you when to try
+  again.
+- **Wallhaven API key** (optional): with the key from your Wallhaven account (Settings → Account),
+  searches use your account's filters, and **NSFW** can be ticked. It's kept in
+  `~/.config/arctic/wallhaven.json`, which only you can read; **Remove** deletes it.
 - **Reduce motion:** windows and menus fade instead of moving, and the fox in the terminal stays
   still.
 - **Text size in apps:** 100% to 175% for GTK apps such as Files and most dialogs. The bar and

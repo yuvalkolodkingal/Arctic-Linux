@@ -33,7 +33,7 @@
 %global debug_package   %{nil}
 
 Name:           arctic-linux
-Version:        0.2.0
+Version:        0.2.1
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -1132,6 +1132,18 @@ fi
 # metapackage: no files
 
 %changelog
+* Mon Sep 28 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.1-1
+- The repository moved to github.com/yuvalkolodkingal/Arctic-Linux: the package
+  repository is now https://yuvalkolodkingal.github.io/Arctic-Linux/ (Pages doesn't
+  redirect, so 0.2.0 systems need the one-line fix in the release notes)
+- Installer: a finished install is never thrown away because the encrypted disk
+  couldn't be closed at the end; processes left in the new system and copies of its
+  mounts in other mount namespaces are released first, closing is retried; dnf and
+  flatpak retry network failures
+- Settings: Wallhaven browser, add/rename/delete your own wallpapers, a display
+  arrangement editor
+- fastfetch in the Arctic design (colours follow the theme) and a neofetch command
+
 * Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.0-1
 - Arctic Linux 0.2: arctic-release enables the signed Arctic package repository (GitHub
   Pages; stable channel on, testing channel off) and ships its public key

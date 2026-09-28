@@ -113,6 +113,12 @@ An Arctic wallpaper follows the theme when you switch. Your own pictures (from
 `~/Pictures/Wallpapers`, or any folder you choose with **Choose folder…**) stay as they are, and
 with **Match colours to wallpaper** on, the desktop takes its colours from them.
 
+To add pictures, use **Settings → Appearance → Add pictures…** or drag them there from Files;
+Settings copies them into your folder and can rename or delete them. **Settings → Appearance →
+Wallhaven** finds wallpapers on [wallhaven.cc](https://wallhaven.cc) and sets one with a click
+(it lands in `~/Pictures/Wallpapers/wallhaven`, so the picker lists it too). See
+[Settings](Settings#appearance).
+
 From a terminal:
 
 ```sh

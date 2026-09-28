@@ -1,5 +1,51 @@
 # Release notes
 
+## Arctic Linux 0.2.1
+
+A fix release for 0.2, with a few additions to Settings and the terminal.
+
+**Download:** [GitHub releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases). The image is
+`Arctic-Linux-0.2-x86_64.iso` with its `.sha256`.
+
+### The project has a new address
+
+The repository is now <https://github.com/yuvalkolodkingal/Arctic-Linux> (it was `O-Tism`), and
+Arctic's package repository is <https://yuvalkolodkingal.github.io/Arctic-Linux/>. Old GitHub
+links still lead to the right place, but the package repository's old address doesn't.
+
+**If you installed 0.2.0**, your system still looks for Arctic's updates at the old address.
+Run this once (then updates work as before):
+
+```sh
+sudo dnf upgrade --refresh --setopt=arctic.baseurl=https://yuvalkolodkingal.github.io/Arctic-Linux/repo/stable/fedora-44/x86_64/ arctic-release
+```
+
+See [Troubleshooting](Troubleshooting#updates-stopped-after-the-repository-was-renamed).
+
+### Installer
+
+- **A finished install is never thrown away at the last step.** On an NVIDIA laptop with an
+  encrypted disk, 0.2.0 could fail at *Setting up your account* because the encrypted disk was
+  still in use, and then removed the new boot entry. The installer now waits for the NVIDIA
+  driver build that runs in the background, stops helpers left running in the new system,
+  releases copies of its disks held by other services, and tries closing the disk again. If it
+  still can't be closed, the install counts as done and the Done screen says a restart finishes
+  it. Once the account is created, a failure no longer removes the boot entry or partitions.
+- **One network hiccup no longer fails an app.** dnf and Flatpak downloads that fail because of
+  the network are tried again three times.
+
+### Settings
+
+- **Wallpapers:** add your own pictures with the file chooser or by dragging them from Files;
+  rename and delete them. **Wallhaven:** search wallhaven.cc and set a wallpaper with one click,
+  with filters that fit your screens and an optional API key. See [Settings](Settings#appearance).
+- **Displays:** arrange your screens by dragging them. See [Settings](Settings#displays).
+
+### Terminal
+
+- **fastfetch** in the Arctic design, in the theme's colours, and a **neofetch** command. See
+  [Terminal and shell](Terminal-and-Shell).
+
 ## Arctic Linux 0.2.0
 
 Arctic Linux 0.2 installs on real hardware, sets up the drivers your computer needs, offers 126
