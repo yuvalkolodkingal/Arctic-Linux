@@ -1,0 +1,5 @@
+# Left out of `git archive`, so out of Source0 and the source RPM (tools/build-rpms.sh): main's
+# wallpaper collections (~750 MB), which would otherwise fill the package repository on GitHub
+# Pages (1 GB limit). They stay in git.
+/Wallpapers export-ignore
+/v2-walls export-ignore
