@@ -151,8 +151,10 @@ func (m *Manager) storePreview(input string, res *discover.Result) (api.Preview,
 	return p, nil
 }
 
+// writeSource stores a choice as the launcher will show it: the rounded tile at 512 px (install
+// uses this file as the source, and a tile's transparent corners keep it from being masked twice).
 func writeSource(path string, img image.Image, purpose string) error {
-	data, err := icon.EncodePNG(icon.Normalize(img, purpose))
+	data, err := icon.EncodePNG(icon.Tile(img, purpose, 512))
 	if err != nil {
 		return err
 	}
