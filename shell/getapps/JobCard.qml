@@ -116,6 +116,16 @@ ColumnLayout {
                 elide: Text.ElideRight
             }
         }
+        // A dnf change after updates were downloaded: arctic-update prepares them again.
+        Text {
+            visible: card.shown !== null && card.shown.source === 'dnf' && UpdateService.ready
+            Layout.maximumWidth: 220
+            text: 'The updates waiting for a restart are prepared again two minutes after this.'
+            color: Theme.inkSubtle
+            font.family: Theme.fontSans
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
         ArcticButton {
             variant: 'ghost'; size: 'sm'
             text: card.detailsOpen ? 'Hide details' : 'Show details'

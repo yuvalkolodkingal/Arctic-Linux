@@ -10,6 +10,7 @@ Item {
     property bool open: false
     property bool side: false
     property int panelWidth: 440
+    property int bleed: 0               // how far the scrim reaches past the page (to the card edge)
     property Item initialFocus: null
     default property alias content: body.data
     readonly property alias panel: panel
@@ -27,6 +28,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        anchors.margins: -sheet.bleed
         radius: Theme.radiusXl
         color: Theme.scrim
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onPressed: sheet.close() }

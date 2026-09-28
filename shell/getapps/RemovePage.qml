@@ -275,6 +275,7 @@ FocusScope {
 
     RemoveSheet {
         id: sheet
+        bleed: Theme.space3
         onClosed: field.forceActiveFocus()
         onRemoved: (name, source) => {
             if (source === 'flatpak' || source === 'dnf') {

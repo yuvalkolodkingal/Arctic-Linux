@@ -260,6 +260,7 @@ FocusScope {
 
     DetailsSheet {
         id: details
+        bleed: Theme.space3
         source: page.source
         onInstallRequested: item => page.install(item)
         onClosed: field.forceActiveFocus()
