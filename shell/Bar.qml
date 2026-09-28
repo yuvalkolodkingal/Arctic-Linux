@@ -9,7 +9,7 @@ import Quickshell.Services.UPower
 
 // The top bar (design TopBar): 34px frost with a 1px line along the bottom.
 // Left: fox mark (launcher) and workspaces 1–5, plus the "Live session" tag on the live USB.
-// Centre: the clock, with what listens and the modes that are on to its left, and the
+// Centre: the clock, with what records or listens and the modes that are on to its left, and the
 // temperature and what's playing to its right. Right: Install (live only) or Restart to update
 // (updates waiting), notifications and Bluetooth (quiet), tray, network, volume, battery, power.
 // Anything the system can't report is hidden, never faked.
@@ -192,7 +192,7 @@ PanelWindow {
         onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
         onHoverChanged: h => h ? bar.hint(clockItem, tooltip) : bar.unhint(clockItem)
     }
-    // Left of the clock: what is listening or watching, and the modes that are on.
+    // Left of the clock: what records, listens or watches, and the modes that are on.
     ModeIndicators {
         anchors.right: clockItem.left
         anchors.rightMargin: Theme.space2

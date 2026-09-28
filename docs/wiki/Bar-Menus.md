@@ -105,9 +105,10 @@ an external monitor too, when it accepts DDC/CI, else the laptop's own screen.
 ## Indicators left of the clock
 
 While an app uses the **microphone** or the **camera**, or the screen is **shared**, a yellow pill
-with the word says so; hover it to see which app. Modes that are on (night light, keep awake, a
-VPN, airplane mode, a muted microphone) show as small icons there; click one to turn it back. Apps that open the
-camera directly instead of through PipeWire can't be seen.
+with the word says so; hover it to see which app. While you record the screen (`Super + Alt + R`),
+a red **Recording 01:23** pill counts the time; click it to stop. Modes that are on (night light,
+keep awake, a VPN, airplane mode, a muted microphone) show as small icons there; click one to turn
+it back. Apps that open the camera directly instead of through PipeWire can't be seen.
 
 ## With the keyboard
 

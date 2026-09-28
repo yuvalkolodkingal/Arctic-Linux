@@ -3,7 +3,8 @@ import QtQuick
 import QtQuick.Layouts
 
 // Left of the clock: privacy pills while something listens or watches ("Mic", "Camera",
-// "Sharing": warning-soft with an icon and a word, never colour alone), then the modes that
+// "Sharing": warning-soft with an icon and a word, never colour alone), "Recording 01:23" while
+// arctic-record records (error-soft: an alert, not a mode; a click stops it), then the modes that
 // are on (the registry's toggles with an indicator: night light, keep awake, VPN, a muted
 // microphone) as quiet icons. Clicking a mode turns it back; clicking "Mic" opens the sound menu.
 // Resting the pointer on them for a moment shows the other modes too, dimmed, on the far left
@@ -13,6 +14,13 @@ RowLayout {
     required property var bar
     property bool revealed: false
     spacing: Theme.space1
+
+    // The recording's length: mm:ss, or h:mm:ss past the hour.
+    function elapsedText(seconds) {
+        const two = n => (n < 10 ? '0' : '') + n;
+        const h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
+        return h > 0 ? h + ':' + two(m) + ':' + two(s) : two(m) + ':' + two(s);
+    }
 
     HoverHandler {
         id: hover
@@ -57,6 +65,19 @@ RowLayout {
             onClicked: row.bar.shell.togglePanel('sound', row.bar.screen, undefined, undefined)
             onHoverChanged: h => h ? row.bar.hint(pill, tooltip) : row.bar.unhint(pill)
         }
+    }
+    BarItem {
+        id: recording
+        visible: RecordService.recording
+        color: Theme.errorSoft
+        iconName: 'record'
+        iconColor: Theme.error
+        text: 'Recording ' + row.elapsedText(RecordService.elapsed)
+        textColor: Theme.error
+        textWeight: Font.DemiBold
+        tooltip: 'Recording · click to stop  (Super + Alt + R)'
+        onClicked: RecordService.stop()
+        onHoverChanged: h => h ? row.bar.hint(recording, tooltip) : row.bar.unhint(recording)
     }
     Repeater {
         model: ToggleRegistry.toggles.filter(t => t.available && t.indicatorShown)
