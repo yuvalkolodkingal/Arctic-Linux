@@ -62,7 +62,7 @@ If your copy has no browser, you can add one for this session with **Get apps**
 - **No password.** The live user has no password and can use `sudo` without one.
 - **No lock screen.** `Super + L` only tells you that locking is off, and the screen never locks
   by itself.
-- **The power menu** (`Super + Esc`) offers only **Restart** and **Shut down**.
+- **The power menu** (`Super + Esc`) offers only **Settings**, **Restart** and **Shut down**.
 - It can feel slower than an installed system, because everything is read from the USB stick.
 
 ## When you're ready to install
