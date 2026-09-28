@@ -24,7 +24,6 @@ FocusScope {
     property string view: 'apps'                   // dnf: apps | all
     property int current: 0
     readonly property bool flathub: source === 'flatpak'
-    readonly property bool catalogApps: flathub ? AppsService.flathubCatalog.length > 0 : view === 'apps'
     readonly property bool fedoraCatalog: AppsService.fedoraApps.length > 0 || !AppsService.fedoraCatalogMissing
     readonly property var items: flathub ? AppsService.flathubItems : view === 'apps' ? AppsService.fedoraApps : AppsService.fedoraPackages
     readonly property var prepared: !flathub && view === 'all' ? AppsService.fedoraPrepared : PackageSearch.prepareItems(items)
@@ -60,11 +59,12 @@ FocusScope {
     // The picks this source can install, as result items (with the catalogue's icon when it has one).
     readonly property var picks: {
         const list = [];
+        if (!flathub && view === 'all') return list;
         const byId = {};
         items.forEach(i => byId[flathub ? i.id : (i.pkg || i.id)] = i);
         AppsService.featured.forEach(app => {
             const method = flathub ? app.flatpak : app.dnf;
-            if (!method || (!flathub && view === 'all')) return;
+            if (!method) return;
             const key = flathub ? method.ref : method.packages[0];
             // Only what this computer's lists have (once they are loaded).
             if (flathub && items.length && !byId[key]) return;

@@ -178,7 +178,9 @@ function searchItems(prepared, query, limit) {
     const strong = [], rest = [];
     for (let i = 0; i < index.length; i++) {
         const byName = strictScore(index.names[i], query);
-        const byId = Math.max(strictScore(index.ids[i], query), strictScore(index.tails[i], query));
+        // (package names are their own id: compare them once)
+        const same = index.ids[i] === index.names[i] && index.tails[i] === index.names[i];
+        const byId = same ? -1 : Math.max(strictScore(index.ids[i], query), strictScore(index.tails[i], query));
         const byKeyword = index.keywords[i] && index.keywords[i].indexOf(query) >= 0 ? 6000 : -1;
         const rank = Math.max(byName >= 0 ? byName + 100 : -1, byId >= 0 ? byId + 50 : -1, byKeyword >= 0 ? byKeyword + 20 : -1);
         if (rank >= 0) strong.push({ i: i, rank: rank });
@@ -189,7 +191,7 @@ function searchItems(prepared, query, limit) {
         for (let j = 0; j < rest.length; j++) {
             const i = rest[j];
             const byName = fuzzyScore(index.names[i], query);
-            const byId = fuzzyScore(index.tails[i], query);
+            const byId = index.tails[i] === index.names[i] ? -1 : fuzzyScore(index.tails[i], query);
             const rank = Math.max(byName >= 0 ? byName + 100 : -1, byId >= 0 ? byId + 50 : -1);
             if (rank >= 0) strong.push({ i: i, rank: rank });
             else loose.push(i);
