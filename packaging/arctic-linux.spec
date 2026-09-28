@@ -241,14 +241,13 @@ Requires:       qt6-qtwayland
 Requires:       python3
 Requires:       python3-pillow
 Requires:       python3-pyte
-# pkexec, for Get apps (install and remove)
+# ---- stream 2 (Get apps): Fedora's app catalogue, for app names, summaries and icons on the
+# Fedora packages page (without it the page lists every package by name)
+Recommends:     appstream-data
+# ---- end stream 2
+# pkexec, for Get apps
 Requires:       polkit
 Requires:       arctic-fonts = %{version}-%{release}
-# ---- stream 2 (Get apps): Fedora's app catalogue (names, summaries and icons on the Fedora
-# packages page) and the web-app engine (Get apps → Web apps; the page hides without it)
-Recommends:     appstream-data
-Recommends:     arctic-webapps = %{version}-%{release}
-# ---- end stream 2
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar, launcher with Get apps
