@@ -91,6 +91,7 @@ FocusScope {
                 id: slider
                 Layout.fillWidth: true
                 focus: true
+                enabled: isFinite(row.value)    // PipeWire hasn't reported a volume yet: grey, not 0 %
                 from: 0
                 to: 1
                 stepSize: 0.05
