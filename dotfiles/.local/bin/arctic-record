@@ -160,6 +160,7 @@ pid, file, kind, audio, geometry, codec = sys.argv[1:]
 print(json.dumps(dict(ok=True, recording=True, pid=int(pid), started=int(time.time()), file=file, kind=kind,
                       audio=audio, geometry=geometry, codec=codec)))' \
     "$pid" "$file" "$kind" "$audio" "$geom" "$codec" > "$state.new" && mv "$state.new" "$state"
+  arctic-shell-ipc record refresh >/dev/null 2>&1 || true
 
   # A notification that stays while recording, with a Stop button; stop closes it.
   (
@@ -186,6 +187,7 @@ stop() {
   for _ in {1..50}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
   kill -0 "$pid" 2>/dev/null && kill -TERM "$pid" 2>/dev/null
   rm -f -- "$state"
+  arctic-shell-ipc record refresh >/dev/null 2>&1 || true
   # The "Recording" notification: its waiter goes first, so closing it isn't read as a click.
   local waiter; waiter="$(cat "$run/record.waiter" 2>/dev/null)"
   [[ "$waiter" =~ ^[0-9]+$ && "$waiter" != "$PPID" ]] && pkill -P "$waiter" notify-send 2>/dev/null

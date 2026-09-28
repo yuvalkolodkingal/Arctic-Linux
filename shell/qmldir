@@ -5,6 +5,7 @@ singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 singleton UpdateService 1.0 UpdateService.qml
+singleton RecordService 1.0 RecordService.qml
 AppTile 1.0 AppTile.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
@@ -29,6 +30,7 @@ Osd 1.0 Osd.qml
 PolkitDialog 1.0 PolkitDialog.qml
 Popover 1.0 Popover.qml
 PopupSurface 1.0 PopupSurface.qml
+PowerKey 1.0 PowerKey.qml
 PowerMenu 1.0 PowerMenu.qml
 RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml

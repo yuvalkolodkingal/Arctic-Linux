@@ -13,7 +13,7 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
-//   clipboard toggle · emoji toggle
+//   clipboard toggle · emoji toggle · record refresh
 ShellRoot {
     id: shell
 
@@ -85,6 +85,7 @@ ShellRoot {
     KeysSheet { id: keys }
     ClipboardPanel { id: clipboard }
     EmojiPicker { id: emoji }
+    PowerKey { locked: lockScreen.secure }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -153,6 +154,11 @@ ShellRoot {
     IpcHandler {
         target: 'emoji'
         function toggle(): void { shell.toggleEmoji(); }
+    }
+    IpcHandler {
+        target: 'record'
+        // arctic-record started or stopped a recording (RecordService re-reads record.json).
+        function refresh(): void { RecordService.refresh(); }
     }
     IpcHandler {
         target: 'shell'

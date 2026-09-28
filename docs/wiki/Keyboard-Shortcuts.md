@@ -125,6 +125,7 @@ These work when the screen is unlocked:
 | Touchpad on / off | Turn the touchpad off or on until you log out (Settings keeps it off for good) |
 | Calculator | The launcher's calculator |
 | Search | The launcher |
+| Power button | The power menu (on the lock screen, and without the desktop shell, it shuts down as before) |
 
 ## Touchpad
 

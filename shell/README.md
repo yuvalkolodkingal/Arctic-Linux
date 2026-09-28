@@ -49,6 +49,7 @@ It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `p
 | OSD | `Osd.qml`, `AudioService.qml` | 280×48 frosted pill, bottom centre. Follows PipeWire volume changes directly; brightness when `arctic-osd` calls `arctic-shell-ipc osd brightness` (brightnessctl). 1.2 s, then fades. |
 | Lock screen | `LockScreen.qml`, `pam/arctic-lock` | ext-session-lock (the session stays locked if the shell dies) + PAM (`pam_unix`, from this folder). Blurred wallpaper under frost, clock, avatar (`~/.face` or your initial), name, password field with focus / error / success rings, battery, Wi-Fi and power bottom-right. Off on the live USB. |
 | Live welcome | `LiveWelcome.qml` | "You're trying Arctic Linux" card (Install Arctic Linux / Keep trying), once per boot via `arctic-welcome`, and the Install tile bottom-left. On the desktop layer, under windows. |
+| Power button | `PowerKey.qml` | Holds a `handle-power-key` inhibitor (`systemd-inhibit … cat`) while the shell runs and the screen is unlocked, so the power button opens the power menu (Mango bind → `arctic-power`); when the shell exits, `cat` gets EOF and logind handles the button again. |
 | Polkit agent | `PolkitDialog.qml` | Password dialog for system changes. If it can't register (another agent runs), the shell starts `arctic-session polkit`. |
 | Tokens and state | `Theme.qml`, `Session.qml`, `Outputs.qml`, `NetworkService.qml`, `DndService.qml` | See below. |
 | Building blocks | `Popover.qml`, `PopupSurface.qml`, `DockPosition.qml`, `DragHandle.qml`, `ArcticButton.qml`, `ArcticField.qml`, `ArcticSwitch.qml`, `Icon.qml`, `Mark.qml`, `Kbd.qml`, `Tip.qml`, `FocusRing.qml`, `RoundedImage.qml` | Popovers unfold from the edge they're docked to (fade + 0.98 scale, duration-slow, ease-standard; reduced motion: fades only) and can be dragged to another edge. |
@@ -89,6 +90,7 @@ notifications.
 | `shell` | `reload` (theme, motion, settings), `live` |
 | `clipboard` | `toggle` (clipboard history, Super + V) |
 | `emoji` | `toggle` (the emoji picker, Super + Ctrl + E) |
+| `record` | `refresh` (arctic-record started or stopped a recording; `RecordService` re-reads it) |
 
 ## Developing
 
