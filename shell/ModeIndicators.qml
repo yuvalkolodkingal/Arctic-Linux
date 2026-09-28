@@ -6,11 +6,36 @@ import QtQuick.Layouts
 // "Sharing": warning-soft with an icon and a word, never colour alone), then the modes that
 // are on (the registry's toggles with an indicator: night light, keep awake, VPN, a muted
 // microphone) as quiet icons. Clicking a mode turns it back; clicking "Mic" opens the sound menu.
+// Resting the pointer on them for a moment shows the other modes too, dimmed, on the far left
+// (so nothing that was there moves); clicking one turns it on.
 RowLayout {
     id: row
     required property var bar
+    property bool revealed: false
     spacing: Theme.space1
 
+    HoverHandler {
+        id: hover
+        onHoveredChanged: {
+            if (hovered) { hideTimer.stop(); revealTimer.restart(); }
+            else { revealTimer.stop(); hideTimer.restart(); }
+        }
+    }
+    Timer { id: revealTimer; interval: 300; onTriggered: row.revealed = true }
+    Timer { id: hideTimer; interval: 600; onTriggered: row.revealed = false }
+
+    Repeater {
+        model: row.revealed ? ToggleRegistry.toggles.filter(t => t.available && t.indicator && !t.indicatorShown && t.kind === 'switch') : []
+        BarItem {
+            id: other
+            required property var modelData
+            iconName: !modelData.active && modelData.iconOff !== '' ? modelData.iconOff : modelData.icon
+            iconColor: Theme.inkSubtle
+            tooltip: modelData.indicatorOffText
+            onClicked: modelData.toggle()
+            onHoverChanged: h => h ? row.bar.hint(other, tooltip) : row.bar.unhint(other)
+        }
+    }
     Repeater {
         model: [
             { key: 'mic', icon: 'mic', word: 'Mic', apps: PrivacyService.mic, what: 'Microphone in use by ' },

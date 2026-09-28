@@ -124,6 +124,7 @@ Singleton {
         indicator: true
         indicatorShown: available && !active
         indicatorText: 'The microphone is muted · click to unmute'
+        indicatorOffText: 'The microphone is on · click to mute it'
         setter: on => { if (on === AudioService.sourceMuted) AudioService.toggleSourceMute(); }
     }
     Toggle {

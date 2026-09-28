@@ -19,6 +19,7 @@ QtObject {
     property bool indicator: false      // shown left of the clock while `indicatorShown`
     property bool indicatorShown: indicator && active
     property string indicatorText: label + ' is on · click to turn it off'
+    property string indicatorOffText: label + ' is off · click to turn it on'   // shown dimmed on hover
     property string tone: 'normal'      // normal, warning, error (indicator pills)
     property string keys: ''            // shortcut for tooltips ("Super + Ctrl + N")
     property var setter: null           // function (on)
