@@ -12,8 +12,10 @@ ArcticField 1.0 ArcticField.qml
 Bar 1.0 Bar.qml
 BarItem 1.0 BarItem.qml
 BarTooltip 1.0 BarTooltip.qml
+ClipboardPanel 1.0 ClipboardPanel.qml
 DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
+EmojiPicker 1.0 EmojiPicker.qml
 FocusRing 1.0 FocusRing.qml
 Icon 1.0 Icon.qml
 InstallConsole 1.0 InstallConsole.qml

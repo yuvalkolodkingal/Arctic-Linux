@@ -253,6 +253,11 @@ Requires:       python3-pyte
 # pkexec, for Get apps
 Requires:       polkit
 Requires:       arctic-fonts = %{version}-%{release}
+# Stream 4 (input): the emoji picker lists unicode-emoji's emoji in the colour emoji font and
+# types them with wtype (the clipboard panel's paste uses it too); without wtype they're copied.
+Requires:       unicode-emoji
+Requires:       google-noto-color-emoji-fonts
+Recommends:     wtype
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,

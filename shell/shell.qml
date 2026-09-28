@@ -13,12 +13,13 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
+//   clipboard toggle · emoji toggle
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, clipboard, emoji].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -56,6 +57,13 @@ ShellRoot {
     function toggleKeys() {
         if (keys.open) keys.close(); else present(keys, null);
     }
+    // Clipboard history (Super + V) and emoji (Super + Ctrl + E), on the focused screen.
+    function toggleClipboard() {
+        if (clipboard.open) clipboard.close(); else present(clipboard, null);
+    }
+    function toggleEmoji() {
+        if (emoji.open) emoji.close(); else present(emoji, null);
+    }
     function lock() {
         closePopovers(null);
         lockScreen.lock();
@@ -75,6 +83,8 @@ ShellRoot {
     PowerMenu { id: power; shell: shell }
     UpdatePopover { id: updates }
     KeysSheet { id: keys }
+    ClipboardPanel { id: clipboard }
+    EmojiPicker { id: emoji }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -135,6 +145,14 @@ ShellRoot {
         target: 'updates'
         function toggle(): void { shell.toggleUpdates(null, undefined); }
         function refresh(): void { UpdateService.refresh(); }
+    }
+    IpcHandler {
+        target: 'clipboard'
+        function toggle(): void { shell.toggleClipboard(); }
+    }
+    IpcHandler {
+        target: 'emoji'
+        function toggle(): void { shell.toggleEmoji(); }
     }
     IpcHandler {
         target: 'shell'

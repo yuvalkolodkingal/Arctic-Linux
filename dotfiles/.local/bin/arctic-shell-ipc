@@ -5,7 +5,7 @@
 #
 # Targets: launcher toggle|open|close · apps install · wallpapers toggle|open · power toggle
 #          keys toggle · osd volume|brightness · lock lock|isLocked · welcome open
-#          dnd refresh · shell reload|live
+#          dnd refresh · shell reload|live · clipboard toggle · emoji toggle
 # Exits non-zero when the shell isn't running, so callers can fall back to something else.
 set -uo pipefail
 (( $# >= 2 )) || { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
