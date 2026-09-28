@@ -59,6 +59,7 @@ headphones.
 Arctic tells you once when the battery gets low, and again, even with do not disturb on, when it
 is about to run out, with what the computer will do then (usually suspend). Turn the first warning
 off in **Settings → Power and lock** (it is `batteryWarnings` in `~/.config/arctic/shell.json`).
+Plugging in or unplugging shows "Charging" or "On battery" at the bottom of the screen.
 
 ## Calendar (`Super + Ctrl + T`)
 
@@ -70,6 +71,7 @@ today.
 
 While something plays, its title sits right of the clock. Click it for the cover, a seek bar,
 previous / play-pause / next and the other players; middle-click plays or pauses, scrolling skips.
+The lock screen shows the title under the password box, with play/pause and next.
 
 ## Tray icons
 
@@ -85,7 +87,8 @@ dark style, power mode, microphone, VPN and airplane mode (a tile only shows whe
 has what it needs). Airplane mode turns every radio off and, when you turn it off again, back on
 only the ones that were on. Click a tile to switch it; the `›` part opens its menu inside Quick settings.
 `Super + Ctrl + D` opens the brightness page, with a slider for each screen that can change its
-brightness (external monitors through DDC/CI).
+brightness (external monitors through DDC/CI). The brightness keys change the screen you're on:
+an external monitor too, when it accepts DDC/CI, else the laptop's own screen.
 
 ## Indicators left of the clock
 

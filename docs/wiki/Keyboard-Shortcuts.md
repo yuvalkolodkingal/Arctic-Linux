@@ -142,7 +142,7 @@ These also work while the screen is locked.
 | Volume up / down | Change the volume (shows the volume pop-up) |
 | Mute | Mute or unmute |
 | Microphone mute | Turn the microphone off or on |
-| Brightness up / down | Change the screen brightness |
+| Brightness up / down | Change the brightness of the screen you're on (external monitors through DDC/CI) |
 | Play/Pause, Next, Previous | Control the music or video that's playing |
 | Keyboard light up / down | Change the keyboard backlight |
 
