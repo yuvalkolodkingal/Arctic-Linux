@@ -12,6 +12,7 @@
 - [Settings](Settings)
 - [Night light and keep awake](Night-Light-and-Keep-Awake)
 - [Printing and scanning](Printing-and-Scanning)
+- [Drives, phones and cameras](Drives-and-Phones)
 - [Apps and software](Apps-and-Software)
 - [Drivers](Drivers)
 - [Updates](Updates)

@@ -329,6 +329,63 @@ class AutostartTest(Home):
             self.assertIn("'{}'".format(ident.replace('-', '\\x2d')), spec)
 
 
+LSBLK = {'blockdevices': [
+    {'name': 'nvme0n1', 'path': '/dev/nvme0n1', 'type': 'disk', 'rm': False, 'hotplug': False, 'size': 512110190592,
+     'children': [{'name': 'nvme0n1p1', 'path': '/dev/nvme0n1p1', 'type': 'part', 'mountpoints': ['/boot/efi']}]},
+    {'name': 'sda', 'path': '/dev/sda', 'type': 'disk', 'rm': True, 'hotplug': True, 'size': 31914983424,
+     'vendor': 'SanDisk ', 'model': 'Ultra', 'tran': 'usb', 'mountpoints': [None],
+     'children': [{'name': 'sda1', 'path': '/dev/sda1', 'type': 'part', 'label': 'PHOTOS',
+                   'mountpoints': ['/run/media/you/PHOTOS']}]},
+    {'name': 'sdb', 'path': '/dev/sdb', 'type': 'disk', 'rm': True, 'hotplug': True, 'size': 0},   # empty card reader
+]}
+
+
+class DrivesTest(HelperHome):
+    def setUp(self):
+        super().setUp()
+        (self.bin / 'arctic-drives').symlink_to(BIN / 'arctic-drives')
+        (self.tmp / 'lsblk.json').write_text(json.dumps(LSBLK))
+        stub(self.bin, 'lsblk', '''\
+            echo "lsblk $*" >> "{0}"
+            case "$*" in
+              *" /dev/sda") echo '{{"blockdevices": [{{"path": "/dev/sda", "mountpoint": null}}, {{"path": "/dev/sda1", "mountpoint": "/run/media/you/PHOTOS"}}]}}' ;;
+              *) cat "{1}" ;;
+            esac
+            '''.format(self.log, self.tmp / 'lsblk.json'))
+        stub(self.bin, 'udisksctl', '''\
+            echo "udisksctl $*" >> "{}"
+            if [ -n "$BUSY" ] && [ "$1" = unmount ]; then echo "Error unmounting /dev/sda1: target is busy" >&2; exit 1; fi
+            '''.format(self.log))
+
+    def test_list_and_eject(self):
+        data = self.tool('arctic-drives', 'list')
+        self.assertEqual(data['drives'], [dict(device='/dev/sda', name='PHOTOS', model='SanDisk Ultra', size=31914983424,
+                                               bus='usb', mounts=['/run/media/you/PHOTOS'])])
+        data = self.tool('arctic-drives', 'eject', '/dev/sda')
+        self.assertEqual((data['name'], data['poweredOff']), ('PHOTOS', True))
+        self.assertIn('udisksctl unmount --block-device /dev/sda1 --no-user-interaction', self.calls())
+        self.assertEqual(self.calls()[-1], 'udisksctl power-off --block-device /dev/sda --no-user-interaction')
+        self.env['BUSY'] = '1'
+        self.assertIn('still using PHOTOS', self.tool('arctic-drives', 'eject', '/dev/sda', ok=False)['error'])
+        self.tool('arctic-drives', 'eject', '/dev/nvme0n1', ok=False)     # not removable
+        self.tool('arctic-drives', 'eject', '/dev/../etc', ok=False)
+
+    def test_session_starts_udiskie(self):
+        ran = self.tmp / 'udiskie.log'
+        stub(self.bin, 'udiskie', 'echo "$*" >> "{}"\n'.format(ran))
+        stub(self.bin, 'pgrep', 'exit 1\n')
+        stub(self.bin, 'setsid', 'shift; exec "$@"\n')
+        stub(self.bin, 'arctic-is-live', 'exit 1\n')
+        session = ['bash', str(BIN / 'arctic-session'), 'drives']
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        (self.home / '.config/arctic/drives.conf').write_text('automount=off\n')
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(ran.read_text().splitlines(), ['--automount --notify --no-tray', '--no-automount --notify --no-tray'])
+        stub(self.bin, 'arctic-is-live', 'exit 0\n')          # never in the live session
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(len(ran.read_text().splitlines()), 2)
+
+
 LPSTAT = r'''
 echo "lpstat $* LC_ALL=$LC_ALL" >> "{log}"
 case "$*" in

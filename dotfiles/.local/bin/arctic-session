@@ -4,7 +4,7 @@
 # (for example as a systemd user unit from arctic-desktop-config), nothing happens.
 #
 #   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle [--restart]
-#                  nightlight
+#                  nightlight | drives
 #
 # `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
@@ -69,5 +69,13 @@ case "${1:-}" in
     run_once swayidle swayidle "${args[@]}" ;;
   # Night light on its schedule (arctic-nightlight runs wlsunset; Settings > Displays).
   nightlight) command -v arctic-nightlight >/dev/null 2>&1 && arctic-nightlight apply >/dev/null 2>&1 ;;
-  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight" >&2; exit 2 ;;
+  # USB drives and SD cards mount by themselves, with a notification (udiskie; arctic-drives ejects).
+  # Not in the live session, where the installer may be partitioning a USB disk. automount=off
+  # in ~/.config/arctic/drives.conf keeps the notifications and mounts only what you open.
+  drives)
+    if arctic-is-live 2>/dev/null; then exit 0; fi
+    auto=--automount
+    grep -qsx 'automount=off' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/drives.conf" && auto=--no-automount
+    run_once udiskie udiskie "$auto" --notify --no-tray ;;
+  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives" >&2; exit 2 ;;
 esac

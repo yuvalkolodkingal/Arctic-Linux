@@ -216,6 +216,10 @@ Requires:       findutils
 # the time zone's location), keep awake (arctic-keep-awake, through arctic-session's swayidle).
 Requires:       wlsunset
 Requires:       tzdata
+# Removable drives: udiskie mounts them with a notification (arctic-session drives);
+# arctic-drives lists and ejects them (lsblk, udisksctl).
+Requires:       udiskie
+Requires:       udisks2
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
@@ -496,6 +500,12 @@ Recommends:     gutenprint-cups
 Recommends:     sane-airscan
 Recommends:     sane-backends-drivers-scanners
 Recommends:     simple-scan
+# Stream 5 (system): phones (MTP, iPhone), cameras and network shares in Thunar (gvfs).
+Recommends:     gvfs
+Recommends:     gvfs-mtp
+Recommends:     gvfs-afc
+Recommends:     gvfs-gphoto2
+Recommends:     gvfs-smb
 
 %description -n arctic-desktop
 Pulls in everything an Arctic Linux desktop needs: Mango, SDDM with the arctic theme and
