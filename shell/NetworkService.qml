@@ -18,6 +18,9 @@ Singleton {
     property var vpn: []                // [{uuid, name, kind, active, last_used}]
     property var saved: []              // [{uuid, ssid, autoconnect}]
     property var networks: []           // the last scan, while scanning
+    // NetworkManager gave up on a saved network (its password changed) and the person chose
+    // "Enter password" in the notification: shell.qml opens the menu with that network's field.
+    signal passwordWanted(string ssid)
     property bool scanning: false
     property int scanRequests: 0
 
@@ -66,6 +69,14 @@ Singleton {
             net.active = data.active || [];
             net.vpn = data.vpn || [];
             if (data.saved) net.saved = data.saved;
+        } else if (data.type === 'needs_secrets') {
+            // Not while the menu is open: it shows the password field itself.
+            if (net.scanning || secretsNotice.running || !data.ssid) return;
+            secretsNotice.ssid = data.ssid;
+            secretsNotice.command = ['notify-send', '-a', 'Network', '-i', 'network-wireless', '-A', 'open=Enter password',
+                                     '“' + data.ssid + '” needs its Wi-Fi password again',
+                                     'The saved password didn’t work. Enter the new one to connect.'];
+            secretsNotice.running = true;
         } else if (data.type === 'networks') {
             if (net.scanning) net.networks = data.networks || [];
         } else if (data.type === 'error') {
@@ -84,6 +95,11 @@ Singleton {
         onExited: code => { if (code === 2) net.available = false; else restart.restart(); }
     }
     Timer { id: restart; interval: 3000; onTriggered: if (!watcher.running) watcher.running = true }
+    Process {
+        id: secretsNotice
+        property string ssid: ''
+        stdout: StdioCollector { onStreamFinished: if (text.trim() === 'open') net.passwordWanted(secretsNotice.ssid) }
+    }
 
     Component {
         id: action

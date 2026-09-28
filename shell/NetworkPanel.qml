@@ -26,7 +26,11 @@ FocusScope {
     implicitWidth: 340
     implicitHeight: (page === '' ? main : page === 'actions' ? actions : join).implicitHeight
 
-    Component.onCompleted: { NetworkService.setScanning(true); sync(NetworkService.networks); }
+    Component.onCompleted: { NetworkService.setScanning(true); sync(NetworkService.networks); showPage(''); }
+    // Opened for a saved network whose password changed: its password field is open.
+    function showPage(_name) {
+        if (menu && menu.options && menu.options.ask) { page = ''; askError = ''; asking = menu.options.ask; }
+    }
     Component.onDestruction: NetworkService.setScanning(false)
 
     // The scan list as a model that is updated in place, so rows (and a half-typed password)

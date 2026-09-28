@@ -17,7 +17,9 @@
 One-shot commands print one JSON line: {"ok":true,…} or {"ok":false,"error":"<sentence>",
 "code":"<code>"} and exit 0/1. `watch` prints one object per line with a "type": "state"
 whenever NetworkManager reports a change (nmcli monitor, 250 ms debounce) and "networks" every
-8 s while a menu asked for a scan.
+8 s while a menu asked for a scan, and "needs_secrets" when NetworkManager gave up on a saved
+Wi-Fi network because its password no longer works (nobody else answers NetworkManager's
+password requests in the shell session; the menu asks instead).
 
 Secrets (--ask): the password comes on stdin as one JSON line {"secret":"…"} and reaches nmcli
 only through a pipe (`passwd-file /dev/fd/N`): never on a command line, in the environment, in
@@ -204,6 +206,18 @@ def build_state(devices, active, profiles, radio):
         vpn.append({'uuid': uuid, 'name': name, 'kind': TYPES[kind], 'active': uuid in active_uuids, 'last_used': last})
     vpn.sort(key=lambda v: v['name'].lower())
     return {'type': 'state', 'nm_running': True, 'wifi': wifi, 'wired': wired, 'active': act, 'vpn': vpn}
+
+
+NM_DEVICE_FAILED = 120
+NM_REASON_NO_SECRETS = 7
+
+
+def parse_state_changed(line):
+    """A `gdbus monitor --system --dest org.freedesktop.NetworkManager` line announcing a device
+    state change → (device path, new state, old state, reason), else None."""
+    m = re.match(r'^(/\S+): org\.freedesktop\.NetworkManager\.Device\.StateChanged '
+                 r'\(uint32 (\d+), uint32 (\d+), uint32 (\d+)\)', (line or '').strip())
+    return (m.group(1), int(m.group(2)), int(m.group(3)), int(m.group(4))) if m else None
 
 
 def error_for(code, stderr, name):
@@ -454,11 +468,15 @@ def watch():
         emit({'type': 'error', 'error': 'nmcli isn’t installed.', 'code': 'nm_down'})
         return 2
     last = None
+    joining = None                  # the Wi-Fi profile NetworkManager was last seen activating
 
     def publish():
-        nonlocal last
+        nonlocal last, joining
         state = reader.state()
         text = json.dumps(state, sort_keys=True)
+        wifi = next((a for a in state['active'] if a['type'] == 'wifi'), None)
+        if wifi:
+            joining = wifi
         if text != last:
             last = text
             emit(state)
@@ -469,7 +487,15 @@ def watch():
     os.set_blocking(monitor.stdout.fileno(), False)
     sel.register(sys.stdin.fileno(), selectors.EVENT_READ, 'stdin')
     sel.register(monitor.stdout.fileno(), selectors.EVENT_READ, 'monitor')
-    bufs = {'stdin': b'', 'monitor': b''}
+    bufs = {'stdin': b'', 'monitor': b'', 'events': b''}
+    # Device failures with their reason, for "needs_secrets" (only nmcli monitor without gdbus).
+    try:
+        events = subprocess.Popen(['gdbus', 'monitor', '--system', '--dest', 'org.freedesktop.NetworkManager'],
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        os.set_blocking(events.stdout.fileno(), False)
+        sel.register(events.stdout.fileno(), selectors.EVENT_READ, 'events')
+    except FileNotFoundError:
+        events = None
     scanning, next_scan, refresh_at = False, 0.0, 0.0
     try:
         while True:
@@ -483,6 +509,17 @@ def watch():
                         refresh_at = refresh_at or time.monotonic() + DEBOUNCE
                     if eof:
                         return 1                 # NetworkService restarts the helper
+                    continue
+                if key.data == 'events':
+                    for line in lines:
+                        change = parse_state_changed(line)
+                        if (change and change[1] == NM_DEVICE_FAILED and change[3] == NM_REASON_NO_SECRETS
+                                and joining and joining.get('state') == 'activating'):
+                            emit({'type': 'needs_secrets', 'uuid': joining['uuid'], 'ssid': joining['name'],
+                                  'device': joining['device']})
+                            joining = None
+                    if eof:
+                        sel.unregister(key.fd)
                     continue
                 if eof:
                     return 0                     # the shell went away
@@ -508,6 +545,8 @@ def watch():
                 next_scan = time.monotonic() + SCAN_INTERVAL
     finally:
         monitor.terminate()
+        if events:
+            events.terminate()
 
 
 # ---- main -------------------------------------------------------------------------------------

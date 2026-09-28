@@ -100,8 +100,8 @@ ShellRoot {
         }
         const same = menuHost.open && menuHost.screen === target && menuHost.panel === name
                      && (!options || options.item === undefined || options.item === menuHost.options.item);
+        menuHost.options = options || {};       // before the panel: a new panel reads it as it loads
         menuHost.panel = name;
-        menuHost.options = options || {};
         menuHost.pointX = anchor !== null ? anchor : target.width - Theme.space2 - Theme.frameWidth - 190;
         // Already showing: go to the page asked for (panels read options.page when they load).
         if (same && menuHost.item && menuHost.item.showPage) menuHost.item.showPage((options && options.page) || '');
@@ -139,6 +139,10 @@ ShellRoot {
     LockScreen { id: lockScreen }
     PolkitDialog { id: polkit }
     BarMenu { id: menuHost; shell: root }
+    Connections {
+        target: NetworkService
+        function onPasswordWanted(ssid) { shell.openPanel('network', null, undefined, { keyboard: true, ask: ssid }); }
+    }
     BluetoothPairDialog { id: btPair }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------

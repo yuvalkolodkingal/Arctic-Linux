@@ -101,6 +101,14 @@ class Parsing(unittest.TestCase):
         self.assertEqual(code, 'failed')
         self.assertEqual(text, 'Couldn’t connect to “Home”. something odd happened')
 
+    def test_state_changed_lines(self):
+        failed = ('/org/freedesktop/NetworkManager/Devices/3: org.freedesktop.NetworkManager.Device.StateChanged '
+                  '(uint32 120, uint32 60, uint32 7)')
+        self.assertEqual(network.parse_state_changed(failed), ('/org/freedesktop/NetworkManager/Devices/3', 120, 60, 7))
+        self.assertIsNone(network.parse_state_changed(
+            "/org/freedesktop/NetworkManager/Devices/3: org.freedesktop.DBus.Properties.PropertiesChanged ('x', {}, @as [])"))
+        self.assertIsNone(network.parse_state_changed(''))
+
     def test_secret_input(self):
         self.assertEqual(network.read_secret(io.StringIO(json.dumps({'secret': 'pw'}) + '\n')), 'pw')
         for bad in ['', 'not json\n', json.dumps({'secret': ''}), json.dumps({'secret': 'a\nb'}),
