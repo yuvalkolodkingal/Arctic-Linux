@@ -1,0 +1,9 @@
+singleton Theme 1.0 Theme.qml
+singleton Backend 1.0 Backend.qml
+Main 1.0 Main.qml
+Page 1.0 Page.qml
+Group 1.0 Group.qml
+SettingRow 1.0 SettingRow.qml
+Toast 1.0 Toast.qml
+RowSwitch 1.0 RowSwitch.qml
+PickerDialog 1.0 PickerDialog.qml

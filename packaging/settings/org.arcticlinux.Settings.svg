@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Arctic Settings: the design's "settings" app tile (installer-ui/assets/tiles/settings-dark.svg,
+       sliders glyph on a slate-900 tile) with the amber knob — amber marks the current value. -->
+  <rect width="64" height="64" rx="19" fill="#1a212a"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="18.5" fill="none" stroke="#2f3945"/>
+  <g transform="translate(14 14) scale(1.5)" fill="none" stroke="#e9eef3" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 7h9 M17 7h3 M4 17h3 M11 17h9"/>
+    <circle cx="15" cy="7" r="2" fill="#f6bd55" stroke="#f6bd55"/>
+    <circle cx="9" cy="17" r="2"/>
+  </g>
+</svg>
