@@ -33,6 +33,11 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     motion | motion-set on|off    reduced motion (arctic-motion)
     text-scale [FACTOR]           GTK text size (org.gnome.desktop.interface text-scaling-factor)
     wallpapers | wallpaper-set KEY                the shell's picker backend (wallpapers.py)
+    wallpaper-import PATH|URL…    copy pictures into your wallpaper folder (checked with Pillow)
+    wallpaper-delete PATH | wallpaper-rename PATH NAME     your own pictures only
+    wallhaven ARGS…               the Wallhaven browser (the shell's wallhaven.py: search, preview,
+                                  set, state, key, prefs); answers {"ok": false, "offline": true}
+                                  instead of failing when Wallhaven can't be reached
     updates | update-run now|apply|channel NAME|auto on|off                     (arctic-update)
     network | wifi on|off         NetworkManager status (nmcli)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
@@ -1884,6 +1889,54 @@ def cmd_wallpaper_set(paths, args):
     return dict(ok=True, current=args[0])
 
 
+def _wallpaper_files(paths, argv, what):
+    script = shell_script(paths, 'wallpapers.py')
+    if not script:
+        raise Failure('The shell’s wallpaper picker isn’t installed.')
+    code, out, _err = run([sys.executable, str(script)] + argv, timeout=120)
+    data = _loads(out) or {}
+    if code != 0 or not data.get('ok'):
+        raise Failure(data.get('error') or 'The picture couldn’t be {}.'.format(what))
+    return data
+
+
+def cmd_wallpaper_import(paths, args):
+    if not args:
+        raise Failure('usage: wallpaper-import PATH|URL…')
+    return _wallpaper_files(paths, ['import'] + list(args), 'added')
+
+
+def cmd_wallpaper_delete(paths, args):
+    if len(args) != 1:
+        raise Failure('usage: wallpaper-delete PATH')
+    return _wallpaper_files(paths, ['delete', args[0]], 'deleted')
+
+
+def cmd_wallpaper_rename(paths, args):
+    if len(args) != 2:
+        raise Failure('usage: wallpaper-rename PATH NAME')
+    return _wallpaper_files(paths, ['rename', args[0], args[1]], 'renamed')
+
+
+WALLHAVEN_TIMEOUTS = {'search': 90, 'preview': 60, 'download': 300, 'set': 300}
+
+
+def cmd_wallhaven(paths, args):
+    """The Wallhaven browser: every network call happens in wallhaven.py. Its answer comes
+    back as is (so the page can show "offline" or "wait N s" in place, not as an error)."""
+    script = shell_script(paths, 'wallhaven.py')
+    if not script:
+        return dict(ok=False, available=False, error='The Wallhaven browser isn’t installed.')
+    if not args or args[0] not in ('search', 'preview', 'download', 'set', 'state', 'key', 'prefs'):
+        raise Failure('usage: wallhaven search|preview|download|set|state|key|prefs …')
+    code, out, err = run([sys.executable, str(script)] + list(args), timeout=WALLHAVEN_TIMEOUTS.get(args[0], 30))
+    data = _loads(out)
+    if not isinstance(data, dict):
+        raise Failure(strip_ansi(err).strip().splitlines()[-1] if err.strip() else 'Wallhaven didn’t answer in time.')
+    data.setdefault('ok', code == 0)
+    return data
+
+
 # ---- arctic-update ------------------------------------------------------------------------------
 
 def cmd_updates(paths, _args):
@@ -2109,7 +2162,9 @@ COMMANDS = {
     'idle-set': cmd_idle_set, 'keyboard-data': cmd_keyboard_data, 'cursor-themes': cmd_cursor_themes,
     'theme': cmd_theme, 'theme-set': cmd_theme_set, 'theme-auto': cmd_theme_auto, 'theme-mode': cmd_theme_mode,
     'motion': cmd_motion, 'motion-set': cmd_motion_set, 'text-scale': cmd_text_scale,
-    'wallpapers': cmd_wallpapers, 'wallpaper-set': cmd_wallpaper_set, 'updates': cmd_updates,
+    'wallpapers': cmd_wallpapers, 'wallpaper-set': cmd_wallpaper_set, 'wallpaper-import': cmd_wallpaper_import,
+    'wallpaper-delete': cmd_wallpaper_delete, 'wallpaper-rename': cmd_wallpaper_rename, 'wallhaven': cmd_wallhaven,
+    'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
 }

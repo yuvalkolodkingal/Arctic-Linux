@@ -671,6 +671,46 @@ class ThemeTest(Home):
                          ['arctic-theme set polar-night', 'arctic-theme auto off', 'arctic-theme mode light'])
 
 
+class WallpaperFilesTest(Home):
+    """Your own pictures (import, rename, delete) and the Wallhaven browser, through the
+    shell's wallpapers.py / wallhaven.py as the app calls them. No network."""
+
+    def setUp(self):
+        super().setUp()
+        from PIL import Image
+        self.pictures = self.home / 'Pictures' / 'Wallpapers'
+        self.src = self.tmp / 'Downloads'
+        self.src.mkdir()
+        Image.new('RGB', (48, 30), (90, 20, 20)).save(self.src / 'Red dunes.jpg')
+        (self.src / 'readme.png').write_text('not a picture')
+        # Like the real one, it keeps the choice in ~/.config/arctic/wallpaper.
+        stub(self.bin, 'arctic-wallpaper', 'echo "arctic-wallpaper $*" >> "{}"\necho "$1" > "$HOME/.config/arctic/wallpaper"\n'.format(self.log))
+
+    def test_import_rename_delete(self):
+        data = self.helper('wallpaper-import', 'file://' + str(self.src / 'Red dunes.jpg').replace(' ', '%20'))
+        added = Path(data['added'][0])
+        self.assertEqual(added, self.pictures / 'Red dunes.jpg')
+        self.assertIn(str(added), [i['path'] for i in self.helper('wallpapers')['items']])
+        self.helper('wallpaper-import', str(self.src / 'readme.png'), ok=False)
+        renamed = Path(self.helper('wallpaper-rename', str(added), 'Dunes at noon')['path'])
+        self.assertEqual(renamed.name, 'Dunes at noon.jpg')
+        self.helper('wallpaper-rename', str(renamed), '../escape', ok=False)
+        self.helper('wallpaper-delete', str(self.src / 'Red dunes.jpg'), ok=False)   # not yours
+        self.helper('wallpaper-set', str(renamed))
+        self.helper('wallpaper-delete', str(renamed), ok=False)                        # in use
+        self.assertIn('arctic-wallpaper ' + str(renamed), self.calls())
+
+    def test_wallhaven_state_and_offline(self):
+        state = self.helper('wallhaven', 'state')
+        self.assertEqual((state['has_key'], state['prefs']['purity']), (False, '100'))
+        self.env.update(https_proxy='http://127.0.0.1:9', HTTPS_PROXY='http://127.0.0.1:9')
+        result = subprocess.run([sys.executable, str(HELPER), 'wallhaven', 'search', '--q', 'snow'], env=self.env,
+                                capture_output=True, text=True, timeout=60)
+        data = json.loads(result.stdout)
+        self.assertEqual((result.returncode, data['ok'], data['offline']), (0, False, True))
+        self.helper('wallhaven', 'rm', '-rf', ok=False)
+
+
 class UpdatesTest(Home):
     def test_missing(self):
         data = self.helper('updates')
