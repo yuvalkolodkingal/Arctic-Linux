@@ -57,6 +57,10 @@ on:
         description: Discard the published site, BOTH channels, and start over
         type: boolean
         default: false
+      dry_run:
+        description: Build, sign and check with dnf5, but don't deploy (no Pages site needed); the site is uploaded as the artifact "site-dry-run"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -116,6 +120,7 @@ jobs:
           echo "Publishing \`$ref_name\` to the **$channel** channel of ${base_url%/}/" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check GitHub Pages
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
           BASE_URL: ${{ steps.plan.outputs.base_url }}
@@ -218,7 +223,16 @@ jobs:
           # signatures verified by dnf5 itself, not only by gpg and rpmkeys.
           tools/test-repo.sh --signed --channel "$CHANNEL" --rpms out/repo --site site --src "$SRC_DIR"
 
+      - name: Upload the site (dry run)
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-dry-run
+          path: site
+          retention-days: 7
+
       - name: Upload the site
+        if: ${{ !inputs.dry_run }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: site
@@ -228,6 +242,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
