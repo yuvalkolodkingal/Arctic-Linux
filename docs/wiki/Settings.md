@@ -140,6 +140,8 @@ leave a laptop's only screen dark the next time it starts without its dock.
   typing, pointer speed and acceleration, scrolling speed, right click, middle click with both
   buttons, and turning the touchpad off altogether.
 - **Mouse:** pointer speed and acceleration, natural scrolling, scrolling speed and left-handed.
+- **Clipboard:** **Keep clipboard history** (what `Super + V` shows; off keeps only what you
+  copied last) and **Clear history**. Saved in `~/.config/arctic/clipboard.conf`.
 
 ## Shortcuts
 

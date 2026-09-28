@@ -1,9 +1,11 @@
 // Keyboard and mouse: keyboard layouts (+ variants, the key that switches between them, what
-// Caps Lock does, the Compose key), key repeat, touchpad and mouse. All of it is Mango config (xkb_rules_*,
+// Caps Lock does, the Compose key), key repeat, touchpad and mouse, and clipboard history
+// (~/.config/arctic/clipboard.conf, read by `arctic-session clipboard`). All of it is Mango config (xkb_rules_*,
 // repeat_*, trackpad_*, mouse_*), written to settings.conf for you only: the installer's
 // /etc/arctic/mango/keyboard.conf (root's, also used by the login screen) stays as it is.
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Templates as T
 import ".."
 import "../components"
 
@@ -14,6 +16,7 @@ Page {
 
     property var kb: ({ layouts: [], variants: {}, switchKeys: [], capsOptions: [], composeKeys: [], switchClashes: {} })
     property var devices: ({ trackpad: true, mouse: true })
+    property var clip: ({ available: false, history: true, entries: 0 })
     readonly property var layoutKeys: ["xkb_rules_layout", "xkb_rules_variant", "xkb_rules_options"]
 
     // The effective keyboard: [{layout, variant}] and the options split into switch / caps / rest.
@@ -59,6 +62,7 @@ Page {
     onShown: {
         Backend.call(["keyboard-data"], r => { if (r.ok) page.kb = r; });
         Backend.call(["devices"], r => { if (r.ok) page.devices = r; }, true);
+        Backend.call(["clipboard"], r => { if (r.ok) page.clip = r; }, true);
     }
 
     Group {
@@ -416,6 +420,68 @@ Page {
                 onToggled: Backend.set({ mouse_left_handed: checked ? 1 : 0 })
             }
         }
+    }
+
+    Group {
+        title: "Clipboard"
+        desc: "Super + V shows what you copied, to copy or paste it again."
+        visible: page.clip.available
+        SettingRow {
+            searchKey: "input.clipboard"
+            title: "Keep clipboard history"
+            desc: !page.clip.history ? "Off: only what you copied last is on the clipboard."
+                : page.clip.entries === 0 ? "Nothing copied yet. It’s kept on this computer only."
+                : page.clip.entries === 1 ? "1 thing kept, on this computer only." : page.clip.entries + " things kept, on this computer only."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Keep clipboard history"
+                checked: page.clip.history
+                onToggled: Backend.call(["clipboard-set", "history", checked ? "on" : "off"], r => {
+                    if (r.ok) {
+                        page.clip = r;
+                        Backend.notify("success", r.history ? "Clipboard history on" : "Clipboard history off", false);
+                    }
+                })
+            }
+        }
+        SettingRow {
+            visible: page.clip.entries > 0
+            title: "Clear clipboard history"
+            desc: "Forgets everything you copied."
+            resettable: false
+            ArButton {
+                text: "Clear history"
+                variant: "secondary"
+                iconName: "trash"
+                gapColor: Theme.surfaceRaised
+                onClicked: clearClipboard.open()
+            }
+        }
+    }
+
+    ArDialog {
+        id: clearClipboard
+        parent: T.Overlay.overlay
+        title: "Clear clipboard history?"
+        body: "Everything you copied is forgotten. This can’t be undone."
+        buttons: [
+            ArButton {
+                text: "Cancel"
+                variant: "ghost"
+                onClicked: clearClipboard.close()
+            },
+            ArButton {
+                text: "Clear history"
+                variant: "destructive"
+                onClicked: Backend.call(["clipboard-clear"], r => {
+                    clearClipboard.close();
+                    if (r.ok) {
+                        page.clip = r;
+                        Backend.notify("success", "Clipboard history cleared", false);
+                    }
+                })
+            }
+        ]
     }
 
     PickerDialog {

@@ -74,6 +74,7 @@ var ENTRIES = [
     ["input", "input.click", "Right click on the touchpad", "clickfinger button areas"],
     ["input", "input.mousespeed", "Mouse speed", "sensitivity acceleration"],
     ["input", "input.lefthanded", "Left-handed mouse", "swap buttons"],
+    ["input", "input.clipboard", "Clipboard history", "cliphist copy paste privacy clear super v"],
     ["shortcuts", "shortcuts.mine", "Your shortcuts", "add custom keybinding command"],
     ["shortcuts", "shortcuts.sheet", "Arctic’s shortcuts", "keys cheat sheet"],
     ["apps", "apps.browser", "Web browser", "firefox zen chromium links"],

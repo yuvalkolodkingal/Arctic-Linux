@@ -852,6 +852,20 @@ class MiscTest(Home):
         clashes = self.helper('keyboard-data')['switchClashes']
         self.assertIn('Ctrl + Shift + F12 (btop)', clashes['grp:ctrl_shift_toggle'])
 
+    def test_clipboard_history(self):
+        stub(self.bin, 'cliphist', 'echo "cliphist $*" >> "{}"; [ "$1" = list ] && printf "2\\tb\\n1\\ta\\n"; exit 0\n'.format(self.log))
+        stub(self.bin, 'arctic-session', 'echo "arctic-session $*" >> "{}"\n'.format(self.log))
+        data = self.helper('clipboard')
+        self.assertEqual((data['available'], data['history'], data['entries']), (True, True, 2))
+        data = self.helper('clipboard-set', 'history', 'off')
+        self.assertFalse(data['history'])
+        self.assertIn('history=off\n', (self.home / '.config/arctic/clipboard.conf').read_text())
+        self.assertIn('arctic-session clipboard --restart', self.calls())
+        self.assertTrue(self.helper('clipboard-set', 'history', 'on')['history'])
+        self.helper('clipboard-clear')
+        self.assertIn('cliphist wipe', self.calls())
+        self.helper('clipboard-set', 'history', 'maybe', ok=False)
+
     def test_shortcuts_that_would_switch_the_layout_are_refused(self):
         self.helper('bind-add', 'SUPER+ALT+SHIFT', 'x', 'foot')            # one layout: nothing to switch
         (self.home / '.config/mango/user.conf').write_text('xkb_rules_layout=us,il\nxkb_rules_options=grp:alt_shift_toggle\n')

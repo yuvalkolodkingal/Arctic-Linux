@@ -14,6 +14,9 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     binds                         the shortcut sheet (keys.txt), every bind in the config, yours
     bind-add MODS KEY COMMAND     add a shortcut that runs COMMAND (checked for clashes)
     notices                       what to say once at login about shortcuts (arctic-settings --check-binds)
+    clipboard                     clipboard history: kept or not, and how many entries
+    clipboard-set history on|off  keep clipboard history (~/.config/arctic/clipboard.conf)
+    clipboard-clear               forget clipboard history (cliphist wipe)
     bind-remove INDEX
     startup                       startup apps: yours (exec-once in settings.conf) and Arctic's
     startup-add COMMAND | --app DESKTOP-ID
@@ -994,6 +997,34 @@ def cmd_notices(paths, _args):
             kept |= {i for i in shown if i.startswith('shadowed-')}
         atomic_write(state, json.dumps(dict(shown=sorted(kept))) + '\n')
     return dict(ok=True, notices=notices)
+
+
+def clipboard_history_on(paths):
+    return (read_text(paths.arctic / 'clipboard.conf') or '').split().count('history=off') == 0
+
+
+def cmd_clipboard(paths, _args):
+    entries = 0
+    if which('cliphist', paths.env):
+        code, out, _err = run(['cliphist', 'list'], env=paths.env)
+        entries = len(out.splitlines()) if code == 0 else 0
+    return dict(ok=True, history=clipboard_history_on(paths), entries=entries,
+                available=bool(which('cliphist', paths.env)))
+
+
+def cmd_clipboard_set(paths, args):
+    if len(args) != 2 or args[0] != 'history' or args[1] not in ('on', 'off'):
+        raise Failure('usage: clipboard-set history on|off')
+    atomic_write(paths.arctic / 'clipboard.conf',
+                 '# Clipboard history (Super + V), set in Settings > Keyboard and mouse.\nhistory={}\n'.format(args[1]))
+    run(['arctic-session', 'clipboard', '--restart'], env=paths.env)
+    return cmd_clipboard(paths, [])
+
+
+def cmd_clipboard_clear(paths, _args):
+    if not which('cliphist', paths.env) or run(['cliphist', 'wipe'], env=paths.env)[0] != 0:
+        raise Failure('Clipboard history couldn’t be cleared.')
+    return cmd_clipboard(paths, [])
 
 
 def validate_command(command, what='command'):
@@ -2262,7 +2293,8 @@ def cmd_set_cursor(paths, args):
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
-    'notices': cmd_notices,
+    'notices': cmd_notices, 'clipboard': cmd_clipboard, 'clipboard-set': cmd_clipboard_set,
+    'clipboard-clear': cmd_clipboard_clear,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
     'displays': cmd_displays, 'display-try': cmd_display_try, 'display-keep': cmd_display_keep,
     'display-revert': cmd_display_revert, 'display-forget': cmd_display_forget, 'devices': cmd_devices,
