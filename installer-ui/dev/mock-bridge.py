@@ -137,6 +137,18 @@ WIFI_PASSWORDS = {"Tundra-5G": "polarnight", "Snowfield": "snowfield", "Aurora G
 
 # Categories and apps from the design bundle (CATEGORIES / APPS). choice "one" | "any";
 # required as in modules/catalog.toml (Office is "one" but may be left empty).
+# The mock machine is an NVIDIA hybrid laptop (like the engine's mock, hw.DefaultFixture):
+# Intel Iris Xe draws the screen, an RTX 4060 renders on demand, Secure Boot is on.
+# ARCTIC_MOCK_HW=none: no drivers found; ARCTIC_MOCK_SECUREBOOT=0: Secure Boot off.
+HAS_DRIVERS = ENV.get("ARCTIC_MOCK_HW", "") != "none"
+SECURE_BOOT = ENV.get("ARCTIC_MOCK_SECUREBOOT", "") != "0"
+DRIVER_CATEGORY = ("drivers", "Drivers", "any", "Found on this computer. These come from RPM Fusion and aren’t open source.", False)
+# id -> (tile, device, builds a kernel module)
+DRIVERS = {
+    "nvidia": ("driver-gpu", "NVIDIA GeForce RTX 4060 Max-Q / Mobile", True),
+    "intel-media": ("driver-media", "Intel Iris Xe Graphics", False),
+}
+
 CATEGORIES = [
     ("browser", "Browser", "one", "Becomes your default browser.", True),
     ("editor", "Editor", "any", "", False),
@@ -147,8 +159,12 @@ CATEGORIES = [
     ("video", "Video", "any", "", False),
     ("extras", "Extras", "any", "Nothing here is ticked by default.", False),
 ]
+if HAS_DRIVERS:
+    CATEGORIES.insert(0, DRIVER_CATEGORY)
 # id, name, category, summary, default, download_mb, source, in_live_image, role
 MODULES = [
+    ("nvidia", "NVIDIA driver", "drivers", "NVIDIA’s own driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile: full speed for games, video and 3D apps.", True, 840, "dnf", False, "graphics driver"),
+    ("intel-media", "Intel video acceleration", "drivers", "Plays and records H.264 and H.265 video on your Intel Iris Xe Graphics instead of the processor.", True, 8, "dnf", False, "video driver"),
     ("zen", "Zen Browser", "browser", "Calm, privacy-first browser with vertical tabs.", True, 112, "flatpak", True, "web browser"),
     ("firefox", "Firefox", "browser", "The classic open-source browser.", False, 78, "dnf", False, "web browser"),
     ("chromium", "Chromium", "browser", "Open-source base of Chrome.", False, 104, "dnf", False, "web browser"),
@@ -178,7 +194,38 @@ MODULES = [
     ("signal", "Signal", "extras", "Private messaging.", False, 150, "flatpak", False, "messenger"),
     ("obs", "OBS Studio", "extras", "Screen recording and streaming.", False, 190, "flatpak", False, "screen recorder"),
 ]
+if not HAS_DRIVERS:
+    MODULES = [m for m in MODULES if m[2] != "drivers"]
 MOD = {m[0]: m for m in MODULES}
+
+
+def is_driver(mid):
+    return mid in MOD and MOD[mid][2] == "drivers"
+
+
+def driver_text(mid, status, mok):
+    name, dev = MOD[mid][1], DRIVERS[mid][1]
+    if status == "deferred":
+        return f"The {name} for your {dev} is installed the first time Arctic Linux is online. Restart once more after that."
+    if mok and DRIVERS[mid][2]:
+        return f"The {name} for your {dev} starts once you’ve confirmed its key (below)."
+    return f"The {name} for your {dev} starts after you restart."
+
+
+def secure_boot_info(code):
+    # internal/wizard SecureBootSteps.
+    return {
+        "code": code,
+        "title": "One more step when the computer restarts",
+        "intro": "Secure Boot is on, so this computer only starts drivers it trusts. The first time it restarts, confirm the key Arctic Linux signed your driver with:",
+        "steps": [
+            "Restart. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds.",
+            "Choose “Enroll MOK”, then “Continue”, then “Yes”.",
+            f"Type the one-time code {code} with the number keys above the letters, then press Enter.",
+            "Choose “Reboot”. Your driver starts from now on.",
+        ],
+        "note": "Missed the blue screen? Arctic Linux still starts, only without the driver. Run “sudo mokutil --import /etc/pki/akmods/certs/public_key.der” in a terminal, pick any password, restart and type it there.",
+    }
 
 STEPS = [
     ("welcome", "Welcome to Arctic Linux", "This takes about 10 minutes. First, pick the language you'd like to use."),
@@ -236,6 +283,8 @@ class MockEngine:
         self.retry_event = threading.Event()
         self.retry_action = None
         self.fail_attempts = {}
+        self.done_drivers = []
+        self.done_secure_boot = None
         fatal = ENV.get("ARCTIC_MOCK_FATAL", "")
         self.fatal_left = int(fatal) if fatal.isdigit() else int(env_on("ARCTIC_MOCK_FATAL"))  # core failures to come
         self.speed = max(0.05, float(ENV.get("ARCTIC_MOCK_SPEED", "1") or 1))
@@ -285,10 +334,14 @@ class MockEngine:
         return {"steps": steps, "current": self.step_id()}
 
     def selected_ids(self):
+        """The ticked apps (not drivers: they aren't counted as apps)."""
         out = []
         for c in CATEGORIES:
-            out.extend(self.data["apps"]["selection"].get(c[0], []))
+            out.extend(i for i in self.data["apps"]["selection"].get(c[0], []) if not is_driver(i))
         return out
+
+    def selected_drivers(self):
+        return [i for i in self.data["apps"]["selection"].get("drivers", []) if is_driver(i)]
 
     def estimate(self, selection):
         ids = []
@@ -299,8 +352,12 @@ class MockEngine:
         if any(MOD[i][6] == "flatpak" and not MOD[i][7] for i in ids):
             mb += 380
         size = f"{mb / 1000:.1f} GB" if mb >= 1000 else f"{mb} MB"
-        n = len(ids)
-        return {"apps": n, "bytes": mb * 1000 * 1000, "label": f"{n} app{'s' if n != 1 else ''} · {size} download"}
+        n = sum(1 for i in ids if not is_driver(i))
+        drivers = len(ids) - n
+        count = f"{n} app{'s' if n != 1 else ''}"
+        if drivers:
+            count += f" + {drivers} driver{'s' if drivers != 1 else ''}"
+        return {"apps": n, "drivers": drivers, "bytes": mb * 1000 * 1000, "label": f"{count} · {size} download"}
 
     def disk(self, path=None):
         path = path or self.data["disk"]["disk"]
@@ -381,12 +438,18 @@ class MockEngine:
                        "encryption": self.data["encryption"].get("enabled", True)}
         elif sid == "apps":
             options = {"categories": [{"id": c[0], "name": c[1], "choice": c[2], "note": c[3], "required": c[4],
-                                       "rule": "Pick one" if c[2] == "one" else "Pick any"} for c in CATEGORIES],
-                       "modules": [{"id": m[0], "name": m[1], "summary": m[3], "category": m[2], "default": m[4], "tile": m[0],
-                                    "download_mb": m[5], "source": m[6], "in_live_image": m[7]} for m in MODULES]}
+                                       "rule": "Pick one" if c[2] == "one" else "Pick any", "hardware": c[0] == "drivers"} for c in CATEGORIES],
+                       "modules": [{"id": m[0], "name": m[1], "summary": m[3], "category": m[2], "default": m[4],
+                                    "tile": DRIVERS[m[0]][0] if is_driver(m[0]) else m[0],
+                                    "device": DRIVERS[m[0]][1] if is_driver(m[0]) else "",
+                                    "download_mb": m[5], "source": "RPM Fusion" if is_driver(m[0]) else m[6], "in_live_image": m[7]} for m in MODULES]}
         elif sid == "done":
             first = (self.data["account"]["full_name"] or "").split(" ")[0]
             data = {"apps_installed": sum(1 for s in self.module_status.values() if s == "installed"), "first_name": first}
+            if self.done_drivers:
+                options["drivers"] = self.done_drivers
+            if self.done_secure_boot:
+                options["secure_boot"] = self.done_secure_boot
         return {"id": sid, "title": title, "help": help_, "data": data, "options": options}
 
     def validate(self, sid, data):
@@ -571,6 +634,12 @@ class MockEngine:
             {"step": "account", "label": "Account", "value": f"{acct['full_name']} ({acct['username']}) on {acct['hostname']}"},
             {"step": "apps", "label": "Apps", "value": ", ".join(apps) if apps else "No extra apps"},
         ]
+        if HAS_DRIVERS:
+            drivers = self.selected_drivers()
+            value = "; ".join(f"{MOD[i][1]} for your {DRIVERS[i][1]}" for i in drivers) or "None — your hardware keeps its open-source drivers"
+            if SECURE_BOOT and any(DRIVERS[i][2] for i in drivers):
+                value += ". Secure Boot is on: you’ll confirm the driver’s key once after restarting"
+            rows.append({"step": "apps", "icon": "cpu", "label": "Drivers", "value": value})
         return {"rows": rows, "warning": warning, "primary_label": primary}
 
     # ---- install simulation
@@ -693,6 +762,24 @@ class MockEngine:
                     break
                 # retry: loop again
 
+        # drivers: installed with the apps, then built for the kernel (akmods)
+        drivers = self.selected_drivers()
+        offline = not self.online()
+        mok = SECURE_BOOT and not offline and any(DRIVERS[i][2] for i in drivers)
+        results = []
+        for i in drivers:
+            name, dev = MOD[i][1], DRIVERS[i][1]
+            status = "deferred" if offline else "installed"
+            if not offline:
+                self.progress(95, "apps", f"Installing the {name} for your {dev}…", "apps", eta(95))
+                self.sleep(0.6)
+                if DRIVERS[i][2]:
+                    self.progress(95, "apps", f"Building the {name} for this computer — this takes a few minutes…", "apps", eta(95))
+                    self.sleep(1.2)
+            results.append({"id": i, "name": name, "device": dev, "status": status, "text": driver_text(i, status, mok)})
+        self.done_drivers = results
+        self.done_secure_boot = secure_boot_info("".join(random.choice("0123456789") for _ in range(8))) if mok else None
+
         for i in range(6):
             p = 95 + i
             self.progress(min(p, 100), "finalize", "Setting up your account…" if i < 3 else "Almost there — tidying up…", "finish", eta(p))
@@ -702,7 +789,12 @@ class MockEngine:
         self.current = STEP_IDS.index("done")
         first = (self.data["account"]["full_name"] or "").split(" ")[0]
         installed = sum(1 for s in self.module_status.values() if s == "installed")
-        self.emit({"event": "done", "apps_installed": installed, "first_name": first})
+        done = {"event": "done", "apps_installed": installed, "first_name": first}
+        if self.done_drivers:
+            done["drivers"] = self.done_drivers
+        if self.done_secure_boot:
+            done["secure_boot"] = self.done_secure_boot
+        self.emit(done)
 
     def resume(self, action, mid):
         if self.install_state != "attention":

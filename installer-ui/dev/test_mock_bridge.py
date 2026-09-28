@@ -111,9 +111,11 @@ class MockBridgeTest(unittest.TestCase):
         self.assertEqual(disk["data"]["mode"], "erase")
         apps = b.ok("GetStep", {"id": "apps"})
         self.assertEqual([c["id"] for c in apps["options"]["categories"]],
-                         ["browser", "editor", "terminal", "shell", "files", "office", "video", "extras"])
+                         ["drivers", "browser", "editor", "terminal", "shell", "files", "office", "video", "extras"])
         est = b.ok("EstimateDownload", {"selection": apps["data"]["selection"]})
-        self.assertRegex(est["label"], r"^\d+ apps? · [\d.]+ (GB|MB) download$")
+        self.assertRegex(est["label"], r"^\d+ apps? \+ 2 drivers · [\d.]+ (GB|MB) download$")
+        nvidia = apps["options"]["modules"][0]
+        self.assertEqual((nvidia["id"], nvidia["tile"], nvidia["device"]), ("nvidia", "driver-gpu", "NVIDIA GeForce RTX 4060 Max-Q / Mobile"))
 
     def test_network_blocks_next_until_online(self):
         b = self.start()
@@ -154,6 +156,8 @@ class MockBridgeTest(unittest.TestCase):
         b.ok("SetStep", {"id": "apps", "data": {"selection": sel}})
         b.ok("Next")
         summary = b.ok("GetSummary")
+        self.assertEqual(summary["rows"][-1]["label"], "Drivers")
+        self.assertIn("NVIDIA driver for your NVIDIA GeForce RTX 4060", summary["rows"][-1]["value"])
         self.assertEqual(summary["primary_label"], "Erase disk and install")
         self.assertIn("erase everything on Samsung SSD 980", summary["warning"])
         self.assertEqual(b.ok("Next")["current"], "install")
@@ -166,7 +170,12 @@ class MockBridgeTest(unittest.TestCase):
         b.ok("RetryModule", {"id": "steam"})
         done = b.wait_event("done", timeout=60)
         self.assertEqual(done["first_name"], "Noa")
-        self.assertEqual(done["apps_installed"], len([m for c in sel.values() for m in c]))
+        self.assertEqual(done["apps_installed"], len([m for k, c in sel.items() if k != "drivers" for m in c]))
+        self.assertEqual([d["id"] for d in done["drivers"]], ["nvidia", "intel-media"])
+        self.assertRegex(done["secure_boot"]["code"], r"^\d{8}$")
+        self.assertIn(done["secure_boot"]["code"], done["secure_boot"]["steps"][2])
+        done_step = b.ok("GetStep", {"id": "done"})
+        self.assertEqual(done_step["options"]["secure_boot"], done["secure_boot"])
         self.assertEqual(b.ok("GetWizard")["current"], "done")
 
     def test_core_failure_then_skip(self):
