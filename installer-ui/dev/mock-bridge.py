@@ -20,6 +20,9 @@ It never touches the system. Knobs (environment):
     ARCTIC_MOCK_HW=none       no drivers found (default: an NVIDIA hybrid laptop, so the
                               Apps step offers the NVIDIA and Intel drivers)
     ARCTIC_MOCK_SECUREBOOT=0  Secure Boot off (default on: the Done step shows the key steps)
+    ARCTIC_MOCK_DROP=1        the connection drops when the install starts, so the drivers are
+                              put off to first boot (with Secure Boot: the "once your driver is
+                              installed" key steps)
 """
 
 import json
@@ -215,14 +218,22 @@ def driver_text(mid, status, mok):
     return f"The {name} for your {dev} starts after you restart."
 
 
-def secure_boot_info(code):
-    # internal/wizard SecureBootSteps.
+def secure_boot_info(code, later=False):
+    # internal/wizard SecureBootSteps(code, later): later = the driver was put off to first boot
+    # (offline), and the engine keeps the code's hash for arctic-firstboot.
+    title = "One more step when the computer restarts"
+    intro = "Secure Boot is on, so this computer only starts drivers it trusts. The first time it restarts, confirm the key Arctic Linux signed your driver with:"
+    first = "Restart. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds."
+    if later:
+        title = "One more step once your driver is installed"
+        intro = "Secure Boot is on, so this computer only starts drivers it trusts. Your driver is installed the first time Arctic Linux is online; keep this code for the restart after that:"
+        first = "Restart once the driver is installed. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds."
     return {
         "code": code,
-        "title": "One more step when the computer restarts",
-        "intro": "Secure Boot is on, so this computer only starts drivers it trusts. The first time it restarts, confirm the key Arctic Linux signed your driver with:",
+        "title": title,
+        "intro": intro,
         "steps": [
-            "Restart. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds.",
+            first,
             "Choose “Enroll MOK”, then “Continue”, then “Yes”.",
             f"Type the one-time code {code} with the number keys above the letters, then press Enter.",
             "Choose “Reboot”. Your driver starts from now on.",
@@ -768,7 +779,9 @@ class MockEngine:
         # drivers: installed with the apps, then built for the kernel (akmods)
         drivers = self.selected_drivers()
         offline = not self.online()
-        mok = SECURE_BOOT and not offline and any(DRIVERS[i][2] for i in drivers)
+        # As the engine: with Secure Boot and an akmod driver there is a code either way;
+        # offline, the driver (and so the key) waits for first boot.
+        mok = SECURE_BOOT and any(DRIVERS[i][2] for i in drivers)
         results = []
         for i in drivers:
             name, dev = MOD[i][1], DRIVERS[i][1]
@@ -781,7 +794,7 @@ class MockEngine:
                     self.sleep(1.2)
             results.append({"id": i, "name": name, "device": dev, "status": status, "text": driver_text(i, status, mok)})
         self.done_drivers = results
-        self.done_secure_boot = secure_boot_info("".join(random.choice("0123456789") for _ in range(8))) if mok else None
+        self.done_secure_boot = secure_boot_info("".join(random.choice("0123456789") for _ in range(8)), later=offline) if mok else None
 
         for i in range(6):
             p = 95 + i
@@ -867,6 +880,8 @@ class MockEngine:
             if method == "GetSummary":
                 return self.summary()
             if method == "Start":
+                if env_on("ARCTIC_MOCK_DROP"):
+                    self.wired, self.ssid = False, ""
                 return self.start()
             if method == "RetryModule":
                 return self.resume("retry", p.get("id"))

@@ -178,6 +178,20 @@ class MockBridgeTest(unittest.TestCase):
         self.assertEqual(done_step["options"]["secure_boot"], done["secure_boot"])
         self.assertEqual(b.ok("GetWizard")["current"], "done")
 
+    def test_offline_secure_boot_shows_the_later_key_steps(self):
+        # As the engine: offline, an akmod driver is put off to first boot and the code's hash
+        # is kept for arctic-firstboot, so the Done step shows SecureBootSteps(code, later).
+        b = self.start(ARCTIC_MOCK_WIRED="1", ARCTIC_MOCK_DROP="1", ARCTIC_MOCK_FAIL="none")
+        self.walk_to("summary")
+        b.ok("Next")
+        b.ok("Start")
+        done = b.wait_event("done", timeout=60)
+        self.assertEqual({d["status"] for d in done["drivers"]}, {"deferred"})
+        sb = done["secure_boot"]
+        self.assertEqual(sb["title"], "One more step once your driver is installed")
+        self.assertTrue(sb["steps"][0].startswith("Restart once the driver is installed."))
+        self.assertIn(sb["code"], sb["steps"][2])
+
     def test_core_failure_then_skip(self):
         b = self.start(ARCTIC_MOCK_FATAL="1", ARCTIC_MOCK_WIRED="1")
         self.walk_to("summary")
