@@ -110,8 +110,9 @@ Install fish first with `sudo dnf install fish` if you didn't pick it in the ins
 
 ## Other terminals
 
-If you picked **foot** or **Alacritty** in the installer, `Super + Enter` opens that instead.
-Arctic's colours are set up for kitty only, so the others start with their own look. To switch
+If you picked another terminal in the installer (**Ghostty**, **Alacritty**, **foot** or
+**Konsole**), `Super + Enter` opens that instead. foot and Alacritty get Arctic's colours too (in
+new windows after a theme change); Ghostty and Konsole start with their own look. To switch
 which terminal `Super + Enter` opens, see
 [Themes and customisation](Themes-and-Customisation#default-apps).
 
