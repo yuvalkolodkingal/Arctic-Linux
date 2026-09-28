@@ -1,9 +1,16 @@
 # Mesa's VA-API and Vulkan video drivers built with every codec (RPM Fusion free
-# mesa-va-drivers-freeworld and mesa-vulkan-drivers-freeworld, 26.2.3 for Fedora 44), in place
-# of Fedora's builds, which leave out H.264, HEVC and VC-1 (rpmfusion.org/Howto/Multimedia).
+# mesa-va-drivers-freeworld and mesa-vulkan-drivers-freeworld, 26.2.3 for Fedora 44), next to
+# or in place of Fedora's builds, which leave out H.264, HEVC and VC-1
+# (rpmfusion.org/Howto/Multimedia).
+# VA-API: never swapped. In Fedora 44 mesa-dri-drivers itself provides mesa-va-drivers (the
+# VA drivers were merged into it), so `dnf swap mesa-va-drivers …` would resolve to
+# mesa-dri-drivers and erase it with gtk4, wlroots and the whole desktop. The freeworld
+# package installs beside it (its drivers go to /usr/lib64/dri-freeworld) and removes nothing.
+# Vulkan: mesa-vulkan-drivers is still its own package, swapped for the freeworld one (the
+# installer only swaps when `rpm -q` finds that exact package installed).
 # Fedora 44's Mesa has no VDPAU drivers any more, so there is nothing to swap for VDPAU.
-# The freeworld builds follow Fedora's Mesa a few days late: when Fedora is ahead, the swap
-# fails and the install asks whether to try again or skip (unattended: first boot).
+# The freeworld builds follow Fedora's Mesa a few days late: when Fedora is ahead, the install
+# fails and asks whether to try again or skip (unattended: first boot).
 id = "amd-video"
 name = "AMD video acceleration"
 short = "AMD video"
@@ -18,15 +25,43 @@ gpu = false
 requires = []
 conflicts = []
 
-# Every AMD display device (radeonsi, r600).
+# AMD display devices with a video decoder Mesa drives (radeonsi: GCN and later; r600: HD 2000
+# to HD 6000), by device id range. Left out: R100–R500 and their IGPs (3150–5fff, 7100–72ff,
+# 7834/7835, 791e/791f, 796c–796f), which have no VA-API at all.
+# APUs from Kaveri on (1304 Kaveri … 164e Raphael, 15bf Phoenix, 150e Strix, 1114 Krackan).
 [[detect]]
 bus = "pci"
 vendor = "1002"
 class = ["0300", "0380"]
+device_min = "1000"
+device_max = "2fff"
+
+# Southern/Sea Islands, Northern Islands, Evergreen, Polaris, Vega (6600 Oland … 6fdf).
+[[detect]]
+bus = "pci"
+vendor = "1002"
+class = ["0300", "0380"]
+device_min = "6600"
+device_max = "6fff"
+
+# Fiji and every Navi (7300 Fiji, 7310 Navi 10 … 744c Navi 31, 7480 Navi 33, 7550 Navi 48).
+[[detect]]
+bus = "pci"
+vendor = "1002"
+class = ["0300", "0380"]
+device_min = "7300"
+device_max = "77ff"
+
+# R600 and later (9400 R600, 94xx–9bxx RV6xx/RV7xx, 98xx/99xx APUs, …).
+[[detect]]
+bus = "pci"
+vendor = "1002"
+class = ["0300", "0380"]
+device_min = "9400"
 
 [[install]]
 method = "dnf"
 packages = ["mesa-va-drivers-freeworld", "mesa-vulkan-drivers-freeworld"]
 repos = ["rpmfusion-free"]
-swap = ["mesa-va-drivers=mesa-va-drivers-freeworld", "mesa-vulkan-drivers=mesa-vulkan-drivers-freeworld"]
+swap = ["mesa-vulkan-drivers=mesa-vulkan-drivers-freeworld"]
 download_mb = 87

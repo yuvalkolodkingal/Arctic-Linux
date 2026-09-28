@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"sort"
 	"sync"
 	"time"
@@ -783,12 +784,10 @@ func (e *Engine) driverResults(job *backend.Job) ([]protocol.DriverResult, *prot
 // MOKCode returns a random one-time password for MokManager: eight digits, which type the
 // same on every keyboard layout (MokManager reads the keys as US QWERTY).
 func MOKCode() (string, error) {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
+	// One uniform draw in [0, 10^8), zero-padded (no modulo bias).
+	n, err := rand.Int(rand.Reader, big.NewInt(100_000_000))
+	if err != nil {
 		return "", err
 	}
-	for i := range b {
-		b[i] = '0' + b[i]%10
-	}
-	return string(b), nil
+	return fmt.Sprintf("%08d", n.Int64()), nil
 }

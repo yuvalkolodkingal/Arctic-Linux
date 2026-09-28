@@ -65,6 +65,7 @@ type Installer struct {
 	// Drivers (drivers.go).
 	drvStatus   map[string]string
 	akmodsReady bool
+	mokImported bool // mokutil --import queued this run's key (revoked on failure)
 }
 
 type layout struct {
@@ -165,6 +166,7 @@ func (in *Installer) Run(ctx context.Context) error {
 // firmware boot entry this run created.
 func (in *Installer) cleanup(ctx context.Context) {
 	in.R.Note("cleanup after failure")
+	in.revokeMOK(ctx)
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{"-R", in.Opt.Target}, AllowFail: true})
 	if in.lay.luksName != "" {
 		in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=15"}, AllowFail: true})
@@ -1303,6 +1305,18 @@ func (in *Installer) setupRepos(ctx context.Context, meth catalog.Install) error
 	}
 	for _, s := range meth.Swap {
 		from, to, _ := strings.Cut(s, "=")
+		// Only swap out a package of exactly that name (rpm -q matches names, not provides, as
+		// arctic-firstboot checks too). dnf swap resolves `from` through provides as well, so
+		// a name another package has absorbed (F44: mesa-dri-drivers provides
+		// mesa-va-drivers) would erase that package and everything that needs it.
+		res, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "rpm", Args: []string{"-q", "--quiet", from}, AllowFail: true}))
+		if err != nil {
+			return err
+		}
+		if res.ExitCode != 0 {
+			in.R.Note("%s isn’t installed: nothing to swap for %s", from, to)
+			continue
+		}
 		if err := in.chroot(ctx, Cmd{Name: "dnf", Args: []string{"swap", "-y", "--allowerasing", from, to}}); err != nil {
 			return err
 		}
@@ -1312,12 +1326,14 @@ func (in *Installer) setupRepos(ctx context.Context, meth catalog.Install) error
 
 func (in *Installer) dnfInstall(ctx context.Context, mods, ensure []*catalog.Module, extra []string, progress func(float64)) error {
 	var pkgs []string
+	akmod := false
 	for _, m := range mods {
 		p := m.Primary()
 		if err := in.setupRepos(ctx, p); err != nil {
 			return err
 		}
 		if m.AkmodName() != "" {
+			akmod = true
 			if err := in.prepareAkmods(ctx); err != nil {
 				return err
 			}
@@ -1330,11 +1346,15 @@ func (in *Installer) dnfInstall(ctx context.Context, mods, ensure []*catalog.Mod
 		}
 	}
 	pkgs = append(pkgs, extra...)
-	return in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), OnLine: func(l string) {
+	err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), OnLine: func(l string) {
 		if d, t, ok := ParseDNF(l); ok && progress != nil {
 			progress(float64(d) / float64(t))
 		}
 	}})
+	if akmod {
+		in.waitAkmods(ctx)
+	}
+	return err
 }
 
 func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth catalog.Install) error {
@@ -1353,11 +1373,15 @@ func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth 
 				return err
 			}
 		}
-		return in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, meth.Packages...), OnLine: func(l string) {
+		err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, meth.Packages...), OnLine: func(l string) {
 			if d, t, ok := ParseDNF(l); ok {
 				report(100 * d / t)
 			}
 		}})
+		if m.AkmodName() != "" {
+			in.waitAkmods(ctx)
+		}
+		return err
 	case catalog.MethodFlatpak:
 		in.flatpakRan = true
 		if !in.remoteDone[meth.Remote] {

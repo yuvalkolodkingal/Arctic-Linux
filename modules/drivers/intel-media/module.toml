@@ -151,7 +151,8 @@ device_min = "e200"
 device_max = "e2ff"
 
 [[install]]
-# dnf swap works whether or not the Fedora package is installed.
+# The swap runs only when Fedora's package is installed (rpm -q); intel-media-driver is
+# installed either way.
 method = "dnf"
 packages = ["intel-media-driver"]
 repos = ["rpmfusion-free", "rpmfusion-nonfree"]

@@ -254,11 +254,193 @@ func TestDriverBuildFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan = rec.Plan()
-	if strings.Count(plan, "akmods --force") != 2 || !strings.Contains(plan, "--args=") || !strings.Contains(plan, "mokutil --import") {
-		t.Error("deferred build: retry, arguments and key expected")
+	if strings.Count(plan, "akmods --force") != 2 || !strings.Contains(plan, "mokutil --import") {
+		t.Error("deferred build: retry and key expected")
+	}
+	// No arguments until the module exists (nouveau keeps the screen if akmods fails at boot
+	// too); the %posttrans blacklist is taken off again, and arctic-firstboot finishes it.
+	if strings.Contains(plan, "--args=") {
+		t.Error("kernel arguments for a driver that isn't built")
+	}
+	for _, w := range []string{
+		"$ chroot /mnt grubby --update-kernel=ALL '--remove-args=rd.driver.blacklist=nouveau,nova_core modprobe.blacklist=nouveau,nova_core nvidia-drm.modeset=1'",
+		`"akmod": {`,
+		`"id": "nvidia"`,
+	} {
+		if !strings.Contains(plan, w) {
+			t.Errorf("plan lacks %q", w)
+		}
+	}
+	if strings.Contains(plan, `"mok_hash"`) {
+		t.Error("key already queued, yet its hash is kept for first boot")
 	}
 	if got := driverOutcome(job); got["nvidia"] != protocol.DriverDeferred {
 		t.Errorf("drivers %v", got)
+	}
+}
+
+// Default profile on an AMD desktop (Radeon RX 7900): the freeworld media drivers are installed
+// next to Fedora's VA driver, never swapped for it (F44's mesa-dri-drivers provides
+// mesa-va-drivers, so dnf swap would erase it and the desktop); the Vulkan one is swapped only
+// when that exact package is installed.
+func TestGoldenAMDDesktop(t *testing.T) {
+	job := loadHWJob(t, "defaults.toml", "uefi", "amd", false)
+	if got := strings.Join(job.Data.Apps.Selection["drivers"], ","); got != "amd-video" {
+		t.Fatalf("default drivers %q", got)
+	}
+	rec := &Recorder{}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	plan := rec.Plan()
+	golden(t, "amd-desktop-uefi.plan", plan)
+	if strings.Contains(plan, "swap -y --allowerasing mesa-va-drivers") {
+		t.Error("mesa-va-drivers is swapped")
+	}
+	for _, w := range []string{
+		"$ chroot /mnt rpm -q --quiet mesa-vulkan-drivers\n$ chroot /mnt dnf swap -y --allowerasing mesa-vulkan-drivers mesa-vulkan-drivers-freeworld",
+		"mesa-va-drivers-freeworld mesa-vulkan-drivers-freeworld",
+	} {
+		if !strings.Contains(plan, w) {
+			t.Errorf("plan lacks %q", w)
+		}
+	}
+	for _, not := range []string{"akmods", "kmodgenca", "grubby --update-kernel", "mokutil"} {
+		if strings.Contains(plan, "$ chroot /mnt "+not) {
+			t.Errorf("AMD plan runs %s", not)
+		}
+	}
+	if got := driverOutcome(job); got["amd-video"] != protocol.DriverInstalled {
+		t.Errorf("drivers %v", got)
+	}
+}
+
+// A swap whose package isn't installed under that exact name is left out.
+func TestSwapOnlyInstalledPackage(t *testing.T) {
+	job := loadHWJob(t, "defaults.toml", "uefi", "amd", false)
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.Name == "chroot" && len(c.Args) > 4 && c.Args[1] == "rpm" && c.Args[4] == "mesa-vulkan-drivers" {
+			return "", errors.New("package mesa-vulkan-drivers is not installed")
+		}
+		return DefaultRespond(c)
+	}}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	if plan := rec.Plan(); strings.Contains(plan, "swap -y --allowerasing mesa-vulkan-drivers") {
+		t.Error("swapped a package that isn't installed")
+	}
+}
+
+// Old and new AMD cards: R100–R500 (no VA-API) get no media driver.
+func TestAMDVideoDetection(t *testing.T) {
+	cat, err := catalog.Load(modules.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := cat.Modules["amd-video"]
+	cases := map[string]bool{
+		"744c": true, "7550": true, "73bf": true, "67df": true, "6798": true, "1638": true,
+		"15bf": true, "1114": true, "9874": true, "9440": true, "6f00": true,
+		"5159": false, "4150": false, "7142": false, "71c5": false, "791e": false, "796e": false, "3e50": false,
+	}
+	for dev, want := range cases {
+		got := false
+		for _, d := range m.Detect {
+			if d.Matches(hw.PCIDevice{Vendor: "1002", Device: dev, Class: "0300"}) {
+				got = true
+			}
+		}
+		if got != want {
+			t.Errorf("1002:%s detected %v, want %v", dev, got, want)
+		}
+	}
+}
+
+// Two kernels in the new system: the development files are asked for both by version; when
+// that fails (the version left the repositories), the newest complete kernel is installed
+// with them, and the driver is built for the kernel that has kernel-devel only.
+func TestAkmodsKernelDevel(t *testing.T) {
+	const old, cur = "6.17.8-300.fc44.x86_64", "7.2.7-200.fc44.x86_64"
+	job := loadHWJob(t, "defaults.toml", "uefi", "nvidia-desktop", false)
+	rec := &Recorder{
+		GlobFn: func(p string) []string {
+			if strings.HasSuffix(p, "/lib/modules/*") {
+				root := strings.TrimSuffix(p, "/lib/modules/*")
+				return []string{root + "/lib/modules/" + cur, root + "/lib/modules/" + old}
+			}
+			return DefaultGlob(p)
+		},
+		ExistsFn: func(p string) bool {
+			if strings.Contains(p, "/usr/src/kernels/") {
+				return strings.Contains(p, cur)
+			}
+			return DefaultExists(p)
+		},
+		Respond: func(c Cmd) (string, error) {
+			if c.Name == "chroot" && strings.Contains(strings.Join(c.Args, " "), "kernel-devel-matched-") {
+				return "", errors.New("No match for argument: kernel-devel-matched-" + old)
+			}
+			return DefaultRespond(c)
+		},
+	}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	plan := rec.Plan()
+	for _, w := range []string{
+		"$ chroot /mnt dnf install -y akmods kernel-devel-matched-" + old + " kernel-devel-matched-" + cur,
+		"$ chroot /mnt dnf install -y " + strings.Join(KernelFallback, " "),
+		"$ chroot /mnt akmods --force --kernels " + cur + " --akmod nvidia",
+	} {
+		if !strings.Contains(plan, w) {
+			t.Errorf("plan lacks %q", w)
+		}
+	}
+	for _, p := range []string{"kernel-modules", "kernel-modules-extra", "kernel-core"} {
+		found := false
+		for _, k := range KernelFallback {
+			found = found || k == p
+		}
+		if !found {
+			t.Errorf("fallback lacks %s", p)
+		}
+	}
+	if strings.Contains(plan, "akmods --force --kernels "+old) {
+		t.Error("built for a kernel without kernel-devel")
+	}
+	if !(strings.Index(plan, "kmodgenca -a") < strings.Index(plan, "akmod-nvidia xorg-x11-drv-nvidia-cuda")) {
+		t.Error("key after the driver transaction")
+	}
+	// The background build is waited for before anything else uses dnf.
+	i := strings.Index(plan, "akmod-nvidia xorg-x11-drv-nvidia-cuda")
+	if j := strings.Index(plan[i:], "\n$ "); j < 0 || !strings.HasPrefix(plan[i+j+1:], "$ chroot /mnt flock -w 1800 /run/akmods/akmods.lock true") {
+		t.Error("no wait for the background akmods build after the driver transaction")
+	}
+	if got := driverOutcome(job); got["nvidia"] != protocol.DriverInstalled {
+		t.Errorf("drivers %v", got)
+	}
+}
+
+// The install fails after the key was queued: cleanup revokes the request.
+func TestMOKRevokedOnFailure(t *testing.T) {
+	job := loadHWJob(t, "defaults.toml", "uefi", "nvidia-laptop", true)
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.Name == "setfiles" || (c.Name == "chroot" && len(c.Args) > 1 && c.Args[1] == "setfiles") ||
+			(c.Name == "usermod") {
+			return "", errors.New("boom")
+		}
+		return DefaultRespond(c)
+	}}
+	if err := runPlan(t, job, rec, newReporter()); err == nil {
+		t.Fatal("no failure")
+	}
+	plan := rec.Plan()
+	if !(strings.Contains(plan, "mokutil --import") && strings.Index(plan, "mokutil --import") < strings.Index(plan, "$ mokutil --revoke-import")) {
+		t.Error("key request not revoked after the failure")
+	}
+	if job.Outcome.MOK != backend.MOKNone {
+		t.Errorf("MOK %q", job.Outcome.MOK)
 	}
 }
 
