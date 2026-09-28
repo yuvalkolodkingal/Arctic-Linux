@@ -50,7 +50,7 @@ Page {
             searchKey: "accessibility.textsize"
             visible: page.textScale.available === true
             title: "Text size in apps"
-            desc: "For GTK apps such as Files and most dialogs. The bar and menus keep their size."
+            desc: "For GTK apps such as Files and most dialogs, and the terminals" + (page.textScale.terminalPt ? " (" + page.textScale.terminalPt + " pt now)" : "") + ". The bar and menus keep their size."
             ArSelect {
                 width: 180
                 model: [{ value: "1", label: "Default" }, { value: "1.1", label: "110%" }, { value: "1.25", label: "125%" },

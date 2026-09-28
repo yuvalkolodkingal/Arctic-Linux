@@ -2241,11 +2241,24 @@ def cmd_text_scale(paths, args):
         code, _o, err = run(['gsettings', 'set'] + schema + [format_number(value)], timeout=5)
         if code != 0:
             raise Failure(err.strip() or 'Text size couldn’t be changed.')
+        # The terminals follow (arctic-font size): 10.5 pt at 100%, to the nearest half point.
+        if which('arctic-font'):
+            size = 'reset' if value == 1 else format_number(round(TERMINAL_PT * value * 2) / 2)
+            run(['arctic-font', 'size', size, '--json'], timeout=20)
     code, out, _err = run(['gsettings', 'get'] + schema, timeout=5)
     try:
-        return dict(ok=True, available=code == 0, value=float(out.strip()) if code == 0 else 1.0)
+        result = dict(ok=True, available=code == 0, value=float(out.strip()) if code == 0 else 1.0)
     except ValueError:
         return dict(ok=True, available=False, value=1.0)
+    if which('arctic-font'):
+        code, out, _err = run(['arctic-font', 'current', '--json'], timeout=10)
+        data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+        if code == 0 and isinstance(data, dict) and isinstance(data.get('size'), (int, float)):
+            result['terminalPt'] = data['size']
+    return result
+
+
+TERMINAL_PT = 10.5      # arctic-font's default terminal size
 
 
 def apply_cursor_gsettings(options):
@@ -2634,7 +2647,8 @@ def cmd_fonts(paths, _args):
     if code != 0 or not isinstance(data, dict):
         raise Failure((strip_ansi(err).strip().splitlines() or ['The fonts couldn’t be listed.'])[-1])
     return dict(ok=True, available=True, current=str(data.get('current') or ''), size=data.get('size'),
-                fonts=[str(f.get('family')) for f in data.get('fonts', []) if isinstance(f, dict) and f.get('family')])
+                fonts=[str(f.get('family')) for f in data.get('fonts', []) if isinstance(f, dict) and f.get('family')],
+                symbols=data.get('symbols') is True)
 
 
 def cmd_font_set(paths, args):

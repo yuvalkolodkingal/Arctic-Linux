@@ -35,8 +35,9 @@
 # Source0 of arctic-linux.spec is `git archive --prefix=arctic-linux-<Version>/` of the working
 # tree: the committed tree plus every uncommitted change, including untracked (not ignored)
 # files (plain `git stash create` would miss untracked files, so a throwaway index is used),
-# plus the public key given above. The mango release tarball is downloaded once and cached in
-# out/sources/. Versions come from the specs.
+# plus the public key given above. The mango release tarball and arctic-linux.spec's Source1 (the
+# Nerd Font symbols release) are downloaded once and cached in out/sources/. Versions come from
+# the specs.
 #
 # Output: out/repo/*.rpm + repodata, out/srpms/*.src.rpm, out/debug/ (debuginfo),
 # out/logs/rpmbuild-*.log, and out/BUILD-INFO (key=value lines: version, release_suffix,
@@ -85,6 +86,13 @@ MANGO_VERSION="$(spec_value mangowm.spec Version)"
 [[ "$VERSION" =~ ^[0-9][0-9A-Za-z.+~^_]*$ ]] || arctic_die "can't read Version from packaging/arctic-linux.spec"
 [[ "$MANGO_VERSION" =~ ^[0-9][0-9A-Za-z.+~^_]*$ ]] || arctic_die "can't read Version from packaging/mangowm.spec"
 MANGO_URL="https://github.com/mangowm/mango/archive/refs/tags/${MANGO_VERSION}.tar.gz"
+# --- stream 6: arctic-linux.spec's Source1, pinned there by version and SHA-256
+NERD_VERSION="$(sed -n 's/^%global[[:space:]]\+nerd_version[[:space:]]\+//p' "$SRC/packaging/arctic-linux.spec" | head -n1)"
+NERD_SHA256="$(sed -n 's/^%global[[:space:]]\+nerd_sha256[[:space:]]\+//p' "$SRC/packaging/arctic-linux.spec" | head -n1)"
+[[ "$NERD_VERSION" =~ ^[0-9][0-9.]*$ && "$NERD_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+  || arctic_die "can't read nerd_version / nerd_sha256 from packaging/arctic-linux.spec"
+NERD_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_VERSION}/NerdFontsSymbolsOnly.tar.xz"
+# --- end stream 6
 
 mkdir -p "$OUT/sources" "$OUT/repo" "$OUT/srpms" "$OUT/logs"
 tmpdir="$(mktemp -d)"
@@ -200,6 +208,19 @@ if [[ "$ONLY" != arctic && ! -s "$mango_tar" ]]; then
   fi
   mv "$mango_tar.part" "$mango_tar"
 fi
+
+# --- stream 6: Source1 (the Nerd Font symbols release); a download that doesn't match the pinned
+# SHA-256 is refused here rather than by rpmbuild's %prep.
+nerd_tar="$OUT/sources/NerdFontsSymbolsOnly-$NERD_VERSION.tar.xz"
+if [[ "$ONLY" != mangowm && ! -s "$nerd_tar" ]]; then
+  arctic_log "downloading the Nerd Font symbols $NERD_VERSION"
+  curl -fsSL --retry 3 --retry-delay 3 -o "$nerd_tar.part" "$NERD_URL" \
+    || arctic_die "couldn't download $NERD_URL"
+  echo "$NERD_SHA256  $nerd_tar.part" | sha256sum -c --quiet - \
+    || { rm -f "$nerd_tar.part"; arctic_die "$NERD_URL doesn't match the SHA-256 in arctic-linux.spec"; }
+  mv "$nerd_tar.part" "$nerd_tar"
+fi
+# --- end stream 6
 
 # ---- 3. Build in the container --------------------------------------------------------
 specs=()

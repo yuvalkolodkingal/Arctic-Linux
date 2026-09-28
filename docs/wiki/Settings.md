@@ -86,6 +86,8 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   picture), Dark or Light.
 - **More themes:** Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine and Everforest, drawn from
   their own colours; a pair (Catppuccin Latte and Mocha) switches as one with `Super + Shift + T`.
+- **Icons in the terminal:** whether the Nerd Font symbols yazi, eza and prompts use are
+  installed (`arctic-fonts-symbols`), with a way to get them when they aren't.
 - **Code font:** the monospace font for the terminals (kitty, foot, alacritty), GTK's monospace
   font and the shell (`arctic-font`); a font you set in a terminal's own file is left alone.
 - **Switch light and dark by itself:** Off, Sunset to sunrise (where your time zone is) or Custom
@@ -263,8 +265,9 @@ Bigger, calmer and easier to reach from the keyboard.
 
 - **High contrast:** stronger text, lines and focus rings in whatever theme you use, the bar and
   apps too (see [High contrast](Themes-and-Customisation#high-contrast)).
-- **Text size in apps:** 100% to 200% for GTK apps such as Files and most dialogs. The bar and
-  menus keep their size.
+- **Text size in apps:** 100% to 200% for GTK apps such as Files and most dialogs, and the
+  terminals too (10.5 pt at 100%, 13 pt at 125%, through `arctic-font size`). The bar and menus
+  keep their size.
 - **Pointer size** (Normal, Large, Larger) and **Pointer style** (the cursor themes installed).
 - **Reduce motion:** windows and menus fade instead of moving, and the fox in the terminal stays
   still.

@@ -71,17 +71,38 @@ class FontsTest(Home):
         stub(self.bin, 'arctic-font', '''\
             echo "arctic-font $*" >> "{}"
             case "$1" in
-              list) echo '{{"ok": true, "current": "JetBrains Mono", "size": 10.5, "fonts": [{{"family": "Fira Code"}}, {{"family": "JetBrains Mono"}}]}}' ;;
+              list) echo '{{"ok": true, "current": "JetBrains Mono", "size": 10.5, "fonts": [{{"family": "Fira Code"}}, {{"family": "JetBrains Mono"}}], "symbols": true}}' ;;
               set) [ "$2" = "Fira Code" ] && echo '{{"ok": true, "family": "Fira Code", "changed": ["kitty"], "skipped": [{{"file": "~/.config/foot/foot.ini", "reason": "has a font of your own"}}]}}' \
                    || {{ echo '{{"ok": false, "error": "There is no monospace font called that here."}}'; exit 1; }} ;;
             esac
             '''.format(self.log))
         data = self.helper('fonts')
         self.assertEqual((data['current'], data['fonts']), ('JetBrains Mono', ['Fira Code', 'JetBrains Mono']))
+        self.assertIs(data['symbols'], True)
         data = self.helper('font-set', 'Fira Code')
         self.assertEqual(data['skipped'][0]['reason'], 'has a font of your own')
         self.assertIn('There is no', self.helper('font-set', 'Comic Sans', ok=False)['error'])
         self.assertIn('arctic-font set Fira Code --json', self.calls())
+
+
+class TextSizeTest(Home):
+    def test_the_terminals_follow(self):
+        state = self.home / 'scale'
+        stub(self.bin, 'gsettings', '''\
+            if [ "$1" = set ]; then echo "$4" > "{0}"; else cat "{0}" 2>/dev/null || echo 1.0; fi
+            '''.format(state))
+        self.assertNotIn('terminalPt', self.helper('text-scale'))       # no arctic-font: GTK only
+        stub(self.bin, 'arctic-font', '''\
+            echo "arctic-font $*" >> "{0}"
+            echo '{{"ok": true, "family": "JetBrains Mono", "size": 13}}'
+            '''.format(self.log))
+        data = self.helper('text-scale', '1.25')
+        self.assertEqual((data['value'], data['terminalPt']), (1.25, 13))
+        self.helper('text-scale', '1')
+        self.helper('text-scale', '1.1')
+        self.assertEqual([c for c in self.calls() if ' size ' in c],
+                         ['arctic-font size 13 --json', 'arctic-font size reset --json', 'arctic-font size 11.5 --json'])
+        self.helper('text-scale', '3', ok=False)
 
 
 class AccessibilityTest(Home):

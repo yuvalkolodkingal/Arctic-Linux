@@ -331,6 +331,20 @@ Page {
                 }
             }
         }
+        SettingRow {
+            searchKey: "appearance.symbols"
+            title: "Icons in the terminal"
+            desc: page.fonts.symbols === true
+                  ? "The symbols yazi, eza and prompts draw are installed, after the code font."
+                  : "Without the Nerd Font symbols, yazi, eza and prompts show boxes for their icons. Install arctic-fonts-symbols with Get apps."
+            resettable: false
+            ArButton {
+                visible: page.fonts.symbols !== true
+                text: "Get them"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.launch(["arctic-shell-ipc", "apps", "install"])
+            }
+        }
     }
 
     Group {

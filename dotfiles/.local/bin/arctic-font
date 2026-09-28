@@ -35,7 +35,7 @@ FILES = {
     "alacritty": os.path.join(CONFIG_HOME, "alacritty", "alacritty.toml"),
 }
 FAMILY_RE = re.compile(r"^[^\x00-\x1f\x7f\"'\\:=,{}\[\]]{1,80}$")
-LEFT_OUT = re.compile(r"symbols|emoji|nerd font", re.I)
+LEFT_OUT = re.compile(r"^symbols\b|emoji", re.I)       # a patched "… Nerd Font" is a code font
 
 
 class Error(Exception):
@@ -77,6 +77,14 @@ def installed():
     out = subprocess.run(["fc-list", ":spacing=mono", "family"], capture_output=True, text=True).stdout
     names = {line.split(",")[0].strip() for line in out.splitlines() if line.strip()}
     return sorted((n for n in names if n and FAMILY_RE.match(n) and not LEFT_OUT.search(n)), key=str.lower)
+
+
+def symbols_installed():
+    """Whether the Nerd Font symbols (arctic-fonts-symbols) are there for the terminal's icons."""
+    if not shutil.which("fc-list"):
+        return False
+    out = subprocess.run(["fc-list", "Symbols Nerd Font Mono", "family"], capture_output=True, text=True).stdout
+    return bool(out.strip())
 
 
 def fmt_size(pt):
@@ -183,7 +191,8 @@ def main(argv):
         state = load_state()
         fonts = installed()
         if as_json:
-            print(json.dumps({"ok": True, "current": state["mono"], "size": state["size"], "fonts": [{"family": f} for f in fonts]}))
+            print(json.dumps({"ok": True, "current": state["mono"], "size": state["size"], "fonts": [{"family": f} for f in fonts],
+                              "symbols": symbols_installed()}))
         else:
             print("\n".join(fonts))
         return 0

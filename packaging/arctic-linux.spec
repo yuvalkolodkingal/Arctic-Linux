@@ -9,6 +9,7 @@
 #   arctic-logos           branding/logos/ (install-path tree) system-logos
 #   arctic-backgrounds     design/wallpapers/*.svg (+ PNG rendered here)
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
+#   arctic-fonts-symbols   Nerd Fonts "Symbols Only" (Source1, the one download) + packaging/fonts
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
 #                          dotfiles/.local/bin → /usr/bin, packaging/updates/ (automatic updates,
@@ -31,6 +32,12 @@
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
+# --- stream 6: Nerd Font symbols (arctic-fonts-symbols). Fedora has no symbols-only Nerd Font,
+# so the upstream release is Source1, pinned by version and SHA-256 (checked in %%prep);
+# tools/build-rpms.sh downloads it next to the Mango tarball.
+%global nerd_version    3.5.1
+%global nerd_sha256     01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996
+# --- end stream 6
 
 Name:           arctic-linux
 Version:        0.2.1
@@ -41,6 +48,9 @@ Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manag
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
 URL:            https://github.com/yuvalkolodkingal/Arctic-Linux
 Source0:        arctic-linux-%{version}.tar.gz
+# --- stream 6
+Source1:        https://github.com/ryanoasis/nerd-fonts/releases/download/v%{nerd_version}/NerdFontsSymbolsOnly.tar.xz#/NerdFontsSymbolsOnly-%{nerd_version}.tar.xz
+# --- end stream 6
 
 ExclusiveArch:  x86_64
 
@@ -52,6 +62,9 @@ BuildRequires:  systemd-rpm-macros
 BuildRequires:  desktop-file-utils
 BuildRequires:  findutils
 BuildRequires:  tar
+# --- stream 6: Source1 is a .tar.xz
+BuildRequires:  xz
+# --- end stream 6
 # %%check: packaging/updates' unit tests (arctic-update's helper)
 BuildRequires:  python3
 # The theme engine renders the static themes in %%build; %%check runs its tests.
@@ -132,6 +145,23 @@ Requires:       fontpackages-filesystem
 %description -n arctic-fonts
 Figtree (SIL Open Font License), the interface typeface of Arctic Linux, installed system
 wide. JetBrains Mono comes from Fedora's jetbrains-mono-fonts-all.
+
+# --- stream 6 (Nerd Font symbols) -------------------------------------------------------------
+%package -n arctic-fonts-symbols
+Summary:        Nerd Font symbols for the terminal (icons in yazi, eza and prompts)
+BuildArch:      noarch
+# The release's LICENSE (MIT, the patcher) and its readme's table of icon sets: Codicons and Font
+# Awesome CC-BY-4.0, Material Design Apache-2.0, Pomicons OFL-1.1-RFN, Weather Icons OFL-1.1,
+# Font Logos Unlicense, the rest MIT.
+License:        MIT AND CC-BY-4.0 AND Apache-2.0 AND OFL-1.1-RFN AND OFL-1.1 AND Unlicense
+Requires:       fontpackages-filesystem
+Requires:       fontconfig
+
+%description -n arctic-fonts-symbols
+The "Symbols Only" fonts of Nerd Fonts %{nerd_version} (Symbols Nerd Font and Symbols Nerd Font
+Mono), set up as a fallback after the code font, so file managers like yazi, eza --icons and
+shell prompts show their icons in any terminal without a patched font.
+# --- end stream 6
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-selinux
@@ -271,6 +301,8 @@ Recommends:     qalculate
 Recommends:     wl-kbptr
 # The theme gallery in Settings > Appearance.
 Recommends:     arctic-themes-extra = %{version}-%{release}
+# Icons in the terminal (yazi, eza --icons, prompts).
+Recommends:     arctic-fonts-symbols = %{version}-%{release}
 # --- end stream 6
 
 %description -n arctic-shell
@@ -511,6 +543,11 @@ networking, portals, Flatpak and Nix.
 # =============================================================================================
 %prep
 %autosetup -n arctic-linux-%{version}
+# --- stream 6: Source1 (Nerd Font symbols), only as the pinned release
+echo "%{nerd_sha256}  %{SOURCE1}" | sha256sum -c --quiet -
+mkdir -p _build/nerd-symbols
+tar -xJf %{SOURCE1} -C _build/nerd-symbols
+# --- end stream 6
 
 %build
 # ---- Go: arcticd + arctic-install (stdlib only, or vendored modules) ----
@@ -627,6 +664,15 @@ if ls branding/fonts/Figtree-*.ttf >/dev/null 2>&1; then
 else
   install -pm 0644 design/fonts/Figtree-*.woff2 %{buildroot}%{_datadir}/fonts/arctic/
 fi
+# --- stream 6: arctic-fonts-symbols (after the code font in fontconfig's fallback list)
+install -d %{buildroot}%{_datadir}/fonts/arctic-symbols
+install -pm 0644 _build/nerd-symbols/SymbolsNerdFont-Regular.ttf _build/nerd-symbols/SymbolsNerdFontMono-Regular.ttf \
+  %{buildroot}%{_datadir}/fonts/arctic-symbols/
+install -Dpm 0644 packaging/fonts/66-arctic-nerd-symbols.conf \
+  %{buildroot}%{_datadir}/fontconfig/conf.avail/66-arctic-nerd-symbols.conf
+install -d %{buildroot}%{_sysconfdir}/fonts/conf.d
+ln -s %{_datadir}/fontconfig/conf.avail/66-arctic-nerd-symbols.conf %{buildroot}%{_sysconfdir}/fonts/conf.d/
+# --- end stream 6
 
 # ---------------------------------------------------------------- arctic-selinux
 install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinux/packages/arctic-nix.pp
@@ -1105,6 +1151,15 @@ fi
 
 %files -n arctic-fonts
 %{_datadir}/fonts/arctic/
+
+# --- stream 6
+%files -n arctic-fonts-symbols
+%license _build/nerd-symbols/LICENSE
+%doc _build/nerd-symbols/README.md
+%{_datadir}/fonts/arctic-symbols/
+%{_datadir}/fontconfig/conf.avail/66-arctic-nerd-symbols.conf
+%{_sysconfdir}/fonts/conf.d/66-arctic-nerd-symbols.conf
+# --- end stream 6
 
 %files -n arctic-selinux
 %license LICENSE

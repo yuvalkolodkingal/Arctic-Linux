@@ -32,7 +32,7 @@ class FontTests(unittest.TestCase):
         def stub(name, body):
             (self.bin / name).write_text('#!/bin/sh\n' + body + '\n')
             (self.bin / name).chmod(0o755)
-        stub('fc-list', 'printf "JetBrains Mono,JetBrains Mono NL\\nFira Code\\nSymbols Nerd Font Mono\\nNoto Color Emoji\\nFira Code\\n"')
+        stub('fc-list', 'printf "JetBrains Mono,JetBrains Mono NL\\nFira Code\\nSymbols Nerd Font Mono\\nNoto Color Emoji\\nFira Code\\nHack Nerd Font Mono\\n"')
         for name in ('gsettings', 'pkill', 'arctic-hook'):
             stub(name, 'echo "{} $*" >> "{}"'.format(name, self.log))
         self.env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(self.config), PATH=str(self.bin) + ':/usr/bin:/bin')
@@ -53,8 +53,9 @@ class FontTests(unittest.TestCase):
 
     def test_list(self):
         data = self.font('list')
-        self.assertEqual([f['family'] for f in data['fonts']], ['Fira Code', 'JetBrains Mono'])
+        self.assertEqual([f['family'] for f in data['fonts']], ['Fira Code', 'Hack Nerd Font Mono', 'JetBrains Mono'])
         self.assertEqual((data['current'], data['size']), ('JetBrains Mono', 10.5))
+        self.assertIs(data['symbols'], True)          # fc-list finds "Symbols Nerd Font Mono"
 
     def test_set_everywhere_arctic_wrote_it(self):
         data = self.font('set', 'Fira Code')
