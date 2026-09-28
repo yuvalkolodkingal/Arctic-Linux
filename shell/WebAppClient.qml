@@ -1,12 +1,14 @@
 import QtQuick
 import Quickshell.Io
+import "WebAppProtocol.js" as Protocol
 
 // The shell's side of `arctic-webapp serve` (the web-app engine, arctic-webapps): JSON lines,
 // {id, method, params} out, {id, result} or {id, error: {code, message, fields}} back, and
 // events told apart by their "event" key (progress while inspecting or installing, changed when
 // apps come and go). One process, started when Get apps' web pages or a web-app Delete need it,
 // stopped when Get apps has been closed for a while (stdin closes; serve exits on EOF).
-// Replies go to the callback given with the request: done(result, error).
+// Replies go to the callback given with the request: done(result, error). The wire format is
+// WebAppProtocol.js.
 Item {
     id: client
     property string command: 'arctic-webapp'
@@ -37,7 +39,7 @@ Item {
         const table = pending;
         table[id] = done || null;
         pending = table;
-        process.write(JSON.stringify({ id: id, method: method, params: params || {} }) + '\n');
+        process.write(Protocol.request(id, method, params));
         return id;
     }
     function list(done) {
@@ -57,22 +59,18 @@ Item {
     function forget(ids, done) {
         return call('Forget', { ids: ids }, (result, err) => { client.list(); if (done) done(result, err); });
     }
-    function runtimeName(id) {
-        const r = runtimes.find(x => x.id === id);
-        return r ? r.name : id === 'webkit' ? 'Arctic' : '';
-    }
+    function runtimeName(id) { return Protocol.runtimeName(runtimes, id); }
 
     function dispatch(line) {
-        let message;
-        try { message = JSON.parse(line); } catch (e) { return; }
-        if (message.event === 'progress') { progress(message.request, message.stage || '', message.message || ''); return; }
-        if (message.event === 'changed') { changed(message.ids || []); list(); return; }
-        if (message.event !== undefined || message.id === undefined) return;
+        const message = Protocol.parse(line);
+        if (message.kind === 'progress') { progress(message.request, message.stage, message.message); return; }
+        if (message.kind === 'changed') { changed(message.ids); list(); return; }
+        if (message.kind !== 'reply') return;
         const table = pending;
         const done = table[message.id];
         delete table[message.id];
         pending = table;
-        if (done) done(message.error ? null : (message.result || {}), message.error || null);
+        if (done) done(message.result, message.error);
     }
 
     Process {

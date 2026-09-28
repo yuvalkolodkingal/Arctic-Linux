@@ -125,6 +125,9 @@ function removeLine(row, source) {
         parts.push(r.host || r.url || '');
         if (r.runtime_name) parts.push(r.runtime_name);
         if (r.running) parts.push('Running');
+        const problem = { 'no-desktop-file': 'Launcher entry missing', 'no-registry': 'Record missing',
+                          'runtime-missing': 'Runtime missing' }[r.problem || ''];
+        if (problem) parts.push(problem);
     } else if (source === 'terminal') {
         parts.push(r.command || '');
         parts.push(r.window === 'tile' ? 'tiled window' : 'floating window');

@@ -75,6 +75,7 @@ assert.equal(G.removeLine({ installation: 'user', origin: 'flathub' }, 'flatpak'
 assert.equal(G.removeLine({ package: 'gimp', repo_label: 'Fedora', install_bytes: 120000000, added: 'you' }, 'dnf'),
              'gimp · Fedora · 120 MB · You added it');
 assert.equal(G.removeLine({ host: 'music.youtube.com', runtime_name: 'Arctic', running: true }, 'web'), 'music.youtube.com · Arctic · Running');
+assert.equal(G.removeLine({ host: 'app.slack.com', problem: 'runtime-missing' }, 'web'), 'app.slack.com · Runtime missing');
 assert.equal(G.removeLine({ command: 'btop', window: 'float' }, 'terminal'), 'btop · floating window');
 assert.equal(G.filterRows([{ name: 'GIMP' }, { name: 'Htop', package: 'htop' }], 'ht').length, 1);
 assert.equal(G.filterRows([{ name: 'GIMP' }], '').length, 1);
