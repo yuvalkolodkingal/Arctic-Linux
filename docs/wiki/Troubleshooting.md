@@ -239,8 +239,13 @@ own in `~/.config/mango/` is the cause, move `user.conf` away and press `Super +
 
 ### No network
 
-- Click the network icon on the bar to pick a Wi-Fi network, or right-click it for the connection
-  editor.
+- Click the network icon on the bar (`Super + Ctrl + W`) to pick a Wi-Fi network; see
+  [Menus on the bar](Bar-Menus#network-and-wi-fi-super--ctrl--w). **Edit connections…** at the
+  bottom opens the connection editor.
+- **"“Home” needs its Wi-Fi password again":** the saved password stopped working (the router's
+  password changed). Click **Enter password** in the notification and type the new one.
+- **A company or school network (eduroam) won't join:** check the sign-in method with your IT
+  department; networks that need a certificate of your own are set up in **Edit connections…**.
 - From a terminal:
 
   ```sh
@@ -306,10 +311,16 @@ moved or restored `/nix`, restore the labels with `sudo restorecon -R /nix`.
 
 ### Sound, Bluetooth or brightness
 
-- **Sound:** click the volume icon on the bar for the volume mixer, or pick the output device in
-  [Settings](Settings#sound), **Sound**.
+- **Sound:** click the volume icon on the bar for the sound menu: where sound plays, the
+  microphone and a volume per app. A device's `…` (or the `›` on its slider) switches between
+  headphones and speakers and picks the profile (for example a headset's microphone mode).
 - **Bluetooth:** the Bluetooth icon only appears when the computer has a Bluetooth adapter. Click it
-  for the Bluetooth manager, or use [Settings](Settings#bluetooth), **Bluetooth**.
+  for the Bluetooth menu. **Pair a new device** shows codes in Arctic's own dialog; if no dialog
+  appears while pairing, another Bluetooth program (such as Blueman's applet) took over pairing:
+  close it, open the menu's pairing page again and retry.
+- **The "Mic" or "Camera" indicator doesn't show for an app:** it shows for apps that use the
+  microphone or camera through PipeWire (browsers, OBS, video calls). Apps that open the camera
+  device directly aren't seen.
 - **Broadcom Wi-Fi:** some Broadcom cards only work with the driver the installer adds; see
   [Drivers](Drivers#wi-fi-doesnt-work-on-a-broadcom-card).
 - **Brightness keys:** these change the built-in screen; external monitors usually have their own
