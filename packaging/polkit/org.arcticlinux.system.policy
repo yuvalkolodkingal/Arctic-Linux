@@ -7,7 +7,7 @@
      few minutes, so turning SSH on and letting it through the firewall asks once. -->
 <policyconfig>
   <vendor>Arctic Linux</vendor>
-  <vendor_url>https://github.com/yuvalkolodkingal/O-Tism</vendor_url>
+  <vendor_url>https://github.com/yuvalkolodkingal/Arctic-Linux</vendor_url>
   <action id="org.arcticlinux.system">
     <description>Change system settings</description>
     <message>Enter your password to change system settings</message>

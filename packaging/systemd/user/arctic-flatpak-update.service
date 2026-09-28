@@ -1,6 +1,6 @@
 [Unit]
 Description=Arctic Linux: update your own Flatpak apps
-Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates man:flatpak-update(1)
+Documentation=https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Updates man:flatpak-update(1)
 # Only for apps installed just for you (flatpak install --user); the system's are
 # arctic-flatpak-update.service's.
 ConditionPathExists=%h/.local/share/flatpak/repo

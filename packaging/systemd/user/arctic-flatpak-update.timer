@@ -1,6 +1,6 @@
 [Unit]
 Description=Daily update of your own Flatpak apps (Arctic Linux)
-Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates
+Documentation=https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Updates
 
 [Timer]
 OnStartupSec=25min

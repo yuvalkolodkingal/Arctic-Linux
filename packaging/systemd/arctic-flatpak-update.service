@@ -1,6 +1,6 @@
 [Unit]
 Description=Arctic Linux: update Flatpak apps
-Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates man:flatpak-update(1)
+Documentation=https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Updates man:flatpak-update(1)
 # Never on the live USB: nothing there survives a restart.
 ConditionKernelCommandLine=!rd.live.image
 Wants=network-online.target

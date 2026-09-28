@@ -8,5 +8,5 @@
     {"icon": "sparkle", "title": "Screens and the lid", "text": "Super + P duplicates or extends your screen; closing the lid with a monitor plugged in keeps working."},
     {"icon": "sliders", "title": "More in Settings", "text": "Date and time, Sharing, Users and sign-in, and apps that start on login."}
   ],
-  "notes_url": "https://github.com/yuvalkolodkingal/O-Tism/wiki/Release-Notes"
+  "notes_url": "https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Release-Notes"
 }
