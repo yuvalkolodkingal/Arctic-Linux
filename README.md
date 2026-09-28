@@ -48,6 +48,7 @@ details are in `docs/BUILD-SPEC.md` §9. Installed Arctic Linux 0.1? See the
 | `installer-ui/` | The installer wizard (Quickshell/QML) |
 | `settings/` | Arctic Settings, the settings app (Quickshell/QML, `Super + S`) |
 | `cmd/`, `internal/` | The installer engine (Go, standard library only) |
+| `cmd/arctic-webapp*`, `internal/webapp/`, `internal/webkit/` | Web apps: any website as an app. The `arctic-webapp` manager (Go) and its WebKitGTK window (Go + cgo) |
 | `modules/`, `profiles/` | The app catalog and install profiles |
 | `branding/` | Login screen (SDDM), boot menu (GRUB), boot splash (Plymouth), logos |
 | `packaging/` | RPM specs (`arctic-linux.spec`, `mangowm.spec`) and system files |

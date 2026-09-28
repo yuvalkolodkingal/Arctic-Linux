@@ -30,6 +30,8 @@ var PAGES = [
       words: "idle sleep suspend screen lock battery lid power mode performance" },
     { id: "startup", title: "Startup apps", icon: "play", file: "StartupPage.qml",
       words: "autostart login exec-once start" },
+    { id: "webapps", title: "Web apps", icon: "globe", file: "WebAppsPage.qml",
+      words: "website site pwa app browser sign in" },
     { id: "about", title: "About", icon: "info", file: "AboutPage.qml",
       words: "system version hardware cpu memory disk fedora help wiki" }
 ];
@@ -109,6 +111,13 @@ var ENTRIES = [
     ["power", "power.lid", "Closing the lid", "laptop lid switch"],
     ["startup", "startup.mine", "Your startup apps", "autostart login"],
     ["startup", "startup.arctic", "Started by Arctic", "session services"],
+    ["webapps", "webapps.list", "Your web apps", "websites pwa"],
+    ["webapps", "webapps.links", "Open other sites in your browser", "links external scope"],
+    ["webapps", "webapps.notifications", "Web app notifications", "allow ask block"],
+    ["webapps", "webapps.engine", "Web app engine", "brave chrome chromium vivaldi drm netflix spotify calls"],
+    ["webapps", "webapps.rendering", "Web app rendering", "blank window software nvidia"],
+    ["webapps", "webapps.signout", "Sign out of a web app", "cookies clear data"],
+    ["webapps", "webapps.kept", "Saved sign-in data", "forget removed web apps"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
     ["about", "about.software", "Software", "version mango quickshell kernel"],
     ["about", "about.help", "Help and feedback", "wiki issues bug report"]

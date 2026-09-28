@@ -14,6 +14,9 @@ scratchpad; see each task prompt).
 ```
 cmd/arcticd/            installer engine daemon (Go, root)
 cmd/arctic-install/     engine CLI: dry-run, unattended, bridge (Go)
+cmd/arctic-webapp/      web-app manager (Go, CGO_ENABLED=0; §11)
+cmd/arctic-webapp-host/ web-app window (Go + cgo, WebKitGTK 6.0; §11)
+internal/webapp/…       web-app core, discovery, icons, policies (pure Go); internal/webkit/ the cgo shim
 internal/…              engine packages (Go)
 modules/<slot>/<id>/module.toml   app catalog (see §5)
 profiles/defaults.toml, profiles/ci/*.toml
@@ -70,6 +73,7 @@ throwaway index, and so is the repository key, §9). noarch unless it contains G
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte, polkit (pkexec, for Get apps); Recommends appstream-data (Fedora app names and icons in Get apps). %check runs `shell/tests/test_apps.py`. |
 | `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
+| `arctic-webapps` | `/usr/bin/arctic-webapp`, `/usr/libexec/arctic/arctic-webapp-host` | arch x86_64. The manager is pure Go; the host is cgo against WebKitGTK 6.0 and GTK 4 (BuildRequires gcc, `pkgconfig(webkitgtk-6.0)`, `pkgconfig(gtk4)`, `pkgconfig(libsoup-3.0)`). Requires `webkitgtk6.0 >=` the version built against, librsvg2-tools, hicolor-icon-theme, publicsuffix-list. %check: the host's NEEDED, no NEEDED in the manager, `--version` of both, `render-sample` + desktop-file-validate. Required by `arctic-desktop`; Recommended by `arctic-shell` (§11). |
 | `sddm-wayland-mango` | `/usr/lib/sddm/sddm.conf.d/10-arctic.conf`, `/usr/libexec/arctic/sddm-compositor-mango`, `/usr/share/arctic/sddm/greeter.conf` | Provides+Conflicts `sddm-greeter-displayserver`. Requires sddm, mangowm, layer-shell-qt. Config per PLAN §7. If the mango greeter can't be made to work in the VM test, ship `10-arctic.conf` for `sddm-wayland-generic` (weston) instead and note it. |
 | `arctic-sddm-theme` | `/usr/share/sddm/themes/arctic/` ← `branding/sddm/arctic/` | Requires sddm, qt6-qtdeclarative, qt6-qt5compat only if used. |
 | `arctic-plymouth-theme` | `/usr/share/plymouth/themes/arctic/` ← `branding/plymouth/arctic/` | Requires plymouth-plugin-script. %post: `plymouth-set-default-theme arctic` (no initrd rebuild in %post). |
@@ -845,3 +849,132 @@ skipped), with `ARCTIC_THEME_DIR=<real path of the active theme folder>`,
 `ARCTIC_THEME_MODE=dark|light`, `ARCTIC_THEME_NAME=<name>`, stdin from /dev/null and stdout sent
 to stderr. Hooks must be fast: each is stopped (its process group killed) after 5 s. A failing or
 slow hook is reported on stderr and never fails the switch.
+
+## 11. Web apps (`arctic-webapps`)
+
+Any website as an app with its own launcher entry, icon, window, Wayland app_id and signed-in
+profile (user guide: `docs/wiki/Web-Apps.md`). Everything is per user; nothing needs root.
+
+**Pieces.** `/usr/bin/arctic-webapp` (the manager: pure Go, `CGO_ENABLED=0`, a PIE with no
+DT_NEEDED; never loads GTK or WebKit) and `/usr/libexec/arctic/arctic-webapp-host` (one app's
+window: Go + a hand-written C shim, cgo against WebKitGTK 6.0, GTK 4 and libsoup 3; only
+`arctic-webapp run` starts it; `ARCTIC_WEBAPP_HOST` overrides the path for development). cgo
+lives only in `internal/webkit/` and `cmd/arctic-webapp-host/`, and every file there starts
+with `//go:build cgo && webkit` (a test enforces it), so `go test ./...` without WebKit headers
+skips them and no stub host can be built. Every decision the window makes (scope, navigation,
+permissions, downloads, crashes, theme) is pure Go in `internal/webapp/policy` and
+`internal/webapp/theme`; the shim reports facts and applies answers. The host links with
+`-z now`, so it never calls a WebKitGTK symbol newer than the version it is built against, and
+the package Requires `webkitgtk6.0 >= <that version>`. A Chromium-family browser is the per-app
+fallback engine for sites that need WebRTC calls or Widevine DRM, which Fedora's WebKitGTK lacks.
+
+**Ids.** `org.arcticlinux.WebApp.<Slug>_<hash>`, grammar
+`^org\.arcticlinux\.WebApp\.[A-Za-z][A-Za-z0-9]{0,31}_[0-9a-f]{6,8}$` (also a valid GApplication
+id; no `-`). Slug: the name's ASCII letters and digits in CamelCase, else the site label, else
+`App`. Hash: the first 6 hex digits of SHA-256 over the identity (the manifest `id`, else the
+start URL without fragment; `#N` appended for copy N), 8 when another identity holds the 6-digit
+id. The id is the GApplication id, the Wayland app_id, the `.desktop` basename, `StartupWMClass`
+(WebKit engine), the D-Bus name and the first icon name. Reinstalling a site whose data was kept
+reuses the kept id, so you stay signed in. Mango's `activation_bypass` rule for
+`^org\.arcticlinux\.WebApp\.` (rules.conf; mangowm ≥ 0.17.3) lets a second start raise the
+window.
+
+**Files.**
+
+| What | Path | Mode | Writer |
+|---|---|---|---|
+| Registry lock (flock; shared for readers, exclusive for writes, 5 s → `busy`) | `$XDG_DATA_HOME/arctic/webapps/.lock` | 0600 | manager |
+| Record (schema 1) / kept record | `…/webapps/<id>/app.json` / `app.removed.json` | 0600 (dir 0700) | manager |
+| Source icon (≤ 512 px PNG) | `…/webapps/<id>/icon.png` | 0600 | manager |
+| Window state, permissions | `…/webapps/<id>/state.json`, `permissions.json` | 0600 | host |
+| WebKit profile (cookies.sqlite, storage) | `…/webapps/<id>/profile/` | 0700 | WebKit |
+| WebKit cache | `$XDG_CACHE_HOME/arctic/webapps/<id>/` | 0700 | WebKit |
+| Browser profile | `…/webapps/<id>/chromium/` (dnf Chromium) or `~/.var/app/<ref>/data/arctic-webapps/<id>/` (Flatpak) | 0700 | browser |
+| Launcher entry | `$XDG_DATA_HOME/applications/<id>.desktop` | 0644 | manager |
+| Icons (48, 64, 128, 256, 512 px) | `$XDG_DATA_HOME/icons/hicolor/<n>x<n>/apps/<icon>.png`, `<icon>` = `<id>` then `<id>.r<N>` after each change | 0644 | manager |
+| Log (1 MiB, one rotation, URLs without query) | `$XDG_STATE_HOME/arctic/webapps/<id>.log` | 0600 | host |
+| Pid file (primary instance only), previews | `$XDG_RUNTIME_DIR/arctic-webapp/<id>.pid`, `inspect-<token>/` | 0700 dir | host / manager |
+
+All writes are atomic (temp file, fsync, rename). `app.json` holds `schema, render,
+engine_version, id, copy, name, name_source, input_url, start_url, manifest_url, manifest_id,
+scope{site,scheme,manifest}, extra_domains, category, theme_color, icon{name,rev,source,url,sha256,purpose},
+runtime (webkit | chromium:brave|chrome|vivaldi|chromium|ungoogled), wm_class, handlers ([] |
+["mailto"]), options{links: browser|app, notifications: allow|ask|block, devtools, rendering:
+auto|software}, tls_exceptions[{host,sha256,pem}] (private-network hosts only), user_set,
+created, updated`. A record whose id doesn't match its directory, whose URLs aren't http(s), or
+with an unknown value is refused.
+
+**`.desktop` keys, in order:** `Type=Application`, `Version=1.5`, `Name`, `Comment=Web app · <host>`,
+`Exec=arctic-webapp run <id>` (`… %u` only for a mail-link app), `TryExec=arctic-webapp`,
+`Icon=<icon>`, `Terminal=false`, `StartupNotify=true`, `StartupWMClass`, `SingleMainWindow=true`,
+`Categories=<Main>;X-Arctic-WebApp;` (Calendar → `Office;Calendar;X-Arctic-WebApp;`),
+`Keywords=web;app;<host>;`, `MimeType=x-scheme-handler/mailto;` (mail-link apps only),
+`X-Arctic-WebApp-Id`, `X-Arctic-WebApp-URL`, `X-Arctic-WebApp-Runtime`, `X-Arctic-WebApp-Schema=1`.
+Never a URL in Exec, never `WebBrowser` or `NoDisplay`. `arctic-webapp render-sample DIR` writes
+two fixture entries for `desktop-file-validate` in `%check`.
+
+**CLI.** `arctic-webapp inspect URL | install (URL | --preview TOKEN) [options] | list [--sizes]
+[--kept] | show ID | run ID [URI] [--url URL] | launch ID [--url URL] | update (ID… | --all) |
+set ID [options] | clear-data ID | remove ID… [--keep-data] | forget ID… | icon ID --from-file F
+--source host-favicon | trust-certificate ID --host H --pem F | repair | runtimes | serve |
+render-sample DIR | version [--webkit]`. Exit 0 ok, 1 error, 2 usage; messages on stderr start
+`arctic-webapp: `. It refuses to run as root (CI containers set `ARCTIC_WEBAPP_ALLOW_ROOT=1`).
+With `--json`: exactly one line on stdout, `{"ok":true,…}` or
+`{"ok":false,"code":"<code>","error":"<sentence>"[,"fields":{…}]}` (`fields` only with code
+`invalid`), nothing on stderr and no progress lines. Success shapes: `inspect` `{"preview":…}`,
+`install` `{"app","desktop_file","launched"}`, `list` `{"apps":[…],"kept":[…]}` (`kept` with
+`--kept`), `show` `{"app"}`, `launch` `{"pid"}` or `{"focused":true}`, `update`
+`{"updated":[{"id","changed","kept"}]}`, `set` `{"app","applied": live|next_start|saved}`,
+`remove` `{"removed":[{"id","stopped","kept_data"}]}`, `repair` `{"repaired","orphans_removed"}`,
+`runtimes` `{"runtimes"}`, `version` `{"version","host","host_present"[,"webkit_version"]}`,
+`clear-data`/`forget` `{}`. App info: `id, name, url, host, icon_name, icon_path (128 px),
+category, runtime, runtime_available, running, links, notifications, devtools, rendering,
+extra_domains, handlers, handlers_supported, tls_exceptions[{host,sha256}], data_bytes (null
+without --sizes), problem ("" | no-desktop-file | no-registry | runtime-missing), created, updated`.
+
+**`serve`** (the shell's Get apps and Remove apps pages): JSON lines on stdin/stdout in the §4
+envelope, snake_case. Methods `Hello` (`engine_version, protocol_version, runtimes[{id, name,
+available, drm, webrtc, install?{module, method, ref?}}]`), `Runtimes`, `Inspect{url}` (a new
+one cancels the previous), `Install{token | url, name, icon (index | "monogram"), icon_file,
+icon_url, category, runtime, links, notifications, mail_links, new_copy, launch}`,
+`List{sizes, kept}`, `Get{id, sizes}`, `Launch{id, url}`, `Update{ids, all}`, `Set{id, name,
+icon{file | monogram | url | {} = from the site}, category, runtime, links, extra_domains,
+add_domain, remove_domain, notifications, mail_links, devtools, rendering, reset_permissions,
+forget_certificate}`, `Remove{ids, keep_data}`, `Forget{ids}`, `ClearData{id}`,
+`Cancel{request}`. Events: `{"event":"progress","request","stage": page|manifest|icons|render,
+"message"}` and `{"event":"changed","ids"}` (after the response to a write). Error codes:
+`invalid` (with `fields`), `bad_request`, `unknown_method`, `not_found`, `state`, `offline`,
+`timeout`, `internal`, `exists`, `fetch`, `http`, `tls`, `too_large`, `not_html`, `busy`,
+`unsupported`. `serve` exits on end of input and deletes its previews. The Inspect result
+(`preview`): `token, url, final_url, host, host_ascii, secure, name, name_source, short_name,
+start_url, scope, manifest_url, display, theme_color, category, suggested_id, installed,
+icons[{index, source, purpose, size, format, path}], recommended_icon, handlers_supported,
+warnings[{code: drm_unsupported|calls_unsupported|login_wall|insecure, message}],
+suggested_runtime`; its token stays installable for an hour.
+
+**Discovery rules.** http(s) only; https is added when there is no scheme; no userinfo, no
+control characters, ≤ 2,048 bytes. Fetch: dial and TLS 5 s, headers 10 s, 30 s per inspect,
+TLS ≥ 1.2 and never an unverified certificate, ≤ 5 redirects and never https → http, HTML read
+to 1 MiB, manifest 256 KiB, images 2 MiB (≤ 4096 px, checked before decoding), 8 MiB in all. The
+user agent is WebKitGTK's own (pinned by the host's smoke test). Once the page came from a public
+address, its manifest and icons may not come from loopback, private or link-local addresses
+(checked at connect time). The page's JavaScript never runs. If the page redirected to another
+site (a sign-in wall), that page's name and icons are ignored and the typed origin is probed.
+Scope = the start URL's registrable domain from Fedora's Public Suffix List (exact host:port for
+IP addresses and localhost) plus extra domains. Icons: never `og:image`, never third-party
+favicon services; WebP/AVIF/JXL are skipped; SVG goes through `rsvg-convert` (stdin, argv, 5 s)
+and is never installed; letter icons use the app-tile tints (never amber).
+
+**Window rules.** Only user link clicks (and gesture-driven "other" navigations) to pages out of
+scope leave the app, for your default browser (`x-scheme-handler/https`); redirects, script
+navigations and form posts stay, so single sign-on works. `window.open` makes a popup in the
+same session with `window.opener` kept (OAuth). Permissions: stored per origin; notifications
+follow the app's option (allowed for in-scope origins by default); camera, microphone, screen,
+location, clipboard ask in a banner outside the page; EME is denied. Downloads go to the XDG
+download directory under a safe unique name. A web-process crash reloads once a minute, then
+shows a banner. `SIGHUP` re-reads app.json (links, extra domains, notifications, devtools,
+certificates); `SIGTERM` quits after saving state. `run` removes
+`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS` from the environment, adds the NVIDIA workarounds on
+the proprietary driver and software rendering on request. Chromium-family runtimes run
+`--app=<url> --user-data-dir=<per-app>` (never `--no-sandbox` or `--class`); a running one is
+focused with `mmsg` instead of opening a second window.

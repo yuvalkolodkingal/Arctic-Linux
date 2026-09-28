@@ -20,8 +20,8 @@
 #                      right of that); screenshots stay of HEADLESS-1
 #   --fixtures         test data for screenshots: desktop entries for the default apps, the
 #                      installer's default-apps file, an arctic-update stand-in with updates
-#                      ready, and two apps that sent notifications (none of it is used outside
-#                      this script)
+#                      ready, two apps that sent notifications and an arctic-webapp stand-in
+#                      with two web apps (none of it is used outside this script)
 #
 # Needs sway, grim, quickshell and python3 (wtype for `key`). Inside containers sway refuses a
 # binary with file capabilities, so a plain copy is used.
@@ -86,6 +86,17 @@ STUB
   mkdir -p "$HOME/.local/state/arctic/notifications"
   printf '{"version":1,"apps":[{"key":"org.signal.Signal","app_name":"Signal","desktop_entry":"org.signal.Signal","last_seen":1790620000},{"key":"Firefox","app_name":"Firefox","last_seen":1790610000}]}\n' \
     > "$HOME/.local/state/arctic/notifications/apps.json"
+  # Web apps (stream 1): a stand-in arctic-webapp with two apps and kept sign-in data.
+  cat > "$HOME/.local/bin/arctic-webapp" <<'STUB'
+#!/bin/sh
+# Test stand-in for arctic-webapp (settings/dev/headless.sh --fixtures).
+case "$1" in
+  list) echo '{"ok":true,"apps":[{"id":"org.arcticlinux.WebApp.YouTubeMusic_4c1a9e","name":"YouTube Music","url":"https://music.youtube.com/?source=pwa","host":"music.youtube.com","icon_name":"org.arcticlinux.WebApp.YouTubeMusic_4c1a9e","icon_path":"","category":"AudioVideo","runtime":"webkit","runtime_available":true,"running":true,"links":"browser","notifications":"allow","devtools":false,"rendering":"auto","extra_domains":["accounts.google.com"],"handlers":[],"handlers_supported":[],"tls_exceptions":[],"data_bytes":48213504,"problem":"","created":"2026-09-28T12:00:00Z","updated":"2026-09-28T12:00:00Z"},{"id":"org.arcticlinux.WebApp.HomeAssistant_0badf0","name":"Home Assistant","url":"https://ha.lan:8123/","host":"ha.lan:8123","icon_name":"org.arcticlinux.WebApp.HomeAssistant_0badf0","icon_path":"","category":"Utility","runtime":"webkit","runtime_available":true,"running":false,"links":"app","notifications":"ask","devtools":true,"rendering":"software","extra_domains":[],"handlers":[],"handlers_supported":[],"tls_exceptions":[{"host":"ha.lan:8123","sha256":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"}],"data_bytes":1203400,"problem":"","created":"2026-09-28T12:00:00Z","updated":"2026-09-28T12:00:00Z"}],"kept":[{"id":"org.arcticlinux.WebApp.Slack_09ab3c","name":"Slack","url":"https://app.slack.com/","data_bytes":2211840}]}' ;;
+  runtimes) echo '{"ok":true,"runtimes":[{"id":"webkit","name":"Arctic","available":true,"drm":false,"webrtc":false},{"id":"chromium:brave","name":"Brave","available":true,"drm":true,"webrtc":true},{"id":"chromium:chromium","name":"Chromium","available":false,"drm":false,"webrtc":true}]}' ;;
+  *) echo '{"ok":true,"applied":"saved"}' ;;
+esac
+STUB
+  chmod +x "$HOME/.local/bin/arctic-webapp"
 fi
 export ARCTIC_SHELL_DIR="$REPO/shell"
 export XDG_DATA_DIRS=/usr/local/share:/usr/share

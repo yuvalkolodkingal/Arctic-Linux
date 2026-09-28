@@ -19,6 +19,8 @@
 #   arctic-shell           shell/ → /usr/share/arctic/shell
 #   arctic-settings        settings/ → /usr/share/arctic/settings, arctic-settings, packaging/settings/
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
+#   arctic-webapps         cmd/arctic-webapp (Go) + cmd/arctic-webapp-host (Go + cgo: WebKitGTK 6.0, GTK 4),
+#                          internal/webapp/, internal/webkit/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
 #   arctic-sddm-theme      branding/sddm/arctic/
 #   arctic-plymouth-theme  branding/plymouth/arctic/ (+ branding/plymouth/dracut/, the initrd hook)
@@ -31,6 +33,12 @@
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
+# ---- stream 1 (web apps): arctic-webapp-host is cgo, linked externally with Fedora's flags;
+# brp-strip strips it too. Its WebKitGTK floor is the version it was built against (it links
+# with -z now, so a newer symbol would stop it starting on an older WebKitGTK;
+# docs/BUILD-SPEC.md §11). The fallback keeps rpmspec -q and dnf builddep working before the
+# -devel package is installed.
+%global webkit_built    %(pkg-config --modversion webkitgtk-6.0 2>/dev/null || echo 2.50)
 
 Name:           arctic-linux
 Version:        0.2.1
@@ -58,6 +66,13 @@ BuildRequires:  python3
 # %%py_byte_compile
 BuildRequires:  python3-rpm-macros
 BuildRequires:  python3-pillow
+# ---- stream 1 (web apps): arctic-webapp-host (cgo): the C compiler, WebKitGTK 6.0, GTK 4,
+# libsoup 3; readelf in %%check
+BuildRequires:  gcc
+BuildRequires:  binutils
+BuildRequires:  pkgconfig(webkitgtk-6.0)
+BuildRequires:  pkgconfig(gtk4)
+BuildRequires:  pkgconfig(libsoup-3.0)
 
 %description
 Arctic Linux is a Fedora %{dist_version} based desktop built around the Mango Wayland
@@ -157,7 +172,7 @@ the NixOS nix-installer policy.
 %package -n arctic-desktop-config
 Summary:        Arctic Linux desktop configuration and helper commands
 BuildArch:      noarch
-Requires:       mangowm >= 0.17.1
+Requires:       mangowm >= 0.17.3
 Requires:       arctic-backgrounds = %{version}-%{release}
 Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-logos = %{version}-%{release}
@@ -272,6 +287,8 @@ Requires:       arctic-fonts = %{version}-%{release}
 Requires:       unicode-emoji
 Requires:       google-noto-color-emoji-fonts
 Recommends:     wtype
+# Get apps → Web apps and Remove apps → Web apps (stream 1); hidden when it is missing
+Recommends:     arctic-webapps = %{version}-%{release}
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar, launcher with Get apps
@@ -353,13 +370,37 @@ the 12-step wizard, written for Quickshell. The app catalog and install profiles
 /usr/share/arctic.
 
 # ---------------------------------------------------------------------------------------------
+# ---- stream 1 (web apps)
+%package -n arctic-webapps
+Summary:        Arctic Linux web apps: any website as an app with its own window and icon
+# libwebkitgtk-6.0.so.4 and libgtk-4.so.1 come from the automatic soname Requires. WebKitGTK has
+# no symbol versions and the host is linked with -z now, so the floor is the version it was
+# built against (docs/BUILD-SPEC.md §11).
+Requires:       webkitgtk6.0%{?_isa} >= %{webkit_built}
+# SVG icons and letter icons → PNG
+Requires:       librsvg2-tools
+# ~/.local/share/icons/hicolor is found through hicolor's index.theme
+Requires:       hicolor-icon-theme
+# A web app's scope uses registrable domains from the Public Suffix List
+Requires:       publicsuffix-list
+Recommends:     arctic-desktop-config = %{version}-%{release}
+Recommends:     arctic-fonts = %{version}-%{release}
+
+%description -n arctic-webapps
+Any website as an app: its own window, icon, launcher entry and sign-in, separate from your
+browser. arctic-webapp adds, lists, changes and removes web apps (the launcher's Get apps and
+Remove apps use it, and nothing needs a password); each app window is arctic-webapp-host, built
+on WebKitGTK. Sites that need protected media or video calls can open in a Chromium-family
+browser instead.
+
+# ---------------------------------------------------------------------------------------------
 %package -n sddm-wayland-mango
 Summary:        SDDM greeter on the Mango Wayland compositor
 BuildArch:      noarch
 Provides:       sddm-greeter-displayserver
 Conflicts:      sddm-greeter-displayserver
 Requires:       sddm
-Requires:       mangowm >= 0.17.1
+Requires:       mangowm >= 0.17.3
 Requires:       layer-shell-qt
 Requires:       qt6-qtwayland
 Requires:       adwaita-cursor-theme
@@ -434,11 +475,13 @@ Requires:       arctic-selinux = %{version}-%{release}
 Requires:       arctic-desktop-config = %{version}-%{release}
 Requires:       arctic-shell = %{version}-%{release}
 Requires:       arctic-settings = %{version}-%{release}
+# Web apps (stream 1): Requires, so existing installs get it through arctic-update
+Requires:       arctic-webapps = %{version}-%{release}
 Requires:       sddm-wayland-mango = %{version}-%{release}
 Requires:       arctic-sddm-theme = %{version}-%{release}
 Requires:       arctic-plymouth-theme = %{version}-%{release}
 Requires:       arctic-grub-theme = %{version}-%{release}
-Requires:       mangowm >= 0.17.1
+Requires:       mangowm >= 0.17.3
 Requires:       sddm
 # Swappable in the installer's app picker (terminal, shell, file manager, video): weak deps,
 # so unticking one doesn't remove this metapackage.
@@ -524,9 +567,15 @@ if [ -f go.mod ]; then
   export GOFLAGS
   export GOCACHE="$PWD/_build/gocache" GOPATH="$PWD/_build/gopath"
   mkdir -p _build/bin
-  for cmd in arcticd arctic-install; do
+  for cmd in arcticd arctic-install arctic-webapp; do
     go build -ldflags "-B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
   done
+  # ---- stream 1 (web apps): the window (docs/BUILD-SPEC.md §11), cgo against WebKitGTK 6.0
+  # and GTK 4. Go reads CGO_CFLAGS/CGO_LDFLAGS, not the CFLAGS/LDFLAGS rpm exports; -tags
+  # webkit selects its files (without it the package has no Go files, so no stub can ship).
+  CGO_ENABLED=1 CGO_CFLAGS="%{build_cflags}" CGO_LDFLAGS="%{build_ldflags}" \
+    go build -tags webkit -ldflags "-B gobuildid -linkmode=external" \
+      -o _build/bin/arctic-webapp-host ./cmd/arctic-webapp-host
 else
   echo "error: go.mod is missing: the installer engine (cmd/, internal/) is not in the tree" >&2
   exit 1
@@ -769,6 +818,10 @@ desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/settin
 install -Dpm 0644 packaging/settings/org.arcticlinux.Settings.svg \
   %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg
 
+# ---------------------------------------------------------------- arctic-webapps (stream 1)
+install -pm 0755 _build/bin/arctic-webapp %{buildroot}%{_bindir}/
+install -Dpm 0755 _build/bin/arctic-webapp-host %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host
+
 # ---------------------------------------------------------------- arctic-installer
 install -pm 0755 _build/bin/arcticd _build/bin/arctic-install %{buildroot}%{_bindir}/
 install -d %{buildroot}%{_datadir}/arctic/catalog %{buildroot}%{_datadir}/arctic/profiles %{buildroot}%{_datadir}/arctic/installer-ui
@@ -858,6 +911,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s shell/tests -p 'test_a
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer %{buildroot}%{_bindir}/arctic-update \
          %{buildroot}%{_datadir}/arctic/theme-hooks.d/*; do
+  # arctic-webapp-host (stream 1) is an ELF binary, not a script
+  case "$(head -c4 "$s")" in "$(printf '\177ELF')") continue ;; esac
   case "$(head -n1 "$s")" in
     *python*) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$s" ;;
     *) bash -n "$s" ;;
@@ -865,6 +920,17 @@ for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/
 done
 # arctic-update's file handling (update.conf, dnf5's offline state, the status file).
 python3 -m unittest discover -s packaging/updates -p 'test_*.py'
+# ---- stream 1 (web apps): the host is the real cgo build and the manager is cgo-free; both
+# start without a display; the launcher entries the manager writes are valid.
+readelf -d %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
+if readelf -d %{buildroot}%{_bindir}/arctic-webapp | grep -q NEEDED; then
+  echo "error: arctic-webapp must not link any library (CGO_ENABLED=0)" >&2; exit 1
+fi
+%{buildroot}%{_libexecdir}/arctic/arctic-webapp-host --version
+%{buildroot}%{_bindir}/arctic-webapp version
+rm -rf _build/webapp-sample
+%{buildroot}%{_bindir}/arctic-webapp render-sample _build/webapp-sample
+desktop-file-validate _build/webapp-sample/*.desktop
 test -f %{buildroot}%{_datadir}/sddm/themes/arctic/metadata.desktop || \
   { echo "error: branding/sddm/arctic has no metadata.desktop" >&2; exit 1; }
 test -f %{buildroot}%{_datadir}/plymouth/themes/arctic/arctic.plymouth || \
@@ -1188,6 +1254,13 @@ fi
 %{_unitdir}/arcticd.service
 %{_datadir}/applications/org.arcticlinux.Installer.desktop
 %dir %{_localstatedir}/log/arctic-install
+
+# ---- stream 1 (web apps)
+%files -n arctic-webapps
+%license LICENSE
+%{_bindir}/arctic-webapp
+%dir %{_libexecdir}/arctic
+%{_libexecdir}/arctic/arctic-webapp-host
 
 %files -n sddm-wayland-mango
 %dir %{_datadir}/arctic
