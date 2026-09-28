@@ -124,10 +124,16 @@ the wallpaper: the top bar, launcher, OSD, the login and lock card and the live 
 | Output | Where | Used by |
 |---|---|---|
 | Flat exports and ready platform files | `design/exports/` (CSS, JSON, GTK, QML `Theme.qml`, kitty, waybar, Mango, GRUB, Plymouth) | Reference for every surface below |
-| Desktop theme files, one folder per theme | `dotfiles/.config/arctic/themes/{winter,polar-night}/`, made by `python3 design/tools/gen-desktop-themes.py` | The shell (`theme.json`), kitty, mako, fuzzel, waybar, swaylock, GTK, Mango, `theme.env` |
+| Desktop theme files, one folder per theme | `dotfiles/.config/arctic/themes/{winter,polar-night}/`, rendered by the theme engine (`design/themegen`, templates in `design/themegen/templates/`) through `python3 design/tools/gen-desktop-themes.py`; the packages render them again at build time and the tests check the committed copies are current | The shell and Settings (`theme.json`), kitty, foot, Alacritty, mako, fuzzel, waybar, swaylock, GTK, Qt (qt5ct/qt6ct), Mango, Zed, yazi, btop, fzf, zsh, Zen, `theme.env` |
 | Installer theme | `installer-ui/Theme.qml` | The installer |
 | Login screen theme | `branding/sddm/arctic/Theme.qml` | SDDM |
 | Boot menu and splash | `branding/grub/arctic/`, `branding/plymouth/arctic/` (made by `branding/tools/`) | GRUB, Plymouth |
+
+The same engine is installed as `arctic-themegen`: `arctic-theme` uses it to make a theme from the
+wallpaper, keeping the semantic token names and enforcing the contrast guarantees (`ink` at least
+7:1 on `ground` and `surface`; secondary text, the accent's text, text on the accent and the
+terminal colours at least 4.5:1). See
+[Themes and customisation](Themes-and-Customisation#colours-from-your-wallpaper).
 
 To change a colour: edit `design/tokens.json`, re-export `design/exports/arctic-tokens.json` from the
 design system, run `python3 design/tools/gen-desktop-themes.py`, and rebuild the branding with
