@@ -13,6 +13,7 @@ singleton PowerService 1.0 PowerService.qml
 singleton MediaService 1.0 MediaService.qml
 singleton ToggleRegistry 1.0 ToggleRegistry.qml
 singleton BrightnessService 1.0 BrightnessService.qml
+singleton PrivacyService 1.0 PrivacyService.qml
 AppTile 1.0 AppTile.qml
 ArcticSlider 1.0 ArcticSlider.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
@@ -49,6 +50,7 @@ MenuSection 1.0 MenuSection.qml
 MenuSeparator 1.0 MenuSeparator.qml
 MenuSlider 1.0 MenuSlider.qml
 MenuSwitchRow 1.0 MenuSwitchRow.qml
+ModeIndicators 1.0 ModeIndicators.qml
 NetworkPanel 1.0 NetworkPanel.qml
 Osd 1.0 Osd.qml
 PolkitDialog 1.0 PolkitDialog.qml

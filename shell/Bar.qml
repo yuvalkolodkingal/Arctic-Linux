@@ -189,6 +189,13 @@ PanelWindow {
         onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
         onHoverChanged: h => h ? bar.hint(clockItem, tooltip) : bar.unhint(clockItem)
     }
+    // Left of the clock: what is listening or watching, and the modes that are on.
+    ModeIndicators {
+        anchors.right: clockItem.left
+        anchors.rightMargin: Theme.space2
+        anchors.verticalCenter: parent.verticalCenter
+        bar: bar
+    }
     // Right of the clock while a media player exists: its title; click for the media menu,
     // middle click plays or pauses, scrolling skips.
     BarItem {

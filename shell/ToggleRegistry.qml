@@ -91,8 +91,7 @@ Singleton {
         id: darkMode
         key: 'dark-mode'
         label: 'Dark style'
-        icon: 'moon'
-        iconOff: 'sun'
+        icon: 'brush'
         keys: 'Super + Shift + T'
         available: Tools.has('arctic-theme')
         active: Theme.dark
