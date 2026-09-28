@@ -53,3 +53,38 @@ for (const q of ['nvim', 'vim', 'gimp', 'fire', '']) {
     assert.deepEqual(Array.from(search(prepared, q, 'all')), Array.from(search(index, q, 'all')), q);
 }
 console.log('Prepared index checks passed.');
+
+// The Flathub and Fedora pages: items with names, summaries and keywords.
+const { prepareItems, searchItems } = context;
+const items = [
+    { id: 'gimp-help', name: 'gimp-help', summary: 'Help files for GIMP' },
+    { id: 'org.gimp.GIMP', name: 'GIMP', summary: 'Create images and edit photographs', keywords: ['paint'] },
+    { id: 'org.inkscape.Inkscape', name: 'Inkscape', summary: 'Vector graphics editor', keywords: ['svg', 'drawing'] },
+    { id: 'org.kde.krita', name: 'Krita', summary: 'Digital painting' },
+    { id: 'io.neovim.nvim', name: 'Neovim', summary: 'Vim-fork focused on extensibility' },
+];
+const ids = (q, limit) => Array.from(searchItems(prepareItems(items), q, limit)).map(i => i.id);
+assert.equal(ids('gimp')[0], 'org.gimp.GIMP');                        // the display name beats an id
+assert.deepEqual(ids('gimp'), ['org.gimp.GIMP', 'gimp-help']);        // not the summary "Help files for GIMP" twice
+assert.equal(ids('svg')[0], 'org.inkscape.Inkscape');                  // keywords
+assert.equal(ids('nvim')[0], 'io.neovim.nvim');                        // the last part of the id
+assert.deepEqual(ids('photographs'), ['org.gimp.GIMP']);               // summaries when little else matches
+assert.deepEqual(ids('krt'), ['org.kde.krita']);                       // fuzzy
+assert.equal(ids('').length, items.length);
+assert.equal(ids('', 2).length, 2);
+assert.deepEqual(ids('zzzz'), []);
+assert.deepEqual(Array.from(searchItems(items, 'gimp')).map(i => i.id), ids('gimp'));   // an unprepared list works too
+// Summaries don't crowd out stronger matches once there are enough of them.
+assert.deepEqual(ids('paint', 1), ['org.gimp.GIMP']);
+// ~70,000 packages answer in time for each keystroke.
+const many = [];
+for (let i = 0; i < 70000; i++) many.push({ id: 'package-' + i, name: 'package-' + i, summary: 'A package number ' + i });
+many.push({ id: 'neovim', name: 'neovim', summary: 'Vim-fork focused on extensibility' });
+const big = prepareItems(many);
+const started = Date.now();
+assert.equal(searchItems(big, 'neovim', 200)[0].id, 'neovim');
+searchItems(big, 'package-69', 200);
+const took = Date.now() - started;
+// (a loose bound: CI machines are shared; a desktop answers in tens of milliseconds)
+assert.ok(took < 3000, 'searching 70k items took ' + took + ' ms');
+console.log('Item search checks passed (' + took + ' ms for two searches over 70k items).');

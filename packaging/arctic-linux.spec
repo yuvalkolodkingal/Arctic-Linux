@@ -258,6 +258,10 @@ Requires:       qt6-qtwayland
 Requires:       python3
 Requires:       python3-pillow
 Requires:       python3-pyte
+# ---- stream 2 (Get apps): Fedora's app catalogue, for app names, summaries and icons on the
+# Fedora packages page (without it the page lists every package by name)
+Recommends:     appstream-data
+# ---- end stream 2
 # pkexec, for Get apps
 Requires:       polkit
 # Stream 3b (notifications): gdbus checks who owns org.freedesktop.Notifications.
@@ -270,9 +274,10 @@ Requires:       google-noto-color-emoji-fonts
 Recommends:     wtype
 
 %description -n arctic-shell
-The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,
-the get-apps console, on-screen display, lock screen, the live-session welcome card, and the
-notification server with its pop-ups and notification centre.
+The Arctic Linux desktop shell, written for Quickshell: top bar, launcher with Get apps
+(Flathub, Fedora packages, web apps, terminal apps, a console) and Remove apps, wallpaper
+picker, on-screen display, lock screen, the live-session welcome card, and the notification
+server with its pop-ups and notification centre.
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
 
 # ---------------------------------------------------------------------------------------------
@@ -750,7 +755,7 @@ exec quickshell -p /usr/share/arctic/shell ipc call "$@"
 EOF
 fi
 chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-shell-ipc
-# Get apps: pkexec dnf5 with the password kept for a few minutes.
+# Get apps: pkexec dnf5 (install and remove) with the password kept for a few minutes.
 install -Dpm 0644 packaging/polkit/org.arcticlinux.pkexec.dnf.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
 
@@ -846,6 +851,10 @@ diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Settings.desktop
 # Settings' backend: the file formats it reads and writes (uses `mango -p` when installed).
 python3 -m unittest discover -s settings/tests -p 'test_*.py'
+# ---- stream 2 (Get apps): apps.py's contracts, the job commands, and that
+# protected-packages.conf covers modules/_system/desktop-base.
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s shell/tests -p 'test_apps.py'
+# ---- end stream 2
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer %{buildroot}%{_bindir}/arctic-update \
          %{buildroot}%{_datadir}/arctic/theme-hooks.d/*; do

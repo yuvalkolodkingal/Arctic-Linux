@@ -216,7 +216,8 @@ The apps your keyboard shortcuts open, and the ones links and files open in: Web
 (`Super + B`), Terminal (`Super + Enter`), Files (`Super + F`), Text editor (`Super + E`), Videos,
 Music, Pictures and PDF documents. The first four are saved in `~/.config/arctic/default-apps`
 (read by `arctic-open`), and every one also in `~/.config/mimeapps.list`, as `xdg-mime default`
-would. **Get apps** installs more; they show up here.
+would. **Get apps** installs more; they show up here. **Install and remove apps** opens Get apps
+or Remove apps (`arctic-shell-ipc apps install|remove`).
 
 ## Network
 

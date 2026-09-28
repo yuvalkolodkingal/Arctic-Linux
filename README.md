@@ -6,7 +6,7 @@ with an identity drawn from the arctic fox. One live USB: boot it to **Try Arcti
 and it only downloads the apps you pick.
 
 - **Desktop:** Mango, a Quickshell shell (bar, launcher with calculator and commands, wallpaper
-  picker, Get apps console, OSD, lock screen), Arctic Settings (`Super + S`), mako, kitty + zsh with the animated `arctic-fetch`
+  picker, Get apps (install and remove apps), OSD, lock screen), Arctic Settings (`Super + S`), mako, kitty + zsh with the animated `arctic-fetch`
   fox, two themes (Winter and Polar night) switched with `Super + Shift + T`.
 - **Default apps (all swappable in the installer):** Zen, Zed, kitty, zsh, yazi, Thunar,
   Collabora Office, VLC. Nix and Flatpak come preinstalled.

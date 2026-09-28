@@ -88,7 +88,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-touchpad toggle\|on\|off\|status` | The touchpad key |
 | `arctic-keys` | Keyboard cheat sheet (`Super + /`) |
 | `arctic-settings [page]` | Settings (`Super + S`): appearance, windows, displays, keyboard and mouse, shortcuts, default apps, network, sound, updates, power, startup apps ([`../settings/README.md`](../settings/README.md)) |
-| `arctic-shell-ipc apps install` | Get apps: install with dnf or Flatpak (`Super + Shift + A`) |
+| `arctic-shell-ipc apps install\|remove` | Get apps: install or remove apps (`Super + Shift + A`) |
 | `arctic-session shell\|mako\|…` | Start one session service once (used by autostart; `mako` only outside the shell's session) |
 | `arctic-notify dismiss\|dismiss-all\|center\|invoke\|history\|count` | Notifications: close pop-ups (`Super + Delete`, `Super + Shift + Delete`), the centre (`Super + Alt + N`), act on the newest (`Super + Alt + ,`); makoctl without the shell |
 | `arctic-welcome` | The live USB's welcome card, once per boot |

@@ -8,6 +8,7 @@ singleton UpdateService 1.0 UpdateService.qml
 singleton NotificationService 1.0 NotificationService.qml
 singleton KeyboardService 1.0 KeyboardService.qml
 singleton RecordService 1.0 RecordService.qml
+singleton AppsService 1.0 AppsService.qml
 AppTile 1.0 AppTile.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
@@ -22,7 +23,7 @@ EmojiPicker 1.0 EmojiPicker.qml
 FocusRing 1.0 FocusRing.qml
 FrozenScreens 1.0 FrozenScreens.qml
 Icon 1.0 Icon.qml
-InstallConsole 1.0 InstallConsole.qml
+WebAppClient 1.0 WebAppClient.qml
 Kbd 1.0 Kbd.qml
 KeyboardItem 1.0 KeyboardItem.qml
 KeyboardPanel 1.0 KeyboardPanel.qml

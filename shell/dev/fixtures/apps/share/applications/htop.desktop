@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Htop
+Comment=Test fixture for screenshots
+Exec=htop
+Icon=htop
+Terminal=true

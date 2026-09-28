@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=GIMP
+Comment=Test fixture for screenshots
+Exec=gimp
+Icon=gimp

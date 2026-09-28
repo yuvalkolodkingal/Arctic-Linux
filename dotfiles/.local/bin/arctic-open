@@ -7,8 +7,9 @@
 #                        the launcher uses this for terminal apps, Fetch and "> command"
 #   arctic-open terminal --app-id ID [-e COMMAND…]
 #                        the terminal's window gets the Wayland app id ID, which window rules
-#                        match (the drop-down terminal): kitty, foot, alacritty or ghostty (your
-#                        terminal if it is one of them, else the first of them installed)
+#                        match (the drop-down terminal, Get apps' terminal apps): kitty, foot,
+#                        alacritty or ghostty (your terminal if it is one of them, else the
+#                        first of them installed)
 #   arctic-open --focus DESKTOP-ID
 #                        bring the app's window back if it is open (Mango), else start it
 #                        (gtk-launch); shortcuts made in Settings use this
@@ -131,5 +132,5 @@ for c in "${candidates[@]}"; do
 done
 
 notify-send -a "Arctic Linux" -i dialog-warning "No app set for $role" \
-  "Pick one with the Software app, or set $role= in ~/.config/arctic/default-apps." 2>/dev/null
+  "Install one with Get apps (Super + Shift + A), or set $role= in ~/.config/arctic/default-apps." 2>/dev/null
 exit 1
