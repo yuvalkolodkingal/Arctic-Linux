@@ -25,3 +25,14 @@ func (m *Manager) render(a *webapp.App) error {
 func removeIcons(p webapp.Paths, id string) { icon.Remove(p, id, "") }
 
 func touchHicolor(p webapp.Paths) { icon.Touch(p) }
+
+// SaveAndRender writes a record and its launcher entry and icons under the exclusive lock
+// (render-sample's offline fixtures).
+func (m *Manager) SaveAndRender(a *webapp.App) error {
+	return m.exclusive(func() error {
+		if err := m.Paths.Save(a); err != nil {
+			return err
+		}
+		return m.render(a)
+	})
+}

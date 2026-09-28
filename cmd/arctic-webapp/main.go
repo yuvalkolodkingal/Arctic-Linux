@@ -117,7 +117,9 @@ func (c *cli) commands() map[string]func([]string) int {
 	return map[string]func([]string) int{
 		"list": c.cmdList, "show": c.cmdShow, "run": c.cmdRun, "launch": c.cmdLaunch,
 		"remove": c.cmdRemove, "forget": c.cmdForget, "clear-data": c.cmdClearData,
-		"repair": c.cmdRepair, "runtimes": c.cmdRuntimes,
+		"repair": c.cmdRepair, "runtimes": c.cmdRuntimes, "inspect": c.cmdInspect,
+		"install": c.cmdInstall, "update": c.cmdUpdate, "set": c.cmdSet, "icon": c.cmdIcon,
+		"trust-certificate": c.cmdTrust, "serve": c.cmdServe, "render-sample": c.cmdRenderSample,
 	}
 }
 
