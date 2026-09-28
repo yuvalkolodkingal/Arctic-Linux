@@ -70,6 +70,9 @@
 		<package name="blueman"/>
 		<package name="pavucontrol"/>
 		<package name="wlr-randr"/>
+		<!-- Web apps (Get apps → Web apps; arctic-desktop requires it too; named so it is never
+		     left out). WebKitGTK 6.0 adds about 155 MiB installed. -->
+		<package name="arctic-webapps"/>
 		<!-- Default apps the installer treats as already in the live image (in_live_image in
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
 		<package name="kitty"/>
