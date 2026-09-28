@@ -143,6 +143,16 @@ StepPage {
             text: "Arctic Linux downloads the apps you pick and the latest security updates while it installs, so you start up to date."
         }
 
+        // A Wi-Fi card that works only once its driver is installed (Broadcom wl): say how
+        // to get online meanwhile.
+        ArBanner {
+            visible: (page.opts.driver_hint || "") !== ""
+            width: parent.width
+            kind: "warning"
+            title: "Your Wi-Fi needs a driver"
+            text: String(page.opts.driver_hint || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        }
+
         ArList {
             id: list
             width: parent.width

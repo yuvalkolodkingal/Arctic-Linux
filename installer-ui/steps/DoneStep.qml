@@ -1,5 +1,7 @@
 // Step 12 — Arctic Linux is ready (INSTALL_STEPS[11]). Aurora band, the USB
 // card, Restart now (primary) and Keep trying (ghost: stay in the live session).
+// With drivers: a line for each, and with Secure Boot on, the steps of the blue
+// "Perform MOK management" screen and the one-time code to type there.
 import QtQuick
 import ".."
 import "../components"
@@ -21,6 +23,9 @@ StepPage {
     helpText: "Take the USB stick out and restart. Your computer will start Arctic Linux. Keep trying closes the installer so you can keep using Arctic Linux from the USB stick."
 
     property string rebootError: ""
+    readonly property var opts: Wizard.step.options || {}
+    readonly property var drivers: (Wizard.doneInfo && Wizard.doneInfo.drivers) || opts.drivers || []
+    readonly property var secureBoot: (Wizard.doneInfo && Wizard.doneInfo.secure_boot) || opts.secure_boot || null
 
     function primary() {
         rebootError = "";
@@ -39,6 +44,75 @@ StepPage {
             iconName: "usb"
             title: "Remove the USB stick"
             desc: "Take it out now, then restart. Your computer will start Arctic Linux" + (Wizard.encryptionEnabled ? " and ask for your disk passphrase." : ".")
+        }
+
+        ArCard {
+            visible: page.drivers.length > 0
+            width: parent.width
+            iconName: "cpu"
+            title: page.drivers.length === 1 ? "Driver" : "Drivers"
+            desc: page.drivers.map(d => d.text).join("\n")
+        }
+
+        // Secure Boot: enroll the driver's signing key on the first restart.
+        ArCard {
+            id: mokCard
+            visible: page.secureBoot !== null
+            width: parent.width
+            iconName: "shield-lock"
+            iconColor: page.secureBoot && page.secureBoot.failed ? Theme.warning : Theme.inkMuted
+            title: page.secureBoot ? page.secureBoot.title : ""
+            desc: page.secureBoot ? page.secureBoot.intro : ""
+
+            Item {
+                width: parent.width
+                height: Theme.space2
+            }
+            Repeater {
+                model: page.secureBoot ? page.secureBoot.steps : []
+                delegate: ArText {
+                    required property var modelData
+                    required property int index
+                    width: mokCard.width - 2 * mokCard.pad - 24 - Theme.space3
+                    text: (index + 1) + ". " + modelData
+                    size: 14
+                    lh: 20
+                    wrapMode: Text.WordWrap
+                    color: Theme.ink
+                }
+            }
+            // The code, large, so it can be copied onto paper or a phone before restarting.
+            Row {
+                visible: page.secureBoot !== null && (page.secureBoot.code || "") !== ""
+                spacing: Theme.space3
+                topPadding: Theme.space2
+                bottomPadding: Theme.space1
+                ArText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "One-time code"
+                    size: 13
+                    lh: 18
+                    color: Theme.inkMuted
+                }
+                ArText {
+                    text: page.secureBoot ? page.secureBoot.code || "" : ""
+                    font.family: Theme.fontMono
+                    size: 22
+                    lh: 30
+                    weight: Font.Bold
+                    tracking: 0.12
+                    Accessible.name: "One-time code " + (page.secureBoot && page.secureBoot.code ? page.secureBoot.code.split("").join(" ") : "")
+                }
+            }
+            ArText {
+                visible: page.secureBoot !== null && (page.secureBoot.note || "") !== ""
+                width: mokCard.width - 2 * mokCard.pad - 24 - Theme.space3
+                text: page.secureBoot ? page.secureBoot.note || "" : ""
+                size: 13
+                lh: 18
+                wrapMode: Text.WordWrap
+                color: Theme.inkMuted
+            }
         }
 
         // Restart refused or failed: say so, and how else to restart.
