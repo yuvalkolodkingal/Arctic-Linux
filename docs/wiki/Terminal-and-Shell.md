@@ -179,7 +179,8 @@ Install fish first with `sudo dnf install fish` if you didn't pick it in the ins
 
 `Super + Alt + Enter` shows a terminal over your windows, 80 % of the screen wide; press it again
 to hide it (what runs in it keeps running). It's your terminal with the app id
-`org.arcticlinux.Dropdown`, so it works with kitty, foot and Alacritty.
+`org.arcticlinux.Dropdown`: kitty, foot, Alacritty or Ghostty. If yours can't set one (Konsole),
+the first of those that is installed is used.
 
 ## Other terminals
 
