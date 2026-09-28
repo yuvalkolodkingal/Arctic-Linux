@@ -42,6 +42,7 @@ Popover {
         tray: trayPanel,
         calendar: calendarPanel,
         battery: batteryPanel,
+        media: mediaPanel,
     })
     Component { id: networkPanel; NetworkPanel { menu: host } }
     Component { id: bluetoothPanel; BluetoothPanel { menu: host } }
@@ -49,6 +50,7 @@ Popover {
     Component { id: trayPanel; TrayPanel { menu: host } }
     Component { id: calendarPanel; CalendarPanel { menu: host } }
     Component { id: batteryPanel; BatteryPanel { menu: host } }
+    Component { id: mediaPanel; MediaPanel { menu: host } }
 
     FocusScope {
         anchors.fill: parent

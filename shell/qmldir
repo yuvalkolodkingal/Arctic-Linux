@@ -10,6 +10,7 @@ singleton Tools 1.0 Tools.qml
 singleton BluetoothService 1.0 BluetoothService.qml
 singleton BatteryService 1.0 BatteryService.qml
 singleton PowerService 1.0 PowerService.qml
+singleton MediaService 1.0 MediaService.qml
 AppTile 1.0 AppTile.qml
 ArcticSlider 1.0 ArcticSlider.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
@@ -34,6 +35,7 @@ Launcher 1.0 Launcher.qml
 LiveWelcome 1.0 LiveWelcome.qml
 LockScreen 1.0 LockScreen.qml
 Mark 1.0 Mark.qml
+MediaPanel 1.0 MediaPanel.qml
 MenuField 1.0 MenuField.qml
 MenuHeader 1.0 MenuHeader.qml
 MenuList 1.0 MenuList.qml

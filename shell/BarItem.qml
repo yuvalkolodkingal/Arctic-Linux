@@ -11,6 +11,7 @@ Rectangle {
     property string text: ''
     property color textColor: Theme.ink
     property int textWeight: Font.Medium
+    property int maxTextWidth: 0        // > 0: the label is elided beyond this (the media title)
     property string tooltip: ''
     property bool interactive: true
     property bool accentFill: false     // the live session's amber Install item
@@ -51,6 +52,8 @@ Rectangle {
         }
         Text {
             visible: item.text !== ''
+            Layout.maximumWidth: item.maxTextWidth > 0 ? item.maxTextWidth : -1
+            elide: Text.ElideRight
             text: item.text
             color: item.textColor
             font.family: Theme.fontSans

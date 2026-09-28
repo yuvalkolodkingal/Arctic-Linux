@@ -211,6 +211,12 @@ ShellRoot {
         function focus(): void { const b = shell.barOn(Outputs.focused); if (b) b.toggleFocusMode(); }
     }
     IpcHandler {
+        target: 'media'
+        function playPause(): void { MediaService.playPause(); }
+        function next(): void { MediaService.next(); }
+        function previous(): void { MediaService.previous(); }
+    }
+    IpcHandler {
         target: 'audio'
         // The next output device (Shift + Mute key, `arctic-osd output next`).
         function nextOutput(): void { AudioService.nextOutput(); }

@@ -106,6 +106,7 @@ PanelWindow {
             battery: batteryItem,
             notifications: bellItem,
             calendar: clockItem,
+            media: mediaItem,
         };
         const item = owners[name] || null;
         return item && item.visible ? item : null;
@@ -187,6 +188,28 @@ PanelWindow {
         tooltip: Qt.locale().toString(clock.date, 'dddd d MMMM yyyy') + '  (Super + Ctrl + T)'
         onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
         onHoverChanged: h => h ? bar.hint(clockItem, tooltip) : bar.unhint(clockItem)
+    }
+    // Right of the clock while a media player exists: its title; click for the media menu,
+    // middle click plays or pauses, scrolling skips.
+    BarItem {
+        id: mediaItem
+        anchors.left: clockItem.right
+        anchors.leftMargin: Theme.space2
+        anchors.verticalCenter: parent.verticalCenter
+        visible: MediaService.available && MediaService.title !== ''
+        hasMenu: true
+        active: bar.menuOpen('media')
+        iconName: MediaService.playing ? 'music' : 'pause'
+        iconColor: Theme.inkMuted
+        text: MediaService.title
+        textColor: Theme.inkMuted
+        maxTextWidth: 180
+        tooltip: MediaService.title + (MediaService.artist ? ' — ' + MediaService.artist : '')
+                 + (MediaService.playing ? '' : ' · paused') + '  (Super + Ctrl + M)'
+        onClicked: bar.shell.togglePanel('media', bar.screen, mediaItem.mapToItem(null, mediaItem.width / 2, 0).x)
+        onMiddleClicked: MediaService.playPause()
+        onScrolled: steps => steps > 0 ? MediaService.previous() : MediaService.next()
+        onHoverChanged: h => h ? bar.hint(mediaItem, tooltip) : bar.unhint(mediaItem)
     }
 
     // ---- right ----------------------------------------------------------------------------
