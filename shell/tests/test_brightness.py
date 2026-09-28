@@ -3,7 +3,9 @@ cool-down, without real hardware.
 
 Run: python3 -m unittest discover -s shell/tests -p 'test_brightness.py'
 """
+import contextlib
 import importlib.util
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -69,7 +71,8 @@ class Parsing(unittest.TestCase):
         self.assertEqual(cache['failures'], {})
 
     def test_usage(self):
-        self.assertEqual(brightness.main(['set', 'DP-1', 'lots']), 1)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(brightness.main(['set', 'DP-1', 'lots']), 1)
 
 
 if __name__ == '__main__':

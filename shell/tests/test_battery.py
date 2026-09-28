@@ -2,7 +2,9 @@
 
 Run: python3 -m unittest discover -s shell/tests -p 'test_battery.py'
 """
+import contextlib
 import importlib.util
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -52,8 +54,9 @@ class Conf(unittest.TestCase):
         self.assertEqual(battery.action_verb('Sleep', [], lambda name: 'no'), 'suspend')
 
     def test_usage(self):
-        self.assertEqual(battery.main(['limit', 'maybe']), 2)
-        self.assertEqual(battery.main([]), 2)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(battery.main(['limit', 'maybe']), 2)
+            self.assertEqual(battery.main([]), 2)
 
 
 if __name__ == '__main__':

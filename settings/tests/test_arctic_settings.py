@@ -434,11 +434,12 @@ class ShortcutsTest(Home):
         self.assertEqual(launcher[0]['label'], 'Super + Space')
 
     def test_add_and_remove(self):
-        data = self.helper('bind-add', 'super+alt', 'B', 'firefox --new-window')
-        self.assertEqual(data['mine'][0]['label'], 'Super + Alt + B')
-        self.assertIn('keymode=default\nbind=SUPER+ALT,b,spawn_shell,firefox --new-window\n', self.settings)
-        self.assertIn('Super + Alt + B', [b['label'] for b in data['all'] if b['mine']])
-        self.helper('bind-add', 'SUPER+ALT', 'b', 'foot', ok=False)            # already yours
+        # (Super + Alt + B is Arctic's own: the bar's keyboard mode.)
+        data = self.helper('bind-add', 'super+alt', 'Y', 'firefox --new-window')
+        self.assertEqual(data['mine'][0]['label'], 'Super + Alt + Y')
+        self.assertIn('keymode=default\nbind=SUPER+ALT,y,spawn_shell,firefox --new-window\n', self.settings)
+        self.assertIn('Super + Alt + Y', [b['label'] for b in data['all'] if b['mine']])
+        self.helper('bind-add', 'SUPER+ALT', 'y', 'foot', ok=False)            # already yours
         data = self.helper('bind-remove', 0)
         self.assertEqual(data['mine'], [])
         self.assertNotIn('bind=', self.settings)
