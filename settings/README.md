@@ -40,7 +40,11 @@ reset per option, search, undo — and is built from Arctic's own parts.
 
 Nothing needs root. Every file is written atomically (temporary file + rename), validated first
 (the helper's own table of Mango keys, then `mango -c FILE -p`), and the previous version is kept
-in `~/.local/state/arctic/settings-backups` (the newest 20 of each).
+in `~/.local/state/arctic/settings-backups` (the newest 20 of each). (an empty `.absent` marker when
+there was no file yet, so even the first change can be undone). Writes take a lock
+(`$XDG_RUNTIME_DIR/arctic-settings.lock`), so quick changes one after another never overwrite
+each other. A display switched off is never saved (`disable:1` would keep a laptop's only screen
+dark the next time it starts without its dock): off lasts until you log out.
 
 | Setting | Written to | Applied with |
 |---|---|---|
