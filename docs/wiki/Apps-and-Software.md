@@ -322,7 +322,7 @@ launcher (`Super + Space`). It first asks where the app should come from:
 |---|---|
 | **Flathub apps** (`1`) | Desktop apps from Flathub, each in its own sandbox. No password needed. |
 | **Fedora packages** (`2`) | Apps and tools from Fedora and RPM Fusion, with dnf. Asks for your password once. |
-| **Web apps** (`3`) | Any website as an app, with its own window, icon and sign-in (see [Web apps](Web-Apps.md)). Shown when the web-app engine is installed. |
+| **Web apps** (`3`) | Any website as an app, with its own window, icon and sign-in (see [Web apps](Web-Apps)). Shown when the web-app engine is installed. |
 | **Terminal apps** (`4`) | Puts a terminal program like `btop` in the launcher, in a floating or tiled window. |
 | **Remove apps** (`5`) | Uninstalls apps; see [Remove apps](#remove-apps). |
 | **Console** (`6`) | Type `dnf` and `flatpak` commands. |
@@ -386,7 +386,7 @@ Nothing is removed before you confirm, and the confirmation says exactly what go
 - **Fedora packages**: every package dnf would remove: the app, the packages that need it, and
   the ones nothing needs any more (untick **Also remove packages nothing else needs** to keep
   those). Removing asks for your password. When snapshots are set up, one is taken first, so the
-  change can be undone (see [Updates](Updates.md)).
+  change can be undone (see [Undoing an update](Updates#undoing-an-update)).
 - **Flatpak**: the app goes for everyone (or only for you, if you installed it that way). Its
   settings and data in `~/.var/app` stay unless you tick **Also delete its settings and data**.
   Runtimes no other app uses go too.

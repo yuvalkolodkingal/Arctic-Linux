@@ -40,7 +40,7 @@ FocusScope {
     function inspect() {
         const url = field.text.trim();
         pause.stop();
-        if (!url || url === inspected) return;
+        if (!url || (url === inspected && (preview || request))) return;
         if (request) AppsService.web.cancel(request);
         preview = null; added = null; error = ''; errorCode = '';
         inspected = url;
@@ -97,6 +97,15 @@ FocusScope {
         spacing: Theme.space3
 
         PageHeader { title: 'Web apps'; onBack: page.backRequested() }
+        Text {
+            Layout.fillWidth: true
+            visible: AppsService.sourcesLoaded && !AppsService.webappPresent
+            text: 'Web apps need the web-app engine (the arctic-webapps package). Install it from Fedora packages.'
+            color: Theme.inkMuted
+            font.family: Theme.fontSans
+            font.pixelSize: 13
+            wrapMode: Text.Wrap
+        }
         ArcticField {
             id: field
             Layout.fillWidth: true
