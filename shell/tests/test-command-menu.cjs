@@ -15,8 +15,12 @@ const Menu = load('MenuModel.js', { LauncherSearch: Search });
 const plain = x => JSON.parse(JSON.stringify(x));
 
 // ---- the shipped data -----------------------------------------------------------------------
-const text = fs.readFileSync(root + 'menu/arctic-menu.json', 'utf8');
-const shipped = Menu.parse(text);
+// Shipped files are strict JSON (other tools may read them), {"version": 1, "entries": {…}}.
+const text = fs.readFileSync(root + 'menu/00-arctic.json', 'utf8');
+const shippedFile = JSON.parse(text);
+assert.equal(shippedFile.version, 1);
+const shipped = shippedFile.entries;
+for (const f of fs.readdirSync(root + 'menu')) assert.ok(/^\d\d-[a-z-]+\.json$/.test(f), 'menu file name: ' + f);
 const icons = load('assets/design-data.js').ICONS;
 const top = ['apps', 'learn', 'capture', 'toggle', 'style', 'setup', 'install', 'remove', 'update', 'system'];
 assert.deepEqual(Object.keys(shipped).filter(id => !id.includes('.')), top);
@@ -47,6 +51,46 @@ for (const fn of ['launcher apps', 'launcher search', 'apps install', 'wallpaper
     const block = new RegExp("target: '" + target + "'[\\s\\S]*?\\n    \\}").exec(shellQml);
     assert.ok(block && new RegExp('function ' + name + '\\(').test(block[0]), 'shell.qml has ' + fn);
 }
+
+// ---- several files (another part of Arctic adds its own), and the plan's fields -----------------
+const two = Menu.build([shippedFile, { version: 1, entries: {
+    'capture.delay': { label: 'Screenshot in 5 seconds', icon: 'clock', run: ['arctic-screenshot', 'screen', '--delay', '5'], order: 5 },
+    'capture.screens': { label: 'All screens', icon: 'camera', run: ['arctic-screenshot', 'screen', '--all'], when: { outputs: 2 } },
+    'install.flatpak': { label: 'Flatpak', icon: 'package', shell: 'openGetApps', args: ['flatpak'] },
+    'remove.web': { label: 'Web apps', icon: 'globe', shell: 'openGetApps', args: ['remove/web'], when: { live: false } },
+    'learn.tour': { label: 'Desktop tour', icon: 'compass', shell: 'url', args: ['https://example.org/tour'] },
+    'learn.bad': { label: 'Bad', icon: 'compass', shell: 'url', args: ['javascript:alert(1)'] },
+    'learn.more': { label: 'More', icon: 'help', target: 'capture' },
+    'learn.evil': { label: 'Evil', icon: 'help', sh: 'rm -rf ~' },
+    'learn.evil2': { label: 'Evil', icon: 'help', run: 'rm -rf ~' },
+    'capture.edit': { label: 'Edit', icon: 'edit', run: ['arctic-screenshot', 'area', '--edit'], when: { command: 'swappy', file: '/etc/x' } },
+} }], '{"mine": {"label": "Mine", "icon": "user"}, "mine.x": {"label": "X", "icon": "user", "sh": "echo hi | wl-copy"}}');
+const kids = parent => two.order.filter(id => Menu.parentOf(id) === parent);
+assert.equal(kids('capture')[0], 'capture.delay', 'order puts a row first');
+assert.ok(kids('capture').indexOf('capture.screens') > kids('capture').indexOf('capture.folder'), 'new rows after the shipped ones');
+assert.deepEqual(plain(two.byId['install.flatpak'].run), ['arctic-shell-ipc', 'apps', 'source', 'flatpak']);
+assert.equal(two.byId['install.flatpak'].ipc, 'apps source');
+assert.deepEqual(plain(two.byId['remove.web'].run), ['arctic-shell-ipc', 'apps', 'remove']);
+assert.equal(two.byId['remove.web'].when, 'installed');
+assert.deepEqual(plain(two.byId['learn.tour'].run), ['xdg-open', 'https://example.org/tour']);
+assert.equal(two.byId['learn.bad'].run, undefined, 'only https addresses');
+assert.equal(two.byId['learn.more'].go, 'capture');
+assert.equal(two.byId['learn.evil'].run, undefined, 'sh only from your own file');
+assert.equal(two.byId['learn.evil2'].run, undefined, 'a run string neither');
+assert.equal(two.byId['mine.x'].run, 'echo hi | wl-copy');
+assert.deepEqual(plain(two.byId['capture.edit'].needs), ['arctic-screenshot', 'swappy']);
+assert.match(two.byId['capture.edit'].test, /^test -e '\/etc\/x'$/);
+assert.ok(two.order.indexOf('mine') > two.order.indexOf('system.poweroff'));
+{
+    const c = Menu.context(false, false);
+    Object.values(two.byId).forEach(e => Menu.needsOf(e).forEach(n => Menu.readGuard(c, 'cmd\t' + n)));
+    c.outputs = 1;
+    assert.ok(!Menu.rows(two, 'capture', c, {}).some(r => r.id === 'capture.screens'), 'one screen: no "all screens"');
+    c.outputs = 2;
+    assert.ok(Menu.rows(two, 'capture', c, {}).some(r => r.id === 'capture.screens'));
+    assert.equal(Menu.rows(two, 'learn', c, {}).find(r => r.id === 'learn.more').kind, 'link');
+}
+assert.deepEqual(plain(Menu.locate(two, 'apps.reminders_cancel')), { branch: 'apps', select: 'apps.reminders-cancel' });
 
 // ---- merging your own file ------------------------------------------------------------------
 const model = Menu.build(shipped, JSON.stringify({

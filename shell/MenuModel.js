@@ -3,19 +3,24 @@
 // The command menu's model (CommandMenu.qml, Super + Alt + Space). Pure functions, tested in
 // tests/test-command-menu.cjs.
 //
-// The menu is data: menu/arctic-menu.json, with ~/.config/arctic/menu.json merged over it by
-// id (a shipped id you repeat changes only the fields you give; "hidden": true removes it; new
-// ids are added after the shipped ones). Dotted ids make the tree: "capture.area" is a row of
-// "capture". Fields of an entry:
+// The menu is data: every menu/*.json file in name order (00-arctic.json is this section's;
+// another part of Arctic adds rows with a file of its own), then ~/.config/arctic/menu.json,
+// merged by id (repeating an id changes only the fields given; "hidden": true removes it; new
+// ids are added after). A file is {"entries": {…}} (or just the entries). Dotted ids make the
+// tree: "capture.area" is a row of "capture". Fields of an entry:
 //   label, icon (a design icon name), desc (a second line), keys (its shortcut, shown as a chip)
-//   run       ["argv", …] runs it (never through a shell); a string runs with `sh -c` (for
-//             entries of your own)
-//   go        "<id>": opens that branch instead (a link)
+//   order     siblings sort by it (default 1000), then by file order
+//   run       ["argv", …] runs it (never through a shell)
+//   sh        "a shell line": runs with `sh -c` (only from your own menu.json)
+//   shell     a named shell action with "args": openView, openGetApps, openPanel, openQuick,
+//             toggleWallpapers, toggleKeys, togglePower, lock, toggleBar, openWelcome,
+//             settings (page, key), url (https only) — each becomes an arctic-* command
+//   target    "<id>": opens that branch instead (a link; "go" works too)
 //   provider  rows made when the menu opens: "settings" (the Settings pages), "themes"
 //   needs     ["command", …]: hidden unless all are installed (default: the command it runs)
 //   ipc       "target function": hidden unless the running shell answers it
-//   when      "live" | "installed": only in the live session / only on an installed system
-//   test      "<sh condition>": hidden unless it succeeds (for entries of your own)
+//   when      "live" | "installed", or {"live": bool, "command": "…", "file": "/…", "outputs": n}
+//   test      "<sh condition>": hidden unless it succeeds
 //   state     ["argv", …] prints JSON (or on/off) saying whether it is on: the row shows a
 //             switch; "dark" is the theme's light or dark
 //   labelOn   the label while the state is on ("Stop recording")
@@ -32,23 +37,93 @@ function parse(text) {
     return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
 }
 
-// build(shipped, mine) -> {order: [ids], byId: {id: entry}}; either may be an object or text.
+// build(shipped, mine) -> {order: [ids], byId: {id: entry}}. shipped: one file or a list of
+// files (objects or text), merged in order; mine: your file (text or object; if it's broken,
+// it is left out).
 function build(shipped, mine) {
-    const a = typeof shipped === 'string' ? parse(shipped) : (shipped || {});
-    const b = typeof mine === 'string' ? safeParse(mine) : (mine || {});
+    const files = (Array.isArray(shipped) ? shipped : [shipped]).map(f => entriesOf(typeof f === 'string' ? parse(f) : f));
+    const user = entriesOf(typeof mine === 'string' ? safeParse(mine) : (mine || {}));
     const byId = {}, order = [];
-    [a, b].forEach(source => {
+    files.concat([user]).forEach((source, index) => {
+        const yours = index === files.length;
         Object.keys(source).forEach(id => {
             const fields = source[id];
-            if (!validId(id) || !fields || typeof fields !== 'object') return;
+            if (!validId(id) || !fields || typeof fields !== 'object' || Array.isArray(fields)) return;
             if (!byId[id]) { byId[id] = { id: id }; order.push(id); }
-            Object.keys(fields).forEach(k => { if (k !== 'id') byId[id][k] = fields[k]; });
+            Object.keys(fields).forEach(k => {
+                if (k === 'id' || k === '_mine') return;
+                // Shell lines (sh, or run as a string) only from your own file.
+                if (!yours && (k === 'sh' || (k === 'run' && typeof fields[k] === 'string'))) return;
+                byId[id][k] = fields[k];
+            });
         });
     });
+    const place = {};
+    order.forEach((id, i) => { place[id] = i; });
+    const rank = id => (typeof byId[id].order === 'number' ? byId[id].order : 1000);
     const ids = order.filter(id => !byId[id].hidden && !hiddenAncestor(byId, id));
     const out = {};
-    ids.forEach(id => { out[id] = byId[id]; });
+    ids.forEach(id => { out[id] = normalise(byId[id]); });
+    // Siblings sorted, parents before children: order by the chain of positions.
+    const key = id => {
+        const chain = [];
+        for (let p = id; p; p = parentOf(p)) chain.unshift(p);
+        return chain.map(p => [out[p] ? rank(p) : 1000, place[p]]);
+    };
+    ids.sort((a, b) => {
+        const ka = key(a), kb = key(b);
+        for (let i = 0; i < Math.min(ka.length, kb.length); i++)
+            if (ka[i][0] !== kb[i][0] || ka[i][1] !== kb[i][1]) return ka[i][0] - kb[i][0] || ka[i][1] - kb[i][1];
+        return ka.length - kb.length;
+    });
     return { order: ids, byId: out };
+}
+function entriesOf(data) {
+    if (!data || typeof data !== 'object') return {};
+    return data.entries && typeof data.entries === 'object' && !Array.isArray(data.entries) ? data.entries : data;
+}
+
+// Shell actions by name, as the commands that do them (so the fallback and guards see them).
+var SHELL_ACTIONS = {
+    openView: a => a[0] === 'apps' ? ['arctic-shell-ipc', 'launcher', 'apps'] : ['arctic-shell-ipc', 'launcher', 'open'],
+    openGetApps: a => !a[0] || a[0] === 'choose' ? ['arctic-shell-ipc', 'apps', 'install']
+                      : /^remove/.test(a[0]) ? ['arctic-shell-ipc', 'apps', 'remove'] : ['arctic-shell-ipc', 'apps', 'source', a[0]],
+    openPanel: a => a[0] ? ['arctic-shell-ipc', 'panel', 'open', a[0]] : null,
+    openQuick: a => ['arctic-shell-ipc', 'quick', 'open', a[0] || ''],
+    toggleWallpapers: () => ['arctic-shell-ipc', 'wallpapers', 'toggle'],
+    toggleKeys: () => ['arctic-shell-ipc', 'keys', 'toggle'],
+    togglePower: () => ['arctic-shell-ipc', 'power', 'toggle'],
+    lock: () => ['arctic-lock'],
+    toggleBar: () => ['arctic-shell-ipc', 'bar', 'toggleHidden'],
+    openWelcome: () => ['arctic-welcome', '--again'],
+    settings: a => a[0] ? ['arctic-settings', a[0]].concat(a[1] ? [a[1]] : []) : null,
+    url: a => /^https:\/\/\S+$/.test(a[0] || '') ? ['xdg-open', a[0]] : null
+};
+
+// One entry in the form rows() reads: shell actions and sh lines as `run`, `target` as `go`,
+// object guards as when / needs / test / minOutputs.
+function normalise(e) {
+    const out = Object.assign({}, e);
+    if (typeof out.target === 'string' && !out.go) out.go = out.target;
+    if (typeof out.sh === 'string' && out.sh.trim() && out.run === undefined) out.run = out.sh;
+    if (typeof out.shell === 'string' && out.run === undefined) {
+        const make = SHELL_ACTIONS[out.shell];
+        const argv = make ? make(Array.isArray(out.args) ? out.args.map(String) : []) : null;
+        if (argv) {
+            out.run = argv;
+            if (argv[0] === 'arctic-shell-ipc' && !out.ipc) out.ipc = argv[1] + ' ' + argv[2];
+        }
+    }
+    const w = out.when;
+    if (w && typeof w === 'object' && !Array.isArray(w)) {
+        out.when = w.live === true ? 'live' : w.live === false ? 'installed' : '';
+        const needs = needsOf(out).slice();
+        if (typeof w.command === 'string' && w.command) needs.push(w.command);
+        out.needs = needs;
+        if (typeof w.file === 'string' && w.file) out.test = 'test -e ' + q(w.file) + (out.test ? ' && ( ' + out.test + ' )' : '');
+        if (typeof w.outputs === 'number') out.minOutputs = w.outputs;
+    }
+    return out;
 }
 function safeParse(text) {
     try { return parse(text); } catch (e) { return {}; }
@@ -168,6 +243,7 @@ function allowed(entry, ctx) {
     for (let i = 0; i < needs.length; i++) if (!ctx.commands[needs[i]]) return false;
     if (entry.ipc && !ctx.ipc[String(entry.ipc).trim().replace(/\s+/g, ' ')]) return false;
     if (typeof entry.test === 'string' && entry.test.trim() && !ctx.tests[entry.id]) return false;
+    if (typeof entry.minOutputs === 'number' && (ctx.outputs || 1) < entry.minOutputs) return false;
     return true;
 }
 
@@ -258,7 +334,7 @@ function trail(model, id) {
 // Where `menu open <path>` goes: {branch, select} (the row to select), or null if unknown.
 // A leaf opens its branch with it selected.
 function locate(model, path) {
-    const id = String(path || '').trim().replace(/[\s/>]+/g, '.').replace(/^\.+|\.+$/g, '').toLowerCase();
+    const id = String(path || '').trim().replace(/[\s/>]+/g, '.').replace(/_/g, '-').replace(/^\.+|\.+$/g, '').toLowerCase();
     if (!id || id === 'root') return { branch: '', select: '' };
     const e = model.byId[id];
     if (!e) return null;

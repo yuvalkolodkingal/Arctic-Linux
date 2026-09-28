@@ -8,8 +8,8 @@
 
 The menu is the shell's (arctic-shell-ipc menu toggle|toggleAt). Without the shell
 (ARCTIC_SHELL=waybar) its rows open in fuzzel instead, minus those that need the shell.
-The rows are the shell's menu/arctic-menu.json with ~/.config/arctic/menu.json merged over it
-by id; the Command Menu wiki page describes the format.
+The rows are the shell's menu/*.json files (in name order) with ~/.config/arctic/menu.json
+merged over them by id; the Command Menu wiki page describes the format.
 """
 import json
 import os
@@ -30,16 +30,57 @@ def parse(text):
     return data if isinstance(data, dict) else {}
 
 
-def load(paths):
-    """Merge the menu files in order: later files change fields by id; "hidden" removes."""
+def entries_of(data):
+    inner = data.get("entries")
+    return inner if isinstance(inner, dict) else data
+
+
+def normalise(entry):
+    """What the shell's MenuModel.normalise does, for the rows the fallback can run: `sh`
+    lines, `shell` actions that need no shell (settings, url) and object `when` guards."""
+    e = dict(entry)
+    if isinstance(e.get("sh"), str) and e["sh"].strip() and "run" not in e:
+        e["run"] = e["sh"]
+    args = [str(a) for a in e.get("args", [])] if isinstance(e.get("args"), list) else []
+    if e.get("shell") == "settings" and args and "run" not in e:
+        e["run"] = ["arctic-settings"] + args[:2]
+    elif e.get("shell") == "url" and args and re.fullmatch(r"https://\S+", args[0]) and "run" not in e:
+        e["run"] = ["xdg-open", args[0]]
+    elif e.get("shell") == "openWelcome" and "run" not in e:
+        e["run"] = ["arctic-welcome", "--again"]
+    when = e.get("when")
+    if isinstance(when, dict):
+        e["when"] = {True: "live", False: "installed"}.get(when.get("live"), "")
+        run = e.get("run")
+        needs = list(e["needs"]) if isinstance(e.get("needs"), list) else \
+            ([run[0]] if isinstance(run, list) and run else [])
+        if isinstance(when.get("command"), str):
+            needs.append(when["command"])
+        e["needs"] = needs
+        if isinstance(when.get("file"), str) and not os.path.exists(when["file"]):
+            e["hidden"] = True
+    return e
+
+
+def menu_files(shell):
+    folder = os.path.join(shell, "menu")
+    try:
+        names = sorted(n for n in os.listdir(folder) if n.endswith(".json"))
+    except OSError:
+        names = []
+    return [os.path.join(folder, n) for n in names]
+
+
+def load(paths, mine=None):
+    """Merge the menu files in order (then yours): later files change fields by id; "hidden"
+    removes; `sh` lines count only in yours."""
     by_id, order = {}, []
-    for i, path in enumerate(paths):
+    sources = [(p, False) for p in paths] + ([(mine, True)] if mine else [])
+    for path, yours in sources:
         try:
             with open(path, encoding="utf-8") as f:
-                data = parse(f.read())
+                data = entries_of(parse(f.read()))
         except (OSError, ValueError):
-            if i == 0:
-                raise
             continue
         for entry_id, fields in data.items():
             if not ID_RE.match(entry_id) or not isinstance(fields, dict):
@@ -47,7 +88,17 @@ def load(paths):
             if entry_id not in by_id:
                 by_id[entry_id] = {"id": entry_id}
                 order.append(entry_id)
-            by_id[entry_id].update({k: v for k, v in fields.items() if k != "id"})
+            by_id[entry_id].update({k: v for k, v in fields.items() if k != "id" and (yours or k != "sh")})
+    for entry_id in order:
+        by_id[entry_id] = normalise(by_id[entry_id])
+    place = {entry_id: i for i, entry_id in enumerate(order)}
+
+    def key(entry_id):
+        parts = entry_id.split(".")
+        chain = [".".join(parts[:n]) for n in range(1, len(parts) + 1)]
+        return [(by_id[c].get("order", 1000) if c in by_id and isinstance(by_id[c].get("order"), int) else 1000,
+                 place.get(c, 0)) for c in chain]
+    order.sort(key=key)
 
     def hidden(entry_id):
         parts = entry_id.split(".")
@@ -119,11 +170,11 @@ def main(argv):
         call = ["arctic-shell-ipc", "menu", "toggleAt", branch] if branch else ["arctic-shell-ipc", "menu", "toggle"]
         if subprocess.run(call, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
             return 0
-    try:
-        entries = load([os.path.join(shell_dir(), "menu", "arctic-menu.json"), os.path.join(CONFIG, "menu.json")])
-    except (OSError, ValueError) as e:
-        print("arctic-menu: can't read the menu: {}".format(e), file=sys.stderr)
+    files = menu_files(shell_dir())
+    if not files:
+        print("arctic-menu: can't find the menu (the shell's menu folder)", file=sys.stderr)
         return 1
+    entries = load(files, os.path.join(CONFIG, "menu.json"))
     choices = rows(entries, branch, is_live())
     if listing:
         for label, e in choices:

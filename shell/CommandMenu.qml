@@ -9,7 +9,7 @@ import "assets/Icons.js" as Icons
 
 // The command menu (Super + Alt + Space): every system action in one keyboard-driven tree
 // (Apps, Learn, Capture, Toggle, Style, Setup, Install, Remove, Update, System), after
-// Omarchy's menu. The rows are data (menu/arctic-menu.json, then ~/.config/arctic/menu.json)
+// Omarchy's menu. The rows are data (menu/*.json, then ~/.config/arctic/menu.json)
 // and MenuModel.js makes the tree; a row whose command isn't installed is hidden. Type to
 // search everything under the branch you're in. ↑/↓ move, Enter or → opens, ← or Backspace
 // goes up, Esc closes (from a branch it was opened at, e.g. Capture on Super + Ctrl + C).
@@ -23,10 +23,10 @@ Popover {
     property var model: MenuModel.build({}, {})
     property var ctx: MenuModel.context(false, false)
     property var pending: null
-    property string shippedText: ''
+    property var shippedFiles: []
     property string mineText: ''
     property var pendingRun: null
-    readonly property var view: Object.assign({}, ctx, { live: Session.live, dark: Theme.dark })
+    readonly property var view: Object.assign({}, ctx, { live: Session.live, dark: Theme.dark, outputs: Quickshell.screens.length })
     readonly property var extra: ({ settingsPages: SettingsIndex.pages })
     readonly property var rows: query.trim() ? MenuModel.search(model, branch, query, view, extra)
                                              : MenuModel.rows(model, branch, view, extra)
@@ -96,11 +96,12 @@ Popover {
 
     // ---- data and guards ----------------------------------------------------------------
     function rebuild() {
-        try {
-            model = MenuModel.build(MenuModel.parse(shippedText), mineText);
-        } catch (e) {
-            console.warn('Arctic: the command menu data has an error:', e);
-        }
+        // A shipped file with an error is left out (and said so), not the whole menu.
+        const files = [];
+        shippedFiles.forEach(text => {
+            try { files.push(MenuModel.parse(text)); } catch (e) { console.warn('Arctic: a command menu file has an error:', e); }
+        });
+        model = MenuModel.build(files, mineText);
     }
     onModelChanged: refreshGuards()
     // One sh script checks every guard and state; while it runs, what it has found so far is
@@ -143,10 +144,16 @@ Popover {
         }
     }
     Timer { id: publishSoon; interval: 30; onTriggered: menu.publish(false) }
-    FileView {
-        path: Quickshell.shellDir + '/menu/arctic-menu.json'
-        printErrors: false
-        onLoaded: { menu.shippedText = text(); menu.rebuild(); }
+    // Every menu/*.json, in name order, as one stream: "\x1e<name>" then the file.
+    Process {
+        command: ['sh', '-c', 'for f in "$1"/menu/*.json; do [ -f "$f" ] && printf "\\036%s\\n" "${f##*/}" && cat -- "$f"; done', 'sh', Quickshell.shellDir]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                menu.shippedFiles = text.split('\x1e').filter(part => part.trim() !== '').map(part => part.slice(part.indexOf('\n') + 1));
+                menu.rebuild();
+            }
+        }
     }
     FileView {
         path: Session.arcticConfig + '/menu.json'

@@ -14,7 +14,7 @@ import unittest
 
 REPO = Path(__file__).parents[2]
 HELPER = REPO / 'dotfiles' / '.local' / 'bin' / 'arctic-menu'
-SHIPPED = REPO / 'shell' / 'menu' / 'arctic-menu.json'
+SHIPPED = REPO / 'shell' / 'menu' / '00-arctic.json'
 
 
 def load():
@@ -59,13 +59,30 @@ class ArcticMenuTests(unittest.TestCase):
         mine.write_text(json.dumps({'capture.area': {'label': 'Snip'}, 'system': {'hidden': True},
                                     'mine': {'label': 'Mine'}, 'mine.hi': {'label': 'Hi', 'run': 'echo hi'},
                                     'mine.no': {'label': 'No', 'run': ['true'], 'test': 'false'}}))
-        entries = self.menu.load([str(SHIPPED), str(mine), str(self.root / 'missing.json')])
+        entries = self.menu.load([str(SHIPPED), str(self.root / 'missing.json')], str(mine))
         by_id = {e['id']: e for e in entries}
         self.assertEqual(by_id['capture.area']['label'], 'Snip')
         self.assertEqual(by_id['capture.area']['run'], ['arctic-screenshot', 'area'])
         self.assertNotIn('system.restart', by_id)
         rows = self.menu.rows(entries, 'mine', False, which=lambda c: True)
         self.assertEqual([label for label, _ in rows], ['Hi'])
+
+    def test_other_files_and_the_plans_fields(self):
+        other = self.root / '20-capture.json'
+        other.write_text(json.dumps({'version': 1, 'entries': {
+            'capture.first': {'label': 'First', 'icon': 'camera', 'run': ['arctic-screenshot', 'x'], 'order': 1},
+            'learn.tour': {'label': 'Tour', 'icon': 'compass', 'shell': 'url', 'args': ['https://example.org']},
+            'learn.evil': {'label': 'Evil', 'icon': 'x', 'sh': 'rm -rf ~'},
+            'learn.gone': {'label': 'Gone', 'icon': 'x', 'run': ['xdg-open', 'https://e.org'], 'when': {'file': '/nonexistent'}},
+        }}))
+        entries = self.menu.load([str(SHIPPED), str(other)])
+        have = {'arctic-screenshot', 'xdg-open', 'sh'}
+        capture = self.menu.rows(entries, 'capture', False, which=lambda c: c in have)
+        self.assertEqual(capture[0][1]['id'], 'capture.first')
+        learn = [e['id'] for _, e in self.menu.rows(entries, 'learn', False, which=lambda c: c in have)]
+        self.assertIn('learn.tour', learn)
+        self.assertNotIn('learn.evil', learn)
+        self.assertNotIn('learn.gone', learn)
 
     def test_list_prints_rows_without_the_shell(self):
         home = self.root / 'home'
