@@ -475,6 +475,28 @@ class ShortcutsTest(Home):
         # A release bind doesn't meet a press bind, a `c` bind lets the next one run too, and
         # another keymode is another set of keys.
 
+    def test_login_notices_are_said_once(self):
+        ids = lambda data: [n['id'] for n in data['notices']]     # noqa: E731
+        first = self.helper('notices')
+        self.assertEqual(ids(first), ['keys-0.3.0'])
+        self.assertEqual(first['notices'][0]['action'], ['arctic-keys'])
+        self.assertEqual(self.helper('notices')['notices'], [])
+        # A shortcut of yours that an Arctic key took over: said once, and again if that changes.
+        self.write_conf('user.conf', 'bind=SUPER,b,spawn,firefox\n')
+        shadow = self.helper('notices')['notices']
+        self.assertEqual(len(shadow), 1)
+        self.assertIn('“Browser” shortcut uses Super + B, so yours (firefox)', shadow[0]['body'])
+        self.assertEqual(self.helper('notices')['notices'], [])
+        self.write_conf('user.conf', 'bind=SUPER,b,spawn,firefox\nbind=SUPER+SHIFT,s,spawn,grim\n')
+        self.assertEqual(self.helper('notices')['notices'][0]['summary'], '2 of your shortcuts don’t run')
+        # Your own copy of binds.conf (not the link to Arctic's) doesn't get the new keys.
+        (self.share / 'mango').mkdir()
+        shutil.copy(DOTFILES / '.config/mango/arctic/binds.conf', self.share / 'mango/binds.conf')
+        self.assertEqual(self.helper('notices')['notices'], [])                  # the same file
+        with open(self.home / '.config/mango/arctic/binds.conf', 'a') as mine:
+            mine.write('bind=SUPER,x,spawn,foot\n')
+        self.assertEqual(ids(self.helper('notices')), ['copied-binds.conf-0.3.0'])
+
 
 class StartupTest(Home):
     def test_add_remove(self):

@@ -91,7 +91,8 @@ adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop.
 SDDM (theme `arctic`, greeter on mango or weston) → `mango.desktop` → `~/.config/mango/config.conf`
 (from /etc/skel). Autostart (`dotfiles/.config/mango/arctic/autostart.conf`):
 `arctic-theme apply`, `arctic-shell` (Quickshell: bar, launcher, wallpapers, OSD, lock, live
-welcome), `arctic-session mako|nm-applet|clipboard|idle`. The Quickshell polkit agent is used if
+welcome), `arctic-session mako|nm-applet|clipboard|idle`, `arctic-settings --check-binds` (once:
+where shortcuts moved, your shortcuts an Arctic key shadows). The Quickshell polkit agent is used if
 `Quickshell.Services.Polkit` works, else lxqt-policykit via `arctic-session polkit`.
 waybar/fuzzel configs stay in the dotfiles as a fallback (`ARCTIC_SHELL=waybar`).
 

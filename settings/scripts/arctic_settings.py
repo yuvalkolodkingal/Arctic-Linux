@@ -13,6 +13,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     undo                          put the previous settings.conf back (from the backups)
     binds                         the shortcut sheet (keys.txt), every bind in the config, yours
     bind-add MODS KEY COMMAND     add a shortcut that runs COMMAND (checked for clashes)
+    notices                       what to say once at login about shortcuts (arctic-settings --check-binds)
     bind-remove INDEX
     startup                       startup apps: yours (exec-once in settings.conf) and Arctic's
     startup-add COMMAND | --app DESKTOP-ID
@@ -946,6 +947,53 @@ def cmd_binds(paths, _args):
     shadowed = [dict(label=c['label'], what=c['what'], file=os.path.basename(c['file']), shadowedBy=c['shadowedBy'])
                 for c in binds if 'shadowedBy' in c and not arctic_file(paths, c['file'])]
     return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed)
+
+
+def cmd_notices(paths, _args):
+    """Things to say once, at login, about the shortcuts: where 0.3 moved the browser, your own
+    shortcuts that an Arctic key now shadows, and copies of Arctic's binds files that don't get
+    new keys. Each notice is said once (~/.local/state/arctic/notices.json)."""
+    state = paths.state / 'arctic' / 'notices.json'
+    try:
+        shown = set(json.loads(read_text(state) or '{}').get('shown', []))
+    except (ValueError, AttributeError):
+        shown = set()
+    notices = []
+    if 'keys-0.3.0' not in shown:
+        notices.append(dict(id='keys-0.3.0', summary='Super + B opens your browser',
+                            body='It was Super + W before Arctic Linux 0.3. Super + Shift + S takes a screenshot, '
+                                 'and Super + / shows every shortcut.',
+                            action=['arctic-keys'], actionLabel='Show shortcuts'))
+    shadowed = cmd_binds(paths, [])['shadowed']
+    if shadowed:
+        ident = 'shadowed-' + '|'.join(sorted('{}:{}'.format(s['label'], s['what']) for s in shadowed))
+        if ident not in shown:
+            s = shadowed[0]
+            notices.append(dict(
+                id=ident, summary='A shortcut of yours doesn’t run' if len(shadowed) == 1
+                else '{} of your shortcuts don’t run'.format(len(shadowed)),
+                body='Arctic’s “{}” shortcut uses {}, so yours ({}) never runs. Pick another key for it.'.format(
+                    s['shadowedBy'].get('sheet') or s['shadowedBy']['what'], s['label'], s['what']),
+                action=['arctic-settings', 'shortcuts'], actionLabel='Open Shortcuts'))
+    for name in ('apps.conf', 'binds.conf'):
+        mine, arctic = paths.mango / 'arctic' / name, paths.share / 'mango' / name
+        ident = 'copied-{}-0.3.0'.format(name)
+        if ident in shown or mine.is_symlink() or not mine.is_file() or not arctic.is_file():
+            continue
+        if read_text(mine) != read_text(arctic):
+            notices.append(dict(
+                id=ident, summary='Your copy of {} doesn’t have the new shortcuts'.format(name),
+                body='You replaced Arctic’s {} with your own copy, so the keys Arctic Linux 0.3 added '
+                     '(Super + B browser, Super + Shift + S screenshot, Alt + Tab) aren’t in it.'.format(name),
+                action=['gio', 'open', str(arctic)], actionLabel='Show the new file'))
+    if notices:
+        state.parent.mkdir(parents=True, exist_ok=True)
+        # The shadowed set is remembered as it is now, so a later change is said again.
+        kept = {i for i in shown if not i.startswith('shadowed-')} | {n['id'] for n in notices}
+        if not any(n['id'].startswith('shadowed-') for n in notices):
+            kept |= {i for i in shown if i.startswith('shadowed-')}
+        atomic_write(state, json.dumps(dict(shown=sorted(kept))) + '\n')
+    return dict(ok=True, notices=notices)
 
 
 def validate_command(command, what='command'):
@@ -2214,6 +2262,7 @@ def cmd_set_cursor(paths, args):
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
+    'notices': cmd_notices,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
     'displays': cmd_displays, 'display-try': cmd_display_try, 'display-keep': cmd_display_keep,
     'display-revert': cmd_display_revert, 'display-forget': cmd_display_forget, 'devices': cmd_devices,
