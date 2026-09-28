@@ -1,6 +1,7 @@
 // Updates: Arctic's updater (arctic-update): its state (idle, checking, downloading, ready,
 // failed), check now, restart and install, the channel and automatic downloads. Without
-// arctic-update this page says how to update instead.
+// arctic-update this page says how to update instead. "Apps and firmware": Flatpak apps (updated
+// daily in place by arctic-flatpak-update.timer, or now) and fwupd's firmware updates.
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -24,7 +25,17 @@ Page {
             }
         });
     }
-    onShown: load()
+    property var more: ({ available: false, flatpak: false, apps: null, firmware: { available: false, devices: [] } })
+    function loadMore() {
+        Backend.call(["more-updates"], r => { if (r.ok) page.more = r; }, true);
+    }
+    function when(iso) {
+        return iso ? String(iso).replace("T", " at ").replace(/:\d\d(\.\d+)?([+-]\d\d:\d\d|Z)?$/, "") : "";
+    }
+    onShown: {
+        load();
+        loadMore();
+    }
     Timer {
         interval: page.active ? 2000 : 15000
         repeat: true
@@ -98,6 +109,50 @@ Page {
                 title: typeof modelData === "string" ? modelData : (modelData.name || "")
                 desc: typeof modelData === "string" ? "" : (modelData.version || "")
                 resettable: false
+            }
+        }
+    }
+
+    Group {
+        visible: page.more.available === true && (page.more.flatpak === true || page.more.firmware.available === true)
+        title: "Apps and firmware"
+        SettingRow {
+            visible: page.more.flatpak === true
+            searchKey: "updates.apps"
+            title: "Flatpak apps"
+            desc: {
+                const a = page.more.apps;
+                const last = !a ? "" : a.state === "failed" ? a.message : (a.updated ? a.updated + (a.updated === 1 ? " app" : " apps") + " updated" : "Up to date") + ", " + page.when(a.checked_at) + ".";
+                return (last ? last + " " : "") + (page.more.auto ? "They’re updated every day; an open app gets the new version when you restart it." : "Update them here or with arctic-update flatpak.");
+            }
+            resettable: false
+            ArButton {
+                text: "Update apps now"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.call(["more-update-run", "apps"], r => {
+                    if (r.ok)
+                        Backend.notify("info", "Updating your apps. A notification says when they’re done.", false);
+                })
+            }
+        }
+        SettingRow {
+            visible: page.more.firmware.available === true
+            searchKey: "updates.firmware"
+            title: "Firmware"
+            desc: {
+                const d = page.more.firmware.devices || [];
+                if (d.length === 0)
+                    return "The firmware of this computer’s devices is up to date, as far as fwupd knows.";
+                return d.map(x => x.name + " " + x.version + " → " + x.update).join(", ") + "."
+                    + (d.some(x => x.reboot) ? " The computer restarts to install it; plug in the charger first." : "");
+            }
+            resettable: false
+            ArButton {
+                visible: (page.more.firmware.devices || []).length > 0
+                text: "Install in a terminal"
+                iconName: "terminal"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.call(["more-update-run", "firmware"], r => {})
             }
         }
     }

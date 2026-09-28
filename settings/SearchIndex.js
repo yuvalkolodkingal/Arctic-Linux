@@ -96,6 +96,8 @@ var ENTRIES = [
     ["updates", "updates.status", "Updates", "check now install restart"],
     ["updates", "updates.auto", "Download updates automatically", "automatic"],
     ["updates", "updates.channel", "Update channel", "stable testing beta"],
+    ["updates", "updates.apps", "Flatpak apps", "flathub app updates"],
+    ["updates", "updates.firmware", "Firmware", "fwupd bios uefi device updates"],
     ["power", "power.lock", "Lock the screen after", "idle timeout screensaver"],
     ["power", "power.suspend", "Suspend after", "sleep idle"],
     ["power", "power.profile", "Power mode", "performance balanced power saver battery"],

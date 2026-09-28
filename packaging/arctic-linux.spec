@@ -500,6 +500,8 @@ Recommends:     gutenprint-cups
 Recommends:     sane-airscan
 Recommends:     sane-backends-drivers-scanners
 Recommends:     simple-scan
+# Stream 5 (system): firmware updates (arctic-update firmware; also in @core).
+Requires:       fwupd
 # Stream 5 (system): phones (MTP, iPhone), cameras and network shares in Thunar (gvfs).
 Recommends:     gvfs
 Recommends:     gvfs-mtp
@@ -686,6 +688,9 @@ install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir
 install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
 install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
 install -Dpm 0644 packaging/systemd/arctic-update-restage.timer %{buildroot}%{_unitdir}/arctic-update-restage.timer
+# Stream 5 (system): Flatpak apps are updated daily too (arctic-update flatpak --auto).
+install -Dpm 0644 packaging/systemd/arctic-flatpak-update.service %{buildroot}%{_unitdir}/arctic-flatpak-update.service
+install -Dpm 0644 packaging/systemd/arctic-flatpak-update.timer %{buildroot}%{_unitdir}/arctic-flatpak-update.timer
 install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
 install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
 install -Dpm 0644 packaging/updates/snapper.actions \
@@ -950,9 +955,11 @@ done
 
 %post -n arctic-desktop-config
 %systemd_post arctic-firstboot.service arctic-update-stage.timer
+%systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
+%systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
@@ -962,6 +969,11 @@ done
 if [ ! -e %{_sharedstatedir}/arctic/.update-presets ]; then
   systemctl --no-reload preset arctic-update-stage.timer snapper-cleanup.timer >/dev/null 2>&1 || :
   mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.update-presets || :
+fi
+# Stream 5: the same once for the Flatpak update timer (new in 0.3).
+if [ ! -e %{_sharedstatedir}/arctic/.flatpak-update-preset ]; then
+  systemctl --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.flatpak-update-preset || :
 fi
 # Compile /etc/dconf/db/distro.d (the Arctic GTK/icon/cursor/font defaults).
 if [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
@@ -1106,6 +1118,8 @@ fi
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer
 %{_unitdir}/arctic-update-restage.timer
+%{_unitdir}/arctic-flatpak-update.service
+%{_unitdir}/arctic-flatpak-update.timer
 %{_libexecdir}/arctic/arctic-update-helper
 %config(noreplace) %{_sysconfdir}/arctic/update.conf
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions

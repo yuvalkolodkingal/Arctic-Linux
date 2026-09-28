@@ -10,6 +10,7 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
 | `update.conf` | `/etc/arctic/update.conf` (config) | `AUTO=download-and-install-on-reboot\|download-only\|off`, `METERED=skip\|allow` |
 | `../systemd/arctic-update-stage.{service,timer}` | `/usr/lib/systemd/system/` | The daily check, 10 minutes after boot and then daily; never on the live USB |
 | `../systemd/arctic-update-restage.timer` | `/usr/lib/systemd/system/` | The same check two minutes after a dnf transaction invalidated the downloaded updates |
+| `../systemd/arctic-flatpak-update.{service,timer}` | `/usr/lib/systemd/system/` | `arctic-update flatpak --auto`: Flatpak apps (the system installation) updated in place, daily, with the same AUTO and METERED settings; the result in `/var/lib/arctic/flatpak-status.json` (`status` shows it) |
 | `update.actions` | `/etc/dnf/libdnf5-plugins/actions.d/arctic-update.actions` (config) | dnf's post-transaction hook: `arctic-update after-transaction` |
 | `snapper.actions` | `/etc/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions` (config) | A snapper pre/post snapshot pair around every dnf transaction, once `/etc/snapper/configs/root` exists |
 | `test_arctic_update.py`, `testdata/fake-dnf5` | (not installed) | Unit tests of the helper and scenario tests of `arctic-update` with a scripted dnf5 under a scratch root (`ARCTIC_UPDATE_TEST_ROOT`): `python3 -m unittest discover -s packaging/updates` (also the spec's `%check` and CI) |

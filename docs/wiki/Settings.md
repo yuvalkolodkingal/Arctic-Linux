@@ -200,6 +200,8 @@ What's waiting, **Check now**, and **Restart and install** when updates have bee
 Under **How updates come**: **Download updates automatically** (in the background; they only
 install when you restart) and the **Channel**, Stable or Testing. These are the same as
 `arctic-update auto on|off` and `arctic-update channel stable|testing`; see [Updates](Updates).
+**Apps and firmware** shows how the daily update of your Flatpak apps went, with **Update apps
+now**, and the firmware updates fwupd has for this computer, with **Install in a terminal**.
 
 ## Power and lock
 

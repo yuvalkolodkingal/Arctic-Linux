@@ -71,6 +71,7 @@ if (( FIXTURES )); then
 #!/bin/sh
 # Test stand-in for arctic-update (settings/dev/headless.sh --fixtures).
 [ "$1" = status ] && echo '{"state":"ready","packages":["kernel-6.18.9","mesa-26.1.2","firefox-143.0","quickshell-0.2.1"],"download_mb":212.5,"staged_at":"2026-09-27T10:12:00Z","channel":"stable","auto":"on"}'
+[ "$1" = firmware ] && echo '{"available":true,"devices":[{"name":"System Firmware","vendor":"LENOVO","version":"0.1.40","update":"0.1.42","summary":"","reboot":true}],"error":""}'
 exit 0
 STUB
   chmod +x "$HOME/.local/bin/arctic-update"

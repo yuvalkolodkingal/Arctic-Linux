@@ -386,6 +386,35 @@ class DrivesTest(HelperHome):
         self.assertEqual(len(ran.read_text().splitlines()), 2)
 
 
+class MoreUpdatesTest(Home):
+    def test_missing(self):
+        data = self.helper('more-updates')
+        self.assertEqual((data['available'], data['firmware']['available']), (False, False))
+        self.helper('more-update-run', 'apps', ok=False)
+
+    def test_apps_and_firmware(self):
+        stub(self.bin, 'arctic-update', '''\
+            echo "arctic-update $*" >> "{}"
+            case "$1 $2" in
+              "status --json") echo '{{"state": "idle", "auto": "download-and-install-on-reboot", "apps": {{"state": "idle", "checked_at": "2026-09-28T10:00:00+00:00", "updated": 2, "message": "2 apps updated."}}}}' ;;
+              "firmware --json") echo '{{"available": true, "devices": [{{"name": "System Firmware", "version": "0.1.40", "update": "0.1.42", "summary": "", "vendor": "", "reboot": true}}], "error": ""}}' ;;
+            esac
+            '''.format(self.log))
+        stub(self.bin, 'flatpak', 'exit 0\n')
+        data = self.helper('more-updates')
+        self.assertEqual((data['flatpak'], data['auto'], data['apps']['updated']), (True, True, 2))
+        self.assertEqual(data['firmware']['devices'][0]['update'], '0.1.42')
+        self.helper('more-update-run', 'apps')
+        self.helper('more-update-run', 'firmware')
+        self.helper('more-update-run', 'kernel', ok=False)
+        for _ in range(50):
+            if 'arctic-update firmware install' in self.calls():
+                break
+            time.sleep(0.1)
+        self.assertIn('arctic-update flatpak --notify', self.calls())
+        self.assertIn('arctic-update firmware install', self.calls())
+
+
 LPSTAT = r'''
 echo "lpstat $* LC_ALL=$LC_ALL" >> "{log}"
 case "$*" in

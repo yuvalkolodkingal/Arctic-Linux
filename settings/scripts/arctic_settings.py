@@ -43,6 +43,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     printers | printer-default NAME | printer-cancel NAME          CUPS queues (lpstat, lpoptions)
     datetime [zones] [locales] | datetime-set timezone ZONE|ntp on|off|time T|locale LANG
                                   time zone, network time, the clock, the language (polkit)
+    more-updates | more-update-run apps|firmware  Flatpak apps and firmware (arctic-update)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -1967,6 +1968,39 @@ def cmd_datetime_set(paths, args):
     return cmd_datetime(paths, [])
 
 
+# ---- Flatpak apps and firmware (arctic-update flatpak | firmware) -------------------------------
+
+def cmd_more_updates(paths, _args):
+    """What arctic-update says about Flatpak apps (the last daily run) and firmware (fwupd)."""
+    result = dict(ok=True, available=bool(which('arctic-update', paths.env)),
+                  flatpak=bool(which('flatpak', paths.env)), apps=None, auto=False,
+                  firmware=dict(available=False, devices=[], error=''))
+    if not result['available']:
+        return result
+    code, out, _err = run(['arctic-update', 'status', '--json'], timeout=30)
+    data = _loads(out) if code == 0 else None
+    if isinstance(data, dict):
+        result.update(apps=data.get('apps'), auto=data.get('auto') == 'download-and-install-on-reboot')
+    code, out, _err = run(['arctic-update', 'firmware', '--json'], timeout=60)
+    firmware = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code == 0 and isinstance(firmware, dict):
+        result['firmware'] = firmware
+    return result
+
+
+def cmd_more_update_run(paths, args):
+    """more-update-run apps|firmware: update Flatpak apps now (a notification says how it went),
+    or install firmware in a terminal (fwupdmgr shows its progress and asks before restarting)."""
+    if args not in (['apps'], ['firmware']):
+        raise Failure('usage: more-update-run apps|firmware')
+    if not which('arctic-update', paths.env):
+        raise Failure('arctic-update isn’t installed.')
+    argv = ['arctic-update', 'flatpak', '--notify'] if args == ['apps'] else ['arctic-update', 'firmware', 'install']
+    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    return dict(ok=True, started=args[0])
+
+
 # ---- keyboard data ------------------------------------------------------------------------------
 
 # Layout-switch keys offered in Settings. Not Win+Space: Super + Space opens the launcher.
@@ -2438,12 +2472,14 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
            'ensure-source'}
 
 
-# Stream 5 (system): night light, keep awake, XDG autostart, printers, date and time.
+# Stream 5 (system): night light, keep awake, XDG autostart, printers, date and time,
+# Flatpak and firmware updates.
 COMMANDS.update({
     'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
     'autostart': cmd_autostart, 'autostart-set': cmd_autostart_set,
     'printers': cmd_printers, 'printer-default': cmd_printer_default, 'printer-cancel': cmd_printer_cancel,
     'datetime': cmd_datetime, 'datetime-set': cmd_datetime_set,
+    'more-updates': cmd_more_updates, 'more-update-run': cmd_more_update_run,
 })
 WRITERS |= {'nightlight-set', 'autostart-set'}
 
