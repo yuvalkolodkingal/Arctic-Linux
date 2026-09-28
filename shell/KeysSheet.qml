@@ -5,16 +5,25 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 
-// Keyboard shortcuts (Super + /): the cheat sheet from keys.txt, in a centred card.
+// Keyboard shortcuts (Super + /): the cheat sheet from keys.txt, in a centred card. Type to
+// find a shortcut by its keys or what it does; ↑/↓ scroll, Esc clears, then closes.
 // keys.txt is found in ~/.local/share/arctic, then /usr/share/arctic.
 Popover {
     id: sheet
     property var sections: []
+    property string query: ''
+    readonly property var matched: {
+        const q = query.trim().toLowerCase();
+        if (!q) return sections;
+        return sections.map(s => ({ title: s.title, rows: s.rows.filter(r => (r.keys + ' ' + r.what).toLowerCase().indexOf(q) >= 0) }))
+            .filter(s => s.rows.length > 0);
+    }
     layerName: 'arctic-keys'
     placement: 'center'
     cardWidth: Math.min(820, width - 48)
-    cardHeight: Math.min(layout.implicitHeight + 2 * Theme.space6, height - 48)
-    focusItem: flick
+    cardHeight: Math.min(760, height - 48)
+    focusItem: field
+    onOpened: field.text = ''
 
     function parse(text) {
         const out = [];
@@ -44,8 +53,57 @@ Popover {
         spacing: Theme.space4
         RowLayout {
             Layout.fillWidth: true
-            Text { text: 'Keyboard shortcuts'; color: Theme.ink; font.family: Theme.fontSans; font.pixelSize: 20; font.weight: Font.DemiBold; Layout.fillWidth: true }
+            spacing: Theme.space4
+            Text { text: 'Keyboard shortcuts'; color: Theme.ink; font.family: Theme.fontSans; font.pixelSize: 20; font.weight: Font.DemiBold }
+            // Find a shortcut: 36px search field, as small as the design's inputs.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: Theme.controlMd
+                radius: Theme.radiusMd
+                color: Theme.surfaceRaised
+                border.width: field.activeFocus ? 2 : 1
+                border.color: field.activeFocus ? Theme.focus : Theme.lineStrong
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.space3
+                    anchors.rightMargin: Theme.space3
+                    spacing: Theme.space2
+                    Icon { name: 'search'; size: 16; color: Theme.inkMuted }
+                    TextInput {
+                        id: field
+                        Layout.fillWidth: true
+                        color: Theme.ink
+                        font.family: Theme.fontSans
+                        font.pixelSize: 14
+                        selectionColor: Theme.selection
+                        selectedTextColor: Theme.ink
+                        clip: true
+                        focus: true
+                        Accessible.role: Accessible.EditableText
+                        Accessible.name: 'Find a shortcut'
+                        onTextChanged: { sheet.query = text; flick.contentY = 0; }
+                        Keys.onEscapePressed: { if (field.text) field.text = ''; else sheet.close(); }
+                        Keys.onDownPressed: flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY + 40))
+                        Keys.onUpPressed: flick.contentY = Math.max(0, flick.contentY - 40)
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: !field.text
+                            text: 'Find a shortcut'
+                            color: Theme.inkSubtle
+                            font: field.font
+                        }
+                    }
+                }
+            }
             ArcticButton { variant: 'ghost'; size: 'sm'; iconName: 'x'; iconOnly: true; label: 'Close  (Esc)'; onClicked: sheet.close() }
+        }
+        Text {
+            Layout.fillWidth: true
+            visible: sheet.query.trim() !== '' && sheet.matched.length === 0
+            text: 'No shortcut matches “' + sheet.query.trim() + '”'
+            color: Theme.inkMuted
+            font.family: Theme.fontSans
+            font.pixelSize: 13
         }
         Flickable {
             id: flick
@@ -66,7 +124,7 @@ Popover {
                 columnSpacing: Theme.space8
                 rowSpacing: Theme.space5
                 Repeater {
-                    model: sheet.sections
+                    model: sheet.matched
                     ColumnLayout {
                         id: section
                         required property var modelData

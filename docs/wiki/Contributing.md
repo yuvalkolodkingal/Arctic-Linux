@@ -12,7 +12,7 @@ Open an [issue](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) and inc
 - for installer problems, the log from **Save log to USB** (see
   [Troubleshooting](Troubleshooting#saving-the-installer-log));
 - for desktop problems, the output of `journalctl --user -b` or `arctic-shell --foreground`;
-- a screenshot (`Print` saves one to `~/Pictures/Screenshots`).
+- a screenshot (`Print` or `Super + Shift + S` saves one to `~/Pictures/Screenshots`).
 
 ## Before you change something
 
@@ -64,7 +64,10 @@ Run the same checks CI runs (see [Building from source](Building-from-Source#con
 go vet ./... && go test ./...                                   # engine
 python3 -m unittest discover -s shell/tests                      # shell helpers
 node shell/tests/test-launcher.cjs                               # launcher ranking, calculator
-node shell/tests/test-package-search.cjs                         # Get apps completion
+node shell/tests/test-package-search.cjs                         # Get apps completion and search
+node shell/tests/test-getapps.cjs                                # Get apps pages: cards, Esc, row states
+python3 -m unittest shell/tests/test_apps.py                     # apps.py, jobs, protected packages
+shell/tests/test-dnf5-remove.sh                                  # (container, root) Remove apps vs the real dnf5
 node shell/tests/test-icons.cjs                                  # launcher tiles (web apps keep their icon)
 # the web-app window (sudo dnf install gcc webkitgtk6.0-devel gtk4-devel libsoup3-devel sway grim):
 CGO_ENABLED=1 go vet -tags webkit ./... && go test -tags webkit ./internal/webkit/

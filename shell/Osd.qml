@@ -6,8 +6,8 @@ import Quickshell.Wayland
 
 // On-screen display for volume and brightness (design OSD): a 280×48 frosted pill,
 // bottom centre, 44px above the edge; 20px icon, 6px progress bar, value in tabular figures.
-// Muted shows the mute icon and 0. Visible for 1.2 s after the last change, then fades out
-// over duration-base. Volume follows PipeWire directly (any change, from keys or apps);
+// Muted shows the mute icon and 0. A keyboard-layout switch shows the layout's name instead of
+// the bar. Visible for 1.2 s after the last change, then fades out over duration-base. Volume follows PipeWire directly (any change, from keys or apps);
 // brightness is shown when `arctic-osd brightness …` calls `arctic-shell-ipc osd brightness`.
 Scope {
     id: osd
@@ -15,6 +15,7 @@ Scope {
     property int value: 0
     property bool muted: false
     property bool showing: false
+    property string label: ''           // the layout's name (kind 'layout')
     readonly property var screen: Outputs.focused
 
     function showVolume() {
@@ -24,6 +25,11 @@ Scope {
         kind = 'volume';
         muted = audio.muted;
         value = muted ? 0 : Math.round(audio.volume * 100);
+        reveal();
+    }
+    function showLayout(name) {
+        kind = 'layout';
+        label = name;
         reveal();
     }
     function showBrightness() {
@@ -50,6 +56,10 @@ Scope {
     Connections {
         target: AudioService
         function onChanged() { osd.showVolume(); }
+    }
+    Connections {
+        target: KeyboardService
+        function onSwitched(name) { osd.showLayout(name); }
     }
     Process {
         id: brightness
@@ -93,7 +103,7 @@ Scope {
             border.color: Theme.line
             opacity: osd.pillOpacity
             Accessible.role: Accessible.StatusBar
-            Accessible.name: (osd.kind === 'brightness' ? 'Brightness ' : 'Volume ') + osd.value + '%'
+            Accessible.name: osd.kind === 'layout' ? 'Keyboard layout ' + osd.label : (osd.kind === 'brightness' ? 'Brightness ' : 'Volume ') + osd.value + '%'
 
             RowLayout {
                 anchors.fill: parent
@@ -102,10 +112,11 @@ Scope {
                 spacing: Theme.space3
                 Icon {
                     size: 20
-                    name: osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
+                    name: osd.kind === 'layout' ? 'keyboard' : osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
                     color: Theme.ink
                 }
                 Rectangle {
+                    visible: osd.kind !== 'layout'
                     Layout.fillWidth: true
                     implicitHeight: 6
                     radius: 3
@@ -124,9 +135,12 @@ Scope {
                     }
                 }
                 Text {
-                    Layout.preferredWidth: 32
-                    horizontalAlignment: Text.AlignRight
-                    text: osd.value
+                    readonly property bool layout: osd.kind === 'layout'
+                    Layout.preferredWidth: layout ? -1 : 32
+                    Layout.fillWidth: layout
+                    horizontalAlignment: layout ? Text.AlignLeft : Text.AlignRight
+                    elide: Text.ElideRight
+                    text: layout ? osd.label : osd.value
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 13

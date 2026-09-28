@@ -175,6 +175,13 @@ sudo usermod --shell /bin/bash "$USER"         # bash
 
 Install fish first with `sudo dnf install fish` if you didn't pick it in the installer.
 
+## The drop-down terminal
+
+`Super + Alt + Enter` shows a terminal over your windows, 80 % of the screen wide; press it again
+to hide it (what runs in it keeps running). It's your terminal with the app id
+`org.arcticlinux.Dropdown`: kitty, foot, Alacritty or Ghostty. If yours can't set one (Konsole),
+the first of those that is installed is used.
+
 ## Other terminals
 
 If you picked another terminal in the installer (**Ghostty**, **Alacritty**, **foot** or

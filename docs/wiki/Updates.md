@@ -37,7 +37,7 @@ The card says how many updates there are and how big they are. **Restart and ins
 now (save your work first); **Later** closes the card, and the updates wait for your next restart.
 `arctic-shell-ipc updates toggle` opens the card from a key binding.
 
-If you install or remove software after the updates were downloaded (with `dnf` or Get apps),
+If you install or remove software after the updates were downloaded (with `dnf`, Get apps or Remove apps),
 they no longer fit the system exactly, so they aren't installed and the item disappears. Two
 minutes later Arctic Linux prepares them again, reusing what it already downloaded, and the item
 comes back; `arctic-update now` does it right away.

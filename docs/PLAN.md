@@ -177,7 +177,7 @@ Hooks are fixed scripts in the signed `arctic-installer` RPM.
 |---|---|---|
 | Bar | waybar (`ext/workspaces` module; Fedora's waybar 0.15 has no mango module) | mangobar |
 | Launcher | fuzzel | rofi (2.0, has Wayland support) |
-| Notifications | mako | dunst, SwayNotificationCenter |
+| Notifications | the Arctic shell's own server (Quickshell `NotificationServer`, 0.3); mako in the waybar fallback | dunst, SwayNotificationCenter |
 | Polkit agent | lxqt-policykit | mate-polkit, xfce-polkit |
 | Lock / idle | swaylock + swayidle | gtklock |
 | Wallpaper | swaybg | — |

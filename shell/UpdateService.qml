@@ -47,7 +47,9 @@ Singleton {
         failureNotified = UpdateStatus.failureKey(status);
         const file = Session.arcticCache + '/update-failure-notified';
         Quickshell.execDetached(['sh', '-c', 'mkdir -p "${1%/*}" && printf "%s\\n" "$2" > "$1"', 'sh', file, failureNotified]);
+        // x-arctic-alert: one of Arctic's own alerts, shown even under do not disturb.
         Quickshell.execDetached(['notify-send', '-a', 'Arctic Linux', '-u', 'critical', '-i', 'dialog-warning',
+                                 '-h', 'boolean:x-arctic-alert:true',
                                  'Updates weren\'t installed', UpdateStatus.failureNotification(status)]);
     }
     onStatusChanged: announceFailure()

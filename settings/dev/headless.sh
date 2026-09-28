@@ -20,8 +20,8 @@
 #                      right of that); screenshots stay of HEADLESS-1
 #   --fixtures         test data for screenshots: desktop entries for the default apps, the
 #                      installer's default-apps file, an arctic-update stand-in with updates
-#                      ready and an arctic-webapp stand-in with two web apps (none of it is used
-#                      outside this script)
+#                      ready, two apps that sent notifications and an arctic-webapp stand-in
+#                      with two web apps (none of it is used outside this script)
 #
 # Needs sway, grim, quickshell and python3 (wtype for `key`). Inside containers sway refuses a
 # binary with file capabilities, so a plain copy is used.
@@ -82,6 +82,10 @@ if (( FIXTURES )); then
 exit 0
 STUB
   chmod +x "$HOME/.local/bin/arctic-update"
+  # Apps that have sent notifications (the shell writes this), for Settings → Notifications.
+  mkdir -p "$HOME/.local/state/arctic/notifications"
+  printf '{"version":1,"apps":[{"key":"org.signal.Signal","app_name":"Signal","desktop_entry":"org.signal.Signal","last_seen":1790620000},{"key":"Firefox","app_name":"Firefox","last_seen":1790610000}]}\n' \
+    > "$HOME/.local/state/arctic/notifications/apps.json"
   # Web apps (stream 1): a stand-in arctic-webapp with two apps and kept sign-in data.
   cat > "$HOME/.local/bin/arctic-webapp" <<'STUB'
 #!/bin/sh

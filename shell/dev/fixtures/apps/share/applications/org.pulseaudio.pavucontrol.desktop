@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Volume Control
+Comment=Test fixture for screenshots
+Exec=pavucontrol
+Icon=pavucontrol

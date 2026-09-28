@@ -58,7 +58,7 @@ You start in the **Polar night** theme with the aurora wallpaper. From here:
 |---|---|
 | `Super + Space` | Open the launcher |
 | `Super + Enter` | Open a terminal (and meet the fox) |
-| `Super + W` | Open your browser |
+| `Super + B` | Open your browser |
 | `Super + /` | See every shortcut |
 | `Super + Shift + T` | Switch to the light Winter theme |
 
@@ -66,7 +66,7 @@ The [desktop tour](Desktop-Tour) walks through the rest.
 
 ## What's already set up
 
-- **Your apps**: the ones you ticked in the installer. `Super + Enter`, `Super + W`, `Super + E`
+- **Your apps**: the ones you ticked in the installer. `Super + Enter`, `Super + B`, `Super + E`
   and `Super + F` open the terminal, browser, editor and file manager you picked.
 - **Your language, keyboard layout, time zone and computer name.** The clock keeps itself right
   over the internet, unless you turned that off.

@@ -6,19 +6,25 @@ import Quickshell.Io
 
 // Arctic Linux desktop shell (Quickshell): the bar, screen frame, launcher with Get apps,
 // wallpaper picker, power menu, keyboard shortcuts, OSD, lock screen, polkit agent, the
-// "updates ready" notice and the live-session welcome. It grew out of a personal Quickshell setup (bar + Rofi-style launcher,
+// "updates ready" notice, the live-session welcome, and the notification server with its toasts
+// and centre. It grew out of a personal Quickshell setup (bar + Rofi-style launcher,
 // install console, wallpaper picker, docking popovers, screen frame) and is styled entirely
 // from the Arctic design tokens (Theme.qml).
 //
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
-//   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
+//   launcher toggle · wallpapers toggle · power toggle · osd volume|brightness
+//   apps install|remove|toggle · apps open|source <page> · apps search <page> <text> · apps uninstall <desktop-id>
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
+//   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory|reload
+//   keyboard next|set|menu
+//   clipboard toggle · emoji toggle · record open|refresh · share pick <fifo> · capture freeze|thaw
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, notificationCenter, keyboardPanel,
+         clipboard, emoji, sharePicker, recordDialog].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -31,9 +37,19 @@ ShellRoot {
         launcher.view = 'home';
         present(launcher, target);
     }
-    function openGetApps(screen) {
+    // Get apps on one of its pages (getapps/GetApps.js parsePage: choose, flatpak, dnf, web,
+    // terminal, remove[/tab], console), with `query` typed in its field.
+    function openGetApps(screen, page, query) {
         launcher.view = 'get';
-        if (launcher.open) launcher.openView('get'); else present(launcher, screen);
+        launcher.getPage = page || 'choose';
+        launcher.getQuery = query || '';
+        if (launcher.open) launcher.openView('get', launcher.getPage, launcher.getQuery); else present(launcher, screen);
+    }
+    // Remove an app by its desktop id: the launcher with the remove confirmation.
+    function uninstallEntry(screen, desktopId) {
+        if (!launcher.open) { launcher.view = 'home'; present(launcher, screen); }
+        else if (launcher.view !== 'home') launcher.openView('home');
+        launcher.askRemove(desktopId);
     }
     function openWallpapers(screen) { present(wallpapers, screen); }
     function toggleWallpapers(screen) {
@@ -53,8 +69,34 @@ ShellRoot {
         updates.pointX = x !== undefined ? x : (target ? target.width - 160 : 0);
         present(updates, target);
     }
+    // The notification centre, under the bar's bell (right-aligned when opened by a key).
+    function toggleNotifications(screen, x) {
+        const target = screen || Outputs.focused;
+        if (notificationCenter.open && notificationCenter.screen === target) { notificationCenter.close(); return; }
+        openNotifications(target, x);
+    }
+    function openNotifications(screen, x) {
+        const target = screen || Outputs.focused;
+        notificationCenter.pointX = x !== undefined ? x : (target ? target.width : 0);
+        present(notificationCenter, target);
+    }
+    // The keyboard-layout menu, under the bar's layout chip.
+    function toggleKeyboardMenu(screen, x) {
+        const target = screen || Outputs.focused;
+        if (keyboardPanel.open && keyboardPanel.screen === target) { keyboardPanel.close(); return; }
+        if (!KeyboardService.multiple) return;
+        keyboardPanel.pointX = x !== undefined ? x : (target ? target.width : 0);
+        present(keyboardPanel, target);
+    }
     function toggleKeys() {
         if (keys.open) keys.close(); else present(keys, null);
+    }
+    // Clipboard history (Super + V) and emoji (Super + Ctrl + E), on the focused screen.
+    function toggleClipboard() {
+        if (clipboard.open) clipboard.close(); else present(clipboard, null);
+    }
+    function toggleEmoji() {
+        if (emoji.open) emoji.close(); else present(emoji, null);
     }
     function lock() {
         closePopovers(null);
@@ -75,10 +117,20 @@ ShellRoot {
     PowerMenu { id: power; shell: shell }
     UpdatePopover { id: updates }
     KeysSheet { id: keys }
+    ClipboardPanel { id: clipboard }
+    EmojiPicker { id: emoji }
+    PowerKey { locked: lockScreen.secure }
+    SharePicker { id: sharePicker }
+    RecordDialog { id: recordDialog }
+    FrozenScreens { id: frozenScreens }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
-    PolkitDialog {}
+    PolkitDialog { id: polkit }
+    Binding { target: AppsService; property: 'polkitActive'; value: polkit.active }
+    NotificationCenter { id: notificationCenter }
+    Toasts { shell: shell }
+    KeyboardPanel { id: keyboardPanel }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
     IpcHandler {
@@ -94,7 +146,14 @@ ShellRoot {
     }
     IpcHandler {
         target: 'apps'
-        function install(): void { shell.openGetApps(null); }
+        function install(): void { shell.openGetApps(null, 'choose', ''); }
+        function remove(): void { shell.openGetApps(null, 'remove', ''); }
+        // choose|flatpak|dnf|web|terminal|remove|remove/<tab>|console; source takes the names
+        // flathub|fedora|web|terminal|console as well.
+        function open(page: string): void { shell.openGetApps(null, page, ''); }
+        function source(name: string): void { shell.openGetApps(null, name, ''); }
+        function search(page: string, text: string): void { shell.openGetApps(null, page, text); }
+        function uninstall(desktopId: string): void { shell.uninstallEntry(null, desktopId); }
         function toggle(): void { shell.toggleLauncher(null); }
     }
     IpcHandler {
@@ -131,10 +190,72 @@ ShellRoot {
         target: 'dnd'
         function refresh(): void { DndService.refresh(); }
     }
+    // `arctic-notify` and `arctic-dnd`. dnd(): on, off, toggle, 1h, tomorrow, status → on / off,
+    // or "unowned" when another daemon (or mako) has the notifications.
+    IpcHandler {
+        target: 'notifications'
+        function center(): void { shell.toggleNotifications(null, undefined); }
+        function toggle(): void { shell.toggleNotifications(null, undefined); }
+        function open(): void { if (!notificationCenter.open) shell.openNotifications(null, undefined); }
+        function close(): void { notificationCenter.close(); }
+        function dismiss(): void { NotificationService.dismissNewest(); }
+        function dismissAll(): void { NotificationService.dismissToasts(); }
+        function invoke(): void { NotificationService.invokeNewest(); }
+        function count(): int { return NotificationService.count; }
+        function history(): string { return NotificationService.historyLines(); }
+        function clearHistory(): void { NotificationService.clearAll(); }
+        function reload(): void { NotificationService.reloadConfig(); }
+        function dnd(mode: string): string {
+            if (!NotificationService.owned) return 'unowned';
+            return NotificationService.setDnd(mode);
+        }
+    }
+    IpcHandler {
+        target: 'keyboard'
+        function next(): void { KeyboardService.next(); }
+        function set(index: int): void { KeyboardService.set(index); }
+        function menu(): void { shell.toggleKeyboardMenu(null, undefined); }
+    }
     IpcHandler {
         target: 'updates'
         function toggle(): void { shell.toggleUpdates(null, undefined); }
         function refresh(): void { UpdateService.refresh(); }
+    }
+    IpcHandler {
+        target: 'clipboard'
+        function toggle(): void { shell.toggleClipboard(); }
+    }
+    IpcHandler {
+        target: 'emoji'
+        function toggle(): void { shell.toggleEmoji(); }
+    }
+    IpcHandler {
+        target: 'capture'
+        // arctic-screenshot: show the monitors as they were at the key press while you select an
+        // area (the picture already has any open popover in it), then take them away.
+        function freeze(dir: string): bool {
+            closePopoversSoon.restart();
+            return frozenScreens.freeze(dir);
+        }
+        function thaw(): void { frozenScreens.thaw(); }
+    }
+    Timer { id: closePopoversSoon; interval: 1; onTriggered: shell.closePopovers(null) }
+    IpcHandler {
+        target: 'share'
+        // arctic-share-picker (the screen-share portal's chooser) waits on this FIFO for the
+        // answer; false when the path isn't one it made.
+        function pick(reply: string): bool {
+            if (!sharePicker.start(reply)) return false;
+            shell.present(sharePicker, null);
+            return true;
+        }
+    }
+    IpcHandler {
+        target: 'record'
+        // arctic-record toggle, when nothing is recording: what to record, and which sound.
+        function open(): void { shell.present(recordDialog, null); }
+        // arctic-record started or stopped a recording (RecordService re-reads record.json).
+        function refresh(): void { RecordService.refresh(); }
     }
     IpcHandler {
         target: 'shell'

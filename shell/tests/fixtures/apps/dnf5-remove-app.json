@@ -1,0 +1,17 @@
+{
+  "rpms":[
+    {
+      "nevra":"t-app-1-1.noarch",
+      "action":"Remove",
+      "reason":"User",
+      "repo_id":"@System"
+    },
+    {
+      "nevra":"t-lib-1-1.noarch",
+      "action":"Remove",
+      "reason":"Clean",
+      "repo_id":"@System"
+    }
+  ],
+  "version":"1.0"
+}

@@ -154,7 +154,7 @@
 		<package name="selinux-policy-targeted"/>
 		<package name="policycoreutils"/>
 		<!-- Desktop odds and ends -->
-		<package name="google-noto-emoji-fonts"/>
+		<package name="google-noto-color-emoji-fonts"/>
 		<package name="adwaita-cursor-theme"/>
 		<package name="adwaita-icon-theme"/>
 		<package name="bash-completion"/>
