@@ -130,6 +130,8 @@ FocusScope {
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
                     elide: Text.ElideRight
                 }
             }
@@ -177,7 +179,7 @@ FocusScope {
             rowSpacing: Theme.space3
             Repeater {
                 model: page.small
-                delegate: Card { offset: page.big.length; Layout.fillWidth: true; Layout.preferredWidth: 1; implicitHeight: 56 }
+                delegate: Card { offset: page.big.length; Layout.fillWidth: true; Layout.preferredWidth: 1; implicitHeight: 64 }
             }
         }
         JobCard { Layout.fillWidth: true }
