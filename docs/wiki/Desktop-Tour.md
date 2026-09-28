@@ -22,7 +22,10 @@ A thin bar runs along the top of the screen.
 
 **Centre**
 
-- **The clock**, with the date: `Sun 27 Sep · 16:47`.
+- **The clock**, with the date: `Sun 27 Sep · 16:47`. Click it for a calendar (`Super + Ctrl + T`).
+- **Left of the clock**: "Mic", "Camera" or "Sharing" while an app records or shares the screen, and
+  small icons for modes that are on (night light, keep awake, VPN, a muted microphone).
+- **Right of the clock**: what's playing, while music or a video plays (`Super + Ctrl + M`).
 
 **Right**
 
@@ -31,15 +34,18 @@ A thin bar runs along the top of the screen.
 | **Install** (amber, live USB only) | Opens the installer | — |
 | **Restart to update** (amber, only while updates wait) | Shows the updates and **Restart and install**; see [Updates](Updates) | — |
 | **Bell** | Turns do not disturb on or off | Right-click brings back the last notification |
-| **Bluetooth** (only with a Bluetooth adapter) | Opens the Bluetooth manager | — |
-| **Tray icons** from running apps | The app's own action or menu | Scrolling is passed to the app |
-| **Network** | The network menu, to pick a Wi-Fi network | Right-click opens the connection editor |
-| **Volume** | Opens the volume mixer | Right-click mutes, scroll changes the volume |
-| **Battery** (only on laptops) | — | Hover to see time left or charging state |
+| **Bluetooth** (only with a Bluetooth adapter) | The Bluetooth menu: your devices, pairing (`Super + Ctrl + B`) | Right-click turns Bluetooth on or off |
+| **Tray icons** from running apps | The app's own action or menu | Right-click opens the menu, scrolling is passed to the app |
+| **Network** | The network menu: Wi-Fi, wired, VPN (`Super + Ctrl + W`) | Right-click opens **Settings → Network** |
+| **Volume** | The sound menu: outputs, microphone, a volume per app (`Super + Ctrl + A`) | Right-click mutes, scroll changes the volume |
+| **Battery** (only on laptops) | The battery menu: power mode, charge limit (`Super + Ctrl + P`) | Hover to see time left or charging state |
 | **Power** | Opens the power menu (`Super + Esc`) | — |
 
 Hover over any icon for a tooltip that names it and its shortcut. Anything your computer can't
-report (a battery on a desktop PC, Bluetooth without an adapter) is simply hidden.
+report (a battery on a desktop PC, Bluetooth without an adapter) is simply hidden. The menus, and
+**Quick settings** (`Super + A`) with its volume and brightness sliders and switches, are described
+in [Menus on the bar and Quick settings](Bar-Menus). `Super + Alt + B` lets you use the bar with
+the keyboard.
 
 ## The screen frame
 

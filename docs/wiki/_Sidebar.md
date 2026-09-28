@@ -8,6 +8,7 @@
 
 **Use it**
 - [Desktop tour](Desktop-Tour)
+- [Menus on the bar and Quick settings](Bar-Menus)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
 - [Settings](Settings)
 - [Apps and software](Apps-and-Software)
