@@ -44,8 +44,8 @@
 - **Every item on the bar opens Arctic's own menu**, in the desktop's style, instead of a separate
   app: see [Menus on the bar](Bar-Menus).
   - **Network:** Wi-Fi networks with their signal, the password asked right under the network,
-    hidden networks and company or school Wi-Fi (eduroam), VPN switches, airplane mode, and
-    **Share with a phone…** (a QR code of a saved network).
+    hidden networks and company or school Wi-Fi (eduroam), VPN switches, airplane mode, a
+    hotspot, and **Share with a phone…** (a QR code of a saved network).
   - **Bluetooth:** your devices with their battery, and pairing, with the codes in Arctic's own
     dialog.
   - **Sound:** where sound plays, the microphone, a volume for each app, and headphone or speaker

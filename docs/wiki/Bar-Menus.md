@@ -25,6 +25,10 @@ the bar.
 - Right-click a network (or press the Menu key, or `Delete` for forget) for **Disconnect**,
   **Share with a phone…** (a QR code a phone camera joins with; **Show password** if you'd rather
   type it), **Connect automatically** and **Forget this network**.
+- **Hotspot** (when your Wi-Fi card can do it) lets phones and laptops join your computer and
+  use its connection, usually the wired one. Arctic makes up a password the first time;
+  **Show the name and password…** shows them with a QR code. A Wi-Fi card can't join a network
+  and be a hotspot at once, so turning it on while you're on Wi-Fi asks first.
 - **VPN** switches appear when you have VPN or WireGuard connections. Import them in
   **Settings → Network** or with **Edit connections…**.
 - **Edit connections…** opens NetworkManager's connection editor for proxies, fixed addresses and
