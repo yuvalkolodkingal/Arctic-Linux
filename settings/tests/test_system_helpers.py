@@ -618,6 +618,15 @@ class DateTimeTest(Home):
         self.env['DENY'] = '1'
         self.assertIn('password', self.helper('datetime-set', 'timezone', 'UTC', ok=False)['error'])
 
+    def test_computer_name(self):
+        stub(self.bin, 'hostnamectl', 'echo "hostnamectl $*" >> "{}"\n'.format(self.log))
+        self.assertEqual(self.helper('hostname-set', 'yuval-laptop')['hostname'], 'yuval-laptop')
+        self.assertIn('hostnamectl set-hostname --static yuval-laptop', self.calls())
+        for bad in ('', '-laptop', 'laptop-', 'my laptop', 'a.b', 'x' * 64, '--help', 'ünï'):
+            with self.subTest(bad):
+                self.helper('hostname-set', bad, ok=False)
+        self.assertEqual(sum(c.startswith('hostnamectl') for c in self.calls()), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

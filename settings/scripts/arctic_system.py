@@ -342,6 +342,22 @@ def cmd_datetime_set(paths, args):
     return cmd_datetime(paths, [])
 
 
+# The computer's name: one network label (letters, digits and hyphens, not at the ends).
+RE_HOSTNAME = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
+
+
+def cmd_hostname_set(paths, args):
+    """hostname-set NAME: the static host name (hostnamectl, polkit), which the network (NAME.local)
+    and Bluetooth see."""
+    if len(args) != 1:
+        raise Failure('usage: hostname-set NAME')
+    name = args[0].strip()
+    if not RE_HOSTNAME.match(name):
+        raise Failure('Use letters, digits and hyphens (not at the start or end), up to 63 of them.')
+    _auth_run(['hostnamectl', 'set-hostname', '--static', name], paths, 'Changing the computer’s name')
+    return dict(ok=True, hostname=name)
+
+
 # ---- Flatpak apps and firmware (arctic-update flatpak | firmware) -------------------------------
 
 def cmd_more_updates(paths, _args):
@@ -715,7 +731,7 @@ COMMANDS = {
     'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
     'autostart': cmd_autostart, 'autostart-set': cmd_autostart_set,
     'printers': cmd_printers, 'printer-default': cmd_printer_default, 'printer-cancel': cmd_printer_cancel,
-    'datetime': cmd_datetime, 'datetime-set': cmd_datetime_set,
+    'datetime': cmd_datetime, 'datetime-set': cmd_datetime_set, 'hostname-set': cmd_hostname_set,
     'more-updates': cmd_more_updates, 'more-update-run': cmd_more_update_run,
     'lid': cmd_lid, 'lid-set': cmd_lid_set, 'effects': cmd_effects, 'effects-set': cmd_effects_set,
     'troubleshoot': cmd_troubleshoot,

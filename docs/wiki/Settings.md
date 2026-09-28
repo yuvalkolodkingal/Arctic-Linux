@@ -322,6 +322,9 @@ storage, and the versions of the window manager, shell and kernel. **Open the wi
 and **Report a problem** has **Copy details** (a summary of the above to paste into an issue) and
 **Open issues**.
 
+**Computer name** is what other computers and phones see on your network (as NAME.local) and
+over Bluetooth: letters, digits and hyphens; **Save** asks for your password.
+
 ## Users and sign-in
 
 Your **Picture** (from your Pictures folder; shown on the login and lock screens), your **Name**,

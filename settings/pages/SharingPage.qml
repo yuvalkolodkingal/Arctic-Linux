@@ -56,7 +56,7 @@ Page {
         SettingRow {
             visible: !!page.info.hostname
             title: "Name on the network"
-            desc: page.info.avahi ? "Other computers find it as " + page.info.mdnsName + "." : "Other computers see it as " + page.info.hostname + "."
+            desc: (page.info.avahi ? "Other computers find it as " + page.info.mdnsName + "." : "Other computers see it as " + page.info.hostname + ".") + " Change it in About."
             resettable: false
         }
     }

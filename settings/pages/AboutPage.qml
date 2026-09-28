@@ -107,8 +107,46 @@ Page {
             ArText { text: page.about.kernel || ""; size: 14; lh: 20; color: Theme.inkMuted; font.family: Theme.fontMono }
         }
         SettingRow {
+            visible: page.about.live === true
             title: "Computer name"
             ArText { text: page.about.hostname || ""; size: 14; lh: 20; color: Theme.inkMuted; font.family: Theme.fontMono }
+        }
+        // Stream 5: the name other computers and phones see (NAME.local, Bluetooth, LocalSend).
+        SettingRow {
+            searchKey: "about.hostname"
+            visible: page.about.live !== true
+            title: "Computer name"
+            desc: "What other computers and phones see on your network and over Bluetooth."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArInput {
+                    id: hostField
+                    width: 220
+                    text: page.about.hostname || ""
+                    maximumLength: 63
+                    accessibleName: "Computer name"
+                    readonly property bool valid: /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(text.trim())
+                    error: text.trim() === "" || valid ? "" : "Letters, digits and hyphens only"
+                    onAccepted: saveHost.clicked()
+                }
+                ArButton {
+                    id: saveHost
+                    text: "Save"
+                    enabled: hostField.valid && hostField.text.trim() !== (page.about.hostname || "")
+                    gapColor: Theme.surfaceRaised
+                    onClicked: {
+                        if (!enabled)
+                            return;
+                        Backend.call(["hostname-set", hostField.text.trim()], r => {
+                            if (r.ok) {
+                                page.about = Object.assign({}, page.about, { hostname: r.hostname });
+                                Backend.notify("success", "Computer name changed", false);
+                            }
+                        });
+                    }
+                }
+            }
         }
     }
 

@@ -138,6 +138,7 @@ var ENTRIES = [
     ["input", "input.im", "Input method", "chinese japanese korean pinyin mozc hangul ime fcitx cjk"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
     ["about", "about.software", "Software", "version mango quickshell kernel"],
+    ["about", "about.hostname", "Computer name", "hostname host name device name network bluetooth rename"],
     ["about", "about.help", "Help and feedback", "wiki issues bug report"],
     ["about", "about.troubleshoot", "If something stops working", "fix broken no sound wifi bluetooth restart reset shell bar"]
 ];
