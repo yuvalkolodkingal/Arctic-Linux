@@ -49,8 +49,9 @@ class SearchIndexTest(unittest.TestCase):
 
     def test_pages_exist(self):
         files = re.findall(r'file: "([A-Za-z]+\.qml)"', self.index)
-        # Every page in pages/ is in the rail, once (no fixed count: pages get added).
-        self.assertEqual(sorted(files), sorted(self.pages))
+        # Every page in pages/ is in the rail, once (no fixed count: pages get added). pages/
+        # also holds views opened from a page (WallhavenBrowser.qml), which aren't *Page.qml.
+        self.assertEqual(sorted(files), sorted(name for name in self.pages if name.endswith('Page.qml')))
 
     def test_entries_point_at_rows(self):
         keys = set()
