@@ -23,9 +23,11 @@ A thin bar runs along the top of the screen.
 **Centre**
 
 - **The clock**, with the date: `Sun 27 Sep · 16:47`. Click it for a calendar (`Super + Ctrl + T`).
-- **Left of the clock**: "Mic", "Camera" or "Sharing" while an app records or shares the screen, and
-  small icons for modes that are on (night light, keep awake, VPN, a muted microphone).
-- **Right of the clock**: what's playing, while music or a video plays (`Super + Ctrl + M`).
+- **Left of the clock**: "Mic", "Camera" or "Sharing" while an app records or shares the screen,
+  a red "Recording 01:23" while you record the screen (click it to stop), and small icons for
+  modes that are on (night light, keep awake, VPN, a muted microphone).
+- **Right of the clock**: the temperature, if you turned it on (**Settings → Appearance →
+  Weather**), and what's playing, while music or a video plays (`Super + Ctrl + M`).
 
 **Right**
 
@@ -46,7 +48,8 @@ Hover over any icon for a tooltip that names it and its shortcut. Anything your 
 report (a battery on a desktop PC, Bluetooth without an adapter) is simply hidden. The menus, and
 **Quick settings** (`Super + A`) with its volume and brightness sliders and switches, are described
 in [Menus on the bar and Quick settings](Bar-Menus). `Super + Alt + B` lets you use the bar with
-the keyboard.
+the keyboard, and `Super + Shift + Space` hides it until you press it again (see
+[Hiding the bar](Bar-Menus#hiding-the-bar)).
 
 ## The screen frame
 
