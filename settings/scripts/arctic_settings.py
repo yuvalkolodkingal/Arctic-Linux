@@ -304,6 +304,7 @@ OPTIONS = {
     # focus and layout
     'sloppyfocus': B + (1,), 'warpcursor': B + (1,), 'focus_on_activate': B + (1,),
     'new_is_master': B + (1,), 'default_mfact': ('float', 0.1, 0.9, 0.55),
+    'enable_hotarea': B + (0,), 'hotarea_corner': ('int', 0, 3, 2),
     # cursor
     'cursor_size': ('int', 12, 128, 24), 'cursor_theme': ('cursor', 0, 0, ''),
     'cursor_hide_timeout': ('int', 0, 600, 0),

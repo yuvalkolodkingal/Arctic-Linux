@@ -103,8 +103,9 @@ How windows sit on the screen, move and take focus. Changes show at once.
   corners, and whether a window on its own gets gaps and a border.
 - **Motion and effects:** window animations and their speed, the frosted bar, shadows, and
   dimming the windows you aren't using.
-- **Focus:** focus follows the mouse, the pointer follows the focus, and whether apps can bring
-  themselves forward (for example a browser when you click a link in another app).
+- **Focus:** focus follows the mouse, the pointer follows the focus, whether apps can bring
+  themselves forward (for example a browser when you click a link in another app), and a **hot
+  corner** that opens the overview when you push the pointer into it (off at first).
 - **Layout:** the layout every workspace starts in (`Super + N` still switches the one you're on),
   whether new windows open as the main window, and the width of the main area.
 

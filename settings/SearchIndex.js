@@ -52,6 +52,7 @@ var ENTRIES = [
     ["windows", "windows.dim", "Dim windows you aren’t using", "opacity unfocused inactive"],
     ["windows", "windows.focus", "Focus follows the mouse", "sloppy focus hover"],
     ["windows", "windows.warp", "Pointer follows the focus", "warp cursor"],
+    ["windows", "windows.hotcorner", "Hot corner", "overview corner mouse pointer"],
     ["windows", "windows.activate", "Apps can bring themselves forward", "activate urgent focus"],
     ["windows", "windows.layout", "Layout for every workspace", "tile scroller monocle grid dwindle tiling"],
     ["windows", "windows.master", "New windows open as the main window", "master stack"],

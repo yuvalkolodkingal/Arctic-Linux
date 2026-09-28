@@ -38,7 +38,8 @@ Page {
     }
     readonly property var windowKeys: ["gappih", "gappiv", "gappoh", "gappov", "borderpx", "border_radius", "smartgaps",
         "no_border_when_single", "animations", "layer_animations", "blur", "blur_layer", "shadows", "layer_shadows",
-        "unfocused_opacity", "sloppyfocus", "warpcursor", "focus_on_activate", "new_is_master", "default_mfact"].concat(speedKeys)
+        "unfocused_opacity", "sloppyfocus", "warpcursor", "focus_on_activate", "enable_hotarea", "hotarea_corner", "new_is_master",
+        "default_mfact"].concat(speedKeys)
     readonly property bool anyChanged: {
         for (let i = 0; i < windowKeys.length; i++)
             if (Backend.info(windowKeys[i]).set)
@@ -246,6 +247,30 @@ Page {
                 Accessible.name: "Apps can bring themselves forward"
                 checked: Backend.isOn("focus_on_activate")
                 onToggled: Backend.set({ focus_on_activate: checked ? 1 : 0 })
+            }
+        }
+        SettingRow {
+            searchKey: "windows.hotcorner"
+            title: "Hot corner"
+            desc: "Push the pointer into a corner of the screen to open the overview (Super + O)."
+            keys: ["enable_hotarea", "hotarea_corner"]
+            onResetRequested: Backend.reset(["enable_hotarea", "hotarea_corner"])
+            Row {
+                spacing: Theme.space3
+                ArSelect {
+                    visible: Backend.isOn("enable_hotarea")
+                    width: 180
+                    model: [{ value: "0", label: "Top left" }, { value: "1", label: "Top right" },
+                            { value: "2", label: "Bottom left" }, { value: "3", label: "Bottom right" }]
+                    value: String(Backend.num("hotarea_corner"))
+                    onActivated: v => Backend.set({ hotarea_corner: v })
+                }
+                RowSwitch {
+                    anchors.verticalCenter: parent.verticalCenter
+                    Accessible.name: "Hot corner"
+                    checked: Backend.isOn("enable_hotarea")
+                    onToggled: Backend.set({ enable_hotarea: checked ? 1 : 0 })
+                }
             }
         }
     }
