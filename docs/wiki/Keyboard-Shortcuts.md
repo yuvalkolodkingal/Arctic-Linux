@@ -1,7 +1,7 @@
 # Keyboard shortcuts
 
 Everything on the Arctic Linux desktop has a shortcut. Press `Super + /` to see the main ones on
-screen at any time.
+screen at any time, and type to find one (`screen`, `window`, `Alt`…).
 
 ![The keyboard shortcut sheet (Super + /)](images/keys.png)
 
