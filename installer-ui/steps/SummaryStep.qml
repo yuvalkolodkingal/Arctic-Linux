@@ -1,5 +1,6 @@
 // Step 9 — Ready to install (INSTALL_STEPS[8]). Rows from GetSummary with
-// "Change" links back to each step, the erase warning, and the one primary
+// "Change" links back to each step (an easy-to-guess disk passphrase or password is
+// noted in its row, so the warning doesn't grow), the erase warning, and the one primary
 // action: "Erase disk and install" / "Install alongside {OS}". Only a click (or
 // Enter/Space on the focused button) starts it, and only after a short wait: Enter
 // elsewhere on the page, a key held down or a double click from Apps do nothing.
@@ -101,7 +102,7 @@ StepPage {
         }
 
         // An answer the engine rejected when installing was asked for (for example a
-        // passphrase too weak): where to change it. The footer has the message.
+        // username the system already has): where to change it. The footer has the message.
         ArBanner {
             visible: Wizard.errorStep !== ""
             width: parent.width

@@ -1,0 +1,43 @@
+# CI profile: the HP Victus case in the QEMU test VM. tools/test-install.sh --test-hardware
+# nvidia-laptop makes the engine see an NVIDIA hybrid laptop (Intel iGPU + RTX 40), so the
+# NVIDIA and Intel media drivers are ticked, installed and akmods builds the NVIDIA module for
+# the new system's kernel (no card needed for that). --online-via-proxy gives the guest the
+# internet through the host's proxy. Encrypted, whole disk; few apps, so the run stays short.
+# The harness passes ARCTIC_LUKS_PASSPHRASE and ARCTIC_USER_PASSWORD and types the
+# passphrase at boot.
+
+description = "CI: NVIDIA laptop, online, encrypted, drivers built"
+
+[welcome]
+language = "en_US.UTF-8"
+
+[keyboard]
+layout = "us"
+variant = ""
+
+[timezone]
+timezone = "UTC"
+auto_time = true
+
+[disk]
+disk = ""
+mode = "erase"
+
+[encryption]
+enabled = true
+
+[account]
+full_name = "Arctic CI"
+username = "ci"
+hostname = "arctic-ci"
+autologin = false
+
+[apps]
+browser = ["zen"]
+editor = []
+terminal = ["kitty"]
+shell = ["zsh"]
+files = ["thunar"]
+office = []
+video = []
+extras = []

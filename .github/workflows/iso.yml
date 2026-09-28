@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v0.2.0-build.<run number>)
+        description: Release tag (default v0.2.1-build.<run number>)
         type: string
         default: ""
       boot_test:
@@ -52,7 +52,7 @@ jobs:
           # without it would install systems that never get Arctic updates. Forks (no secret)
           # still build, with the Arctic repositories disabled.
           ARCTIC_GPG_PUBLIC_KEY: ${{ secrets.ARCTIC_GPG_PUBLIC_KEY }}
-          ARCTIC_REQUIRE_GPG_KEY: ${{ github.repository == 'yuvalkolodkingal/O-Tism' && '1' || '0' }}
+          ARCTIC_REQUIRE_GPG_KEY: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && '1' || '0' }}
         run: |
           # Every build gets its own Release (1.<UTC commit time>.<UTC build time>.git<commit>):
           # the repository's builds of newer commits update the packages on the ISO.
@@ -113,7 +113,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SPLIT: ${{ steps.size.outputs.split }}
-          CANONICAL: ${{ github.repository == 'yuvalkolodkingal/O-Tism' }}
+          CANONICAL: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' }}
         run: |
           # A released ISO must install systems that get Arctic's updates.
           if [ "$CANONICAL" = true ] && ! grep -qx 'arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
@@ -123,7 +123,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v0.2.0-build.$GITHUB_RUN_NUMBER"
+            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v0.2.1-build.$GITHUB_RUN_NUMBER"
             pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
@@ -140,7 +140,7 @@ jobs:
             if grep -q '^arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
               echo "Updates: Fedora's packages come from Fedora's repositories, Arctic's own packages (desktop,"
               echo "shell, installer, branding, Mango) from the signed Arctic package repository,"
-              echo "https://yuvalkolodkingal.github.io/O-Tism/ (the stable channel; the testing channel is off)."
+              echo "https://yuvalkolodkingal.github.io/Arctic-Linux/ (the stable channel; the testing channel is off)."
             else
               echo "Updates: Fedora's packages update as usual. This ISO was built without the Arctic repository"
               echo "key, so the Arctic package repository is disabled on it."

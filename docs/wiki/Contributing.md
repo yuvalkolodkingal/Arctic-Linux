@@ -5,7 +5,7 @@ valuable as code.
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/yuvalkolodkingal/O-Tism/issues) and include:
+Open an [issue](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) and include:
 
 - what you did, what you expected and what happened instead;
 - your computer's model, and whether it starts in UEFI or BIOS mode;
@@ -16,10 +16,10 @@ Open an [issue](https://github.com/yuvalkolodkingal/O-Tism/issues) and include:
 
 ## Before you change something
 
-- **Read the contracts.** [`docs/BUILD-SPEC.md`](https://github.com/yuvalkolodkingal/O-Tism/blob/main/docs/BUILD-SPEC.md)
+- **Read the contracts.** [`docs/BUILD-SPEC.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/BUILD-SPEC.md)
   fixes the paths, package names, the engine ↔ UI protocol and the wizard steps that every
   component is built against. When a detail there turns out to be wrong on a real system, fix it
-  there first, then in the code. [`docs/PLAN.md`](https://github.com/yuvalkolodkingal/O-Tism/blob/main/docs/PLAN.md)
+  there first, then in the code. [`docs/PLAN.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/PLAN.md)
   explains why things are the way they are.
 - **Follow the design system.** Colours, sizes, radii and durations come from the tokens, never
   hard-coded values. See [Design system](Design-System) and `design/brand-book.md`.
@@ -99,7 +99,7 @@ change alters a screen.
 
 ## Editing this wiki
 
-The wiki is written in [`docs/wiki/`](https://github.com/yuvalkolodkingal/O-Tism/tree/main/docs/wiki)
+The wiki is written in [`docs/wiki/`](https://github.com/yuvalkolodkingal/Arctic-Linux/tree/main/docs/wiki)
 and published by the `wiki.yml` workflow when changes reach `main`. Edits made in GitHub's wiki
 editor are overwritten, so change the files in the repository instead:
 

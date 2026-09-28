@@ -84,7 +84,23 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   wallpaper picker (`Super + Shift + W`).
 - **Light or dark:** for the theme made from your wallpaper: Automatic (whatever suits the
   picture), Dark or Light.
-- **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers`.
+- **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers` (the same
+  list as the wallpaper picker). **Add pictures…** opens the file chooser; you can also drag
+  pictures here from Files. Added pictures are copied into `~/Pictures/Wallpapers` (only real
+  pictures: JPEG, PNG, WebP, BMP or GIF). Point at one of your own pictures to **rename** or
+  **delete** it (or select it and press `F2` or `Delete`). The picture in use can't be deleted.
+- **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
+  press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
+  pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at
+  least as large as your largest screen, in your screens' shapes. Click a picture for a larger
+  look, then **Download and set**: it's saved in `~/Pictures/Wallpapers/wallhaven` and becomes
+  your wallpaper, and with **Match colours to the wallpaper** on, the colours follow it. Nothing
+  is downloaded until you search. Without internet the section says so; the rest of Settings
+  works as usual. Wallhaven allows 45 searches a minute; Settings waits or tells you when to try
+  again.
+- **Wallhaven API key** (optional): with the key from your Wallhaven account (Settings → Account),
+  searches use your account's filters, and **NSFW** can be ticked. It's kept in
+  `~/.config/arctic/wallhaven.json`, which only you can read; **Remove** deletes it.
 - **Reduce motion:** windows and menus fade instead of moving, and the fox in the terminal stays
   still.
 - **Text size in apps:** 100% to 175% for GTK apps such as Files and most dialogs. The bar and
@@ -114,8 +130,30 @@ How windows sit on the screen, move and take focus. Changes show at once.
 
 ![The Displays page](images/settings-displays.png)
 
-Size, sharpness and position of each screen: **Use this display**, **Resolution**, **Refresh
-rate**, **Scale**, **Rotation**, **Position** and **Variable refresh rate**.
+**Arrangement** shows your screens as they sit next to each other, each drawn to scale. Drag one
+to where it is on your desk and let go: it snaps against the edge of another screen, and lines up
+with its top, bottom or middle when you drop it close to that. Screens always touch along an edge,
+because that's where the pointer crosses from one to the next, and they never overlap; a screen
+that was only touching the one you moved moves along with it. With the keyboard, press `Tab` until
+a screen is highlighted, then use the arrow keys.
+
+Click a screen to change it:
+
+- **Use this display:** switch it off or on. The last screen that's on can't be switched off.
+  A screen that's off is listed under the arrangement, so you can pick it and switch it back on.
+- **Main display:** the screen you start on when you log in. The pointer, your first windows,
+  the launcher and notifications appear there; the bar is on every screen. Arctic's window
+  manager starts at the top-left corner of the arrangement, so **Make main** moves the screen
+  there: it swaps places with the screen that was there. Dragging another screen to the far left
+  or top makes that one the main display instead, and the **Main** label moves with it.
+- **Resolution** and **Refresh rate.**
+- **Scale:** how big everything is drawn. The row says how large the desktop is at that scale,
+  for example a 2560 × 1600 screen at 150% gives a 1706 × 1066 desktop.
+- **Rotation:** portrait (90° or 270°), upside down, or mirrored.
+- **Variable refresh rate** for screens with FreeSync or G-Sync.
+
+If your screens overlap or have a gap between them when you open the page, Settings shows them
+lined up and says so; press **Apply** to use that.
 
 Press **Apply** and the change happens at once, with a question: **Keep these display
 settings?** If you don't press **Keep changes** within 15 seconds (for example because the screen
@@ -123,6 +161,11 @@ went black), the old layout comes back by itself. If Settings has closed in the 
 watchdog puts it back after 20 seconds. A kept layout is
 saved as `monitorrule` lines in `settings.conf`, listed under **Saved layout**; **Forget** removes
 it.
+
+Settings remembers one place per screen. If you use a laptop with different monitors, say at home
+and at work, each monitor keeps the place you last kept for it, unless that would put it on top of
+the layout you kept since; then it comes back to the right of your other screens, and you can
+drag it where you want once more.
 
 A display you switch off stays off only until you log out. That's on purpose: a saved "off" could
 leave a laptop's only screen dark the next time it starts without its dock.

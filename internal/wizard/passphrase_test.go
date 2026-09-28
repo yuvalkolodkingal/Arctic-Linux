@@ -42,6 +42,10 @@ func TestCheckPassphrase(t *testing.T) {
 		if got.OK != (c.score >= 2) {
 			t.Errorf("%q: ok=%v", c.text, got.OK)
 		}
+		// The warnings (never a refusal): the passphrase below Fair, the password below Weak.
+		if got.WeakPassphrase() != (c.score < 2) || got.WeakPassword() != (c.score < 1) {
+			t.Errorf("%q: weak passphrase %v, weak password %v", c.text, got.WeakPassphrase(), got.WeakPassword())
+		}
 	}
 	if l := CheckPassphrase("acid acorn acre aged").MeterLabel(); l != "Strong · 4 words" {
 		t.Errorf("meter label %q", l)
