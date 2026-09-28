@@ -18,6 +18,12 @@ It never touches the system. Knobs (environment):
                               "Something went wrong" view)
     ARCTIC_MOCK_SPEED=<f>     install speed multiplier (default 1.0 = about 40 s)
     ARCTIC_MOCK_LOG=<path>    append every request/response to this file
+    ARCTIC_MOCK_HW=none       no drivers found (default: an NVIDIA hybrid laptop, so the
+                              Apps step offers the NVIDIA and Intel drivers)
+    ARCTIC_MOCK_SECUREBOOT=0  Secure Boot off (default on: the Done step shows the key steps)
+    ARCTIC_MOCK_DROP=1        the connection drops when the install starts, so the drivers are
+                              put off to first boot (with Secure Boot: the "once your driver is
+                              installed" key steps)
 """
 
 import json
@@ -152,9 +158,9 @@ def load_catalog(root):
     categories, modules, system = [], [], []
     links = {}   # id -> (requires, conflicts), as the engine's catalog.Validate checks them
     for c in cat["category"]:
-        # id, name, choice ("one" | "any"), note, required, collapsed, role
+        # id, name, choice ("one" | "any"), note, required, collapsed, role, hardware
         categories.append((c["id"], c["name"], c["choice"], c.get("note", ""), bool(c.get("required")),
-                           bool(c.get("collapsed")), c.get("role", "app")))
+                           bool(c.get("collapsed")), c.get("role", "app"), bool(c.get("hardware"))))
         for mid in c["modules"]:
             with open(root / c["id"] / mid / "module.toml", "rb") as f:
                 m = tomllib.load(f)
@@ -181,6 +187,23 @@ def load_catalog(root):
 
 
 CATEGORIES, MODULES, SYSTEM, RUNTIMES, LINKS = load_catalog(CATALOG_DIR)
+
+# The mock machine is an NVIDIA hybrid laptop (like the engine's mock, hw.DefaultFixture):
+# Intel Iris Xe draws the screen, an RTX 4060 renders on demand, Secure Boot is on.
+# ARCTIC_MOCK_HW=none: no drivers found; ARCTIC_MOCK_SECUREBOOT=0: Secure Boot off.
+HAS_DRIVERS = ENV.get("ARCTIC_MOCK_HW", "") != "none"
+SECURE_BOOT = ENV.get("ARCTIC_MOCK_SECUREBOOT", "") != "0"
+# The drivers "detected" on it: id -> (tile, device, builds a kernel module)
+DRIVERS = {
+    "nvidia": ("driver-gpu", "NVIDIA GeForce RTX 4060 Max-Q / Mobile", True),
+    "intel-media": ("driver-media", "Intel Iris Xe Graphics", False),
+} if HAS_DRIVERS else {}
+# Hardware categories (drivers) offer only what was detected, with the device in the summary;
+# with nothing detected the section is left out, as the engine's catalog.MarkDetected does.
+HARDWARE = {c[0] for c in CATEGORIES if c[7]}
+MODULES = [m[:3] + (m[3].replace("{device}", DRIVERS[m[0]][1]),) + m[4:] if m[2] in HARDWARE else m
+           for m in MODULES if m[2] not in HARDWARE or m[0] in DRIVERS]
+CATEGORIES = [c for c in CATEGORIES if not c[7] or any(m[2] == c[0] for m in MODULES)]
 SUMMARY_APPS = 12   # like the engine's wizard.appList: the Summary doesn't scroll
 
 
@@ -191,6 +214,43 @@ def app_list(names):
 
 MOD = {m[0]: m for m in MODULES}
 OPTIONAL_GROUPS = {c[0] for c in CATEGORIES if c[5]}   # the collapsed "More apps" sections
+
+
+def is_driver(mid):
+    return mid in MOD and MOD[mid][2] == "drivers"
+
+
+def driver_text(mid, status, mok):
+    name, dev = MOD[mid][1], DRIVERS[mid][1]
+    if status == "deferred":
+        return f"The {name} for your {dev} is installed the first time Arctic Linux is online. Restart once more after that."
+    if mok and DRIVERS[mid][2]:
+        return f"The {name} for your {dev} starts once you’ve confirmed its key (below)."
+    return f"The {name} for your {dev} starts after you restart."
+
+
+def secure_boot_info(code, later=False):
+    # internal/wizard SecureBootSteps(code, later): later = the driver was put off to first boot
+    # (offline), and the engine keeps the code's hash for arctic-firstboot.
+    title = "One more step when the computer restarts"
+    intro = "Secure Boot is on, so this computer only starts drivers it trusts. The first time it restarts, confirm the key Arctic Linux signed your driver with:"
+    first = "Restart. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds."
+    if later:
+        title = "One more step once your driver is installed"
+        intro = "Secure Boot is on, so this computer only starts drivers it trusts. Your driver is installed the first time Arctic Linux is online; keep this code for the restart after that:"
+        first = "Restart once the driver is installed. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds."
+    return {
+        "code": code,
+        "title": title,
+        "intro": intro,
+        "steps": [
+            first,
+            "Choose “Enroll MOK”, then “Continue”, then “Yes”.",
+            f"Type the one-time code {code} with the number keys above the letters, then press Enter.",
+            "Choose “Reboot”. Your driver starts from now on.",
+        ],
+        "note": "Missed the blue screen? Arctic Linux still starts, only without the driver. Run “sudo mokutil --import /etc/pki/akmods/certs/public_key.der” in a terminal, pick any password, restart and type it there.",
+    }
 
 STEPS = [
     ("welcome", "Welcome to Arctic Linux", "This takes about 10 minutes. First, pick the language you'd like to use."),
@@ -248,6 +308,8 @@ class MockEngine:
         self.retry_event = threading.Event()
         self.retry_action = None
         self.fail_attempts = {}
+        self.done_drivers = []
+        self.done_secure_boot = None
         fatal = ENV.get("ARCTIC_MOCK_FATAL", "")
         self.fatal_left = int(fatal) if fatal.isdigit() else int(env_on("ARCTIC_MOCK_FATAL"))  # core failures to come
         self.speed = max(0.05, float(ENV.get("ARCTIC_MOCK_SPEED", "1") or 1))
@@ -297,10 +359,14 @@ class MockEngine:
         return {"steps": steps, "current": self.step_id()}
 
     def selected_ids(self):
+        """The ticked apps (not drivers: they aren't counted as apps)."""
         out = []
         for c in CATEGORIES:
-            out.extend(self.data["apps"]["selection"].get(c[0], []))
+            out.extend(i for i in self.data["apps"]["selection"].get(c[0], []) if not is_driver(i))
         return out
+
+    def selected_drivers(self):
+        return [i for i in self.data["apps"]["selection"].get("drivers", []) if is_driver(i)]
 
     def estimate(self, selection):
         # Like catalog.EstimateDownload: the ticked apps' first methods, the always-installed
@@ -320,10 +386,16 @@ class MockEngine:
             size = f"{b / 1000 ** 3:.1f}".rstrip("0").rstrip(".") + " GB"
         else:
             size = f"{(b + 500_000) // 1_000_000} MB"
-        n = len(ids)
-        noun = "app" if n == 1 else "apps"
-        label = f"{n} {noun} · {size} download" if b else f"{n} {noun} · nothing to download"
-        return {"apps": n, "bytes": b, "label": label}
+        n = sum(1 for i in ids if not is_driver(i))
+        drivers = len(ids) - n
+        count = f"{n} app{'s' if n != 1 else ''}"
+        if drivers:
+            count += f" + {drivers} driver{'s' if drivers != 1 else ''}"
+        label = f"{count} · {size} download" if b else f"{count} · nothing to download"
+        out = {"apps": n, "bytes": b, "label": label}
+        if drivers:   # omitempty, as the engine's Estimate
+            out["drivers"] = drivers
+        return out
 
     def disk(self, path=None):
         path = path or self.data["disk"]["disk"]
@@ -404,15 +476,21 @@ class MockEngine:
                        "encryption": self.data["encryption"].get("enabled", True)}
         elif sid == "apps":
             options = {"categories": [{"id": c[0], "name": c[1], "choice": c[2], "note": c[3], "required": c[4],
-                                       "rule": "Pick one" if c[2] == "one" else "Pick any", "collapsed": c[5]}
+                                       "rule": "Pick one" if c[2] == "one" else "Pick any", "collapsed": c[5],
+                                       **({"hardware": True} if c[7] else {})}
                                       for c in CATEGORIES],
                        "modules": [{"id": m[0], "name": m[1], "summary": m[3], "category": m[2], "default": m[4],
                                     "always": m[15], "tile": m[10], "icon": m[11], "download_mb": 0 if m[7] else m[5],
                                     "source": m[9], "method": m[6], "verified": m[13], "in_live_image": m[7],
-                                    "proprietary": m[14]} for m in MODULES]}
+                                    "proprietary": m[14],
+                                    **({"device": DRIVERS[m[0]][1]} if is_driver(m[0]) else {})} for m in MODULES]}
         elif sid == "done":
             first = (self.data["account"]["full_name"] or "").split(" ")[0]
             data = {"apps_installed": sum(1 for s in self.module_status.values() if s == "installed"), "first_name": first}
+            if self.done_drivers:
+                options["drivers"] = self.done_drivers
+            if self.done_secure_boot:
+                options["secure_boot"] = self.done_secure_boot
         return {"id": sid, "title": title, "help": help_, "data": data, "options": options}
 
     def validate(self, sid, data):
@@ -611,6 +689,12 @@ class MockEngine:
             {"step": "account", "label": "Account", "value": f"{acct['full_name']} ({acct['username']}) on {acct['hostname']}"},
             {"step": "apps", "label": "Apps", "value": app_list(apps) if apps else "No extra apps"},
         ]
+        if HAS_DRIVERS:
+            drivers = self.selected_drivers()
+            value = "; ".join(f"{MOD[i][1]} for your {DRIVERS[i][1]}" for i in drivers) or "None — your hardware keeps its open-source drivers"
+            if SECURE_BOOT and any(DRIVERS[i][2] for i in drivers):
+                value += ". Secure Boot is on: you’ll confirm the driver’s key once after restarting"
+            rows.append({"step": "apps", "icon": "cpu", "label": "Drivers", "value": value})
         return {"rows": rows, "warning": warning, "primary_label": primary}
 
     # ---- install simulation
@@ -735,6 +819,26 @@ class MockEngine:
                     break
                 # retry: loop again
 
+        # drivers: installed with the apps, then built for the kernel (akmods)
+        drivers = self.selected_drivers()
+        offline = not self.online()
+        # As the engine: with Secure Boot and an akmod driver there is a code either way;
+        # offline, the driver (and so the key) waits for first boot.
+        mok = SECURE_BOOT and any(DRIVERS[i][2] for i in drivers)
+        results = []
+        for i in drivers:
+            name, dev = MOD[i][1], DRIVERS[i][1]
+            status = "deferred" if offline else "installed"
+            if not offline:
+                self.progress(95, "apps", f"Installing the {name} for your {dev}…", "apps", eta(95))
+                self.sleep(0.6)
+                if DRIVERS[i][2]:
+                    self.progress(95, "apps", f"Building the {name} for this computer — this takes a few minutes…", "apps", eta(95))
+                    self.sleep(1.2)
+            results.append({"id": i, "name": name, "device": dev, "status": status, "text": driver_text(i, status, mok)})
+        self.done_drivers = results
+        self.done_secure_boot = secure_boot_info("".join(random.choice("0123456789") for _ in range(8)), later=offline) if mok else None
+
         for i in range(6):
             p = 95 + i
             self.progress(min(p, 100), "finalize", "Setting up your account…" if i < 3 else "Almost there — tidying up…", "finish", eta(p))
@@ -744,7 +848,12 @@ class MockEngine:
         self.current = STEP_IDS.index("done")
         first = (self.data["account"]["full_name"] or "").split(" ")[0]
         installed = sum(1 for s in self.module_status.values() if s == "installed")
-        self.emit({"event": "done", "apps_installed": installed, "first_name": first})
+        done = {"event": "done", "apps_installed": installed, "first_name": first}
+        if self.done_drivers:
+            done["drivers"] = self.done_drivers
+        if self.done_secure_boot:
+            done["secure_boot"] = self.done_secure_boot
+        self.emit(done)
 
     def resume(self, action, mid):
         if self.install_state != "attention":
@@ -814,6 +923,8 @@ class MockEngine:
             if method == "GetSummary":
                 return self.summary()
             if method == "Start":
+                if env_on("ARCTIC_MOCK_DROP"):
+                    self.wired, self.ssid = False, ""
                 return self.start()
             if method == "RetryModule":
                 return self.resume("retry", p.get("id"))

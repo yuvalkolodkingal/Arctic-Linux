@@ -1,0 +1,40 @@
+# NVIDIA's 580 series, the last driver for Maxwell, Pascal and Volta (GeForce GTX 750 to
+# GTX 1080 Ti, Titan V), from RPM Fusion nonfree (akmod-nvidia-580xx, 580.178.04 for
+# Fedora 44 on 2026-09-27). Built on the computer by akmods like nvidia.
+id = "nvidia-580xx"
+name = "NVIDIA driver (580 series)"
+short = "NVIDIA driver"
+summary = "NVIDIA’s driver for your {device}: full speed for games, video and 3D apps."
+category = "drivers"
+role = "graphics driver"
+default = true
+tile = "driver-gpu"
+icon = "cpu"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = ["nvidia"]
+
+# Maxwell (GM107 = 10de:1380, GM108M from 1340), Pascal (15f0–1d52) and Volta (1d81–1df6):
+# every device id from 1340 below Turing's 1e00. Kepler ends at 12ba.
+[[detect]]
+bus = "pci"
+vendor = "10de"
+class = ["0300", "0302"]
+device_min = "1340"
+device_max = "1dff"
+
+[akmod]
+name = "nvidia-580xx"
+module = "nvidia"
+
+[boot]
+kernel_args = ["rd.driver.blacklist=nouveau,nova_core", "modprobe.blacklist=nouveau,nova_core", "nvidia-drm.modeset=1"]
+luks_display_args = ["plymouth.use-simpledrm=1"]
+
+[[install]]
+method = "dnf"
+packages = ["akmod-nvidia-580xx", "xorg-x11-drv-nvidia-580xx-cuda", "libva-nvidia-driver"]
+repos = ["rpmfusion-free", "rpmfusion-nonfree"]
+runtime = "akmods"
+download_mb = 510

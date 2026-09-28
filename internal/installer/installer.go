@@ -62,6 +62,10 @@ type Installer struct {
 	deferred   []string
 	flatpakRan bool
 	bootNum    string // firmware boot entry this run created (removed again on failure)
+	// Drivers (drivers.go).
+	drvStatus   map[string]string
+	akmodsReady bool
+	mokImported bool // mokutil --import queued this run's key (revoked on failure)
 }
 
 type layout struct {
@@ -162,6 +166,7 @@ func (in *Installer) Run(ctx context.Context) error {
 // firmware boot entry this run created.
 func (in *Installer) cleanup(ctx context.Context) {
 	in.R.Note("cleanup after failure")
+	in.revokeMOK(ctx)
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{"-R", in.Opt.Target}, AllowFail: true})
 	if in.lay.luksName != "" {
 		in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=15"}, AllowFail: true})
@@ -1086,9 +1091,17 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	// 3. Download what the live image doesn't have. dnf/COPR modules go in one transaction.
 	var todo []*catalog.Module
 	for _, m := range resolved {
-		if !inLive(m) {
-			todo = append(todo, m)
+		if inLive(m) {
+			continue
 		}
+		// Without a connection a driver would only fail; arctic-firstboot installs it once
+		// the new system is online.
+		if m.IsHardware() && in.Job.Offline {
+			in.Rep.Logf("%s: offline, putting it off to first boot", m.ID)
+			in.deferred = append(in.deferred, m.ID)
+			continue
+		}
+		todo = append(todo, m)
 	}
 	extra := []string{in.langpack()}
 	if in.Job.Data.Disk.Mode == wizard.ModeAlongside {
@@ -1156,6 +1169,9 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 		}
 		step()
 	}
+	if err := in.finishDrivers(ctx); err != nil {
+		return err
+	}
 	if in.flatpakRan {
 		if err := in.write(in.tgt("/var/lib/flatpak/.fedora-initialized"), "", 0o644); err != nil {
 			return err
@@ -1192,7 +1208,7 @@ func (in *Installer) batchStatus(batch []*catalog.Module) string {
 
 // isApp reports whether a module is one of the apps the person ticked (progress, events).
 func (in *Installer) isApp(m *catalog.Module) bool {
-	return !m.Hidden && in.Job.Data.Apps.Selection.Contains(m.ID)
+	return !m.Hidden && !m.IsHardware() && in.Job.Data.Apps.Selection.Contains(m.ID)
 }
 
 // installWithAttention tries every method of a module; when all fail it asks the person
@@ -1202,6 +1218,8 @@ func (in *Installer) installWithAttention(ctx context.Context, m *catalog.Module
 		if in.isApp(m) {
 			in.t.Update(0, backend.InstallingStatus(in.cat, m))
 			in.Rep.Module(protocol.ModuleEvent{ID: m.ID, Name: m.Name, Status: protocol.ModDownloading})
+		} else if m.IsHardware() {
+			in.t.Update(0, backend.InstallingStatus(in.cat, m))
 		}
 		var lastErr error
 		for _, meth := range m.Install {
@@ -1296,6 +1314,18 @@ func (in *Installer) setupRepos(ctx context.Context, meth catalog.Install) error
 	}
 	for _, s := range meth.Swap {
 		from, to, _ := strings.Cut(s, "=")
+		// Only swap out a package of exactly that name (rpm -q matches names, not provides, as
+		// arctic-firstboot checks too). dnf swap resolves `from` through provides as well, so
+		// a name another package has absorbed (F44: mesa-dri-drivers provides
+		// mesa-va-drivers) would erase that package and everything that needs it.
+		res, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "rpm", Args: []string{"-q", "--quiet", from}, AllowFail: true}))
+		if err != nil {
+			return err
+		}
+		if res.ExitCode != 0 {
+			in.R.Note("%s isn’t installed: nothing to swap for %s", from, to)
+			continue
+		}
 		if err := in.chroot(ctx, Cmd{Name: "dnf", Args: []string{"swap", "-y", "--allowerasing", from, to}}); err != nil {
 			return err
 		}
@@ -1305,10 +1335,17 @@ func (in *Installer) setupRepos(ctx context.Context, meth catalog.Install) error
 
 func (in *Installer) dnfInstall(ctx context.Context, mods, ensure []*catalog.Module, extra []string, progress func(float64)) error {
 	var pkgs []string
+	akmod := false
 	for _, m := range mods {
 		p := m.Primary()
 		if err := in.setupRepos(ctx, p); err != nil {
 			return err
+		}
+		if m.AkmodName() != "" {
+			akmod = true
+			if err := in.prepareAkmods(ctx); err != nil {
+				return err
+			}
 		}
 		pkgs = append(pkgs, p.Packages...)
 	}
@@ -1318,11 +1355,15 @@ func (in *Installer) dnfInstall(ctx context.Context, mods, ensure []*catalog.Mod
 		}
 	}
 	pkgs = append(pkgs, extra...)
-	return in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), OnLine: func(l string) {
+	err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), OnLine: func(l string) {
 		if d, t, ok := ParseDNF(l); ok && progress != nil {
 			progress(float64(d) / float64(t))
 		}
 	}})
+	if akmod {
+		in.waitAkmods(ctx)
+	}
+	return err
 }
 
 func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth catalog.Install) error {
@@ -1336,11 +1377,20 @@ func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth 
 		if err := in.setupRepos(ctx, meth); err != nil {
 			return err
 		}
-		return in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, meth.Packages...), OnLine: func(l string) {
+		if m.AkmodName() != "" {
+			if err := in.prepareAkmods(ctx); err != nil {
+				return err
+			}
+		}
+		err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, meth.Packages...), OnLine: func(l string) {
 			if d, t, ok := ParseDNF(l); ok {
 				report(100 * d / t)
 			}
 		}})
+		if m.AkmodName() != "" {
+			in.waitAkmods(ctx)
+		}
+		return err
 	case catalog.MethodFlatpak:
 		in.flatpakRan = true
 		if !in.remoteDone[meth.Remote] {
@@ -1420,18 +1470,31 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	if len(in.deferred) > 0 {
 		// Version 2 carries each module's install methods, because the catalog leaves the
 		// installed system together with arctic-installer (arctic-firstboot reads this).
+		// Drivers also carry what happens after their packages are in: the akmod to build
+		// and the kernel arguments to add; mok_hash is the one-time code's hash for
+		// enrolling the akmods key when Secure Boot is on (pendingDriverKey).
 		type pendingModule struct {
-			ID      string            `json:"id"`
-			Name    string            `json:"name"`
-			Install []catalog.Install `json:"install"`
+			ID         string            `json:"id"`
+			Name       string            `json:"name"`
+			Install    []catalog.Install `json:"install"`
+			Akmod      *catalog.Akmod    `json:"akmod,omitempty"`
+			KernelArgs []string          `json:"kernel_args,omitempty"`
 		}
 		var mods []pendingModule
 		for _, id := range in.deferred {
 			if m := in.cat.Modules[id]; m != nil {
-				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install})
+				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install, Akmod: m.Akmod, KernelArgs: m.KernelArgs(in.lay.luks)})
 			}
 		}
-		b, _ := json.MarshalIndent(map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}, "", "  ")
+		doc := map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}
+		hashPath, err := in.pendingDriverKey(ctx)
+		if err != nil {
+			return err
+		}
+		if hashPath != "" {
+			doc["mok_hash"] = hashPath
+		}
+		b, _ := json.MarshalIndent(doc, "", "  ")
 		if err := in.write(in.tgt("/var/lib/arctic/pending.json"), string(b)+"\n", 0o644); err != nil {
 			return err
 		}

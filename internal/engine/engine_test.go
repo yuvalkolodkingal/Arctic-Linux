@@ -229,8 +229,17 @@ func fullWizard(t *testing.T, c *client) {
 	c.ok("Next", nil)
 	// Apps: add Steam so the mock fails it.
 	apps := c.ok("GetStep", map[string]any{"id": "apps"})
-	if apps["note"] != "8 apps · 2.1 GB download" {
+	// The mock is an NVIDIA hybrid laptop: NVIDIA's and Intel's drivers are offered first,
+	// ticked, and counted apart from the apps.
+	if apps["note"] != "8 apps + 2 drivers · 3 GB download" {
 		t.Fatalf("apps footer %v", apps["note"])
+	}
+	opts := apps["options"].(map[string]any)
+	if cat0 := opts["categories"].([]any)[0].(map[string]any); cat0["id"] != "drivers" || cat0["hardware"] != true {
+		t.Fatalf("first category %v", cat0)
+	}
+	if m0 := opts["modules"].([]any)[0].(map[string]any); m0["id"] != "nvidia" || m0["device"] != "NVIDIA GeForce RTX 4060 Max-Q / Mobile" || m0["default"] != true {
+		t.Fatalf("first module %v", m0)
 	}
 	c.ok("SetStep", map[string]any{"id": "apps", "data": map[string]any{"selection": map[string]any{"gaming": []string{"steam"}}}})
 	est := c.ok("EstimateDownload", map[string]any{"selection": map[string]any{
@@ -241,8 +250,13 @@ func fullWizard(t *testing.T, c *client) {
 	}
 	c.ok("Next", nil)
 	sum := c.ok("GetSummary", nil)
-	if sum["primary_label"] != "Erase disk and install" || len(sum["rows"].([]any)) != 7 {
+	rows := sum["rows"].([]any)
+	if sum["primary_label"] != "Erase disk and install" || len(rows) != 8 {
 		t.Fatalf("summary %v", sum)
+	}
+	if drv := rows[7].(map[string]any); drv["label"] != "Drivers" || drv["icon"] != "cpu" ||
+		drv["value"] != "NVIDIA driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile; Intel video acceleration for your Intel Iris Xe Graphics. Secure Boot is on: you’ll confirm the driver’s key once after restarting" {
+		t.Fatalf("drivers row %v", drv)
 	}
 	// Summary's primary button: Next moves to the install screen, Start begins.
 	if w := c.ok("Next", nil); w["current"] != "install" {
@@ -278,6 +292,16 @@ func TestFullSessionWithAttention(t *testing.T) {
 	if done["apps_installed"] != float64(8) || done["first_name"] != "Noa" {
 		t.Fatalf("done %v", done)
 	}
+	drivers := done["drivers"].([]any)
+	if len(drivers) != 2 || drivers[0].(map[string]any)["status"] != "installed" ||
+		drivers[0].(map[string]any)["text"] != "The NVIDIA driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile starts once you’ve confirmed its key (below)." {
+		t.Fatalf("done drivers %v", drivers)
+	}
+	sb := done["secure_boot"].(map[string]any)
+	code, _ := sb["code"].(string)
+	if len(code) != 8 || strings.Trim(code, "0123456789") != "" || !strings.Contains(sb["steps"].([]any)[2].(string), code) {
+		t.Fatalf("secure boot %v", sb)
+	}
 	w := c.ok("GetWizard", nil)
 	if w["current"] != "done" || w["state"] != "done" {
 		t.Fatalf("wizard after done %v", w)
@@ -285,6 +309,9 @@ func TestFullSessionWithAttention(t *testing.T) {
 	st := c.ok("GetStep", map[string]any{"id": "done"})
 	if st["help"] != "Everything is installed, including 8 apps. Welcome aboard, Noa." {
 		t.Fatalf("done help %v", st["help"])
+	}
+	if o := st["options"].(map[string]any); o["secure_boot"].(map[string]any)["code"] != code || len(o["drivers"].([]any)) != 2 {
+		t.Fatalf("done step options %v", o)
 	}
 	states := map[string]string{}
 	for _, m := range e.ModuleStates() {

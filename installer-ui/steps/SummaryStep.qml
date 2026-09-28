@@ -85,7 +85,8 @@ StepPage {
                 width: ListView.view.width
                 first: index === 0
                 hoverEnabled: false
-                iconName: page.icons[modelData.step] || "check"
+                // The engine names the icon (the Drivers row shares the apps step).
+                iconName: modelData.icon || page.icons[modelData.step] || "check"
                 title: modelData.label
                 desc: modelData.value
                 ArButton {

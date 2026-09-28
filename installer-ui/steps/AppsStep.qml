@@ -291,7 +291,8 @@ StepPage {
         id: search
         width: page.width
         iconName: "search"
-        placeholder: "Search " + page.modules.length + " apps"
+        // Drivers (the hardware section) are searchable but not counted as apps.
+        placeholder: "Search " + page.modules.filter(m => !page.categories.some(c => c.hardware && c.id === m.category)).length + " apps"
         accessibleName: "Search apps"
         text: page.query
         onEdited: page.query = text

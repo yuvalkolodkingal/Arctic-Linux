@@ -276,6 +276,12 @@ Requires:       openssl
 Requires:       NetworkManager
 Requires:       flatpak
 Requires:       dnf5
+# Drivers: device names for the Apps step (pci.ids), grubby for their kernel arguments and
+# mokutil to queue the akmods key for enrolment when Secure Boot is on. The installed system
+# is a copy of the live image, so mokutil stays for arctic-firstboot when this package goes.
+Requires:       hwdata
+Requires:       grubby
+Requires:       mokutil
 %{?systemd_requires}
 
 %description -n arctic-installer

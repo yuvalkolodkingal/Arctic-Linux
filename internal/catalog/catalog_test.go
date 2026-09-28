@@ -63,13 +63,21 @@ func TestDesignTiles(t *testing.T) {
 		podman podman-desktop distrobox gnome-boxes virt-manager waydroid
 		flathub bazaar flatseal mission-center gnome-disks pika-backup file-roller btrfs-assistant`)
 	var got []string
+	var drivers []string
 	for _, m := range c.Modules {
-		if !m.Hidden {
+		switch {
+		case m.IsHardware():
+			drivers = append(drivers, m.ID)
+		case !m.Hidden:
 			got = append(got, m.ID)
 		}
 	}
 	sort.Strings(got)
 	sort.Strings(want)
+	sort.Strings(drivers)
+	if strings.Join(drivers, " ") != "amd-video broadcom-wl intel-media nvidia nvidia-580xx" {
+		t.Fatalf("drivers %v", drivers)
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("visible modules\n got %v\nwant %v", got, want)
 	}
@@ -87,15 +95,16 @@ func TestDesignTiles(t *testing.T) {
 	for _, cat := range c.Categories {
 		cats = append(cats, cat.ID+":"+cat.Choice)
 	}
-	wantCats := "browser:one editor:any terminal:one shell:one files:any office:one video:any " +
+	wantCats := "drivers:any browser:one editor:any terminal:one shell:one files:any office:one video:any " +
 		"music:any photos:any graphics:any recording:any chat:any email:any notes:any reading:any " +
 		"gaming:any security:any sync:any dev:any containers:any extras:any"
 	if strings.Join(cats, " ") != wantCats {
 		t.Fatalf("categories %v", cats)
 	}
-	// The design's seven sections stay open; the optional groups start folded and tick nothing.
+	// The drivers section and the design's seven sections stay open; the optional groups
+	// start folded and tick nothing.
 	for i, cat := range c.Categories {
-		if cat.Collapsed != (i >= 7) {
+		if cat.Collapsed != (i >= 8) {
 			t.Errorf("%s: collapsed = %v", cat.ID, cat.Collapsed)
 		}
 		if cat.Collapsed {
@@ -129,7 +138,8 @@ func TestTileAssets(t *testing.T) {
 		if m.Icon == "" || !strings.Contains(string(icons), "\n \""+m.Icon+"\": ") {
 			t.Errorf("%s: icon %q is not in Icons.js ICONS", id, m.Icon)
 		}
-		if !strings.Contains(string(icons), "\n \""+id+"\": {") {
+		// Driver tiles are shared (driver-gpu, driver-media, driver-wifi), not per-app designs.
+		if !m.IsHardware() && !strings.Contains(string(icons), "\n \""+id+"\": {") {
 			t.Errorf("%s: no APPS entry in Icons.js", id)
 		}
 	}
@@ -163,6 +173,7 @@ func TestDefaults(t *testing.T) {
 		"files": {"yazi", "thunar"}, "office": {"collabora"}, "video": {"vlc"},
 		"music": {}, "photos": {}, "graphics": {}, "recording": {}, "chat": {}, "email": {}, "notes": {},
 		"reading": {}, "gaming": {}, "security": {}, "sync": {}, "dev": {}, "containers": {}, "extras": {},
+		"drivers": {}, // nothing detected
 	}
 	if !reflect.DeepEqual(sel, want) {
 		t.Fatalf("defaults\n got %v\nwant %v", sel, want)

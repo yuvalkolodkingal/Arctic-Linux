@@ -57,7 +57,8 @@ type Config struct {
 }
 
 // Env reads mock tuning from the environment: ARCTIC_MOCK_SPEED, ARCTIC_MOCK_FAIL
-// (module id or "none"), ARCTIC_MOCK_FATAL=1, ARCTIC_MOCK_WIRED=1, ARCTIC_MOCK_FIRMWARE.
+// (module id or "none"), ARCTIC_MOCK_FATAL=1, ARCTIC_MOCK_WIRED=1, ARCTIC_MOCK_FIRMWARE,
+// ARCTIC_MOCK_HW (a hw.Fixtures name) and ARCTIC_MOCK_SECUREBOOT=0.
 func (c *Config) Env() {
 	if v, err := strconv.ParseFloat(os.Getenv("ARCTIC_MOCK_SPEED"), 64); err == nil && v > 0 {
 		c.MockOptions.Speed = v
@@ -73,6 +74,12 @@ func (c *Config) Env() {
 	}
 	if v := os.Getenv("ARCTIC_MOCK_FIRMWARE"); v == "uefi" || v == "bios" {
 		c.MockOptions.Firmware = v
+	}
+	if v := os.Getenv("ARCTIC_MOCK_HW"); v != "" {
+		c.MockOptions.Hardware = v
+	}
+	if os.Getenv("ARCTIC_MOCK_SECUREBOOT") == "0" {
+		c.MockOptions.NoSecureBoot = true
 	}
 }
 

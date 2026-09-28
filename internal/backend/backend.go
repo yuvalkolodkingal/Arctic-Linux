@@ -36,6 +36,9 @@ type Backend interface {
 	// ConnectWifi returns a *protocol.Error with code auth or timeout on failure.
 	ConnectWifi(ctx context.Context, ssid, password string) error
 	DetectTimezone(ctx context.Context) wizard.Detected
+	// Hardware lists the PCI devices and the Secure Boot state (driver detection). The real
+	// backend reads sysfs and efivarfs; the mock returns a fixture (an NVIDIA hybrid laptop).
+	Hardware(ctx context.Context) hw.Hardware
 	// Install runs the whole install and reports through r. It returns nil when the system
 	// is installed (optional apps may have been skipped or deferred) and an error for a
 	// fatal failure.
@@ -79,10 +82,59 @@ type Job struct {
 	Catalog  *catalog.Catalog
 	Secrets  *Secrets
 	LogPath  string
+	// Hardware is what the engine detected (Secure Boot decides the key enrolment).
+	Hardware hw.Hardware
+	// Offline is set when the computer had no internet connection at Start: drivers are then
+	// put off to first boot straight away instead of failing one download after another.
+	Offline bool
+	// MOKCode is the one-time password for enrolling the driver signing key when Secure Boot
+	// is on and a driver is built on the computer ("" otherwise). It is shown on the Done
+	// screen; the install only ever handles its SHA-512 crypt hash.
+	MOKCode string
+	// Outcome is filled in by Install for the Done screen (drivers, key enrolment).
+	Outcome Outcome
 }
 
-// Apps returns the visible modules the job installs (what "9 apps" counts).
+// Outcome is what an install reports beyond progress events.
+type Outcome struct {
+	Drivers []DriverOutcome
+	// MOK is MOKNone, MOKRequested (enrolment waits for the restart; pending at first boot
+	// when the driver was put off) or MOKFailed (mokutil refused).
+	MOK string
+}
+
+// DriverOutcome is what happened to one driver (protocol.DriverInstalled, …).
+type DriverOutcome struct {
+	ID     string
+	Status string
+}
+
+// Key enrolment states (Outcome.MOK).
+const (
+	MOKNone      = ""
+	MOKRequested = "requested"
+	MOKFailed    = "failed"
+)
+
+// Apps returns the visible modules the job installs (what "9 apps" counts; not drivers).
 func (j *Job) Apps() []*catalog.Module { return j.Catalog.Apps(j.Data.Apps.Selection) }
+
+// Drivers returns the drivers the job installs.
+func (j *Job) Drivers() []*catalog.Module { return j.Catalog.Drivers(j.Data.Apps.Selection) }
+
+// NeedsMOK reports whether the job builds a kernel module on a machine that enforces Secure
+// Boot, so the akmods signing key has to be enrolled.
+func (j *Job) NeedsMOK() bool {
+	if !j.Hardware.SecureBoot || j.Firmware != "uefi" {
+		return false
+	}
+	for _, m := range j.Drivers() {
+		if m.AkmodName() != "" {
+			return true
+		}
+	}
+	return false
+}
 
 // Decision answers an attention event.
 type Decision int

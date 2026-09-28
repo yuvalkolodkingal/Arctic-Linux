@@ -3,7 +3,9 @@
 //
 // Everything the installer can put on a system is a module. Visible modules are the app tiles
 // of the design's Ninite-style picker; hidden modules under modules/_system are always
-// installed. Profiles and API input only ever name module ids — never commands.
+// installed. Modules of a hardware category (drivers) carry [[detect]] rules and are only
+// offered when MarkDetected finds a matching device. Profiles and API input only ever name
+// module ids — never commands.
 package catalog
 
 import (
@@ -30,12 +32,15 @@ const (
 
 // Category is one picker section (design CATEGORIES).
 type Category struct {
-	ID       string   `toml:"id" json:"id"`
-	Name     string   `toml:"name" json:"name"`
-	Choice   string   `toml:"choice" json:"choice"` // one | any
-	Required bool     `toml:"required" json:"required"`
-	Note     string   `toml:"note" json:"note"`
-	Role     string   `toml:"role" json:"role"` // used in "Installing Zed, your code editor…"
+	ID       string `toml:"id" json:"id"`
+	Name     string `toml:"name" json:"name"`
+	Choice   string `toml:"choice" json:"choice"` // one | any
+	Required bool   `toml:"required" json:"required"`
+	Note     string `toml:"note" json:"note"`
+	Role     string `toml:"role" json:"role"` // used in "Installing Zed, your code editor…"
+	// Hardware categories (drivers) list modules that are offered only when their [[detect]]
+	// rules match this computer; the category is left out of the picker otherwise.
+	Hardware bool     `toml:"hardware" json:"hardware,omitempty"`
 	Modules  []string `toml:"modules" json:"modules"`
 	// Collapsed sections start folded in the picker (the optional "More apps" groups).
 	Collapsed bool `toml:"collapsed" json:"collapsed"`
@@ -83,6 +88,73 @@ type Session struct {
 	GlobalServices []string `toml:"global_services" json:"global_services,omitempty"` // systemctl --global enable
 }
 
+// Detect is one hardware rule of a driver module: a device on the bus with this vendor, one
+// of these classes (class + subclass, "0300") and either one of Devices or a device id in
+// [DeviceMin, DeviceMax], and not in Exclude. Ids are four lower-case hex digits.
+type Detect struct {
+	Bus       string   `toml:"bus" json:"bus"` // "pci"
+	Vendor    string   `toml:"vendor" json:"vendor"`
+	Class     []string `toml:"class" json:"class"`
+	Devices   []string `toml:"devices" json:"devices,omitempty"`
+	DeviceMin string   `toml:"device_min" json:"device_min,omitempty"`
+	DeviceMax string   `toml:"device_max" json:"device_max,omitempty"`
+	Exclude   []string `toml:"exclude" json:"exclude,omitempty"`
+}
+
+// Matches reports whether a PCI device satisfies the rule.
+func (d Detect) Matches(p hw.PCIDevice) bool {
+	if d.Bus != "pci" || p.Vendor != d.Vendor {
+		return false
+	}
+	classOK := false
+	for _, c := range d.Class {
+		if c == p.Class {
+			classOK = true
+		}
+	}
+	if !classOK {
+		return false
+	}
+	for _, x := range d.Exclude {
+		if x == p.Device {
+			return false
+		}
+	}
+	if len(d.Devices) > 0 {
+		for _, x := range d.Devices {
+			if x == p.Device {
+				return true
+			}
+		}
+		return false
+	}
+	lo, hi := d.DeviceMin, d.DeviceMax
+	if lo == "" {
+		lo = "0000"
+	}
+	if hi == "" {
+		hi = "ffff"
+	}
+	// Four lower-case hex digits compare like numbers.
+	return p.Device >= lo && p.Device <= hi
+}
+
+// Akmod names a kernel module that akmods builds on the computer (RPM Fusion's akmod-<name>
+// package) and the module file checked after the build.
+type Akmod struct {
+	Name   string `toml:"name" json:"name"`     // akmods --akmod <name>
+	Module string `toml:"module" json:"module"` // modinfo -k <kernel> <module>
+}
+
+// Boot holds kernel command line arguments a driver needs (added with grubby once it is
+// installed, removed by nothing: the driver's own packages remove theirs).
+type Boot struct {
+	KernelArgs []string `toml:"kernel_args" json:"kernel_args,omitempty"`
+	// LUKSDisplayArgs are added too when the disk is encrypted and the matched device drives
+	// the boot screen (plymouth.use-simpledrm=1: the passphrase prompt shows at once).
+	LUKSDisplayArgs []string `toml:"luks_display_args" json:"luks_display_args,omitempty"`
+}
+
 // Hooks are fixed scripts shipped inside the catalog (none in v0.1).
 type Hooks struct {
 	Post []string `toml:"post" json:"post,omitempty"`
@@ -110,8 +182,59 @@ type Module struct {
 	Defaults    Defaults  `toml:"defaults" json:"defaults"`
 	Session     Session   `toml:"session" json:"session"`
 	Hooks       Hooks     `toml:"hooks" json:"-"`
+	// Drivers (modules of a hardware category) only.
+	Detect      []Detect `toml:"detect" json:"detect,omitempty"`
+	Akmod       *Akmod   `toml:"akmod" json:"akmod,omitempty"`
+	Boot        *Boot    `toml:"boot" json:"boot,omitempty"`
+	NetworkHint string   `toml:"network_hint" json:"network_hint,omitempty"` // Network step, {device} filled in
 
 	Dir string `toml:"-" json:"-"`
+	// Set by MarkDetected: a device matched (Device is its label, PCI the device, BootDisplay
+	// whether it drives the boot screen).
+	Detected    bool         `toml:"-" json:"-"`
+	Device      string       `toml:"-" json:"-"`
+	PCI         hw.PCIDevice `toml:"-" json:"-"`
+	BootDisplay bool         `toml:"-" json:"-"`
+	hardware    bool
+}
+
+// IsHardware reports whether the module is a driver (listed in a hardware category).
+func (m *Module) IsHardware() bool { return m.hardware }
+
+// AkmodName is the akmods name of a driver built on the computer ("" for everything else).
+func (m *Module) AkmodName() string {
+	if m.Akmod == nil {
+		return ""
+	}
+	return m.Akmod.Name
+}
+
+// KernelArgs are the arguments the driver adds to the kernel command line; luks says the
+// disk is encrypted (then the display arguments apply when the device drives the screen).
+func (m *Module) KernelArgs(luks bool) []string {
+	if m.Boot == nil {
+		return nil
+	}
+	args := append([]string{}, m.Boot.KernelArgs...)
+	if luks && m.BootDisplay {
+		args = append(args, m.Boot.LUKSDisplayArgs...)
+	}
+	return args
+}
+
+// Fill replaces {device} in a driver's copy with the detected device's label.
+func (m *Module) Fill(s string) string {
+	dev := m.Device
+	if dev == "" {
+		dev = "hardware"
+	}
+	return strings.ReplaceAll(s, "{device}", dev)
+}
+
+// Available reports whether the picker may offer the module: visible, and for drivers only
+// when their hardware was detected.
+func (m *Module) Available() bool {
+	return !m.Hidden && (len(m.Detect) == 0 || m.Detected)
 }
 
 // DisplayShort is the short name used in summaries ("Zen", "Collabora").
@@ -241,6 +364,13 @@ func Load(fsys fs.FS) (*Catalog, error) {
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
+	for _, cat := range c.Categories {
+		for _, id := range cat.Modules {
+			if m, ok := c.Modules[id]; ok && cat.Hardware {
+				m.hardware = true
+			}
+		}
+	}
 	if err := c.check(); err != nil {
 		return nil, err
 	}
@@ -302,6 +432,9 @@ func (c *Catalog) check() error {
 		if cat.Required && cat.Collapsed {
 			bad("category %q: a required category can't start collapsed", cat.ID)
 		}
+		if cat.Hardware && (cat.Choice != "any" || cat.Required) {
+			bad("category %q: hardware categories must be choice = \"any\" and not required", cat.ID)
+		}
 	}
 	for id, m := range c.Modules {
 		if !idRe.MatchString(id) {
@@ -346,11 +479,6 @@ func (c *Catalog) check() error {
 				if in.Remote == "" {
 					bad("%s: flatpak installs must name their remote", where)
 				}
-				if in.Runtime != "" {
-					if _, ok := c.Runtimes[in.Runtime]; !ok {
-						bad("%s: runtime %q has no size in catalog.toml [runtimes]", where, in.Runtime)
-					}
-				}
 			case MethodNix:
 				if in.Attr == "" {
 					bad("%s: nix needs attr", where)
@@ -366,15 +494,103 @@ func (c *Catalog) check() error {
 					bad("%s: unknown repo %q", where, r)
 				}
 			}
+			// A shared download (Flatpak runtime, the kernel module build tools) is counted
+			// once per install, so it needs its size in catalog.toml.
+			if in.Runtime != "" {
+				if _, ok := c.Runtimes[in.Runtime]; !ok {
+					bad("%s: runtime %q has no size in catalog.toml [runtimes]", where, in.Runtime)
+				}
+			}
 		}
 		for _, r := range append(append([]string{}, m.Requires...), m.Conflicts...) {
 			if _, ok := c.Modules[r]; !ok {
 				bad("module %q: requires/conflicts names unknown module %q", id, r)
 			}
 		}
+		c.checkDriver(m, bad)
 	}
 	return errors.Join(errs...)
 }
+
+var (
+	akmodNameRe   = regexp.MustCompile(`^[a-z0-9-]+$`)
+	akmodModuleRe = regexp.MustCompile(`^[a-z0-9_]+$`)
+	// One kernel argument: name[=value], no spaces or quotes (grubby gets them as one word).
+	kernelArgRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+(=[A-Za-z0-9_.,:/-]+)?$`)
+)
+
+// checkDriver validates the hardware fields: [[detect]] only (and always) on modules of a
+// hardware category, strict ids, [akmod] only with an RPM Fusion nonfree dnf method, and
+// kernel arguments that are single plain words.
+func (c *Catalog) checkDriver(m *Module, bad func(string, ...any)) {
+	id := m.ID
+	switch {
+	case m.hardware && len(m.Detect) == 0:
+		bad("module %q: modules of a hardware category need at least one [[detect]]", id)
+	case !m.hardware && len(m.Detect) > 0:
+		bad("module %q: [[detect]] is only allowed in a hardware category", id)
+	}
+	if !m.hardware && (m.Akmod != nil || m.Boot != nil || m.NetworkHint != "") {
+		bad("module %q: [akmod], [boot] and network_hint are only allowed in a hardware category", id)
+	}
+	if m.hardware && (m.Always || m.Hidden) {
+		bad("module %q: drivers can't be hidden or always installed", id)
+	}
+	for i, d := range m.Detect {
+		where := fmt.Sprintf("module %q detect[%d]", id, i)
+		if d.Bus != "pci" {
+			bad("%s: bus must be \"pci\"", where)
+		}
+		if !hex4Re.MatchString(d.Vendor) {
+			bad("%s: vendor %q must be four lower-case hex digits", where, d.Vendor)
+		}
+		if len(d.Class) == 0 {
+			bad("%s: needs at least one class", where)
+		}
+		for _, list := range [][]string{d.Class, d.Devices, d.Exclude} {
+			for _, x := range list {
+				if !hex4Re.MatchString(x) {
+					bad("%s: %q must be four lower-case hex digits", where, x)
+				}
+			}
+		}
+		for _, x := range []string{d.DeviceMin, d.DeviceMax} {
+			if x != "" && !hex4Re.MatchString(x) {
+				bad("%s: device range %q must be four lower-case hex digits", where, x)
+			}
+		}
+		if len(d.Devices) > 0 && (d.DeviceMin != "" || d.DeviceMax != "") {
+			bad("%s: use devices or device_min/device_max, not both", where)
+		}
+		if d.DeviceMin != "" && d.DeviceMax != "" && d.DeviceMin > d.DeviceMax {
+			bad("%s: device_min %s is above device_max %s", where, d.DeviceMin, d.DeviceMax)
+		}
+	}
+	if a := m.Akmod; a != nil {
+		if !akmodNameRe.MatchString(a.Name) || !akmodModuleRe.MatchString(a.Module) {
+			bad("module %q: [akmod] needs name (a-z, 0-9, -) and module (a-z, 0-9, _)", id)
+		}
+		p := m.Primary()
+		nonfree := false
+		for _, r := range p.Repos {
+			if r == "rpmfusion-nonfree" {
+				nonfree = true
+			}
+		}
+		if p.Method != MethodDNF || !nonfree {
+			bad("module %q: [akmod] drivers need a first [[install]] with method = \"dnf\" and repos including rpmfusion-nonfree", id)
+		}
+	}
+	if b := m.Boot; b != nil {
+		for _, a := range append(append([]string{}, b.KernelArgs...), b.LUKSDisplayArgs...) {
+			if !kernelArgRe.MatchString(a) {
+				bad("module %q: kernel argument %q is not a single name[=value] word", id, a)
+			}
+		}
+	}
+}
+
+var hex4Re = regexp.MustCompile(`^[0-9a-f]{4}$`)
 
 // KnownRepos are the extra repositories a dnf method may ask for. Setting them up is code
 // owned by the installer (keys from distribution-gpg-keys, never --nogpgcheck).
@@ -428,18 +644,86 @@ func (s Selection) Contains(id string) bool {
 	return false
 }
 
-// DefaultSelection is what the picker starts with.
+// DefaultSelection is what the picker starts with. Drivers are ticked only when their device
+// was detected, and not when an earlier driver that conflicts with them is ticked already
+// (a machine with two NVIDIA cards of different generations gets the first one's driver).
 func (c *Catalog) DefaultSelection() Selection {
 	sel := Selection{}
 	for _, cat := range c.Categories {
 		sel[cat.ID] = []string{}
 		for _, id := range cat.Modules {
-			if c.Modules[id].Default {
+			m := c.Modules[id]
+			if !m.Default || (m.hardware && !m.Detected) {
+				continue
+			}
+			clash := false
+			for _, x := range m.Conflicts {
+				if sel.Contains(x) {
+					clash = true
+				}
+			}
+			for _, prev := range sel[cat.ID] {
+				for _, x := range c.Modules[prev].Conflicts {
+					if x == id {
+						clash = true
+					}
+				}
+			}
+			if !clash {
 				sel[cat.ID] = append(sel[cat.ID], id)
 			}
 		}
 	}
 	return sel
+}
+
+// MarkDetected matches the drivers' [[detect]] rules against the machine's PCI devices and
+// records the first matching device on each driver (Detected, Device, PCI, BootDisplay).
+// Drivers that match nothing are not offered. It returns the detected drivers in catalog
+// order. Call it once, before DefaultSelection, Picker and Validate are used.
+func (c *Catalog) MarkDetected(h hw.Hardware) []*Module {
+	boot, hasBoot := h.BootDisplay()
+	var out []*Module
+	for _, id := range c.Order {
+		m := c.Modules[id]
+		if !m.hardware {
+			continue
+		}
+		m.Detected, m.Device, m.PCI, m.BootDisplay = false, "", hw.PCIDevice{}, false
+		for _, p := range h.PCI {
+			if !m.MatchesDevice(p) {
+				continue
+			}
+			m.Detected, m.Device, m.PCI = true, p.Label(), p
+			m.BootDisplay = hasBoot && p.IsDisplay() && p.Slot == boot.Slot
+			break
+		}
+		if m.Detected {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// MatchesDevice reports whether any of the module's [[detect]] rules matches the device.
+func (m *Module) MatchesDevice(p hw.PCIDevice) bool {
+	for _, d := range m.Detect {
+		if d.Matches(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// DetectedDrivers are the drivers MarkDetected found hardware for, in catalog order.
+func (c *Catalog) DetectedDrivers() []*Module {
+	var out []*Module
+	for _, id := range c.Order {
+		if m := c.Modules[id]; m.hardware && m.Detected {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // Normalize orders each category's ids in catalog order and drops duplicates. Unknown ids are
@@ -501,6 +785,8 @@ func (c *Catalog) Validate(sel Selection) map[string]string {
 			m, ok := c.Modules[id]
 			if !ok || m.Hidden {
 				set(k, fmt.Sprintf("We don't know an app called %q.", id))
+			} else if m.hardware && !m.Detected {
+				set(k, fmt.Sprintf("%s is only for hardware this computer doesn’t have.", m.Name))
 			} else if m.Category != k {
 				set(k, fmt.Sprintf("%s belongs under %s.", m.Name, c.catName(m.Category)))
 			}
@@ -563,7 +849,19 @@ func (c *Catalog) Resolve(sel Selection) []*Module {
 func (c *Catalog) Apps(sel Selection) []*Module {
 	var out []*Module
 	for _, m := range c.Resolve(sel) {
-		if !m.Hidden && sel.Contains(m.ID) {
+		if !m.Hidden && !m.hardware && sel.Contains(m.ID) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// Drivers are the drivers a selection installs (modules of a hardware category), in catalog
+// order. They are not counted as apps.
+func (c *Catalog) Drivers(sel Selection) []*Module {
+	var out []*Module
+	for _, m := range c.Resolve(sel) {
+		if m.hardware && sel.Contains(m.ID) {
 			out = append(out, m)
 		}
 	}
@@ -572,9 +870,10 @@ func (c *Catalog) Apps(sel Selection) []*Module {
 
 // Estimate is the picker footer.
 type Estimate struct {
-	Apps  int    `json:"apps"`
-	Bytes int64  `json:"bytes"`
-	Label string `json:"label"`
+	Apps    int    `json:"apps"`
+	Drivers int    `json:"drivers,omitempty"`
+	Bytes   int64  `json:"bytes"`
+	Label   string `json:"label"`
 }
 
 // EstimateDownload counts the apps a selection installs and sums what has to be downloaded:
@@ -582,9 +881,12 @@ type Estimate struct {
 func (c *Catalog) EstimateDownload(sel Selection) Estimate {
 	var mb float64
 	runtimes := map[string]bool{}
-	apps := 0
+	apps, drivers := 0, 0
 	for _, m := range c.Resolve(sel) {
-		if !m.Hidden && sel.Contains(m.ID) {
+		switch {
+		case m.hardware && sel.Contains(m.ID):
+			drivers++
+		case !m.Hidden && sel.Contains(m.ID):
 			apps++
 		}
 		if m.InLiveImage {
@@ -598,15 +900,22 @@ func (c *Catalog) EstimateDownload(sel Selection) Estimate {
 		}
 	}
 	bytes := int64(mb * hw.MB)
-	noun := "apps"
-	if apps == 1 {
-		noun = "app"
+	count := plural(apps, "app", "apps")
+	if drivers > 0 {
+		count += " + " + plural(drivers, "driver", "drivers")
 	}
-	label := fmt.Sprintf("%d %s · %s download", apps, noun, hw.DownloadLabel(bytes))
+	label := fmt.Sprintf("%s · %s download", count, hw.DownloadLabel(bytes))
 	if bytes == 0 {
-		label = fmt.Sprintf("%d %s · nothing to download", apps, noun)
+		label = fmt.Sprintf("%s · nothing to download", count)
 	}
-	return Estimate{Apps: apps, Bytes: bytes, Label: label}
+	return Estimate{Apps: apps, Drivers: drivers, Bytes: bytes, Label: label}
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, one)
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }
 
 // PickerCategory / PickerModule are the JSON shapes of the apps step options.
@@ -618,6 +927,8 @@ type PickerCategory struct {
 	Rule      string `json:"rule"`
 	Note      string `json:"note"`
 	Collapsed bool   `json:"collapsed"`
+	// Hardware marks the drivers section (only present when a driver was detected).
+	Hardware bool `json:"hardware,omitempty"`
 }
 
 type PickerModule struct {
@@ -635,6 +946,8 @@ type PickerModule struct {
 	Verified    bool    `json:"verified"`
 	InLiveImage bool    `json:"in_live_image"`
 	Proprietary bool    `json:"proprietary"`
+	// Device names the detected hardware a driver is for ("NVIDIA GeForce RTX 4060 …").
+	Device string `json:"device,omitempty"`
 }
 
 // Picker is the catalog as the apps step shows it.
@@ -643,21 +956,34 @@ type Picker struct {
 	Modules    []PickerModule   `json:"modules"`
 }
 
-// Picker returns the visible catalog in picker order.
+// Picker returns the visible catalog in picker order. Drivers appear only when their
+// hardware was detected, and a hardware category only when it offers a driver.
 func (c *Catalog) Picker() Picker {
-	var p Picker
+	p := Picker{Categories: []PickerCategory{}, Modules: []PickerModule{}}
+	def := c.DefaultSelection()
 	for _, cat := range c.Categories {
-		p.Categories = append(p.Categories, PickerCategory{ID: cat.ID, Name: cat.Name, Choice: cat.Choice, Required: cat.Required,
-			Rule: cat.Rule(), Note: cat.Note, Collapsed: cat.Collapsed})
+		var mods []PickerModule
 		for _, id := range cat.Modules {
 			m := c.Modules[id]
+			if !m.Available() {
+				continue
+			}
 			in := m.Primary()
-			p.Modules = append(p.Modules, PickerModule{
+			pm := PickerModule{
 				ID: m.ID, Name: m.Name, Summary: m.Summary, Category: m.Category, Default: m.Default, Always: m.Always,
 				Tile: m.Tile, Icon: m.Icon, DownloadMB: m.DownloadMB(), Source: SourceLabel(in), Method: in.Method,
 				Verified: in.Verified, InLiveImage: m.InLiveImage, Proprietary: m.Proprietary,
-			})
+			}
+			if m.hardware {
+				pm.Summary, pm.Device, pm.Default = m.Fill(m.Summary), m.Device, def.Contains(m.ID)
+			}
+			mods = append(mods, pm)
 		}
+		if cat.Hardware && len(mods) == 0 {
+			continue
+		}
+		p.Categories = append(p.Categories, PickerCategory{ID: cat.ID, Name: cat.Name, Choice: cat.Choice, Required: cat.Required, Rule: cat.Rule(), Note: cat.Note, Collapsed: cat.Collapsed, Hardware: cat.Hardware})
+		p.Modules = append(p.Modules, mods...)
 	}
 	return p
 }

@@ -189,13 +189,14 @@ next
 # 8 Apps (tick Steam too: one more app, and the mock makes Steam fail later)
 wait_page apps
 # The optional groups start folded: only the open sections (not `collapsed` in the
-# catalog) have app rows. The expected numbers come from the catalog and the engine
+# catalog) have app rows, plus the drivers the mock "detected" (the hardware section
+# lists only those). The expected numbers come from the catalog and the engine
 # (test_mock_bridge.py checks the mock's estimate against arctic-install's).
 rows=$(python3 - "$here/../modules/catalog.toml" << 'PY'
 import sys, tomllib
 with open(sys.argv[1], "rb") as f:
     cat = tomllib.load(f)
-print(sum(len(c["modules"]) for c in cat["category"] if not c.get("collapsed")))
+print(sum(len(c["modules"]) for c in cat["category"] if not c.get("collapsed") and not c.get("hardware")))
 PY
 )
 estimate=$(python3 - << 'PY'
@@ -210,14 +211,18 @@ def call(i, method, params=None):
         if msg.get("id") == i:
             return msg["result"]
 call(1, "Hello", {"client": "test-headless", "version": "test"})
-sel = call(2, "GetStep", {"id": "apps"})["data"]["selection"]
+apps = call(2, "GetStep", {"id": "apps"})
+sel = apps["data"]["selection"]
+hardware = {c["id"] for c in apps["options"]["categories"] if c.get("hardware")}
+drivers = sum(1 for m in apps["options"]["modules"] if m["category"] in hardware)
 est = call(3, "EstimateDownload", {"selection": sel})
-print(json.dumps({"label": est["label"], "apps": est["apps"]}))
+print(json.dumps({"label": est["label"], "apps": est["apps"], "drivers": drivers}))
 p.stdin.close()
 p.wait(timeout=5)
 PY
 )
 [ -n "$rows" ] && [ -n "$estimate" ] || fail "couldn't read the expected rows ($rows) or estimate ($estimate)"
+rows=$((rows + $(printf '%s' "$estimate" | python3 -c 'import json, sys; print(json.load(sys.stdin)["drivers"])')))
 log "expecting $rows open app rows and $estimate"
 wait_for "d.get('step',{}).get('open')==[] and d.get('step',{}).get('rows')==$rows" "folded optional groups"
 wait_for "d.get('note')==${estimate}['label']" "the default download estimate"

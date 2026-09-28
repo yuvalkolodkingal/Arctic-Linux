@@ -1,0 +1,38 @@
+# Broadcom's wl driver (RPM Fusion nonfree akmod-wl + broadcom-wl, 6.30.223.271) for the
+# Broadcom Wi-Fi chips Fedora has no working driver for: the b43 chips (their firmware isn't
+# in linux-firmware) and the 802.11ac BCM4352/BCM4360/BCM43142 that no in-kernel driver
+# supports. brcmsmac (BCM4313/43224/43225/43227/43228) and brcmfmac chips work already and are
+# not listed. broadcom-wl blacklists b43, bcma, ssb and brcmsmac so wl gets the card.
+id = "broadcom-wl"
+name = "Broadcom Wi-Fi driver"
+short = "Broadcom Wi-Fi"
+summary = "Broadcom’s driver, so your {device} works."
+category = "drivers"
+role = "Wi-Fi driver"
+default = true
+tile = "driver-wifi"
+icon = "wifi"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+network_hint = "Your {device} needs Broadcom’s driver, which Arctic Linux installs for you. Until then, connect a network cable or share your phone’s connection over USB."
+
+# BCM4311 (4311, 4312), BCM4312 (4315), BCM4321 (4328, 4329, 432a), BCM4322 (432b, 432c,
+# 432d), BCM4331 (4331), BCM43142 (4365), BCM4360 (43a0), BCM4352 (43b1).
+[[detect]]
+bus = "pci"
+vendor = "14e4"
+class = ["0280"]
+devices = ["4311", "4312", "4315", "4328", "4329", "432a", "432b", "432c", "432d", "4331", "4365", "43a0", "43b1"]
+
+[akmod]
+name = "wl"
+module = "wl"
+
+[[install]]
+method = "dnf"
+packages = ["akmod-wl", "broadcom-wl"]
+repos = ["rpmfusion-free", "rpmfusion-nonfree"]
+runtime = "akmods"
+download_mb = 6
