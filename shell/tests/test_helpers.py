@@ -1,5 +1,5 @@
 """Tests for the shell's Python helpers that don't need a desktop:
-scripts/package-index.py (the Get apps name cache) and scripts/wallpapers.py (the picker).
+scripts/package-index.py (the Get apps package index) and scripts/wallpapers.py (the picker).
 
 Run: python3 -m unittest discover -s shell/tests
 """
@@ -48,16 +48,22 @@ class PackageIndexTests(unittest.TestCase):
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         self.cache = self.root / 'cache'
-        # A fake dnf5 that lists three names (twice, as for two architectures) and a fake flatpak.
-        fake_command(self.bin, 'dnf5', 'printf "neovim\\nhtop\\nneovim\\nfish\\n"; echo "$@" > "$(dirname "$0")/dnf-args"')
-        fake_command(self.bin, 'flatpak', 'printf "org.gimp.GIMP\\napp.zen_browser.zen\\n"')
+        # A fake dnf5 that lists three packages (neovim twice, as for two architectures) and a
+        # fake flatpak whose system installation has the flathub remote.
+        fake_command(self.bin, 'dnf5', 'printf "neovim\\tfedora\\tVim-fork focused on extensibility\\nhtop\\tupdates\\tInteractive process viewer\\n'
+                                       'neovim\\tfedora\\tsecond arch\\nfish\\tfedora\\tFriendly interactive shell\\n'
+                                       'not a name\\tfedora\\tx\\n"; printf "%s\\n" "$*" > "$(dirname "$0")/dnf-args"')
+        fake_command(self.bin, 'flatpak', 'echo "$@" >> "$(dirname "$0")/flatpak-args"\n'
+                                          'case "$1 $2" in "remotes --system") echo flathub ;; "remotes --user") ;; '
+                                          '"remote-ls --system") printf "org.gimp.GIMP\\tGIMP\\tCreate images and edit photographs\\n'
+                                          'app.zen_browser.zen\\tZen Browser\\tA calmer internet\\n" ;; *) exit 1 ;; esac')
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_index(self):
+    def run_index(self, *args):
         env = dict(os.environ, XDG_CACHE_HOME=str(self.cache), PATH=str(self.bin) + ':/usr/bin:/bin')
-        out = subprocess.run([sys.executable, str(SCRIPTS / 'package-index.py')], env=env,
+        out = subprocess.run([sys.executable, str(SCRIPTS / 'package-index.py'), *args], env=env,
                              capture_output=True, text=True, timeout=30)
         self.assertEqual(out.returncode, 0, out.stderr)
         return [json.loads(line) for line in out.stdout.splitlines()]
@@ -68,9 +74,16 @@ class PackageIndexTests(unittest.TestCase):
         self.assertEqual(lines[0], {'packages': [], 'refreshing': True, 'error': ''})
         self.assertEqual(lines[1]['packages'], ['fish', 'htop', 'neovim', 'flathub:app.zen_browser.zen', 'flathub:org.gimp.GIMP'])
         self.assertFalse(lines[1]['refreshing'])
-        self.assertIn('repoquery --available --qf %{name}\\n', (self.bin / 'dnf-args').read_text())
+        self.assertIn('repoquery --available --qf %{name}\t%{repoid}\t%{summary}\\n', (self.bin / 'dnf-args').read_text())
+        self.assertIn('remote-ls --system --app --columns=application,name,description flathub', (self.bin / 'flatpak-args').read_text())
 
-    def test_fresh_cache_is_not_refreshed(self):
+    def test_details_keep_summaries(self):
+        lines = self.run_index('--details')
+        self.assertEqual(lines[1]['details']['dnf'][2], ['neovim', 'fedora', 'Vim-fork focused on extensibility'])
+        self.assertEqual(lines[1]['details']['flathub'][1], ['org.gimp.GIMP', 'GIMP', 'Create images and edit photographs'])
+        self.assertNotIn('details', self.run_index()[0])
+
+    def test_fresh_cache_is_not_refreshed_unless_forced(self):
         self.run_index()
         (self.bin / 'dnf-args').unlink()
         lines = self.run_index()
@@ -78,21 +91,42 @@ class PackageIndexTests(unittest.TestCase):
         self.assertFalse(lines[0]['refreshing'])
         self.assertEqual(len(lines[0]['packages']), 5)
         self.assertFalse((self.bin / 'dnf-args').exists())
+        self.assertEqual(len(self.run_index('--force')), 2)
+        self.assertTrue((self.bin / 'dnf-args').exists())
 
     def test_stale_cache_is_shown_then_refreshed(self):
         self.run_index()
         old = time.time() - 3 * 24 * 3600
-        for f in (self.cache / 'arctic').glob('*.txt'):
+        for f in (self.cache / 'arctic').glob('*.tsv'):
             os.utime(f, (old, old))
         lines = self.run_index()
         self.assertEqual(len(lines), 2)
         self.assertTrue(lines[0]['refreshing'])
         self.assertEqual(len(lines[0]['packages']), 5)   # the old list right away
 
-    def test_failing_dnf_reports_an_error_sentence(self):
+    def test_old_name_caches_are_read(self):
+        folder = self.cache / 'arctic'
+        folder.mkdir(parents=True)
+        (folder / 'packages.txt').write_text('gimp\nneovim\n')
+        (folder / 'flathub.txt').write_text('org.gimp.GIMP\n')
+        fake_command(self.bin, 'dnf5', 'exit 1')
+        lines = self.run_index('--details')
+        self.assertEqual(lines[0]['packages'], ['gimp', 'neovim', 'flathub:org.gimp.GIMP'])
+        self.assertEqual(lines[0]['details']['dnf'][0], ['gimp', '', ''])
+
+    def test_failing_commands_report_an_error_sentence(self):
         fake_command(self.bin, 'dnf5', 'echo "Cannot download metadata" >&2; exit 1')
+        self.assertEqual(self.run_index()[-1]['error'], 'Could not read the dnf package list.')
+        fake_command(self.bin, 'flatpak', 'case "$1 $2" in "remotes --system") echo flathub ;; *) exit 1 ;; esac')
+        self.assertEqual(self.run_index('--force')[-1]['error'],
+                         'Could not read the dnf package list. Could not read the Flathub app list.')
+
+    def test_no_flathub_remote_is_not_an_error(self):
+        fake_command(self.bin, 'flatpak', 'exit 0')
         lines = self.run_index()
-        self.assertEqual(lines[-1]['error'], 'Could not read the dnf package list.')
+        self.assertEqual(lines[-1]['error'], '')
+        self.assertEqual(lines[-1]['packages'], ['fish', 'htop', 'neovim'])
+        self.assertEqual(len(self.run_index()), 1)   # and the empty Flathub list counts as fresh
 
 
 class WallpaperTests(unittest.TestCase):

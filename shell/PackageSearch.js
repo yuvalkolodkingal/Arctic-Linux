@@ -1,5 +1,7 @@
 .pragma library
-// Completion for the Get apps console (tests: tests/test-package-search.cjs).
+// Search for Get apps (tests: tests/test-package-search.cjs): completion in the Console, and
+// ranked search over names, ids, keywords and summaries for the Flathub and Fedora pages
+// (prepareItems / searchItems, at the end).
 //
 // The index holds dnf package names ("neovim") and Flathub app ids with a "flathub:" prefix
 // ("flathub:org.gimp.GIMP"). Which of them are offered depends on the command being typed:
@@ -142,4 +144,67 @@ function complete(text, cursor, entry) {
     const value = ctx.source === 'flathub' && entry.startsWith(FLATHUB) ? entry.slice(FLATHUB.length) : entry;
     const replacement = ctx.prefix + value;
     return { text: text.slice(0, ctx.start) + replacement + text.slice(ctx.end), cursor: ctx.start + replacement.length };
+}
+
+// ---- the Flathub and Fedora pages: search over items -------------------------------------------
+// prepareItems([{id, name, summary, keywords?, …}]) -> an index with the lowercase fields worked
+// out once. searchItems(index, query, limit) -> items, best first:
+//   name      exact / prefix / substring, then fuzzy          weight +100
+//   id        the same, on the whole id and its last dotted part (org.gimp.GIMP -> gimp)   +50
+//   keywords  substring                                       +20
+//   summary   substring only, and only while the matches above are fewer than `limit`
+// A display name beats an id, so "gimp" finds GIMP before gimp-help.
+function prepareItems(items) {
+    const list = items || [];
+    const names = [], ids = [], tails = [], keywords = [], summaries = [];
+    for (let i = 0; i < list.length; i++) {
+        const item = list[i];
+        const id = String(item.id || '').toLowerCase();
+        names.push(String(item.name || item.id || '').toLowerCase());
+        ids.push(id);
+        tails.push(id.slice(id.lastIndexOf('.') + 1));
+        keywords.push((item.keywords || []).join(' ').toLowerCase());
+        summaries.push(String(item.summary || '').toLowerCase());
+    }
+    return { preparedItems: true, items: list, names: names, ids: ids, tails: tails, keywords: keywords,
+             summaries: summaries, length: list.length };
+}
+
+function searchItems(prepared, query, limit) {
+    const index = prepared && prepared.preparedItems ? prepared : prepareItems(prepared || []);
+    limit = limit || 200;
+    query = String(query || '').toLowerCase().trim();
+    if (!query) return index.items.slice(0, limit);
+    const strong = [], rest = [];
+    for (let i = 0; i < index.length; i++) {
+        const byName = strictScore(index.names[i], query);
+        const byId = Math.max(strictScore(index.ids[i], query), strictScore(index.tails[i], query));
+        const byKeyword = index.keywords[i] && index.keywords[i].indexOf(query) >= 0 ? 6000 : -1;
+        const rank = Math.max(byName >= 0 ? byName + 100 : -1, byId >= 0 ? byId + 50 : -1, byKeyword >= 0 ? byKeyword + 20 : -1);
+        if (rank >= 0) strong.push({ i: i, rank: rank });
+        else rest.push(i);
+    }
+    if (strong.length < limit) {
+        const loose = [];
+        for (let j = 0; j < rest.length; j++) {
+            const i = rest[j];
+            const byName = fuzzyScore(index.names[i], query);
+            const byId = fuzzyScore(index.tails[i], query);
+            const rank = Math.max(byName >= 0 ? byName + 100 : -1, byId >= 0 ? byId + 50 : -1);
+            if (rank >= 0) strong.push({ i: i, rank: rank });
+            else loose.push(i);
+        }
+        // Summaries last: "photo" finds GIMP by what it does.
+        if (strong.length < limit && query.length > 2) {
+            for (let j = 0; j < loose.length; j++) {
+                const at = index.summaries[loose[j]].indexOf(query);
+                if (at >= 0) strong.push({ i: loose[j], rank: 1000 - at });
+            }
+        }
+    }
+    strong.sort((a, b) => b.rank - a.rank || index.names[a.i].length - index.names[b.i].length
+                          || (index.names[a.i] < index.names[b.i] ? -1 : index.names[a.i] > index.names[b.i] ? 1 : 0));
+    const out = [];
+    for (let k = 0; k < strong.length && k < limit; k++) out.push(index.items[strong[k].i]);
+    return out;
 }

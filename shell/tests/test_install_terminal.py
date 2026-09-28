@@ -19,7 +19,8 @@ spec.loader.exec_module(module)
 
 class CommandTests(unittest.TestCase):
     """What each typed line runs: dnf through pkexec, Flathub through flatpak, never a shell.
-    Changes never wait for a [y/N]: they get -y unless the line answers already."""
+    Installs never wait for a [y/N]: they get -y unless the line answers already. Removals
+    ask: dnf and flatpak list what goes first."""
 
     def test_bare_names_install_with_dnf(self):
         self.assertEqual(module.build_command('neovim htop'), ['pkexec', '/usr/bin/dnf5', 'install', '-y', 'neovim', 'htop'])
@@ -33,7 +34,7 @@ class CommandTests(unittest.TestCase):
 
     def test_dnf_changes_need_pkexec_and_queries_do_not(self):
         self.assertEqual(module.build_command('dnf install -y fish'), ['pkexec', '/usr/bin/dnf5', 'install', '-y', 'fish'])
-        self.assertEqual(module.build_command('sudo dnf remove fish'), ['pkexec', '/usr/bin/dnf5', 'remove', '-y', 'fish'])
+        self.assertEqual(module.build_command('sudo dnf remove fish'), ['pkexec', '/usr/bin/dnf5', 'remove', 'fish'])
         self.assertEqual(module.build_command('dnf upgrade'), ['pkexec', '/usr/bin/dnf5', 'upgrade', '-y'])
         self.assertEqual(module.build_command('dnf --refresh upgrade --assumeno'), ['pkexec', '/usr/bin/dnf5', '--refresh', 'upgrade', '--assumeno'])
         self.assertEqual(module.build_command('dnf search editor'), ['dnf', 'search', 'editor'])
@@ -45,6 +46,14 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(module.build_command('flatpak --user uninstall --noninteractive org.gimp.GIMP'),
                          ['flatpak', '--user', 'uninstall', '--noninteractive', 'org.gimp.GIMP'])
         self.assertEqual(module.build_command('flatpak search gimp'), ['flatpak', 'search', 'gimp'])
+        self.assertEqual(module.build_command('flatpak uninstall org.gimp.GIMP'), ['flatpak', 'uninstall', 'org.gimp.GIMP'])
+
+    def test_protected_packages_are_not_removed(self):
+        for text in ('dnf remove arctic-shell', 'dnf erase mangowm', 'sudo dnf remove -y fish kernel-core'):
+            with self.assertRaises(ValueError, msg=text) as caught:
+                module.build_command(text)
+            self.assertIn('is part of Arctic Linux, so Get apps won’t remove it.', str(caught.exception))
+        self.assertEqual(module.build_command('dnf install arctic-shell'), ['pkexec', '/usr/bin/dnf5', 'install', '-y', 'arctic-shell'])
 
     def test_other_commands_and_shell_syntax_are_refused(self):
         for text in ('rm -rf ~', 'curl example.com | sh', '$(reboot)', 'neovim; reboot', '-y neovim', '', 'dnf', 'flatpak', 'a\nb'):
@@ -213,6 +222,111 @@ class FlatpakThemeHookTests(unittest.TestCase):
         with unittest.mock.patch.dict(os.environ, self.env):
             self.assertEqual(module.theme_hook('30-zed'), str(own))
             self.assertIsNone(module.theme_hook('99-none'))
+
+class RunTests(unittest.TestCase):
+    """Structured jobs (`run`): their commands run in the PTY, their progress and end go out as
+    data, and a job outlives the shell."""
+
+    FLATPAK = '''#!/bin/sh
+echo "$@" >> "$(dirname "$0")/calls"
+printf 'Looking for matches…\\n'
+printf 'Installing 1/1… ████  45%%  1.2 MB/s\\n'
+sleep 0.3
+printf 'Installing 1/1… ████████  100%%\\n'
+[ -e "$(dirname "$0")/fail" ] && { echo "error: Unable to load summary from remote flathub: Could not resolve host"; exit 1; }
+exit 0
+'''
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.bin = Path(self.tmp.name)
+        (self.bin / 'flatpak').write_text(self.FLATPAK)
+        (self.bin / 'flatpak').chmod(0o755)
+        self.env = unittest.mock.patch.dict(os.environ, {'PATH': str(self.bin) + ':' + os.environ.get('PATH', ''),
+                                                         'XDG_CONFIG_HOME': str(self.bin / 'config'),
+                                                         'ARCTIC_DATA_DIR': str(self.bin / 'share')})
+        self.env.start()
+        self.console = module.Console()
+
+    def tearDown(self):
+        self.env.stop()
+        if self.console.pid:
+            os.kill(self.console.pid, signal.SIGKILL)
+            os.waitpid(self.console.pid, 0)
+            os.close(self.console.master)
+        self.tmp.cleanup()
+
+    def states(self, job):
+        lines = []
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            self.console.run(job)
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                self.console.read()
+                if self.console.dirty:
+                    self.console.emit()
+                if self.console.pid is None and self.console.job is None and not self.console.dirty:
+                    break
+                time.sleep(0.02)
+        lines = [json.loads(l) for l in stream.getvalue().splitlines()]
+        return lines
+
+    def test_a_flatpak_install_reports_progress_then_success(self):
+        lines = self.states(dict(id='j8', kind='install', source='flatpak', ids=['org.gimp.GIMP'], installation='system', name='GIMP'))
+        running = [l['job'] for l in lines if l.get('job')]
+        self.assertTrue(running)
+        self.assertEqual(running[0]['id'], 'j8')
+        self.assertIn(45, [j['percent'] for j in running])
+        self.assertEqual(lines[-1]['finished'], dict(id='j8', ok=True, code=0, message=''))
+        self.assertIsNone(lines[-1]['job'])
+        self.assertIn('install --system -y --noninteractive flathub org.gimp.GIMP', (self.bin / 'calls').read_text())
+        self.assertIn('$ flatpak install --system', lines[-1]['output'])   # the console shows GUI jobs too
+
+    def test_a_failed_job_says_why(self):
+        (self.bin / 'fail').write_text('')
+        lines = self.states(dict(id='j9', kind='install', source='flatpak', ids=['org.gimp.GIMP'], installation='system', name='GIMP'))
+        self.assertEqual(lines[-1]['finished'], dict(id='j9', ok=False, code=1, message=
+                         'GIMP couldn’t be downloaded. Check your internet connection and try again. Nothing else changed.'))
+
+    def test_a_flatpak_removal_runs_both_commands(self):
+        lines = self.states(dict(id='j10', kind='remove', source='flatpak', ids=['org.gimp.GIMP'], installation='user', delete_data=False))
+        self.assertTrue(lines[-1]['finished']['ok'])
+        self.assertEqual((self.bin / 'calls').read_text().splitlines(),
+                         ['uninstall --user -y --noninteractive org.gimp.GIMP', 'uninstall --user -y --noninteractive --unused'])
+
+    def test_refused_jobs_and_a_second_job(self):
+        lines = self.states(dict(id='j1', kind='remove', source='dnf', ids=['arctic-shell']))
+        self.assertEqual(lines[-1]['finished'], dict(id='j1', ok=False, code=-1, message='arctic-shell is part of Arctic Linux, so Get apps won’t remove it.'))
+        self.assertFalse((self.bin / 'calls').exists())
+        self.console.run(dict(id='a', kind='install', source='flatpak', ids=['org.gimp.GIMP'], installation='system'))
+        self.console.run(dict(id='b', kind='install', source='flatpak', ids=['org.gimp.GIMP'], installation='system'))
+        self.assertEqual(self.console.finished['id'], 'b')
+        self.assertFalse(self.console.finished['ok'])
+        self.assertEqual(self.console.job['id'], 'a')
+
+    def test_transcript_can_be_turned_off(self):
+        module.handle(self.console, dict(action='transcript', on=False))
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            self.console.emit()
+        self.assertNotIn('output', json.loads(stream.getvalue()))
+
+    def test_a_typed_command_is_a_console_job(self):
+        self.console.start('x', [sys.executable, '-c', 'print(1)'])
+        self.assertEqual(self.console.job['kind'], 'console')
+
+    def test_the_job_finishes_after_the_shell_goes_away(self):
+        (self.bin / 'flatpak').write_text('#!/bin/sh\nsleep 1\necho done > "$(dirname "$0")/finished"\n')
+        runner = subprocess.Popen([sys.executable, str(Path(__file__).parents[1] / 'scripts/install-terminal.py')],
+                                  stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ.copy())
+        job = dict(id='j', kind='install', source='flatpak', ids=['org.gimp.GIMP'], installation='system')
+        runner.stdin.write((json.dumps(dict(action='run', job=job)) + '\n').encode())
+        runner.stdin.close()
+        self.assertEqual(runner.wait(timeout=10), 0)
+        self.assertEqual((self.bin / 'finished').read_text(), 'done\n')
+
 
 if __name__ == '__main__':
     unittest.main()
