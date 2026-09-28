@@ -1,8 +1,9 @@
 # Desktop tour
 
 The Arctic Linux desktop is Mango, a tiling window manager, with a shell drawn on top of it: the
-bar, the launcher, pop-ups and the lock screen. Everything has a keyboard shortcut
-(`Super + /` lists them all), and everything also works with the mouse.
+bar, the launcher, pop-ups and the lock screen. **Arctic Settings** (`Super + S`) changes how it
+all looks and works. Everything has a keyboard shortcut (`Super + /` lists them all), and
+everything also works with the mouse.
 
 `Super` is the key with the Windows logo on most keyboards.
 
@@ -82,6 +83,7 @@ through them. On a touchpad, swipe with four fingers left or right.
 - **Apps**: every app on this computer
 - **Get apps**: install new apps (see below)
 - **Wallpapers**: change the desktop picture
+- **Settings**: appearance, displays, keyboard, apps and more (`Super + S`)
 - **Fetch**: the fox greeting in a terminal
 - **Install Arctic Linux**: only on the live USB
 
@@ -108,8 +110,33 @@ in your terminal and keeps the window open so you can read the output.
 ![The Get apps console suggesting packages for a typed name](images/get-apps.png)
 
 `Super + Shift + A`, or **Get apps** in the launcher, opens a small console for installing apps.
-Type an app's name and press `Enter` to install it, and `Tab` to complete a name. It asks for your
-password when it needs it. Full details are on [Apps and software](Apps-and-Software#get-apps).
+Type an app's name and press `Enter` to install it, and `Tab` to complete a name. Installs run on
+their own, without `[y/N]` questions; your password is asked once, in a dialog. Full details are
+on [Apps and software](Apps-and-Software#get-apps).
+
+## Settings
+
+![Arctic Settings on the Windows page, with sliders for gaps, borders and corners](images/settings-windows.png)
+
+`Super + S` opens **Arctic Settings**. It's also in the launcher and first in the power menu.
+Pick a page on the left, or start typing to search every setting:
+
+| Page | Changes |
+|---|---|
+| **Appearance** | Theme, colours from the wallpaper, light or dark, wallpaper, reduced motion, text and pointer size |
+| **Windows** | Gaps, borders, rounded corners, animations, blur, shadows, focus, the default layout |
+| **Displays** | Resolution, scale, rotation and position of each screen |
+| **Keyboard and mouse** | Layout, key repeat, touchpad and mouse |
+| **Shortcuts** | Your own shortcuts |
+| **Default apps** | The browser, terminal, file manager and editor the shortcuts open, and the apps for links and files |
+| **Network**, **Bluetooth**, **Sound** | Wi-Fi, Bluetooth devices, speakers and microphones |
+| **Updates** | What's waiting, automatic updates and the channel |
+| **Power and lock** | Power mode, when the screen locks and when the computer sleeps |
+| **Startup apps** | Apps that start when you log in |
+| **About** | This computer and Arctic Linux |
+
+Changes apply straight away, and `Ctrl + Z` undoes the last one. Everything is on
+[Settings](Settings).
 
 ## Wallpapers
 
@@ -122,6 +149,10 @@ to use it, or search by name.
   and they switch along with the theme ("Follows the theme").
 - **Your own pictures**: put them in `~/Pictures/Wallpapers`, or click **Choose folder…** to use
   another folder. Your own picture stays the same when you switch themes.
+- **Match colours to wallpaper** (the switch at the bottom, on by default): with one of your own
+  pictures, the whole desktop takes its colours from it: the accent, the window borders, the
+  terminal and your apps. Arctic's own wallpapers keep the Winter and Polar night colours. See
+  [Themes and customisation](Themes-and-Customisation#colours-from-your-wallpaper).
 
 ## Notifications and do not disturb
 
@@ -146,9 +177,9 @@ black screen.
 
 ![The power menu](images/power-menu.png)
 
-`Super + Esc`, or the power icon on the bar, opens the power menu: **Lock screen**, **Log out**,
-**Suspend**, **Restart** and **Shut down**. On the live USB it only has **Restart** and
-**Shut down**.
+`Super + Esc`, or the power icon on the bar, opens the power menu: **Settings**, **Lock screen**,
+**Log out**, **Suspend**, **Restart** and **Shut down**. On the live USB it has **Settings**,
+**Restart** and **Shut down**.
 
 ## The lock screen
 
@@ -185,7 +216,8 @@ password to allow it.
 
 `Super + Enter` opens a terminal, where a small fox greets you. See
 [Terminal and shell](Terminal-and-Shell). `Super + Shift + T` switches the whole desktop between the
-light Winter and the dark Polar night themes:
+light Winter and the dark Polar night themes (or, when the colours come from your wallpaper,
+between its light and dark versions):
 
 ![The same desktop in the Winter theme](images/theme-winter.png)
 
