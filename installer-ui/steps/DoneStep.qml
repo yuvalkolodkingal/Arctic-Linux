@@ -2,6 +2,7 @@
 // card, Restart now (primary) and Keep trying (ghost: stay in the live session).
 // With drivers: a line for each, and with Secure Boot on, the steps of the blue
 // "Perform MOK management" screen and the one-time code to type there.
+pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
 import "../components"
