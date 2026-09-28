@@ -692,11 +692,20 @@ func (in *Installer) removeLivePackages(ctx context.Context) error {
 
 // relabel sets the SELinux labels of the whole target (the API file systems and the vfat
 // ESP excepted) from the target's own file contexts. It returns setfiles' exit code.
+//
+// setfiles never crosses into another mounted file system (it runs with -x implied), so every
+// subvolume and /boot is named: left out, /home/<user>, /var/log and /boot would stay unlabelled
+// (unlabeled_t), and the login would fail to enter the home directory.
 func (in *Installer) relabel(ctx context.Context) (int, error) {
 	t := in.Opt.Target
-	res, err := in.R.Run(ctx, Cmd{Name: "setfiles", Args: []string{"-F", "-r", t,
+	args := []string{"-F", "-r", t,
 		"-e", in.tgt("/proc"), "-e", in.tgt("/sys"), "-e", in.tgt("/dev"), "-e", in.tgt("/run"), "-e", in.tgt("/boot/efi"),
-		in.tgt("/etc/selinux/targeted/contexts/files/file_contexts"), t}, AllowFail: true})
+		in.tgt("/etc/selinux/targeted/contexts/files/file_contexts")}
+	for _, sv := range subvolumes {
+		args = append(args, in.tgt(sv.mount))
+	}
+	args = append(args, in.tgt("/boot"))
+	res, err := in.R.Run(ctx, Cmd{Name: "setfiles", Args: args, AllowFail: true})
 	if err != nil {
 		return 0, err
 	}

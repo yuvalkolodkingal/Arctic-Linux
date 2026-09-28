@@ -299,6 +299,10 @@ func TestLivePackagesRemovedWithoutScriptlets(t *testing.T) {
 		}
 	}
 	// Whole-system relabels (with the API file system excludes); snapper's files get their own.
+	// setfiles doesn't cross mount points: every subvolume and /boot must be named.
+	if !strings.Contains(plan, "file_contexts /mnt /mnt/home /mnt/var/log /mnt/nix /mnt/boot\n") {
+		t.Error("setfiles doesn't relabel every mounted subvolume and /boot")
+	}
 	if n := strings.Count(plan, "$ setfiles -F -r /mnt -e "); n != 2 {
 		t.Errorf("want two relabels (after the copy and at the end), got %d", n)
 	}
