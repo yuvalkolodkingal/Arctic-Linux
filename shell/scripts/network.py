@@ -18,6 +18,9 @@
     network.py share --uuid U [--reveal]   a QR code (SVG) a phone camera joins with
     network.py vpn-up --uuid U [--ask]  |  vpn-down --uuid U
     network.py vpn-import --file PATH [--type openvpn|wireguard]
+    network.py hotspot on [--ssid NAME] | off
+                                     this computer as a Wi-Fi access point ("Arctic hotspot"),
+                                     sharing its connection; the share card shows its password
 
 One-shot commands print one JSON line: {"ok":true,…} or {"ok":false,"error":"<sentence>",
 "code":"<code>"} and exit 0/1. `watch` prints one object per line with a "type": "state"
@@ -37,7 +40,9 @@ every change succeed without running anything (screenshots and tests).
 import json
 import os
 import re
+import secrets
 import selectors
+import socket
 import subprocess
 import sys
 import time
@@ -48,6 +53,8 @@ SCAN_INTERVAL = 8.0
 DEBOUNCE = 0.25
 TYPES = {'802-11-wireless': 'wifi', 'wifi': 'wifi', '802-3-ethernet': 'ethernet', 'ethernet': 'ethernet',
          'vpn': 'vpn', 'wireguard': 'wireguard'}
+HOTSPOT = 'Arctic hotspot'               # the hotspot's profile name (kept apart from Wi-Fi networks)
+PASSWORD_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789'      # no l, o, 0 or 1 to misread
 
 
 class Failure(Exception):
@@ -213,6 +220,31 @@ def build_state(devices, active, profiles, radio):
     return {'type': 'state', 'nm_running': True, 'wifi': wifi, 'wired': wired, 'active': act, 'vpn': vpn}
 
 
+def mark_hotspot(state, hotspot, ap_capable):
+    """Add the hotspot to a state object: {"active","uuid","ssid"}; its active connection gets the
+    type "hotspot", so it isn't taken for the Wi-Fi network the computer is on."""
+    if state.get('wifi') is not None:
+        state['wifi']['ap_capable'] = bool(ap_capable)
+    uuid = hotspot['uuid'] if hotspot else None
+    active = False
+    for a in state.get('active', []):
+        if uuid and a['uuid'] == uuid:
+            a['type'] = 'hotspot'
+            active = True
+    state['hotspot'] = {'active': active, 'uuid': uuid, 'ssid': hotspot['ssid'] if hotspot else None}
+    return state
+
+
+def hotspot_password(length=12):
+    return ''.join(secrets.choice(PASSWORD_CHARS) for _ in range(length))
+
+
+def hotspot_ssid(host=None):
+    """The hotspot's name: the computer's name, as phones list it ("arctic-laptop hotspot")."""
+    name = re.sub(r'[^\w .-]', '', (host if host is not None else socket.gethostname()).split('.')[0]).strip()
+    return ('%s hotspot' % name[:24]) if name and name != 'localhost' else 'Arctic hotspot'
+
+
 NM_DEVICE_FAILED = 120
 NM_REASON_NO_SECRETS = 7
 
@@ -308,14 +340,22 @@ def with_secret(setting, secret, run):
 class Reader:
     def __init__(self):
         self.ssids = {}                  # profile uuid → SSID (profiles rarely change their SSID)
+        self.ap = {}                     # Wi-Fi device → can it be an access point
 
     def profiles(self):
         return rows('-f', 'NAME,UUID,TYPE,TIMESTAMP,AUTOCONNECT', 'connection', 'show') or []
 
-    def wifi_profiles(self, profiles=None):
+    def ap_capable(self, device):
+        if device not in self.ap:
+            code, text, _ = nmcli('-g', 'WIFI-PROPERTIES.AP', 'device', 'show', device)
+            self.ap[device] = code == 0 and text.strip() == 'yes'
+        return self.ap[device]
+
+    def wifi_profiles(self, profiles=None, hotspot=False):
+        """Saved Wi-Fi networks; with hotspot=True, the hotspot's profile instead."""
         out = []
         for f in profiles if profiles is not None else self.profiles():
-            if len(f) >= 4 and TYPES.get(f[2]) == 'wifi':
+            if len(f) >= 4 and TYPES.get(f[2]) == 'wifi' and (f[0] == HOTSPOT) == hotspot:
                 uuid = f[1]
                 if uuid not in self.ssids:
                     code, text, _ = nmcli('-g', '802-11-wireless.ssid', 'connection', 'show', 'uuid', uuid)
@@ -347,7 +387,8 @@ class Reader:
         state['saved'] = [{'uuid': p['uuid'], 'ssid': p['ssid'], 'autoconnect': p['autoconnect']}
                           for p in self.wifi_profiles(profiles)]
         state['airplane'] = airplane_on(rfkill_state())
-        return state
+        hotspot = next(iter(self.wifi_profiles(profiles, hotspot=True)), None)
+        return mark_hotspot(state, hotspot, state['wifi'] is not None and self.ap_capable(state['wifi']['device']))
 
     def networks(self, rescan=False):
         if rescan:
@@ -614,6 +655,54 @@ def cmd_vpn_import(args):
     return {'ok': True, 'kind': kind, 'name': m.group(1) if m else '', 'uuid': m.group(2) if m else ''}
 
 
+def cmd_hotspot(args):
+    """Turn the hotspot on or off. The first time, a profile is added without a password and
+    brought up with a new one through a pipe (NetworkManager keeps it; the share card reads it
+    back); later it is brought up as it is, with a new password only if the old one is gone."""
+    if FIXTURE:
+        return {'ok': True, 'active': args.mode == 'on'}
+    existing = next(iter(Reader().wifi_profiles(hotspot=True)), None)
+    if args.mode == 'off':
+        if existing:
+            simple('connection', 'down', 'uuid', existing['uuid'])
+        return {'ok': True, 'active': False}
+    device = wifi_device()
+    if not device:
+        raise Failure('radio_off', 'There is no Wi-Fi on this computer.')
+
+    def start(uuid, fresh):
+        try:
+            activate(uuid, '', '802-11-wireless-security.psk' if fresh else None, hotspot_password() if fresh else None)
+        except Failure as e:
+            if e.code in ('denied', 'nm_down', 'auth'):
+                raise
+            raise Failure(e.code, 'The hotspot didn’t start. Your Wi-Fi card may not share while it is busy; try again.')
+
+    if existing:
+        try:
+            start(existing['uuid'], False)
+        except Failure as e:
+            if e.code != 'auth':
+                raise
+            start(existing['uuid'], True)            # its password wasn't kept: a new one
+        return {'ok': True, 'active': True, 'uuid': existing['uuid'], 'ssid': existing['ssid']}
+    ssid = args.ssid or hotspot_ssid()
+    # 2.4 GHz WPA2 (AES only): what every phone and laptop can join.
+    code, out, err = nmcli('connection', 'add', 'type', 'wifi', 'ifname', device, 'con-name', HOTSPOT,
+                           'autoconnect', 'no', 'ssid', ssid, '802-11-wireless.mode', 'ap', '802-11-wireless.band', 'bg',
+                           'ipv4.method', 'shared', 'wifi-sec.key-mgmt', 'wpa-psk', 'wifi-sec.proto', 'rsn',
+                           'wifi-sec.pairwise', 'ccmp', 'wifi-sec.group', 'ccmp')
+    m = re.search(r'\(([0-9a-f-]{36})\)', out)
+    if code != 0 or not m:
+        raise Failure(*error_for(code, err, ''))
+    try:
+        start(m.group(1), True)
+    except Failure:
+        nmcli('connection', 'delete', 'uuid', m.group(1))
+        raise
+    return {'ok': True, 'active': True, 'uuid': m.group(1), 'ssid': ssid}
+
+
 # ---- watch ------------------------------------------------------------------------------------
 def lines_of(fd, buf):
     """Read what is available on fd; returns (complete lines, rest, eof)."""
@@ -792,6 +881,9 @@ def parse(argv):
     vi.add_argument('--type', choices=['openvpn', 'wireguard'])
     v = sub.add_parser('vpn-down')
     v.add_argument('--uuid', required=True)
+    hs = sub.add_parser('hotspot')
+    hs.add_argument('mode', choices=['on', 'off'])
+    hs.add_argument('--ssid')
     return p.parse_args(argv)
 
 
@@ -837,6 +929,8 @@ def main(argv=None, stdin=None):
             out = cmd_vpn_import(args)
         elif args.cmd == 'vpn-down':
             out = simple('connection', 'down', 'uuid', args.uuid)
+        elif args.cmd == 'hotspot':
+            out = cmd_hotspot(args)
         else:
             raise Failure('usage', 'Unknown command.')
     except Failure as e:

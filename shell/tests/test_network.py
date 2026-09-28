@@ -136,6 +136,21 @@ class Parsing(unittest.TestCase):
             with self.assertRaises(network.Failure, msg=bad):
                 network.read_secret(io.StringIO(bad))
 
+    def test_hotspot_state(self):
+        state = {'wifi': {'device': 'wlp2s0'}, 'active': [{'uuid': 'h', 'type': 'wifi', 'name': 'Arctic hotspot'},
+                                                         {'uuid': 'w', 'type': 'ethernet', 'name': 'Wired'}]}
+        network.mark_hotspot(state, {'uuid': 'h', 'ssid': 'ada hotspot'}, True)
+        self.assertEqual(state['hotspot'], {'active': True, 'uuid': 'h', 'ssid': 'ada hotspot'})
+        self.assertEqual(state['active'][0]['type'], 'hotspot')         # not the Wi-Fi network you're on
+        self.assertTrue(state['wifi']['ap_capable'])
+        state = network.mark_hotspot({'wifi': None, 'active': []}, None, False)
+        self.assertEqual(state['hotspot'], {'active': False, 'uuid': None, 'ssid': None})
+        self.assertEqual(network.hotspot_ssid('ada-laptop.home'), 'ada-laptop hotspot')
+        self.assertEqual(network.hotspot_ssid('localhost'), 'Arctic hotspot')
+        pw = network.hotspot_password()
+        self.assertEqual(len(pw), 12)
+        self.assertTrue(set(pw) <= set(network.PASSWORD_CHARS))
+
     def test_wep_key_type(self):
         self.assertEqual(network.wep_key_type('abcde'), 'key')
         self.assertEqual(network.wep_key_type('0123456789'), 'key')
@@ -252,6 +267,36 @@ class Commands(unittest.TestCase):
         self.assertEqual(pairs['802-1x.system-ca-certs'], 'yes')
         self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
         self.assertNoSecretOnArgv()
+
+    def test_hotspot_first_time(self):
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'Arctic hotspot' (%s) successfully added.\n" % UUID}
+        code, out = self.run_helper('hotspot', 'on', '--ssid', 'ada hotspot', scenario=scenario)
+        self.assertEqual((code, out), (0, {'ok': True, 'active': True, 'uuid': UUID, 'ssid': 'ada hotspot'}))
+        add = next(a for a in self.argv() if a[:2] == ['connection', 'add'])
+        pairs = dict(zip(add[2::2], add[3::2]))
+        self.assertEqual((pairs['con-name'], pairs['802-11-wireless.mode'], pairs['ipv4.method'], pairs['wifi-sec.key-mgmt']),
+                         ('Arctic hotspot', 'ap', 'shared', 'wpa-psk'))
+        self.assertNotIn('wifi-sec.psk', pairs)                          # the password only through the pipe
+        secret = self.secrets()
+        self.assertRegex(secret, r'^802-11-wireless-security\.psk:[a-z2-9]{12}\n$')
+        self.assertFalse(any(secret.split(':', 1)[1].strip() in ' '.join(a) for a in self.argv()))
+
+    def test_hotspot_again_and_off(self):
+        scenario = dict(STATUS)
+        scenario['connection show'] = {'out': STATUS['connection show']['out'] +
+                                       'Arctic hotspot:77777777-2222-3333-4444-555555555555:802-11-wireless:0:no\n'}
+        code, out = self.run_helper('hotspot', 'on', scenario=scenario)
+        self.assertEqual((code, out['active'], out['uuid']), (0, True, '77777777-2222-3333-4444-555555555555'))
+        self.assertFalse(any(a[:2] == ['connection', 'add'] for a in self.argv()))
+        self.assertEqual(self.secrets(), '')                             # its saved password is used
+        code, out = self.run_helper('hotspot', 'off', scenario=scenario)
+        self.assertEqual((code, out), (0, {'ok': True, 'active': False}))
+        self.assertIn(['connection', 'down', 'uuid', '77777777-2222-3333-4444-555555555555'], self.argv())
+        # Saved networks leave the hotspot out.
+        code, out = self.run_helper('status', scenario=scenario)
+        self.assertEqual([s['ssid'] for s in out['saved']], ['Home'])
+        self.assertEqual(out['hotspot']['uuid'], '77777777-2222-3333-4444-555555555555')
 
     def test_company_network_refusals(self):
         with self.assertRaises(network.Failure):

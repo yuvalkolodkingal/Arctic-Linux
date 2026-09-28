@@ -6,8 +6,8 @@ import Quickshell
 // The network menu (bar network item, Super + Ctrl + W): Wi-Fi on/off, the wired link, nearby
 // Wi-Fi networks (scanned only while this is open), joining with the password asked right under
 // the network, company (802.1X) networks with a username and password, hidden networks, a
-// network's actions (disconnect, connect automatically, forget), VPN switches, and Settings /
-// the connection editor. Everything goes through network.py
+// network's actions (disconnect, connect automatically, forget), a hotspot, VPN switches, and
+// Settings / the connection editor. Everything goes through network.py
 // (NetworkService.run); a password travels to it on stdin and is cleared from the field.
 FocusScope {
     id: panel
@@ -21,6 +21,9 @@ FocusScope {
     property string vpnPending: ''
     property string vpnAsking: ''
     property string vpnError: ''
+    property bool hotspotPending: false
+    property bool hotspotConfirm: false   // "This disconnects “Home”" asked, not yet answered
+    property string hotspotError: ''
     readonly property var wifi: NetworkService.wifi
     readonly property bool wifiOn: wifi !== null && wifi.enabled && wifi.hardware
 
@@ -238,6 +241,37 @@ FocusScope {
             onActivated: { panel.joinError = ''; panel.joinSecurity = 'wpa-psk'; panel.page = 'join'; }
         }
 
+        // Hotspot (a Wi-Fi card that can be an access point): phones and laptops join this
+        // computer and share its connection, usually the wired one.
+        MenuSwitchRow {
+            id: hotspotRow
+            visible: panel.wifiOn && NetworkService.hotspotCapable
+            icon: 'hotspot'
+            label: 'Hotspot'
+            checked: NetworkService.hotspot.active
+            busy: panel.hotspotPending
+            detail: NetworkService.hotspot.active ? 'On · “' + NetworkService.hotspot.ssid + '”'
+                    : NetworkService.wiredLink ? 'Shares your wired connection' : 'Off'
+            errorText: panel.hotspotError
+            onToggled: on => {
+                if (panel.hotspotConfirm) panel.hotspotConfirm = false;
+                else if (on && NetworkService.wifiActive) panel.hotspotConfirm = true;
+                else panel.setHotspot(on);
+            }
+        }
+        MenuRow {
+            visible: hotspotRow.visible && panel.hotspotConfirm && NetworkService.wifiActive !== null
+            label: 'Turn on the hotspot'
+            detail: 'This disconnects “' + (NetworkService.wifiActive ? NetworkService.wifiActive.name : '') + '”.'
+            onActivated: panel.setHotspot(true)
+        }
+        MenuRow {
+            visible: hotspotRow.visible && NetworkService.hotspot.active
+            icon: 'qr-code'
+            label: 'Show the name and password…'
+            onActivated: panel.menu.shell.shareWifi(NetworkService.hotspot.uuid, NetworkService.hotspot.ssid)
+        }
+
         MenuSection {
             visible: NetworkService.vpn.length > 0
             text: 'VPN'
@@ -293,6 +327,16 @@ FocusScope {
             trailing: 'external'
             onActivated: panel.external(['nm-connection-editor'])
         }
+    }
+
+    function setHotspot(on) {
+        hotspotConfirm = false;
+        hotspotError = '';
+        hotspotPending = true;
+        NetworkService.run(['hotspot', on ? 'on' : 'off'], null, r => {
+            panel.hotspotPending = false;
+            if (!r.ok) panel.hotspotError = r.error;
+        });
     }
 
     property string vpnFailed: ''

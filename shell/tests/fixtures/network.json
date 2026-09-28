@@ -2,12 +2,13 @@
   "comment": "Test data for network.py's fixture mode (ARCTIC_NETWORK_FIXTURE): screenshots and tests only.",
   "state": {
     "nm_running": true,
-    "wifi": {"device": "wlp2s0", "state": "connected", "hardware": true, "enabled": true},
+    "wifi": {"device": "wlp2s0", "state": "connected", "hardware": true, "enabled": true, "ap_capable": true},
     "wired": [{"device": "enp3s0", "state": "unavailable", "connection": ""}],
     "active": [{"uuid": "5d9f0c55-0000-4000-8000-000000000001", "name": "Fjord", "type": "wifi", "device": "wlp2s0", "state": "activated"}],
     "vpn": [{"uuid": "5d9f0c55-0000-4000-8000-000000000009", "name": "Work VPN", "kind": "wireguard", "active": false, "last_used": 1759000000}],
     "saved": [{"uuid": "5d9f0c55-0000-4000-8000-000000000001", "ssid": "Fjord", "autoconnect": true},
-              {"uuid": "5d9f0c55-0000-4000-8000-000000000002", "ssid": "Library", "autoconnect": true}]
+              {"uuid": "5d9f0c55-0000-4000-8000-000000000002", "ssid": "Library", "autoconnect": true}],
+    "hotspot": {"active": false, "uuid": null, "ssid": null}
   },
   "networks": [
     {"ssid": "Fjord", "signal": 84, "band": "5 GHz", "security": "wpa-psk", "in_use": true, "saved": true, "uuid": "5d9f0c55-0000-4000-8000-000000000001", "hidden": false},
