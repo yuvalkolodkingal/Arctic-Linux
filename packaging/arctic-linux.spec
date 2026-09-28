@@ -244,10 +244,19 @@ Requires:       python3-pyte
 # pkexec, for Get apps
 Requires:       polkit
 Requires:       arctic-fonts = %{version}-%{release}
+# Stream 3a (bar menus): the Bluetooth pairing agent and battery.py talk D-Bus with
+# python3-dbus and a GLib main loop; gdbus checks for the power-profiles service; ddcutil
+# sets external monitors' brightness. (The network menu hides itself without nmcli.)
+Requires:       python3-dbus
+Requires:       python3-gobject-base
+Requires:       glib2
+Recommends:     ddcutil
 
 %description -n arctic-shell
-The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,
-the get-apps console, on-screen display, lock screen and the live-session welcome card.
+The Arctic Linux desktop shell, written for Quickshell: top bar with its own menus (network
+and Wi-Fi, Bluetooth with a pairing agent, sound, battery and power mode, calendar, media,
+tray menus) and Quick Settings, launcher, wallpaper picker, the get-apps console, on-screen
+display, lock screen and the live-session welcome card.
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
 
 # ---------------------------------------------------------------------------------------------
