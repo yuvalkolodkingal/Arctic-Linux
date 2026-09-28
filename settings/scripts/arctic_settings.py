@@ -2036,6 +2036,9 @@ def cmd_idle_set(paths, args):
         raise Failure('Suspend can’t come before the screen locks.')
     text = ('# Written by Arctic Settings. `arctic-session idle` (swayidle) reads it; 0 means never.\n'
             'lock_after={}\nsuspend_after={}\n').format(lock, suspend)
+    # Stream 5: keep the other keys (battery times, dimming, screens off: arctic_system.py).
+    text += ''.join(line + '\n' for line in (read_text(paths.idle_conf) or '').splitlines()
+                    if re.match(r'^\w+=\d+$', line) and line.split('=')[0] not in ('lock_after', 'suspend_after'))
     if paths.idle_conf.exists():
         backup(paths, paths.idle_conf)
     atomic_write(paths.idle_conf, text)

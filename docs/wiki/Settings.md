@@ -272,6 +272,12 @@ afterwards), and **Take snapshot** takes one now.
 
 - **When you're away:** lock the screen after, and suspend after, a time you pick (or never).
   The screen always locks before the computer sleeps. Saved in `~/.config/arctic/idle.conf`.
+- **On battery** (on laptops): other times while unplugged, or **Same as plugged in** (the
+  default). Plugging in or unplugging switches between them.
+- **Around the lock:** **Dim the screen before it locks** (half as bright 30 seconds before, on
+  screens with a backlight; on by default) and **Turn the screens off after locking** (1 minute
+  by default, or Never). A key or the mouse brings either back. Keep awake (`Super + Ctrl + I`)
+  and apps that play video or hold a call pause all of this.
 - **Power mode:** Power saver, Balanced or Performance (when the computer offers them).
 - **Laptop lid** (on laptops): **When you close the lid** — **Suspend** (the default; it locks
   first), **Lock and turn the screen off**, or **Keep running, screen off**. With another screen

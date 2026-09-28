@@ -449,6 +449,21 @@ class DisplayTest(HelperHome):
         self.assertEqual(self.helper('lid')['whenClosed'], 'lock')
         self.helper('lid-set', 'hibernate', ok=False)
 
+    def test_screens_off_after_the_lock(self):
+        # Only the lit screens sleep, and only those wake (the laptop panel stays off by choice).
+        self.outputs.write_text(json.dumps([dict(WLR_RANDR[0], enabled=False), WLR_RANDR[1]]))
+        self.assertEqual(self.tool('arctic-display', 'screens', 'off')['screens'], ['HDMI-A-1'])
+        self.assertEqual(self.dispatches(), ['sleep_monitor,HDMI-A-1'])
+        self.assertEqual(self.tool('arctic-display', 'screens', 'on')['screens'], ['HDMI-A-1'])
+        self.assertEqual(self.dispatches()[-1], 'wakeup_monitor,HDMI-A-1')
+        self.assertEqual(self.tool('arctic-display', 'screens', 'on')['screens'], [])   # once
+        # Both lit, then the lid shuts while they sleep: the panel behind it stays dark.
+        self.outputs.write_text(json.dumps(WLR_RANDR))
+        self.tool('arctic-display', 'screens', 'off')
+        self.lid.write_text('state:      closed\n')
+        self.assertEqual(self.tool('arctic-display', 'screens', 'on')['screens'], ['HDMI-A-1'])
+        self.assertNotIn('wakeup_monitor,eDP-1', self.dispatches())
+
     def test_session_holds_the_lid_switch(self):
         ran = self.tmp / 'inhibit.log'
         stub(self.bin, 'systemd-inhibit', 'echo "$*" >> "{}"\n'.format(ran))

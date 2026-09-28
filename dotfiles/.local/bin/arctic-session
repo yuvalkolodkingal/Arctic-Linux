@@ -4,7 +4,7 @@
 # (for example as a systemd user unit from arctic-desktop-config), nothing happens.
 #
 #   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle [--restart]
-#                  nightlight | drives | lid [--restart] | effects | screensaver
+#                  nightlight | drives | lid [--restart] | effects | screensaver | power-watch
 #
 # `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
@@ -17,6 +17,26 @@ run_once() {   # run_once <process name> <command...>
   pgrep -u "$UID" -x "$name" >/dev/null 2>&1 && return 0
   command -v "$1" >/dev/null 2>&1 || [[ -x "$1" ]] || return 0
   setsid -f "$@" >/dev/null 2>&1
+}
+
+# battery | ac | nothing (no battery): from sysfs (ARCTIC_POWER_SUPPLY in tests). A mouse's or a
+# phone's battery (scope Device) doesn't count; any charger online means plugged in.
+power_source() {
+  local dir type scope online battery=""
+  for dir in "${ARCTIC_POWER_SUPPLY:-/sys/class/power_supply}"/*; do
+    [[ -r "$dir/type" ]] || continue
+    read -r type < "$dir/type"
+    if [[ "$type" == Battery ]]; then
+      scope=System
+      [[ -r "$dir/scope" ]] && read -r scope < "$dir/scope"
+      [[ "$scope" == Device ]] || battery=1
+    elif [[ -r "$dir/online" ]]; then
+      read -r online < "$dir/online"
+      [[ "$online" == 1 ]] && { echo ac; return 0; }
+    fi
+  done
+  [[ -n "$battery" ]] && echo battery
+  return 0
 }
 
 case "${1:-}" in
@@ -42,12 +62,16 @@ case "${1:-}" in
     # Lock after 5 min, suspend after 15 min; lock before any suspend. The live session only dims.
     # Settings (Power & lock) changes the times in ~/.config/arctic/idle.conf (lock_after=,
     # suspend_after=, in seconds; 0 = never) and restarts swayidle with `idle --restart`.
+    # Also there: lock_after_battery= and suspend_after_battery= (on battery; missing = the same
+    # as plugged in), dim_before_lock= (seconds, 0 = don't dim) and screen_off_after= (seconds
+    # after the lock, 0 = leave the screens on).
     if arctic-is-live 2>/dev/null; then exit 0; fi
     if [[ "${2:-}" == --restart ]]; then
       pkill -u "$UID" -x swayidle 2>/dev/null
       for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -u "$UID" -x swayidle >/dev/null 2>&1 || break; sleep 0.1; done
     fi
-    lock_after=300 suspend_after=900 dim_before_lock=30
+    lock_after=300 suspend_after=900 dim_before_lock=30 screen_off_after=60
+    lock_after_battery="" suspend_after_battery=""
     conf="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/idle.conf"
     if [[ -r "$conf" ]]; then
       while IFS='=' read -r key value; do
@@ -56,8 +80,18 @@ case "${1:-}" in
           lock_after) lock_after=$value ;;
           suspend_after) suspend_after=$value ;;
           dim_before_lock) dim_before_lock=$value ;;
+          screen_off_after) screen_off_after=$value ;;
+          lock_after_battery) lock_after_battery=$value ;;
+          suspend_after_battery) suspend_after_battery=$value ;;
         esac
       done < "$conf"
+    fi
+    if [[ -n "$lock_after_battery$suspend_after_battery" ]]; then
+      if [[ "$(power_source)" == battery ]]; then
+        lock_after=${lock_after_battery:-$lock_after} suspend_after=${suspend_after_battery:-$suspend_after}
+      fi
+      # Plugging in or unplugging restarts this with the other times.
+      [[ -n "$(power_source)" ]] && setsid -f "$0" power-watch >/dev/null 2>&1
     fi
     # Keep awake (arctic-keep-awake) drops both timeouts until it ends; locking before sleep stays.
     awake=""
@@ -76,9 +110,32 @@ case "${1:-}" in
              resume 'brightnessctl -q -r')
     fi
     (( lock_after > 0 )) && args+=(timeout "$lock_after" 'arctic-lock')
+    # The screens go dark a little after the lock (Mango's sleep_monitor); a key or the mouse
+    # wakes the ones it put to sleep.
+    if (( lock_after > 0 && screen_off_after > 0 )) && command -v arctic-display >/dev/null 2>&1; then
+      args+=(timeout "$(( lock_after + screen_off_after ))" 'arctic-display screens off'
+             resume 'arctic-display screens on')
+    fi
     (( suspend_after > 0 )) && args+=(timeout "$suspend_after" 'systemctl suspend')
     args+=(before-sleep 'arctic-lock')
     run_once swayidle swayidle "${args[@]}" ;;
+  # Restarts the idle times when the computer is plugged in or unplugged (only started by `idle`
+  # when idle.conf has times for the battery). One per session: the lock file says so.
+  power-watch)
+    lockfile="${XDG_RUNTIME_DIR:-/tmp}/arctic/power-watch.lock"
+    mkdir -p "${lockfile%/*}"
+    exec 9>"$lockfile"
+    flock -n 9 || exit 0
+    last="$(power_source)"
+    [[ -n "$last" ]] || exit 0
+    # A battery reports its charge every minute or so: restart only when the source changes.
+    udevadm monitor --udev --subsystem-match=power_supply 2>/dev/null | while read -r line; do
+      [[ "$line" == UDEV* ]] || continue
+      now="$(power_source)"
+      [[ "$now" == "$last" ]] && continue
+      last="$now"
+      "$0" idle --restart 9>&-
+    done ;;
   # Night light on its schedule (arctic-nightlight runs wlsunset; Settings > Displays).
   nightlight) command -v arctic-nightlight >/dev/null 2>&1 && arctic-nightlight apply >/dev/null 2>&1 ;;
   # USB drives and SD cards mount by themselves, with a notification (udiskie; arctic-drives ejects).
@@ -112,5 +169,5 @@ case "${1:-}" in
     { command -v arctic-screensaver >/dev/null 2>&1 && setsid -f arctic-screensaver run >/dev/null 2>&1; } ;;
   # Lighter effects in virtual machines and without a GPU driver; game mode ends with the session.
   effects) command -v arctic-effects >/dev/null 2>&1 && arctic-effects apply >/dev/null 2>&1 ;;
-  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives|lid [--restart]|effects|screensaver" >&2; exit 2 ;;
+  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives|lid [--restart]|effects|screensaver|power-watch" >&2; exit 2 ;;
 esac

@@ -132,6 +132,75 @@ class DimTest(Tools):
         subprocess.run(['bash', str(BIN / 'arctic-session'), 'idle'], env=self.env, check=True, timeout=10)
         self.assertEqual(ran.read_text().splitlines()[-1], '-w^timeout^600^arctic-lock^before-sleep^arctic-lock^')
 
+    def supplies(self, on_battery):
+        """A laptop's sysfs power supplies: BAT0, a mouse's battery and the charger."""
+        root = self.tmp / 'power_supply'
+        for name, files in (('BAT0', dict(type='Battery', capacity='80')),
+                            ('hidpp_battery_0', dict(type='Battery', scope='Device')),
+                            ('AC', dict(type='Mains', online='0' if on_battery else '1'))):
+            (root / name).mkdir(parents=True, exist_ok=True)
+            for key, value in files.items():
+                (root / name / key).write_text(value + '\n')
+        self.env['ARCTIC_POWER_SUPPLY'] = str(root)
+
+    def test_battery_times_and_screens_off(self):
+        ran = self.tmp / 'swayidle.log'
+        stub(self.bin, 'arctic-is-live', 'exit 1\n')
+        stub(self.bin, 'pgrep', 'exit 1\n')
+        stub(self.bin, 'swayidle', 'printf "%s^" "$@" >> "{}"; echo >> "{}"\n'.format(ran, ran))
+        stub(self.bin, 'setsid', 'shift; echo "setsid $*" >> "{}"; case "$1" in */arctic-session) ;; *) exec "$@" ;; esac\n'.format(self.log))
+        stub(self.bin, 'arctic-display', 'exit 0\n')
+        self.supplies(on_battery=True)
+        conf = self.home / '.config/arctic/idle.conf'
+        conf.write_text('lock_after=600\nsuspend_after=1800\ndim_before_lock=0\nlock_after_battery=120\n')
+        session = ['bash', str(BIN / 'arctic-session'), 'idle']
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(ran.read_text().splitlines()[-1].split('^')[:-1],
+                         ['-w', 'timeout', '120', 'arctic-lock', 'timeout', '180', 'arctic-display screens off',
+                          'resume', 'arctic-display screens on', 'timeout', '1800', 'systemctl suspend',
+                          'before-sleep', 'arctic-lock'])
+        self.assertTrue(any(c.startswith('setsid ') and c.endswith('arctic-session power-watch') for c in self.calls()))
+        self.supplies(on_battery=False)
+        conf.write_text('lock_after=600\nsuspend_after=0\nscreen_off_after=0\nlock_after_battery=120\n')
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(ran.read_text().splitlines()[-1].split('^')[1:-1], ['timeout', '600', 'arctic-lock',
+                                                                            'before-sleep', 'arctic-lock'])
+        # The watcher: one per session; it restarts idle when the source changes.
+        stub(self.bin, 'udevadm', 'echo "UDEV  [1.0] change /devices/AC (power_supply)"\n')
+        watch = ['bash', str(BIN / 'arctic-session'), 'power-watch']
+        before = len(self.calls())
+        subprocess.run(watch, env=self.env, check=True, timeout=10)
+        self.assertEqual(len(self.calls()), before)                            # still plugged in
+        stub(self.bin, 'udevadm', 'echo 0 > "$ARCTIC_POWER_SUPPLY/AC/online"\n'
+                                  'echo "UDEV  [2.0] change /devices/AC (power_supply)"\n')
+        subprocess.run(watch, env=self.env, check=True, timeout=10)
+        self.assertEqual(self.calls()[-1], 'setsid swayidle -w timeout 120 arctic-lock before-sleep arctic-lock')
+
+    def test_settings(self):
+        self.supplies(on_battery=True)
+        stub(self.bin, 'arctic-session', 'echo "arctic-session $*" >> "{}"\n'.format(self.log))
+        stub(self.bin, 'arctic-display', 'exit 0\n')
+        data = self.helper('idle-more')
+        self.assertEqual((data['battery'], data['onBattery'], data['lockBattery'], data['dim'], data['screenOff']),
+                         (True, True, None, True, 60))
+        self.helper('idle-set', 600, 1800)
+        self.helper('idle-more-set', 'lock-battery', 180)
+        self.helper('idle-more-set', 'screen-off', 30)
+        self.helper('idle-more-set', 'dim', 'off')
+        conf = self.home / '.config/arctic/idle.conf'
+        self.assertEqual(conf.read_text().splitlines()[1:], ['lock_after=600', 'suspend_after=1800',
+                                                            'lock_after_battery=180', 'screen_off_after=30',
+                                                            'dim_before_lock=0'])
+        self.helper('idle-set', 300, 900)                  # the plugged-in times keep the rest
+        self.assertIn('lock_after_battery=180', conf.read_text())
+        self.assertIn('before the screen locks', self.helper('idle-more-set', 'suspend-battery', 120, ok=False)['error'])
+        for args in (('screen-off', 45), ('dim', 'maybe'), ('lock-battery', 10), ('colour', 'red')):
+            with self.subTest(args):
+                self.helper('idle-more-set', *args, ok=False)
+        self.helper('idle-more-set', 'lock-battery', 'same')
+        self.assertNotIn('lock_after_battery', conf.read_text())
+        self.assertIn('arctic-session idle --restart', self.calls())
+
 
 FIREWALL = '''\
 echo "firewall-cmd $*" >> "{log}"

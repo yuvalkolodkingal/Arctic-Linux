@@ -8,6 +8,8 @@
     arctic-display status [--json]
     arctic-display lid-closed | lid-opened
                                         Mango's switchbind=fold / unfold (binds.conf)
+    arctic-display screens off | on     every screen dark, and back (swayidle, a little after
+                                        the lock: `arctic-session idle`)
 
 Modes last until you log out, re-plug a screen or change the layout in Settings > Displays
 (nothing is written to settings.conf). With the lid closed and another screen connected, the
@@ -282,6 +284,37 @@ def lid(closed):
     return dict(ok=True, done=done)
 
 
+# ---- screens off after the lock ---------------------------------------------------------------
+
+def screens(off):
+    """Put every lit screen to sleep (Mango's sleep_monitor: the layout stays), or wake the ones
+    this put to sleep. A laptop panel behind a closed lid stays dark."""
+    state = read_state()
+    if off:
+        names = [o['name'] for o in outputs() if o['enabled']]
+        for name in names:
+            try:
+                dispatch('sleep_monitor', name)
+            except Failure:
+                names.remove(name)
+        state['asleep'] = sorted(set(state.get('asleep') or []) | set(names))
+        write_state(state)
+        return dict(ok=True, done='screens off', screens=names)
+    names = [n for n in state.pop('asleep', []) or [] if isinstance(n, str)]
+    closed = lid_state() == 'closed'
+    woken = []
+    for name in names:
+        if closed and is_internal(name):
+            continue
+        try:
+            dispatch('wakeup_monitor', name)
+            woken.append(name)
+        except Failure:
+            pass
+    write_state(state)
+    return dict(ok=True, done='screens on', screens=woken)
+
+
 def main(argv):
     verb = argv[0] if argv else 'status'
     if verb in ('-h', '--help'):
@@ -299,9 +332,11 @@ def main(argv):
         result = lid(verb == 'lid-closed')
     elif verb == 'lid' and len(argv) > 1 and argv[1] in ('closed', 'open'):
         result = lid(argv[1] == 'closed')
+    elif verb == 'screens' and len(argv) > 1 and argv[1] in ('off', 'on'):
+        result = screens(argv[1] == 'off')
     else:
-        print('usage: arctic-display status [--json] | mode [laptop|mirror|extend|external] | lid-closed | lid-opened',
-              file=sys.stderr)
+        print('usage: arctic-display status [--json] | mode [laptop|mirror|extend|external] | lid-closed | lid-opened'
+              ' | screens off|on', file=sys.stderr)
         return 2
     print(json.dumps(result))
     return 0

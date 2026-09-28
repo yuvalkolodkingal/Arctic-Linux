@@ -9,8 +9,11 @@ are its (one JSON object per command, Failure for a sentence, argv lists, never 
     printers | printer-default NAME | printer-cancel NAME          CUPS queues (lpstat, lpoptions)
     datetime [zones] [locales] | datetime-set timezone ZONE|ntp on|off|time T|locale LANG
                                   time zone, network time, the clock, the language (polkit)
+    hostname-set NAME             the computer's name (hostnamectl, polkit)
     more-updates | more-update-run apps|firmware  Flatpak apps and firmware (arctic-update)
     lid | lid-set suspend|lock|screen-off          closing the lid without another screen (lid.conf)
+    idle-more | idle-more-set lock-battery|suspend-battery S|same | dim on|off | screen-off S
+                                  times on battery, dimming, screens off after the lock (idle.conf)
     effects | effects-set lighter auto|on|off | game on|off      arctic-effects
     sharing | sharing-set allow NAME on|off | ssh on|off | ssh-password on|off
                                   firewall and remote login (pkexec arctic-system-helper)
@@ -423,6 +426,93 @@ def cmd_lid_set(paths, args):
     return cmd_lid(paths, [])
 
 
+# ---- idle: times on battery, dimming, screens off after the lock (idle.conf) ---------------------
+# arctic_settings.py's idle / idle-set keep lock_after= and suspend_after= (plugged in); these are
+# the other keys `arctic-session idle` reads. A missing battery time means "the same as plugged in".
+
+IDLE_KEYS = {'lock-battery': 'lock_after_battery', 'suspend-battery': 'suspend_after_battery',
+             'dim': 'dim_before_lock', 'screen-off': 'screen_off_after'}
+SCREEN_OFF_CHOICES = (0, 30, 60, 120, 300, 600)
+
+
+def _power_supplies(paths):
+    """(has a battery, running on it) from sysfs, as arctic-session's power_source reads it."""
+    root = Path(paths.env.get('ARCTIC_POWER_SUPPLY') or '/sys/class/power_supply')
+    battery = plugged = False
+    try:
+        supplies = sorted(root.iterdir())
+    except OSError:
+        supplies = []
+    for supply in supplies:
+        kind = (read_text(supply / 'type') or '').strip()
+        if kind == 'Battery':
+            battery = battery or (read_text(supply / 'scope') or 'System').strip() != 'Device'
+        elif (read_text(supply / 'online') or '').strip() == '1':
+            plugged = True
+    return battery, battery and not plugged
+
+
+def _idle_values(paths):
+    values = {}
+    for line in (read_text(paths.idle_conf) or '').splitlines():
+        key, _, value = line.partition('=')
+        if value.strip().isdigit():
+            values[key.strip()] = int(value.strip())
+    return values
+
+
+def cmd_idle_more(paths, _args):
+    from arctic_settings import is_live
+    values = _idle_values(paths)
+    battery, on_battery = _power_supplies(paths)
+    backlight = Path(paths.env.get('ARCTIC_BACKLIGHT') or '/sys/class/backlight')
+    return dict(ok=True, battery=battery, onBattery=on_battery,
+                lockBattery=values.get('lock_after_battery'), suspendBattery=values.get('suspend_after_battery'),
+                dim=values.get('dim_before_lock', 30) > 0, screenOff=values.get('screen_off_after', 60),
+                canDim=bool(which('brightnessctl', paths.env)) and backlight.is_dir() and any(backlight.iterdir()),
+                canScreenOff=bool(which('arctic-display', paths.env)), live=is_live(paths))
+
+
+def cmd_idle_more_set(paths, args):
+    """idle-more-set lock-battery|suspend-battery SECONDS|same | dim on|off | screen-off SECONDS."""
+    if len(args) != 2 or args[0] not in IDLE_KEYS:
+        raise Failure('usage: idle-more-set lock-battery|suspend-battery SECONDS|same | dim on|off | screen-off SECONDS')
+    what, value = args
+    values = _idle_values(paths)
+    if what in ('lock-battery', 'suspend-battery'):
+        if value == 'same':
+            number = None
+        elif value.isdigit() and (int(value) == 0 or 60 <= int(value) <= 4 * 3600):
+            number = int(value)
+        else:
+            raise Failure('Pick between one minute and four hours, or never.')
+        lock = number if what == 'lock-battery' else values.get('lock_after_battery', values.get('lock_after', 300))
+        suspend = number if what == 'suspend-battery' else values.get('suspend_after_battery', values.get('suspend_after', 900))
+        if number is not None and lock and suspend and suspend < lock:
+            raise Failure('Suspend can’t come before the screen locks.')
+    elif what == 'dim':
+        if value not in ('on', 'off'):
+            raise Failure('usage: idle-more-set dim on|off')
+        number = 30 if value == 'on' else 0
+    else:
+        if not value.isdigit() or int(value) not in SCREEN_OFF_CHOICES:
+            raise Failure('Pick one of: ' + ', '.join(str(s) for s in SCREEN_OFF_CHOICES) + ' seconds.')
+        number = int(value)
+    key = IDLE_KEYS[what]
+    kept = [line for line in (read_text(paths.idle_conf) or '').splitlines() if line.partition('=')[0].strip() != key]
+    if not kept:
+        kept = ['# Written by Arctic Settings. `arctic-session idle` (swayidle) reads it; 0 means never.']
+    if number is not None:
+        kept.append('{}={}'.format(key, number))
+    if paths.idle_conf.exists():
+        backup(paths, paths.idle_conf)
+    atomic_write(paths.idle_conf, '\n'.join(kept) + '\n')
+    from arctic_settings import is_live
+    if which('arctic-session', paths.env) and not is_live(paths):
+        run(['arctic-session', 'idle', '--restart'], timeout=10)
+    return cmd_idle_more(paths, [])
+
+
 # ---- lighter effects and game mode (arctic-effects) -----------------------------------------------
 
 def cmd_effects(paths, _args):
@@ -734,6 +824,7 @@ COMMANDS = {
     'datetime': cmd_datetime, 'datetime-set': cmd_datetime_set, 'hostname-set': cmd_hostname_set,
     'more-updates': cmd_more_updates, 'more-update-run': cmd_more_update_run,
     'lid': cmd_lid, 'lid-set': cmd_lid_set, 'effects': cmd_effects, 'effects-set': cmd_effects_set,
+    'idle-more': cmd_idle_more, 'idle-more-set': cmd_idle_more_set,
     'troubleshoot': cmd_troubleshoot,
     'sharing': cmd_sharing, 'sharing-set': cmd_sharing_set, 'snapshots': cmd_snapshots,
     'snapshot-run': cmd_snapshot_run,
@@ -741,4 +832,4 @@ COMMANDS = {
     'im': cmd_im, 'im-run': cmd_im_run, 'upgrade': cmd_upgrade,
 }
 # Commands that read, change and write back a file of ours (they run one at a time).
-WRITERS = {'nightlight-set', 'autostart-set', 'lid-set', 'effects-set'}
+WRITERS = {'nightlight-set', 'autostart-set', 'lid-set', 'effects-set', 'idle-more-set'}

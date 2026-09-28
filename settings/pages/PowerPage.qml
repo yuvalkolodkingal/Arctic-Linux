@@ -70,6 +70,85 @@ Page {
         }
     }
 
+    // Stream 5: times on battery, dimming and screens off (idle.conf's other keys; arctic_system.py
+    // idle-more, `arctic-session idle` reads them). Hidden in the live session.
+    Group {
+        id: battery
+        property var more: ({ battery: false, live: true })
+        function load() {
+            Backend.call(["idle-more"], r => { if (r.ok) battery.more = r; }, true);
+        }
+        function change(what, value) {
+            Backend.call(["idle-more-set", what, String(value)], r => {
+                if (r.ok) {
+                    battery.more = r;
+                    Backend.notify("success", "Saved", false);
+                } else {
+                    battery.load();
+                }
+            });
+        }
+        function choices(list, lock) {
+            return [{ value: "same", label: "Same as plugged in" }].concat(
+                list.filter(s => s === 0 || !lock || s >= lock).map(s => ({ value: String(s), label: page.words(s) })));
+        }
+        Component.onCompleted: load()
+        visible: more.battery === true && more.live !== true
+        title: "On battery"
+        desc: "Shorter times save power. " + (more.onBattery ? "Running on battery now." : "Plugged in now.")
+        SettingRow {
+            searchKey: "power.battery.times"
+            title: "Lock the screen after"
+            resettable: false
+            ArSelect {
+                width: 200
+                model: battery.choices(page.lockChoices, 0)
+                value: battery.more.lockBattery === null || battery.more.lockBattery === undefined ? "same" : String(battery.more.lockBattery)
+                onActivated: v => battery.change("lock-battery", v)
+            }
+        }
+        SettingRow {
+            title: "Suspend after"
+            resettable: false
+            ArSelect {
+                width: 200
+                model: battery.choices(page.suspendChoices, battery.more.lockBattery === null || battery.more.lockBattery === undefined ? page.idle.lock : battery.more.lockBattery)
+                value: battery.more.suspendBattery === null || battery.more.suspendBattery === undefined ? "same" : String(battery.more.suspendBattery)
+                onActivated: v => battery.change("suspend-battery", v)
+            }
+        }
+    }
+
+    Group {
+        visible: battery.more.live !== true && (battery.more.canDim === true || battery.more.canScreenOff === true)
+        title: "Around the lock"
+        SettingRow {
+            searchKey: "power.dim"
+            visible: battery.more.canDim === true
+            title: "Dim the screen before it locks"
+            desc: "Half as bright 30 seconds before; a key or the mouse brings it back."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Dim the screen before it locks"
+                checked: battery.more.dim === true
+                onToggled: battery.change("dim", checked ? "on" : "off")
+            }
+        }
+        SettingRow {
+            searchKey: "power.screenoff"
+            visible: battery.more.canScreenOff === true
+            title: "Turn the screens off after locking"
+            desc: "A key or the mouse turns them back on."
+            resettable: false
+            ArSelect {
+                width: 200
+                model: [0, 30, 60, 120, 300, 600].map(s => ({ value: String(s), label: s === 0 ? "Never" : s < 60 ? s + " seconds" : page.words(s) }))
+                value: String(battery.more.screenOff === undefined ? 60 : battery.more.screenOff)
+                onActivated: v => battery.change("screen-off", v)
+            }
+        }
+    }
+
     Group {
         visible: page.profile.available === true
         title: "Power mode"
