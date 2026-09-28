@@ -55,7 +55,15 @@ def engine_entry(path):
                 continue
             out[name] = value
         install.append(out)
-    return {'id': data['id'], 'name': data['name'], 'install': install}
+    entry = {'id': data['id'], 'name': data['name'], 'install': install}
+    # Drivers: json:"akmod,omitempty" and json:"kernel_args,omitempty" (installer finalizePhase;
+    # the LUKS-only display arguments are left out here: an iGPU drives the screen).
+    if 'akmod' in data:
+        entry['akmod'] = {'name': data['akmod']['name'], 'module': data['akmod']['module']}
+    args = data.get('boot', {}).get('kernel_args')
+    if args:
+        entry['kernel_args'] = args
+    return entry
 
 
 class FakeRunner:
@@ -152,6 +160,35 @@ class MethodTests(unittest.TestCase):
                                         ['dnf', 'install', '-y', 'yazi']])
 
 
+class DriverTests(unittest.TestCase):
+    def fb(self, runner):
+        return firstboot.FirstBoot(run=runner, release='44')
+
+    def test_nvidia_is_built_and_gets_its_kernel_arguments(self):
+        run = FakeRunner()
+        with mock.patch.object(firstboot.os, 'uname', return_value=mock.Mock(release='6.17.8-300.fc44.x86_64')):
+            self.assertTrue(self.fb(run).install(engine_entry('drivers/nvidia')))
+        cmds = run.commands
+        self.assertIn(['dnf', 'install', '-y', 'akmod-nvidia', 'xorg-x11-drv-nvidia-cuda', 'libva-nvidia-driver'], cmds)
+        i = cmds.index(['dnf', 'install', '-y', 'akmod-nvidia', 'xorg-x11-drv-nvidia-cuda', 'libva-nvidia-driver'])
+        self.assertEqual(cmds[i + 1:], [
+            ['kmodgenca', '-a'],
+            ['akmods', '--force', '--akmod', 'nvidia'],
+            ['modinfo', '-k', '6.17.8-300.fc44.x86_64', '-F', 'version', 'nvidia'],
+            ['grubby', '--update-kernel=ALL', '--args=rd.driver.blacklist=nouveau,nova_core modprobe.blacklist=nouveau,nova_core nvidia-drm.modeset=1'],
+        ])
+
+    def test_failed_build_keeps_the_driver_pending_and_sets_no_arguments(self):
+        run = FakeRunner(fail=[['akmods']])
+        self.assertFalse(self.fb(run).install(engine_entry('drivers/broadcom-wl')))
+        self.assertFalse(any(c[0] == 'grubby' for c in run.commands))
+
+    def test_media_driver_has_no_build(self):
+        run = FakeRunner()
+        self.assertTrue(self.fb(run).install(engine_entry('drivers/intel-media')))
+        self.assertFalse(any(c[0] in ('akmods', 'kmodgenca', 'grubby') for c in run.commands))
+
+
 class MainTests(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -168,9 +205,9 @@ class MainTests(unittest.TestCase):
         # As the engine: json.MarshalIndent of {"version", "nixpkgs", "modules"}.
         self.pending.write_text(json.dumps({'version': 2, 'nixpkgs': nixpkgs, 'modules': modules}, indent=2) + '\n')
 
-    def main(self, runner):
+    def main(self, runner, sb=lambda: False):
         with contextlib.redirect_stdout(io.StringIO()):
-            return firstboot.main(runner)
+            return firstboot.main(runner, sb=sb)
 
     def test_everything_installed_removes_the_file(self):
         self.write([engine_entry('extras/flathub'), engine_entry('_system/codecs')])
@@ -194,6 +231,39 @@ class MainTests(unittest.TestCase):
         self.assertEqual(left['nixpkgs'], 'github:NixOS/nixpkgs/abc')
         self.assertEqual([m['id'] for m in left['modules']], ['broken', 'zed'])
         self.assertEqual(left['modules'][1], engine_entry('editor/zed'))
+
+    def write_driver(self, modules):
+        hash_file = Path(self.dir.name) / 'mok.hash'
+        hash_file.write_text('$6$salt$hash\n')
+        self.pending.write_text(json.dumps({'version': 2, 'nixpkgs': '', 'modules': modules,
+                                            'mok_hash': str(hash_file)}, indent=2) + '\n')
+        return hash_file
+
+    def test_driver_key_enrolled_after_the_build_with_secure_boot(self):
+        hash_file = self.write_driver([engine_entry('drivers/nvidia'), engine_entry('editor/zed')])
+        run = FakeRunner(fail=[['flatpak', 'install']])
+        self.assertEqual(self.main(run, sb=lambda: True), 1)
+        self.assertIn(['mokutil', '--import', '/etc/pki/akmods/certs/public_key.der', '--hash-file', str(hash_file)], run.commands)
+        self.assertFalse(hash_file.exists())
+        left = json.loads(self.pending.read_text())
+        self.assertNotIn('mok_hash', left)
+        self.assertEqual([m['id'] for m in left['modules']], ['zed'])
+
+    def test_driver_key_waits_for_the_driver(self):
+        hash_file = self.write_driver([engine_entry('drivers/nvidia')])
+        run = FakeRunner(fail=[['dnf', 'install', '-y', 'akmod-nvidia']])
+        self.assertEqual(self.main(run, sb=lambda: True), 1)
+        self.assertFalse(any(c[0] == 'mokutil' for c in run.commands))
+        self.assertTrue(hash_file.exists())
+        self.assertEqual(json.loads(self.pending.read_text())['mok_hash'], str(hash_file))
+
+    def test_no_enrolment_without_secure_boot(self):
+        hash_file = self.write_driver([engine_entry('drivers/nvidia')])
+        run = FakeRunner()
+        self.assertEqual(self.main(run, sb=lambda: False), 0)
+        self.assertFalse(any(c[0] == 'mokutil' for c in run.commands))
+        self.assertFalse(hash_file.exists())
+        self.assertFalse(self.pending.exists())
 
     def test_unreadable_file_is_left_alone(self):
         self.pending.write_text('{not json')
