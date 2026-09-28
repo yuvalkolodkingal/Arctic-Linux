@@ -15,12 +15,13 @@ import Quickshell.Io
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
 //   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory
+//   keyboard next|set|menu
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates, notificationCenter].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, notificationCenter, keyboardPanel].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -66,6 +67,14 @@ ShellRoot {
         notificationCenter.pointX = x !== undefined ? x : (target ? target.width : 0);
         present(notificationCenter, target);
     }
+    // The keyboard-layout menu, under the bar's layout chip.
+    function toggleKeyboardMenu(screen, x) {
+        const target = screen || Outputs.focused;
+        if (keyboardPanel.open && keyboardPanel.screen === target) { keyboardPanel.close(); return; }
+        if (!KeyboardService.multiple) return;
+        keyboardPanel.pointX = x !== undefined ? x : (target ? target.width : 0);
+        present(keyboardPanel, target);
+    }
     function toggleKeys() {
         if (keys.open) keys.close(); else present(keys, null);
     }
@@ -94,6 +103,7 @@ ShellRoot {
     PolkitDialog {}
     NotificationCenter { id: notificationCenter }
     Toasts { shell: shell }
+    KeyboardPanel { id: keyboardPanel }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
     IpcHandler {
@@ -164,6 +174,12 @@ ShellRoot {
             if (!NotificationService.owned) return 'unowned';
             return NotificationService.setDnd(mode);
         }
+    }
+    IpcHandler {
+        target: 'keyboard'
+        function next(): void { KeyboardService.next(); }
+        function set(index: int): void { KeyboardService.set(index); }
+        function menu(): void { shell.toggleKeyboardMenu(null, undefined); }
     }
     IpcHandler {
         target: 'updates'

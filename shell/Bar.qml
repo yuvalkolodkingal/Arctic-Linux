@@ -156,6 +156,12 @@ PanelWindow {
                 }
             }
         }
+        // The keyboard layout ("EN"), only with more than one layout.
+        KeyboardItem {
+            id: keyboardItem
+            onRightClicked: bar.shell.toggleKeyboardMenu(bar.screen, keyboardItem.mapToItem(null, keyboardItem.width / 2, 0).x)
+            onHoverChanged: h => h ? bar.hint(keyboardItem, tooltip) : bar.unhint(keyboardItem)
+        }
         BarItem {
             id: bluetoothItem
             readonly property var adapter: Bluetooth.defaultAdapter
