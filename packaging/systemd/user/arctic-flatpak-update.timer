@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily update of your own Flatpak apps (Arctic Linux)
+Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates
+
+[Timer]
+OnStartupSec=25min
+OnCalendar=daily
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

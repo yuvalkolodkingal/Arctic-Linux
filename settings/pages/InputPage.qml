@@ -388,6 +388,67 @@ Page {
         }
     }
 
+    // Input methods (Fcitx 5) for languages a layout can't type: installed on request (a terminal
+    // with pkexec dnf5), started by XDG autostart (fcitx5-autostart), configured in its own tool.
+    Group {
+        id: imGroup
+        property var im: ({ installed: false, running: false, engines: [] })
+        property var picked: ({})
+        Component.onCompleted: Backend.call(["im"], r => { if (r.ok) imGroup.im = r; }, true)
+        visible: (im.engines || []).length > 0
+        title: "Input method"
+        desc: "Type Chinese, Japanese, Korean and other languages that need more than a keyboard layout."
+        SettingRow {
+            visible: imGroup.im.installed !== true
+            searchKey: "input.im"
+            title: "Install an input method"
+            desc: "Pick the languages, then Install: a terminal window asks for your password. Log out and back in afterwards."
+            resettable: false
+            stacked: true
+            Column {
+                width: parent.width
+                spacing: Theme.space2
+                Repeater {
+                    model: imGroup.im.engines || []
+                    ArCheck {
+                        required property var modelData
+                        text: modelData.label
+                        checked: imGroup.picked[modelData.id] === true
+                        onToggled: {
+                            const p = Object.assign({}, imGroup.picked);
+                            p[modelData.id] = checked;
+                            imGroup.picked = p;
+                        }
+                    }
+                }
+                ArButton {
+                    text: "Install"
+                    iconName: "terminal"
+                    enabled: Object.keys(imGroup.picked).some(k => imGroup.picked[k])
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.call(["im-run", "install"].concat(Object.keys(imGroup.picked).filter(k => imGroup.picked[k])), r => {
+                        if (r.ok)
+                            Backend.notify("info", "Installing in the terminal window. Log out and back in afterwards.", false);
+                    })
+                }
+            }
+        }
+        SettingRow {
+            visible: imGroup.im.installed === true
+            title: imGroup.im.running ? "Fcitx 5 is running" : "Fcitx 5 is installed"
+            desc: imGroup.im.running ? "Ctrl + Space switches between your keyboard and the input method."
+                : "Log out and back in to start it."
+            resettable: false
+            ArButton {
+                visible: imGroup.im.configtool === true
+                text: "Configure"
+                iconRight: "external"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.call(["im-run", "configure"], r => {})
+            }
+        }
+    }
+
     PickerDialog {
         id: layoutPicker
         title: "Add a keyboard layout"

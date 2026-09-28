@@ -322,6 +322,20 @@ storage, and the versions of the window manager, shell and kernel. **Open the wi
 and **Report a problem** has **Copy details** (a summary of the above to paste into an issue) and
 **Open issues**.
 
+## Users and sign-in
+
+Your **Picture** (from your Pictures folder; shown on the login and lock screens), your **Name**,
+and the jobs that ask questions, which open a terminal window: **Change password** (your keyring
+follows), **Change passphrase** for an encrypted disk, and **Add a fingerprint** when the computer
+has a reader. Hidden in the live session.
+
+## Keyboard and mouse: input methods
+
+**Input method** (at the end of Keyboard and mouse) installs Fcitx 5 for Chinese, Japanese or
+Korean: tick the languages and **Install** (a terminal window asks for your password), then log
+out and back in. `Ctrl + Space` switches between your keyboard and the input method;
+**Configure** opens Fcitx's own settings.
+
 ## About: if something stops working
 
 **If something stops working** restarts one part of the desktop: **Restart sound** (PipeWire),

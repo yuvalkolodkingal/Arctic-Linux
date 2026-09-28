@@ -10,7 +10,9 @@
 #   arctic-update metered [skip|allow]
 #   arctic-update stage                      the daily check (arctic-update-stage.timer, root)
 #   arctic-update after-transaction          dnf's post-transaction hook (arctic-update.actions)
-#   arctic-update flatpak [--auto] [--notify]  update Flatpak apps now (--auto: the daily timer's run)
+#   arctic-update flatpak [--auto] [--user] [--notify]
+#                                            update Flatpak apps now (--auto: the daily timers' run;
+#                                            --user: only your own installation)
 #   arctic-update firmware [--json] | firmware install    firmware updates (fwupd)
 #
 # How it works: `dnf5 upgrade --offline` downloads the updates and tests the transaction; this
@@ -787,11 +789,12 @@ flatpak_commits() {  # flatpak_commits --system|--user → "app commit" lines
   flatpak list "$1" --app --columns=application,active 2>/dev/null | LC_ALL=C sort
 }
 cmd_flatpak() {
-  local auto=no notify=no a
+  local auto=no notify=no only_user=no a
   for a in "$@"; do
     case $a in
       --auto) auto=yes ;;
       --notify) notify=yes ;;
+      --user) only_user=yes ;;
       *) usage >&2; exit 2 ;;
     esac
   done
@@ -801,7 +804,8 @@ cmd_flatpak() {
     refuse_live
   fi
   if [[ $auto == yes ]]; then
-    is_root || die "flatpak --auto is what arctic-flatpak-update.service runs, as root; use: arctic-update flatpak"
+    is_root || [[ $only_user == yes ]] || \
+      die "flatpak --auto is what arctic-flatpak-update.service runs, as root; use: arctic-update flatpak"
     load_config
     if [[ $AUTO != download-and-install-on-reboot ]]; then
       say "Automatic updates are '$AUTO' ($CONF): Flatpak apps are updated when you run arctic-update flatpak."
@@ -818,6 +822,7 @@ cmd_flatpak() {
   fi
   local installs=(--system) inst before after changed=0 failed="" out
   (( EUID != 0 )) && installs+=(--user)
+  [[ $only_user == yes ]] && installs=(--user)
   for inst in "${installs[@]}"; do
     [[ $inst == --user && ! -d "${HOME:-/nonexistent}/.local/share/flatpak" ]] && continue
     before="$(flatpak_commits "$inst")"
@@ -839,9 +844,13 @@ cmd_flatpak() {
     msg="Your Flatpak apps are up to date."
   fi
   say "$msg"
-  if is_root; then
-    helper write-status "$FLATPAK_STATUS" state="$state" checked_at=@now apps_updated="$changed" \
-      "message=$msg" || warn "can't write $FLATPAK_STATUS"
+  # The system installation's result is the root status file; yours (the user timer's) is kept
+  # in your home.
+  local record="$FLATPAK_STATUS"
+  [[ $only_user == yes ]] && record="${XDG_STATE_HOME:-$HOME/.local/state}/arctic/flatpak-update.json"
+  if is_root || [[ $only_user == yes ]]; then
+    helper write-status "$record" state="$state" checked_at=@now apps_updated="$changed" \
+      "message=$msg" || warn "can't write $record"
   fi
   if [[ $notify == yes ]] && command -v notify-send >/dev/null 2>&1; then
     if [[ $state == failed ]]; then

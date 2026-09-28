@@ -15,3 +15,5 @@ enable arctic-*.service
 # SSH keys unlocked once per session (gcr-ssh-agent; /etc/profile.d/arctic-ssh-agent.sh names
 # its socket). Stream 5.
 enable gcr-ssh-agent.socket
+# Flatpak apps installed just for you, updated daily (arctic-update flatpak --user).
+enable arctic-flatpak-update.timer

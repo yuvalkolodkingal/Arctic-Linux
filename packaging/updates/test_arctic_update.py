@@ -968,6 +968,18 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(self.cli("flatpak", "--auto").stdout, "")
         self.cli("flatpak", "--sideways", rc=2)
 
+    def test_flatpak_user_installation(self):
+        self.fake_flatpak()
+        self.env["XDG_STATE_HOME"] = self.path("home-state")
+        self.env["HOME"] = self.path("home")
+        os.makedirs(self.path("home/.local/share/flatpak"))
+        self.assertIn("1 app updated.", self.cli("flatpak", "--auto", "--user").stdout)
+        self.assertIn("update --user --noninteractive -y", self.calls("flatpak"))
+        self.assertFalse([c for c in self.calls("flatpak") if c.startswith("update --system")])
+        status = helper.read_json(self.path("home-state/arctic/flatpak-update.json"))
+        self.assertEqual(status["apps_updated"], 1)
+        self.assertFalse(os.path.exists(self.path("var/lib/arctic/flatpak-status.json")))
+
     def test_flatpak_failure_is_recorded(self):
         self.fake_flatpak(fail=True)
         p = self.cli("flatpak", "--auto", rc=1)

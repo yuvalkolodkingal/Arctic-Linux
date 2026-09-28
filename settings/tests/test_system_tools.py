@@ -231,5 +231,120 @@ class SystemHelperTest(Home):
         self.assertEqual(self.helper('snapshots')['config'], False)
 
 
+LSBLK_LUKS = {'blockdevices': [{'name': 'nvme0n1', 'type': 'disk', 'children': [
+    {'name': 'nvme0n1p1', 'type': 'part', 'fstype': 'vfat', 'mountpoints': ['/boot/efi']},
+    {'name': 'nvme0n1p2', 'type': 'part', 'fstype': 'crypto_LUKS', 'uuid': '0f3a4d2e-11aa-4bbb-8ccc-0123456789ab', 'mountpoints': [None],
+     'children': [{'name': 'luks-0f3a', 'type': 'crypt', 'fstype': 'btrfs', 'mountpoints': ['/home', '/']}]}]}]}
+
+
+class UsersTest(Tools):
+    def setUp(self):
+        super().setUp()
+        stub(self.bin, 'lsblk', "echo '{}'\n".format(json.dumps(LSBLK_LUKS)))
+        stub(self.bin, 'gdbus', 'echo "gdbus $*" >> "{}"; echo "()"\n'.format(self.log))
+        stub(self.bin, 'arctic-open', 'echo "arctic-open $*" >> "{}"\n'.format(self.log))
+
+    def test_status_and_jobs(self):
+        stub(self.bin, 'fprintd-list', 'echo "found 1 devices"; echo "Fingerprints for user you on Goodix:"; echo " - #0: right-index-finger"\n')
+        stub(self.bin, 'fprintd-enroll', 'exit 0\n')
+        data = self.helper('users')
+        self.assertEqual(data['luks'], dict(present=True, uuid='0f3a4d2e-11aa-4bbb-8ccc-0123456789ab'))
+        self.assertEqual((data['fingerprint']['reader'], data['fingerprint']['fingers']), (True, ['right-index-finger']))
+        self.helper('user-run', 'disk')
+        self.helper('user-run', 'password')
+        for _ in range(50):
+            if len([c for c in self.calls() if c.startswith('arctic-open')]) == 2:
+                break
+            import time
+            time.sleep(0.1)
+        self.assertIn('arctic-open terminal --hold -e pkexec /usr/sbin/cryptsetup luksChangeKey /dev/disk/by-uuid/0f3a4d2e-11aa-4bbb-8ccc-0123456789ab', self.calls())
+        self.assertIn('arctic-open terminal --hold -e passwd', self.calls())
+        self.helper('user-run', 'rm', ok=False)
+
+    def test_name(self):
+        self.helper('user-set', 'name', 'Yuval K')
+        self.assertTrue(any('SetRealName Yuval K' in c for c in self.calls()))
+        self.helper('user-set', 'name', 'a:b', ok=False)
+        self.helper('user-set', 'name', 'x' * 65, ok=False)
+
+    @unittest.skipUnless(__import__('importlib').util.find_spec('PIL'), 'needs Pillow')
+    def test_picture(self):
+        from PIL import Image
+        pictures = self.home / 'Pictures'
+        pictures.mkdir()
+        Image.new('RGB', (400, 300), (200, 30, 30)).save(pictures / 'me.jpg')
+        stub(self.bin, 'xdg-user-dir', 'echo "{}"\n'.format(pictures))
+        self.assertEqual([p['name'] for p in self.helper('user-pictures')['pictures']], ['me.jpg'])
+        data = self.helper('user-set', 'picture', str(pictures / 'me.jpg'))
+        self.assertTrue(data['picture'].endswith('.face'))
+        with Image.open(self.home / '.face') as face:
+            self.assertEqual(face.size, (256, 256))
+        self.assertTrue(any('SetIconFile ' + str(self.home / '.face') in c for c in self.calls()))
+        self.helper('user-set', 'picture', '--remove')
+        self.assertFalse((self.home / '.face').exists())
+        self.helper('user-set', 'picture', str(self.home / 'nothing.png'), ok=False)
+
+
+class InputMethodTest(Tools):
+    def test_install_and_state(self):
+        stub(self.bin, 'rpm', 'for p in "$@"; do case "$p" in fcitx5|fcitx5-mozc) echo "$p" ;; esac; done\n')
+        stub(self.bin, 'pgrep', 'exit 1\n')
+        stub(self.bin, 'arctic-open', 'echo "arctic-open $*" >> "{}"\n'.format(self.log))
+        data = self.helper('im')
+        self.assertEqual((data['installed'], data['running']), (True, False))
+        self.assertEqual([e['id'] for e in data['engines'] if e['installed']], ['japanese'])
+        self.helper('im-run', 'install', 'korean', 'chinese')
+        for _ in range(50):
+            if self.calls():
+                break
+            import time
+            time.sleep(0.1)
+        self.assertEqual(self.calls()[0], 'arctic-open terminal --hold -e pkexec /usr/bin/dnf5 install -y fcitx5 '
+                         'fcitx5-gtk fcitx5-qt fcitx5-configtool fcitx5-autostart fcitx5-hangul fcitx5-chinese-addons')
+        self.helper('im-run', 'install', 'klingon', ok=False)
+
+
+class GpuAndShareTest(Tools):
+    def test_gpu(self):
+        stub(self.bin, 'switcherooctl', textwrap.dedent('''\
+            echo "Device: 0"
+            echo "  Name:        Intel Corporation Raptor Lake-P [Iris Xe Graphics]"
+            echo "  Default:     yes"
+            echo "  Discrete:    no"
+            echo "Device: 1"
+            echo "  Name:        NVIDIA Corporation AD107M [GeForce RTX 4060 Max-Q / Mobile]"
+            echo "  Default:     no"
+            echo "  Discrete:    yes"
+            '''))
+        apps = self.data_dirs / 'applications'
+        (apps / 'steam.desktop').write_text('[Desktop Entry]\nName=Steam\nExec=steam\nPrefersNonDefaultGPU=true\n')
+        (apps / 'zed.desktop').write_text('[Desktop Entry]\nName=Zed\nExec=zed\n')
+        result = subprocess.run([str(BIN / 'arctic-gpu'), 'status', '--json'], env=self.env, capture_output=True, text=True)
+        data = json.loads(result.stdout)
+        self.assertEqual((data['hybrid'], data['prefers']), (True, ['steam']))
+        self.assertIn('RTX 4060', data['discrete'])
+        stub(self.bin, 'switcherooctl', 'echo "Device: 0"; echo "  Name: AMD"; echo "  Default: yes"; echo "  Discrete: no"\n')
+        data = json.loads(subprocess.run([str(BIN / 'arctic-gpu'), 'status', '--json'], env=self.env,
+                                         capture_output=True, text=True).stdout)
+        self.assertEqual((data['hybrid'], data['prefers']), (False, []))
+
+    def test_share(self):
+        stub(self.bin, 'flatpak', 'exit 1\n')
+        self.assertEqual(json.loads(self.sh(BIN / 'arctic-share', 'status', '--json')),
+                         dict(ok=True, localsend=False, kdeconnect=False))
+        stub(self.bin, 'arctic-shell-ipc', 'echo "arctic-shell-ipc $*" >> "{}"\n'.format(self.log))
+        self.sh(BIN / 'arctic-share', 'open', rc=1)
+        self.assertIn('arctic-shell-ipc apps install', self.calls())
+        stub(self.bin, 'flatpak', 'echo "flatpak $*" >> "{}"\n'.format(self.log))
+        stub(self.bin, 'setsid', 'shift; exec "$@"\n')
+        stub(self.bin, 'xdg-user-dir', 'echo "{}"\n'.format(self.tmp / 'Downloads'))
+        stub(self.bin, 'wl-paste', 'case "$*" in *list-types*) echo text/plain ;; *) echo "hello" ;; esac\n')
+        self.sh(BIN / 'arctic-share', 'clipboard')
+        saved = list((self.tmp / 'Downloads').glob('Clipboard *.txt'))
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0].read_text(), 'hello\n')
+        self.assertIn('flatpak run org.localsend.localsend_app', self.calls())
+
+
 if __name__ == '__main__':
     unittest.main()

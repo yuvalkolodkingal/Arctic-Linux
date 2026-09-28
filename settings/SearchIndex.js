@@ -34,6 +34,8 @@ var PAGES = [
       words: "print printer printing cups scanner scan paper ipp airprint" },
     { id: "datetime", title: "Date and time", icon: "clock", file: "DateTimePage.qml",
       words: "time zone timezone clock date ntp language region locale" },
+    { id: "users", title: "Users and sign-in", icon: "user", file: "UsersPage.qml",
+      words: "account password avatar picture name fingerprint disk encryption passphrase" },
     { id: "about", title: "About", icon: "info", file: "AboutPage.qml",
       words: "system version hardware cpu memory disk fedora help wiki" }
 ];
@@ -127,6 +129,12 @@ var ENTRIES = [
     ["datetime", "datetime.ntp", "Set the time automatically", "ntp network time sync clock"],
     ["datetime", "datetime.clock", "Date and time", "clock set time manually"],
     ["datetime", "datetime.language", "Language", "locale region translation"],
+    ["users", "users.picture", "Your picture", "avatar photo face account"],
+    ["users", "users.name", "Your name", "full name account"],
+    ["users", "users.password", "Change your password", "password login"],
+    ["users", "users.disk", "Disk encryption passphrase", "luks encryption unlock boot"],
+    ["users", "users.fingerprint", "Fingerprint", "fprint biometric reader unlock"],
+    ["input", "input.im", "Input method", "chinese japanese korean pinyin mozc hangul ime fcitx cjk"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
     ["about", "about.software", "Software", "version mango quickshell kernel"],
     ["about", "about.help", "Help and feedback", "wiki issues bug report"],

@@ -1,0 +1,15 @@
+[Unit]
+Description=Arctic Linux: update your own Flatpak apps
+Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates man:flatpak-update(1)
+# Only for apps installed just for you (flatpak install --user); the system's are
+# arctic-flatpak-update.service's.
+ConditionPathExists=%h/.local/share/flatpak/repo
+ConditionKernelCommandLine=!rd.live.image
+
+[Service]
+# Follows AUTO and METERED in /etc/arctic/update.conf, like the system's daily run.
+Type=oneshot
+ExecStart=/usr/bin/arctic-update flatpak --auto --user
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=2h

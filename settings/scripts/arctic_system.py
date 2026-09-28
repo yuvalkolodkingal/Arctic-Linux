@@ -15,6 +15,10 @@ are its (one JSON object per command, Failure for a sentence, argv lists, never 
     sharing | sharing-set allow NAME on|off | ssh on|off | ssh-password on|off
                                   firewall and remote login (pkexec arctic-system-helper)
     snapshots | snapshot-run create TEXT | undo PRE POST          snapper, through the same helper
+    users | user-pictures | user-set picture PATH|--remove | name NAME | user-run password|disk|fingerprint
+                                  your picture and name (AccountsService); password, disk
+                                  passphrase and fingerprints in a terminal window
+    im | im-run install ENGINE… | configure       Fcitx 5 input methods (Chinese, Japanese, Korean)
     troubleshoot sound|wifi|bluetooth|shell       restart that part of the desktop (arctic-restart)
 """
 import os
@@ -536,6 +540,157 @@ def cmd_snapshot_run(paths, args):
     raise Failure('usage: snapshot-run create TEXT | undo PRE POST')
 
 
+# ---- users and sign-in (AccountsService, passwd, cryptsetup, fprintd) ------------------------------
+
+PICTURE_TYPES = ('.png', '.jpg', '.jpeg', '.webp')
+
+
+def _root_luks(tree, found=None):
+    """The UUID of the LUKS container under / in `lsblk -J` output, or ''."""
+    def walk(node, luks):
+        if node.get('fstype') == 'crypto_LUKS':
+            luks = node.get('uuid') or luks
+        if '/' in (node.get('mountpoints') or [node.get('mountpoint')]):
+            return luks or ''
+        for child in node.get('children') or []:
+            hit = walk(child, luks)
+            if hit is not None:
+                return hit
+        return None
+    for device in tree.get('blockdevices', []):
+        hit = walk(device, '')
+        if hit is not None:
+            return hit
+    return ''
+
+
+def _accounts_user(paths):
+    return '/org/freedesktop/Accounts/User{}'.format(os.getuid())
+
+
+def cmd_users(paths, _args):
+    import pwd
+    from arctic_settings import is_live
+    entry = pwd.getpwuid(os.getuid())
+    code, out, _err = run(['lsblk', '-J', '-o', 'NAME,TYPE,FSTYPE,UUID,MOUNTPOINTS'], timeout=10)
+    luks = _root_luks(_loads(out) or {}) if code == 0 else ''
+    fingerprint = dict(available=bool(which('fprintd-enroll', paths.env)), reader=False, fingers=[])
+    if which('fprintd-list', paths.env):
+        code, out, _err = run(['fprintd-list', entry.pw_name], timeout=15)
+        fingerprint['reader'] = code == 0 and 'no devices' not in out.lower()
+        fingerprint['fingers'] = [line.split(':', 1)[1].strip() for line in out.splitlines()
+                                  if line.strip().startswith('- #') and ':' in line]
+    picture = paths.home / '.face'
+    return dict(ok=True, user=entry.pw_name, name=entry.pw_gecos.split(',')[0], picture=str(picture) if picture.is_file() else '',
+                luks=dict(present=bool(luks), uuid=luks), fingerprint=fingerprint, live=is_live(paths))
+
+
+def cmd_user_pictures(paths, _args):
+    """Pictures to choose from: the Pictures folder (and its first level of folders)."""
+    code, out, _err = run(['xdg-user-dir', 'PICTURES'], timeout=5)
+    folder = Path(out.strip()) if code == 0 and out.strip() else paths.home / 'Pictures'
+    found = []
+    for path in sorted(list(folder.glob('*')) + list(folder.glob('*/*'))):
+        if path.suffix.lower() in PICTURE_TYPES and path.is_file():
+            found.append(dict(path=str(path), name=str(path.relative_to(folder))))
+    return dict(ok=True, folder=str(folder), pictures=found[:500])
+
+
+def cmd_user_set(paths, args):
+    """user-set picture PATH|--remove | name NAME: your picture (~/.face, 256×256, and
+    AccountsService's copy, which the login screen shows) or your full name."""
+    if len(args) != 2 or args[0] not in ('picture', 'name'):
+        raise Failure('usage: user-set picture PATH|--remove | name NAME')
+    face = paths.home / '.face'
+    if args[0] == 'name':
+        name = args[1].strip()
+        if not name or len(name) > 64 or ':' in name or any(ord(c) < 32 for c in name):
+            raise Failure('A name is up to 64 characters, without “:”.')
+        code, _out, err = run(['gdbus', 'call', '--system', '--dest', 'org.freedesktop.Accounts', '--object-path',
+                               _accounts_user(paths), '--method', 'org.freedesktop.Accounts.User.SetRealName', name],
+                              timeout=180)
+        if code != 0:
+            raise Failure('Your name couldn’t be changed: ' + (err.strip().splitlines() or ['AccountsService failed'])[-1])
+        return cmd_users(paths, [])
+    if args[1] == '--remove':
+        face.unlink(missing_ok=True)
+        icon = ''
+    else:
+        source = Path(args[1])
+        if source.suffix.lower() not in PICTURE_TYPES or not source.is_file():
+            raise Failure('Pick a PNG, JPEG or WebP picture.')
+        try:
+            from PIL import Image, ImageOps
+            with Image.open(source) as image:
+                image = ImageOps.exif_transpose(image).convert('RGB')
+                side = min(image.size)
+                left, top = (image.width - side) // 2, (image.height - side) // 2
+                image = image.crop((left, top, left + side, top + side)).resize((256, 256), Image.LANCZOS)
+                tmp = face.with_name('.face.new')
+                image.save(tmp, 'PNG')
+        except ImportError:
+            raise Failure('Changing the picture needs python3-pillow.') from None
+        except OSError:
+            raise Failure('That picture couldn’t be read.') from None
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, face)
+        icon = str(face)
+    # The login screen reads AccountsService's copy; it's fine when that isn't there.
+    run(['gdbus', 'call', '--system', '--dest', 'org.freedesktop.Accounts', '--object-path', _accounts_user(paths),
+         '--method', 'org.freedesktop.Accounts.User.SetIconFile', icon], timeout=30)
+    return cmd_users(paths, [])
+
+
+def cmd_user_run(paths, args):
+    """user-run password | disk | fingerprint: a terminal window for the job (it asks questions)."""
+    jobs = {'password': ['passwd'], 'fingerprint': ['fprintd-enroll']}
+    if args == ['disk']:
+        uuid = cmd_users(paths, [])['luks']['uuid']
+        if not uuid or not re.fullmatch(r'[0-9a-fA-F-]{8,64}', uuid):
+            raise Failure('This computer’s disk isn’t encrypted.')
+        argv = ['pkexec', '/usr/sbin/cryptsetup', 'luksChangeKey', '/dev/disk/by-uuid/' + uuid]
+    elif len(args) == 1 and args[0] in jobs:
+        argv = jobs[args[0]]
+    else:
+        raise Failure('usage: user-run password|disk|fingerprint')
+    subprocess.Popen(['arctic-open', 'terminal', '--hold', '-e'] + argv, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return dict(ok=True, started=args[0])
+
+
+# ---- input methods (Fcitx 5) --------------------------------------------------------------------
+
+IM_BASE = ['fcitx5', 'fcitx5-gtk', 'fcitx5-qt', 'fcitx5-configtool', 'fcitx5-autostart']
+IM_ENGINES = [dict(id='chinese', package='fcitx5-chinese-addons', label='Chinese (Pinyin and more)'),
+              dict(id='japanese', package='fcitx5-mozc', label='Japanese (Mozc)'),
+              dict(id='korean', package='fcitx5-hangul', label='Korean (Hangul)')]
+
+
+def cmd_im(paths, _args):
+    names = IM_BASE + [e['package'] for e in IM_ENGINES]
+    code, out, _err = run(['rpm', '-q', '--qf', '%{NAME}\n'] + names, timeout=20)
+    installed = {line.strip() for line in out.splitlines() if line.strip() in names}
+    code, _out, _err = run(['pgrep', '-u', str(os.getuid()), '-x', 'fcitx5'], timeout=5)
+    return dict(ok=True, installed='fcitx5' in installed, running=code == 0,
+                engines=[dict(e, installed=e['package'] in installed) for e in IM_ENGINES],
+                configtool=bool(which('fcitx5-configtool', paths.env)))
+
+
+def cmd_im_run(paths, args):
+    """im-run install ENGINE… (a terminal: pkexec dnf5) | configure (fcitx5-configtool)."""
+    if args == ['configure']:
+        subprocess.Popen(['fcitx5-configtool'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return dict(ok=True, started='configure')
+    engines = {e['id']: e['package'] for e in IM_ENGINES}
+    if len(args) < 2 or args[0] != 'install' or any(a not in engines for a in args[1:]):
+        raise Failure('usage: im-run install chinese|japanese|korean… | configure')
+    argv = ['pkexec', '/usr/bin/dnf5', 'install', '-y'] + IM_BASE + [engines[a] for a in args[1:]]
+    subprocess.Popen(['arctic-open', 'terminal', '--hold', '-e'] + argv, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return dict(ok=True, started='install')
+
+
 COMMANDS = {
     'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
     'autostart': cmd_autostart, 'autostart-set': cmd_autostart_set,
@@ -546,6 +701,8 @@ COMMANDS = {
     'troubleshoot': cmd_troubleshoot,
     'sharing': cmd_sharing, 'sharing-set': cmd_sharing_set, 'snapshots': cmd_snapshots,
     'snapshot-run': cmd_snapshot_run,
+    'users': cmd_users, 'user-pictures': cmd_user_pictures, 'user-set': cmd_user_set, 'user-run': cmd_user_run,
+    'im': cmd_im, 'im-run': cmd_im_run,
 }
 # Commands that read, change and write back a file of ours (they run one at a time).
 WRITERS = {'nightlight-set', 'autostart-set', 'lid-set', 'effects-set'}

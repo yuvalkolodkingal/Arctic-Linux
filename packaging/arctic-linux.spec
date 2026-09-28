@@ -517,6 +517,11 @@ Requires:       fwupd
 Requires:       gcr
 Requires:       firewalld
 Recommends:     firewall-config
+# Users and sign-in (AccountsService: name and picture; fprintd: fingerprints) and running an app
+# on a laptop's discrete graphics chip (arctic-gpu → switcherooctl).
+Requires:       accountsservice
+Recommends:     fprintd
+Requires:       switcheroo-control
 # Stream 5 (system): phones (MTP, iPhone), cameras and network shares in Thunar (gvfs).
 Recommends:     gvfs
 Recommends:     gvfs-mtp
@@ -726,6 +731,8 @@ install -Dpm 0644 packaging/systemd/arctic-update-restage.timer %{buildroot}%{_u
 # Stream 5 (system): Flatpak apps are updated daily too (arctic-update flatpak --auto).
 install -Dpm 0644 packaging/systemd/arctic-flatpak-update.service %{buildroot}%{_unitdir}/arctic-flatpak-update.service
 install -Dpm 0644 packaging/systemd/arctic-flatpak-update.timer %{buildroot}%{_unitdir}/arctic-flatpak-update.timer
+install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.service %{buildroot}%{_userunitdir}/arctic-flatpak-update.service
+install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.timer %{buildroot}%{_userunitdir}/arctic-flatpak-update.timer
 install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
 install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
 install -Dpm 0644 packaging/updates/snapper.actions \
@@ -1027,6 +1034,7 @@ fi
 # Stream 5: the same once for the Flatpak update timer (new in 0.3).
 if [ ! -e %{_sharedstatedir}/arctic/.flatpak-update-preset ]; then
   systemctl --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
+  systemctl --global --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
   mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.flatpak-update-preset || :
 fi
 # Compile /etc/dconf/db/distro.d (the Arctic GTK/icon/cursor/font defaults).
@@ -1197,6 +1205,8 @@ fi
 %{_unitdir}/arctic-update-restage.timer
 %{_unitdir}/arctic-flatpak-update.service
 %{_unitdir}/arctic-flatpak-update.timer
+%{_userunitdir}/arctic-flatpak-update.service
+%{_userunitdir}/arctic-flatpak-update.timer
 %{_libexecdir}/arctic/arctic-update-helper
 %config(noreplace) %{_sysconfdir}/arctic/update.conf
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions

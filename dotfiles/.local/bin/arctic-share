@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# arctic-share — send files to phones and computers nearby (Super+Ctrl+S).
+#
+#   arctic-share                 a menu: send the clipboard, send files or receive (LocalSend),
+#                                your phone (KDE Connect, when installed)
+#   arctic-share clipboard       save what's on the clipboard to Downloads and open LocalSend
+#   arctic-share open            open LocalSend (pick files there, or receive)
+#   arctic-share phone           open KDE Connect
+#   arctic-share status [--json] what's installed
+#
+# LocalSend is the Flathub app org.localsend.localsend_app (Get apps installs it); its firewall
+# port is on Settings > Sharing. Without it, the menu offers to install it.
+set -uo pipefail
+
+LOCALSEND_ID=org.localsend.localsend_app
+
+localsend_cmd() {   # the command that starts LocalSend, or nothing
+  if command -v localsend_app >/dev/null 2>&1; then echo localsend_app
+  elif command -v localsend >/dev/null 2>&1; then echo localsend
+  elif command -v flatpak >/dev/null 2>&1 && flatpak info "$LOCALSEND_ID" >/dev/null 2>&1; then
+    echo "flatpak run $LOCALSEND_ID"
+  fi
+}
+kdeconnect_cmd() {
+  if command -v kdeconnect-app >/dev/null 2>&1; then echo kdeconnect-app; fi
+}
+tell() { notify-send -a "Arctic Linux" "$1" "${2:-}" >/dev/null 2>&1 || true; }
+
+open_localsend() {
+  local cmd
+  cmd="$(localsend_cmd)"
+  if [[ -z "$cmd" ]]; then
+    tell "LocalSend isn't installed" "Get it from Get apps (Super + Shift + A): search for LocalSend."
+    arctic-shell-ipc apps install >/dev/null 2>&1 || true
+    return 1
+  fi
+  read -r -a argv <<<"$cmd"
+  setsid -f "${argv[@]}" >/dev/null 2>&1 < /dev/null
+}
+
+send_clipboard() {
+  local dir stamp type file
+  dir="$(xdg-user-dir DOWNLOAD 2>/dev/null)"
+  [[ -n "$dir" && "$dir" != "$HOME" ]] || dir="$HOME/Downloads"
+  mkdir -p "$dir"
+  stamp="$(date '+%Y-%m-%d %H.%M.%S')"
+  type="$(wl-paste --list-types 2>/dev/null | grep -m1 -E '^image/png$|^text/plain' || true)"
+  case "$type" in
+    image/png) file="$dir/Clipboard $stamp.png"; wl-paste --type image/png > "$file" ;;
+    text/*)    file="$dir/Clipboard $stamp.txt"; wl-paste --type text/plain > "$file" ;;
+    *) tell "The clipboard is empty" "Copy some text or a picture first."; return 1 ;;
+  esac
+  open_localsend || return 1
+  tell "Saved the clipboard to Downloads" "Pick ${file##*/} in LocalSend to send it."
+}
+
+status() {
+  local ls kc
+  ls="$(localsend_cmd)" kc="$(kdeconnect_cmd)"
+  if [[ "${1:-}" == --json ]]; then
+    printf '{"ok": true, "localsend": %s, "kdeconnect": %s}\n' \
+      "$([[ -n $ls ]] && echo true || echo false)" "$([[ -n $kc ]] && echo true || echo false)"
+  else
+    echo "LocalSend: ${ls:-not installed}"; echo "KDE Connect: ${kc:-not installed}"
+  fi
+}
+
+menu() {
+  local items=() choice
+  if [[ -n "$(localsend_cmd)" ]]; then
+    items+=("Send the clipboard" "Send files or receive (LocalSend)")
+  else
+    items+=("Install LocalSend")
+  fi
+  [[ -n "$(kdeconnect_cmd)" ]] && items+=("Your phone (KDE Connect)")
+  items+=("Sharing settings")
+  choice="$(printf '%s\n' "${items[@]}" | fuzzel --dmenu --prompt "  " --placeholder "Share" \
+    --lines "${#items[@]}" --width 32 2>/dev/null)" || exit 0
+  case "$choice" in
+    "Send the clipboard") send_clipboard ;;
+    "Send files or receive (LocalSend)") open_localsend ;;
+    "Install LocalSend") open_localsend ;;
+    "Your phone (KDE Connect)") setsid -f kdeconnect-app >/dev/null 2>&1 < /dev/null ;;
+    "Sharing settings") exec arctic-settings sharing ;;
+  esac
+}
+
+case "${1:-}" in
+  "") menu ;;
+  clipboard) send_clipboard ;;
+  open) open_localsend ;;
+  phone)
+    if [[ -n "$(kdeconnect_cmd)" ]]; then setsid -f kdeconnect-app >/dev/null 2>&1 < /dev/null
+    else tell "KDE Connect isn't installed" "Install it with: sudo dnf install kde-connect"; exit 1; fi ;;
+  status) status "${2:-}" ;;
+  *) echo "usage: arctic-share [clipboard|open|phone|status [--json]]" >&2; exit 2 ;;
+esac
