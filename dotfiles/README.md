@@ -72,12 +72,13 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-lock` | Lock the screen (`Super + L`); off in the live session |
 | `arctic-power [lock\|logout\|suspend\|restart\|poweroff]` | The power menu (`Super + Esc`), or do it now |
 | `arctic-osd volume\|brightness up\|down`, `volume mute`, `mic mute` | Hardware keys with the on-screen display |
-| `arctic-dnd [toggle]` | Do not disturb (`Super + Shift + N`) |
+| `arctic-dnd [toggle\|on\|off\|for 1h\|until-tomorrow]` | Do not disturb (`Super + Shift + N`) |
 | `arctic-screenshot area\|screen\|window` | `Print`, `Shift + Print`, `Super + Print` |
 | `arctic-keys` | Keyboard cheat sheet (`Super + /`) |
 | `arctic-settings [page]` | Settings (`Super + S`): appearance, windows, displays, keyboard and mouse, shortcuts, default apps, network, sound, updates, power, startup apps ([`../settings/README.md`](../settings/README.md)) |
 | `arctic-shell-ipc apps install` | Get apps: install with dnf or Flatpak (`Super + Shift + A`) |
-| `arctic-session shell\|mako\|…` | Start one session service once (used by autostart) |
+| `arctic-session shell\|mako\|…` | Start one session service once (used by autostart; `mako` only outside the shell's session) |
+| `arctic-notify dismiss\|dismiss-all\|center\|invoke\|history\|count` | Notifications: close pop-ups (`Super + Delete`, `Super + Shift + Delete`), the centre (`Super + Alt + N`), act on the newest (`Super + Alt + ,`); makoctl without the shell |
 | `arctic-welcome` | The live USB's welcome card, once per boot |
 | `arctic-start-installer` | Start the installer from the live USB (`Super + I`) |
 
@@ -135,8 +136,6 @@ tries the shell first and falls back on its own, so keybinds are the same either
   original shell's.
 - **Bar keyboard access:** the design's `Super + B` bar focus isn't there yet. Everything on the
   bar also has its own shortcut.
-- **Lock screen:** "N notifications hidden" isn't shown, because mako can't count hidden
-  notifications.
 - **Fallback only:** waybar's workspaces use `ext/workspaces` (Fedora's waybar 0.15 has no
   `mango/workspaces` module); fuzzel has no `=` / `>` modes.
 

@@ -9,6 +9,7 @@
 **Use it**
 - [Desktop tour](Desktop-Tour)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
+- [Notifications](Notifications)
 - [Settings](Settings)
 - [Apps and software](Apps-and-Software)
 - [Drivers](Drivers)

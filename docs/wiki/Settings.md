@@ -15,7 +15,8 @@ arctic-settings displays     # open it on a page
 ```
 
 The page names for `arctic-settings <page>` are `appearance`, `windows`, `displays`, `input`,
-`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `updates`, `power`, `startup` and `about`.
+`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `notifications`, `updates`, `power`, `startup`
+and `about`.
 
 ## Finding a setting
 
@@ -62,6 +63,7 @@ file). That's what `Ctrl + Z` uses.
 | Wi-Fi on or off | NetworkManager (`nmcli`) | At once |
 | Bluetooth, sound | BlueZ and PipeWire directly | At once |
 | Updates | through `arctic-update` | At once |
+| Notifications: schedule, history, per-app choices | `~/.config/arctic/notifications.json`; do not disturb through `arctic-dnd` | At once |
 
 `settings.conf` is read after Arctic's own Mango files and **before** your
 `~/.config/mango/user.conf`, so anything you set by hand in `user.conf` still wins. When it does,
@@ -184,6 +186,14 @@ computer without a Bluetooth adapter the page says so.
 Where sound plays (**Play sound on**) and its volume, and which microphone you speak into and its
 volume. **Open the volume control** starts the full mixer, for the volume of each app and device
 profiles.
+
+## Notifications
+
+**Do not disturb** now, for an hour or until tomorrow, and **on a schedule** (every day between
+two times); whether the notification centre **keeps its notifications after a restart**, and
+**Clear**; and for every app that has sent a notification, what it may do: pop up, stay in the
+centre only, show even during do not disturb, or keep even its urgent ones quiet then. See
+[Notifications](Notifications).
 
 ## Updates
 
