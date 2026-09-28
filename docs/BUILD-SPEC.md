@@ -481,14 +481,14 @@ fails offline; Arctic's are skipped quietly, which is why publishing checks the 
 before deploying it (below).
 
 **The key.** `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` is installed from
-`packaging/release/RPM-GPG-KEY-arctic`, which is not committed yet: `tools/build-rpms.sh` puts the
-key into Source0 from `--gpg-public-key FILE` or `ARCTIC_GPG_PUBLIC_KEY` (its content; ci.yml,
-iso.yml and repo.yml pass the repository secret). Without any key the build still succeeds but
+`packaging/release/RPM-GPG-KEY-arctic` (rsa4096 "Arctic Linux Packages", fingerprint
+`80F7 5DE9 A23B 6322 46FD 1FF1 BD1A 642B 5436 645A`, the public half of the repository secret).
+`tools/build-rpms.sh` can also put a key into Source0 from `--gpg-public-key FILE` or
+`ARCTIC_GPG_PUBLIC_KEY` (its content; ci.yml, iso.yml and repo.yml pass the repository secret),
+and publishing checks that the committed key is the signing key. Without any key the build still succeeds but
 warns, and arctic-release ships both repo files with `enabled=0`; `--require-gpg-key`
 (`ARCTIC_REQUIRE_GPG_KEY=1`, repo.yml) makes that an error. The spec's `%check` enforces: key ⇔
-`[arctic]` enabled, testing always off, no secret key material. To commit the key later:
-`curl -fsSL https://yuvalkolodkingal.github.io/O-Tism/RPM-GPG-KEY-arctic -o packaging/release/RPM-GPG-KEY-arctic`
-(publishing then checks it is the signing key). No tool here ever generates or stores a secret
+`[arctic]` enabled, testing always off, no secret key material. No tool here ever generates or stores a secret
 key; signing happens only in repo.yml with the secrets.
 
 **Publishing** (`.github/workflows/repo.yml`; the steps are scripts that run locally too):
