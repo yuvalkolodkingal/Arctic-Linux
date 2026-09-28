@@ -26,8 +26,9 @@ support every resolution. Arctic Linux also allows software drawing when there's
 graphics driver, which is what virtual machines and Safe graphics mode need.
 
 If Safe graphics mode works but the normal entry doesn't, the graphics driver is the likely
-problem. Version 0.1 doesn't set up NVIDIA's own driver; see the
-[release notes](Release-Notes#known-limitations).
+problem. The live USB always uses the open drivers; NVIDIA cards often need Safe graphics mode
+there. The installer then sets up NVIDIA's own driver for the installed system (see
+[Drivers](Drivers)).
 
 ### Arctic Linux behaves strangely or crashes on the live USB
 
@@ -81,6 +82,25 @@ Some usernames are already used by Arctic Linux itself (for example `root`). Pic
 username starts with a lowercase letter and uses only lowercase letters, numbers, `-` and `_`, up
 to 32 characters.
 
+### The install stops at "removing live-only packages" (Arctic Linux 0.1)
+
+Arctic Linux 0.1.0 could fail on real computers at this point, with scriptlets failing with exit
+code 127 in the log: the copied system had no SELinux labels yet, so SELinux stopped the package
+scripts from running. The same bug also made some finished 0.1 installs refuse every login (see
+[The login screen goes straight back](#the-login-screen-goes-straight-back-after-the-password)).
+The 0.2 installer labels the system right after copying it, and again at the end, including
+`/home`, `/var/log`, `/nix` and `/boot`. Download the 0.2 image
+(`Arctic-Linux-0.2-x86_64.iso`) and write the stick again.
+
+### "The NVIDIA driver couldn't be installed"
+
+*"The driver didn't build for this computer's kernel."* The driver is built on the computer
+while installing (see [Drivers](Drivers#how-the-nvidia-and-broadcom-drivers-are-installed)). Press
+**Try again**; if it keeps failing, press **Skip the driver**. The rest of the install carries on,
+your card keeps the open-source driver, and you can
+[add the driver later](Drivers#adding-a-driver-you-skipped). The same goes for the Broadcom Wi-Fi
+driver.
+
 ### An app couldn't be downloaded
 
 The installer pauses on **One app needs attention**. Press **Try again** first: most download
@@ -110,8 +130,9 @@ to the Disk step, check your choice and continue.
 **Save log to USB** writes a file called `arctic-install-<date>-<time>.log`:
 
 - **To a USB stick**, if one is plugged in that is formatted as FAT or exFAT (most sticks are) and
-  isn't the Arctic Linux stick. When the message says *"You can unplug it now"*, it's safe to
-  remove.
+  isn't the Arctic Linux stick. A Ventoy stick you started Arctic Linux from counts as the Arctic
+  Linux stick and is skipped (its partition is busy while the live session runs). When the message
+  says *"You can unplug it now"*, it's safe to remove.
 - **Otherwise to `/home/liveuser`** in the live session. That copy is lost when the computer
   restarts, so plug in a second USB stick and save again to keep it.
 
@@ -126,6 +147,23 @@ Open the firmware's boot menu and choose **Arctic Linux**, or move it to the top
 in the firmware settings. If you installed alongside another system, the Arctic Linux menu lists
 both.
 
+### A blue screen says "Perform MOK management"
+
+That's the one step Secure Boot needs for the NVIDIA or Broadcom driver. Press any key within 10
+seconds, choose **Enroll MOK**, **Continue**, **Yes**, type the one-time code from the installer's
+Done screen, then **Reboot**. Missed it, or lost the code? Arctic Linux still starts, only without
+the driver; see [Missed the blue screen](Drivers#missed-the-blue-screen).
+
+### The NVIDIA or Wi-Fi driver isn't working
+
+- **With Secure Boot on**, the driver only starts once its key is enrolled (above). Check with
+  `mokutil --test-key /etc/pki/akmods/certs/public_key.der`.
+- **Installed offline**, the driver is installed the first time the computer is online, and starts
+  after the restart that follows.
+- **Black screen, or it stopped after an update:** see [Drivers](Drivers#troubleshooting), which
+  also covers going back to `nouveau` and rebuilding with `akmods`.
+- `nvidia-smi` shows whether NVIDIA's driver is running.
+
 ### The disk passphrase isn't accepted
 
 - Check Caps Lock; a hint appears when it's on.
@@ -139,6 +177,22 @@ There's no way to recover an encrypted disk without its passphrase.
 
 Check Caps Lock (the login screen shows a hint) and the keyboard layout shown in the bottom-right
 corner. If you picked a non-Latin layout, English (US) comes first and `Alt + Shift` switches.
+
+### The login screen goes straight back after the password
+
+The password is right, but the desktop can't start. On systems installed with Arctic Linux
+0.1.0 the usual cause is missing SELinux labels on your home folder: the login can't enter it and
+returns to the login screen. Relabel the whole system once:
+
+1. Restart, and in the boot menu (it shows for 5 seconds) press `e` on the first entry.
+2. At the end of the line that starts with `linux`, add a space and `autorelabel=1`, then press
+   `Ctrl + X`.
+3. The computer labels every file (a few minutes) and restarts by itself. Log in normally.
+
+If you can log in on a text console (`Ctrl + Alt + F3`), `sudo touch /.autorelabel` and a restart
+do the same. Installs made with 0.2 are labelled correctly. If it isn't SELinux, see
+[The desktop has no bar](#the-desktop-has-no-bar-or-the-launcher-doesnt-open) and the session
+log (`journalctl -b` from a text console).
 
 ### The desktop has no bar, or the launcher doesn't open
 
@@ -218,32 +272,30 @@ moved or restored `/nix`, restore the labels with `sudo restorecon -R /nix`.
 
 ### Sound, Bluetooth or brightness
 
-- **Sound:** click the volume icon on the bar for the volume mixer, and pick the right output
-  device there.
+- **Sound:** click the volume icon on the bar for the volume mixer, or pick the output device in
+  [Settings](Settings#sound), **Sound**.
 - **Bluetooth:** the Bluetooth icon only appears when the computer has a Bluetooth adapter. Click it
-  for the Bluetooth manager.
+  for the Bluetooth manager, or use [Settings](Settings#bluetooth), **Bluetooth**.
+- **Broadcom Wi-Fi:** some Broadcom cards only work with the driver the installer adds; see
+  [Drivers](Drivers#wi-fi-doesnt-work-on-a-broadcom-card).
 - **Brightness keys:** these change the built-in screen; external monitors usually have their own
   buttons.
 
 ### The screen locks too soon, or the computer sleeps
 
-The screen locks after 5 minutes without use and the computer suspends after 15. The times are
-fixed in Arctic's `autostart.conf`, which starts `arctic-session idle`. To use your own, replace
-the link to that file with a copy (as in
-[Changing a shortcut](Themes-and-Customisation#changing-a-shortcut)):
+The screen locks after 5 minutes without use and the computer suspends after 15. Change the
+times (or turn them off) in [Settings](Settings#power-and-lock) (`Super + S`), **Power and lock**.
+They're saved in `~/.config/arctic/idle.conf` (`lock_after=` and `suspend_after=`, in seconds, 0
+for never) and apply at once.
 
-```sh
-cp --remove-destination /usr/share/arctic/mango/autostart.conf ~/.config/mango/arctic/autostart.conf
-```
+### A setting doesn't stick
 
-In the copy, replace the line `exec-once=arctic-session idle` with your own times in seconds, for
-example 10 minutes to lock and 30 to suspend:
-
-```ini
-exec-once=swayidle -w timeout 600 'arctic-lock' timeout 1800 'systemctl suspend' before-sleep 'arctic-lock'
-```
-
-Then log out and back in.
+- Settings shows a note on the row when your own `~/.config/mango/user.conf` sets the same thing:
+  `user.conf` is read last and wins. Remove the line there.
+- A display you switch off in Settings comes back at the next login, on purpose.
+- Startup apps start from the next login.
+- To undo changes, press `Ctrl + Z` in Settings, or use the copies in
+  `~/.local/state/arctic/settings-backups/`. See [Settings](Settings#if-settings-wont-open).
 
 ## Getting more information
 
@@ -252,5 +304,7 @@ Then log out and back in.
 | Your desktop session's messages | `journalctl --user -b` |
 | The whole system's messages since start-up | `journalctl -b` |
 | Services that failed | `systemctl --failed` |
-| Which Arctic Linux you have | `cat /etc/os-release` |
+| Which Arctic Linux you have | `cat /etc/os-release` (or Settings, **About**) |
+| Graphics driver in use | `lspci -k \| grep -EA3 'VGA\|3D'`, `nvidia-smi` |
+| Secure Boot and the driver key | `mokutil --sb-state`, `mokutil --test-key /etc/pki/akmods/certs/public_key.der` |
 | The shell with its log | `arctic-shell --stop; arctic-shell --foreground` |
