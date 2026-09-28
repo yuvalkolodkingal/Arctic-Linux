@@ -236,6 +236,19 @@ in /usr/share/arctic/theme-hooks.d (GTK, Qt, Zed, Zen). App theming: the GTK, ic
 and font defaults for GTK/libadwaita and Flatpak apps (dconf distro database) and the Flatpak
 overrides that let Flatpak apps read the GTK colours.
 
+# --- stream 6 (theme gallery) ------------------------------------------------------------------
+%package -n arctic-themes-extra
+Summary:        More themes for Arctic Linux: Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine, Everforest
+BuildArch:      noarch
+Requires:       arctic-desktop-config = %{version}-%{release}
+
+%description -n arctic-themes-extra
+Optional themes for Arctic Linux, made from the colours of Nord, Catppuccin, Gruvbox, Tokyo
+Night, Rosé Pine and Everforest by Arctic's theme engine: the same roles and contrast
+guarantees as Winter and Polar night, with the amber "here" accent kept. Pick one in
+Settings > Appearance or with arctic-theme set NAME.
+# --- end stream 6
+
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
 Summary:        Arctic Linux desktop shell (Quickshell)
@@ -256,6 +269,8 @@ Recommends:     fd-find
 Recommends:     qalculate
 # The keyboard pointer (Super + Alt + K, arctic-kbptr).
 Recommends:     wl-kbptr
+# The theme gallery in Settings > Appearance.
+Recommends:     arctic-themes-extra = %{version}-%{release}
 # --- end stream 6
 
 %description -n arctic-shell
@@ -525,6 +540,15 @@ for t in winter polar-night; do
   PYTHONPATH=design python3 -m themegen builtin "$t" \
     | PYTHONPATH=design python3 -m themegen render --palette - --out "_build/themes/$t" --quiet
 done
+# --- stream 6: the theme gallery (design/themes/*/colors.toml); `named` refuses a palette that
+# can't meet the contrast guarantees, so a bad one fails the build.
+rm -rf _build/themes-extra
+for toml in design/themes/*/colors.toml; do
+  t="$(basename "$(dirname "$toml")")"
+  PYTHONPATH=design python3 -m themegen named --colors "$toml" --name "$t" \
+    | PYTHONPATH=design python3 -m themegen render --palette - --out "_build/themes-extra/$t" --quiet
+done
+# --- end stream 6
 
 # ---- Wallpapers: SVG → 3840×2160 PNG ----
 mkdir -p _build/backgrounds
@@ -664,6 +688,9 @@ ln -s %{_datadir}/arctic/themes/polar-night/fastfetch/config.jsonc %{buildroot}%
 install -Dpm 0644 dotfiles/.local/share/arctic/keys.txt %{buildroot}%{_datadir}/arctic/keys.txt
 install -d %{buildroot}%{_datadir}/arctic/themes
 cp -a _build/themes/. %{buildroot}%{_datadir}/arctic/themes/
+# --- stream 6: the theme gallery (arctic-themes-extra)
+install -d %{buildroot}%{_datadir}/arctic/themes-extra
+cp -a _build/themes-extra/. %{buildroot}%{_datadir}/arctic/themes-extra/
 # The theme engine (arctic-themegen, run by arctic-theme) and the design data it reads.
 themegen=%{buildroot}%{_datadir}/arctic/themegen
 install -d "$themegen/data/exports" "$themegen/data/icons" "$themegen/data/logos"
@@ -1127,6 +1154,11 @@ fi
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 %dir %{_sharedstatedir}/arctic
 %ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
+
+# --- stream 6
+%files -n arctic-themes-extra
+%license LICENSE
+%{_datadir}/arctic/themes-extra/
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic

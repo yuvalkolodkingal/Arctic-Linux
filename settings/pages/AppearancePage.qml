@@ -152,6 +152,78 @@ Page {
                 }
             }
         }
+        // The theme gallery (arctic-themes-extra): Nord, Catppuccin, Gruvbox and the rest, drawn
+        // as small desktops from their own colours. A pair shows which theme it switches to.
+        SettingRow {
+            id: galleryRow
+            searchKey: "appearance.gallery"
+            readonly property var gallery: (page.theme.themes || []).filter(t => t.gallery === true)
+            visible: page.theme.modern === true
+            title: "More themes"
+            desc: gallery.length ? "The same Arctic, in other colours. Super + Shift + T switches to a theme's light or dark pair."
+                                 : "Nord, Catppuccin, Gruvbox and more come in the arctic-themes-extra package."
+            stacked: gallery.length > 0
+            ArButton {
+                visible: galleryRow.gallery.length === 0
+                text: "Get apps"
+                iconName: "package"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.launch(["arctic-shell-ipc", "apps", "install"])
+            }
+            Flow {
+                visible: galleryRow.gallery.length > 0
+                width: parent.width
+                spacing: Theme.space3
+                Repeater {
+                    model: galleryRow.gallery
+                    ArCard {
+                        id: galleryCard
+                        required property var modelData
+                        readonly property var sw: modelData.swatches || {}
+                        readonly property var pairTheme: (page.theme.themes || []).find(t => t.id === modelData.pair)
+                        width: (parent.width - 2 * Theme.space3) / 3
+                        choice: true
+                        radio: true
+                        title: page.busyTheme === modelData.id ? "Switching…" : modelData.label
+                        desc: (modelData.mode === "light" ? "Light" : "Dark") + (galleryCard.pairTheme ? " · pairs with " + galleryCard.pairTheme.label : "")
+                        selected: page.theme.current === modelData.id
+                        onClicked: page.setTheme(modelData.id)
+                        // A small desktop in the theme's colours: the bar, a window with two
+                        // lines of text, a terminal, and one dot of its "here" accent.
+                        Item { width: 1; height: Theme.space2 }
+                        Rectangle {
+                            width: parent.width
+                            height: Math.round(width * 10 / 16)
+                            radius: Theme.radiusSm
+                            color: galleryCard.sw.ground || Theme.surfaceSunken
+                            border.width: 1
+                            border.color: Theme.line
+                            clip: true
+                            Rectangle { x: 1; y: 1; width: parent.width - 2; height: 7; color: galleryCard.sw.frost || galleryCard.sw.surface || "transparent" }
+                            Rectangle {
+                                x: parent.width * 0.08; y: parent.height * 0.22
+                                width: parent.width * 0.56; height: parent.height * 0.62
+                                radius: 4
+                                color: galleryCard.sw["surface-raised"] || "transparent"
+                                border.width: 1
+                                border.color: galleryCard.sw.line || "transparent"
+                                Rectangle { x: 8; y: 10; width: parent.width * 0.6; height: 4; radius: 2; color: galleryCard.sw.ink || "transparent" }
+                                Rectangle { x: 8; y: 20; width: parent.width * 0.42; height: 4; radius: 2; color: galleryCard.sw["ink-muted"] || "transparent" }
+                                Rectangle { x: 8; y: parent.height - 14; width: 8; height: 8; radius: 4; color: galleryCard.sw.accent || "transparent" }
+                            }
+                            Rectangle {
+                                x: parent.width * 0.68; y: parent.height * 0.22
+                                width: parent.width * 0.26; height: parent.height * 0.62
+                                radius: 4
+                                color: galleryCard.sw["term-background"] || "transparent"
+                                border.width: 1
+                                border.color: galleryCard.sw.line || "transparent"
+                            }
+                        }
+                    }
+                }
+            }
+        }
         SettingRow {
             searchKey: "appearance.auto"
             title: "Match colours to the wallpaper"

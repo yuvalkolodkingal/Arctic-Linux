@@ -84,6 +84,8 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   wallpaper picker (`Super + Shift + W`).
 - **Light or dark:** for the theme made from your wallpaper: Automatic (whatever suits the
   picture), Dark or Light.
+- **More themes:** Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine and Everforest, drawn from
+  their own colours; a pair (Catppuccin Latte and Mocha) switches as one with `Super + Shift + T`.
 - **Switch light and dark by itself:** Off, Sunset to sunrise (where your time zone is) or Custom
   hours. See [Themes and customisation](Themes-and-Customisation#light-by-day-dark-at-night).
 - **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers` (the same

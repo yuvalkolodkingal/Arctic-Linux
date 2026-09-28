@@ -41,6 +41,21 @@ It uses `arctic-theme light|dark`, so with **Match colours to wallpaper** on it 
 wallpaper's theme between its light and dark take. A change that falls while the computer sleeps
 happens when it wakes. The setting is kept in `~/.config/arctic/daylight.json`.
 
+## More themes
+
+Settings › Appearance › **More themes** has ten more looks, each drawn as a small desktop in its
+own colours: **Nord**, **Catppuccin Mocha** and **Latte**, **Gruvbox** and **Gruvbox Light**,
+**Tokyo Night**, **Rosé Pine** and **Rosé Pine Dawn**, **Everforest** and **Everforest Light**
+(package `arctic-themes-extra`). Click one to use it, or `arctic-theme set catppuccin-mocha`.
+
+They are made by Arctic's theme engine from each theme's published colours, so they behave like
+Winter and Polar night: the same contrast guarantees (the build refuses a theme that misses one),
+every app that follows the theme follows them, and the warm "here" accent stays, so the selected
+row or the focused field looks like "here" in every theme. A theme with a light and a dark take
+is a pair: `Super + Shift + T` (and [light by day, dark at night](#light-by-day-dark-at-night))
+switches between Catppuccin Latte and Mocha, not to Winter. The colour sources and licences are
+in `design/themes/<name>/SOURCE`.
+
 ## Colours from your wallpaper
 
 When you use a picture of your own as the wallpaper, Arctic Linux makes a theme from it: the

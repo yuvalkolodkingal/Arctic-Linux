@@ -1,0 +1,4 @@
+Upstream: https://github.com/nordtheme/nord
+Licence: MIT (the upstream project's licence; confirm before each release)
+The Nord palette (nord0-nord15); the colors.toml mapping as in Omarchy 4 (themes/nord).
+Only the colour values are used; Arctic renders every file itself from its own templates.

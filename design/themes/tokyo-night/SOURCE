@@ -1,0 +1,4 @@
+Upstream: https://github.com/folke/tokyonight.nvim
+Licence: Apache-2.0 (the upstream project's licence; confirm before each release)
+The "night" style: bg, bg_dark, bg_highlight, fg, fg_dark, comment, terminal_black and the accents.
+Only the colour values are used; Arctic renders every file itself from its own templates.

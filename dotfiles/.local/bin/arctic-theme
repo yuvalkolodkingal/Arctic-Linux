@@ -3,13 +3,15 @@
 
   arctic-theme                      print the active theme's name
   arctic-theme set NAME             switch to NAME: winter, polar-night, wallpaper (colours made
-                                    from the wallpaper now) or a folder in ~/.config/arctic/themes.
+                                    from the wallpaper now), a gallery theme (nord, catppuccin-mocha,
+                                    …: package arctic-themes-extra) or a folder in ~/.config/arctic/themes.
                                     Choosing anything but wallpaper turns auto colours off.
   arctic-theme auto [on|off]        colours follow the wallpaper: every new wallpaper remakes the
                                     'wallpaper' theme and switches to it (Arctic's own wallpapers
                                     keep Winter / Polar night). Without on|off, print on or off.
   arctic-theme mode [auto|dark|light]   light or dark for wallpaper colours (auto: from the picture)
-  arctic-theme toggle               light <-> dark (Super+Shift+T)
+  arctic-theme toggle               light <-> dark (Super+Shift+T); a gallery theme switches to
+                                    its pair (Catppuccin Mocha <-> Latte), else to Winter / Polar night
   arctic-theme zen [on|off]         give Zen Browser the theme's accent colour (read when Zen
                                     starts; default off). Without on|off, print on or off.
   arctic-theme current [--json]     the active theme (JSON: name, label, mode, colours, settings)
@@ -50,6 +52,7 @@ CURRENT = os.path.join(CONFIG, "current")
 SETTINGS = os.path.join(CONFIG, "settings.json")
 USER_THEMES = os.path.join(CONFIG, "themes")
 SYSTEM_THEMES = os.path.join(SYSTEM, "themes")
+EXTRA_THEMES = os.path.join(SYSTEM, "themes-extra")      # the gallery (arctic-themes-extra)
 HOOK_DIRS = (os.path.join(SYSTEM, "theme-hooks.d"), os.path.join(CONFIG, "theme-hooks.d"))
 USER_TEMPLATES = os.path.join(CONFIG, "templates")
 WALLPAPER_CHOICE = os.path.join(CONFIG, "wallpaper")
@@ -112,10 +115,12 @@ def write_atomic(path, text):
 # ---- themes --------------------------------------------------------------------------------------
 
 def theme_dir(name):
-    """(folder, 'user'|'system') for a theme name, or (None, None). ~/.config/arctic/themes wins."""
+    """(folder, 'user'|'system'|'gallery') for a theme name, or (None, None).
+    ~/.config/arctic/themes wins, then Arctic's own, then the gallery."""
     if not NAME_RE.match(name or ""):
         return None, None
-    for folder, source in ((os.path.join(USER_THEMES, name), "user"), (os.path.join(SYSTEM_THEMES, name), "system")):
+    for folder, source in ((os.path.join(USER_THEMES, name), "user"), (os.path.join(SYSTEM_THEMES, name), "system"),
+                           (os.path.join(EXTRA_THEMES, name), "gallery")):
         if os.path.isfile(os.path.join(folder, "theme.json")):
             return folder, source
     return None, None
@@ -155,13 +160,14 @@ def theme_info(name, folder, source):
         for key, value in qml.items():
             role = re.sub(r"([A-Z]|(?<=[a-z])[0-9])", lambda m: "-" + m.group(1).lower(), key)
             colors[role] = css_color(value)
+    pair = pal.get("pair") if isinstance(pal.get("pair"), str) and NAME_RE.match(pal.get("pair") or "") else ""
     return {"name": name, "label": label, "mode": mode if mode in ("dark", "light") else "dark",
-            "base": base, "dir": folder, "source": source, "colors": colors}
+            "base": base, "dir": folder, "source": source, "colors": colors, "pair": pair}
 
 
 def all_themes():
     names = set()
-    for d in (USER_THEMES, SYSTEM_THEMES):
+    for d in (USER_THEMES, SYSTEM_THEMES, EXTRA_THEMES):
         try:
             names.update(n for n in os.listdir(d) if NAME_RE.match(n))
         except OSError:
@@ -354,6 +360,19 @@ def activate(name, redraw=True):
 
 def static_for_mode(mode):
     return BUILTIN_FOR_MODE.get(mode, DEFAULT_THEME)
+
+
+def for_mode(mode, info=None):
+    """The theme to switch to for light or dark: the active one when it already is, its pair
+    when it has one of that mode (a gallery theme), else Winter or Polar night."""
+    info = info or active_info()
+    if info.get("mode") == mode and info.get("name") not in (None, WALLPAPER_THEME):
+        return info["name"]
+    pair = info.get("pair") or ""
+    folder, source = theme_dir(pair) if pair else (None, None)
+    if folder and theme_info(pair, folder, source)["mode"] == mode:
+        return pair
+    return static_for_mode(mode)
 
 
 def follow_wallpaper(force=False):
@@ -594,7 +613,7 @@ def cmd_toggle():
     if auto_colors() or info["name"] == WALLPAPER_THEME:
         cmd_mode(other)
     else:
-        activate("polar-night" if info["name"] == "winter" else "winter")
+        activate(for_mode(other, info))
 
 
 def cmd_apply():
@@ -629,7 +648,9 @@ def cmd_list(as_json):
         for t in themes:
             c = t.pop("colors")
             t["active"] = t["name"] == active
-            t["swatches"] = {k: c.get(k) for k in ("ground", "surface", "accent", "ink")}
+            t["gallery"] = t["source"] == "gallery"
+            t["swatches"] = {k: c.get(k) for k in ("ground", "surface", "surface-raised", "frost", "line", "ink",
+                                                   "ink-muted", "accent", "on-accent", "term-background")}
             out.append(t)
         print(json.dumps(out, indent=2))
         return
@@ -680,7 +701,7 @@ def main(argv):
             if auto_colors():
                 cmd_mode(verb)
             else:
-                cmd_set(static_for_mode(verb))
+                cmd_set(for_mode(verb))
         else:
             usage(sys.stderr)
             return 2

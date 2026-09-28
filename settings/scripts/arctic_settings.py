@@ -2121,8 +2121,16 @@ def _theme_items(data):
             out.append(dict(id=item, name=item.replace('-', ' ').capitalize()))
         elif isinstance(item, dict) and (item.get('id') or item.get('name')):
             ident = str(item.get('id') or item.get('name'))
-            out.append(dict(id=ident, name=str(item.get('name') or ident), dark=item.get('dark'),
-                            kind=str(item.get('kind') or item.get('type') or '')))
+            entry = dict(id=ident, name=str(item.get('name') or ident), dark=item.get('dark'),
+                         kind=str(item.get('kind') or item.get('type') or ''))
+            # The theme gallery (arctic-themes-extra): its label, mode, pair and colours.
+            if item.get('gallery') is True:
+                swatches = item.get('swatches') if isinstance(item.get('swatches'), dict) else {}
+                entry.update(gallery=True, label=str(item.get('label') or ident), mode=str(item.get('mode') or ''),
+                             pair=str(item.get('pair') or ''),
+                             swatches={k: v for k, v in swatches.items()
+                                       if isinstance(k, str) and isinstance(v, str) and re.fullmatch(r'#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?', v)})
+            out.append(entry)
     return out
 
 
