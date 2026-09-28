@@ -11,8 +11,8 @@ quickshell -p settings          # from a checkout
 ```
 
 Pages: Appearance, Windows, Displays, Keyboard and mouse, Shortcuts, Default apps, Network,
-Bluetooth, Sound, Updates, Power and lock, Startup apps, Printers and scanners, Date and time,
-About. `Ctrl + F` (or `/`, or just typing
+Sharing, Bluetooth, Sound, Updates, Power and lock, Startup apps, Printers and scanners, Date and
+time, Users and sign-in, About. `Ctrl + F` (or `/`, or just typing
 in the page list) searches every setting; a result opens its page and highlights the row. `↑ ↓`
 in the page list switch pages, `Tab` goes into the page, `Esc` comes back, `Ctrl + PgUp/PgDn`
 switch pages from anywhere, `Ctrl + Z` undoes the last change, `Ctrl + Q` closes Settings.
@@ -39,7 +39,11 @@ reset per option, search, undo — and is built from Arctic's own parts.
 
 ## What it changes
 
-Nothing needs root. Every file is written atomically (temporary file + rename), validated first
+Settings never runs as root. The few system-wide changes ask for your password: through polkit
+(`timedatectl`, `localectl`, `hostnamectl`, AccountsService) or `pkexec` and Settings' root helper
+(`packaging/system/arctic-system-helper`: the firewall, remote login and snapshots; its arguments
+are checked against fixed tables). The system commands (night light to users) live in
+`scripts/arctic_system.py`, which `arctic_settings.py` merges in. Every file is written atomically (temporary file + rename), validated first
 (the helper's own table of Mango keys, then `mango -c FILE -p`), and the previous version is kept
 in `~/.local/state/arctic/settings-backups` (the newest 20 of each). (an empty `.absent` marker when
 there was no file yet, so even the first change can be undone). Writes take a lock
@@ -69,6 +73,14 @@ dark the next time it starts without its dock): off lasts until you log out.
 | Apps that start themselves (Startup apps) | `~/.config/autostart/ID.desktop`: a copy with `Hidden=true` to switch one off, removed again when nothing of yours is left | next login (systemd's XDG autostart) |
 | Default printer, cancel jobs | `lpoptions -d NAME` (`~/.cups/lpoptions`), `cancel -a NAME` | |
 | Time zone, network time, clock, language | `timedatectl set-timezone\|set-ntp\|set-time`, `localectl set-locale LANG=…` (systemd, polkit asks for the password) | |
+| Times on battery, dimming, screens off after the lock (Power and lock) | `~/.config/arctic/idle.conf` (`lock_after_battery=`, `suspend_after_battery=`, `dim_before_lock=`, `screen_off_after=`) | `arctic-session idle --restart` |
+| Closing the lid (Power and lock) | `~/.config/arctic/lid.conf` (`when_closed=`) | `arctic-session lid --restart` |
+| Lighter effects, game mode (Windows) | through `arctic-effects lighter\|game …` (`~/.config/arctic/effects.conf`, sourced by config.conf) | Mango reloads |
+| Computer name (About) | `hostnamectl set-hostname --static` (polkit) | |
+| Your name and picture (Users and sign-in) | AccountsService (`SetRealName`, `SetIconFile`) and `~/.face` | |
+| Fingerprint on the lock screen | `~/.config/arctic/shell.json` (`lock_fingerprint`) | the shell watches the file |
+| Firewall allows, remote login (Sharing); snapshots (Updates) | `pkexec arctic-system-helper firewall-allow\|ssh\|ssh-password\|snapshot-create …` | |
+| Flatpak apps and firmware (Updates) | through `arctic-update flatpak\|firmware` | |
 
 settings.conf is sourced after Arctic's files, `keyboard.conf` and `motion.conf`, and before
 `user.conf`, so your own `user.conf` still wins (Settings says so on the row). Animations are
