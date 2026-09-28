@@ -88,7 +88,8 @@ def main(argv=None):
             sys.stdout.write(pal.dumps(pal.builtin(args.name)))
         elif args.command == "check":
             p = pal.load(args.palette)
-            failures = derive.check(p)
+            # A high-contrast take (arctic-themegen contrast) is held to its stronger pairs too.
+            failures = derive.check(p) + (derive.check_high_contrast(p) if p.get("contrast") == "high" else [])
             if args.json:
                 print(json.dumps({"ok": not failures, "contrast": derive.contrast_report(p),
                                   "failures": [{"foreground": f, "background": b, "ratio": r, "required": q}

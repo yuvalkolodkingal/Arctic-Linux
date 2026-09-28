@@ -7,6 +7,7 @@ import glob
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,11 @@ sys.path.insert(0, DESIGN)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from themegen import color, derive, named, palette, render  # noqa: E402
+
+try:
+    from PIL import Image
+except ImportError:  # pragma: no cover
+    Image = None
 
 GALLERY = sorted(glob.glob(os.path.join(DESIGN, "themes", "*", "colors.toml")))
 
@@ -53,6 +59,36 @@ class EngineTests(unittest.TestCase):
                 self.assertGreaterEqual(color.contrast(c["ink"], c["ground"]), 12)
                 self.assertGreaterEqual(color.contrast(c["line"], c["ground"]), 4.5)
                 self.assertNotIn("contrast", p)          # the palette it came from is untouched
+
+    @unittest.skipIf(Image is None, "Pillow (python3-pillow) is not installed")
+    def test_wallpaper_themes_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for rgb in ((10, 60, 120), (250, 200, 140), (128, 128, 128)):
+                picture = os.path.join(tmp, "p.png")
+                Image.new("RGB", (64, 36), rgb).save(picture)
+                with self.subTest(rgb=rgb):
+                    hc = derive.high_contrast(derive.from_wallpaper(picture))
+                    self.assertEqual(derive.check_high_contrast(hc), [])
+
+    def test_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = os.path.join(tmp, "winter.json")
+            with open(source, "w", encoding="utf-8") as f:
+                f.write(palette.dumps(palette.builtin("winter")))
+            env = dict(os.environ, PYTHONPATH=DESIGN, PYTHONDONTWRITEBYTECODE="1")
+            out = subprocess.run([sys.executable, "-m", "themegen", "contrast", "--palette", source],
+                                 env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            hc = json.loads(out.stdout)
+            self.assertEqual(hc["contrast"], "high")
+            # check holds a high-contrast palette to its own pairs: undo one and it fails.
+            hc["colors"]["ink-muted"] = palette.builtin("winter")["colors"]["ink-muted"]
+            with open(source, "w", encoding="utf-8") as f:
+                json.dump(hc, f)
+            out = subprocess.run([sys.executable, "-m", "themegen", "check", "--palette", source, "--json"],
+                                 env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(out.returncode, 1)
+            self.assertIn("ink-muted", out.stdout)
 
     def test_theme_json_says_so_only_when_high(self):
         with tempfile.TemporaryDirectory() as out:
