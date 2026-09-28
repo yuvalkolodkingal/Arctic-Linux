@@ -179,6 +179,69 @@ class SettingsFileTest(unittest.TestCase):
         with self.assertRaises(S.Failure):
             model.render()
 
+    def test_out_of_range_hand_edits_are_clamped(self):
+        model = S.SettingsFile.parse('borderpx=20\nfocused_opacity=0.1\ngappih=oops\n')
+        self.assertEqual(model.options, {'borderpx': '16', 'focused_opacity': '0.3'})
+        self.assertEqual(model.extra, ['gappih=oops'])
+
+    def test_binds_of_other_keymodes_stay_verbatim(self):
+        text = textwrap.dedent('''\
+            keymode=default
+            bind=SUPER+ALT,b,spawn_shell,firefox
+            keymode=resize
+            bind=NONE,h,spawn_shell,notify-send left
+            bind=NONE,Escape,setkeymode,default
+            keymode=default
+            env=FOO,bar
+            ''')
+        model = S.SettingsFile.parse(text)
+        self.assertEqual(model.binds, [dict(mods='SUPER+ALT', key='b', command='firefox')])
+        self.assertEqual(model.extra, ['keymode=resize', 'bind=NONE,h,spawn_shell,notify-send left',
+                                       'bind=NONE,Escape,setkeymode,default', 'keymode=default', 'env=FOO,bar'])
+        self.assertEqual(S.SettingsFile.parse(model.render()).render(), model.render())
+        # A file that ends in another keymode gets the way back, so user.conf starts in default.
+        model = S.SettingsFile.parse('keymode=resize\nbind=NONE,h,spawn_shell,x\n')
+        self.assertEqual(model.binds, [])
+        self.assertTrue(model.render().endswith('keymode=default\n'))
+        self.assertEqual(S.SettingsFile.parse(model.render()).render(), model.render())
+
+    def test_mimeapps_keeps_other_lines(self):
+        text = textwrap.dedent('''\
+            # my comment
+            [Added Associations]
+            text/html=a.desktop;
+
+            [Default Applications]
+            # browsers
+            text/html=old.desktop
+            image/png=viewer.desktop
+            text/html=dup.desktop
+
+            [Removed Associations]
+            video/mp4=bad.desktop
+            ''')
+        out = S.update_mimeapps(text, 'Default Applications',
+                                {'text/html': 'new.desktop', 'x-scheme-handler/http': 'new.desktop'})
+        self.assertEqual(out, textwrap.dedent('''\
+            # my comment
+            [Added Associations]
+            text/html=a.desktop;
+
+            [Default Applications]
+            # browsers
+            text/html=new.desktop
+            image/png=viewer.desktop
+            x-scheme-handler/http=new.desktop
+
+            [Removed Associations]
+            video/mp4=bad.desktop
+            '''))
+        self.assertEqual(S.update_mimeapps(None, 'Default Applications', {'a/b': 'x.desktop'}),
+                         '[Default Applications]\na/b=x.desktop\n')
+        self.assertEqual(S.update_mimeapps('[Added Associations]\na/b=y.desktop\n', 'Default Applications',
+                                           {'a/b': 'x.desktop'}),
+                         '[Added Associations]\na/b=y.desktop\n\n[Default Applications]\na/b=x.desktop\n')
+
     @unittest.skipUnless(REAL_MANGO, 'mango is not installed')
     def test_mango_accepts_what_settings_writes(self):
         model = S.SettingsFile.parse('')
@@ -294,6 +357,46 @@ class SetAndResetTest(Home):
         self.assertIn('env=FOO,bar', self.settings)
         self.assertIn('gappih=4', self.settings)
 
+    def test_setting_a_key_drops_its_kept_line(self):
+        (self.home / '.config/mango/settings.conf').write_text('borderpx=oops\nenv=FOO,bar\n')
+        data = self.helper('set', 'borderpx=3')
+        self.assertNotIn('borderpx=oops', self.settings)
+        self.assertIn('borderpx=3', self.settings)
+        self.assertIn('env=FOO,bar', self.settings)
+        self.assertEqual(data['options']['borderpx']['value'], '3')
+
+    def test_first_change_can_be_undone(self):
+        self.assertFalse(self.helper('state')['undo'])
+        data = self.helper('set', 'gappih=12')
+        self.assertTrue(data['undo'])
+        self.helper('undo')
+        self.assertFalse((self.home / '.config/mango/settings.conf').exists())
+        self.assertFalse(self.helper('state')['undo'])
+        self.helper('undo', ok=False)
+
+    def test_undo_gives_gtk_the_restored_cursor(self):
+        stub(self.bin, 'gsettings', 'echo "gsettings $*" >> "{}"\n'.format(self.log))
+        self.helper('set-cursor', 'cursor_size=48')
+        self.assertIn('gsettings set org.gnome.desktop.interface cursor-size 48', self.calls())
+        restored = self.helper('undo')['options']['cursor_size']['value']
+        self.assertEqual(self.calls()[-1], 'gsettings set org.gnome.desktop.interface cursor-size ' + restored)
+
+    def test_parallel_sets_all_land(self):
+        # A slow `mango -p` (like the real check) widens the window two writers could overlap in.
+        stub(self.bin, 'mango', 'sleep 0.3\n')
+        self.env['PATH'] = str(self.bin) + ':/usr/bin:/bin'
+        values = ['gappih=12', 'borderpx=7', 'blur=0', 'gappov=20', 'shadows=1']
+        procs = [subprocess.Popen([sys.executable, str(HELPER), 'set', v], env=self.env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for v in values]
+        for proc in procs:
+            out, _err = proc.communicate(timeout=60)
+            self.assertTrue(json.loads(out)['ok'], out)
+        for value in values:
+            self.assertIn(value + '\n', self.settings)
+        # Every change left one backup, so undo walks back through all of them.
+        backups = sorted((self.tmp / 'home/.local/state/arctic/settings-backups').glob('settings.conf.*'))
+        self.assertEqual(len(backups), len(values))
+
 
 class ShortcutsTest(Home):
     def test_sheet_is_parsed_like_keys_sheet(self):
@@ -384,6 +487,29 @@ class DisplaysTest(Home):
         self.assertIn('monitorrule=name:^HDMI-A-1$,width:3840,height:2160,refresh:59.997,x:1707,y:0,scale:2,rr:0,vrr:0', self.settings)
         self.assertFalse(self.helper('displays')['pending'])
         self.helper('display-keep', ok=False)
+
+    def test_off_is_never_saved(self):
+        # A saved disable rule would keep the built-in screen dark even when it is the only one.
+        (self.home / '.config/mango/settings.conf').write_text(
+            'monitorrule=name:^eDP-1$,width:2560,height:1600,x:0,y:0,scale:1.5,rr:0,vrr:0,disable:1\n')
+        self.helper('display-try', self.layout(**{'eDP-1': dict(enabled=False)}))
+        applied = [c for c in self.calls() if c.startswith('wlr-randr')][-1]
+        self.assertIn('--output eDP-1 --off', applied)
+        data = self.helper('display-keep')
+        self.assertEqual(data['sessionOnly'], ['eDP-1'])
+        self.assertNotIn('disable', self.settings)
+        self.assertIn('monitorrule=name:^eDP-1$,width:2560,height:1600', self.settings)
+        self.assertIn('monitorrule=name:^HDMI-A-1$', self.settings)
+
+    def test_off_needs_wlr_randr(self):
+        (self.bin / 'wlr-randr').unlink()
+        stub(self.bin, 'mmsg', '''\
+            if [ "$1 $2" = "get all-monitors" ]; then
+              echo '{"monitors":[{"name":"eDP-1","x":0,"y":0,"width":1707,"height":1067,"scale":1.5},{"name":"HDMI-A-1","x":1707,"y":0,"width":1920,"height":1080,"scale":2}]}'
+            fi
+            ''')
+        self.helper('display-try', self.layout(**{'eDP-1': dict(enabled=False)}), ok=False)
+        self.assertFalse((self.home / '.config/mango/settings.conf').exists())
 
     def test_try_revert(self):
         self.helper('display-try', self.layout(**{'HDMI-A-1': dict(transform='90')}))
