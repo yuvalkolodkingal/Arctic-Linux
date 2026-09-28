@@ -195,6 +195,7 @@ ShellRoot {
     FrozenScreens { id: frozenScreens }
     Osd { id: osd }
     LiveWelcome { id: welcome }
+    WhatsNew { id: whatsNew }
     LockScreen { id: lockScreen }
     PolkitDialog { id: polkit }
     BarMenu { id: menuHost; shell: root }
@@ -264,6 +265,11 @@ ShellRoot {
         target: 'welcome'
         // (not "show": `quickshell ipc call … show` is read as its own show subcommand)
         function open(): void { welcome.show(); }
+    }
+    IpcHandler {
+        target: 'whatsnew'
+        // "What's new" after an Arctic update, shown again (not "show": see welcome above).
+        function open(): void { whatsNew.show(); }
     }
     IpcHandler {
         target: 'dnd'

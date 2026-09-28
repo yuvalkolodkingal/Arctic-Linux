@@ -1,4 +1,4 @@
-// The shell's icon names resolve (design-data.js + icons-extra.js): node shell/tests/test-icons.cjs
+// The shell's icon names resolve (design-data.js + icons-extra.js), and app tiles: node shell/tests/test-icons.cjs
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -56,4 +56,25 @@ for (const file of fs.readdirSync(shell).filter(f => f.endsWith('.qml'))) {
 }
 assert.deepEqual([...new Set(missing)], [], 'unknown icon names');
 
-console.log('icons: ok (' + Object.keys(extra).length + ' extra glyphs)');
+
+// ---- app tiles: a web app (arctic-webapp, desktop id org.arcticlinux.WebApp.…) keeps its own
+// icon even when its name matches a design tile ("Signal", "Steam", "Settings") -------------
+const dataCtx = {};
+vm.createContext(dataCtx);
+vm.runInContext(fs.readFileSync(path.join(shell, 'assets/design-data.js'), 'utf8').replace('.pragma library', ''), dataCtx);
+const extraCtx = {};
+vm.createContext(extraCtx);
+vm.runInContext(fs.readFileSync(path.join(shell, 'assets/icons-extra.js'), 'utf8').replace('.pragma library', ''), extraCtx);
+const icons = { Data: dataCtx, Extra: extraCtx };
+vm.createContext(icons);
+vm.runInContext(fs.readFileSync(path.join(shell, 'assets/Icons.js'), 'utf8').replace('.pragma library', '')
+    .replace(/^\.import .*$/mg, ''), icons);
+assert.equal(icons.tileFor('org.arcticlinux.WebApp.Signal_1a2b3c', 'Signal'), '');
+assert.equal(icons.tileFor('org.arcticlinux.WebApp.Steam_1a2b3c', 'Steam Store'), '');
+assert.equal(icons.tileFor('org.arcticlinux.WebApp.Settings_00ff00', 'Account settings'), '');
+assert.equal(icons.tileFor('org.signal.Signal', 'Signal'), 'signal');
+assert.equal(icons.tileFor('com.valvesoftware.Steam', 'Steam'), 'steam');
+assert.equal(icons.tileFor('org.arcticlinux.Settings', 'Arctic Settings'), 'settings');
+// ...and the extra glyphs reach Icons.js (the bar menus' icons).
+assert.ok(icons.has('hotspot') && icons.has('lock'));
+console.log('test-icons: ok (' + Object.keys(extra).length + ' extra glyphs)');

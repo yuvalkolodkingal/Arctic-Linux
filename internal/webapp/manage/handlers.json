@@ -1,0 +1,8 @@
+[
+  {"name": "Gmail", "hosts": ["mail.google.com"], "template": "https://mail.google.com/mail/?extsrc=mailto&url={mailto}"},
+  {"name": "Outlook", "hosts": ["outlook.office.com", "outlook.office365.com"], "template": "https://outlook.office.com/mail/deeplink/compose?mailtouri={mailto}"},
+  {"name": "Outlook.com", "hosts": ["outlook.live.com"], "template": "https://outlook.live.com/mail/deeplink/compose?mailtouri={mailto}"},
+  {"name": "Proton Mail", "hosts": ["mail.proton.me"], "template": "https://mail.proton.me/inbox#mailto={mailto}"},
+  {"name": "Fastmail", "hosts": ["app.fastmail.com"], "template": "https://app.fastmail.com/action/compose/?mailto={mailto}"},
+  {"name": "HEY", "hosts": ["app.hey.com"], "template": "https://app.hey.com/messages/new?mailto={mailto}"}
+]

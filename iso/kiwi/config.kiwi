@@ -70,6 +70,9 @@
 		<package name="blueman"/>
 		<package name="pavucontrol"/>
 		<package name="wlr-randr"/>
+		<!-- Web apps (Get apps → Web apps; arctic-desktop requires it too; named so it is never
+		     left out). WebKitGTK 6.0 adds about 155 MiB installed. -->
+		<package name="arctic-webapps"/>
 		<!-- Default apps the installer treats as already in the live image (in_live_image in
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
 		<package name="kitty"/>
@@ -179,8 +182,8 @@
 		<ignore name="gfs2-utils"/>
 		<ignore name="reiserfs-utils"/>
 		<ignore name="qemu-user-static"/>
-		<!-- Weak dependencies nothing here uses: EPS for kimageformats, cpp for xrdb (~70 MB) -->
-		<ignore name="ghostscript"/>
+		<!-- Weak dependencies nothing here uses: cpp for xrdb. (Stream 5: ghostscript is
+		     no longer ignored, printing needs it: cups-filters → libcupsfilters.) -->
 		<ignore name="cpp"/>
 		<ignore name="glibc-all-langpacks"/>
 	</packages>

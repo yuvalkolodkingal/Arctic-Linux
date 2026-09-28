@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""arctic-effects — lighter effects (virtual machines, no graphics driver) and game mode.
+
+    arctic-effects status [--json]
+    arctic-effects lighter auto|on|off     no animations, blur or shadows; auto = in a virtual
+                                           machine or without a GPU driver (software rendering)
+    arctic-effects game on|off|toggle      game mode: lighter effects and no gaps, until you turn
+                                           it off or log out
+    arctic-effects apply                   at login (arctic-session effects): game mode off, the
+                                           machine checked again
+
+Settings keeps them in ~/.config/arctic/effects.json; the Mango lines they need are written to
+~/.config/arctic/effects.conf, which ~/.config/mango/config.conf sources after settings.conf (the
+line is added to older copies of config.conf, with a backup), and Mango reloads when it changed.
+Each command prints one JSON line; failures print {"ok": false, "error": "…"} and exit 1.
+"""
+import glob
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+LIGHTER = ['animations=0', 'layer_animations=0', 'blur=0', 'blur_layer=0', 'shadows=0', 'layer_shadows=0']
+GAME = ['gappih=0', 'gappiv=0', 'gappoh=0', 'gappov=0']
+SOURCE = 'source-optional=~/.config/arctic/effects.conf'
+SETTINGS_CONF = 'source-optional=~/.config/mango/settings.conf'
+USER_CONF = 'source-optional=~/.config/mango/user.conf'
+
+
+class Failure(Exception):
+    """A sentence for the person."""
+
+
+HOME = Path(os.environ.get('HOME') or Path.home())
+CONFIG = Path(os.environ.get('XDG_CONFIG_HOME') or HOME / '.config')
+STATE = CONFIG / 'arctic' / 'effects.json'
+CONF = CONFIG / 'arctic' / 'effects.conf'
+MANGO_CONF = HOME / '.config' / 'mango' / 'config.conf'     # Mango reads it by $HOME
+BACKUPS = Path(os.environ.get('XDG_STATE_HOME') or HOME / '.local/state') / 'arctic' / 'settings-backups'
+
+
+def write(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix='.' + path.name + '.', dir=str(path.parent))
+    with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+        handle.write(text)
+    os.replace(tmp, path)
+
+
+def read_state():
+    try:
+        data = json.loads(STATE.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        data = {}
+    lighter = data.get('lighter') if data.get('lighter') in ('auto', 'on', 'off') else 'auto'
+    return dict(lighter=lighter, game=data.get('game') is True)
+
+
+def software_reason():
+    """Why effects are lighter automatically: 'vm', 'software' or ''."""
+    try:
+        if subprocess.run(['systemd-detect-virt', '--vm', '--quiet'], timeout=5).returncode == 0:
+            return 'vm'
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if not glob.glob(os.path.join(os.environ.get('ARCTIC_EFFECTS_DRI') or '/dev/dri', 'renderD*')):
+        return 'software'
+    return ''
+
+
+def ensure_sourced():
+    """Older homes have a copy of config.conf without the effects line: add it before user.conf,
+    after Settings' line (added too when it's missing, as Settings would, so the order holds)."""
+    try:
+        text = MANGO_CONF.read_text(encoding='utf-8')
+    except OSError:
+        return False        # no config: Mango runs on its defaults and reads nothing of ours
+    lines = text.splitlines()
+    missing = [line for line in (SETTINGS_CONF, SOURCE) if line not in (x.strip() for x in lines)]
+    if SOURCE not in missing:
+        return True
+    BACKUPS.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(MANGO_CONF, BACKUPS / 'config.conf.{}'.format(time.strftime('%Y%m%d-%H%M%S')))
+    at = next((i for i, line in enumerate(lines) if line.strip() == USER_CONF), len(lines))
+    lines[at:at] = missing
+    target = MANGO_CONF.resolve() if MANGO_CONF.is_symlink() else MANGO_CONF
+    write(target, '\n'.join(lines) + '\n')
+    return True
+
+
+def apply(state):
+    reason = software_reason() if state['lighter'] == 'auto' else ''
+    lighter = state['lighter'] == 'on' or bool(reason)
+    lines = ['# Written by arctic-effects. ~/.config/mango/config.conf sources it after settings.conf.']
+    if lighter or state['game']:
+        lines += ['# Lighter effects' + (' (game mode)' if state['game'] and not lighter else
+                                        ' (virtual machine)' if reason == 'vm' else
+                                        ' (software rendering)' if reason == 'software' else '')] + LIGHTER
+    if state['game']:
+        lines += ['# Game mode'] + GAME
+    text = '\n'.join(lines) + '\n'
+    write(STATE, json.dumps(state) + '\n')
+    sourced = ensure_sourced()
+    try:
+        changed = CONF.read_text(encoding='utf-8') != text
+    except OSError:
+        changed = True
+    if changed:
+        write(CONF, text)
+        for argv in (['mmsg', 'dispatch', 'reload_config'], ['arctic-shell-ipc', 'shell', 'reload']):
+            try:
+                subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, timeout=10)
+            except (OSError, subprocess.SubprocessError):
+                pass
+    return dict(ok=True, lighter=state['lighter'], lighter_active=lighter or state['game'], reason=reason,
+                game=state['game'], sourced=sourced)
+
+
+def tell(text):
+    if shutil.which('notify-send'):
+        subprocess.run(['notify-send', '-a', 'arctic-osd', '-e', '-t', '1500',
+                        '-h', 'string:x-canonical-private-synchronous:arctic-osd', text],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
+
+
+def main(argv):
+    verb = argv[0] if argv else 'status'
+    rest = argv[1:]
+    state = read_state()
+    if verb in ('-h', '--help'):
+        print(__doc__.strip())
+        return 0
+    if verb == 'status':
+        reason = software_reason() if state['lighter'] == 'auto' else ''
+        result = dict(ok=True, lighter=state['lighter'], game=state['game'], reason=reason,
+                      lighter_active=state['lighter'] == 'on' or bool(reason) or state['game'])
+        if '--json' not in rest:
+            print('Lighter effects: {}{}; game mode: {}'.format(
+                state['lighter'], ' (on now: {})'.format(reason) if reason else '', 'on' if state['game'] else 'off'))
+            return 0
+    elif verb == 'lighter' and rest[:1] in (['auto'], ['on'], ['off']):
+        state['lighter'] = rest[0]
+        result = apply(state)
+    elif verb == 'game' and rest[:1] in (['on'], ['off'], ['toggle']):
+        state['game'] = not state['game'] if rest[0] == 'toggle' else rest[0] == 'on'
+        result = apply(state)
+        if '--quiet' not in rest:
+            tell('Game mode on' if state['game'] else 'Game mode off')
+    elif verb == 'apply':
+        state['game'] = False
+        result = apply(state)
+    else:
+        print('usage: arctic-effects status [--json] | lighter auto|on|off | game on|off|toggle | apply',
+              file=sys.stderr)
+        return 2
+    print(json.dumps(result))
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Failure as error:
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)

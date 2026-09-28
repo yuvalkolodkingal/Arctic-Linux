@@ -1,0 +1,8 @@
+window.arctic-webapp { background: #eef2f5; }
+window.arctic-webapp headerbar { background: #fbfcfd; color: #151a21; box-shadow: inset 0 -1px #d5dde4; }
+window.arctic-webapp headerbar button { border-radius: 10px; }
+window.arctic-webapp button:focus-visible { outline: 2px solid #a86812; outline-offset: 1px; }
+.arctic-host { color: #4a5663; font-size: 0.9em; }
+.arctic-banner { background: #ffffff; color: #151a21; border: 1px solid #d5dde4; border-radius: 14px; margin: 8px; padding: 8px 12px; }
+.arctic-banner button.suggested-action { background: #efa637; color: #151a21; border-radius: 10px; }
+.arctic-findbar { background: #e8edf1; border-bottom: 1px solid #d5dde4; }

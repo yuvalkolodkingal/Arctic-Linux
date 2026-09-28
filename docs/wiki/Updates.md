@@ -11,8 +11,8 @@ while you work, and it never restarts the computer by itself.
 1. **A check every day.** About ten minutes after the computer starts, and once a day after
    that, Arctic Linux looks for updates to everything installed with dnf: Fedora's packages,
    Arctic's own (the desktop, the shell, Mango, the installer's apps), RPM Fusion and any other
-   repository you added. Flatpak and Nix apps update separately (see
-   [below](#flatpak-and-nix-apps)).
+   repository you added. Flatpak apps are updated every day too, in their own way, and firmware
+   when you ask (see [below](#flatpak-apps-firmware-and-nix)).
 2. **Downloaded in the background.** The updates are downloaded at the lowest priority and
    tested: dnf checks that they install cleanly, without installing anything yet. Your running
    system isn't touched.
@@ -63,6 +63,8 @@ password.
 | `arctic-update channel` | Shows the channel; `channel stable` or `channel testing` switches |
 | `arctic-update auto` | Shows automatic updates; `auto on`, `auto download-only` or `auto off` changes them |
 | `arctic-update metered` | Shows what happens on metered connections; `metered skip` or `metered allow` changes it |
+| `arctic-update flatpak` | Updates your Flatpak apps now (see [below](#flatpak-apps-firmware-and-nix)) |
+| `arctic-update firmware` | Lists firmware updates for this computer's devices; `firmware install` installs them |
 | `arctic-update help` | The list of commands |
 
 ```text
@@ -229,13 +231,65 @@ sudo snapper -c root create-config /
 sudo snapper -c root set-config NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no
 ```
 
-## Flatpak and Nix apps
+## The next Fedora release
 
-Apps from Flathub and Nix aren't part of these updates. Update them yourself:
+Arctic Linux publishes its packages for a new Fedora release once that release is out and Arctic
+works on it. From then on **Settings → Updates** shows **Fedora 45 is ready for Arctic Linux**
+(`arctic-update upgrade check` says the same). **Upgrade…** opens a terminal window that
+downloads the new release (a few gigabytes, `dnf5 system-upgrade download`; a snapshot is taken
+first), then asks whether to restart: the upgrade installs during that restart, and the computer
+restarts once more at the end. Your files, settings and apps stay. **Release notes** says what
+changes.
 
 ```sh
-flatpak update                  # Flatpak apps (Zen, Zed, Collabora Office and others)
-nix profile upgrade --all       # Nix packages in your profile
+arctic-update upgrade check        # is the next release ready?
+arctic-update upgrade download     # download it, then restart into the upgrade
+```
+
+The daily update check leaves a downloaded upgrade alone; `arctic-update` shows it as waiting
+for `dnf5 offline reboot`.
+
+## What's new
+
+The first time you log in after an update brings a new Arctic Linux release (0.2 → 0.3, say), a
+card says what's new in it, with **Read the release notes**. It shows once; `arctic-shell-ipc
+whatsnew open` shows it again. The card's text is `/usr/share/arctic/shell/whats-new.json`.
+
+## Flatpak apps, firmware and Nix
+
+**Flatpak apps** (Zen, Zed, Collabora Office and others from Flathub) are updated every day, about
+twenty minutes after the computer starts and then daily (`arctic-flatpak-update.timer`, which
+runs `arctic-update flatpak --auto`). They're updated in place: an app that's open keeps running
+the version it started with and gets the new one the next time you open it. Runtimes no app uses
+any more are removed afterwards. The daily run follows the same settings as the system updates:
+it only runs with automatic updates **on** (not with `download-only` or `off`), and not on a
+metered connection unless `METERED=allow`.
+
+To update them right away: **Settings → Updates → Update apps now**, or
+
+```sh
+arctic-update flatpak           # your apps, and the ones installed for everyone
+```
+
+`arctic-update` shows how the last run went ("Flatpak apps  2 apps updated").
+
+**Firmware** (the BIOS/UEFI, docks, keyboards, SSDs and other devices whose makers publish updates
+through the [Linux Vendor Firmware Service](https://fwupd.org)) comes from fwupd, which keeps its
+list of updates current by itself. **Settings → Updates → Firmware** says what's available;
+**Install in a terminal** runs `fwupdmgr update`, which shows its progress and asks before it
+restarts the computer. From a terminal:
+
+```sh
+arctic-update firmware          # what's available
+arctic-update firmware install  # install it (fwupdmgr update)
+```
+
+Plug a laptop in before a firmware update, and don't switch it off while it runs.
+
+**Nix** packages in your profile are yours to update:
+
+```sh
+nix profile upgrade --all
 ```
 
 ## Fixing it on the go

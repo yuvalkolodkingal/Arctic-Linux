@@ -147,7 +147,15 @@ mokutil --test-key /etc/pki/akmods/certs/public_key.der             # "is alread
 Most laptops with an NVIDIA GPU also have Intel or AMD graphics in the processor, which drives the
 built-in screen. Arctic Linux keeps drawing the desktop on that integrated chip, which saves
 battery; the NVIDIA driver is installed for the NVIDIA chip, and apps use it when you ask them to.
-To run an app on the NVIDIA chip:
+To run an app on the NVIDIA chip (or the discrete AMD one):
+
+```sh
+arctic-gpu run app-name          # switcheroo-control sets what that chip's driver needs
+arctic-gpu status                # the chips, and the apps that ask for the discrete one
+```
+
+Apps whose desktop entry says `PrefersNonDefaultGPU=true` (Steam, many games) ask for it
+themselves. By hand, the variables are:
 
 ```sh
 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia app-name   # OpenGL apps

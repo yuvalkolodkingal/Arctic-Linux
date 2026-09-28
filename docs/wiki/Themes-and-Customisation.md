@@ -190,7 +190,7 @@ these files, which Arctic never overwrites:
 | `~/.config/kitty/user.conf` | The kitty terminal |
 | `~/.zshrc.local` | zsh |
 | `~/.config/arctic/default-apps` | Which app each shortcut opens |
-| `~/.config/arctic/shell.json` | Desktop shell settings (the screen frame) |
+| `~/.config/arctic/shell.json` | Desktop shell settings (the screen frame; `lock_fingerprint`) |
 | `~/.config/arctic/settings.json` | Theme settings (see [Where it's kept](#where-its-kept)) |
 | `~/.config/arctic/theme-hooks.d/` | Your own theme hooks (see [Theme hooks](#theme-hooks)) |
 
