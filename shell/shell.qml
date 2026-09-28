@@ -201,8 +201,15 @@ ShellRoot {
     // called `show` or `list` (quickshell ipc reads those as its own subcommands).
     IpcHandler {
         target: 'panel'
-        function toggle(name: string): void { shell.togglePanel(name, null, undefined, { keyboard: true }); }
-        function open(name: string): void { shell.openPanel(name, null, undefined, { keyboard: true }); }
+        function toggle(name: string): void {
+            // The notification centre is its own popover (stream 3b's toggleNotifications).
+            if (name === 'notifications') { if (typeof shell.toggleNotifications === 'function') shell.toggleNotifications(); return; }
+            shell.togglePanel(name, null, undefined, { keyboard: true });
+        }
+        function open(name: string): void {
+            if (name === 'notifications') { if (typeof shell.toggleNotifications === 'function') shell.toggleNotifications(); return; }
+            shell.openPanel(name, null, undefined, { keyboard: true });
+        }
         function close(): void { shell.closePanel(); }
     }
     // Quick Settings (Super + A) and the toggle registry behind its tiles.
