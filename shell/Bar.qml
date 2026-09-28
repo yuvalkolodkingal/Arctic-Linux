@@ -105,6 +105,7 @@ PanelWindow {
             sound: volumeItem,
             battery: batteryItem,
             notifications: bellItem,
+            calendar: clockItem,
         };
         const item = owners[name] || null;
         return item && item.visible ? item : null;
@@ -175,15 +176,17 @@ PanelWindow {
         }
     }
 
-    // ---- centre: clock (tabular figures) ------------------------------------------------
-    Text {
+    // ---- centre: clock (tabular figures); click for the calendar ------------------------
+    BarItem {
+        id: clockItem
         anchors.centerIn: parent
         text: Qt.formatDateTime(clock.date, 'ddd d MMM · hh:mm')
-        color: Theme.ink
-        font.family: Theme.fontSans
-        font.pixelSize: 13
-        font.weight: Font.DemiBold
-        font.features: { 'tnum': 1 }
+        textWeight: Font.DemiBold
+        hasMenu: true
+        active: bar.menuOpen('calendar')
+        tooltip: Qt.locale().toString(clock.date, 'dddd d MMMM yyyy') + '  (Super + Ctrl + T)'
+        onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
+        onHoverChanged: h => h ? bar.hint(clockItem, tooltip) : bar.unhint(clockItem)
     }
 
     // ---- right ----------------------------------------------------------------------------

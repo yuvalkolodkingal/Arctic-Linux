@@ -19,6 +19,7 @@ BarMenu 1.0 BarMenu.qml
 BarTooltip 1.0 BarTooltip.qml
 BluetoothPairDialog 1.0 BluetoothPairDialog.qml
 BluetoothPanel 1.0 BluetoothPanel.qml
+CalendarPanel 1.0 CalendarPanel.qml
 DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
 FocusRing 1.0 FocusRing.qml
