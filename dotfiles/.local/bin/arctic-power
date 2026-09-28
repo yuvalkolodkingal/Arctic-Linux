@@ -120,6 +120,12 @@ act() {
 }
 
 gentle() {   # gentle <action> <word for the question> [--now]
+  if [[ "${3:-}" != --now && -z "${ARCTIC_POWER_DETACHED:-}" && -t 0 ]]; then
+    # Typed in a terminal: closing the windows closes that terminal too, so go on without it.
+    ARCTIC_POWER_DETACHED=1 setsid -f "$0" "$1" >/dev/null 2>&1 < /dev/null
+    echo "Closing your windows first…"
+    exit 0
+  fi
   if [[ "${3:-}" != --now ]] && ! confirm "$1" "$2"; then exit 0; fi
   act "$1"
 }

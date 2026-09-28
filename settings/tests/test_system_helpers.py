@@ -522,6 +522,22 @@ class MoreUpdatesTest(Home):
         self.assertIn('arctic-update flatpak --notify', self.calls())
         self.assertIn('arctic-update firmware install', self.calls())
 
+    def test_upgrade(self):
+        self.assertFalse(self.helper('upgrade')['available'])
+        stub(self.bin, 'arctic-update', '''\
+            echo '{"ok": true, "available": true, "current": 44, "next": 45, "notes": "https://example.org"}'
+            ''')
+        data = self.helper('upgrade', 'check')
+        self.assertEqual((data['available'], data['next']), (True, 45))
+        stub(self.bin, 'arctic-open', 'echo "arctic-open $*" >> "{}"\n'.format(self.log))
+        self.helper('upgrade', 'download')
+        for _ in range(50):
+            if self.calls():
+                break
+            time.sleep(0.1)
+        self.assertEqual(self.calls(), ['arctic-open terminal --hold -e arctic-update upgrade download'])
+        self.helper('upgrade', 'now', ok=False)
+
 
 LPSTAT = r'''
 echo "lpstat $* LC_ALL=$LC_ALL" >> "{log}"

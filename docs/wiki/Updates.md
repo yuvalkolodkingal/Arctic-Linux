@@ -231,6 +231,30 @@ sudo snapper -c root create-config /
 sudo snapper -c root set-config NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no
 ```
 
+## The next Fedora release
+
+Arctic Linux publishes its packages for a new Fedora release once that release is out and Arctic
+works on it. From then on **Settings → Updates** shows **Fedora 45 is ready for Arctic Linux**
+(`arctic-update upgrade check` says the same). **Upgrade…** opens a terminal window that
+downloads the new release (a few gigabytes, `dnf5 system-upgrade download`; a snapshot is taken
+first), then asks whether to restart: the upgrade installs during that restart, and the computer
+restarts once more at the end. Your files, settings and apps stay. **Release notes** says what
+changes.
+
+```sh
+arctic-update upgrade check        # is the next release ready?
+arctic-update upgrade download     # download it, then restart into the upgrade
+```
+
+The daily update check leaves a downloaded upgrade alone; `arctic-update` shows it as waiting
+for `dnf5 offline reboot`.
+
+## What's new
+
+The first time you log in after an update brings a new Arctic Linux release (0.2 → 0.3, say), a
+card says what's new in it, with **Read the release notes**. It shows once; `arctic-shell-ipc
+whatsnew open` shows it again. The card's text is `/usr/share/arctic/shell/whats-new.json`.
+
 ## Flatpak apps, firmware and Nix
 
 **Flatpak apps** (Zen, Zed, Collabora Office and others from Flathub) are updated every day, about

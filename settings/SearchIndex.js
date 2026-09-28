@@ -109,6 +109,7 @@ var ENTRIES = [
     ["updates", "updates.apps", "Flatpak apps", "flathub app updates"],
     ["updates", "updates.firmware", "Firmware", "fwupd bios uefi device updates"],
     ["updates", "updates.snapshots", "Snapshots", "undo an update rollback snapper restore btrfs"],
+    ["updates", "updates.upgrade", "Upgrade to the next Fedora", "fedora release version system-upgrade"],
     ["sharing", "sharing.firewall", "Firewall", "ports allow block security incoming"],
     ["sharing", "sharing.mdns", "Find printers and devices", "mdns avahi bonjour discovery"],
     ["sharing", "sharing.localsend", "LocalSend", "airdrop send files nearby"],

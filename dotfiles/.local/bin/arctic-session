@@ -94,7 +94,12 @@ case "${1:-}" in
   lid)
     if arctic-is-live 2>/dev/null; then exit 0; fi
     why="Closing the lid does what you chose in Settings"
-    if [[ "${2:-}" == --restart ]]; then pkill -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux" 2>/dev/null; fi
+    if [[ "${2:-}" == --restart ]]; then
+      # setsid made each holder a process group of its own: end it with its `sleep`.
+      for pid in $(pgrep -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux"); do
+        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null
+      done
+    fi
     choice="$(sed -n 's/^when_closed=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/lid.conf" 2>/dev/null | tail -n 1)"
     case "$choice" in
       lock|screen-off)

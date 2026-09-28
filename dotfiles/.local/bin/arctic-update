@@ -14,6 +14,8 @@
 #                                            update Flatpak apps now (--auto: the daily timers' run;
 #                                            --user: only your own installation)
 #   arctic-update firmware [--json] | firmware install    firmware updates (fwupd)
+#   arctic-update upgrade check [--json] | upgrade download
+#                                            the next Fedora release, once Arctic has it
 #
 # How it works: `dnf5 upgrade --offline` downloads the updates and tests the transaction; this
 # script then marks it ready for the next boot the way `dnf5 offline reboot` does (status
@@ -81,6 +83,8 @@ Arctic Linux updates: downloaded in the background, installed the next time you 
   arctic-update flatpak [--notify]         update Flatpak apps now (yours and the system's)
   arctic-update firmware [--json]          firmware updates fwupd offers for this computer
   arctic-update firmware install           install them (in a terminal: fwupdmgr update)
+  arctic-update upgrade check [--json]     is the next Fedora release ready for Arctic Linux?
+  arctic-update upgrade download           download it (dnf5 system-upgrade), then restart into it
   arctic-update help
 
 Settings: /etc/arctic/update.conf
@@ -890,6 +894,46 @@ cmd_firmware() {
   esac
 }
 
+# The next Fedora release: Arctic publishes its repository for a release only once that release
+# is out and Arctic works on it, so the repository answering for $releasever + 1 is the signal.
+# `download` is dnf5 system-upgrade (a snapshot is taken around it, as around every dnf
+# transaction), then `dnf5 offline reboot`, which asks before it restarts into the upgrade.
+# arctic-update itself leaves that transaction alone (it's dnf5 system-upgrade's).
+NOTES_URL="https://github.com/yuvalkolodkingal/O-Tism/wiki/Release-Notes"
+current_release() {
+  local id
+  id="$(sed -n 's/^PLATFORM_ID="\{0,1\}platform:f\([0-9]*\)"\{0,1\}$/\1/p' "$R/etc/os-release" "$R/usr/lib/os-release" 2>/dev/null | head -n 1)"
+  if [[ -n $id ]]; then echo "$id"; else rpm -E %fedora 2>/dev/null; fi
+}
+cmd_upgrade() {
+  local now next repo section=arctic url available=false
+  now="$(current_release)"
+  [[ $now =~ ^[0-9]+$ ]] || die "can't tell which Fedora release this is"
+  next=$(( now + 1 ))
+  case ${1:-check} in
+    check)
+      repo="$R/usr/share/dnf5/repos.d/arctic.repo"
+      [[ "$(current_channel)" == testing ]] && { repo="$R/usr/share/dnf5/repos.d/arctic-testing.repo" section=arctic-testing; }
+      url="$(helper repomd-url "$repo" "$section" "$next" "$(uname -m)")"
+      if [[ -n $url ]] && curl -fsI --max-time 20 -o /dev/null "$url" 2>/dev/null; then available=true; fi
+      if [[ ${2:-} == --json ]]; then
+        printf '{"ok": true, "available": %s, "current": %d, "next": %d, "notes": "%s"}\n' "$available" "$now" "$next" "$NOTES_URL"
+      elif [[ $available == true ]]; then
+        say "Fedora $next is ready for Arctic Linux. Upgrade with: arctic-update upgrade download" "Release notes: $NOTES_URL"
+      else
+        say "Arctic Linux isn't ready for Fedora $next yet; you're on Fedora $now."
+      fi ;;
+    download)
+      refuse_live
+      as_root
+      say "Downloading Fedora $next (a few gigabytes). You can keep working."
+      dnf5 system-upgrade download --releasever="$next" -y || die "the download didn't work (see above)"
+      say "" "Fedora $next is downloaded. Restarting installs it; that takes a while, and the computer restarts again at the end."
+      dnf5 offline reboot ;;
+    *) usage >&2; exit 2 ;;
+  esac
+}
+
 cmd=${1:-status}
 (( $# )) && shift
 case $cmd in
@@ -904,6 +948,7 @@ case $cmd in
   after-transaction) cmd_after_transaction ;;
   flatpak)           cmd_flatpak "$@" ;;
   firmware)          cmd_firmware "$@" ;;
+  upgrade)           cmd_upgrade "$@" ;;
   help|-h|--help)    usage ;;
   *)                 usage >&2; exit 2 ;;
 esac

@@ -61,6 +61,37 @@ Page {
         onAction: Backend.launch(["arctic-open", "terminal", "--hold", "-e", "sudo", "dnf", "upgrade"])
     }
 
+    // The next Fedora release, once Arctic's repository has it (arctic-update upgrade check).
+    Group {
+        id: upgradeGroup
+        property var up: ({ available: false })
+        visible: up.available === true && page.up.available === true
+        title: "Fedora " + (up.next || "")
+        Component.onCompleted: Backend.call(["upgrade", "check"], r => { if (r.ok) upgradeGroup.up = r; }, true)
+        SettingRow {
+            searchKey: "updates.upgrade"
+            title: "Fedora " + (upgradeGroup.up.next || "") + " is ready for Arctic Linux"
+            desc: "Opens a terminal window: it downloads a few gigabytes, then asks to restart and installs it. A snapshot is taken first, and your files and apps stay."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArButton {
+                    text: "Release notes"
+                    variant: "ghost"
+                    iconRight: "external"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.openUrl(upgradeGroup.up.notes || "")
+                }
+                ArButton {
+                    text: "Upgrade…"
+                    iconName: "terminal"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.call(["upgrade", "download"], r => {})
+                }
+            }
+        }
+    }
+
     Group {
         visible: page.up.available === true
         title: "Status"

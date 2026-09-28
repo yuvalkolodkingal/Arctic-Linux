@@ -968,6 +968,35 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(self.cli("flatpak", "--auto").stdout, "")
         self.cli("flatpak", "--sideways", rc=2)
 
+    def test_upgrade_check(self):
+        import http.server
+        import threading
+        served = self.path("srv")
+        os.makedirs(os.path.join(served, "fedora-45/x86_64/repodata"))
+        Path(served, "fedora-45/x86_64/repodata/repomd.xml").write_text("<repomd/>")
+
+        class Quiet(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *a, **k):
+                super().__init__(*a, directory=served, **k)
+
+            def log_message(self, *a):
+                pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Quiet)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.write("usr/share/dnf5/repos.d/arctic.repo",
+                   "[arctic]\nbaseurl=http://127.0.0.1:{}/fedora-$releasever/$basearch/\n".format(server.server_port))
+        self.write("etc/os-release", 'NAME="Arctic Linux"\nPLATFORM_ID="platform:f44"\n')
+        self.env["NO_PROXY"] = self.env["no_proxy"] = "127.0.0.1"
+        data = json.loads(self.cli("upgrade", "check", "--json").stdout)
+        if os.uname().machine == "x86_64":
+            self.assertEqual((data["available"], data["current"], data["next"]), (True, 44, 45))
+        self.write("etc/os-release", 'PLATFORM_ID="platform:f45"\n')
+        data = json.loads(self.cli("upgrade", "check", "--json").stdout)
+        self.assertEqual((data["available"], data["next"]), (False, 46))
+        self.cli("upgrade", "sideways", rc=2)
+
     def test_flatpak_user_installation(self):
         self.fake_flatpak()
         self.env["XDG_STATE_HOME"] = self.path("home-state")
@@ -1005,6 +1034,18 @@ class ScenarioTests(unittest.TestCase):
         fw = json.loads(self.cli("firmware", "--json").stdout)
         self.assertEqual((fw["available"], fw["devices"]), (True, []))
         self.cli("firmware", "flash", rc=2)
+
+
+class UpgradeTests(unittest.TestCase):
+    def test_repomd_url(self):
+        repo = (ROOT / "packaging/release/arctic.repo").read_text()
+        url = helper.repomd_url(repo, "arctic", 45, "x86_64")
+        self.assertTrue(url.endswith("/repo/stable/fedora-45/x86_64/repodata/repomd.xml"), url)
+        self.assertTrue(url.startswith("https://"))
+        testing = (ROOT / "packaging/release/arctic-testing.repo").read_text()
+        self.assertIn("fedora-45/x86_64/repodata/repomd.xml", helper.repomd_url(testing, "arctic-testing", 45, "x86_64"))
+        self.assertEqual(helper.repomd_url(repo, "nothing", 45, "x86_64"), "")
+        self.assertEqual(helper.repomd_url("[arctic]\nbaseurl=file:///srv/repo\n", "arctic", 45, "x86_64"), "")
 
 
 class FirmwareParseTests(unittest.TestCase):

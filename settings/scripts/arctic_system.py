@@ -19,6 +19,7 @@ are its (one JSON object per command, Failure for a sentence, argv lists, never 
                                   your picture and name (AccountsService); password, disk
                                   passphrase and fingerprints in a terminal window
     im | im-run install ENGINE… | configure       Fcitx 5 input methods (Chinese, Japanese, Korean)
+    upgrade [check|download]      the next Fedora release (arctic-update upgrade; download in a terminal)
     troubleshoot sound|wifi|bluetooth|shell       restart that part of the desktop (arctic-restart)
 """
 import os
@@ -691,6 +692,25 @@ def cmd_im_run(paths, args):
     return dict(ok=True, started='install')
 
 
+# ---- the next Fedora release (arctic-update upgrade) --------------------------------------------
+
+def cmd_upgrade(paths, args):
+    """upgrade [check] | upgrade download: is the next Fedora release ready for Arctic Linux, and
+    upgrading to it (a terminal window: the download, then a restart that asks first)."""
+    if args in ([], ['check']):
+        if not which('arctic-update', paths.env):
+            return dict(ok=True, available=False)
+        code, out, _err = run(['arctic-update', 'upgrade', 'check', '--json'], timeout=40)
+        data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+        return data if code == 0 and isinstance(data, dict) else dict(ok=True, available=False)
+    if args == ['download']:
+        subprocess.Popen(['arctic-open', 'terminal', '--hold', '-e', 'arctic-update', 'upgrade', 'download'],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+        return dict(ok=True, started='download')
+    raise Failure('usage: upgrade [check|download]')
+
+
 COMMANDS = {
     'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
     'autostart': cmd_autostart, 'autostart-set': cmd_autostart_set,
@@ -702,7 +722,7 @@ COMMANDS = {
     'sharing': cmd_sharing, 'sharing-set': cmd_sharing_set, 'snapshots': cmd_snapshots,
     'snapshot-run': cmd_snapshot_run,
     'users': cmd_users, 'user-pictures': cmd_user_pictures, 'user-set': cmd_user_set, 'user-run': cmd_user_run,
-    'im': cmd_im, 'im-run': cmd_im_run,
+    'im': cmd_im, 'im-run': cmd_im_run, 'upgrade': cmd_upgrade,
 }
 # Commands that read, change and write back a file of ours (they run one at a time).
 WRITERS = {'nightlight-set', 'autostart-set', 'lid-set', 'effects-set'}

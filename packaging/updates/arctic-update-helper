@@ -381,6 +381,23 @@ def channel_from_repos(text):
     return "none"
 
 
+def repomd_url(text, section, releasever, basearch):
+    """The repomd.xml URL of a repository section of a .repo file for another release (the
+    Fedora upgrade check), or "" when the section has no baseurl."""
+    current, base = None, ""
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+        elif current == section and line.split("=", 1)[0].strip() == "baseurl" and "=" in line:
+            base = line.split("=", 1)[1].strip().split()[0] if line.split("=", 1)[1].strip() else ""
+            break
+    if not base.startswith("https://") and not base.startswith("http://"):
+        return ""
+    base = base.replace("$releasever", str(releasever)).replace("$basearch", basearch)
+    return base.rstrip("/") + "/repodata/repomd.xml"
+
+
 # ---- status file ---------------------------------------------------------------------------
 
 def now_iso():
@@ -706,6 +723,8 @@ def main(argv=None):
     c.add_argument("--datadir", default=DATADIR)
     c.add_argument("--flatpak-status", default=FLATPAK_STATUS)
     c = sub.add_parser("firmware"); c.add_argument("--json", action="store_true")
+    c = sub.add_parser("repomd-url"); c.add_argument("file"); c.add_argument("section")
+    c.add_argument("releasever"); c.add_argument("basearch")
     a = p.parse_args(argv)
 
     if a.cmd == "config":
@@ -764,6 +783,8 @@ def main(argv=None):
                               a.channel, a.offline, a.busy == "yes", table=table)
         report["apps"] = apps_report(read_json(a.flatpak_status))
         print(json.dumps(report, indent=2) if a.json else format_report(report))
+    elif a.cmd == "repomd-url":
+        print(repomd_url(read_text(a.file), a.section, a.releasever, a.basearch))
     elif a.cmd == "firmware":
         # fwupdmgr's JSON on stdin (arctic-update firmware).
         fw = parse_firmware(sys.stdin.read())
