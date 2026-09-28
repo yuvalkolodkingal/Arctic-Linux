@@ -1077,6 +1077,14 @@ class DefaultAppsTest(Home):
         self.assertTrue(ran.read_text().splitlines()[-1].endswith('[arctic-open][--class][org.arcticlinux.Dropdown]'))
         subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'x.y', '--hold', '-e', 'btop'], env=env, check=True, timeout=10)
         self.assertTrue(ran.read_text().splitlines()[-1].endswith('[--class][x.y][--hold][-e][btop]'))
+        # A terminal that can't set an app id is passed over for one that can.
+        (self.home / '.config/arctic').mkdir(parents=True, exist_ok=True)
+        (self.home / '.config/arctic/default-apps').write_text('terminal=konsole\n')
+        stub(self.bin, 'konsole', 'exit 0\n')
+        subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'x.y'], env=env, check=True, timeout=10)
+        self.assertIn('exec kitty "$@"', ran.read_text().splitlines()[-1])
+        subprocess.run(['bash', str(opener), 'terminal'], env=env, check=True, timeout=10)
+        self.assertIn('exec konsole "$@"', ran.read_text().splitlines()[-1])
         for bad in (['terminal', '--app-id', 'a b'], ['terminal', '--hold'], ['browser', '--app-id', 'x']):
             self.assertEqual(subprocess.run(['bash', str(opener)] + bad, env=env, timeout=10, capture_output=True).returncode, 2)
 

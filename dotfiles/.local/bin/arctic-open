@@ -7,7 +7,8 @@
 #                        the launcher uses this for terminal apps, Fetch and "> command"
 #   arctic-open terminal --app-id ID [-e COMMAND…]
 #                        the terminal's window gets the Wayland app id ID, which window rules
-#                        match (the drop-down terminal); kitty, foot and alacritty only
+#                        match (the drop-down terminal): kitty, foot, alacritty or ghostty (your
+#                        terminal if it is one of them, else the first of them installed)
 #
 # The installer writes your picks to /etc/arctic/default-apps; you can override any of them in
 # ~/.config/arctic/default-apps. Both files are simple  role=command  lines, e.g.
@@ -50,6 +51,7 @@ id_args() {   # id_args <terminal command line> — how that terminal sets its w
   case "$(basename "${1%% *}")" in
     kitty|alacritty) printf '%s\n' --class "$app_id" ;;
     foot) printf '%s\n' --app-id "$app_id" ;;
+    ghostty) printf '%s\n' "--class=$app_id" ;;
   esac
 }
 
@@ -89,6 +91,8 @@ for c in "${candidates[@]}"; do
   (( ${#exec_args[@]} )) && [[ "$c" == gtk-launch* ]] && continue
   if available "$c"; then
     mapfile -t ids < <(id_args "$c")
+    # A window rule needs the app id: skip to a terminal that can set one (kitty, foot…).
+    [[ -n "$app_id" && ${#ids[@]} -eq 0 ]] && continue
     # Detach so the app outlives the keybinding's process. The role's command line is a
     # command line (word-split by sh); the command to run is passed as separate arguments.
     setsid -f sh -c "exec $c \"\$@\"" arctic-open "${ids[@]}" "${exec_args[@]}" >/dev/null 2>&1
