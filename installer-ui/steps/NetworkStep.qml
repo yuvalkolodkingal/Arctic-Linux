@@ -146,6 +146,7 @@ StepPage {
         // A Wi-Fi card that works only once its driver is installed (Broadcom wl): say how
         // to get online meanwhile.
         ArBanner {
+            id: hint
             visible: (page.opts.driver_hint || "") !== ""
             width: parent.width
             kind: "warning"
@@ -156,7 +157,8 @@ StepPage {
         ArList {
             id: list
             width: parent.width
-            height: Math.min(implicitHeight, Math.max(120, page.availableHeight - 170))
+            // What's above it: the info banner (170 with spacing), and the driver hint when shown.
+            height: Math.min(implicitHeight, Math.max(120, page.availableHeight - 170 - (hint.visible ? hint.height + Theme.space4 : 0)))
             accessibleName: "Networks"
             model: page.rows
             // Arrows only move; Space or a click connects.

@@ -50,6 +50,42 @@ StepPage {
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height
         Accessible.role: Accessible.Pane
+        Accessible.name: "Arctic Linux is ready"
+        // Keyboard: Tab reaches the page when it scrolls; arrows and Page Up/Down, Home/End move it.
+        activeFocusOnTab: interactive
+        function scrollBy(dy) {
+            contentY = Math.max(0, Math.min(contentHeight - height, contentY + dy));
+        }
+        Keys.onPressed: event => {
+            const step = height - 48;
+            if (event.key === Qt.Key_Down)
+                scrollBy(40);
+            else if (event.key === Qt.Key_Up)
+                scrollBy(-40);
+            else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_Space)
+                scrollBy(step);
+            else if (event.key === Qt.Key_PageUp)
+                scrollBy(-step);
+            else if (event.key === Qt.Key_Home)
+                contentY = 0;
+            else if (event.key === Qt.Key_End)
+                scrollBy(contentHeight);
+            else
+                return;
+            event.accepted = true;
+        }
+
+        // Focus ring while the page has keyboard focus.
+        Rectangle {
+            visible: doneFlick.activeFocus
+            parent: doneFlick
+            anchors.fill: parent
+            color: "transparent"
+            radius: Theme.radiusMd
+            border.width: Theme.focusWidth
+            border.color: Theme.focus
+            z: 10
+        }
 
         Column {
             id: doneColumn
