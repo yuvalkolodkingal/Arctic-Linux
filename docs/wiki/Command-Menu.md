@@ -34,6 +34,7 @@ show a switch with their current state.
 | **Install** | Get apps, and straight to Flathub, Fedora packages, web apps or the package console |
 | **Remove** | Remove apps |
 | **Update** | Check for updates now, update settings, update firmware, restart sound, restart Wi-Fi, restart the desktop shell |
+| **Open windows** | Every window on every workspace; `Enter` brings one forward |
 | **System** | Lock screen, log out, suspend, restart, shut down (the live USB has only restart and shut down) |
 
 A row whose app or helper isn't installed is hidden, and so is a branch with nothing in it.

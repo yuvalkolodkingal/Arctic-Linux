@@ -68,6 +68,8 @@
     "update.wifi": {"label": "Restart Wi-Fi", "icon": "wifi", "needs": ["nmcli"], "run": ["sh", "-c", "nmcli radio wifi off && sleep 1 && nmcli radio wifi on"]},
     "update.shell": {"label": "Restart the desktop shell", "icon": "restart", "desc": "The bar, launcher and menus", "run": ["arctic-shell", "--restart"]},
 
+    "windows": {"label": "Open windows", "icon": "tiling", "desc": "Every window on every workspace", "provider": "windows"},
+
     "system": {"label": "System", "icon": "power"},
     "system.lock": {"label": "Lock screen", "icon": "lock", "keys": "Super + L", "run": ["arctic-power", "lock"], "when": "installed"},
     "system.logout": {"label": "Log out", "icon": "log-out", "run": ["arctic-power", "logout"], "when": "installed"},

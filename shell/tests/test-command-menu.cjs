@@ -23,7 +23,7 @@ const shipped = shippedFile.entries;
 for (const f of fs.readdirSync(root + 'menu')) assert.ok(/^\d\d-[a-z-]+\.json$/.test(f), 'menu file name: ' + f);
 const icons = load('assets/design-data.js').ICONS;
 const top = ['apps', 'learn', 'capture', 'toggle', 'style', 'setup', 'install', 'remove', 'update', 'system'];
-assert.deepEqual(Object.keys(shipped).filter(id => !id.includes('.')), top);
+assert.deepEqual(Object.keys(shipped).filter(id => !id.includes('.')), top.slice(0, -1).concat(['windows', 'system']));
 for (const [id, e] of Object.entries(shipped)) {
     assert.ok(Menu.validId(id), id);
     assert.ok(e.label && typeof e.label === 'string', id + ' has a label');
@@ -182,6 +182,11 @@ Menu.readGuard(ctx, 'provider\tstyle.font\t{"ok": true, "current": "Fira Code", 
 const fonts = Menu.rows(base, 'style.font', ctx, {});
 assert.deepEqual(fonts.map(f => [f.label, f.current]), [['Fira Code', true], ['JetBrains Mono', false]]);
 assert.deepEqual(plain(fonts[1].run), ['arctic-font', 'set', 'JetBrains Mono']);
+// Open windows: a row each, hidden with none open.
+const wins = Menu.rows(base, 'windows', ctx, { windows: [{ title: 'Inbox', appName: 'Evolution', ref: 7 }, { title: '', appName: '' }] });
+assert.deepEqual(wins.map(w => [w.label, w.desc, w.window]), [['Inbox', 'Evolution', 7]]);
+assert.ok(!ids(Menu.rows(base, '', ctx, { windows: [] })).includes('windows'));
+assert.ok(ids(Menu.rows(base, '', ctx, { windows: [{ title: 'Inbox', ref: 7 }] })).includes('windows'));
 // No pages (Settings not installed): only its own rows; none of those either, and Setup hides.
 assert.deepEqual(ids(Menu.rows(base, 'setup', ctx, { settingsPages: [] })), ['setup.kbptr', 'setup.hooks']);
 ctx.commands['arctic-hook'] = false;

@@ -16,7 +16,8 @@
 //             toggleWallpapers, toggleKeys, togglePower, lock, toggleBar, openWelcome,
 //             settings (page, key), url (https only) — each becomes an arctic-* command
 //   target    "<id>": opens that branch instead (a link; "go" works too)
-//   provider  rows made when the menu opens: "settings" (the Settings pages), "themes", "fonts"
+//   provider  rows made when the menu opens: "settings" (the Settings pages), "themes", "fonts",
+//             "windows" (the open windows)
 //   needs     ["command", …]: hidden unless all are installed (default: the command it runs)
 //   ipc       "target function": hidden unless the running shell answers it
 //   when      "live" | "installed", or {"live": bool, "command": "…", "file": "/…", "outputs": n}
@@ -262,6 +263,13 @@ function providerRows(entry, ctx, extra) {
         const pages = (extra && extra.settingsPages) || [];
         pages.forEach(p => out.push({ id: entry.id + '.' + p.id, label: p.title, icon: p.icon || 'sliders',
                                       desc: '', keys: '', kind: 'action', run: ['arctic-settings', p.id] }));
+    } else if (entry.provider === 'windows') {
+        // Open windows ({title, appName, ref}); Enter brings one forward.
+        ((extra && extra.windows) || []).forEach((w, i) => {
+            if (!w || !(w.title || w.appName)) return;
+            out.push({ id: entry.id + '.w' + i, label: w.title || w.appName, icon: 'tiling', desc: w.appName || '', keys: '',
+                       kind: 'action', window: w.ref || null });
+        });
     } else if (entry.provider === 'fonts') {
         const data = ctx.providers[entry.id];
         if (data && Array.isArray(data.fonts)) data.fonts.forEach(f => {

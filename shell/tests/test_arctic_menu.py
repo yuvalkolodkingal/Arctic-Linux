@@ -40,7 +40,7 @@ class ArcticMenuTests(unittest.TestCase):
         entries = self.menu.load([str(SHIPPED)])
         ids = [e['id'] for e in entries]
         self.assertEqual([i for i in ids if '.' not in i],
-                         ['apps', 'learn', 'capture', 'toggle', 'style', 'setup', 'install', 'remove', 'update', 'system'])
+                         ['apps', 'learn', 'capture', 'toggle', 'style', 'setup', 'install', 'remove', 'update', 'windows', 'system'])
 
     def test_fallback_rows_need_their_command_and_no_shell(self):
         entries = self.menu.load([str(SHIPPED)])

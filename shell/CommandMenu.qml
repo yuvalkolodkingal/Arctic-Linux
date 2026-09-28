@@ -4,6 +4,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import "MenuModel.js" as MenuModel
 import "assets/Icons.js" as Icons
 
@@ -27,7 +28,14 @@ Popover {
     property string mineText: ''
     property var pendingRun: null
     readonly property var view: Object.assign({}, ctx, { live: Session.live, dark: Theme.dark, outputs: Quickshell.screens.length })
-    readonly property var extra: ({ settingsPages: SettingsIndex.pages })
+    readonly property var extra: ({
+        settingsPages: SettingsIndex.pages,
+        // Every window on every workspace (Open windows), only while the menu is open.
+        windows: open ? ToplevelManager.toplevels.values.map(t => {
+            const entry = t.appId ? DesktopEntries.heuristicLookup(t.appId) : null;
+            return { title: t.title, appName: entry ? entry.name : t.appId, ref: t };
+        }) : []
+    })
     readonly property var rows: query.trim() ? MenuModel.search(model, branch, query, view, extra)
                                              : MenuModel.rows(model, branch, view, extra)
     readonly property var trail: MenuModel.trail(model, branch)
@@ -76,6 +84,7 @@ Popover {
         if (!row) return;
         if (row.kind === 'branch') { enter(row.id, ''); return; }
         if (row.kind === 'link') { enter(row.go, ''); return; }
+        if (row.window) { close(); row.window.activate(); return; }
         // Run it once the card is gone, so screenshots and pickers don't catch it.
         pendingRun = row.run;
         close();
