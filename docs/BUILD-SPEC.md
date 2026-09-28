@@ -82,13 +82,15 @@ mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-setti
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
 arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
-pipewire-pulseaudio, pavucontrol, network-manager-applet, NetworkManager-wifi, blueman,
+pipewire-pulseaudio, NetworkManager-wifi, bluez,
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
 gnome-keyring-pam, Thunar, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
 fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
 adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop, mako (the waybar session's notification
-daemon; the shell is its own notification server). arctic-shell Requires glib2 (gdbus).
+daemon; the shell is its own notification server), pavucontrol, network-manager-applet and
+blueman (the shell draws its own sound, network and Bluetooth menus and pairs with its own
+agent; the waybar session and the menus' "More…" links still use them). arctic-shell Requires glib2 (gdbus).
 
 ## 3. Desktop session (installed and live)
 

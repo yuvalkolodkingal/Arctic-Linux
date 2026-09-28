@@ -475,10 +475,14 @@ Requires:       brightnessctl
 Requires:       playerctl
 Requires:       wireplumber
 Requires:       pipewire-pulseaudio
-Requires:       pavucontrol
-Requires:       network-manager-applet
+# Stream 3a (bar menus): the shell draws the network, Bluetooth and sound menus and pairs with
+# its own agent, so the applet, the Bluetooth manager and the mixer are weak dependencies (the
+# waybar session and the menus' "Edit connections…" links still use them); BlueZ itself stays.
+Recommends:     pavucontrol
+Recommends:     network-manager-applet
 Requires:       NetworkManager-wifi
-Requires:       blueman
+Recommends:     blueman
+Requires:       bluez
 Requires:       xdg-desktop-portal-wlr
 Requires:       xdg-desktop-portal-gtk
 Requires:       xdg-user-dirs

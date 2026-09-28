@@ -68,7 +68,9 @@
 - **"Mic", "Camera" and "Sharing"** show next to the clock while an app uses them.
 - **A saved Wi-Fi network whose password changed** asks for the new one in a notification.
 - nm-applet no longer starts with the Arctic shell (the waybar fallback still has it), and
-  Blueman's tray icon is hidden: the menus do their work.
+  Blueman's tray icon is hidden: the menus do their work. nm-applet, Blueman and the volume
+  control (pavucontrol) are still installed, but you can now remove them without removing the
+  desktop.
 
 ## Arctic Linux 0.2.1
 
