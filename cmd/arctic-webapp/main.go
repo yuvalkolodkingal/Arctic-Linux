@@ -106,8 +106,9 @@ func (c *cli) main(args []string) int {
 		fmt.Fprintf(c.stderr, "arctic-webapp: unknown command %q\n%s", cmd, usage)
 		return 2
 	}
-	if c.euid() == 0 && cmd != "render-sample" {
-		// Web apps are per user; as root they would land in /root and its profile.
+	if c.euid() == 0 && cmd != "render-sample" && os.Getenv("ARCTIC_WEBAPP_ALLOW_ROOT") != "1" {
+		// Web apps are per user; as root they would land in /root and its profile. (CI
+		// containers, which only have root, set ARCTIC_WEBAPP_ALLOW_ROOT=1.)
 		return c.fail(jsonWanted(rest), webapp.Errorf(webapp.CodeState, "Web apps are per user. Run arctic-webapp without sudo."))
 	}
 	return run(rest)

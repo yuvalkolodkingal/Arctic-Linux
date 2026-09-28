@@ -13,9 +13,9 @@ const Schema = 1
 const RenderVersion = 1
 
 // FetchUserAgent is what discovery sends, so the preview sees what the app will see: WebKitGTK
-// 2.54's default user agent on x86_64 Linux. The host's smoke test pins it against
-// webkit_settings_get_user_agent(); never copy a user agent from a document.
-const FetchUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+// 2.54's default user agent on x86_64 Linux, as measured by the host's smoke test
+// (cmd/arctic-webapp-host/dev/smoke.sh fails when the page sees anything else).
+const FetchUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15"
 
 // IDPrefix starts every web-app id (and so every app_id, desktop id and icon name).
 const IDPrefix = "org.arcticlinux.WebApp."

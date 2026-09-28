@@ -79,7 +79,7 @@ func TestSafeNameAndUnique(t *testing.T) {
 		{".bashrc", ""}:                         "bashrc",
 		{"a\x00b\nc.pdf", ""}:                   "abc.pdf",
 		{"report", "application/pdf"}:           "report.pdf",
-		{"evil\u202egpj.exe", ""}:                    "evilgpj.exe",
+		{"evil\u202egpj.exe", ""}:               "evilgpj.exe",
 		{"", ""}:                                "download",
 		{strings.Repeat("é", 150) + ".pdf", ""}: strings.Repeat("é", 98) + ".pdf",
 	} {
