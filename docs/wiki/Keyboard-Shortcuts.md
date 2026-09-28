@@ -69,7 +69,7 @@ screen at any time.
 | `Super + Delete` | Dismiss the newest notification |
 | `Super + Shift + Delete` | Dismiss all notifications |
 | `Super + Shift + N` | Do not disturb on / off |
-| `Super + Shift + T` | Switch between Winter and Polar night |
+| `Super + Shift + T` | Switch between light and dark (Winter and Polar night, or your wallpaper's colours) |
 | `Super + Shift + R` | Reload the desktop configuration |
 | `Print` | Screenshot of an area you select |
 | `Shift + Print` | Screenshot of the whole screen |
