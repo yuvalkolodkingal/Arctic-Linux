@@ -62,7 +62,7 @@ Press `Super + /` on the desktop to see every shortcut.
 
 ## About this wiki
 
-These pages live in [`docs/wiki`](https://github.com/yuvalkolodkingal/O-Tism/tree/main/docs/wiki)
+These pages live in [`docs/wiki`](https://github.com/yuvalkolodkingal/Arctic-Linux/tree/main/docs/wiki)
 in the repository and are published here by GitHub Actions, so a change to the docs goes through
 the same review as a change to the code. Most screenshots were taken from Arctic Linux running
 in a virtual machine or a headless test session, so small details may differ from what you see. The installer screenshots use its demo mode, so the disks, networks and names in them

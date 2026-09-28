@@ -310,11 +310,15 @@ fill '{"disk": "/dev/sda"}'
 shot 05w-disk-no-alongside-winter
 next
 wait_page encryption
+# A short passphrase is only a warning: the banner shows and Next stays on.
 fill '{"passphrase": "short", "confirm": "short"}'
+wait_for "d.get('valid') and d.get('step',{}).get('weak')" "the weak-passphrase warning"
+shot 06y-encryption-weak-winter
+fill '{"confirm": "shorts"}'
 sleep 0.5
-[ "$(field valid)" = "False" ] || fail "a too-short passphrase must block Next"
+[ "$(field valid)" = "False" ] || fail "passphrases that don't match must block Next"
 fill '{"suggest": true}'
-wait_for "d.get('valid')" "a suggested passphrase"
+wait_for "d.get('valid') and not d.get('step',{}).get('weak')" "a suggested passphrase"
 shot 06w-encryption-suggested-winter
 next
 wait_page account
@@ -328,12 +332,15 @@ wait_for "d.get('fields',{}).get('username')" "the engine's username error"
 shot 07w-account-engine-error-winter
 fill '{"username": "ada"}'
 wait_for "d.get('valid')" "account form (2)"
-# The password as the disk passphrase too: it must pass as a passphrase (Fair or better).
+# The password as the disk passphrase too: below Fair it gets the disk warning; Next stays on.
 fill '{"same_as_disk": true, "password": "iloveyou", "confirm": "iloveyou"}'
-sleep 0.6
-[ "$(field valid)" = "False" ] || fail "a Weak password can't be the disk passphrase too"
-fill '{"same_as_disk": false, "password": "glacier-lake-7", "confirm": "glacier-lake-7"}'
-wait_for "d.get('valid')" "account form (3)"
+wait_for "d.get('valid') and d.get('step',{}).get('weak') and d.get('step',{}).get('disk_too')" "the weak disk-password warning"
+shot 07y-account-weak-disk-winter
+# A 1-character password: a warning too, not a refusal.
+fill '{"same_as_disk": false, "password": "x", "confirm": "x"}'
+wait_for "d.get('valid') and d.get('step',{}).get('weak') and not d.get('step',{}).get('disk_too')" "the short-password warning"
+fill '{"password": "glacier-lake-7", "confirm": "glacier-lake-7"}'
+wait_for "d.get('valid') and not d.get('step',{}).get('weak')" "account form (3)"
 next
 wait_page apps
 # Office is "pick one" but optional: clicking the ticked suite unticks it.

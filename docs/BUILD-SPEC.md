@@ -42,7 +42,10 @@ tools/lib/arcticrepo.py prune / manifest / fetch (the published site) / index fo
 tools/tests/            unit tests for tools/lib (python3 -m unittest discover -s tools/tests)
 tools/test-iso.sh       boots the ISO in QEMU (no KVM needed), takes screenshots
 tools/test-install.sh   installs from the ISO to a VM disk (arctic-install unattended, profiles/ci/offline.toml),
-                        then boots it: LUKS prompt, SDDM login, desktop, logs over the serial port
+                        then boots it: LUKS prompt, SDDM login, desktop, logs over the serial port;
+                        --test-hardware nvidia-laptop --online-via-proxy with profiles/ci/nvidia.toml
+                        builds the NVIDIA akmod online (arctic-install unattended --test-hardware
+                        NAME --test-online: VM-test aids that fake the PCI devices / the online check)
 tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QMP helpers for the tests)
 .github/workflows/ci.yml   go test, shellcheck, python tests, node tests, qmllint
 .github/workflows/iso.yml  build RPMs + ISO, upload artifact, publish release (tag or manual)
@@ -51,19 +54,19 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 0.2.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.0/` of the
+Version 0.2.1, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.1/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 
 | Subpackage | Installs | Notes |
 |---|---|---|
-| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
-| `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
+| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL; LOGO names the icon arctic-logos installs in hicolor and `/usr/share/pixmaps`, checked in `%check`; fastfetch has no built-in Arctic logo and would draw Fedora's by ID_LIKE, hence the fox in the fastfetch layouts, §3.1), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
+| `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/pixmaps/arctic-logo-icon.{png,svg}` (os-release `LOGO`), `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
 | `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
-| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf` | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
+| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf`; fastfetch (§3.1): `/usr/share/arctic/fastfetch/{greeting.jsonc,logo.txt}` ← `dotfiles/.local/share/arctic/fastfetch/`, `/etc/xdg/fastfetch/config.jsonc` → the Polar night theme's `fastfetch/config.jsonc` (accounts without the skel link: root, older accounts); `neofetch`: `/usr/libexec/arctic/neofetch` ← `dotfiles/.local/bin/neofetch` (fastfetch with the theme's `fastfetch/neofetch.jsonc`; a real neofetch found on `PATH` runs instead) and `%ghost /usr/bin/neofetch` → it, created in `%posttrans` only when that name is free: a `%ghost` never conflicts with another package's file, so a neofetch package (none in Fedora 44) installs over it, and `%triggerpostun -- neofetch` links it again when that package goes (rpm leaves the shared path's file behind) | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1), fastfetch. Provides `neofetch = %{version}-%{release}` (satisfies what depends on neofetch; `dnf install neofetch` says it is there, and would install a real neofetch package by name). No `Conflicts: neofetch`: it would make installing a real neofetch remove arctic-desktop-config (and arctic-desktop). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte. |
 | `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
@@ -134,6 +137,7 @@ every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
 | btop | theme file | `btop/arctic.theme` | `~/.config/btop/themes/arctic.theme` → `../../arctic/current/btop/arctic.theme`; `~/.config/btop/btop.conf` `color_theme = "arctic"`, `theme_background = false` | next start |
 | zsh prompt, completion menu, zsh plugins | `ARCTIC_PROMPT_COLORS` (24-bit when `COLORTERM=truecolor`, else ANSI 2/3/1/8), `ma=` selection colour, `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE`, `ZSH_HIGHLIGHT_STYLES` | `zsh/colors.zsh` | `~/.zshrc` sources it and re-sources it before the next prompt when the link or file changes | next prompt |
 | fzf | options file | `fzf/fzfrc` | `FZF_DEFAULT_OPTS_FILE` in `~/.zshrc` and `~/.bashrc.d/arctic.sh` (your `FZF_DEFAULT_OPTS` still apply on top) | every run |
+| fastfetch, `neofetch` | whole fastfetch layouts (JSONC has no include), colours as `#rrggbb` (fastfetch ≥ 2.42): the fox (`logo.txt`, the mark in quadrant blocks, `branding/tools/fastfetch_logo.py`) in `term-foreground` with `ansi-3` eyes; `config.jsonc`: keys `ansi-6`, user `ansi-3` bold, rule `ansi-8`, percentages `success`/`warning`/`error`, lines os kernel uptime packages shell wm terminal theme cpu gpu memory disk updates (os, wm, theme, updates from `arctic-fetch --info …`: "Arctic Linux 0.2 (Fedora 44)", "Mango", the theme's label, the update status file — never dnf or the network); `neofetch.jsonc`: fastfetch's neofetch preset with neofetch's key names, keys and title `accent-text` | `fastfetch/config.jsonc`, `fastfetch/neofetch.jsonc` | `~/.config/fastfetch/config.jsonc` → `../arctic/current/fastfetch/config.jsonc` (a copy of yours replaces the link); `neofetch` reads `~/.config/fastfetch/neofetch.jsonc`, else the active theme's, else Polar night's, else fastfetch's `neofetch` preset. arctic-fetch's info column is `fastfetch --config greeting.jsonc --logo none --pipe false` (`~/.local/share/arctic/fastfetch/`, else `/usr/share/arctic/fastfetch/`; palette slots, like the fox) | every run |
 | bat, delta (not installed) | `BAT_THEME=ansi` (delta honours it): the terminal's palette | — | `~/.zshrc`, `~/.bashrc.d/arctic.sh` | yes |
 | bash prompt | ANSI colours (the terminal palette) | — | — | yes |
 | foot, Alacritty (terminal alternatives) | same palette as kitty | `foot/colors.ini` (`[colors-<mode>]` + `initial-color-theme`), `alacritty/colors.toml` | `~/.config/foot/foot.ini` `include=~/.config/arctic/current/foot/colors.ini`; `~/.config/alacritty/alacritty.toml` `general.import` | new windows |
@@ -162,7 +166,9 @@ once, with the copies `10-gtk` just made:
 
 **Packages** (`arctic-desktop-config` Requires, also listed in `iso/kiwi/config.kiwi`):
 `adw-gtk3-theme`, `qt6ct`, `qt5ct`, `adwaita-icon-theme`, `adwaita-cursor-theme`, `dconf`,
-`flatpak`; `arctic-desktop` Recommends `btop`. Added to the image (dnf5 against Fedora 44, vs the
+`flatpak`, `fastfetch` (2.60 in Fedora 44, 2.68 in its updates: the layouts use only modules and
+options both have, checked by `design/themegen/tests/test_fastfetch.py`); `arctic-desktop`
+Recommends `btop`. Added to the image (dnf5 against Fedora 44, vs the
 0.1 image's package list): adw-gtk3-theme 1.1 MB, btop 1.8 MB (+ rocm-smi 2.9 MB, its weak
 dependency), qt5ct + qt6ct about 150 MB installed / 63 MB download, because Fedora builds them
 with KDE colour-scheme support: KDE Frameworks 5 and 6 (ki18n 17 + 18 MB, kwidgetsaddons 7 + 5 MB,
@@ -194,6 +200,8 @@ previous versions in `~/.local/state/arctic/settings-backups/`):
 | `~/.config/mimeapps.list` | `[Default Applications]` for links and files (as `xdg-mime default`) |
 | `~/.config/arctic/idle.conf` | `lock_after=`, `suspend_after=` (seconds, 0 = never), read by `arctic-session idle` |
 | `$XDG_RUNTIME_DIR/arctic-settings-display.json` | the display layout to go back to while a change waits to be kept |
+| `~/Pictures/Wallpapers/` (your wallpaper folder) | pictures you add (copied after Pillow decodes them; renamed/deleted only inside that folder, never the one in use); Wallhaven downloads in `wallhaven/wallhaven-<id>.<ext>` |
+| `~/.config/arctic/wallhaven.json` (mode 600) | Wallhaven filters (`categories`, `purity` — NSFW only with a key —, `sorting`, `range`, `fit`) and the optional `api_key` (never sent to the UI) |
 
 **Commands it calls** (each missing one hides or explains its controls): `mmsg dispatch
 reload_config`, `mmsg get all-devices|all-clients`, `mango -p`; `arctic-theme set <name>|auto
@@ -206,9 +214,58 @@ stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
 `pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install`, `xdg-open`.
 Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
 
-Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
+Wallpapers (Appearance): the shell's `scripts/wallpapers.py` (`list`, `apply`, `import`, `delete`,
+`rename`) and `scripts/wallhaven.py` (`search`, `preview`, `download`, `set`, `state`, `key`,
+`prefs`; stdlib urllib + Pillow), through the helper's `wallpaper-import|delete|rename` and
+`wallhaven …`. Only wallhaven.py talks to the network: https://wallhaven.cc/api/v1/search (and
+`/settings` to check a key), thumbnails and pictures from th./w.wallhaven.cc (URLs checked); API
+calls are counted in `~/.cache/arctic/wallhaven/api-calls.json` under a lock (45 a minute: wait up
+to 8 s, else `{"wait": N}`), searches cached 15 min, thumbnails in `~/.cache/arctic/wallhaven/`;
+offline answers `{"ok": false, "offline": true}`. "Fit my screens" = `atleast` of the largest
+enabled output and each output's `ratios` (`wlr-randr --json`, rotation applied). "Add pictures…"
+is QtQuick.Dialogs' FileDialog (the portal through qt6ct), plus a DropArea for `file://` URLs.
+
+Displays: an arrangement editor (every display a rectangle to scale; drag and drop, or `Tab` to
+one and move it with the arrow keys) whose geometry is all in the helper, as pure tested functions:
+`arctic_settings.py display-arrange LAYOUT [--move NAME X Y [--threshold PX] | --nudge NAME
+left|right|up|down | --main NAME | --enable NAME | --disable NAME | --anchor NAME]` (nothing is
+applied). Positions are logical px; a display's size there is its mode, turned for 90°/270°,
+divided by the scale in single precision and cut to whole pixels (wlroots
+`wlr_output_effective_resolution`: 2560×1600 at 150 % is 1706×1066). Every display that is on
+touches another along an edge (a dropped one by at least 1/8 of the shorter edge), none overlap,
+and the top-left corner is 0,0 (XWayland misreads clicks at negative positions); a drop goes to
+the nearest such place, lined up with the others' edges or centres within 12 screen px, and
+displays left unconnected follow; after a scale, rotation or mode change the others settle round
+that display on the side they were on; the last display that is on can't be switched off.
+Apply runs `wlr-randr` at once (the tidied layout) and asks to keep it for 15 s; a detached
 watchdog (`arctic_settings.py display-revert --if-pending TOKEN --after 20`) puts the old layout
-back even if Settings is gone; kept layouts become `monitorrule` lines.
+back even if Settings is gone; kept layouts become `monitorrule` lines, the main display's
+first; a display switched off is never saved (`disable:1` would also blank a laptop's only
+screen), so off lasts until logout. Rules of displays that aren't connected (or are off) stay,
+without `x`/`y` where they would overlap the kept layout (one rule per display: the monitor at
+home must not come back on top of the laptop's place from work).
+
+Mango 0.17.3's `monitorrule` (read in the 0.17.3 tarball: `src/config/parse_config.c`,
+`parse_option`, the `monitorrule` branch; applied by `src/manage/monitor.c`
+`apply_rule_to_state`): comma-separated `key:value`, e.g.
+`monitorrule=name:^HDMI-A-1$,width:3840,height:2160,refresh:60,x:1706,y:0,scale:2,rr:0,vrr:0`.
+`name` is a regex (hence `^…$`; `make`, `model`, `serial` also match); `x`/`y` are logical px
+(left out: placed automatically, `wlr_output_layout_add_auto`); `scale`; `rr` 0–7 is the
+`wl_output_transform` (1 = 90, 2 = 180, 3 = 270, 4 = flipped, 5–7 = flipped-90/180/270, the order
+of wlr-randr's names); `vrr` 0/1; the mode is used only when `width`, `height` and `refresh` are
+all set, else the preferred one; also `disable`, `custom`, `hdr`, `hdr_*`, `icc`. A new output
+takes the first rule that matches (`handle_new_output`), a config reload the last one
+(`parse_config.c` `reapply_monitor_rules`), so Settings writes one `^NAME$` rule per display.
+
+Main display: Mango has no primary output (no option or dispatch for one in 0.17.3; `monitor.c`
+`set_selected_monitor` keeps XWayland's RandR primary on the focused display,
+`xwayland_primary.c`). At login `main.c` selects the monitor under the pointer, which starts at
+0,0, so that display is where you start: focus, the first windows, the launcher, OSD and menus (the
+shell follows the focused output, `shell/Outputs.qml`) and mako's notifications (no `output=`).
+The bar is on every display (`Variants` over `Quickshell.screens`). So Settings' "main display"
+is the one covering the layout's top-left corner (else the one nearest to it, where Mango moves
+the pointer), and **Make main** swaps it with the display there; nothing stores a primary
+separately.
 
 The live image (`iso/kiwi/config.kiwi`, and so the installed system) lists `arctic-settings`,
 `nm-connection-editor`, `blueman`, `pavucontrol` and `wlr-randr` explicitly.
@@ -244,12 +301,12 @@ IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|sea
 | `ScanWifi` | — | `{networks:[{ssid,signal:0-100,secure:bool,connected:bool}]}` |
 | `ConnectWifi` | `{ssid, password}` | `{ok}` or error `{code:"auth"\|"timeout", message}` |
 | `NetworkState` | — | `{online:bool, wired:bool, ssid?:string}` |
-| `CheckPassphrase` | `{text}` | `{score:0-4, label:"Too short"\|"Weak"\|"Fair"\|"Good"\|"Strong", words:int, ok:bool}` (ok = score ≥ 2 "Fair") |
+| `CheckPassphrase` | `{text}` | `{score:0-4, label:"Too short"\|"Weak"\|"Fair"\|"Good"\|"Strong", words:int, ok:bool}` (ok = score ≥ 2 "Fair"). Advisory only: the score drives the meter and the weak-secret warnings (§4.1 rows 6–7); Next, the Summary and Start accept any non-empty passphrase or password |
 | `SuggestPassphrase` | — | `{text:"four random words"}` (EFF short wordlist, embedded) |
 | `SuggestAccount` | `{full_name}` | `{username, hostname}` (hostname = `{username}-{model}` from DMI, lowercased, `-` joined) |
-| `SetSecrets` | `{luks_passphrase?, user_password?}` | `{ok}` (kept in memory only, never logged or written) |
+| `SetSecrets` | `{luks_passphrase?, user_password?}` | `{ok}` (kept in memory only, never logged or written; an empty string clears it, and Next / Start then refuse with `Type a passphrase.` / `Type a password.`) |
 | `EstimateDownload` | `{selection}` | `{apps:int, drivers?:int, bytes:int, label:"9 apps · 1.4 GB download"}` (drivers are not apps: `"8 apps + 2 drivers · 3 GB download"`) |
-| `GetSummary` | — | `{rows:[{step, icon, label, value}], warning, primary_label}` (rows for welcome, keyboard, timezone, disk, encryption, account, apps — each `step` is a Goto target; primary "Erase disk and install" or "Install alongside {OS}"). When a driver was detected an 8th row follows: `{step:"apps", icon:"cpu", label:"Drivers", value:"NVIDIA driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile; …"}` (+ ". Secure Boot is on: you’ll confirm the driver’s key once after restarting" when a built driver needs the key; "None — …" when all were unticked). The UI takes the row's `icon` |
+| `GetSummary` | — | `{rows:[{step, icon, label, value}], warning, primary_label}` (rows for welcome, keyboard, timezone, disk, encryption, account, apps — each `step` is a Goto target; primary "Erase disk and install" or "Install alongside {OS}"). A secret below its `min_score` is noted in its row, not in `warning` (the Summary page doesn't scroll, so neither gets taller): the encryption row's value becomes "On — easy-to-guess passphrase; you’ll type it each time the computer starts" (encryption on), and the account row's value ends with ", easy-to-guess password". When a driver was detected an 8th row follows: `{step:"apps", icon:"cpu", label:"Drivers", value:"NVIDIA driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile; …"}` (+ ". Secure Boot is on: you’ll confirm the driver’s key once after restarting" when a built driver needs the key; "None — …" when all were unticked). The UI takes the row's `icon` |
 | `Start` | — | `{ok}` then events. Also "Try again" after a failure. Re-probes the disks first: if the chosen disk is gone, is not the same device (model/serial/WWN/size) or, alongside, its partitions or free space changed, it answers `{code:"state"}` and refuses until the Disk step is passed again |
 | `RetryModule` / `SkipModule` | `{id}` | `{ok}` |
 | `SaveLog` | — | `{path, on_usb, device?, label?, safe_to_remove, message}`: to a FAT/exFAT file system on a removable disk that is not the install medium (mounted in place, else mounted, written, synced and unmounted: `path` is then the file's path on the stick and `safe_to_remove` true), else `/home/liveuser` or /tmp (lost on restart). `message` is the sentence to show |
@@ -260,7 +317,7 @@ IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|sea
   - `{"event":"progress","percent":0-100,"phase":"disk"|"copy"|"configure"|"bootloader"|"apps"|"finalize","status":"Installing Zed, your code editor…","eta_seconds":420,"substeps":[{"id":"disk","label":"Preparing the disk","state":"done"|"active"|"todo"},…4 items: disk, system ("Copying Arctic Linux"), apps ("Installing your apps"), finish ("Setting up your account")]}`
   - `{"event":"module","id":"zed","name":"Zed","status":"queued"|"downloading"|"installed"|"failed"|"skipped"|"deferred","percent":0-100}`
   - `{"event":"attention","module":{"id","name"},"message":"The download server didn't answer.","optional":true}` → UI shows step 11 (Try again / Skip {App}); core failures: `{"event":"failed","message":"…","fatal":true,"can_change":true}` → Save log / Try again / Change (Back or Goto).
-  - `{"event":"done","apps_installed":9,"first_name":"Noa","drivers"?:[{id,name,device,status:"installed"|"deferred"|"skipped",text}],"secure_boot"?:{code,title,intro,steps:[…],note,failed?}}` — `drivers` lists what happened to each ticked driver with a sentence for it (drivers get no `module` events and are not in `apps_installed`); `secure_boot` is present when the akmods signing key waits for enrolment in shim's MokManager on the next restart (Secure Boot enforced, UEFI, a driver built by akmods): `code` is the one-time password (8 digits, typed on the number row — MokManager reads the keyboard as US QWERTY), `steps` the MokManager screens. With `failed:true` (mokutil refused) there is no code and the steps say how to enroll the key by hand. Driver failures use the `attention` event like apps (title "The NVIDIA driver couldn’t be installed", skip label "Skip the driver").
+  - `{"event":"done","apps_installed":9,"first_name":"Noa","notes"?:["…"],"drivers"?:[{id,name,device,status:"installed"|"deferred"|"skipped",text}],"secure_boot"?:{code,title,intro,steps:[…],note,failed?}}` — `drivers` lists what happened to each ticked driver with a sentence for it (drivers get no `module` events and are not in `apps_installed`); `secure_boot` is present when the akmods signing key waits for enrolment in shim's MokManager on the next restart (Secure Boot enforced, UEFI, a driver built by akmods): `code` is the one-time password (8 digits, typed on the number row — MokManager reads the keyboard as US QWERTY), `steps` the MokManager screens. `notes`: sentences about a success with a caveat (the new disk couldn’t be closed at the end), a banner on the Done screen. With `failed:true` (mokutil refused) there is no code and the steps say how to enroll the key by hand. Driver failures use the `attention` event like apps (title "The NVIDIA driver couldn’t be installed", skip label "Skip the driver").
   - Status lines follow `design/guidelines/20-installer-copy.md`.
 
 ### 4.1 Wizard steps (ids fixed; copy = design/guidelines/20-installer-copy.md)
@@ -272,8 +329,8 @@ IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|sea
 | 3 | `network` | `{}` | `{online,wired,ssid,driver_hint?}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online. `driver_hint` is set when a detected Wi-Fi card only works once its driver is installed (Broadcom wl): how to get online meanwhile |
 | 4 | `timezone` | `{timezone:"Asia/Jerusalem", auto_time:true}` | `{detected:{city,timezone,source:"network"\|"default"}, regions:{Europe:[{city,timezone}],…}}` |
 | 5 | `disk` | `{disk:"/dev/nvme0n1", mode:"erase"\|"alongside"}` | `{disks:[{path,model,size_bytes,size_label,removable,install_media:bool,existing_os:[…],alongside_possible:bool,alongside_label:"Uses 120 GB of free space"}]}` (install media excluded; alongside needs ≥ 40 GB free, on UEFI an ESP to share, on MBR room for two primary partitions) |
-| 6 | `encryption` | `{enabled:true}` | `{min_score:2}` (passphrase via SetSecrets) |
-| 7 | `account` | `{full_name, username, hostname, autologin:false}` (username: not a user or group the copied system has) | `{hostname_hint:"Suggested from your name and computer"}` (password via SetSecrets) |
+| 6 | `encryption` | `{enabled:true}` | `{min_score:2, weak_warning, passphrase_set, strength?}` (passphrase via SetSecrets; `strength` is the saved one's CheckPassphrase result). `min_score` is the warning threshold, not a gate: below it the step shows `weak_warning` ("This passphrase is easy to guess: someone who has your computer could read your files. You can still use it.") in a warning banner and Next still works. Next needs a passphrase (both fields matching, English (US) characters on a non-Latin layout — checked by the UI) |
+| 7 | `account` | `{full_name, username, hostname, autologin:false}` (username: not a user or group the copied system has) | `{hostname_hint:"Suggested from your name and computer", min_score:1, weak_warning, weak_disk_warning, password_set, strength?}` (password via SetSecrets). As on step 6, `min_score` only warns: below it `weak_warning` ("This password is easy to guess: someone at your computer could log in as you. You can still use it."); with "Use this password for the disk passphrase too", below "Fair" (`ok` false) `weak_disk_warning` ("This password is easy to guess: someone who has your computer could read your files. You can still use it."). Any non-empty password is accepted |
 | 8 | `apps` | `{selection:{drivers:["nvidia","intel-media"],browser:["zen"],editor:["zed"],…}}` | catalog: `{categories:[{id,name,choice:"one"\|"any",note,hardware?}], modules:[{id,name,summary,category,default,tile,download_mb,source,in_live_image,device?}]}` — the `drivers` category (`hardware:true`) comes first and is present only when a driver matched this computer's hardware; its modules carry `device` (the detected card's name, also filled into `summary`) and are `default` (ticked) when detected. Selecting a driver whose hardware wasn't found is a field error on `drivers` |
 | 9 | `summary` | — | via GetSummary |
 | 10 | `install` | — | events |
@@ -382,6 +439,19 @@ drivers are not tried: they go to `/var/lib/arctic/pending.json` with `akmod` an
 `kernel_args`, plus `"mok_hash":"/var/lib/arctic/mok.hash"` (Secure Boot), and
 arctic-firstboot installs (akmods with kernel-devel and the key before the driver, as the
 engine), builds, adds the arguments and queues the key once online.
+After the driver transaction the engine also waits (≤ 20 min) until no process runs inside the
+target any more (root under /mnt: the background akmods build may take its lock after the
+flock). Finalize (internal/installer/release.go): wait for work left in the target, SIGTERM then
+SIGKILL helpers (gpg-agent, keyboxd, dbus …) — only processes whose root is the target; `umount
+--recursive` (3 tries, then lazy), `sync`, then for LUKS: unmount leftover copies of the target's
+mounts in other mount namespaces (`nsenter --target PID --mount -- umount --recursive --lazy`;
+services started during the install copy every mount), `udevadm settle` and `cryptsetup close`
+with a 0/1/2/4/8 s backoff, `dmsetup remove --retry`, `dmsetup remove --deferred`. The install
+is `committed` once the user exists (bootloader done): cleanup then never removes the boot entry
+or partitions (the MOK request is still revoked). Once the system is complete (relabelled,
+snapper), a release failure is not a failure: logged, the Done event gets a note. dnf in the
+chroot and flatpak install/remote-add are run again after 5/15/45 s when they fail on the network
+(curl/librepo errors; dnf5's own retries=10 covers downloads, not the metalink).
 Hybrid laptops keep rendering on the integrated GPU (wlroots uses the `boot_vga` card);
 `/etc/profile.d/arctic-graphics.sh` sets `LIBVA_DRIVER_NAME=nvidia`, `NVD_BACKEND=direct` and
 `__GLX_VENDOR_LIBRARY_NAME=nvidia` only when NVIDIA's driver drives the boot display. The target directory is made a private
@@ -436,13 +506,13 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 0.2.0, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 0.2.1, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
 `arctic_repos` (`enabled|disabled|not-built`), one `rpm=`/`srpm=` line per package built.
 
-**Site layout** (https://yuvalkolodkingal.github.io/O-Tism/):
+**Site layout** (https://yuvalkolodkingal.github.io/Arctic-Linux/):
 
 ```
 repo/<channel>/fedora-<releasever>/x86_64/     x86_64 + noarch RPMs, repodata/ (+ repomd.xml.asc)

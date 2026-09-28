@@ -47,6 +47,7 @@ APP_TEMPLATES = (
     "qt6ct/colors/arctic.conf", "qt5ct/colors/arctic.conf", "zed/themes/arctic.json",
     "yazi/theme.toml", "btop/arctic.theme", "zsh/colors.zsh", "fzf/fzfrc", "zen/user.js",
     "foot/colors.ini", "alacritty/colors.toml",
+    "fastfetch/config.jsonc", "fastfetch/neofetch.jsonc",     # checked in test_fastfetch.py
 )
 
 

@@ -46,7 +46,14 @@ func ProbeHardware(root string) hw.Hardware {
 
 // Hardware implements backend.Backend: the live system's PCI devices and Secure Boot state.
 func (b *Backend) Hardware(ctx context.Context) hw.Hardware {
-	return ProbeHardware("/")
+	h := ProbeHardware("/")
+	if b.opts.TestHardware != "" {
+		if f, ok := hw.Fixture(b.opts.TestHardware, h.SecureBoot); ok {
+			f.CPUVendor = h.CPUVendor
+			return f
+		}
+	}
+	return h
 }
 
 // ReadPCI lists the devices of a /sys/bus/pci/devices directory, in slot order.

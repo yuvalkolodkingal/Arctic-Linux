@@ -33,13 +33,13 @@
 %global debug_package   %{nil}
 
 Name:           arctic-linux
-Version:        0.2.0
+Version:        0.2.1
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
-URL:            https://github.com/yuvalkolodkingal/O-Tism
+URL:            https://github.com/yuvalkolodkingal/Arctic-Linux
 Source0:        arctic-linux-%{version}.tar.gz
 
 ExclusiveArch:  x86_64
@@ -184,7 +184,13 @@ Requires:       wl-clipboard
 Requires:       cliphist
 Requires:       brightnessctl
 Requires:       playerctl
+# fastfetch draws `fastfetch` (the themes' fastfetch/config.jsonc), `neofetch` and the info
+# column of the arctic-fetch greeting.
 Requires:       fastfetch
+# Fedora 44 has no neofetch: `neofetch` here is fastfetch with the neofetch layout. Its
+# /usr/bin/neofetch is a %%ghost link made in %%posttrans only while nothing else is there, so a
+# real neofetch package installs over it without a file conflict (docs/BUILD-SPEC.md §2).
+Provides:       neofetch = %{version}-%{release}
 Requires:       jetbrains-mono-fonts-all
 # App theming (docs/BUILD-SPEC.md "App theming"): GTK 3 apps use adw-gtk3, which takes the
 # theme's colours from ~/.config/gtk-3.0/gtk.css; Qt 5/6 apps use qt5ct/qt6ct (Fusion + the
@@ -643,6 +649,20 @@ ln -sfn %{_datadir}/arctic/themes/polar-night %{buildroot}%{_sysconfdir}/skel/.c
 echo polar-night > %{buildroot}%{_sysconfdir}/skel/.config/arctic/theme
 install -d %{buildroot}%{_bindir}
 install -pm 0755 dotfiles/.local/bin/* %{buildroot}%{_bindir}/
+# neofetch: the wrapper lives in /usr/libexec/arctic and /usr/bin/neofetch is a %%ghost link to
+# it (made in %%posttrans), so a real neofetch package can take the name: a %%ghost never
+# conflicts with another package's file (%%triggerpostun below puts the link back after it).
+install -d %{buildroot}%{_libexecdir}/arctic
+mv %{buildroot}%{_bindir}/neofetch %{buildroot}%{_libexecdir}/arctic/neofetch
+ln -s ../libexec/arctic/neofetch %{buildroot}%{_bindir}/neofetch
+# fastfetch: the layout of arctic-fetch's info column and the fox as a text logo (the themes
+# carry fastfetch/config.jsonc and fastfetch/neofetch.jsonc, from templates). Accounts without
+# ~/.config/fastfetch/config.jsonc (root; accounts made before it was in /etc/skel) get the
+# Polar night one through fastfetch's system config.
+install -d %{buildroot}%{_datadir}/arctic/fastfetch
+install -pm 0644 dotfiles/.local/share/arctic/fastfetch/* %{buildroot}%{_datadir}/arctic/fastfetch/
+install -d %{buildroot}%{_sysconfdir}/xdg/fastfetch
+ln -s %{_datadir}/arctic/themes/polar-night/fastfetch/config.jsonc %{buildroot}%{_sysconfdir}/xdg/fastfetch/config.jsonc
 install -Dpm 0644 dotfiles/.local/share/arctic/keys.txt %{buildroot}%{_datadir}/arctic/keys.txt
 install -d %{buildroot}%{_datadir}/arctic/themes
 cp -a _build/themes/. %{buildroot}%{_datadir}/arctic/themes/
@@ -686,8 +706,9 @@ install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/fla
 # QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
 # an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
 install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
-# arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own subpackages.
-(cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer' \
+# arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own
+# subpackages; neofetch is listed below (%%ghost).
+(cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer|neofetch' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
 # /usr/share/arctic/mango is shared with arctic-live (live.conf).
 (cd dotfiles/.config/mango/arctic && ls -- *.conf) | sed 's,^,%{_datadir}/arctic/mango/,' >> desktop-config.files
@@ -833,6 +854,19 @@ test -f %{buildroot}/boot/grub2/themes/arctic/theme.txt || \
   { echo "error: branding/grub/arctic has no theme.txt" >&2; exit 1; }
 test -f %{buildroot}%{_datadir}/pixmaps/system-logo-white.png || \
   { echo "error: branding/logos has no usr/share/pixmaps/system-logo-white.png" >&2; exit 1; }
+# os-release LOGO= names the icon fastfetch and others look up.
+logo="$(sed -n 's/^LOGO=//p' %{buildroot}%{_prefix}/lib/os-release)"
+test -n "$logo" && test -f "%{buildroot}%{_datadir}/pixmaps/$logo.png" && test -f "%{buildroot}%{_datadir}/pixmaps/$logo.svg" || \
+  { echo "error: os-release LOGO=$logo has no /usr/share/pixmaps/$logo.png and .svg" >&2; exit 1; }
+# neofetch (a %%ghost link to the wrapper) and fastfetch's system config (a link into the themes).
+test -x %{buildroot}%{_libexecdir}/arctic/neofetch
+test "$(readlink %{buildroot}%{_bindir}/neofetch)" = ../libexec/arctic/neofetch
+test -f "%{buildroot}$(readlink %{buildroot}%{_sysconfdir}/xdg/fastfetch/config.jsonc)"
+for t in winter polar-night; do
+  for f in config.jsonc neofetch.jsonc; do
+    test -f %{buildroot}%{_datadir}/arctic/themes/$t/fastfetch/$f || { echo "error: theme $t has no fastfetch/$f" >&2; exit 1; }
+  done
+done
 # The links /etc/skel keeps into /usr/share/arctic must resolve.
 skel_links="$(find %{buildroot}%{_sysconfdir}/skel -type l)"
 test -n "$skel_links"
@@ -932,12 +966,25 @@ if [ ! -e %{_sharedstatedir}/arctic/.update-presets ]; then
 fi
 # Compile /etc/dconf/db/distro.d (the Arctic GTK/icon/cursor/font defaults).
 if [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
+# `neofetch`: link the wrapper unless something (a neofetch package) has the name already.
+if [ ! -e %{_bindir}/neofetch ] && [ ! -L %{_bindir}/neofetch ]; then
+  ln -s ../libexec/arctic/neofetch %{_bindir}/neofetch || :
+fi
 
 %postun -n arctic-desktop-config
 if [ "$1" -eq 0 ] && [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
 
 %triggerin -n arctic-desktop-config -- zsh
 %{arctic_skel_zsh}
+
+# A neofetch package installed its /usr/bin/neofetch over the wrapper's link (the %%ghost there
+# doesn't conflict). Removing that package leaves its file behind, because the path is also
+# ours: point the name at the wrapper again.
+%triggerpostun -n arctic-desktop-config -- neofetch
+if [ "$2" -eq 0 ] && [ "$(readlink %{_bindir}/neofetch 2>/dev/null)" != ../libexec/arctic/neofetch ]; then
+  ln -sfn ../libexec/arctic/neofetch %{_bindir}/neofetch || :
+fi
+:
 
 # Removing zsh (unticked in the installer's app picker) saves the Arctic versions put in place
 # above as .zshrc.rpmsave / .zprofile.rpmsave, which useradd would then copy into every new
@@ -1056,6 +1103,12 @@ fi
 %{_datadir}/arctic/keys.txt
 %{_datadir}/arctic/themes/
 %{_datadir}/arctic/themegen/
+%dir %{_datadir}/arctic/fastfetch
+%{_datadir}/arctic/fastfetch/greeting.jsonc
+%{_datadir}/arctic/fastfetch/logo.txt
+%dir %{_sysconfdir}/xdg/fastfetch
+%config(noreplace) %{_sysconfdir}/xdg/fastfetch/config.jsonc
+%ghost %{_bindir}/neofetch
 %dir %{_datadir}/arctic/theme-hooks.d
 %{_datadir}/arctic/theme-hooks.d/*
 %config(noreplace) %{_sysconfdir}/dconf/db/distro.d/10-arctic
@@ -1066,6 +1119,7 @@ fi
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
+%{_libexecdir}/arctic/neofetch
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer
 %{_unitdir}/arctic-update-restage.timer
@@ -1141,6 +1195,18 @@ fi
 # metapackage: no files
 
 %changelog
+* Mon Sep 28 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.1-1
+- The repository moved to github.com/yuvalkolodkingal/Arctic-Linux: the package
+  repository is now https://yuvalkolodkingal.github.io/Arctic-Linux/ (Pages doesn't
+  redirect, so 0.2.0 systems need the one-line fix in the release notes)
+- Installer: a finished install is never thrown away because the encrypted disk
+  couldn't be closed at the end; processes left in the new system and copies of its
+  mounts in other mount namespaces are released first, closing is retried; dnf and
+  flatpak retry network failures
+- Settings: Wallhaven browser, add/rename/delete your own wallpapers, a display
+  arrangement editor
+- fastfetch in the Arctic design (colours follow the theme) and a neofetch command
+
 * Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.0-1
 - Arctic Linux 0.2: arctic-release enables the signed Arctic package repository (GitHub
   Pages; stable channel on, testing channel off) and ships its public key
