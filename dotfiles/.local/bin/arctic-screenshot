@@ -132,13 +132,18 @@ else
   file="$(target)"
 fi
 
+style() {   # slurp's options in the theme's colours
+  mapfile -t STYLE < <(arctic-capture slurp-args 2>/dev/null)
+}
+
 scale_of() {   # scale_of OUTPUT — that monitor's scale, so grim neither blurs nor enlarges it
   arctic-capture output "$1" 2>/dev/null | json scale
 }
 
 case "$mode" in
   area)
-    sel="$(arctic-capture rects 2>/dev/null | slurp -d -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
+    style
+    sel="$(arctic-capture rects 2>/dev/null | slurp "${STYLE[@]}" -d -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
     [[ -n "$sel" ]] || exit 0
     scale="$(scale_of "${sel#*	}")"
     grim ${scale:+-s "$scale"} -g "${sel%%	*}" "$file" ;;
@@ -154,7 +159,8 @@ case "$mode" in
   window)
     if (( pick )); then
       # Only the windows on screen can be clicked (slurp -r: no free areas).
-      sel="$(arctic-capture rects 2>/dev/null | slurp -r -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
+      style
+      sel="$(arctic-capture rects 2>/dev/null | slurp "${STYLE[@]}" -r -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
       info="{\"geometry\": \"${sel%%	*}\", \"output\": \"${sel#*	}\"}"
     else
       sleep "$delay"

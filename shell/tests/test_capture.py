@@ -130,6 +130,18 @@ class CaptureTest(unittest.TestCase):
         self.assertIn('%{buildroot}%{_libexecdir}/arctic/arctic-share-picker\n', spec)
         self.assertIn('packaging/desktop/arctic-share-picker', (repo / '.github/workflows/ci.yml').read_text())
 
+    def test_slurp_args_from_the_theme(self):
+        theme = self.home / '.config/arctic/current'
+        theme.mkdir(parents=True)
+        (theme / 'capture-colors.env').write_text(
+            '# c\nSLURP_ARGS="-b #0c1015b3 -c #f6bd55ff -s #00000000 -B #6b7a8a33 -w 2 -F Figtree -x evil"\n')
+        code, out = self.run_helper('slurp-args')
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), ['-b', '#0c1015b3', '-c', '#f6bd55ff', '-s', '#00000000',
+                                            '-B', '#6b7a8a33', '-w', '2', '-F', 'Figtree'])
+        (theme / 'capture-colors.env').write_text('SLURP_ARGS="-c $(rm -rf ~) -w 99999"\n')
+        self.assertEqual(self.run_helper('slurp-args'), (0, ''))
+
     def test_pixel_from_a_grim_frame(self):
         frame = b'P6\n# grim\n2 2\n255\n' + bytes([30, 42, 56]) + bytes(9)
         data = self.json('pixel', stdin=frame)

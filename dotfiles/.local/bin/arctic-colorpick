@@ -18,7 +18,9 @@ mkdir -p "$run" && chmod 700 "$run"
 exec 9>"$run.lock"
 if ! flock -n 9; then pkill -x slurp; exit 0; fi
 
-sel="$(slurp -p -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
+# slurp in the theme's colours, but nothing over the screen: you're judging its colours.
+mapfile -t style < <(arctic-capture slurp-args 2>/dev/null)
+sel="$(slurp "${style[@]}" -b '#00000000' -p -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
 [[ -n "$sel" ]] || exit 0
 scale="$(arctic-capture output "${sel#*	}" 2>/dev/null | field scale)"
 # At scale 2 a 1×1 area is 2×2 pixels; arctic-capture reads the top-left one.

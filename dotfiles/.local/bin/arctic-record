@@ -104,7 +104,9 @@ start() {
     exec 9>"$run/capture.lock"
     if ! flock -n 9; then pkill -x slurp; exit 0; fi
     # -o: a click takes the whole monitor; a drag takes an area.
-    geom="$(slurp -o -d 2>/dev/null)" || exit 0
+    local style
+    mapfile -t style < <(arctic-capture slurp-args 2>/dev/null)
+    geom="$(slurp "${style[@]}" -o -d 2>/dev/null)" || exit 0
     exec 9>&-
   fi
   [[ -n "$geom" ]] || exit 0
@@ -171,6 +173,21 @@ print(json.dumps(dict(ok=True, recording=True, pid=int(pid), started=int(time.ti
     }
   ) </dev/null >/dev/null 2>&1 &
   echo "$!" > "$run/record.waiter"
+  disown
+
+  # Stop in time when the disk fills up (under 1 GiB left), rather than let the file break.
+  (
+    while grep -qs "\"pid\": $pid," "$state"; do
+      sleep 10
+      avail="$(df --output=avail -B1 "${file%/*}" 2>/dev/null | tail -n1 | tr -d ' ')"
+      if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail < 1073741824 )); then
+        "$0" stop
+        notify-send -a "Screen recording" -i dialog-warning "Recording stopped: the disk is nearly full" \
+          "It's saved; less than 1 GB of space was left." 2>/dev/null
+        break
+      fi
+    done
+  ) </dev/null >/dev/null 2>&1 &
   disown
 }
 

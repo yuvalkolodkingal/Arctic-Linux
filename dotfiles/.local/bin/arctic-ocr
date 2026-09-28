@@ -49,7 +49,9 @@ mkdir -p "$run" && chmod 700 "$run"
 exec 9>"$run.lock"
 if ! flock -n 9; then pkill -x slurp; exit 0; fi
 
-sel="$(arctic-capture rects 2>/dev/null | slurp -d -f '%x,%y %wx%h' 2>/dev/null)" || exit 0
+# slurp in the theme's colours.
+mapfile -t style < <(arctic-capture slurp-args 2>/dev/null)
+sel="$(arctic-capture rects 2>/dev/null | slurp "${style[@]}" -d -f '%x,%y %wx%h' 2>/dev/null)" || exit 0
 [[ -n "$sel" ]] || exit 0
 tmp="$run/ocr-$$.png"
 trap 'rm -f -- "$tmp"' EXIT

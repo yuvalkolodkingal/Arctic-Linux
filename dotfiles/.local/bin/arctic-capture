@@ -8,6 +8,7 @@ selecting with slurp and the capturing with grim; this answers what needs parsin
     arctic-capture output [NAME]     the focused (or that) monitor (mmsg get all-monitors)
     arctic-capture rects             visible windows as slurp's predefined rectangles (text lines)
     arctic-capture sources [--json]  monitors and windows to share, "label<TAB>xdpw choice" lines
+    arctic-capture slurp-args        slurp's options in the theme's colours, one per line
                                      (--json: {"ok":true,"sources":[{kind,label,app_id,value}]})
     arctic-capture pixel < FRAME.ppm the top-left pixel of a grim -t ppm frame, as hex/rgb/hsl
     arctic-capture ocr FILE          the text in a picture (tesseract), in your languages
@@ -16,7 +17,7 @@ selecting with slurp and the capturing with grim; this answers what needs parsin
     arctic-capture same FILE FILE    exit 0 when two pictures have the same pixels (Pillow)
     arctic-capture swatch HEX FILE   a small SVG swatch for the colour notification
 
-Every command but `rects` and `sources` prints one JSON line: {"ok": true, …} or
+Every command but `rects`, `sources` and `slurp-args` prints one JSON line: {"ok": true, …} or
 {"ok": false, "code": "…", "error": "One sentence."}.
 """
 import colorsys
@@ -204,6 +205,24 @@ def cmd_sources(args):
     return None
 
 
+def cmd_slurp_args(_args):
+    """The theme's capture-colors.env (SLURP_ARGS="-b #… -c #…"), checked word by word, so a
+    stray file can't pass slurp anything but colours, a width and a font name."""
+    path = CONFIG / 'arctic' / 'current' / 'capture-colors.env'
+    try:
+        text = path.read_text(encoding='utf-8')
+    except OSError:
+        return None
+    match = re.search(r'^SLURP_ARGS="([^"\n]*)"$', text, re.M)
+    words = match.group(1).split() if match else []
+    allowed = {'-b': r'#[0-9a-fA-F]{8}', '-c': r'#[0-9a-fA-F]{8}', '-s': r'#[0-9a-fA-F]{8}',
+               '-B': r'#[0-9a-fA-F]{8}', '-w': r'[0-9]{1,2}', '-F': r'[A-Za-z][A-Za-z0-9 -]{0,40}'}
+    for flag, value in zip(words[::2], words[1::2]):
+        if flag in allowed and re.fullmatch(allowed[flag], value):
+            sys.stdout.write('{}\n{}\n'.format(flag, value))
+    return None
+
+
 # ---- colour --------------------------------------------------------------------------------------
 
 def ppm_first_pixel(data):
@@ -359,7 +378,8 @@ def cmd_uri(args):
     return dict(uri=Path(os.path.abspath(args[0])).as_uri())
 
 
-COMMANDS = {'window': cmd_window, 'output': cmd_output, 'rects': cmd_rects, 'sources': cmd_sources, 'pixel': cmd_pixel,
+COMMANDS = {'window': cmd_window, 'output': cmd_output, 'rects': cmd_rects, 'sources': cmd_sources, 'slurp-args': cmd_slurp_args,
+            'pixel': cmd_pixel,
             'swatch': cmd_swatch, 'ocr': cmd_ocr, 'qr': cmd_qr, 'uri': cmd_uri, 'same': cmd_same}
 
 
