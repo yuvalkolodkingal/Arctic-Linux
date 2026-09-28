@@ -273,6 +273,34 @@ The live image (`iso/kiwi/config.kiwi`, and so the installed system) lists `arct
 IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|search|page|pages|ready|set|value|quit`
 (`arctic-settings` uses `page`/`open`; `settings/dev/headless.sh` the rest).
 
+### 3.3 System helpers (0.3)
+
+Command-line helpers in `dotfiles/.local/bin` (→ /usr/bin); each status prints one JSON line,
+`{"ok": true, …}` or `{"ok": false, "error": "<sentence>"}`. Settings' commands for them are in
+`settings/scripts/arctic_system.py`; the bar and Quick Settings use the same commands.
+
+| Helper | Does | State |
+|---|---|---|
+| `arctic-nightlight on\|off\|toggle [--quiet]\|status --json\|set K=V…\|apply` | night light (wlsunset) on a schedule: sunset to sunrise (location from the time zone), custom hours or always | `~/.config/arctic/nightlight.conf`; `$XDG_RUNTIME_DIR/arctic/nightlight.json` |
+| `arctic-keep-awake on [MIN]\|off\|toggle [--quiet]\|status --json` | no lock or suspend for a while | `$XDG_RUNTIME_DIR/arctic/keep-awake` (end time, 0 = until off) |
+| `arctic-screensaver run\|status` | answers `org.freedesktop.ScreenSaver` (apps keeping the screen on) | `$XDG_RUNTIME_DIR/arctic/inhibitors.json` |
+| `arctic-display status --json\|mode [NAME]\|lid-closed\|lid-opened\|screens off\|on` | Super+P / display key, the lid (`switchbind=fold\|unfold`), screens off after the lock | `$XDG_RUNTIME_DIR/arctic/display.json`; `~/.config/arctic/lid.conf` |
+| `arctic-effects status\|lighter auto\|on\|off\|game on\|off\|toggle\|apply` | lighter effects in VMs / without a GPU driver; game mode | `~/.config/arctic/effects.{json,conf}` (config.conf sources the .conf) |
+| `arctic-power can\|prepare\|hibernate\|firmware\|…` | power menu checks (busy installs, closing windows gracefully, Hibernate, firmware setup) | — |
+| `arctic-drives list\|eject DEV` | removable drives (udisks2; udiskie mounts them) | `~/.config/arctic/drives.conf` |
+| `arctic-share`, `arctic-gpu`, `arctic-restart`, `arctic-sysmon` | LocalSend / KDE Connect; discrete GPU (switcheroo-control); restart sound, Wi-Fi, Bluetooth, the shell; system monitor | — |
+
+`arctic-session idle` (swayidle) reads `~/.config/arctic/idle.conf`: `lock_after=`,
+`suspend_after=` (plugged in), `lock_after_battery=`, `suspend_after_battery=` (missing = the
+same), `dim_before_lock=`, `screen_off_after=`; keep awake and `inhibitors.json` drop the lock and
+suspend timeouts. `arctic-session power-watch` restarts it when the power source changes.
+`arctic-session nightlight|drives|lid|effects|screensaver` start the rest from autostart.conf.
+System-wide changes: polkit (`timedatectl`, `localectl`, `hostnamectl`, AccountsService) or
+`pkexec /usr/libexec/arctic/arctic-system-helper` (action `org.arcticlinux.system`,
+`auth_admin_keep`; firewall allows, sshd, keys-only SSH, snapper). Units:
+`arctic-flatpak-update.timer` (system and user), `gcr-ssh-agent.socket` (user preset), and the
+XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
+
 ## 4. Engine ↔ installer UI protocol
 
 - `arcticd` listens on `/run/arcticd.sock` (systemd socket activation: `arcticd.socket`,
