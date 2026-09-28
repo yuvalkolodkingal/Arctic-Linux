@@ -55,7 +55,7 @@ jobs:
         run: |
           dnf -y install git golang gcc binutils webkitgtk6.0-devel gtk4-devel libsoup3-devel \
             publicsuffix-list librsvg2-tools desktop-file-utils sway grim dbus-daemon dbus-tools \
-            mesa-dri-drivers fontconfig google-noto-sans-fonts procps-ng python3
+            mesa-dri-drivers fontconfig google-noto-sans-fonts procps-ng python3 libcap
       - uses: actions/checkout@v4
       - name: go vet (tagged), web-app tests, host build
         run: |
