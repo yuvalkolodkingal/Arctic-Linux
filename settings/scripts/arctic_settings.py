@@ -39,6 +39,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     caps                          which helper commands and tools are installed
     nightlight | nightlight-set KEY=VALUE…|now on|off    night light schedule (arctic-nightlight)
     keep-awake [on [MINUTES]|off] no lock or suspend for a while (arctic-keep-awake)
+    autostart | autostart-set ID on|off           apps' own "start on login" entries (XDG autostart)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -1705,6 +1706,95 @@ def cmd_keep_awake(paths, args):
     return data
 
 
+# ---- XDG autostart (~/.config/autostart, /etc/xdg/autostart) ------------------------------------
+
+# Entries Arctic keeps off in the Mango session (packaging/desktop/autostart/arctic-starts-it.conf).
+ARCTIC_AUTOSTART = {'nm-applet', 'blueman', 'geoclue-demo-agent'}
+RE_AUTOSTART_ID = re.compile(r'^[A-Za-z0-9._+-]{1,128}$')
+
+
+def autostart_dirs(paths):
+    system = [Path(d) / 'autostart' for d in (paths.env.get('XDG_CONFIG_DIRS') or '/etc/xdg').split(':') if d]
+    return paths.config / 'autostart', system
+
+
+def _is_true(value):
+    return str(value or '').strip().lower() == 'true'
+
+
+def autostart_entries(paths):
+    """What systemd-xdg-autostart-generator starts in the Mango session, as the Startup page
+    lists it: a file in ~/.config/autostart replaces the system one of the same name, Hidden=true
+    there switches it off, and OnlyShowIn/NotShowIn/TryExec/X-systemd-skip decide as systemd does."""
+    user, system = autostart_dirs(paths)
+    found = {}
+    for folder in [user] + system:
+        if not folder.is_dir():
+            continue
+        for path in sorted(folder.glob('*.desktop')):
+            found.setdefault(path.name[:-8], path)
+    out = []
+    for ident, path in sorted(found.items()):
+        raw = read_desktop(path)
+        mine = path.parent == user
+        if ident in ARCTIC_AUTOSTART or raw.get('Type', 'Application') != 'Application' or not raw.get('Exec'):
+            continue
+        if (_is_true(raw.get('Hidden')) and not mine) or _is_true(raw.get('X-systemd-skip')):
+            continue
+        desktops = [d.lower() for d in raw.get('OnlyShowIn', '').split(';') if d]
+        if (desktops and 'mango' not in desktops) or 'mango' in [d.lower() for d in raw.get('NotShowIn', '').split(';')]:
+            continue
+        tryexec = raw.get('TryExec', '')
+        if tryexec and not (os.access(tryexec, os.X_OK) if tryexec.startswith('/') else which(tryexec, paths.env)):
+            continue
+        system_copy = next((str(f / path.name) for f in system if (f / path.name).is_file()), '')
+        out.append(dict(id=ident, name=raw.get('Name') or ident, comment=raw.get('Comment', ''),
+                        enabled=not _is_true(raw.get('Hidden')), mine=mine, system=system_copy,
+                        exec=exec_command(dict(exec=raw['Exec']))))
+    return out
+
+
+def cmd_autostart(paths, _args):
+    return dict(ok=True, entries=autostart_entries(paths))
+
+
+def _set_hidden(text, hidden):
+    """The desktop entry text with Hidden=true (or without a Hidden line) in [Desktop Entry]."""
+    out, section, done = [], '', False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('['):
+            if section == '[Desktop Entry]' and hidden and not done:
+                out.append('Hidden=true')
+                done = True
+            section = stripped
+        elif section == '[Desktop Entry]' and stripped.split('=', 1)[0].strip() == 'Hidden':
+            continue
+        out.append(line)
+    if section == '[Desktop Entry]' and hidden and not done:
+        out.append('Hidden=true')
+    return '\n'.join(out) + '\n'
+
+
+def cmd_autostart_set(paths, args):
+    """autostart-set ID on|off: switch an app's own "start on login" on or off for you."""
+    if len(args) != 2 or args[1] not in ('on', 'off') or not RE_AUTOSTART_ID.match(args[0]):
+        raise Failure('usage: autostart-set ID on|off')
+    entry = next((e for e in autostart_entries(paths) if e['id'] == args[0]), None)
+    if not entry:
+        raise Failure('That app doesn’t start on login any more.')
+    user, _system = autostart_dirs(paths)
+    target = user / (entry['id'] + '.desktop')
+    source = target if entry['mine'] else Path(entry['system'])
+    text = _set_hidden(read_text(source) or '', args[1] == 'off')
+    system_text = read_text(entry['system']) if entry['system'] else None
+    if args[1] == 'on' and system_text is not None and _set_hidden(system_text, False) == text:
+        target.unlink(missing_ok=True)      # nothing of yours left: follow the app's own file again
+    else:
+        atomic_write(target, text)
+    return cmd_autostart(paths, [])
+
+
 # ---- keyboard data ------------------------------------------------------------------------------
 
 # Layout-switch keys offered in Settings. Not Win+Space: Super + Space opens the launcher.
@@ -2176,11 +2266,12 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
            'ensure-source'}
 
 
-# Stream 5 (system): night light, keep awake.
+# Stream 5 (system): night light, keep awake, XDG autostart.
 COMMANDS.update({
     'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
+    'autostart': cmd_autostart, 'autostart-set': cmd_autostart_set,
 })
-WRITERS |= {'nightlight-set'}
+WRITERS |= {'nightlight-set', 'autostart-set'}
 
 
 def main(argv=None):

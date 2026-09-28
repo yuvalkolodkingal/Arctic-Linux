@@ -98,6 +98,7 @@ var ENTRIES = [
     ["power", "power.lid", "Closing the lid", "laptop lid switch"],
     ["startup", "startup.mine", "Your startup apps", "autostart login"],
     ["startup", "startup.arctic", "Started by Arctic", "session services"],
+    ["startup", "startup.xdg", "Apps that start themselves", "autostart start on login xdg discord steam"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
     ["about", "about.software", "Software", "version mango quickshell kernel"],
     ["about", "about.help", "Help and feedback", "wiki issues bug report"]

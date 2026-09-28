@@ -222,6 +222,15 @@ They're saved as `exec-once=` lines in `settings.conf` and start from the next l
 by Arctic** lists what the desktop itself starts; those live in `autostart.conf` in
 `~/.config/mango/arctic`.
 
+**Apps that start themselves** lists the apps that turned on their own "start on login" option
+(Discord, Steam, Nextcloud, KDE Connect and others put a file in `~/.config/autostart`; some
+packages put one in `/etc/xdg/autostart`). Arctic starts them like other desktops do, through
+systemd's XDG autostart. Switching one off here writes a copy with `Hidden=true` to
+`~/.config/autostart`, and switching it back on removes that copy again; both apply from the next
+login. Entries meant only for other desktops (`OnlyShowIn=GNOME`, for example) don't start and
+aren't listed, and nm-applet, blueman-applet and geoclue's demo agent stay off because Arctic
+takes care of those itself.
+
 ## About
 
 ![The About page](images/settings-about.png)

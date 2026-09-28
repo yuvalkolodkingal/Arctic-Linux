@@ -681,6 +681,16 @@ install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/fla
 # QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
 # an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
 install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 5 (system): XDG autostart in the Mango session (packaging/desktop/autostart): the
+# session target wants xdg-desktop-autostart.target, and the entries Arctic starts itself or
+# doesn't use stay off there (drop-ins for the units systemd-xdg-autostart-generator makes;
+# the names are systemd-escaped desktop ids, "-" is \x2d).
+install -Dpm 0644 packaging/desktop/autostart/mango-session-autostart.conf \
+  %{buildroot}%{_userunitdir}/mango-session.target.d/arctic-autostart.conf
+for id in 'nm\x2dapplet' 'blueman' 'geoclue\x2ddemo\x2dagent'; do
+  install -Dpm 0644 packaging/desktop/autostart/arctic-starts-it.conf \
+    "%{buildroot}%{_userunitdir}/app-${id}@autostart.service.d/arctic.conf"
+done
 # arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own subpackages.
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
@@ -1058,6 +1068,10 @@ fi
 %dir %{_localstatedir}/lib/flatpak/overrides
 %config(noreplace) %{_localstatedir}/lib/flatpak/overrides/global
 %{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 5 (system): XDG autostart drop-ins
+%dir %{_userunitdir}/mango-session.target.d
+%{_userunitdir}/mango-session.target.d/arctic-autostart.conf
+%{_userunitdir}/app-*@autostart.service.d/
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot

@@ -266,5 +266,65 @@ class KeepAwakeTest(HelperHome):
         self.assertFalse(any(c.startswith('notify-send') for c in self.calls()))
 
 
+class AutostartTest(Home):
+    """Apps' own "start on login" entries (XDG autostart) in Settings > Startup apps."""
+
+    def entry(self, folder, name, *lines):
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / (name + '.desktop')
+        path.write_text('[Desktop Entry]\nType=Application\n' + ''.join(line + '\n' for line in lines))
+        return path
+
+    def test_list_and_switch(self):
+        system = self.tmp / 'xdg/autostart'
+        self.env['XDG_CONFIG_DIRS'] = str(self.tmp / 'xdg')
+        discord = self.entry(system, 'discord', 'Name=Discord', 'Exec=/usr/bin/discord --start-minimized %U')
+        self.entry(system, 'nm-applet', 'Name=NetworkManager Applet', 'Exec=nm-applet', 'NotShowIn=KDE;GNOME;')
+        self.entry(system, 'gnome-keyring-ssh', 'Name=SSH Key Agent', 'Exec=gnome-keyring-daemon', 'OnlyShowIn=GNOME;Unity;MATE;')
+        self.entry(system, 'xdg-user-dirs', 'Name=User folders', 'Exec=xdg-user-dirs-update', 'X-systemd-skip=true')
+        self.entry(system, 'gone', 'Name=Gone', 'Exec=gone', 'TryExec=/nonexistent/gone')
+        self.entry(system, 'off-by-vendor', 'Name=Off', 'Exec=off', 'Hidden=true')
+        self.entry(system, 'fcitx5', 'Name=Fcitx 5', 'Exec=/usr/bin/fcitx5', 'OnlyShowIn=mango;KDE;',
+                   '', '[Desktop Action Quit]', 'Name=Quit')
+        user = self.home / '.config/autostart'
+        self.entry(user, 'syncthing', 'Name=Syncthing', 'Exec=syncthing serve --no-browser', 'Comment=Sync files')
+        data = self.helper('autostart')
+        self.assertEqual([e['id'] for e in data['entries']], ['discord', 'fcitx5', 'syncthing'])
+        self.assertEqual(data['entries'][0]['exec'], '/usr/bin/discord --start-minimized')
+        self.assertTrue(all(e['enabled'] for e in data['entries']))
+
+        # Off: a copy with Hidden=true in ~/.config/autostart, in [Desktop Entry] only.
+        data = self.helper('autostart-set', 'fcitx5', 'off')
+        copy = (user / 'fcitx5.desktop').read_text()
+        self.assertEqual(copy.split('[Desktop Action Quit]')[0].count('Hidden=true'), 1)
+        self.assertNotIn('Hidden', copy.split('[Desktop Action Quit]')[1])
+        self.assertFalse(next(e for e in data['entries'] if e['id'] == 'fcitx5')['enabled'])
+        # On again: nothing of yours is left, so the copy goes and the app's own file counts.
+        self.helper('autostart-set', 'fcitx5', 'on')
+        self.assertFalse((user / 'fcitx5.desktop').exists())
+        # Your own entries are edited in place.
+        self.helper('autostart-set', 'syncthing', 'off')
+        self.assertIn('Hidden=true', (user / 'syncthing.desktop').read_text())
+        self.helper('autostart-set', 'syncthing', 'on')
+        self.assertNotIn('Hidden', (user / 'syncthing.desktop').read_text())
+        self.assertTrue(discord.exists())
+
+        self.helper('autostart-set', 'nm-applet', 'off', ok=False)      # Arctic starts it itself
+        self.helper('autostart-set', '../evil', 'off', ok=False)
+        self.helper('autostart-set', 'discord', 'maybe', ok=False)
+
+    def test_packaging(self):
+        """The drop-ins the spec installs: the session wants the autostart target, and the
+        entries Settings hides are the ones Arctic switches off."""
+        import arctic_settings as S
+        root = DOTFILES.parent / 'packaging/desktop/autostart'
+        self.assertIn('Wants=xdg-desktop-autostart.target', (root / 'mango-session-autostart.conf').read_text())
+        self.assertIn('ConditionEnvironment=!XDG_CURRENT_DESKTOP=mango', (root / 'arctic-starts-it.conf').read_text())
+        spec = (DOTFILES.parent / 'packaging/arctic-linux.spec').read_text()
+        self.assertIn('mango-session.target.d/arctic-autostart.conf', spec)
+        for ident in S.ARCTIC_AUTOSTART:
+            self.assertIn("'{}'".format(ident.replace('-', '\\x2d')), spec)
+
+
 if __name__ == '__main__':
     unittest.main()
