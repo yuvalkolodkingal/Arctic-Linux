@@ -1,16 +1,19 @@
-"""Tests for the system helpers Settings drives: arctic-nightlight (night light on wlsunset) and
-arctic-keep-awake (no lock or suspend for a while), and their Settings commands.
+"""Tests for the system features Settings drives: arctic-nightlight (night light on wlsunset),
+arctic-keep-awake (no lock or suspend for a while), XDG autostart, printers (CUPS) and date,
+time and language (timedatectl, localectl), with their Settings commands.
 
     python3 -m unittest discover -s settings/tests -v
 
 Each test uses the throwaway home of test_arctic_settings.Home, with the real helpers from
-dotfiles/.local/bin and stand-ins for wlsunset, notify-send, swayidle and arctic-session that
-record how they were called. Time and time zone come from ARCTIC_NOW and TZ.
+dotfiles/.local/bin and stand-ins for wlsunset, notify-send, swayidle, arctic-session, lpstat,
+timedatectl and the like that record how they were called. Time and time zone come from
+ARCTIC_NOW and TZ.
 """
 import json
 import os
 import signal
 import subprocess
+import textwrap
 import time
 import unittest
 
@@ -324,6 +327,86 @@ class AutostartTest(Home):
         self.assertIn('mango-session.target.d/arctic-autostart.conf', spec)
         for ident in S.ARCTIC_AUTOSTART:
             self.assertIn("'{}'".format(ident.replace('-', '\\x2d')), spec)
+
+
+LPSTAT = r'''
+echo "lpstat $* LC_ALL=$LC_ALL" >> "{log}"
+case "$*" in
+  "-l -p") printf 'printer Brother disabled since Mon Sep 28 20:16:11 2026 -\n\tPaused\n\tForm mounted:\n\tDescription: Brother HL\n\tLocation: \nprinter Office_Laser is idle.  enabled since Mon Sep 28 20:16:11 2026\n\tDescription: HP LaserJet Pro M404\n\tLocation: Office\n' ;;
+  "-d") echo "system default destination: Office_Laser" ;;
+  "-o") printf 'Brother-1               you              1024   Mon Sep 28 20:16:11 2026\nBrother-2   you   1   Mon\n' ;;
+  "-e") printf 'Brother\nOffice_Laser\nCanon_TS5300_series\n' ;;
+esac
+'''
+
+
+class PrintersTest(Home):
+    def test_missing(self):
+        self.assertFalse(self.helper('printers')['available'])
+
+    def test_list_default_cancel(self):
+        stub(self.bin, 'lpstat', LPSTAT.format(log=self.log))
+        stub(self.bin, 'lpoptions', 'echo "lpoptions $*" >> "{}"\n'.format(self.log))
+        stub(self.bin, 'cancel', 'echo "cancel $*" >> "{}"\n'.format(self.log))
+        stub(self.bin, 'system-config-printer', 'exit 0\n')
+        data = self.helper('printers')
+        self.assertEqual([(p['name'], p['state'], p['default'], p['jobs']) for p in data['printers']],
+                         [('Brother', 'paused', False, 2), ('Office_Laser', 'idle', True, 0)])
+        self.assertEqual(data['printers'][1]['location'], 'Office')
+        self.assertEqual(data['network'], [dict(name='Canon_TS5300_series', default=False)])
+        self.assertEqual((data['canAdd'], data['scan']), (True, False))
+        self.assertTrue(all(c.endswith('LC_ALL=C') for c in self.calls() if c.startswith('lpstat')))
+        self.helper('printer-default', 'Brother')
+        self.helper('printer-cancel', 'Brother')
+        self.assertIn('lpoptions -d Brother', self.calls())
+        self.assertIn('cancel -a Brother', self.calls())
+        self.helper('printer-default', 'a b', ok=False)
+        self.helper('printer-cancel', '../x', ok=False)
+
+
+class DateTimeTest(Home):
+    def setUp(self):
+        super().setUp()
+        stub(self.bin, 'timedatectl', textwrap.dedent('''\
+            echo "timedatectl $*" >> "{}"
+            case "$1" in
+              show) printf 'Timezone=Europe/Berlin\\nNTP=yes\\nNTPSynchronized=yes\\nCanNTP=yes\\n' ;;
+              list-timezones) printf 'Asia/Jerusalem\\nEurope/Berlin\\nAmerica/Argentina/Buenos_Aires\\nUTC\\n' ;;
+              set-*) if [ -n "$DENY" ]; then echo "Failed to set time zone: Access denied" >&2; exit 1; fi ;;
+            esac
+            exit 0
+            ''').format(self.log))
+        stub(self.bin, 'localectl', textwrap.dedent('''\
+            echo "localectl $*" >> "{}"
+            case "$1" in
+              status) printf '   System Locale: LANG=en_US.UTF-8\\n       VC Keymap: us\\n' ;;
+              list-locales) printf 'C.UTF-8\\nde_DE.UTF-8\\nen_US.UTF-8\\nhe_IL.UTF-8\\nsr_RS.UTF-8@latin\\n' ;;
+            esac
+            exit 0
+            ''').format(self.log))
+
+    def test_read(self):
+        data = self.helper('datetime', 'zones', 'locales')
+        self.assertEqual((data['timezone'], data['ntp'], data['ntpSynced'], data['locale']),
+                         ('Europe/Berlin', True, True, 'en_US.UTF-8'))
+        self.assertIn('America/Argentina/Buenos_Aires', data['zones'])
+        self.assertEqual(data['locales'], ['de_DE.UTF-8', 'en_US.UTF-8', 'he_IL.UTF-8'])
+        self.assertEqual(self.helper('datetime')['zones'], [])
+
+    def test_changes(self):
+        self.helper('datetime-set', 'timezone', 'Asia/Jerusalem')
+        self.helper('datetime-set', 'ntp', 'off')
+        self.helper('datetime-set', 'locale', 'he_IL.UTF-8')
+        for expected in ('timedatectl set-timezone Asia/Jerusalem', 'timedatectl set-ntp false',
+                         'localectl set-locale LANG=he_IL.UTF-8'):
+            self.assertIn(expected, self.calls())
+        self.assertIn('Turn off', self.helper('datetime-set', 'time', '2026-09-28 21:30', ok=False)['error'])
+        for args in (('timezone', 'Mars/Olympus'), ('timezone', '../../etc/passwd'), ('locale', 'xx_XX.UTF-8'),
+                     ('time', 'tomorrow'), ('ntp', 'maybe'), ('colour', 'red')):
+            with self.subTest(args):
+                self.helper('datetime-set', *args, ok=False)
+        self.env['DENY'] = '1'
+        self.assertIn('password', self.helper('datetime-set', 'timezone', 'UTC', ok=False)['error'])
 
 
 if __name__ == '__main__':

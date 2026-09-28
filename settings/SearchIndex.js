@@ -28,6 +28,10 @@ var PAGES = [
       words: "idle sleep suspend screen lock battery lid power mode performance" },
     { id: "startup", title: "Startup apps", icon: "play", file: "StartupPage.qml",
       words: "autostart login exec-once start" },
+    { id: "printers", title: "Printers and scanners", icon: "printer", file: "PrintersPage.qml",
+      words: "print printer printing cups scanner scan paper ipp airprint" },
+    { id: "datetime", title: "Date and time", icon: "clock", file: "DateTimePage.qml",
+      words: "time zone timezone clock date ntp language region locale" },
     { id: "about", title: "About", icon: "info", file: "AboutPage.qml",
       words: "system version hardware cpu memory disk fedora help wiki" }
 ];
@@ -99,6 +103,13 @@ var ENTRIES = [
     ["startup", "startup.mine", "Your startup apps", "autostart login"],
     ["startup", "startup.arctic", "Started by Arctic", "session services"],
     ["startup", "startup.xdg", "Apps that start themselves", "autostart start on login xdg discord steam"],
+    ["printers", "printers.list", "Printers", "default printer print queue jobs cancel"],
+    ["printers", "printers.add", "Add a printer", "set up printer driver share"],
+    ["printers", "printers.scan", "Scan a document", "scanner scanning photo"],
+    ["datetime", "datetime.timezone", "Time zone", "timezone travel city utc"],
+    ["datetime", "datetime.ntp", "Set the time automatically", "ntp network time sync clock"],
+    ["datetime", "datetime.clock", "Date and time", "clock set time manually"],
+    ["datetime", "datetime.language", "Language", "locale region translation"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
     ["about", "about.software", "Software", "version mango quickshell kernel"],
     ["about", "about.help", "Help and feedback", "wiki issues bug report"]

@@ -281,8 +281,9 @@ Recommends:     xdg-utils
 %description -n arctic-settings
 Arctic Settings: appearance and themes, windows (Mango gaps, borders, animations, focus,
 layout), displays, keyboard and mouse, shortcuts, default apps, network, Bluetooth, sound,
-updates, power and lock, startup apps. Changes go to ~/.config/mango/settings.conf and the
-Arctic helpers; nothing needs root. Start it with arctic-settings (Super+S).
+updates, power and lock, startup apps, printers and scanners, date and time. Changes go to
+~/.config/mango/settings.conf and the Arctic helpers; only the time zone, the clock and the
+language ask for the password (systemd, polkit). Start it with arctic-settings (Super+S).
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-installer
@@ -478,6 +479,23 @@ Requires:       qt6ct
 Requires:       qt5ct
 # The terminal system monitor, themed like the rest (btop/arctic.theme).
 Recommends:     btop
+# Stream 5 (system): printing and scanning. Driverless printers (IPP Everywhere, AirPrint) over
+# USB (ipp-usb) and the network (avahi + nss-mdns; cups-browsed stays out, CUPS and the print
+# dialogs find network printers themselves); system-config-printer administers queues through
+# cups-pk-helper (polkit); Settings > Printers and scanners. cups.socket/cups.path are enabled
+# by preset. Scanners: sane-airscan (driverless eSCL/WSD) and Document Scanner.
+Requires:       cups
+Requires:       cups-filters
+Requires:       ghostscript
+Requires:       ipp-usb
+Requires:       avahi
+Requires:       nss-mdns
+Requires:       cups-pk-helper
+Requires:       system-config-printer
+Recommends:     gutenprint-cups
+Recommends:     sane-airscan
+Recommends:     sane-backends-drivers-scanners
+Recommends:     simple-scan
 
 %description -n arctic-desktop
 Pulls in everything an Arctic Linux desktop needs: Mango, SDDM with the arctic theme and

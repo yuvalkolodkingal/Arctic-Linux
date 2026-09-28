@@ -42,8 +42,10 @@ value.
 
 ## Where your changes go
 
-Nothing in Settings needs your password: it only writes files in your home folder, and only
-through programs that already work without root. Every file is checked before it's saved (window
+Almost nothing in Settings needs your password: it writes files in your home folder, through
+programs that already work without root. The exceptions change the whole computer and ask for
+the password through the usual dialog: the time zone, the clock and the language (**Date and
+time**), and setting up printers (*Print Settings*). Every file is checked before it's saved (window
 manager settings with Mango itself), written in one go so it's never half-written, and the
 previous version is kept in `~/.local/state/arctic/settings-backups/` (the newest 20 of each
 file). That's what `Ctrl + Z` uses.
@@ -230,6 +232,20 @@ systemd's XDG autostart. Switching one off here writes a copy with `Hidden=true`
 login. Entries meant only for other desktops (`OnlyShowIn=GNOME`, for example) don't start and
 aren't listed, and nm-applet, blueman-applet and geoclue's demo agent stay off because Arctic
 takes care of those itself.
+
+## Printers and scanners
+
+The printers you've set up and whether they're ready, with **Make default** and **Cancel jobs**,
+driverless printers found **On your network**, **Open printer settings** (system-config-printer,
+to add or change a printer) and **Open Document Scanner**. See
+[Printing and scanning](Printing-and-Scanning).
+
+## Date and time
+
+**Time zone** (a searchable list of cities), **Set the time automatically** (network time; when
+it's off, you can type the date and time), and the **Language** of the whole computer, which
+changes at the next login. These go through systemd (`timedatectl`, `localectl`), so they ask for
+your password. Night light's sunset and sunrise follow the time zone.
 
 ## About
 

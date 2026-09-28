@@ -49,7 +49,7 @@ class SearchIndexTest(unittest.TestCase):
 
     def test_pages_exist(self):
         files = re.findall(r'file: "([A-Za-z]+\.qml)"', self.index)
-        self.assertEqual(len(files), 13)
+        self.assertEqual(sorted(files), sorted(self.pages))     # every page file is in the rail
         for name in files:
             self.assertIn(name, self.pages)
 
