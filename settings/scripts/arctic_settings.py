@@ -37,6 +37,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     network | wifi on|off         NetworkManager status (nmcli)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
+    shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2099,6 +2100,48 @@ def cmd_set_cursor(paths, args):
     return result
 
 
+# ---- the shell's own options (~/.config/arctic/shell.json) --------------------------------------
+# The shell watches the file, so a change shows at once. Only the keys below are written here;
+# every other key in the file is kept as it is.
+
+WEB_ENGINES = (('duckduckgo', 'DuckDuckGo'), ('startpage', 'Startpage'), ('brave', 'Brave Search'),
+               ('ecosia', 'Ecosia'), ('google', 'Google'), ('bing', 'Bing'))
+
+
+def _web_search_ok(value):
+    return value in dict(WEB_ENGINES) or bool(re.fullmatch(r'https://[^\s"\\]{1,200}', value) and '%s' in value)
+
+
+SHELL_OPTIONS = {
+    # key: (default, check(value) -> bool)
+    'webSearch': ('duckduckgo', _web_search_ok),
+}
+
+
+def read_shell_json(paths):
+    data = _loads(read_text(paths.arctic / 'shell.json') or '')
+    return data if isinstance(data, dict) else {}
+
+
+def cmd_shell_options(paths, _args):
+    data = read_shell_json(paths)
+    out = {key: data.get(key, default) for key, (default, _check) in SHELL_OPTIONS.items()}
+    out.update(ok=True, engines=[dict(id=i, name=n) for i, n in WEB_ENGINES])
+    return out
+
+
+def cmd_shell_option_set(paths, args):
+    if len(args) != 2 or args[0] not in SHELL_OPTIONS:
+        raise Failure('usage: shell-option-set {} VALUE'.format('|'.join(SHELL_OPTIONS)))
+    key, value = args
+    if not SHELL_OPTIONS[key][1](value):
+        raise Failure('That isn’t a value Arctic can use for this.')
+    data = read_shell_json(paths)
+    data[key] = value
+    atomic_write(paths.arctic / 'shell.json', json.dumps(data, indent=2) + '\n')
+    return cmd_shell_options(paths, [])
+
+
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
@@ -2120,6 +2163,10 @@ COMMANDS = {
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
            'ensure-source'}
+
+# The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
+COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set})
+WRITERS |= {'shell-option-set'}
 
 
 def main(argv=None):

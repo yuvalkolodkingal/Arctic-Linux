@@ -5,6 +5,8 @@
 #                             displays, input, shortcuts, apps, network, bluetooth, sound,
 #                             updates, power, startup, about. If it is open already, it shows
 #                             that page and comes to the front.
+#   arctic-settings page key  … scrolled to one setting and highlighted (a search key, e.g.
+#                             arctic-settings appearance appearance.motion; the launcher uses it)
 #   arctic-settings --path    print the folder the app runs from
 #
 # The app is the first folder found of $ARCTIC_SETTINGS_DIR, /usr/share/arctic/settings
@@ -23,15 +25,17 @@ settings_dir() {
 }
 
 usage() {
-  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 page="${1:-}"
+key="${2:-}"
 case "$page" in
   -h|--help) usage; exit 0 ;;
   --path|"") ;;
   *) [[ "$page" =~ ^[a-z]+$ ]] || { usage >&2; exit 2; } ;;
 esac
+[[ -z "$key" || "$key" =~ ^[a-z0-9-]+(\.[a-z0-9-]+)*$ ]] || { usage >&2; exit 2; }
 
 dir="$(settings_dir)" || {
   echo "arctic-settings: the Settings app isn't installed (package arctic-settings)" >&2
@@ -48,7 +52,8 @@ fi
 # Already open: show the page and bring the window to the front (Mango focuses the client
 # whose title is "Arctic Settings").
 if quickshell ipc -p "$dir" call settings page >/dev/null 2>&1; then
-  if [[ -n "$page" ]]; then quickshell ipc -p "$dir" call settings open "$page" >/dev/null 2>&1; fi
+  if [[ -n "$key" ]]; then quickshell ipc -p "$dir" call settings reveal "$page" "$key" >/dev/null 2>&1
+  elif [[ -n "$page" ]]; then quickshell ipc -p "$dir" call settings open "$page" >/dev/null 2>&1; fi
   if command -v mmsg >/dev/null 2>&1; then
     id="$(mmsg get all-clients 2>/dev/null | python3 -c '
 import json, sys
@@ -62,4 +67,4 @@ for c in json.load(sys.stdin).get("clients", []):
 fi
 
 # -n: a second start while this one is still coming up does nothing.
-ARCTIC_SETTINGS_PAGE="$page" exec quickshell -n -d -p "$dir"
+ARCTIC_SETTINGS_PAGE="$page" ARCTIC_SETTINGS_REVEAL="$key" exec quickshell -n -d -p "$dir"

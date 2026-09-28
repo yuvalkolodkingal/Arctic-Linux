@@ -103,9 +103,11 @@ Tap to click and natural scrolling are on for touchpads.
 
 | Key | Does |
 |---|---|
-| Type | Search apps |
-| `=` then a sum | Calculator; `Enter` copies the answer |
+| Type | Search apps, Settings, open windows, app actions and files (the web is the last row) |
+| `=` then a sum | Calculator (units too, like `= 10 km to mi`); `Enter` copies the answer |
 | `>` then a command | Run a command; `Shift + Enter` runs it in the terminal |
+| `?` then words | Search the web |
+| `Shift + Enter` on a file | Open the folder it's in |
 | `↑` / `↓` | Move through the results |
 | `Enter` | Open |
 | `Esc` | Back, or close |

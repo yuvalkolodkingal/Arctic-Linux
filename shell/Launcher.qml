@@ -8,7 +8,9 @@ import "Calc.js" as Calc
 import "assets/Icons.js" as Icons
 
 // The launcher (design Launcher, Super+Space): a 520px frosted card that hangs from the bar
-// over a scrim. Type to find apps; "=" is a calculator, ">" runs a command. With nothing
+// over a scrim. Type to find apps, Settings pages, open windows, app actions and files (and
+// a web search after them; LauncherSources.qml); "=" is a calculator (units too, with qalc),
+// ">" runs a command, "?" searches the web. With nothing
 // typed it offers Apps, Get apps, Wallpapers, Settings and Fetch (the original shell's), and
 // on the live USB "Install Arctic Linux" first. Keyboard first: ↑/↓ or Tab move, Enter opens,
 // Esc goes back or closes. The card can be dragged to any screen edge, where it docks.
@@ -58,20 +60,38 @@ Popover {
         .filter(e => !e.noDisplay)
         .map(e => ({ kind: 'app', entry: e, name: e.name, desc: e.genericName || e.comment || '',
                      keywords: [e.genericName, e.comment].concat(e.keywords || []).concat(e.categories || []).join(' '),
-                     tile: Icons.tileFor(e.id, e.name), icon: e.icon }))
+                     tile: Icons.tileFor(e.id, e.name), icon: e.icon, id: 'app:' + e.id }))
+    LauncherSources {
+        id: sources
+        active: launcher.open
+        text: launcher.parsed.mode === 'search' && launcher.view === 'home' ? launcher.parsed.text : ''
+        calc: launcher.parsed.mode === 'calc' && !Calc.evaluate(launcher.parsed.text).ok ? launcher.parsed.text : ''
+        apps: launcher.apps
+    }
     readonly property var results: {
         if (parsed.mode === 'calc') {
             const calc = Calc.evaluate(parsed.text);
+            const units = calc.ok ? null : sources.qalcRow(parsed.text);
+            if (units) return [units];
+            if (!calc.ok && parsed.text && sources.hasQalc && sources.qalcFor !== parsed.text)
+                return [{ kind: 'none', name: 'Working it out…', desc: '= ' + parsed.text, glyph: 'hash' }];
             return [calc.ok ? { kind: 'calc', name: calc.text, desc: '= ' + parsed.text + ' · Enter copies the result', glyph: 'hash' }
                             : { kind: 'none', name: parsed.text ? 'Can’t work that out' : 'Calculator', desc: calc.error, glyph: 'hash' }];
         }
         if (parsed.mode === 'command')
             return [parsed.text ? { kind: 'command', name: parsed.text, desc: 'Run this command · Shift + Enter runs it in a terminal', glyph: 'prompt' }
                                 : { kind: 'none', name: 'Run a command', desc: 'Type a command after >, like > htop', glyph: 'prompt' }];
-        if (view === 'apps') return LauncherSearch.rank(apps, parsed.text);
+        if (parsed.mode === 'web')
+            return [sources.webRow(parsed.text) || { kind: 'none', name: 'Search the web', desc: 'Type what to look for after ?, like ? fedora release date', glyph: 'globe' }];
+        if (view === 'apps') return LauncherSearch.rank(apps, parsed.text, item => sources.boost(item));
         if (!parsed.text) return specials;
-        // Settings is one of the specials, so its desktop entry would show twice.
-        return LauncherSearch.rank(specials.concat(apps.filter(a => a.entry.id !== 'org.arcticlinux.Settings')), parsed.text).slice(0, 50);
+        // Settings is one of the specials, so its desktop entry would show twice. A unit
+        // conversion ("10 km to mi") goes first; files and the web search follow the rest.
+        const units = LauncherSearch.looksLikeConversion(parsed.text) ? sources.qalcRow(parsed.text) : null;
+        return (units ? [units] : [])
+            .concat(LauncherSearch.rank(specials.concat(apps.filter(a => a.entry.id !== 'org.arcticlinux.Settings'), sources.extra),
+                                        parsed.text, item => sources.boost(item)).slice(0, 50))
+            .concat(sources.tail(parsed.text));
     }
     onResultsChanged: current = Math.min(current, Math.max(0, results.length - 1))
 
@@ -82,6 +102,7 @@ Popover {
     }
     function activate(item, alternate) {
         if (!item) return;
+        sources.remember(item.id);
         switch (item.kind) {
         case 'app':
             if (item.entry.runInTerminal)
@@ -97,6 +118,12 @@ Popover {
         case 'fetch': Quickshell.execDetached(inTerminal(['arctic-fetch'], true)); close(); break;
         case 'install': Quickshell.execDetached(['arctic-start-installer']); close(); break;
         case 'calc': Quickshell.execDetached(['wl-copy', '--', item.name]); close(); break;
+        case 'setting': Quickshell.execDetached(['arctic-settings', item.page].concat(item.key ? [item.key] : [])); close(); break;
+        case 'window': if (item.ref) item.ref.activate(); close(); break;
+        case 'action': item.action.execute(); close(); break;
+        case 'web': Quickshell.execDetached(['xdg-open', item.url]); close(); break;
+        // Shift + Enter opens the folder a file is in.
+        case 'file': Quickshell.execDetached(['xdg-open', alternate && !item.folder ? item.path.replace(/\/[^/]*$/, '') || '/' : item.path]); close(); break;
         case 'command':
             if (alternate) Quickshell.execDetached(inTerminal(['sh', '-c', item.name], true));
             else Quickshell.execDetached(['sh', '-c', item.name]);
@@ -156,7 +183,7 @@ Popover {
                     anchors.rightMargin: Theme.space3
                     spacing: Theme.space3
                     Icon {
-                        name: launcher.view === 'apps' ? 'grid' : launcher.parsed.mode === 'calc' ? 'hash' : launcher.parsed.mode === 'command' ? 'prompt' : 'search'
+                        name: launcher.view === 'apps' ? 'grid' : launcher.parsed.mode === 'calc' ? 'hash' : launcher.parsed.mode === 'command' ? 'prompt' : launcher.parsed.mode === 'web' ? 'globe' : 'search'
                         size: 20
                         color: Theme.inkMuted
                     }
@@ -182,7 +209,7 @@ Popover {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: !field.text
-                            text: launcher.view === 'apps' ? 'Search every app' : 'Search apps, or type = to calculate'
+                            text: launcher.view === 'apps' ? 'Search every app' : 'Search apps, settings, windows and files'
                             color: Theme.inkSubtle
                             font: field.font
                         }

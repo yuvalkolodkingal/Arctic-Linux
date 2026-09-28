@@ -22,6 +22,7 @@ InstallConsole 1.0 InstallConsole.qml
 Kbd 1.0 Kbd.qml
 KeysSheet 1.0 KeysSheet.qml
 Launcher 1.0 Launcher.qml
+LauncherSources 1.0 LauncherSources.qml
 LiveWelcome 1.0 LiveWelcome.qml
 LockScreen 1.0 LockScreen.qml
 Mark 1.0 Mark.qml

@@ -244,6 +244,11 @@ Requires:       python3-pyte
 # pkexec, for Get apps
 Requires:       polkit
 Requires:       arctic-fonts = %{version}-%{release}
+# --- stream 6 (launcher, command menu): the launcher finds files with fd and converts units
+# with qalc when they are installed.
+Recommends:     fd-find
+Recommends:     qalculate
+# --- end stream 6
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,
