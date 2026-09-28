@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<components version="0.8" origin="flathub">
+  <component type="desktop-application">
+    <id>org.gimp.GIMP</id>
+    <name>GIMP</name>
+    <summary>Create images and edit photographs</summary>
+    <developer_name>GIMP developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>GIMP is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>org.inkscape.Inkscape</id>
+    <name>Inkscape</name>
+    <summary>Vector graphics editor</summary>
+    <developer_name>Inkscape developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Inkscape is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>org.kde.krita</id>
+    <name>Krita</name>
+    <summary>Digital painting</summary>
+    <developer_name>Krita developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Krita is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>org.blender.Blender</id>
+    <name>Blender</name>
+    <summary>Free and open source 3D creation suite</summary>
+    <developer_name>Blender developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Blender is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>com.obsproject.Studio</id>
+    <name>OBS Studio</name>
+    <summary>Live stream and record videos</summary>
+    <developer_name>OBS Studio developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>OBS Studio is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>org.videolan.VLC</id>
+    <name>VLC</name>
+    <summary>VLC media player, the open-source multimedia player</summary>
+    <developer_name>VLC developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>VLC is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>io.mpv.Mpv</id>
+    <name>mpv</name>
+    <summary>A free, open source, and cross-platform media player</summary>
+    <developer_name>mpv developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>mpv is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.spotify.Client</id>
+    <name>Spotify</name>
+    <summary>Online music streaming service</summary>
+    <developer_name>Spotify developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Spotify is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.signal.Signal</id>
+    <name>Signal Desktop</name>
+    <summary>Private messenger</summary>
+    <developer_name>Signal Desktop developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Signal Desktop is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>com.discordapp.Discord</id>
+    <name>Discord</name>
+    <summary>Messaging, voice and video</summary>
+    <developer_name>Discord developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Discord is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.telegram.desktop</id>
+    <name>Telegram Desktop</name>
+    <summary>Fast, secure messaging</summary>
+    <developer_name>Telegram Desktop developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Telegram Desktop is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.valvesoftware.Steam</id>
+    <name>Steam</name>
+    <summary>Launcher for the Steam software distribution service</summary>
+    <developer_name>Steam developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Steam is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>app.zen_browser.zen</id>
+    <name>Zen Browser</name>
+    <summary>Experience tranquillity while browsing the web</summary>
+    <developer_name>Zen Browser developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Zen Browser is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>org.mozilla.firefox</id>
+    <name>Firefox</name>
+    <summary>Fast, private and safe web browser</summary>
+    <developer_name>Firefox developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Firefox is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>com.brave.Browser</id>
+    <name>Brave</name>
+    <summary>Fast internet, AI, adblock</summary>
+    <developer_name>Brave developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Brave is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>dev.zed.Zed</id>
+    <name>Zed</name>
+    <summary>High-performance, multiplayer code editor</summary>
+    <developer_name>Zed developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Zed is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>com.vscodium.codium</id>
+    <name>VSCodium</name>
+    <summary>Telemetry-less code editing</summary>
+    <developer_name>VSCodium developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>VSCodium is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.libreoffice.LibreOffice</id>
+    <name>LibreOffice</name>
+    <summary>The LibreOffice productivity suite</summary>
+    <developer_name>LibreOffice developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>LibreOffice is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>com.collabora.Office</id>
+    <name>Collabora Office</name>
+    <summary>Office suite based on LibreOffice</summary>
+    <developer_name>Collabora Office developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Collabora Office is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.onlyoffice.desktopeditors</id>
+    <name>ONLYOFFICE Desktop Editors</name>
+    <summary>Office productivity suite</summary>
+    <developer_name>ONLYOFFICE Desktop Editors developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>ONLYOFFICE Desktop Editors is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.gnome.Calculator</id>
+    <name>Calculator</name>
+    <summary>Perform arithmetic, scientific or financial calculations</summary>
+    <developer_name>Calculator developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Calculator is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.gnome.Papers</id>
+    <name>Papers</name>
+    <summary>Read documents</summary>
+    <developer_name>Papers developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Papers is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.github.tchx84.Flatseal</id>
+    <name>Flatseal</name>
+    <summary>Manage Flatpak permissions</summary>
+    <developer_name>Flatseal developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Flatseal is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>io.github.celluloid_player.Celluloid</id>
+    <name>Celluloid</name>
+    <summary>Watch videos</summary>
+    <developer_name>Celluloid developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Celluloid is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.audacityteam.Audacity</id>
+    <name>Audacity</name>
+    <summary>Audio editor</summary>
+    <developer_name>Audacity developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Audacity is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.darktable.Darktable</id>
+    <name>darktable</name>
+    <summary>Organize and develop images from digital cameras</summary>
+    <developer_name>darktable developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>darktable is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.kde.kdenlive</id>
+    <name>Kdenlive</name>
+    <summary>Video editor</summary>
+    <developer_name>Kdenlive developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Kdenlive is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.heroicgameslauncher.hgl</id>
+    <name>Heroic Games Launcher</name>
+    <summary>An open source epic games launcher</summary>
+    <developer_name>Heroic Games Launcher developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Heroic Games Launcher is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>net.lutris.Lutris</id>
+    <name>Lutris</name>
+    <summary>Video game preservation platform</summary>
+    <developer_name>Lutris developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Lutris is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.prismlauncher.PrismLauncher</id>
+    <name>Prism Launcher</name>
+    <summary>Minecraft launcher</summary>
+    <developer_name>Prism Launcher developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Prism Launcher is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.github.johnfactotum.Foliate</id>
+    <name>Foliate</name>
+    <summary>Read e-books in style</summary>
+    <developer_name>Foliate developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Foliate is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.gnome.Podcasts</id>
+    <name>Podcasts</name>
+    <summary>Listen to your favorite shows</summary>
+    <developer_name>Podcasts developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Podcasts is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>md.obsidian.Obsidian</id>
+    <name>Obsidian</name>
+    <summary>Markdown-based knowledge base</summary>
+    <developer_name>Obsidian developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Obsidian is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+    <custom><value key="flathub::verification::verified">true</value></custom>
+  </component>
+  <component type="desktop-application">
+    <id>com.bitwarden.desktop</id>
+    <name>Bitwarden</name>
+    <summary>A secure and free password manager</summary>
+    <developer_name>Bitwarden developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Bitwarden is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.keepassxc.KeePassXC</id>
+    <name>KeePassXC</name>
+    <summary>Community-driven port of the Windows application “KeePass Password Safe”</summary>
+    <developer_name>KeePassXC developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>KeePassXC is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.usebottles.bottles</id>
+    <name>Bottles</name>
+    <summary>Run Windows software</summary>
+    <developer_name>Bottles developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Bottles is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.freecad.FreeCAD</id>
+    <name>FreeCAD</name>
+    <summary>An open source parametric 3D CAD modeler</summary>
+    <developer_name>FreeCAD developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>FreeCAD is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>io.github.flattool.Warehouse</id>
+    <name>Warehouse</name>
+    <summary>Manage all things Flatpak</summary>
+    <developer_name>Warehouse developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Warehouse is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.nickvision.tubeconverter</id>
+    <name>Parabolic</name>
+    <summary>Download web video and audio</summary>
+    <developer_name>Parabolic developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Parabolic is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.github.PintaProject.Pinta</id>
+    <name>Pinta</name>
+    <summary>Edit images and paint digitally</summary>
+    <developer_name>Pinta developers</developer_name>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Pinta is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Utility</category></categories>
+  </component>
+</components>

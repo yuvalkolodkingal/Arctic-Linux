@@ -5,6 +5,7 @@ singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 singleton UpdateService 1.0 UpdateService.qml
+singleton AppsService 1.0 AppsService.qml
 AppTile 1.0 AppTile.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
@@ -16,7 +17,7 @@ DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
 FocusRing 1.0 FocusRing.qml
 Icon 1.0 Icon.qml
-InstallConsole 1.0 InstallConsole.qml
+WebAppClient 1.0 WebAppClient.qml
 Kbd 1.0 Kbd.qml
 KeysSheet 1.0 KeysSheet.qml
 Launcher 1.0 Launcher.qml

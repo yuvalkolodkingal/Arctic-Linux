@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=VLC media player
+Comment=Test fixture for screenshots
+Exec=vlc
+Icon=vlc

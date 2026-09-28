@@ -677,7 +677,8 @@ class ProgressTests(unittest.TestCase):
                          dict(percent=16, done=2, total=12, step='gimp-3.0.4-1.fc44.x86_64   45% [=====     ]'.split('   45%')[0]))
 
     def test_flatpak_percent(self):
-        self.assertEqual(appslib.progress(['Installing 1/2… ████████▌  45%  1.2 MB/s  00:10'])['percent'], 45)
+        self.assertEqual(appslib.progress(['Installing 1/2… ████████▌  45%  1.2 MB/s  00:10']),
+                         dict(percent=45, done=None, total=None, step='Installing 1/2'))
         self.assertIsNone(appslib.progress(['', 'Looking for matches…']))
 
     def test_explain(self):

@@ -1,0 +1,333 @@
+#!/usr/bin/env python3
+"""Stand-ins for flatpak, rpm, dnf5, pkexec and arctic-webapp, for Get apps screenshots.
+
+shell/dev/headless.sh --app-fixtures puts shell/dev/fixtures/bin first on PATH; each command
+there is a link to this script, which answers from canned Fedora 44-like data (300 packages,
+40 Flathub apps, a few installed apps and a web app) so nothing from the developer's own
+system shows up. Installs and removals print dnf5 / flatpak-like progress and are remembered
+in $XDG_RUNTIME_DIR/fake-apps.json for the session. Test data only; never packaged.
+"""
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+DATA = HERE.parent / 'apps'
+STATE = Path(os.environ.get('XDG_RUNTIME_DIR') or '/tmp') / 'fake-apps.json'
+DATA_HOME = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
+FLATPAK_SYSTEM = Path(os.environ.get('ARCTIC_FLATPAK_SYSTEM_DIR') or DATA / 'flatpak')
+
+FLATHUB = [
+    ('org.gimp.GIMP', 'GIMP', 'Create images and edit photographs'), ('org.inkscape.Inkscape', 'Inkscape', 'Vector graphics editor'),
+    ('org.kde.krita', 'Krita', 'Digital painting'), ('org.blender.Blender', 'Blender', 'Free and open source 3D creation suite'),
+    ('com.obsproject.Studio', 'OBS Studio', 'Live stream and record videos'), ('org.videolan.VLC', 'VLC', 'VLC media player, the open-source multimedia player'),
+    ('io.mpv.Mpv', 'mpv', 'A free, open source, and cross-platform media player'), ('com.spotify.Client', 'Spotify', 'Online music streaming service'),
+    ('org.signal.Signal', 'Signal Desktop', 'Private messenger'), ('com.discordapp.Discord', 'Discord', 'Messaging, voice and video'),
+    ('org.telegram.desktop', 'Telegram Desktop', 'Fast, secure messaging'), ('com.valvesoftware.Steam', 'Steam', 'Launcher for the Steam software distribution service'),
+    ('app.zen_browser.zen', 'Zen Browser', 'Experience tranquillity while browsing the web'), ('org.mozilla.firefox', 'Firefox', 'Fast, private and safe web browser'),
+    ('com.brave.Browser', 'Brave', 'Fast internet, AI, adblock'), ('dev.zed.Zed', 'Zed', 'High-performance, multiplayer code editor'),
+    ('com.vscodium.codium', 'VSCodium', 'Telemetry-less code editing'), ('org.libreoffice.LibreOffice', 'LibreOffice', 'The LibreOffice productivity suite'),
+    ('com.collabora.Office', 'Collabora Office', 'Office suite based on LibreOffice'), ('org.onlyoffice.desktopeditors', 'ONLYOFFICE Desktop Editors', 'Office productivity suite'),
+    ('org.gnome.Calculator', 'Calculator', 'Perform arithmetic, scientific or financial calculations'), ('org.gnome.Papers', 'Papers', 'Read documents'),
+    ('com.github.tchx84.Flatseal', 'Flatseal', 'Manage Flatpak permissions'), ('io.github.celluloid_player.Celluloid', 'Celluloid', 'Watch videos'),
+    ('org.audacityteam.Audacity', 'Audacity', 'Audio editor'), ('org.darktable.Darktable', 'darktable', 'Organize and develop images from digital cameras'),
+    ('org.kde.kdenlive', 'Kdenlive', 'Video editor'), ('com.heroicgameslauncher.hgl', 'Heroic Games Launcher', 'An open source epic games launcher'),
+    ('net.lutris.Lutris', 'Lutris', 'Video game preservation platform'), ('org.prismlauncher.PrismLauncher', 'Prism Launcher', 'Minecraft launcher'),
+    ('com.github.johnfactotum.Foliate', 'Foliate', 'Read e-books in style'), ('org.gnome.Podcasts', 'Podcasts', 'Listen to your favorite shows'),
+    ('md.obsidian.Obsidian', 'Obsidian', 'Markdown-based knowledge base'), ('com.bitwarden.desktop', 'Bitwarden', 'A secure and free password manager'),
+    ('org.keepassxc.KeePassXC', 'KeePassXC', 'Community-driven port of the Windows application “KeePass Password Safe”'),
+    ('com.usebottles.bottles', 'Bottles', 'Run Windows software'), ('org.freecad.FreeCAD', 'FreeCAD', 'An open source parametric 3D CAD modeler'),
+    ('io.github.flattool.Warehouse', 'Warehouse', 'Manage all things Flatpak'), ('org.nickvision.tubeconverter', 'Parabolic', 'Download web video and audio'),
+    ('com.github.PintaProject.Pinta', 'Pinta', 'Edit images and paint digitally'),
+]
+VERIFIED = {'org.gimp.GIMP', 'org.inkscape.Inkscape', 'org.kde.krita', 'org.blender.Blender', 'com.obsproject.Studio', 'org.signal.Signal',
+            'app.zen_browser.zen', 'org.mozilla.firefox', 'com.brave.Browser', 'dev.zed.Zed', 'org.libreoffice.LibreOffice', 'md.obsidian.Obsidian'}
+PACKAGES = [
+    ('neovim', 'fedora', 'Vim-fork focused on extensibility and agility'), ('htop', 'fedora', 'Interactive process viewer'),
+    ('btop', 'fedora', 'Modern and colorful command line resource monitor that shows usage and stats'),
+    ('gimp', 'fedora', 'GNU Image Manipulation Program'), ('gimp-help', 'fedora', 'Help files for GIMP'),
+    ('inkscape', 'fedora', 'Vector-based drawing program using SVG'), ('krita', 'fedora', 'Sketching and painting program'),
+    ('ripgrep', 'fedora', 'Line oriented search tool using Rust\'s regex library'), ('fd-find', 'fedora', 'Fd is a simple, fast and user-friendly alternative to find'),
+    ('fish', 'fedora', 'Friendly interactive shell'), ('zsh', 'fedora', 'Powerful interactive shell'), ('tmux', 'fedora', 'A terminal multiplexer'),
+    ('yazi', 'fedora', 'Blazing fast terminal file manager written in Rust'), ('vlc', 'rpmfusion-free', 'The cross-platform open-source multimedia framework, player and server'),
+    ('mpv', 'fedora', 'Movie player playing most video formats and DVDs'), ('ffmpeg', 'rpmfusion-free', 'Digital VCR and streaming server'),
+    ('steam', 'rpmfusion-nonfree', 'Installer for the Steam software distribution service'), ('obs-studio', 'fedora', 'Open Broadcaster Software Studio'),
+    ('firefox', 'fedora', 'Mozilla Firefox Web browser'), ('chromium', 'fedora', 'A WebKit (Blink) powered web browser'),
+    ('thunderbird', 'fedora', 'Mozilla Thunderbird mail/newsgroup client'), ('libreoffice', 'fedora', 'Free Software Productivity Suite'),
+    ('git', 'fedora', 'Fast Version Control System'), ('golang', 'fedora', 'The Go Programming Language'), ('nodejs', 'fedora', 'JavaScript runtime'),
+    ('python3-pip', 'fedora', 'A tool for installing and managing Python packages'), ('podman', 'fedora', 'Manage Pods, Containers and Container Images'),
+    ('toolbox', 'fedora', 'Tool for interactive command line environments on Linux'), ('distrobox', 'fedora', 'Another tool for containerized command line environments on Linux'),
+    ('fastfetch', 'fedora', 'Like neofetch, but much faster because written in c'), ('kitty', 'fedora', 'Cross-platform, fast, feature full, GPU based terminal emulator'),
+    ('foot', 'fedora', 'Fast, lightweight and minimalistic Wayland terminal emulator'), ('alacritty', 'fedora', 'A cross-platform, GPU enhanced terminal emulator'),
+    ('helix', 'fedora', 'A post-modern modal text editor written in Rust'), ('emacs', 'fedora', 'GNU Emacs text editor'), ('vim-enhanced', 'fedora', 'A version of the VIM editor which includes recent enhancements'),
+    ('blender', 'fedora', '3D modeling, animation, rendering and post-production'), ('audacity', 'fedora', 'Multitrack audio editor'),
+    ('darktable', 'fedora', 'Utility to organize and develop raw images'), ('kdenlive', 'fedora', 'Non-linear video editor'),
+    ('tesseract', 'fedora', 'Raw OCR Engine'), ('tesseract-langpack-heb', 'fedora', 'Hebrew language data for tesseract'),
+    ('pavucontrol', 'fedora', 'Volume control for PulseAudio'), ('blueman', 'fedora', 'GTK+ Bluetooth Manager'),
+    ('network-manager-applet', 'fedora', 'A network control and status applet for NetworkManager'), ('fuzzel', 'fedora', 'Application launcher for wlroots based Wayland compositors'),
+]
+for i in range(len(PACKAGES), 300):
+    PACKAGES.append(('perl-Test-Fixture-%03d' % i, 'fedora', 'A test fixture Perl module number %d' % i))
+# Installed dnf apps: package -> (desktop id, name, reason, repo, size)
+DNF_INSTALLED = {
+    'gimp': ('gimp', 'GIMP', 'User', 'fedora', 201326592), 'htop': ('htop', 'Htop', 'User', 'fedora', 468000),
+    'btop': ('btop', 'btop++', 'Weak Dependency', 'fedora', 1450000), 'kitty': ('kitty', 'kitty', 'Weak Dependency', 'fedora', 39000000),
+    'firefox': ('firefox', 'Firefox', 'Weak Dependency', 'fedora', 262000000), 'vlc': ('vlc', 'VLC media player', 'User', 'rpmfusion-free', 12000000),
+    'blueman': ('blueman-manager', 'Bluetooth Manager', 'Dependency', 'fedora', 4400000),
+    'pavucontrol': ('org.pulseaudio.pavucontrol', 'Volume Control', 'Dependency', 'fedora', 520000),
+    'arctic-settings': ('org.arcticlinux.Settings', 'Settings', 'Dependency', 'arctic', 1200000),
+    'ripgrep': ('', 'ripgrep', 'User', 'fedora', 5100000), 'bash': ('', 'bash', 'User', 'fedora', 8800000),
+}
+FLATPAK_INSTALLED = [('org.gimp.GIMP', 'GIMP', '3.0.4', 'system', '412.3 MB'), ('md.obsidian.Obsidian', 'Obsidian', '1.9.10', 'system', '325.1 MB'),
+                     ('com.spotify.Client', 'Spotify', '1.2.63', 'user', '301.0 MB')]
+LATER = 2000000000   # installed after the install mark
+
+
+def state():
+    try:
+        return json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        return {'dnf': sorted(DNF_INSTALLED), 'flatpak': [list(r) for r in FLATPAK_INSTALLED], 'webapps': [], 'kept': []}
+
+
+def save(data):
+    STATE.write_text(json.dumps(data))
+
+
+def progress_dnf(verb, names):
+    steps = ['Verify package files', 'Prepare transaction'] + ['{} {}-0:1.0-1.fc44.x86_64'.format(verb, n) for n in names]
+    total = len(steps)
+    for i, step in enumerate(steps, 1):
+        print('[{}/{}] {:<40} 100% |  12.0 MiB/s |   4.2 MiB |  00m00s'.format(i, total, step), flush=True)
+        time.sleep(0.6)
+    print('Complete!')
+
+
+def dnf5(args):
+    data = state()
+    if 'repoquery' in args:
+        if '--providers-of=requires' in args:
+            print('\n'.join(['blueman', 'pavucontrol', 'network-manager-applet', 'fuzzel', 'arctic-settings']))
+        elif '--installed' in args:
+            names = [a for a in args[args.index('--qf') + 2:]] if '--qf' in args else []
+            for name in data['dnf']:
+                if names and name not in names:
+                    continue
+                desktop, _title, reason, repo, size = DNF_INSTALLED.get(name, ('', name, 'User', 'fedora', 1000000))
+                summary = next((p[2] for p in PACKAGES if p[0] == name), name)
+                when = LATER if reason == 'User' else 1000
+                print('\t'.join([name, reason, repo, str(when), str(size), '1.0-1.fc44', summary]))
+        elif '--available' in args:
+            for name, repo, summary in PACKAGES:
+                print('\t'.join([name, repo, summary]))
+        else:
+            name = args[-1]
+            row = next((p for p in PACKAGES if p[0] == name), None)
+            if row:
+                print('\t'.join([name, '1.0-1.fc44', row[1], '4400000', '12000000', 'GPL-3.0-or-later', 'https://example.org/' + name,
+                                 row[2], row[2] + '.']) + '\n\x1e')
+        return 0
+    if args and args[0] == 'remove':
+        names = [a for a in args[1:] if not a.startswith('-')]
+        store = next((a.split('=', 1)[1] for a in args if a.startswith('--store=')), None)
+        if store:
+            rpms = [dict(nevra=n + '-1.0-1.fc44.x86_64', action='Remove', reason='User', repo_id='@System') for n in names]
+            if 'gimp' in names and '--no-autoremove' not in args:
+                rpms += [dict(nevra='gimp-data-extras-2.0-1.fc44.noarch', action='Remove', reason='Dependency', repo_id='@System'),
+                         dict(nevra='babl-0.1.110-1.fc44.x86_64', action='Remove', reason='Clean', repo_id='@System')]
+            os.makedirs(store)
+            Path(store, 'transaction.json').write_text(json.dumps(dict(rpms=rpms, version='1.0')))
+            return 0
+        progress_dnf('Removing', names)
+        data['dnf'] = [n for n in data['dnf'] if n not in names]
+        save(data)
+        return 0
+    if args and args[0] == 'install':
+        names = [a for a in args[1:] if not a.startswith('-')]
+        progress_dnf('Installing', names)
+        data['dnf'] = sorted(set(data['dnf']) | set(names))
+        save(data)
+        return 0
+    print('dnf5 (screenshot stand-in): ' + ' '.join(args))
+    return 0
+
+
+def rpm(args):
+    data = state()
+    owners = {}
+    for folder in os.environ.get('XDG_DATA_DIRS', '').split(':'):
+        for name, (desktop, *_rest) in DNF_INSTALLED.items():
+            if desktop and name in data['dnf']:
+                owners[str(Path(folder) / 'applications' / (desktop + '.desktop'))] = name
+    if args[:1] == ['-qf']:
+        paths = args[args.index('--') + 1:] if '--' in args else args[3:]
+        for path in paths:
+            if path in owners:
+                print('{}\t{}'.format(path, owners[path]))
+            elif path.endswith('/bash'):
+                print('{}\tbash'.format(path))
+        return 0
+    if args[:1] == ['-qa']:
+        print('\n'.join(data['dnf']))
+        return 0
+    if args[:1] == ['-q']:
+        for name in args[3:]:
+            if name in data['dnf'] or name in ('gimp-data-extras', 'babl'):
+                size = DNF_INSTALLED.get(name, ('', '', '', '', 3145728))[4]
+                print('{}\t{}'.format(name, size) if 'SIZE' in args[2] else name)
+        return 0
+    return 1
+
+
+def flatpak(args):
+    data = state()
+    verb = next((a for a in args if not a.startswith('-')), '')
+    if verb == 'remotes':
+        print('flathub' if '--user' not in args else '')
+        return 0
+    if verb == 'remote-ls':
+        for ident, name, summary in FLATHUB:
+            print('\t'.join([ident, name, summary]))
+        return 0
+    if verb == 'list':
+        for ident, name, version, where, size in data['flatpak']:
+            print('\t'.join([ident, name, version, 'flathub', where, size]))
+        return 0
+    if verb == 'remote-info':
+        print('Version: 3.0.4\nLicense: GPL-3.0-or-later\nDownload: 120.2 MB\nInstalled: 412.3 MB')
+        return 0
+    if verb in ('install', 'uninstall'):
+        ids = [a for a in args[args.index(verb) + 1:] if not a.startswith('-') and a != 'flathub']
+        for pct in (0, 12, 38, 64, 85, 100):
+            print('{} {}… {}  {}%  3.4 MB/s'.format('Installing' if verb == 'install' else 'Uninstalling', ' '.join(ids) or 'unused', '█' * (pct // 10), pct), flush=True)
+            time.sleep(0.5)
+        where = 'user' if '--user' in args else 'system'
+        if verb == 'install':
+            for ident in ids:
+                name = next((f[1] for f in FLATHUB if f[0] == ident), ident)
+                data['flatpak'].append([ident, name, '1.0', where, '100.0 MB'])
+        else:
+            data['flatpak'] = [r for r in data['flatpak'] if not (r[0] in ids and r[3] == where)]
+        save(data)
+        return 0
+    return 0
+
+
+def pkexec(args):
+    if args and args[0] == '/usr/bin/dnf5':
+        return dnf5(args[1:])
+    return 127
+
+
+# ---- arctic-webapp -----------------------------------------------------------------------------
+
+def webapp_icon(folder, name, colour):
+    path = Path(folder) / (name + '.png')
+    try:
+        from PIL import Image, ImageDraw
+        img = Image.new('RGBA', (128, 128), (0, 0, 0, 0))
+        ImageDraw.Draw(img).rounded_rectangle((8, 8, 120, 120), radius=28, fill=colour)
+        ImageDraw.Draw(img).ellipse((44, 44, 84, 84), fill=(255, 255, 255, 255))
+        img.save(path)
+    except ImportError:
+        return ''
+    return str(path)
+
+
+def app_info(app):
+    return dict(app, url='https://' + app['host'] + '/', icon_name=app['id'], category='AudioVideo', runtime='webkit',
+                runtime_available=True, running=False, links='browser', problem='', data_bytes=48213504)
+
+
+def serve():
+    runtime = Path(os.environ.get('XDG_RUNTIME_DIR') or '/tmp') / 'arctic-webapp'
+    runtime.mkdir(parents=True, exist_ok=True)
+
+    def send(obj):
+        print(json.dumps(obj), flush=True)
+
+    for line in sys.stdin:
+        try:
+            req = json.loads(line)
+        except ValueError:
+            continue
+        rid, method, params = req.get('id'), req.get('method'), req.get('params') or {}
+        data = state()
+        if method == 'Hello':
+            send(dict(id=rid, result=dict(engine_version='0.3.0', protocol_version=1, runtimes=[
+                dict(id='webkit', name='Arctic', available=True, drm=False, webrtc=False),
+                dict(id='chromium:brave', name='Brave', available=True, drm=True, webrtc=True)])))
+        elif method == 'Inspect':
+            url = str(params.get('url', '')).strip()
+            host = url.split('//')[-1].split('/')[0]
+            for stage, message in (('page', 'Opening ' + host), ('manifest', 'Reading the app manifest'), ('icons', 'Getting icons (2 of 3)')):
+                send(dict(event='progress', request=rid, stage=stage, message=message))
+                time.sleep(0.3)
+            if host == 'offline.example':
+                send(dict(id=rid, error=dict(code='offline', message='You’re offline. You can still add the app with a letter icon.')))
+                continue
+            name = 'YouTube Music' if host == 'music.youtube.com' else host.split('.')[0].capitalize()
+            icons = [dict(index=i, source=s, size=512, format='png', path=webapp_icon(runtime, 'inspect-%d-%d' % (rid, i), c))
+                     for i, (s, c) in enumerate((('manifest', (255, 0, 51, 255)), ('apple-touch', (40, 40, 40, 255)), ('monogram', (94, 129, 172, 255))))]
+            send(dict(id=rid, result=dict(token='tok%d' % rid, url='https://' + host + '/', final_url='https://' + host + '/', host=host,
+                                          host_ascii=host, secure=True, name=name, name_source='manifest', start_url='https://' + host + '/',
+                                          category='AudioVideo', suggested_id='org.arcticlinux.WebApp.' + name.replace(' ', '') + '_4c1a9e',
+                                          installed=[a['id'] for a in data['webapps'] if a['host'] == host], icons=icons,
+                                          recommended_icon=0, handlers_supported=[], warnings=[], suggested_runtime='webkit')))
+        elif method == 'Install':
+            name = params.get('name') or 'Web app'
+            host = 'music.youtube.com' if 'YouTube' in name else name.lower() + '.example'
+            ident = 'org.arcticlinux.WebApp.' + ''.join(w[:1].upper() + w[1:] for w in name.split()) + '_4c1a9e'
+            icon = webapp_icon(runtime, ident, (255, 0, 51, 255))
+            app = dict(id=ident, name=name, host=host, icon_path=icon)
+            data['webapps'] = [a for a in data['webapps'] if a['id'] != ident] + [app]
+            save(data)
+            apps = DATA_HOME / 'applications'
+            apps.mkdir(parents=True, exist_ok=True)
+            (apps / (ident + '.desktop')).write_text('[Desktop Entry]\nType=Application\nName={}\nComment=Web app · {}\nExec=true\nIcon={}\n'
+                                                     'Categories=AudioVideo;X-Arctic-WebApp;\nX-Arctic-WebApp-Id={}\n'.format(name, host, icon, ident))
+            send(dict(event='progress', request=rid, stage='render', message='Making the icon'))
+            send(dict(id=rid, result=dict(app=app_info(app), desktop_file=str(apps / (ident + '.desktop')), launched=False)))
+            send(dict(event='changed', ids=[ident]))
+        elif method == 'List':
+            send(dict(id=rid, result=dict(apps=[app_info(a) for a in data['webapps']], kept=data['kept'])))
+        elif method == 'Get':
+            app = next((a for a in data['webapps'] if a['id'] == params.get('id')), None)
+            send(dict(id=rid, result=dict(app=app_info(app))) if app else dict(id=rid, error=dict(code='not_found', message='That web app isn’t there any more.')))
+        elif method == 'Remove':
+            ids = params.get('ids') or []
+            gone = [a for a in data['webapps'] if a['id'] in ids]
+            data['webapps'] = [a for a in data['webapps'] if a['id'] not in ids]
+            if params.get('keep_data'):
+                data['kept'] += [dict(id=a['id'], name=a['name'], url='https://' + a['host'] + '/', data_bytes=48213504) for a in gone]
+            save(data)
+            for ident in ids:
+                (DATA_HOME / 'applications' / (ident + '.desktop')).unlink(missing_ok=True)
+            send(dict(id=rid, result=dict(removed=[dict(id=i, stopped=False, kept_data=bool(params.get('keep_data'))) for i in ids])))
+        elif method == 'Forget':
+            data['kept'] = [k for k in data['kept'] if k['id'] not in (params.get('ids') or [])]
+            save(data)
+            send(dict(id=rid, result={}))
+        elif method in ('Launch', 'Cancel'):
+            send(dict(id=rid, result=dict(pid=4242) if method == 'Launch' else {}))
+        else:
+            send(dict(id=rid, error=dict(code='unknown_method', message='Unknown method ' + str(method))))
+    return 0
+
+
+def arctic_webapp(args):
+    if args[:1] == ['serve']:
+        return serve()
+    if args[:1] == ['list']:
+        print(json.dumps(dict(ok=True, apps=[app_info(a) for a in state()['webapps']])))
+        return 0
+    print(json.dumps(dict(ok=False, code='bad_request', error='The screenshot stand-in only serves.')))
+    return 1
+
+
+TOOLS = {'dnf5': dnf5, 'rpm': rpm, 'flatpak': flatpak, 'pkexec': pkexec, 'arctic-webapp': arctic_webapp}
+
+if __name__ == '__main__':
+    sys.exit(TOOLS.get(os.path.basename(sys.argv[0]), lambda a: 127)(sys.argv[1:]))

@@ -138,6 +138,7 @@ def build_job(job, protected=None, user_remotes=None):
 DNF_COUNTER = re.compile(r'^\[\s*(\d+)/(\d+)\]\s*(.*)$')
 PERCENT = re.compile(r'(\d{1,3})%')
 # What follows the step text on a dnf5 progress line: "100% |  1.2 MiB/s | 3.0 MiB |  00m02s".
+FLATPAK_BAR = re.compile('[…▀-▟#\\[]|\\.\\.\\.')
 DNF_TAIL = re.compile(r'\s+(-?\d{1,3}%.*|\.\.\.)$')
 
 
@@ -154,7 +155,8 @@ def progress(lines):
             return dict(percent=min(100, done * 100 // total), done=done, total=total, step=step)
         found = PERCENT.findall(line)
         if found and int(found[-1]) <= 100:
-            step = line.split(found[-1] + '%')[0].strip().rstrip('.…[#= ').strip()
+            # "Installing 1/2… ████████▌  45%  1.2 MB/s": the words before the bar.
+            step = FLATPAK_BAR.split(line.split(found[-1] + '%')[0], 1)[0].strip()
             return dict(percent=int(found[-1]), done=None, total=None, step=step[:80])
     return None
 

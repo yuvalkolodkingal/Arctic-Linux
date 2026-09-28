@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Bluetooth Manager
+Comment=Test fixture for screenshots
+Exec=blueman
+Icon=blueman

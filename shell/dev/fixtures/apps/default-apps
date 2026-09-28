@@ -1,0 +1,3 @@
+browser=gtk-launch firefox
+terminal=kitty
+images=gimp

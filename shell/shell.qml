@@ -11,7 +11,8 @@ import Quickshell.Io
 // from the Arctic design tokens (Theme.qml).
 //
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
-//   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
+//   launcher toggle · wallpapers toggle · power toggle · osd volume|brightness
+//   apps install|remove|toggle · apps open|source <page> · apps search <page> <text> · apps uninstall <desktop-id>
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
 ShellRoot {
     id: shell
@@ -31,9 +32,19 @@ ShellRoot {
         launcher.view = 'home';
         present(launcher, target);
     }
-    function openGetApps(screen) {
+    // Get apps on one of its pages (getapps/GetApps.js parsePage: choose, flatpak, dnf, web,
+    // terminal, remove[/tab], console), with `query` typed in its field.
+    function openGetApps(screen, page, query) {
         launcher.view = 'get';
-        if (launcher.open) launcher.openView('get'); else present(launcher, screen);
+        launcher.getPage = page || 'choose';
+        launcher.getQuery = query || '';
+        if (launcher.open) launcher.openView('get', launcher.getPage, launcher.getQuery); else present(launcher, screen);
+    }
+    // Remove an app by its desktop id: the launcher with the remove confirmation.
+    function uninstallEntry(screen, desktopId) {
+        if (!launcher.open) { launcher.view = 'home'; present(launcher, screen); }
+        else if (launcher.view !== 'home') launcher.openView('home');
+        launcher.askRemove(desktopId);
     }
     function openWallpapers(screen) { present(wallpapers, screen); }
     function toggleWallpapers(screen) {
@@ -78,7 +89,8 @@ ShellRoot {
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
-    PolkitDialog {}
+    PolkitDialog { id: polkit }
+    Binding { target: AppsService; property: 'polkitActive'; value: polkit.active }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
     IpcHandler {
@@ -94,7 +106,14 @@ ShellRoot {
     }
     IpcHandler {
         target: 'apps'
-        function install(): void { shell.openGetApps(null); }
+        function install(): void { shell.openGetApps(null, 'choose', ''); }
+        function remove(): void { shell.openGetApps(null, 'remove', ''); }
+        // choose|flatpak|dnf|web|terminal|remove|remove/<tab>|console; source takes the names
+        // flathub|fedora|web|terminal|console as well.
+        function open(page: string): void { shell.openGetApps(null, page, ''); }
+        function source(name: string): void { shell.openGetApps(null, name, ''); }
+        function search(page: string, text: string): void { shell.openGetApps(null, page, text); }
+        function uninstall(desktopId: string): void { shell.uninstallEntry(null, desktopId); }
         function toggle(): void { shell.toggleLauncher(null); }
     }
     IpcHandler {

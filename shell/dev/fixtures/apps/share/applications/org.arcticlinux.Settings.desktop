@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+Comment=Test fixture for screenshots
+Exec=arctic-settings
+Icon=arctic-settings
