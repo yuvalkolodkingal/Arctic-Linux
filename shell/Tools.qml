@@ -10,7 +10,7 @@ Singleton {
     id: tools
     readonly property var names: ['nm-connection-editor', 'blueman-manager', 'pavucontrol', 'pwvucontrol',
         'arctic-settings', 'arctic-dnd', 'arctic-nightlight', 'arctic-keep-awake', 'arctic-theme',
-        'brightnessctl', 'notify-send', 'playerctl']
+        'brightnessctl', 'notify-send', 'playerctl', 'qrencode']
     property var found: ({})
     property bool ready: false
     function has(name) { return found[name] === true; }

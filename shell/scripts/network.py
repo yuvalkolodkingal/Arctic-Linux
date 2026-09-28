@@ -15,6 +15,7 @@
     network.py autoconnect --uuid U on|off
     network.py radio wifi on|off
     network.py airplane on|off       every radio off (rfkill), then back to how they were
+    network.py share --uuid U [--reveal]   a QR code (SVG) a phone camera joins with
     network.py vpn-up --uuid U [--ask]  |  vpn-down --uuid U
 
 One-shot commands print one JSON line: {"ok":true,…} or {"ok":false,"error":"<sentence>",
@@ -418,6 +419,54 @@ def cmd_airplane(on):
     return {'ok': True, 'airplane': on}
 
 
+# ---- sharing a network as a QR code ----------------------------------------------------------------
+def qr_escape(text):
+    return re.sub(r'([\\;,:"])', r'\\\1', text)
+
+
+def qr_payload(ssid, key_mgmt, secret, hidden=False):
+    """The WIFI: text phone cameras understand. Company (802.1X) networks can't be shared."""
+    if key_mgmt == 'wpa-eap':
+        raise Failure('enterprise', 'Company networks can’t be shared this way: each person signs in.')
+    kind = 'WEP' if key_mgmt == 'none' and secret else 'WPA' if key_mgmt in ('wpa-psk', 'sae') else 'nopass'
+    out = 'WIFI:T:%s;S:%s;' % (kind, qr_escape(ssid))
+    if kind != 'nopass':
+        out += 'P:%s;' % qr_escape(secret)
+    if hidden:
+        out += 'H:true;'
+    return out + ';'
+
+
+def cmd_share(args):
+    if FIXTURE:
+        data = load_fixture().get('share', {'ssid': 'Fjord', 'key_mgmt': 'wpa-psk', 'psk': 'fixture-password'})
+        ssid, mgmt, secret, hidden = data['ssid'], data['key_mgmt'], data['psk'], False
+    else:
+        def get(field, secrets=False):
+            code, text, err = nmcli(*(['-s'] if secrets else []), '-g', field, 'connection', 'show', 'uuid', args.uuid)
+            if code != 0:
+                raise Failure(*error_for(code, err, ''))
+            return split_terse(text.rstrip('\n'))[0] if text.strip() else ''
+        ssid, mgmt = get('802-11-wireless.ssid'), get('802-11-wireless-security.key-mgmt')
+        hidden = get('802-11-wireless.hidden') == 'yes'
+        secret = get('802-11-wireless-security.wep-key0' if mgmt == 'none' else '802-11-wireless-security.psk', True) \
+            if mgmt else ''
+        if mgmt in ('wpa-psk', 'sae') and not secret:
+            raise Failure('denied', 'Arctic couldn’t read the password of “%s” (it may be kept by another app).' % ssid)
+    payload = qr_payload(ssid, mgmt, secret, hidden)
+    try:
+        p = subprocess.run(['qrencode', '-t', 'SVG', '-m', '2', '-l', 'M', '-o', '-'], input=payload,
+                           capture_output=True, text=True, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        raise Failure('failed', 'Install qrencode to share networks as a QR code.')
+    if p.returncode != 0 or '<svg' not in p.stdout:
+        raise Failure('failed', 'Couldn’t draw the QR code.')
+    out = {'ok': True, 'ssid': ssid, 'svg': p.stdout[p.stdout.index('<svg'):]}
+    if args.reveal:
+        out['password'] = secret
+    return out
+
+
 def load_fixture():
     with open(FIXTURE, encoding='utf-8') as f:
         return json.load(f)
@@ -701,6 +750,9 @@ def parse(argv):
     r = sub.add_parser('radio')
     r.add_argument('what', choices=['wifi'])
     r.add_argument('mode', choices=['on', 'off'])
+    sh = sub.add_parser('share')
+    sh.add_argument('--uuid', required=True)
+    sh.add_argument('--reveal', action='store_true')
     ap = sub.add_parser('airplane')
     ap.add_argument('mode', choices=['on', 'off'])
     u = sub.add_parser('vpn-up')
@@ -744,6 +796,8 @@ def main(argv=None, stdin=None):
                          'yes' if args.mode == 'on' else 'no')
         elif args.cmd == 'radio':
             out = simple('radio', 'wifi', args.mode)
+        elif args.cmd == 'share':
+            out = cmd_share(args)
         elif args.cmd == 'airplane':
             out = cmd_airplane(args.mode == 'on')
         elif args.cmd == 'vpn-up':

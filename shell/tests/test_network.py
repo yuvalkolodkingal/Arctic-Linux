@@ -113,6 +113,14 @@ class Parsing(unittest.TestCase):
         self.assertFalse(network.airplane_on({}))
         self.assertEqual(network.parse_rfkill('not json'), {})
 
+    def test_qr_payload(self):
+        self.assertEqual(network.qr_payload('Home', 'wpa-psk', 'pa;ss:w"o,rd\\'), 'WIFI:T:WPA;S:Home;P:pa\\;ss\\:w\\"o\\,rd\\\\;;')
+        self.assertEqual(network.qr_payload('Café', 'sae', 'secret', hidden=True), 'WIFI:T:WPA;S:Café;P:secret;H:true;;')
+        self.assertEqual(network.qr_payload('Library', '', ''), 'WIFI:T:nopass;S:Library;;')
+        self.assertEqual(network.qr_payload('Old', 'none', 'abcde'), 'WIFI:T:WEP;S:Old;P:abcde;;')
+        with self.assertRaises(network.Failure):
+            network.qr_payload('eduroam', 'wpa-eap', '')
+
     def test_state_changed_lines(self):
         failed = ('/org/freedesktop/NetworkManager/Devices/3: org.freedesktop.NetworkManager.Device.StateChanged '
                   '(uint32 120, uint32 60, uint32 7)')
@@ -306,6 +314,23 @@ class Commands(unittest.TestCase):
         self.assertIn('rfkill block bluetooth', log)
         self.assertIn('rfkill unblock wlan', log)
         self.assertNotIn('rfkill unblock bluetooth', log)        # it was off before
+
+    def test_share_sends_the_password_on_stdin(self):
+        qr = self.bin / 'qrencode'
+        qr.write_text('#!/bin/sh\necho "$*" > "%s"; cat > "%s"; echo "<?xml?><svg>code</svg>"\n'
+                      % (self.bin / 'qr-args', self.bin / 'qr-input'))
+        qr.chmod(0o755)
+        scenario = {'802-11-wireless.ssid': {'out': 'Home\n'},
+                    '802-11-wireless-security.key-mgmt': {'out': 'wpa-psk\n'},
+                    '802-11-wireless.hidden': {'out': 'no\n'},
+                    '802-11-wireless-security.psk': {'out': 'hunter22\n'}}
+        code, out = self.run_helper('share', '--uuid', UUID, scenario=scenario)
+        self.assertEqual((code, out['ssid'], out['svg']), (0, 'Home', '<svg>code</svg>\n'))
+        self.assertNotIn('password', out)
+        self.assertEqual((self.bin / 'qr-input').read_text(), 'WIFI:T:WPA;S:Home;P:hunter22;;')
+        self.assertNotIn('hunter22', (self.bin / 'qr-args').read_text())
+        code, out = self.run_helper('share', '--uuid', UUID, '--reveal', scenario=scenario)
+        self.assertEqual(out['password'], 'hunter22')
 
     def test_forget_by_ssid(self):
         code, _ = self.run_helper('forget', '--ssid', 'Home', scenario=STATUS)

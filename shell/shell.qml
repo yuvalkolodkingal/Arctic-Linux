@@ -24,7 +24,7 @@ ShellRoot {
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates, menuHost].forEach(p => { if (p !== except && p.open) p.close(); });
+        [launcher, wallpapers, power, keys, updates, menuHost, wifiShare].forEach(p => { if (p !== except && p.open) p.close(); });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -112,6 +112,12 @@ ShellRoot {
         present(menuHost, target);
     }
     function closePanel() { menuHost.close(); }
+    // A saved Wi-Fi network as a QR code (from its page in the network menu).
+    function shareWifi(uuid, ssid) {
+        const target = menuHost.screen || Outputs.focused;
+        wifiShare.show(uuid, ssid);
+        present(wifiShare, target);
+    }
     // Ctrl+Tab in a menu: the next (dir 1) or previous (-1) bar item that has a menu.
     function cyclePanel(screen, dir) {
         const bar = barOn(screen);
@@ -147,6 +153,7 @@ ShellRoot {
         function onPasswordWanted(ssid) { shell.openPanel('network', null, undefined, { keyboard: true, ask: ssid }); }
     }
     BluetoothPairDialog { id: btPair }
+    WifiShare { id: wifiShare }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
     IpcHandler {

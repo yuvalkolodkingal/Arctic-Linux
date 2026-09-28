@@ -23,7 +23,8 @@ the bar.
 - **Join another network…** is for networks that don't show their name (hidden networks): type
   the name, pick the security and enter the password.
 - Right-click a network (or press the Menu key, or `Delete` for forget) for **Disconnect**,
-  **Connect automatically** and **Forget this network**.
+  **Share with a phone…** (a QR code a phone camera joins with; **Show password** if you'd rather
+  type it), **Connect automatically** and **Forget this network**.
 - **VPN** switches appear when you have VPN or WireGuard connections. Import them in
   **Settings → Network** or with **Edit connections…**.
 - **Edit connections…** opens NetworkManager's connection editor for proxies, fixed addresses and

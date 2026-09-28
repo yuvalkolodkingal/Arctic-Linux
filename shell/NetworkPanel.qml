@@ -326,6 +326,13 @@ FocusScope {
                 panel.closePage();
             }
         }
+        MenuRow {
+            readonly property var profile: panel.target ? NetworkService.savedFor(panel.target.ssid) : null
+            visible: profile !== null && panel.target.security !== 'enterprise' && Tools.has('qrencode')
+            icon: 'qr-code'
+            label: 'Share with a phone…'
+            onActivated: panel.menu.shell.shareWifi(profile.uuid, panel.target.ssid)
+        }
         MenuSwitchRow {
             readonly property var profile: panel.target ? NetworkService.savedFor(panel.target.ssid) : null
             visible: profile !== null
