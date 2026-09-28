@@ -7,7 +7,8 @@
 #   dev/test-headless.sh [out-dir]          default out-dir: dev/screenshots
 #   THEME=light dev/test-headless.sh /tmp/shots-light
 #
-# Needs: sway, grim, quickshell, python3 (wtype optional: keyboard checks).
+# Needs: sway, grim, quickshell, python3, wtype (real key presses). Without wtype
+# the run fails, unless ARCTIC_TEST_NO_KEYS=1 (then the keyboard checks are skipped).
 # Exit status is non-zero when a step doesn't show up or a check fails.
 set -euo pipefail
 
@@ -25,6 +26,17 @@ cleanup() {
     rm -rf "$work"
 }
 trap cleanup EXIT
+
+keys=1
+if ! command -v wtype >/dev/null; then
+    if [ "${ARCTIC_TEST_NO_KEYS:-}" = 1 ]; then
+        keys=0
+        echo "!! SKIPPED: keyboard checks (wtype is not installed; ARCTIC_TEST_NO_KEYS=1)" >&2
+    else
+        echo "FAIL: wtype is not installed: the keyboard checks need it (ARCTIC_TEST_NO_KEYS=1 skips them)" >&2
+        exit 1
+    fi
+fi
 
 fail() { echo "FAIL: $*" >&2; echo "--- quickshell log" >&2; grep -v MESA "$work/qs.log" | tail -30 >&2 || true; exit 1; }
 log() { echo "== $*"; }
@@ -77,7 +89,7 @@ shot() { sleep "${2:-0.7}"; grim "$out/$1.png"; log "screenshot $1.png"; }
 next() { r=$(ipc next); [ "$r" = "ok" ] || fail "next on $(field page): $r"; }
 fill() { r=$(ipc fill "$1"); [ "$r" = "ok" ] || fail "fill $1: $r"; }
 # wtype makes a new virtual keyboard each run; give Qt a moment to bind it (-s).
-key() { command -v wtype >/dev/null && wtype -s 400 "$@"; }
+key() { [ "$keys" = 1 ] && wtype -s 400 "$@"; }
 
 wait_for "d.get('connected')" "engine connection"
 
@@ -89,7 +101,7 @@ shot 01b-welcome-search
 fill '{"query": "", "language": "en_US.UTF-8"}'
 
 # Real keys: Enter = Next (the list has focus, a language is pre-selected).
-if command -v wtype >/dev/null; then
+if [ "$keys" = 1 ]; then
     key -k Return
     wait_page keyboard
     # Alt+Left = Back
@@ -143,7 +155,7 @@ next
 # 5 Disk (Tab from the pre-selected card shows the keyboard focus ring)
 wait_page disk
 shot 05-disk
-if command -v wtype >/dev/null; then
+if [ "$keys" = 1 ]; then
     # Keep the virtual keyboard alive while capturing: when it goes away the
     # window loses keyboard focus and the ring (correctly) disappears.
     wtype -s 400 -k Tab -s 2500 &
@@ -174,13 +186,43 @@ wait_for "d.get('valid')" "a valid account"
 shot 07b-account-valid
 next
 
-# 8 Apps (tick Steam too: 9 apps, and the mock makes Steam fail later)
+# 8 Apps (tick Steam too: one more app, and the mock makes Steam fail later)
 wait_page apps
-# The optional groups start folded: only the design's seven sections have app rows.
-wait_for "d.get('step',{}).get('open')==[] and d.get('step',{}).get('rows')==38" "folded optional groups"
-wait_for "d.get('note')=='8 apps · 2.1 GB download'" "the default download estimate"
+# The optional groups start folded: only the open sections (not `collapsed` in the
+# catalog) have app rows. The expected numbers come from the catalog and the engine
+# (test_mock_bridge.py checks the mock's estimate against arctic-install's).
+rows=$(python3 - "$here/../modules/catalog.toml" << 'PY'
+import sys, tomllib
+with open(sys.argv[1], "rb") as f:
+    cat = tomllib.load(f)
+print(sum(len(c["modules"]) for c in cat["category"] if not c.get("collapsed")))
+PY
+)
+estimate=$(python3 - << 'PY'
+import json, os, shlex, subprocess
+p = subprocess.Popen(shlex.split(os.environ["ARCTIC_INSTALLER_BRIDGE"]), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                     stderr=subprocess.DEVNULL, text=True, env=dict(os.environ, ARCTIC_MOCK_LOG=os.devnull))
+def call(i, method, params=None):
+    p.stdin.write(json.dumps({"id": i, "method": method, "params": params}) + "\n")
+    p.stdin.flush()
+    for line in p.stdout:
+        msg = json.loads(line)
+        if msg.get("id") == i:
+            return msg["result"]
+call(1, "Hello", {"client": "test-headless", "version": "test"})
+sel = call(2, "GetStep", {"id": "apps"})["data"]["selection"]
+est = call(3, "EstimateDownload", {"selection": sel})
+print(json.dumps({"label": est["label"], "apps": est["apps"]}))
+p.stdin.close()
+p.wait(timeout=5)
+PY
+)
+[ -n "$rows" ] && [ -n "$estimate" ] || fail "couldn't read the expected rows ($rows) or estimate ($estimate)"
+log "expecting $rows open app rows and $estimate"
+wait_for "d.get('step',{}).get('open')==[] and d.get('step',{}).get('rows')==$rows" "folded optional groups"
+wait_for "d.get('note')==${estimate}['label']" "the default download estimate"
 fill '{"select": ["steam"]}'
-wait_for "d.get('step',{}).get('open')==['gaming'] and d.get('note','').startswith('9 apps')" "Steam ticked, Games open"
+wait_for "d.get('step',{}).get('open')==['gaming'] and d.get('note','').startswith(str(${estimate}['apps'] + 1) + ' apps')" "Steam ticked, Games open"
 shot 08-apps
 fill '{"scroll": 520}'
 shot 08b-apps-scrolled
@@ -191,7 +233,7 @@ wait_for "d.get('step',{}).get('matches',0)>=3 and d.get('step',{}).get('rows')=
 shot 08c-apps-search
 fill '{"query": ""}'
 # Keyboard: Space on a folded group opens it; Left folds it again.
-if command -v wtype >/dev/null; then
+if [ "$keys" = 1 ]; then
     fill '{"focus": "group:music"}'
     key -k space
     wait_for "'music' in d.get('step',{}).get('open',[])" "Space opens a group"
@@ -199,20 +241,34 @@ if command -v wtype >/dev/null; then
     key -k Left
     wait_for "'music' not in d.get('step',{}).get('open',[])" "Left folds a group"
 fi
+# A missing requirement: Podman Desktop without Podman. Next stays here, and the group
+# says why (in red under its apps, and in the footer).
+fill '{"select": ["podman-desktop"]}'
+wait_for "d.get('ready')" "apps ready again"
+next
+msg="Podman Desktop needs Podman. Tick it too."
+wait_for "d.get('fields',{}).get('containers')=='$msg' and d.get('note')=='$msg' and d.get('step',{}).get('errors')==['$msg'] and d.get('ready')" "the missing-requirement message"
+[ "$(field page)" = "apps" ] || fail "Next went on without Podman"
+shot 08e-apps-needs-podman
+# Ticking Podman clears it.
+fill '{"toggle": ["podman"]}'
+wait_for "not d.get('fields') and not d.get('step',{}).get('errors') and d.get('note','').endswith('download')" "the message cleared"
+fill '{"unselect": ["podman-desktop", "podman"]}'
+wait_for "d.get('ready')" "apps ready (3)"
 next
 
 # 9 Summary
 wait_page summary
 shot 09-summary
 # Enter doesn't start the install from Summary (only the button does), Esc asks first.
-if command -v wtype >/dev/null; then
+if [ "$keys" = 1 ]; then
     key -k Return
     sleep 0.5
     [ "$(field page)" = "summary" ] || fail "Enter on Summary started the install"
 fi
 r=$(ipc quit); [ "$r" = "asking" ] || fail "Esc on Summary should ask first: $r"
 shot 09b-quit-dialog
-if command -v wtype >/dev/null; then key -k Escape; sleep 0.4; fi
+if [ "$keys" = 1 ]; then key -k Escape; sleep 0.4; fi
 next
 
 # 10 Installing
@@ -336,7 +392,7 @@ shot 00c-engine-down-bridge-message
 start_ui
 wait_for "d.get('connected')" "engine connection (4)"
 wait_page welcome
-if command -v wtype >/dev/null; then
+if [ "$keys" = 1 ]; then
     key -k Escape
 else
     ipc quit >/dev/null || true
