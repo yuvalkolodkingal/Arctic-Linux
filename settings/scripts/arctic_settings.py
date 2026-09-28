@@ -778,7 +778,7 @@ KEY_NAMES = {'return': 'Enter', 'space': 'Space', 'slash': '/', 'comma': ',', 'p
              'left': '←', 'right': '→', 'up': '↑', 'down': '↓', 'print': 'Print',
              'page_up': 'Page Up', 'page_down': 'Page Down', 'minus': '-', 'equal': '=',
              'grave': '`', 'semicolon': ';', 'apostrophe': "'", 'bracketleft': '[', 'bracketright': ']',
-             'backslash': '\\', 'code:49': '`'}
+             'backslash': '\\', 'code:49': '`', 'caps_lock': 'Caps Lock'}
 DISPATCHERS = {
     'killclient': 'Close the window', 'togglefloating': 'Float / tile the window',
     'togglemaximizescreen': 'Maximise', 'togglefullscreen': 'Full screen',
@@ -972,6 +972,14 @@ def cmd_bind_add(paths, args):
         key = key.lower()
     if not (mods - {'SHIFT'}) and not FREE_KEYS.match(key):
         raise Failure('Add Super, Ctrl or Alt, so the shortcut doesn’t take over a key you type with.')
+    layouts, options = chain_keyboard(paths)
+    switch = next((o for o in options if o.startswith('grp:')), 'grp:alt_shift_toggle')
+    if len(layouts) > 1 and switch_clash(switch, mods, key):
+        chord = ' + '.join(MOD_NAMES[m] for m in ['SUPER', 'CTRL', 'ALT', 'SHIFT'] if m in SWITCH_CHORDS[switch][0])
+        if SWITCH_CHORDS[switch][1]:
+            chord = ' + '.join(filter(None, [chord, key_label(SWITCH_CHORDS[switch][1])]))
+        raise Failure('{} switches your keyboard layout, so this shortcut would switch it too. Pick another key, '
+                      'or change “Switch layouts with” on the Keyboard and mouse page.'.format(chord))
     command = validate_command(args[2])
     # Mango joins spawn arguments split at commas again, but stops at an empty part or a "0".
     parts = command.split(',')
@@ -1721,6 +1729,36 @@ def cmd_idle_set(paths, args):
 SWITCH_KEYS = ['grp:alt_shift_toggle', 'grp:ctrl_shift_toggle', 'grp:caps_toggle', 'grp:alt_space_toggle',
                'grp:shifts_toggle', 'grp:toggle', 'grp:lalt_lshift_toggle', 'grp:alt_caps_toggle']
 CAPS_OPTIONS = ['caps:escape', 'ctrl:nocaps', 'caps:backspace', 'caps:super', 'caps:none', 'caps:swapescape']
+# The Compose key: press it, then two keys (' then e types é).
+COMPOSE_OPTIONS = ['compose:ralt', 'compose:menu', 'compose:rctrl', 'compose:caps', 'compose:sclk']
+COMPOSE_LABELS = {'compose:ralt': 'Right Alt', 'compose:menu': 'Menu', 'compose:rctrl': 'Right Ctrl',
+                  'compose:caps': 'Caps Lock', 'compose:sclk': 'Scroll Lock'}
+# The keys a layout-switch option takes over: (modifiers the chord holds, the key or None).
+# Any shortcut holding them switches the layout too (Alt + Shift + Tab under Alt + Shift).
+SWITCH_CHORDS = {
+    'grp:alt_shift_toggle': ({'ALT', 'SHIFT'}, None), 'grp:lalt_lshift_toggle': ({'ALT', 'SHIFT'}, None),
+    'grp:ctrl_shift_toggle': ({'CTRL', 'SHIFT'}, None), 'grp:alt_space_toggle': ({'ALT'}, 'space'),
+    'grp:caps_toggle': (set(), 'caps_lock'), 'grp:alt_caps_toggle': ({'ALT'}, 'caps_lock'),
+}
+
+
+def switch_clash(option, mods, key):
+    chord = SWITCH_CHORDS.get(option)
+    if not chord:
+        return False
+    need, chord_key = chord
+    return need <= set(mods) and (chord_key is None or key.lower() == chord_key)
+
+
+def chain_keyboard(paths):
+    """(layouts, options) as Mango reads them: the last xkb_rules_* in the chain."""
+    values = {}
+    for key, value, _origin in read_chain(paths):
+        if key in ('xkb_rules_layout', 'xkb_rules_options'):
+            values[key] = value
+    layouts = [l for l in values.get('xkb_rules_layout', 'us').split(',') if l.strip()]
+    options = [o for o in values.get('xkb_rules_options', '').split(',') if o.strip()]
+    return layouts, options
 
 
 def parse_evdev_lst(text):
@@ -1755,8 +1793,18 @@ def cmd_keyboard_data(paths, _args):
         layouts = [dict(id='us', label='English (US)')]
     switch = [dict(id=o, label=options.get(o, o)) for o in SWITCH_KEYS if o in options or not options]
     caps = [dict(id=o, label=options.get(o, {'caps:none': 'Caps Lock is disabled'}.get(o, o))) for o in CAPS_OPTIONS]
+    compose = [dict(id=o, label=COMPOSE_LABELS[o]) for o in COMPOSE_OPTIONS if o in options or not options]
+    # The shortcuts each switch option would also fire (Settings says so under the choice).
+    clashes = {o: [] for o in SWITCH_CHORDS}
+    for bind in chain_binds(paths):
+        if bind['keymode'] not in ('default', 'common') or 'shadowedBy' in bind:
+            continue
+        for option in clashes:
+            if switch_clash(option, bind['mods'], bind['key']):
+                clashes[option].append('{} ({})'.format(bind['label'], bind['what']))
     return dict(ok=True, layouts=sorted(layouts, key=lambda l: l['label'].lower()), variants=variants,
-                switchKeys=switch, capsOptions=caps)
+                switchKeys=switch, capsOptions=caps, composeKeys=compose,
+                switchClashes={o: v for o, v in clashes.items() if v})
 
 
 def cmd_cursor_themes(paths, _args):

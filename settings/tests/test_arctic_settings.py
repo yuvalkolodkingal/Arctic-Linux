@@ -823,6 +823,21 @@ class MiscTest(Home):
         data = self.helper('keyboard-data')
         self.assertTrue(data['layouts'])
         self.assertTrue(data['switchKeys'])
+        self.assertIn('compose:ralt', [o['id'] for o in data['composeKeys']])
+        # Arctic's own keys stay clear of Alt + Shift; a bind of yours with Ctrl + Shift is named.
+        self.assertNotIn('grp:alt_shift_toggle', data['switchClashes'])
+        (self.home / '.config/mango/user.conf').write_text('bind=CTRL+SHIFT,F12,spawn,btop\n')
+        clashes = self.helper('keyboard-data')['switchClashes']
+        self.assertIn('Ctrl + Shift + F12 (btop)', clashes['grp:ctrl_shift_toggle'])
+
+    def test_shortcuts_that_would_switch_the_layout_are_refused(self):
+        self.helper('bind-add', 'SUPER+ALT+SHIFT', 'x', 'foot')            # one layout: nothing to switch
+        (self.home / '.config/mango/user.conf').write_text('xkb_rules_layout=us,il\nxkb_rules_options=grp:alt_shift_toggle\n')
+        self.assertIn('Alt + Shift switches', self.helper('bind-add', 'SUPER+ALT+SHIFT', 'y', 'foot', ok=False)['error'])
+        self.helper('bind-add', 'SUPER+CTRL+SHIFT', 'y', 'foot')
+        (self.home / '.config/mango/user.conf').write_text('xkb_rules_layout=us,il\nxkb_rules_options=grp:alt_space_toggle\n')
+        self.assertIn('Alt + Space switches', self.helper('bind-add', 'SUPER+ALT', 'space', 'foot', ok=False)['error'])
+        self.helper('bind-add', 'SUPER+ALT+SHIFT', 'y', 'foot')
 
     def test_unknown_command(self):
         result = subprocess.run([sys.executable, str(HELPER), 'frobnicate'], env=self.env, capture_output=True, text=True)
