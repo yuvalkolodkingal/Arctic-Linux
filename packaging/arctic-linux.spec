@@ -524,6 +524,8 @@ Recommends:     firewall-config
 # on a laptop's discrete graphics chip (arctic-gpu → switcherooctl).
 Requires:       accountsservice
 Recommends:     fprintd
+# The lock screen takes a saved fingerprint too (shell/pam/arctic-lock-fingerprint).
+Recommends:     fprintd-pam
 Requires:       switcheroo-control
 # Stream 5 (system): phones (MTP, iPhone), cameras and network shares in Thunar (gvfs).
 Recommends:     gvfs

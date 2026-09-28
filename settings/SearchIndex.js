@@ -138,6 +138,7 @@ var ENTRIES = [
     ["users", "users.password", "Change your password", "password login"],
     ["users", "users.disk", "Disk encryption passphrase", "luks encryption unlock boot"],
     ["users", "users.fingerprint", "Fingerprint", "fprint biometric reader unlock"],
+    ["users", "users.lockfinger", "Unlock the screen with your fingerprint", "fingerprint lock screen biometric touch"],
     ["input", "input.im", "Input method", "chinese japanese korean pinyin mozc hangul ime fcitx cjk"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
     ["about", "about.software", "Software", "version mango quickshell kernel"],

@@ -330,6 +330,28 @@ class UsersTest(Tools):
         self.assertIn('arctic-open terminal --hold -e passwd', self.calls())
         self.helper('user-run', 'rm', ok=False)
 
+    def test_lock_screen_fingerprint(self):
+        pam = self.tmp / 'lib64/security'
+        pam.mkdir(parents=True)
+        (pam / 'pam_fprintd.so').write_text('')
+        self.env['ARCTIC_PAM_LIB'] = str(self.tmp / 'lib64')
+        shell_json = self.home / '.config/arctic/shell.json'
+        shell_json.parent.mkdir(parents=True, exist_ok=True)
+        shell_json.write_text('{"frame": false}\n')
+        data = self.helper('users')['fingerprint']
+        self.assertEqual((data['lockScreen'], data['pam']), (True, True))
+        data = self.helper('user-set', 'lock-fingerprint', 'off')['fingerprint']
+        self.assertFalse(data['lockScreen'])
+        self.assertEqual(json.loads(shell_json.read_text()), {'frame': False, 'lock_fingerprint': False})
+        self.helper('user-set', 'lock-fingerprint', 'maybe', ok=False)
+        shell_json.write_text('{"frame": fal')                  # yours, half written: left alone
+        self.assertIn('valid JSON', self.helper('user-set', 'lock-fingerprint', 'on', ok=False)['error'])
+        self.assertEqual(shell_json.read_text(), '{"frame": fal')
+        # The lock screen's PAM service asks pam_fprintd only.
+        service = (DOTFILES.parent / 'shell/pam/arctic-lock-fingerprint').read_text()
+        self.assertEqual([l for l in service.splitlines() if l and not l.startswith('#')],
+                         ['auth required pam_fprintd.so max-tries=3 timeout=30'])
+
     def test_name(self):
         self.helper('user-set', 'name', 'Yuval K')
         self.assertTrue(any('SetRealName Yuval K' in c for c in self.calls()))

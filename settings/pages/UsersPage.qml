@@ -160,6 +160,22 @@ Page {
                 onClicked: page.run("fingerprint", "Touch the reader when the terminal window asks.")
             }
         }
+        SettingRow {
+            visible: page.info.fingerprint.reader === true && page.info.fingerprint.pam === true
+                     && (page.info.fingerprint.fingers || []).length > 0
+            searchKey: "users.lockfinger"
+            title: "Unlock the screen with your fingerprint"
+            desc: "Your password works too. Not while the lid is closed."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Unlock the screen with your fingerprint"
+                checked: page.info.fingerprint.lockScreen !== false
+                onToggled: Backend.call(["user-set", "lock-fingerprint", checked ? "on" : "off"], r => {
+                    if (r.ok)
+                        page.info = r;
+                })
+            }
+        }
     }
 
     PickerDialog {

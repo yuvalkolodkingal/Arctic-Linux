@@ -78,6 +78,85 @@ Scope {
             root.password = '';
         }
     }
+    // Stream 5: the fingerprint reader unlocks too (pam/arctic-lock-fingerprint: pam_fprintd), next
+    // to the password, when a finger is saved (fprintd-list), the lid is open (logind) and
+    // shell.json doesn't say "lock_fingerprint": false (Settings > Users and sign-in). It listens
+    // again each time its 30 s wait runs out; three fingers that don't match, or a reader that
+    // keeps failing, stop it until the next lock.
+    property bool fingerprint: false    // listening now
+    property int fingerMisses: 0
+    property int fingerFailures: 0
+    property double fingerStarted: 0
+    function listenForFinger() {
+        if (!lock.secure || state === 'success' || fingerPam.active || fingerMisses >= 3 || fingerFailures >= 3
+                || Session.settings.lock_fingerprint === false || fingerCheck.running || lidCheck.running)
+            return;
+        fingerCheck.running = true;
+    }
+    onSecureChanged: {
+        fingerMisses = 0;
+        fingerFailures = 0;
+        if (secure)
+            listenForFinger();
+    }
+    onLockedChanged: if (!locked && fingerPam.active) fingerPam.abort()
+    Process {
+        id: fingerCheck
+        command: ['fprintd-list', Session.user]
+        stdout: StdioCollector {
+            onStreamFinished: if (/^\s*- #\d+:/m.test(text)) lidCheck.running = true
+        }
+    }
+    Process {
+        id: lidCheck
+        command: ['gdbus', 'call', '--system', '--dest', 'org.freedesktop.login1', '--object-path', '/org/freedesktop/login1',
+            '--method', 'org.freedesktop.DBus.Properties.Get', 'org.freedesktop.login1.Manager', 'LidClosed']
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (/true/.test(text) || !lock.secure || root.state === 'success')
+                    return;
+                root.fingerStarted = Date.now();
+                fingerPam.start();
+            }
+        }
+    }
+    Timer { id: fingerAgain; interval: 1000; onTriggered: root.listenForFinger() }
+    PamContext {
+        id: fingerPam
+        configDirectory: Quickshell.shellDir + '/pam'
+        config: 'arctic-lock-fingerprint'
+        onActiveChanged: root.fingerprint = active
+        onPamMessage: {
+            if (responseRequired) {
+                respond('');
+            } else if (messageIsError && /match/i.test(message)) {
+                root.fingerMisses++;
+                root.message = 'That finger didn’t match. Try again, or type your password.';
+            }
+        }
+        onCompleted: result => {
+            if (result === PamResult.Success) {
+                if (!lock.locked || root.state === 'success')
+                    return;
+                root.state = 'success';
+                root.message = '';
+                unlockTimer.restart();
+                return;
+            }
+            if (result === PamResult.MaxTries)
+                root.fingerMisses = 3;
+            else if (Date.now() - root.fingerStarted < 5000)
+                root.fingerFailures++;
+            if (lock.locked)
+                fingerAgain.restart();
+        }
+        onError: {
+            root.fingerFailures++;
+            if (lock.locked)
+                fingerAgain.restart();
+        }
+    }
+
     // Let the green "accepted" ring show for a moment before the screen unlocks.
     Timer { id: unlockTimer; interval: 180; onTriggered: { lock.locked = false; root.password = ''; root.state = 'idle'; } }
 
@@ -235,7 +314,8 @@ Scope {
                     Layout.maximumWidth: 340
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
-                    text: root.message || (root.state === 'checking' ? 'Checking…' : root.state === 'success' ? 'Unlocked' : 'Locked')
+                    text: root.message || (root.state === 'checking' ? 'Checking…' : root.state === 'success' ? 'Unlocked'
+                        : root.fingerprint ? 'Locked. Touch the fingerprint reader or type your password.' : 'Locked')
                     color: root.state === 'error' ? Theme.error : root.state === 'success' ? Theme.success : Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 12

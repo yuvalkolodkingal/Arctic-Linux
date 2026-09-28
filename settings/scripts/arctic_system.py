@@ -25,6 +25,7 @@ are its (one JSON object per command, Failure for a sentence, argv lists, never 
     upgrade [check|download]      the next Fedora release (arctic-update upgrade; download in a terminal)
     troubleshoot sound|wifi|bluetooth|shell       restart that part of the desktop (arctic-restart)
 """
+import json
 import os
 import re
 import subprocess
@@ -687,6 +688,11 @@ def cmd_users(paths, _args):
         fingerprint['reader'] = code == 0 and 'no devices' not in out.lower()
         fingerprint['fingers'] = [line.split(':', 1)[1].strip() for line in out.splitlines()
                                   if line.strip().startswith('- #') and ':' in line]
+    # The lock screen listens for a finger too (shell/pam/arctic-lock-fingerprint) unless
+    # shell.json says "lock_fingerprint": false; it needs pam_fprintd (fprintd-pam).
+    fingerprint['lockScreen'] = _shell_settings(paths).get('lock_fingerprint') is not False
+    fingerprint['pam'] = any(os.path.exists(folder + '/security/pam_fprintd.so')
+                             for folder in (paths.env.get('ARCTIC_PAM_LIB') or '/usr/lib64', '/usr/lib'))
     picture = paths.home / '.face'
     return dict(ok=True, user=entry.pw_name, name=entry.pw_gecos.split(',')[0], picture=str(picture) if picture.is_file() else '',
                 luks=dict(present=bool(luks), uuid=luks), fingerprint=fingerprint, live=is_live(paths))
@@ -703,12 +709,31 @@ def cmd_user_pictures(paths, _args):
     return dict(ok=True, folder=str(folder), pictures=found[:500])
 
 
+def _shell_settings(paths):
+    """~/.config/arctic/shell.json (the shell's own settings, e.g. {"frame": true}), or {}."""
+    data = _loads(read_text(paths.arctic / 'shell.json') or '')
+    return data if isinstance(data, dict) else {}
+
+
 def cmd_user_set(paths, args):
-    """user-set picture PATH|--remove | name NAME: your picture (~/.face, 256×256, and
-    AccountsService's copy, which the login screen shows) or your full name."""
-    if len(args) != 2 or args[0] not in ('picture', 'name'):
-        raise Failure('usage: user-set picture PATH|--remove | name NAME')
+    """user-set picture PATH|--remove | name NAME | lock-fingerprint on|off: your picture
+    (~/.face, 256×256, and AccountsService's copy, which the login screen shows), your full name,
+    or whether the lock screen takes your fingerprint (shell.json, which the shell watches)."""
+    if len(args) != 2 or args[0] not in ('picture', 'name', 'lock-fingerprint'):
+        raise Failure('usage: user-set picture PATH|--remove | name NAME | lock-fingerprint on|off')
     face = paths.home / '.face'
+    if args[0] == 'lock-fingerprint':
+        if args[1] not in ('on', 'off'):
+            raise Failure('usage: user-set lock-fingerprint on|off')
+        path = paths.arctic / 'shell.json'
+        if read_text(path) and not isinstance(_loads(read_text(path)), dict):
+            raise Failure('{} isn’t valid JSON; fix or remove it first.'.format(path))
+        data = _shell_settings(paths)
+        data['lock_fingerprint'] = args[1] == 'on'
+        if path.exists():
+            backup(paths, path)
+        atomic_write(path, json.dumps(data, indent=2) + '\n')
+        return cmd_users(paths, [])
     if args[0] == 'name':
         name = args[1].strip()
         if not name or len(name) > 64 or ':' in name or any(ord(c) < 32 for c in name):

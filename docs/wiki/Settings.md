@@ -336,7 +336,8 @@ over Bluetooth: letters, digits and hyphens; **Save** asks for your password.
 Your **Picture** (from your Pictures folder; shown on the login and lock screens), your **Name**,
 and the jobs that ask questions, which open a terminal window: **Change password** (your keyring
 follows), **Change passphrase** for an encrypted disk, and **Add a fingerprint** when the computer
-has a reader. Hidden in the live session.
+has a reader. With a finger saved, the lock screen takes it too (not while the lid is closed);
+**Unlock the screen with your fingerprint** turns that off. Hidden in the live session.
 
 ## Keyboard and mouse: input methods
 
