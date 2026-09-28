@@ -8,6 +8,10 @@
 #   arctic-osd mic mute
 #   arctic-osd brightness up|down
 #   arctic-osd kbd up|down          keyboard backlight (no keyboard light: nothing happens)
+#
+# Brightness keys act on the monitor you're on: the laptop panel, or an external monitor over
+# DDC/CI, through the shell's brightness.py (`step focused ±5`). Without the shell's scripts,
+# brightnessctl changes the laptop panel as before.
 set -uo pipefail
 
 STEP=5
@@ -25,6 +29,26 @@ volume() {   # volume <sink|source> -> "<percent> <muted:0|1>"
   local v; v="$(awk '{printf "%d", $2 * 100 + 0.5}' <<<"$out")"
   if [[ "$out" == *MUTED* ]]; then echo "$v 1"; else echo "$v 0"; fi
 }
+
+brightness_step() {   # brightness_step +5|-5 → "<percent>\t<monitor>" when brightness.py did it
+  local dir out percent label=''
+  dir="$(arctic-shell --path 2>/dev/null)" && [[ -f "$dir/scripts/brightness.py" ]] || return 1
+  out="$(python3 "$dir/scripts/brightness.py" step focused "$1" 2>/dev/null)" || return 1
+  [[ "$out" =~ \"percent\":\ ([0-9]+) ]] || return 1
+  percent="${BASH_REMATCH[1]}"
+  [[ "$out" =~ \"label\":\ \"([^\"]*)\" ]] && label="${BASH_REMATCH[1]}"
+  printf '%s\t%s\n' "$percent" "$label"
+}
+
+case "${1:-} ${2:-}" in
+  "brightness up"|"brightness down")
+    if [[ "$2" == up ]]; then delta="+$STEP"; else delta="-$STEP"; fi
+    if IFS=$'\t' read -r level monitor < <(brightness_step "$delta"); then
+      arctic-shell-ipc osd brightnessLevel "$level" "$monitor" >/dev/null 2>&1 && exit 0
+      show brightness "$level" "${monitor:+$monitor · }$level"
+      exit 0
+    fi ;;
+esac
 
 case "${1:-} ${2:-}" in
   "volume up")

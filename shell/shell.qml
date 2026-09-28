@@ -250,6 +250,8 @@ ShellRoot {
         target: 'osd'
         function volume(): void { osd.showVolume(); }
         function brightness(): void { osd.showBrightness(); }
+        // arctic-osd after brightness.py stepped the focused monitor: its level and name.
+        function brightnessLevel(percent: int, monitor: string): void { osd.showBrightnessLevel(percent, monitor); }
     }
     IpcHandler {
         target: 'lock'

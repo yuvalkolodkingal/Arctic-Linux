@@ -7,6 +7,11 @@ brightnessctl, external monitors through DDC/CI (ddcutil, when installed).
                                            "label":"Built-in display","percent":60},
                                           {"output":"DP-1","kind":"ddc","bus":5,"label":"DELL U2723QE","percent":40}]}
     brightness.py set OUTPUT PERCENT    {"ok":true,"output":"DP-1","percent":50}
+    brightness.py step OUTPUT|focused +5|-5
+                                        {"ok":true,"output":"DP-1","percent":45,"label":"DELL U2723QE"}
+
+`step focused` is for the brightness keys (arctic-osd): the monitor Mango has focused
+(`mmsg get all-monitors`, "active": true), else the laptop panel, as the keys did before.
 
 One JSON line per call. `ddcutil detect` is slow, so what it finds is cached in
 ~/.cache/arctic/ddc.json for 10 minutes; a monitor that fails three times in a row is left
@@ -127,7 +132,19 @@ def note(cache, bus, ok, now):
         f['last'] = now
 
 
-def ddc_displays(cache, now):
+def parse_monitors(text):
+    """`mmsg get all-monitors` → the focused monitor's name ('' when none is marked)."""
+    try:
+        monitors = json.loads(text or '').get('monitors', [])
+    except (ValueError, AttributeError):
+        return ''
+    for m in monitors if isinstance(monitors, list) else []:
+        if isinstance(m, dict) and m.get('active'):
+            return str(m.get('name') or '')
+    return ''
+
+
+def ddc_displays(cache, now, only=''):
     if not shutil.which('ddcutil'):
         return []
     if now - cache.get('detected_at', 0) > DETECT_TTL:
@@ -136,7 +153,7 @@ def ddc_displays(cache, now):
         cache['detected_at'] = now
     out = []
     for d in cache.get('displays', []):
-        if cooling(cache, d['bus'], now):
+        if (only and d['output'] != only) or cooling(cache, d['bus'], now):
             continue
         code, text = run(['ddcutil', '--bus', str(d['bus']), 'getvcp', '10', '--terse'])
         percent = parse_vcp(text) if code == 0 else None
@@ -146,32 +163,55 @@ def ddc_displays(cache, now):
     return out
 
 
-def list_displays():
+def list_displays(only=''):
+    """Every display with a brightness control. With `only`, the laptop panel plus that output
+    (a key press then asks one DDC monitor, not all of them)."""
     displays = []
     code, text = run(['brightnessctl', '-m', '-c', 'backlight'])
     if code == 0:
         for b in parse_brightnessctl(text)[:1]:
             displays.append({'output': internal_output() or 'internal', 'kind': 'backlight', 'device': b['device'],
                              'label': 'Built-in display', 'percent': b['percent']})
+    if only and any(d['output'] == only for d in displays):
+        return displays
     cache = load_cache()
-    displays += ddc_displays(cache, time.time())
+    displays += ddc_displays(cache, time.time(), only)
     save_cache(cache)
     return displays
 
 
-def set_brightness(output, percent):
+def set_display(d, percent):
     percent = max(1, min(100, int(percent)))       # never fully dark (arctic-osd's 1 % floor)
-    for d in list_displays() if output else []:
-        if d['output'] != output:
-            continue
-        if d['kind'] == 'backlight':
-            code, _ = run(['brightnessctl', '-q', '-d', d['device'], 'set', '%d%%' % percent])
-        else:
-            code, _ = run(['ddcutil', '--bus', str(d['bus']), 'setvcp', '10', str(percent)])
-        if code != 0:
-            return {'ok': False, 'error': 'Couldn’t change the brightness of %s.' % d['label']}
-        return {'ok': True, 'output': output, 'percent': percent}
+    if d['kind'] == 'backlight':
+        code, _ = run(['brightnessctl', '-q', '-d', d['device'], 'set', '%d%%' % percent])
+    else:
+        code, _ = run(['ddcutil', '--bus', str(d['bus']), 'setvcp', '10', str(percent)])
+    if code != 0:
+        return {'ok': False, 'error': 'Couldn’t change the brightness of %s.' % d['label']}
+    return {'ok': True, 'output': d['output'], 'percent': percent, 'label': d['label']}
+
+
+def set_brightness(output, percent):
+    for d in list_displays(output) if output else []:
+        if d['output'] == output:
+            out = set_display(d, percent)
+            out.pop('label', None)
+            return out
     return {'ok': False, 'error': 'That display isn’t there any more.'}
+
+
+def step_brightness(output, delta):
+    focused = output == 'focused'
+    if focused:
+        code, text = run(['mmsg', 'get', 'all-monitors'], timeout=3)
+        output = parse_monitors(text) if code == 0 else ''
+    displays = list_displays(output)
+    d = next((x for x in displays if x['output'] == output), None)
+    if d is None and focused:
+        d = next((x for x in displays if x['kind'] == 'backlight'), None)
+    if d is None:
+        return {'ok': False, 'error': 'No display here can change its brightness from the computer.'}
+    return set_display(d, d['percent'] + delta)
 
 
 def main(argv):
@@ -179,8 +219,10 @@ def main(argv):
         out = {'ok': True, 'displays': list_displays()}
     elif argv[:1] == ['set'] and len(argv) == 3 and argv[2].isdigit():
         out = set_brightness(argv[1], int(argv[2]))
+    elif argv[:1] == ['step'] and len(argv) == 3 and re.fullmatch(r'[+-]\d{1,3}', argv[2]):
+        out = step_brightness(argv[1], int(argv[2]))
     else:
-        out = {'ok': False, 'error': 'usage: brightness.py list | set OUTPUT PERCENT'}
+        out = {'ok': False, 'error': 'usage: brightness.py list | set OUTPUT PERCENT | step OUTPUT|focused +N|-N'}
     print(json.dumps(out, ensure_ascii=False))
     return 0 if out.get('ok') else 1
 
