@@ -73,30 +73,30 @@ Page {
     // Stream 5: keep awake for a while (arctic-keep-awake, also Super + Ctrl + I).
     Group {
         id: awake
-        property var state: ({ helper: false, on: false })
+        property var info: ({ helper: false, on: false })
         function load() {
-            Backend.call(["keep-awake"], r => { if (r.ok) awake.state = r; }, true);
+            Backend.call(["keep-awake"], r => { if (r.ok) awake.info = r; }, true);
         }
         Component.onCompleted: load()
-        Timer { interval: 30000; repeat: true; running: awake.state.on === true; onTriggered: awake.load() }
-        visible: state.helper === true && page.idle.live !== true
+        Timer { interval: 30000; repeat: true; running: awake.info.on === true; onTriggered: awake.load() }
+        visible: info.helper === true && page.idle.live !== true
         title: "Keep awake"
         SettingRow {
             searchKey: "power.awake"
             title: "Keep the computer awake"
-            desc: awake.state.on ? (awake.state.until ? "On until " + awake.state.untilText : "On until you turn it off") + ": the screen doesn’t lock and the computer doesn’t sleep."
+            desc: awake.info.on ? (awake.info.until ? "On until " + awake.info.untilText : "On until you turn it off") + ": the screen doesn’t lock and the computer doesn’t sleep."
                 : "For a presentation or a long download: no lock and no sleep for a while. Super\u00a0+\u00a0Ctrl\u00a0+\u00a0I turns it on and off."
             resettable: false
             ArSelect {
                 width: 200
-                model: (awake.state.on ? [{ value: "now", label: awake.state.until ? "Until " + awake.state.untilText : "Until turned off" }] : [])
+                model: (awake.info.on ? [{ value: "now", label: awake.info.until ? "Until " + awake.info.untilText : "Until turned off" }] : [])
                     .concat([{ value: "off", label: "Off" }, { value: "30", label: "30 minutes" }, { value: "60", label: "1 hour" },
-                        { value: "120", label: "2 hours" }].concat(awake.state.on && !awake.state.until ? [] : [{ value: "0", label: "Until turned off" }]))
-                value: awake.state.on ? "now" : "off"
+                        { value: "120", label: "2 hours" }].concat(awake.info.on && !awake.info.until ? [] : [{ value: "0", label: "Until turned off" }]))
+                value: awake.info.on ? "now" : "off"
                 onActivated: v => {
                     if (v === "now")
                         return;
-                    Backend.call(["keep-awake"].concat(v === "off" ? ["off"] : v === "0" ? ["on"] : ["on", v]), r => { if (r.ok) awake.state = Object.assign({ helper: true }, r); });
+                    Backend.call(["keep-awake"].concat(v === "off" ? ["off"] : v === "0" ? ["on"] : ["on", v]), r => { if (r.ok) awake.info = Object.assign({ helper: true }, r); });
                 }
             }
         }
