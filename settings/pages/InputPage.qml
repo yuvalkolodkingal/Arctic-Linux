@@ -16,7 +16,7 @@ Page {
 
     property var kb: ({ layouts: [], variants: {}, switchKeys: [], capsOptions: [], composeKeys: [], switchClashes: {} })
     property var devices: ({ trackpad: true, mouse: true })
-    property var clip: ({ available: false, history: true, entries: 0 })
+    property var clipState: ({ available: false, history: true, entries: 0 })
     readonly property var layoutKeys: ["xkb_rules_layout", "xkb_rules_variant", "xkb_rules_options"]
 
     // The effective keyboard: [{layout, variant}] and the options split into switch / caps / rest.
@@ -62,7 +62,7 @@ Page {
     onShown: {
         Backend.call(["keyboard-data"], r => { if (r.ok) page.kb = r; });
         Backend.call(["devices"], r => { if (r.ok) page.devices = r; }, true);
-        Backend.call(["clipboard"], r => { if (r.ok) page.clip = r; }, true);
+        Backend.call(["clipboard"], r => { if (r.ok) page.clipState = r; }, true);
     }
 
     Group {
@@ -425,27 +425,27 @@ Page {
     Group {
         title: "Clipboard"
         desc: "Super + V shows what you copied, to copy or paste it again."
-        visible: page.clip.available
+        visible: page.clipState.available
         SettingRow {
             searchKey: "input.clipboard"
             title: "Keep clipboard history"
-            desc: !page.clip.history ? "Off: only what you copied last is on the clipboard."
-                : page.clip.entries === 0 ? "Nothing copied yet. It’s kept on this computer only."
-                : page.clip.entries === 1 ? "1 thing kept, on this computer only." : page.clip.entries + " things kept, on this computer only."
+            desc: !page.clipState.history ? "Off: only what you copied last is on the clipboard."
+                : page.clipState.entries === 0 ? "Nothing copied yet. It’s kept on this computer only."
+                : page.clipState.entries === 1 ? "1 thing kept, on this computer only." : page.clipState.entries + " things kept, on this computer only."
             resettable: false
             RowSwitch {
                 Accessible.name: "Keep clipboard history"
-                checked: page.clip.history
+                checked: page.clipState.history
                 onToggled: Backend.call(["clipboard-set", "history", checked ? "on" : "off"], r => {
                     if (r.ok) {
-                        page.clip = r;
+                        page.clipState = r;
                         Backend.notify("success", r.history ? "Clipboard history on" : "Clipboard history off", false);
                     }
                 })
             }
         }
         SettingRow {
-            visible: page.clip.entries > 0
+            visible: page.clipState.entries > 0
             title: "Clear clipboard history"
             desc: "Forgets everything you copied."
             resettable: false
@@ -476,7 +476,7 @@ Page {
                 onClicked: Backend.call(["clipboard-clear"], r => {
                     clearClipboard.close();
                     if (r.ok) {
-                        page.clip = r;
+                        page.clipState = r;
                         Backend.notify("success", "Clipboard history cleared", false);
                     }
                 })
