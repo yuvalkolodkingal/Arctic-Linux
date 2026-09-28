@@ -115,8 +115,10 @@ class KeyboardTest(unittest.TestCase):
         self.assertEqual(K.index_of('il', items), 1)
         self.assertEqual(K.index_of('German', items), -1)
         self.assertEqual(K.active('{"layout":"Hebrew (lyx)"}', items), dict(type='active', index=1, name='Hebrew (lyx)'))
-        self.assertIsNone(K.active('not json', items))
+        self.assertEqual(K.active('Hebrew (lyx)\n', items)['index'], 1)       # a bare name works too
+        self.assertIsNone(K.active('German', items))
         self.assertIsNone(K.active('{"other": 1}', items))
+        self.assertIsNone(K.active('', items))
 
     def test_switching(self):
         self.fake_mmsg('echo \'{"success":true}\'')

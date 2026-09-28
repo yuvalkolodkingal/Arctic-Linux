@@ -197,14 +197,28 @@ Popover {
                     focusPolicy: Qt.NoFocus
                     onClicked: centre.back()
                 }
-                Text {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    text: centre.page === 'dnd' ? 'Do not disturb' : 'Notifications'
-                    color: Theme.ink
-                    font.family: Theme.fontSans
-                    font.pixelSize: 15
-                    font.weight: Font.DemiBold
-                    Accessible.role: Accessible.Heading
+                    spacing: 0
+                    Text {
+                        Layout.fillWidth: true
+                        text: centre.page === 'dnd' ? 'Do not disturb' : 'Notifications'
+                        color: Theme.ink
+                        font.family: Theme.fontSans
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                        Accessible.role: Accessible.Heading
+                    }
+                    // On the durations page: what is on now ("On until 15:40").
+                    Text {
+                        Layout.fillWidth: true
+                        visible: centre.page === 'dnd'
+                        text: NotificationService.dndDetail
+                        color: Theme.inkMuted
+                        font.family: Theme.fontSans
+                        font.pixelSize: 12
+                        font.features: { 'tnum': 1 }
+                    }
                 }
                 Text {
                     visible: centre.page === 'main' && NotificationService.count > 0

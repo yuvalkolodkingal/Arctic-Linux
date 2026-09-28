@@ -128,14 +128,17 @@ def index_of(name, items):
 
 
 def active(line, items):
+    """One line from mmsg ({"layout": "…"}, or the bare name) → the active line, or None when
+    it names no layout of ours."""
     try:
         data = json.loads(line)
     except ValueError:
+        data = line.strip()
+    name = data.get('layout', data.get('keyboardlayout')) if isinstance(data, dict) else data
+    if not isinstance(name, str) or not name:
         return None
-    name = data.get('layout', data.get('keyboardlayout')) if isinstance(data, dict) else None
-    if not isinstance(name, str):
-        return None
-    return dict(type='active', index=index_of(name, items), name=name)
+    index = index_of(name, items)
+    return dict(type='active', index=index, name=name) if index >= 0 else None
 
 
 def dispatch(argument):

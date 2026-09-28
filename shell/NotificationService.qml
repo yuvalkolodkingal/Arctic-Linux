@@ -51,8 +51,8 @@ Singleton {
 
     // Session-local ids (the server's own ids restart from 1 with every shell).
     property int lastId: 0
-    // id → the live Notification, and id → the toast clock {left, since, hover}. Plain maps:
-    // nothing binds to them.
+    // id → the live Notification, and id → the toast clock {left, since, hover, stays}.
+    // Plain maps: nothing binds to them.
     property var live: ({})
     property var clocks: ({})
     property bool historyLoaded: false
@@ -180,7 +180,7 @@ Singleton {
         return -1;
     }
     function showToast(id, timeout, slot) {
-        clocks[id] = { left: timeout, since: 0, hover: false };
+        clocks[id] = { left: timeout, since: 0, hover: false, stays: timeout <= 0 };
         const at = toastIndex(id);
         if (at >= 0) {
             if (slot >= 0 && at !== slot) toastList.move(at, slot, 1);
@@ -213,8 +213,9 @@ Singleton {
         const due = [];
         for (let i = 0; i < Math.min(maxToasts, toastList.count); i++) {
             const id = toastList.get(i).nid, c = clocks[id];
-            if (!c || c.left <= 0) continue;
-            if (c.hover) { if (c.since) { c.left -= t - c.since; c.since = 0; } continue; }
+            if (!c || c.stays) continue;
+            // Hovering stops the clock; afterwards there are at least 2 s to read on.
+            if (c.hover) { if (c.since) { c.left = Math.max(2000, c.left - (t - c.since)); c.since = 0; } continue; }
             if (!c.since) c.since = t;
             else if (t - c.since >= c.left) due.push(id);
         }
