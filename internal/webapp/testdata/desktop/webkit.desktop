@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=YouTube Music
+Comment=Web app · music.youtube.com
+Exec=arctic-webapp run org.arcticlinux.WebApp.YouTubeMusic_4c1a9e
+TryExec=arctic-webapp
+Icon=org.arcticlinux.WebApp.YouTubeMusic_4c1a9e
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.arcticlinux.WebApp.YouTubeMusic_4c1a9e
+SingleMainWindow=true
+Categories=AudioVideo;X-Arctic-WebApp;
+Keywords=web;app;music.youtube.com;
+X-Arctic-WebApp-Id=org.arcticlinux.WebApp.YouTubeMusic_4c1a9e
+X-Arctic-WebApp-URL=https://music.youtube.com/?source=pwa
+X-Arctic-WebApp-Runtime=webkit
+X-Arctic-WebApp-Schema=1

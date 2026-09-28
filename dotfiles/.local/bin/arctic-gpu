@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""arctic-gpu — run an app on the discrete graphics chip of a laptop with two (hybrid graphics).
+
+    arctic-gpu status [--json]     the graphics chips switcheroo-control knows, whether this is a
+                                   hybrid machine, and the apps that ask for the discrete chip
+                                   (PrefersNonDefaultGPU=true in their desktop entry)
+    arctic-gpu run COMMAND…        run COMMAND on the discrete chip (switcherooctl launch sets
+                                   the variables that chip's driver needs, e.g. NVIDIA's PRIME ones)
+
+The launcher can use it for Shift + Enter, and for apps whose entry prefers the discrete chip.
+Each status prints one JSON line; failures print {"ok": false, "error": "…"} and exit 1.
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+class Failure(Exception):
+    """A sentence for the person."""
+
+
+def gpus():
+    """`switcherooctl list` → [{index, name, default, discrete}] ([] without the service)."""
+    if not shutil.which('switcherooctl'):
+        return []
+    try:
+        out = subprocess.run(['switcherooctl', 'list'], capture_output=True, text=True, timeout=10,
+                             env=dict(os.environ, LC_ALL='C')).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    found = []
+    for line in out.splitlines():
+        key, _, value = line.strip().partition(':')
+        value = value.strip()
+        if key == 'Device':
+            found.append(dict(index=int(value) if value.isdigit() else len(found), name='', default=False,
+                              discrete=False))
+        elif found and key == 'Name':
+            found[-1]['name'] = value
+        elif found and key == 'Default':
+            found[-1]['default'] = value.lower() == 'yes'
+        elif found and key == 'Discrete':
+            found[-1]['discrete'] = value.lower() == 'yes'
+    return found
+
+
+def data_dirs():
+    home = Path(os.environ.get('HOME') or Path.home())
+    dirs = [Path(os.environ.get('XDG_DATA_HOME') or home / '.local/share')]
+    dirs += [Path(d) for d in (os.environ.get('XDG_DATA_DIRS') or '/usr/local/share:/usr/share').split(':') if d]
+    dirs += [home / '.local/share/flatpak/exports/share', Path('/var/lib/flatpak/exports/share')]
+    return dirs
+
+
+def prefers():
+    """Desktop ids whose entry asks for the discrete chip."""
+    out = []
+    seen = set()
+    for folder in data_dirs():
+        apps = folder / 'applications'
+        if not apps.is_dir():
+            continue
+        for path in sorted(apps.rglob('*.desktop')):
+            ident = str(path.relative_to(apps))[:-8].replace('/', '-')
+            if ident in seen:
+                continue
+            seen.add(ident)
+            try:
+                text = path.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            section = ''
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith('['):
+                    section = line
+                elif section == '[Desktop Entry]' and line.replace(' ', '') in (
+                        'PrefersNonDefaultGPU=true', 'X-KDE-RunOnDiscreteGpu=true'):
+                    out.append(ident)
+                    break
+    return out
+
+
+def main(argv):
+    verb = argv[0] if argv else 'status'
+    if verb in ('-h', '--help'):
+        print(__doc__.strip())
+        return 0
+    if verb == 'status':
+        found = gpus()
+        hybrid = len(found) > 1 and any(g['discrete'] for g in found)
+        discrete = next((g['name'] for g in found if g['discrete'] and not g['default']), '')
+        result = dict(ok=True, hybrid=hybrid, discrete=discrete, gpus=found, prefers=prefers() if hybrid else [])
+        if '--json' not in argv[1:]:
+            print('Hybrid graphics: {}'.format('yes, the discrete chip is ' + discrete if hybrid else 'no'))
+            return 0
+        print(json.dumps(result))
+        return 0
+    if verb == 'run' and len(argv) > 1:
+        if not shutil.which('switcherooctl'):
+            raise Failure('Running on the other graphics chip needs switcheroo-control.')
+        os.execvp('switcherooctl', ['switcherooctl', 'launch'] + argv[1:])
+    print('usage: arctic-gpu status [--json] | run COMMAND…', file=sys.stderr)
+    return 2
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Failure as error:
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)

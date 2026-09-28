@@ -17,6 +17,8 @@ enable arctic-firstboot.service
 # by dnf5-offline-transaction.service (static, wanted by system-update.target). Not
 # dnf5-automatic: it can only install into the running system (dnf5-plugin-automatic).
 enable arctic-update-stage.timer
+# Flatpak apps are updated in place, daily (arctic-update flatpak --auto; stream 5).
+enable arctic-flatpak-update.timer
 disable dnf5-automatic.timer
 disable dnf-automatic.timer
 # Snapper: the pre/post snapshots around dnf transactions (arctic-snapper.actions) are thinned

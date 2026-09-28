@@ -63,6 +63,9 @@ Singleton {
     readonly property color snow100: c.snow100
     readonly property color slate900: c.slate900
     function token(name) { return c[name] || c.ink; }
+    // shadow-sm / shadow-md, single-layer approximations (as settings/Theme.qml; ShadowLayers.qml)
+    readonly property color shadowSm: dark ? '#66000000' : '#1f12171e'
+    readonly property color shadowMd: dark ? '#b3000000' : '#2612171e'
 
     // ---- type -----------------------------------------------------------------------------
     // Figtree for the interface, JetBrains Mono for values that benefit from it. Some Figtree

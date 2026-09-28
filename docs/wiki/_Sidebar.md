@@ -8,10 +8,18 @@
 
 **Use it**
 - [Desktop tour](Desktop-Tour)
+- [Menus on the bar and Quick settings](Bar-Menus)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
 - [Command menu](Command-Menu)
+- [Notifications](Notifications)
 - [Settings](Settings)
+- [Night light and keep awake](Night-Light-and-Keep-Awake)
+- [Printing and scanning](Printing-and-Scanning)
+- [Drives, phones and cameras](Drives-and-Phones)
+- [Screens and the laptop lid](Screens-and-Laptop-Lid)
+- [Sharing and phones](Sharing-and-Phones)
 - [Apps and software](Apps-and-Software)
+- [Web apps](Web-Apps)
 - [Drivers](Drivers)
 - [Updates](Updates)
 - [Themes and customisation](Themes-and-Customisation)

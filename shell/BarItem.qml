@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 
 // One item on the top bar: a 26px pill, 8px side padding, 16px icon and/or 13px label.
-// Hover = surface-sunken. Icon-only items always carry a tooltip (shown by the bar).
+// Hover = surface-sunken, and so is an item whose menu is open (`active`). Icon-only items
+// always carry a tooltip (shown by the bar).
 Rectangle {
     id: item
     property string iconName: ''
@@ -10,10 +11,15 @@ Rectangle {
     property string text: ''
     property color textColor: Theme.ink
     property int textWeight: Font.Medium
+    property int maxTextWidth: 0        // > 0: the label is elided beyond this (the media title)
     property string tooltip: ''
     property bool interactive: true
     property bool accentFill: false     // the live session's amber Install item
     property bool keyboardFocused: false
+    property bool hasMenu: false        // left click opens a bar menu (BarMenu)
+    property bool active: false         // …and that menu is open now
+    readonly property bool barStop: interactive     // reachable in the bar's keyboard mode
+    function press() { clicked(); }
     default property alias extra: row.data
     signal clicked()
     signal rightClicked()
@@ -25,11 +31,11 @@ Rectangle {
     implicitHeight: 26
     radius: 13
     color: accentFill ? (mouse.pressed ? Theme.accentPressed : mouse.containsMouse ? Theme.accentHover : Theme.accent)
-                      : interactive && (mouse.containsMouse || keyboardFocused) ? Theme.surfaceSunken : 'transparent'
+                      : interactive && (mouse.containsMouse || keyboardFocused || active) ? Theme.surfaceSunken : 'transparent'
     border.width: accentFill && !Theme.dark ? 1 : 0
     border.color: Theme.accentEdge
     Behavior on color { ColorAnimation { duration: Theme.durationFast } }
-    Accessible.role: Accessible.Button
+    Accessible.role: hasMenu ? Accessible.ButtonMenu : Accessible.Button
     Accessible.name: tooltip || text
 
     FocusRing { targetRadius: item.radius; shown: item.keyboardFocused }
@@ -46,6 +52,8 @@ Rectangle {
         }
         Text {
             visible: item.text !== ''
+            Layout.maximumWidth: item.maxTextWidth > 0 ? item.maxTextWidth : -1
+            elide: Text.ElideRight
             text: item.text
             color: item.textColor
             font.family: Theme.fontSans

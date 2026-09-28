@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# arctic-window — window actions that take more than one Mango dispatch.
+#
+#   arctic-window pin    Super+Shift+P: pin the window (floating, on every workspace, centred),
+#                        or unpin it when it is pinned
+set -uo pipefail
+
+usage() { sed -n '4,5p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+
+case "${1:-}" in
+  pin)
+    # "floating global" as two 0/1 words; nothing when no window has the focus.
+    read -r floating global <<<"$(mmsg get focusing-client 2>/dev/null | python3 -c 'import json,sys
+try: c = json.load(sys.stdin)
+except ValueError: c = {}
+if isinstance(c, dict) and "id" in c:
+    print(int(bool(c.get("is_floating"))), int(bool(c.get("is_global"))))' 2>/dev/null)"
+    [[ -n "${floating:-}" ]] || exit 0
+    if (( floating && global )); then
+      mmsg dispatch toggleglobal >/dev/null
+      mmsg dispatch togglefloating >/dev/null
+    else
+      # Only what's missing, so a floating window isn't tiled on the way.
+      (( floating )) || mmsg dispatch togglefloating >/dev/null
+      (( global )) || mmsg dispatch toggleglobal >/dev/null
+      mmsg dispatch centerwin >/dev/null
+    fi ;;
+  *) usage ;;
+esac

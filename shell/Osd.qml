@@ -8,13 +8,17 @@ import "assets/Icons.js" as Icons
 
 // On-screen display for volume and brightness (design OSD): a 280×48 frosted pill,
 // bottom centre, 44px above the edge; 20px icon, 6px progress bar, value in tabular figures.
-// Muted shows the mute icon and 0. Visible for 1.2 s after the last change, then fades out
-// over duration-base. Volume follows PipeWire directly (any change, from keys or apps);
-// brightness is shown when `arctic-osd brightness …` calls `arctic-shell-ipc osd brightness`.
-// Two kinds for everything else (OsdModel.js): a level, the same pill with any icon and an
-// optional label (`osd level ICON PERCENT LABEL`), and a notice, an icon and a few words with an
-// optional detail and no bar (`osd notice ICON TEXT DETAIL`, `arctic-osd notice …` from scripts:
-// Caps Lock, a mode turned on); a notice stays a little longer the more it says.
+// Muted shows the mute icon and 0. A keyboard-layout switch shows the layout's name instead of
+// the bar. Visible for 1.2 s after the last change, then fades out over duration-base. Volume
+// follows PipeWire directly (any change, from keys or apps); brightness is shown when
+// `arctic-osd brightness …` calls `arctic-shell-ipc osd brightness`, or
+// `osd brightnessLevel <percent> <monitor>` after it stepped the focused monitor (the monitor's
+// name shows when there is more than one screen). Plugging in or unplugging a laptop shows
+// "Charging" / "On battery". Two kinds for everything else (OsdModel.js): a level, the same pill
+// with any icon and an optional label (`osd level ICON PERCENT LABEL`), and a notice, an icon and
+// a few words with an optional detail and no bar (`osd notice ICON TEXT DETAIL`, `arctic-osd
+// notice …` from scripts: Caps Lock, a mode turned on); a notice stays a little longer the more
+// it says.
 Scope {
     id: osd
     property string kind: 'volume'     // volume, brightness, level, notice
@@ -24,6 +28,8 @@ Scope {
     property int value: 0
     property bool muted: false
     property bool showing: false
+    property string label: ''           // the layout's name (kind 'layout'), the power source, a monitor
+    readonly property bool textOnly: kind === 'layout' || kind === 'power'
     readonly property var screen: Outputs.focused
 
     function showVolume() {
@@ -33,6 +39,11 @@ Scope {
         kind = 'volume';
         muted = audio.muted;
         value = muted ? 0 : Math.round(audio.volume * 100);
+        reveal();
+    }
+    function showLayout(name) {
+        kind = 'layout';
+        label = name;
         reveal();
     }
     function showBrightness() {
@@ -51,6 +62,18 @@ Scope {
         icon = OsdModel.icon(iconName, Icons.has);
         text = words || '';
         detail = more || '';
+        reveal();
+    }
+    function showBrightnessLevel(percent, monitor) {
+        kind = 'brightness';
+        muted = false;
+        value = Math.max(0, Math.min(100, percent));
+        label = Quickshell.screens.length > 1 ? monitor : '';
+        reveal();
+    }
+    function showPower(onBattery) {
+        kind = 'power';
+        label = onBattery ? 'On battery' : BatteryService.full ? 'Plugged in' : 'Charging';
         reveal();
     }
     function reveal() {
@@ -76,6 +99,18 @@ Scope {
         target: AudioService
         function onChanged() { osd.showVolume(); }
     }
+    Connections {
+        target: KeyboardService
+        function onSwitched(name) { osd.showLayout(name); }
+    }
+    // Plugged in or unplugged, on a laptop; not UPower's first report after start-up.
+    Timer { id: powerSettle; interval: 5000; running: true }
+    Connections {
+        target: BatteryService
+        function onOnBatteryChanged() {
+            if (!powerSettle.running && BatteryService.present) osd.showPower(BatteryService.onBattery);
+        }
+    }
     Process {
         id: brightness
         command: ['brightnessctl', '-m']
@@ -87,6 +122,7 @@ Scope {
                 if (isNaN(percent)) return;
                 osd.kind = 'brightness';
                 osd.muted = false;
+                osd.label = '';
                 osd.value = percent;
                 osd.reveal();
             }
@@ -124,7 +160,9 @@ Scope {
             opacity: osd.pillOpacity
             Accessible.role: Accessible.StatusBar
             Accessible.name: osd.kind === 'notice' ? osd.text + (osd.detail ? ', ' + osd.detail : '')
-                           : (osd.kind === 'level' ? osd.text + ' ' : osd.kind === 'brightness' ? 'Brightness ' : 'Volume ') + osd.value + '%'
+                             : osd.kind === 'layout' ? 'Keyboard layout ' + osd.label : osd.kind === 'power' ? osd.label
+                             : (osd.kind === 'level' ? osd.text + ' ' : osd.kind === 'brightness' ? 'Brightness ' + (osd.label ? osd.label + ' ' : '')
+                                : 'Volume ') + osd.value + '%'
 
             RowLayout {
                 anchors.fill: parent
@@ -133,7 +171,9 @@ Scope {
                 spacing: Theme.space3
                 Icon {
                     size: 20
-                    name: osd.kind === 'notice' || osd.kind === 'level' ? osd.icon : osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
+                    name: osd.kind === 'notice' || osd.kind === 'level' ? osd.icon : osd.kind === 'layout' ? 'keyboard'
+                          : osd.kind === 'power' ? (osd.label === 'On battery' ? 'battery' : 'battery-charging')
+                          : osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
                     color: Theme.ink
                 }
                 // Notice: the words, then the detail after " · " (elided when too long).
@@ -167,8 +207,18 @@ Scope {
                     font.family: Theme.fontSans
                     font.pixelSize: 12
                 }
+                Text {
+                    // Which monitor the brightness keys changed (with more than one screen).
+                    visible: osd.kind === 'brightness' && osd.label !== ''
+                    Layout.maximumWidth: 88
+                    elide: Text.ElideRight
+                    text: osd.label
+                    color: Theme.inkMuted
+                    font.family: Theme.fontSans
+                    font.pixelSize: 12
+                }
                 Rectangle {
-                    visible: osd.kind !== 'notice'
+                    visible: osd.kind !== 'notice' && !osd.textOnly
                     Layout.fillWidth: true
                     implicitHeight: 6
                     radius: 3
@@ -187,10 +237,13 @@ Scope {
                     }
                 }
                 Text {
+                    readonly property bool layout: osd.textOnly
                     visible: osd.kind !== 'notice'
-                    Layout.preferredWidth: 32
-                    horizontalAlignment: Text.AlignRight
-                    text: osd.value
+                    Layout.preferredWidth: layout ? -1 : 32
+                    Layout.fillWidth: layout
+                    horizontalAlignment: layout ? Text.AlignLeft : Text.AlignRight
+                    elide: Text.ElideRight
+                    text: layout ? osd.label : osd.value
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 13

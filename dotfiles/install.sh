@@ -34,11 +34,12 @@ done
 
 # Fedora packages (all in Fedora 44 except mangowm, which comes from the Arctic COPR or Terra).
 PACKAGES=(
-  quickshell python3 python3-pillow python3-pyte
+  quickshell python3 python3-pillow python3-pyte python3-dbus python3-gobject-base
   kitty zsh mako swaybg swayidle swaylock waybar fuzzel
   grim slurp wl-clipboard cliphist brightnessctl playerctl wireplumber pavucontrol
   lxqt-policykit network-manager-applet NetworkManager-tui blueman libnotify xdg-user-dirs
   librsvg2-tools jetbrains-mono-fonts-all google-noto-sans-fonts
+  wtype swappy wf-recorder tesseract python3-zxing-cpp unicode-emoji google-noto-color-emoji-fonts
 )
 
 if (( DEPS )); then

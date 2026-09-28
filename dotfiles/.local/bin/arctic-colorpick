@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# arctic-colorpick — pick a colour anywhere on the screen (Super+Shift+C) and copy it as #rrggbb.
+# Click a pixel (slurp -p); grim reads it at the monitor's own scale, so the colour is the one on
+# screen, not a blend. The notification offers rgb() and hsl() too. The key again cancels.
+set -uo pipefail
+
+run="${XDG_RUNTIME_DIR:-/tmp}/arctic/capture"
+
+field() {   # field KEY < {"ok":…}
+  python3 -c 'import json,sys
+try: v = json.load(sys.stdin).get(sys.argv[1], "")
+except ValueError: v = ""
+print(int(v) if isinstance(v, bool) else v)' "$1"
+}
+
+# One selection at a time, shared with the other capture keys: the key again cancels it.
+mkdir -p "$run" && chmod 700 "$run"
+exec 9>"$run.lock"
+if ! flock -n 9; then pkill -x slurp; exit 0; fi
+
+# slurp in the theme's colours, but nothing over the screen: you're judging its colours.
+mapfile -t style < <(arctic-capture slurp-args 2>/dev/null)
+sel="$(slurp "${style[@]}" -b '#00000000' -p -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
+[[ -n "$sel" ]] || exit 0
+scale="$(arctic-capture output "${sel#*	}" 2>/dev/null | field scale)"
+# At scale 2 a 1×1 area is 2×2 pixels; arctic-capture reads the top-left one.
+out="$(grim ${scale:+-s "$scale"} -g "${sel%%	*}" -t ppm - 2>/dev/null | arctic-capture pixel)"
+flock -u 9
+hex="$(field hex <<<"$out")"
+if [[ -z "$hex" ]]; then
+  notify-send -a "Colour picker" "Couldn’t read the colour" "$(field error <<<"$out")" 2>/dev/null
+  exit 1
+fi
+rgb="$(field rgb_text <<<"$out")"
+hsl="$(field hsl_text <<<"$out")"
+wl-copy -- "$hex"
+
+notify() {   # waits for a button, so it runs detached
+  local swatch="$run/swatch-${hex#\#}.svg" action
+  arctic-capture swatch "$hex" "$swatch" >/dev/null 2>&1 || swatch=""
+  action="$(notify-send -a "Colour picker" ${swatch:+-i "$swatch"} -A "rgb=Copy rgb()" -A "hsl=Copy hsl()" \
+    "$hex copied" "$rgb · $hsl" 2>/dev/null)"
+  case "$action" in
+    rgb) wl-copy -- "$rgb" ;;
+    hsl) wl-copy -- "$hsl" ;;
+  esac
+  [[ -n "$swatch" ]] && rm -f -- "$swatch"
+}
+( exec 9>&-; notify ) </dev/null >/dev/null 2>&1 & disown

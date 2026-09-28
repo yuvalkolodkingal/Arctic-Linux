@@ -2,35 +2,42 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import Quickshell
-import Quickshell.Io
-import "PackageSearch.js" as PackageSearch
+import ".."
+import "../PackageSearch.js" as PackageSearch
 
-// Get apps: a small terminal for dnf and Flatpak inside the launcher (from the original
-// shell's install console). Type an app name to install it, or a dnf / flatpak command; the
-// commands run in a real PTY (scripts/install-terminal.py). Installs run unattended (-y) and
-// dnf gets root through pkexec, whose password dialog is the shell's PolkitDialog; anything a
-// program still asks is answered here, password input masked and never logged or stored.
-// Tab completes package names from a cached index (scripts/package-index.py).
+// Get apps → Console: a small terminal for dnf and Flatpak (from the original shell's install
+// console), for power users. Type an app name to install it, or a dnf / flatpak command; the
+// commands run in a real PTY (scripts/install-terminal.py, owned by AppsService, which runs the
+// other pages' installs and removals in the same PTY — they show here too). Installs run
+// unattended (-y) and dnf gets root through pkexec, whose password dialog is the shell's
+// PolkitDialog; typed removals list what goes and ask [y/N] here. Anything a program asks is
+// answered on the input line, password input masked and never logged or stored. Tab completes
+// package names from the cached index (scripts/package-index.py).
 ColumnLayout {
     id: terminal
-    property bool jobRunning: false
-    property bool secret: false
-    property string output: ''
-    property string notice: ''
-    property bool submitting: false
-    property var packages: []
-    property var index: PackageSearch.prepare([])
+    readonly property bool jobRunning: AppsService.consoleRunning || AppsService.job !== null
+    readonly property bool guiJob: AppsService.job !== null
+    readonly property bool secret: AppsService.consoleSecret
+    readonly property string output: AppsService.consoleOutput
+    readonly property string notice: AppsService.consoleNotice
+    readonly property bool submitting: AppsService.consoleSubmitting
+    readonly property var packages: AppsService.packages
+    readonly property var index: AppsService.packageIndex
     property var matches: []
     property string source: 'all'
-    property bool indexRefreshing: false
-    property string indexError: ''
+    readonly property bool indexRefreshing: AppsService.indexRefreshing
+    readonly property string indexError: AppsService.indexError
     property string completedText: '\u0000'
     readonly property bool suggestionsOpen: !jobRunning && !secret && !submitting && input.text.length > 0
                                             && completedText !== input.text && PackageSearch.context(input.text, input.cursorPosition).allowed
     signal backRequested()
     readonly property Item inputItem: input
     spacing: Theme.space3
+
+    function back() { return false; }
+    onSecretChanged: input.clear()
+    onIndexChanged: updateMatches()
+    Binding { target: AppsService; property: 'transcript'; value: true; when: terminal.visible }
 
     function updateMatches() {
         if (jobRunning || secret || submitting) return;
@@ -48,80 +55,22 @@ ColumnLayout {
         input.forceActiveFocus();
     }
     function open() {
-        if (!backend.running) backend.running = true;
-        if (!packages.length && !packageIndex.running) packageIndex.running = true;
+        AppsService.ensureStarted();
         updateMatches();
         input.forceActiveFocus();
     }
-    function send(action, text) {
-        if (!backend.running) return;
-        backend.write(JSON.stringify({action: action, text: text || '', secret: terminal.secret}) + '\n');
-    }
+    function send(action, text) { AppsService.consoleSend(action, text); }
 
     Timer { id: filterTimer; interval: 60; onTriggered: terminal.updateMatches() }
-    Process {
-        id: packageIndex
-        command: ['python3', Session.scripts + '/package-index.py']
-        stdout: SplitParser {
-            onRead: data => {
-                try {
-                    const result = JSON.parse(data);
-                    if (result.packages.length || !terminal.packages.length) {
-                        terminal.packages = result.packages;
-                        terminal.index = PackageSearch.prepare(result.packages);
-                    }
-                    terminal.indexRefreshing = result.refreshing;
-                    terminal.indexError = result.error || '';
-                    terminal.updateMatches();
-                } catch (e) { terminal.indexError = 'Could not read the package list.'; }
-            }
-        }
-        onExited: terminal.indexRefreshing = false
-    }
-    Process {
-        id: backend
-        command: ['python3', Session.scripts + '/install-terminal.py']
-        stdinEnabled: true
-        stdout: SplitParser {
-            onRead: data => {
-                try {
-                    const state = JSON.parse(data);
-                    const wasSecret = terminal.secret;
-                    terminal.jobRunning = state.running;
-                    terminal.submitting = false;
-                    terminal.secret = state.secret;
-                    if (wasSecret !== state.secret) input.clear();
-                    terminal.output = state.output;
-                    terminal.notice = state.notice;
-                } catch (e) { terminal.notice = 'Could not read terminal output.'; }
-            }
-        }
-        onExited: {
-            terminal.jobRunning = false;
-            terminal.secret = false;
-            terminal.submitting = false;
-            input.clear();
-            terminal.notice = 'The console stopped. Open Get apps again to restart it.';
-        }
-    }
 
     // ---- header -----------------------------------------------------------------------
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Theme.space2
-        ArcticButton { variant: 'ghost'; size: 'sm'; iconName: 'chevron-left'; text: 'Back'; onClicked: terminal.backRequested() }
-        Text {
-            text: 'Get apps'
-            color: Theme.ink
-            font.family: Theme.fontSans
-            font.pixelSize: 16
-            font.weight: Font.DemiBold
-        }
-        Item { Layout.fillWidth: true }
+    PageHeader {
+        title: 'Console'
+        onBack: terminal.backRequested()
         ArcticButton {
             variant: 'ghost'; size: 'sm'; iconName: 'refresh'; text: 'Refresh list'
-            enabled: !terminal.jobRunning && !packageIndex.running
-            onClicked: { terminal.indexError = ''; packageIndex.running = true; }
+            enabled: !terminal.jobRunning && !terminal.indexRefreshing
+            onClicked: AppsService.refreshIndex(true)
         }
         ArcticButton { variant: 'ghost'; size: 'sm'; text: 'Clear'; enabled: !terminal.jobRunning; onClicked: terminal.send('clear') }
         ArcticButton { variant: 'secondary'; size: 'sm'; text: 'Stop  Ctrl+C'; enabled: terminal.jobRunning; onClicked: terminal.send('interrupt') }
@@ -144,7 +93,7 @@ ColumnLayout {
             Text {
                 Layout.fillWidth: true
                 text: terminal.indexError ? terminal.indexError
-                      : !terminal.packages.length ? (terminal.indexRefreshing || packageIndex.running ? 'Getting the package list… this takes a minute the first time.' : 'No package list yet.')
+                      : !terminal.packages.length ? (terminal.indexRefreshing || !AppsService.indexLoaded ? 'Getting the package list… this takes a minute the first time.' : 'No package list yet.')
                       : terminal.matches.length + (terminal.matches.length >= 200 ? '+' : '') + ' matches · Tab or Enter completes'
                            + (terminal.indexRefreshing ? ' · updating the list' : '')
                 color: Theme.inkMuted
@@ -268,10 +217,10 @@ ColumnLayout {
         ArcticField {
             id: input
             Layout.fillWidth: true
-            enabled: backend.running
+            enabled: !terminal.guiJob
             font.family: Theme.fontMono
             font.pixelSize: 13
-            placeholderText: terminal.secret ? 'Password (hidden)' : terminal.jobRunning ? 'Answer the prompt above…' : 'App name, or a dnf or flatpak command'
+            placeholderText: terminal.guiJob ? AppsService.currentLabel + '… the Console waits for it' : terminal.secret ? 'Password (hidden)' : terminal.jobRunning ? 'Answer the prompt above…' : 'App name, or a dnf or flatpak command'
             echoMode: terminal.secret ? TextInput.Password : TextInput.Normal
             inputMethodHints: terminal.secret ? Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase : Qt.ImhNoPredictiveText
             selectByMouse: !terminal.secret
@@ -290,7 +239,7 @@ ColumnLayout {
                     return;
                 }
                 if (!terminal.jobRunning && !text.trim()) return;
-                if (!terminal.jobRunning) terminal.submitting = true;
+                if (terminal.guiJob) return;
                 terminal.send(terminal.jobRunning ? 'input' : 'start', text);
                 clear();
             }

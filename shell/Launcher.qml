@@ -6,33 +6,41 @@ import Quickshell
 import "LauncherSearch.js" as LauncherSearch
 import "Calc.js" as Calc
 import "assets/Icons.js" as Icons
+import "getapps"
 
 // The launcher (design Launcher, Super+Space): a 520px frosted card that hangs from the bar
 // over a scrim. Type to find apps, Settings pages, open windows, app actions and files (and
 // a web search after them; LauncherSources.qml); "=" is a calculator (units too, with qalc),
-// ">" runs a command, "?" searches the web. With nothing
-// typed it offers Apps, Get apps, Wallpapers, Settings and Fetch (the original shell's), and
-// on the live USB "Install Arctic Linux" first. Keyboard first: ↑/↓ or Tab move, Enter opens,
-// Esc goes back or closes. The card can be dragged to any screen edge, where it docks.
+// ">" runs a command, "?" searches the web. With nothing typed it offers Apps, Get apps, Remove
+// apps, Wallpapers, Settings and Fetch (the original shell's), and on the live USB "Install
+// Arctic Linux" first. Keyboard first: ↑/↓ or Tab move, Enter opens, Esc goes back or closes;
+// Shift+Delete (or Delete at the end of the text) removes the selected app after a confirmation
+// (getapps/RemoveSheet). Get apps is a set of pages inside the card (getapps/GetApps.qml). The
+// card can be dragged to any screen edge, where it docks.
 Popover {
     id: launcher
     required property var shell
-    property string view: 'home'        // home, apps (every app), get (Get apps console)
+    property string view: 'home'        // home, apps (every app), get (Get apps, see getapps/GetApps.qml)
+    property string getPage: 'choose'   // the Get apps page to open with, and what to type there
+    property string getQuery: ''
     property string query: ''
     property int current: 0
     readonly property var parsed: LauncherSearch.mode(query)
 
     layerName: 'arctic-launcher'
     focusItem: view === 'get' ? getApps.inputItem : field
-    cardWidth: view === 'get' ? Math.min(760, width - 32) : 520
-    cardHeight: view === 'get' ? Math.min(600, height - 32) : Math.min(layout.implicitHeight + 2 * Theme.space3, height - 32)
+    cardWidth: view === 'get' ? Math.min(getApps.preferredWidth, width - 32) : 520
+    // (taller while the remove confirmation needs the room)
+    cardHeight: view === 'get' ? Math.min(getApps.preferredHeight, height - 32)
+                               : Math.min(Math.max(layout.implicitHeight + 2 * Theme.space3, removeSheet.open ? removeSheet.wantedHeight : 0), height - 32)
 
-    function openView(name) {
+    function openView(name, page, text) {
+        removeSheet.close();
         view = name;
         query = '';
         field.text = '';
         current = 0;
-        if (name === 'get') getApps.open(); else field.forceActiveFocus();
+        if (name === 'get') getApps.open(page || 'choose', text || ''); else field.forceActiveFocus();
     }
     function setQuery(text) {
         if (view === 'get') openView('home');
@@ -43,14 +51,35 @@ Popover {
         if (view !== 'home') openView('home');
         else close();
     }
-    onOpened: openView(view === 'get' ? 'get' : 'home')
+    onOpened: openView(view === 'get' ? 'get' : 'home', getPage, getQuery)
+    onDismissed: removeSheet.close()
+    // Delete on an app row: find where the app came from, then ask (not on the live USB).
+    function askRemove(entryOrId) {
+        const id = typeof entryOrId === 'string' ? entryOrId : entryOrId && entryOrId.id;
+        if (!id || Session.live) return;
+        AppsService.helper(['owner', id], r => {
+            if (!launcher.open) return;
+            if (!r.ok) { removeSheet.openFor({ source: 'unknown', name: id, blocked: { code: r.code, message: r.error } }); return; }
+            if (r.source === 'webapp') AppsService.web.start();
+            removeSheet.openFor(r);
+        });
+    }
+    Binding { target: AppsService; property: 'watching'; value: launcher.open && launcher.view === 'get' }
+    // "Show details" on a notification about a job that didn't work: its page in Get apps.
+    Connections {
+        target: AppsService
+        function onDetailsRequested(job) {
+            launcher.shell.openGetApps(null, job.kind === 'remove' ? 'remove' : job.source === 'dnf' ? 'dnf' : 'flatpak', '');
+        }
+    }
 
     // ---- results --------------------------------------------------------------------------
     readonly property var specials: {
         const list = [];
         if (Session.live) list.push({ kind: 'install', name: 'Install Arctic Linux', desc: 'Put Arctic Linux on this computer · Super + I', tile: 'installer', keywords: 'installer setup disk' });
         list.push({ kind: 'apps', name: 'Apps', desc: 'Every app on this computer', glyph: 'grid', keywords: 'applications programs all' });
-        list.push({ kind: 'get', name: 'Get apps', desc: 'Install apps with dnf or Flatpak', glyph: 'package', keywords: 'install software packages dnf flatpak flathub store' });
+        list.push({ kind: 'get', name: 'Get apps', desc: 'Install from Flathub, Fedora or the web', glyph: 'package', keywords: 'install software packages dnf flatpak flathub store web app terminal' });
+        if (!Session.live) list.push({ kind: 'remove', name: 'Remove apps', desc: 'Uninstall Flatpak apps, Fedora packages and web apps', glyph: 'trash', keywords: 'uninstall delete remove flatpak dnf web app' });
         list.push({ kind: 'wallpapers', name: 'Wallpapers', desc: 'Change the desktop picture', glyph: 'image', keywords: 'background picture desktop' });
         list.push({ kind: 'settings', name: 'Settings', desc: 'Appearance, displays, keyboard, apps and more · Super + S', glyph: 'sliders', keywords: 'preferences control panel options configure theme' });
         list.push({ kind: 'fetch', name: 'Fetch', desc: 'The Arctic greeting in a terminal', glyph: 'terminal', keywords: 'fastfetch neofetch system info' });
@@ -60,7 +89,10 @@ Popover {
         .filter(e => !e.noDisplay)
         .map(e => ({ kind: 'app', entry: e, name: e.name, desc: e.genericName || e.comment || '',
                      keywords: [e.genericName, e.comment].concat(e.keywords || []).concat(e.categories || []).join(' '),
-                     tile: Icons.tileFor(e.id, e.name), icon: e.icon, id: 'app:' + e.id }))
+                     // Web apps and terminal apps keep their own icons (a TUI called "Settings
+                     // monitor" isn't Settings).
+                     tile: e.id.startsWith('org.arcticlinux.WebApp.') || e.id.startsWith('org.arcticlinux.TerminalApp.') ? '' : Icons.tileFor(e.id, e.name),
+                     icon: e.icon, id: 'app:' + e.id }))
     LauncherSources {
         id: sources
         active: launcher.open
@@ -83,18 +115,24 @@ Popover {
                                 : { kind: 'none', name: 'Run a command', desc: 'Type a command after >, like > htop', glyph: 'prompt' }];
         if (parsed.mode === 'web')
             return [sources.webRow(parsed.text) || { kind: 'none', name: 'Search the web', desc: 'Type what to look for after ?, like ? fedora release date', glyph: 'globe' }];
-        if (view === 'apps') return LauncherSearch.rank(apps, parsed.text, item => sources.boost(item));
+        if (view === 'apps') return withGetSearch(LauncherSearch.rank(apps, parsed.text, item => sources.boost(item)));
         if (!parsed.text) return specials;
         // "remind 10m tea" (arctic-remind; Super + Ctrl + R opens the launcher with "remind ").
         const reminder = LauncherSearch.reminderRow(parsed.text);
         if (reminder) return [reminder];
         // Settings is one of the specials, so its desktop entry would show twice. A unit
-        // conversion ("10 km to mi") goes first; files and the web search follow the rest.
+        // conversion ("10 km to mi") goes first; "Find it in Get apps" (no app found), then files
+        // and the web search follow the rest.
         const units = LauncherSearch.looksLikeConversion(parsed.text) ? sources.qalcRow(parsed.text) : null;
-        return (units ? [units] : [])
+        return withGetSearch((units ? [units] : [])
             .concat(LauncherSearch.rank(specials.concat(apps.filter(a => a.entry.id !== 'org.arcticlinux.Settings'), sources.extra),
-                                        parsed.text, item => sources.boost(item)).slice(0, 50))
+                                        parsed.text, item => sources.boost(item)).slice(0, 50)))
             .concat(sources.tail(parsed.text));
+    }
+    // No app found: offer to look for it in Get apps.
+    function withGetSearch(found) {
+        if (!parsed.text || found.some(r => r.kind === 'app')) return found;
+        return found.concat([{ kind: 'get-search', name: 'Find “' + parsed.text + '” in Get apps', desc: 'Search Flathub and Fedora', glyph: 'package' }]);
     }
     onResultsChanged: current = Math.min(current, Math.max(0, results.length - 1))
 
@@ -116,6 +154,8 @@ Popover {
             break;
         case 'apps': openView('apps'); break;
         case 'get': openView('get'); break;
+        case 'remove': openView('get', 'remove'); break;
+        case 'get-search': openView('get', 'flatpak', parsed.text); break;
         case 'wallpapers': close(); shell.openWallpapers(launcher.screen); break;
         case 'settings': Quickshell.execDetached(['arctic-settings']); close(); break;
         case 'fetch': Quickshell.execDetached(inTerminal(['arctic-fetch'], true)); close(); break;
@@ -159,12 +199,13 @@ Popover {
             onMoved: (nextX, nextY) => launcher.dock.moveTo(nextX, nextY)
         }
 
-        InstallConsole {
+        GetApps {
             id: getApps
             visible: launcher.view === 'get'
             Layout.fillWidth: true
             Layout.fillHeight: true
             onBackRequested: launcher.openView('home')
+            onCloseRequested: launcher.close()
         }
 
         ColumnLayout {
@@ -208,6 +249,17 @@ Popover {
                         Keys.onTabPressed: launcher.move(1)
                         Keys.onBacktabPressed: launcher.move(-1)
                         Keys.onEscapePressed: { if (field.text && launcher.view === 'home') field.text = ''; else launcher.back(); }
+                        // Shift+Delete, or Delete with the cursor at the end: remove the selected app.
+                        Keys.onDeletePressed: event => {
+                            const item = launcher.results[launcher.current];
+                            if (item && item.kind === 'app' && !Session.live
+                                && ((event.modifiers & Qt.ShiftModifier) || field.cursorPosition === field.text.length)) {
+                                launcher.askRemove(item.entry);
+                                event.accepted = true;
+                            } else {
+                                event.accepted = false;
+                            }
+                        }
                         Keys.onReturnPressed: event => launcher.activate(launcher.results[launcher.current], event.modifiers & Qt.ShiftModifier)
                         Keys.onEnterPressed: event => launcher.activate(launcher.results[launcher.current], event.modifiers & Qt.ShiftModifier)
                         Text {
@@ -293,9 +345,23 @@ Popover {
                         id: rowMouse
                         anchors.fill: parent
                         hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
                         cursorShape: Qt.PointingHandCursor
                         onPositionChanged: launcher.current = row.index
-                        onClicked: mouse => launcher.activate(row.modelData, mouse.modifiers & Qt.ShiftModifier)
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.RightButton) { if (row.modelData.kind === 'app') launcher.askRemove(row.modelData.entry); }
+                            else launcher.activate(row.modelData, mouse.modifiers & Qt.ShiftModifier);
+                        }
+                    }
+                    // Remove this app (the same as Delete), on the hovered or selected app row.
+                    ArcticButton {
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.space3 + 52
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: row.modelData.kind === 'app' && !Session.live && (row.selected || rowMouse.containsMouse)
+                        variant: 'ghost'; size: 'sm'; iconName: 'trash'; iconOnly: true; label: 'Remove app'
+                        focusPolicy: Qt.NoFocus
+                        onClicked: launcher.askRemove(row.modelData.entry)
                     }
                 }
             }
@@ -329,10 +395,23 @@ Popover {
                 Hint { label: 'move'; keys: [ Kbd { text: '↑' }, Kbd { text: '↓' } ] }
                 Hint { label: 'open'; keys: [ Kbd { text: 'Enter' } ] }
                 Hint { label: launcher.view === 'home' ? 'close' : 'back'; keys: [ Kbd { text: 'Esc' } ] }
+                Hint {
+                    id: removeHint
+                    label: 'remove'
+                    keys: [ Kbd { text: 'Delete' } ]
+                    visible: !Session.live && !!launcher.results[launcher.current] && launcher.results[launcher.current].kind === 'app'
+                }
                 Item { Layout.fillWidth: true }
-                Hint { label: 'calculator'; keys: [ Kbd { text: '=' } ] }
-                Hint { label: 'command'; keys: [ Kbd { text: '>' } ] }
+                // (they make room for "remove" while an app is selected)
+                Hint { label: 'calculator'; visible: !removeHint.visible; keys: [ Kbd { text: '=' } ] }
+                Hint { label: 'command'; visible: !removeHint.visible; keys: [ Kbd { text: '>' } ] }
             }
         }
+    }
+
+    // Delete on an app row asks here, over the card.
+    RemoveSheet {
+        id: removeSheet
+        onClosed: field.forceActiveFocus()
     }
 }

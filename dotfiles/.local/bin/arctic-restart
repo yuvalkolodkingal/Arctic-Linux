@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# arctic-restart — restart one part of the desktop when it stops working (not the computer:
+# that's `arctic-power restart`). Settings > About > "If something stops working" uses it.
+#
+#   arctic-restart sound | wifi | bluetooth | shell [--json]
+#
+#   sound      PipeWire and WirePlumber (your user services)
+#   wifi       Wi-Fi off and on again (NetworkManager)
+#   bluetooth  the Bluetooth service (asks for your password)
+#   shell      the Arctic shell (bar, launcher, notifications)
+# --json prints {"ok": true, "restarted": "sound"} or {"ok": false, "error": "…"}.
+set -uo pipefail
+
+what="${1:-}"
+json=0
+[[ "${2:-}" == --json ]] && json=1
+
+done_() {   # done_ <what> <sentence>
+  if (( json )); then printf '{"ok": true, "restarted": "%s"}\n' "$1"; else echo "$2"; fi
+  notify-send -a arctic-osd -e -t 1500 -h string:x-canonical-private-synchronous:arctic-osd "$2" >/dev/null 2>&1 || true
+  exit 0
+}
+fail() {
+  if (( json )); then printf '{"ok": false, "error": "%s"}\n' "$1"; else echo "arctic-restart: $1" >&2; fi
+  exit 1
+}
+
+case "$what" in
+  sound)
+    systemctl --user restart pipewire.service pipewire-pulse.service wireplumber.service 2>/dev/null \
+      || fail "Sound couldn’t be restarted."
+    done_ sound "Sound restarted" ;;
+  wifi)
+    command -v nmcli >/dev/null 2>&1 || fail "NetworkManager isn’t installed."
+    nmcli radio wifi off 2>/dev/null || fail "Wi-Fi couldn’t be turned off."
+    sleep 1
+    nmcli radio wifi on 2>/dev/null || fail "Wi-Fi couldn’t be turned on again."
+    done_ wifi "Wi-Fi restarted" ;;
+  bluetooth)
+    systemctl restart bluetooth.service 2>/dev/null || fail "Bluetooth couldn’t be restarted."
+    done_ bluetooth "Bluetooth restarted" ;;
+  shell)
+    if [[ "${ARCTIC_SHELL:-quickshell}" == waybar ]] || ! command -v arctic-shell >/dev/null 2>&1; then
+      pkill -u "$UID" -x waybar 2>/dev/null
+      sleep 0.3
+      setsid -f waybar >/dev/null 2>&1 < /dev/null || fail "The bar couldn’t be restarted."
+    else
+      arctic-shell --restart >/dev/null 2>&1 || fail "The desktop shell couldn’t be restarted."
+    fi
+    done_ shell "The desktop shell restarted" ;;
+  *) echo "usage: arctic-restart sound|wifi|bluetooth|shell [--json]" >&2; exit 2 ;;
+esac

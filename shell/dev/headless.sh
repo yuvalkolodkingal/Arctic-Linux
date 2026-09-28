@@ -3,8 +3,8 @@
 #
 #   shell/dev/headless.sh [options] <name> [<step>…]
 #
-# Starts sway with a 1280×800 headless output inside a D-Bus session (with PipeWire and mako
-# when installed), a throwaway HOME with the dotfiles installed (dotfiles/install.sh --target),
+# Starts sway with a 1280×800 headless output inside a D-Bus session (with PipeWire when
+# installed; the shell is the notification server, so `sh notify-send …` steps show toasts), a throwaway HOME with the dotfiles installed (dotfiles/install.sh --target),
 # and the shell from this checkout. Each step is either `ipc <target> <function> [args]`,
 # `sleep <seconds>`, `key <text>` (wtype), `point <x> <y>` / `click` (wlrctl virtual pointer),
 # `sh <command>`, `theme <winter|polar-night>` or `shot <name>`;
@@ -18,7 +18,12 @@
 #
 # Options: --live (ARCTIC_FORCE_LIVE=1), --theme winter|polar-night, --size WxH, --keep-home,
 #          --fixtures (add desktop entries for Zed, Zen Browser and yazi, as in the design
-#          mockups, so launcher screenshots have something to find; test data only)
+#          mockups, so launcher screenshots have something to find, point the network menu
+#          at shell/tests/fixtures/network.json and add the tray icon of
+#          shell/tests/fixtures/sni-menu.py; test data only),
+#          --mako (start mako before the shell, to test the hand-over of the notification name)
+#          --app-fixtures (Get apps with stand-ins for flatpak, rpm, dnf5, pkexec and arctic-webapp
+#          from shell/dev/fixtures: canned packages, Flathub apps, installed apps and a web app)
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -28,6 +33,8 @@ THEME=polar-night
 LIVE=0
 KEEP=0
 FIXTURES=0
+MAKO=0
+APP_FIXTURES=0
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --live) LIVE=1; shift ;;
@@ -35,6 +42,8 @@ while [[ "${1:-}" == --* ]]; do
     --size) SIZE="$2"; shift 2 ;;
     --keep-home) KEEP=1; shift ;;
     --fixtures) FIXTURES=1; shift ;;
+    --mako) MAKO=1; shift ;;
+    --app-fixtures) APP_FIXTURES=1; shift ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -58,10 +67,23 @@ if (( FIXTURES )); then
   fixture dev.zed.Zed Zed "Code editor" false
   fixture app.zen_browser.zen "Zen Browser" "Web browser" false
   fixture yazi yazi "Terminal file manager" true
+  # The network menu answers from test data (network.py's fixture mode) instead of NetworkManager.
+  export ARCTIC_NETWORK_FIXTURE="$REPO/shell/tests/fixtures/network.json"
+  # …and a tray icon with a menu of every kind of entry (python3-dbus).
+  export ARCTIC_SNI_FIXTURE="$REPO/shell/tests/fixtures/sni-menu.py"
 fi
 export PATH="$HOME/.local/bin:$PATH"
 export ARCTIC_SHELL_DIR="$REPO/shell"
 export XDG_DATA_DIRS=/usr/local/share:/usr/share
+if (( APP_FIXTURES )); then
+  apps_fixtures="$REPO/shell/dev/fixtures/apps"
+  export PATH="$REPO/shell/dev/fixtures/bin:$PATH"
+  export XDG_DATA_DIRS="$apps_fixtures/share:$apps_fixtures/flatpak/exports/share:$XDG_DATA_DIRS"
+  export ARCTIC_WEBAPP_CMD="$REPO/shell/dev/fixtures/bin/arctic-webapp" ARCTIC_SWCATALOG="$apps_fixtures/swcatalog"
+  export ARCTIC_FLATPAK_SYSTEM_DIR="$apps_fixtures/flatpak" ARCTIC_INSTALL_MARK="$apps_fixtures/share"
+  export ARCTIC_DEFAULT_APPS="$apps_fixtures/default-apps" ARCTIC_WHEEL=1
+  rm -f "$XDG_RUNTIME_DIR/fake-apps.json"
+fi
 (( LIVE )) && export ARCTIC_FORCE_LIVE=1
 export WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1
 export QT_QPA_PLATFORM=wayland
@@ -93,9 +115,10 @@ if command -v pipewire >/dev/null; then
   # A virtual output, so the volume item and OSD have a real PipeWire sink to follow.
   pw-cli create-node adapter '{ factory.name=support.null-audio-sink node.name=arctic-test-sink node.description="Speakers" media.class=Audio/Sink object.linger=true audio.position=[FL FR] }' >/dev/null 2>&1
 fi
-command -v mako >/dev/null && { mako >/dev/null 2>&1 & }
+if (( MAKO )) && command -v mako >/dev/null; then mako >/dev/null 2>&1 & sleep 0.5; fi
 arctic-wallpaper >/dev/null 2>&1 || true
 arctic-shell --foreground >/tmp/arctic-shell.log 2>&1 &
+[[ -n "${ARCTIC_SNI_FIXTURE:-}" ]] && python3 -c 'import dbus, gi' 2>/dev/null && { python3 "$ARCTIC_SNI_FIXTURE" >/tmp/arctic-sni.log 2>&1 & }
 sleep 4
 shot() { grim "$OUT/$1.png" && echo "screenshot: $OUT/$1.png"; }
 if (( $# == 0 )); then shot "$NAME"; fi
@@ -114,11 +137,11 @@ while (( $# )); do
   esac
 done
 arctic-shell --stop
-pkill -x mako; pkill -x wireplumber; pkill -x pipewire; pkill -x swaybg
+pkill -f sni-menu.py; pkill -x mako; pkill -x wireplumber; pkill -x pipewire; pkill -x swaybg
 kill %1 2>/dev/null; pkill -f "$SWAY" 2>/dev/null
 INNER
 chmod +x "$inner"
-export SWAY SWAYCONF="$conf" OUT NAME
+export SWAY SWAYCONF="$conf" OUT NAME MAKO
 dbus-run-session -- "$inner" "$@"
 echo "--- shell log (warnings and errors) ---"
 grep -a -E -i "warn|error|fail|typeerror|referenceerror" /tmp/arctic-shell.log | grep -v -E "MESA|ZINK|dri2|libEGL" | head -40

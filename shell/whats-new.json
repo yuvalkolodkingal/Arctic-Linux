@@ -1,0 +1,12 @@
+{
+  "version": "0.3",
+  "title": "What’s new in Arctic Linux 0.3",
+  "items": [
+    {"icon": "moon", "title": "Night light and keep awake", "text": "Warmer colours in the evening (Super + Ctrl + N), and no lock or sleep while you present (Super + Ctrl + I)."},
+    {"icon": "document", "title": "Printing, scanning and USB drives", "text": "Printers and scanners work without drivers, and USB drives open by themselves. Settings → Printers and scanners."},
+    {"icon": "download", "title": "Every app kept up to date", "text": "Flatpak apps are updated every day, firmware updates are offered, and you can undo an update from Settings → Updates."},
+    {"icon": "sparkle", "title": "Screens and the lid", "text": "Super + P duplicates or extends your screen; closing the lid with a monitor plugged in keeps working."},
+    {"icon": "sliders", "title": "More in Settings", "text": "Date and time, Sharing, Users and sign-in, and apps that start on login."}
+  ],
+  "notes_url": "https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Release-Notes"
+}

@@ -3,13 +3,23 @@
 # Used by ~/.config/mango/arctic/autostart.conf. If the service is already running
 # (for example as a systemd user unit from arctic-desktop-config), nothing happens.
 #
-#   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle [--restart]
+#   arctic-session shell | waybar | mako [--fallback] | polkit | nm-applet | clipboard | idle [--restart]
+#                  nightlight | drives | lid [--restart] | effects | screensaver | power-watch
 #
 # `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
 # ~/.config/mango/user.conf), or when Quickshell isn't installed, it starts the fallback desktop
 # instead: waybar for the bar and lxqt-policykit for passwords (fuzzel is the launcher).
+#
+# `mako` does nothing in the shell's session: the shell is the notification server there.
+# The shell runs `mako --fallback` itself when it couldn't take the name (like the polkit agent).
+# `nm-applet` starts only with the fallback desktop: the shell has its own network menu.
 set -uo pipefail
+
+shell_session() {   # the Arctic shell runs this session (not the waybar fallback)
+  [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]] && command -v quickshell >/dev/null 2>&1 \
+    && arctic-shell --path >/dev/null 2>&1
+}
 
 run_once() {   # run_once <process name> <command...>
   local name="$1"; shift
@@ -18,35 +28,63 @@ run_once() {   # run_once <process name> <command...>
   setsid -f "$@" >/dev/null 2>&1
 }
 
+# battery | ac | nothing (no battery): from sysfs (ARCTIC_POWER_SUPPLY in tests). A mouse's or a
+# phone's battery (scope Device) doesn't count; any charger online means plugged in.
+power_source() {
+  local dir type scope online battery=""
+  for dir in "${ARCTIC_POWER_SUPPLY:-/sys/class/power_supply}"/*; do
+    [[ -r "$dir/type" ]] || continue
+    read -r type < "$dir/type"
+    if [[ "$type" == Battery ]]; then
+      scope=System
+      [[ -r "$dir/scope" ]] && read -r scope < "$dir/scope"
+      [[ "$scope" == Device ]] || battery=1
+    elif [[ -r "$dir/online" ]]; then
+      read -r online < "$dir/online"
+      [[ "$online" == 1 ]] && { echo ac; return 0; }
+    fi
+  done
+  [[ -n "$battery" ]] && echo battery
+  return 0
+}
+
 case "${1:-}" in
   shell)
-    if [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]] && command -v quickshell >/dev/null 2>&1 \
-       && arctic-shell --path >/dev/null 2>&1; then
+    if shell_session; then
       arctic-shell   # quickshell -n: exits at once if it already runs
     else
       run_once waybar waybar
       "$0" polkit
     fi ;;
   waybar)    run_once waybar waybar ;;
-  mako)      run_once mako mako ;;
+  mako)
+    if [[ "${2:-}" == --fallback ]] || ! shell_session; then run_once mako mako; fi ;;
   polkit)
     for agent in /usr/libexec/lxqt-policykit-agent /usr/libexec/polkit-mate-authentication-agent-1 /usr/libexec/xfce-polkit; do
       if [[ -x "$agent" ]]; then run_once "$(basename "$agent" | cut -c1-15)" "$agent"; break; fi
     done ;;
-  nm-applet) run_once nm-applet nm-applet --indicator ;;
+  nm-applet) shell_session || run_once nm-applet nm-applet --indicator ;;
   clipboard)
+    # Clipboard history (cliphist, Super + V). Settings (Keyboard and mouse) turns it off with
+    # history=off in ~/.config/arctic/clipboard.conf and applies that with `clipboard --restart`.
+    if [[ "${2:-}" == --restart ]]; then pkill -u "$UID" -f "wl-paste --watch cliphist" 2>/dev/null; fi
+    grep -qsx 'history=off' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/clipboard.conf" && exit 0
     pgrep -u "$UID" -f "wl-paste --watch cliphist" >/dev/null 2>&1 || \
       { command -v cliphist >/dev/null && setsid -f wl-paste --watch cliphist store >/dev/null 2>&1; } ;;
   idle)
     # Lock after 5 min, suspend after 15 min; lock before any suspend. The live session only dims.
     # Settings (Power & lock) changes the times in ~/.config/arctic/idle.conf (lock_after=,
     # suspend_after=, in seconds; 0 = never) and restarts swayidle with `idle --restart`.
+    # Also there: lock_after_battery= and suspend_after_battery= (on battery; missing = the same
+    # as plugged in), dim_before_lock= (seconds, 0 = don't dim) and screen_off_after= (seconds
+    # after the lock, 0 = leave the screens on).
     if arctic-is-live 2>/dev/null; then exit 0; fi
     if [[ "${2:-}" == --restart ]]; then
       pkill -u "$UID" -x swayidle 2>/dev/null
       for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -u "$UID" -x swayidle >/dev/null 2>&1 || break; sleep 0.1; done
     fi
-    lock_after=300 suspend_after=900
+    lock_after=300 suspend_after=900 dim_before_lock=30 screen_off_after=60
+    lock_after_battery="" suspend_after_battery=""
     conf="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/idle.conf"
     if [[ -r "$conf" ]]; then
       while IFS='=' read -r key value; do
@@ -54,13 +92,95 @@ case "${1:-}" in
         case "$key" in
           lock_after) lock_after=$value ;;
           suspend_after) suspend_after=$value ;;
+          dim_before_lock) dim_before_lock=$value ;;
+          screen_off_after) screen_off_after=$value ;;
+          lock_after_battery) lock_after_battery=$value ;;
+          suspend_after_battery) suspend_after_battery=$value ;;
         esac
       done < "$conf"
     fi
+    if [[ -n "$lock_after_battery$suspend_after_battery" ]]; then
+      if [[ "$(power_source)" == battery ]]; then
+        lock_after=${lock_after_battery:-$lock_after} suspend_after=${suspend_after_battery:-$suspend_after}
+      fi
+      # Plugging in or unplugging restarts this with the other times.
+      [[ -n "$(power_source)" ]] && setsid -f "$0" power-watch >/dev/null 2>&1
+    fi
+    # Keep awake (arctic-keep-awake) drops both timeouts until it ends; locking before sleep stays.
+    awake=""
+    [[ -r "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake" ]] && read -r awake < "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake"
+    if [[ "$awake" =~ ^[0-9]+$ ]] && (( awake == 0 || awake > $(date +%s) )); then lock_after=0 suspend_after=0; fi
+    # Apps that asked to keep the screen on (arctic-screensaver: video calls, presentations) too.
+    [[ -s "${XDG_RUNTIME_DIR:-/tmp}/arctic/inhibitors.json" ]] && lock_after=0 suspend_after=0
     args=(-w)
+    # Dim the screen a little before it locks (dim_before_lock seconds; 0 = don't); any key or
+    # movement brings the brightness back. Screens without a backlight (monitors) stay as they are.
+    if (( lock_after > 0 && dim_before_lock > 0 && lock_after > dim_before_lock )) && command -v brightnessctl >/dev/null 2>&1; then
+      # swayidle's sh expands it: half the brightness, at least 1%.
+      # shellcheck disable=SC2016
+      args+=(timeout "$(( lock_after - dim_before_lock ))"
+             'brightnessctl -q -s set "$(( $(brightnessctl -m | cut -d, -f4 | tr -d %) / 2 + 1 ))%"'
+             resume 'brightnessctl -q -r')
+    fi
     (( lock_after > 0 )) && args+=(timeout "$lock_after" 'arctic-lock')
+    # The screens go dark a little after the lock (Mango's sleep_monitor); a key or the mouse
+    # wakes the ones it put to sleep.
+    if (( lock_after > 0 && screen_off_after > 0 )) && command -v arctic-display >/dev/null 2>&1; then
+      args+=(timeout "$(( lock_after + screen_off_after ))" 'arctic-display screens off'
+             resume 'arctic-display screens on')
+    fi
     (( suspend_after > 0 )) && args+=(timeout "$suspend_after" 'systemctl suspend')
     args+=(before-sleep 'arctic-lock')
     run_once swayidle swayidle "${args[@]}" ;;
-  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]" >&2; exit 2 ;;
+  # Restarts the idle times when the computer is plugged in or unplugged (only started by `idle`
+  # when idle.conf has times for the battery). One per session: the lock file says so.
+  power-watch)
+    lockfile="${XDG_RUNTIME_DIR:-/tmp}/arctic/power-watch.lock"
+    mkdir -p "${lockfile%/*}"
+    exec 9>"$lockfile"
+    flock -n 9 || exit 0
+    last="$(power_source)"
+    [[ -n "$last" ]] || exit 0
+    # A battery reports its charge every minute or so: restart only when the source changes.
+    udevadm monitor --udev --subsystem-match=power_supply 2>/dev/null 9>&- | while read -r line; do
+      [[ "$line" == UDEV* ]] || continue
+      now="$(power_source)"
+      [[ "$now" == "$last" ]] && continue
+      last="$now"
+      "$0" idle --restart 9>&-
+    done ;;
+  # Night light on its schedule (arctic-nightlight runs wlsunset; Settings > Displays).
+  nightlight) command -v arctic-nightlight >/dev/null 2>&1 && arctic-nightlight apply >/dev/null 2>&1 ;;
+  # USB drives and SD cards mount by themselves, with a notification (udiskie; arctic-drives ejects).
+  # Not in the live session, where the installer may be partitioning a USB disk. automount=off
+  # in ~/.config/arctic/drives.conf keeps the notifications and mounts only what you open.
+  drives)
+    if arctic-is-live 2>/dev/null; then exit 0; fi
+    auto=--automount
+    grep -qsx 'automount=off' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/drives.conf" && auto=--no-automount
+    run_once udiskie udiskie "$auto" --notify --no-tray ;;
+  # Closing the lid: "lock" or "screen off" in ~/.config/arctic/lid.conf (Settings > Power and
+  # lock) keeps logind from suspending while the session runs; arctic-display does the rest.
+  lid)
+    if arctic-is-live 2>/dev/null; then exit 0; fi
+    why="Closing the lid does what you chose in Settings"
+    if [[ "${2:-}" == --restart ]]; then
+      # setsid made each holder a process group of its own: end it with its `sleep`.
+      for pid in $(pgrep -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux"); do
+        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null
+      done
+    fi
+    choice="$(sed -n 's/^when_closed=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/lid.conf" 2>/dev/null | tail -n 1)"
+    case "$choice" in
+      lock|screen-off)
+        pgrep -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux" >/dev/null 2>&1 || \
+          setsid -f systemd-inhibit --what=handle-lid-switch --who="Arctic Linux" --why="$why" --mode=block \
+            sleep infinity >/dev/null 2>&1 ;;
+    esac ;;
+  # Apps keeping the screen on through org.freedesktop.ScreenSaver (Chromium, Electron apps).
+  screensaver) pgrep -u "$UID" -f "arctic-screensaver run" >/dev/null 2>&1 || \
+    { command -v arctic-screensaver >/dev/null 2>&1 && setsid -f arctic-screensaver run >/dev/null 2>&1; } ;;
+  # Lighter effects in virtual machines and without a GPU driver; game mode ends with the session.
+  effects) command -v arctic-effects >/dev/null 2>&1 && arctic-effects apply >/dev/null 2>&1 ;;
+  *) echo "usage: arctic-session shell|waybar|mako [--fallback]|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives|lid [--restart]|effects|screensaver|power-watch" >&2; exit 2 ;;
 esac

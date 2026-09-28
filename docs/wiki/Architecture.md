@@ -201,14 +201,18 @@ commands.
   `~/.config/arctic/motion.conf`, `settings.conf` (written by Arctic Settings), then `user.conf`. The `arctic/*.conf` files are links to
   `/usr/share/arctic/mango/`, so package updates reach existing accounts.
 - **Autostart:** `arctic-theme apply`, `arctic-session shell|mako|nm-applet|clipboard|idle`,
-  `arctic-welcome`.
+  `arctic-welcome` (`mako` only outside the shell's session: the shell is the notification server).
+  nm-applet runs only with the waybar fallback; the shell draws its own network, Bluetooth (with a
+  BlueZ pairing agent, `shell/scripts/bt-agent.py`) and sound menus.
 - **The shell** (`shell/`, run by `arctic-shell` as `quickshell -p /usr/share/arctic/shell`) draws
   the bar, frame, launcher, Get apps, wallpapers, power menu, shortcut sheet, OSD, lock screen
-  (ext-session-lock + PAM), polkit agent and live welcome. Workspaces come from `mmsg watch`
-  through `scripts/workspaces.py`.
+  (ext-session-lock + PAM), polkit agent, live welcome and notifications (it owns
+  `org.freedesktop.Notifications`: toasts, the notification centre, do not disturb; see
+  [Notifications](Notifications)). Workspaces come from `mmsg watch` through
+  `scripts/workspaces.py`, the keyboard layout from `scripts/keyboard.py`.
 - **Keybinds and helpers talk to the shell over IPC:** `arctic-shell-ipc <target> <function>`
   (`quickshell ipc call`). Targets: `launcher`, `apps`, `wallpapers`, `power`, `keys`, `osd`,
-  `lock`, `welcome`, `dnd`, `updates`, `shell`. It exits non-zero when the shell isn't running, so every
+  `lock`, `welcome`, `dnd`, `notifications`, `keyboard`, `updates`, `shell`. It exits non-zero when the shell isn't running, so every
   `arctic-*` helper falls back to fuzzel, swaylock or a notification. `ARCTIC_SHELL=waybar`
   selects the waybar fallback desktop.
 - **Themes:** `~/.config/arctic/current` links to `/usr/share/arctic/themes/<theme>`; every app

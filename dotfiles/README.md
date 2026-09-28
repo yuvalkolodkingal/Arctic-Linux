@@ -37,7 +37,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `.config/mango/arctic/binds.conf` | Every shortcut (cheat sheet: `Super + /`) | Accessibility → Keyboard |
 | `.config/mango/arctic/apps.conf` | `Super+Enter/W/E/F` → your terminal, browser, editor, file manager via `arctic-open` | — |
 | `.config/mango/arctic/rules.conf` | Floating dialogs, full-screen installer, layer rules for blur and animation | — |
-| `.config/mango/arctic/autostart.conf` | Theme, the shell (bar, launcher, OSD, lock, polkit agent), notifications, network applet, clipboard, idle lock, live welcome | — |
+| `.config/mango/arctic/autostart.conf` | Theme, the shell (bar and its menus, launcher, OSD, lock, polkit agent), notifications, network applet (fallback desktop only), clipboard, idle lock, live welcome | — |
 | `.config/arctic/shell.json` | Shell settings: `{"frame": true}` (the rounded screen frame) | — |
 | `.config/waybar/` | **Fallback bar** (`ARCTIC_SHELL=waybar`): the same TopBar in waybar | TopBar, LiveDesktop |
 | `.config/fuzzel/fuzzel.ini` | **Fallback launcher**: 520px frosted card, 20px radius, amber-soft selection | Launcher |
@@ -72,15 +72,25 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-launcher ["=12*4"]` | Open or close the launcher (`Super + Space`), optionally with something typed |
 | `arctic-open terminal\|browser\|editor\|files\|files-tui` | Open the app you picked for a role |
 | `arctic-open terminal [--hold] -e <command…>` | Run a command in the terminal you picked (the launcher's terminal apps, Fetch, Shift+Enter) |
+| `arctic-open --focus <desktop id>` | Bring the app's window back if it's open, else start it (shortcuts made in Settings) |
 | `arctic-lock` | Lock the screen (`Super + L`); off in the live session |
 | `arctic-power [lock\|logout\|suspend\|restart\|poweroff]` | The power menu (`Super + Esc`), or do it now |
-| `arctic-osd volume\|brightness up\|down`, `volume mute`, `mic mute` | Hardware keys with the on-screen display |
-| `arctic-dnd [toggle]` | Do not disturb (`Super + Shift + N`) |
-| `arctic-screenshot area\|screen\|window` | `Print`, `Shift + Print`, `Super + Print` |
+| `arctic-osd volume\|brightness\|kbd up\|down`, `volume mute`, `mic mute` | Hardware keys with the on-screen display |
+| `arctic-dnd [toggle\|on\|off\|for 1h\|until-tomorrow]` | Do not disturb (`Super + Shift + N`) |
+| `arctic-screenshot area\|screen\|window [--copy-only] [--edit]` | `Print` or `Super + Shift + S`, `Shift + Print`, `Super + Print`, `Ctrl + Print`; the notification opens, shows, edits (swappy) or trashes the picture |
+| `arctic-ocr [--qr]` | Copy the text in an area (`Super + Ctrl + Print`, tesseract), or a QR code |
+| `arctic-colorpick` | Copy the colour under the pointer as `#rrggbb` (`Super + Shift + C`) |
+| `arctic-record toggle\|start\|stop\|status [--json]` | Record the screen with wf-recorder (`Super + Alt + R`); `status --json` for the bar |
+| `arctic-capture` | The capture helpers' parser: focused window and monitor, windows for slurp, pixel colour, OCR, QR |
+| `arctic-clipboard` | Clipboard history (`Super + V`): the shell's panel, else fuzzel |
+| `arctic-emoji` | Emoji (`Super + Ctrl + E`): the shell's picker, else fuzzel |
+| `arctic-window pin` | Pin a window over every workspace (`Super + Shift + P`) |
+| `arctic-touchpad toggle\|on\|off\|status` | The touchpad key |
 | `arctic-keys` | Keyboard cheat sheet (`Super + /`) |
 | `arctic-settings [page]` | Settings (`Super + S`): appearance, windows, displays, keyboard and mouse, shortcuts, default apps, network, sound, updates, power, startup apps ([`../settings/README.md`](../settings/README.md)) |
-| `arctic-shell-ipc apps install` | Get apps: install with dnf or Flatpak (`Super + Shift + A`) |
-| `arctic-session shell\|mako\|…` | Start one session service once (used by autostart) |
+| `arctic-shell-ipc apps install\|remove` | Get apps: install or remove apps (`Super + Shift + A`) |
+| `arctic-session shell\|mako\|…` | Start one session service once (used by autostart; `mako` only outside the shell's session) |
+| `arctic-notify dismiss\|dismiss-all\|center\|invoke\|history\|count` | Notifications: close pop-ups (`Super + Delete`, `Super + Shift + Delete`), the centre (`Super + Alt + N`), act on the newest (`Super + Alt + ,`); makoctl without the shell |
 | `arctic-welcome` | The live USB's welcome card, once per boot |
 | `arctic-start-installer` | Start the installer from the live USB (`Super + I`) |
 
@@ -136,10 +146,9 @@ tries the shell first and falls back on its own, so keybinds are the same either
 - **Launcher and popovers** hang from the bar and can be docked to any screen edge (from the
   original Quickshell setup) rather than floating 120px below it; the screen frame is also the
   original shell's.
-- **Bar keyboard access:** the design's `Super + B` bar focus isn't there yet. Everything on the
-  bar also has its own shortcut.
-- **Lock screen:** "N notifications hidden" isn't shown, because mako can't count hidden
-  notifications.
+- **Bar keyboard access** is `Super + Alt + B` rather than the design's `Super + B` (the browser's
+  key since 0.3); every menu on the bar also has its own shortcut (`Super + A`,
+  `Super + Ctrl + W/B/A/P/D/T/M`).
 - **Fallback only:** waybar's workspaces use `ext/workspaces` (Fedora's waybar 0.15 has no
   `mango/workspaces` module); fuzzel has no `=` / `>` modes.
 

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# arctic-sysmon — what's running and what it uses (Ctrl+Shift+Esc).
+#
+#   arctic-sysmon            open a system monitor: Mission Center or GNOME System Monitor when
+#                            one is installed, else btop (Arctic's theme) in your terminal
+#   arctic-sysmon --which    print the command it would run
+set -uo pipefail
+
+pick() {
+  if command -v flatpak >/dev/null 2>&1 && flatpak info io.missioncenter.MissionCenter >/dev/null 2>&1; then
+    echo "flatpak run io.missioncenter.MissionCenter"
+  elif command -v missioncenter >/dev/null 2>&1; then
+    echo "missioncenter"
+  elif command -v gnome-system-monitor >/dev/null 2>&1; then
+    echo "gnome-system-monitor"
+  elif command -v btop >/dev/null 2>&1; then
+    echo "arctic-open terminal -e btop"
+  else
+    echo "arctic-open terminal --hold -e top"
+  fi
+}
+
+case "${1:-}" in
+  --which) pick ;;
+  "")
+    read -r -a cmd <<<"$(pick)"
+    exec "${cmd[@]}" ;;
+  *) echo "usage: arctic-sysmon [--which]" >&2; exit 2 ;;
+esac

@@ -20,7 +20,7 @@
 	</description>
 
 	<preferences>
-		<version>0.2.1</version>
+		<version>0.3.0</version>
 		<packagemanager>dnf5</packagemanager>
 		<locale>en_US</locale>
 		<keytable>us</keytable>
@@ -64,12 +64,15 @@
 		<!-- The Arctic desktop, the installer and the live session -->
 		<package name="arctic-desktop"/>
 		<!-- Arctic Settings (arctic-desktop requires it too; named so it is never left out)
-		     and the tools its Network, Bluetooth and Sound pages open. -->
+		     and the tools behind the bar menus' and Settings' "More…" links. -->
 		<package name="arctic-settings"/>
 		<package name="nm-connection-editor"/>
 		<package name="blueman"/>
 		<package name="pavucontrol"/>
 		<package name="wlr-randr"/>
+		<!-- Web apps (Get apps → Web apps; arctic-desktop requires it too; named so it is never
+		     left out). WebKitGTK 6.0 adds about 155 MiB installed. -->
+		<package name="arctic-webapps"/>
 		<!-- Default apps the installer treats as already in the live image (in_live_image in
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
 		<package name="kitty"/>
@@ -154,7 +157,7 @@
 		<package name="selinux-policy-targeted"/>
 		<package name="policycoreutils"/>
 		<!-- Desktop odds and ends -->
-		<package name="google-noto-emoji-fonts"/>
+		<package name="google-noto-color-emoji-fonts"/>
 		<package name="adwaita-cursor-theme"/>
 		<package name="adwaita-icon-theme"/>
 		<package name="bash-completion"/>
@@ -182,8 +185,8 @@
 		<ignore name="gfs2-utils"/>
 		<ignore name="reiserfs-utils"/>
 		<ignore name="qemu-user-static"/>
-		<!-- Weak dependencies nothing here uses: EPS for kimageformats, cpp for xrdb (~70 MB) -->
-		<ignore name="ghostscript"/>
+		<!-- Weak dependencies nothing here uses: cpp for xrdb. (Stream 5: ghostscript is
+		     no longer ignored, printing needs it: cups-filters → libcupsfilters.) -->
 		<ignore name="cpp"/>
 		<ignore name="glibc-all-langpacks"/>
 	</packages>

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# arctic-share-picker — the screen-share picker in Mango sessions. xdg-desktop-portal-wlr runs it
+# (chooser_cmd in /etc/xdg/xdg-desktop-portal-wlr/mango) when an app asks to share your screen.
+# It prints what you picked, "Monitor: <output>" or "Window: <identifier>", and nothing when you
+# decline (xdg-desktop-portal-wlr(5)).
+#
+# The list names every monitor and every window (arctic-capture sources, from Mango): the
+# shell's "Share your screen" card, else fuzzel. Without Mango's answer, slurp picks a monitor by
+# clicking it.
+set -uo pipefail
+
+# The portal is started by D-Bus: find Mango's socket if its environment didn't bring it.
+if [[ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]]; then
+  sock="$(find "${XDG_RUNTIME_DIR:-/run/user/$UID}" -maxdepth 1 -name 'mango-*.sock' -type s 2>/dev/null | head -n1)"
+  [[ -n "$sock" ]] && export MANGO_INSTANCE_SIGNATURE="$sock"
+fi
+
+# The shell's card answers on a FIFO: one line, empty when you decline.
+run="${XDG_RUNTIME_DIR:-/run/user/$UID}/arctic"
+mkdir -p "$run" && chmod 700 "$run"
+fifo="$run/share-$$.fifo"
+if mkfifo -m 600 "$fifo" 2>/dev/null; then
+  trap 'rm -f -- "$fifo"' EXIT
+  # Read-write, so opening doesn't wait for the shell's writer.
+  exec 3<>"$fifo"
+  if [[ "$(arctic-shell-ipc share pick "$fifo" 2>/dev/null)" == true ]]; then
+    IFS= read -r -t 120 answer <&3 || answer=""
+    [[ "$answer" =~ ^(Monitor|Window):\ [^[:cntrl:]]+$ ]] && printf '%s\n' "$answer"
+    exit 0
+  fi
+fi
+
+sources="$(arctic-capture sources 2>/dev/null)"
+if [[ -n "$sources" ]] && command -v fuzzel >/dev/null 2>&1; then
+  pick="$(cut -f1 <<<"$sources" | fuzzel --dmenu --index --prompt "Share  " \
+    --placeholder "Pick a screen or a window to share" 2>/dev/null)" || exit 0
+  [[ "$pick" =~ ^[0-9]+$ ]] || exit 0
+  sed -n "$(( pick + 1 ))p" <<<"$sources" | cut -f2
+  exit 0
+fi
+slurp -f 'Monitor: %o' -or 2>/dev/null || true

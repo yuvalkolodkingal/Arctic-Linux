@@ -20,6 +20,8 @@
 #   arctic-shell           shell/ → /usr/share/arctic/shell
 #   arctic-settings        settings/ → /usr/share/arctic/settings, arctic-settings, packaging/settings/
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
+#   arctic-webapps         cmd/arctic-webapp (Go) + cmd/arctic-webapp-host (Go + cgo: WebKitGTK 6.0, GTK 4),
+#                          internal/webapp/, internal/webkit/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
 #   arctic-sddm-theme      branding/sddm/arctic/
 #   arctic-plymouth-theme  branding/plymouth/arctic/ (+ branding/plymouth/dracut/, the initrd hook)
@@ -32,6 +34,12 @@
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
+# ---- stream 1 (web apps): arctic-webapp-host is cgo, linked externally with Fedora's flags;
+# brp-strip strips it too. Its WebKitGTK floor is the version it was built against (it links
+# with -z now, so a newer symbol would stop it starting on an older WebKitGTK;
+# docs/BUILD-SPEC.md §11). The fallback keeps rpmspec -q and dnf builddep working before the
+# -devel package is installed.
+%global webkit_built    %(pkg-config --modversion webkitgtk-6.0 2>/dev/null || echo 2.50)
 # --- stream 6: Nerd Font symbols (arctic-fonts-symbols). Fedora has no symbols-only Nerd Font,
 # so the upstream release is Source1, pinned by version and SHA-256 (checked in %%prep);
 # tools/build-rpms.sh downloads it next to the Mango tarball.
@@ -40,7 +48,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        0.2.1
+Version:        0.3.0
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -71,6 +79,13 @@ BuildRequires:  python3
 # %%py_byte_compile
 BuildRequires:  python3-rpm-macros
 BuildRequires:  python3-pillow
+# ---- stream 1 (web apps): arctic-webapp-host (cgo): the C compiler, WebKitGTK 6.0, GTK 4,
+# libsoup 3; readelf in %%check
+BuildRequires:  gcc
+BuildRequires:  binutils
+BuildRequires:  pkgconfig(webkitgtk-6.0)
+BuildRequires:  pkgconfig(gtk4)
+BuildRequires:  pkgconfig(libsoup-3.0)
 
 %description
 Arctic Linux is a Fedora %{dist_version} based desktop built around the Mango Wayland
@@ -187,7 +202,7 @@ the NixOS nix-installer policy.
 %package -n arctic-desktop-config
 Summary:        Arctic Linux desktop configuration and helper commands
 BuildArch:      noarch
-Requires:       mangowm >= 0.17.1
+Requires:       mangowm >= 0.17.3
 Requires:       arctic-backgrounds = %{version}-%{release}
 Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-logos = %{version}-%{release}
@@ -204,7 +219,9 @@ Requires:       libnotify
 Requires:       procps-ng
 Requires:       util-linux
 Requires:       librsvg2-tools
-Requires:       mako
+# Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
+# waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
+Recommends:     mako
 Requires:       swaybg
 Requires:       swayidle
 Requires:       swaylock
@@ -248,6 +265,30 @@ Requires:       libdnf5-plugin-actions
 Requires:       snapper
 Requires:       btrfs-progs
 Requires:       findutils
+# Stream 4 (shortcuts and capture): gio and gdbus for the screenshot notification's buttons
+# (open, show in Files, move to the trash); swappy edits screenshots (satty isn't in Fedora;
+# swappy's weak deps bring its icon font); wf-recorder records the screen (arctic-record);
+# tesseract (its data package brings English) and zxing-cpp read text and QR codes (arctic-ocr).
+Requires:       glib2
+Recommends:     swappy
+Recommends:     wf-recorder
+Recommends:     tesseract
+Recommends:     python3-zxing-cpp
+# Stream 5 (system): night light (arctic-nightlight runs wlsunset; tzdata's zone1970.tab gives
+# the time zone's location), keep awake (arctic-keep-awake, through arctic-session's swayidle).
+Requires:       wlsunset
+Requires:       tzdata
+# Removable drives: udiskie mounts them with a notification (arctic-session drives);
+# arctic-drives lists and ejects them (lsblk, udisksctl).
+Requires:       udiskie
+Requires:       udisks2
+# Screens and the lid: arctic-display (wlr-randr, Mango's mmsg; Duplicate needs wl-mirror),
+# arctic-session lid (systemd-inhibit); lighter effects and game mode: arctic-effects.
+Requires:       wlr-randr
+Recommends:     wl-mirror
+# Apps that keep the screen on through org.freedesktop.ScreenSaver: arctic-screensaver.
+Requires:       python3-dbus
+Requires:       python3-gobject-base
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
@@ -290,9 +331,33 @@ Requires:       qt6-qtwayland
 Requires:       python3
 Requires:       python3-pillow
 Requires:       python3-pyte
+# ---- stream 2 (Get apps): Fedora's app catalogue, for app names, summaries and icons on the
+# Fedora packages page (without it the page lists every package by name)
+Recommends:     appstream-data
+# ---- end stream 2
 # pkexec, for Get apps
 Requires:       polkit
+# Stream 3b (notifications): gdbus checks who owns org.freedesktop.Notifications.
+Requires:       glib2
 Requires:       arctic-fonts = %{version}-%{release}
+# Stream 4 (input): the emoji picker lists unicode-emoji's emoji in the colour emoji font and
+# types them with wtype (the clipboard panel's paste uses it too); without wtype they're copied.
+Requires:       unicode-emoji
+Requires:       google-noto-color-emoji-fonts
+Recommends:     wtype
+# Get apps → Web apps and Remove apps → Web apps (stream 1); hidden when it is missing
+Recommends:     arctic-webapps = %{version}-%{release}
+# Stream 3a (bar menus): the Bluetooth pairing agent and battery.py talk D-Bus with
+# python3-dbus and a GLib main loop; gdbus (glib2, above) checks for the power-profiles
+# service; audio.py reads ports and profiles with pw-dump and pw-cli; ddcutil sets external
+# monitors' brightness. (The network menu hides itself without nmcli.)
+Requires:       python3-dbus
+Requires:       python3-gobject-base
+Requires:       pipewire-utils
+Recommends:     ddcutil
+# Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
+Recommends:     qrencode
+Recommends:     NetworkManager-openvpn
 # --- stream 6 (launcher, command menu): the launcher finds files with fd and converts units
 # with qalc when they are installed.
 Recommends:     fd-find
@@ -306,8 +371,12 @@ Recommends:     arctic-fonts-symbols = %{version}-%{release}
 # --- end stream 6
 
 %description -n arctic-shell
-The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,
-the get-apps console, on-screen display, lock screen and the live-session welcome card.
+The Arctic Linux desktop shell, written for Quickshell: top bar with its own menus (network
+and Wi-Fi, Bluetooth with a pairing agent, sound, battery and power mode, calendar, media,
+tray menus) and Quick Settings, launcher with Get apps (Flathub, Fedora packages, web apps,
+terminal apps, a console) and Remove apps, wallpaper picker, on-screen display, lock screen,
+the live-session welcome card, and the notification server with its pop-ups and notification
+centre.
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
 
 # ---------------------------------------------------------------------------------------------
@@ -337,8 +406,9 @@ Recommends:     xdg-utils
 %description -n arctic-settings
 Arctic Settings: appearance and themes, windows (Mango gaps, borders, animations, focus,
 layout), displays, keyboard and mouse, shortcuts, default apps, network, Bluetooth, sound,
-updates, power and lock, startup apps. Changes go to ~/.config/mango/settings.conf and the
-Arctic helpers; nothing needs root. Start it with arctic-settings (Super+S).
+updates, power and lock, startup apps, printers and scanners, date and time. Changes go to
+~/.config/mango/settings.conf and the Arctic helpers; only the time zone, the clock and the
+language ask for the password (systemd, polkit). Start it with arctic-settings (Super+S).
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-installer
@@ -383,13 +453,37 @@ the 12-step wizard, written for Quickshell. The app catalog and install profiles
 /usr/share/arctic.
 
 # ---------------------------------------------------------------------------------------------
+# ---- stream 1 (web apps)
+%package -n arctic-webapps
+Summary:        Arctic Linux web apps: any website as an app with its own window and icon
+# libwebkitgtk-6.0.so.4 and libgtk-4.so.1 come from the automatic soname Requires. WebKitGTK has
+# no symbol versions and the host is linked with -z now, so the floor is the version it was
+# built against (docs/BUILD-SPEC.md §11).
+Requires:       webkitgtk6.0%{?_isa} >= %{webkit_built}
+# SVG icons and letter icons → PNG
+Requires:       librsvg2-tools
+# ~/.local/share/icons/hicolor is found through hicolor's index.theme
+Requires:       hicolor-icon-theme
+# A web app's scope uses registrable domains from the Public Suffix List
+Requires:       publicsuffix-list
+Recommends:     arctic-desktop-config = %{version}-%{release}
+Recommends:     arctic-fonts = %{version}-%{release}
+
+%description -n arctic-webapps
+Any website as an app: its own window, icon, launcher entry and sign-in, separate from your
+browser. arctic-webapp adds, lists, changes and removes web apps (the launcher's Get apps and
+Remove apps use it, and nothing needs a password); each app window is arctic-webapp-host, built
+on WebKitGTK. Sites that need protected media or video calls can open in a Chromium-family
+browser instead.
+
+# ---------------------------------------------------------------------------------------------
 %package -n sddm-wayland-mango
 Summary:        SDDM greeter on the Mango Wayland compositor
 BuildArch:      noarch
 Provides:       sddm-greeter-displayserver
 Conflicts:      sddm-greeter-displayserver
 Requires:       sddm
-Requires:       mangowm >= 0.17.1
+Requires:       mangowm >= 0.17.3
 Requires:       layer-shell-qt
 Requires:       qt6-qtwayland
 Requires:       adwaita-cursor-theme
@@ -464,11 +558,13 @@ Requires:       arctic-selinux = %{version}-%{release}
 Requires:       arctic-desktop-config = %{version}-%{release}
 Requires:       arctic-shell = %{version}-%{release}
 Requires:       arctic-settings = %{version}-%{release}
+# Web apps (stream 1): Requires, so existing installs get it through arctic-update
+Requires:       arctic-webapps = %{version}-%{release}
 Requires:       sddm-wayland-mango = %{version}-%{release}
 Requires:       arctic-sddm-theme = %{version}-%{release}
 Requires:       arctic-plymouth-theme = %{version}-%{release}
 Requires:       arctic-grub-theme = %{version}-%{release}
-Requires:       mangowm >= 0.17.1
+Requires:       mangowm >= 0.17.3
 Requires:       sddm
 # Swappable in the installer's app picker (terminal, shell, file manager, video): weak deps,
 # so unticking one doesn't remove this metapackage.
@@ -478,7 +574,9 @@ Recommends:     zsh
 Recommends:     Thunar
 Recommends:     vlc
 Requires:       fastfetch
-Requires:       mako
+# Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
+# waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
+Recommends:     mako
 Requires:       swaybg
 Requires:       swayidle
 Requires:       swaylock
@@ -490,10 +588,14 @@ Requires:       brightnessctl
 Requires:       playerctl
 Requires:       wireplumber
 Requires:       pipewire-pulseaudio
-Requires:       pavucontrol
-Requires:       network-manager-applet
+# Stream 3a (bar menus): the shell draws the network, Bluetooth and sound menus and pairs with
+# its own agent, so the applet, the Bluetooth manager and the mixer are weak dependencies (the
+# waybar session and the menus' "Edit connections…" links still use them); BlueZ itself stays.
+Recommends:     pavucontrol
+Recommends:     network-manager-applet
 Requires:       NetworkManager-wifi
-Requires:       blueman
+Recommends:     blueman
+Requires:       bluez
 Requires:       xdg-desktop-portal-wlr
 Requires:       xdg-desktop-portal-gtk
 Requires:       xdg-user-dirs
@@ -534,6 +636,43 @@ Requires:       qt6ct
 Requires:       qt5ct
 # The terminal system monitor, themed like the rest (btop/arctic.theme).
 Recommends:     btop
+# Stream 5 (system): printing and scanning. Driverless printers (IPP Everywhere, AirPrint) over
+# USB (ipp-usb) and the network (avahi + nss-mdns; cups-browsed stays out, CUPS and the print
+# dialogs find network printers themselves); system-config-printer administers queues through
+# cups-pk-helper (polkit); Settings > Printers and scanners. cups.socket/cups.path are enabled
+# by preset. Scanners: sane-airscan (driverless eSCL/WSD) and Document Scanner.
+Requires:       cups
+Requires:       cups-filters
+Requires:       ghostscript
+Requires:       ipp-usb
+Requires:       avahi
+Requires:       nss-mdns
+Requires:       cups-pk-helper
+Requires:       system-config-printer
+Recommends:     gutenprint-cups
+Recommends:     sane-airscan
+Recommends:     sane-backends-drivers-scanners
+Recommends:     simple-scan
+# Stream 5 (system): firmware updates (arctic-update firmware; also in @core).
+Requires:       fwupd
+# Stream 5 (system): SSH keys once per session (gcr-ssh-agent), the firewall Settings shows
+# (firewalld, in @core too), system monitor (Ctrl+Shift+Esc falls back to btop).
+Requires:       gcr
+Requires:       firewalld
+Recommends:     firewall-config
+# Users and sign-in (AccountsService: name and picture; fprintd: fingerprints) and running an app
+# on a laptop's discrete graphics chip (arctic-gpu → switcherooctl).
+Requires:       accountsservice
+Recommends:     fprintd
+# The lock screen takes a saved fingerprint too (shell/pam/arctic-lock-fingerprint).
+Recommends:     fprintd-pam
+Requires:       switcheroo-control
+# Stream 5 (system): phones (MTP, iPhone), cameras and network shares in Thunar (gvfs).
+Recommends:     gvfs
+Recommends:     gvfs-mtp
+Recommends:     gvfs-afc
+Recommends:     gvfs-gphoto2
+Recommends:     gvfs-smb
 
 %description -n arctic-desktop
 Pulls in everything an Arctic Linux desktop needs: Mango, SDDM with the arctic theme and
@@ -557,9 +696,15 @@ if [ -f go.mod ]; then
   export GOFLAGS
   export GOCACHE="$PWD/_build/gocache" GOPATH="$PWD/_build/gopath"
   mkdir -p _build/bin
-  for cmd in arcticd arctic-install; do
+  for cmd in arcticd arctic-install arctic-webapp; do
     go build -ldflags "-B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
   done
+  # ---- stream 1 (web apps): the window (docs/BUILD-SPEC.md §11), cgo against WebKitGTK 6.0
+  # and GTK 4. Go reads CGO_CFLAGS/CGO_LDFLAGS, not the CFLAGS/LDFLAGS rpm exports; -tags
+  # webkit selects its files (without it the package has no Go files, so no stub can ship).
+  CGO_ENABLED=1 CGO_CFLAGS="%{build_cflags}" CGO_LDFLAGS="%{build_ldflags}" \
+    go build -tags webkit -ldflags "-B gobuildid -linkmode=external" \
+      -o _build/bin/arctic-webapp-host ./cmd/arctic-webapp-host
 else
   echo "error: go.mod is missing: the installer engine (cmd/, internal/) is not in the tree" >&2
   exit 1
@@ -750,10 +895,24 @@ install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
+# Stream 5 (system): the SSH agent's socket for the session (gcr-ssh-agent), and the root helper
+# Settings uses for the firewall, remote login and snapshots (pkexec, org.arcticlinux.system).
+install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
+install -Dpm 0755 packaging/system/arctic-system-helper %{buildroot}%{_libexecdir}/arctic/arctic-system-helper
+install -Dpm 0644 packaging/polkit/org.arcticlinux.system.policy \
+  %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+# Thunar's Send To menu: LocalSend (arctic-share files).
+install -Dpm 0644 packaging/desktop/arctic-sendto-localsend.desktop \
+  %{buildroot}%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 # Automatic updates (arctic-update, in /usr/bin with the helpers above) and snapshots.
 install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
 install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
 install -Dpm 0644 packaging/systemd/arctic-update-restage.timer %{buildroot}%{_unitdir}/arctic-update-restage.timer
+# Stream 5 (system): Flatpak apps are updated daily too (arctic-update flatpak --auto).
+install -Dpm 0644 packaging/systemd/arctic-flatpak-update.service %{buildroot}%{_unitdir}/arctic-flatpak-update.service
+install -Dpm 0644 packaging/systemd/arctic-flatpak-update.timer %{buildroot}%{_unitdir}/arctic-flatpak-update.timer
+install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.service %{buildroot}%{_userunitdir}/arctic-flatpak-update.service
+install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.timer %{buildroot}%{_userunitdir}/arctic-flatpak-update.timer
 install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
 install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
 install -Dpm 0644 packaging/updates/snapper.actions \
@@ -777,6 +936,19 @@ install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/fla
 # QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
 # an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
 install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 4 (capture): the screen-share picker xdg-desktop-portal-wlr runs in Mango sessions.
+install -Dpm 0644 packaging/desktop/xdg-desktop-portal-wlr.ini %{buildroot}%{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+install -Dpm 0755 packaging/desktop/arctic-share-picker %{buildroot}%{_libexecdir}/arctic/arctic-share-picker
+# Stream 5 (system): XDG autostart in the Mango session (packaging/desktop/autostart): the
+# session target wants xdg-desktop-autostart.target, and the entries Arctic starts itself or
+# doesn't use stay off there (drop-ins for the units systemd-xdg-autostart-generator makes;
+# the names are systemd-escaped desktop ids, "-" is \x2d).
+install -Dpm 0644 packaging/desktop/autostart/mango-session-autostart.conf \
+  %{buildroot}%{_userunitdir}/mango-session.target.d/arctic-autostart.conf
+for id in 'nm\x2dapplet' 'blueman' 'geoclue\x2ddemo\x2dagent'; do
+  install -Dpm 0644 packaging/desktop/autostart/arctic-starts-it.conf \
+    "%{buildroot}%{_userunitdir}/app-${id}@autostart.service.d/arctic.conf"
+done
 # arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own
 # subpackages; neofetch is listed below (%%ghost).
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer|neofetch' \
@@ -806,7 +978,7 @@ exec quickshell -p /usr/share/arctic/shell ipc call "$@"
 EOF
 fi
 chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-shell-ipc
-# Get apps: pkexec dnf5 with the password kept for a few minutes.
+# Get apps: pkexec dnf5 (install and remove) with the password kept for a few minutes.
 install -Dpm 0644 packaging/polkit/org.arcticlinux.pkexec.dnf.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
 
@@ -819,6 +991,10 @@ chmod 0755 %{buildroot}%{_datadir}/arctic/settings/scripts/arctic_settings.py
 desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/settings/org.arcticlinux.Settings.desktop
 install -Dpm 0644 packaging/settings/org.arcticlinux.Settings.svg \
   %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg
+
+# ---------------------------------------------------------------- arctic-webapps (stream 1)
+install -pm 0755 _build/bin/arctic-webapp %{buildroot}%{_bindir}/
+install -Dpm 0755 _build/bin/arctic-webapp-host %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host
 
 # ---------------------------------------------------------------- arctic-installer
 install -pm 0755 _build/bin/arcticd _build/bin/arctic-install %{buildroot}%{_bindir}/
@@ -900,11 +1076,18 @@ ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTEC
   python3 "$tg" render --palette _build/winter.json --out _build/check-theme --quiet
 diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Settings.desktop
+desktop-file-validate %{buildroot}%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 # Settings' backend: the file formats it reads and writes (uses `mango -p` when installed).
 python3 -m unittest discover -s settings/tests -p 'test_*.py'
+# ---- stream 2 (Get apps): apps.py's contracts, the job commands, and that
+# protected-packages.conf covers modules/_system/desktop-base.
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s shell/tests -p 'test_apps.py'
+# ---- end stream 2
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer %{buildroot}%{_bindir}/arctic-update \
          %{buildroot}%{_datadir}/arctic/theme-hooks.d/*; do
+  # arctic-webapp-host (stream 1) is an ELF binary, not a script
+  case "$(head -c4 "$s")" in "$(printf '\177ELF')") continue ;; esac
   case "$(head -n1 "$s")" in
     *python*) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$s" ;;
     *) bash -n "$s" ;;
@@ -912,6 +1095,17 @@ for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/
 done
 # arctic-update's file handling (update.conf, dnf5's offline state, the status file).
 python3 -m unittest discover -s packaging/updates -p 'test_*.py'
+# ---- stream 1 (web apps): the host is the real cgo build and the manager is cgo-free; both
+# start without a display; the launcher entries the manager writes are valid.
+readelf -d %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
+if readelf -d %{buildroot}%{_bindir}/arctic-webapp | grep -q NEEDED; then
+  echo "error: arctic-webapp must not link any library (CGO_ENABLED=0)" >&2; exit 1
+fi
+%{buildroot}%{_libexecdir}/arctic/arctic-webapp-host --version
+%{buildroot}%{_bindir}/arctic-webapp version
+rm -rf _build/webapp-sample
+%{buildroot}%{_bindir}/arctic-webapp render-sample _build/webapp-sample
+desktop-file-validate _build/webapp-sample/*.desktop
 test -f %{buildroot}%{_datadir}/sddm/themes/arctic/metadata.desktop || \
   { echo "error: branding/sddm/arctic has no metadata.desktop" >&2; exit 1; }
 test -f %{buildroot}%{_datadir}/plymouth/themes/arctic/arctic.plymouth || \
@@ -1022,9 +1216,11 @@ done
 
 %post -n arctic-desktop-config
 %systemd_post arctic-firstboot.service arctic-update-stage.timer
+%systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
+%systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
@@ -1034,6 +1230,17 @@ done
 if [ ! -e %{_sharedstatedir}/arctic/.update-presets ]; then
   systemctl --no-reload preset arctic-update-stage.timer snapper-cleanup.timer >/dev/null 2>&1 || :
   mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.update-presets || :
+fi
+# Stream 5: the SSH agent's socket for every user, once (the user preset covers new users).
+if [ ! -e %{_sharedstatedir}/arctic/.ssh-agent-preset ]; then
+  systemctl --global --no-reload preset gcr-ssh-agent.socket >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.ssh-agent-preset || :
+fi
+# Stream 5: the same once for the Flatpak update timer (new in 0.3).
+if [ ! -e %{_sharedstatedir}/arctic/.flatpak-update-preset ]; then
+  systemctl --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
+  systemctl --global --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.flatpak-update-preset || :
 fi
 # Compile /etc/dconf/db/distro.d (the Arctic GTK/icon/cursor/font defaults).
 if [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
@@ -1178,6 +1385,10 @@ fi
 %dir %{_sysconfdir}/arctic/mango
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
 %{_sysconfdir}/profile.d/arctic-graphics.sh
+%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
+%{_libexecdir}/arctic/arctic-system-helper
+%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 %dir %{_datadir}/arctic
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt
@@ -1196,6 +1407,10 @@ fi
 %dir %{_localstatedir}/lib/flatpak/overrides
 %config(noreplace) %{_localstatedir}/lib/flatpak/overrides/global
 %{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 5 (system): XDG autostart drop-ins
+%dir %{_userunitdir}/mango-session.target.d
+%{_userunitdir}/mango-session.target.d/arctic-autostart.conf
+%{_userunitdir}/app-*@autostart.service.d/
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
@@ -1203,12 +1418,20 @@ fi
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer
 %{_unitdir}/arctic-update-restage.timer
+%{_unitdir}/arctic-flatpak-update.service
+%{_unitdir}/arctic-flatpak-update.timer
+%{_userunitdir}/arctic-flatpak-update.service
+%{_userunitdir}/arctic-flatpak-update.timer
 %{_libexecdir}/arctic/arctic-update-helper
 %config(noreplace) %{_sysconfdir}/arctic/update.conf
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 %dir %{_sharedstatedir}/arctic
 %ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
+# Stream 4 (capture): the screen-share picker.
+%dir %{_sysconfdir}/xdg/xdg-desktop-portal-wlr
+%config(noreplace) %{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+%{_libexecdir}/arctic/arctic-share-picker
 
 # --- stream 6
 %files -n arctic-themes-extra
@@ -1246,6 +1469,13 @@ fi
 %{_datadir}/applications/org.arcticlinux.Installer.desktop
 %dir %{_localstatedir}/log/arctic-install
 
+# ---- stream 1 (web apps)
+%files -n arctic-webapps
+%license LICENSE
+%{_bindir}/arctic-webapp
+%dir %{_libexecdir}/arctic
+%{_libexecdir}/arctic/arctic-webapp-host
+
 %files -n sddm-wayland-mango
 %dir %{_datadir}/arctic
 %{_prefix}/lib/sddm/sddm.conf.d/10-arctic.conf
@@ -1280,6 +1510,25 @@ fi
 # metapackage: no files
 
 %changelog
+* Mon Sep 28 2026 Arctic Linux <arctic@arcticlinux.org> - 0.3.0-1
+- Get apps opens to a chooser: Flathub apps, Fedora packages, web apps, terminal apps and a
+  console; Remove apps lists what you installed per source and shows every package a removal
+  takes with it; Delete on a launcher app removes it
+- Web apps: arctic-webapp (Go) turns any website into an app with its own window, icon, sign-in
+  and scope, in the new arctic-webapps package (arctic-webapp-host on WebKitGTK 6.0, with a
+  Chromium-family runtime for protected video and calls)
+- Every bar item opens an Arctic menu (Wi-Fi and network, Bluetooth with the shell's own pairing
+  agent, sound, battery and power, calendar, media, brightness, tray menus); Quick Settings on
+  Super + A; the shell is the notification server, with a notification centre and do not disturb
+- Super + B opens the browser (Super + W is free); Super + Shift + S takes a screenshot; text and
+  QR codes from the screen, a colour picker, screen recording, a screen-share picker, clipboard
+  history and emoji panels, Alt + Tab, a drop-down terminal
+- Night light, keep awake, XDG autostart, printing and scanning, USB drives and phones, Flatpak
+  and firmware updates, the laptop lid and screen modes, Users, Sharing, and more Settings pages
+- A command menu on Super + Alt + Space, launcher search for settings, windows, files and units,
+  more OSD kinds, automatic light and dark, a theme gallery, an Accessibility page, a first-login
+  welcome, reminders and user hooks
+
 * Mon Sep 28 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.1-1
 - The repository moved to github.com/yuvalkolodkingal/Arctic-Linux: the package
   repository is now https://yuvalkolodkingal.github.io/Arctic-Linux/ (Pages doesn't

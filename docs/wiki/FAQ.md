@@ -118,8 +118,16 @@ The 0.2 installer doesn't have this problem.
 
 ### How do I install an app?
 
-Press `Super + Shift + A` for **Get apps**, type the app's name and press `Enter`. You can also use
-`dnf`, `flatpak` or Nix from a terminal. See [Apps and software](Apps-and-Software).
+Press `Super + Shift + A` for **Get apps**, pick **Flathub apps** or **Fedora packages**, type the
+app's name and press `Enter`. You can also use `dnf`, `flatpak` or Nix from a terminal. See
+[Apps and software](Apps-and-Software).
+
+### How do I remove an app?
+
+Select it in the launcher (`Super + Space`) and press `Shift + Delete`, or open **Get apps → Remove
+apps**. You see exactly what goes before anything is removed. Packages Arctic Linux needs (the
+desktop, Blueman, the volume control, your only terminal, your login shell) can't be removed
+there, and the page says why. See [Remove apps](Apps-and-Software#remove-apps).
 
 ### Where's the Software app the installer mentions?
 
@@ -174,6 +182,22 @@ folder too: `~/.config/mango/user.conf` for the window manager,
 Yes, from version 0.2. The system uses btrfs, and snapper takes a snapshot before and after every
 dnf transaction, so you can put back files an update changed. See
 [Updates](Updates#snapshots).
+
+### Why is there no Hibernate?
+
+Arctic Linux doesn't set up hibernation, for three reasons:
+
+1. **No disk swap.** Arctic installs compressed swap in memory (zram), as Fedora does.
+   Hibernating needs swap on disk at least as large as the memory in use, and kernel arguments
+   that point at it.
+2. **Secure Boot.** With Secure Boot on, Fedora's kernel locks itself down, and lockdown doesn't
+   allow hibernating to ordinary swap. Arctic keeps Secure Boot on.
+3. **Untested on Arctic's disk layout.** A swap file on btrfs inside an encrypted disk needs
+   special care, and a resume that fails loses everything that was open.
+
+So the power menu shows **Hibernate** only when the computer really can (someone set it up by
+hand, with Secure Boot off), and a nearly empty battery suspends. **Restart into firmware** shows
+when the firmware offers its setup screen.
 
 ## The project
 

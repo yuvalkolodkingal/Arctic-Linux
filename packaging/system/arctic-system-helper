@@ -1,0 +1,197 @@
+#!/usr/bin/python3
+"""arctic-system-helper — the few system changes Arctic Settings makes as root, through
+`pkexec /usr/libexec/arctic/arctic-system-helper VERB …` (polkit action org.arcticlinux.system:
+the administrator's password, kept for a few minutes).
+
+    firewall-allow mdns|localsend|kdeconnect|ssh on|off
+                            let that through the firewall's default zone, now and after a restart
+    ssh on|off              remote login: sshd.service enabled and running, or off
+    ssh-password on|off     whether remote login takes passwords (off: keys only)
+    snapshots               snapper's snapshots of / (pre/post pairs around dnf, and single ones)
+    snapshot-create TEXT    take a snapshot of / now
+    snapshot-undo PRE POST  undo what changed between a listed pair (runs in a terminal)
+
+Every argument is checked against fixed tables first; commands are argv lists, never a shell;
+each change is logged (logger -t arctic-system-helper). One JSON line on stdout, or
+{"ok": false, "error": "<a sentence>"} and exit 1 (snapshot-undo prints snapper's lines).
+ARCTIC_SYSTEM_HELPER_TEST=1 lets the tests run it as an ordinary user with stand-ins on PATH.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+ALLOWS = {   # name → firewall-cmd arguments that allow it
+    'mdns': ['--add-service=mdns'],
+    'ssh': ['--add-service=ssh'],
+    'kdeconnect': ['--add-service=kdeconnect'],
+    'localsend': ['--add-port=53317/tcp', '--add-port=53317/udp'],
+}
+TEST = os.environ.get('ARCTIC_SYSTEM_HELPER_TEST') == '1'   # pkexec never passes it on
+KEYS_ONLY = (TEST and os.environ.get('ARCTIC_SSH_KEYS_ONLY')) or '/etc/ssh/sshd_config.d/40-arctic-keys-only.conf'
+KEYS_ONLY_TEXT = ('# Written by Arctic Settings (Sharing > Allow password login: off). Remove this file to\n'
+                  '# allow passwords again.\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n')
+RE_TEXT = re.compile(r'^[^\x00-\x1f\x7f]{1,80}$')
+
+
+class Failure(Exception):
+    """A sentence for the person."""
+
+
+def run(argv, timeout=120):
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
+                              env=dict(os.environ, LC_ALL='C'))
+        return done.returncode, done.stdout, done.stderr
+    except (OSError, subprocess.SubprocessError) as error:
+        return 127, '', str(error)
+
+
+def log(text):
+    who = os.environ.get('PKEXEC_UID', '?')
+    run(['logger', '-t', 'arctic-system-helper', 'uid {}: {}'.format(who, text)], timeout=10)
+
+
+def last_line(text, fallback):
+    lines = [line for line in (text or '').strip().splitlines() if line.strip()]
+    return lines[-1] if lines else fallback
+
+
+def firewall_allow(name, on):
+    code, out, _err = run(['firewall-cmd', '--state'])
+    if code != 0 or out.strip() != 'running':
+        raise Failure('The firewall isn’t running, so there’s nothing to allow.')
+    _c, zone, _e = run(['firewall-cmd', '--get-default-zone'])
+    zone = zone.strip()
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,32}', zone):
+        raise Failure('The firewall didn’t say which zone it uses.')
+    args = [a if on else a.replace('--add-', '--remove-') for a in ALLOWS[name]]
+    for permanent in ([], ['--permanent']):
+        code, _out, err = run(['firewall-cmd', '--zone=' + zone] + permanent + args)
+        # Removing what isn't there (or adding what is) is fine: firewalld warns, exit 0 or 11/12.
+        if code not in (0, 11, 12, 16):
+            raise Failure('The firewall didn’t take it: ' + last_line(err, 'firewall-cmd failed') + '.')
+    log('firewall {} {} in zone {}'.format('allow' if on else 'block', name, zone))
+    return dict(ok=True, allowed=on, zone=zone)
+
+
+def ssh(on):
+    if on:
+        code, _out, err = run(['systemctl', 'enable', '--now', 'sshd.service'])
+    else:
+        code, _out, err = run(['systemctl', 'disable', '--now', 'sshd.service', 'sshd.socket'])
+    if code != 0:
+        raise Failure('Remote login couldn’t be turned {}: {}.'.format('on' if on else 'off', last_line(err, 'systemctl failed')))
+    log('ssh ' + ('on' if on else 'off'))
+    _c, enabled, _e = run(['systemctl', 'is-enabled', 'sshd.service'])
+    _c, active, _e = run(['systemctl', 'is-active', 'sshd.service'])
+    return dict(ok=True, enabled=enabled.strip() == 'enabled', active=active.strip() == 'active')
+
+
+def ssh_password(on):
+    if on:
+        try:
+            os.unlink(KEYS_ONLY)
+        except FileNotFoundError:
+            pass
+    else:
+        os.makedirs(os.path.dirname(KEYS_ONLY), exist_ok=True)
+        with open(KEYS_ONLY + '.new', 'w', encoding='utf-8') as handle:
+            handle.write(KEYS_ONLY_TEXT)
+        os.chmod(KEYS_ONLY + '.new', 0o644)
+        os.replace(KEYS_ONLY + '.new', KEYS_ONLY)
+    code, _out, err = run(['sshd', '-t'])
+    if code != 0:
+        if not on:
+            os.unlink(KEYS_ONLY)
+        raise Failure('The SSH server’s settings don’t check out: ' + last_line(err, 'sshd -t failed') + '.')
+    run(['systemctl', 'try-reload-or-restart', 'sshd.service'])
+    log('ssh password login ' + ('on' if on else 'off'))
+    return dict(ok=True, password_login=on)
+
+
+def snapper(*args, timeout=300):
+    return run(['snapper', '--no-dbus'] + list(args), timeout=timeout)
+
+
+def snapshots():
+    if not os.path.exists((TEST and os.environ.get('ARCTIC_SNAPPER_ROOT_CONFIG')) or '/etc/snapper/configs/root'):
+        return dict(ok=True, config=False, pairs=[], singles=[])
+    code, out, err = snapper('--jsonout', '-c', 'root', 'list')
+    if code != 0:
+        raise Failure('The snapshots couldn’t be listed: ' + last_line(err, 'snapper failed') + '.')
+    try:
+        rows = json.loads(out).get('root', [])
+    except (ValueError, AttributeError):
+        raise Failure('snapper answered something unexpected.') from None
+    pre = {}
+    pairs, singles = [], []
+    for row in rows:
+        number = row.get('number')
+        if not number:
+            continue          # 0 is the current system
+        item = dict(number=number, date=row.get('date', ''), description=row.get('description', ''),
+                    cleanup=row.get('cleanup', ''), userdata=row.get('userdata') or {})
+        if row.get('type') == 'pre':
+            pre[number] = item
+        elif row.get('type') == 'post' and row.get('pre-number') in pre:
+            first = pre.pop(row['pre-number'])
+            pairs.append(dict(pre=first['number'], post=number, date=first['date'],
+                              description=first['description'] or item['description']))
+        elif row.get('type') == 'single':
+            singles.append(item)
+    return dict(ok=True, config=True, pairs=pairs[::-1], singles=singles[::-1])
+
+
+def snapshot_create(text):
+    if not RE_TEXT.match(text):
+        raise Failure('Describe the snapshot in a line of up to 80 characters.')
+    code, out, err = snapper('-c', 'root', 'create', '-t', 'single', '-c', 'number', '-p', '-d', text)
+    if code != 0:
+        raise Failure('The snapshot couldn’t be taken: ' + last_line(err, 'snapper failed') + '.')
+    log('snapshot {} "{}"'.format(out.strip(), text))
+    return dict(ok=True, number=int(out.strip()) if out.strip().isdigit() else None)
+
+
+def snapshot_undo(pre, post):
+    listed = snapshots()
+    if not any(p['pre'] == pre and p['post'] == post for p in listed['pairs']):
+        raise Failure('There’s no snapshot pair {}..{}.'.format(pre, post))
+    log('snapshot undo {}..{}'.format(pre, post))
+    # Interactive: snapper's own lines go to the terminal it runs in.
+    code = subprocess.call(['snapper', '--no-dbus', '-c', 'root', 'undochange', '{}..{}'.format(pre, post)])
+    print('The changes are undone. Restart the computer so every program uses the old files.' if code == 0
+          else 'Undoing didn’t finish (snapper said why above).')
+    return code
+
+
+def main(argv):
+    if os.geteuid() != 0 and not TEST:
+        raise Failure('This runs as root, through pkexec.')
+    verb, args = (argv[0] if argv else ''), argv[1:]
+    if verb == 'firewall-allow' and len(args) == 2 and args[0] in ALLOWS and args[1] in ('on', 'off'):
+        result = firewall_allow(args[0], args[1] == 'on')
+    elif verb == 'ssh' and args in (['on'], ['off']):
+        result = ssh(args[0] == 'on')
+    elif verb == 'ssh-password' and args in (['on'], ['off']):
+        result = ssh_password(args[0] == 'on')
+    elif verb == 'snapshots' and not args:
+        result = snapshots()
+    elif verb == 'snapshot-create' and len(args) == 1:
+        result = snapshot_create(args[0])
+    elif verb == 'snapshot-undo' and len(args) == 2 and all(a.isdigit() for a in args):
+        return snapshot_undo(int(args[0]), int(args[1]))
+    else:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    print(json.dumps(result))
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Failure as error:
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)

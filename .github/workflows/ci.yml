@@ -38,6 +38,45 @@ jobs:
           [ -d vendor ] && export GOFLAGS=-mod=vendor
           go test ./...
 
+  # Stream 1 (web apps): the cgo WebKitGTK 6.0 window, its tagged tests and a headless smoke
+  # test in sway (docs/BUILD-SPEC.md §11). The go job above covers every pure-Go web-app package.
+  go-webkit:
+    name: Go (web app host, cgo WebKitGTK 6.0)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+      GOPROXY: "off"
+      GOFLAGS: -mod=mod
+      CGO_ENABLED: "1"
+    steps:
+      - name: Install tools
+        run: |
+          dnf -y install git golang gcc binutils webkitgtk6.0-devel gtk4-devel libsoup3-devel \
+            publicsuffix-list librsvg2-tools desktop-file-utils sway grim dbus-daemon dbus-tools \
+            mesa-dri-drivers fontconfig google-noto-sans-fonts procps-ng python3 libcap
+      - uses: actions/checkout@v4
+      - name: go vet (tagged), web-app tests, host build
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          go vet -tags webkit ./...
+          go test -tags webkit ./internal/webapp/... ./internal/webkit/... ./cmd/arctic-webapp/... ./cmd/arctic-webapp-host/...
+          go build -tags webkit -o /tmp/arctic-webapp-host ./cmd/arctic-webapp-host
+          readelf -d /tmp/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
+          CGO_ENABLED=0 go build -o /tmp/arctic-webapp ./cmd/arctic-webapp
+          if readelf -d /tmp/arctic-webapp | grep -q NEEDED; then echo "arctic-webapp must not link libraries"; exit 1; fi
+          /tmp/arctic-webapp render-sample /tmp/webapp-sample
+          desktop-file-validate /tmp/webapp-sample/*.desktop
+      - name: Headless smoke test (sandbox off only here; bwrap can't create namespaces in this container)
+        run: cmd/arctic-webapp-host/dev/smoke.sh --out /tmp/webapp-shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webapp-screenshots
+          path: /tmp/webapp-shots/*.png
+          retention-days: 7
+
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
@@ -50,8 +89,9 @@ jobs:
         run: |
           files=()
           for f in dotfiles/.local/bin/* tools/*.sh tools/lib/*.sh live/* iso/kiwi/config.sh \
-                   packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh \
-                   packaging/updates/*.sh packaging/theme-hooks.d/* dotfiles/.bashrc.d/*.sh settings/dev/*.sh; do
+                   packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh packaging/desktop/arctic-share-picker \
+                   packaging/updates/*.sh packaging/theme-hooks.d/* dotfiles/.bashrc.d/*.sh settings/dev/*.sh \
+                   cmd/arctic-webapp-host/dev/*.sh; do
             [ -f "$f" ] || continue
             case "$(head -n1 "$f")" in
               *python*|*node*) continue ;;
@@ -70,8 +110,9 @@ jobs:
       - name: Install tools
         # zsh, fzf, foot and fastfetch let the app theme tests run the apps' own checks (zsh -n,
         # fzf's option parser, foot --check-config, fastfetch with the Arctic layouts); without
-        # them those checks are skipped.
-        run: dnf -y install git python3 python3-pyte python3-pillow python3-rpm nodejs librsvg2-tools util-linux procps-ng zsh fzf foot fastfetch
+        # them those checks are skipped. python3-dbus, python3-dbusmock and dbus-daemon run the
+        # Bluetooth agent against a mock BlueZ.
+        run: dnf -y install git python3 python3-pyte python3-pillow python3-rpm nodejs librsvg2-tools util-linux procps-ng zsh fzf foot fastfetch python3-dbus python3-gobject-base python3-dbusmock dbus-daemon
       - uses: actions/checkout@v4
       - name: Python unittest (design/themegen — theme engine, wallpaper colours, arctic-theme, app templates and theme hooks)
         run: python3 -m unittest discover -s design/themegen/tests -v
@@ -111,7 +152,11 @@ jobs:
           # --man=no: the container has no man pages (tsflags=nodocs), so the
           # Documentation=man: check would fail although the page ships with dnf5.
           systemd-analyze verify --man=no packaging/systemd/arctic-update-stage.service \
-            packaging/systemd/arctic-update-stage.timer packaging/systemd/arctic-update-restage.timer
+            packaging/systemd/arctic-update-stage.timer packaging/systemd/arctic-update-restage.timer \
+            packaging/systemd/arctic-flatpak-update.service packaging/systemd/arctic-flatpak-update.timer
+          XDG_RUNTIME_DIR="$(mktemp -d)" systemd-analyze verify --user --man=no \
+            packaging/systemd/user/arctic-flatpak-update.service \
+            packaging/systemd/user/arctic-flatpak-update.timer
 
   dnf5-offline:
     name: dnf5 offline updates (arctic-update, real dnf5)
@@ -125,6 +170,19 @@ jobs:
         # Downloads, schedules, installs (dnf5 offline _execute) and fails updates with a local
         # repository, and pins the dnf5 behaviour and messages arctic-update relies on.
         run: packaging/updates/test-dnf5-offline.sh
+
+  dnf5-remove:
+    name: dnf5 remove previews (Remove apps, real dnf5)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: dnf -y install git dnf5-plugins rpm-build createrepo_c python3 util-linux
+      - uses: actions/checkout@v4
+      - name: shell/tests/test-dnf5-remove.sh
+        # Previews removals as a normal user (dnf5 remove --store), pins the transaction reasons
+        # and repoquery fields shell/scripts/apps.py reads, and removes what the preview listed.
+        run: shell/tests/test-dnf5-remove.sh
 
   qml:
     name: qmllint
@@ -165,6 +223,39 @@ jobs:
         with:
           name: settings-screenshots
           path: /tmp/settings-shots/*.png
+          retention-days: 7
+
+  shell-menus:
+    name: Shell bar menus (headless smoke test)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: |
+          dnf -y install git quickshell qt6-qtsvg qt6-qtwayland sway grim python3 python3-pillow python3-pyte \
+            python3-dbus python3-gobject-base librsvg2-tools dbus-daemon swaybg fontconfig google-noto-sans-fonts \
+            procps-ng pipewire wireplumber pipewire-utils libcap findutils which glib2
+      - uses: actions/checkout@v4
+      - name: Every menu opens without QML errors (network from test data, both themes)
+        run: |
+          set -u
+          for theme in polar-night winter; do
+            shell/dev/headless.sh --fixtures --theme "$theme" "menus-$theme" \
+              ipc panel open network sleep 1 shot "ci-menu-network-$theme" \
+              ipc panel open sound sleep 1 shot "ci-menu-sound-$theme" \
+              ipc panel open calendar sleep 1 shot "ci-menu-calendar-$theme" \
+              ipc quick toggle sleep 1 shot "ci-menu-quick-$theme" \
+              ipc quick open display sleep 1 shot "ci-menu-display-$theme" \
+              ipc power toggle sleep 1 shot "ci-menu-power-$theme"
+            if grep -a -E "TypeError|ReferenceError|SyntaxError|Failed to load|is not a type|unavailable|Cannot assign|Unable to assign" /tmp/arctic-shell.log; then
+              echo "QML errors in the shell log ($theme)"; exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shell-menu-screenshots
+          path: shell/dev/screenshots/ci-menu-*.png
           retention-days: 7
 
   specs:

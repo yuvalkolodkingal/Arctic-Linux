@@ -1,6 +1,8 @@
-// Startup apps: commands that run once when you log in. Mango runs exec-once lines (it doesn't
-// read ~/.config/autostart), so yours are exec-once lines in settings.conf; Arctic's own come
-// from autostart.conf and are shown read-only.
+// Startup apps: commands that run once when you log in. Yours are exec-once lines in
+// settings.conf; Arctic's own come from autostart.conf and are shown read-only. Apps that turned
+// on their own "start on login" (~/.config/autostart, /etc/xdg/autostart) start through systemd's
+// XDG autostart (mango-session.target wants xdg-desktop-autostart.target); switching one off
+// writes a Hidden=true copy to ~/.config/autostart.
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
@@ -12,7 +14,11 @@ Page {
     title: "Startup apps"
     lede: "Apps and commands that start when you log in. Changes apply the next time you log in."
     property var list: ({ mine: [], arctic: [], apps: [] })
-    onShown: Backend.call(["startup"], r => { if (r.ok) page.list = r; })
+    property var xdg: []
+    onShown: {
+        Backend.call(["startup"], r => { if (r.ok) page.list = r; });
+        Backend.call(["autostart"], r => { if (r.ok) page.xdg = r.entries; }, true);
+    }
     function add(args) {
         Backend.call(["startup-add"].concat(args), r => {
             if (r.ok) {
@@ -87,6 +93,36 @@ Page {
                         page.add(commandField.text.trim().split(/\s+/));
                         commandField.text = "";
                     }
+                }
+            }
+        }
+    }
+
+    Group {
+        visible: page.xdg.length > 0
+        title: "Apps that start themselves"
+        desc: "Apps you told to “start on login” in their own settings, such as a chat or sync app. Switching one off here applies from the next login."
+        Repeater {
+            model: page.xdg
+            SettingRow {
+                id: xdgRow
+                required property var modelData
+                required property int index
+                searchKey: index === 0 ? "startup.xdg" : ""
+                title: modelData.name
+                desc: modelData.comment || modelData.exec
+                resettable: false
+                RowSwitch {
+                    Accessible.name: "Start " + xdgRow.modelData.name + " when you log in"
+                    checked: xdgRow.modelData.enabled
+                    onToggled: Backend.call(["autostart-set", xdgRow.modelData.id, checked ? "on" : "off"], r => {
+                        if (r.ok) {
+                            page.xdg = r.entries;
+                            Backend.notify("success", "Saved. It applies the next time you log in.", false);
+                        } else {
+                            Backend.call(["autostart"], r2 => { if (r2.ok) page.xdg = r2.entries; }, true);
+                        }
+                    })
                 }
             }
         }

@@ -21,6 +21,13 @@ PanelWindow {
     property real pointX: 0
     property real cardRadius: Theme.radiusXl
     property color cardColor: Theme.frost
+    property int shadow: 0              // 1 shadow-sm, 2 shadow-md (ShadowLayers behind the card)
+    property bool animateSize: false    // card width/height changes animate (the bar menu)
+    // Size changes animate only once the card has settled after opening, so a menu doesn't
+    // grow into place while its content loads.
+    property bool sizeSettled: false
+    // The tallest a 'point' card may be: the screen below the bar, less a margin.
+    readonly property real maxCardHeight: height - 2 * Theme.space4 - Theme.frameWidth
     property alias card: surface
     property alias dock: dockPos
     // What gets keyboard focus when the card opens (and again once the surface is mapped:
@@ -43,7 +50,10 @@ PanelWindow {
     WlrLayershell.namespace: layerName
     WlrLayershell.keyboardFocus: open && grabKeyboard ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
+    Timer { id: settle; interval: 120; onTriggered: popover.sizeSettled = popover.open }
     onOpenChanged: {
+        sizeSettled = false;
+        if (open) settle.restart();
         if (open) {
             fadeOut.stop();
             shade.opacity = 1;
@@ -80,6 +90,12 @@ PanelWindow {
         }
     }
 
+    ShadowLayers {
+        target: surface
+        elevation: popover.shadow
+        radius: popover.cardRadius
+    }
+
     PopupSurface {
         id: surface
         focus: true
@@ -96,6 +112,8 @@ PanelWindow {
         y: popover.placement === 'dock' ? dockPos.animatedY
            : popover.placement === 'point' ? Theme.space1 + Theme.frameWidth
            : Math.max(Theme.space4, (popover.height - height) / 2 - Theme.barHeight / 2)
+        Behavior on width { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
+        Behavior on height { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
         Keys.onEscapePressed: popover.close()
         // Swallow clicks on the card itself so they don't reach the scrim.
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }

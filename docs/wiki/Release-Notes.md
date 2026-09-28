@@ -1,5 +1,77 @@
 # Release notes
 
+## Arctic Linux 0.3.0 (draft)
+
+### Shortcuts and capture
+
+- **`Super + B` opens your browser.** It was `Super + W`, which is now free for a shortcut of
+  your own. If you had bound `Super + B` yourself, Settings > Shortcuts shows that it no longer
+  runs (Arctic's shortcuts come first), so you can move it to another key.
+- **`Super + Shift + S` takes a screenshot of an area**, as on Windows; `Print` still does. The
+  screen freezes while you drag over an area or click a window, so menus and tooltips stay in it. `Shift + Print` now takes the screen you're on (not every
+  screen at once), window screenshots leave out the border, and `Ctrl + Print` copies an area
+  without saving it.
+- **The screenshot notification does more:** click it to open the picture; its buttons show it in
+  your file manager, open it in an editor to draw arrows, text and boxes (swappy), or move it to
+  the trash.
+- **Copy text from the screen** with `Super + Ctrl + Print` (text recognition, in your language),
+  and **read QR codes** (`arctic-ocr --qr`; sign-in codes stay out of clipboard history).
+- **Pick a colour** anywhere with `Super + Shift + C`: it's copied as `#rrggbb`.
+- **Record the screen** with `Super + Alt + R`: click a screen or drag an area, press again to
+  stop. Recordings go to `~/Videos/Screencasts`, using your graphics card's encoder when it has one.
+- **Sharing your screen** in a video call or OBS shows a list of your screens and windows, so you
+  can share a single window.
+- **Clipboard history** (`Super + V`) is a panel with search and pictures: `Enter` copies, `Shift +
+  Enter` also pastes, `Delete` removes. It's blacked out in screenshots and screen shares.
+- **Emoji** with `Super + Ctrl + E`: search by name, `Enter` types it. The live USB and new installs
+  get the colour emoji font.
+- **Switching windows:** `Alt + Tab` (`` Alt + ` `` goes back; `Alt + Shift` would switch your keyboard
+  layout), `Super + Alt + Tab` for every workspace, `Super + J` to jump to a window by its letter,
+  `Super + Backspace` for the previous one.
+- **More window keys:** `Super + H` hides a window (`Super + Shift + H` brings it back),
+  `Super + Shift + P` pins one over every workspace, `Super + Alt` + arrows make tab groups.
+- **A scratch workspace** over the current one (`` Super + ` ``) and a **drop-down terminal**
+  (`Super + Alt + Enter`).
+- **Hardware keys:** the keyboard-light, touchpad, calculator and search keys work.
+- **Settings > Keyboard and mouse** has a **Compose key** (press it, then two keys to type é, ©…),
+  and says which shortcuts your layout-switch key would also fire; Settings refuses a new shortcut
+  that holds that key.
+- Upgrading? If you replaced `~/.config/mango/arctic/binds.conf` or `apps.conf` with your own copy,
+  it doesn't get the new keys: compare it with `/usr/share/arctic/mango/`.
+
+### Menus on the bar
+
+- **Every item on the bar opens Arctic's own menu**, in the desktop's style, instead of a separate
+  app: see [Menus on the bar](Bar-Menus).
+  - **Network:** Wi-Fi networks with their signal, the password asked right under the network,
+    hidden networks and company or school Wi-Fi (eduroam), VPN and Tailscale switches (with
+    exit nodes), airplane mode, a hotspot, and **Share with a phone…** (a QR code of a saved
+    network).
+  - **Bluetooth:** your devices with their battery, and pairing, with the codes in Arctic's own
+    dialog.
+  - **Sound:** where sound plays, the microphone, a volume for each app, and headphone or speaker
+    ports and profiles.
+  - **Battery:** power mode, **Limit charging to 80 %** on laptops that support it, battery
+    health and your mouse's or headphones' battery. Arctic warns once when the battery is low and
+    again when it's about to run out.
+  - **The clock** opens a calendar with week numbers; **what's playing** sits next to it, with
+    its own menu, and on the lock screen.
+  - **Tray icons'** menus are drawn in the same style.
+- **Quick settings** on `Super + A`: Wi-Fi, Bluetooth, do not disturb, dark style, power mode,
+  microphone, VPN and airplane mode, with volume and brightness sliders.
+- **Keys:** `Super + Ctrl + W`, `B`, `A`, `P`, `T`, `M` and `D` open the network, Bluetooth,
+  sound, battery, calendar, media and brightness menus; `Super + Alt + B` walks the bar with the
+  arrow keys. In a menu, the arrow keys, `Enter` and `Esc` do what you'd expect, and `Ctrl + Tab`
+  moves to the next menu. `Shift + Mute` sends sound to the next output.
+- **The brightness keys** change the screen you're on, external monitors included when they
+  accept DDC/CI.
+- **"Mic", "Camera" and "Sharing"** show next to the clock while an app uses them.
+- **A saved Wi-Fi network whose password changed** asks for the new one in a notification.
+- nm-applet no longer starts with the Arctic shell (the waybar fallback still has it), and
+  Blueman's tray icon is hidden: the menus do their work. nm-applet, Blueman and the volume
+  control (pavucontrol) are still installed, but you can now remove them without removing the
+  desktop.
+
 ## Arctic Linux 0.2.1
 
 A fix release for 0.2, with a few additions to Settings and the terminal.

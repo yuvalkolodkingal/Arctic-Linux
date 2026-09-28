@@ -26,8 +26,102 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: 'arctic-bar'
 
-    function hint(item, text) { tipPopup.request(item, text); }
+    // The menu open on this bar, if any: tooltips stay quiet meanwhile.
+    readonly property var menuHost: bar.shell ? bar.shell.barMenu : null
+    readonly property bool menuHere: menuHost !== null && menuHost.open && menuHost.screen === bar.screen
+    function menuOpen(name) { return menuHere && menuHost.panel === name; }
+    function hint(item, text) { if (!menuHere) tipPopup.request(item, text); }
+
+    // ---- keyboard mode (Super + Alt + B): Left/Right across the items, Enter opens --------
+    // The bar takes the keyboard (Top layer); a menu it opens (Overlay) takes it while open and
+    // gives it back on close. Esc, the key again or 10 s without a key leave the mode.
+    property bool focusMode: false
+    property Item focusedStop: null
+    WlrLayershell.keyboardFocus: focusMode ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    function barStops() {
+        const out = [];
+        function walk(item) {
+            const kids = item.children;
+            for (let i = 0; i < kids.length; i++) {
+                if (!kids[i].visible) continue;
+                if (kids[i].barStop === true) out.push(kids[i]); else walk(kids[i]);
+            }
+        }
+        walk(bar.contentItem);
+        return out.sort((a, b) => a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x);
+    }
+    function moveFocus(item) {
+        if (focusedStop) focusedStop.keyboardFocused = false;
+        focusedStop = item;
+        if (item) item.keyboardFocused = true;
+    }
+    function enterFocusMode() {
+        const stops = barStops();
+        focusMode = true;
+        moveFocus(stops.length ? stops[0] : null);
+        barKeys.forceActiveFocus();
+        idle.restart();
+    }
+    function leaveFocusMode() {
+        focusMode = false;
+        moveFocus(null);
+        idle.stop();
+    }
+    function toggleFocusMode() { if (focusMode) leaveFocusMode(); else enterFocusMode(); }
+    Timer { id: idle; interval: 10000; onTriggered: if (!bar.menuHere) bar.leaveFocusMode() }
+    onMenuHereChanged: {
+        if (menuHere) tipPopup.dismiss();
+        else if (focusMode) { barKeys.forceActiveFocus(); idle.restart(); }
+    }
+    Item {
+        id: barKeys
+        focus: true
+        Keys.onPressed: event => {
+            if (!bar.focusMode) return;
+            idle.restart();
+            const stops = bar.barStops();
+            const at = stops.indexOf(bar.focusedStop);
+            if (event.key === Qt.Key_Right || event.key === Qt.Key_Tab) bar.moveFocus(stops[Math.min(stops.length - 1, at + 1)] || null);
+            else if (event.key === Qt.Key_Left || event.key === Qt.Key_Backtab) bar.moveFocus(stops[Math.max(0, at - 1)] || null);
+            else if (event.key === Qt.Key_Home) bar.moveFocus(stops[0] || null);
+            else if (event.key === Qt.Key_End) bar.moveFocus(stops[stops.length - 1] || null);
+            else if (event.key === Qt.Key_Escape) bar.leaveFocusMode();
+            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space || event.key === Qt.Key_Down) {
+                const item = bar.focusedStop;
+                if (!item) return;
+                item.press();
+                // An item without a menu starts something else (an app, a workspace): done.
+                if (item.hasMenu !== true) bar.leaveFocusMode();
+            } else return;
+            event.accepted = true;
+        }
+    }
     function unhint(item) { tipPopup.release(item); }
+    // Where a panel's menu hangs: the centre x of the visible bar item that owns it, else null.
+    function ownerOf(name) {
+        const owners = {
+            network: networkItem,
+            bluetooth: bluetoothItem,
+            sound: volumeItem,
+            battery: batteryItem,
+            notifications: bellItem,
+            keyboard: keyboardItem,
+            calendar: clockItem,
+            media: mediaItem,
+        };
+        const item = owners[name] || null;
+        return item && item.visible ? item : null;
+    }
+    function anchorFor(name) {
+        const item = ownerOf(name);
+        return item ? item.mapToItem(null, item.width / 2, 0).x : null;
+    }
+    // The menus on this bar from left to right (Ctrl+Tab in a menu).
+    function panelOrder() {
+        return Object.keys(bar.menuHost.panels)
+            .filter(n => ownerOf(n) !== null)
+            .sort((a, b) => anchorFor(a) - anchorFor(b));
+    }
 
     SystemClock { id: clock; precision: SystemClock.Minutes }
     BarTooltip { id: tipPopup; anchor.window: bar }
@@ -84,15 +178,46 @@ PanelWindow {
         }
     }
 
-    // ---- centre: clock (tabular figures) ------------------------------------------------
-    Text {
+    // ---- centre: clock (tabular figures); click for the calendar ------------------------
+    BarItem {
+        id: clockItem
         anchors.centerIn: parent
         text: Qt.formatDateTime(clock.date, 'ddd d MMM · hh:mm')
-        color: Theme.ink
-        font.family: Theme.fontSans
-        font.pixelSize: 13
-        font.weight: Font.DemiBold
-        font.features: { 'tnum': 1 }
+        textWeight: Font.DemiBold
+        hasMenu: true
+        active: bar.menuOpen('calendar')
+        tooltip: Qt.locale().toString(clock.date, 'dddd d MMMM yyyy') + '  (Super + Ctrl + T)'
+        onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
+        onHoverChanged: h => h ? bar.hint(clockItem, tooltip) : bar.unhint(clockItem)
+    }
+    // Left of the clock: what is listening or watching, and the modes that are on.
+    ModeIndicators {
+        anchors.right: clockItem.left
+        anchors.rightMargin: Theme.space2
+        anchors.verticalCenter: parent.verticalCenter
+        bar: bar
+    }
+    // Right of the clock while a media player exists: its title; click for the media menu,
+    // middle click plays or pauses, scrolling skips.
+    BarItem {
+        id: mediaItem
+        anchors.left: clockItem.right
+        anchors.leftMargin: Theme.space2
+        anchors.verticalCenter: parent.verticalCenter
+        visible: MediaService.available && MediaService.title !== ''
+        hasMenu: true
+        active: bar.menuOpen('media')
+        iconName: MediaService.playing ? 'music' : 'pause'
+        iconColor: Theme.inkMuted
+        text: MediaService.title
+        textColor: Theme.inkMuted
+        maxTextWidth: 180
+        tooltip: MediaService.title + (MediaService.artist ? ' — ' + MediaService.artist : '')
+                 + (MediaService.playing ? '' : ' · paused') + '  (Super + Ctrl + M)'
+        onClicked: bar.shell.togglePanel('media', bar.screen, mediaItem.mapToItem(null, mediaItem.width / 2, 0).x)
+        onMiddleClicked: MediaService.playPause()
+        onScrolled: steps => steps > 0 ? MediaService.previous() : MediaService.next()
+        onHoverChanged: h => h ? bar.hint(mediaItem, tooltip) : bar.unhint(mediaItem)
     }
 
     // ---- right ----------------------------------------------------------------------------
@@ -122,37 +247,76 @@ PanelWindow {
         }
 
         // Quiet group: notifications and Bluetooth sit in ink-muted.
+        // The bell: the notification centre (right click: do not disturb). A dot marks what
+        // arrived since the centre was last opened. When the shell doesn't own notifications
+        // (mako in the fallback), it is 0.2's bell: do not disturb, right click brings one back.
         BarItem {
             id: bellItem
-            visible: DndService.available
+            readonly property bool centre: NotificationService.owned
+            readonly property int unseen: NotificationService.unseen
+            visible: centre || DndService.available
             iconName: DndService.active ? 'bell-off' : 'bell'
             iconColor: Theme.inkMuted
-            tooltip: DndService.active ? 'Do not disturb is on · only urgent notifications show' : 'Notifications · click for do not disturb'
-            onClicked: DndService.toggle()
-            onRightClicked: Quickshell.execDetached(['makoctl', 'restore'])
+            tooltip: !centre ? (DndService.active ? 'Do not disturb is on · only urgent notifications show' : 'Notifications · click for do not disturb')
+                     : (DndService.active ? 'Do not disturb is on' : unseen > 0 ? unseen + (unseen === 1 ? ' new notification' : ' new notifications') : 'Notifications')
+                       + '  (Super + Alt + N · right click: do not disturb)'
+            onClicked: centre ? bar.shell.toggleNotifications(bar.screen, bellItem.mapToItem(null, bellItem.width / 2, 0).x) : DndService.toggle()
+            onRightClicked: centre ? DndService.toggle() : Quickshell.execDetached(['makoctl', 'restore'])
             onHoverChanged: h => h ? bar.hint(bellItem, tooltip) : bar.unhint(bellItem)
+            Item {
+                // Unseen: a dot on the bell's shoulder, in ink (a count, not a status colour).
+                visible: bellItem.centre && bellItem.unseen > 0 && !DndService.active
+                Layout.preferredWidth: 0
+                Layout.preferredHeight: 0
+                Layout.leftMargin: -Theme.space1
+                Rectangle {
+                    x: -7
+                    y: -8
+                    width: 6
+                    height: 6
+                    radius: 3
+                    color: Theme.ink
+                    border.width: 1
+                    border.color: Theme.frost
+                }
+            }
+        }
+        // The keyboard layout ("EN"), only with more than one layout.
+        KeyboardItem {
+            id: keyboardItem
+            onRightClicked: bar.shell.toggleKeyboardMenu(bar.screen, keyboardItem.mapToItem(null, keyboardItem.width / 2, 0).x)
+            onHoverChanged: h => h ? bar.hint(keyboardItem, tooltip) : bar.unhint(keyboardItem)
         }
         BarItem {
             id: bluetoothItem
             readonly property var adapter: Bluetooth.defaultAdapter
             readonly property var connected: adapter ? adapter.devices.values.filter(d => d.connected) : []
             visible: adapter !== null
+            hasMenu: true
+            active: bar.menuOpen('bluetooth')
             iconName: 'bluetooth'
             iconColor: adapter && adapter.enabled ? Theme.inkMuted : Theme.inkDisabled
-            tooltip: !adapter ? '' : !adapter.enabled ? 'Bluetooth off'
-                     : connected.length ? 'Connected to ' + connected.map(d => d.name).join(', ') : 'Bluetooth on'
-            onClicked: Quickshell.execDetached(['blueman-manager'])
+            tooltip: !adapter ? '' : !adapter.enabled ? 'Bluetooth off  (Super + Ctrl + B)'
+                     : connected.length ? 'Connected to ' + connected.map(d => d.name + (d.batteryAvailable ? ' · ' + Math.round(d.battery * 100) + ' %' : '')).join(', ')
+                     : 'Bluetooth on  (Super + Ctrl + B)'
+            onClicked: bar.shell.togglePanel('bluetooth', bar.screen, bluetoothItem.mapToItem(null, bluetoothItem.width / 2, 0).x)
             onRightClicked: if (adapter) adapter.enabled = !adapter.enabled
             onHoverChanged: h => h ? bar.hint(bluetoothItem, tooltip) : bar.unhint(bluetoothItem)
         }
 
         Repeater {
-            // nm-applet's own icon is folded into the network item below.
-            model: SystemTray.items.values.filter(i => i.id !== 'nm-applet')
+            // nm-applet's own icon is folded into the network item below, and blueman's applet
+            // (started by "More Bluetooth options…") into the Bluetooth item.
+            model: SystemTray.items.values.filter(i => i.id !== 'nm-applet' && !String(i.id).startsWith('blueman'))
             BarItem {
                 id: trayItem
                 required property var modelData
+                function openMenu() {
+                    bar.shell.togglePanel('tray', bar.screen, trayItem.mapToItem(null, trayItem.width / 2, 0).x, { item: trayItem.modelData });
+                }
                 implicitWidth: 16 + 2 * Theme.space2
+                hasMenu: modelData.hasMenu
+                active: bar.menuOpen('tray') && bar.menuHost.options.item === modelData
                 tooltip: modelData.tooltipTitle || modelData.title || modelData.id
                 Image {
                     Layout.preferredWidth: 16
@@ -161,72 +325,53 @@ PanelWindow {
                     source: trayItem.modelData.icon
                     fillMode: Image.PreserveAspectFit
                 }
-                onClicked: modelData.onlyMenu && modelData.hasMenu ? menu.open() : modelData.activate()
+                onClicked: modelData.onlyMenu && modelData.hasMenu ? openMenu() : modelData.activate()
                 onMiddleClicked: modelData.secondaryActivate()
-                onRightClicked: if (modelData.hasMenu) menu.open()
+                onRightClicked: if (modelData.hasMenu) openMenu()
                 onScrolled: steps => modelData.scroll(steps, false)
                 onHoverChanged: h => h ? bar.hint(trayItem, tooltip) : bar.unhint(trayItem)
-                QsMenuAnchor {
-                    id: menu
-                    menu: trayItem.modelData.menu
-                    anchor.item: trayItem
-                    anchor.edges: Edges.Bottom
-                    anchor.gravity: Edges.Bottom
-                }
             }
         }
 
         BarItem {
             id: networkItem
-            // Click: nm-applet's network menu when it runs (pick a Wi-Fi network), else the editor.
-            readonly property var applet: SystemTray.items.values.find(i => i.id === 'nm-applet') || null
+            // Click: the network menu (Wi-Fi, wired, VPN); right click: Settings → Network.
             visible: NetworkService.available
+            hasMenu: true
+            active: bar.menuOpen('network')
             iconName: NetworkService.iconName
-            tooltip: NetworkService.summary
-            onClicked: {
-                if (applet && applet.hasMenu) networkMenu.open();
-                else Quickshell.execDetached(['nm-connection-editor']);
-            }
-            onRightClicked: Quickshell.execDetached(['nm-connection-editor'])
+            tooltip: NetworkService.summary + (NetworkService.vpnActive ? ' · VPN on' : '') + '  (Super + Ctrl + W)'
+            onClicked: bar.shell.togglePanel('network', bar.screen, networkItem.mapToItem(null, networkItem.width / 2, 0).x)
+            onRightClicked: Quickshell.execDetached(['arctic-settings', 'network'])
             onHoverChanged: h => h ? bar.hint(networkItem, tooltip) : bar.unhint(networkItem)
-            QsMenuAnchor {
-                id: networkMenu
-                menu: networkItem.applet ? networkItem.applet.menu : null
-                anchor.item: networkItem
-                anchor.edges: Edges.Bottom
-                anchor.gravity: Edges.Bottom
-            }
         }
         BarItem {
             id: volumeItem
             visible: AudioService.available
             iconName: AudioService.muted ? 'volume-mute' : 'volume'
             text: AudioService.muted ? 'Muted' : AudioService.percent + '%'
-            tooltip: (AudioService.description ? AudioService.description + ' · ' : '') + (AudioService.muted ? 'Muted' : AudioService.percent + '%')
-            onClicked: Quickshell.execDetached(['pavucontrol'])
+            hasMenu: true
+            active: bar.menuOpen('sound')
+            tooltip: (AudioService.description ? AudioService.description + ' · ' : '') + (AudioService.muted ? 'Muted' : AudioService.percent + '%') + '  (Super + Ctrl + A)'
+            onClicked: bar.shell.togglePanel('sound', bar.screen, volumeItem.mapToItem(null, volumeItem.width / 2, 0).x)
             onRightClicked: AudioService.toggleMute()
             onScrolled: steps => AudioService.step(steps)
             onHoverChanged: h => h ? bar.hint(volumeItem, tooltip) : bar.unhint(volumeItem)
         }
         BarItem {
             id: batteryItem
-            readonly property var device: UPower.displayDevice
-            readonly property bool present: device !== null && device.ready && device.isLaptopBattery
-            readonly property int percent: present ? Math.round(device.percentage > 1 ? device.percentage : device.percentage * 100) : 0
-            readonly property bool charging: present && (device.state === UPowerDeviceState.Charging || device.state === UPowerDeviceState.PendingCharge)
-            readonly property bool full: present && device.state === UPowerDeviceState.FullyCharged
-            function duration(seconds) {
-                const h = Math.floor(seconds / 3600), m = Math.round((seconds % 3600) / 60);
-                return h > 0 ? h + ' h ' + m + ' min' : m + ' min';
-            }
-            visible: present
-            interactive: false
-            iconName: charging ? 'battery-charging' : 'battery'
-            iconColor: present && !charging && percent <= 10 ? Theme.error : Theme.ink
-            text: percent + '%'
-            tooltip: full ? 'Fully charged' : charging ? (device.timeToFull > 0 ? 'Charging · full in ' + duration(device.timeToFull) : 'Charging')
-                     : present && device.timeToEmpty > 0 ? percent + '% · ' + duration(device.timeToEmpty) + ' left' : percent + '%'
-            // Battery has no action, but still explains itself on hover.
+            // Charge, and the battery menu (power mode, charge limit) on click. At or below
+            // UPower's low level the word travels with the colour.
+            readonly property var b: BatteryService
+            visible: b.present
+            hasMenu: true
+            active: bar.menuOpen('battery')
+            iconName: b.charging ? 'battery-charging' : 'battery'
+            iconColor: b.present && !b.charging && b.percent <= 10 ? Theme.error : Theme.ink
+            text: b.percent + '%' + (b.low ? ' · Low' : '')
+            tooltip: (b.full ? 'Fully charged' : b.percent + '%' + (b.timeText ? ' · ' + b.timeText : ''))
+                     + (PowerService.available && PowerService.current ? ' · ' + PowerService.current.label : '') + '  (Super + Ctrl + P)'
+            onClicked: bar.shell.togglePanel('battery', bar.screen, batteryItem.mapToItem(null, batteryItem.width / 2, 0).x)
             onHoverChanged: h => h ? bar.hint(batteryItem, tooltip) : bar.unhint(batteryItem)
         }
         BarItem {

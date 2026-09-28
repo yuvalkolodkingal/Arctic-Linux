@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Gmail
+Comment=Web app · mail.google.com
+Exec=arctic-webapp run org.arcticlinux.WebApp.Gmail_77aa01 %u
+TryExec=arctic-webapp
+Icon=org.arcticlinux.WebApp.Gmail_77aa01.r2
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.arcticlinux.WebApp.Gmail_77aa01
+SingleMainWindow=true
+Categories=Office;X-Arctic-WebApp;
+Keywords=web;app;mail.google.com;
+MimeType=x-scheme-handler/mailto;
+X-Arctic-WebApp-Id=org.arcticlinux.WebApp.Gmail_77aa01
+X-Arctic-WebApp-URL=https://mail.google.com/mail/u/1/
+X-Arctic-WebApp-Runtime=webkit
+X-Arctic-WebApp-Schema=1
