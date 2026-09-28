@@ -15,7 +15,7 @@ and it only downloads the apps you pick.
 
 ## Try it
 
-Download the ISO from the [releases](https://github.com/yuvalkolodkingal/O-Tism/releases), write
+Download the ISO from the [releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases), write
 it to a USB stick (4 GB or more), for example with Fedora Media Writer or
 `sudo dd if=Arctic-Linux-0.2-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync`, and boot it.
 
@@ -23,7 +23,7 @@ it to a USB stick (4 GB or more), for example with Fedora Media Writer or
 
 Fedora's packages come from Fedora's repositories. Arctic's own packages (desktop, shell, installer,
 branding, Mango) come from the signed **Arctic package repository** on this project's GitHub Pages
-site, https://yuvalkolodkingal.github.io/O-Tism/, which `arctic-release` sets up with its key:
+site, https://yuvalkolodkingal.github.io/Arctic-Linux/, which `arctic-release` sets up with its key:
 
 | Channel | Built from | On an installed system |
 |---|---|---|

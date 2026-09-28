@@ -10,7 +10,7 @@
 # arctic-testing.repo.
 [arctic]
 name=Arctic Linux $releasever - $basearch
-baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/stable/fedora-$releasever/$basearch/
+baseurl=https://yuvalkolodkingal.github.io/Arctic-Linux/repo/stable/fedora-$releasever/$basearch/
 type=rpm-md
 enabled=1
 gpgcheck=1
@@ -29,7 +29,7 @@ priority=90
 
 [arctic-source]
 name=Arctic Linux $releasever - Source
-baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/stable/fedora-$releasever/source/
+baseurl=https://yuvalkolodkingal.github.io/Arctic-Linux/repo/stable/fedora-$releasever/source/
 type=rpm-md
 enabled=0
 gpgcheck=1

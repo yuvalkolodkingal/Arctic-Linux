@@ -54,6 +54,9 @@ type Config struct {
 	LogPath     string // "" = default for the mode; "-" = stderr
 	Unattended  bool
 	Target      string
+	// TestHardware and TestOnline are VM-test aids for the real backend (host.Options).
+	TestHardware string
+	TestOnline   bool
 }
 
 // Env reads mock tuning from the environment: ARCTIC_MOCK_SPEED, ARCTIC_MOCK_FAIL
@@ -131,7 +134,10 @@ func NewEngine(cfg Config) (*engine.Engine, func(), error) {
 	if cfg.Mock {
 		b = mock.New(cfg.MockOptions)
 	} else {
-		b = host.New(host.Options{Log: logw, LogPath: logPath, Target: cfg.Target})
+		b = host.New(host.Options{Log: logw, LogPath: logPath, Target: cfg.Target, TestHardware: cfg.TestHardware, TestOnline: cfg.TestOnline})
+		if cfg.TestHardware != "" || cfg.TestOnline {
+			fmt.Fprintf(logw, "TEST MODE: hardware fixture %q, assume online %v\n", cfg.TestHardware, cfg.TestOnline)
+		}
 	}
 	var preinstalled []string
 	if !cfg.Mock && host.IsLive() {

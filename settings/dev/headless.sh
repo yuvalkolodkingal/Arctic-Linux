@@ -3,17 +3,21 @@
 #
 #   settings/dev/headless.sh [options] [<step>…]
 #
-# Starts sway with a 1280×800 headless output inside a D-Bus session (with PipeWire when
-# installed), a throwaway HOME with the dotfiles installed (dotfiles/install.sh --target) and
-# the app from this checkout. Steps: `page <id>`, `reveal <page> <searchKey>`,
+# Starts sway with a 1280×800 headless output (HEADLESS-1; the window and the screenshots are
+# there) inside a D-Bus session (with PipeWire when installed), a throwaway HOME with the
+# dotfiles installed (dotfiles/install.sh --target) and the app from this checkout. Steps: `page <id>`, `reveal <page> <searchKey>`,
 # `search <text>`, `key <wtype args…>` (up to the next step), `sleep <s>`, `sh <command>`,
 # `theme <winter|polar-night>`, `shot <name>`.
 #
 #   --smoke            open every page, screenshot it (<page>.png), and fail on QML errors or
-#                      warnings in the log (the CI check)
+#                      warnings in the log (the CI check); then add displays up to three and
+#                      open Displays again (displays-3.png)
 #   --theme NAME       winter or polar-night (default polar-night)
 #   --out DIR          where screenshots go (default settings/dev/screenshots)
 #   --size WxH         output size (default 1280x800)
+#   --outputs N        1 to 3 displays for the Displays page: 2 adds HEADLESS-2 (2560×1440 at
+#                      150 %, right of the first), 3 also HEADLESS-3 (1920×1080 turned 90°,
+#                      right of that); screenshots stay of HEADLESS-1
 #   --fixtures         test data for screenshots: desktop entries for the default apps, the
 #                      installer's default-apps file, an arctic-update stand-in with updates
 #                      ready and an arctic-webapp stand-in with two web apps (none of it is used
@@ -29,6 +33,7 @@ SIZE=1280x800
 THEME=polar-night
 SMOKE=0
 FIXTURES=0
+OUTPUTS=1
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --smoke) SMOKE=1; shift ;;
@@ -36,9 +41,11 @@ while [[ "${1:-}" == --* ]]; do
     --out) OUT="$2"; shift 2 ;;
     --size) SIZE="$2"; shift 2 ;;
     --fixtures) FIXTURES=1; shift ;;
+    --outputs) OUTPUTS="$2"; shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
+[[ "$OUTPUTS" =~ ^[1-3]$ ]] || { echo "--outputs takes 1, 2 or 3" >&2; exit 2; }
 mkdir -p "$OUT"
 
 work="$(mktemp -d /tmp/arctic-settings-headless.XXXXXX)"
@@ -95,7 +102,10 @@ unset WAYLAND_DISPLAY SWAYSOCK
 
 SWAY="$(command -v sway)"
 if command -v getcap >/dev/null && [[ -n "$(getcap "$SWAY" 2>/dev/null)" ]]; then cp "$SWAY" "$work/sway"; SWAY="$work/sway"; fi
-printf 'output HEADLESS-1 resolution %s\ndefault_border none\nfor_window [title="^Arctic Settings$"] floating enable, resize set 1080 740, move position center\n' "$SIZE" > "$work/sway.conf"
+printf 'output HEADLESS-1 resolution %s position 0 0\ndefault_border none\nfor_window [title="^Arctic Settings$"] floating enable, resize set 1080 740, move position center\n' "$SIZE" > "$work/sway.conf"
+# More displays (sway's create_output, below): a 4K-ish one at 150 % and a portrait one.
+printf 'output HEADLESS-2 mode --custom 2560x1440@60Hz scale 1.5 position %s 0\n' "${SIZE%x*}" >> "$work/sway.conf"
+printf 'output HEADLESS-3 mode --custom 1920x1080@60Hz transform 90 position %s 0\n' "$(( ${SIZE%x*} + 1706 ))" >> "$work/sway.conf"
 
 cat > "$work/inner.sh" <<'INNER'
 #!/usr/bin/env bash
@@ -103,6 +113,9 @@ set -uo pipefail
 "$SWAY" -c "$WORK/sway.conf" >"$WORK/sway.log" 2>&1 &
 for _ in $(seq 100); do ls "$XDG_RUNTIME_DIR"/wayland-[0-9] >/dev/null 2>&1 && break; sleep 0.05; done
 export WAYLAND_DISPLAY="$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9] | head -1)")"
+for _ in $(seq 2 "$OUTPUTS"); do
+  swaymsg -s "$(ls "$XDG_RUNTIME_DIR"/sway-ipc.*.sock | head -1)" create_output >/dev/null
+done
 if command -v pipewire >/dev/null; then
   pipewire >/dev/null 2>&1 &
   sleep 0.3
@@ -118,7 +131,7 @@ settle() {   # the helper has answered and the page has drawn
   for _ in $(seq 100); do [[ "$(ipc ready)" == true ]] && break; sleep 0.1; done
   sleep "${1:-0.8}"
 }
-shot() { grim "$OUT/$1.png" && echo "screenshot: $OUT/$1.png"; }
+shot() { grim -o HEADLESS-1 "$OUT/$1.png" && echo "screenshot: $OUT/$1.png"; }
 for _ in $(seq 100); do [[ -n "$(ipc page)" ]] && break; sleep 0.1; done
 [[ -n "$(ipc page)" ]] || { echo "FAIL: Settings did not start"; cat "$WORK/qs.log"; exit 1; }
 settle 1.5
@@ -132,6 +145,22 @@ if (( SMOKE )); then
   done
   ipc search "gaps" >/dev/null; sleep 0.6; shot search
   ipc reveal windows windows.layout >/dev/null; settle 0.8; shot reveal
+  # The Displays page with three displays: plug in the others (sway's create_output) and
+  # check that the helper sees a tidy layout for the arrangement editor.
+  for _ in $(seq "$((OUTPUTS + 1))" 3); do
+    swaymsg -s "$(ls "$XDG_RUNTIME_DIR"/sway-ipc.*.sock | head -1)" create_output >/dev/null
+  done
+  sleep 0.5
+  ipc open displays >/dev/null; settle 1.2
+  shot displays-3
+  python3 "$REPO/settings/scripts/arctic_settings.py" displays | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+names = sorted(o["name"] for o in d["arranged"])
+assert names == ["HEADLESS-1", "HEADLESS-2", "HEADLESS-3"] and not d["problems"] and d["main"] == "HEADLESS-1", d
+' || { echo "FAIL: the Displays page doesn't get three tidy displays"; exit 1; }
+  echo "PASS: three displays reach the arrangement editor"
+  ipc open windows >/dev/null; settle 0.8
   # A change goes all the way: QML → helper → settings.conf (sourced by config.conf) → state.
   ipc set gappih 14 >/dev/null; settle 0.3
   grep -qx 'gappih=14' "$HOME/.config/mango/settings.conf" || { echo "FAIL: gappih=14 not in settings.conf"; exit 1; }
@@ -148,6 +177,8 @@ while (( $# )); do
     reveal) ipc reveal "$2" "$3" >/dev/null; settle; shift 3 ;;
     search) ipc search "$2" >/dev/null; sleep 0.6; shift 2 ;;
     key)    shift; args=(); while (( $# )) && [[ " page reveal search key sleep sh theme shot " != *" $1 "* ]]; do args+=("$1"); shift; done
+            # The seat has no keyboard until wtype makes one: give the window the focus first.
+            swaymsg -s "$(ls "$XDG_RUNTIME_DIR"/sway-ipc.*.sock | head -1)" '[title="^Arctic Settings$"] focus' >/dev/null 2>&1
             wtype "${args[@]}" 2>/dev/null || echo "wtype missing" ;;
     sleep)  sleep "$2"; shift 2 ;;
     sh)     timeout 20 sh -c "$2"; shift 2 ;;
@@ -164,7 +195,7 @@ pkill -f "$SWAY" 2>/dev/null
 exit 0
 INNER
 chmod +x "$work/inner.sh"
-export SWAY WORK="$work" REPO OUT SMOKE
+export SWAY WORK="$work" REPO OUT SMOKE OUTPUTS
 status=0
 dbus-run-session -- "$work/inner.sh" "$@" || status=$?
 

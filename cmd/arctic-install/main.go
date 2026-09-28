@@ -304,12 +304,19 @@ func cmdUnattended(args []string, out io.Writer) int {
 	var cfg daemon.Config
 	profilePath := fs.String("profile", "", "profile file (required)")
 	fs.BoolVar(&cfg.Mock, "mock", false, "run against the mock backend (nothing is touched)")
+	fs.StringVar(&cfg.TestHardware, "test-hardware", "", "VM tests: detect this hardware fixture's PCI devices ("+strings.Join(hw.FixtureNames(), ", ")+") instead of the real ones, so its drivers are installed and built")
+	fs.BoolVar(&cfg.TestOnline, "test-online", false, "VM tests: treat the network as online (the guest reaches the mirrors through a proxy that NetworkManager's check can't see)")
 	mockFlags(fs, &cfg)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if *profilePath == "" {
 		return fail("unattended: --profile is required")
+	}
+	if cfg.TestHardware != "" {
+		if _, ok := hw.Fixture(cfg.TestHardware, false); !ok {
+			return fail("unattended: unknown --test-hardware %q (%s)", cfg.TestHardware, strings.Join(hw.FixtureNames(), ", "))
+		}
 	}
 	p, err := loadProfile(*profilePath)
 	if err != nil {

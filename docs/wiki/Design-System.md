@@ -6,8 +6,8 @@ paws, and the amber eyes, the only colour that ever asks for attention.
 
 - **The full design system** (brand book, component specs and mockups of every screen in both
   themes): [the Arctic Linux design system artifact](https://claude.ai/artifact/8eUAobifhKCoecsG23Fb3i).
-- **What the build uses** is copied into [`design/`](https://github.com/yuvalkolodkingal/O-Tism/tree/main/design):
-  `tokens.json`, the [brand book](https://github.com/yuvalkolodkingal/O-Tism/blob/main/design/brand-book.md),
+- **What the build uses** is copied into [`design/`](https://github.com/yuvalkolodkingal/Arctic-Linux/tree/main/design):
+  `tokens.json`, the [brand book](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/design/brand-book.md),
   guidelines, exports, fonts, logos, icons and wallpapers.
 
 ## Principles
