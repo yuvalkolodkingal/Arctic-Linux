@@ -21,6 +21,26 @@ Press `Super + Shift + T` to switch between light and dark. The bar, launcher, w
 terminal, notifications, lock screen and your apps all change together, and the Arctic wallpapers
 switch to their matching version.
 
+### Light by day, dark at night
+
+Arctic Linux can switch by itself: in Settings › Appearance, **Switch light and dark by itself**
+is **Off** (the default), **Sunset to sunrise** or **Custom hours** (for example light from 07:00,
+dark from 19:00). Sunrise and sunset are worked out on the computer from where your time zone is
+(tzdata's coordinates for it): no location service, nothing is sent anywhere. `Super + Shift + T`
+still switches whenever you like; the schedule takes over again at the next change. The same from
+a terminal:
+
+```sh
+arctic-daylight                  # the schedule and today's times
+arctic-daylight sun              # light from sunrise, dark from sunset
+arctic-daylight hours 07:00 19:00
+arctic-daylight off
+```
+
+It uses `arctic-theme light|dark`, so with **Match colours to wallpaper** on it switches your
+wallpaper's theme between its light and dark take. A change that falls while the computer sleeps
+happens when it wakes. The setting is kept in `~/.config/arctic/daylight.json`.
+
 ## Colours from your wallpaper
 
 When you use a picture of your own as the wallpaper, Arctic Linux makes a theme from it: the

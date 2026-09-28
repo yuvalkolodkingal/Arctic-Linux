@@ -1,6 +1,7 @@
-// Appearance: the theme (Winter, Polar night, or made from the wallpaper — arctic-theme),
-// the wallpaper (the shell's picker backend), reduced motion (arctic-motion), text size in
-// GTK apps (gsettings) and the pointer (Mango cursor_theme / cursor_size).
+// Appearance: the theme (Winter, Polar night, or made from the wallpaper — arctic-theme), light
+// and dark by the clock (arctic-daylight), the wallpaper (the shell's picker backend), reduced
+// motion (arctic-motion), text size in GTK apps (gsettings) and the pointer (Mango
+// cursor_theme / cursor_size).
 // Without the newer arctic-theme (set/auto/mode/list), only Winter and Polar night are offered
 // and the rest says why.
 pragma ComponentBehavior: Bound
@@ -19,6 +20,7 @@ Page {
     property var motion: ({ available: true, reduced: false })
     property var textScale: ({ available: false, value: 1 })
     property var cursors: []
+    property var daylight: ({ available: false, mode: "off" })
     property string busyTheme: ""
     property string busyWall: ""
 
@@ -27,7 +29,25 @@ Page {
         Backend.call(["motion"], r => { if (r.ok) page.motion = r; });
         Backend.call(["text-scale"], r => { if (r.ok) page.textScale = r; }, true);
         Backend.call(["cursor-themes"], r => { if (r.ok) page.cursors = r.themes; }, true);
+        Backend.call(["daylight"], r => { if (r.ok) page.daylight = r; }, true);
         loadWallpapers();
+    }
+    // Light and dark by the clock (arctic-daylight): off, sunset to sunrise, or custom hours.
+    function setDaylight(args) {
+        Backend.call(["daylight-set"].concat(args), r => {
+            if (r.ok) {
+                page.daylight = r;
+                Theme.reload();
+                Backend.notify("success", r.mode === "off" ? "Light and dark: only when you switch" : "Light and dark switch by themselves now", false);
+            }
+        });
+    }
+    function daylightText() {
+        const d = page.daylight;
+        if (d.message) return d.message;
+        if (d.mode === "sun" && d.today) return "Light from sunrise (" + d.today.light + " today), dark from sunset (" + d.today.dark + "), where your time zone is. Super + Shift + T still switches until the next one.";
+        if (d.mode === "hours") return "Light from " + d.light + ", dark from " + d.dark + ". Super + Shift + T still switches until the next change.";
+        return "Only when you switch: here or with Super + Shift + T.";
     }
     function loadWallpapers() {
         Backend.call(["wallpapers"], r => { if (r.ok) page.walls = r; });
@@ -140,6 +160,45 @@ Page {
                 onActivated: v => Backend.call(["theme-mode", v], r => {
                     if (r.ok) { page.theme = r; Theme.reload(); }
                 })
+            }
+        }
+        SettingRow {
+            searchKey: "appearance.schedule"
+            visible: page.daylight.available === true
+            title: "Switch light and dark by itself"
+            desc: page.daylightText()
+            ArSegmented {
+                accessibleName: "Switch light and dark by itself"
+                model: [{ value: "off", label: "Off" }, { value: "sun", label: "Sunset to sunrise" }, { value: "hours", label: "Custom hours" }]
+                value: page.daylight.mode || "off"
+                onActivated: v => page.setDaylight(v === "hours" ? ["hours", page.daylight.light || "07:00", page.daylight.dark || "19:00"] : [v])
+            }
+        }
+        SettingRow {
+            visible: page.daylight.available === true && page.daylight.mode === "hours"
+            title: "Light from, dark from"
+            desc: "24-hour times, like 07:00 and 19:00. Enter saves."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArInput {
+                    id: lightFrom
+                    width: 96
+                    text: page.daylight.light || "07:00"
+                    placeholder: "07:00"
+                    maximumLength: 5
+                    accessibleName: "Light from"
+                    onAccepted: page.setDaylight(["hours", lightFrom.text.trim(), darkFrom.text.trim()])
+                }
+                ArInput {
+                    id: darkFrom
+                    width: 96
+                    text: page.daylight.dark || "19:00"
+                    placeholder: "19:00"
+                    maximumLength: 5
+                    accessibleName: "Dark from"
+                    onAccepted: page.setDaylight(["hours", lightFrom.text.trim(), darkFrom.text.trim()])
+                }
             }
         }
     }

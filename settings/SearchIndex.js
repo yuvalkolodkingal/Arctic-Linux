@@ -36,6 +36,7 @@ var ENTRIES = [
     ["appearance", "appearance.theme", "Theme", "winter polar night dark light mode colours"],
     ["appearance", "appearance.auto", "Match colours to the wallpaper", "auto automatic accent"],
     ["appearance", "appearance.mode", "Light or dark", "dark mode light mode"],
+    ["appearance", "appearance.schedule", "Switch light and dark by itself", "automatic dark mode sunset sunrise night schedule"],
     ["appearance", "appearance.wallpaper", "Wallpaper", "background picture desktop image"],
     ["appearance", "appearance.motion", "Reduce motion", "animations accessibility"],
     ["appearance", "appearance.textscale", "Text size in apps", "font scale bigger"],

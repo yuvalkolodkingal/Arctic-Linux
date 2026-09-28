@@ -38,6 +38,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
     shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch
+    daylight | daylight-set off|sun|hours LIGHT DARK      light and dark by the clock (arctic-daylight)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2142,6 +2143,31 @@ def cmd_shell_option_set(paths, args):
     return cmd_shell_options(paths, [])
 
 
+# ---- light and dark by the clock (arctic-daylight) ------------------------------------------------
+
+def cmd_daylight(paths, args):
+    if not which('arctic-daylight'):
+        return dict(ok=True, available=False)
+    argv = ['arctic-daylight'] + (list(args) if args else ['--json'])
+    code, out, err = run(argv, timeout=60)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if not isinstance(data, dict):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['The light and dark schedule couldn’t be read.'])[-1])
+    if not data.get('ok'):
+        raise Failure(data.get('error') or 'That didn’t work.')
+    data['available'] = True
+    return data
+
+
+def cmd_daylight_set(paths, args):
+    if not args or args[0] not in ('off', 'sun', 'hours') or (args[0] == 'hours') != (len(args) == 3) \
+            or (args[0] != 'hours' and len(args) != 1):
+        raise Failure('usage: daylight-set off|sun|hours LIGHT DARK')
+    if not which('arctic-daylight'):
+        raise Failure('arctic-daylight isn’t installed.')
+    return cmd_daylight(paths, args)
+
+
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
@@ -2165,7 +2191,8 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
            'ensure-source'}
 
 # The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
-COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set})
+COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
+                 'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set})
 WRITERS |= {'shell-option-set'}
 
 

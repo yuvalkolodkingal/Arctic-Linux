@@ -6,7 +6,7 @@ the shell's options, the light/dark schedule, fonts and accessibility.
 import json
 import unittest
 
-from test_arctic_settings import Home
+from test_arctic_settings import Home, stub
 
 
 class ShellOptionsTest(Home):
@@ -38,6 +38,28 @@ class ShellOptionsTest(Home):
         self.assertEqual(self.helper('shell-options')['webSearch'], 'duckduckgo')
         self.helper('shell-option-set', 'webSearch', 'brave')
         self.assertEqual(self.shell_json(), {'webSearch': 'brave'})
+
+
+class DaylightTest(Home):
+    def test_missing(self):
+        self.assertFalse(self.helper('daylight')['available'])
+        self.helper('daylight-set', 'sun', ok=False)
+
+    def test_passes_through(self):
+        stub(self.bin, 'arctic-daylight', '''\
+            echo "arctic-daylight $*" >> "{}"
+            case "$1" in
+              --json|sun|off|hours) echo '{{"ok": true, "mode": "sun", "light": "07:00", "dark": "19:00", "today": {{"light": "06:33", "dark": "18:30"}}}}' ;;
+              *) echo '{{"ok": false, "error": "Give two different times of day, like 07:00 19:00."}}'; exit 1 ;;
+            esac
+            '''.format(self.log))
+        data = self.helper('daylight')
+        self.assertEqual((data['available'], data['mode'], data['today']['light']), (True, 'sun', '06:33'))
+        self.helper('daylight-set', 'sun')
+        self.helper('daylight-set', 'hours', '07:00', '19:00')
+        self.assertEqual(self.calls(), ['arctic-daylight --json', 'arctic-daylight sun', 'arctic-daylight hours 07:00 19:00'])
+        for bad in (['sometimes'], ['hours', '07:00'], ['sun', 'now'], []):
+            self.helper('daylight-set', *bad, ok=False)
 
 
 if __name__ == '__main__':
