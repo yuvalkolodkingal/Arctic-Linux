@@ -729,6 +729,9 @@ install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdi
 install -Dpm 0755 packaging/system/arctic-system-helper %{buildroot}%{_libexecdir}/arctic/arctic-system-helper
 install -Dpm 0644 packaging/polkit/org.arcticlinux.system.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+# Thunar's Send To menu: LocalSend (arctic-share files).
+install -Dpm 0644 packaging/desktop/arctic-sendto-localsend.desktop \
+  %{buildroot}%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 # Automatic updates (arctic-update, in /usr/bin with the helpers above) and snapshots.
 install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
 install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
@@ -894,6 +897,7 @@ ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTEC
   python3 "$tg" render --palette _build/winter.json --out _build/check-theme --quiet
 diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Settings.desktop
+desktop-file-validate %{buildroot}%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 # Settings' backend: the file formats it reads and writes (uses `mango -p` when installed).
 python3 -m unittest discover -s settings/tests -p 'test_*.py'
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
@@ -1179,6 +1183,7 @@ fi
 %{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 %{_libexecdir}/arctic/arctic-system-helper
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 %dir %{_datadir}/arctic
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt

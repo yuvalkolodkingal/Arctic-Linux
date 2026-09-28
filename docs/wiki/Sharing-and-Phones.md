@@ -9,14 +9,18 @@ search for LocalSend; it's on Flathub) and on your phone.
 `Super + Ctrl + S` opens the share menu:
 
 - **Send the clipboard**: what you copied (text or a picture) is saved to your Downloads folder
-  and LocalSend opens; pick the file there and the device to send it to.
+  and LocalSend opens with it ready to send; pick the device to send it to.
 - **Send files or receive (LocalSend)**: opens LocalSend.
 - **Your phone (KDE Connect)**, when KDE Connect is installed.
 - **Sharing settings**.
 
+In Files (Thunar), right-click files or folders and choose **Send To → LocalSend**: LocalSend
+opens with them on its Send page.
+
 To receive, LocalSend needs port 53317: turn on **Settings → Sharing → LocalSend**.
 
-From a terminal: `arctic-share clipboard`, `arctic-share open`, `arctic-share status`.
+From a terminal: `arctic-share files PATH…`, `arctic-share clipboard`, `arctic-share open`,
+`arctic-share status`.
 
 ## Your phone: KDE Connect
 

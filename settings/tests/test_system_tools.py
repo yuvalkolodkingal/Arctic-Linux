@@ -498,7 +498,20 @@ class GpuAndShareTest(Tools):
         saved = list((self.tmp / 'Downloads').glob('Clipboard *.txt'))
         self.assertEqual(len(saved), 1)
         self.assertEqual(saved[0].read_text(), 'hello\n')
-        self.assertIn('flatpak run org.localsend.localsend_app', self.calls())
+        self.assertIn('flatpak run --file-forwarding org.localsend.localsend_app @@ {} @@'.format(saved[0]), self.calls())
+        # Files through the document portal, folders as they are; missing ones are left out.
+        photo = self.tmp / '-photo.jpg'
+        photo.write_text('jpeg')
+        self.sh(BIN / 'arctic-share', 'files', str(photo), str(self.tmp / 'Downloads'), str(self.tmp / 'gone.txt'))
+        self.assertEqual(self.calls()[-1], 'flatpak run --file-forwarding org.localsend.localsend_app @@ {} @@ {}'.format(
+            photo, self.tmp / 'Downloads'))
+        self.sh(BIN / 'arctic-share', 'files', str(self.tmp / 'gone.txt'), rc=1)
+        # A LocalSend on the PATH (an RPM or a tarball) gets the paths directly.
+        stub(self.bin, 'localsend_app', 'echo "localsend_app $*" >> "{}"\n'.format(self.log))
+        self.sh(BIN / 'arctic-share', 'files', str(photo))
+        self.assertEqual(self.calls()[-1], 'localsend_app {}'.format(photo))
+        entry = (DOTFILES.parent / 'packaging/desktop/arctic-sendto-localsend.desktop').read_text()
+        self.assertIn('Exec=arctic-share files %F', entry)
 
 
 if __name__ == '__main__':
