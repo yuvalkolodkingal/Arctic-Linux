@@ -1545,7 +1545,8 @@ def set_monitor_rules(model, layout):
     parse_option: name is a regex, x/y are logical px, rr is the wl_output transform, and a mode
     is used only with width, height and refresh; src/manage/monitor.c applies them). The main
     display's rule comes first, then the others top to bottom, left to right, then the rules of
-    displays that aren't connected now, as they were.
+    displays that aren't connected now (or are off): as they were, but without x/y where they
+    would overlap this layout.
 
     A display switched off is never saved as `disable:1`: Mango applies that rule whenever the
     output appears, even when it is the only screen (a laptop started without its dock would
@@ -1569,6 +1570,16 @@ def set_monitor_rules(model, layout):
                 rule['refresh'] = float(o['refresh'])
         rules.pop(o['name'], None)
         placed.append(rule)
+    # A display that isn't connected now (the monitor at home, while at work) or is off keeps
+    # its rule; where its saved place would overlap the layout just kept, it loses x/y, and Mango
+    # puts it right of the others when it comes back, instead of on top of one.
+    boxes = [_box(dict(rule, transform=TRANSFORMS[rule['rr']])) for rule in placed]
+    for name, rule in list(rules.items()):
+        if 'x' not in rule or 'y' not in rule or not rule.get('width'):
+            continue
+        box = _box(dict(rule, transform=TRANSFORMS[min(max(int(rule.get('rr', 0)), 0), 7)]))
+        if any(overlaps(box, b) for b in boxes):
+            rules[name] = {k: v for k, v in rule.items() if k not in ('x', 'y')}
     model.monitors = placed + list(rules.values())
     session_only.sort(key=[o['name'] for o in layout].index)
     return session_only

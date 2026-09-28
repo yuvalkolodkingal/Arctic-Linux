@@ -682,14 +682,18 @@ class LayoutTest(unittest.TestCase):
             S.set_output_enabled(three, 'HDMI-A-9', False)
 
     def test_monitor_rules_main_first(self):
-        model = S.SettingsFile.parse('monitorrule=name:^DP-9$,width:1280,height:1024,refresh:60,x:0,y:0,scale:1,rr:0,vrr:0\n')
+        # DP-9 and DP-8 aren't connected (the monitors at home, say): their rules stay, but a
+        # saved place that would overlap this layout goes (Mango then puts it at the right).
+        model = S.SettingsFile.parse('monitorrule=name:^DP-9$,width:1280,height:1024,refresh:60,x:0,y:0,scale:1,rr:0,vrr:0\n'
+                                     'monitorrule=name:^DP-8$,width:1280,height:1024,refresh:60,x:0,y:1920,scale:1,rr:0,vrr:0\n')
         layout = S.make_main(S.normalize_layout([self.LAPTOP, self.MONITOR, self.PORTRAIT]), 'HDMI-A-1')
         self.assertEqual(S.set_monitor_rules(model, layout), [])
         self.assertEqual(model.render().split('# ---- Displays\n')[1].strip().splitlines(), [
             'monitorrule=name:^HDMI-A-1$,width:3840,height:2160,refresh:60,x:0,y:0,scale:2,rr:0,vrr:0',
             'monitorrule=name:^eDP-1$,width:2560,height:1600,refresh:60,x:1920,y:0,scale:1.5,rr:0,vrr:0',
             'monitorrule=name:^DP-1$,width:1920,height:1080,refresh:60,x:3626,y:0,scale:1,rr:1,vrr:0',
-            'monitorrule=name:^DP-9$,width:1280,height:1024,refresh:60,x:0,y:0,scale:1,rr:0,vrr:0'])
+            'monitorrule=name:^DP-9$,width:1280,height:1024,refresh:60,scale:1,rr:0,vrr:0',
+            'monitorrule=name:^DP-8$,width:1280,height:1024,refresh:60,x:0,y:1920,scale:1,rr:0,vrr:0'])
         for rr, transform in enumerate(S.TRANSFORMS):
             model = S.SettingsFile()
             S.set_monitor_rules(model, S.normalize_layout([dict(self.LAPTOP, transform=transform)]))
@@ -850,6 +854,10 @@ class DisplaysTest(Home):
         self.assertNotIn('disable', self.settings)
         self.assertIn('monitorrule=name:^eDP-1$,width:2560,height:1600', self.settings)
         self.assertIn('monitorrule=name:^HDMI-A-1$', self.settings)
+        # The monitor now sits at 0,0, where the laptop's rule had it: that rule loses its place,
+        # so the laptop comes back next to the monitor, not on top of it.
+        self.assertIn('monitorrule=name:^HDMI-A-1$,width:3840,height:2160,refresh:59.997,x:0,y:0,scale:2,rr:0,vrr:0\n'
+                      'monitorrule=name:^eDP-1$,width:2560,height:1600,scale:1.5,rr:0,vrr:0\n', self.settings)
 
     def test_off_needs_wlr_randr(self):
         (self.bin / 'wlr-randr').unlink()
