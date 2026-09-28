@@ -14,6 +14,7 @@
     network.py forget (--uuid U… | --ssid S)
     network.py autoconnect --uuid U on|off
     network.py radio wifi on|off
+    network.py airplane on|off       every radio off (rfkill), then back to how they were
     network.py vpn-up --uuid U [--ask]  |  vpn-down --uuid U
 
 One-shot commands print one JSON line: {"ok":true,…} or {"ok":false,"error":"<sentence>",
@@ -343,6 +344,7 @@ class Reader:
         self.ssids = {u: s for u, s in self.ssids.items() if u in known}
         state['saved'] = [{'uuid': p['uuid'], 'ssid': p['ssid'], 'autoconnect': p['autoconnect']}
                           for p in self.wifi_profiles(profiles)]
+        state['airplane'] = airplane_on(rfkill_state())
         return state
 
     def networks(self, rescan=False):
@@ -350,6 +352,70 @@ class Reader:
             nmcli('device', 'wifi', 'rescan')        # NetworkManager may refuse (rate limit): fine
         code, text, _ = nmcli('-t', '-f', 'IN-USE,SSID,SIGNAL,FREQ,SECURITY', 'device', 'wifi', 'list', '--rescan', 'no')
         return parse_wifi_list(text if code == 0 else '', self.saved_map())
+
+
+# ---- airplane mode (rfkill) -----------------------------------------------------------------------
+AIRPLANE_TYPES = ('wlan', 'bluetooth', 'wwan')
+STATE_DIR = os.path.join(os.environ.get('XDG_STATE_HOME') or os.path.expanduser('~/.local/state'), 'arctic')
+
+
+def parse_rfkill(text):
+    """`rfkill --json` → {type: soft-blocked for every device of that type} for the radio types."""
+    try:
+        data = json.loads(text or '{}')
+    except ValueError:
+        return {}
+    devices = next((v for v in data.values() if isinstance(v, list)), []) if isinstance(data, dict) else []
+    out = {}
+    for d in devices:
+        kind = d.get('type')
+        if kind in AIRPLANE_TYPES:
+            out[kind] = out.get(kind, True) and d.get('soft') == 'blocked'
+    return out
+
+
+def rfkill_state():
+    try:
+        p = subprocess.run(['rfkill', '--json'], capture_output=True, text=True, timeout=5, stdin=subprocess.DEVNULL)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {}
+    return parse_rfkill(p.stdout) if p.returncode == 0 else {}
+
+
+def airplane_on(state):
+    """Airplane mode: every radio there is is soft-blocked (and there is at least one)."""
+    return bool(state) and all(state.values())
+
+
+def cmd_airplane(on):
+    if FIXTURE:
+        return {'ok': True, 'airplane': on}
+    saved = os.path.join(STATE_DIR, 'airplane.json')
+    state = rfkill_state()
+    if on:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(saved, 'w', encoding='utf-8') as f:
+            json.dump({k: not blocked for k, blocked in state.items()}, f)       # which ones were on
+        todo = [('block', k) for k in state]
+    else:
+        try:
+            with open(saved, encoding='utf-8') as f:
+                were_on = json.load(f)
+        except (OSError, ValueError):
+            were_on = {k: True for k in state}
+        todo = [('unblock', k) for k, was in were_on.items() if was and k in AIRPLANE_TYPES]
+    failed = False
+    for verb, kind in todo:
+        try:
+            failed |= subprocess.run(['rfkill', verb, kind], capture_output=True, timeout=5,
+                                     stdin=subprocess.DEVNULL).returncode != 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            failed = True
+    if failed or not todo:
+        # No rfkill access: NetworkManager's radios instead (the shell turns Bluetooth off itself).
+        simple('radio', 'all', 'off' if on else 'on')
+        return {'ok': True, 'airplane': on, 'fallback': True}
+    return {'ok': True, 'airplane': on}
 
 
 def load_fixture():
@@ -635,6 +701,8 @@ def parse(argv):
     r = sub.add_parser('radio')
     r.add_argument('what', choices=['wifi'])
     r.add_argument('mode', choices=['on', 'off'])
+    ap = sub.add_parser('airplane')
+    ap.add_argument('mode', choices=['on', 'off'])
     u = sub.add_parser('vpn-up')
     u.add_argument('--uuid', required=True)
     u.add_argument('--name')
@@ -676,6 +744,8 @@ def main(argv=None, stdin=None):
                          'yes' if args.mode == 'on' else 'no')
         elif args.cmd == 'radio':
             out = simple('radio', 'wifi', args.mode)
+        elif args.cmd == 'airplane':
+            out = cmd_airplane(args.mode == 'on')
         elif args.cmd == 'vpn-up':
             out = cmd_vpn_up(args, stdin)
         elif args.cmd == 'vpn-down':

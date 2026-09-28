@@ -101,6 +101,18 @@ class Parsing(unittest.TestCase):
         self.assertEqual(code, 'failed')
         self.assertEqual(text, 'Couldn’t connect to “Home”. something odd happened')
 
+    def test_rfkill(self):
+        text = json.dumps({'': [{'id': 0, 'type': 'wlan', 'device': 'phy0', 'soft': 'blocked', 'hard': 'unblocked'},
+                                {'id': 1, 'type': 'bluetooth', 'device': 'hci0', 'soft': 'blocked', 'hard': 'unblocked'},
+                                {'id': 2, 'type': 'bluetooth', 'device': 'hci1', 'soft': 'unblocked', 'hard': 'unblocked'},
+                                {'id': 3, 'type': 'nfc', 'device': 'nfc0', 'soft': 'unblocked', 'hard': 'unblocked'}]})
+        state = network.parse_rfkill(text)
+        self.assertEqual(state, {'wlan': True, 'bluetooth': False})
+        self.assertFalse(network.airplane_on(state))
+        self.assertTrue(network.airplane_on({'wlan': True, 'bluetooth': True}))
+        self.assertFalse(network.airplane_on({}))
+        self.assertEqual(network.parse_rfkill('not json'), {})
+
     def test_state_changed_lines(self):
         failed = ('/org/freedesktop/NetworkManager/Devices/3: org.freedesktop.NetworkManager.Device.StateChanged '
                   '(uint32 120, uint32 60, uint32 7)')
@@ -276,6 +288,24 @@ class Commands(unittest.TestCase):
         self.assertIn(['radio', 'wifi', 'off'], argv)
         self.assertIn(['connection', 'modify', 'uuid', UUID, 'connection.autoconnect', 'no'], argv)
         self.assertNoSecretOnArgv()
+
+    def test_airplane_blocks_and_restores_radios(self):
+        state = self.bin / 'rfkill-state'
+        fake = self.bin / 'rfkill'
+        fake.write_text('#!/bin/sh\necho "rfkill $*" >> "%s"\n'
+                        'if [ "$1" = --json ]; then cat "%s"; fi\n' % (self.bin / 'rfkill.log', state))
+        fake.chmod(0o755)
+        state.write_text(json.dumps({'': [{'type': 'wlan', 'soft': 'unblocked'}, {'type': 'bluetooth', 'soft': 'blocked'}]}))
+        home = self.bin / 'state'
+        env = {'XDG_STATE_HOME': str(home)}
+        self.assertEqual(self.run_helper('airplane', 'on', env=env)[0], 0)
+        self.assertEqual(json.loads((home / 'arctic/airplane.json').read_text()), {'wlan': True, 'bluetooth': False})
+        self.assertEqual(self.run_helper('airplane', 'off', env=env)[0], 0)
+        log = (self.bin / 'rfkill.log').read_text().splitlines()
+        self.assertIn('rfkill block wlan', log)
+        self.assertIn('rfkill block bluetooth', log)
+        self.assertIn('rfkill unblock wlan', log)
+        self.assertNotIn('rfkill unblock bluetooth', log)        # it was off before
 
     def test_forget_by_ssid(self):
         code, _ = self.run_helper('forget', '--ssid', 'Home', scenario=STATUS)

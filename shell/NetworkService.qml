@@ -17,6 +17,7 @@ Singleton {
     property var active: []             // [{uuid, name, type, device, state}]
     property var vpn: []                // [{uuid, name, kind, active, last_used}]
     property var saved: []              // [{uuid, ssid, autoconnect}]
+    property bool airplane: false       // every radio soft-blocked (rfkill)
     property var networks: []           // the last scan, while scanning
     // NetworkManager gave up on a saved network (its password changed) and the person chose
     // "Enter password" in the notification: shell.qml opens the menu with that network's field.
@@ -69,6 +70,7 @@ Singleton {
             net.active = data.active || [];
             net.vpn = data.vpn || [];
             if (data.saved) net.saved = data.saved;
+            net.airplane = data.airplane === true;
         } else if (data.type === 'needs_secrets') {
             // Not while the menu is open: it shows the password field itself.
             if (net.scanning || secretsNotice.running || !data.ssid) return;

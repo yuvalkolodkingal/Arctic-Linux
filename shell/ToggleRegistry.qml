@@ -9,7 +9,7 @@ import Quickshell
 Singleton {
     id: registry
 
-    readonly property var toggles: [wifi, bluetooth, dnd, nightLight, keepAwake, darkMode, powerMode, mic, vpn]
+    readonly property var toggles: [wifi, bluetooth, dnd, nightLight, keepAwake, darkMode, powerMode, mic, vpn, airplane]
     readonly property var visibleToggles: toggles.filter(t => t.available)
 
     function byKey(key) { return toggles.find(t => t.key === key) || null; }
@@ -125,6 +125,21 @@ Singleton {
         indicatorShown: available && !active
         indicatorText: 'The microphone is muted · click to unmute'
         setter: on => { if (on === AudioService.sourceMuted) AudioService.toggleSourceMute(); }
+    }
+    Toggle {
+        id: airplane
+        key: 'airplane'
+        label: 'Airplane mode'
+        icon: 'airplane'
+        available: NetworkService.available && (NetworkService.wifi !== null || BluetoothService.available)
+        active: NetworkService.airplane
+        indicator: true
+        indicatorText: 'Airplane mode is on · click to turn it off'
+        // rfkill; where the session may not use it, network.py turns NetworkManager's radios off
+        // and Bluetooth is switched here.
+        setter: on => NetworkService.run(['airplane', on ? 'on' : 'off'], null, r => {
+            if (r.ok && r.fallback && BluetoothService.available) BluetoothService.setEnabled(!on);
+        })
     }
     Toggle {
         id: vpn

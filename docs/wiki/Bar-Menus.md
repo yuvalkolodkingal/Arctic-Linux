@@ -80,8 +80,9 @@ Apps in the tray open their menus in the same style: check boxes, choices and su
 
 Everything at a glance: battery, buttons for Settings, Lock and Power, the volume and brightness
 sliders and a tile for each switch: Wi-Fi, Bluetooth, do not disturb, night light, keep awake,
-dark style, power mode, microphone and VPN (a tile only shows when your computer has what it
-needs). Click a tile to switch it; the `›` part opens its menu inside Quick settings.
+dark style, power mode, microphone, VPN and airplane mode (a tile only shows when your computer
+has what it needs). Airplane mode turns every radio off and, when you turn it off again, back on
+only the ones that were on. Click a tile to switch it; the `›` part opens its menu inside Quick settings.
 `Super + Ctrl + D` opens the brightness page, with a slider for each screen that can change its
 brightness (external monitors through DDC/CI).
 
@@ -89,7 +90,7 @@ brightness (external monitors through DDC/CI).
 
 While an app uses the **microphone** or the **camera**, or the screen is **shared**, a yellow pill
 with the word says so; hover it to see which app. Modes that are on (night light, keep awake, a
-VPN, a muted microphone) show as small icons there; click one to turn it back. Apps that open the
+VPN, airplane mode, a muted microphone) show as small icons there; click one to turn it back. Apps that open the
 camera directly instead of through PipeWire can't be seen.
 
 ## With the keyboard

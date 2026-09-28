@@ -151,8 +151,15 @@ FocusScope {
             checked: panel.wifiOn
             switchEnabled: panel.wifi !== null && panel.wifi.hardware
             detail: !NetworkService.nmRunning ? 'NetworkManager isn’t running'
+                    : NetworkService.airplane ? 'Airplane mode is on'
                     : panel.wifi && !panel.wifi.hardware ? 'Turned off by a switch on the computer' : ''
             onToggled: on => NetworkService.run(['radio', 'wifi', on ? 'on' : 'off'], null, null)
+        }
+        MenuRow {
+            visible: NetworkService.airplane
+            icon: 'airplane'
+            label: 'Turn off airplane mode'
+            onActivated: ToggleRegistry.set('airplane', 'off')
         }
         Repeater {
             model: NetworkService.wired
