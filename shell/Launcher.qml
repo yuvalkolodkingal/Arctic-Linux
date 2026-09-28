@@ -28,7 +28,9 @@ Popover {
     layerName: 'arctic-launcher'
     focusItem: view === 'get' ? getApps.inputItem : field
     cardWidth: view === 'get' ? Math.min(getApps.preferredWidth, width - 32) : 520
-    cardHeight: view === 'get' ? Math.min(getApps.preferredHeight, height - 32) : Math.min(layout.implicitHeight + 2 * Theme.space3, height - 32)
+    // (taller while the remove confirmation needs the room)
+    cardHeight: view === 'get' ? Math.min(getApps.preferredHeight, height - 32)
+                               : Math.min(Math.max(layout.implicitHeight + 2 * Theme.space3, removeSheet.open ? removeSheet.wantedHeight : 0), height - 32)
 
     function openView(name, page, text) {
         removeSheet.close();
@@ -61,6 +63,13 @@ Popover {
         });
     }
     Binding { target: AppsService; property: 'watching'; value: launcher.open && launcher.view === 'get' }
+    // "Show details" on a notification about a job that didn't work: its page in Get apps.
+    Connections {
+        target: AppsService
+        function onDetailsRequested(job) {
+            launcher.shell.openGetApps(null, job.kind === 'remove' ? 'remove' : job.source === 'dnf' ? 'dnf' : 'flatpak', '');
+        }
+    }
 
     // ---- results --------------------------------------------------------------------------
     readonly property var specials: {

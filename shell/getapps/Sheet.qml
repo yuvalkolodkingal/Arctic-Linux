@@ -13,6 +13,7 @@ Item {
     property Item initialFocus: null
     default property alias content: body.data
     readonly property alias panel: panel
+    readonly property real wantedHeight: body.implicitHeight + 2 * Theme.space5 + 2 * Theme.space4   // to show it whole
     signal closed()
 
     function show() { open = true; Qt.callLater(() => { if (sheet.initialFocus) sheet.initialFocus.forceActiveFocus(); else panel.forceActiveFocus(); }); }

@@ -48,12 +48,6 @@ FocusScope {
 
     focus: true
     Keys.onEscapePressed: event => { router.back(); event.accepted = true; }
-    Connections {
-        target: AppsService
-        function onDetailsRequested(job) {
-            router.open(job.kind === 'remove' ? 'remove' : job.source === 'dnf' ? 'dnf' : 'flatpak', '');
-        }
-    }
 
     Loader {
         id: loader

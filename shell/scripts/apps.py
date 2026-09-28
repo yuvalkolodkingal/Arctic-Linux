@@ -497,6 +497,39 @@ def protection_reason(name, display, protected, closure, shell_pkg):
 
 
 def installed_dnf(other=False):
+    """(removable rows, protected rows), cached until the rpm database, the launcher entry
+    folders, the default apps, the protection lists or your shell change."""
+    rpmdb = stamp(RPMDB)
+    key = None
+    if rpmdb:
+        watched = [str(d) for d in system_desktop_dirs()] + [str(p) for p in DEFAULT_APPS] + \
+                  [str(INSTALL_MARK), str(appslib.PROTECTED_FILE), str(appslib.PROTECTED_DIR)]
+        key = [rpmdb, other, os.environ.get('USER', ''), [[w, stamp(w)] for w in watched]]
+        cache = CACHE / 'installed-dnf.json'
+        try:
+            data = json.loads(cache.read_text())
+            if data.get(str(other)) and data[str(other)].get('key') == key:
+                return data[str(other)]['apps'], data[str(other)]['protected']
+        except (OSError, ValueError, AttributeError):
+            pass
+    apps, blocked = scan_installed_dnf(other)
+    if key is not None:
+        try:
+            try:
+                data = json.loads((CACHE / 'installed-dnf.json').read_text())
+            except (OSError, ValueError):
+                data = {}
+            data[str(other)] = dict(key=key, apps=apps, protected=blocked)
+            CACHE.mkdir(parents=True, exist_ok=True)
+            temp = CACHE / 'installed-dnf.tmp'
+            temp.write_text(json.dumps(data, ensure_ascii=False))
+            temp.replace(CACHE / 'installed-dnf.json')
+        except OSError:
+            pass
+    return apps, blocked
+
+
+def scan_installed_dnf(other=False):
     entries = appslib.desktop_entries(system_desktop_dirs())
     owners = rpm_owners([e['path'] for e in entries.values()])
     by_package = {}

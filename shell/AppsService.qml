@@ -120,7 +120,7 @@ Singleton {
         const job = jobs.find(j => j.id === jobId);
         if (!job) return;
         if (job.phase === 'waiting') update(jobId, { phase: 'cancelled', finishedAt: Date.now() });
-        else if (job.phase === 'running') send({ action: 'interrupt' });
+        else if (job.phase === 'running') { update(jobId, { stopping: true }); send({ action: 'interrupt' }); }
     }
     function update(jobId, fields) {
         jobs = jobs.map(j => j.id === jobId ? Object.assign({}, j, fields) : j);
@@ -147,10 +147,11 @@ Singleton {
     function finish(done) {
         const job = jobs.find(j => j.id === done.id);
         if (!job) return;
-        const phase = done.ok ? 'done' : job.phase === 'running' && done.code === 130 ? 'cancelled' : 'failed';
+        const phase = done.ok ? 'done' : job.stopping ? 'cancelled' : 'failed';
         update(done.id, { phase: phase, code: done.code, message: done.message || '', percent: done.ok ? 100 : job.percent, finishedAt: Date.now() });
         const ended = jobs.find(j => j.id === done.id);
         refreshInstalledIds();
+        if (job.kind === 'add-remote' && done.ok) { refreshSources(); refreshIndex(true); loadCatalog('flathub'); }
         jobFinished(ended);
         if (!watching) notify(ended);
     }

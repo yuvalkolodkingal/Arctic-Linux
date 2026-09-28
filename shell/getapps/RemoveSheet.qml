@@ -48,6 +48,10 @@ Sheet {
     function load() {
         if (!request || request.blocked) return;
         const t = request.target || {};
+        if (source === 'webapp' && AppsService.sourcesLoaded && !AppsService.webappPresent) {
+            error = 'The web-app engine (arctic-webapps) isn’t installed, so ' + name + ' can’t be removed here.';
+            return;
+        }
         if (source === 'dnf') {
             loading = true;
             AppsService.helper(['preview-remove', 'dnf'].concat(autoremove ? [] : ['--no-autoremove'], [t.package]), r => {

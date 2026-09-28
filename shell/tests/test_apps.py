@@ -375,6 +375,21 @@ class InstalledTests(Apps):
         rows = self.run_apps('installed', 'dnf', '--other')['apps']
         self.assertEqual([r['package'] for r in rows], ['ripgrep'])   # not arctic-shell (protected)
 
+    def test_the_list_is_cached_until_the_rpm_database_changes(self):
+        self.dnf_system()
+        db = self.root / 'rpmdb.sqlite'
+        db.write_text('')
+        os.utime(db, (100, 100))
+        self.assertEqual(len(self.run_apps('installed', 'dnf')['apps']), 4)
+        (self.root / 'calls.log').unlink()
+        self.data['facts'] = [f for f in self.data['facts'] if f[0] != 'htop']
+        self.assertEqual(len(self.run_apps('installed', 'dnf')['apps']), 4)   # from the cache
+        self.assertNotIn('repoquery --installed', self.calls())
+        os.utime(db, (200, 200))
+        rows = self.run_apps('installed', 'dnf')['apps']
+        self.assertEqual(rows[[r['package'] for r in rows].index('htop')]['summary'], '')   # scanned again
+        self.assertIn('repoquery --installed', self.calls())
+
     def test_added_is_left_out_without_the_install_mark(self):
         self.dnf_system()
         self.env['ARCTIC_INSTALL_MARK'] = str(self.root / 'no-such-mark')
