@@ -110,6 +110,15 @@ a red **Recording 01:23** pill counts the time; click it to stop. Modes that are
 keep awake, a VPN, airplane mode, a muted microphone) show as small icons there; click one to turn
 it back. Apps that open the camera directly instead of through PipeWire can't be seen.
 
+## Hiding the bar
+
+`Super + Shift + Space` (or **Hide the top bar** in the [command menu](Command-Menu)'s Style
+branch) hides the bar on every screen, and windows move up into its place; press it again to bring
+the bar back. It stays hidden until you show it or log out. The keys above still open the menus,
+where they would hang from the bar, and the microphone, camera, sharing and recording pills move
+to the top-right corner of the screen while the bar is away. The live USB always keeps its bar (the
+Install button is on it), and the key needs the Arctic shell (not the waybar session).
+
 ## With the keyboard
 
 `Super + Alt + B` puts the bar in keyboard mode: `←` `→` move across the items, `Enter` opens one,

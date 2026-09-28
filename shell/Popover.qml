@@ -44,7 +44,7 @@ PanelWindow {
     visible: shown
     color: 'transparent'
     anchors { top: true; bottom: true; left: true; right: true }
-    margins.top: Theme.barHeight
+    margins.top: Theme.topInset
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: layerName
@@ -111,7 +111,7 @@ PanelWindow {
            : (popover.width - width) / 2
         y: popover.placement === 'dock' ? dockPos.animatedY
            : popover.placement === 'point' ? Theme.space1 + Theme.frameWidth
-           : Math.max(Theme.space4, (popover.height - height) / 2 - Theme.barHeight / 2)
+           : Math.max(Theme.space4, (popover.height - height) / 2 - Theme.topInset / 2)
         Behavior on width { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
         Behavior on height { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
         Keys.onEscapePressed: popover.close()
