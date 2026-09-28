@@ -52,7 +52,11 @@ straight to the desktop after the disk passphrase.
 
 ![The installed desktop after logging in](images/installed-desktop.png)
 
-You start in the **Polar night** theme with the aurora wallpaper. From here:
+You start in the **Polar night** theme with the aurora wallpaper. The first time you log in, a
+**Welcome to Arctic Linux** card shows the keys that get you everywhere, a **Connect** button
+when you aren't online yet, **Get apps**, and **Light** or **Dark**. `Enter` or **Get started**
+closes it; it doesn't come back by itself (the [command menu](Command-Menu)'s **Learn ›
+Welcome**, or `arctic-welcome --again`, shows it again). From here:
 
 | Press | To |
 |---|---|
@@ -91,6 +95,9 @@ Sometimes an app can't be downloaded during the install.
 - **In an automated (unattended) install**, an app that can't be downloaded is retried once and
   then put off until later. It's written to `/var/lib/arctic/pending.json`, and the
   **arctic-firstboot** service installs it after the computer starts and is online.
+
+While apps are still on their way, the welcome card says which ones (**Finishing setup**), and
+a notification says **All set** once they're all installed.
 
 arctic-firstboot runs in the background and never holds up the login screen. It tries each app
 the same way the installer would have (dnf, COPR, Flatpak or Nix), removes the ones that worked

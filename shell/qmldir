@@ -16,6 +16,7 @@ BarTooltip 1.0 BarTooltip.qml
 CommandMenu 1.0 CommandMenu.qml
 DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
+FirstLogin 1.0 FirstLogin.qml
 FocusRing 1.0 FocusRing.qml
 Icon 1.0 Icon.qml
 InstallConsole 1.0 InstallConsole.qml

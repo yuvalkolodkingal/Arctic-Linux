@@ -18,6 +18,8 @@ SHIPPED = REPO / 'shell' / 'menu' / 'arctic-menu.json'
 
 
 def load():
+    # No __pycache__ next to the helper: dotfiles/.local/bin is installed as it is.
+    sys.dont_write_bytecode = True
     loader = importlib.machinery.SourceFileLoader('arctic_menu', str(HELPER))
     spec = importlib.util.spec_from_loader('arctic_menu', loader)
     module = importlib.util.module_from_spec(spec)

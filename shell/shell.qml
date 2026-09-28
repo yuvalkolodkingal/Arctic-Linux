@@ -13,13 +13,13 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
-//   menu toggle|toggleAt <branch>|open <branch>|close (the command menu)
+//   menu toggle|toggleAt <branch>|open <branch>|close (the command menu) · welcome firstLogin
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates, commandMenu].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, commandMenu, firstLoginCard].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -84,6 +84,7 @@ ShellRoot {
     UpdatePopover { id: updates }
     KeysSheet { id: keys }
     CommandMenu { id: commandMenu }
+    FirstLogin { id: firstLoginCard }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -150,6 +151,8 @@ ShellRoot {
         target: 'welcome'
         // (not "show": `quickshell ipc call … show` is read as its own show subcommand)
         function open(): void { welcome.show(); }
+        // The installed system's welcome, at a new account's first login (arctic-welcome).
+        function firstLogin(): void { if (!Session.live) shell.present(firstLoginCard, null); }
     }
     IpcHandler {
         target: 'dnd'

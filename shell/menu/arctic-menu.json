@@ -22,6 +22,7 @@
   "learn.keys": {"label": "Keyboard shortcuts", "icon": "keyboard", "keys": "Super + /", "run": ["arctic-keys"]},
   "learn.wiki": {"label": "Arctic Linux wiki", "icon": "globe", "desc": "Guides to everything on this desktop", "run": ["xdg-open", "https://github.com/yuvalkolodkingal/O-Tism/wiki"]},
   "learn.menu": {"label": "About this menu", "icon": "document", "desc": "What’s in it, and how to add your own rows", "run": ["xdg-open", "https://github.com/yuvalkolodkingal/O-Tism/wiki/Command-Menu"]},
+  "learn.welcome": {"label": "Welcome", "icon": "sparkle", "desc": "The keys that get you everywhere", "run": ["arctic-welcome", "--again"], "when": "installed"},
   "learn.fedora": {"label": "Fedora documentation", "icon": "document", "desc": "Arctic Linux is built on Fedora", "run": ["xdg-open", "https://docs.fedoraproject.org/en-US/docs/"]},
   "learn.about": {"label": "About this computer", "icon": "info", "run": ["arctic-settings", "about"]},
 
