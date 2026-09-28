@@ -127,17 +127,19 @@ it for SELinux first: see
 your 0.1 install stopped at *"removing live-only packages"*, install again with the 0.2 USB
 stick.
 
-Arctic Linux 0.1 shipped with the Arctic repository switched off, so a 0.1 system doesn't see the
-new packages until you add the repository once:
+Arctic Linux 0.1 shipped with the Arctic repository switched off (its `arctic.repo` pointed at a
+placeholder address), so a 0.1 system doesn't see the new packages until you add the repository
+once. Put the published repository file in `/etc/yum.repos.d/` under the same name, where it takes
+the place of 0.1's disabled copy:
 
 ```sh
-sudo dnf config-manager addrepo --from-repofile=https://yuvalkolodkingal.github.io/O-Tism/arctic.repo
+sudo curl -fsSL -o /etc/yum.repos.d/arctic.repo https://yuvalkolodkingal.github.io/O-Tism/arctic.repo
 sudo dnf upgrade
 ```
 
 dnf asks whether to import the Arctic Linux key. Check that the fingerprint it shows is the one on
 <https://yuvalkolodkingal.github.io/O-Tism/>, then answer `y`. The upgrade brings the 0.2
-`arctic-release`, which has the repository built in. Remove the file the first command added, so
+`arctic-release`, which has the repository and its key built in. Remove the file you added, so
 the system follows `arctic-release`'s settings from now on, and restart:
 
 ```sh
