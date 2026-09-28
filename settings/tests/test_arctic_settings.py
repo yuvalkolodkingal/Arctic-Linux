@@ -270,9 +270,10 @@ class SetAndResetTest(Home):
         self.assertEqual(data['options']['gappih']['arctic'], '8')
         self.assertIn('gappih=12\ngappiv=12\n', self.settings)
         self.assertIn('sloppyfocus=0', self.settings)
-        # config.conf now sources settings.conf, just before user.conf
+        # config.conf now sources settings.conf, before arctic-effects' file and user.conf
         lines = [l for l in self.config.splitlines() if l.startswith('source')]
-        self.assertEqual(lines[-2:], [S.SOURCE_LINE, 'source-optional=~/.config/mango/user.conf'])
+        self.assertEqual(lines[-3:], [S.SOURCE_LINE, 'source-optional=~/.config/arctic/effects.conf',
+                                      'source-optional=~/.config/mango/user.conf'])
         self.assertIn('mmsg dispatch reload_config', self.calls())
         self.assertEqual(data['source'], 'present')     # the repository config already has it
 

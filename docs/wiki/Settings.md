@@ -112,6 +112,12 @@ How windows sit on the screen, move and take focus. Changes show at once.
 
 **Reset all window settings** puts back Arctic's values; **Open settings.conf** shows the file.
 
+**Effects** has **Lighter effects** (Automatic, On, Off: no animations, blur or shadows;
+Automatic turns them off in a virtual machine or without a graphics driver) and **Game mode**
+(lighter effects and no gaps until you turn it off or log out). They're written to
+`~/.config/arctic/effects.conf`, which Mango reads after `settings.conf`, so while they're on they
+win over the rows above. See [Screens and the laptop lid](Screens-and-Laptop-Lid#lighter-effects-and-game-mode).
+
 ## Displays
 
 ![The Displays page](images/settings-displays.png)
@@ -210,9 +216,10 @@ now**, and the firmware updates fwupd has for this computer, with **Install in a
 - **When you're away:** lock the screen after, and suspend after, a time you pick (or never).
   The screen always locks before the computer sleeps. Saved in `~/.config/arctic/idle.conf`.
 - **Power mode:** Power saver, Balanced or Performance (when the computer offers them).
-- **Laptop lid:** closing the lid suspends the computer, and locks it first. With another screen
-  plugged in and the laptop on power, it doesn't suspend. That's decided by systemd-logind
-  (`HandleLidSwitch` in `/etc/systemd/logind.conf`), not by Settings.
+- **Laptop lid** (on laptops): **When you close the lid** — **Suspend** (the default; it locks
+  first), **Lock and turn the screen off**, or **Keep running, screen off**. With another screen
+  plugged in, closing the lid turns the laptop screen off and your windows move to the other
+  screen, whatever you pick here. See [Screens and the laptop lid](Screens-and-Laptop-Lid).
 
 The live session never locks or suspends on its own; these settings apply once Arctic Linux is
 installed.

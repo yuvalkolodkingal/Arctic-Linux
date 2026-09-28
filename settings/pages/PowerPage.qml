@@ -1,6 +1,7 @@
 // Power and lock: when the screen locks and the computer suspends when you're away (swayidle,
 // started by `arctic-session idle`, reads ~/.config/arctic/idle.conf), the power mode
-// (powerprofilesctl, from tuned-ppd), and what closing the lid does (systemd-logind).
+// (powerprofilesctl, from tuned-ppd), and what closing the lid does (arctic-display; logind
+// suspends unless `arctic-session lid` holds its lid switch for "lock" or "screen off").
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -86,13 +87,30 @@ Page {
         }
     }
 
+    // Closing the lid (arctic-display lid-closed; ~/.config/arctic/lid.conf). Only on laptops.
     Group {
+        id: lidGroup
+        property var lid: ({ present: false, whenClosed: "suspend" })
+        visible: lid.present === true
         title: "Laptop lid"
+        Component.onCompleted: Backend.call(["lid"], r => { if (r.ok) lidGroup.lid = r; }, true)
         SettingRow {
             searchKey: "power.lid"
-            title: "Closing the lid"
-            desc: "Suspends the computer (and locks it first). With another screen plugged in and the laptop on power, closing the lid doesn’t suspend. This is decided by systemd-logind (HandleLidSwitch in /etc/systemd/logind.conf)."
+            title: "When you close the lid"
+            desc: "With another screen plugged in, closing the lid turns the laptop screen off and your windows move to the other screen."
             resettable: false
+            ArSelect {
+                width: 260
+                model: [{ value: "suspend", label: "Suspend" }, { value: "lock", label: "Lock and turn the screen off" },
+                    { value: "screen-off", label: "Keep running, screen off" }]
+                value: lidGroup.lid.whenClosed || "suspend"
+                onActivated: v => Backend.call(["lid-set", v], r => {
+                    if (r.ok) {
+                        lidGroup.lid = r;
+                        Backend.notify("success", "Saved", false);
+                    }
+                })
+            }
         }
     }
 }

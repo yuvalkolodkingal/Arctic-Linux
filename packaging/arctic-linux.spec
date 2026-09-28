@@ -220,6 +220,10 @@ Requires:       tzdata
 # arctic-drives lists and ejects them (lsblk, udisksctl).
 Requires:       udiskie
 Requires:       udisks2
+# Screens and the lid: arctic-display (wlr-randr, Mango's mmsg; Duplicate needs wl-mirror),
+# arctic-session lid (systemd-inhibit); lighter effects and game mode: arctic-effects.
+Requires:       wlr-randr
+Recommends:     wl-mirror
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night

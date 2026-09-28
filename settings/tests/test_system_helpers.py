@@ -386,6 +386,114 @@ class DrivesTest(HelperHome):
         self.assertEqual(len(ran.read_text().splitlines()), 2)
 
 
+WLR_RANDR = [{'name': 'eDP-1', 'description': 'BOE 0x0BCA', 'enabled': True},
+             {'name': 'HDMI-A-1', 'description': 'Dell U2720Q', 'enabled': True}]
+
+
+class DisplayTest(HelperHome):
+    def setUp(self):
+        super().setUp()
+        for name in ('arctic-display', 'arctic-effects'):
+            (self.bin / name).symlink_to(BIN / name)
+        self.outputs = self.tmp / 'wlr-randr.json'
+        self.outputs.write_text(json.dumps(WLR_RANDR))
+        stub(self.bin, 'wlr-randr', 'cat "{}"\n'.format(self.outputs))
+        self.lid = self.tmp / 'lid/LID0/state'
+        self.lid.parent.mkdir(parents=True)
+        self.lid.write_text('state:      open\n')
+        self.env['ARCTIC_LID_GLOB'] = str(self.tmp / 'lid/*/state')
+        stub(self.bin, 'arctic-lock', 'echo "arctic-lock" >> "{}"\n'.format(self.log))
+
+    def dispatches(self):
+        return [c.split(' ', 2)[2] for c in self.calls() if c.startswith('mmsg dispatch')]
+
+    def test_modes(self):
+        data = self.tool('arctic-display', 'status', '--json')
+        self.assertEqual((data['mode'], data['choices']), ('extend', ['laptop', 'extend', 'external']))
+        self.tool('arctic-display', 'mode', 'laptop')
+        self.assertEqual(self.dispatches(), ['enable_monitor,eDP-1', 'disable_monitor,HDMI-A-1'])
+        self.assertTrue(self.calls()[-1].endswith('Laptop screen only'))
+        self.tool('arctic-display', 'mode', 'external')
+        self.assertEqual(self.dispatches()[-2:], ['enable_monitor,HDMI-A-1', 'disable_monitor,eDP-1'])
+        self.assertIn('Duplicating needs wl-mirror', self.tool('arctic-display', 'mode', 'mirror', ok=False)['error'])
+        stub(self.bin, 'wl-mirror', 'echo "wl-mirror $*" >> "{}"\nexec sleep 30\n'.format(self.log))
+        data = self.tool('arctic-display', 'mode', 'mirror')
+        self.assertEqual(data['mode'], 'mirror')
+        state = json.loads((self.run_dir / 'arctic/display.json').read_text())
+        self.assertEqual(len(state['mirrors']), 1)
+        for pid in state['mirrors']:
+            os.kill(pid, signal.SIGKILL)
+        self.tool('arctic-display', 'mode', 'sideways', ok=False)
+        self.outputs.write_text(json.dumps(WLR_RANDR[:1]))
+        self.assertIn('Only one screen', self.tool('arctic-display', 'mode', 'laptop', ok=False)['error'])
+
+    def test_lid(self):
+        # Not really closed (a tablet-mode switch fires the same binding): nothing happens.
+        self.assertEqual(self.tool('arctic-display', 'lid-closed')['done'], 'nothing')
+        self.lid.write_text('state:      closed\n')
+        self.assertEqual(self.tool('arctic-display', 'lid-closed')['done'], 'laptop screen off')
+        self.assertEqual(self.dispatches(), ['disable_monitor,eDP-1'])
+        self.assertEqual(self.tool('arctic-display', 'lid-opened')['done'], 'laptop screen on')
+        self.assertEqual(self.dispatches()[-1], 'enable_monitor,eDP-1')
+        # Alone: what lid.conf says (suspend = logind's job, nothing here).
+        self.outputs.write_text(json.dumps([WLR_RANDR[0], dict(WLR_RANDR[1], enabled=False)]))
+        self.assertEqual(self.tool('arctic-display', 'lid-closed')['done'], 'nothing')
+        self.helper('lid-set', 'lock')
+        self.assertIn('arctic-session lid --restart', self.calls())
+        self.assertEqual(self.tool('arctic-display', 'lid-closed')['done'], 'locked')
+        self.assertIn('arctic-lock', self.calls())
+        self.assertEqual(self.dispatches()[-1], 'sleep_monitor,eDP-1')
+        self.assertEqual(self.tool('arctic-display', 'lid-opened')['done'], 'screen on')
+        self.assertEqual(self.dispatches()[-1], 'wakeup_monitor,eDP-1')
+        self.env['ARCTIC_FORCE_LID'] = '1'
+        self.assertEqual(self.helper('lid')['whenClosed'], 'lock')
+        self.helper('lid-set', 'hibernate', ok=False)
+
+    def test_session_holds_the_lid_switch(self):
+        ran = self.tmp / 'inhibit.log'
+        stub(self.bin, 'systemd-inhibit', 'echo "$*" >> "{}"\n'.format(ran))
+        stub(self.bin, 'pgrep', 'exit 1\n')
+        stub(self.bin, 'setsid', 'shift; exec "$@"\n')
+        stub(self.bin, 'arctic-is-live', 'exit 1\n')
+        session = ['bash', str(BIN / 'arctic-session'), 'lid']
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertFalse(ran.exists())                       # suspend: logind's default
+        (self.home / '.config/arctic/lid.conf').write_text('when_closed=screen-off\n')
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertIn('--what=handle-lid-switch --who=Arctic Linux', ran.read_text())
+
+    def test_effects(self):
+        mango = self.home / '.config/mango/config.conf'
+        old = mango.read_text().replace('source-optional=~/.config/arctic/effects.conf\n', '')
+        mango.write_text(old)
+        stub(self.bin, 'systemd-detect-virt', 'exit 0\n')
+        data = self.tool('arctic-effects', 'lighter', 'auto')
+        self.assertEqual((data['lighter_active'], data['reason']), (True, 'vm'))
+        lines = mango.read_text().splitlines()
+        self.assertEqual(lines.index('source-optional=~/.config/arctic/effects.conf') + 1,
+                         lines.index('source-optional=~/.config/mango/user.conf'))
+        self.assertTrue(list((self.home / '.local/state/arctic/settings-backups').glob('config.conf.*')))
+        conf = (self.home / '.config/arctic/effects.conf').read_text()
+        self.assertIn('# Lighter effects (virtual machine)\nanimations=0', conf)
+        self.assertIn('mmsg dispatch reload_config', self.calls())
+        # Game mode adds no gaps; a login (apply) turns it off again.
+        self.assertTrue(self.helper('effects-set', 'game', 'on')['game'])
+        self.assertIn('gappih=0', (self.home / '.config/arctic/effects.conf').read_text())
+        reloads = self.calls().count('mmsg dispatch reload_config')
+        self.tool('arctic-effects', 'game', 'on', '--quiet')
+        self.assertEqual(self.calls().count('mmsg dispatch reload_config'), reloads)   # nothing changed
+        self.assertFalse(self.tool('arctic-effects', 'apply')['game'])
+        stub(self.bin, 'systemd-detect-virt', 'exit 1\n')
+        self.env['ARCTIC_EFFECTS_DRI'] = str(self.tmp)                       # no renderD* here
+        self.assertEqual(self.tool('arctic-effects', 'status', '--json')['reason'], 'software')
+        (self.tmp / 'renderD128').write_text('')
+        data = self.helper('effects-set', 'lighter', 'off')
+        self.assertEqual((data['lighter_active'], data['reason']), (False, ''))
+        self.assertNotIn('animations=0', (self.home / '.config/arctic/effects.conf').read_text())
+        self.assertEqual(mango.read_text().count('source-optional=~/.config/arctic/effects.conf'), 1)
+        self.helper('effects-set', 'game', 'maybe', ok=False)
+
+
 class MoreUpdatesTest(Home):
     def test_missing(self):
         data = self.helper('more-updates')

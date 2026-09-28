@@ -10,6 +10,8 @@ are its (one JSON object per command, Failure for a sentence, argv lists, never 
     datetime [zones] [locales] | datetime-set timezone ZONE|ntp on|off|time T|locale LANG
                                   time zone, network time, the clock, the language (polkit)
     more-updates | more-update-run apps|firmware  Flatpak apps and firmware (arctic-update)
+    lid | lid-set suspend|lock|screen-off          closing the lid without another screen (lid.conf)
+    effects | effects-set lighter auto|on|off | game on|off      arctic-effects
 """
 import os
 import re
@@ -17,8 +19,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from arctic_settings import (Failure, _loads, atomic_write, exec_command, read_desktop, read_text, run,
-                             strip_ansi, which)
+from arctic_settings import (Failure, _loads, atomic_write, backup, exec_command, read_desktop, read_text,
+                             run, strip_ansi, which)
 
 
 # ---- night light and keep awake (arctic-nightlight, arctic-keep-awake) -------------------------
@@ -364,12 +366,61 @@ def cmd_more_update_run(paths, args):
     return dict(ok=True, started=args[0])
 
 
+# ---- the laptop lid (arctic-display lid-closed, arctic-session lid) ------------------------------
+
+LID_CHOICES = ('suspend', 'lock', 'screen-off')
+
+
+def _has_lid(paths):
+    return bool(paths.env.get('ARCTIC_FORCE_LID')) or any(Path('/proc/acpi/button/lid').glob('*/state'))
+
+
+def cmd_lid(paths, _args):
+    choice = 'suspend'
+    for line in (read_text(paths.arctic / 'lid.conf') or '').splitlines():
+        key, _, value = line.partition('=')
+        if key.strip() == 'when_closed' and value.strip() in LID_CHOICES:
+            choice = value.strip()
+    return dict(ok=True, present=_has_lid(paths), whenClosed=choice)
+
+
+def cmd_lid_set(paths, args):
+    """lid-set suspend|lock|screen-off: what closing the lid does without another screen."""
+    if len(args) != 1 or args[0] not in LID_CHOICES:
+        raise Failure('usage: lid-set suspend|lock|screen-off')
+    path = paths.arctic / 'lid.conf'
+    if path.exists():
+        backup(paths, path)
+    atomic_write(path, '# Written by Arctic Settings (Power and lock). arctic-display and arctic-session lid read it.\n'
+                       'when_closed={}\n'.format(args[0]))
+    if which('arctic-session', paths.env):
+        run(['arctic-session', 'lid', '--restart'], timeout=10)
+    return cmd_lid(paths, [])
+
+
+# ---- lighter effects and game mode (arctic-effects) -----------------------------------------------
+
+def cmd_effects(paths, _args):
+    data = _helper_json(['arctic-effects', 'status', '--json'], missing=dict(ok=True, helper=False))
+    data.setdefault('helper', True)
+    return data
+
+
+def cmd_effects_set(paths, args):
+    """effects-set lighter auto|on|off | game on|off."""
+    if tuple(args) not in {('lighter', 'auto'), ('lighter', 'on'), ('lighter', 'off'), ('game', 'on'), ('game', 'off')}:
+        raise Failure('usage: effects-set lighter auto|on|off | game on|off')
+    _helper_json(['arctic-effects'] + list(args) + (['--quiet'] if args[0] == 'game' else []), timeout=30)
+    return cmd_effects(paths, [])
+
+
 COMMANDS = {
     'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
     'autostart': cmd_autostart, 'autostart-set': cmd_autostart_set,
     'printers': cmd_printers, 'printer-default': cmd_printer_default, 'printer-cancel': cmd_printer_cancel,
     'datetime': cmd_datetime, 'datetime-set': cmd_datetime_set,
     'more-updates': cmd_more_updates, 'more-update-run': cmd_more_update_run,
+    'lid': cmd_lid, 'lid-set': cmd_lid_set, 'effects': cmd_effects, 'effects-set': cmd_effects_set,
 }
 # Commands that read, change and write back a file of ours (they run one at a time).
-WRITERS = {'nightlight-set', 'autostart-set'}
+WRITERS = {'nightlight-set', 'autostart-set', 'lid-set', 'effects-set'}

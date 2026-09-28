@@ -4,7 +4,7 @@
 # (for example as a systemd user unit from arctic-desktop-config), nothing happens.
 #
 #   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle [--restart]
-#                  nightlight | drives
+#                  nightlight | drives | lid [--restart] | effects
 #
 # `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
@@ -77,5 +77,20 @@ case "${1:-}" in
     auto=--automount
     grep -qsx 'automount=off' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/drives.conf" && auto=--no-automount
     run_once udiskie udiskie "$auto" --notify --no-tray ;;
-  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives" >&2; exit 2 ;;
+  # Closing the lid: "lock" or "screen off" in ~/.config/arctic/lid.conf (Settings > Power and
+  # lock) keeps logind from suspending while the session runs; arctic-display does the rest.
+  lid)
+    if arctic-is-live 2>/dev/null; then exit 0; fi
+    why="Closing the lid does what you chose in Settings"
+    if [[ "${2:-}" == --restart ]]; then pkill -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux" 2>/dev/null; fi
+    choice="$(sed -n 's/^when_closed=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/lid.conf" 2>/dev/null | tail -n 1)"
+    case "$choice" in
+      lock|screen-off)
+        pgrep -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux" >/dev/null 2>&1 || \
+          setsid -f systemd-inhibit --what=handle-lid-switch --who="Arctic Linux" --why="$why" --mode=block \
+            sleep infinity >/dev/null 2>&1 ;;
+    esac ;;
+  # Lighter effects in virtual machines and without a GPU driver; game mode ends with the session.
+  effects) command -v arctic-effects >/dev/null 2>&1 && arctic-effects apply >/dev/null 2>&1 ;;
+  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives|lid [--restart]|effects" >&2; exit 2 ;;
 esac
