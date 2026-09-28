@@ -1077,6 +1077,12 @@ class DefaultAppsTest(Home):
         self.assertTrue(ran.read_text().splitlines()[-1].endswith('[arctic-open][--class][org.arcticlinux.Dropdown]'))
         subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'x.y', '--hold', '-e', 'btop'], env=env, check=True, timeout=10)
         self.assertTrue(ran.read_text().splitlines()[-1].endswith('[--class][x.y][--hold][-e][btop]'))
+        # --focus: the open window comes back (Mango), else the app starts.
+        stub(self.bin, 'mmsg', 'echo "mmsg $*" >> "{}"; [ "$1" = get ] && echo \'{{"clients": [{{"id": 7, "appid": "Firefox"}}]}}\'\n'.format(self.log))
+        subprocess.run(['bash', str(opener), '--focus', 'org.mozilla.firefox'], env=env, check=True, timeout=10)
+        self.assertIn('mmsg dispatch focusid client,7', self.calls())
+        subprocess.run(['bash', str(opener), '--focus', 'org.gnome.Nautilus'], env=env, check=True, timeout=10)
+        self.assertTrue(ran.read_text().splitlines()[-1].endswith('[gtk-launch][org.gnome.Nautilus]'))
         # A terminal that can't set an app id is passed over for one that can.
         (self.home / '.config/arctic').mkdir(parents=True, exist_ok=True)
         (self.home / '.config/arctic/default-apps').write_text('terminal=konsole\n')

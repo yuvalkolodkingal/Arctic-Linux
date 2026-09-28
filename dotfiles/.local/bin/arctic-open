@@ -9,6 +9,9 @@
 #                        the terminal's window gets the Wayland app id ID, which window rules
 #                        match (the drop-down terminal): kitty, foot, alacritty or ghostty (your
 #                        terminal if it is one of them, else the first of them installed)
+#   arctic-open --focus DESKTOP-ID
+#                        bring the app's window back if it is open (Mango), else start it
+#                        (gtk-launch); shortcuts made in Settings use this
 #
 # The installer writes your picks to /etc/arctic/default-apps; you can override any of them in
 # ~/.config/arctic/default-apps. Both files are simple  role=command  lines, e.g.
@@ -20,12 +23,39 @@ set -uo pipefail
 usage() {
   echo "usage: arctic-open terminal|browser|editor|files|files-tui" >&2
   echo "       arctic-open terminal [--hold] [--app-id ID] [-e COMMAND [ARGUMENTS…]]" >&2
+  echo "       arctic-open --focus DESKTOP-ID" >&2
   exit 2
 }
 
 role="${1:-}"
 [[ -n "$role" ]] || usage
 shift
+
+# Launch or focus: the first window whose app id is the desktop entry's (its id, the part after
+# its last dot, or its StartupWMClass, in any case) comes to the front, on its workspace.
+if [[ "$role" == --focus ]]; then
+  id="${1:-}"
+  [[ "$id" =~ ^[A-Za-z0-9._-]+$ ]] || usage
+  dirs="${XDG_DATA_HOME:-$HOME/.local/share}:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}:/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share"
+  client="$(mmsg get all-clients 2>/dev/null | python3 -c '
+import json, os, sys
+ident, dirs = sys.argv[1], sys.argv[2].split(":")
+names = {ident.lower(), ident.rsplit(".", 1)[-1].lower()}
+for d in dirs:
+    try:
+        with open(os.path.join(d, "applications", ident + ".desktop"), encoding="utf-8") as f:
+            names |= {l.split("=", 1)[1].strip().lower() for l in f if l.startswith("StartupWMClass=")}
+        break
+    except OSError:
+        pass
+for c in json.load(sys.stdin).get("clients", []):
+    if str(c.get("appid") or c.get("app_id") or "").lower() in names:
+        print(c["id"])
+        break' "$id" "$dirs" 2>/dev/null)"
+  if [[ "$client" =~ ^[0-9]+$ ]] && mmsg dispatch focusid "client,$client" >/dev/null 2>&1; then exit 0; fi
+  setsid -f gtk-launch "$id" >/dev/null 2>&1
+  exit 0
+fi
 
 # Running a command in the terminal: [--hold] [--app-id ID] [-e COMMAND…]
 exec_args=()

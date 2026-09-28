@@ -318,6 +318,17 @@ Page {
             iconName: "grid"
             onClicked: appPicker.start()
         }
+        // An app picked above: start it, or bring back its window when it's open already.
+        ArCheck {
+            id: focusCheck
+            visible: /^(gtk-launch|arctic-open --focus) [A-Za-z0-9._-]+$/.test(addDialog.command.trim())
+            checked: true
+            text: "If it’s open, bring its window back"
+            onToggled: {
+                const id = addDialog.command.trim().split(" ").pop();
+                commandField.text = (checked ? "arctic-open --focus " : "gtk-launch ") + id;
+            }
+        }
         ArText {
             visible: addDialog.error !== ""
             width: parent.width
@@ -349,7 +360,7 @@ Page {
         actionText: "Use this app"
         items: apps
         onPicked: v => {
-            commandField.text = "gtk-launch " + v;
+            commandField.text = (focusCheck.checked ? "arctic-open --focus " : "gtk-launch ") + v;
             addDialog.open();
         }
         onOpened: if (apps.length === 0) Backend.call(["startup"], r => {

@@ -72,6 +72,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-launcher ["=12*4"]` | Open or close the launcher (`Super + Space`), optionally with something typed |
 | `arctic-open terminal\|browser\|editor\|files\|files-tui` | Open the app you picked for a role |
 | `arctic-open terminal [--hold] -e <command…>` | Run a command in the terminal you picked (the launcher's terminal apps, Fetch, Shift+Enter) |
+| `arctic-open --focus <desktop id>` | Bring the app's window back if it's open, else start it (shortcuts made in Settings) |
 | `arctic-lock` | Lock the screen (`Super + L`); off in the live session |
 | `arctic-power [lock\|logout\|suspend\|restart\|poweroff]` | The power menu (`Super + Esc`), or do it now |
 | `arctic-osd volume\|brightness\|kbd up\|down`, `volume mute`, `mic mute` | Hardware keys with the on-screen display |

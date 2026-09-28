@@ -192,7 +192,8 @@ leave a laptop's only screen dark the next time it starts without its dock.
 ![The Shortcuts page](images/settings-shortcuts.png)
 
 Every shortcut of the desktop, searchable, and **Your shortcuts**. **Add a shortcut**: click the
-key box and press the keys, then type a command or pick an app to open. Mango uses the first
+key box and press the keys, then type a command or pick an app to open (with **If it's open,
+bring its window back**, on at first, the key shows the app's window instead of opening another). Mango uses the first
 shortcut it finds for a key, so Settings refuses a key that's already taken, and one that holds
 the keys that switch your keyboard layout. Your shortcuts are saved as `bind=` lines in
 `settings.conf`.
