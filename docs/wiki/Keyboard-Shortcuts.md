@@ -59,6 +59,26 @@ screen at any time.
 | `Super + ,` / `.` | Focus the monitor on the left / right |
 | `Super + Shift + ,` / `.` | Move the window to the monitor on the left / right |
 
+## Menus on the bar
+
+Every item on the bar opens its own menu; these keys open them from anywhere.
+
+| Shortcut | Does |
+|---|---|
+| `Super + A` | Quick settings: volume, brightness, Wi-Fi, Bluetooth, do not disturb, power mode and more |
+| `Super + Ctrl + W` | Network and Wi-Fi |
+| `Super + Ctrl + B` | Bluetooth |
+| `Super + Ctrl + A` | Sound |
+| `Super + Ctrl + P` | Battery and power mode (Quick settings on a desktop) |
+| `Super + Ctrl + D` | Brightness |
+| `Super + Ctrl + T` | Calendar |
+| `Super + Ctrl + M` | Music and video that's playing |
+| `Super + Alt + B` | Use the bar with the keyboard: `←` `→` move, `Enter` opens, `Esc` leaves |
+| `Shift` + Mute key | Play sound on the next output (speakers, headphones, HDMI) |
+
+If the key that switches keyboard layouts is Right Alt alone (Settings → Keyboard), use the
+left `Alt` for the `Super + Alt` shortcuts.
+
 ## System
 
 | Shortcut | Does |
@@ -107,6 +127,22 @@ Tap to click and natural scrolling are on for touchpads.
 | `↑` / `↓` | Move through the results |
 | `Enter` | Open |
 | `Esc` | Back, or close |
+
+## In a menu on the bar
+
+| Key | Does |
+|---|---|
+| `↑` / `↓` | Previous / next row, switch or slider |
+| `Home` / `End`, `Page Up` / `Page Down` | First / last row; five rows at a time |
+| `Enter` or `Space` | Choose the row, or flip its switch |
+| `←` / `→` on a slider | 5 % less / more (`Space` mutes) |
+| `→` on a row with `›` | Open that page; `←` or `Backspace` comes back |
+| `Tab` / `Shift + Tab` | Next / previous group (the switch at the top, the list, the links at the bottom) |
+| `Ctrl + Tab` / `Ctrl + Shift + Tab` | The menu of the next / previous item on the bar |
+| Menu key, `Shift + F10` or right click | More actions for the row (forget a network or device) |
+| `Delete` | Forget the network or device |
+| Letters | Jump to the row that starts with them |
+| `Esc` | Leave the text field, go back a page, or close |
 
 ## In Get apps
 
