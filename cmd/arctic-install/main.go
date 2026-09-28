@@ -513,6 +513,16 @@ func (u *unattended) follow(events <-chan any) int {
 				if len(x.Deferred) > 0 {
 					fmt.Fprintf(u.out, "Deferred to first boot: %s\n", strings.Join(x.Deferred, ", "))
 				}
+				for _, d := range x.Drivers {
+					fmt.Fprintf(u.out, "Driver %s: %s\n", d.ID, d.Text)
+				}
+				// The one-time code is only ever shown to whoever runs the install.
+				if sb := x.SecureBoot; sb != nil {
+					fmt.Fprintf(u.out, "%s\n%s\n", sb.Title, sb.Intro)
+					for i, st := range sb.Steps {
+						fmt.Fprintf(u.out, "  %d. %s\n", i+1, st)
+					}
+				}
 				return 0
 			}
 		}
