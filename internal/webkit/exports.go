@@ -14,6 +14,7 @@ import "C"
 import (
 	"runtime/cgo"
 	"strings"
+	"unsafe"
 )
 
 func ctl(h C.uintptr_t) Controller { return cgo.Handle(h).Value().(Controller) }
@@ -124,3 +125,28 @@ func goThemeChanged(h C.uintptr_t) { safeDo(func() { ctl(h).ThemeChanged() }) }
 
 //export goIdle
 func goIdle(h C.uintptr_t) { safeDo(func() { ctl(h).Idle() }) }
+
+//export goCertificateQuestion
+func goCertificateQuestion(h C.uintptr_t, uri, pem *C.char) *C.char {
+	return safeStr(func() string { return ctl(h).CertificateQuestion(C.GoString(uri), C.GoString(pem)) })
+}
+
+//export goTrustCertificate
+func goTrustCertificate(h C.uintptr_t) C.int {
+	return safe(0, func() C.int { return b2i(ctl(h).TrustCertificate()) })
+}
+
+//export goWantFavicon
+func goWantFavicon(h C.uintptr_t, w, hgt C.int) C.int {
+	return safe(0, func() C.int { return b2i(ctl(h).WantFavicon(int(w), int(hgt))) })
+}
+
+//export goFavicon
+func goFavicon(h C.uintptr_t, data unsafe.Pointer, n C.int) C.int {
+	return safe(0, func() C.int {
+		if n <= 0 || n > 4<<20 {
+			return 0
+		}
+		return b2i(ctl(h).Favicon(C.GoBytes(data, n)))
+	})
+}

@@ -30,7 +30,10 @@ typedef struct {
     WebKitPermissionRequest *pending; /* the banner's permission request (ref held) */
     int pending_kind;
     char *pending_origin;
-    int banner_action;                /* 0 permission, 1 reload */
+    int banner_action;                /* 0 permission, 1 reload, 2 trust a certificate */
+    GtkWidget *audio;                 /* mute button, shown while the page plays audio */
+    GSimpleAction *open_link_action;  /* context menu: open a link in your browser */
+    gboolean favicon_done;
     GtkCssProvider *css;
     GFileMonitor *theme_monitor;
     GHashTable *notifications;        /* tag → WebKitNotification (ref) */
@@ -161,6 +164,10 @@ static void banner_primary_cb(GtkButton *b, gpointer data) {
         webkit_web_view_reload(S.view);
         return;
     }
+    if (S.banner_action == 2) {
+        if (goTrustCertificate(S.cfg.handle)) webkit_web_view_reload(S.view);
+        return;
+    }
     finish_permission(TRUE, TRUE);
 }
 
@@ -176,6 +183,7 @@ void arctic_banner(const char *text, const char *primary) {
     if (!S.revealer) return;
     finish_permission(FALSE, FALSE);
     S.banner_action = 1;
+    gtk_button_set_label(GTK_BUTTON(S.banner_secondary), "Block");
     gtk_label_set_text(GTK_LABEL(S.banner_label), text ? text : "");
     gtk_widget_set_visible(S.banner_primary, primary != NULL);
     if (primary) gtk_button_set_label(GTK_BUTTON(S.banner_primary), primary);
@@ -192,6 +200,7 @@ static void ask_permission(WebKitPermissionRequest *req, int kind, const char *o
     S.pending_kind = kind;
     S.pending_origin = g_strdup(origin);
     S.banner_action = 0;
+    gtk_button_set_label(GTK_BUTTON(S.banner_secondary), "Block");
     char *host = NULL;
     GUri *u = g_uri_parse(origin, G_URI_FLAGS_NONE, NULL);
     if (u) {
@@ -428,7 +437,32 @@ static void init_notification_permissions_cb(WebKitWebContext *ctx, gpointer dat
 static void download_finished_cb(WebKitDownload *d, gpointer data) {
     (void)data;
     const char *dest = webkit_download_get_destination(d);
-    if (dest) goDownloadFinished(S.cfg.handle, (char *)dest);
+    if (!dest) return;
+    goDownloadFinished(S.cfg.handle, (char *)dest);
+    /* Never opened automatically: the notification offers Open and Show in folder. */
+    char *name = g_path_get_basename(dest);
+    GNotification *gn = g_notification_new("Download finished");
+    g_notification_set_body(gn, name);
+    g_notification_set_default_action_and_target(gn, "app.download-show", "s", dest);
+    g_notification_add_button_with_target(gn, "Open", "app.download-open", "s", dest);
+    g_notification_add_button_with_target(gn, "Show in folder", "app.download-show", "s", dest);
+    char *tag = g_strdup_printf("download-%s", name);
+    g_application_send_notification(G_APPLICATION(S.app), tag, gn);
+    g_free(tag);
+    g_object_unref(gn);
+    g_free(name);
+}
+
+static void download_action_cb(GSimpleAction *a, GVariant *param, gpointer data) {
+    (void)a;
+    GFile *f = g_file_new_for_path(g_variant_get_string(param, NULL));
+    GtkFileLauncher *l = gtk_file_launcher_new(f);
+    if (GPOINTER_TO_INT(data))
+        gtk_file_launcher_open_containing_folder(l, S.window, NULL, NULL, NULL);
+    else
+        gtk_file_launcher_launch(l, S.window, NULL, NULL, NULL);
+    g_object_unref(l);
+    g_object_unref(f);
 }
 
 static gboolean decide_destination_cb(WebKitDownload *d, const char *suggested, gpointer data) {
@@ -515,13 +549,28 @@ static gboolean load_failed_cb(WebKitWebView *view, WebKitLoadEvent ev, const ch
 static gboolean tls_failed_cb(WebKitWebView *view, const char *uri, GTlsCertificate *cert, GTlsCertificateFlags errors,
                               gpointer data) {
     (void)view;
-    (void)cert;
     (void)errors;
     (void)data;
     char *html = goLoadFailed(S.cfg.handle, (char *)(uri ? uri : ""), "", 1);
     if (!html) return FALSE;
     webkit_web_view_load_alternate_html(S.view, html, uri, NULL);
     free(html);
+    /* A site on your own network may be trusted, this exact certificate for this host only. */
+    char *pem = NULL;
+    if (cert) g_object_get(cert, "certificate-pem", &pem, NULL);
+    char *question = pem ? goCertificateQuestion(S.cfg.handle, (char *)(uri ? uri : ""), pem) : NULL;
+    if (question) {
+        finish_permission(FALSE, FALSE);
+        S.banner_action = 2;
+        gtk_label_set_text(GTK_LABEL(S.banner_label), question);
+        gtk_button_set_label(GTK_BUTTON(S.banner_primary), "Trust");
+        gtk_button_set_label(GTK_BUTTON(S.banner_secondary), "Not now");
+        gtk_widget_set_visible(S.banner_primary, TRUE);
+        gtk_widget_set_visible(S.banner_secondary, TRUE);
+        gtk_revealer_set_reveal_child(GTK_REVEALER(S.revealer), TRUE);
+        free(question);
+    }
+    g_free(pem);
     return TRUE;
 }
 
@@ -540,6 +589,70 @@ static void fullscreen_cb(WebKitWebView *view, gpointer data) {
 
 /* ---------------------------------------------------------------- views and the window */
 
+/* The favicon WebKit decoded, for the manager's letter-icon upgrade (the manager decodes it
+ * again with its own bounded decoders). */
+static void favicon_cb(WebKitWebView *view, GParamSpec *ps, gpointer data) {
+    (void)ps;
+    (void)data;
+    if (S.favicon_done) return;
+    GdkTexture *t = webkit_web_view_get_favicon(view);
+    if (!t) return;
+    if (!goWantFavicon(S.cfg.handle, gdk_texture_get_width(t), gdk_texture_get_height(t))) return;
+    GBytes *png = gdk_texture_save_to_png_bytes(t);
+    if (!png) return;
+    gsize n = 0;
+    const void *bytes = g_bytes_get_data(png, &n);
+    if (n > 0 && goFavicon(S.cfg.handle, (void *)bytes, (int)n)) S.favicon_done = TRUE;
+    g_bytes_unref(png);
+}
+
+static void update_audio(void) {
+    gboolean muted = webkit_web_view_get_is_muted(S.view);
+    gtk_widget_set_visible(S.audio, webkit_web_view_is_playing_audio(S.view) || muted);
+    gtk_button_set_icon_name(GTK_BUTTON(S.audio), muted ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic");
+    gtk_widget_set_tooltip_text(S.audio, muted ? "Unmute" : "Mute");
+}
+static void audio_cb(WebKitWebView *view, GParamSpec *ps, gpointer data) {
+    (void)view;
+    (void)ps;
+    (void)data;
+    update_audio();
+}
+static void mute_cb(GtkButton *b, gpointer d) {
+    (void)b;
+    (void)d;
+    webkit_web_view_set_is_muted(S.view, !webkit_web_view_get_is_muted(S.view));
+    update_audio();
+}
+
+/* Context menu: "Open Link in New Window" becomes "Open Link in Browser". */
+static void open_link_cb(GSimpleAction *a, GVariant *param, gpointer d) {
+    (void)a;
+    (void)d;
+    arctic_open_external(g_variant_get_string(param, NULL));
+}
+
+static gboolean context_menu_cb(WebKitWebView *view, WebKitContextMenu *menu, WebKitHitTestResult *hit, gpointer d) {
+    (void)view;
+    (void)d;
+    const char *link = webkit_hit_test_result_get_link_uri(hit);
+    GList *items = webkit_context_menu_get_items(menu);
+    int pos = 0;
+    for (GList *l = items; l; l = l->next, pos++) {
+        WebKitContextMenuItem *item = l->data;
+        if (webkit_context_menu_item_get_stock_action(item) != WEBKIT_CONTEXT_MENU_ACTION_OPEN_LINK_IN_NEW_WINDOW) continue;
+        webkit_context_menu_remove(menu, item);
+        if (link && (g_str_has_prefix(link, "https://") || g_str_has_prefix(link, "http://")))
+            webkit_context_menu_insert(menu,
+                                       webkit_context_menu_item_new_from_gaction(G_ACTION(S.open_link_action),
+                                                                                 "Open Link in Browser",
+                                                                                 g_variant_new_string(link)),
+                                       pos);
+        break;
+    }
+    return FALSE;
+}
+
 static WebKitWebView *new_view(WebKitWebView *related) {
     WebKitWebView *v;
     if (related)
@@ -552,6 +665,7 @@ static WebKitWebView *new_view(WebKitWebView *related) {
     g_signal_connect(v, "permission-request", G_CALLBACK(permission_cb), NULL);
     g_signal_connect(v, "create", G_CALLBACK(create_cb), NULL);
     g_signal_connect(v, "show-notification", G_CALLBACK(show_notification_cb), NULL);
+    g_signal_connect(v, "context-menu", G_CALLBACK(context_menu_cb), NULL);
     return v;
 }
 
@@ -744,6 +858,9 @@ static void build_window(void) {
     g_signal_connect(S.back_to_app, "clicked", G_CALLBACK(back_to_app_cb), NULL);
     S.host_label = gtk_label_new("");
     gtk_widget_add_css_class(S.host_label, "arctic-host");
+    S.audio = icon_button("audio-volume-high-symbolic", "Mute", G_CALLBACK(mute_cb));
+    gtk_widget_set_visible(S.audio, FALSE);
+    gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), S.audio);
     gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), S.back_to_app);
     gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), S.host_label);
     gtk_widget_set_visible(S.back_to_app, FALSE);
@@ -792,6 +909,9 @@ static void build_window(void) {
     webkit_web_view_set_zoom_level(S.view, S.cfg.zoom > 0 ? S.cfg.zoom : 1.0);
     g_signal_connect(S.view, "notify::title", G_CALLBACK(title_cb), NULL);
     g_signal_connect(S.view, "notify::uri", G_CALLBACK(uri_cb), NULL);
+    g_signal_connect(S.view, "notify::favicon", G_CALLBACK(favicon_cb), NULL);
+    g_signal_connect(S.view, "notify::is-playing-audio", G_CALLBACK(audio_cb), NULL);
+    g_signal_connect(S.view, "notify::is-muted", G_CALLBACK(audio_cb), NULL);
     g_signal_connect(S.view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
     g_signal_connect(S.view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
     g_signal_connect(S.view, "load-failed-with-tls-errors", G_CALLBACK(tls_failed_cb), NULL);
@@ -867,6 +987,16 @@ static void startup_cb(GApplication *app, gpointer d) {
     g_action_map_add_action(G_ACTION_MAP(app), G_ACTION(clicked));
     g_object_unref(clicked);
     S.notifications = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_object_unref);
+    GSimpleAction *dl_open = g_simple_action_new("download-open", G_VARIANT_TYPE_STRING);
+    g_signal_connect(dl_open, "activate", G_CALLBACK(download_action_cb), GINT_TO_POINTER(0));
+    g_action_map_add_action(G_ACTION_MAP(app), G_ACTION(dl_open));
+    g_object_unref(dl_open);
+    GSimpleAction *dl_show = g_simple_action_new("download-show", G_VARIANT_TYPE_STRING);
+    g_signal_connect(dl_show, "activate", G_CALLBACK(download_action_cb), GINT_TO_POINTER(1));
+    g_action_map_add_action(G_ACTION_MAP(app), G_ACTION(dl_show));
+    g_object_unref(dl_show);
+    S.open_link_action = g_simple_action_new("open-link-in-browser", G_VARIANT_TYPE_STRING);
+    g_signal_connect(S.open_link_action, "activate", G_CALLBACK(open_link_cb), NULL);
 
     g_unix_signal_add(SIGTERM, unix_signal_cb, GINT_TO_POINTER(SIGTERM));
     g_unix_signal_add(SIGINT, unix_signal_cb, GINT_TO_POINTER(SIGINT));

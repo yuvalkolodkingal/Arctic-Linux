@@ -6,8 +6,9 @@
 #   cmd/arctic-webapp-host/dev/smoke.sh [--out DIR]
 #
 # Checks: the window's Wayland app_id is the app id, the title follows the page, the page sees
-# webapp.FetchUserAgent (so discovery fetches as the app will), a second start keeps one window
-# and the pid file, and remove stops the app. Screenshots land in DIR (default
+# webapp.FetchUserAgent (so discovery fetches as the app will), the page's favicon replaces the
+# letter icon through the manager, a second start keeps one window and the pid file, and remove
+# stops the app. Screenshots land in DIR (default
 # /tmp/webapp-shots). The navigation rules themselves are unit-tested in internal/webapp/policy.
 #
 # Containers can't create the user namespaces WebKit's bubblewrap sandbox needs, so this script
@@ -33,8 +34,15 @@ UA_WANT="$(sed -n 's/^const FetchUserAgent = "\(.*\)"$/\1/p' "$REPO/internal/web
 
 # ---- fixture site: records every request's path and User-Agent
 cat > "$WORK/site/server.py" <<'PY'
-import http.server, sys
+import http.server, os, struct, sys, zlib
 LOG = sys.argv[2]
+def png(size, rgb):
+    raw = b"".join(b"\0" + bytes(rgb) * size for _ in range(size))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+ICON = png(96, (40, 110, 200))
 PAGES = {
     "/": b"<!doctype html><html><head><title>Smoke Home</title><link rel=manifest href=/app.webmanifest></head>"
          b"<body style='background:#9cf'><h1>Smoke</h1><a id=out href='https://example.com/elsewhere'>out</a>"
@@ -47,11 +55,20 @@ class H(http.server.BaseHTTPRequestHandler):
         with open(LOG, "a") as f:
             f.write(self.path + "\t" + self.headers.get("User-Agent", "") + "\n")
         body = PAGES.get(self.path.split("?")[0])
+        # The favicon appears only after install, so the app starts with a letter icon and the
+        # window's favicon upgrade has something to do.
+        if self.path == "/favicon.ico" and os.path.exists(LOG + ".icon"):
+            body = ICON
         if body is None:
             self.send_error(404)
             return
         self.send_response(200)
-        self.send_header("Content-Type", "application/manifest+json" if self.path.endswith("manifest") else "text/html; charset=utf-8")
+        ctype = "text/html; charset=utf-8"
+        if self.path.endswith("manifest"):
+            ctype = "application/manifest+json"
+        elif self.path == "/favicon.ico":
+            ctype = "image/png"
+        self.send_header("Content-Type", ctype)
         self.end_headers()
         self.wfile.write(body)
     def log_message(self, *a):
@@ -75,6 +92,7 @@ export WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 GDK_B
 
 ID="$(arctic-webapp install "http://127.0.0.1:$PORT/" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"], d; print(d["app"]["id"])')"
 echo "installed $ID"
+touch "$WORK/requests.log.icon"
 
 SWAY="$(command -v sway)"
 if command -v getcap >/dev/null && [[ -n "$(getcap "$SWAY" 2>/dev/null)" ]]; then cp "$SWAY" "$WORK/sway"; SWAY="$WORK/sway"; fi
@@ -109,6 +127,11 @@ UA_GOT="$(grep "^/$(printf '\t')" "$WORK/requests.log" | tail -1 | cut -f2)"
 [ "$UA_GOT" = "$UA_WANT" ] || fail "user agent: the page saw \"$UA_GOT\"; webapp.FetchUserAgent is \"$UA_WANT\""
 PID1="$(cat "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" 2>/dev/null || true)"
 [ -n "$PID1" ] || fail "no pid file"
+
+# The page's favicon replaces the letter icon (host → arctic-webapp icon → revision .r1).
+wait_for 'grep -q "\"source\": \"host-favicon\"" "$XDG_DATA_HOME/arctic/webapps/$ID/app.json"' || fail "favicon upgrade: $(grep -A3 '"icon"' "$XDG_DATA_HOME/arctic/webapps/$ID/app.json")"
+[ -f "$XDG_DATA_HOME/icons/hicolor/128x128/apps/$ID.r1.png" ] || fail "favicon upgrade: no .r1 icon"
+grep -q "^Icon=$ID.r1$" "$XDG_DATA_HOME/applications/$ID.desktop" || fail "favicon upgrade: launcher entry not updated"
 
 # A second start raises the running app: still one window, same pid file.
 timeout 20 arctic-webapp-host --app-id "$ID" >/dev/null 2>&1 || fail "second start did not exit"

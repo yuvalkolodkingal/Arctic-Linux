@@ -37,6 +37,10 @@ type controller struct {
 	log      *log.Logger
 	logFile  *os.File
 	pidDone  bool
+	// pendingCert is the certificate the trust banner offers; faviconSent stops a second
+	// favicon upgrade in one session.
+	pendingCert *pendingCert
+	faviconSent bool
 }
 
 func newController(id, openURL string, inspect bool, notice string) (*controller, error) {

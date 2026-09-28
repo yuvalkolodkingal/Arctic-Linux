@@ -54,6 +54,13 @@ type Controller interface {
 	Signal(signo int)
 	ThemeChanged()
 	Idle()
+	// CertificateQuestion returns the banner text offering to trust a certificate for a
+	// private-network host ("" for none); TrustCertificate acts on your yes.
+	CertificateQuestion(uri, pem string) string
+	TrustCertificate() bool
+	// WantFavicon and Favicon upgrade a letter icon to the page's own icon.
+	WantFavicon(width, height int) bool
+	Favicon(png []byte) bool
 }
 
 func cstr(s string) *C.char {
