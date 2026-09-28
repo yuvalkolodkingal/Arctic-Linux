@@ -1,6 +1,6 @@
 // Network: what NetworkManager is connected to, Wi-Fi on/off (nmcli), and the full editor
-// (nm-connection-editor) for everything else: VPNs, proxies, static addresses. Joining a
-// Wi-Fi network is done from the bar's network menu (nm-applet) or the editor.
+// (nm-connection-editor) for everything else: proxies, static addresses, company logins.
+// Joining a Wi-Fi network happens in the shell's network menu on the bar (network.py).
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -9,7 +9,7 @@ import "../components"
 Page {
     id: page
     title: "Network"
-    lede: "Your connections. Join a Wi-Fi network from the network icon on the bar."
+    lede: "Your connections. Join a Wi-Fi network from the network menu on the bar (Super + Ctrl + W)."
     property var net: ({ available: true, devices: [], wifi: true, hasWifi: false })
     function load() {
         Backend.call(["network"], r => { if (r.ok) page.net = r; }, true);

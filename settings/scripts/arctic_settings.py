@@ -1980,6 +1980,19 @@ def cmd_wifi(paths, args):
     return cmd_network(paths, [])
 
 
+def cmd_bluetooth_pair(_paths, _args):
+    """Pair a device: the shell's Bluetooth menu on its pairing page (codes come up in Arctic's
+    own dialog); without the shell, the Bluetooth manager."""
+    code, _out, _err = run(['arctic-shell-ipc', 'bluetooth', 'pair'], timeout=10)
+    if code == 0:
+        return dict(ok=True, opened='shell')
+    if which('blueman-manager'):
+        subprocess.Popen(['blueman-manager'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return dict(ok=True, opened='blueman')
+    raise Failure('The Arctic shell isn’t running, and the Bluetooth manager isn’t installed.')
+
+
 # ---- about --------------------------------------------------------------------------------------
 
 def parse_os_release(text):
@@ -2077,7 +2090,8 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
          'pwvucontrol': 'pwvucontrol', 'wdisplays': 'wdisplays', 'arcticTheme': 'arctic-theme',
          'arcticUpdate': 'arctic-update', 'arcticMotion': 'arctic-motion', 'arcticWallpaper': 'arctic-wallpaper',
          'gsettings': 'gsettings', 'swayidle': 'swayidle', 'gtkLaunch': 'gtk-launch', 'xdgOpen': 'xdg-open',
-         'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl'}
+         'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl',
+         'shellIpc': 'arctic-shell-ipc'}
 
 
 def cmd_caps(paths, _args):
@@ -2111,6 +2125,7 @@ COMMANDS = {
     'motion': cmd_motion, 'motion-set': cmd_motion_set, 'text-scale': cmd_text_scale,
     'wallpapers': cmd_wallpapers, 'wallpaper-set': cmd_wallpaper_set, 'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
+    'bluetooth-pair': cmd_bluetooth_pair,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
 }
 

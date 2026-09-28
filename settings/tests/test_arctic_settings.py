@@ -714,6 +714,22 @@ class NetworkTest(Home):
         self.assertFalse(self.helper('network')['available'])
 
 
+class BluetoothPairTest(Home):
+    def test_opens_the_shell_menu(self):
+        stub(self.bin, 'arctic-shell-ipc', 'echo "ipc $*" >> "{}"\n'.format(self.log))
+        self.assertEqual(self.helper('bluetooth-pair')['opened'], 'shell')
+        self.assertIn('ipc bluetooth pair', self.calls())
+
+    def test_falls_back_to_blueman(self):
+        stub(self.bin, 'arctic-shell-ipc', 'exit 1\n')
+        stub(self.bin, 'blueman-manager', 'echo blueman >> "{}"\n'.format(self.log))
+        self.assertEqual(self.helper('bluetooth-pair')['opened'], 'blueman')
+
+    def test_neither(self):
+        stub(self.bin, 'arctic-shell-ipc', 'exit 1\n')
+        self.assertIn('isn’t running', self.helper('bluetooth-pair', ok=False)['error'])
+
+
 class PowerProfileTest(Home):
     def test_missing(self):
         self.assertFalse(self.helper('power-profile')['available'])

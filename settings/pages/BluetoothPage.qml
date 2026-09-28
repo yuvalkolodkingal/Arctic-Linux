@@ -1,6 +1,6 @@
 // Bluetooth: on/off and your paired devices through BlueZ (Quickshell.Bluetooth, the same
-// service the bar uses); pairing a new device happens in blueman-manager, which also asks
-// for PIN codes.
+// service the bar uses). Pairing a new device happens in the shell's Bluetooth menu, with the
+// codes in Arctic's own dialog (blueman-manager when the shell isn't running).
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Bluetooth
@@ -79,12 +79,24 @@ Page {
         }
         SettingRow {
             title: "Pair a new device"
-            desc: "Opens the Bluetooth manager, which finds devices near you and asks for codes."
+            desc: "Finds devices near you. Pairing codes appear in Arctic’s own dialog."
             resettable: false
-            enabled: Backend.caps.blueman === true
+            enabled: Backend.caps.shellIpc === true || Backend.caps.blueman === true
             ArButton {
                 text: "Pair a device"
                 iconName: "plus"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.call(["bluetooth-pair"], null)
+            }
+        }
+        SettingRow {
+            visible: Backend.caps.blueman === true
+            title: "More Bluetooth options"
+            desc: "File transfer and advanced settings."
+            resettable: false
+            ArButton {
+                text: "Open the Bluetooth manager"
+                iconRight: "external"
                 gapColor: Theme.surfaceRaised
                 onClicked: Backend.launch(["blueman-manager"])
             }
