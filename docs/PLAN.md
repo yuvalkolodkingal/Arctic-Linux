@@ -325,7 +325,7 @@ Every step is idempotent, checkpointed, logged and has a dry-run mode.
   - Mango as the greeter compositor is untested 🔍 P1. The fallback is `sddm-wayland-generic` (weston), which is in Fedora ✅.
   - Exclude `sddm-x11`, `sddm-wayland-plasma` and `sddm-themes`.
 - **Theme:** `arctic-sddm-theme` installs to `/usr/share/sddm/themes/arctic/`. It needs `metadata.desktop` with `QtVersion=6` and `Theme-Id=arctic`, because Fedora's greeter is Qt6-only ✅. It must have a user field, a password field (empty passwords allowed for liveuser), a session picker, a keyboard indicator, power buttons and error text. The placeholder is minimal, and the design later replaces only the QML and assets (**DESIGN HOOK**). Preview it with `sddm-greeter-qt6 --test-mode --theme …`.
-- **Session:** the stock `mango.desktop` starts `mango-session.target`, which binds `graphical-session.target`. `arctic-desktop-config` ships user units `WantedBy=graphical-session.target` for the polkit agent, swayidle and nm-applet. Each has `ConditionUser=!@system`, so they never run in the greeter. waybar and mako are started by D-Bus or units. Mango doesn't process XDG autostart ✅.
+- **Session:** the stock `mango.desktop` starts `mango-session.target`, which binds `graphical-session.target`. `arctic-desktop-config` ships user units `WantedBy=graphical-session.target` for the polkit agent, swayidle and nm-applet (nm-applet only with the waybar fallback: the Arctic shell draws its own network menu). Each has `ConditionUser=!@system`, so they never run in the greeter. waybar and mako are started by D-Bus or units. Mango doesn't process XDG autostart ✅.
 
 ## 8. Live ISO
 
