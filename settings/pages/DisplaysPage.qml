@@ -114,7 +114,8 @@ Page {
         page.trying = false;
         Backend.call(["display-keep"], r => {
             if (r.ok) {
-                Backend.notify("success", "Display settings kept", false);
+                const off = r.sessionOnly || [];
+                Backend.notify("success", off.length ? "Display settings kept. " + off.join(", ") + (off.length > 1 ? " stay" : " stays") + " off until you log out (it’s never saved as off, so no login starts on a dark screen)." : "Display settings kept", false);
                 page.load();
                 Backend.refresh();
             }

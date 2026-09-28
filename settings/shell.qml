@@ -23,9 +23,14 @@ ShellRoot {
         id: window
         title: "Arctic Settings"
         color: Theme.surface
-        implicitWidth: 1080
-        implicitHeight: 740
-        minimumSize: Qt.size(760, 520)
+        // Never bigger than the screen (1280 × 720, or 1366 × 768 at 150 % is 512 px tall), so
+        // the bottom of a page (Displays' Apply / Keep) stays reachable. Mango's window rule only
+        // floats it; the size is ours.
+        readonly property int screenW: screen ? screen.width : 1080
+        readonly property int screenH: screen ? screen.height : 740
+        implicitWidth: Math.max(320, Math.min(1080, screenW - 80))
+        implicitHeight: Math.max(300, Math.min(740, screenH - 80))
+        minimumSize: Qt.size(Math.min(760, implicitWidth), Math.min(520, implicitHeight))
         visible: true
         // Closing the window (Super + Q, or the compositor) quits Settings.
         onVisibleChanged: if (!visible) Qt.quit()

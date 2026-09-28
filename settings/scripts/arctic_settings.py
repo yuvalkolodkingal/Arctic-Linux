@@ -42,6 +42,8 @@ Writes are atomic (temporary file + rename), user-level, validated first (our ow
 then `mango -c FILE -p` when Mango is installed) and backed up to
 ~/.local/state/arctic/settings-backups. Nothing here needs root.
 """
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -98,6 +100,7 @@ class Paths:
         self.mimeapps = self.config / 'mimeapps.list'
         self.backups = self.state / 'arctic' / 'settings-backups'
         self.display_pending = self.runtime / 'arctic-settings-display.json'
+        self.lock = self.runtime / 'arctic-settings.lock'
 
     def expand(self, value):
         """A path as Mango's `source=` resolves it: ~/…, ./… (next to config.conf) or absolute."""
@@ -175,6 +178,32 @@ def backup(paths, path):
         except OSError:
             pass
     return target
+
+
+ABSENT = '.absent'   # a backup meaning "there was no file yet" (undo deletes the file)
+
+
+def backup_absent(paths, path):
+    """Record in the backups that path didn't exist, so the first change can be undone too."""
+    path = Path(path)
+    paths.backups.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime('%Y%m%d-%H%M%S') + '-%06d' % (time.time_ns() // 1000 % 1000000)
+    target = paths.backups / '{}.{}{}'.format(path.name, stamp, ABSENT)
+    target.write_text('', encoding='utf-8')
+    return target
+
+
+@contextlib.contextmanager
+def settings_lock(paths):
+    """One writer at a time: every command that reads, changes and writes back a file holds this
+    for the whole read-change-write, so two quick changes from the app can't overwrite each other."""
+    paths.lock.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(paths.lock), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)     # releases the lock
 
 
 def read_text(path):
@@ -354,6 +383,24 @@ def normalise(key, raw):
     raise Failure('Unknown kind of option.')
 
 
+def clamp_option(key, raw):
+    """normalise(), except that a number outside Settings' range (a hand edit such as
+    borderpx=20) is brought into it rather than refused. Raises Failure for anything else."""
+    try:
+        return normalise(key, raw)
+    except Failure:
+        kind, low, high = OPTIONS[key][:3]
+        if kind not in ('int', 'float'):
+            raise
+        try:
+            number = float(str(raw).strip()) if kind == 'float' else int(str(raw).strip())
+        except ValueError:
+            raise Failure('not a number') from None
+        if number != number:
+            raise
+        return normalise(key, min(max(number, low), high))
+
+
 # ---- settings.conf model ------------------------------------------------------------------------
 
 class SettingsFile:
@@ -371,6 +418,7 @@ class SettingsFile:
     @classmethod
     def parse(cls, text):
         model = cls()
+        keymode = 'default'
         for line in (text or '').splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith('#'):
@@ -380,11 +428,19 @@ class SettingsFile:
                 model.extra.append(line)
                 continue
             key, value = pair
-            if key in OPTIONS:
+            if key == 'keymode':
+                # Binds after another keymode belong to it: keep them (and the way back to
+                # default) verbatim, so they never turn into default-mode shortcuts.
+                if value != 'default' or keymode != 'default':
+                    model.extra.append(line)
+                keymode = value
+            elif key == 'bind' and keymode != 'default':
+                model.extra.append(line)
+            elif key in OPTIONS:
                 try:
                     if value == '' and key not in EMPTY_OK:
                         raise Failure('empty')
-                    model.options[key] = normalise(key, value) if value else ''
+                    model.options[key] = clamp_option(key, value) if value else ''
                 except Failure:
                     model.extra.append(line)
             elif key == 'tagrule' and re.fullmatch(r'id:\*,layout_name:([a-z_]+)', value) \
@@ -396,8 +452,6 @@ class SettingsFile:
                     model.monitors.append(rule)
                 else:
                     model.extra.append(line)
-            elif key == 'keymode' and value == 'default':
-                continue
             elif key == 'bind':
                 parts = value.split(',', 3)
                 if len(parts) == 4 and parts[2].strip() == 'spawn_shell' and _mods_ok(parts[0]):
@@ -443,11 +497,20 @@ class SettingsFile:
             out.append('')
             out.append('# ---- Kept from before (not written by Settings)')
             out.extend(self.extra)
+            modes = [pair[1] for pair in map(split_line, self.extra) if pair and pair[0] == 'keymode']
+            if modes and modes[-1] != 'default':
+                out.append('keymode=default')     # files read after this one start in default mode
         text = '\n'.join(out).rstrip('\n') + '\n'
         for line in text.splitlines():
             if len(line.encode('utf-8')) > MAX_LINE:
                 raise Failure('A line in settings.conf would be too long for Mango.')
         return text
+
+    def drop_extra(self, keys):
+        """Forget kept lines that set one of keys: Settings now writes those keys itself, and a
+        later line in the file would otherwise win in Mango."""
+        keys = set(keys)
+        self.extra = [line for line in self.extra if (split_line(line) or ('',))[0] not in keys]
 
 
 def _mods_ok(text):
@@ -568,7 +631,10 @@ def save_settings(paths, model, reload=True):
         raise Failure(problem)
     source = ensure_sourced(paths)
     if old != text:
-        backup(paths, paths.settings_conf)
+        if old is None:
+            backup_absent(paths, paths.settings_conf)
+        else:
+            backup(paths, paths.settings_conf)
         atomic_write(paths.settings_conf, text)
     reloaded = reload_mango() if reload else False
     return dict(ok=True, source=source, reloaded=reloaded, changed=old != text)
@@ -635,6 +701,7 @@ def cmd_set(paths, args):
             model.options[key] = ''
             continue
         model.options[key] = normalise(key, value)
+    model.drop_extra(model.options.keys() & {a.split('=', 1)[0].strip() for a in args})
     if 'xkb_rules_variant' in model.options and 'xkb_rules_layout' in model.options:
         layouts = model.options['xkb_rules_layout'].count(',') + 1
         if model.options['xkb_rules_variant'].count(',') + 1 > layouts:
@@ -649,8 +716,10 @@ def cmd_reset(paths, args):
     for key in args:
         if key == 'all':
             model.options.clear()
+            model.drop_extra(OPTIONS)
         elif key in OPTIONS:
             model.options.pop(key, None)
+            model.drop_extra([key])
         else:
             raise Failure('Settings doesn’t know the option “{}”.'.format(key))
     result = save_settings(paths, model)
@@ -677,15 +746,27 @@ def cmd_undo(paths, _args):
     if not backups:
         raise Failure('There’s nothing to undo.')
     newest = backups[-1]
-    text = newest.read_text(encoding='utf-8')
-    problem = mango_check(text)
-    if problem:
-        raise Failure(problem)
-    atomic_write(paths.settings_conf, text)
+    cursor_before = _cursor_values(mango_state(paths))
+    if newest.name.endswith(ABSENT):
+        paths.settings_conf.unlink(missing_ok=True)
+    else:
+        text = newest.read_text(encoding='utf-8')
+        problem = mango_check(text)
+        if problem:
+            raise Failure(problem)
+        atomic_write(paths.settings_conf, text)
     newest.unlink()
     result = dict(ok=True, reloaded=reload_mango())
     result.update(mango_state(paths))
+    # GTK apps got the cursor through gsettings (set-cursor): give them the restored one too.
+    cursor_after = _cursor_values(result)
+    if cursor_after != cursor_before:
+        apply_cursor_gsettings(cursor_after)
     return result
+
+
+def _cursor_values(state):
+    return {key: state['options'][key]['value'] for key in ('cursor_theme', 'cursor_size')}
 
 
 # ---- shortcuts ----------------------------------------------------------------------------------
@@ -1054,6 +1135,10 @@ def cmd_display_try(paths, args):
     for o in layout:
         if o['name'] not in known:
             raise Failure('{} isn’t connected any more.'.format(o['name']))
+    if backend != 'wlr-randr' and any(not o['enabled'] for o in layout):
+        # Without wlr-randr, "off" could only be a saved disable rule, which would also switch
+        # the screen off when it is the only one (see set_monitor_rules).
+        raise Failure('Turning a display off needs wlr-randr.')
     token = '%x' % time.time_ns()
     if backend == 'wlr-randr':
         pending = dict(token=token, backend='wlr-randr', before=before, layout=layout)
@@ -1085,18 +1170,28 @@ def cmd_display_try(paths, args):
 
 
 def set_monitor_rules(model, layout):
+    """Save the layout as monitor rules. A display switched off is never saved as `disable:1`:
+    Mango applies that rule whenever the output appears, even when it is the only screen (a
+    laptop started without its dock would come up dark). Off lasts for this session only; the
+    display keeps its earlier rule, if any, without a disable key. Returns the displays that
+    are off for this session only."""
     rules = {r['name']: r for r in model.monitors}
+    session_only = []
     for o in layout:
+        if not o['enabled']:
+            session_only.append(o['name'])
+            if o['name'] in rules:
+                rules[o['name']] = {k: v for k, v in rules[o['name']].items() if k != 'disable'}
+            continue
         rule = dict(name=o['name'], x=o['x'], y=o['y'], scale=float(o['scale']),
                     rr=TRANSFORMS.index(o['transform']), vrr=1 if o.get('adaptiveSync') else 0)
         if o.get('width') and o.get('height'):
             rule.update(width=o['width'], height=o['height'])
             if o.get('refresh'):
                 rule['refresh'] = float(o['refresh'])
-        if not o['enabled']:
-            rule['disable'] = 1
         rules[o['name']] = rule
     model.monitors = list(rules.values())
+    return session_only
 
 
 def cmd_display_keep(paths, _args):
@@ -1107,11 +1202,12 @@ def cmd_display_keep(paths, _args):
     paths.display_pending.unlink(missing_ok=True)
     if pending.get('backend') == 'wlr-randr':
         model = load_settings(paths)
-        set_monitor_rules(model, pending['layout'])
+        session_only = set_monitor_rules(model, pending['layout'])
         # Mango already shows this layout; a reload would only redo it.
         result = save_settings(paths, model, reload=False)
+        result['sessionOnly'] = session_only
     else:
-        result = dict(ok=True)
+        result = dict(ok=True, sessionOnly=[])
     result.update(cmd_displays(paths, []))
     return result
 
@@ -1128,6 +1224,11 @@ def cmd_display_revert(paths, args):
             args = args[1:]
     if delay:
         time.sleep(delay)
+    with settings_lock(paths):
+        return _display_revert(paths, token)
+
+
+def _display_revert(paths, token):
     text = read_text(paths.display_pending)
     if not text:
         if token:
@@ -1379,13 +1480,49 @@ def read_mimeapps(path):
     return data
 
 
-def write_mimeapps(path, data):
+def update_mimeapps(text, section, values):
+    """text with the keys in values set in [section]; every other line (comments, other
+    sections, other keys) is copied through unchanged."""
+    lines = (text or '').splitlines()
+    todo = dict(values)
     out = []
-    for section, values in data.items():
+    current = None
+    end = None            # index in out just after the last line of the target section
+
+    def flush():
+        if todo:
+            insert = [k + '=' + v for k, v in todo.items()]
+            out[end:end] = insert
+            todo.clear()
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('[') and stripped.endswith(']'):
+            if current == section:
+                flush()
+            current = stripped[1:-1]
+            out.append(line)
+            if current == section:
+                end = len(out)
+            continue
+        if current == section and '=' in stripped and not stripped.startswith('#'):
+            key = stripped.split('=', 1)[0].strip()
+            if key in values:
+                if key in todo:
+                    out.append(key + '=' + todo.pop(key))
+                    end = len(out)
+                continue          # a duplicate of a key we set
+        out.append(line)
+        if current == section and stripped:
+            end = len(out)
+    if current == section:
+        flush()
+    elif todo:
+        if out and out[-1].strip():
+            out.append('')
         out.append('[{}]'.format(section))
-        out.extend('{}={}'.format(k, v) for k, v in values.items())
-        out.append('')
-    atomic_write(path, '\n'.join(out).rstrip('\n') + '\n')
+        out.extend(k + '=' + v for k, v in todo.items())
+    return '\n'.join(out).rstrip('\n') + '\n'
 
 
 def mime_default(paths, mime):
@@ -1453,15 +1590,12 @@ def cmd_app_set(paths, args):
             backup(paths, paths.default_apps)
         atomic_write(paths.default_apps, '\n'.join(lines) + '\n')
     if role['mimes'] and not entry['terminal']:
-        data = read_mimeapps(paths.mimeapps)
-        if paths.mimeapps.exists():
+        text = read_text(paths.mimeapps)
+        if text is not None:
             backup(paths, paths.mimeapps)
-        defaults = data.setdefault('Default Applications', {})
         handled = set(entry['mimes']) | set(role['mimes'] if role['id'] in ('browser', 'files', 'editor') else [])
-        for mime in role['mimes']:
-            if mime in handled:
-                defaults[mime] = entry['id'] + '.desktop'
-        write_mimeapps(paths.mimeapps, data)
+        defaults = {mime: entry['id'] + '.desktop' for mime in role['mimes'] if mime in handled}
+        atomic_write(paths.mimeapps, update_mimeapps(text, 'Default Applications', defaults))
     result = cmd_apps(paths, [])
     result['ok'] = True
     return result
@@ -1981,6 +2115,13 @@ COMMANDS = {
 }
 
 
+# Commands that read, change and write back settings.conf (or another file of ours): they run
+# one at a time (settings_lock). display-revert takes the lock itself, after its wait.
+WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
+           'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
+           'ensure-source'}
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ('-h', '--help') or argv[0] not in COMMANDS:
@@ -1988,7 +2129,8 @@ def main(argv=None):
         return 0 if argv and argv[0] in ('-h', '--help') else 2
     paths = Paths()
     try:
-        result = COMMANDS[argv[0]](paths, argv[1:])
+        with settings_lock(paths) if argv[0] in WRITERS else contextlib.nullcontext():
+            result = COMMANDS[argv[0]](paths, argv[1:])
     except Failure as error:
         print(json.dumps(dict(ok=False, error=str(error))))
         return 1

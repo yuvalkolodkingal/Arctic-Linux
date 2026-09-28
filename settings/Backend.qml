@@ -17,6 +17,9 @@ Singleton {
     property var caps: ({})
     property bool ready: false
     property int running: 0
+    // Changes run one after another in the helper (it holds a lock around each write); answers
+    // can still arrive out of order, so only the newest change's answer updates `mango`.
+    property int changeSeq: 0
     readonly property bool live: caps.live === true
     // Shown by the window: kind is "success", "error" or "info"; undo offers "Undo".
     signal notify(string kind, string text, bool undo)
@@ -52,37 +55,30 @@ Singleton {
         const args = [values.cursor_theme !== undefined || values.cursor_size !== undefined ? "set-cursor" : "set"];
         for (const key in values)
             args.push(key + "=" + values[key]);
-        call(args, r => {
-            if (!r.ok) {
-                backend.refresh();
-                return;
-            }
-            backend.mango = r;
-            backend.notify("success", message || "Saved", true);
-        });
+        change(args, r => backend.notify("success", message || "Saved", true), true);
     }
     function reset(keys, message) {
-        call(["reset"].concat(keys), r => {
-            if (!r.ok)
-                return;
-            backend.mango = r;
-            backend.notify("success", message || "Back to Arctic’s setting", true);
-        });
+        change(["reset"].concat(keys), r => backend.notify("success", message || "Back to Arctic’s setting", true));
     }
     function setLayout(name) {
-        call(["layout", name || "--reset"], r => {
-            if (!r.ok)
-                return;
-            backend.mango = r;
-            backend.notify("success", "Layout changed", true);
-        });
+        change(["layout", name || "--reset"], r => backend.notify("success", "Layout changed", true));
     }
     function undo() {
-        call(["undo"], r => {
-            if (!r.ok)
+        change(["undo"], r => backend.notify("info", "Undone", false));
+    }
+    // A change that answers with the whole state: apply it only if no newer change was started
+    // meanwhile (that one's answer is the newer state); on failure, re-read the state.
+    function change(args, ok, refreshOnError) {
+        const seq = ++backend.changeSeq;
+        call(args, r => {
+            if (!r.ok) {
+                if (refreshOnError && seq === backend.changeSeq)
+                    backend.refresh();
                 return;
-            backend.mango = r;
-            backend.notify("info", "Undone", false);
+            }
+            if (seq === backend.changeSeq)
+                backend.mango = r;
+            ok(r);
         });
     }
 
