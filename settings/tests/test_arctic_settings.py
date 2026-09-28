@@ -348,6 +348,20 @@ class SetAndResetTest(Home):
         self.helper('undo')
         self.assertNotIn('borderpx', self.settings)
 
+    def test_backups_stay_in_order_when_the_clock_goes_back(self):
+        # A backup's name must sort after the one before it, or undo restores the wrong one.
+        conf = self.home / '.config/mango/settings.conf'
+        conf.write_text('gappih=1\n')
+        first = S.backup(self.paths, conf)
+        real = time.time_ns
+        try:
+            time.time_ns = lambda: real() - 5 * 10**9
+            conf.write_text('gappih=2\n')
+            second = S.backup(self.paths, conf)
+        finally:
+            time.time_ns = real
+        self.assertLess(first.name, second.name)
+
     def test_keyboard_override_clears_installer_variant(self):
         (self.etc / 'mango/keyboard.conf').write_text('xkb_rules_layout=de\nxkb_rules_variant=nodeadkeys\n')
         conf = self.home / '.config/mango/config.conf'

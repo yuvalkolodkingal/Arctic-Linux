@@ -188,14 +188,30 @@ def atomic_write(path, text, mode=None):
         raise
 
 
+def backup_stamp(paths, name):
+    """A name part for the next backup of `name` that sorts after every backup it already has.
+    One clock reading (seconds and microseconds from two readings could go backwards across a
+    second), and never earlier than the newest backup, so undo always takes the latest one."""
+    def micros(stamp):
+        day, micro = stamp.rsplit('-', 1)
+        return int(time.mktime(time.strptime(day, '%Y%m%d-%H%M%S'))) * 1000000 + int(micro)
+    now = time.time_ns() // 1000
+    olds = sorted(p.name[len(name) + 1:].split('.')[0] for p in paths.backups.glob(name + '.*'))
+    if olds:
+        try:
+            now = max(now, micros(olds[-1]) + 1)
+        except ValueError:
+            pass
+    return time.strftime('%Y%m%d-%H%M%S', time.localtime(now // 1000000)) + '-%06d' % (now % 1000000)
+
+
 def backup(paths, path):
     """Copy path into the backups folder (newest BACKUPS_KEPT per file). Returns the copy."""
     path = Path(path)
     if not path.is_file():
         return None
     paths.backups.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime('%Y%m%d-%H%M%S') + '-%06d' % (time.time_ns() // 1000 % 1000000)
-    target = paths.backups / '{}.{}'.format(path.name, stamp)
+    target = paths.backups / '{}.{}'.format(path.name, backup_stamp(paths, path.name))
     shutil.copy2(path, target)
     olds = sorted(paths.backups.glob(path.name + '.*'))
     for old in olds[:-BACKUPS_KEPT]:
@@ -213,8 +229,7 @@ def backup_absent(paths, path):
     """Record in the backups that path didn't exist, so the first change can be undone too."""
     path = Path(path)
     paths.backups.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime('%Y%m%d-%H%M%S') + '-%06d' % (time.time_ns() // 1000 % 1000000)
-    target = paths.backups / '{}.{}{}'.format(path.name, stamp, ABSENT)
+    target = paths.backups / '{}.{}{}'.format(path.name, backup_stamp(paths, path.name), ABSENT)
     target.write_text('', encoding='utf-8')
     return target
 
