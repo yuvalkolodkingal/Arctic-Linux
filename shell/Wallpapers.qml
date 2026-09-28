@@ -249,6 +249,7 @@ Popover {
                             Text {
                                 Layout.fillWidth: true
                                 text: cell.modelData.name
+                                textFormat: Text.PlainText
                                 color: Theme.ink
                                 font.family: Theme.fontSans
                                 font.pixelSize: 13

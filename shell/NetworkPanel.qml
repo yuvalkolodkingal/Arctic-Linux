@@ -474,6 +474,7 @@ FocusScope {
             Text {
                 Layout.fillWidth: true
                 text: panel.target ? 'Forget “' + panel.target.ssid + '”? You’ll need the password to join again.' : ''
+                textFormat: Text.PlainText
                 wrapMode: Text.WordWrap
                 color: Theme.ink
                 font.family: Theme.fontSans

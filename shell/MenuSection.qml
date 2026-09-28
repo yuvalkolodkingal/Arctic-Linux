@@ -23,6 +23,7 @@ Item {
         Text {
             Layout.fillWidth: true
             text: section.text.toUpperCase()
+            textFormat: Text.PlainText
             elide: Text.ElideRight
             color: Theme.inkSubtle
             font.family: Theme.fontSans
@@ -34,6 +35,7 @@ Item {
         Text {
             visible: section.trailingText !== ''
             text: section.trailingText
+            textFormat: Text.PlainText
             color: Theme.inkSubtle
             font.family: Theme.fontSans
             font.pixelSize: 11

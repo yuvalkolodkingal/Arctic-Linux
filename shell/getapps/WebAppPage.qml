@@ -129,14 +129,14 @@ FocusScope {
             visible: page.status !== ''
             spacing: Theme.space2
             Icon { name: 'clock'; size: 14; color: Theme.inkMuted }
-            Text { text: page.status; color: Theme.inkMuted; font.family: Theme.fontSans; font.pixelSize: 13 }
+            Text { text: page.status; textFormat: Text.PlainText; color: Theme.inkMuted; font.family: Theme.fontSans; font.pixelSize: 13 }
         }
         RowLayout {
             Layout.fillWidth: true
             visible: page.error !== ''
             spacing: Theme.space2
             Icon { Layout.alignment: Qt.AlignTop; name: 'x-circle'; size: 16; color: Theme.error }
-            Text { Layout.fillWidth: true; text: page.error; color: Theme.error; font.family: Theme.fontSans; font.pixelSize: 13; wrapMode: Text.Wrap }
+            Text { Layout.fillWidth: true; text: page.error; textFormat: Text.PlainText; color: Theme.error; font.family: Theme.fontSans; font.pixelSize: 13; wrapMode: Text.Wrap }
             ArcticButton {
                 visible: page.errorCode === 'offline' && page.inspected !== ''
                 variant: 'secondary'; size: 'sm'
@@ -215,7 +215,7 @@ FocusScope {
                         Layout.fillWidth: true
                         spacing: Theme.space2
                         Icon { Layout.alignment: Qt.AlignTop; name: 'alert'; size: 16; color: Theme.warning }
-                        Text { Layout.fillWidth: true; text: warning.modelData.message; color: Theme.warning; font.family: Theme.fontSans; font.pixelSize: 13; wrapMode: Text.Wrap }
+                        Text { Layout.fillWidth: true; text: warning.modelData.message; textFormat: Text.PlainText; color: Theme.warning; font.family: Theme.fontSans; font.pixelSize: 13; wrapMode: Text.Wrap }
                     }
                 }
                 RowLayout {
@@ -251,6 +251,7 @@ FocusScope {
                 Icon { name: 'check-circle'; size: 18; color: Theme.success }
                 Text {
                     text: page.added ? page.added.name + ' is in the launcher.' : ''
+                    textFormat: Text.PlainText
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 15

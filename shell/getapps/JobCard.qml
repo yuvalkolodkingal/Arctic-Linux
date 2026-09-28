@@ -53,6 +53,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     text: card.shown ? (card.failed ? (card.shown.kind === 'remove' ? card.shown.name + ' wasn’t removed' : card.shown.name + ' wasn’t installed')
                                         : GetAppsLogic.jobLabel(card.shown)) + (card.waiting > 0 ? ' · ' + card.waiting + ' more waiting' : '') : ''
+                    textFormat: Text.PlainText
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 14
@@ -108,6 +109,7 @@ ColumnLayout {
                       : card.done ? (card.shown.kind === 'install' ? 'It’s in the launcher.' : '')
                       : card.shown.phase === 'waiting' ? 'Waiting for the change before it'
                       : card.shown.step || 'Starting…'
+                textFormat: Text.PlainText
                 color: card.failed ? Theme.error : Theme.inkMuted
                 font.family: Theme.fontSans
                 font.pixelSize: 12

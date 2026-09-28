@@ -126,6 +126,7 @@ Sheet {
             Text {
                 Layout.fillWidth: true
                 text: sheet.blocked ? sheet.name + ' can’t be removed' : 'Remove ' + sheet.name + '?'
+                textFormat: Text.PlainText
                 color: Theme.ink
                 font.family: Theme.fontSans
                 font.pixelSize: 18
@@ -136,6 +137,7 @@ Sheet {
         }
 
         component Line: Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             color: Theme.inkMuted
             font.family: Theme.fontSans
@@ -144,6 +146,7 @@ Sheet {
             visible: text !== ''
         }
         component Heading: Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             color: Theme.ink
             font.family: Theme.fontSans
@@ -194,7 +197,7 @@ Sheet {
                                     required property var modelData
                                     Layout.fillWidth: true
                                     spacing: Theme.space2
-                                    Text { Layout.fillWidth: true; text: pkg.modelData.name; color: Theme.ink; font.family: Theme.fontMono; font.pixelSize: 12; elide: Text.ElideRight }
+                                    Text { Layout.fillWidth: true; text: pkg.modelData.name; textFormat: Text.PlainText; color: Theme.ink; font.family: Theme.fontMono; font.pixelSize: 12; elide: Text.ElideRight }
                                     Text { text: GetAppsLogic.sizeText(pkg.modelData.install_bytes); color: Theme.inkSubtle; font.family: Theme.fontSans; font.pixelSize: 12 }
                                 }
                             }
@@ -266,7 +269,7 @@ Sheet {
                 Layout.fillWidth: true
                 spacing: Theme.space2
                 Icon { Layout.alignment: Qt.AlignTop; name: 'alert'; size: 16; color: Theme.warning }
-                Text { Layout.fillWidth: true; text: warning.modelData.message; color: Theme.warning; font.family: Theme.fontSans; font.pixelSize: 13; wrapMode: Text.Wrap }
+                Text { Layout.fillWidth: true; text: warning.modelData.message; textFormat: Text.PlainText; color: Theme.warning; font.family: Theme.fontSans; font.pixelSize: 13; wrapMode: Text.Wrap }
             }
         }
 

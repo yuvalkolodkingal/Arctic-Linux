@@ -117,6 +117,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: row.label
+                textFormat: Text.PlainText
                 elide: Text.ElideRight
                 color: !row.enabled ? Theme.inkDisabled : row.destructive ? Theme.error : Theme.ink
                 font.family: Theme.fontSans
@@ -127,6 +128,7 @@ Item {
                 Layout.fillWidth: true
                 visible: row.detail !== '' && row.errorText === ''
                 text: row.detail
+                textFormat: Text.PlainText
                 elide: Text.ElideRight
                 color: row.enabled ? Theme.inkMuted : Theme.inkDisabled
                 font.family: Theme.fontSans
@@ -137,6 +139,7 @@ Item {
                 Layout.fillWidth: true
                 visible: row.errorText !== ''
                 text: row.errorText
+                textFormat: Text.PlainText
                 wrapMode: Text.WordWrap
                 color: Theme.error
                 font.family: Theme.fontSans
@@ -188,6 +191,7 @@ Item {
         Text {
             visible: row.trailing === 'text'
             text: row.trailingText
+            textFormat: Text.PlainText
             color: Theme.inkMuted
             font.family: Theme.fontSans
             font.pixelSize: 13

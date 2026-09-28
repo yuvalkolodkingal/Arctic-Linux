@@ -57,6 +57,7 @@ FocusScope {
                 Text {
                     Layout.fillWidth: true
                     text: MediaService.title || 'Nothing playing'
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.ink
                     font.family: Theme.fontSans
@@ -67,6 +68,7 @@ FocusScope {
                     Layout.fillWidth: true
                     visible: text !== ''
                     text: MediaService.artist
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
@@ -76,6 +78,7 @@ FocusScope {
                     Layout.fillWidth: true
                     visible: text !== ''
                     text: panel.p ? panel.p.trackAlbum : ''
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.inkSubtle
                     font.family: Theme.fontSans

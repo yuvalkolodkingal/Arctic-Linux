@@ -35,6 +35,7 @@ AbstractButton {
             id: label
             Layout.fillWidth: true
             text: control.text
+            textFormat: Text.PlainText
             color: control.enabled ? Theme.ink : Theme.inkDisabled
             font.family: Theme.fontSans
             font.pixelSize: 13

@@ -205,6 +205,7 @@ Popover {
                     Icon { visible: crumb.index > 0; name: 'chevron-right'; size: 12; color: Theme.inkSubtle }
                     Text {
                         text: crumb.modelData.toUpperCase()
+                        textFormat: Text.PlainText
                         color: crumb.index === menu.trail.length ? Theme.ink : Theme.inkMuted
                         font.family: Theme.fontSans
                         font.pixelSize: 11
@@ -266,6 +267,7 @@ Popover {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: !field.text
                         text: menu.branch ? 'Search ' + menu.trail[menu.trail.length - 1] : 'Search the menu'
+                        textFormat: Text.PlainText
                         color: Theme.inkSubtle
                         font: field.font
                     }
@@ -311,6 +313,7 @@ Popover {
                     }
                     Text {
                         text: row.modelData.label
+                        textFormat: Text.PlainText
                         color: Theme.ink
                         font.family: Theme.fontSans
                         font.pixelSize: 15
@@ -321,6 +324,7 @@ Popover {
                     Text {
                         Layout.fillWidth: true
                         text: row.modelData.desc
+                        textFormat: Text.PlainText
                         color: Theme.inkMuted
                         font.family: Theme.fontSans
                         font.pixelSize: 12
@@ -353,6 +357,7 @@ Popover {
             visible: list_.count === 0
             horizontalAlignment: Text.AlignHCenter
             text: menu.query.trim() ? 'Nothing in the menu matches “' + menu.query.trim() + '”' : 'Nothing here on this computer'
+            textFormat: Text.PlainText
             color: Theme.inkMuted
             font.family: Theme.fontSans
             font.pixelSize: 13

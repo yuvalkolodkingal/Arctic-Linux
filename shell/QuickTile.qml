@@ -57,6 +57,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: tile.toggle.label
+                textFormat: Text.PlainText
                 elide: Text.ElideRight
                 color: Theme.ink
                 font.family: Theme.fontSans
@@ -66,6 +67,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: tile.toggle.detail
+                textFormat: Text.PlainText
                 elide: Text.ElideRight
                 color: Theme.inkMuted
                 font.family: Theme.fontSans

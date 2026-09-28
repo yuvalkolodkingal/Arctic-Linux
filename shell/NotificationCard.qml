@@ -70,6 +70,7 @@ Item {
                     visible: card.showApp
                     Layout.fillWidth: true
                     text: NotificationService.appNameFor(card.entry)
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.inkMuted
                     font.family: Theme.fontSans

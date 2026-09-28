@@ -52,6 +52,7 @@ T.Switch {
         verticalAlignment: Text.AlignVCenter
         visible: control.text !== ''
         text: control.text
+        textFormat: Text.PlainText
         color: control.enabled ? Theme.ink : Theme.inkDisabled
         font.family: Theme.fontSans
         font.pixelSize: control.labelSize

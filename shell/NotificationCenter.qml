@@ -309,6 +309,7 @@ Popover {
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignHCenter
                             text: centre.owned ? 'No notifications' : 'Another notification service is running (' + NotificationService.foreign + ')'
+                            textFormat: Text.PlainText
                             wrapMode: Text.Wrap
                             color: Theme.ink
                             font.family: Theme.fontSans
@@ -392,6 +393,7 @@ Popover {
                                     }
                                     Text {
                                         text: groupBlock.modelData.items.length + ' from ' + NotificationService.appNameFor(groupBlock.first)
+                                        textFormat: Text.PlainText
                                         color: Theme.inkMuted
                                         font.family: Theme.fontSans
                                         font.pixelSize: 12
@@ -566,6 +568,7 @@ Popover {
                 Text {
                     Layout.fillWidth: true
                     text: line.label
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.ink
                     font.family: Theme.fontSans
@@ -576,6 +579,7 @@ Popover {
                     Layout.fillWidth: true
                     visible: line.detail !== ''
                     text: line.detail
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
@@ -586,6 +590,7 @@ Popover {
             Text {
                 visible: line.trailingText !== ''
                 text: line.trailingText
+                textFormat: Text.PlainText
                 color: Theme.inkSubtle
                 font.family: Theme.fontSans
                 font.pixelSize: 12

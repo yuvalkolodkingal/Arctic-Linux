@@ -99,6 +99,7 @@ Item {
                   ? [WeatherService.place, WeatherService.reading.attribution || 'Open-Meteo.com',
                      Weather.updatedText(WeatherService.reading.fetched_at, WeatherService.now)].filter(s => s).join(' · ')
                   : (WeatherService.problem || 'Getting the weather…')
+            textFormat: Text.PlainText
             color: Theme.inkSubtle
             font.family: Theme.fontSans
             font.pixelSize: 12

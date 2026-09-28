@@ -44,6 +44,7 @@ FocusScope {
             Layout.fillWidth: true
             visible: form.label !== ''
             text: form.label
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.ink
             font.family: Theme.fontSans
@@ -90,6 +91,7 @@ FocusScope {
             Layout.fillWidth: true
             visible: form.errorText !== ''
             text: form.errorText
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.error
             font.family: Theme.fontSans

@@ -56,6 +56,7 @@ PopupWindow {
             id: label
             anchors.centerIn: parent
             text: tip.text
+            textFormat: Text.PlainText
             color: Theme.inkInverse
             font.family: Theme.fontSans
             font.pixelSize: 12

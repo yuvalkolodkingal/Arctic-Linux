@@ -68,6 +68,7 @@ ColumnLayout {
                 Text {
                     Layout.fillWidth: true
                     text: header.title
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.ink
                     font.family: Theme.fontSans
@@ -78,6 +79,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     visible: header.detail !== ''
                     text: header.detail
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
@@ -88,6 +90,7 @@ ColumnLayout {
             Text {
                 visible: header.trailingText !== ''
                 text: header.trailingText
+                textFormat: Text.PlainText
                 color: Theme.ink
                 font.family: Theme.fontSans
                 font.pixelSize: 15

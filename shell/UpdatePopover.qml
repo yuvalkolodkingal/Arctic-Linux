@@ -50,6 +50,7 @@ Popover {
         Text {
             Layout.fillWidth: true
             text: UpdateService.detail
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.inkMuted
             font.family: Theme.fontSans

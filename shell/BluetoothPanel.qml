@@ -199,6 +199,7 @@ FocusScope {
             Text {
                 Layout.fillWidth: true
                 text: devicePage.d ? 'Forget “' + (devicePage.d.name || devicePage.d.address) + '”? You’ll need to pair it again.' : ''
+                textFormat: Text.PlainText
                 wrapMode: Text.WordWrap
                 color: Theme.ink
                 font.family: Theme.fontSans

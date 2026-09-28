@@ -102,6 +102,7 @@ T.Button {
             }
             Text {
                 text: control.text
+                textFormat: Text.PlainText
                 color: control.fg
                 font.family: Theme.fontSans
                 font.pixelSize: control.size === "sm" ? 13 : 15
