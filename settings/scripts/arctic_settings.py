@@ -2060,7 +2060,7 @@ def cmd_about(paths, _args):
             code, out, _err = run(argv, timeout=5)
             match = re.search(r'\d+\.\d+(\.\d+)?', out or '')
             versions[name] = match.group(0) if code == 0 and match else ''
-    home = osr.get('HOME_URL', 'https://github.com/yuvalkolodkingal/O-Tism')
+    home = osr.get('HOME_URL', 'https://github.com/yuvalkolodkingal/Arctic-Linux')
     return dict(ok=True, name=osr.get('NAME', 'Arctic Linux'), version=osr.get('VERSION_ID', ''),
                 pretty=osr.get('PRETTY_NAME', ''), fedora=fedora, kernel=os.uname().release,
                 hostname=os.uname().nodename, cpu=cpu, cores=cores, memory=mem_kb * 1024, disks=disks,

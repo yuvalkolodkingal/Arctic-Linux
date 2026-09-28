@@ -39,7 +39,7 @@ Version:        0.2.0
 Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
-URL:            https://github.com/yuvalkolodkingal/O-Tism
+URL:            https://github.com/yuvalkolodkingal/Arctic-Linux
 Source0:        arctic-linux-%{version}.tar.gz
 
 ExclusiveArch:  x86_64

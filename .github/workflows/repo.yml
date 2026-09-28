@@ -1,7 +1,7 @@
 name: Repository
 
 # Builds the RPMs and publishes them, signed, to the Arctic package repository on GitHub Pages
-# (https://yuvalkolodkingal.github.io/O-Tism/repo/<channel>/fedora-44/…; docs/BUILD-SPEC.md §9):
+# (https://yuvalkolodkingal.github.io/Arctic-Linux/repo/<channel>/fedora-44/…; docs/BUILD-SPEC.md §9):
 #
 #   push to main                          → channel stable
 #   push to claude/busy-goodall-j42hmi    → channel testing (via repo-testing.yml, below)

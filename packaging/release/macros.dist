@@ -10,6 +10,6 @@
 %dist_vendor         Arctic Linux
 %dist_name           Arctic Linux
 %dist_purl_namespace fedora
-%dist_home_url       https://github.com/yuvalkolodkingal/O-Tism
-%dist_bug_report_url https://github.com/yuvalkolodkingal/O-Tism/issues
+%dist_home_url       https://github.com/yuvalkolodkingal/Arctic-Linux
+%dist_bug_report_url https://github.com/yuvalkolodkingal/Arctic-Linux/issues
 %dist_debuginfod_url ima:enforcing https://debuginfod.fedoraproject.org/ ima:ignore

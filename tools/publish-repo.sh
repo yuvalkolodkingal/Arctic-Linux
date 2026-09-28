@@ -17,7 +17,7 @@
 #   --src DIR          the source tree the RPMs were built from (default: this checkout): its
 #                      packaging/release/{arctic,arctic-testing}.repo, RPM-GPG-KEY-arctic and
 #                      the Fedora release (dist_version in packaging/arctic-linux.spec)
-#   --base-url URL     the site's URL (default https://yuvalkolodkingal.github.io/O-Tism)
+#   --base-url URL     the site's URL (default https://yuvalkolodkingal.github.io/Arctic-Linux)
 #   --build-info FILE  BUILD-INFO of the build (default: next to --rpms)
 #   --budget-mb N      fail when the whole site is larger than N MB (default 900; Pages
 #                      sites may be up to 1 GB)
@@ -51,9 +51,9 @@ source "$HERE/lib/container.sh"
 ROOT="$(arctic_repo_root)"
 
 SITE=""; CHANNEL=""; RPMS="$ROOT/out/repo"; SRPMS="$ROOT/out/srpms"; KEEP=3; SIGN=1; RESIGN_OLD=0
-SRC="$ROOT"; BASE_URL="https://yuvalkolodkingal.github.io/O-Tism"; BUILD_INFO=""; BUDGET_MB=900
+SRC="$ROOT"; BASE_URL="https://yuvalkolodkingal.github.io/Arctic-Linux"; BUILD_INFO=""; BUDGET_MB=900
 SUMMARY=""; RELEASEVER=""
-UPSTREAM_URL="https://yuvalkolodkingal.github.io/O-Tism"
+UPSTREAM_URL="https://yuvalkolodkingal.github.io/Arctic-Linux"
 
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
 while (( $# )); do

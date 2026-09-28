@@ -1,7 +1,7 @@
 # Troubleshooting
 
 Something not working? Find the closest heading below. If nothing here helps, open an
-[issue](https://github.com/yuvalkolodkingal/O-Tism/issues) and include what you tried and, for
+[issue](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) and include what you tried and, for
 installer problems, the log (see [Saving the installer log](#saving-the-installer-log)).
 
 ## Starting from the USB stick

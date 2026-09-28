@@ -442,7 +442,7 @@ the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
 `arctic_repos` (`enabled|disabled|not-built`), one `rpm=`/`srpm=` line per package built.
 
-**Site layout** (https://yuvalkolodkingal.github.io/O-Tism/):
+**Site layout** (https://yuvalkolodkingal.github.io/Arctic-Linux/):
 
 ```
 repo/<channel>/fedora-<releasever>/x86_64/     x86_64 + noarch RPMs, repodata/ (+ repomd.xml.asc)

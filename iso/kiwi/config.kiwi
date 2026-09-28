@@ -15,7 +15,7 @@
 <image schemaversion="7.4" name="Arctic-Linux" displayname="Arctic Linux">
 	<description type="system">
 		<author>Arctic Linux</author>
-		<contact>https://github.com/yuvalkolodkingal/O-Tism/issues</contact>
+		<contact>https://github.com/yuvalkolodkingal/Arctic-Linux/issues</contact>
 		<specification>Arctic Linux 0.2 live media (Fedora 44 base, Mango desktop)</specification>
 	</description>
 
