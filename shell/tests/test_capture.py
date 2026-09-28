@@ -6,6 +6,7 @@ Run: python3 -m unittest discover -s shell/tests
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -233,6 +234,72 @@ class CaptureTest(unittest.TestCase):
     def test_usage(self):
         code, _out = self.run_helper('frobnicate')
         self.assertEqual(code, 2)
+
+
+class ScreenshotTest(unittest.TestCase):
+    """arctic-screenshot with stand-ins for slurp, grim, wl-copy and notify-send (no shell, so
+    nothing freezes): where the picture goes, what is copied, and cancelling."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.bin = self.root / 'bin'
+        self.bin.mkdir()
+        self.pictures = self.root / 'Pictures'
+        self.log = self.root / 'calls'
+        bindir = HELPER.parent
+        fakes = {
+            'slurp': 'cat > /dev/null; echo "slurp $*" >> {log}; [ -n "$CANCEL" ] && exit 1; printf "10,20 30x40\\tDP-1\\n"',
+            'grim': 'echo "grim $*" >> {log}; for last; do :; done; printf png > "$last"',
+            'wl-copy': 'echo "wl-copy $*" >> {log}; cat > /dev/null',
+            'notify-send': 'echo "notify-send $*" >> {log}',
+            'xdg-user-dir': 'echo {pictures}',
+            'mmsg': 'exit 1',
+            'arctic-capture': 'exec python3 {bindir}/arctic-capture "$@"',
+            'arctic-shell-ipc': 'exit 1',
+        }
+        for name, body in fakes.items():
+            path = self.bin / name
+            path.write_text('#!/bin/sh\n' + body.format(log=self.log, pictures=self.pictures, bindir=bindir) + '\n')
+            path.chmod(0o755)
+        self.env = dict(PATH='{}:/usr/bin:/bin'.format(self.bin), HOME=str(self.root), XDG_RUNTIME_DIR=str(self.root / 'run'),
+                        LANG='C.UTF-8')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def shot(self, *args, **env):
+        result = subprocess.run(['bash', str(HELPER.parent / 'arctic-screenshot')] + list(args), timeout=30,
+                                env=dict(self.env, **env), capture_output=True, text=True)
+        return result.returncode
+
+    def calls(self):
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def test_area_is_saved_and_copied(self):
+        self.assertEqual(self.shot('area'), 0)
+        self.assertEqual(self.shot('area'), 0)
+        shots = sorted(p.name for p in (self.pictures / 'Screenshots').iterdir())
+        self.assertEqual(len(shots), 2)             # the second one in the same second gets " (2)"
+        self.assertTrue(all(re.fullmatch(r'Screenshot \d{4}-\d\d-\d\d \d\d\.\d\d\.\d\d( \(2\))?\.png', s) for s in shots))
+        grims = [c for c in self.calls() if c.startswith('grim ')]
+        self.assertIn('-g 10,20 30x40', grims[0])
+        self.assertIn('wl-copy --type image/png', self.calls())
+
+    def test_cancel_saves_nothing(self):
+        self.assertEqual(self.shot('area', CANCEL='1'), 0)
+        self.assertFalse((self.pictures / 'Screenshots').exists() and any((self.pictures / 'Screenshots').iterdir()))
+        self.assertFalse([c for c in self.calls() if c.startswith(('grim', 'wl-copy'))])
+
+    def test_copy_only_keeps_the_screenshots_folder_clean(self):
+        self.assertEqual(self.shot('area', '--copy-only'), 0)
+        self.assertFalse((self.pictures / 'Screenshots').exists())
+        self.assertIn('wl-copy --type image/png', self.calls())
+
+    def test_usage(self):
+        self.assertEqual(self.shot('window', '--delay', '11'), 2)
+        self.assertEqual(self.shot('sideways'), 2)
+        self.assertEqual(self.shot('edit', '/nonexistent.png'), 2)
 
 
 class RecordStatusTest(unittest.TestCase):
