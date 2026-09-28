@@ -3,8 +3,8 @@
 #
 #   arctic-settings [page]    open Settings, on a page if you name one: appearance, windows,
 #                             displays, input, shortcuts, apps, network, bluetooth, sound,
-#                             updates, power, startup, about. If it is open already, it shows
-#                             that page and comes to the front.
+#                             notifications, updates, power, startup, about. If it is open
+#                             already, it shows that page and comes to the front.
 #   arctic-settings --path    print the folder the app runs from
 #
 # The app is the first folder found of $ARCTIC_SETTINGS_DIR, /usr/share/arctic/settings

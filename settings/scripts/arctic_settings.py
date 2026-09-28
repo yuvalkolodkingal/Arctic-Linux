@@ -35,6 +35,11 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     wallpapers | wallpaper-set KEY                the shell's picker backend (wallpapers.py)
     updates | update-run now|apply|channel NAME|auto on|off                     (arctic-update)
     network | wifi on|off         NetworkManager status (nmcli)
+    notifications                 do not disturb, its schedule, history and the per-app rules
+    notification-set KEY VALUE    history on|off, schedule on|off, schedule-from / schedule-to HH:MM
+    notification-rule-set APP KEY on|off…   toasts, history, allow_during_dnd, silence_urgent
+    notification-history-clear    empty the notification centre
+    dnd-set on|off|1h|tomorrow    do not disturb now (arctic-dnd)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
 
@@ -1980,6 +1985,137 @@ def cmd_wifi(paths, args):
     return cmd_network(paths, [])
 
 
+# ---- notifications --------------------------------------------------------------------------------
+# The shell's notification server (shell/NotificationService.qml) reads
+# ~/.config/arctic/notifications.json (written here) and keeps its own state in
+# ~/.local/state/arctic/notifications/ (apps.json: the apps seen, for the rules list).
+# Do not disturb goes through arctic-dnd, which talks to the shell or to mako.
+
+NOTIFY_RULE_KEYS = ('toasts', 'history', 'allow_during_dnd', 'silence_urgent')
+NOTIFY_RULE_DEFAULTS = dict(toasts=True, history=True, allow_during_dnd=False, silence_urgent=False)
+HHMM = re.compile(r'^([01]?\d|2[0-3]):[0-5]\d$')
+
+
+def notifications_file(paths):
+    return paths.arctic / 'notifications.json'
+
+
+def notifications_state(paths):
+    return paths.state / 'arctic' / 'notifications'
+
+
+def read_notification_config(paths):
+    data = _loads(read_text(notifications_file(paths)) or '')
+    data = data if isinstance(data, dict) else {}
+    schedule = data.get('dnd_schedule') if isinstance(data.get('dnd_schedule'), dict) else {}
+    start, end = str(schedule.get('from', '')), str(schedule.get('to', ''))
+    rules = data.get('apps') if isinstance(data.get('apps'), dict) else {}
+    apps = {}
+    for key, rule in rules.items():
+        if isinstance(rule, dict):
+            apps[str(key)] = {k: rule[k] for k in NOTIFY_RULE_KEYS if isinstance(rule.get(k), bool)}
+    return {'history': data.get('history') is not False,
+            'dnd_schedule': {'enabled': schedule.get('enabled') is True,
+                             'from': start if HHMM.match(start) else '22:00', 'to': end if HHMM.match(end) else '07:00'},
+            'apps': apps}
+
+
+def write_notification_config(paths, config):
+    atomic_write(notifications_file(paths), json.dumps(config, indent=1, sort_keys=True) + '\n')
+
+
+def cmd_notifications(paths, _args):
+    config = read_notification_config(paths)
+    seen = _loads(read_text(notifications_state(paths) / 'apps.json') or '')
+    seen = seen.get('apps') if isinstance(seen, dict) and isinstance(seen.get('apps'), list) else []
+    apps, keys = [], set()
+    for app in seen:
+        if isinstance(app, dict) and isinstance(app.get('key'), str) and app['key'] and app['key'] not in keys:
+            keys.add(app['key'])
+            apps.append(dict(key=app['key'], name=str(app.get('app_name') or app['key']),
+                             desktopEntry=str(app.get('desktop_entry') or ''), lastSeen=app.get('last_seen') or 0))
+    for key in sorted(set(config['apps']) - keys):     # rules for apps not seen lately
+        apps.append(dict(key=key, name=key, desktopEntry='', lastSeen=0))
+    for app in apps:
+        app['rule'] = dict(NOTIFY_RULE_DEFAULTS, **config['apps'].get(app['key'], {}))
+    # The shell answers on / off when it owns notifications, "unowned" when mako (or another
+    # daemon) has them; arctic-dnd answers either way.
+    code, out, _err = run(['arctic-shell-ipc', 'notifications', 'dnd', 'status'], timeout=5) if which('arctic-shell-ipc') else (1, '', '')
+    owned = code == 0 and out.strip() in ('on', 'off')
+    dnd = out.strip() == 'on' if owned else False
+    if not owned and which('arctic-dnd'):
+        code, out, _err = run(['arctic-dnd', 'status'], timeout=5)
+        status = _loads(out) or {}
+        dnd = isinstance(status, dict) and status.get('class') == 'dnd'
+    return dict(ok=True, owned=owned, dnd=dnd, history=config['history'], schedule=config['dnd_schedule'], apps=apps)
+
+
+def cmd_notification_set(paths, args):
+    """notification-set history on|off · schedule on|off · schedule-from HH:MM · schedule-to HH:MM"""
+    if len(args) != 2:
+        raise Failure('usage: notification-set history|schedule on|off, or schedule-from|schedule-to HH:MM')
+    key, value = args
+    config = read_notification_config(paths)
+    if key in ('history', 'schedule') and value in ('on', 'off'):
+        if key == 'history':
+            config['history'] = value == 'on'
+        else:
+            config['dnd_schedule']['enabled'] = value == 'on'
+    elif key in ('schedule-from', 'schedule-to') and HHMM.match(value):
+        config['dnd_schedule'][key.split('-')[1]] = '{:0>5}'.format(value)
+    else:
+        raise Failure('That isn’t a notification setting Settings knows.')
+    write_notification_config(paths, config)
+    return cmd_notifications(paths, [])
+
+
+def cmd_notification_rule_set(paths, args):
+    """notification-rule-set APP KEY on|off [KEY on|off…]; KEY: toasts, history,
+    allow_during_dnd, silence_urgent. Rules that match the defaults are dropped."""
+    if len(args) < 3 or len(args) % 2 == 0:
+        raise Failure('usage: notification-rule-set APP KEY on|off…')
+    app, pairs = args[0], args[1:]
+    if not app or len(app) > 200 or any(ord(ch) < 32 for ch in app):
+        raise Failure('That app name can’t be used.')
+    config = read_notification_config(paths)
+    rule = dict(NOTIFY_RULE_DEFAULTS, **config['apps'].get(app, {}))
+    for key, value in zip(pairs[::2], pairs[1::2]):
+        if key not in NOTIFY_RULE_KEYS or value not in ('on', 'off'):
+            raise Failure('usage: notification-rule-set APP toasts|history|allow_during_dnd|silence_urgent on|off')
+        rule[key] = value == 'on'
+    changed = {k: v for k, v in rule.items() if v != NOTIFY_RULE_DEFAULTS[k]}
+    if changed:
+        config['apps'][app] = changed
+    else:
+        config['apps'].pop(app, None)
+    write_notification_config(paths, config)
+    return cmd_notifications(paths, [])
+
+
+def cmd_notification_history_clear(paths, _args):
+    """Clear the notification centre: through the shell when it runs, else the saved history."""
+    code = run(['arctic-shell-ipc', 'notifications', 'clearHistory'], timeout=5)[0] if which('arctic-shell-ipc') else 1
+    if code != 0:
+        try:
+            (notifications_state(paths) / 'history.json').unlink()
+        except FileNotFoundError:
+            pass
+    return cmd_notifications(paths, [])
+
+
+def cmd_dnd_set(paths, args):
+    """dnd-set on|off|1h|tomorrow — do not disturb now (arctic-dnd)."""
+    commands = {'on': ['on'], 'off': ['off'], '1h': ['for', '1h'], 'tomorrow': ['until-tomorrow']}
+    if len(args) != 1 or args[0] not in commands:
+        raise Failure('usage: dnd-set on|off|1h|tomorrow')
+    if not which('arctic-dnd'):
+        raise Failure('arctic-dnd isn’t installed.')
+    code, out, err = run(['arctic-dnd'] + commands[args[0]], timeout=10)
+    if code != 0:
+        raise Failure((err or out).strip() or 'Do not disturb couldn’t be changed.')
+    return cmd_notifications(paths, [])
+
+
 # ---- about --------------------------------------------------------------------------------------
 
 def parse_os_release(text):
@@ -2077,7 +2213,8 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
          'pwvucontrol': 'pwvucontrol', 'wdisplays': 'wdisplays', 'arcticTheme': 'arctic-theme',
          'arcticUpdate': 'arctic-update', 'arcticMotion': 'arctic-motion', 'arcticWallpaper': 'arctic-wallpaper',
          'gsettings': 'gsettings', 'swayidle': 'swayidle', 'gtkLaunch': 'gtk-launch', 'xdgOpen': 'xdg-open',
-         'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl'}
+         'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl',
+         'arcticDnd': 'arctic-dnd'}
 
 
 def cmd_caps(paths, _args):
@@ -2112,6 +2249,9 @@ COMMANDS = {
     'wallpapers': cmd_wallpapers, 'wallpaper-set': cmd_wallpaper_set, 'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
+    'notifications': cmd_notifications, 'notification-set': cmd_notification_set,
+    'notification-rule-set': cmd_notification_rule_set, 'notification-history-clear': cmd_notification_history_clear,
+    'dnd-set': cmd_dnd_set,
 }
 
 
@@ -2119,7 +2259,7 @@ COMMANDS = {
 # one at a time (settings_lock). display-revert takes the lock itself, after its wait.
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
-           'ensure-source'}
+           'ensure-source', 'notification-set', 'notification-rule-set'}
 
 
 def main(argv=None):

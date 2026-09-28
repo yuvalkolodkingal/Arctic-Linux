@@ -49,9 +49,8 @@ class SearchIndexTest(unittest.TestCase):
 
     def test_pages_exist(self):
         files = re.findall(r'file: "([A-Za-z]+\.qml)"', self.index)
-        self.assertEqual(len(files), 13)
-        for name in files:
-            self.assertIn(name, self.pages)
+        # Every page in pages/ is in the rail, once (no fixed count: pages get added).
+        self.assertEqual(sorted(files), sorted(self.pages))
 
     def test_entries_point_at_rows(self):
         keys = set()

@@ -15,8 +15,9 @@
 #   --out DIR          where screenshots go (default settings/dev/screenshots)
 #   --size WxH         output size (default 1280x800)
 #   --fixtures         test data for screenshots: desktop entries for the default apps, the
-#                      installer's default-apps file, and an arctic-update stand-in with updates
-#                      ready (none of it is used outside this script)
+#                      installer's default-apps file, an arctic-update stand-in with updates
+#                      ready, and two apps that sent notifications (none of it is used outside
+#                      this script)
 #
 # Needs sway, grim, quickshell and python3 (wtype for `key`). Inside containers sway refuses a
 # binary with file capabilities, so a plain copy is used.
@@ -74,6 +75,10 @@ if (( FIXTURES )); then
 exit 0
 STUB
   chmod +x "$HOME/.local/bin/arctic-update"
+  # Apps that have sent notifications (the shell writes this), for Settings → Notifications.
+  mkdir -p "$HOME/.local/state/arctic/notifications"
+  printf '{"version":1,"apps":[{"key":"org.signal.Signal","app_name":"Signal","desktop_entry":"org.signal.Signal","last_seen":1790620000},{"key":"Firefox","app_name":"Firefox","last_seen":1790610000}]}\n' \
+    > "$HOME/.local/state/arctic/notifications/apps.json"
 fi
 export ARCTIC_SHELL_DIR="$REPO/shell"
 export XDG_DATA_DIRS=/usr/local/share:/usr/share
