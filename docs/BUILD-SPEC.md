@@ -198,7 +198,11 @@ filled with the detected device's name. Shipped: `nvidia` (Turing and newer, `ak
 `xorg-x11-drv-nvidia-cuda` + `libva-nvidia-driver`), `nvidia-580xx` (Maxwell–Volta, the last
 series for them; conflicts with `nvidia`), `broadcom-wl` (`akmod-wl`, chips with no working
 in-kernel driver), `intel-media` (RPM Fusion `intel-media-driver`, Broadwell and newer) and
-`amd-video` (`mesa-va-drivers-freeworld` / `mesa-vulkan-drivers-freeworld` swaps). Kepler and
+`amd-video` (`mesa-va-drivers-freeworld` installed beside Fedora's VA driver — in F44
+`mesa-dri-drivers` provides `mesa-va-drivers`, so it is never swapped — and a
+`mesa-vulkan-drivers-freeworld` swap; GCN/r600-class device ranges only, not R100–R500). A
+`swap` runs only when `rpm -q <old>` finds that exact package (dnf swap would follow provides).
+Kepler and
 older NVIDIA cards get nothing (their drivers have no GBM, which Mango needs). The
 `[runtimes]` entry `akmods` sizes the build tools, counted once. Mock fixtures:
 `internal/hw/fixtures.go` (`arcticd --mock --mock-hw NAME`, `arctic-install plan --hardware
@@ -224,18 +228,27 @@ app diff (dnf remove/install in chroot, flatpak from host with FLATPAK_* into /m
 counts as in the live image whatever the catalog says: kept when ticked, uninstalled with its
 unused runtimes when not), setfiles relabel, unmount. Drivers (internal/installer/drivers.go):
 installed in the chroot in the apps' dnf transaction with the RPM Fusion repositories; for an
-akmod driver `akmods` is installed and its key created (`kmodgenca -a`) first, then after the
-transaction `akmods --force --kernels <kver> --akmod <name>` runs for each kernel with its
-kernel-devel and `modinfo` checks the module (failure → attention: Try again / Skip, which
-removes the packages again; unattended → akmods.service builds it at boot). The `[boot]`
-kernel arguments of the installed drivers go on with `grubby --update-kernel=ALL --args=…`
-(boot entries, GRUB_CMDLINE_LINUX and /etc/kernel/cmdline) — so only when an NVIDIA driver is
-installed. With Secure Boot enforced on UEFI, `mokutil --import
-/etc/pki/akmods/certs/public_key.der --hash-file /dev/stdin` gets the SHA-512 crypt hash of the
-engine's random one-time code (shown on the Done screen, never logged). Offline at Start,
+akmod driver `akmods` is installed with `kernel-devel-matched-<kver>` of each installed kernel
+(else, when that version has left the repositories, the newest complete kernel: `kernel
+kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-devel-matched` — never
+the partial kernel dnf would pick for akmods alone) and its key created (`kmodgenca -a`) first;
+after the transaction the engine waits on `/run/akmods/akmods.lock` for the %posttrans build
+(which installs its kmod with dnf), then `akmods --force --kernels <kver> --akmod <name>` runs
+for each kernel with its kernel-devel and `modinfo` checks the module (failure → attention: Try
+again / Skip, which removes the packages again; unattended → put off: no kernel arguments, the
+package's own nouveau blacklist removed again, and the driver goes to pending.json for
+arctic-firstboot). akmods' `modprobe` of freshly built modules when the kernel version equals
+the live one is accepted (it cannot take over a bound device). The `[boot]` kernel arguments of
+the built drivers go on with `grubby --update-kernel=ALL --args=…` (boot entries,
+GRUB_CMDLINE_LINUX and /etc/kernel/cmdline) — so only when an NVIDIA driver is built. With
+Secure Boot enforced on UEFI, `mokutil --import /etc/pki/akmods/certs/public_key.der
+--hash-file /dev/stdin` gets the SHA-512 crypt hash of the engine's random one-time code (shown
+on the Done screen, never logged); if the install fails afterwards, cleanup runs `mokutil
+--revoke-import`. Offline at Start,
 drivers are not tried: they go to `/var/lib/arctic/pending.json` with `akmod` and
 `kernel_args`, plus `"mok_hash":"/var/lib/arctic/mok.hash"` (Secure Boot), and
-arctic-firstboot installs, builds, adds the arguments and queues the key once online.
+arctic-firstboot installs (akmods with kernel-devel and the key before the driver, as the
+engine), builds, adds the arguments and queues the key once online.
 Hybrid laptops keep rendering on the integrated GPU (wlroots uses the `boot_vga` card);
 `/etc/profile.d/arctic-graphics.sh` sets `LIBVA_DRIVER_NAME=nvidia`, `NVD_BACKEND=direct` and
 `__GLX_VENDOR_LIBRARY_NAME=nvidia` only when NVIDIA's driver drives the boot display. The target directory is made a private
