@@ -12,6 +12,8 @@ import "GetApps.js" as GetAppsLogic
 // the Verified badge), else the index's names; Fedora has Apps (appstream-data) and All
 // packages (every available package, with its summary and repository). Installs are
 // AppsService jobs: Flathub needs no password, Fedora asks once through the polkit dialog.
+// Before you type, the page offers Arctic picks: the installer catalogue's apps that this source
+// has (assets/featured.json, made by `arctic-install catalog --featured`).
 // Keys: type to search, ↑/↓ or Tab move, Enter installs (or opens), Shift+Enter details,
 // Ctrl+Tab / Ctrl+Page Up/Down switch between Apps and All packages.
 FocusScope {
@@ -41,8 +43,28 @@ FocusScope {
         return false;
     }
     function reopen(text) { field.text = text || ''; field.forceActiveFocus(); }
+    // The picks this source can install, as result items (with the catalogue's icon when it has one).
+    readonly property var picks: {
+        const list = [];
+        const byId = {};
+        items.forEach(i => byId[flathub ? i.id : (i.pkg || i.id)] = i);
+        AppsService.featured.forEach(app => {
+            const method = flathub ? app.flatpak : app.dnf;
+            if (!method || (!flathub && view === 'all')) return;
+            const key = flathub ? method.ref : method.packages[0];
+            // Only what this computer's lists have (once they are loaded).
+            if (flathub && items.length && !byId[key]) return;
+            if (!flathub && AppsService.dnfNamesCount && !AppsService.dnfNames[key] && !AppsService.installedIds.dnf[key]) return;
+            const known = byId[key] || {};
+            list.push(Object.assign({}, known, { id: flathub ? key : (known.id || key), pkg: flathub ? undefined : key,
+                                                 pkgs: flathub ? undefined : method.packages, name: known.name || app.name,
+                                                 summary: known.summary || app.summary, tile: app.tile,
+                                                 verified: flathub ? (known.verified || method.verified) : false, pick: true }));
+        });
+        return list;
+    }
     function search() {
-        results = PackageSearch.searchItems(prepared, field.text, 200);
+        results = field.text.trim() === '' && picks.length ? picks : PackageSearch.searchItems(prepared, field.text, 200);
         current = 0;
         list.positionViewAtBeginning();
     }
@@ -59,7 +81,7 @@ FocusScope {
         const state = stateOf(item);
         if (state === 'installed') { launch(item); return; }
         if (state === 'waiting' || state === 'running') return;
-        AppsService.install(source, [flathub ? item.id : (item.pkg || item.id)],
+        AppsService.install(source, flathub ? [item.id] : item.pkgs || [item.pkg || item.id],
                             { name: item.name || item.id, icon: item.icon || '', desktop: desktopOf(item) });
     }
     function launch(item) {
@@ -79,6 +101,7 @@ FocusScope {
     }
 
     onPreparedChanged: search()
+    onPicksChanged: if (field.text.trim() === '') search()
     onSourceChanged: { view = 'apps'; field.text = initialQuery; search(); }
     Component.onCompleted: {
         if (source === 'dnf' && AppsService.fedoraCatalogMissing && !AppsService.fedoraApps.length) view = 'all';
@@ -202,7 +225,8 @@ FocusScope {
                 Text {
                     id: hint
                     visible: field.text.trim() === ''
-                    text: page.flathub ? 'Type to search all of Flathub.' : page.view === 'apps' ? 'Type to search Fedora’s apps.' : 'Type to search every package.'
+                    text: (page.picks.length && page.view !== 'all' ? 'Arctic picks · ' : '')
+                          + (page.flathub ? 'Type to search all of Flathub.' : page.view === 'apps' ? 'Type to search Fedora’s apps.' : 'Type to search every package.')
                     color: Theme.inkSubtle
                     font.family: Theme.fontSans
                     font.pixelSize: 12
@@ -220,6 +244,7 @@ FocusScope {
                 imageSource: modelData.icon && modelData.icon.startsWith('/') ? modelData.icon : ''
                 iconName: modelData.icon && !modelData.icon.startsWith('/') ? modelData.icon : ''
                 glyph: page.source === 'dnf' && page.view === 'all' ? 'layers' : 'package'
+                tileId: modelData.pick && !imageSource ? modelData.tile || '' : ''
                 verified: !!modelData.verified
                 state_: page.stateOf(modelData)
                 percent: job ? job.percent : null

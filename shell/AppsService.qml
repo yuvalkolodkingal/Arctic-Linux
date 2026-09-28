@@ -39,12 +39,15 @@ Singleton {
     property var packageIndex: PackageSearch.prepare([])
     property var flathubList: []                   // [{id, name, summary}] from the index (no icons)
     property var fedoraPackages: []                // [{id, name, repo, summary}] every available package
+    property var dnfNames: ({})                    // {name: true} of fedoraPackages
+    property int dnfNamesCount: 0
     property var flathubCatalog: []                // AppStream apps: names, summaries, icons
     property var fedoraApps: []
     property bool flathubCatalogMissing: false
     property bool fedoraCatalogMissing: false
     readonly property var flathubItems: flathubCatalog.length ? flathubCatalog : flathubList
     property var installedIds: ({ flatpak: {}, dnf: {} })   // {flatpak: {id: installation}, dnf: {name: true}}
+    property var featured: []                      // Arctic picks (assets/featured.json)
     property string indexError: ''
     property bool indexRefreshing: false
     property bool indexLoaded: false
@@ -233,6 +236,10 @@ Singleton {
                         service.packageIndex = PackageSearch.prepare(result.packages);
                         const details = result.details || { dnf: [], flathub: [] };
                         service.fedoraPackages = details.dnf.map(r => ({ id: r[0], name: r[0], repo: r[1], summary: r[2] }));
+                        const names = {};
+                        details.dnf.forEach(r => names[r[0]] = true);
+                        service.dnfNames = names;
+                        service.dnfNamesCount = details.dnf.length;
                         service.flathubList = details.flathub.map(r => ({ id: r[0], name: r[1] || r[0], summary: r[2], icon: '' }));
                     }
                     service.indexRefreshing = result.refreshing;
@@ -283,6 +290,11 @@ Singleton {
     }
     Timer { id: restart; interval: 500; onTriggered: service.pump() }
     WebAppClient { id: webClient; command: service.webappCmd }
+    FileView {
+        path: Quickshell.shellDir + '/assets/featured.json'
+        printErrors: false
+        onLoaded: { try { service.featured = JSON.parse(text()).apps || []; } catch (e) { service.featured = []; } }
+    }
     onPolkitActiveChanged: if (job) update(job.id, { step: polkitActive ? 'Waiting for your password' : job.step === 'Waiting for your password' ? '' : job.step })
 
     // The large lists go 5 minutes after the launcher closes, unless a job runs; the next
@@ -294,6 +306,8 @@ Singleton {
         onTriggered: {
             if (service.busy || service.watching) return;
             service.fedoraPackages = [];
+            service.dnfNames = {};
+            service.dnfNamesCount = 0;
             service.flathubList = [];
             service.flathubCatalog = [];
             service.fedoraApps = [];
