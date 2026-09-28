@@ -250,6 +250,8 @@ Popover {
                     height: 52
                     radius: Theme.radiusMd
                     color: selected ? Theme.accentSoft : rowMouse.containsMouse ? Theme.surfaceSunken : 'transparent'
+                    border.width: selected && Theme.highContrast ? Theme.lineWidth : 0      // high contrast: an edge too
+                    border.color: Theme.focus
                     Behavior on color { ColorAnimation { duration: Theme.durationFast } }
                     RowLayout {
                         anchors.fill: parent

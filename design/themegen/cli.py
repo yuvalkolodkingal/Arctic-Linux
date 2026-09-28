@@ -9,6 +9,8 @@
         print a static palette (JSON)
   arctic-themegen check --palette FILE [--json]
         validate a palette and report the contrast guarantees (exit 1 if one fails)
+  arctic-themegen contrast --palette FILE
+        print the high-contrast take of a palette (JSON; exit 1 if it can't meet its guarantees)
   arctic-themegen named --colors FILE --name NAME [--label TEXT]
         print a gallery palette made from a colors.toml (design/themes/<name>) (JSON)
 
@@ -46,6 +48,9 @@ def _parser():
     b = sub.add_parser("builtin", help="print a static palette")
     b.add_argument("name", choices=sorted(pal.BUILTINS))
 
+    h = sub.add_parser("contrast", help="the high-contrast take of a palette")
+    h.add_argument("--palette", required=True)
+
     n = sub.add_parser("named", help="a gallery palette from a colors.toml")
     n.add_argument("--colors", required=True, metavar="FILE")
     n.add_argument("--name", required=True)
@@ -70,6 +75,8 @@ def main(argv=None):
                 raise ThemegenError("--name must match [a-z0-9][a-z0-9._-]*")
             p = derive.from_wallpaper(args.image, args.mode, args.base, args.name, args.label)
             sys.stdout.write(pal.dumps(p))
+        elif args.command == "contrast":
+            sys.stdout.write(pal.dumps(derive.high_contrast(pal.load(args.palette))))
         elif args.command == "named":
             try:
                 with open(args.colors, encoding="utf-8") as f:

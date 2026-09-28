@@ -28,7 +28,7 @@ show a switch with their current state.
 | **Apps** | Every app, terminal, browser, files, code editor, emoji, clipboard history, calculator, system monitor |
 | **Learn** | Keyboard shortcuts, this wiki, the welcome card again, Fedora’s documentation, About this computer |
 | **Capture** | Screenshot of an area, a window or the screen; record the screen (and stop); copy text from the screen; read a QR code; pick a colour; open the Screenshots folder |
-| **Toggle** | Dark style, night light, keep awake, do not disturb, reduce motion |
+| **Toggle** | Dark style, night light, keep awake, do not disturb, reduce motion, high contrast |
 | **Style** | Theme (every theme you can switch to, the current one ticked), wallpaper, Appearance settings |
 | **Setup** | Every page of [Settings](Settings), and the folder for your [hooks](Themes-and-Customisation#hooks-for-other-events) |
 | **Install** | Get apps, and straight to Flathub, Fedora packages, web apps or the package console |

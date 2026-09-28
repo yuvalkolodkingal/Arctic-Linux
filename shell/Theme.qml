@@ -21,6 +21,10 @@ Singleton {
     readonly property bool dark: tokens.dark
     readonly property string themeId: tokens.id
     readonly property string themeName: tokens.name
+    // High contrast (Settings > Accessibility): the theme is its high-contrast take (arctic-theme
+    // contrast on), and lines and focus rings get heavier too.
+    readonly property bool highContrast: tokens.contrast === 'high'
+    readonly property int lineWidth: highContrast ? 2 : 1
 
     // ---- colour (semantic tokens) -------------------------------------------------------
     readonly property color ground: c.ground
@@ -91,7 +95,7 @@ Singleton {
     readonly property int controlMd: tokens.size.controlMd
     readonly property int controlLg: tokens.size.controlLg
     readonly property int targetMin: tokens.size.targetMin
-    readonly property int focusWidth: tokens.border.borderFocus
+    readonly property int focusWidth: highContrast ? Math.max(3, tokens.border.borderFocus) : tokens.border.borderFocus
 
     // Screen frame (the shell's rounded surround). Its inner radius is concentric with tiled
     // window corners: window radius + Mango's 8px gap.

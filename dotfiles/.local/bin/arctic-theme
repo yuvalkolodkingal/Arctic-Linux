@@ -12,6 +12,9 @@
   arctic-theme mode [auto|dark|light]   light or dark for wallpaper colours (auto: from the picture)
   arctic-theme toggle               light <-> dark (Super+Shift+T); a gallery theme switches to
                                     its pair (Catppuccin Mocha <-> Latte), else to Winter / Polar night
+  arctic-theme contrast [on|off|toggle] [--json]
+                                    high contrast: whatever theme is active, drawn with stronger
+                                    contrast (Settings > Accessibility). Without on|off, print it.
   arctic-theme zen [on|off]         give Zen Browser the theme's accent colour (read when Zen
                                     starts; default off). Without on|off, print on or off.
   arctic-theme current [--json]     the active theme (JSON: name, label, mode, colours, settings)
@@ -53,6 +56,8 @@ SETTINGS = os.path.join(CONFIG, "settings.json")
 USER_THEMES = os.path.join(CONFIG, "themes")
 SYSTEM_THEMES = os.path.join(SYSTEM, "themes")
 EXTRA_THEMES = os.path.join(SYSTEM, "themes-extra")      # the gallery (arctic-themes-extra)
+# High contrast takes of the themes, made when needed (~/.local/state: not settings, remade).
+HC_THEMES = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "arctic", "themes-hc")
 HOOK_DIRS = (os.path.join(SYSTEM, "theme-hooks.d"), os.path.join(CONFIG, "theme-hooks.d"))
 USER_TEMPLATES = os.path.join(CONFIG, "templates")
 WALLPAPER_CHOICE = os.path.join(CONFIG, "wallpaper")
@@ -92,6 +97,10 @@ def save_settings(**changes):
     data = load_settings()
     data.update(changes)
     write_atomic(SETTINGS, json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def high_contrast(settings=None):
+    return (settings if settings is not None else load_settings()).get("contrast") == "high"
 
 
 def auto_colors(settings=None):
@@ -332,6 +341,27 @@ def make_wallpaper_theme(picture, mode, force=False):
     return True
 
 
+def hc_folder(name, folder):
+    """The high-contrast take of the theme in `folder`, in HC_THEMES/<name>: remade when the
+    theme's palette or the engine changes."""
+    import hashlib
+    tg = themegen()
+    source = read_json(os.path.join(folder, "palette.json"))
+    if not source.get("colors"):
+        raise Error("theme '{}' has no palette.json to make a high-contrast take from".format(name))
+    key = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest() + ":" + fingerprint(tg)
+    out = os.path.join(HC_THEMES, name)
+    if read_json(os.path.join(out, "palette.json")).get("hc_source") == key and os.path.isfile(os.path.join(out, "theme.json")):
+        return out
+    try:
+        p = tg.derive.high_contrast(tg.palette.validate(source))
+        p["hc_source"] = key
+        tg.render.render(p, out, template_dirs(), force=True)
+    except tg.palette.ThemegenError as e:
+        raise Error(str(e))
+    return out
+
+
 # ---- switching -----------------------------------------------------------------------------------
 
 def link_current(name):
@@ -343,7 +373,13 @@ def link_current(name):
     if os.path.isdir(CURRENT) and not os.path.islink(CURRENT):
         raise Error("{} is a folder, not a link; move it away and try again".format(CURRENT))
     # A theme of yours is linked relatively (the home folder can move); a packaged one absolutely.
+    # With high contrast on, the link goes to the theme's high-contrast take instead.
     target = os.path.join("themes", name) if source == "user" else folder
+    if high_contrast():
+        try:
+            target = hc_folder(name, folder)
+        except Error as e:        # the theme itself, rather than no theme
+            warn("{}; using it as it is".format(e))
     tmp = os.path.join(CONFIG, ".current.tmp-{}".format(os.getpid()))
     with contextlib.suppress(FileNotFoundError):
         os.unlink(tmp)
@@ -403,6 +439,8 @@ def sync(force=False, redraw=True):
         return active_name()
     target, changed = follow_wallpaper(force=force)
     linked = os.path.realpath(CURRENT) == os.path.realpath(theme_dir(target)[0] or CURRENT + "-missing")
+    if high_contrast():
+        linked = os.path.realpath(CURRENT) == os.path.realpath(os.path.join(HC_THEMES, target))
     if changed or force or target != active_name() or not linked:
         activate(target, redraw=redraw)
     return target
@@ -564,6 +602,22 @@ def cmd_set(name):
     activate(name)
 
 
+def cmd_contrast(value, as_json=False):
+    if value is None:
+        on = high_contrast()
+        print(json.dumps({"ok": True, "contrast": "high" if on else "normal"}) if as_json else ("on" if on else "off"))
+        return
+    if value not in ("on", "off", "toggle"):
+        raise Error("usage: arctic-theme contrast [on|off|toggle]", 2)
+    on = (not high_contrast()) if value == "toggle" else value == "on"
+    save_settings(contrast="high" if on else "normal")
+    if have("gsettings"):     # libadwaita's own high-contrast styles, on top of the colours
+        run_quiet(["gsettings", "set", "org.gnome.desktop.a11y.interface", "high-contrast", "true" if on else "false"])
+    activate(active_name())
+    if as_json:
+        print(json.dumps({"ok": True, "contrast": "high" if on else "normal"}))
+
+
 def cmd_auto(value):
     if value is None:
         print("on" if auto_colors() else "off")
@@ -636,7 +690,7 @@ def cmd_current(as_json):
         return
     settings = load_settings()
     info.update(auto_colors=auto_colors(settings), wallpaper_mode=wallpaper_mode(settings), wallpaper=saved_wallpaper(),
-                zen_theme=zen_theme(settings))
+                zen_theme=zen_theme(settings), contrast="high" if high_contrast(settings) else "normal")
     print(json.dumps(info, indent=2))
 
 
@@ -685,6 +739,8 @@ def main(argv):
             cmd_auto(rest[0] if rest else None)
         elif verb == "mode" and len(rest) <= 1:
             cmd_mode(rest[0] if rest else None)
+        elif verb == "contrast" and len(rest) <= 1:
+            cmd_contrast(rest[0] if rest else None, as_json)
         elif verb == "zen" and len(rest) <= 1:
             cmd_zen(rest[0] if rest else None)
         elif verb == "toggle" and not rest:

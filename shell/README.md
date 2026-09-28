@@ -62,7 +62,9 @@ engine (`design/themegen`: `design/tools/gen-desktop-themes.py` for Winter and P
 (`assets/theme-defaults.js`, generated too). `arctic-theme toggle` restyles the shell live: the
 shell watches `~/.config/arctic/theme` and `arctic-theme` also calls `arctic-shell-ipc shell
 reload`. Fonts: Figtree and JetBrains Mono. Reduced motion (`arctic-motion off`) turns movement
-into fades.
+into fades. High contrast (`arctic-theme contrast on`) links the theme's high-contrast take, whose
+`theme.json` has `"contrast": "high"`: `Theme.highContrast` then makes popover edges
+(`Theme.lineWidth`) and focus rings heavier and gives the selected row an edge.
 
 Icons and app tiles come from the design system's bundle: `assets/design-data.js` is generated
 by `node dev/export-design-assets.cjs <design>/components/bundle.js` and drawn in token colours

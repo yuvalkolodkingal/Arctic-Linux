@@ -70,7 +70,8 @@ def theme_json(p):
     colors = {camel(r): qml_color(p["colors"][r]) for r in ROLES}
     for k, v in tok["ramps"].items():
         colors[camel(k)] = qml_color(v)
-    return json.dumps({
+    extra = {"contrast": "high"} if p.get("contrast") == "high" else {}
+    return json.dumps(dict({
         "_comment": header(p) + " Colours are QML #AARRGGBB.",
         "id": p["name"],
         "name": p["label"],
@@ -91,7 +92,7 @@ def theme_json(p):
         "size": {camel(k): px(v) for k, v in tok["size"].items()},
         "duration": {camel(k): px(v) for k, v in tok["duration"].items()},
         "easing": {camel(k): bezier(v) for k, v in tok["easing"].items()},
-    }, indent=1, sort_keys=False) + "\n"
+    }, **extra), indent=1, sort_keys=False) + "\n"
 
 
 # ---- gtk.css ------------------------------------------------------------------------------------

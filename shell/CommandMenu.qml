@@ -294,6 +294,8 @@ Popover {
                 height: 40
                 radius: Theme.radiusMd
                 color: selected ? Theme.accentSoft : rowMouse.containsMouse ? Theme.surfaceSunken : 'transparent'
+                border.width: selected && Theme.highContrast ? Theme.lineWidth : 0      // high contrast: an edge too
+                border.color: Theme.focus
                 Behavior on color { ColorAnimation { duration: Theme.durationFast } }
                 Accessible.role: Accessible.MenuItem
                 Accessible.name: row.modelData.label + (row.modelData.checked === true ? ', on' : row.modelData.checked === false ? ', off' : '')

@@ -100,6 +100,7 @@ var ENTRIES = [
     ["power", "power.suspend", "Suspend after", "sleep idle"],
     ["power", "power.profile", "Power mode", "performance balanced power saver battery"],
     ["power", "power.lid", "Closing the lid", "laptop lid switch"],
+    ["accessibility", "accessibility.contrast", "High contrast", "contrast see low vision stronger colours bold"],
     ["accessibility", "accessibility.textsize", "Text size in apps", "font scale bigger larger"],
     ["accessibility", "accessibility.cursor", "Pointer size and style", "cursor theme mouse bigger"],
     ["accessibility", "accessibility.motion", "Reduce motion", "animations calm"],

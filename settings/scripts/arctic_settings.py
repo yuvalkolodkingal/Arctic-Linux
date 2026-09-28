@@ -47,7 +47,9 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     caps                          which helper commands and tools are installed
     shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch
     daylight | daylight-set off|sun|hours LIGHT DARK      light and dark by the clock (arctic-daylight)
-    accessibility                 what the Accessibility page needs (the keyboard pointer, wl-kbptr)
+    accessibility                 what the Accessibility page needs (the keyboard pointer, wl-kbptr,
+                                  high contrast)
+    contrast-set on|off           high contrast (arctic-theme contrast)
     fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
@@ -2652,8 +2654,28 @@ def cmd_font_set(paths, args):
 # ---- accessibility ---------------------------------------------------------------------------------
 
 def cmd_accessibility(paths, _args):
-    """What the Accessibility page shows besides motion, text size and the pointer."""
-    return dict(ok=True, kbptr=bool(which('wl-kbptr')), kbptrHelper=bool(which('arctic-kbptr')))
+    """What the Accessibility page shows besides motion, text size and the pointer. contrast is
+    None when arctic-theme can't say (an older one: the row is hidden)."""
+    contrast = None
+    if which('arctic-theme'):
+        code, out, _err = run(['arctic-theme', 'contrast', '--json'], timeout=10)
+        data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+        if code == 0 and isinstance(data, dict) and data.get('ok'):
+            contrast = data.get('contrast') == 'high'
+    return dict(ok=True, kbptr=bool(which('wl-kbptr')), kbptrHelper=bool(which('arctic-kbptr')), contrast=contrast)
+
+
+def cmd_contrast_set(paths, args):
+    """High contrast on or off: arctic-theme relinks the active theme to its high-contrast take."""
+    if len(args) != 1 or args[0] not in ('on', 'off'):
+        raise Failure('usage: contrast-set on|off')
+    if not which('arctic-theme'):
+        raise Failure('arctic-theme isn’t installed.')
+    code, out, err = run(['arctic-theme', 'contrast', args[0], '--json'], timeout=60)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict) or not data.get('ok'):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['High contrast couldn’t be changed.'])[-1])
+    return cmd_accessibility(paths, [])
 
 
 COMMANDS = {
@@ -2684,6 +2706,7 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
 # The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
 COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
                  'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
+                 'contrast-set': cmd_contrast_set,
                  'fonts': cmd_fonts, 'font-set': cmd_font_set})
 WRITERS |= {'shell-option-set'}
 

@@ -156,10 +156,12 @@ ctx = ctxWith({ dark: true, cmds: everything, lines: [
     'state\ttoggle.awake\t{"ok": false, "error": "Nope"}',
     'state\ttoggle.dnd\t{"text":" ","tooltip":"Do not disturb is on","class":"dnd"}',
     'state\ttoggle.motion\treduced',
+    'state\ttoggle.contrast\ton',
     'state\tcapture.record\t{"ok": true, "recording": true}'] });
 const toggles = {};
 Menu.rows(base, 'toggle', ctx, {}).forEach(r => { toggles[r.id] = r.checked; });
-assert.deepEqual(plain(toggles), { 'toggle.dark': true, 'toggle.nightlight': true, 'toggle.dnd': true, 'toggle.motion': true },
+assert.deepEqual(plain(toggles), { 'toggle.dark': true, 'toggle.nightlight': true, 'toggle.dnd': true, 'toggle.motion': true,
+                                   'toggle.contrast': true },
                  'unknown state (ok: false) shows no switch');
 assert.ok(!('toggle.awake' in toggles) || toggles['toggle.awake'] === undefined);
 assert.equal(Menu.rows(base, 'capture', ctx, {}).find(r => r.id === 'capture.record').label, 'Stop recording');

@@ -87,6 +87,7 @@ arctic-theme mode dark           # light or dark for wallpaper colours: auto, da
 arctic-theme toggle              # light <-> dark, the same as Super + Shift + T
 arctic-theme reload              # apply the theme to running apps again and run the hooks
 arctic-theme current --json      # the theme's name, mode, colours and settings, as JSON
+arctic-theme contrast on         # high contrast for whatever theme is active (off: back to normal)
 ```
 
 - `set` with any theme but `wallpaper` turns **Match colours to wallpaper** off. `set wallpaper`
@@ -106,6 +107,7 @@ and the login screen uses it too.
 | `~/.config/arctic/current` | A link to the folder of the theme in use. Apps read their colours through it. |
 | `~/.config/arctic/theme` | The name of the theme in use (the desktop shell watches it). |
 | `~/.config/arctic/themes/wallpaper/` | The theme made from your wallpaper |
+| `~/.local/state/arctic/themes-hc/` | High-contrast takes of the themes you used with high contrast on (made again when needed) |
 | `/usr/share/arctic/themes/` | Winter and Polar night |
 
 ## Which apps follow the theme
@@ -167,7 +169,7 @@ PNG, JPEG, WebP, GIF, BMP, TIFF and SVG pictures all work.
 
 ## Reduced motion
 
-If animations bother you, turn them off with **Reduce motion** in Settings (**Appearance**), or:
+If animations bother you, turn them off with **Reduce motion** in Settings (**Accessibility**), or:
 
 ```sh
 arctic-motion off     # no window animations, the shell only fades, the terminal fox stays still
@@ -177,6 +179,21 @@ arctic-motion         # show the current setting
 
 This also turns off animations in GTK apps. For the start-up screen, add `arctic.reduce_motion=1`
 to the kernel command line; the fox and its dots then stay still.
+
+## High contrast
+
+**High contrast** in Settings (**Accessibility**), or `arctic-theme contrast on`, keeps the theme
+you chose, light or dark, and draws it with more contrast: text at least 12:1 against its
+background (7:1 for secondary text, status colours and amber "here" text), lines and focus rings
+you can see (4.5:1, and thicker in the shell's menus), solid instead of frosted panels and fewer
+shades of background. Hues stay the same, so Nord is still Nord.
+
+Every app that follows the theme follows this too, and GTK 4 apps also get their own
+high-contrast style. Switching themes, light and dark, or the wallpaper keeps it on. The
+high-contrast take of a theme is made the first time you use it (in
+`~/.local/state/arctic/themes-hc/`), which takes a second.
+
+`settings.json` remembers it as `"contrast": "high"`.
 
 ## The screen frame
 

@@ -1,4 +1,5 @@
-// Accessibility: bigger text and pointer, less motion, and the pointer from the keyboard
+// Accessibility: high contrast (arctic-theme contrast), bigger text and pointer, less motion, and
+// the pointer from the keyboard
 // (wl-kbptr, Super + Alt + K). The motion, text size and pointer rows came from Appearance
 // (their commands are unchanged: motion-set, text-scale, set cursor_size / cursor_theme). The
 // last group says plainly what this desktop can't offer yet, rather than hiding it.
@@ -15,7 +16,7 @@ Page {
     property var motion: ({ available: true, reduced: false })
     property var textScale: ({ available: false, value: 1 })
     property var cursors: []
-    property var access: ({ kbptr: false })
+    property var access: ({ kbptr: false, contrast: null })
 
     onShown: {
         Backend.call(["motion"], r => { if (r.ok) page.motion = r; });
@@ -26,6 +27,25 @@ Page {
 
     Group {
         title: "Seeing"
+        SettingRow {
+            searchKey: "accessibility.contrast"
+            visible: page.access.contrast === true || page.access.contrast === false
+            title: "High contrast"
+            desc: "Stronger text, lines and focus rings in whatever theme you use, the bar and apps too."
+            resettable: false
+            RowSwitch {
+                checked: page.access.contrast === true
+                Accessible.name: "High contrast"
+                onToggled: Backend.call(["contrast-set", checked ? "off" : "on"], r => {
+                    if (r.ok) {
+                        page.access = r;
+                        Theme.reload();
+                    } else {
+                        checked = page.access.contrast === true;
+                    }
+                })
+            }
+        }
         SettingRow {
             searchKey: "accessibility.textsize"
             visible: page.textScale.available === true

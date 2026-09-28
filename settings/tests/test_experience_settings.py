@@ -90,6 +90,26 @@ class AccessibilityTest(Home):
         stub(self.bin, 'wl-kbptr', 'exit 0\n')
         self.assertTrue(self.helper('accessibility')['kbptr'])
 
+    def test_high_contrast(self):
+        self.assertIsNone(self.helper('accessibility')['contrast'])       # no arctic-theme: no row
+        self.helper('contrast-set', 'on', ok=False)
+        state = self.home / 'contrast'
+        stub(self.bin, 'arctic-theme', '''\
+            [ "$1" = contrast ] || exit 2
+            case "$2" in
+              on) echo high > "{0}" ;;
+              off) echo normal > "{0}" ;;
+              loud) echo "arctic-theme: no" >&2; exit 2 ;;
+            esac
+            printf '{{"ok": true, "contrast": "%s"}}\\n' "$(cat "{0}" 2>/dev/null || echo normal)"
+            '''.format(state))
+        self.assertIs(self.helper('accessibility')['contrast'], False)
+        self.assertIs(self.helper('contrast-set', 'on')['contrast'], True)
+        self.assertIs(self.helper('accessibility')['contrast'], True)
+        self.assertIs(self.helper('contrast-set', 'off')['contrast'], False)
+        for bad in ((), ('loud',), ('on', 'off')):
+            self.helper('contrast-set', *bad, ok=False)
+
 
 if __name__ == '__main__':
     unittest.main()

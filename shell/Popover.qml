@@ -87,7 +87,7 @@ PanelWindow {
         height: popover.cardHeight
         radius: popover.cardRadius
         color: popover.cardColor
-        border.width: 1
+        border.width: Theme.lineWidth
         border.color: Theme.line
         dockEdge: popover.placement === 'dock' ? dockPos.edge : ''
         x: popover.placement === 'dock' ? dockPos.animatedX

@@ -39,6 +39,7 @@
     "toggle.awake": {"label": "Keep awake", "icon": "eye", "desc": "Don’t lock or sleep", "keys": "Super + Ctrl + I", "run": ["arctic-keep-awake", "toggle"], "state": ["arctic-keep-awake", "status", "--json"]},
     "toggle.dnd": {"label": "Do not disturb", "icon": "bell-off", "keys": "Super + Shift + N", "run": ["arctic-dnd", "toggle"], "state": ["arctic-dnd", "status"]},
     "toggle.motion": {"label": "Reduce motion", "icon": "sparkle", "run": ["arctic-motion", "toggle"], "state": ["arctic-motion"]},
+    "toggle.contrast": {"label": "High contrast", "icon": "brush", "desc": "Stronger text and lines in any theme", "run": ["arctic-theme", "contrast", "toggle"], "state": ["arctic-theme", "contrast"]},
 
     "style": {"label": "Style", "icon": "brush"},
     "style.theme": {"label": "Theme", "icon": "brush", "provider": "themes", "needs": ["arctic-theme"]},

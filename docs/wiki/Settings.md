@@ -261,6 +261,8 @@ installed.
 
 Bigger, calmer and easier to reach from the keyboard.
 
+- **High contrast:** stronger text, lines and focus rings in whatever theme you use, the bar and
+  apps too (see [High contrast](Themes-and-Customisation#high-contrast)).
 - **Text size in apps:** 100% to 200% for GTK apps such as Files and most dialogs. The bar and
   menus keep their size.
 - **Pointer size** (Normal, Large, Larger) and **Pointer style** (the cursor themes installed).

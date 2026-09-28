@@ -20,6 +20,7 @@ Then contrast is enforced (lightness moved, hue kept) — see GUARANTEES — and
 foregrounds alone can't reach it (a mid-grey --base), the backgrounds are moved toward black
 (dark) or white (light) until they can; a palette that still fails raises ThemegenError.
 """
+import copy
 import math
 import os
 
@@ -153,6 +154,67 @@ def enforce(c):
     _contrast_pair(c, "term-cursor-text-color", "term-cursor", 4.5, move="bg")
     _contrast_pair(c, "term-selection-foreground", "term-selection-background", 4.5, move="bg")
     return c
+
+
+# High contrast (Settings > Accessibility): stronger ratios than GUARANTEES, and the lines and
+# status colours too (non-text is 3:1 in WCAG; high contrast asks more of it).
+GUARANTEES_HC = (
+    ("ink", BACKGROUNDS, 12.0),
+    ("ink-muted", BACKGROUNDS, 7.0),
+    ("ink-subtle", BACKGROUNDS, 7.0),
+    ("ink-disabled", ("ground",), 4.5),
+    ("line", ("ground", "surface"), 4.5),
+    ("line-strong", ("ground", "surface"), 4.5),
+    ("accent-text", ("ground",), 7.0),
+    ("on-accent", ("accent",), 7.0),
+    ("ink", ("accent-soft", "selection"), 7.0),
+    ("focus", ("ground", "surface"), 4.5),
+    ("success", ("ground",), 7.0),
+    ("warning", ("ground",), 7.0),
+    ("error", ("ground",), 7.0),
+    ("info", ("ground",), 7.0),
+) + tuple((a, ("term-background",), 7.0) for a in ANSI_COLORS)
+
+
+def high_contrast(palette):
+    """The high-contrast take of a palette: opaque frost, two surface steps (ground and raised),
+    a darker scrim, and GUARANTEES_HC met by moving lightness only (hues stay). Recorded as
+    "contrast": "high". Raises ThemegenError if a pair can't be met."""
+    p = copy.deepcopy(palette)
+    c = p["colors"]
+    c["scrim"] = color.with_alpha(c["scrim"], max(color.alpha_of(c["scrim"]) or 0, 0xcc if p["mode"] == "dark" else 0x99))
+    # Ink first: where it can't get far enough from a background (a light raised surface in a
+    # dark theme), the background moves towards the ground instead.
+    for bg in ("ground", "surface-raised"):
+        _contrast_pair(c, "ink", bg, GUARANTEES_HC[0][2], move="fg")
+    c["surface"] = c["ground"]
+    c["surface-sunken"] = c["ground"]
+    c["frost"] = color.with_alpha(c["surface-raised"], 255)
+    enforce(c)
+    for fg, bgs, ratio in GUARANTEES_HC:
+        for bg in bgs:
+            if fg == "ink" and bg in ("accent-soft", "selection"):
+                _contrast_pair(c, fg, bg, ratio, move="bg")
+            elif fg == "on-accent":
+                _contrast_pair(c, fg, bg, ratio, move="fg")
+            else:
+                c[fg] = color.ensure_contrast(c[fg], c[bg], ratio)
+    for state in ("accent-hover", "accent-pressed"):
+        c[state] = color.ensure_contrast(c[state], c["on-accent"], 7.0)
+    c["accent-edge"] = c["focus"]
+    p["contrast"] = "high"
+    failures = check(p) + check_high_contrast(p)
+    if failures:
+        raise ThemegenError("the high-contrast take can't meet its guarantees: " + ", ".join(
+            "{} on {} {:.2f} < {:g}".format(fg, bg, r, need) for fg, bg, r, need in failures))
+    return validate(p)
+
+
+def check_high_contrast(palette):
+    """[(foreground, background, ratio, required)] for every GUARANTEES_HC pair that fails."""
+    c = palette["colors"]
+    return [(fg, bg, round(color.contrast(c[fg], c[bg]), 3), ratio)
+            for fg, bgs, ratio in GUARANTEES_HC for bg in bgs if color.contrast(c[fg], c[bg]) < ratio]
 
 
 def _meet_guarantees(c, mode, rounds=12, step=0.25):
