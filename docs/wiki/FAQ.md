@@ -193,10 +193,13 @@ when the firmware offers its setup screen.
 
 ## The project
 
-### Why is the repository called O-Tism?
+### Why do some links say O-Tism?
 
-It's the repository's original name, kept until it's renamed on GitHub. The operating system is
-called Arctic Linux, and its packages and commands use `arctic`.
+The repository was called O-Tism until 0.2.1, when it was renamed Arctic-Linux. GitHub forwards
+the old repository links, but not the package repository on GitHub Pages: 0.2.0 systems need a
+one-line fix to keep getting updates (see
+[Troubleshooting](Troubleshooting#updates-stopped-after-the-repository-was-renamed)). The Go
+module path inside the source still says `o-tism`.
 
 ### How can I help?
 

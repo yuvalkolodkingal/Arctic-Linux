@@ -55,7 +55,9 @@ dark the next time it starts without its dock): off lasts until you log out.
 | Wallpaper | through the shell's `scripts/wallpapers.py apply` → `arctic-wallpaper` | |
 | Reduce motion | through `arctic-motion on\|off` | |
 | Text size in GTK apps, pointer for GTK apps | `gsettings` `org.gnome.desktop.interface` `text-scaling-factor`, `cursor-theme`, `cursor-size` | |
+| Displays (arrange) | nothing: the helper's `display-arrange` works out every drag, arrow key, **Make main**, on/off and size change (displays touch edge to edge, never overlap, top-left at 0,0; the main display is the one there, where Mango starts the pointer) | |
 | Displays (try) | `wlr-randr --output …` (not saved); `$XDG_RUNTIME_DIR/arctic-settings-display.json` holds the layout to go back to | a watchdog reverts after 20 s unless kept |
+| Displays (keep) | `monitorrule=name:^OUT$,width:…,height:…,refresh:…,x:…,y:…,scale:…,rr:…,vrr:…` in settings.conf, the main display's first | Mango already shows it (no reload) |
 | Default apps | `~/.config/arctic/default-apps` (`role=command`, read by `arctic-open`) and `~/.config/mimeapps.list` `[Default Applications]` (as `xdg-mime default`) | |
 | Lock / suspend timeouts | `~/.config/arctic/idle.conf` (`lock_after=`, `suspend_after=` seconds, 0 = never) | `arctic-session idle --restart` (swayidle) |
 | Power mode | tuned-ppd over D-Bus (`gdbus`, `org.freedesktop.UPower.PowerProfiles`) | |
@@ -85,9 +87,13 @@ python3 -m unittest discover -s settings/tests -v       # backend + consistency 
 /usr/lib64/qt6/bin/qmllint -I settings $(find settings -name '*.qml')
 settings/dev/headless.sh --smoke --fixtures              # every page in a headless sway, screenshots
 settings/dev/headless.sh page displays shot displays      # one screenshot
+settings/dev/headless.sh --outputs 3 page displays shot displays   # the arrangement, three displays
 ```
 
 `dev/headless.sh` needs sway, grim, quickshell and python3 (Fedora container: see the CI job).
+`--outputs 2|3` adds sway headless displays (2560 × 1440 at 150 %, and 1920 × 1080 turned 90°)
+next to the first; `--smoke` also plugs them in after the page tour and checks the Displays page
+gets them.
 `--fixtures` adds test desktop entries, the installer's default-apps and an `arctic-update`
 stand-in, for screenshots only. Screenshots of every page (Polar night) are in
 `dev/screenshots/`.

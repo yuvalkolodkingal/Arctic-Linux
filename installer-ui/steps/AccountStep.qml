@@ -2,7 +2,9 @@
 // (auto-filled, lowercase, editable) → password + confirm → computer name
 // ({username}-{model}, suggested by the engine). Passwords go to SetSecrets only.
 // Coming back (Summary "Change"), the engine still has the password
-// (options.password_set): empty password fields keep it.
+// (options.password_set): empty password fields keep it. A password below
+// options.min_score (or, for the disk too, below "Fair") gets a warning banner;
+// any password is accepted.
 import QtQuick
 import ".."
 import "../components"
@@ -35,13 +37,23 @@ StepPage {
     readonly property bool saved: !!opts.password_set
     readonly property bool keep: saved && password.text === "" && confirm.text === ""
     readonly property bool encryption: opts.encryption !== undefined ? !!opts.encryption : Wizard.encryptionEnabled
-    // "Use this password for the disk passphrase too": then it has to pass as a
-    // passphrase (Fair or better), and it has to be typed (a kept one isn't known here).
+    // "Use this password for the disk passphrase too": then it has to be typed (a kept
+    // one isn't known here), and it is weak below the passphrase's "Fair" (ok).
     readonly property bool diskToo: sameAsDisk && encryption
-    readonly property bool diskTooWeak: diskToo && password.text !== "" && !strength.ok
+    readonly property int minScore: opts.min_score !== undefined ? opts.min_score : 1
+    // Easy to guess: a warning, never a reason to keep Next off. The typed password once
+    // the engine has scored it, else a kept one (options.strength).
+    readonly property var shownStrength: keep ? (opts.strength || null) : (password.text !== "" && strength.label !== "" ? strength : null)
+    readonly property bool weak: shownStrength !== null && (diskToo ? shownStrength.ok !== true : shownStrength.score < minScore)
     // As a disk passphrase it is typed at start-up with English (US) (see EncryptionStep).
     readonly property string latinError: diskToo && Wizard.keyboardNonLatin && /[^\x20-\x7e]/.test(password.text) ? "For the disk too, use English (US) letters, numbers and symbols." : ""
-    readonly property bool passwordOk: keep ? !diskToo : (password.text !== "" && password.text === confirm.text && strength.score >= 1 && (!diskToo || strength.ok === true) && latinError === "")
+    readonly property bool passwordOk: keep ? !diskToo : (password.text !== "" && password.text === confirm.text && latinError === "")
+    // For tests (IPC state().step).
+    testState: ({
+            weak: weak,
+            disk_too: diskToo,
+            label: strength.label
+        })
 
     function suggest() {
         const name = fullName.text.trim();
@@ -194,8 +206,6 @@ StepPage {
             help: {
                 if (text === "")
                     return page.keep && page.diskToo ? "Type it again to use it for the disk too." : page.saved ? "Your password is saved. Leave this empty to keep it." : "";
-                if (page.diskTooWeak)
-                    return "To use it for the disk too, it needs to be Fair or better. Add another word or two.";
                 return page.strength.label;
             }
             error: Wizard.fieldErrors.password || page.latinError
@@ -246,6 +256,12 @@ StepPage {
             text: "Log in automatically"
             checked: page.autologin
             onToggled: page.autologin = checked
+        }
+        ArBanner {
+            visible: page.weak
+            width: parent.width
+            kind: "warning"
+            text: page.diskToo ? (page.opts.weak_disk_warning || "This password is easy to guess: someone who has your computer could read your files. You can still use it.") : (page.opts.weak_warning || "This password is easy to guess: someone at your computer could log in as you. You can still use it.")
         }
     }
 }

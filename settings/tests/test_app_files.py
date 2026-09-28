@@ -49,7 +49,8 @@ class SearchIndexTest(unittest.TestCase):
 
     def test_pages_exist(self):
         files = re.findall(r'file: "([A-Za-z]+\.qml)"', self.index)
-        self.assertEqual(sorted(files), sorted(self.pages))     # every page file is in the rail
+        # every *Page.qml is in the rail (other files there, like WallhavenBrowser.qml, are parts)
+        self.assertEqual(sorted(files), sorted(n for n in self.pages if n.endswith('Page.qml')))
         for name in files:
             self.assertIn(name, self.pages)
 

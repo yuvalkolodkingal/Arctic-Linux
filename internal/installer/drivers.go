@@ -122,7 +122,7 @@ func (in *Installer) prepareAkmods(ctx context.Context) error {
 	for _, k := range kvers {
 		pkgs = append(pkgs, "kernel-devel-matched-"+k)
 	}
-	res, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), AllowFail: true}))
+	res, err := in.runChroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), AllowFail: true})
 	if err != nil {
 		return err
 	}
@@ -140,9 +140,13 @@ func (in *Installer) prepareAkmods(ctx context.Context) error {
 }
 
 // waitAkmods waits for the build an akmod package's %posttrans started in the background
-// (it holds akmods' lock until it has installed the kmod package with dnf).
+// (it holds akmods' lock until it has installed the kmod package with dnf). The flock can
+// come before the background akmods has taken the lock, so whatever still works inside the
+// target (akmods, rpmbuild, dnf) is waited for too; otherwise it would keep running into
+// finalize and hold the new file system when LUKS is closed.
 func (in *Installer) waitAkmods(ctx context.Context) {
 	in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "flock", Args: []string{"-w", "1800", akmodsLockDir + "/akmods.lock", "true"}, AllowFail: true}))
+	in.waitTargetWork(ctx)
 }
 
 // akmodsBuild builds a driver for every kernel of the new system that has its development
@@ -204,7 +208,7 @@ func (in *Installer) buildDriver(ctx context.Context, m *catalog.Module) (string
 // kernel arguments.
 func (in *Installer) removeDriver(ctx context.Context, m *catalog.Module) {
 	in.skipped[m.ID] = true
-	in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "dnf", Args: append([]string{"remove", "-y"}, m.Primary().Packages...), AllowFail: true}))
+	in.runChroot(ctx, Cmd{Name: "dnf", Args: append([]string{"remove", "-y"}, m.Primary().Packages...), AllowFail: true})
 	if args := m.KernelArgs(in.lay.luks); len(args) > 0 {
 		in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "grubby", Args: []string{"--update-kernel=ALL", "--remove-args=" + strings.Join(args, " ")}, AllowFail: true}))
 	}

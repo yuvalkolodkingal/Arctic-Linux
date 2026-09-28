@@ -18,6 +18,9 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     startup-add COMMAND | --app DESKTOP-ID
     startup-remove INDEX
     displays                      outputs (wlr-randr --json, else mmsg) and saved monitor rules
+    display-arrange JSON [OP]     tidy a layout (touching, no overlap, from 0,0) after OP:
+                                  --move NAME X Y [--threshold PX] | --nudge NAME left|right|up|down
+                                  | --main NAME | --enable NAME | --disable NAME | --anchor NAME
     display-try JSON              apply a layout now (wlr-randr); it reverts by itself after 20 s
     display-keep                  keep it: written as monitorrule lines
     display-revert                go back to the layout from before display-try
@@ -33,6 +36,11 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     motion | motion-set on|off    reduced motion (arctic-motion)
     text-scale [FACTOR]           GTK text size (org.gnome.desktop.interface text-scaling-factor)
     wallpapers | wallpaper-set KEY                the shell's picker backend (wallpapers.py)
+    wallpaper-import PATH|URL…    copy pictures into your wallpaper folder (checked with Pillow)
+    wallpaper-delete PATH | wallpaper-rename PATH NAME     your own pictures only
+    wallhaven ARGS…               the Wallhaven browser (the shell's wallhaven.py: search, preview,
+                                  set, state, key, prefs); answers {"ok": false, "offline": true}
+                                  instead of failing when Wallhaven can't be reached
     updates | update-run now|apply|channel NAME|auto on|off                     (arctic-update)
     network | wifi on|off         NetworkManager status (nmcli)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
@@ -46,10 +54,12 @@ then `mango -c FILE -p` when Mango is installed) and backed up to
 import contextlib
 import fcntl
 import json
+import math
 import os
 import re
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -999,7 +1009,314 @@ def cmd_startup_remove(paths, args):
 
 # ---- displays -----------------------------------------------------------------------------------
 
+# wl_output transforms in their enum order: Mango's monitorrule `rr:` is the index (rr:1 = 90).
 TRANSFORMS = ['normal', '90', '180', '270', 'flipped', 'flipped-90', 'flipped-180', 'flipped-270']
+
+
+# ---- display arrangement (the Displays page's editor; pure geometry) -----------------------------
+#
+# Mango (wlroots) puts each display at x,y in logical pixels, where it takes the size of its mode,
+# turned for 90°/270°, divided by its scale. The pointer only goes from one display to the next
+# where their edges touch, and overlapping displays show the same part of the desktop, so a
+# layout is kept connected edge to edge without overlaps. XWayland misreads clicks at negative
+# positions (Mango's docs), so the top-left corner is 0,0. Mango has no primary display: the
+# pointer starts at 0,0, so the display there is where you start after login (focus, the first
+# windows, the launcher; Mango keeps XWayland's primary output on the focused display). That is
+# the "main" display here. The page only draws; each change to a layout goes through these.
+
+ROTATED = ('90', '270', 'flipped-90', 'flipped-270')
+CONTACT_PART = 8        # a snapped display shares at least 1/8 of the shorter of the two edges
+DIRECTIONS = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1), 'down': (0, 1)}
+
+
+def _f32(value):
+    """value in single precision, as wlroots' float arithmetic has it."""
+    return struct.unpack('f', struct.pack('f', value))[0]
+
+
+def logical_size(o):
+    """(width, height) a display takes in the layout, as wlroots' wlr_output_effective_resolution
+    computes it: the mode, turned for 90° and 270°, divided by the scale in single precision and
+    cut to whole pixels (2560 × 1600 at 150 % is 1706 × 1066). Without a mode (mmsg reports only
+    the logical size) the physical size is the estimate in physicalWidth/physicalHeight."""
+    width = int(o.get('width') or o.get('physicalWidth') or 0)
+    height = int(o.get('height') or o.get('physicalHeight') or 0)
+    if width <= 0 or height <= 0:
+        return max(1, int(o.get('logicalWidth') or 1)), max(1, int(o.get('logicalHeight') or 1))
+    if str(o.get('transform') or 'normal') in ROTATED:
+        width, height = height, width
+    scale = _f32(float(o.get('scale') or 1))
+    if scale <= 0:
+        scale = 1.0
+    return max(1, int(_f32(width / scale))), max(1, int(_f32(height / scale)))
+
+
+def _box(o):
+    width, height = logical_size(o)
+    return (int(o.get('x') or 0), int(o.get('y') or 0), width, height)
+
+
+def overlaps(a, b):
+    """Do two boxes (x, y, width, height) share any area?"""
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
+def contact(a, b):
+    """How long an edge two boxes share (0 when they don't touch, or only at a corner)."""
+    if a[0] + a[2] == b[0] or b[0] + b[2] == a[0]:
+        return max(0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
+    if a[1] + a[3] == b[1] or b[1] + b[3] == a[1]:
+        return max(0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
+    return 0
+
+
+def _gap(a, b):
+    """Distance between two boxes (0 when they touch or overlap)."""
+    dx = max(b[0] - (a[0] + a[2]), a[0] - (b[0] + b[2]), 0)
+    dy = max(b[1] - (a[1] + a[3]), a[1] - (b[1] + b[3]), 0)
+    return math.hypot(dx, dy)
+
+
+def _enabled(layout):
+    return [o for o in layout if o.get('enabled', True)]
+
+
+def _reached(boxes):
+    """Indexes of the boxes the pointer can reach from the first one, edge to edge (or through
+    an overlap, which layout_problems reports on its own)."""
+    reached, todo = {0}, [0]
+    while boxes and todo:
+        i = todo.pop()
+        for j in range(len(boxes)):
+            if j not in reached and (contact(boxes[i], boxes[j]) > 0 or overlaps(boxes[i], boxes[j])):
+                reached.add(j)
+                todo.append(j)
+    return reached if boxes else set()
+
+
+def layout_problems(layout):
+    """[] for a good layout, else sentences: displays that overlap, displays cut off from the
+    first one (the pointer couldn't reach them)."""
+    on = [(o['name'], _box(o)) for o in _enabled(layout)]
+    problems = []
+    for i, (name_a, a) in enumerate(on):
+        for name_b, b in on[i + 1:]:
+            if overlaps(a, b):
+                problems.append('{} and {} overlap.'.format(name_a, name_b))
+    reached = _reached([box for _name, box in on])
+    problems += ['{} doesn’t touch the other displays.'.format(on[j][0]) for j in range(len(on)) if j not in reached]
+    return problems
+
+
+def main_output(layout):
+    """The display you start on: the one at the layout's top-left corner (Mango starts the
+    pointer at 0,0), or the one nearest to that corner when no display covers it (Mango moves
+    the pointer to the closest display). '' when every display is off."""
+    on = _enabled(layout)
+    if not on:
+        return ''
+    boxes = [_box(o) for o in on]
+    left, top = min(b[0] for b in boxes), min(b[1] for b in boxes)
+
+    def distance(b):
+        return math.hypot(max(b[0] - left, 0), max(b[1] - top, 0))
+    return on[min(range(len(on)), key=lambda i: (distance(boxes[i]), i))]['name']
+
+
+def _side(box, other):
+    """Which side of `other` box lies on, by their centres (right, left, below or above)."""
+    dx = (box[0] + box[2] / 2 - other[0] - other[2] / 2) / (box[2] + other[2])
+    dy = (box[1] + box[3] / 2 - other[1] - other[3] / 2) / (box[3] + other[3])
+    if abs(dx) >= abs(dy):
+        return 'right' if dx >= 0 else 'left'
+    return 'below' if dy >= 0 else 'above'
+
+
+def _spots(size, others, target):
+    """Places for a box of `size` along each side of each of `others`: the point of that side
+    nearest to `target`, and every place on it lined up with an edge or the centre of one of
+    them (or flush against one). Yields ((x, y), aligned, side, index of the box it touches,
+    the nearest point of that side)."""
+    w, h = size
+    xs, ys = set(), set()
+    for bx, by, bw, bh in others:
+        xs.update((bx, bx + bw - w, bx + (bw - w) // 2, bx - w, bx + bw))
+        ys.update((by, by + bh - h, by + (bh - h) // 2, by - h, by + bh))
+    for i, (bx, by, bw, bh) in enumerate(others):
+        need_y = max(1, min(h, bh) // CONTACT_PART)
+        need_x = max(1, min(w, bw) // CONTACT_PART)
+        for side, fixed, lo, hi, free, aligned in (
+                ('right', bx + bw, by - h + need_y, by + bh - need_y, target[1], ys),
+                ('left', bx - w, by - h + need_y, by + bh - need_y, target[1], ys),
+                ('below', by + bh, bx - w + need_x, bx + bw - need_x, target[0], xs),
+                ('above', by - h, bx - w + need_x, bx + bw - need_x, target[0], xs)):
+            flat = side in ('right', 'left')
+            near = min(max(free, lo), hi)
+            nearest = (fixed, near) if flat else (near, fixed)
+            for v in {near} | {v for v in aligned if lo <= v <= hi}:
+                yield ((fixed, v) if flat else (v, fixed)), v in aligned, side, i, nearest
+
+
+def default_threshold(size):
+    """How far (logical px) a display jumps to line up with another: 1/20 of its longer side."""
+    return max(16, max(size) // 20)
+
+
+def snap_position(size, others, target, threshold=None, bound=None, prefer=None):
+    """Where a box of `size` dropped at `target` goes: the nearest place where it touches one of
+    `others` along an edge (at least 1/8 of it) without overlapping any. A place lined up with
+    their edges or centres wins when it is within `threshold` px of that along the edge.
+    bound=(x, y): not left of x nor above y. prefer=a box: places on the side of each neighbour
+    that box was on come first (so a display that was right of another stays right of it)."""
+    w, h = size
+    target = (int(round(target[0])), int(round(target[1])))
+    threshold = default_threshold(size) if threshold is None else threshold
+    best = None
+    for (x, y), aligned, side, i, nearest in _spots(size, others, target):
+        if bound and (x < bound[0] or y < bound[1]):
+            continue
+        if any(overlaps((x, y, w, h), b) for b in others):
+            continue
+        away = 0 if prefer is None or _side(prefer, others[i]) == side else 1
+        # How far to that side, then along it; lining up is worth `threshold` along the edge.
+        along = abs(x - nearest[0]) + abs(y - nearest[1])
+        score = math.hypot(nearest[0] - target[0], nearest[1] - target[1]) + along - (threshold if aligned else 0)
+        key = (away, score, not aligned, y, x)
+        if best is None or key < best[0]:
+            best = (key, (x, y))
+    if best:
+        return best[1]
+    # Never reached with a bound at a box's corner, but to be safe: right of everything.
+    right = max(others, key=lambda b: b[0] + b[2])
+    return right[0] + right[2], right[1]
+
+
+def _fits(box, placed, bound):
+    return (not bound or (box[0] >= bound[0] and box[1] >= bound[1])) \
+        and not any(overlaps(box, b) for b in placed) and any(contact(box, b) > 0 for b in placed)
+
+
+def normalize_layout(layout, anchor=None, main=None):
+    """A tidy copy of layout: the displays that are on touch edge to edge without overlapping,
+    and the top-left corner is 0,0. `anchor` keeps its place and the others settle around it
+    (default: the main display): one that touches a settled display without overlapping keeps
+    its place; otherwise it moves to the nearest free place next to them, on the side it was
+    on. The main display stays the main one (it keeps the top-left corner); `main` makes a
+    given display the main one instead. Each display gets logicalWidth, logicalHeight and main.
+    A layout that is already tidy only moves to 0,0."""
+    items = [dict(o) for o in layout]
+    for o in items:
+        o['x'], o['y'] = int(o.get('x') or 0), int(o.get('y') or 0)
+    on = _enabled(items)
+    if on:
+        names = [o['name'] for o in on]
+        forced = main in names
+        main = main if forced else main_output(items)
+        first = on[names.index(main)]
+        left, top = min(o['x'] for o in on), min(o['y'] for o in on)
+        corner = (first['x'], first['y'])
+        bound = corner if forced or corner == (left, top) else None
+        start = on[names.index(anchor)] if anchor in names else first
+        boxes = [_box(start)]
+        rest = [o for o in on if o is not start]
+        while rest:
+            fits = [o for o in rest if _fits(_box(o), boxes, bound)]
+            if fits:
+                o = fits[0]
+            else:
+                o = min(rest, key=lambda p: min(_gap(_box(p), b) for b in boxes))
+                box = _box(o)
+                o['x'], o['y'] = snap_position(box[2:], boxes, box[:2], bound=bound, prefer=box)
+            rest.remove(o)
+            boxes.append(_box(o))
+        left, top = min(b[0] for b in boxes), min(b[1] for b in boxes)
+        for o in items:
+            o['x'] -= left
+            o['y'] -= top
+    main = main_output(items)
+    for o in items:
+        o['logicalWidth'], o['logicalHeight'] = logical_size(o)
+        o['main'] = o['name'] == main
+    return items
+
+
+def _output(layout, name, enabled=None):
+    for o in layout:
+        if o.get('name') == name:
+            if enabled and not o.get('enabled', True):
+                raise Failure('{} is off.'.format(name))
+            return o
+    raise Failure('{} isn’t connected.'.format(name))
+
+
+def snap_output(layout, name, x, y, threshold=None):
+    """Drop display `name` at x,y (logical px, in the layout's coordinates): it goes to the
+    nearest place touching another display (snap_position), and displays it no longer connected
+    settle next to the rest."""
+    items = [dict(o) for o in layout]
+    moving = _output(items, name, enabled=True)
+    others = [_box(o) for o in _enabled(items) if o is not moving]
+    if others:
+        moving['x'], moving['y'] = snap_position(logical_size(moving), others, (x, y), threshold)
+    return normalize_layout(items, anchor=name)
+
+
+def nudge_output(layout, name, direction):
+    """An arrow key on display `name`: it moves a step (1/10 of its size) that way along the
+    edge it sits on, stopping where it lines up with an edge or centre of another display, and
+    goes round a corner at the end of the edge; places where every display still touches the
+    rest come first. It stays where it is when there's no place that way."""
+    if direction not in DIRECTIONS:
+        raise Failure('Move a display left, right, up or down.')
+    items = [dict(o) for o in layout]
+    moving = _output(items, name, enabled=True)
+    box = _box(moving)
+    others = [_box(o) for o in _enabled(items) if o is not moving]
+    dx, dy = DIRECTIONS[direction]
+    step = max(8, (box[3] if dy else box[2]) // 10)
+    best = None
+    for (x, y), _aligned, _where, _i, _nearest in _spots(box[2:], others, (box[0] + dx * step, box[1] + dy * step)):
+        moved = (x, y) + box[2:]
+        if any(overlaps(moved, b) for b in others):
+            continue
+        along = (x - box[0]) * dx + (y - box[1]) * dy
+        across = abs((x - box[0]) * dy) + abs((y - box[1]) * dx)
+        cut_off = len(_reached([moved] + others)) <= len(others)
+        key = (cut_off, along + 2 * across, y, x)
+        if along > 0 and (best is None or key < best[0]):
+            best = (key, (x, y))
+    if best:
+        moving['x'], moving['y'] = best[1]
+    return normalize_layout(items, anchor=name)
+
+
+def make_main(layout, name):
+    """Make `name` the main display (where you start; Mango has no other notion of primary):
+    it trades places with the display at the top-left corner, and the others settle round."""
+    items = [dict(o) for o in layout]
+    new = _output(items, name, enabled=True)
+    old = _output(items, main_output(items))
+    if new is not old:
+        (new['x'], new['y']), (old['x'], old['y']) = (old['x'], old['y']), (new['x'], new['y'])
+    return normalize_layout(items, anchor=name, main=name)
+
+
+def set_output_enabled(layout, name, enabled):
+    """Switch a display on (it joins at the right of the others) or off (the rest close up).
+    The last display that is on can't be switched off."""
+    items = [dict(o) for o in layout]
+    target = _output(items, name)
+    if enabled and not target.get('enabled', True):
+        boxes = [_box(o) for o in _enabled(items)]
+        target['enabled'] = True
+        if boxes:
+            target['x'] = max(b[0] + b[2] for b in boxes)
+            target['y'] = min(b[1] for b in boxes)
+    elif not enabled and target.get('enabled', True):
+        if len(_enabled(items)) == 1:
+            raise Failure('At least one display has to stay on.')
+        target['enabled'] = False
+    return normalize_layout(items)
 
 
 def list_outputs():
@@ -1017,10 +1334,13 @@ def list_outputs():
         if code == 0:
             try:
                 monitors = json.loads(out).get('monitors', [])
+                # No mode (width 0 = keep it); the physical size is estimated for the editor.
                 return [dict(name=m.get('name', ''), description='', make='', model='', enabled=True,
                              modes=[], width=0, height=0, refresh=0, x=m.get('x', 0), y=m.get('y', 0),
                              scale=m.get('scale', 1), transform='normal', adaptiveSync=bool(m.get('is_vrr')),
-                             logicalWidth=m.get('width', 0), logicalHeight=m.get('height', 0))
+                             logicalWidth=m.get('width', 0), logicalHeight=m.get('height', 0),
+                             physicalWidth=round(m.get('width', 0) * (m.get('scale') or 1)),
+                             physicalHeight=round(m.get('height', 0) * (m.get('scale') or 1)))
                         for m in monitors], 'mmsg'
             except (ValueError, AttributeError):
                 pass
@@ -1031,40 +1351,98 @@ def normalise_wlr(o):
     modes = [dict(width=m['width'], height=m['height'], refresh=round(float(m.get('refresh', 0)), 3),
                   preferred=bool(m.get('preferred')), current=bool(m.get('current')))
              for m in o.get('modes', [])]
-    current = next((m for m in modes if m['current']), modes[0] if modes else None)
+    # A display that is off has no current mode: it would come back in its preferred one.
+    current = next((m for m in modes if m['current']), None) or \
+        next((m for m in modes if m['preferred']), modes[0] if modes else None)
     pos = o.get('position') or {}
-    scale = float(o.get('scale') or 1)
-    transform = o.get('transform') or 'normal'
-    width = current['width'] if current else 0
-    height = current['height'] if current else 0
-    if transform in ('90', '270', 'flipped-90', 'flipped-270'):
-        width, height = height, width
-    return dict(name=o.get('name', ''), description=o.get('description', ''), make=o.get('make') or '',
+    item = dict(name=o.get('name', ''), description=o.get('description', ''), make=o.get('make') or '',
                 model=o.get('model') or '', serial=o.get('serial') or '', enabled=bool(o.get('enabled', True)),
                 modes=modes, width=current['width'] if current else 0, height=current['height'] if current else 0,
                 refresh=current['refresh'] if current else 0, x=int(pos.get('x', 0)), y=int(pos.get('y', 0)),
-                scale=scale, transform=transform, adaptiveSync=bool(o.get('adaptive_sync')),
-                logicalWidth=round(width / scale) if scale else width,
-                logicalHeight=round(height / scale) if scale else height)
+                scale=float(o.get('scale') or 1), transform=o.get('transform') or 'normal',
+                adaptiveSync=bool(o.get('adaptive_sync')))
+    item['logicalWidth'], item['logicalHeight'] = logical_size(item)
+    return item
+
+
+EDIT_KEYS = ('name', 'enabled', 'width', 'height', 'refresh', 'x', 'y', 'scale', 'transform', 'adaptiveSync',
+             'logicalWidth', 'logicalHeight', 'physicalWidth', 'physicalHeight')
 
 
 def cmd_displays(paths, _args):
+    """The displays as they are (outputs), and the same layout tidied for the editor (arranged:
+    only what a layout holds; the same unless displays overlap or don't touch)."""
     outputs, backend = list_outputs()
     pending = read_text(paths.display_pending)
-    return dict(ok=True, outputs=outputs, backend=backend, rules=load_settings(paths).monitors,
+    main = main_output(outputs)
+    for o in outputs:
+        o['main'] = o['name'] == main
+    arranged = normalize_layout([{k: o[k] for k in EDIT_KEYS if k in o} for o in outputs])
+    return dict(ok=True, outputs=outputs, arranged=arranged, main=main, problems=layout_problems(outputs),
+                backend=backend, rules=load_settings(paths).monitors,
                 canApply=backend in ('wlr-randr', 'mmsg'), canChangeMode=backend == 'wlr-randr',
                 pending=bool(pending), revertAfter=REVERT_AFTER)
 
 
-def check_layout(outputs):
-    """Validate a display layout from the app; returns it cleaned (positions from 0,0)."""
-    if not isinstance(outputs, list) or not outputs:
+def _layout_arg(text):
+    try:
+        layout = json.loads(text)
+    except ValueError:
+        raise Failure('The display settings came in garbled.') from None
+    if not isinstance(layout, list) or not layout or not all(isinstance(o, dict) for o in layout):
+        raise Failure('No displays to set up.')
+    return layout
+
+
+def cmd_display_arrange(paths, args):
+    """The editor's moves (nothing is applied): the layout after one of --move NAME X Y
+    [--threshold PX], --nudge NAME DIRECTION, --main NAME, --enable NAME, --disable NAME,
+    --anchor NAME (NAME changed size: the others settle around it), or none (just tidy it)."""
+    if not args:
+        raise Failure('No displays to set up.')
+    layout = check_layout(_layout_arg(args[0]), tidy=False)
+    rest = list(args[1:])
+    threshold = None
+    if '--threshold' in rest:
+        i = rest.index('--threshold')
+        try:
+            threshold = max(0, int(float(rest[i + 1])))
+        except (IndexError, ValueError):
+            raise Failure('The snapping distance isn’t a number.') from None
+        del rest[i:i + 2]
+    op, names = (rest[0], rest[1:]) if rest else ('', [])
+    try:
+        if op == '--move' and len(names) == 3:
+            layout = snap_output(layout, names[0], float(names[1]), float(names[2]), threshold)
+        elif op == '--nudge' and len(names) == 2:
+            layout = nudge_output(layout, names[0], names[1])
+        elif op == '--main' and len(names) == 1:
+            layout = make_main(layout, names[0])
+        elif op in ('--enable', '--disable') and len(names) == 1:
+            layout = set_output_enabled(layout, names[0], op == '--enable')
+        elif op == '--anchor' and len(names) == 1:
+            layout = normalize_layout(layout, anchor=names[0])
+        elif not op:
+            layout = normalize_layout(layout)
+        else:
+            raise Failure('Settings asked for a display move it doesn’t know.')
+    except ValueError:
+        raise Failure('That position isn’t a number.') from None
+    return dict(ok=True, outputs=layout, main=main_output(layout), problems=layout_problems(layout))
+
+
+def check_layout(outputs, tidy=True):
+    """Validate a display layout from the app; returns it cleaned and, with tidy, arranged
+    (normalize_layout: touching, no overlaps, from 0,0; a tidy layout only moves to 0,0)."""
+    if not isinstance(outputs, list) or not outputs or not all(isinstance(o, dict) for o in outputs):
         raise Failure('No displays to set up.')
     clean = []
     for o in outputs:
         name = str(o.get('name', ''))
         if not RE_OUTPUT.match(name):
             raise Failure('That display name isn’t valid.')
+        if any(c['name'] == name for c in clean):
+            raise Failure('{} is in the layout twice.'.format(name))
         item = dict(name=name, enabled=bool(o.get('enabled', True)))
         try:
             item['width'] = int(o.get('width') or 0)       # 0: keep the current mode
@@ -1073,6 +1451,10 @@ def check_layout(outputs):
             item['x'] = int(o.get('x', 0))
             item['y'] = int(o.get('y', 0))
             item['scale'] = round(float(o.get('scale') or 1), 3)
+            # Without a mode (mmsg), the size the editor knows the display by.
+            for key in ('logicalWidth', 'logicalHeight', 'physicalWidth', 'physicalHeight'):
+                if o.get(key):
+                    item[key] = min(max(int(o[key]), 1), 65536)
         except (KeyError, TypeError, ValueError):
             raise Failure('The display settings for {} are incomplete.'.format(name)) from None
         if (item['width'] or item['height']) and not (320 <= item['width'] <= 16384 and 200 <= item['height'] <= 16384):
@@ -1087,16 +1469,13 @@ def check_layout(outputs):
         item['transform'] = transform
         item['adaptiveSync'] = bool(o.get('adaptiveSync', False))
         clean.append(item)
+        if not all(abs(item[key]) <= 1 << 20 for key in ('x', 'y')):
+            raise Failure('{} is too far away.'.format(name))
     enabled = [o for o in clean if o['enabled']]
     if not enabled:
         raise Failure('At least one display has to stay on.')
     # XWayland misreads clicks with negative positions (Mango docs): start at 0,0.
-    min_x = min(o['x'] for o in enabled)
-    min_y = min(o['y'] for o in enabled)
-    for o in clean:
-        o['x'] -= min_x
-        o['y'] -= min_y
-    return clean
+    return normalize_layout(clean) if tidy else clean
 
 
 def wlr_randr_args(layout):
@@ -1126,10 +1505,7 @@ def snapshot(outputs):
 
 
 def cmd_display_try(paths, args):
-    try:
-        layout = check_layout(json.loads(args[0] if args else '[]'))
-    except ValueError:
-        raise Failure('The display settings came in garbled.') from None
+    layout = check_layout(_layout_arg(args[0] if args else '[]'))
     outputs, backend = list_outputs()
     before = snapshot(outputs)
     known = {o['name'] for o in outputs}
@@ -1167,18 +1543,26 @@ def cmd_display_try(paths, args):
                          start_new_session=True)
     except OSError:
         pass
-    return dict(ok=True, token=token, revertAfter=REVERT_AFTER, backend=backend or 'config')
+    return dict(ok=True, token=token, revertAfter=REVERT_AFTER, backend=backend or 'config', layout=layout)
 
 
 def set_monitor_rules(model, layout):
-    """Save the layout as monitor rules. A display switched off is never saved as `disable:1`:
-    Mango applies that rule whenever the output appears, even when it is the only screen (a
-    laptop started without its dock would come up dark). Off lasts for this session only; the
-    display keeps its earlier rule, if any, without a disable key. Returns the displays that
-    are off for this session only."""
+    """Save the layout as monitor rules (Mango 0.17.3 reads them in src/config/parse_config.c,
+    parse_option: name is a regex, x/y are logical px, rr is the wl_output transform, and a mode
+    is used only with width, height and refresh; src/manage/monitor.c applies them). The main
+    display's rule comes first, then the others top to bottom, left to right, then the rules of
+    displays that aren't connected now (or are off): as they were, but without x/y where they
+    would overlap this layout.
+
+    A display switched off is never saved as `disable:1`: Mango applies that rule whenever the
+    output appears, even when it is the only screen (a laptop started without its dock would
+    come up dark). Off lasts for this session only; the display keeps its earlier rule, if any,
+    without a disable key. Returns the displays that are off for this session only."""
     rules = {r['name']: r for r in model.monitors}
     session_only = []
-    for o in layout:
+    main = main_output(layout)
+    placed = []
+    for o in sorted(layout, key=lambda o: (o['name'] != main, o['y'], o['x'])):
         if not o['enabled']:
             session_only.append(o['name'])
             if o['name'] in rules:
@@ -1190,8 +1574,20 @@ def set_monitor_rules(model, layout):
             rule.update(width=o['width'], height=o['height'])
             if o.get('refresh'):
                 rule['refresh'] = float(o['refresh'])
-        rules[o['name']] = rule
-    model.monitors = list(rules.values())
+        rules.pop(o['name'], None)
+        placed.append(rule)
+    # A display that isn't connected now (the monitor at home, while at work) or is off keeps
+    # its rule; where its saved place would overlap the layout just kept, it loses x/y, and Mango
+    # puts it right of the others when it comes back, instead of on top of one.
+    boxes = [_box(dict(rule, transform=TRANSFORMS[rule['rr']])) for rule in placed]
+    for name, rule in list(rules.items()):
+        if 'x' not in rule or 'y' not in rule or not rule.get('width'):
+            continue
+        box = _box(dict(rule, transform=TRANSFORMS[min(max(int(rule.get('rr', 0)), 0), 7)]))
+        if any(overlaps(box, b) for b in boxes):
+            rules[name] = {k: v for k, v in rule.items() if k not in ('x', 'y')}
+    model.monitors = placed + list(rules.values())
+    session_only.sort(key=[o['name'] for o in layout].index)
     return session_only
 
 
@@ -1885,6 +2281,54 @@ def cmd_wallpaper_set(paths, args):
     return dict(ok=True, current=args[0])
 
 
+def _wallpaper_files(paths, argv, what):
+    script = shell_script(paths, 'wallpapers.py')
+    if not script:
+        raise Failure('The shell’s wallpaper picker isn’t installed.')
+    code, out, _err = run([sys.executable, str(script)] + argv, timeout=120)
+    data = _loads(out) or {}
+    if code != 0 or not data.get('ok'):
+        raise Failure(data.get('error') or 'The picture couldn’t be {}.'.format(what))
+    return data
+
+
+def cmd_wallpaper_import(paths, args):
+    if not args:
+        raise Failure('usage: wallpaper-import PATH|URL…')
+    return _wallpaper_files(paths, ['import'] + list(args), 'added')
+
+
+def cmd_wallpaper_delete(paths, args):
+    if len(args) != 1:
+        raise Failure('usage: wallpaper-delete PATH')
+    return _wallpaper_files(paths, ['delete', args[0]], 'deleted')
+
+
+def cmd_wallpaper_rename(paths, args):
+    if len(args) != 2:
+        raise Failure('usage: wallpaper-rename PATH NAME')
+    return _wallpaper_files(paths, ['rename', args[0], args[1]], 'renamed')
+
+
+WALLHAVEN_TIMEOUTS = {'search': 90, 'preview': 60, 'download': 300, 'set': 300}
+
+
+def cmd_wallhaven(paths, args):
+    """The Wallhaven browser: every network call happens in wallhaven.py. Its answer comes
+    back as is (so the page can show "offline" or "wait N s" in place, not as an error)."""
+    script = shell_script(paths, 'wallhaven.py')
+    if not script:
+        return dict(ok=False, available=False, error='The Wallhaven browser isn’t installed.')
+    if not args or args[0] not in ('search', 'preview', 'download', 'set', 'state', 'key', 'prefs'):
+        raise Failure('usage: wallhaven search|preview|download|set|state|key|prefs …')
+    code, out, err = run([sys.executable, str(script)] + list(args), timeout=WALLHAVEN_TIMEOUTS.get(args[0], 30))
+    data = _loads(out)
+    if not isinstance(data, dict):
+        raise Failure(strip_ansi(err).strip().splitlines()[-1] if err.strip() else 'Wallhaven didn’t answer in time.')
+    data.setdefault('ok', code == 0)
+    return data
+
+
 # ---- arctic-update ------------------------------------------------------------------------------
 
 def cmd_updates(paths, _args):
@@ -2061,7 +2505,7 @@ def cmd_about(paths, _args):
             code, out, _err = run(argv, timeout=5)
             match = re.search(r'\d+\.\d+(\.\d+)?', out or '')
             versions[name] = match.group(0) if code == 0 and match else ''
-    home = osr.get('HOME_URL', 'https://github.com/yuvalkolodkingal/O-Tism')
+    home = osr.get('HOME_URL', 'https://github.com/yuvalkolodkingal/Arctic-Linux')
     return dict(ok=True, name=osr.get('NAME', 'Arctic Linux'), version=osr.get('VERSION_ID', ''),
                 pretty=osr.get('PRETTY_NAME', ''), fedora=fedora, kernel=os.uname().release,
                 hostname=os.uname().nodename, cpu=cpu, cores=cores, memory=mem_kb * 1024, disks=disks,
@@ -2104,13 +2548,16 @@ COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
-    'displays': cmd_displays, 'display-try': cmd_display_try, 'display-keep': cmd_display_keep,
+    'displays': cmd_displays, 'display-arrange': cmd_display_arrange, 'display-try': cmd_display_try,
+    'display-keep': cmd_display_keep,
     'display-revert': cmd_display_revert, 'display-forget': cmd_display_forget, 'devices': cmd_devices,
     'power-profile': cmd_power_profile, 'apps': cmd_apps, 'app-set': cmd_app_set, 'idle': cmd_idle,
     'idle-set': cmd_idle_set, 'keyboard-data': cmd_keyboard_data, 'cursor-themes': cmd_cursor_themes,
     'theme': cmd_theme, 'theme-set': cmd_theme_set, 'theme-auto': cmd_theme_auto, 'theme-mode': cmd_theme_mode,
     'motion': cmd_motion, 'motion-set': cmd_motion_set, 'text-scale': cmd_text_scale,
-    'wallpapers': cmd_wallpapers, 'wallpaper-set': cmd_wallpaper_set, 'updates': cmd_updates,
+    'wallpapers': cmd_wallpapers, 'wallpaper-set': cmd_wallpaper_set, 'wallpaper-import': cmd_wallpaper_import,
+    'wallpaper-delete': cmd_wallpaper_delete, 'wallpaper-rename': cmd_wallpaper_rename, 'wallhaven': cmd_wallhaven,
+    'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
 }

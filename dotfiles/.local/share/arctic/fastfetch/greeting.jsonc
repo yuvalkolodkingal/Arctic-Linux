@@ -1,0 +1,36 @@
+// Arctic Linux — the info column of arctic-fetch, the fox greeting a new terminal opens with
+// (docs/wiki/Terminal-and-Shell.md). arctic-fetch draws the fox and runs
+//   fastfetch --config <this file> --logo none --pipe false
+// for the lines beside it: ~/.local/share/arctic/fastfetch/greeting.jsonc if you have one,
+// else /usr/share/arctic/fastfetch/greeting.jsonc.
+//
+// Keys are padded with spaces rather than aligned by fastfetch (display.key.width moves the
+// cursor to an absolute column, which would land inside the fox). Colours are the terminal's
+// palette slots, as the fox's (design/guidelines/30-terminal-and-fetch.md): user amber (3) bold,
+// keys glacier (6), the rule and dim text 8; the terminal's palette follows the theme. The shell
+// line is your login shell ($SHELL), from arctic-fetch: fastfetch would name arctic-fetch's bash.
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": null,
+  "display": {
+    "separator": "",
+    "brightColor": false,
+    "hideCursor": false,
+    "disableLinewrap": false,
+    "color": { "keys": "cyan", "title": "yellow" }
+  },
+  "modules": [
+    { "type": "title", "color": { "user": "bold_yellow", "at": "light_black", "host": "bold_default" } },
+    { "type": "separator", "string": "─", "outputColor": "light_black", "times": 20 },
+    { "type": "os", "key": "os     ", "format": "{name} {version-id}" },
+    { "type": "command", "key": "base   ", "text": "arctic-fetch --info base" },
+    { "type": "kernel", "key": "kernel ", "format": "{release}" },
+    { "type": "command", "key": "wm     ", "text": "arctic-fetch --info wm", "format": "{result} {#light_black}· Wayland" },
+    { "type": "wm", "key": "wm     ", "format": "{pretty-name}", "condition": { "succeeded": false } },
+    { "type": "command", "key": "shell  ", "text": "arctic-fetch --info shell" },
+    { "type": "terminal", "key": "term   " },
+    { "type": "command", "key": "theme  ", "text": "arctic-fetch --info theme" },
+    { "type": "uptime", "key": "uptime ", "format": "{?days}{days} d {?}{?hours}{hours} h {?}{/days}{minutes} min{/}" },
+    { "type": "colors", "symbol": "background" }
+  ]
+}
