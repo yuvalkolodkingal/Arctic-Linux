@@ -37,7 +37,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `.config/mango/arctic/binds.conf` | Every shortcut (cheat sheet: `Super + /`) | Accessibility → Keyboard |
 | `.config/mango/arctic/apps.conf` | `Super+Enter/W/E/F` → your terminal, browser, editor, file manager via `arctic-open` | — |
 | `.config/mango/arctic/rules.conf` | Floating dialogs, full-screen installer, layer rules for blur and animation | — |
-| `.config/mango/arctic/autostart.conf` | Theme, the shell (bar, launcher, OSD, lock, polkit agent), notifications, network applet, clipboard, idle lock, live welcome | — |
+| `.config/mango/arctic/autostart.conf` | Theme, the shell (bar and its menus, launcher, OSD, lock, polkit agent), notifications, network applet (fallback desktop only), clipboard, idle lock, live welcome | — |
 | `.config/arctic/shell.json` | Shell settings: `{"frame": true}` (the rounded screen frame) | — |
 | `.config/waybar/` | **Fallback bar** (`ARCTIC_SHELL=waybar`): the same TopBar in waybar | TopBar, LiveDesktop |
 | `.config/fuzzel/fuzzel.ini` | **Fallback launcher**: 520px frosted card, 20px radius, amber-soft selection | Launcher |
@@ -136,8 +136,9 @@ tries the shell first and falls back on its own, so keybinds are the same either
 - **Launcher and popovers** hang from the bar and can be docked to any screen edge (from the
   original Quickshell setup) rather than floating 120px below it; the screen frame is also the
   original shell's.
-- **Bar keyboard access:** the design's `Super + B` bar focus isn't there yet. Everything on the
-  bar also has its own shortcut.
+- **Bar keyboard access** is `Super + Alt + B` rather than the design's `Super + B` (the browser's
+  key since 0.3); every menu on the bar also has its own shortcut (`Super + A`,
+  `Super + Ctrl + W/B/A/P/D/T/M`).
 - **Lock screen:** "N notifications hidden" isn't shown, because mako can't count hidden
   notifications.
 - **Fallback only:** waybar's workspaces use `ext/workspaces` (Fedora's waybar 0.15 has no
