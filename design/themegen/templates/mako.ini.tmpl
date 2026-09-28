@@ -20,6 +20,9 @@ layer=overlay
 anchor=top-right
 max-visible=4
 format=<b>%s</b>\n<span color="{{ink-muted|hex}}">%b</span>
+# Left click runs a notification's main action (a screenshot opens); middle click lists its
+# other actions (Show in Files, Edit, Move to Trash…) in fuzzel.
+on-button-middle=exec makoctl menu -n "$id" -- fuzzel --dmenu --prompt "Action  "
 
 [hidden]
 format=<span color="{{ink-subtle|hex}}">%h more</span>
