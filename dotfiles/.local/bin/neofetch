@@ -1,0 +1,75 @@
+#!/bin/sh
+# neofetch — the classic neofetch screen, drawn by fastfetch (Arctic Linux; ARCTIC-NEOFETCH-WRAPPER).
+#
+# neofetch itself is no longer developed and Fedora 44 doesn't ship it; fastfetch draws the
+# same thing faster: user@host, a rule, OS, Host, Kernel, Uptime, Packages, Shell, Resolution,
+# DE, WM, WM Theme, Theme, Icons, Terminal, Terminal Font, CPU, GPU, Memory and the colour
+# blocks, with the Arctic fox on the left in the active theme's colours.
+#
+#   neofetch [fastfetch options…]    e.g. neofetch --logo none, neofetch --pipe
+#   neofetch --stdout | --off        neofetch's own "no colours, no logo" / "no logo"
+#
+# The layout, first one found:
+#   ~/.config/fastfetch/neofetch.jsonc                       your own
+#   ~/.config/arctic/current/fastfetch/neofetch.jsonc        the active theme's
+#   /usr/share/arctic/themes/polar-night/fastfetch/neofetch.jsonc
+#   fastfetch's own "neofetch" preset
+#
+# A real neofetch wins: when another neofetch is on your PATH (Nix, a COPR, pip…), this runs
+# it instead. The package installs this file as /usr/libexec/arctic/neofetch and links
+# /usr/bin/neofetch to it only while no other package owns that name (docs/BUILD-SPEC.md §2).
+# NEOFETCH_ARCTIC=1 skips the search for a real one.
+
+self="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+
+# Another neofetch on PATH that isn't this wrapper (or a copy of it): hand over to it.
+real=""
+if [ "${NEOFETCH_ARCTIC:-0}" != 1 ]; then
+  IFS_OLD=$IFS
+  IFS=:
+  for dir in $PATH; do
+    [ -n "$dir" ] || continue
+    cand="$dir/neofetch"
+    [ -f "$cand" ] && [ -x "$cand" ] || continue
+    [ "$(readlink -f "$cand" 2>/dev/null)" = "$self" ] && continue
+    grep -q 'ARCTIC-NEOFETCH-WRAPPER' "$cand" 2>/dev/null && continue
+    real=$cand
+    break
+  done
+  IFS=$IFS_OLD
+fi
+if [ -n "$real" ]; then
+  NEOFETCH_ARCTIC=1 exec "$real" "$@"
+fi
+
+if ! command -v fastfetch >/dev/null 2>&1; then
+  echo "neofetch: this is Arctic Linux's neofetch, which needs fastfetch: sudo dnf install fastfetch" >&2
+  exit 127
+fi
+
+config="${XDG_CONFIG_HOME:-$HOME/.config}"
+layout=""
+for f in "$config/fastfetch/neofetch.jsonc" "$config/arctic/current/fastfetch/neofetch.jsonc" \
+         /usr/share/arctic/themes/polar-night/fastfetch/neofetch.jsonc; do
+  if [ -r "$f" ]; then layout=$f; break; fi
+done
+[ -n "$layout" ] || layout=neofetch
+
+# neofetch's own switches that people type out of habit.
+first=1
+for arg in "$@"; do
+  [ "$first" = 1 ] && { set --; first=0; }
+  case $arg in
+    --stdout) set -- "$@" --logo none --pipe true ;;
+    --off) set -- "$@" --logo none ;;
+    -v|--version)
+      printf 'neofetch (Arctic Linux): the neofetch layout drawn by %s\n' "$(fastfetch --version 2>/dev/null)"
+      exit 0 ;;
+    -h|--help)
+      sed -n '2,16p' "$self" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) set -- "$@" "$arg" ;;
+  esac
+done
+
+exec fastfetch --config "$layout" "$@"
