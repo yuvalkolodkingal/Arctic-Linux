@@ -129,7 +129,7 @@ case "${1:-}" in
     last="$(power_source)"
     [[ -n "$last" ]] || exit 0
     # A battery reports its charge every minute or so: restart only when the source changes.
-    udevadm monitor --udev --subsystem-match=power_supply 2>/dev/null | while read -r line; do
+    udevadm monitor --udev --subsystem-match=power_supply 2>/dev/null 9>&- | while read -r line; do
       [[ "$line" == UDEV* ]] || continue
       now="$(power_source)"
       [[ "$now" == "$last" ]] && continue
