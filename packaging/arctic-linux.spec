@@ -213,9 +213,14 @@ Requires:       snapper
 Requires:       btrfs-progs
 Requires:       findutils
 # Stream 4 (shortcuts and capture): gio and gdbus for the screenshot notification's buttons
-# (open, show in Files, move to the trash); swappy edits screenshots (satty isn't in Fedora).
+# (open, show in Files, move to the trash); swappy edits screenshots (satty isn't in Fedora;
+# swappy's weak deps bring its icon font); wf-recorder records the screen (arctic-record);
+# tesseract (its data package brings English) and zxing-cpp read text and QR codes (arctic-ocr).
 Requires:       glib2
 Recommends:     swappy
+Recommends:     wf-recorder
+Recommends:     tesseract
+Recommends:     python3-zxing-cpp
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night

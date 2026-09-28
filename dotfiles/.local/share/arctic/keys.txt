@@ -49,6 +49,9 @@
     Shift + Print            Screenshot of this screen
     Super + Print            Screenshot of the window
     Ctrl + Print             An area to the clipboard only
+    Super + Ctrl + Print     Copy the text in an area
+    Super + Shift + C        Pick a colour
+    Super + Alt + R          Record the screen (again to stop)
 
   Touchpad
     3 fingers                Move focus

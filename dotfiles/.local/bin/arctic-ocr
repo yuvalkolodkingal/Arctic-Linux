@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# arctic-ocr — copy the text in an area of the screen (Super+Ctrl+Print), or with --qr what a QR
+# code in it says. Select the area as for a screenshot (drag, or click a window). tesseract reads
+# it in your language, your keyboard layouts' languages and English (arctic-capture ocr).
+#
+#   arctic-ocr          copy the text
+#   arctic-ocr --qr     copy the QR code (kept out of clipboard history: codes often carry
+#                       sign-in secrets or Wi-Fi passwords)
+set -uo pipefail
+
+usage() { sed -n '6,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+qr=0
+case "${1:-}" in
+  --qr) qr=1 ;;
+  "") ;;
+  *) usage ;;
+esac
+
+run="${XDG_RUNTIME_DIR:-/tmp}/arctic/capture"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/arctic"
+app="Copy text"; (( qr )) && app="QR code"
+
+field() {   # field KEY < {"ok":…} — one field of arctic-capture's answer ("" when missing)
+  python3 -c 'import json,sys
+try: v = json.load(sys.stdin).get(sys.argv[1], "")
+except ValueError: v = ""
+if isinstance(v, list): v = v[0] if v else ""
+print(int(v) if isinstance(v, bool) else v)' "$1"
+}
+
+say() { notify-send -a "$app" "$@" 2>/dev/null || true; }
+
+offer_install() {   # offer_install PACKAGE SUMMARY BODY — a notification with an Install button
+  local action
+  action="$(notify-send -a "$app" -A "install=Install" "$2" "$3" 2>/dev/null)"
+  [[ "$action" == install ]] && arctic-open terminal --hold -e sudo dnf install "$1"
+}
+
+open_link() {   # open_link URL BODY — "Link copied", with a button that opens it
+  local action
+  action="$(notify-send -a "$app" -A "open=Open link" "Link copied" "$2" 2>/dev/null)"
+  [[ "$action" == open ]] && gio open "$1"
+}
+
+detach() { ( exec 9>&-; "$@" ) </dev/null >/dev/null 2>&1 & disown; }
+
+# One selection at a time, shared with the other capture keys: the key again cancels it.
+mkdir -p "$run" && chmod 700 "$run"
+exec 9>"$run.lock"
+if ! flock -n 9; then pkill -x slurp; exit 0; fi
+
+sel="$(arctic-capture rects 2>/dev/null | slurp -d -f '%x,%y %wx%h' 2>/dev/null)" || exit 0
+[[ -n "$sel" ]] || exit 0
+tmp="$run/ocr-$$.png"
+trap 'rm -f -- "$tmp"' EXIT
+# Twice the logical size: tesseract reads small screen text much better enlarged.
+grim -s 2 -g "$sel" "$tmp" 2>/dev/null
+flock -u 9
+[[ -s "$tmp" ]] || { say "Couldn’t capture the screen" "grim didn’t return a picture."; exit 1; }
+
+if (( qr )); then
+  out="$(arctic-capture qr "$tmp")"
+else
+  out="$(arctic-capture ocr "$tmp")"
+fi
+code="$(field code <<<"$out")"
+
+if [[ "$code" == missing_tool ]]; then
+  tool="$(field tool <<<"$out")"
+  detach offer_install "$tool" "$(field error <<<"$out")" "Install $tool to read the screen."
+  exit 1
+fi
+
+if (( qr )); then
+  if [[ "$code" == not_found ]]; then say "No QR code found" "Select the whole code, a little larger than it."; exit 0; fi
+  [[ "$(field ok <<<"$out")" == 1 ]] || { say "Couldn’t read the QR code" "$(field error <<<"$out")"; exit 1; }
+  text="$(field codes <<<"$out")"
+  kind="$(field kind <<<"$out")"
+  shown="$(field shown <<<"$out")"
+  count="$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["codes"]))' <<<"$out")"
+  more=""; (( count > 1 )) && more=" ($count codes found, this is the first)"
+  # --sensitive keeps it out of cliphist (wl-clipboard marks it for password managers).
+  wl-copy --sensitive -- "$text" 2>/dev/null || wl-copy -- "$text"
+  case "$kind" in
+    url)     detach open_link "$text" "$shown$more" ;;
+    otpauth) say "Sign-in code copied" "It’s kept out of clipboard history.$more" ;;
+    wifi)    say "Wi-Fi details copied" "Network: $shown$more" ;;
+    *)       say "QR code copied" "$shown$more" ;;
+  esac
+  exit 0
+fi
+
+missing="$(field missing <<<"$out")"
+if [[ -n "$missing" ]] && [[ ! -e "$state/ocr-offered-$missing" ]]; then
+  # Your language isn't installed: say so once, with a button that installs it.
+  mkdir -p "$state" && : > "$state/ocr-offered-$missing"
+  name="$(field missing_name <<<"$out")"
+  detach offer_install "tesseract-langpack-$missing" "Read $name too?" \
+    "Text in $name is read once its language data is installed (tesseract-langpack-$missing)."
+fi
+if [[ "$code" == not_found ]]; then say "No text found in that area" "Select just the text, a little larger than it."; exit 0; fi
+[[ "$(field ok <<<"$out")" == 1 ]] || { say "Couldn’t read the text" "$(field error <<<"$out")"; exit 1; }
+text="$(field text <<<"$out")"
+lines="$(field lines <<<"$out")"
+wl-copy -- "$text"
+first="${text%%$'\n'*}"
+(( ${#first} > 80 )) && first="${first:0:79}…"
+suffix=""; (( lines > 1 )) && suffix=" ($lines lines)"
+say "Text copied" "$first$suffix"

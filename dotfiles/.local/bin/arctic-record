@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# arctic-record — record the screen (Super+Alt+R or Alt+Print; the same key stops it).
+# Click a monitor to record all of it, or drag an area. wf-recorder writes
+# ~/Videos/Screencasts/Screencast <date>.mp4 (or .webm) with the first encoder that works on this
+# computer: the graphics card's H.264, AV1 or VP9, else VP9 on the processor.
+#
+#   arctic-record toggle                     stop, or pick what to record and start
+#   arctic-record start [area|screen] [--audio none|desktop|mic]
+#   arctic-record stop
+#   arctic-record status [--json]            --json: one line, {"ok":true,"recording":…}
+# While recording, $XDG_RUNTIME_DIR/arctic/record.json holds the state (the bar reads it) and a
+# notification with a Stop button stays up. The log is $XDG_RUNTIME_DIR/arctic/record.log.
+set -uo pipefail
+
+usage() { sed -n '7,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+
+run="${XDG_RUNTIME_DIR:-/tmp}/arctic"
+state="$run/record.json"
+log="$run/record.log"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/arctic/record-codec"
+node=/dev/dri/renderD128
+mkdir -p "$run"
+
+field() {   # field KEY < JSON
+  python3 -c 'import json,sys
+try: v = json.load(sys.stdin).get(sys.argv[1], "")
+except ValueError: v = ""
+print(int(v) if isinstance(v, bool) else v)' "$1"
+}
+
+recording_pid() {   # the recorder's pid, when a recording is running (a stale state is removed)
+  [[ -f "$state" ]] || return 1
+  local pid; pid="$(field pid < "$state")"
+  if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then echo "$pid"; return 0; fi
+  rm -f -- "$state"
+  return 1
+}
+
+notify_close() {   # close a notification by id (any notification server)
+  [[ "${1:-}" =~ ^[0-9]+$ ]] || return 0
+  gdbus call --session --timeout 2 --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
+    --method org.freedesktop.Notifications.CloseNotification "$1" >/dev/null 2>&1 || true
+}
+
+status() {
+  local pid
+  if pid="$(recording_pid)"; then
+    if [[ "${1:-}" == --json ]]; then cat "$state"; else
+      printf 'Recording for %s s: %s\n' "$(( $(date +%s) - $(field started < "$state") ))" "$(field file < "$state")"
+    fi
+  else
+    if [[ "${1:-}" == --json ]]; then echo '{"ok": true, "recording": false}'; else echo "Not recording"; fi
+  fi
+}
+
+# The encoders to try, best first: "codec extension audio-codec extra arguments…".
+candidates() {
+  local driver=""
+  [[ -e "$node" ]] && driver="$(basename "$(readlink -f "/sys/class/drm/${node##*/}/device/driver" 2>/dev/null)")"
+  local cached=""
+  [[ -n "$driver" && -f "$cache" ]] && cached="$(sed -n "s/^$driver=//p" "$cache" | head -n1)"
+  local all=()
+  if [[ -e "$node" ]]; then
+    all+=("h264_vaapi mp4 aac -d $node" "av1_vaapi webm libopus -d $node" "vp9_vaapi webm libopus -d $node")
+  fi
+  all+=("libvpx-vp9 webm libopus -p deadline=realtime -p cpu-used=8 -p row-mt=1")
+  local c
+  if [[ -n "$cached" ]]; then
+    for c in "${all[@]}"; do [[ "${c%% *}" == "$cached" ]] && echo "$c"; done
+  fi
+  for c in "${all[@]}"; do [[ "${c%% *}" == "$cached" ]] || echo "$c"; done
+  echo "$driver" > "$run/record.driver"
+}
+
+audio_device() {   # audio_device desktop|mic — the PipeWire node wf-recorder's pulse backend opens
+  local target=@DEFAULT_AUDIO_SINK@ suffix=.monitor name
+  [[ "$1" == mic ]] && { target=@DEFAULT_AUDIO_SOURCE@; suffix=""; }
+  name="$(wpctl inspect "$target" 2>/dev/null | sed -n 's/^[ *]*node\.name = "\(.*\)"$/\1/p' | head -n1)"
+  [[ -n "$name" ]] && echo "$name$suffix"
+}
+
+start() {
+  local kind=area audio=none
+  while (( $# )); do
+    case "$1" in
+      area|screen) kind="$1" ;;
+      --audio) audio="${2:-}"; shift ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  case "$audio" in none|desktop|mic) ;; *) usage ;; esac
+  recording_pid >/dev/null && { echo "Already recording." >&2; exit 1; }
+  command -v wf-recorder >/dev/null 2>&1 || {
+    notify-send -a "Screen recording" "Screen recording isn’t installed" "Install the wf-recorder package." 2>/dev/null
+    exit 1; }
+
+  local geom=""
+  if [[ "$kind" == screen ]]; then
+    geom="$(arctic-capture output 2>/dev/null | field geometry)"
+  else
+    # One selection at a time, shared with the other capture keys: the key again cancels it.
+    mkdir -p "$run/capture" && chmod 700 "$run/capture"
+    exec 9>"$run/capture.lock"
+    if ! flock -n 9; then pkill -x slurp; exit 0; fi
+    # -o: a click takes the whole monitor; a drag takes an area.
+    geom="$(slurp -o -d 2>/dev/null)" || exit 0
+    exec 9>&-
+  fi
+  [[ -n "$geom" ]] || exit 0
+
+  local dir; dir="$(xdg-user-dir VIDEOS 2>/dev/null || echo "$HOME/Videos")/Screencasts"
+  mkdir -p "$dir"
+  local base; base="$dir/Screencast $(date '+%Y-%m-%d %H.%M.%S')"
+  local audio_args=() device=""
+  if [[ "$audio" != none ]]; then
+    device="$(audio_device "$audio")"
+    [[ -n "$device" ]] && audio_args=("--audio=$device")
+  fi
+
+  local line codec ext acodec pid="" file=""
+  : > "$log"
+  while read -r line; do
+    read -r codec ext acodec rest <<<"$line"
+    local extra=()
+    read -r -a extra <<<"$rest"
+    file="$base.$ext"
+    local args=(-y -f "$file" -g "$geom" -c "$codec" "${extra[@]}")
+    (( ${#audio_args[@]} )) && args+=("${audio_args[@]}" -C "$acodec")
+    echo "== wf-recorder ${args[*]}" >> "$log"
+    # A background job of a script isn't a process group leader, so setsid doesn't fork: $! is
+    # wf-recorder, in a session of its own that outlives this script.
+    setsid wf-recorder "${args[@]}" </dev/null >>"$log" 2>&1 &
+    pid=$!
+    disown
+    # The encoder works when wf-recorder is still running after a moment (one that can't start
+    # exits at once; the file itself stays empty until ffmpeg's first 32 KiB).
+    sleep 1.5
+    if kill -0 "$pid" 2>/dev/null; then
+      local driver; driver="$(cat "$run/record.driver" 2>/dev/null)"
+      if [[ -n "$driver" ]]; then
+        mkdir -p "${cache%/*}"
+        { grep -v "^$driver=" "$cache" 2>/dev/null; echo "$driver=$codec"; } > "$cache.new" && mv "$cache.new" "$cache"
+      fi
+      break
+    fi
+    kill "$pid" 2>/dev/null
+    rm -f -- "$file"
+    pid="" file=""
+  done < <(candidates)
+
+  if [[ -z "$pid" ]]; then
+    notify-send -a "Screen recording" -i dialog-error "Couldn’t start recording" \
+      "$(grep -v '^==' "$log" | tail -n1)" 2>/dev/null
+    exit 1
+  fi
+
+  python3 -c 'import json,sys,time
+pid, file, kind, audio, geometry, codec = sys.argv[1:]
+print(json.dumps(dict(ok=True, recording=True, pid=int(pid), started=int(time.time()), file=file, kind=kind,
+                      audio=audio, geometry=geometry, codec=codec)))' \
+    "$pid" "$file" "$kind" "$audio" "$geom" "$codec" > "$state.new" && mv "$state.new" "$state"
+
+  # A notification that stays while recording, with a Stop button; stop closes it.
+  (
+    notify-send -p -t 0 -a "Screen recording" -i media-record -A "stop=Stop recording" \
+      "Recording the screen" "Super + Alt + R stops it." 2>/dev/null | {
+      read -r id && printf '%s\n' "$id" > "$run/record.notification"
+      read -r action && [[ "$action" == stop ]] && "$0" stop
+    }
+  ) </dev/null >/dev/null 2>&1 &
+  echo "$!" > "$run/record.waiter"
+  disown
+}
+
+stop() {
+  local pid
+  pid="$(recording_pid)" || { echo "Not recording." >&2; return 0; }
+  local file geom started
+  file="$(field file < "$state")"
+  geom="$(field geometry < "$state")"
+  started="$(field started < "$state")"
+  local thumb="$run/record-thumb.png"
+  grim -g "$geom" -s 0.25 "$thumb" 2>/dev/null || thumb=""
+  kill -INT "$pid" 2>/dev/null
+  for _ in {1..50}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+  kill -0 "$pid" 2>/dev/null && kill -TERM "$pid" 2>/dev/null
+  rm -f -- "$state"
+  # The "Recording" notification: its waiter goes first, so closing it isn't read as a click.
+  local waiter; waiter="$(cat "$run/record.waiter" 2>/dev/null)"
+  [[ "$waiter" =~ ^[0-9]+$ && "$waiter" != "$PPID" ]] && pkill -P "$waiter" notify-send 2>/dev/null
+  notify_close "$(cat "$run/record.notification" 2>/dev/null)"
+  rm -f -- "$run/record.waiter" "$run/record.notification"
+
+  [[ -s "$file" ]] || { notify-send -a "Screen recording" "The recording is empty" "Nothing was saved." 2>/dev/null; return 1; }
+  local secs=$(( $(date +%s) - started )) length size
+  if (( secs >= 60 )); then length="$(( secs / 60 )) min $(( secs % 60 )) s"; else length="$secs s"; fi
+  size="$(du -h -- "$file" | cut -f1)"
+  saved() {
+    local action args=(-a "Screen recording" -A "default=Open" -A "folder=Show in Files" -A "trash=Move to Trash")
+    [[ -n "$thumb" ]] && args+=(-i "$thumb" -h "string:image-path:$thumb")
+    action="$(notify-send "${args[@]}" "Screen recording saved" "$length · ${size}B · ${file/#$HOME/\~}" 2>/dev/null)"
+    case "$action" in
+      default) gio open "$file" ;;
+      folder)
+        local uri; uri="$(arctic-capture uri "$file" | field uri)"
+        gdbus call --session --timeout 2 --dest org.freedesktop.FileManager1 --object-path /org/freedesktop/FileManager1 \
+          --method org.freedesktop.FileManager1.ShowItems "['$uri']" "" >/dev/null 2>&1 || gio open "${file%/*}" ;;
+      trash) gio trash -- "$file" ;;
+    esac
+    [[ -n "$thumb" ]] && rm -f -- "$thumb"
+  }
+  ( saved ) </dev/null >/dev/null 2>&1 & disown
+}
+
+case "${1:-}" in
+  toggle)
+    if recording_pid >/dev/null; then stop; else start area; fi ;;
+  start) shift; start "$@" ;;
+  stop) stop ;;
+  status) status "${2:-}" ;;
+  *) usage ;;
+esac

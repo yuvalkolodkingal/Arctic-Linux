@@ -165,5 +165,39 @@ class CaptureTest(unittest.TestCase):
         self.assertEqual(code, 2)
 
 
+class RecordStatusTest(unittest.TestCase):
+    """arctic-record status --json, which the bar reads (the recording itself needs a desktop)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.run_dir = Path(self.tmp.name) / 'arctic'
+        self.run_dir.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def status(self):
+        result = subprocess.run(['bash', str(HELPER.parent / 'arctic-record'), 'status', '--json'], capture_output=True,
+                                text=True, timeout=30, env=dict(os.environ, XDG_RUNTIME_DIR=self.tmp.name))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_not_recording(self):
+        self.assertEqual(self.status(), {'ok': True, 'recording': False})
+
+    def test_recording_and_stale_state(self):
+        sleeper = subprocess.Popen(['sleep', '30'])
+        try:
+            state = {'ok': True, 'recording': True, 'pid': sleeper.pid, 'started': 1, 'file': '/x.webm'}
+            (self.run_dir / 'record.json').write_text(json.dumps(state))
+            self.assertEqual(self.status(), state)
+        finally:
+            sleeper.kill()
+            sleeper.wait()
+        # The recorder is gone (it crashed, or the session restarted): not recording any more.
+        self.assertEqual(self.status(), {'ok': True, 'recording': False})
+        self.assertFalse((self.run_dir / 'record.json').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
