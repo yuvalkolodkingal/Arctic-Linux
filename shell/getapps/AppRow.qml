@@ -20,6 +20,7 @@ Rectangle {
     property bool selected: false
     property string actionText: 'Install'
     property string reason: ''                     // locked rows: why
+    property bool canOpen: true                    // installed rows: it has a launcher entry
     signal activated()                             // the row's button (Install, Open, Remove…)
     signal clicked()                               // the row body (details)
     signal hovered()
@@ -86,7 +87,7 @@ Rectangle {
             spacing: Theme.space2
             Icon { name: 'check-circle'; size: 16; color: Theme.success }
             Text { text: 'Installed'; color: Theme.success; font.family: Theme.fontSans; font.pixelSize: 12; font.weight: Font.Medium }
-            ArcticButton { variant: 'ghost'; size: 'sm'; text: 'Open'; focusPolicy: Qt.NoFocus; onClicked: row.activated() }
+            ArcticButton { visible: row.canOpen; variant: 'ghost'; size: 'sm'; text: 'Open'; focusPolicy: Qt.NoFocus; onClicked: row.activated() }
         }
         RowLayout {
             visible: row.state_ === 'waiting'

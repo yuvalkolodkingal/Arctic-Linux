@@ -23,6 +23,9 @@ assert.deepEqual(plain(G.parsePage('remove/fedora')), { page: 'remove', tab: 'dn
 assert.deepEqual(plain(G.parsePage('remove/snap')), { page: 'remove', tab: '' });
 assert.deepEqual(plain(G.parsePage('flathub')), { page: 'flatpak', tab: '' });
 assert.deepEqual(plain(G.parsePage('fedora')), { page: 'dnf', tab: '' });
+assert.deepEqual(plain(G.parsePage('dnf/all')), { page: 'dnf', tab: 'all' });
+assert.deepEqual(plain(G.parsePage('fedora/apps')), { page: 'dnf', tab: 'apps' });
+assert.deepEqual(plain(G.parsePage('flatpak/all')), { page: 'flatpak', tab: '' });
 assert.deepEqual(plain(G.parsePage('Console')), { page: 'console', tab: '' });
 assert.deepEqual(plain(G.parsePage('nonsense')), { page: 'choose', tab: '' });
 assert.deepEqual(plain(G.parsePage('')), { page: 'choose', tab: '' });

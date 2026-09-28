@@ -20,13 +20,15 @@ FocusScope {
     id: page
     property string source: 'flatpak'
     property string initialQuery: ''
+    property string initialView: ''                // dnf: apps | all
     property string view: 'apps'                   // dnf: apps | all
     property int current: 0
     readonly property bool flathub: source === 'flatpak'
     readonly property bool catalogApps: flathub ? AppsService.flathubCatalog.length > 0 : view === 'apps'
     readonly property bool fedoraCatalog: AppsService.fedoraApps.length > 0 || !AppsService.fedoraCatalogMissing
     readonly property var items: flathub ? AppsService.flathubItems : view === 'apps' ? AppsService.fedoraApps : AppsService.fedoraPackages
-    readonly property var prepared: PackageSearch.prepareItems(items)
+    readonly property var prepared: !flathub && view === 'all' ? AppsService.fedoraPrepared : PackageSearch.prepareItems(items)
+    property bool widening: false                  // opened with a name to look for (IPC): widen() when lists arrive
     property var results: []
     readonly property var flatpakSource: AppsService.sources.flatpak || null
     readonly property bool noFlatpak: flathub && AppsService.sourcesLoaded && !!flatpakSource && !flatpakSource.present
@@ -42,7 +44,19 @@ FocusScope {
         if (field.text) { field.text = ''; return true; }
         return false;
     }
-    function reopen(text) { field.text = text || ''; field.forceActiveFocus(); }
+    function reopen(text, tab) {
+        if (tab && !flathub) view = tab;
+        field.text = text || '';
+        Qt.callLater(widen);
+        field.forceActiveFocus();
+    }
+    // A package asked for by name (IPC `apps search dnf NAME`) needn't be an app: when Fedora's
+    // apps have nothing for it, look in all packages.
+    function widen() {
+        if (source !== 'dnf' || view !== 'apps' || !field.text.trim()) return;
+        search();
+        if (!results.length && PackageSearch.searchItems(AppsService.fedoraPrepared, field.text, 1).length) { widening = false; Qt.callLater(() => page.view = 'all'); }
+    }
     // The picks this source can install, as result items (with the catalogue's icon when it has one).
     readonly property var picks: {
         const list = [];
@@ -100,13 +114,16 @@ FocusScope {
         if (shift) showDetails(item); else install(item);
     }
 
-    onPreparedChanged: search()
+    onPreparedChanged: { search(); if (widening) Qt.callLater(widen); }
     onPicksChanged: if (field.text.trim() === '') search()
-    onSourceChanged: { view = 'apps'; field.text = initialQuery; search(); }
+    onSourceChanged: { view = initialView || 'apps'; field.text = initialQuery; search(); Qt.callLater(widen); }
     Component.onCompleted: {
         if (source === 'dnf' && AppsService.fedoraCatalogMissing && !AppsService.fedoraApps.length) view = 'all';
+        if (initialView && source === 'dnf') view = initialView;
+        widening = initialQuery !== '';
         field.text = initialQuery;
         search();
+        Qt.callLater(widen);
     }
     Connections {
         target: AppsService
@@ -150,6 +167,7 @@ FocusScope {
             iconName: 'search'
             placeholderText: page.flathub ? 'Search Flathub' : page.view === 'apps' ? 'Search Fedora’s apps' : 'Search all packages'
             onTextChanged: debounce.restart()
+            onTextEdited: page.widening = false
             Keys.onDownPressed: page.move(1)
             Keys.onUpPressed: page.move(-1)
             Keys.onTabPressed: event => { if (event.modifiers & Qt.ControlModifier) event.accepted = false; else page.move(1); }
@@ -190,6 +208,12 @@ FocusScope {
                     variant: 'primary'
                     text: 'Add Flathub'
                     onClicked: AppsService.addFlathub()
+                }
+                ArcticButton {
+                    visible: page.source === 'dnf' && page.view === 'apps' && page.items.length > 0 && page.results.length === 0 && field.text.trim() !== ''
+                    variant: 'secondary'
+                    text: 'Search all packages'
+                    onClicked: page.view = 'all'
                 }
                 ArcticButton {
                     visible: !page.noFlathub && !page.noFlatpak && page.items.length > 0 && page.results.length === 0 && field.text.trim() !== ''
@@ -247,6 +271,7 @@ FocusScope {
                 tileId: modelData.pick && !imageSource ? modelData.tile || '' : ''
                 verified: !!modelData.verified
                 state_: page.stateOf(modelData)
+                canOpen: page.desktopOf(modelData) !== ''
                 percent: job ? job.percent : null
                 selected: index === page.current
                 onHovered: page.current = index

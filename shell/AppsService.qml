@@ -39,6 +39,7 @@ Singleton {
     property var packageIndex: PackageSearch.prepare([])
     property var flathubList: []                   // [{id, name, summary}] from the index (no icons)
     property var fedoraPackages: []                // [{id, name, repo, summary}] every available package
+    readonly property var fedoraPrepared: PackageSearch.prepareItems(fedoraPackages)   // searched once per list
     property var dnfNames: ({})                    // {name: true} of fedoraPackages
     property int dnfNamesCount: 0
     property var flathubCatalog: []                // AppStream apps: names, summaries, icons

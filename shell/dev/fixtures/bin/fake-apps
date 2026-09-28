@@ -68,8 +68,9 @@ PACKAGES = [
     ('pavucontrol', 'fedora', 'Volume control for PulseAudio'), ('blueman', 'fedora', 'GTK+ Bluetooth Manager'),
     ('network-manager-applet', 'fedora', 'A network control and status applet for NetworkManager'), ('fuzzel', 'fedora', 'Application launcher for wlroots based Wayland compositors'),
 ]
-for i in range(len(PACKAGES), 300):
-    PACKAGES.append(('perl-Test-Fixture-%03d' % i, 'fedora', 'A test fixture Perl module number %d' % i))
+# FAKE_APPS_PACKAGES: how many (300; 70000 is about Fedora's size, for load tests).
+for i in range(len(PACKAGES), int(os.environ.get('FAKE_APPS_PACKAGES') or 300)):
+    PACKAGES.append(('perl-Test-Fixture-%05d' % i, 'fedora', 'A test fixture Perl module number %d' % i))
 # Installed dnf apps: package -> (desktop id, name, reason, repo, size)
 DNF_INSTALLED = {
     'gimp': ('gimp', 'GIMP', 'User', 'fedora', 201326592), 'htop': ('htop', 'Htop', 'User', 'fedora', 468000),

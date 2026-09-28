@@ -29,7 +29,8 @@ function cards(state) {
                .map((c, i) => Object.assign({ digit: i + 1 }, c));
 }
 
-// "remove/dnf" -> {page: 'remove', tab: 'dnf'}; anything unknown opens the chooser.
+// "remove/dnf" -> {page: 'remove', tab: 'dnf'}, "dnf/all" -> {page: 'dnf', tab: 'all'} (every
+// package, not only apps); anything unknown opens the chooser.
 function parsePage(text) {
     const parts = String(text || '').trim().toLowerCase().split('/');
     let page = ALIASES[parts[0]] || parts[0];
@@ -39,6 +40,7 @@ function parsePage(text) {
         const t = ALIASES[parts[1]] || parts[1];
         if (TABS.indexOf(t) >= 0) tab = t;
     }
+    if (page === 'dnf' && (parts[1] === 'apps' || parts[1] === 'all')) tab = parts[1];
     return { page: page, tab: tab };
 }
 

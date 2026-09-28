@@ -16,7 +16,7 @@ import "GetApps.js" as GetAppsLogic
 FocusScope {
     id: router
     property string page: 'choose'
-    property string removeTab: ''
+    property string removeTab: ''                 // remove/<tab>, or dnf/all|apps
     property string query: ''
     readonly property Item inputItem: loader.item && loader.item.inputItem ? loader.item.inputItem : router
     readonly property int preferredWidth: page === 'choose' ? 640 : 760
@@ -73,6 +73,7 @@ FocusScope {
         SourcePage {
             source: router.page
             initialQuery: router.query
+            initialView: router.removeTab
             onBackRequested: router.open('choose', '')
             onOpenPage: (name, text) => router.open(name, text)
             onCloseRequested: router.closeRequested()
