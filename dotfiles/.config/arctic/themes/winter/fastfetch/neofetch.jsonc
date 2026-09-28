@@ -1,0 +1,52 @@
+// Arctic Linux — `neofetch`, Winter theme.
+// Rendered by arctic-themegen from design/themegen/templates/fastfetch/neofetch.jsonc.tmpl into
+// every theme folder; the neofetch command (fastfetch underneath) reads it through
+// ~/.config/arctic/current/fastfetch/neofetch.jsonc, so the colours follow the theme. Your own
+// ~/.config/fastfetch/neofetch.jsonc wins over it.
+//
+// Classic neofetch: user@host over a rule, then OS, Host, Kernel, Uptime, Packages, Shell,
+// Resolution, DE, WM, WM Theme, Theme, Icons, Terminal, Terminal Font, CPU, GPU and Memory
+// ("Key: value", sizes in MiB), and the colour blocks — the module list of fastfetch's own
+// neofetch preset, with neofetch's key names — and the Arctic fox on the left instead of the
+// distribution's logo. OS is os-release's PRETTY_NAME and the architecture, as neofetch prints it.
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "data",
+    "source": "$1    ▗██▙▖        ▗▟██▖\n$1    ▟████▙▖    ▗▟████▙\n$1   ▐████████████████▛▘ ▗▄▖\n$1  ▗█████████████████ ▗████▙\n$1  ▟████████████████▙ ▐█████▙\n$1  ██████$2██$1██████$2██$1██▖ ██████\n$1  ▝▀███████████████▛ ▄██████▌\n$1     ▀▜████████████ ▐███████▘\n$1        ▀████████▀ ▗████████\n$1          ▝▀██▀▘ ▗▟████████▘\n$1 ▟███▄▖       ▄▄██████████▘\n$1▐████████▙▄▄▟███████████▛▘\n$1 ▜████████████████████▛▀\n$1   ▀▀██████████████▀▀",
+    "color": { "1": "#1d242d", "2": "#84500d" },
+    "padding": { "left": 1, "right": 3 }
+  },
+  "display": {
+    "separator": ": ",
+    "brightColor": true,
+    "color": { "keys": "#84500d", "title": "#84500d" },
+    "percent": { "color": { "green": "#1d7350", "yellow": "#9a4812", "red": "#b3261e" } },
+    "size": { "maxPrefix": "MB", "ndigits": 0, "spaceBeforeUnit": "never" },
+    "freq": { "ndigits": 3, "spaceBeforeUnit": "never" }
+  },
+  "modules": [
+    "title",
+    "separator",
+    { "type": "os", "key": "OS" },
+    { "type": "host", "key": "Host" },
+    { "type": "board", "key": "Host", "condition": { "succeeded": false } },
+    { "type": "kernel", "key": "Kernel", "format": "{release}" },
+    { "type": "uptime", "key": "Uptime" },
+    { "type": "packages", "key": "Packages", "combined": true },
+    { "type": "shell", "key": "Shell" },
+    { "type": "display", "key": "Resolution", "compactType": "original" },
+    { "type": "de", "key": "DE" },
+    { "type": "wm", "key": "WM" },
+    { "type": "wmtheme", "key": "WM Theme" },
+    { "type": "theme", "key": "Theme" },
+    { "type": "icons", "key": "Icons" },
+    { "type": "terminal", "key": "Terminal" },
+    { "type": "terminalfont", "key": "Terminal Font", "format": "{/name}{-}{/}{name}{?size} {size}{?}" },
+    { "type": "cpu", "key": "CPU" },
+    { "type": "gpu", "key": "GPU", "format": "{name}" },
+    { "type": "memory", "key": "Memory", "format": "{used} / {total}" },
+    "break",
+    "colors"
+  ]
+}

@@ -61,12 +61,12 @@ throwaway index, and so is the repository key, §9). noarch unless it contains G
 
 | Subpackage | Installs | Notes |
 |---|---|---|
-| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
-| `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
+| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL; LOGO names the icon arctic-logos installs in hicolor and `/usr/share/pixmaps`, checked in `%check`; fastfetch has no built-in Arctic logo and would draw Fedora's by ID_LIKE, hence the fox in the fastfetch layouts, §3.1), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
+| `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/pixmaps/arctic-logo-icon.{png,svg}` (os-release `LOGO`), `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
 | `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
-| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf` | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
+| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf`; fastfetch (§3.1): `/usr/share/arctic/fastfetch/{greeting.jsonc,logo.txt}` ← `dotfiles/.local/share/arctic/fastfetch/`, `/etc/xdg/fastfetch/config.jsonc` → the Polar night theme's `fastfetch/config.jsonc` (accounts without the skel link: root, older accounts); `neofetch`: `/usr/libexec/arctic/neofetch` ← `dotfiles/.local/bin/neofetch` (fastfetch with the theme's `fastfetch/neofetch.jsonc`; a real neofetch found on `PATH` runs instead) and `%ghost /usr/bin/neofetch` → it, created in `%posttrans` only when that name is free: a `%ghost` never conflicts with another package's file, so a neofetch package (none in Fedora 44) installs over it, and `%triggerpostun -- neofetch` links it again when that package goes (rpm leaves the shared path's file behind) | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1), fastfetch. Provides `neofetch = %{version}-%{release}` (satisfies what depends on neofetch; `dnf install neofetch` says it is there, and would install a real neofetch package by name). No `Conflicts: neofetch`: it would make installing a real neofetch remove arctic-desktop-config (and arctic-desktop). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte. |
 | `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
@@ -137,6 +137,7 @@ every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
 | btop | theme file | `btop/arctic.theme` | `~/.config/btop/themes/arctic.theme` → `../../arctic/current/btop/arctic.theme`; `~/.config/btop/btop.conf` `color_theme = "arctic"`, `theme_background = false` | next start |
 | zsh prompt, completion menu, zsh plugins | `ARCTIC_PROMPT_COLORS` (24-bit when `COLORTERM=truecolor`, else ANSI 2/3/1/8), `ma=` selection colour, `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE`, `ZSH_HIGHLIGHT_STYLES` | `zsh/colors.zsh` | `~/.zshrc` sources it and re-sources it before the next prompt when the link or file changes | next prompt |
 | fzf | options file | `fzf/fzfrc` | `FZF_DEFAULT_OPTS_FILE` in `~/.zshrc` and `~/.bashrc.d/arctic.sh` (your `FZF_DEFAULT_OPTS` still apply on top) | every run |
+| fastfetch, `neofetch` | whole fastfetch layouts (JSONC has no include), colours as `#rrggbb` (fastfetch ≥ 2.42): the fox (`logo.txt`, the mark in quadrant blocks, `branding/tools/fastfetch_logo.py`) in `term-foreground` with `ansi-3` eyes; `config.jsonc`: keys `ansi-6`, user `ansi-3` bold, rule `ansi-8`, percentages `success`/`warning`/`error`, lines os kernel uptime packages shell wm terminal theme cpu gpu memory disk updates (os, wm, theme, updates from `arctic-fetch --info …`: "Arctic Linux 0.2 (Fedora 44)", "Mango", the theme's label, the update status file — never dnf or the network); `neofetch.jsonc`: fastfetch's neofetch preset with neofetch's key names, keys and title `accent-text` | `fastfetch/config.jsonc`, `fastfetch/neofetch.jsonc` | `~/.config/fastfetch/config.jsonc` → `../arctic/current/fastfetch/config.jsonc` (a copy of yours replaces the link); `neofetch` reads `~/.config/fastfetch/neofetch.jsonc`, else the active theme's, else Polar night's, else fastfetch's `neofetch` preset. arctic-fetch's info column is `fastfetch --config greeting.jsonc --logo none --pipe false` (`~/.local/share/arctic/fastfetch/`, else `/usr/share/arctic/fastfetch/`; palette slots, like the fox) | every run |
 | bat, delta (not installed) | `BAT_THEME=ansi` (delta honours it): the terminal's palette | — | `~/.zshrc`, `~/.bashrc.d/arctic.sh` | yes |
 | bash prompt | ANSI colours (the terminal palette) | — | — | yes |
 | foot, Alacritty (terminal alternatives) | same palette as kitty | `foot/colors.ini` (`[colors-<mode>]` + `initial-color-theme`), `alacritty/colors.toml` | `~/.config/foot/foot.ini` `include=~/.config/arctic/current/foot/colors.ini`; `~/.config/alacritty/alacritty.toml` `general.import` | new windows |
@@ -165,7 +166,9 @@ once, with the copies `10-gtk` just made:
 
 **Packages** (`arctic-desktop-config` Requires, also listed in `iso/kiwi/config.kiwi`):
 `adw-gtk3-theme`, `qt6ct`, `qt5ct`, `adwaita-icon-theme`, `adwaita-cursor-theme`, `dconf`,
-`flatpak`; `arctic-desktop` Recommends `btop`. Added to the image (dnf5 against Fedora 44, vs the
+`flatpak`, `fastfetch` (2.60 in Fedora 44, 2.68 in its updates: the layouts use only modules and
+options both have, checked by `design/themegen/tests/test_fastfetch.py`); `arctic-desktop`
+Recommends `btop`. Added to the image (dnf5 against Fedora 44, vs the
 0.1 image's package list): adw-gtk3-theme 1.1 MB, btop 1.8 MB (+ rocm-smi 2.9 MB, its weak
 dependency), qt5ct + qt6ct about 150 MB installed / 63 MB download, because Fedora builds them
 with KDE colour-scheme support: KDE Frameworks 5 and 6 (ki18n 17 + 18 MB, kwidgetsaddons 7 + 5 MB,
@@ -222,9 +225,47 @@ offline answers `{"ok": false, "offline": true}`. "Fit my screens" = `atleast` o
 enabled output and each output's `ratios` (`wlr-randr --json`, rotation applied). "Add pictures…"
 is QtQuick.Dialogs' FileDialog (the portal through qt6ct), plus a DropArea for `file://` URLs.
 
-Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
+Displays: an arrangement editor (every display a rectangle to scale; drag and drop, or `Tab` to
+one and move it with the arrow keys) whose geometry is all in the helper, as pure tested functions:
+`arctic_settings.py display-arrange LAYOUT [--move NAME X Y [--threshold PX] | --nudge NAME
+left|right|up|down | --main NAME | --enable NAME | --disable NAME | --anchor NAME]` (nothing is
+applied). Positions are logical px; a display's size there is its mode, turned for 90°/270°,
+divided by the scale in single precision and cut to whole pixels (wlroots
+`wlr_output_effective_resolution`: 2560×1600 at 150 % is 1706×1066). Every display that is on
+touches another along an edge (a dropped one by at least 1/8 of the shorter edge), none overlap,
+and the top-left corner is 0,0 (XWayland misreads clicks at negative positions); a drop goes to
+the nearest such place, lined up with the others' edges or centres within 12 screen px, and
+displays left unconnected follow; after a scale, rotation or mode change the others settle round
+that display on the side they were on; the last display that is on can't be switched off.
+Apply runs `wlr-randr` at once (the tidied layout) and asks to keep it for 15 s; a detached
 watchdog (`arctic_settings.py display-revert --if-pending TOKEN --after 20`) puts the old layout
-back even if Settings is gone; kept layouts become `monitorrule` lines.
+back even if Settings is gone; kept layouts become `monitorrule` lines, the main display's
+first; a display switched off is never saved (`disable:1` would also blank a laptop's only
+screen), so off lasts until logout. Rules of displays that aren't connected (or are off) stay,
+without `x`/`y` where they would overlap the kept layout (one rule per display: the monitor at
+home must not come back on top of the laptop's place from work).
+
+Mango 0.17.3's `monitorrule` (read in the 0.17.3 tarball: `src/config/parse_config.c`,
+`parse_option`, the `monitorrule` branch; applied by `src/manage/monitor.c`
+`apply_rule_to_state`): comma-separated `key:value`, e.g.
+`monitorrule=name:^HDMI-A-1$,width:3840,height:2160,refresh:60,x:1706,y:0,scale:2,rr:0,vrr:0`.
+`name` is a regex (hence `^…$`; `make`, `model`, `serial` also match); `x`/`y` are logical px
+(left out: placed automatically, `wlr_output_layout_add_auto`); `scale`; `rr` 0–7 is the
+`wl_output_transform` (1 = 90, 2 = 180, 3 = 270, 4 = flipped, 5–7 = flipped-90/180/270, the order
+of wlr-randr's names); `vrr` 0/1; the mode is used only when `width`, `height` and `refresh` are
+all set, else the preferred one; also `disable`, `custom`, `hdr`, `hdr_*`, `icc`. A new output
+takes the first rule that matches (`handle_new_output`), a config reload the last one
+(`parse_config.c` `reapply_monitor_rules`), so Settings writes one `^NAME$` rule per display.
+
+Main display: Mango has no primary output (no option or dispatch for one in 0.17.3; `monitor.c`
+`set_selected_monitor` keeps XWayland's RandR primary on the focused display,
+`xwayland_primary.c`). At login `main.c` selects the monitor under the pointer, which starts at
+0,0, so that display is where you start: focus, the first windows, the launcher, OSD and menus (the
+shell follows the focused output, `shell/Outputs.qml`) and mako's notifications (no `output=`).
+The bar is on every display (`Variants` over `Quickshell.screens`). So Settings' "main display"
+is the one covering the layout's top-left corner (else the one nearest to it, where Mango moves
+the pointer), and **Make main** swaps it with the display there; nothing stores a primary
+separately.
 
 The live image (`iso/kiwi/config.kiwi`, and so the installed system) lists `arctic-settings`,
 `nm-connection-editor`, `blueman`, `pavucontrol` and `wlr-randr` explicitly.

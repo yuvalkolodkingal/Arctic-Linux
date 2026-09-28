@@ -14,9 +14,9 @@ system.
   are amber. Press any key to skip straight to the resting fox.
 - **Next to it:** `you@your-computer`, then `os`, `base` (the Fedora release underneath),
   `kernel`, `wm` (Mango on Wayland), `shell`, `term`, `theme` and `uptime`, and two rows of colour
-  swatches showing the terminal's palette.
-- Colours come from the terminal's palette, so the greeting follows the Winter and Polar night
-  themes.
+  swatches showing the terminal's palette. fastfetch finds these (the same as
+  [`fastfetch`](#fastfetch-and-neofetch) shows); without fastfetch the greeting finds them itself.
+- Colours come from the terminal's palette, so the greeting follows the theme.
 
 Some ways to change it:
 
@@ -26,9 +26,13 @@ arctic-fetch --static   # the resting fox, no animation
 ```
 
 - It's drawn still (no animation) when reduced motion is on (`arctic-motion off`), when
-  `ARCTIC_REDUCE_MOTION=1` is set, or when the window is narrower than 60 columns.
+  `ARCTIC_REDUCE_MOTION=1` is set, or when the window is too narrow for it (under 60 columns, or
+  narrower than the fox and its longest line).
 - To turn the greeting off, see [Turning the greeting off](#turning-the-greeting-off) below.
 - **Fetch** in the launcher (`Super + Space`) opens a terminal with the greeting.
+- The lines beside the fox are a fastfetch layout: copy
+  `/usr/share/arctic/fastfetch/greeting.jsonc` to `~/.local/share/arctic/fastfetch/greeting.jsonc`
+  and edit it to change them.
 
 ### Turning the greeting off
 
@@ -39,6 +43,69 @@ log out and back in:
 ```sh
 export ARCTIC_FETCH=0
 ```
+
+## fastfetch and neofetch
+
+`fastfetch` prints a fuller report beside a bigger fox (the Arctic mark in block characters,
+with amber eyes). On a laptop, for example:
+
+```text
+you@your-computer
+────────────────────
+os        Arctic Linux 0.2 (Fedora 44)
+kernel    6.17.1-300.fc44.x86_64
+uptime    3 h 12 min
+packages  12 (flatpak), 1843 (rpm)
+shell     zsh 5.9
+wm        Mango · Wayland
+terminal  kitty 0.42.2
+theme     Polar night
+cpu       AMD Ryzen 7 7840U (16) @ 5.13 GHz
+gpu       AMD Radeon 780M [Integrated]
+memory    5.2 GiB / 30.6 GiB (17%)
+disk /    41.3 GiB / 475.4 GiB (9%) - btrfs
+updates   up to date · checked today
+```
+
+- **packages** counts Fedora packages (rpm), Flatpak apps and, once you have some, Nix packages.
+- **updates** is what the daily update check last found, as the bar's indicator shows it
+  ([Updates](Updates)): for example "12 updates ready (84 MB) · restart to install". fastfetch
+  never starts a check, so it stays quick; the line is left out on the live USB.
+- The colours follow the theme (Winter, Polar night or your wallpaper's):
+  `~/.config/fastfetch/config.jsonc` is a link to the active theme's
+  `~/.config/arctic/current/fastfetch/config.jsonc`.
+
+`neofetch` shows the classic neofetch screen: `you@your-computer` over a dashed line, then OS,
+Host, Kernel, Uptime, Packages, Shell, Resolution, DE, WM, WM Theme, Theme, Icons, Terminal,
+Terminal Font, CPU, GPU and Memory, and the colour blocks, with the fox on the left. neofetch
+itself is no longer developed and Fedora doesn't ship it, so Arctic's `neofetch` is fastfetch with
+neofetch's layout. `neofetch --stdout` prints it without the fox and colours; fastfetch's options
+work too (`neofetch --logo none`). If you install the real neofetch (from Nix or a COPR, say),
+`neofetch` runs that instead.
+
+### Changing them
+
+- **fastfetch:** replace the link with a copy of the theme's layout and edit that:
+
+  ```sh
+  cp --remove-destination ~/.config/arctic/current/fastfetch/config.jsonc ~/.config/fastfetch/config.jsonc
+  ```
+
+  A copy keeps the colours of the theme it came from. To follow the theme again:
+  `ln -sfn ../arctic/current/fastfetch/config.jsonc ~/.config/fastfetch/config.jsonc`.
+- **neofetch:** your own `~/.config/fastfetch/neofetch.jsonc` is used instead of the theme's
+  (start from a copy of `~/.config/arctic/current/fastfetch/neofetch.jsonc`).
+- **The fox** is also in `/usr/share/arctic/fastfetch/logo.txt` for layouts of your own
+  (`$1` is the fur, `$2` the eyes):
+
+  ```sh
+  fastfetch --file /usr/share/arctic/fastfetch/logo.txt --logo-color-1 white --logo-color-2 yellow
+  ```
+
+- The Arctic lines come from `arctic-fetch --info os|base|wm|shell|theme|updates`, which you can
+  use in a layout of your own as fastfetch `command` modules.
+- fastfetch's options and modules: `fastfetch --help`, `fastfetch --list-modules` and
+  [its wiki](https://github.com/fastfetch-cli/fastfetch/wiki/Configuration).
 
 ## kitty
 
