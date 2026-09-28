@@ -9,9 +9,13 @@ import Quickshell.Wayland
 // Muted shows the mute icon and 0. Visible for 1.2 s after the last change, then fades out
 // over duration-base. Volume follows PipeWire directly (any change, from keys or apps);
 // brightness is shown when `arctic-osd brightness …` calls `arctic-shell-ipc osd brightness`.
+// The "message" kind is an icon and a few words, no bar (`arctic-shell-ipc osd message ICON TEXT`,
+// or `arctic-osd show ICON TEXT` from scripts): Caps Lock, touchpad off, a mode turned on.
 Scope {
     id: osd
     property string kind: 'volume'
+    property string message: ''
+    property string messageIcon: 'info'
     property int value: 0
     property bool muted: false
     property bool showing: false
@@ -28,6 +32,12 @@ Scope {
     }
     function showBrightness() {
         if (!brightness.running) brightness.running = true;
+    }
+    function showMessage(icon, text) {
+        kind = 'message';
+        messageIcon = icon || 'info';
+        message = text;
+        reveal();
     }
     function reveal() {
         fadeOut.stop();
@@ -93,7 +103,7 @@ Scope {
             border.color: Theme.line
             opacity: osd.pillOpacity
             Accessible.role: Accessible.StatusBar
-            Accessible.name: (osd.kind === 'brightness' ? 'Brightness ' : 'Volume ') + osd.value + '%'
+            Accessible.name: osd.kind === 'message' ? osd.message : (osd.kind === 'brightness' ? 'Brightness ' : 'Volume ') + osd.value + '%'
 
             RowLayout {
                 anchors.fill: parent
@@ -102,10 +112,21 @@ Scope {
                 spacing: Theme.space3
                 Icon {
                     size: 20
-                    name: osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
+                    name: osd.kind === 'message' ? osd.messageIcon : osd.kind === 'brightness' ? 'brightness' : osd.muted || osd.value === 0 ? 'volume-mute' : 'volume'
                     color: Theme.ink
                 }
+                Text {
+                    visible: osd.kind === 'message'
+                    Layout.fillWidth: true
+                    text: osd.message
+                    color: Theme.ink
+                    elide: Text.ElideRight
+                    font.family: Theme.fontSans
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                }
                 Rectangle {
+                    visible: osd.kind !== 'message'
                     Layout.fillWidth: true
                     implicitHeight: 6
                     radius: 3
@@ -124,6 +145,7 @@ Scope {
                     }
                 }
                 Text {
+                    visible: osd.kind !== 'message'
                     Layout.preferredWidth: 32
                     horizontalAlignment: Text.AlignRight
                     text: osd.value

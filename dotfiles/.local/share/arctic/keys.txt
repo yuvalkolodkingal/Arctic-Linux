@@ -46,6 +46,9 @@
     Print                    Screenshot an area (Shift: screen, Super: window)
     Super + Ctrl + C         Capture menu
 
+  Hardware keys
+    Caps Lock                Shows whether Caps Lock is on
+
   Touchpad
     3 fingers                Move focus
     4 fingers ← →            Previous / next workspace

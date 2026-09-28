@@ -139,6 +139,8 @@ ShellRoot {
         target: 'osd'
         function volume(): void { osd.showVolume(); }
         function brightness(): void { osd.showBrightness(); }
+        // An icon (a design icon name) and a few words, e.g. `osd message keyboard "Caps Lock on"`.
+        function message(icon: string, text: string): void { osd.showMessage(icon, text); }
     }
     IpcHandler {
         target: 'lock'

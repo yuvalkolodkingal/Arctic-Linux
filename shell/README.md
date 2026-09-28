@@ -45,7 +45,7 @@ It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `p
 | Power menu | `PowerMenu.qml` | Under the power item or Super+Esc: Settings, Lock screen, Log out, Suspend, Restart, Shut down (live: Settings, Restart, Shut down). Runs `arctic-power <action>`; Settings runs `arctic-settings`. |
 | Command menu | `CommandMenu.qml`, `MenuModel.js`, `menu/arctic-menu.json`, `SettingsIndex.qml` | Super+Alt+Space (Super+Ctrl+C: Capture). Every system action in one keyboard-driven tree: Apps, Learn, Capture, Toggle, Style, Setup (every Settings page, from Settings' own `SearchIndex.js`), Install, Remove, Update, System. The rows are data, merged with `~/.config/arctic/menu.json` by id; one `sh` script per open checks which commands and IPC functions exist (a row that can't run is hidden) and reads the toggles' states. Type to search the branch. `arctic-menu` falls back to fuzzel without the shell. Tests: `tests/test-command-menu.cjs`, `tests/test_arctic_menu.py`. |
 | Keyboard shortcuts | `KeysSheet.qml` | Super+/: `keys.txt` from `~/.local/share/arctic` or `/usr/share/arctic`. |
-| OSD | `Osd.qml`, `AudioService.qml` | 280×48 frosted pill, bottom centre. Follows PipeWire volume changes directly; brightness when `arctic-osd` calls `arctic-shell-ipc osd brightness` (brightnessctl). 1.2 s, then fades. |
+| OSD | `Osd.qml`, `AudioService.qml` | 280×48 frosted pill, bottom centre. Follows PipeWire volume changes directly; brightness when `arctic-osd` calls `arctic-shell-ipc osd brightness` (brightnessctl). 1.2 s, then fades. The message kind is an icon and a few words without a bar (`osd message ICON TEXT`, `arctic-osd show ICON TEXT`): Caps Lock on / off (`arctic-osd caps`, from the Caps Lock key and the keyboard's Caps Lock light). |
 | Lock screen | `LockScreen.qml`, `pam/arctic-lock` | ext-session-lock (the session stays locked if the shell dies) + PAM (`pam_unix`, from this folder). Blurred wallpaper under frost, clock, avatar (`~/.face` or your initial), name, password field with focus / error / success rings, battery, Wi-Fi and power bottom-right. Off on the live USB. |
 | Live welcome | `LiveWelcome.qml` | "You're trying Arctic Linux" card (Install Arctic Linux / Keep trying), once per boot via `arctic-welcome`, and the Install tile bottom-left. On the desktop layer, under windows. |
 | First-login welcome | `FirstLogin.qml` | Installed system, once per new account (`arctic-welcome`: /etc/skel's `~/.local/state/arctic/first-login` marker; `arctic-welcome --again`, or the command menu's Learn › Welcome, shows it again): the keys that get you everywhere, Connect (only while offline), Get apps, Light / Dark, and "Finishing setup" while `/var/lib/arctic/pending.json` lists apps arctic-firstboot still installs (a notification says "All set" when it's gone). |
@@ -82,7 +82,7 @@ notifications.
 | `power` | `toggle` |
 | `menu` | `toggle`, `toggleAt <branch>` (e.g. `capture`), `open <branch>`, `search <text>`, `close` |
 | `keys` | `toggle` |
-| `osd` | `volume`, `brightness` |
+| `osd` | `volume`, `brightness`, `message <icon> <text>` (an icon and a few words) |
 | `lock` | `lock`, `isLocked` (true once the compositor confirms the lock covers every screen) |
 | `welcome` | `open` |
 | `dnd` | `refresh` |
