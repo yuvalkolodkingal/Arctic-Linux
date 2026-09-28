@@ -9,8 +9,9 @@ import Quickshell.Services.UPower
 // the critical action), other devices' batteries, and the low and critical warnings: one
 // notification each per discharge, cleared when charging starts. Settings' "Warn me when the
 // battery is low" (shell.json batteryWarnings) turns the low one off; the critical one always
-// shows, even under do not disturb (an Arctic alert). Each warning also runs your battery-low
-// hooks (arctic-hook battery-low PERCENT), when arctic-hook is installed.
+// shows, even under do not disturb (an Arctic alert). Once per discharge, at the low level, your
+// battery-low hooks run too (arctic-hook battery-low PERCENT, when it is installed), whether the
+// warning shows or not.
 Singleton {
     id: battery
     readonly property var device: UPower.displayDevice
@@ -33,6 +34,7 @@ Singleton {
                           threshold_supported: false, threshold_enabled: false, threshold_end: 0 })
     property bool warnedLow: false
     property bool warnedCritical: false
+    property bool hookedLow: false
     property var warnedDevices: ({})
 
     function duration(seconds) {
@@ -57,13 +59,14 @@ Singleton {
         limit.running = true;
     }
     function notify(args) { Quickshell.execDetached(['notify-send'].concat(args)); }
-    function runHooks() {
-        Quickshell.execDetached(['sh', '-c', 'command -v arctic-hook >/dev/null 2>&1 && exec arctic-hook battery-low "$1"', 'sh', String(percent)]);
-    }
 
     function check() {
         if (!present) return;
-        if (charging || full || !onBattery) { warnedLow = false; warnedCritical = false; return; }
+        if (charging || full || !onBattery) { warnedLow = false; warnedCritical = false; hookedLow = false; return; }
+        if (percent <= info.percentage_low && !hookedLow) {
+            hookedLow = true;
+            Quickshell.execDetached(['sh', '-c', 'command -v arctic-hook >/dev/null 2>&1 && exec arctic-hook battery-low "$1"', 'sh', String(percent)]);
+        }
         if (percent <= info.percentage_critical && !warnedCritical) {
             warnedCritical = true;
             warnedLow = true;
@@ -72,12 +75,10 @@ Singleton {
                     'Battery at ' + percent + ' %',
                     verb === 'nothing' ? 'Plug in to keep working.'
                         : 'Arctic will ' + verb + ' at ' + info.percentage_action + ' %. Plug in to keep working.']);
-            runHooks();
         } else if (percent <= info.percentage_low && !warnedLow && Session.settings.batteryWarnings !== false) {
             warnedLow = true;
             notify(['-a', 'Arctic Linux', '-i', 'battery-low', 'Battery at ' + percent + ' %',
                     (device.timeToEmpty > 0 ? 'About ' + duration(device.timeToEmpty) + ' left. ' : '') + 'Plug in soon.']);
-            runHooks();
         }
     }
     function checkPeripherals() {
