@@ -29,6 +29,8 @@ func TestWireNames(t *testing.T) {
 		{AppInfo{}, []string{`"data_bytes":null`}},
 		{ListResult{Apps: []AppInfo{}, Kept: []KeptInfo{{ID: "k", Name: "Slack", URL: "https://app.slack.com/", DataBytes: &size}}},
 			[]string{`"kept":[{"id":"k","name":"Slack","url":"https://app.slack.com/","data_bytes":48213504}]`}},
+		{ListResult{Apps: []AppInfo{}, Kept: []KeptInfo{}}, []string{`{"apps":[],"kept":[]}`}},
+		{ListResult{Apps: []AppInfo{}}, []string{`{"apps":[]}`}},
 		{LaunchResult{Pid: 41234}, []string{`{"pid":41234}`}},
 		{LaunchResult{Focused: true}, []string{`{"focused":true}`}},
 		{UpdateResult{Updated: []Updated{{ID: "x", Changed: []string{"icon"}, Kept: []string{"name"}}}}, []string{`{"updated":[{"id":"x","changed":["icon"],"kept":["name"]}]}`}},

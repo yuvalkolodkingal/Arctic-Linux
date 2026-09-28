@@ -213,9 +213,22 @@ type KeptInfo struct {
 	DataBytes *int64 `json:"data_bytes"`
 }
 
+// ListResult: kept is present (possibly []) exactly when it was asked for (a nil Kept leaves
+// it out; plain omitempty would also drop an empty list).
 type ListResult struct {
 	Apps []AppInfo  `json:"apps"`
 	Kept []KeptInfo `json:"kept,omitempty"`
+}
+
+func (r ListResult) MarshalJSON() ([]byte, error) {
+	out := struct {
+		Apps []AppInfo   `json:"apps"`
+		Kept *[]KeptInfo `json:"kept,omitempty"`
+	}{Apps: r.Apps}
+	if r.Kept != nil {
+		out.Kept = &r.Kept
+	}
+	return json.Marshal(out)
 }
 
 type GetParams struct {
