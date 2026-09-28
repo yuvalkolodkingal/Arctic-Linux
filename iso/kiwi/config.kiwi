@@ -182,8 +182,8 @@
 		<ignore name="gfs2-utils"/>
 		<ignore name="reiserfs-utils"/>
 		<ignore name="qemu-user-static"/>
-		<!-- Weak dependencies nothing here uses: EPS for kimageformats, cpp for xrdb (~70 MB) -->
-		<ignore name="ghostscript"/>
+		<!-- Weak dependencies nothing here uses: cpp for xrdb. (Stream 5: ghostscript is
+		     no longer ignored, printing needs it: cups-filters → libcupsfilters.) -->
 		<ignore name="cpp"/>
 		<ignore name="glibc-all-langpacks"/>
 	</packages>

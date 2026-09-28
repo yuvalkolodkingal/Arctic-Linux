@@ -244,6 +244,21 @@ Recommends:     swappy
 Recommends:     wf-recorder
 Recommends:     tesseract
 Recommends:     python3-zxing-cpp
+# Stream 5 (system): night light (arctic-nightlight runs wlsunset; tzdata's zone1970.tab gives
+# the time zone's location), keep awake (arctic-keep-awake, through arctic-session's swayidle).
+Requires:       wlsunset
+Requires:       tzdata
+# Removable drives: udiskie mounts them with a notification (arctic-session drives);
+# arctic-drives lists and ejects them (lsblk, udisksctl).
+Requires:       udiskie
+Requires:       udisks2
+# Screens and the lid: arctic-display (wlr-randr, Mango's mmsg; Duplicate needs wl-mirror),
+# arctic-session lid (systemd-inhibit); lighter effects and game mode: arctic-effects.
+Requires:       wlr-randr
+Recommends:     wl-mirror
+# Apps that keep the screen on through org.freedesktop.ScreenSaver: arctic-screensaver.
+Requires:       python3-dbus
+Requires:       python3-gobject-base
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
@@ -324,8 +339,9 @@ Recommends:     xdg-utils
 %description -n arctic-settings
 Arctic Settings: appearance and themes, windows (Mango gaps, borders, animations, focus,
 layout), displays, keyboard and mouse, shortcuts, default apps, network, Bluetooth, sound,
-updates, power and lock, startup apps. Changes go to ~/.config/mango/settings.conf and the
-Arctic helpers; nothing needs root. Start it with arctic-settings (Super+S).
+updates, power and lock, startup apps, printers and scanners, date and time. Changes go to
+~/.config/mango/settings.conf and the Arctic helpers; only the time zone, the clock and the
+language ask for the password (systemd, polkit). Start it with arctic-settings (Super+S).
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-installer
@@ -549,6 +565,43 @@ Requires:       qt6ct
 Requires:       qt5ct
 # The terminal system monitor, themed like the rest (btop/arctic.theme).
 Recommends:     btop
+# Stream 5 (system): printing and scanning. Driverless printers (IPP Everywhere, AirPrint) over
+# USB (ipp-usb) and the network (avahi + nss-mdns; cups-browsed stays out, CUPS and the print
+# dialogs find network printers themselves); system-config-printer administers queues through
+# cups-pk-helper (polkit); Settings > Printers and scanners. cups.socket/cups.path are enabled
+# by preset. Scanners: sane-airscan (driverless eSCL/WSD) and Document Scanner.
+Requires:       cups
+Requires:       cups-filters
+Requires:       ghostscript
+Requires:       ipp-usb
+Requires:       avahi
+Requires:       nss-mdns
+Requires:       cups-pk-helper
+Requires:       system-config-printer
+Recommends:     gutenprint-cups
+Recommends:     sane-airscan
+Recommends:     sane-backends-drivers-scanners
+Recommends:     simple-scan
+# Stream 5 (system): firmware updates (arctic-update firmware; also in @core).
+Requires:       fwupd
+# Stream 5 (system): SSH keys once per session (gcr-ssh-agent), the firewall Settings shows
+# (firewalld, in @core too), system monitor (Ctrl+Shift+Esc falls back to btop).
+Requires:       gcr
+Requires:       firewalld
+Recommends:     firewall-config
+# Users and sign-in (AccountsService: name and picture; fprintd: fingerprints) and running an app
+# on a laptop's discrete graphics chip (arctic-gpu → switcherooctl).
+Requires:       accountsservice
+Recommends:     fprintd
+# The lock screen takes a saved fingerprint too (shell/pam/arctic-lock-fingerprint).
+Recommends:     fprintd-pam
+Requires:       switcheroo-control
+# Stream 5 (system): phones (MTP, iPhone), cameras and network shares in Thunar (gvfs).
+Recommends:     gvfs
+Recommends:     gvfs-mtp
+Recommends:     gvfs-afc
+Recommends:     gvfs-gphoto2
+Recommends:     gvfs-smb
 
 %description -n arctic-desktop
 Pulls in everything an Arctic Linux desktop needs: Mango, SDDM with the arctic theme and
@@ -745,10 +798,24 @@ install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
+# Stream 5 (system): the SSH agent's socket for the session (gcr-ssh-agent), and the root helper
+# Settings uses for the firewall, remote login and snapshots (pkexec, org.arcticlinux.system).
+install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
+install -Dpm 0755 packaging/system/arctic-system-helper %{buildroot}%{_libexecdir}/arctic/arctic-system-helper
+install -Dpm 0644 packaging/polkit/org.arcticlinux.system.policy \
+  %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+# Thunar's Send To menu: LocalSend (arctic-share files).
+install -Dpm 0644 packaging/desktop/arctic-sendto-localsend.desktop \
+  %{buildroot}%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 # Automatic updates (arctic-update, in /usr/bin with the helpers above) and snapshots.
 install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
 install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
 install -Dpm 0644 packaging/systemd/arctic-update-restage.timer %{buildroot}%{_unitdir}/arctic-update-restage.timer
+# Stream 5 (system): Flatpak apps are updated daily too (arctic-update flatpak --auto).
+install -Dpm 0644 packaging/systemd/arctic-flatpak-update.service %{buildroot}%{_unitdir}/arctic-flatpak-update.service
+install -Dpm 0644 packaging/systemd/arctic-flatpak-update.timer %{buildroot}%{_unitdir}/arctic-flatpak-update.timer
+install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.service %{buildroot}%{_userunitdir}/arctic-flatpak-update.service
+install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.timer %{buildroot}%{_userunitdir}/arctic-flatpak-update.timer
 install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
 install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
 install -Dpm 0644 packaging/updates/snapper.actions \
@@ -775,6 +842,16 @@ install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefi
 # Stream 4 (capture): the screen-share picker xdg-desktop-portal-wlr runs in Mango sessions.
 install -Dpm 0644 packaging/desktop/xdg-desktop-portal-wlr.ini %{buildroot}%{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
 install -Dpm 0755 packaging/desktop/arctic-share-picker %{buildroot}%{_libexecdir}/arctic/arctic-share-picker
+# Stream 5 (system): XDG autostart in the Mango session (packaging/desktop/autostart): the
+# session target wants xdg-desktop-autostart.target, and the entries Arctic starts itself or
+# doesn't use stay off there (drop-ins for the units systemd-xdg-autostart-generator makes;
+# the names are systemd-escaped desktop ids, "-" is \x2d).
+install -Dpm 0644 packaging/desktop/autostart/mango-session-autostart.conf \
+  %{buildroot}%{_userunitdir}/mango-session.target.d/arctic-autostart.conf
+for id in 'nm\x2dapplet' 'blueman' 'geoclue\x2ddemo\x2dagent'; do
+  install -Dpm 0644 packaging/desktop/autostart/arctic-starts-it.conf \
+    "%{buildroot}%{_userunitdir}/app-${id}@autostart.service.d/arctic.conf"
+done
 # arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own
 # subpackages; neofetch is listed below (%%ghost).
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer|neofetch' \
@@ -902,6 +979,7 @@ ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTEC
   python3 "$tg" render --palette _build/winter.json --out _build/check-theme --quiet
 diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Settings.desktop
+desktop-file-validate %{buildroot}%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 # Settings' backend: the file formats it reads and writes (uses `mango -p` when installed).
 python3 -m unittest discover -s settings/tests -p 'test_*.py'
 # ---- stream 2 (Get apps): apps.py's contracts, the job commands, and that
@@ -1041,9 +1119,11 @@ done
 
 %post -n arctic-desktop-config
 %systemd_post arctic-firstboot.service arctic-update-stage.timer
+%systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
+%systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
@@ -1053,6 +1133,17 @@ done
 if [ ! -e %{_sharedstatedir}/arctic/.update-presets ]; then
   systemctl --no-reload preset arctic-update-stage.timer snapper-cleanup.timer >/dev/null 2>&1 || :
   mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.update-presets || :
+fi
+# Stream 5: the SSH agent's socket for every user, once (the user preset covers new users).
+if [ ! -e %{_sharedstatedir}/arctic/.ssh-agent-preset ]; then
+  systemctl --global --no-reload preset gcr-ssh-agent.socket >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.ssh-agent-preset || :
+fi
+# Stream 5: the same once for the Flatpak update timer (new in 0.3).
+if [ ! -e %{_sharedstatedir}/arctic/.flatpak-update-preset ]; then
+  systemctl --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
+  systemctl --global --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.flatpak-update-preset || :
 fi
 # Compile /etc/dconf/db/distro.d (the Arctic GTK/icon/cursor/font defaults).
 if [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
@@ -1188,6 +1279,10 @@ fi
 %dir %{_sysconfdir}/arctic/mango
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
 %{_sysconfdir}/profile.d/arctic-graphics.sh
+%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
+%{_libexecdir}/arctic/arctic-system-helper
+%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 %dir %{_datadir}/arctic
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt
@@ -1206,6 +1301,10 @@ fi
 %dir %{_localstatedir}/lib/flatpak/overrides
 %config(noreplace) %{_localstatedir}/lib/flatpak/overrides/global
 %{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 5 (system): XDG autostart drop-ins
+%dir %{_userunitdir}/mango-session.target.d
+%{_userunitdir}/mango-session.target.d/arctic-autostart.conf
+%{_userunitdir}/app-*@autostart.service.d/
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
@@ -1213,6 +1312,10 @@ fi
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer
 %{_unitdir}/arctic-update-restage.timer
+%{_unitdir}/arctic-flatpak-update.service
+%{_unitdir}/arctic-flatpak-update.timer
+%{_userunitdir}/arctic-flatpak-update.service
+%{_userunitdir}/arctic-flatpak-update.timer
 %{_libexecdir}/arctic/arctic-update-helper
 %config(noreplace) %{_sysconfdir}/arctic/update.conf
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions

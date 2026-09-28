@@ -55,6 +55,11 @@
     Super + Alt + ,          Open the newest notification
     Super + Shift + N        Do not disturb
     Super + Shift + T        Switch Winter / Polar night
+    Super + Ctrl + N         Night light on / off
+    Super + Ctrl + I         Keep awake (no lock or sleep) on / off
+    Super + P                Screens: laptop only, duplicate, extend
+    Ctrl + Shift + Esc       What's running (system monitor)
+    Super + Ctrl + S         Share: send to phones and computers nearby
     Super + Shift + R        Reload the desktop config
 
   Capture

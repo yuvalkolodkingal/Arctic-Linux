@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""arctic-screensaver — lets apps keep the screen on (video calls, presentations, films).
+
+    arctic-screensaver run            own org.freedesktop.ScreenSaver on the session bus
+                                      (arctic-session screensaver starts it at login)
+    arctic-screensaver status [--json]  which apps keep the screen on now
+
+Chromium, Electron and many other apps ask the desktop to stay awake through the
+org.freedesktop.ScreenSaver D-Bus interface (Inhibit/UnInhibit). Nothing on a Mango session
+answers it, so this does: while any app holds an inhibit, the app list is in
+$XDG_RUNTIME_DIR/arctic/inhibitors.json and `arctic-session idle` runs swayidle without its lock
+and suspend timeouts, exactly as keep awake does (locking before sleep stays). An app that quits
+without letting go loses its inhibits when its bus name goes away. At most 32 per app; app
+names and reasons are cut to 64 characters. Lock() locks the screen; GetActive() is always false.
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+NAME = 'org.freedesktop.ScreenSaver'
+PATHS = ('/org/freedesktop/ScreenSaver', '/ScreenSaver')
+PER_SENDER = 32
+TEXT = 64
+
+
+def state_file():
+    return Path(os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir()) / 'arctic' / 'inhibitors.json'
+
+
+class Cookies:
+    """The inhibits apps hold: cookie → (sender, app, reason). Pure, so it's tested without D-Bus."""
+
+    def __init__(self):
+        self.held = {}
+        self.next = 1
+
+    def add(self, sender, app, reason):
+        if sum(1 for s, _a, _r in self.held.values() if s == sender) >= PER_SENDER:
+            raise ValueError('too many inhibits from ' + sender)
+        cookie = self.next
+        self.next += 1
+        self.held[cookie] = (sender, str(app or 'An app')[:TEXT], str(reason or '')[:TEXT])
+        return cookie
+
+    def remove(self, cookie, sender=None):
+        """Only the app that asked may let go of its own cookie."""
+        entry = self.held.get(int(cookie))
+        if entry and (sender is None or entry[0] == sender):
+            del self.held[int(cookie)]
+            return True
+        return False
+
+    def vanish(self, sender):
+        gone = [c for c, (s, _a, _r) in self.held.items() if s == sender]
+        for cookie in gone:
+            del self.held[cookie]
+        return len(gone)
+
+    def apps(self):
+        seen, out = set(), []
+        for _s, app, reason in self.held.values():
+            if (app, reason) not in seen:
+                seen.add((app, reason))
+                out.append(dict(app=app, reason=reason))
+        return out
+
+
+def publish(cookies, was_active):
+    """Write or remove the state file; restart swayidle when inhibiting starts or stops."""
+    path = state_file()
+    active = bool(cookies.held)
+    if active:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix='.inhibitors.', dir=str(path.parent))
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            json.dump(dict(apps=cookies.apps()), handle)
+        os.replace(tmp, path)
+    else:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    if active != was_active:
+        subprocess.run(['arctic-session', 'idle', '--restart'], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=False)
+    return active
+
+
+def serve():
+    import dbus
+    import dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+
+    DBusGMainLoop(set_as_default=True)
+    bus = dbus.SessionBus()
+    if bus.name_has_owner(NAME):
+        print(json.dumps(dict(type='error', code='name-taken', error=NAME + ' already has an owner.')))
+        return 1
+    cookies = Cookies()
+    active = {'now': False}
+
+    def changed():
+        active['now'] = publish(cookies, active['now'])
+
+    class ScreenSaver(dbus.service.Object):
+        @dbus.service.method(NAME, in_signature='ss', out_signature='u', sender_keyword='sender')
+        def Inhibit(self, app, reason, sender=None):
+            try:
+                cookie = cookies.add(sender, app, reason)
+            except ValueError as error:
+                raise dbus.exceptions.DBusException(str(error), name='org.freedesktop.DBus.Error.LimitsExceeded')
+            changed()
+            return dbus.UInt32(cookie)
+
+        @dbus.service.method(NAME, in_signature='u', out_signature='', sender_keyword='sender')
+        def UnInhibit(self, cookie, sender=None):
+            if cookies.remove(cookie, sender):
+                changed()
+
+        @dbus.service.method(NAME, in_signature='', out_signature='b')
+        def GetActive(self):
+            return False
+
+        @dbus.service.method(NAME, in_signature='', out_signature='u')
+        def GetActiveTime(self):
+            return dbus.UInt32(0)
+
+        @dbus.service.method(NAME, in_signature='', out_signature='')
+        def SimulateUserActivity(self):
+            pass
+
+        @dbus.service.method(NAME, in_signature='', out_signature='')
+        def Lock(self):
+            subprocess.Popen(['arctic-lock'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+
+    def owner_changed(name, _old, new):
+        if not new and name.startswith(':') and cookies.vanish(name):
+            changed()
+
+    bus.add_signal_receiver(owner_changed, signal_name='NameOwnerChanged', dbus_interface='org.freedesktop.DBus')
+    held_name = dbus.service.BusName(NAME, bus, do_not_queue=True)
+    objects = [ScreenSaver(bus, path) for path in PATHS]
+    if state_file().exists():       # a stale file from before a crash: nobody holds it now
+        publish(cookies, True)
+    GLib.MainLoop().run()
+    del held_name, objects
+    return 0
+
+
+def main(argv):
+    verb = argv[0] if argv else 'status'
+    if verb in ('-h', '--help'):
+        print(__doc__.strip())
+        return 0
+    if verb == 'run':
+        return serve()
+    if verb == 'status':
+        try:
+            apps = json.loads(state_file().read_text(encoding='utf-8')).get('apps', [])
+        except (OSError, ValueError):
+            apps = []
+        if '--json' in argv[1:]:
+            print(json.dumps(dict(ok=True, apps=apps)))
+        else:
+            print('\n'.join('{} keeps the screen on{}'.format(a['app'], ': ' + a['reason'] if a['reason'] else '')
+                            for a in apps) or 'No app keeps the screen on.')
+        return 0
+    print('usage: arctic-screensaver run | status [--json]', file=sys.stderr)
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

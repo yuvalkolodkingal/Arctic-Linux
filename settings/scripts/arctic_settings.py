@@ -60,6 +60,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
                                   forget-certificate icon)
     webapp-reset-permissions ID | webapp-refresh ID | webapp-clear ID | webapp-open ID | webapp-runtimes
     webapp-remove ID keep|delete | webapp-forget ID
+    nightlight, keep-awake, autostart, printers, datetime, more-updates …   see arctic_system.py
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2198,6 +2199,9 @@ def cmd_idle_set(paths, args):
         raise Failure('Suspend can’t come before the screen locks.')
     text = ('# Written by Arctic Settings. `arctic-session idle` (swayidle) reads it; 0 means never.\n'
             'lock_after={}\nsuspend_after={}\n').format(lock, suspend)
+    # Stream 5: keep the other keys (battery times, dimming, screens off: arctic_system.py).
+    text += ''.join(line + '\n' for line in (read_text(paths.idle_conf) or '').splitlines()
+                    if re.match(r'^\w+=\d+$', line) and line.split('=')[0] not in ('lock_after', 'suspend_after'))
     if paths.idle_conf.exists():
         backup(paths, paths.idle_conf)
     atomic_write(paths.idle_conf, text)
@@ -2996,6 +3000,14 @@ COMMANDS.update({
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
            'ensure-source', 'notification-set', 'notification-rule-set'}
+
+
+# Stream 5 (system): night light, keep awake, XDG autostart, printers, date and time, Flatpak
+# and firmware updates are in arctic_system.py (settings/tests/test_system_helpers.py).
+sys.modules.setdefault('arctic_settings', sys.modules[__name__])   # when run as a script
+import arctic_system  # noqa: E402
+COMMANDS.update(arctic_system.COMMANDS)
+WRITERS |= arctic_system.WRITERS
 
 
 def main(argv=None):

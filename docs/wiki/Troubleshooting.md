@@ -320,7 +320,13 @@ moved or restored `/nix`, restore the labels with `sudo restorecon -R /nix`.
 The screen locks after 5 minutes without use and the computer suspends after 15. Change the
 times (or turn them off) in [Settings](Settings#power-and-lock) (`Super + S`), **Power and lock**.
 They're saved in `~/.config/arctic/idle.conf` (`lock_after=` and `suspend_after=`, in seconds, 0
-for never) and apply at once.
+for never) and apply at once. The same file holds `lock_after_battery=` and
+`suspend_after_battery=` (on battery), `dim_before_lock=` (seconds; 0 turns dimming off) and
+`screen_off_after=` (seconds after the lock; 0 leaves the screens on).
+
+The screens turn off a minute after the lock; a key or the mouse turns them on again. If a
+screen doesn't come back on your hardware, set **Turn the screens off after locking** to
+**Never** and tell us in an issue.
 
 ### A shortcut I made doesn't work
 

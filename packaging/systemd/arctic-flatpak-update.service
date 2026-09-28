@@ -1,0 +1,19 @@
+[Unit]
+Description=Arctic Linux: update Flatpak apps
+Documentation=https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Updates man:flatpak-update(1)
+# Never on the live USB: nothing there survives a restart.
+ConditionKernelCommandLine=!rd.live.image
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# `arctic-update flatpak --auto`: `flatpak update` of the system installation, in place (a
+# running app keeps its version until it restarts), then unused runtimes are removed. It skips
+# metered connections (METERED= in /etc/arctic/update.conf) and does nothing unless
+# AUTO=download-and-install-on-reboot.
+Type=oneshot
+ExecStart=/usr/bin/arctic-update flatpak --auto
+# In the background: the lowest CPU and disk priority.
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=2h

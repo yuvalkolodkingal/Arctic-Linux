@@ -107,8 +107,46 @@ Page {
             ArText { text: page.about.kernel || ""; size: 14; lh: 20; color: Theme.inkMuted; font.family: Theme.fontMono }
         }
         SettingRow {
+            visible: page.about.live === true
             title: "Computer name"
             ArText { text: page.about.hostname || ""; size: 14; lh: 20; color: Theme.inkMuted; font.family: Theme.fontMono }
+        }
+        // Stream 5: the name other computers and phones see (NAME.local, Bluetooth, LocalSend).
+        SettingRow {
+            searchKey: "about.hostname"
+            visible: page.about.live !== true
+            title: "Computer name"
+            desc: "What other computers and phones see on your network and over Bluetooth."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArInput {
+                    id: hostField
+                    width: 220
+                    text: page.about.hostname || ""
+                    maximumLength: 63
+                    accessibleName: "Computer name"
+                    readonly property bool valid: /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(text.trim())
+                    error: text.trim() === "" || valid ? "" : "Letters, digits and hyphens only"
+                    onAccepted: saveHost.clicked()
+                }
+                ArButton {
+                    id: saveHost
+                    text: "Save"
+                    enabled: hostField.valid && hostField.text.trim() !== (page.about.hostname || "")
+                    gapColor: Theme.surfaceRaised
+                    onClicked: {
+                        if (!enabled)
+                            return;
+                        Backend.call(["hostname-set", hostField.text.trim()], r => {
+                            if (r.ok) {
+                                page.about = Object.assign({}, page.about, { hostname: r.hostname });
+                                Backend.notify("success", "Computer name changed", false);
+                            }
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -146,6 +184,38 @@ Page {
                     iconRight: "external"
                     gapColor: Theme.surfaceRaised
                     onClicked: Backend.openUrl(page.about.issues || "https://github.com/yuvalkolodkingal/Arctic-Linux/issues")
+                }
+            }
+        }
+    }
+
+    // Restart one part of the desktop (arctic-restart), not the computer.
+    Group {
+        title: "If something stops working"
+        desc: "Restart just that part of the desktop. Your apps and files stay as they are."
+        SettingRow {
+            searchKey: "about.troubleshoot"
+            title: "Sound, Wi-Fi, Bluetooth or the desktop shell"
+            desc: "The shell is the bar, the launcher and the notifications. Ctrl + Shift + Esc shows what’s running."
+            resettable: false
+            stacked: true
+            Flow {
+                width: parent.width
+                spacing: Theme.space2
+                Repeater {
+                    model: [{ id: "sound", label: "Restart sound" }, { id: "wifi", label: "Restart Wi-Fi" },
+                        { id: "bluetooth", label: "Restart Bluetooth" }, { id: "shell", label: "Restart the shell" }]
+                    ArButton {
+                        required property var modelData
+                        text: modelData.label
+                        iconName: "refresh"
+                        size: "sm"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: Backend.call(["troubleshoot", modelData.id], r => {
+                            if (r.ok)
+                                Backend.notify("success", "Restarted", false);
+                        })
+                    }
                 }
             }
         }

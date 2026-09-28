@@ -137,7 +137,49 @@ Page {
         page.trying = false;
         Backend.call(["display-revert"], _r => page.load());
     }
-    onShown: if (!trying) load()
+    onShown: {
+        if (!trying)
+            load();
+        loadNight();
+    }
+
+    // ---- Night light (arctic-nightlight runs wlsunset; its schedule is nightlight.conf)
+    property var night: ({ helper: false })
+    function loadNight() {
+        Backend.call(["nightlight"], r => { if (r.ok) page.night = r; }, true);
+    }
+    function setNight(args, message) {
+        Backend.call(["nightlight-set"].concat(args), r => {
+            if (r.ok) {
+                page.night = r;
+                if (message)
+                    Backend.notify("success", message, false);
+            } else {
+                page.loadNight();
+            }
+        });
+    }
+    function halfHours(first, count, current) {
+        const out = [];
+        for (let i = 0; i < count; i++) {
+            const m = (first * 60 + i * 30) % (24 * 60);
+            const t = (m < 600 ? "0" : "") + Math.floor(m / 60) + ":" + (m % 60 === 0 ? "00" : "30");
+            out.push({ value: t, label: t });
+        }
+        if (current && !out.some(o => o.value === current))
+            out.unshift({ value: current, label: current });
+        return out;
+    }
+    readonly property string nightState: {
+        const n = page.night;
+        if (n.error)
+            return n.error;
+        if (n.active)
+            return "On now" + (n.untilText ? ", until " + n.untilText : n.nextChangeText ? ", until " + n.nextChangeText : "") + ".";
+        if (n.untilText)
+            return "Off until " + n.untilText + ".";
+        return n.nextChangeText ? "Turns on at " + n.nextChangeText + "." : "Off.";
+    }
 
     Timer {
         id: tick
@@ -579,6 +621,88 @@ Page {
                         Backend.notify("success", "Saved layout forgotten. It applies the next time Mango starts.", false);
                     }
                 })
+            }
+        }
+    }
+
+    Group {
+        visible: page.night.helper === true
+        title: "Night light"
+        desc: "A warmer screen in the evening is easier on the eyes. Super + Ctrl + N turns it on or off right away."
+        SettingRow {
+            searchKey: "displays.nightlight"
+            title: "Night light"
+            desc: page.night.available === false ? "Night light needs wlsunset: sudo dnf install wlsunset." : page.nightState
+            resettable: false
+            ArSelect {
+                width: 220
+                enabled: page.night.available !== false
+                model: [{ value: "off", label: "Off" }, { value: "sunset", label: "Sunset to sunrise" },
+                    { value: "hours", label: "Custom hours" }, { value: "always", label: "Always on" }]
+                value: page.night.mode || "off"
+                onActivated: v => page.setNight(["mode=" + v], "Night light changed")
+            }
+        }
+        SettingRow {
+            visible: page.night.mode === "sunset"
+            title: "Where the sun sets"
+            desc: page.night.fallback ? "Your time zone doesn’t say where you are, so night light uses the custom hours (" + page.night.from + " to " + page.night.to + ") instead. Pick a city as your time zone to follow the sun."
+                : page.night.location === "manual" ? "The location in ~/.config/arctic/nightlight.conf (lat, lon)."
+                : "The location of your time zone, " + String(page.night.location).replace(/_/g, " ") + ". Nothing is looked up online."
+            resettable: false
+        }
+        SettingRow {
+            visible: page.night.mode === "hours"
+            searchKey: "displays.nighthours"
+            title: "Hours"
+            desc: "It warms up over half an hour from the first time and is back to normal by the second."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArSelect {
+                    width: 110
+                    model: page.halfHours(16, 16, page.night.from)
+                    value: page.night.from || "20:00"
+                    onActivated: v => page.setNight(["from=" + v], "Hours changed")
+                }
+                ArText {
+                    text: "to"
+                    size: 14
+                    lh: 40
+                    color: Theme.inkMuted
+                }
+                ArSelect {
+                    width: 110
+                    model: page.halfHours(4, 16, page.night.to)
+                    value: page.night.to || "07:00"
+                    onActivated: v => page.setNight(["to=" + v], "Hours changed")
+                }
+            }
+        }
+        SettingRow {
+            visible: page.night.mode !== "off" || page.night.active === true
+            searchKey: "displays.warmth"
+            title: "Warmth"
+            desc: "Further right is warmer and dimmer. It changes as soon as you let go."
+            resettable: false
+            ArSlider {
+                accessibleName: "Night light warmth"
+                valueText: (6000 - value * 100) + " kelvin"
+                from: 0; to: 35; stepSize: 1
+                value: (6000 - (page.night.temp || 4000)) / 100
+                onCommitted: v => page.setNight(["temp=" + (6000 - Math.round(v) * 100)], "")
+            }
+        }
+        SettingRow {
+            visible: page.night.available !== false && !page.night.error
+            title: page.night.active ? "Turn it off for now" : "Turn it on now"
+            desc: page.night.mode === "sunset" || page.night.mode === "hours" ? "Until the schedule changes anyway." : "Until you log out."
+            resettable: false
+            ArButton {
+                text: page.night.active ? "Turn off" : "Turn on"
+                variant: "secondary"
+                gapColor: Theme.surfaceRaised
+                onClicked: page.setNight(["now", page.night.active ? "off" : "on"], "")
             }
         }
     }

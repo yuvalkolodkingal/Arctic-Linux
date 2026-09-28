@@ -43,8 +43,10 @@ value.
 
 ## Where your changes go
 
-Nothing in Settings needs your password: it only writes files in your home folder, and only
-through programs that already work without root. Every file is checked before it's saved (window
+Almost nothing in Settings needs your password: it writes files in your home folder, through
+programs that already work without root. The exceptions change the whole computer and ask for
+the password through the usual dialog: the time zone, the clock and the language (**Date and
+time**), and setting up printers (*Print Settings*). Every file is checked before it's saved (window
 manager settings with Mango itself), written in one go so it's never half-written, and the
 previous version is kept in `~/.local/state/arctic/settings-backups/` (the newest 20 of each
 file). That's what `Ctrl + Z` uses.
@@ -129,6 +131,12 @@ How windows sit on the screen, move and take focus. Changes show at once.
 
 **Reset all window settings** puts back Arctic's values; **Open settings.conf** shows the file.
 
+**Effects** has **Lighter effects** (Automatic, On, Off: no animations, blur or shadows;
+Automatic turns them off in a virtual machine or without a graphics driver) and **Game mode**
+(lighter effects and no gaps until you turn it off or log out). They're written to
+`~/.config/arctic/effects.conf`, which Mango reads after `settings.conf`, so while they're on they
+win over the rows above. See [Screens and the laptop lid](Screens-and-Laptop-Lid#lighter-effects-and-game-mode).
+
 ## Displays
 
 ![The Displays page](images/settings-displays.png)
@@ -172,6 +180,11 @@ drag it where you want once more.
 
 A display you switch off stays off only until you log out. That's on purpose: a saved "off" could
 leave a laptop's only screen dark the next time it starts without its dock.
+
+**Night light** makes the screen warmer in the evening: **Off**, **Sunset to sunrise** (worked out
+from your time zone's location, nothing is looked up online), **Custom hours** or **Always on**, and
+how warm with **Warmth**. **Turn on** / **Turn off** changes it right away until the schedule
+changes anyway; `Super + Ctrl + N` does the same. See [Night light and keep awake](Night-Light-and-Keep-Awake).
 
 ## Keyboard and mouse
 
@@ -227,6 +240,17 @@ Your connections and a Wi-Fi switch. Join a Wi-Fi network from the network icon 
 **Open the editor** starts the connection editor (`nm-connection-editor`) for VPNs, proxies and
 fixed addresses; **Open nmtui** lists the Wi-Fi networks around you in a terminal.
 
+## Sharing
+
+What other computers and phones on your network can reach. **Firewall** says whether it's on
+(firewalld, which lets in only what's allowed) and opens its own settings when
+`firewall-config` is installed. **Let in**: **Find printers and devices on the network** (mDNS),
+**LocalSend** (port 53317, shown when LocalSend is installed) and **KDE Connect** (shown when
+it's installed). **Remote login (SSH)** turns the SSH server on or off and says how to connect
+(`ssh you@arctic.local`); **Allow password login** off means only keys in
+`~/.ssh/authorized_keys` can log in. These change the whole computer, so they ask for your
+password (once for a few minutes). Remote login is hidden in the live session.
+
 ## Bluetooth
 
 ![The Bluetooth page](images/settings-bluetooth.png)
@@ -259,6 +283,11 @@ What's waiting, **Check now**, and **Restart and install** when updates have bee
 Under **How updates come**: **Download updates automatically** (in the background; they only
 install when you restart) and the **Channel**, Stable or Testing. These are the same as
 `arctic-update auto on|off` and `arctic-update channel stable|testing`; see [Updates](Updates).
+**Apps and firmware** shows how the daily update of your Flatpak apps went, with **Update apps
+now**, and the firmware updates fwupd has for this computer, with **Install in a terminal**.
+**Snapshots**: every dnf transaction takes a snapshot before and after. **Show snapshots**
+(asks for your password) lists them; **Undo…** undoes one update in a terminal window (restart
+afterwards), and **Take snapshot** takes one now.
 
 ## Power and lock
 
@@ -266,10 +295,19 @@ install when you restart) and the **Channel**, Stable or Testing. These are the 
 
 - **When you're away:** lock the screen after, and suspend after, a time you pick (or never).
   The screen always locks before the computer sleeps. Saved in `~/.config/arctic/idle.conf`.
+- **Keep awake:** no lock and no sleep for 30 minutes, 1 hour, 2 hours or until you turn it off
+  (`Super + Ctrl + I` turns it on and off). See [Night light and keep awake](Night-Light-and-Keep-Awake).
+- **On battery** (on laptops): other times while unplugged, or **Same as plugged in** (the
+  default). Plugging in or unplugging switches between them.
+- **Around the lock:** **Dim the screen before it locks** (half as bright 30 seconds before, on
+  screens with a backlight; on by default) and **Turn the screens off after locking** (1 minute
+  by default, or Never). A key or the mouse brings either back. Keep awake (`Super + Ctrl + I`)
+  and apps that play video or hold a call pause all of this.
 - **Power mode:** Power saver, Balanced or Performance (when the computer offers them).
-- **Laptop lid:** closing the lid suspends the computer, and locks it first. With another screen
-  plugged in and the laptop on power, it doesn't suspend. That's decided by systemd-logind
-  (`HandleLidSwitch` in `/etc/systemd/logind.conf`), not by Settings.
+- **Laptop lid** (on laptops): **When you close the lid** — **Suspend** (the default; it locks
+  first), **Lock and turn the screen off**, or **Keep running, screen off**. With another screen
+  plugged in, closing the lid turns the laptop screen off and your windows move to the other
+  screen, whatever you pick here. See [Screens and the laptop lid](Screens-and-Laptop-Lid).
 
 The live session never locks or suspends on its own; these settings apply once Arctic Linux is
 installed.
@@ -282,6 +320,29 @@ Apps and commands that start when you log in: **Add an app** (pick one) or **Add
 They're saved as `exec-once=` lines in `settings.conf` and start from the next login. **Started
 by Arctic** lists what the desktop itself starts; those live in `autostart.conf` in
 `~/.config/mango/arctic`.
+
+**Apps that start themselves** lists the apps that turned on their own "start on login" option
+(Discord, Steam, Nextcloud, KDE Connect and others put a file in `~/.config/autostart`; some
+packages put one in `/etc/xdg/autostart`). Arctic starts them like other desktops do, through
+systemd's XDG autostart. Switching one off here writes a copy with `Hidden=true` to
+`~/.config/autostart`, and switching it back on removes that copy again; both apply from the next
+login. Entries meant only for other desktops (`OnlyShowIn=GNOME`, for example) don't start and
+aren't listed, and nm-applet, blueman-applet and geoclue's demo agent stay off because Arctic
+takes care of those itself.
+
+## Printers and scanners
+
+The printers you've set up and whether they're ready, with **Make default** and **Cancel jobs**,
+driverless printers found **On your network**, **Open printer settings** (system-config-printer,
+to add or change a printer) and **Open Document Scanner**. See
+[Printing and scanning](Printing-and-Scanning).
+
+## Date and time
+
+**Time zone** (a searchable list of cities), **Set the time automatically** (network time; when
+it's off, you can type the date and time), and the **Language** of the whole computer, which
+changes at the next login. These go through systemd (`timedatectl`, `localectl`), so they ask for
+your password. Night light's sunset and sunrise follow the time zone.
 
 ## Web apps
 
@@ -304,6 +365,31 @@ Which Arctic Linux and Fedora you run, the computer's model, processor, graphics
 storage, and the versions of the window manager, shell and kernel. **Open the wiki** comes here,
 and **Report a problem** has **Copy details** (a summary of the above to paste into an issue) and
 **Open issues**.
+
+**Computer name** is what other computers and phones see on your network (as NAME.local) and
+over Bluetooth: letters, digits and hyphens; **Save** asks for your password.
+
+## Users and sign-in
+
+Your **Picture** (from your Pictures folder; shown on the login and lock screens), your **Name**,
+and the jobs that ask questions, which open a terminal window: **Change password** (your keyring
+follows), **Change passphrase** for an encrypted disk, and **Add a fingerprint** when the computer
+has a reader. With a finger saved, the lock screen takes it too (not while the lid is closed);
+**Unlock the screen with your fingerprint** turns that off. Hidden in the live session.
+
+## Keyboard and mouse: input methods
+
+**Input method** (at the end of Keyboard and mouse) installs Fcitx 5 for Chinese, Japanese or
+Korean: tick the languages and **Install** (a terminal window asks for your password), then log
+out and back in. `Ctrl + Space` switches between your keyboard and the input method;
+**Configure** opens Fcitx's own settings.
+
+## About: if something stops working
+
+**If something stops working** restarts one part of the desktop: **Restart sound** (PipeWire),
+**Restart Wi-Fi**, **Restart Bluetooth** (asks for your password) or **Restart the shell** (the
+bar, launcher and notifications). The same from a terminal: `arctic-restart
+sound|wifi|bluetooth|shell`. `Ctrl + Shift + Esc` opens a system monitor.
 
 ## If Settings won't open
 

@@ -182,6 +182,16 @@ to hide it (what runs in it keeps running). It's your terminal with the app id
 `org.arcticlinux.Dropdown`: kitty, foot, Alacritty or Ghostty. If yours can't set one (Konsole),
 the first of those that is installed is used.
 
+## SSH keys
+
+Arctic runs an SSH agent for your session (`gcr-ssh-agent`): the first time a key is used (a
+`git push`, `ssh server`), a dialog asks for its passphrase, and the key stays unlocked until you
+log out. `ssh-add -l` lists the keys it holds. `SSH_AUTH_SOCK` points at
+`$XDG_RUNTIME_DIR/gcr/ssh` (`/etc/profile.d/arctic-ssh-agent.sh`); an agent you start yourself
+wins. To turn it off: `systemctl --user disable --now gcr-ssh-agent.socket`.
+
+To log in to this computer from another one, see **Settings → Sharing → Remote login**.
+
 ## Other terminals
 
 If you picked another terminal in the installer (**Ghostty**, **Alacritty**, **foot** or

@@ -88,6 +88,11 @@ was on `Super + W` before Arctic Linux 0.3; `Super + W` is now free for a shortc
 | `Super + Alt + ,` | Act on the newest notification (like clicking it) |
 | `Super + Shift + N` | Do not disturb on / off |
 | `Super + Shift + T` | Switch between light and dark (Winter and Polar night, or your wallpaper's colours) |
+| `Super + Ctrl + N` | [Night light](Night-Light-and-Keep-Awake) on / off (until its schedule changes) |
+| `Super + Ctrl + I` | [Keep awake](Night-Light-and-Keep-Awake#keep-awake) on / off: no lock or sleep while you're away |
+| `Super + P` | [Screens](Screens-and-Laptop-Lid): laptop screen only, duplicate, extend, other screen only |
+| `Ctrl + Shift + Esc` | What's running: a system monitor (Mission Center or GNOME System Monitor when installed, else btop) |
+| `Super + Ctrl + S` | Share: send the clipboard or files with [LocalSend](Sharing-and-Phones), or open KDE Connect |
 | `Super + Shift + R` | Reload the desktop configuration |
 
 ## Screenshots and capture
@@ -123,6 +128,7 @@ These also work while the screen is locked.
 | Mute | Mute or unmute |
 | Microphone mute | Turn the microphone off or on |
 | Brightness up / down | Change the screen brightness |
+| Display key (on many laptops, Fn + a function key with a screen on it) | The screens menu, as `Super + P` |
 | Play/Pause, Next, Previous | Control the music or video that's playing |
 | Keyboard light up / down | Change the keyboard backlight |
 

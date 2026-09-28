@@ -319,6 +319,49 @@ Page {
         }
     }
 
+    // Lighter effects and game mode (arctic-effects): Mango lines in ~/.config/arctic/effects.conf,
+    // sourced after settings.conf, so they win over the rows above while they're on.
+    Group {
+        id: effectsGroup
+        property var fx: ({ helper: false })
+        function set(what, value) {
+            Backend.call(["effects-set", what, value], r => {
+                if (r.ok) {
+                    effectsGroup.fx = r;
+                    Backend.refresh();
+                }
+            });
+        }
+        visible: fx.helper === true
+        title: "Effects"
+        desc: fx.lighter_active ? "Animations, blur and shadows are off while this is on, whatever the rows above say." : ""
+        Component.onCompleted: Backend.call(["effects"], r => { if (r.ok) effectsGroup.fx = r; }, true)
+        SettingRow {
+            searchKey: "windows.lighter"
+            title: "Lighter effects"
+            desc: "No animations, blur or shadows. Automatic turns them off in virtual machines and without a graphics driver."
+                + (effectsGroup.fx.reason === "vm" ? " On now: this is a virtual machine." : effectsGroup.fx.reason === "software" ? " On now: there’s no graphics driver." : "")
+            resettable: false
+            ArSegmented {
+                accessibleName: "Lighter effects"
+                model: [{ value: "auto", label: "Automatic" }, { value: "on", label: "On" }, { value: "off", label: "Off" }]
+                value: effectsGroup.fx.lighter || "auto"
+                onActivated: v => effectsGroup.set("lighter", v)
+            }
+        }
+        SettingRow {
+            searchKey: "windows.gamemode"
+            title: "Game mode"
+            desc: "Lighter effects and no gaps, until you turn it off or log out."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Game mode"
+                checked: effectsGroup.fx.game === true
+                onToggled: effectsGroup.set("game", checked ? "on" : "off")
+            }
+        }
+    }
+
     Row {
         spacing: Theme.space2
         ArButton {

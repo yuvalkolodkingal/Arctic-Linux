@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Arctic Linux: Settings changes the firewall, remote login (SSH) and snapshots through
+     `pkexec /usr/libexec/arctic/arctic-system-helper …`, which checks every argument against
+     fixed tables. An administrator's password, asked in the shell's own dialog, is kept for a
+     few minutes, so turning SSH on and letting it through the firewall asks once. -->
+<policyconfig>
+  <vendor>Arctic Linux</vendor>
+  <vendor_url>https://github.com/yuvalkolodkingal/Arctic-Linux</vendor_url>
+  <action id="org.arcticlinux.system">
+    <description>Change system settings</description>
+    <message>Enter your password to change system settings</message>
+    <icon_name>preferences-system</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/arctic/arctic-system-helper</annotate>
+  </action>
+</policyconfig>

@@ -151,7 +151,11 @@ jobs:
           # --man=no: the container has no man pages (tsflags=nodocs), so the
           # Documentation=man: check would fail although the page ships with dnf5.
           systemd-analyze verify --man=no packaging/systemd/arctic-update-stage.service \
-            packaging/systemd/arctic-update-stage.timer packaging/systemd/arctic-update-restage.timer
+            packaging/systemd/arctic-update-stage.timer packaging/systemd/arctic-update-restage.timer \
+            packaging/systemd/arctic-flatpak-update.service packaging/systemd/arctic-flatpak-update.timer
+          XDG_RUNTIME_DIR="$(mktemp -d)" systemd-analyze verify --user --man=no \
+            packaging/systemd/user/arctic-flatpak-update.service \
+            packaging/systemd/user/arctic-flatpak-update.timer
 
   dnf5-offline:
     name: dnf5 offline updates (arctic-update, real dnf5)

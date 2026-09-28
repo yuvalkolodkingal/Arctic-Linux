@@ -1,0 +1,9 @@
+[Desktop Entry]
+# Thunar's Send To menu (/usr/share/Thunar/sendto): LocalSend opens with the files ready to
+# send (arctic-share files; it offers to install LocalSend when it's missing).
+Type=Application
+Version=1.0
+Name=LocalSend (phones and computers nearby)
+Icon=org.localsend.localsend_app
+Exec=arctic-share files %F
+TryExec=arctic-share
