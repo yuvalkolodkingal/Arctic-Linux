@@ -778,7 +778,7 @@ KEY_NAMES = {'return': 'Enter', 'space': 'Space', 'slash': '/', 'comma': ',', 'p
              'left': '←', 'right': '→', 'up': '↑', 'down': '↓', 'print': 'Print',
              'page_up': 'Page Up', 'page_down': 'Page Down', 'minus': '-', 'equal': '=',
              'grave': '`', 'semicolon': ';', 'apostrophe': "'", 'bracketleft': '[', 'bracketright': ']',
-             'backslash': '\\'}
+             'backslash': '\\', 'code:49': '`'}
 DISPATCHERS = {
     'killclient': 'Close the window', 'togglefloating': 'Float / tile the window',
     'togglemaximizescreen': 'Maximise', 'togglefullscreen': 'Full screen',
@@ -789,6 +789,14 @@ DISPATCHERS = {
     'tagtoleft': 'Move the window to the previous workspace', 'tagtoright': 'Move the window to the next workspace',
     'focusmon': 'Focus the other monitor', 'tagmon': 'Move the window to the other monitor',
     'reload_config': 'Reload the desktop config', 'quit': 'Log out', 'switch_keyboard_layout': 'Next keyboard layout',
+    'switcher': 'Switch windows', 'togglejump': 'Jump to a window', 'focuslast': 'Back to the previous window',
+    'toggle_special_tag': 'Scratch workspace', 'tag_special_tag': 'Move the window to the scratch workspace',
+    'toggle_named_scratchpad': 'Drop-down window', 'minimized': 'Hide the window',
+    'restore_minimized': 'Bring back a hidden window', 'groupjoin': 'Join a tab group',
+    'groupfocus': 'Next / previous tab in the group', 'groupleave': 'Leave the tab group',
+    'toggleglobal': 'Show the window on every workspace', 'centerwin': 'Centre the window',
+    'toggle_trackpad_enable': 'Touchpad on / off', 'toggle_scratchpad': 'Show hidden windows',
+    'setlayout': 'Layout',
 }
 RE_KEY = re.compile(r'^(?:[A-Za-z0-9_]{1,40}|code:\d{1,3})$')
 FREE_KEYS = re.compile(r'^(?:F\d{1,2}|XF86\w+|Print|Pause|Scroll_Lock|Menu)$')
@@ -825,8 +833,35 @@ def combo_label(mods, key):
     return ' + '.join(names + [key_label(key)])
 
 
+def combo_id(mods, key):
+    """What Mango matches a key press on. code:49 is the key above Tab (grave on us)."""
+    key = key.lower()
+    return (frozenset(mods), 'grave' if key == 'code:49' else key)
+
+
+def mark_shadowed(binds):
+    """Mango runs only the first bind that matches a key press, unless that bind has the `c`
+    flag, so a later bind on the same keys in the same keymode (or in `common`, which applies in
+    every mode) never runs. Release binds (`r`) and press binds don't meet."""
+    for i, bind in enumerate(binds):
+        for earlier in binds[:i]:
+            if earlier['combo'] != bind['combo'] or ('r' in earlier['flags']) != ('r' in bind['flags']):
+                continue
+            if 'c' in earlier['flags']:
+                continue
+            if earlier['keymode'] != bind['keymode'] and 'common' not in (earlier['keymode'], bind['keymode']):
+                continue
+            bind['shadowedBy'] = dict(label=earlier['label'], what=earlier['what'],
+                                      file=os.path.basename(earlier['file']))
+            break
+    for bind in binds:
+        del bind['combo']
+    return binds
+
+
 def chain_binds(paths):
-    """Keyboard binds in the config chain: [{mods, key, action, args, file, keymode, label}]."""
+    """Keyboard binds in the config chain: [{mods, key, action, args, file, keymode, label,
+    flags, shadowedBy?}]."""
     out = []
     keymode = 'default'
     for key, value, origin in read_chain(paths):
@@ -852,8 +887,19 @@ def chain_binds(paths):
                 what += ' ' + args.split(',')[0]
         out.append(dict(mods=sorted(mods), key=parts[1], action=action, args=args, file=origin,
                         keymode=keymode, label=combo_label(mods, parts[1]), what=what,
-                        mine=same_file(origin, paths.settings_conf)))
-    return out
+                        mine=same_file(origin, paths.settings_conf), flags=key[4:],
+                        combo=combo_id(mods, parts[1])))
+    return mark_shadowed(out)
+
+
+def arctic_file(paths, origin):
+    """A file of Arctic's own (its Mango config, links into /usr/share/arctic, the theme's
+    colours), rather than one of yours."""
+    if same_file(origin, paths.settings_conf) or same_file(origin, paths.user_conf):
+        return False
+    real = os.path.realpath(origin)
+    return any(real.startswith(os.path.realpath(str(root)) + os.sep)
+               for root in (paths.mango / 'arctic', paths.share, paths.arctic, paths.etc))
 
 
 def parse_sheet(text):
@@ -879,9 +925,27 @@ def cmd_binds(paths, _args):
         if sheet:
             break
     model = load_settings(paths)
-    mine = [dict(index=i, label=combo_label(parse_mods(b['mods']), b['key']), command=b['command'],
-                 mods=b['mods'], key=b['key']) for i, b in enumerate(model.binds)]
-    return dict(ok=True, sheet=parse_sheet(sheet or ''), all=chain_binds(paths), mine=mine)
+    binds = chain_binds(paths)
+    mine = []
+    for i, b in enumerate(model.binds):
+        mods = parse_mods(b['mods'])
+        entry = dict(index=i, label=combo_label(mods, b['key']), command=b['command'], mods=b['mods'], key=b['key'])
+        shadow = next((c['shadowedBy'] for c in binds if c['mine'] and 'shadowedBy' in c
+                       and combo_id(c['mods'], c['key']) == combo_id(mods, b['key'])
+                       and c['args'] == b['command']), None)
+        if shadow:
+            entry['shadowedBy'] = shadow
+        mine.append(entry)
+    # Your binds (settings.conf, user.conf or a file you sourced) that never run, with the
+    # sheet's words for the bind that wins ("Browser" rather than "arctic-open browser").
+    sections = parse_sheet(sheet or '')
+    words = {row['keys']: row['what'] for section in sections for row in section['rows']}
+    for c in binds:
+        if 'shadowedBy' in c:
+            c['shadowedBy']['sheet'] = words.get(c['shadowedBy']['label'], '')
+    shadowed = [dict(label=c['label'], what=c['what'], file=os.path.basename(c['file']), shadowedBy=c['shadowedBy'])
+                for c in binds if 'shadowedBy' in c and not arctic_file(paths, c['file'])]
+    return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed)
 
 
 def validate_command(command, what='command'):
@@ -913,15 +977,15 @@ def cmd_bind_add(paths, args):
     parts = command.split(',')
     if len(parts) > 5 or any(p == '' or p == '0' for p in parts[1:]):
         raise Failure('Mango can’t pass that many commas on. Put the command in a script instead.')
-    combo = (frozenset(mods), key.lower())
+    combo = combo_id(mods, key)
     for bind in chain_binds(paths):
-        if bind['keymode'] not in ('default', 'common'):
+        if bind['keymode'] not in ('default', 'common') or 'r' in bind['flags']:
             continue
-        if (frozenset(bind['mods']), bind['key'].lower()) == combo:
+        if combo_id(bind['mods'], bind['key']) == combo:
             raise Failure('{} already does something: {}. Pick another key.'.format(bind['label'], bind['what']))
     model = load_settings(paths)
     for bind in model.binds:
-        if (frozenset(parse_mods(bind['mods'])), bind['key'].lower()) == combo:
+        if combo_id(parse_mods(bind['mods']), bind['key']) == combo:
             raise Failure('You already have a shortcut on {}.'.format(combo_label(mods, key)))
     model.binds.append(dict(mods=mods_text(mods), key=key, command=command))
     result = save_settings(paths, model)
@@ -1394,7 +1458,7 @@ IMAGES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'im
 ROLES = [
     dict(id='browser', label='Web browser', open='browser', icon='globe', categories=['WebBrowser'],
          mimes=['x-scheme-handler/http', 'x-scheme-handler/https', 'text/html', 'application/xhtml+xml'],
-         keys='Super + W'),
+         keys='Super + B'),
     dict(id='terminal', label='Terminal', open='terminal', icon='terminal', categories=['TerminalEmulator'],
          mimes=[], keys='Super + Enter'),
     dict(id='files', label='Files', open='files', icon='folder', categories=['FileManager'],

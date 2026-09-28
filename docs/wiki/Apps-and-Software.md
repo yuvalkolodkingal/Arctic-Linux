@@ -10,7 +10,7 @@ These are ticked for you in the installer. Every one can be swapped or unticked.
 
 | Role | Default | Opens with | Comes from |
 |---|---|---|---|
-| Browser | **Zen Browser**: calm, privacy-first, with vertical tabs | `Super + W` | Flathub |
+| Browser | **Zen Browser**: calm, privacy-first, with vertical tabs | `Super + B` | Flathub |
 | Code editor | **Zed**: fast, modern code editor | `Super + E` | Flathub (community build) |
 | Terminal | **kitty**: fast, GPU-drawn terminal | `Super + Enter` | Fedora |
 | Shell | **zsh**: friendly shell with smart completion | inside the terminal | Fedora |
@@ -417,7 +417,7 @@ nix profile upgrade --all    # Nix packages in your profile (with the options ab
 
 ## Changing which app opens
 
-`Super + Enter`, `Super + W`, `Super + E`, `Super + F` and `Super + Shift + F` open the apps you
+`Super + Enter`, `Super + B`, `Super + E`, `Super + F` and `Super + Shift + F` open the apps you
 picked in the installer. To change them, and the apps that open links and files, open Settings
 (`Super + S`) and choose **Default apps** (see [Settings](Settings#default-apps)). The files
 behind it are on

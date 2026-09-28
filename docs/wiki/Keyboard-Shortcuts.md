@@ -14,7 +14,7 @@ screen at any time.
 |---|---|
 | `Super + Space` | Open the launcher: apps, `=` calculator, `>` commands (press again to close) |
 | `Super + Enter` | Open your terminal |
-| `Super + W` | Open your browser |
+| `Super + B` | Open your browser |
 | `Super + E` | Open your code editor |
 | `Super + F` | Open your file manager |
 | `Super + Shift + F` | Open the file manager in the terminal (yazi) |
@@ -24,7 +24,7 @@ screen at any time.
 | `Super + Shift + W` | Wallpapers |
 | `Super + /` | The shortcut sheet |
 
-`Super + Enter`, `W`, `E` and `F` open the apps you picked in the installer. See
+`Super + Enter`, `B`, `E` and `F` open the apps you picked in the installer. See
 [Themes and customisation](Themes-and-Customisation#default-apps) to change them.
 
 ## Windows

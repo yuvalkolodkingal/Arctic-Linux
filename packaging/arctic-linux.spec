@@ -212,6 +212,10 @@ Requires:       libdnf5-plugin-actions
 Requires:       snapper
 Requires:       btrfs-progs
 Requires:       findutils
+# Stream 4 (shortcuts and capture): gio and gdbus for the screenshot notification's buttons
+# (open, show in Files, move to the trash); swappy edits screenshots (satty isn't in Fedora).
+Requires:       glib2
+Recommends:     swappy
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night

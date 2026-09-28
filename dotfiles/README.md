@@ -133,8 +133,8 @@ tries the shell first and falls back on its own, so keybinds are the same either
 - **Launcher and popovers** hang from the bar and can be docked to any screen edge (from the
   original Quickshell setup) rather than floating 120px below it; the screen frame is also the
   original shell's.
-- **Bar keyboard access:** the design's `Super + B` bar focus isn't there yet. Everything on the
-  bar also has its own shortcut.
+- **Bar keyboard access:** the design put bar focus on `Super + B`, which opens your browser
+  instead. Everything on the bar also has its own shortcut.
 - **Lock screen:** "N notifications hidden" isn't shown, because mako can't count hidden
   notifications.
 - **Fallback only:** waybar's workspaces use `ext/workspaces` (Fedora's waybar 0.15 has no

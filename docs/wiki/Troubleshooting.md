@@ -243,7 +243,7 @@ own in `~/.config/mango/` is the cause, move `user.conf` away and press `Super +
   sudo systemctl start arctic-firstboot
   ```
 
-- **`Super + W` (or E, F) says "No app set":** the app for that role isn't installed. Install one,
+- **`Super + B` (or E, F) says "No app set":** the app for that role isn't installed. Install one,
   or set another in `~/.config/arctic/default-apps` (see
   [Themes and customisation](Themes-and-Customisation#default-apps)).
 

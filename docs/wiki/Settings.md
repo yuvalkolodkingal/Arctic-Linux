@@ -156,7 +156,7 @@ saved as `bind=` lines in `settings.conf`.
 ![The Default apps page](images/settings-apps.png)
 
 The apps your keyboard shortcuts open, and the ones links and files open in: Web browser
-(`Super + W`), Terminal (`Super + Enter`), Files (`Super + F`), Text editor (`Super + E`), Videos,
+(`Super + B`), Terminal (`Super + Enter`), Files (`Super + F`), Text editor (`Super + E`), Videos,
 Music, Pictures and PDF documents. The first four are saved in `~/.config/arctic/default-apps`
 (read by `arctic-open`), and every one also in `~/.config/mimeapps.list`, as `xdg-mime default`
 would. **Get apps** installs more; they show up here.

@@ -411,11 +411,13 @@ class ShortcutsTest(Home):
         self.assertEqual(launcher[0]['label'], 'Super + Space')
 
     def test_add_and_remove(self):
-        data = self.helper('bind-add', 'super+alt', 'B', 'firefox --new-window')
-        self.assertEqual(data['mine'][0]['label'], 'Super + Alt + B')
-        self.assertIn('keymode=default\nbind=SUPER+ALT,b,spawn_shell,firefox --new-window\n', self.settings)
-        self.assertIn('Super + Alt + B', [b['label'] for b in data['all'] if b['mine']])
-        self.helper('bind-add', 'SUPER+ALT', 'b', 'foot', ok=False)            # already yours
+        data = self.helper('bind-add', 'super+alt', 'F', 'firefox --new-window')
+        self.assertEqual(data['mine'][0]['label'], 'Super + Alt + F')
+        self.assertIn('keymode=default\nbind=SUPER+ALT,f,spawn_shell,firefox --new-window\n', self.settings)
+        self.assertIn('Super + Alt + F', [b['label'] for b in data['all'] if b['mine']])
+        self.assertNotIn('shadowedBy', data['mine'][0])
+        self.assertEqual(data['shadowed'], [])
+        self.helper('bind-add', 'SUPER+ALT', 'f', 'foot', ok=False)            # already yours
         data = self.helper('bind-remove', 0)
         self.assertEqual(data['mine'], [])
         self.assertNotIn('bind=', self.settings)
@@ -430,6 +432,48 @@ class ShortcutsTest(Home):
         self.helper('bind-add', 'SUPER+ALT', 'a', 'a,,b', ok=False)
         self.helper('bind-add', 'SUPER+ALT', 'a', '', ok=False)
         self.helper('bind-add', 'NONE', 'F9', 'foot')                   # function keys may go alone
+
+    def test_new_default_keys(self):
+        self.assertIn('arctic-open browser', self.helper('bind-add', 'SUPER', 'b', 'foot', ok=False)['error'])
+        self.assertIn('arctic-screenshot', self.helper('bind-add', 'SUPER+SHIFT', 's', 'foot', ok=False)['error'])
+        self.assertEqual(self.helper('bind-add', 'SUPER', 'w', 'firefox')['mine'][0]['label'], 'Super + W')
+
+    def write_conf(self, name, text):
+        (self.home / '.config/mango' / name).write_text(text)
+
+    def test_binds_arctic_took_over_are_flagged(self):
+        # Your Super + B from before 0.3 (Settings wrote it), now Arctic's browser key.
+        self.write_conf('settings.conf', 'keymode=default\nbind=SUPER,b,spawn_shell,firefox\n')
+        data = self.helper('binds')
+        shadow = data['mine'][0]['shadowedBy']
+        self.assertEqual((shadow['label'], shadow['file'], shadow['sheet']), ('Super + B', 'apps.conf', 'Browser'))
+        self.assertEqual([(s['label'], s['what'], s['file']) for s in data['shadowed']],
+                         [('Super + B', 'firefox', 'settings.conf')])
+        mine = [b for b in data['all'] if b['mine']]
+        self.assertEqual(mine[0]['shadowedBy']['what'], 'arctic-open browser')
+        # Arctic's own binds are never reported as yours.
+        self.assertFalse([b for b in data['all'] if not b['mine'] and 'shadowedBy' in b])
+
+    def test_shadowing_follows_mango(self):
+        self.write_conf('user.conf', textwrap.dedent('''\
+            bind=SUPER+SHIFT,s,spawn,grim
+            bindr=SUPER,q,spawn,foot
+            bind=SUPER+CTRL,code:49,spawn,a
+            bind=SUPER+CTRL,grave,spawn,b
+            bindc=SUPER+ALT,x,spawn,c
+            bind=SUPER+ALT,x,spawn,d
+            keymode=resize
+            bind=SUPER,Space,spawn,e
+            keymode=common
+            bind=SUPER,Space,spawn,f
+            '''))
+        data = self.helper('binds')
+        found = {(s['what'], s['file']): s['shadowedBy']['label'] for s in data['shadowed']}
+        self.assertEqual(found, {('grim', 'user.conf'): 'Super + Shift + S',     # Arctic's screenshot key
+                                 ('b', 'user.conf'): 'Super + Ctrl + `',          # code:49 is the grave key
+                                 ('f', 'user.conf'): 'Super + Space'})           # common meets default
+        # A release bind doesn't meet a press bind, a `c` bind lets the next one run too, and
+        # another keymode is another set of keys.
 
 
 class StartupTest(Home):
@@ -563,6 +607,7 @@ class DefaultAppsTest(Home):
         browser = self.role(data, 'browser')
         self.assertEqual([c['id'] for c in browser['candidates']], ['org.mozilla.firefox', 'app.zen_browser.zen'])
         self.assertEqual(browser['current'], 'app.zen_browser.zen')        # /etc/arctic/default-apps
+        self.assertEqual(browser['keys'], 'Super + B')
         self.assertFalse(browser['overridden'])
         terminal = self.role(data, 'terminal')
         self.assertEqual([c['id'] for c in terminal['candidates']], ['foot', 'kitty'])   # not xterm (no --hold)

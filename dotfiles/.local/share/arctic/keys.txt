@@ -3,7 +3,7 @@
   Everyday
     Super + Space            Apps (press again to close)
     Super + Enter            Terminal
-    Super + W                Browser
+    Super + B                Browser
     Super + E                Code editor
     Super + F                Files
     Super + Shift + F        Files in the terminal (yazi)
@@ -42,7 +42,13 @@
     Super + Shift + N        Do not disturb
     Super + Shift + T        Switch Winter / Polar night
     Super + Shift + R        Reload the desktop config
-    Print                    Screenshot an area (Shift: screen, Super: window)
+
+  Capture
+    Print                    Screenshot of an area (drag, or click a window)
+    Super + Shift + S        Screenshot of an area
+    Shift + Print            Screenshot of this screen
+    Super + Print            Screenshot of the window
+    Ctrl + Print             An area to the clipboard only
 
   Touchpad
     3 fingers                Move focus
