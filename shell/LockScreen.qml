@@ -46,7 +46,7 @@ Scope {
         reveal = false;
         wallpaperView.reload();
         // The password is typed in the first layout (the installer's), whatever was active.
-        if (KeyboardService.multiple && KeyboardService.index !== 0) KeyboardService.set(0);
+        if (KeyboardService.multiple && KeyboardService.index !== 0) KeyboardService.set(0, true);
         lock.locked = true;
         root.showing = true;
         NotificationService.locked = true;

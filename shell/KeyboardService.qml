@@ -16,10 +16,18 @@ Singleton {
     readonly property var current: layouts[index] || null
     readonly property string name: current ? current.name : ''
     readonly property string shortName: current ? current.short : ''
+    // A switch to another layout (not the first report, not the lock screen's reset): the OSD
+    // shows its name.
+    signal switched(string name)
+    property bool known: false
+    property bool quiet: false
 
     function next() { Quickshell.execDetached(['python3', Session.scripts + '/keyboard.py', 'next']); }
-    function set(i) {
-        if (i >= 0 && i < layouts.length) Quickshell.execDetached(['python3', Session.scripts + '/keyboard.py', 'set', String(i)]);
+    // quietly: the switch isn't announced (the lock screen's reset to the first layout).
+    function set(i, quietly) {
+        if (i < 0 || i >= layouts.length) return;
+        quiet = quietly === true;
+        Quickshell.execDetached(['python3', Session.scripts + '/keyboard.py', 'set', String(i)]);
     }
     function restart() {
         watch.running = false;
@@ -39,7 +47,11 @@ Singleton {
                     keyboard.switchLabel = msg.switch_label || '';
                     if (keyboard.index >= keyboard.layouts.length) keyboard.index = 0;
                 } else if (msg.type === 'active' && msg.index >= 0) {
+                    const moved = keyboard.known && msg.index !== keyboard.index;
                     keyboard.index = msg.index;
+                    keyboard.known = true;
+                    if (moved && !keyboard.quiet && keyboard.multiple) keyboard.switched(keyboard.name);
+                    keyboard.quiet = false;
                 }
             }
         }
