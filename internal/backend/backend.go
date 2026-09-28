@@ -101,6 +101,9 @@ type Outcome struct {
 	// MOK is MOKNone, MOKRequested (enrolment waits for the restart; pending at first boot
 	// when the driver was put off) or MOKFailed (mokutil refused).
 	MOK string
+	// Notes are sentences for the Done screen about an install that succeeded with a
+	// caveat (e.g. installer.NoteStillOpen).
+	Notes []string
 }
 
 // DriverOutcome is what happened to one driver (protocol.DriverInstalled, …).

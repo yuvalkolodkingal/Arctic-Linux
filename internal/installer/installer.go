@@ -66,6 +66,12 @@ type Installer struct {
 	drvStatus   map[string]string
 	akmodsReady bool
 	mokImported bool // mokutil --import queued this run's key (revoked on failure)
+	// committed is set once the bootloader is installed and the user exists: from then on a
+	// failure leaves the partitions and the boot entry alone. complete is set
+	// when the system is fully installed and relabelled: only unmounting is left.
+	committed, complete bool
+	// sleepFn replaces time.Sleep in tests (retries and waits).
+	sleepFn func(context.Context, time.Duration) error
 }
 
 type layout struct {
@@ -106,8 +112,13 @@ func (in *Installer) run(ctx context.Context, name string, args ...string) error
 }
 
 func (in *Installer) chroot(ctx context.Context, c Cmd) error {
-	_, err := in.R.Run(ctx, Chroot(in.Opt.Target, c))
+	_, err := in.runChroot(ctx, c)
 	return err
+}
+
+// runChroot runs c inside the target; dnf is tried again when it failed on the network.
+func (in *Installer) runChroot(ctx context.Context, c Cmd) (Result, error) {
+	return in.runNet(ctx, Chroot(in.Opt.Target, c))
 }
 
 func (in *Installer) output(ctx context.Context, name string, args ...string) (string, error) {
@@ -149,6 +160,14 @@ func (in *Installer) Run(ctx context.Context) error {
 		in.t.Phase(p.phase, p.status)
 		if err := p.fn(ctx); err != nil {
 			in.Rep.Logf("%s failed: %v", p.phase, err)
+			if in.complete {
+				// Everything is installed and relabelled; only letting go of the disk
+				// failed. The system boots: keep it, and say so on the Done screen.
+				in.Rep.Logf("the new system is complete; keeping it (%v)", err)
+				in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteStillOpen)
+				in.R.Run(context.Background(), Cmd{Name: "umount", Args: []string{in.Opt.Target}, AllowFail: true}) // the private bind
+				break
+			}
 			in.cleanup(context.Background())
 			return fmt.Errorf("%s: %w", p.phase, err)
 		}
@@ -164,15 +183,26 @@ func (in *Installer) Run(ctx context.Context) error {
 // it also removes the partitions this run added (wiping their signatures first), so the other
 // system's disk is left as it was and a retry finds the same free space, and it removes the
 // firmware boot entry this run created.
+//
+// Once the install is committed (bootloader installed, user created) cleanup only unmounts
+// and closes: the new system may already be complete enough to boot, and its boot entry and
+// partitions must never be thrown away by a failure in the last steps. The key request is
+// still revoked: the failure screen can't show its code, and "Try again" queues a new one.
 func (in *Installer) cleanup(ctx context.Context) {
 	in.R.Note("cleanup after failure")
 	in.revokeMOK(ctx)
+	in.stopTargetProcesses(ctx)
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{"-R", in.Opt.Target}, AllowFail: true})
 	if in.lay.luksName != "" {
+		in.releaseMountHolders(ctx)
 		in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=15"}, AllowFail: true})
 		in.R.Run(ctx, Cmd{Name: "cryptsetup", Args: []string{"close", in.lay.luksName}, AllowFail: true})
 	}
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{in.Opt.Target}, AllowFail: true}) // the private bind
+	if in.committed {
+		in.R.Note("the bootloader and the account are in place: the partitions and the boot entry stay")
+		return
+	}
 	if len(in.lay.created) > 0 {
 		args := []string{"--delete", in.lay.disk}
 		for _, n := range in.lay.created {
@@ -306,11 +336,13 @@ func (in *Installer) diskPhase(ctx context.Context) error {
 }
 
 // privateTarget makes the target directory a private mount point before anything is mounted
-// on it. "/" is a shared mount (systemd), so every mount below it is copied into the mount
-// namespaces of sandboxed services (ProtectSystem=, PrivateTmp=, …). Those copies drop out of
-// umount propagation once the API file systems are bound in with --make-rslave, stay mounted,
-// and keep the new btrfs alive, so closing LUKS at the end fails with "Device or resource
-// busy". Under a private mount point the new system's mounts stay in this namespace.
+// on it. "/" is a shared mount (systemd), so every mount below it would propagate into the
+// mount namespaces of sandboxed services (ProtectSystem=, PrivateTmp=, …) that already exist;
+// those copies drop out of umount propagation once the API file systems are bound in with
+// --make-rslave, stay mounted, and keep the new btrfs alive, so closing LUKS at the end fails
+// with "Device or resource busy". Under a private mount point nothing propagates. A service
+// that *starts* while the target is mounted still gets a copy of every mount (a new namespace
+// copies the whole tree): releaseMountHolders unmounts those at the end (release.go).
 func (in *Installer) privateTarget(ctx context.Context) error {
 	tgt := in.Opt.Target
 	if err := in.R.MkdirAll(tgt, 0o755); err != nil {
@@ -680,7 +712,7 @@ var LiveOnlyUnits = []string{"livesys.service", "livesys-late.service", "arcticd
 // packages removed without scriptlets: a live-only leftover must not stop the install.
 func (in *Installer) removeLivePackages(ctx context.Context) error {
 	args := append([]string{"remove", "-y", "--no-autoremove"}, LiveOnlyPackages...)
-	res, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "dnf", Args: args, AllowFail: true}))
+	res, err := in.runChroot(ctx, Cmd{Name: "dnf", Args: args, AllowFail: true})
 	if err != nil {
 		return err
 	}
@@ -1151,12 +1183,12 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 			}
 		} else {
 			in.Rep.Logf("batched dnf install failed, installing one by one: %v", err)
-			if _, e := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, extra...), AllowFail: true})); e != nil {
+			if _, e := in.runChroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, extra...), AllowFail: true}); e != nil {
 				return e
 			}
 		}
 	} else if len(extra) > 0 {
-		if _, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, extra...), AllowFail: true})); err != nil {
+		if _, err := in.runChroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, extra...), AllowFail: true}); err != nil {
 			return err
 		}
 	}
@@ -1398,7 +1430,7 @@ func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth 
 			if !ok {
 				return fmt.Errorf("unknown flatpak remote %q", meth.Remote)
 			}
-			if _, err := in.R.Run(ctx, Cmd{Name: "flatpak", Args: []string{"remote-add", "--system", "--if-not-exists", meth.Remote, url}, Env: in.flatpakEnv()}); err != nil {
+			if _, err := in.runNet(ctx, Cmd{Name: "flatpak", Args: []string{"remote-add", "--system", "--if-not-exists", meth.Remote, url}, Env: in.flatpakEnv()}); err != nil {
 				return err
 			}
 			in.remoteDone[meth.Remote] = true
@@ -1406,7 +1438,7 @@ func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth 
 		if meth.Ref == "" {
 			return nil
 		}
-		_, err := in.R.Run(ctx, Cmd{Name: "flatpak", Args: []string{"install", "--system", "-y", "--noninteractive", meth.Remote, meth.Ref}, Env: in.flatpakEnv(),
+		_, err := in.runNet(ctx, Cmd{Name: "flatpak", Args: []string{"install", "--system", "-y", "--noninteractive", meth.Remote, meth.Ref}, Env: in.flatpakEnv(),
 			OnLine: func(l string) {
 				if p, ok := ParsePercent(l); ok {
 					report(p)
@@ -1455,6 +1487,7 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	if _, err := in.R.Run(ctx, Cmd{Name: "useradd", Args: args, Redact: []int{len(args) - 2}, SecretLabel: "password hash"}); err != nil {
 		return err
 	}
+	in.committed = true
 	if err := in.run(ctx, "usermod", "--root", in.Opt.Target, "--lock", "root"); err != nil {
 		return err
 	}
@@ -1523,23 +1556,19 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	if err := in.setupSnapper(ctx); err != nil {
 		return err
 	}
+	in.complete = true
 	in.t.Update(0.8, "")
-	if err := in.run(ctx, "umount", "--recursive", t); err != nil {
+	if err := in.releaseTarget(ctx); err != nil {
 		return err
-	}
-	if in.lay.luks {
-		// udev may still be probing the mapper after the unmount.
-		if _, err := in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=30"}, AllowFail: true}); err != nil {
-			return err
-		}
-		if err := in.run(ctx, "cryptsetup", "close", in.lay.luksName); err != nil {
-			return err
-		}
 	}
 	// The private bind of the target directory (privateTarget).
 	_, err = in.R.Run(ctx, Cmd{Name: "umount", Args: []string{t}, AllowFail: true})
 	return err
 }
+
+// NoteStillOpen is the Done screen's note when the new system is complete but its disk
+// couldn't be let go of at the end (Outcome.Notes).
+const NoteStillOpen = "Arctic Linux is installed. The installer couldn’t close the new disk at the end, because the live system is still using it; restarting closes it, and nothing is lost."
 
 // SnapperPolicy is the cleanup policy of snapper's root configuration: the snapshot pairs
 // around dnf transactions (arctic-snapper.actions) use the number algorithm, of which the newest

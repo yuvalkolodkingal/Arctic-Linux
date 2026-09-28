@@ -126,6 +126,7 @@ type Wizard struct {
 	// Set by the engine when the install finished (Done screen).
 	DriverResults []protocol.DriverResult
 	SecureBoot    *protocol.SecureBootInfo
+	DoneNotes     []string
 }
 
 // New starts a wizard with defaults: the suggested language (from the live session's LANG),
@@ -502,6 +503,9 @@ func (w *Wizard) Get(id string) (protocol.StepResult, *protocol.Error) {
 		}
 		if w.SecureBoot != nil {
 			opts["secure_boot"] = w.SecureBoot
+		}
+		if len(w.DoneNotes) > 0 {
+			opts["notes"] = w.DoneNotes
 		}
 		res.Options = opts
 	}

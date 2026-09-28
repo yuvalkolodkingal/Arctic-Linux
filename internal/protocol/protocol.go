@@ -367,6 +367,9 @@ type DoneEvent struct {
 	// SecureBoot is set when a driver's signing key has to be enrolled after the restart
 	// (Secure Boot is on): the one-time code and the steps of the firmware's MOK screen.
 	SecureBoot *SecureBootInfo `json:"secure_boot,omitempty"`
+	// Notes are sentences about an install that succeeded with a caveat (the new disk
+	// couldn't be closed at the end, …).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Driver statuses (DriverResult.Status).

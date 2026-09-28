@@ -132,6 +132,10 @@ $ chroot /mnt rpm -q --quiet ffmpeg-free
 $ chroot /mnt dnf swap -y --allowerasing ffmpeg-free ffmpeg
 $ chroot /mnt dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver intel-media-driver yazi openh264 mozilla-openh264 gstreamer1-plugin-openh264 glibc-langpack-en kitty kitty-shell-integration zsh Thunar vlc vlc-plugins-freeworld
 $ chroot /mnt flock -w 1800 /run/akmods/akmods.lock true
+? processes using /mnt: 4242 akmods (root)
+# wait 2s
+? processes using /mnt: 4242 akmods (root)
+# wait 2s
 ? processes using /mnt: none
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub app.zen_browser.zen
@@ -144,7 +148,6 @@ $ chroot /mnt modinfo -k 6.17.8-300.fc44.x86_64 -F version nvidia
 # driver nvidia for NVIDIA GeForce RTX 4060 Max-Q / Mobile: installed
 # driver intel-media for Intel Iris Xe Graphics: installed
 $ chroot /mnt grubby --update-kernel=ALL '--args=rd.driver.blacklist=nouveau,nova_core modprobe.blacklist=nouveau,nova_core nvidia-drm.modeset=1'
-$ chroot /mnt mokutil --import /etc/pki/akmods/certs/public_key.der --hash-file /dev/stdin < [secret: one-time code hash]
 write /mnt/var/lib/flatpak/.fedora-initialized (0644, empty)
 
 # == finalize: Setting up your account…
@@ -196,9 +199,17 @@ $ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/b
 $ chroot /mnt snapper --no-dbus -c root create-config /
 $ chroot /mnt snapper --no-dbus -c root set-config NUMBER_CLEANUP=yes NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no
 $ setfiles -F -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt/.snapshots /mnt/etc/snapper /mnt/etc/sysconfig/snapper
+? processes using /mnt: 5151 gpg-agent (root)
+$ kill -TERM 5151
+# wait 1s
 ? processes using /mnt: none
 $ umount --recursive /mnt
 $ sync
+? other mount namespaces with /mnt: 812 systemd-hostnam (mounts: /mnt /mnt/boot /mnt/boot/efi)
+$ nsenter --target 812 --mount -- umount --recursive --lazy /mnt
+$ udevadm settle --timeout=30
+$ cryptsetup close luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad
+# wait 1s
 ? other mount namespaces with /mnt: none
 $ udevadm settle --timeout=30
 $ cryptsetup close luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad
