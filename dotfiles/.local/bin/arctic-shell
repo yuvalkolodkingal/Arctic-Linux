@@ -29,6 +29,9 @@ shell_dir() {
 
 dir="$(shell_dir)" || { echo "arctic-shell: no shell found (is the arctic-shell package installed?)" >&2; exit 1; }
 command -v quickshell >/dev/null 2>&1 || { echo "arctic-shell: quickshell is not installed" >&2; exit 1; }
+# The launcher only notices new apps in ~/.local/share/applications (web apps, terminal apps)
+# when that folder already existed as the shell started.
+mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/applications" 2>/dev/null
 
 case "${1:-}" in
   --path)       echo "$dir" ;;
