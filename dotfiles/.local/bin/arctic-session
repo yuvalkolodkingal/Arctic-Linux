@@ -4,6 +4,7 @@
 # (for example as a systemd user unit from arctic-desktop-config), nothing happens.
 #
 #   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle [--restart]
+#                  nightlight
 #
 # `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
@@ -57,10 +58,16 @@ case "${1:-}" in
         esac
       done < "$conf"
     fi
+    # Keep awake (arctic-keep-awake) drops both timeouts until it ends; locking before sleep stays.
+    awake=""
+    [[ -r "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake" ]] && read -r awake < "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake"
+    if [[ "$awake" =~ ^[0-9]+$ ]] && (( awake == 0 || awake > $(date +%s) )); then lock_after=0 suspend_after=0; fi
     args=(-w)
     (( lock_after > 0 )) && args+=(timeout "$lock_after" 'arctic-lock')
     (( suspend_after > 0 )) && args+=(timeout "$suspend_after" 'systemctl suspend')
     args+=(before-sleep 'arctic-lock')
     run_once swayidle swayidle "${args[@]}" ;;
-  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]" >&2; exit 2 ;;
+  # Night light on its schedule (arctic-nightlight runs wlsunset; Settings > Displays).
+  nightlight) command -v arctic-nightlight >/dev/null 2>&1 && arctic-nightlight apply >/dev/null 2>&1 ;;
+  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight" >&2; exit 2 ;;
 esac

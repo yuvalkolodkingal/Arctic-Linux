@@ -127,6 +127,11 @@ it.
 A display you switch off stays off only until you log out. That's on purpose: a saved "off" could
 leave a laptop's only screen dark the next time it starts without its dock.
 
+**Night light** makes the screen warmer in the evening: **Off**, **Sunset to sunrise** (worked out
+from your time zone's location, nothing is looked up online), **Custom hours** or **Always on**, and
+how warm with **Warmth**. **Turn on** / **Turn off** changes it right away until the schedule
+changes anyway; `Super + Ctrl + N` does the same. See [Night light and keep awake](Night-Light-and-Keep-Awake).
+
 ## Keyboard and mouse
 
 ![The Keyboard and mouse page](images/settings-input.png)

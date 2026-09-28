@@ -41,6 +41,8 @@
     Super + Delete           Dismiss notification (Shift: all)
     Super + Shift + N        Do not disturb
     Super + Shift + T        Switch Winter / Polar night
+    Super + Ctrl + N         Night light on / off
+    Super + Ctrl + I         Keep awake (no lock or sleep) on / off
     Super + Shift + R        Reload the desktop config
     Print                    Screenshot an area (Shift: screen, Super: window)
 

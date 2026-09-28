@@ -10,6 +10,7 @@
 - [Desktop tour](Desktop-Tour)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
 - [Settings](Settings)
+- [Night light and keep awake](Night-Light-and-Keep-Awake)
 - [Apps and software](Apps-and-Software)
 - [Drivers](Drivers)
 - [Updates](Updates)

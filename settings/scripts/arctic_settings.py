@@ -37,6 +37,8 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     network | wifi on|off         NetworkManager status (nmcli)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
+    nightlight | nightlight-set KEY=VALUE…|now on|off    night light schedule (arctic-nightlight)
+    keep-awake [on [MINUTES]|off] no lock or suspend for a while (arctic-keep-awake)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -1651,6 +1653,58 @@ def cmd_idle_set(paths, args):
     return result
 
 
+# ---- night light and keep awake (arctic-nightlight, arctic-keep-awake) -------------------------
+
+def _helper_json(argv, timeout=20, missing=None):
+    """Run an arctic-* helper that answers with one JSON line; its error sentence becomes ours."""
+    if not which(argv[0]):
+        if missing is not None:
+            return missing
+        raise Failure('{} isn’t installed.'.format(argv[0]))
+    code, out, err = run(argv, timeout=timeout)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if not isinstance(data, dict):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['{} didn’t answer.'.format(argv[0])])[-1])
+    if code != 0 or not data.get('ok'):
+        raise Failure(data.get('error') or 'That didn’t work.')
+    return data
+
+
+def cmd_nightlight(paths, _args):
+    data = _helper_json(['arctic-nightlight', 'status', '--json'], missing=dict(ok=True, helper=False))
+    data.setdefault('helper', True)
+    return data
+
+
+def cmd_nightlight_set(paths, args):
+    """nightlight-set KEY=VALUE… (the schedule) or nightlight-set now on|off."""
+    if args[:1] == ['now']:
+        if args[1:] not in (['on'], ['off']):
+            raise Failure('usage: nightlight-set now on|off')
+        data = _helper_json(['arctic-nightlight', args[1], '--quiet'])
+    else:
+        allowed = ('mode', 'temp', 'from', 'to', 'lat', 'lon')
+        if not args or any(a.split('=', 1)[0] not in allowed or '=' not in a for a in args):
+            raise Failure('usage: nightlight-set KEY=VALUE… ({})'.format(', '.join(allowed)))
+        data = _helper_json(['arctic-nightlight', 'set'] + list(args))
+    data['helper'] = True
+    return data
+
+
+def cmd_keep_awake(paths, args):
+    """keep-awake [on [MINUTES]|off]: arctic-keep-awake's status, or turn it on or off."""
+    if not args:
+        data = _helper_json(['arctic-keep-awake', 'status', '--json'], missing=dict(ok=True, helper=False))
+    elif args[0] == 'on' and (len(args) == 1 or (len(args) == 2 and args[1].isdigit())):
+        data = _helper_json(['arctic-keep-awake', 'on'] + args[1:] + ['--quiet'])
+    elif args == ['off']:
+        data = _helper_json(['arctic-keep-awake', 'off', '--quiet'])
+    else:
+        raise Failure('usage: keep-awake [on [MINUTES]|off]')
+    data.setdefault('helper', True)
+    return data
+
+
 # ---- keyboard data ------------------------------------------------------------------------------
 
 # Layout-switch keys offered in Settings. Not Win+Space: Super + Space opens the launcher.
@@ -2120,6 +2174,13 @@ COMMANDS = {
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
            'ensure-source'}
+
+
+# Stream 5 (system): night light, keep awake.
+COMMANDS.update({
+    'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
+})
+WRITERS |= {'nightlight-set'}
 
 
 def main(argv=None):

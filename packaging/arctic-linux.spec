@@ -212,6 +212,10 @@ Requires:       libdnf5-plugin-actions
 Requires:       snapper
 Requires:       btrfs-progs
 Requires:       findutils
+# Stream 5 (system): night light (arctic-nightlight runs wlsunset; tzdata's zone1970.tab gives
+# the time zone's location), keep awake (arctic-keep-awake, through arctic-session's swayidle).
+Requires:       wlsunset
+Requires:       tzdata
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
