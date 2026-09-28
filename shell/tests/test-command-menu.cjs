@@ -128,7 +128,7 @@ const ids = (list) => list.map(r => r.id);
 assert.deepEqual(ids(Menu.rows(base, '', Menu.context(false, false), {})), []);
 // All commands present but no shell IPC: the IPC-only rows and Remove (IPC only) hide.
 let ctx = ctxWith({ cmds: everything });
-assert.deepEqual(ids(Menu.rows(base, '', ctx, {})), ['apps', 'learn', 'capture', 'toggle', 'style', 'update', 'system']);
+assert.deepEqual(ids(Menu.rows(base, '', ctx, {})), ['apps', 'learn', 'capture', 'toggle', 'style', 'setup', 'update', 'system']);
 assert.ok(!ids(Menu.rows(base, 'apps', ctx, {})).includes('apps.emoji'));
 // The shell's `quickshell ipc show` lines.
 const show = ['target apps', '  function install(): void', '  function remove(): void', '  function source(name: string): void',
@@ -172,13 +172,17 @@ const pages = Search.parseSettings(fs.readFileSync(root + '../settings/SearchInd
 ctx = ctxWith({ cmds: everything, lines: ['provider\tstyle.theme\t[{"name":"winter","label":"Winter","mode":"light","active":false},'
     + '{"name":"polar-night","label":"Polar night","mode":"dark","active":true}]'] });
 const setup = Menu.rows(base, 'setup', ctx, { settingsPages: pages });
-assert.equal(setup.length, pages.length);
+assert.equal(setup.length, pages.length + 1, 'the pages, then the branch\'s own rows');
 assert.deepEqual(plain(setup[0].run), ['arctic-settings', pages[0].id]);
+assert.equal(setup[setup.length - 1].id, 'setup.hooks');
 const themes = Menu.rows(base, 'style.theme', ctx, {});
 assert.deepEqual(themes.map(t => [t.label, t.current]), [['Winter', false], ['Polar night', true]]);
 assert.deepEqual(plain(themes[0].run), ['arctic-theme', 'set', 'winter']);
-// No pages (Settings not installed): Setup hides.
+// No pages (Settings not installed): only its own rows; none of those either, and Setup hides.
+assert.deepEqual(ids(Menu.rows(base, 'setup', ctx, { settingsPages: [] })), ['setup.hooks']);
+ctx.commands['arctic-hook'] = false;
 assert.ok(!ids(Menu.rows(base, '', ctx, { settingsPages: [] })).includes('setup'));
+ctx.commands['arctic-hook'] = true;
 
 // ---- search, trail, locate --------------------------------------------------------------------
 ctx = ctxWith({ cmds: everything, lines: show.map(l => 'ipc\t' + l) });

@@ -17,7 +17,8 @@
 #
 # Choosing a wallpaper also runs `arctic-theme sync`: with auto colours on (the default), your
 # own pictures colour the desktop (the 'wallpaper' theme) and Arctic's wallpapers bring back
-# Winter / Polar night. ARCTIC_WALLPAPER_NO_SYNC=1 skips that.
+# Winter / Polar night. ARCTIC_WALLPAPER_NO_SYNC=1 skips that. A new choice also runs your
+# wallpaper hooks (arctic-hook wallpaper PICTURE).
 set -euo pipefail
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
@@ -96,6 +97,7 @@ case "${1:-}" in
     fi ;;
   *)
     mkdir -p "$CONF"
+    chosen=1
     if is_name "$1"; then
       printf '%s\n' "$1" > "$CONF/wallpaper"
       sync_colours
@@ -134,4 +136,8 @@ sleep 0.3
 if [[ -n "$old" ]]; then
   # shellcheck disable=SC2086
   kill $old 2>/dev/null || true
+fi
+# A new choice (not a redraw): your wallpaper hooks (arctic-hook), in the background.
+if [[ -n "${chosen:-}" ]] && command -v arctic-hook >/dev/null 2>&1; then
+  setsid -f arctic-hook wallpaper "$img" >/dev/null 2>&1 || true
 fi

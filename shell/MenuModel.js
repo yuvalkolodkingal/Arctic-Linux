@@ -275,7 +275,7 @@ function providerRows(entry, ctx, extra) {
 
 function hasRows(model, id, ctx, extra) {
     const e = model.byId[id];
-    if (e.provider) return providerRows(e, ctx, extra).length > 0;
+    if (e.provider && providerRows(e, ctx, extra).length > 0) return true;
     const kids = childIds(model, id);
     for (let i = 0; i < kids.length; i++) {
         const k = model.byId[kids[i]];
@@ -289,12 +289,12 @@ function isBranch(model, entry) {
     return !!entry.provider || model.order.some(id => parentOf(id) === entry.id);
 }
 
-// The rows of a branch ('' is the top), in file order:
+// The rows of a branch ('' is the top), in order:
 // {id, label, icon, desc, keys, kind: 'branch'|'action'|'link', run, go, checked, current}.
 function rows(model, parent, ctx, extra) {
     const p = parent ? model.byId[parent] : null;
-    if (p && p.provider) return providerRows(p, ctx, extra);
-    const out = [];
+    // A provider's rows come first, then the branch's own.
+    const out = p && p.provider ? providerRows(p, ctx, extra) : [];
     childIds(model, parent).forEach(id => {
         const e = model.byId[id];
         if (!allowed(e, ctx)) return;

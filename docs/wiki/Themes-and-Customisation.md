@@ -313,6 +313,32 @@ A file of yours with the same name as one of Arctic's replaces it, and a file of
 isn't executable turns Arctic's hook off. Hooks must be quick: each is stopped after 5 seconds,
 and one that fails is reported but never stops the switch.
 
+### Hooks for other events
+
+The same rules work for more than the theme. Put executable files in the event's folder in
+`~/.config/arctic/`, and `arctic-hook` runs them when it happens:
+
+| Folder | When | `$1` |
+|---|---|---|
+| `wallpaper-hooks.d` | You chose a new wallpaper | the picture |
+| `lock-hooks.d` | The screen has locked | — |
+| `unlock-hooks.d` | The screen has unlocked | — |
+| `battery-low-hooks.d` | The battery is low | the percentage |
+| `post-update-hooks.d` | The first login after updates were installed at a restart | the Arctic version |
+| `login-hooks.d` | Every login, once the desktop has started | — |
+
+Each hook also gets `ARCTIC_HOOK_EVENT` and `ARCTIC_HOOK_VALUE`. Names ending in `.sample` are
+skipped, so you can keep examples next to your hooks. What a hook prints shows up in
+`journalctl --user -t arctic-hook`. For example, to pause music when the screen locks:
+
+```sh
+#!/bin/sh
+# ~/.config/arctic/lock-hooks.d/10-pause
+playerctl pause
+```
+
+`arctic-hook --list` shows every event and the hooks it would run.
+
 ## Making your own theme
 
 A theme is a folder: `theme.json` for the shell, `gtk.css`, and a colour file for each app,

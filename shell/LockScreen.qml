@@ -79,7 +79,9 @@ Scope {
         }
     }
     // Let the green "accepted" ring show for a moment before the screen unlocks.
-    Timer { id: unlockTimer; interval: 180; onTriggered: { lock.locked = false; root.password = ''; root.state = 'idle'; } }
+    Timer { id: unlockTimer; interval: 180; onTriggered: { lock.locked = false; root.password = ''; root.state = 'idle'; Quickshell.execDetached(['arctic-hook', 'unlock']); } }
+    // Your lock hooks (arctic-hook), once every screen is covered; unlock's run above.
+    onSecureChanged: if (secure) Quickshell.execDetached(['arctic-hook', 'lock'])
 
     // arctic-wallpaper records the picture it drew; fall back to the theme's lock wallpaper.
     FileView {

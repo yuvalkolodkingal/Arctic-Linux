@@ -45,7 +45,8 @@
     "style.wallpapers": {"label": "Wallpaper", "icon": "image", "keys": "Super + Shift + W", "run": ["arctic-shell-ipc", "wallpapers", "open"]},
     "style.appearance": {"label": "Appearance settings", "icon": "sliders", "run": ["arctic-settings", "appearance"]},
 
-    "setup": {"label": "Setup", "icon": "sliders", "desc": "Every page of Settings", "provider": "settings", "needs": ["arctic-settings"]},
+    "setup": {"label": "Setup", "icon": "sliders", "desc": "Every page of Settings", "provider": "settings"},
+    "setup.hooks": {"label": "Open my hooks folder", "icon": "folder", "desc": "Your scripts for desktop events", "run": ["arctic-hook", "--open"]},
 
     "install": {"label": "Install", "icon": "download"},
     "install.apps": {"label": "Get apps", "icon": "package", "desc": "Flathub, Fedora packages and web apps", "keys": "Super + Shift + A", "run": ["arctic-shell-ipc", "apps", "install"], "ipc": "apps install"},
