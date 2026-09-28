@@ -86,6 +86,8 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   picture), Dark or Light.
 - **More themes:** Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine and Everforest, drawn from
   their own colours; a pair (Catppuccin Latte and Mocha) switches as one with `Super + Shift + T`.
+- **Code font:** the monospace font for the terminals (kitty, foot, alacritty), GTK's monospace
+  font and the shell (`arctic-font`); a font you set in a terminal's own file is left alone.
 - **Switch light and dark by itself:** Off, Sunset to sunrise (where your time zone is) or Custom
   hours. See [Themes and customisation](Themes-and-Customisation#light-by-day-dark-at-night).
 - **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers` (the same

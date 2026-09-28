@@ -129,6 +129,19 @@ font_size 12
 background_opacity 0.95
 ```
 
+### The code font
+
+Settings › Appearance › **Code font** (or the [command menu](Command-Menu)'s Style › Code font)
+picks any monospace font installed. `arctic-font` changes it in kitty (which reloads), foot, and
+alacritty, sets GTK's monospace font, and the shell's own code text follows. It only changes a
+line that still holds what Arctic wrote there, so a font you set yourself stays, and it says so:
+
+```sh
+arctic-font list                 # monospace fonts installed
+arctic-font set "Fira Code"
+arctic-font size 12              # the terminals' size (arctic-font size reset: 10.5)
+```
+
 kitty's own shortcuts work as usual; for example `Ctrl + Shift + T` opens a new tab and
 `Ctrl + Shift + Enter` a new window inside kitty. See kitty's documentation for the full list.
 

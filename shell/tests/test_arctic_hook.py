@@ -85,7 +85,7 @@ class HookTests(unittest.TestCase):
         self.hook('mine', 'post-update', 'log', 'true')
         listing = json.loads(self.run_hook('--list', '--json').stdout)
         events = {e['event']: e for e in listing['events']}
-        self.assertEqual(sorted(events), sorted(['wallpaper', 'lock', 'unlock', 'battery-low', 'post-update', 'login', 'theme']))
+        self.assertEqual(sorted(events), sorted(['wallpaper', 'font', 'lock', 'unlock', 'battery-low', 'post-update', 'login', 'theme']))
         self.assertEqual(len(events['post-update']['hooks']), 1)
         self.assertEqual(events['theme']['folders'][1], str(self.mine / 'theme-hooks.d'))
 

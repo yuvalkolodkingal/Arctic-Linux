@@ -42,6 +42,7 @@
 
     "style": {"label": "Style", "icon": "brush"},
     "style.theme": {"label": "Theme", "icon": "brush", "provider": "themes", "needs": ["arctic-theme"]},
+    "style.font": {"label": "Code font", "icon": "code", "desc": "The terminal's and the shell's", "provider": "fonts", "needs": ["arctic-font"]},
     "style.wallpapers": {"label": "Wallpaper", "icon": "image", "keys": "Super + Shift + W", "run": ["arctic-shell-ipc", "wallpapers", "open"]},
     "style.appearance": {"label": "Appearance settings", "icon": "sliders", "run": ["arctic-settings", "appearance"]},
 

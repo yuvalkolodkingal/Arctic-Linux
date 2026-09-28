@@ -65,7 +65,8 @@ Singleton {
     // builds register as "Figtree Light"; use whichever family is really installed.
     readonly property var families: Qt.fontFamilies()
     readonly property string fontSans: pick([tokens.fonts.sans, tokens.fonts.sans + ' Light', 'Noto Sans'])
-    readonly property string fontMono: pick([tokens.fonts.mono, 'JetBrains Mono NL', 'Noto Sans Mono', 'monospace'])
+    // The code font you chose (arctic-font writes shell.json "monoFont"), when it's installed.
+    readonly property string fontMono: pick([Session.settings.monoFont || '', tokens.fonts.mono, 'JetBrains Mono NL', 'Noto Sans Mono', 'monospace'])
     function pick(list) {
         for (let i = 0; i < list.length; i++) if (families.indexOf(list[i]) >= 0) return list[i];
         return list[list.length - 1];

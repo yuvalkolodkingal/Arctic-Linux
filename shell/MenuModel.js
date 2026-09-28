@@ -16,7 +16,7 @@
 //             toggleWallpapers, toggleKeys, togglePower, lock, toggleBar, openWelcome,
 //             settings (page, key), url (https only) — each becomes an arctic-* command
 //   target    "<id>": opens that branch instead (a link; "go" works too)
-//   provider  rows made when the menu opens: "settings" (the Settings pages), "themes"
+//   provider  rows made when the menu opens: "settings" (the Settings pages), "themes", "fonts"
 //   needs     ["command", …]: hidden unless all are installed (default: the command it runs)
 //   ipc       "target function": hidden unless the running shell answers it
 //   when      "live" | "installed", or {"live": bool, "command": "…", "file": "/…", "outputs": n}
@@ -186,11 +186,12 @@ function guardScript(model, opts) {
                    + ' 2>/dev/null </dev/null | tr -d \'\\n\\t\' | head -c 2000) && printf \'state\\t%s\\t%s\\n\' ' + q(id) + ' "$out" ) &');
     });
     lines.push('wait');
+    const PROVIDERS = { themes: ['arctic-theme', 'list', '--json'], fonts: ['arctic-font', 'list', '--json'] };
     model.order.forEach(id => {
-        const e = model.byId[id];
-        if (e.provider === 'themes')
-            lines.push('command -v arctic-theme >/dev/null 2>&1 && printf \'provider\\t%s\\t%s\\n\' ' + q(id)
-                       + ' "$(timeout 5 arctic-theme list --json 2>/dev/null </dev/null | tr -d \'\\n\\t\')"');
+        const argv = PROVIDERS[model.byId[id].provider];
+        if (argv)
+            lines.push('command -v ' + q(argv[0]) + ' >/dev/null 2>&1 && printf \'provider\\t%s\\t%s\\n\' ' + q(id)
+                       + ' "$(timeout 5 ' + argv.map(q).join(' ') + ' 2>/dev/null </dev/null | tr -d \'\\n\\t\')"');
     });
     return lines.join('\n') + '\n';
 }
@@ -261,6 +262,13 @@ function providerRows(entry, ctx, extra) {
         const pages = (extra && extra.settingsPages) || [];
         pages.forEach(p => out.push({ id: entry.id + '.' + p.id, label: p.title, icon: p.icon || 'sliders',
                                       desc: '', keys: '', kind: 'action', run: ['arctic-settings', p.id] }));
+    } else if (entry.provider === 'fonts') {
+        const data = ctx.providers[entry.id];
+        if (data && Array.isArray(data.fonts)) data.fonts.forEach(f => {
+            if (!f || typeof f.family !== 'string') return;
+            out.push({ id: entry.id + '.' + f.family.toLowerCase().replace(/[^a-z0-9]+/g, '-'), label: f.family, icon: 'code',
+                       desc: '', keys: '', kind: 'action', run: ['arctic-font', 'set', f.family], current: f.family === data.current });
+        });
     } else if (entry.provider === 'themes') {
         const list = ctx.providers[entry.id];
         if (Array.isArray(list)) list.forEach(t => {

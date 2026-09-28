@@ -62,6 +62,28 @@ class DaylightTest(Home):
             self.helper('daylight-set', *bad, ok=False)
 
 
+class FontsTest(Home):
+    def test_missing(self):
+        self.assertFalse(self.helper('fonts')['available'])
+        self.helper('font-set', 'Fira Code', ok=False)
+
+    def test_list_and_set(self):
+        stub(self.bin, 'arctic-font', '''\
+            echo "arctic-font $*" >> "{}"
+            case "$1" in
+              list) echo '{{"ok": true, "current": "JetBrains Mono", "size": 10.5, "fonts": [{{"family": "Fira Code"}}, {{"family": "JetBrains Mono"}}]}}' ;;
+              set) [ "$2" = "Fira Code" ] && echo '{{"ok": true, "family": "Fira Code", "changed": ["kitty"], "skipped": [{{"file": "~/.config/foot/foot.ini", "reason": "has a font of your own"}}]}}' \
+                   || {{ echo '{{"ok": false, "error": "There is no monospace font called that here."}}'; exit 1; }} ;;
+            esac
+            '''.format(self.log))
+        data = self.helper('fonts')
+        self.assertEqual((data['current'], data['fonts']), ('JetBrains Mono', ['Fira Code', 'JetBrains Mono']))
+        data = self.helper('font-set', 'Fira Code')
+        self.assertEqual(data['skipped'][0]['reason'], 'has a font of your own')
+        self.assertIn('There is no', self.helper('font-set', 'Comic Sans', ok=False)['error'])
+        self.assertIn('arctic-font set Fira Code --json', self.calls())
+
+
 class AccessibilityTest(Home):
     def test_keyboard_pointer(self):
         self.assertFalse(self.helper('accessibility')['kbptr'])

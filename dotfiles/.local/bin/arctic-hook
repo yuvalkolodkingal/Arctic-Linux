@@ -10,6 +10,7 @@ Events, their folders (Arctic's in /usr/share/arctic, then yours in ~/.config/ar
 yours replaces Arctic's of the same name, and one of yours that isn't executable turns it off)
 and $1:
   wallpaper    wallpaper-hooks.d     arctic-wallpaper, after drawing a new picture   the picture
+  font         font-hooks.d          arctic-font, after the code font changed        the family
   lock         lock-hooks.d          the screen has locked                           —
   unlock       unlock-hooks.d        the screen has unlocked                         —
   battery-low  battery-low-hooks.d   the battery is low                              percentage
@@ -39,7 +40,7 @@ HOME = os.path.expanduser("~")
 CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "arctic")
 SYSTEM = os.environ.get("ARCTIC_DATA_DIR") or "/usr/share/arctic"
 RUNTIME = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(), "arctic")
-EVENTS = ("wallpaper", "lock", "unlock", "battery-low", "post-update", "login", "theme")
+EVENTS = ("wallpaper", "font", "lock", "unlock", "battery-low", "post-update", "login", "theme")
 TIMEOUT = float(os.environ.get("ARCTIC_HOOK_TIMEOUT", "5"))
 OUTPUT_MAX = 4096
 SKIP_SUFFIXES = ("~", ".rpmnew", ".rpmsave", ".rpmorig", ".disabled", ".sample")

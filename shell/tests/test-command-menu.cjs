@@ -178,6 +178,10 @@ assert.equal(setup[setup.length - 1].id, 'setup.hooks');
 const themes = Menu.rows(base, 'style.theme', ctx, {});
 assert.deepEqual(themes.map(t => [t.label, t.current]), [['Winter', false], ['Polar night', true]]);
 assert.deepEqual(plain(themes[0].run), ['arctic-theme', 'set', 'winter']);
+Menu.readGuard(ctx, 'provider\tstyle.font\t{"ok": true, "current": "Fira Code", "fonts": [{"family": "Fira Code"}, {"family": "JetBrains Mono"}]}');
+const fonts = Menu.rows(base, 'style.font', ctx, {});
+assert.deepEqual(fonts.map(f => [f.label, f.current]), [['Fira Code', true], ['JetBrains Mono', false]]);
+assert.deepEqual(plain(fonts[1].run), ['arctic-font', 'set', 'JetBrains Mono']);
 // No pages (Settings not installed): only its own rows; none of those either, and Setup hides.
 assert.deepEqual(ids(Menu.rows(base, 'setup', ctx, { settingsPages: [] })), ['setup.kbptr', 'setup.hooks']);
 ctx.commands['arctic-hook'] = false;

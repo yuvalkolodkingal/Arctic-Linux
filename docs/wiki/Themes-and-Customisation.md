@@ -336,6 +336,7 @@ The same rules work for more than the theme. Put executable files in the event's
 | Folder | When | `$1` |
 |---|---|---|
 | `wallpaper-hooks.d` | You chose a new wallpaper | the picture |
+| `font-hooks.d` | You chose another code font | the font |
 | `lock-hooks.d` | The screen has locked | — |
 | `unlock-hooks.d` | The screen has unlocked | — |
 | `battery-low-hooks.d` | The battery is low | the percentage |

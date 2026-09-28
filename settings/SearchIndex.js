@@ -38,6 +38,7 @@ var ENTRIES = [
     ["appearance", "appearance.theme", "Theme", "winter polar night dark light mode colours"],
     ["appearance", "appearance.auto", "Match colours to the wallpaper", "auto automatic accent"],
     ["appearance", "appearance.mode", "Light or dark", "dark mode light mode"],
+    ["appearance", "appearance.font", "Code font", "monospace terminal font programming typeface"],
     ["appearance", "appearance.gallery", "More themes", "nord catppuccin gruvbox tokyo night rose pine everforest palette colour scheme gallery"],
     ["appearance", "appearance.schedule", "Switch light and dark by itself", "automatic dark mode sunset sunrise night schedule"],
     ["appearance", "appearance.wallpaper", "Wallpaper", "background picture desktop image add upload drop rename delete my own pictures"],

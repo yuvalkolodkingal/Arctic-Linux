@@ -20,6 +20,7 @@ Page {
     property var theme: ({ available: true, modern: false, themes: [], current: "", mode: "auto", auto: false })
     property var walls: ({ items: [], current: "", available: true })
     property var daylight: ({ available: false, mode: "off" })
+    property var fonts: ({ available: false, fonts: [] })
     property string busyTheme: ""
     property string busyWall: ""
     property bool importing: false
@@ -27,6 +28,7 @@ Page {
     function load() {
         Backend.call(["theme"], r => { if (r.ok) page.theme = r; });
         Backend.call(["daylight"], r => { if (r.ok) page.daylight = r; }, true);
+        Backend.call(["fonts"], r => { if (r.ok) page.fonts = r; }, true);
         loadWallpapers();
     }
     // Light and dark by the clock (arctic-daylight): off, sunset to sunrise, or custom hours.
@@ -290,6 +292,42 @@ Page {
                     maximumLength: 5
                     accessibleName: "Dark from"
                     onAccepted: page.setDaylight(["hours", lightFrom.text.trim(), darkFrom.text.trim()])
+                }
+            }
+        }
+    }
+
+    // The code font (arctic-font): the terminals, GTK's monospace font and the shell's code text.
+    Group {
+        title: "Fonts"
+        visible: page.fonts.available === true && (page.fonts.fonts || []).length > 0
+        SettingRow {
+            searchKey: "appearance.font"
+            title: "Code font"
+            desc: "For the terminal, code and the shell's commands. Zed and other editors keep their own."
+            resettable: false
+            Column {
+                spacing: Theme.space1
+                ArSelect {
+                    width: 240
+                    model: (page.fonts.fonts || []).map(f => ({ value: f, label: f }))
+                    value: page.fonts.current || ""
+                    onActivated: v => Backend.call(["font-set", v], r => {
+                        if (r.ok) {
+                            page.fonts = r;
+                            const skipped = (r.skipped || []).map(s => s.file).join(", ");
+                            Backend.notify("success", skipped ? "Code font changed; " + skipped + " keeps a font of its own" : "Code font changed", false);
+                        }
+                    })
+                }
+                ArText {
+                    width: 240
+                    text: "0O 1lI {} => != ~/.config"
+                    font.family: page.fonts.current || Theme.fontMono
+                    size: 13
+                    lh: 18
+                    color: Theme.inkMuted
+                    elide: Text.ElideRight
                 }
             }
         }

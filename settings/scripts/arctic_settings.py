@@ -48,6 +48,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch
     daylight | daylight-set off|sun|hours LIGHT DARK      light and dark by the clock (arctic-daylight)
     accessibility                 what the Accessibility page needs (the keyboard pointer, wl-kbptr)
+    fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2621,6 +2622,33 @@ def cmd_daylight_set(paths, args):
     return cmd_daylight(paths, args)
 
 
+# ---- the code font (arctic-font) ------------------------------------------------------------------
+
+def cmd_fonts(paths, _args):
+    if not which('arctic-font'):
+        return dict(ok=True, available=False)
+    code, out, err = run(['arctic-font', 'list', '--json'], timeout=20)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['The fonts couldn’t be listed.'])[-1])
+    return dict(ok=True, available=True, current=str(data.get('current') or ''), size=data.get('size'),
+                fonts=[str(f.get('family')) for f in data.get('fonts', []) if isinstance(f, dict) and f.get('family')])
+
+
+def cmd_font_set(paths, args):
+    if len(args) != 1 or not args[0].strip():
+        raise Failure('usage: font-set FAMILY')
+    if not which('arctic-font'):
+        raise Failure('arctic-font isn’t installed.')
+    code, out, err = run(['arctic-font', 'set', args[0], '--json'], timeout=30)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if not isinstance(data, dict) or not data.get('ok'):
+        raise Failure((data or {}).get('error') if isinstance(data, dict) else (strip_ansi(err).strip() or 'The font couldn’t be changed.'))
+    result = cmd_fonts(paths, [])
+    result.update(changed=data.get('changed', []), skipped=data.get('skipped', []))
+    return result
+
+
 # ---- accessibility ---------------------------------------------------------------------------------
 
 def cmd_accessibility(paths, _args):
@@ -2655,7 +2683,8 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
 
 # The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
 COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
-                 'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility})
+                 'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
+                 'fonts': cmd_fonts, 'font-set': cmd_font_set})
 WRITERS |= {'shell-option-set'}
 
 

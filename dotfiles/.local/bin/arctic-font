@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""arctic-font — the code font: the terminals, GTK's monospace font and the shell.
+
+  arctic-font list [--json]          monospace fonts installed (fc-list :spacing=mono)
+  arctic-font current [--json]       the code font and the terminal font size
+  arctic-font set FAMILY [--json]    use FAMILY everywhere Arctic set the code font
+  arctic-font size PT|reset [--json] the terminals' font size (10.5 is Arctic's)
+
+`set` and `size` change a line only while it still holds what Arctic wrote there last (kept in
+~/.config/arctic/fonts.json), so a font you chose yourself in a file is left alone and said so:
+  kitty      ~/.config/kitty/kitty.conf       font_family, bold/italic fonts; kitty reloads
+  foot       ~/.config/foot/foot.ini          font=FAMILY:size=PT (new windows)
+  alacritty  ~/.config/alacritty/alacritty.toml   normal family, size (it reloads by itself)
+  gtk        gsettings monospace-font-name
+  shell      ~/.config/arctic/shell.json "monoFont" (the shell's code text)
+After a change the font hooks run (arctic-hook font FAMILY). Editors such as Zed keep their
+own font settings.
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+HOME = os.path.expanduser("~")
+CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+ARCTIC = os.path.join(CONFIG_HOME, "arctic")
+STATE = os.path.join(ARCTIC, "fonts.json")
+SHELL_JSON = os.path.join(ARCTIC, "shell.json")
+DEFAULTS = {"mono": "JetBrains Mono", "size": 10.5}
+FILES = {
+    "kitty": os.path.join(CONFIG_HOME, "kitty", "kitty.conf"),
+    "foot": os.path.join(CONFIG_HOME, "foot", "foot.ini"),
+    "alacritty": os.path.join(CONFIG_HOME, "alacritty", "alacritty.toml"),
+}
+FAMILY_RE = re.compile(r"^[^\x00-\x1f\x7f\"'\\:=,{}\[\]]{1,80}$")
+LEFT_OUT = re.compile(r"symbols|emoji|nerd font", re.I)
+
+
+class Error(Exception):
+    pass
+
+
+def load_state():
+    state = dict(DEFAULTS)
+    try:
+        with open(STATE, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            if isinstance(data.get("mono"), str) and FAMILY_RE.match(data["mono"]):
+                state["mono"] = data["mono"]
+            if isinstance(data.get("size"), (int, float)) and 6 <= data["size"] <= 40:
+                state["size"] = float(data["size"])
+    except (OSError, ValueError):
+        pass
+    return state
+
+
+def write_atomic(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    real = os.path.realpath(path)
+    tmp = "{}.tmp-{}".format(real, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    try:
+        os.chmod(tmp, os.stat(real).st_mode & 0o777)
+    except OSError:
+        pass
+    os.replace(tmp, real)
+
+
+def installed():
+    """Monospace families, first name of each fc-list line, without symbol and emoji fonts."""
+    if not shutil.which("fc-list"):
+        return []
+    out = subprocess.run(["fc-list", ":spacing=mono", "family"], capture_output=True, text=True).stdout
+    names = {line.split(",")[0].strip() for line in out.splitlines() if line.strip()}
+    return sorted((n for n in names if n and FAMILY_RE.match(n) and not LEFT_OUT.search(n)), key=str.lower)
+
+
+def fmt_size(pt):
+    return ("%g" % pt)
+
+
+# Each rewriter: (new text, changed?) for one file, given the recorded and the wanted values.
+def kitty(text, old, new):
+    fam, size = old
+    nfam, nsize = new
+    lines, changed = [], False
+    for line in text.splitlines(keepends=True):
+        m = re.match(r"^(font_family|bold_font|italic_font|bold_italic_font|font_size)(\s+)(.*?)(\s*)$", line)
+        if m:
+            key, gap, value = m.group(1), m.group(2), m.group(3)
+            want = None
+            if key == "font_family" and value == fam and nfam != fam:
+                want = nfam
+            elif key in ("bold_font", "italic_font") and value in (fam + " Bold", fam + " Italic") and nfam != fam:
+                want = "auto"
+            elif key == "font_size" and value == fmt_size(size) and nsize != size:
+                want = fmt_size(nsize)
+            if want is not None:
+                line = "{}{}{}\n".format(key, gap, want)
+                changed = True
+        lines.append(line)
+    return "".join(lines), changed
+
+
+def foot(text, old, new):
+    fam, size = old
+    pattern = re.compile(r"^font=" + re.escape(fam) + r":size=" + re.escape(fmt_size(size)) + r"\s*$", re.M)
+    if not pattern.search(text):
+        return text, False
+    return pattern.sub("font={}:size={}".format(new[0], fmt_size(new[1])), text), new != old
+
+
+def alacritty(text, old, new):
+    fam, size = old
+    changed = False
+    fam_re = re.compile(r'^normal = \{ family = "' + re.escape(fam) + r'" \}\s*$', re.M)
+    if new[0] != fam and fam_re.search(text):
+        text = fam_re.sub('normal = {{ family = "{}" }}'.format(new[0]), text)
+        changed = True
+    size_re = re.compile(r"^size = " + re.escape(fmt_size(size)) + r"\s*$", re.M)
+    if new[1] != size and size_re.search(text):
+        text = size_re.sub("size = {}".format(fmt_size(new[1])), text)
+        changed = True
+    return text, changed
+
+
+REWRITERS = {"kitty": kitty, "foot": foot, "alacritty": alacritty}
+
+
+def apply(family, size):
+    state = load_state()
+    old, new = (state["mono"], state["size"]), (family, size)
+    changed, skipped = [], []
+    for name, path in FILES.items():
+        try:
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+        except OSError:
+            continue
+        result, did = REWRITERS[name](text, old, new)
+        if did:
+            write_atomic(path, result)
+            changed.append(name)
+        elif new != old:
+            skipped.append({"file": path.replace(HOME, "~", 1), "reason": "has a font of your own"})
+    if "kitty" in changed and shutil.which("pkill"):
+        subprocess.run(["pkill", "-USR1", "-u", str(os.getuid()), "-x", "kitty"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if family != old[0] or size != old[1]:
+        if shutil.which("gsettings"):
+            done = subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "monospace-font-name",
+                                   "{} {}".format(family, round(size))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if done.returncode == 0:
+                changed.append("gtk")
+        try:
+            with open(SHELL_JSON, encoding="utf-8") as f:
+                shell = json.load(f)
+            shell = shell if isinstance(shell, dict) else {}
+        except (OSError, ValueError):
+            shell = {}
+        if shell.get("monoFont") != family:
+            shell["monoFont"] = family
+            write_atomic(SHELL_JSON, json.dumps(shell, indent=2) + "\n")
+            changed.append("shell")
+    write_atomic(STATE, json.dumps({"mono": family, "size": size}, indent=2) + "\n")
+    if family != old[0] and shutil.which("arctic-hook"):
+        subprocess.Popen(["arctic-hook", "font", family], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    return {"ok": True, "family": family, "size": size, "changed": changed, "skipped": skipped}
+
+
+def main(argv):
+    as_json = "--json" in argv
+    args = [a for a in argv if a != "--json"]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0 if args else 2
+    verb = args[0]
+    if verb == "list" and len(args) == 1:
+        state = load_state()
+        fonts = installed()
+        if as_json:
+            print(json.dumps({"ok": True, "current": state["mono"], "size": state["size"], "fonts": [{"family": f} for f in fonts]}))
+        else:
+            print("\n".join(fonts))
+        return 0
+    if verb == "current" and len(args) == 1:
+        state = load_state()
+        print(json.dumps({"ok": True, "family": state["mono"], "size": state["size"]}) if as_json else state["mono"])
+        return 0
+    if verb == "set" and len(args) == 2:
+        family = args[1].strip()
+        fonts = installed()
+        if not FAMILY_RE.match(family) or (fonts and family not in fonts):
+            raise Error("There's no monospace font called {} here (arctic-font list).".format(family))
+        result = apply(family, load_state()["size"])
+    elif verb == "size" and len(args) == 2:
+        if args[1] == "reset":
+            size = DEFAULTS["size"]
+        else:
+            try:
+                size = round(float(args[1]) * 2) / 2
+            except ValueError:
+                raise Error("The size is a number of points, like 11 or 12.5.") from None
+            if not 6 <= size <= 40:
+                raise Error("The size must be between 6 and 40 points.")
+        result = apply(load_state()["mono"], size)
+    else:
+        raise Error("usage: arctic-font list | current | set FAMILY | size PT|reset  [--json]")
+    if as_json:
+        print(json.dumps(result))
+    else:
+        print("{} {}: {}".format(result["family"], fmt_size(result["size"]), ", ".join(result["changed"]) or "nothing to change"))
+        for s in result["skipped"]:
+            print("  left alone: {} ({})".format(s["file"], s["reason"]))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Error as e:
+        print(json.dumps({"ok": False, "error": str(e)}) if "--json" in sys.argv else "arctic-font: " + str(e),
+              file=sys.stdout if "--json" in sys.argv else sys.stderr)
+        sys.exit(1)
