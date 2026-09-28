@@ -164,11 +164,14 @@ PanelWindow {
             readonly property var adapter: Bluetooth.defaultAdapter
             readonly property var connected: adapter ? adapter.devices.values.filter(d => d.connected) : []
             visible: adapter !== null
+            hasMenu: true
+            active: bar.menuOpen('bluetooth')
             iconName: 'bluetooth'
             iconColor: adapter && adapter.enabled ? Theme.inkMuted : Theme.inkDisabled
-            tooltip: !adapter ? '' : !adapter.enabled ? 'Bluetooth off'
-                     : connected.length ? 'Connected to ' + connected.map(d => d.name).join(', ') : 'Bluetooth on'
-            onClicked: Quickshell.execDetached(['blueman-manager'])
+            tooltip: !adapter ? '' : !adapter.enabled ? 'Bluetooth off  (Super + Ctrl + B)'
+                     : connected.length ? 'Connected to ' + connected.map(d => d.name + (d.batteryAvailable ? ' · ' + Math.round(d.battery * 100) + ' %' : '')).join(', ')
+                     : 'Bluetooth on  (Super + Ctrl + B)'
+            onClicked: bar.shell.togglePanel('bluetooth', bar.screen, bluetoothItem.mapToItem(null, bluetoothItem.width / 2, 0).x)
             onRightClicked: if (adapter) adapter.enabled = !adapter.enabled
             onHoverChanged: h => h ? bar.hint(bluetoothItem, tooltip) : bar.unhint(bluetoothItem)
         }

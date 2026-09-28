@@ -61,13 +61,14 @@ ShellRoot {
     }
     function lock() {
         closePopovers(null);
+        if (btPair.open) btPair.close();        // says no to a pending pairing question
         lockScreen.lock();
     }
 
     // ---- bar menus (BarMenu) --------------------------------------------------------------------
     readonly property var barMenu: menuHost
     // A dialog that needs the keyboard is open over a menu: the menu lets go of it meanwhile.
-    readonly property bool modalOpen: polkit.active
+    readonly property bool modalOpen: polkit.active || btPair.open
     function barOn(screen) {
         const all = bars.instances;
         for (let i = 0; i < all.length; i++) if (screen && all[i].screen && all[i].screen.name === screen.name) return all[i];
@@ -93,9 +94,12 @@ ShellRoot {
                 openPanel('quick', target, undefined, Object.assign({}, options || {}, { page: name }));
             return;
         }
+        const same = menuHost.open && menuHost.screen === target && menuHost.panel === name;
         menuHost.panel = name;
         menuHost.options = options || {};
         menuHost.pointX = anchor !== null ? anchor : target.width - Theme.space2 - Theme.frameWidth - 190;
+        // Already showing: go to the page asked for (panels read options.page when they load).
+        if (same && menuHost.item && menuHost.item.showPage) menuHost.item.showPage((options && options.page) || '');
         if (menuHost.open && menuHost.screen === target) { menuHost.focusContent(); return; }
         present(menuHost, target);
     }
@@ -130,6 +134,7 @@ ShellRoot {
     LockScreen { id: lockScreen }
     PolkitDialog { id: polkit }
     BarMenu { id: menuHost; shell: shell }
+    BluetoothPairDialog { id: btPair }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
     IpcHandler {
@@ -194,6 +199,11 @@ ShellRoot {
         function toggle(name: string): void { shell.togglePanel(name, null, undefined, { keyboard: true }); }
         function open(name: string): void { shell.openPanel(name, null, undefined, { keyboard: true }); }
         function close(): void { shell.closePanel(); }
+    }
+    IpcHandler {
+        target: 'bluetooth'
+        // The Bluetooth menu on its pairing page (Settings → Bluetooth → Pair a device).
+        function pair(): void { shell.openPanel('bluetooth', null, undefined, { page: 'pair', keyboard: true }); }
     }
     IpcHandler {
         target: 'shell'

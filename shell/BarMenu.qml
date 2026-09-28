@@ -37,8 +37,10 @@ Popover {
     // Panel id → component; each work package adds its panel here.
     readonly property var panels: ({
         network: networkPanel,
+        bluetooth: bluetoothPanel,
     })
     Component { id: networkPanel; NetworkPanel { menu: host } }
+    Component { id: bluetoothPanel; BluetoothPanel { menu: host } }
 
     FocusScope {
         anchors.fill: parent
