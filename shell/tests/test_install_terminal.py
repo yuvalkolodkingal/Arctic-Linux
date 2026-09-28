@@ -327,6 +327,30 @@ exit 0
         self.assertEqual(runner.wait(timeout=10), 0)
         self.assertEqual((self.bin / 'finished').read_text(), 'done\n')
 
+    def test_the_job_finishes_when_the_shell_stops_the_runner(self):
+        (self.bin / 'flatpak').write_text('#!/bin/sh\nsleep 1\necho done > "$(dirname "$0")/finished"\n')
+        runner = subprocess.Popen([sys.executable, str(Path(__file__).parents[1] / 'scripts/install-terminal.py')],
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=os.environ.copy())
+        runner.stdout.readline()                      # the first state: the runner is up
+        job = dict(id='j', kind='install', source='flatpak', ids=['org.gimp.GIMP'], installation='system')
+        runner.stdin.write((json.dumps(dict(action='run', job=job)) + '\n').encode())
+        runner.stdin.flush()
+        runner.stdout.readline()                      # the job started
+        runner.send_signal(signal.SIGTERM)
+        self.assertEqual(runner.wait(timeout=10), 0)
+        self.assertEqual((self.bin / 'finished').read_text(), 'done\n')
+        runner.stdin.close()
+        runner.stdout.close()
+
+    def test_an_idle_runner_stops_at_once(self):
+        runner = subprocess.Popen([sys.executable, str(Path(__file__).parents[1] / 'scripts/install-terminal.py')],
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=os.environ.copy())
+        runner.stdout.readline()
+        runner.send_signal(signal.SIGTERM)
+        self.assertEqual(runner.wait(timeout=5), 0)
+        runner.stdin.close()
+        runner.stdout.close()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -35,9 +35,9 @@ program reads a password the input line is masked (see Console.prompt_is_secret)
 response typed for a prompt that has since changed is refused rather than sent, so a password
 can't land in a visible prompt. Nothing typed is written to a file or log.
 
-When stdin closes (the shell stopped) while a job runs, the job still finishes: the runner
-stops reading requests but keeps the PTY open until the job exits, so a shell restart doesn't
-cut a dnf transaction short.
+When stdin closes or SIGTERM / SIGHUP arrives (the shell stopped) while a job runs, the job
+still finishes: the runner stops reading requests but keeps the PTY open until the job exits,
+so a shell restart doesn't cut a dnf transaction short.
 """
 import fcntl
 import json
@@ -45,6 +45,7 @@ import os
 import pty
 import re
 import selectors
+import signal
 import shlex
 import struct
 import subprocess
@@ -411,9 +412,22 @@ def main():
     selector.register(sys.stdin, selectors.EVENT_READ)
     reading = True
     incoming = b''
+    stopping = []
+
+    def on_signal(signum, _frame):
+        # The shell is stopping (or restarting): a running job still finishes, as after EOF.
+        if console.pid is None:
+            raise SystemExit(0)
+        stopping.append(signum)
+
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, on_signal)
     console.emit()
     try:
         while True:
+            if stopping and reading:
+                selector.unregister(sys.stdin)
+                reading = False
             if not reading and console.pid is None:
                 return
             timeout = EMIT_INTERVAL / 2 if console.pid else None
