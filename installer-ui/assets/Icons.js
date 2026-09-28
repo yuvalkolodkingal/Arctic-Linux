@@ -934,7 +934,7 @@ var APPS = {
   "name": "Waydroid",
   "category": "containers",
   "glyph": "phone",
-  "summary": "Run Android apps next to your desktop.",
+  "summary": "Android apps. Fetches 1 GB on first start.",
   "default": false
  },
  "bazaar": {

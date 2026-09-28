@@ -1,6 +1,6 @@
 id = "waydroid"
 name = "Waydroid"
-summary = "Run Android apps next to your desktop."
+summary = "Android apps. Fetches 1 GB on first start."
 category = "containers"
 role = "Android app runner"
 default = false
@@ -12,7 +12,9 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: waydroid 1.6.3; the preset enables waydroid-container.service. The Android image (~800 MB) downloads on first start.
+# Fedora 44: waydroid 1.6.3; the preset enables waydroid-container.service.
+# download_mb is the RPM only: `waydroid init` fetches the LineageOS system and vendor
+# images (about 0.8-1 GB) on first start, not during the install. The summary says so.
 method = "dnf"
 packages = ["waydroid"]
 download_mb = 5

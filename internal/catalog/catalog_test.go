@@ -427,3 +427,53 @@ func TestMarkPreinstalled(t *testing.T) {
 		t.Errorf("estimate %d → %d: Zen's download should no longer count", before, after)
 	}
 }
+
+// freedesktop runtimes get two years of updates: a new branch each August, and the one
+// before the previous goes end-of-life. A module on an older branch makes flatpak warn and
+// pulls a runtime nothing else needs. Such a module has to be listed here, with the reason,
+// until Flathub moves the app on.
+var staleRuntimeOK = map[string]string{
+	"gpu-screen-recorder": "Flathub's com.dec05eba.gpu_screen_recorder is still on 24.08 (2026-09-28)",
+	"kodi":                "Flatpak fallback only; Flathub's tv.kodi.Kodi is still on 24.08 (2026-09-28)",
+}
+
+func TestFlatpakRuntimesAreCurrent(t *testing.T) {
+	c := load(t)
+	// Newest two branches of each org.freedesktop.* runtime named in [runtimes].
+	branches := map[string][]string{}
+	for ref := range c.Runtimes {
+		name, branch, ok := strings.Cut(ref, "//")
+		if ok && strings.HasPrefix(name, "org.freedesktop.") {
+			branches[name] = append(branches[name], branch)
+		}
+	}
+	current := map[string]bool{}
+	for name, bs := range branches {
+		sort.Sort(sort.Reverse(sort.StringSlice(bs))) // YY.MM sorts as text
+		for i, b := range bs {
+			if i < 2 {
+				current[name+"//"+b] = true
+			}
+		}
+	}
+	stale := map[string]bool{}
+	for _, id := range c.Order {
+		for _, in := range c.Modules[id].Install {
+			name, _, _ := strings.Cut(in.Runtime, "//")
+			if in.Runtime == "" || !strings.HasPrefix(name, "org.freedesktop.") || current[in.Runtime] {
+				continue
+			}
+			stale[id] = true
+			if _, ok := staleRuntimeOK[id]; !ok {
+				t.Errorf("%s: runtime %s is older than the newest two branches (end-of-life); use a newer one or list it in staleRuntimeOK", id, in.Runtime)
+			} else {
+				t.Logf("warning: %s still uses end-of-life %s: %s", id, in.Runtime, staleRuntimeOK[id])
+			}
+		}
+	}
+	for id := range staleRuntimeOK {
+		if !stale[id] {
+			t.Errorf("%s is in staleRuntimeOK but no longer uses an old runtime: drop it from the list", id)
+		}
+	}
+}

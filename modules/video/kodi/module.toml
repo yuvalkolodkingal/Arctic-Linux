@@ -22,6 +22,9 @@ download_mb = 39
 method = "flatpak"
 remote = "flathub"
 ref = "tv.kodi.Kodi"
+# Flathub still builds this app on freedesktop 24.08 (checked 2026-09-28), which is
+# end-of-life: flatpak warns about it and pulls a 269 MB runtime no other app uses.
+# Move to the new runtime when Flathub does (catalog_test TestFlatpakRuntimesAreCurrent).
 runtime = "org.freedesktop.Platform//24.08"
 verified = true
 download_mb = 298
