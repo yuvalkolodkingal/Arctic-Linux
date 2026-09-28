@@ -70,7 +70,8 @@ Next stays off until you're online, because the installer downloads your apps.
 ### The passphrase or password isn't accepted
 
 Since Arctic Linux 0.2.1 a short or weak passphrase or password is never refused: the installer
-only warns that it's easy to guess, and **Next** stays on. If **Next** is still off:
+may warn that it's easy to guess (a disk passphrase below **Fair**, a password under 8
+characters), and **Next** stays on. If **Next** is still off:
 
 - Type it in both fields, the same way. *"Passphrases don't match yet."* or *"Passwords don't
   match yet."* means the second field differs; **Show** (the eye) lets you compare them.

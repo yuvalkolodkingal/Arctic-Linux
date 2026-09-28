@@ -120,7 +120,7 @@ func TestUnattendedMock(t *testing.T) {
 	}
 }
 
-// Short secrets don't stop an unattended install: the Summary it prints warns instead.
+// Short secrets don't stop an unattended install: the Summary it prints notes them instead.
 func TestUnattendedWeakSecrets(t *testing.T) {
 	t.Setenv("ARCTIC_LUKS_PASSPHRASE", "abc")
 	t.Setenv("ARCTIC_USER_PASSWORD", "x")
@@ -131,7 +131,7 @@ func TestUnattendedWeakSecrets(t *testing.T) {
 		t.Fatalf("exit %d\n%s", code, out.String())
 	}
 	s := out.String()
-	for _, want := range []string{wizard.CopyWeakBothSummary, "Done: Arctic Linux is ready"} {
+	for _, want := range []string{wizard.CopyWeakPassphraseRow, "on arctic-ci, " + wizard.CopyWeakPasswordRow, "Done: Arctic Linux is ready"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("output lacks %q:\n%s", want, s)
 		}

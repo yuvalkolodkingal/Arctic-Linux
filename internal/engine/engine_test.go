@@ -409,9 +409,17 @@ func TestWeakSecretsInstall(t *testing.T) {
 		t.Fatalf("a 1-character password must pass Next: %v", w)
 	}
 	c.ok("Next", nil)
+	// The Summary notes them in their rows; the erase warning stays one sentence.
 	sum := c.ok("GetSummary", nil)
-	if want := "Installing will erase everything on Samsung SSD 980. This can’t be undone. " + wizard.CopyWeakBothSummary; sum["warning"] != want {
+	if want := "Installing will erase everything on Samsung SSD 980. This can’t be undone."; sum["warning"] != want {
 		t.Fatalf("summary warning %q, want %q", sum["warning"], want)
+	}
+	rows := map[string]any{}
+	for _, r := range sum["rows"].([]any) {
+		rows[r.(map[string]any)["label"].(string)] = r.(map[string]any)["value"]
+	}
+	if rows["Encryption"] != wizard.CopyWeakPassphraseRow || rows["Account"] != "Noa Levi (noa) on noa-thinkpad, "+wizard.CopyWeakPasswordRow {
+		t.Fatalf("summary rows %v", rows)
 	}
 	if w := c.ok("Next", nil); w["current"] != "install" {
 		t.Fatalf("Next from summary: %v", w)
@@ -422,6 +430,12 @@ func TestWeakSecretsInstall(t *testing.T) {
 		t.Fatalf("Start without a password: %v", err)
 	}
 	c.ok("SetSecrets", map[string]any{"user_password": "x"})
+	// And an empty disk passphrase.
+	c.ok("SetSecrets", map[string]any{"luks_passphrase": ""})
+	if _, err := c.call("Start", nil); err == nil || err["fields"].(map[string]any)["passphrase"] != "Type a passphrase." {
+		t.Fatalf("Start without a passphrase: %v", err)
+	}
+	c.ok("SetSecrets", map[string]any{"luks_passphrase": "abc"})
 	c.ok("Start", nil)
 	done := c.waitEvent(func(m map[string]any) bool { return m["event"] == "done" }, 30*time.Second)
 	if done["first_name"] != "Noa" {

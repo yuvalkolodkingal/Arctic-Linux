@@ -147,6 +147,8 @@ WIFI_PASSWORDS = {"Tundra-5G": "polarnight", "Snowfield": "snowfield", "Aurora G
 WEAK_PASSPHRASE = "This passphrase is easy to guess: someone who has your computer could read your files. You can still use it."
 WEAK_PASSWORD = "This password is easy to guess: someone at your computer could log in as you. You can still use it."
 WEAK_PASSWORD_DISK = "This password is easy to guess: someone who has your computer could read your files. You can still use it."
+WEAK_PASSPHRASE_ROW = "easy-to-guess passphrase"   # this mock has no Encryption row: after the Disk row's ", encrypted"
+WEAK_PASSWORD_ROW = "easy-to-guess password"       # after the Account row's value
 
 # Categories and apps come from the real catalog (modules/catalog.toml and every
 # modules/<category>/<id>/module.toml), so the UI sees exactly what the engine offers:
@@ -690,21 +692,19 @@ class MockEngine:
             primary = "Erase disk and install"
             warning = f"Installing will **erase everything on {name}**. This can't be undone."
         disk_value += ", encrypted" if enc else ", not encrypted"
-        # As the engine: a sentence after the warning when a secret is easy to guess.
-        weak_luks = enc and "luks_passphrase" in self.secrets and self.check_passphrase(self.secrets["luks_passphrase"])["score"] < 2
-        weak_pass = "user_password" in self.secrets and self.check_passphrase(self.secrets["user_password"])["score"] < 1
-        if weak_luks and weak_pass:
-            warning += " Your disk passphrase and password are easy to guess."
-        elif weak_luks:
-            warning += " Your disk passphrase is easy to guess."
-        elif weak_pass:
-            warning += " Your password is easy to guess."
+        # As the engine: a secret that is easy to guess is noted in its row (the warning
+        # stays one sentence).
+        if enc and self.secrets.get("luks_passphrase") and self.check_passphrase(self.secrets["luks_passphrase"])["score"] < 2:
+            disk_value += ", " + WEAK_PASSPHRASE_ROW
+        account = f"{acct['full_name']} ({acct['username']}) on {acct['hostname']}"
+        if self.secrets.get("user_password") and self.check_passphrase(self.secrets["user_password"])["score"] < 1:
+            account += ", " + WEAK_PASSWORD_ROW
         rows = [
             {"step": "welcome", "label": "Language and keyboard",
              "value": f"{self.lang_name(self.data['welcome']['language'])} · {self.layout_name(self.data['keyboard']['layout'], self.data['keyboard']['variant'])} layout"},
             {"step": "timezone", "label": "Time zone", "value": f"{city} ({offset})" if offset else city},
             {"step": "disk", "label": "Disk", "value": disk_value},
-            {"step": "account", "label": "Account", "value": f"{acct['full_name']} ({acct['username']}) on {acct['hostname']}"},
+            {"step": "account", "label": "Account", "value": account},
             {"step": "apps", "label": "Apps", "value": app_list(apps) if apps else "No extra apps"},
         ]
         if HAS_DRIVERS:

@@ -35,7 +35,7 @@ See [Troubleshooting](Troubleshooting#updates-stopped-after-the-repository-was-r
   the network are tried again three times.
 - **A short passphrase or password no longer stops you.** Any disk passphrase or account password
   is accepted once you've typed it twice; below **Fair** (or under 8 characters for the password)
-  the step shows a warning that it's easy to guess, and the Summary mentions it.
+  the step shows a warning that it's easy to guess, and its Summary row notes it.
 
 ### Settings
 

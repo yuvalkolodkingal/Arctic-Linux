@@ -860,7 +860,13 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 		tz += " (" + off + ")"
 	}
 	disk, _ := w.SelectedDisk()
+	// A disk passphrase or password below its min_score is noted in its row (one line, so
+	// the erase warning below the rows keeps its place above the footer); Start takes it.
+	sec := w.env.Secrets()
 	enc := "On — you’ll type your passphrase each time the computer starts"
+	if sec.LUKSSet && sec.LUKS.WeakPassphrase() {
+		enc = CopyWeakPassphraseRow
+	}
 	if !d.Encryption.Enabled {
 		enc = "Off — anyone with this computer can read your files"
 	}
@@ -883,12 +889,12 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 		warning = fmt.Sprintf("Installing will erase everything on %s. This can’t be undone.", diskName)
 		primary = "Erase disk and install"
 	}
-	if weak := w.weakSecrets(); weak != "" {
-		warning += " " + weak
-	}
 	account := fmt.Sprintf("%s (%s) on %s", d.Account.FullName, d.Account.Username, d.Account.Hostname)
 	if d.Account.Autologin {
 		account += ", logs in automatically"
+	}
+	if sec.PasswordSet && sec.Password.WeakPassword() {
+		account += ", " + CopyWeakPasswordRow
 	}
 	var apps []string
 	cat := w.env.Catalog()
@@ -912,23 +918,6 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 		Warning:      warning,
 		PrimaryLabel: primary,
 	}
-}
-
-// weakSecrets is the Summary's sentence about a disk passphrase or password below its
-// min_score, or "". It is only a warning: Start takes any non-empty secret.
-func (w *Wizard) weakSecrets() string {
-	s := w.env.Secrets()
-	luks := w.Data.Encryption.Enabled && s.LUKSSet && s.LUKS.WeakPassphrase()
-	pass := s.PasswordSet && s.Password.WeakPassword()
-	switch {
-	case luks && pass:
-		return CopyWeakBothSummary
-	case luks:
-		return CopyWeakLUKSSummary
-	case pass:
-		return CopyWeakPassSummary
-	}
-	return ""
 }
 
 // summaryApps is how many app names the Summary's Apps row lists before "and N more":

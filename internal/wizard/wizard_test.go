@@ -363,23 +363,30 @@ func TestEncryptionValidation(t *testing.T) {
 	mustNext(t, w)
 }
 
-// Short secrets pass every step and ReadyToInstall; the Summary warns about them.
+// Short secrets pass every step and ReadyToInstall; the Summary notes them in the
+// Encryption and Account rows, and its erase warning stays one sentence.
 func TestWeakSecretsWarnOnly(t *testing.T) {
-	const erase = "Installing will erase everything on Samsung SSD 980. This can’t be undone."
+	const (
+		erase   = "Installing will erase everything on Samsung SSD 980. This can’t be undone."
+		encOn   = "On — you’ll type your passphrase each time the computer starts"
+		encOff  = "Off — anyone with this computer can read your files"
+		account = "Noa Levi (noa) on noa-thinkpad"
+		weakAcc = account + ", " + CopyWeakPasswordRow
+	)
 	for _, c := range []struct {
 		name, luks, password string
 		encrypt              bool
-		want                 string
+		enc, account         string
 	}{
-		{"strong", "acid acorn acre aged", "winter fox 2026", true, erase},
-		{"short passphrase", "abc", "winter fox 2026", true, erase + " " + CopyWeakLUKSSummary},
-		{"weak passphrase", "aaaaaaaaaaaa", "winter fox 2026", true, erase + " " + CopyWeakLUKSSummary},
-		{"short password", "acid acorn acre aged", "x", true, erase + " " + CopyWeakPassSummary},
-		{"both", "abc", "x", true, erase + " " + CopyWeakBothSummary},
+		{"strong", "acid acorn acre aged", "winter fox 2026", true, encOn, account},
+		{"short passphrase", "abc", "winter fox 2026", true, CopyWeakPassphraseRow, account},
+		{"weak passphrase", "aaaaaaaaaaaa", "winter fox 2026", true, CopyWeakPassphraseRow, account},
+		{"short password", "acid acorn acre aged", "x", true, encOn, weakAcc},
+		{"both", "abc", "x", true, CopyWeakPassphraseRow, weakAcc},
 		// "Weak" (8+ characters, easy to guess) is only a warning for the disk passphrase.
-		{"weak password", "acid acorn acre aged", "password", true, erase},
+		{"weak password", "acid acorn acre aged", "password", true, encOn, account},
 		// No encryption: the passphrase isn't used, so it isn't mentioned.
-		{"no encryption", "abc", "x", false, erase + " " + CopyWeakPassSummary},
+		{"no encryption", "abc", "x", false, encOff, weakAcc},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w, env := newTest(t)
@@ -400,8 +407,16 @@ func TestWeakSecretsWarnOnly(t *testing.T) {
 			if err := w.ReadyToInstall(); err != nil {
 				t.Fatalf("ReadyToInstall: %v", err)
 			}
-			if s := w.Summary(); s.Warning != c.want {
-				t.Errorf("summary warning %q, want %q", s.Warning, c.want)
+			s := w.Summary()
+			if s.Warning != erase {
+				t.Errorf("summary warning %q, want %q", s.Warning, erase)
+			}
+			rows := map[string]string{}
+			for _, r := range s.Rows {
+				rows[r.Label] = r.Value
+			}
+			if rows["Encryption"] != c.enc || rows["Account"] != c.account {
+				t.Errorf("summary rows: encryption %q, account %q; want %q, %q", rows["Encryption"], rows["Account"], c.enc, c.account)
 			}
 			if err := w.Next(); err != nil || w.Current() != StepInstall {
 				t.Errorf("Next from summary: %v (at %s)", err, w.Current())

@@ -248,7 +248,7 @@ you confirm the driver's key once after restarting; see
 
 **Ready to install.** *"Check everything below. Nothing has been written to your disk yet."*
 
-Each row (language and keyboard, time zone, disk and encryption, account, apps) has a **Change**
+Each row (language, keyboard, time zone, disk, encryption, account, apps) has a **Change**
 link that takes you back to that step; your other answers are kept. The apps row lists up to 12
 apps, then *"and N more"*.
 
@@ -258,6 +258,11 @@ Secure Boot on it adds *"Secure Boot is on: you'll confirm the driver's key once
 restarting"*. If you unticked every driver it says *"None — your hardware keeps its open-source
 drivers"*. The warning says exactly what will
 happen, for example *"Installing will erase everything on Samsung SSD 980. This can't be undone."*
+
+If your disk passphrase or password is easy to guess, its row says so: the Encryption row reads
+*"On — easy-to-guess passphrase; you'll type it each time the computer starts"*, and the Account
+row ends with *"easy-to-guess password"*. You can still install; press **Change** to pick a
+stronger one.
 
 The button names what it does: **Erase disk and install**, or **Install alongside Windows**
 (or whichever system is on the disk). On this screen `Enter` alone doesn't start the install:

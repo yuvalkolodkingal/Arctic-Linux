@@ -311,7 +311,7 @@ class MockBridgeTest(unittest.TestCase):
 
     def test_weak_secrets_only_warn(self):
         # As the engine: a short or weak disk passphrase or password passes every step and
-        # the Summary, which says so after its warning; an empty one is still refused.
+        # the Summary, which notes it in the Disk and Account rows; an empty one is still refused.
         b = self.start(ARCTIC_MOCK_WIRED="1")
         self.walk_to("account")
         b.ok("SetStep", {"id": "account", "data": {"full_name": "Noa Levi", "username": "noa", "hostname": "noa-thinkpad"}})
@@ -324,7 +324,11 @@ class MockBridgeTest(unittest.TestCase):
         self.assertTrue(opts["weak_warning"].startswith("This password is easy to guess"))
         self.assertEqual(b.ok("Next")["current"], "apps")
         self.assertEqual(b.ok("Next")["current"], "summary")
-        self.assertTrue(b.ok("GetSummary")["warning"].endswith(" Your disk passphrase and password are easy to guess."))
+        summary = b.ok("GetSummary")
+        rows = {r["label"]: r["value"] for r in summary["rows"]}
+        self.assertTrue(rows["Disk"].endswith(", encrypted, easy-to-guess passphrase"))
+        self.assertEqual(rows["Account"], "Noa Levi (noa) on noa-thinkpad, easy-to-guess password")
+        self.assertTrue(summary["warning"].endswith("This can't be undone."))
         self.assertEqual(b.ok("Next")["current"], "install")
         b.ok("Start")
 

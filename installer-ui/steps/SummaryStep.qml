@@ -1,6 +1,6 @@
 // Step 9 — Ready to install (INSTALL_STEPS[8]). Rows from GetSummary with
-// "Change" links back to each step, the erase warning (with a sentence after it when
-// the disk passphrase or password is easy to guess), and the one primary
+// "Change" links back to each step (an easy-to-guess disk passphrase or password is
+// noted in its row, so the warning doesn't grow), the erase warning, and the one primary
 // action: "Erase disk and install" / "Install alongside {OS}". Only a click (or
 // Enter/Space on the focused button) starts it, and only after a short wait: Enter
 // elsewhere on the page, a key held down or a double click from Apps do nothing.
