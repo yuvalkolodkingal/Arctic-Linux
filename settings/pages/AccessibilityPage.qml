@@ -36,7 +36,7 @@ Page {
             RowSwitch {
                 checked: page.access.contrast === true
                 Accessible.name: "High contrast"
-                onToggled: Backend.call(["contrast-set", checked ? "off" : "on"], r => {
+                onToggled: Backend.call(["contrast-set", checked ? "on" : "off"], r => {
                     if (r.ok) {
                         page.access = r;
                         Theme.reload();
