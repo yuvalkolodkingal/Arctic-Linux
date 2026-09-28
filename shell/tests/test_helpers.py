@@ -131,6 +131,19 @@ class WallpaperTests(unittest.TestCase):
             self.assertTrue(Path(item['thumb']).is_file())
         self.assertEqual(result['current'], 'snowfield')      # nothing saved: the theme default
 
+    def test_theme_made_from_a_picture_shows_its_base_drawing(self):
+        # arctic-theme's 'wallpaper' theme: the Arctic wallpapers follow its base / mode.
+        (self.config / 'theme').write_text('wallpaper\n')
+        current = self.config / 'current'
+        current.mkdir()
+        (current / 'theme.env').write_text('ARCTIC_THEME=wallpaper\nARCTIC_THEME_MODE=light\nARCTIC_THEME_BASE=winter\n')
+        self.assertEqual(self.module.theme(), 'winter')
+        (current / 'theme.env').write_text('ARCTIC_THEME=mine\nARCTIC_THEME_MODE=dark\nARCTIC_THEME_BASE=mine\n')
+        self.assertEqual(self.module.theme(), 'polar-night')
+        (current / 'theme.env').write_text('ARCTIC_THEME=mine\nARCTIC_THEME_MODE=light\n')
+        self.assertEqual(self.module.theme(), 'winter')
+        self.assertTrue(self.module.library()['items'][0]['path'].endswith('aurora-winter.png'))
+
     def test_current_follows_the_saved_choice(self):
         (self.config / 'wallpaper').write_text('fox\n')
         self.assertEqual(self.module.library()['current'], 'fox')

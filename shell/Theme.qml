@@ -4,11 +4,13 @@ import Quickshell
 import Quickshell.Io
 import "assets/theme-defaults.js" as Defaults
 
-// The Arctic design tokens for the active theme (Winter or Polar night).
+// The Arctic design tokens for the active theme (Winter, Polar night, the one made from your
+// wallpaper, or a theme of your own).
 //
 // Read from ~/.config/arctic/current/theme.json, which `arctic-theme` switches, falling back to
 // /usr/share/arctic/themes/polar-night/theme.json and then to the built-in Polar night.
-// Every file is generated from design/tokens.json by design/tools/gen-desktop-themes.py.
+// Every theme.json is rendered by the theme engine (design/themegen, arctic-themegen) from a
+// palette; the static ones from design/tokens.json.
 // `arctic-theme` also writes ~/.config/arctic/theme and calls `arctic-shell-ipc shell reload`,
 // so the whole shell restyles live.
 Singleton {
@@ -124,8 +126,11 @@ Singleton {
     FileView {
         id: themeView
         property bool fallback: false
+        // Toggled on every switch: two spellings of the same file, so the path changes and
+        // FileView re-creates its watch (it sets one up only when `path` changes).
+        property bool respell: false
         path: fallback ? '/usr/share/arctic/themes/polar-night/theme.json'
-                       : Session.arcticConfig + '/current/theme.json'
+                       : Session.arcticConfig + (respell ? '/current/./theme.json' : '/current/theme.json')
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
@@ -133,13 +138,21 @@ Singleton {
         onLoadFailed: if (!fallback) fallback = true
     }
     // `arctic-theme` swaps the ~/.config/arctic/current symlink, which a file watch on
-    // current/theme.json can't see; the theme name file it rewrites is watched instead.
+    // current/theme.json can't see (the watch follows the link once, to the file it pointed at
+    // then, and a FileView only re-creates it when its path changes). arctic-theme rewrites the
+    // theme name file after every switch, and that is watched instead: on a change themeView's
+    // path is respelled, so it reads theme.json through the new link and watches the new
+    // target (a theme regenerated in place, like the wallpaper one, is then picked up too).
     FileView {
         id: stateView
         path: Session.arcticConfig + '/theme'
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: { themeView.fallback = false; themeView.reload(); }
+        onLoaded: {
+            themeView.fallback = false;
+            themeView.respell = !themeView.respell;
+            themeView.reload();
+        }
     }
 }

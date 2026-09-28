@@ -10,6 +10,8 @@ import Quickshell.Io
 // use it. The Arctic wallpapers come first and follow the Winter / Polar night switch; your
 // own pictures come from a folder you choose (default ~/Pictures/Wallpapers).
 // Applying goes through `arctic-wallpaper`, so the lock screen and the next login agree.
+// "Match colours to wallpaper" is `arctic-theme auto on|off` (settings.json "auto_colors",
+// on by default): your pictures then colour the whole desktop, Arctic's keep its palettes.
 Popover {
     id: picker
     property var items: []
@@ -19,6 +21,9 @@ Popover {
     property string folder: ''
     property bool folderExists: false
     property string query: ''
+    // Colours follow the wallpaper (arctic-theme auto); missing setting = on.
+    property bool autoColors: true
+    property bool refreshAfter: false
     readonly property var filtered: items.filter(item => item.name.toLowerCase().includes(query.trim().toLowerCase()))
     readonly property string helper: Session.scripts + '/wallpapers.py'
 
@@ -31,6 +36,13 @@ Popover {
         status = items.length ? '' : 'Loading your wallpapers…';
         scan.running = true;
     }
+    function setAutoColors(on) {
+        if (autoSwitch.running) return;
+        picker.autoColors = on;
+        status = on ? 'Matching the colours to your wallpaper…' : 'Going back to the Arctic colours…';
+        autoSwitch.command = ['arctic-theme', 'auto', on ? 'on' : 'off'];
+        autoSwitch.running = true;
+    }
     function use(item) {
         if (apply.running || !item) return;
         applying = item.key;
@@ -40,10 +52,45 @@ Popover {
     }
     focusItem: search
     onOpened: refresh()
-    // Theme switch: the Arctic thumbnails change with it.
+    // Theme switch: the Arctic thumbnails change with it (after a wallpaper or colour change
+    // that is still running, once it's done).
+    function themeChanged() {
+        if (!picker.open) return;
+        if (apply.running || autoSwitch.running) picker.refreshAfter = true;
+        else picker.refresh();
+    }
+    function finished() {
+        if (!picker.refreshAfter) return;
+        picker.refreshAfter = false;
+        Qt.callLater(picker.refresh);
+    }
     Connections {
         target: Theme
-        function onThemeIdChanged() { if (picker.open) picker.refresh(); }
+        function onThemeIdChanged() { picker.themeChanged(); }
+        function onDarkChanged() { picker.themeChanged(); }
+    }
+    FileView {
+        id: settingsView
+        path: Session.arcticConfig + '/settings.json'
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const data = JSON.parse(text());
+                picker.autoColors = data.auto_colors !== false;
+            } catch (e) { picker.autoColors = true; }
+        }
+        onLoadFailed: picker.autoColors = true
+    }
+    Process {
+        id: autoSwitch
+        stderr: StdioCollector { id: autoErrors }
+        onExited: exitCode => {
+            settingsView.reload();
+            picker.status = exitCode === 0 ? '' : (autoErrors.text.trim().split('\n').pop().replace(/^arctic-theme: /, '') || 'The colours could not be changed.');
+            picker.finished();
+        }
     }
 
     Process {
@@ -65,6 +112,7 @@ Popover {
     }
     Process {
         id: apply
+        onExited: picker.finished()
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -111,7 +159,8 @@ Popover {
                 spacing: 2
                 Text { text: 'Wallpapers'; color: Theme.ink; font.family: Theme.fontSans; font.pixelSize: 20; font.weight: Font.DemiBold }
                 Text {
-                    text: 'Click one to use it. Arctic wallpapers follow the ' + Theme.themeName + ' theme.'
+                    text: picker.autoColors ? 'Click one to use it. Your pictures colour the desktop; Arctic wallpapers keep the Arctic palette.'
+                                            : 'Click one to use it. Arctic wallpapers follow the ' + Theme.themeName + ' theme.'
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 13
@@ -237,6 +286,18 @@ Popover {
         }
         RowLayout {
             Layout.fillWidth: true
+            spacing: Theme.space4
+            ArcticSwitch {
+                id: autoToggle
+                text: 'Match colours to wallpaper'
+                checked: picker.autoColors
+                enabled: !autoSwitch.running && !apply.running
+                onToggled: {
+                    picker.setAutoColors(checked);
+                    checked = Qt.binding(() => picker.autoColors);
+                }
+                Keys.onEscapePressed: picker.close()
+            }
             Text {
                 Layout.fillWidth: true
                 text: picker.status || (picker.folderExists ? 'Your pictures: ' + picker.folder.replace(Session.home, '~') : 'Add your own pictures to ~/Pictures/Wallpapers, or choose a folder.')
