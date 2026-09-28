@@ -186,6 +186,7 @@ Tap to click and natural scrolling are on for touchpads.
 | `?` then words | Search the web |
 | `remind` then when and what | A reminder, like `remind 10m tea` or `remind 17:30 call Ana` |
 | `Shift + Enter` on a file | Open the folder it's in |
+| `Shift + Enter` on an app | On a laptop with two graphics chips: run it on the discrete one (`arctic-gpu run`) |
 | `↑` / `↓` | Move through the results |
 | `Enter` | Open |
 | `Shift + Delete`, or `Delete` with the cursor at the end | Remove the selected app (asks first) |

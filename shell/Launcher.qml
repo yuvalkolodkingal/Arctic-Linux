@@ -146,7 +146,9 @@ Popover {
         sources.remember(item.id);
         switch (item.kind) {
         case 'app':
-            if (item.entry.runInTerminal)
+            if (alternate && sources.hybridGpu && !item.entry.runInTerminal)
+                Quickshell.execDetached({ command: ['arctic-gpu', 'run'].concat(item.entry.command), workingDirectory: item.entry.workingDirectory || Session.home });
+            else if (item.entry.runInTerminal)
                 Quickshell.execDetached({ command: inTerminal(item.entry.command, false), workingDirectory: item.entry.workingDirectory || Session.home });
             else
                 item.entry.execute();
@@ -400,6 +402,11 @@ Popover {
                     label: 'remove'
                     keys: [ Kbd { text: 'Delete' } ]
                     visible: !Session.live && !!launcher.results[launcher.current] && launcher.results[launcher.current].kind === 'app'
+                }
+                Hint {
+                    label: 'on the graphics chip'
+                    visible: removeHint.visible && sources.hybridGpu
+                    keys: [ Kbd { text: 'Shift + Enter' } ]
                 }
                 Item { Layout.fillWidth: true }
                 // (they make room for "remove" while an app is selected)

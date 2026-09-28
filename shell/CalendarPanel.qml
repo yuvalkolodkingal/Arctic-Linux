@@ -178,5 +178,21 @@ FocusScope {
                 }
             }
         }
+        // The weather (WeatherService; off until Settings > Appearance > Weather turns it on).
+        Rectangle {
+            visible: WeatherService.enabled
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.space1
+            implicitHeight: 1
+            color: Theme.line
+        }
+        Loader {
+            active: WeatherService.enabled
+            visible: active
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.space1
+            Layout.rightMargin: Theme.space1
+            sourceComponent: WeatherCard {}
+        }
     }
 }

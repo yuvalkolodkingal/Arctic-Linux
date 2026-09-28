@@ -154,6 +154,8 @@ arctic-gpu run app-name          # switcheroo-control sets what that chip's driv
 arctic-gpu status                # the chips, and the apps that ask for the discrete one
 ```
 
+In the launcher, `Shift + Enter` on an app does the same (the footer says so on such a laptop).
+
 Apps whose desktop entry says `PrefersNonDefaultGPU=true` (Steam, many games) ask for it
 themselves. By hand, the variables are:
 

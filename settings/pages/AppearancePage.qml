@@ -520,17 +520,8 @@ Page {
                 onActivated: v => page.setShellOption("weatherUnits", v, "")
             }
         }
-        SettingRow {
-            title: "Show the temperature on the bar"
-            desc: "Next to the clock."
-            visible: page.shellOptions.weather === true
-            resettable: false
-            RowSwitch {
-                checked: page.shellOptions.barWeather === true
-                Accessible.name: "Show the temperature on the bar"
-                onToggled: page.setShellOption("barWeather", checked, "")
-            }
-        }
+        // "Show the temperature on the bar" (shell-option-set barWeather) comes with WeatherItem
+        // on the bar (Bar.qml: WeatherItem { visible: WeatherService.showInBar }).
     }
 
     Group {

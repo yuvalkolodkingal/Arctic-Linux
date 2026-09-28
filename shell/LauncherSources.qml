@@ -18,11 +18,24 @@ Item {
     property var stats: ({})
     property real now: Date.now()
     property bool hasFd: false
+    // A laptop with two graphics chips (arctic-gpu status): Shift + Enter runs an app on the
+    // discrete one.
+    property bool hybridGpu: false
+    property bool gpuChecked: false
     property bool hasQalc: false
     property var files: []
     property string filesFor: ''
     property string qalcFor: ''
     property string qalcResult: ''
+    Process {
+        id: gpuCheck
+        command: ['arctic-gpu', 'status', '--json']
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { sources.hybridGpu = JSON.parse(text.trim().split('\n').pop()).hybrid === true; } catch (e) { sources.hybridGpu = false; }
+            }
+        }
+    }
     readonly property string stateDir: (Quickshell.env('XDG_STATE_HOME') || Session.home + '/.local/state') + '/arctic'
     // shell.json "webSearch": duckduckgo (default), startpage, brave, ecosia, google, bing or
     // an https:// address with %s.
@@ -64,7 +77,11 @@ Item {
         return { kind: 'calc', name: qalcResult, desc: '= ' + expr + ' · Enter copies the result', glyph: 'hash' };
     }
 
-    onActiveChanged: if (active) now = Date.now()
+    onActiveChanged: {
+        if (!active) return;
+        now = Date.now();
+        if (!gpuChecked) { gpuChecked = true; gpuCheck.running = true; }
+    }
     onTextChanged: { if (text.length >= 3 && hasFd) fileTimer.restart(); if (LauncherSearch.looksLikeConversion(text)) qalcTimer.restart(); }
     onCalcChanged: if (calc) qalcTimer.restart()
 
