@@ -651,6 +651,15 @@ class DefaultAppsTest(Home):
         opener.write_text(script)
         subprocess.run(['bash', str(opener), 'browser'], env=env, check=True, timeout=10)
         self.assertIn('exec gtk-launch org.mozilla.firefox', ran.read_text())
+        # The drop-down terminal's window gets its app id in the terminal's own words.
+        stub(self.bin, 'setsid', 'shift; for a in "$@"; do printf "[%s]" "$a"; done >> "{}"; echo >> "{}"\n'.format(ran, ran))
+        stub(self.bin, 'kitty', 'exit 0\n')
+        subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'org.arcticlinux.Dropdown'], env=env, check=True, timeout=10)
+        self.assertTrue(ran.read_text().splitlines()[-1].endswith('[arctic-open][--class][org.arcticlinux.Dropdown]'))
+        subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'x.y', '--hold', '-e', 'btop'], env=env, check=True, timeout=10)
+        self.assertTrue(ran.read_text().splitlines()[-1].endswith('[--class][x.y][--hold][-e][btop]'))
+        for bad in (['terminal', '--app-id', 'a b'], ['terminal', '--hold'], ['browser', '--app-id', 'x']):
+            self.assertEqual(subprocess.run(['bash', str(opener)] + bad, env=env, timeout=10, capture_output=True).returncode, 2)
 
 
 class IdleTest(Home):

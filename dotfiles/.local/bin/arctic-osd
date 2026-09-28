@@ -7,6 +7,7 @@
 #   arctic-osd volume up|down|mute
 #   arctic-osd mic mute
 #   arctic-osd brightness up|down
+#   arctic-osd kbd up|down          keyboard backlight (no keyboard light: nothing happens)
 set -uo pipefail
 
 STEP=5
@@ -48,8 +49,19 @@ case "${1:-} ${2:-}" in
     [[ "$max" =~ ^[0-9]+$ ]] || max=0
     floor=$(( max / 100 )); (( floor > 0 )) || floor=1
     brightnessctl -q --min-value="$floor" set "${STEP}%-" ;;
+  "kbd up"|"kbd down")
+    # Keyboard lights have a few steps (often 2 or 3): one step at a time, else 10 %.
+    kbd='*::kbd_backlight'
+    max="$(brightnessctl --device="$kbd" max 2>/dev/null)"
+    [[ "$max" =~ ^[0-9]+$ ]] && (( max > 0 )) || exit 0
+    step="10%"; (( max <= 10 )) && step=1
+    sign=+; [[ "$2" == down ]] && sign=-
+    brightnessctl -q --device="$kbd" set "$step$sign"
+    k="$(brightnessctl --device="$kbd" -m 2>/dev/null | awk -F, '{gsub("%","",$4); print $4}')"
+    show brightness "${k:-0}" "Keyboard light ${k:-0}%"
+    exit 0 ;;
   *)
-    echo "usage: arctic-osd volume up|down|mute | mic mute | brightness up|down" >&2; exit 2 ;;
+    echo "usage: arctic-osd volume up|down|mute | mic mute | brightness up|down | kbd up|down" >&2; exit 2 ;;
 esac
 
 arctic-shell-ipc osd "$1" >/dev/null 2>&1 && exit 0

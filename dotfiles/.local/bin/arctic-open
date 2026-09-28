@@ -5,6 +5,9 @@
 #   arctic-open terminal [--hold] -e COMMAND [ARGUMENTS…]
 #                        run a command in your terminal (--hold: keep it open afterwards);
 #                        the launcher uses this for terminal apps, Fetch and "> command"
+#   arctic-open terminal --app-id ID [-e COMMAND…]
+#                        the terminal's window gets the Wayland app id ID, which window rules
+#                        match (the drop-down terminal); kitty, foot and alacritty only
 #
 # The installer writes your picks to /etc/arctic/default-apps; you can override any of them in
 # ~/.config/arctic/default-apps. Both files are simple  role=command  lines, e.g.
@@ -15,7 +18,7 @@ set -uo pipefail
 
 usage() {
   echo "usage: arctic-open terminal|browser|editor|files|files-tui" >&2
-  echo "       arctic-open terminal [--hold] -e COMMAND [ARGUMENTS…]" >&2
+  echo "       arctic-open terminal [--hold] [--app-id ID] [-e COMMAND [ARGUMENTS…]]" >&2
   exit 2
 }
 
@@ -23,22 +26,32 @@ role="${1:-}"
 [[ -n "$role" ]] || usage
 shift
 
-# Running a command in the terminal: [--hold] -e COMMAND…
+# Running a command in the terminal: [--hold] [--app-id ID] [-e COMMAND…]
 exec_args=()
+app_id=""
 if (( $# )); then
   [[ "$role" == terminal ]] || usage
-  hold=0
+  hold=0 run=0
   while (( $# )); do
     case "$1" in
       --hold) hold=1; shift ;;
-      -e) shift; break ;;
+      --app-id) app_id="${2:-}"; [[ "$app_id" =~ ^[A-Za-z0-9._-]+$ ]] || usage; shift 2 ;;
+      -e) shift; run=1; break ;;
       *) usage ;;
     esac
   done
-  (( $# )) || usage
+  if (( run )); then (( $# )) || usage; else [[ -n "$app_id" ]] || usage; fi
   (( hold )) && exec_args+=(--hold)
-  exec_args+=(-e "$@")
+  (( run )) && exec_args+=(-e "$@")
 fi
+
+id_args() {   # id_args <terminal command line> — how that terminal sets its window's app id
+  [[ -n "$app_id" ]] || return 0
+  case "$(basename "${1%% *}")" in
+    kitty|alacritty) printf '%s\n' --class "$app_id" ;;
+    foot) printf '%s\n' --app-id "$app_id" ;;
+  esac
+}
 
 declare -A FALLBACK=(
   [terminal]="kitty|foot|alacritty"
@@ -75,9 +88,10 @@ for c in "${candidates[@]}"; do
   # A desktop entry can't be handed a command to run.
   (( ${#exec_args[@]} )) && [[ "$c" == gtk-launch* ]] && continue
   if available "$c"; then
+    mapfile -t ids < <(id_args "$c")
     # Detach so the app outlives the keybinding's process. The role's command line is a
     # command line (word-split by sh); the command to run is passed as separate arguments.
-    setsid -f sh -c "exec $c \"\$@\"" arctic-open "${exec_args[@]}" >/dev/null 2>&1
+    setsid -f sh -c "exec $c \"\$@\"" arctic-open "${ids[@]}" "${exec_args[@]}" >/dev/null 2>&1
     exit 0
   fi
 done
