@@ -2424,6 +2424,57 @@ def cmd_wifi(paths, args):
     return cmd_network(paths, [])
 
 
+# ---- battery (the shell's battery.py) and shell settings ----------------------------------------
+
+SHELL_KEYS = {'batteryWarnings': ('true', 'false')}
+
+
+def shell_settings(paths):
+    try:
+        data = json.loads((paths.config / 'arctic/shell.json').read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def cmd_battery(paths, args):
+    """The laptop battery as the battery menu sees it (battery.py status: charge limit), plus
+    whether the low-battery warning is on. `battery limit on|off` sets UPower's charge limit."""
+    warnings = shell_settings(paths).get('batteryWarnings') is not False
+    script = shell_script(paths, 'battery.py')
+    if not script:
+        return dict(ok=True, present=False, warnings=warnings)
+    if args[:1] == ['limit'] and args[1:] in (['on'], ['off']):
+        code, out, _err = run([sys.executable, str(script), 'limit', args[1]], timeout=60)
+    elif not args:
+        code, out, _err = run([sys.executable, str(script), 'status'], timeout=20)
+    else:
+        raise Failure('usage: battery [limit on|off]')
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = dict(ok=False, error='The battery helper didn’t answer.')
+    if args and data.get('ok'):
+        return cmd_battery(paths, [])
+    if not data.get('ok'):
+        if args:
+            raise Failure(data.get('error') or 'That didn’t work.')
+        return dict(ok=True, present=False, warnings=warnings)
+    data['warnings'] = warnings
+    return data
+
+
+def cmd_shell_set(paths, args):
+    """shell-set KEY VALUE: one of the shell's own settings in ~/.config/arctic/shell.json
+    (read by the shell's Session.qml), keeping the others."""
+    if len(args) != 2 or args[0] not in SHELL_KEYS or args[1] not in SHELL_KEYS[args[0]]:
+        raise Failure('usage: shell-set batteryWarnings true|false')
+    data = shell_settings(paths)
+    data[args[0]] = args[1] == 'true'
+    atomic_write(paths.config / 'arctic/shell.json', json.dumps(data, indent=2) + '\n')
+    return dict(ok=True, **{args[0]: data[args[0]]})
+
+
 def cmd_bluetooth_pair(_paths, _args):
     """Pair a device: the shell's Bluetooth menu on its pairing page (codes come up in Arctic's
     own dialog); without the shell, the Bluetooth manager."""
@@ -2572,7 +2623,7 @@ COMMANDS = {
     'wallpaper-delete': cmd_wallpaper_delete, 'wallpaper-rename': cmd_wallpaper_rename, 'wallhaven': cmd_wallhaven,
     'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
-    'bluetooth-pair': cmd_bluetooth_pair,
+    'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
 }
 
@@ -2581,7 +2632,7 @@ COMMANDS = {
 # one at a time (settings_lock). display-revert takes the lock itself, after its wait.
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
-           'ensure-source'}
+           'ensure-source', 'shell-set'}
 
 
 def main(argv=None):

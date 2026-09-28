@@ -53,8 +53,8 @@ the one your laptop uses), the battery's health and the batteries of your mouse,
 headphones.
 
 Arctic tells you once when the battery gets low, and again, even with do not disturb on, when it
-is about to run out, with what the computer will do then (usually suspend). To turn the first
-warning off, put `{"batteryWarnings": false}` in `~/.config/arctic/shell.json`.
+is about to run out, with what the computer will do then (usually suspend). Turn the first warning
+off in **Settings → Power and lock** (it is `batteryWarnings` in `~/.config/arctic/shell.json`).
 
 ## Calendar (`Super + Ctrl + T`)
 

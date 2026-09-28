@@ -244,6 +244,9 @@ install when you restart) and the **Channel**, Stable or Testing. These are the 
 - **When you're away:** lock the screen after, and suspend after, a time you pick (or never).
   The screen always locks before the computer sleeps. Saved in `~/.config/arctic/idle.conf`.
 - **Power mode:** Power saver, Balanced or Performance (when the computer offers them).
+- **Battery** (laptops): **Limit charging** to the level your laptop supports (often 80 %), when
+  it offers a charge limit, and **Warn me when the battery is low**. The battery menu on the bar
+  has both too; see [Menus on the bar](Bar-Menus#battery-and-power-mode-super--ctrl--p).
 - **Laptop lid:** closing the lid suspends the computer, and locks it first. With another screen
   plugged in and the laptop on power, it doesn't suspend. That's decided by systemd-logind
   (`HandleLidSwitch` in `/etc/systemd/logind.conf`), not by Settings.

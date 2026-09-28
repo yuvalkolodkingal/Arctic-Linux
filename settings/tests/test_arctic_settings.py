@@ -1168,6 +1168,37 @@ class BluetoothPairTest(Home):
         self.assertIn('isn’t running', self.helper('bluetooth-pair', ok=False)['error'])
 
 
+class BatteryTest(Home):
+    def setUp(self):
+        super().setUp()
+        shell = self.tmp / 'shell/scripts'
+        shell.mkdir(parents=True)
+        (shell / 'battery.py').write_text(
+            'import json, sys\n'
+            'if sys.argv[1:] == ["status"]:\n'
+            '    print(json.dumps({"ok": True, "present": True, "threshold_supported": True, "threshold_end": 80}))\n'
+            'else:\n'
+            '    open(sys.argv[0] + ".log", "a").write(" ".join(sys.argv[1:]) + "\\n"); print(json.dumps({"ok": True}))\n')
+        self.env['ARCTIC_SHELL_DIR'] = str(self.tmp / 'shell')
+        self.log_file = shell / 'battery.py.log'
+
+    def test_status_and_limit(self):
+        data = self.helper('battery')
+        self.assertEqual((data['present'], data['threshold_end'], data['warnings']), (True, 80, True))
+        self.helper('battery', 'limit', 'on')
+        self.assertEqual(self.log_file.read_text(), 'limit on\n')
+        self.helper('battery', 'limit', 'maybe', ok=False)
+
+    def test_warnings_switch_keeps_other_shell_settings(self):
+        (self.home / '.config/arctic/shell.json').write_text('{"frame": false}')
+        self.assertFalse(self.helper('shell-set', 'batteryWarnings', 'false')['batteryWarnings'])
+        self.assertEqual(json.loads((self.home / '.config/arctic/shell.json').read_text()),
+                         {'frame': False, 'batteryWarnings': False})
+        self.assertFalse(self.helper('battery')['warnings'])
+        self.helper('shell-set', 'frame', 'true', ok=False)
+        self.helper('shell-set', 'batteryWarnings', 'maybe', ok=False)
+
+
 class PowerProfileTest(Home):
     def test_missing(self):
         self.assertFalse(self.helper('power-profile')['available'])

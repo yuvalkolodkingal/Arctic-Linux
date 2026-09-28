@@ -97,6 +97,8 @@ var ENTRIES = [
     ["power", "power.suspend", "Suspend after", "sleep idle"],
     ["power", "power.profile", "Power mode", "performance balanced power saver battery"],
     ["power", "power.lid", "Closing the lid", "laptop lid switch"],
+    ["power", "power.limit", "Limit charging", "battery charge threshold health 80"],
+    ["power", "power.warnings", "Warn me when the battery is low", "battery low warning notification"],
     ["startup", "startup.mine", "Your startup apps", "autostart login"],
     ["startup", "startup.arctic", "Started by Arctic", "session services"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
