@@ -230,6 +230,9 @@ Requires:       udisks2
 # arctic-session lid (systemd-inhibit); lighter effects and game mode: arctic-effects.
 Requires:       wlr-randr
 Recommends:     wl-mirror
+# Apps that keep the screen on through org.freedesktop.ScreenSaver: arctic-screensaver.
+Requires:       python3-dbus
+Requires:       python3-gobject-base
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night

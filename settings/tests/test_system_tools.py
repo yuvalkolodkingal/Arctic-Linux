@@ -304,6 +304,70 @@ class InputMethodTest(Tools):
         self.helper('im-run', 'install', 'klingon', ok=False)
 
 
+def load_helper(name):
+    """A dotfiles helper as a module (without writing __pycache__ into dotfiles/.local/bin)."""
+    import importlib.machinery
+    import importlib.util
+    import sys
+    loader = importlib.machinery.SourceFileLoader(name.replace('-', '_'), str(BIN / name))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    old, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+    try:
+        loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = old
+    return module
+
+
+class ScreenSaverTest(Tools):
+    def test_cookies(self):
+        ss = load_helper('arctic-screensaver')
+        cookies = ss.Cookies()
+        zoom = cookies.add(':1.20', 'Zoom', 'Video call')
+        cookies.add(':1.20', 'Zoom', 'Video call')
+        chrome = cookies.add(':1.31', 'Google Chrome' + 'x' * 80, '')
+        self.assertEqual(len(cookies.apps()), 2)                     # the same app and reason once
+        self.assertEqual(len(cookies.apps()[1]['app']), 64)
+        self.assertFalse(cookies.remove(zoom, ':1.31'))               # not yours to let go
+        self.assertTrue(cookies.remove(zoom, ':1.20'))
+        self.assertEqual(cookies.vanish(':1.20'), 1)
+        self.assertEqual(list(cookies.held), [chrome])
+        for _ in range(ss.PER_SENDER - 1):
+            cookies.add(':1.31', 'Chrome', '')
+        with self.assertRaises(ValueError):
+            cookies.add(':1.31', 'Chrome', '')
+
+    def test_publish_drives_swayidle(self):
+        ss = load_helper('arctic-screensaver')
+        stub(self.bin, 'arctic-session', 'echo "arctic-session $*" >> "{}"\n'.format(self.log))
+        import os
+        old_env = dict(os.environ)
+        os.environ.update(PATH=self.env['PATH'], XDG_RUNTIME_DIR=str(self.tmp))
+        try:
+            cookies = ss.Cookies()
+            cookies.add(':1.5', 'Chromium', 'Playing video')
+            self.assertTrue(ss.publish(cookies, False))
+            self.assertEqual(json.loads((self.tmp / 'arctic/inhibitors.json').read_text())['apps'][0]['app'], 'Chromium')
+            cookies.vanish(':1.5')
+            self.assertFalse(ss.publish(cookies, True))
+            self.assertFalse((self.tmp / 'arctic/inhibitors.json').exists())
+        finally:
+            os.environ.clear()
+            os.environ.update(old_env)
+        self.assertEqual(self.calls(), ['arctic-session idle --restart'] * 2)
+        # swayidle keeps only "lock before sleep" while an app holds the screen on.
+        (self.tmp / 'arctic/inhibitors.json').write_text('{"apps": [{"app": "Zoom", "reason": ""}]}')
+        ran = self.tmp / 'swayidle.log'
+        stub(self.bin, 'arctic-is-live', 'exit 1\n')
+        stub(self.bin, 'pgrep', 'exit 1\n')
+        stub(self.bin, 'setsid', 'shift; exec "$@"\n')
+        stub(self.bin, 'swayidle', 'echo "$*" >> "{}"\n'.format(ran))
+        env = dict(self.env, XDG_RUNTIME_DIR=str(self.tmp))
+        subprocess.run(['bash', str(BIN / 'arctic-session'), 'idle'], env=env, check=True, timeout=10)
+        self.assertEqual(ran.read_text().strip(), '-w before-sleep arctic-lock')
+
+
 class GpuAndShareTest(Tools):
     def test_gpu(self):
         stub(self.bin, 'switcherooctl', textwrap.dedent('''\

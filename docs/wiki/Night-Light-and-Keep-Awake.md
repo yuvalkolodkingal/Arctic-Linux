@@ -64,6 +64,11 @@ arctic-keep-awake off
 arctic-keep-awake status --json
 ```
 
+**Apps keep the screen on by themselves** while they need it: a video call in the browser, a
+presentation, a film. They ask through the usual desktop interface (`org.freedesktop.ScreenSaver`,
+which `arctic-screensaver` answers), and the screen then doesn't lock or sleep until they let go
+or quit. `arctic-screensaver status` shows which apps are doing it.
+
 Keep awake still locks the screen **before** the computer sleeps: suspending from the power menu
 or closing the lid locks it as always. It ends when you log out.
 

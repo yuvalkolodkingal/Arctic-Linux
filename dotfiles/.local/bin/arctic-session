@@ -4,7 +4,7 @@
 # (for example as a systemd user unit from arctic-desktop-config), nothing happens.
 #
 #   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle [--restart]
-#                  nightlight | drives | lid [--restart] | effects
+#                  nightlight | drives | lid [--restart] | effects | screensaver
 #
 # `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
@@ -63,6 +63,8 @@ case "${1:-}" in
     awake=""
     [[ -r "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake" ]] && read -r awake < "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake"
     if [[ "$awake" =~ ^[0-9]+$ ]] && (( awake == 0 || awake > $(date +%s) )); then lock_after=0 suspend_after=0; fi
+    # Apps that asked to keep the screen on (arctic-screensaver: video calls, presentations) too.
+    [[ -s "${XDG_RUNTIME_DIR:-/tmp}/arctic/inhibitors.json" ]] && lock_after=0 suspend_after=0
     args=(-w)
     # Dim the screen a little before it locks (dim_before_lock seconds; 0 = don't); any key or
     # movement brings the brightness back. Screens without a backlight (monitors) stay as they are.
@@ -100,7 +102,10 @@ case "${1:-}" in
           setsid -f systemd-inhibit --what=handle-lid-switch --who="Arctic Linux" --why="$why" --mode=block \
             sleep infinity >/dev/null 2>&1 ;;
     esac ;;
+  # Apps keeping the screen on through org.freedesktop.ScreenSaver (Chromium, Electron apps).
+  screensaver) pgrep -u "$UID" -f "arctic-screensaver run" >/dev/null 2>&1 || \
+    { command -v arctic-screensaver >/dev/null 2>&1 && setsid -f arctic-screensaver run >/dev/null 2>&1; } ;;
   # Lighter effects in virtual machines and without a GPU driver; game mode ends with the session.
   effects) command -v arctic-effects >/dev/null 2>&1 && arctic-effects apply >/dev/null 2>&1 ;;
-  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives|lid [--restart]|effects" >&2; exit 2 ;;
+  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]|nightlight|drives|lid [--restart]|effects|screensaver" >&2; exit 2 ;;
 esac
