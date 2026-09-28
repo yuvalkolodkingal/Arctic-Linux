@@ -131,8 +131,10 @@ leave a laptop's only screen dark the next time it starts without its dock.
 
 ![The Keyboard and mouse page](images/settings-input.png)
 
-- **Keyboard:** your layouts (**Add a layout**), the keys that switch between them, what the
-  Caps Lock key does (many people make it a second Esc or Ctrl), and a box to try your keyboard.
+- **Keyboard:** your layouts (**Add a layout**), the keys that switch between them (with the
+  shortcuts those keys would also fire, if any), what the Caps Lock key does (many people make it
+  a second Esc or Ctrl), the **Compose key** (press it, then two keys: `'` then `e` types é), and a
+  box to try your keyboard.
 - **Typing:** repeat delay and rate, and Num Lock on when you log in.
 - **Touchpad:** tap to click, tap and drag, natural scrolling, turning the touchpad off while
   typing, pointer speed and acceleration, scrolling speed, right click, middle click with both
@@ -145,8 +147,14 @@ leave a laptop's only screen dark the next time it starts without its dock.
 
 Every shortcut of the desktop, searchable, and **Your shortcuts**. **Add a shortcut**: click the
 key box and press the keys, then type a command or pick an app to open. Mango uses the first
-shortcut it finds for a key, so Settings refuses a key that's already taken. Your shortcuts are
-saved as `bind=` lines in `settings.conf`.
+shortcut it finds for a key, so Settings refuses a key that's already taken, and one that holds
+the keys that switch your keyboard layout. Your shortcuts are saved as `bind=` lines in
+`settings.conf`.
+
+Arctic's own shortcuts come first. When an update gives Arctic a key you had bound (0.3 moved the
+browser to `Super + B` and added `Super + Shift + S`), a banner at the top says which of your
+shortcuts no longer run, and the row is marked **Doesn't run**: remove it and add it again on
+another key.
 
 **Every shortcut in your Mango config** lists everything Mango has, including the ones in your
 `user.conf`. The main ones are also on [Keyboard shortcuts](Keyboard-Shortcuts).

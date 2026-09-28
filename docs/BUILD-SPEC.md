@@ -98,7 +98,13 @@ waybar/fuzzel configs stay in the dotfiles as a fallback (`ARCTIC_SHELL=waybar`)
 Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <target> <fn>`,
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
-`lock lock`, `keys toggle`. Mango binds call these.
+`lock lock`, `keys toggle`, `clipboard toggle`, `emoji toggle`. Mango binds call these.
+
+Capture (arctic-desktop-config): `arctic-screenshot`, `arctic-ocr`, `arctic-colorpick` and
+`arctic-record` select with slurp and capture with grim / wf-recorder; `arctic-capture` parses
+Mango's IPC for them. Screen sharing in Mango sessions: `/etc/xdg/xdg-desktop-portal-wlr/mango`
+(`chooser_type=simple`) runs `/usr/libexec/arctic/arctic-share-picker`, which lists every monitor
+and window (fuzzel) and prints xdg-desktop-portal-wlr's `Monitor: <output>` / `Window: <id>`.
 
 ### 3.1 App theming
 

@@ -44,6 +44,8 @@ It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `p
 | Updates | `UpdateIndicator.qml`, `UpdatePopover.qml`, `UpdateService.qml`, `UpdateStatus.js` | While updates wait for the next restart (`/var/lib/arctic/update-status.json` from `arctic-update` says `ready` and `/system-update` exists): the amber "Restart to update" pill on the bar, a card with the number and size of the updates and **Restart and install** (`arctic-power restart`), and one notification per download (remembered in `~/.cache/arctic/update-notified`). Never on the live USB. |
 | Power menu | `PowerMenu.qml` | Under the power item or Super+Esc: Settings, Lock screen, Log out, Suspend, Restart, Shut down (live: Settings, Restart, Shut down). Runs `arctic-power <action>`; Settings runs `arctic-settings`. |
 | Keyboard shortcuts | `KeysSheet.qml` | Super+/: `keys.txt` from `~/.local/share/arctic` or `/usr/share/arctic`. |
+| Clipboard history | `ClipboardPanel.qml`, `scripts/clipboard.py` | Super+V: cliphist's history, newest first, pictures with a thumbnail (`~/.cache/arctic/clip-thumbs`). Enter copies, Shift+Enter also pastes (wtype; Ctrl+Shift+V in terminals), Delete removes, Clear asks first. The `arctic-clipboard` layer is shielded from screenshots and screencasts (rules.conf). |
+| Emoji | `EmojiPicker.qml`, `scripts/emoji-index.py` | Super+Ctrl+E: unicode-emoji's fully-qualified emoji (up to the version Noto Color Emoji draws; tones folded into their base), CLDR keywords in your language when installed, recent ones first (`~/.local/state/arctic/emoji.json`). Enter types it (wtype, after the layer has gone), Shift+Enter copies it. Cached in `~/.cache/arctic/emoji.json`. |
 | OSD | `Osd.qml`, `AudioService.qml` | 280×48 frosted pill, bottom centre. Follows PipeWire volume changes directly; brightness when `arctic-osd` calls `arctic-shell-ipc osd brightness` (brightnessctl). 1.2 s, then fades. |
 | Lock screen | `LockScreen.qml`, `pam/arctic-lock` | ext-session-lock (the session stays locked if the shell dies) + PAM (`pam_unix`, from this folder). Blurred wallpaper under frost, clock, avatar (`~/.face` or your initial), name, password field with focus / error / success rings, battery, Wi-Fi and power bottom-right. Off on the live USB. |
 | Live welcome | `LiveWelcome.qml` | "You're trying Arctic Linux" card (Install Arctic Linux / Keep trying), once per boot via `arctic-welcome`, and the Install tile bottom-left. On the desktop layer, under windows. |
@@ -85,6 +87,8 @@ notifications.
 | `dnd` | `refresh` |
 | `updates` | `toggle` (the updates card, only while updates wait), `refresh` |
 | `shell` | `reload` (theme, motion, settings), `live` |
+| `clipboard` | `toggle` (clipboard history, Super + V) |
+| `emoji` | `toggle` (the emoji picker, Super + Ctrl + E) |
 
 ## Developing
 

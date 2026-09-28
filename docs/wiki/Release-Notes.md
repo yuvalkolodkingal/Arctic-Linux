@@ -1,5 +1,44 @@
 # Release notes
 
+## Arctic Linux 0.3.0 (draft)
+
+### Shortcuts and capture
+
+- **`Super + B` opens your browser.** It was `Super + W`, which is now free for a shortcut of
+  your own. If you had bound `Super + B` yourself, Settings > Shortcuts shows that it no longer
+  runs (Arctic's shortcuts come first), so you can move it to another key.
+- **`Super + Shift + S` takes a screenshot of an area**, as on Windows; `Print` still does. Drag
+  over an area or click a window. `Shift + Print` now takes the screen you're on (not every
+  screen at once), window screenshots leave out the border, and `Ctrl + Print` copies an area
+  without saving it.
+- **The screenshot notification does more:** click it to open the picture; its buttons show it in
+  your file manager, open it in an editor to draw arrows, text and boxes (swappy), or move it to
+  the trash.
+- **Copy text from the screen** with `Super + Ctrl + Print` (text recognition, in your language),
+  and **read QR codes** (`arctic-ocr --qr`; sign-in codes stay out of clipboard history).
+- **Pick a colour** anywhere with `Super + Shift + C`: it's copied as `#rrggbb`.
+- **Record the screen** with `Super + Alt + R`: click a screen or drag an area, press again to
+  stop. Recordings go to `~/Videos/Screencasts`, using your graphics card's encoder when it has one.
+- **Sharing your screen** in a video call or OBS shows a list of your screens and windows, so you
+  can share a single window.
+- **Clipboard history** (`Super + V`) is a panel with search and pictures: `Enter` copies, `Shift +
+  Enter` also pastes, `Delete` removes. It's blacked out in screenshots and screen shares.
+- **Emoji** with `Super + Ctrl + E`: search by name, `Enter` types it. The live USB and new installs
+  get the colour emoji font.
+- **Switching windows:** `Alt + Tab` (`` Alt + ` `` goes back; `Alt + Shift` would switch your keyboard
+  layout), `Super + Alt + Tab` for every workspace, `Super + J` to jump to a window by its letter,
+  `Super + Backspace` for the previous one.
+- **More window keys:** `Super + H` hides a window (`Super + Shift + H` brings it back),
+  `Super + Shift + P` pins one over every workspace, `Super + Alt` + arrows make tab groups.
+- **A scratch workspace** over the current one (`` Super + ` ``) and a **drop-down terminal**
+  (`Super + Alt + Enter`).
+- **Hardware keys:** the keyboard-light, touchpad, calculator and search keys work.
+- **Settings > Keyboard and mouse** has a **Compose key** (press it, then two keys to type é, ©…),
+  and says which shortcuts your layout-switch key would also fire; Settings refuses a new shortcut
+  that holds that key.
+- Upgrading? If you replaced `~/.config/mango/arctic/binds.conf` or `apps.conf` with your own copy,
+  it doesn't get the new keys: compare it with `/usr/share/arctic/mango/`.
+
 ## Arctic Linux 0.2.0
 
 Arctic Linux 0.2 installs on real hardware, sets up the drivers your computer needs, offers 126

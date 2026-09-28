@@ -201,11 +201,30 @@ There's no lock screen in the live session.
 `Super + /` opens a sheet with every shortcut. Press `Esc` to close it. The same list is on
 [Keyboard shortcuts](Keyboard-Shortcuts).
 
-## Screenshots and the clipboard
+## Capture and the clipboard
 
-- `Print` lets you select an area, `Shift + Print` takes the whole screen, `Super + Print` the
-  current window. Screenshots are saved in `~/Pictures/Screenshots` and copied to the clipboard.
-- `Super + V` shows your clipboard history. Pick an entry to copy it again.
+- **Screenshots:** `Print` or `Super + Shift + S` lets you drag over an area or click a window,
+  `Shift + Print` takes the screen you're on, `Super + Print` the current window, and
+  `Ctrl + Print` copies an area without saving it. Screenshots are saved in
+  `~/Pictures/Screenshots` and copied to the clipboard. Click the notification to open the
+  picture; its buttons show it in your file manager, open it in the editor (swappy: arrows,
+  text, boxes and blur) or move it to the trash.
+- **Text from the screen:** `Super + Ctrl + Print`, then select the text: it's recognised and
+  copied. It reads your language and your keyboard layouts' languages; when one isn't installed,
+  a notification offers to add it. `arctic-ocr --qr` copies what a QR code says instead, and keeps
+  it out of clipboard history.
+- **Colours:** `Super + Shift + C`, then click: the colour is copied as `#rrggbb`, and the
+  notification can copy it as `rgb()` or `hsl()` too.
+- **Screen recording:** `Super + Alt + R`, then click a screen or drag an area. A notification
+  stays up while it records; press `Super + Alt + R` again (or **Stop recording**) to save it in
+  `~/Videos/Screencasts`. It uses your graphics card's video encoder when it has one.
+- **Sharing your screen:** when an app (a video call, OBS) asks to share your screen, a list of
+  your screens and windows appears: pick one, or press `Esc` to share nothing.
+- **Clipboard history:** `Super + V` shows what you copied, pictures included. Type to filter;
+  `Enter` copies an entry again, `Shift + Enter` also pastes it, `Delete` removes it. Clipboard
+  history is blacked out in screenshots and screen shares.
+- **Emoji:** `Super + Ctrl + E`, type a word (`heart`, `thumbs`), then `Enter` types the emoji
+  where you were typing; `Shift + Enter` copies it. The ones you use come first.
 
 ## Password prompts
 
