@@ -94,8 +94,8 @@ func TestAllProfilesValid(t *testing.T) {
 		}
 		return nil
 	})
-	if n != 4 { // defaults + ci/{default,alternative,offline}
-		t.Errorf("found %d profiles, want 4", n)
+	if n != 5 { // defaults + ci/{default,alternative,offline,nvidia}
+		t.Errorf("found %d profiles, want 5", n)
 	}
 }
 
