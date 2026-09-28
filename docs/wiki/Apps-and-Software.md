@@ -297,6 +297,7 @@ The NVIDIA and Broadcom drivers are built for your kernel on your computer (by a
 built again for every new kernel. With Secure Boot on, you confirm their key once after the
 install; see [Install Arctic Linux](Install-Arctic-Linux#secure-boot-and-your-driver). Older
 NVIDIA cards (Kepler and before) keep the open driver: their NVIDIA drivers don't work with Mango.
+Everything about drivers, including adding one later, is on [Drivers](Drivers).
 
 ## Always added
 
@@ -418,5 +419,6 @@ nix profile upgrade --all    # Nix packages in your profile (with the options ab
 
 `Super + Enter`, `Super + W`, `Super + E`, `Super + F` and `Super + Shift + F` open the apps you
 picked in the installer. To change them, and the apps that open links and files, open Settings
-(`Super + S`) and choose **Default apps**. The files behind it are on
+(`Super + S`) and choose **Default apps** (see [Settings](Settings#default-apps)). The files
+behind it are on
 [Themes and customisation](Themes-and-Customisation#default-apps).

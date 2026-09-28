@@ -6,7 +6,7 @@ or one made from your wallpaper. This page covers themes, wallpapers, which apps
 and the settings files you can change safely.
 
 Most of this can also be changed in **Arctic Settings** (`Super + S`, then **Appearance**); see
-[Desktop tour](Desktop-Tour#settings). This page shows the files and commands behind it.
+[Settings](Settings#appearance). This page shows the files and commands behind it.
 
 ## Winter and Polar night
 

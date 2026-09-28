@@ -236,7 +236,8 @@ The NVIDIA and Broadcom drivers are built for your kernel during the install, wh
 minutes. On a laptop with both Intel or AMD graphics and an NVIDIA card, the desktop keeps
 running on the built-in graphics. If your computer uses **Secure Boot**,
 you confirm the driver's key once after restarting; see
-[Secure Boot and your driver](#secure-boot-and-your-driver).
+[Secure Boot and your driver](#secure-boot-and-your-driver). More on each driver:
+[Drivers](Drivers).
 
 ## 9. Summary
 
@@ -345,7 +346,8 @@ If the installer couldn't ask your computer to trust the key, the card is titled
 needs Secure Boot's approval** and gives the same `mokutil` steps. Turning Secure Boot off in
 your computer's firmware settings works too. If the driver is only installed at first boot
 (because you were offline), the card says **One more step once your driver is installed**: keep
-the code for the restart after the driver is installed.
+the code for the restart after the driver is installed. See also
+[Drivers](Drivers#secure-boot-confirming-the-drivers-key).
 
 Next: [First boot](First-Boot).
 
