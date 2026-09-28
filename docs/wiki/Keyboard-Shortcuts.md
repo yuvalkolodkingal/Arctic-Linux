@@ -20,7 +20,7 @@ screen at any time.
 | `Super + Shift + F` | Open the file manager in the terminal (yazi) |
 | `Super + V` | Clipboard history |
 | `Super + S` | [Settings](Settings) |
-| `Super + Shift + A` | Get apps: install apps with dnf or Flatpak |
+| `Super + Shift + A` | Get apps: install or remove apps (Flathub, Fedora, web apps) |
 | `Super + Shift + W` | Wallpapers |
 | `Super + /` | The shortcut sheet |
 
@@ -106,15 +106,26 @@ Tap to click and natural scrolling are on for touchpads.
 | `>` then a command | Run a command; `Shift + Enter` runs it in the terminal |
 | `↑` / `↓` | Move through the results |
 | `Enter` | Open |
+| `Shift + Delete`, or `Delete` with the cursor at the end | Remove the selected app (asks first) |
 | `Esc` | Back, or close |
 
 ## In Get apps
 
-| Key | Does |
-|---|---|
-| `Tab` | Complete a package name |
-| `Enter` | Run what you typed |
-| `Ctrl + C` | Stop the running command |
+| Where | Key | Does |
+|---|---|---|
+| Chooser | `1` … `6` | Open that card (the digits follow the cards shown) |
+| Chooser | `←` `→` `↑` `↓`, `Tab`, then `Enter` or `Space` | Move between the cards and open one |
+| Flathub apps, Fedora packages | Type, `↑` / `↓` | Search, move through the results |
+| Flathub apps, Fedora packages | `Enter` | Install the selected app (or open it when it's installed) |
+| Flathub apps, Fedora packages | `Shift + Enter` | The app's details |
+| Fedora packages | `Ctrl + Tab`, `Ctrl + Page Down` / `Ctrl + Page Up` | Switch between Apps and All packages |
+| Remove apps | `Delete` or `Enter` | Remove the selected app (asks first) |
+| Remove apps | `Ctrl + Tab`, `Ctrl + Page Down` / `Ctrl + Page Up` | Next or previous tab |
+| Web apps | `Enter`, `Ctrl + Enter` | Look at the site now; add the web app |
+| Console | `Tab` | Complete a package name |
+| Console | `Enter` | Run what you typed |
+| Console | `Ctrl + C` | Stop the running command |
+| Anywhere | `Esc` | Back one step: close a panel, clear the field, back to the chooser, back to the launcher |
 
 ## In Settings
 

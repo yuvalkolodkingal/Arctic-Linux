@@ -81,7 +81,8 @@ through them. On a touchpad, swipe with four fingers left or right.
 `Enter`. Before you type anything, it offers:
 
 - **Apps**: every app on this computer
-- **Get apps**: install new apps (see below)
+- **Get apps**: install and remove apps (see below)
+- **Remove apps**: uninstall Flatpak apps, Fedora packages and web apps
 - **Wallpapers**: change the desktop picture
 - **Settings**: appearance, displays, keyboard, apps and more (`Super + S`)
 - **Fetch**: the fox greeting in a terminal
@@ -107,12 +108,14 @@ in your terminal and keeps the window open so you can read the output.
 
 ## Get apps
 
-![The Get apps console suggesting packages for a typed name](images/get-apps.png)
+![Get apps: where should the app come from?](images/get-apps.png)
 
-`Super + Shift + A`, or **Get apps** in the launcher, opens a small console for installing apps.
-Type an app's name and press `Enter` to install it, and `Tab` to complete a name. Installs run on
-their own, without `[y/N]` questions; your password is asked once, in a dialog. Full details are
-on [Apps and software](Apps-and-Software#get-apps).
+`Super + Shift + A`, or **Get apps** in the launcher, asks where the app should come from:
+**Flathub apps**, **Fedora packages**, **Web apps** (any website as an app), **Terminal apps**,
+**Remove apps** or the **Console**. Search, press `Enter` to install; Flathub needs no password,
+Fedora asks once, in a dialog. Installs carry on when you close the launcher. `Shift + Delete` on
+an app in the launcher removes it, after showing what goes. Full details are on
+[Apps and software](Apps-and-Software#get-apps).
 
 ## Settings
 

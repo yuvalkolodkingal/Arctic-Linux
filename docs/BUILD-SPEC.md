@@ -17,7 +17,7 @@ cmd/arctic-install/     engine CLI: dry-run, unattended, bridge (Go)
 internal/…              engine packages (Go)
 modules/<slot>/<id>/module.toml   app catalog (see §5)
 profiles/defaults.toml, profiles/ci/*.toml
-shell/                  Quickshell desktop shell (bar, launcher, wallpapers, get-apps console, OSD, lock, live welcome)
+shell/                  Quickshell desktop shell (bar, launcher, wallpapers, Get apps and Remove apps, OSD, lock, live welcome)
 installer-ui/           Quickshell installer frontend (the 12-step wizard)
 settings/               Arctic Settings, the settings app (Quickshell; §3.2)
 branding/sddm/arctic/   SDDM Qt6 QML login theme
@@ -97,8 +97,8 @@ waybar/fuzzel configs stay in the dotfiles as a fallback (`ARCTIC_SHELL=waybar`)
 
 Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <target> <fn>`,
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
-`wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
-`lock lock`, `keys toggle`. Mango binds call these.
+`wallpapers toggle`, `apps install|remove|open <page>|source <name>|search <page> <text>|uninstall <desktop-id>`
+(Get apps), `power toggle`, `osd volume|brightness`, `lock lock`, `keys toggle`. Mango binds call these.
 
 ### 3.1 App theming
 
@@ -203,7 +203,7 @@ stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
 `scripts/wallpapers.py list|apply` (→ `arctic-wallpaper`); `arctic-session idle --restart`;
 `wlr-randr --json` / `wlr-randr --output …`; `nmcli`; `gdbus` (power profiles, tuned-ppd);
 `gsettings` (GTK text size, cursor); tools it opens: `nm-connection-editor`, `blueman-manager`,
-`pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install`, `xdg-open`.
+`pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install|remove`, `xdg-open`.
 Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
 
 Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
@@ -225,7 +225,7 @@ IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|sea
   failure, and never touches the system.
 - The UI runs `arctic-install bridge [--socket PATH]`, which relays newline-delimited JSON
   between its stdin/stdout and the socket (Quickshell `Process` + `SplitParser`, as in
-  `shell/InstallConsole.qml`). `arctic-install bridge --mock` starts an in-process mock engine
+  `shell/AppsService.qml`). `arctic-install bridge --mock` starts an in-process mock engine
   instead (same code as `arcticd --mock`), so the UI can run with no daemon and no root.
 - Messages (one JSON object per line):
   - request `{"id": 7, "method": "SetStep", "params": {...}}`

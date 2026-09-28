@@ -33,7 +33,7 @@ downloads the apps you pick.
 - **Mango**, a tiling window manager for Wayland. Windows arrange themselves side by side with
   small gaps and rounded corners, and the window you're using has an amber border.
 - **A desktop shell** made for Arctic Linux: the top bar, a launcher that also works as a
-  calculator and a command runner, a wallpaper picker, a **Get apps** console, volume and
+  calculator and a command runner, a wallpaper picker, **Get apps** (install and remove apps), volume and
   brightness pop-ups, a power menu and a lock screen.
 - **Two themes**, Winter (light) and Polar night (dark), and **colours from your wallpaper**: pick
   a picture of your own and the whole desktop, your apps included, takes its colours from it.

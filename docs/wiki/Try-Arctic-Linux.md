@@ -53,7 +53,8 @@ Some builds of the live USB include **Zen Browser**, so you can go online straig
 build leaves Zen out when including it would make the image larger than 2 GB.
 
 If your copy has no browser, you can add one for this session with **Get apps**
-(`Super + Shift + A`): type `firefox` and press `Enter`. It's gone again when you restart.
+(`Super + Shift + A`) → **Flathub apps** or **Fedora packages**: type `firefox` and press `Enter`.
+It's gone again when you restart.
 
 ## What's different from an installed system
 

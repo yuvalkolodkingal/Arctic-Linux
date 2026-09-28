@@ -1,7 +1,8 @@
 // Default apps: which app opens for each role. The keyboard roles (browser, terminal, files,
 // editor) go to ~/.config/arctic/default-apps, which arctic-open reads after the installer's
 // /etc/arctic/default-apps (Super + W, Super + Enter, Super + F, Super + E); links and files
-// open through ~/.config/mimeapps.list, the file `xdg-mime default` writes.
+// open through ~/.config/mimeapps.list, the file `xdg-mime default` writes. "Install and remove
+// apps" opens the shell's Get apps and Remove apps (arctic-shell-ipc apps install|remove).
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -58,10 +59,32 @@ Page {
                 }
             }
         }
+        SettingRow {
+            searchKey: "apps.software"
+            title: "Install and remove apps"
+            desc: "Flathub apps, Fedora packages, web apps and terminal apps."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArButton {
+                    text: "Get apps"
+                    iconName: "package"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.launch(["arctic-shell-ipc", "apps", "install"])
+                }
+                ArButton {
+                    visible: !Backend.live
+                    text: "Remove apps"
+                    iconName: "trash"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.launch(["arctic-shell-ipc", "apps", "remove"])
+                }
+            }
+        }
     }
     ArText {
         width: parent.width
-        text: "Install more apps with Get apps (Super + Shift + A); they show up here."
+        text: "Apps you install with Get apps (Super + Shift + A) show up here."
         size: 13
         lh: 18
         wrapMode: Text.WordWrap

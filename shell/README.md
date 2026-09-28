@@ -1,7 +1,7 @@
 # Arctic shell
 
 The Arctic Linux desktop shell, written for [Quickshell](https://quickshell.org): the top bar,
-the screen frame, the launcher with its Get apps console, the wallpaper picker, the power menu,
+the screen frame, the launcher with Get apps and Remove apps, the wallpaper picker, the power menu,
 the keyboard-shortcut sheet, the volume/brightness OSD, the lock screen, the polkit password
 dialog and the live USB's welcome card. It runs on Mango (Arctic's compositor) and also on
 Hyprland and sway.
@@ -29,7 +29,7 @@ checkout. Mango starts it at login (`arctic-session shell` in the dotfiles' auto
 lxqt-policykit fallback instead.
 
 It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `python3-pyte`
-(the Get apps terminal); the bar uses NetworkManager (`nmcli`), PipeWire, UPower, BlueZ, mako
+(the Get apps console); the bar uses NetworkManager (`nmcli`), PipeWire, UPower, BlueZ, mako
 (`makoctl`) and `brightnessctl` when they are there and hides what isn't.
 
 ## What's in it
@@ -38,8 +38,8 @@ It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `p
 |---|---|---|
 | Top bar | `Bar.qml`, `BarItem.qml`, `BarTooltip.qml`, `Workspaces.qml`, `scripts/workspaces.py` | 34px frost, 1px `line` bottom. Fox mark (launcher), workspaces 1–5 (active amber pill, occupied ring, empty muted, urgent error ring), clock with tabular figures, notifications bell (do not disturb), Bluetooth, tray, network, volume, battery (hidden without one), power. Live USB: "Live session" tag and the amber Install item. Tooltips on every icon-only item. |
 | Screen frame | `ScreenFrame.qml` | Ground-coloured surround with a `line` hairline. It reserves its width on each edge, so Mango keeps its 8px gap inside it and window corners are concentric with the frame's. `{"frame": false}` in `~/.config/arctic/shell.json` turns it off. |
-| Launcher | `Launcher.qml`, `LauncherSearch.js`, `Calc.js`, `AppTile.qml` | Super+Space. 520px frosted card that hangs from the bar over a scrim; drag the grip to dock it to any edge. Apps (design app tiles for the Arctic apps), `=` calculator (a small parser: arithmetic only, never `eval`), `>` run a command (Shift+Enter: in your terminal, via `arctic-open terminal -e`). Empty query: Apps, Get apps, Wallpapers, Settings, Fetch (+ Install Arctic Linux on the live USB). |
-| Get apps | `InstallConsole.qml`, `PackageSearch.js`, `scripts/install-terminal.py`, `scripts/package-index.py` | Type an app name to install it, or a `dnf` / `flatpak` command. `dnf install|remove|upgrade` run as `sudo dnf …`, queries without sudo, `flathub:<id>` or `flatpak install flathub …` through Flatpak — in a real PTY, so sudo's password and dnf's `[y/N]` are answered in the console. Password input is masked, never logged or stored; a reply typed for a prompt that has since changed is refused. Ctrl+C stops the job. Tab completes names from a cached index (`~/.cache/arctic/packages.txt` from `dnf5 repoquery`, `flathub.txt` from `flatpak remote-ls`), refreshed in the background once a day. |
+| Launcher | `Launcher.qml`, `LauncherSearch.js`, `Calc.js`, `AppTile.qml` | Super+Space. 520px frosted card that hangs from the bar over a scrim; drag the grip to dock it to any edge. Apps (design app tiles for the Arctic apps), `=` calculator (a small parser: arithmetic only, never `eval`), `>` run a command (Shift+Enter: in your terminal, via `arctic-open terminal -e`). Empty query: Apps, Get apps, Remove apps, Wallpapers, Settings, Fetch (+ Install Arctic Linux on the live USB). Shift+Delete (or Delete at the end of the text), the row's trash button or a right-click removes an app after `getapps/RemoveSheet` shows what goes; a search with no app offers "Find … in Get apps". |
+| Get apps | `AppsService.qml`, `WebAppClient.qml`, `getapps/` (`GetApps.qml` router, `ChooserPage`, `SourcePage`, `WebAppPage`, `TerminalAppPage`, `RemovePage`, `RemoveSheet`, `ConsolePage`, `GetApps.js`), `PackageSearch.js`, `scripts/apps.py`, `scripts/appslib.py`, `scripts/install-terminal.py`, `scripts/package-index.py`, `scripts/protected-packages.conf` | Super+Shift+A. A chooser (Flathub apps, Fedora packages, Web apps, Terminal apps, Remove apps, Console); Esc goes back one step. Installs and removals are jobs of `AppsService`, run one at a time in the runner's PTY (`install-terminal.py run`, commands built by `appslib.build_job`: `pkexec /usr/bin/dnf5 install|remove -y …`, `flatpak install|uninstall --system|--user -y --noninteractive …`), so they outlive the launcher; a notification says when one ends out of sight. `apps.py` answers the read-only questions as you: AppStream catalogues, installed apps per source, dnf removal previews (`dnf5 remove --store`, as you), launcher-entry owners (Delete in the launcher). Protected packages (`protected-packages.conf`, `/etc/arctic/protected-packages.d/`, the hard closure of `arctic-desktop`, your login shell, your only terminal) are never removed. Web apps go through `arctic-webapp serve`. The Console takes `dnf` / `flatpak` commands in a real PTY; typed removals list what goes and ask `[y/N]`. |
 | Wallpapers | `Wallpapers.qml`, `scripts/wallpapers.py` | Searchable thumbnail grid. The Arctic wallpapers (from `~/.local/share/arctic/wallpapers` or `/usr/share/backgrounds/arctic`) show the active theme's variant and follow Winter / Polar night; your own pictures come from `~/Pictures/Wallpapers` or a folder you choose. Applies through `arctic-wallpaper`. The "Match colours to wallpaper" switch is `arctic-theme auto on\|off` (read from `~/.config/arctic/settings.json`). Thumbnails (Pillow; SVGs via rsvg-convert) in `~/.cache/arctic/thumbs`, settings in `~/.config/arctic/wallpapers.json`. |
 | Updates | `UpdateIndicator.qml`, `UpdatePopover.qml`, `UpdateService.qml`, `UpdateStatus.js` | While updates wait for the next restart (`/var/lib/arctic/update-status.json` from `arctic-update` says `ready` and `/system-update` exists): the amber "Restart to update" pill on the bar, a card with the number and size of the updates and **Restart and install** (`arctic-power restart`), and one notification per download (remembered in `~/.cache/arctic/update-notified`). Never on the live USB. |
 | Power menu | `PowerMenu.qml` | Under the power item or Super+Esc: Settings, Lock screen, Log out, Suspend, Restart, Shut down (live: Settings, Restart, Shut down). Runs `arctic-power <action>`; Settings runs `arctic-settings`. |
@@ -75,7 +75,7 @@ notifications.
 | Target | Functions |
 |---|---|
 | `launcher` | `toggle`, `open`, `close`, `search <text>` (e.g. `"=12*4"`) |
-| `apps` | `install` (Get apps), `toggle` |
+| `apps` | `install` (Get apps), `remove` (Remove apps), `open <page>` / `source <name>` (flathub, fedora, web, terminal, remove[/tab], console), `search <page> <text>`, `uninstall <desktop-id>`, `toggle` |
 | `wallpapers` | `toggle`, `open` |
 | `power` | `toggle` |
 | `keys` | `toggle` |

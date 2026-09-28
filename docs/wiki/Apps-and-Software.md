@@ -2,7 +2,7 @@
 
 Arctic Linux starts with the apps you pick in the installer, from a catalog of 126. Afterwards
 you can add almost anything from three places: Fedora's own packages (dnf), Flathub (Flatpak) and
-Nix. The quickest way is **Get apps** (`Super + Shift + A`).
+Nix. The quickest way is **Get apps** (`Super + Shift + A`), which also removes apps.
 
 ## The default apps
 
@@ -313,37 +313,103 @@ links, documents, videos and folders.
 
 ## Get apps
 
-![The Get apps console suggesting packages for a typed name](images/get-apps.png)
+![Get apps: where should the app come from?](images/get-apps.png)
 
-**Get apps** is a small console for installing software. Open it with `Super + Shift + A`, or
-choose **Get apps** in the launcher (`Super + Space`).
+**Get apps** installs software. Open it with `Super + Shift + A`, or choose **Get apps** in the
+launcher (`Super + Space`). It first asks where the app should come from:
 
-What you can type:
+| Card | What it does |
+|---|---|
+| **Flathub apps** (`1`) | Desktop apps from Flathub, each in its own sandbox. No password needed. |
+| **Fedora packages** (`2`) | Apps and tools from Fedora and RPM Fusion, with dnf. Asks for your password once. |
+| **Web apps** (`3`) | Any website as an app, with its own window, icon and sign-in (see [Web apps](Web-Apps.md)). Shown when the web-app engine is installed. |
+| **Terminal apps** (`4`) | Puts a terminal program like `btop` in the launcher, in a floating or tiled window. |
+| **Remove apps** (`5`) | Uninstalls apps; see [Remove apps](#remove-apps). |
+| **Console** (`6`) | Type `dnf` and `flatpak` commands. |
+
+Press a card's digit, or move with the arrow keys and press `Enter`. `Esc` goes back one step
+(it closes an open panel, then clears what you typed, then returns to this chooser, then to the
+launcher).
+
+**Flathub apps** lists Flathub's catalogue with names, summaries, icons and the **Verified**
+badge for apps their developers publish themselves. Type to search, `Enter` installs the selected
+app (or opens it when it's already installed), `Shift + Enter` shows its details. Apps install for
+everyone on the computer without a password; if Flathub isn't set up yet, **Add Flathub** adds it
+(that asks for your password once).
+
+**Fedora packages** has two views: **Apps** (Fedora's app catalogue, `appstream-data`, with names
+and icons) and **All packages** (every package, with its summary and repository: Fedora, RPM
+Fusion, COPR or Arctic Linux). `Ctrl + Tab` switches between them. Installing asks for your
+password once, in the desktop's password dialog; it's remembered for a few minutes.
+
+Installs keep going when you close the launcher: the strip at the bottom of Get apps shows
+progress (**Show details** shows dnf's or Flatpak's own output, **Stop** stops it), and a
+notification says when an app is ready if Get apps isn't open. A second install waits for the
+first.
+
+**Terminal apps**: give a command (`btop`, `yazi`, `htop -t`) and a name; it gets a launcher entry
+that opens in your terminal. If the program isn't installed, the page offers to find it in Fedora
+packages. Remove the entry again in Remove apps; the program itself stays.
+
+**Console**: a small terminal for `dnf` and `flatpak`, for when you know the command.
 
 | Type | Does |
 |---|---|
 | `htop` | Installs `htop` from Fedora (`pkexec dnf5 install -y htop`). You can list several names. |
 | `flathub:org.gimp.GIMP` | Installs an app from Flathub (`flatpak install -y flathub org.gimp.GIMP`) |
 | `dnf search editor` | Searches Fedora's packages. `dnf info`, `dnf list` and other questions run without a password. |
-| `dnf install …`, `dnf remove …`, `dnf upgrade` | Runs as `pkexec dnf5 … -y` |
-| `flatpak install flathub …`, `flatpak uninstall …`, `flatpak update` | Runs as typed, with `-y` added |
+| `dnf install …`, `dnf upgrade` | Runs as `pkexec dnf5 … -y` |
+| `dnf remove …` | Runs as `pkexec dnf5 remove …`: dnf lists everything that goes and asks `[y/N]` in the console |
+| `flatpak install flathub …`, `flatpak update` | Runs as typed, with `-y` added; `flatpak uninstall` asks first |
 
-- **Installs run on their own.** Nothing stops at dnf's or Flatpak's `Is this ok [y/N]`: the
-  console answers yes for you (unless you typed `-y` or `--assumeno` yourself).
-- **Your password is asked once, in a dialog.** dnf runs through `pkexec`, so the desktop's
-  password dialog appears; type your account password there. It's remembered for a few minutes,
-  so a second install right after the first doesn't ask again. Installing from Flathub needs no
-  password at all.
-- As you type an app's name, matching packages from Fedora and Flathub are suggested. `Tab`
-  completes a name. The list of names is saved on your computer and refreshed once a day; the
-  **Refresh list** button updates it now.
-- If a command still asks for something in the console (for example a `sudo` you typed), answer
-  there. A password is hidden as you type and never saved or logged.
+- `Tab` completes package names; **Refresh list** updates the list of names now (it refreshes
+  itself once a day).
+- Packages Arctic Linux needs can't be removed here (see below).
+- If a command asks for something (a `sudo` you typed, dnf's `[y/N]`), answer on the input line.
+  A password is hidden as you type and never saved or logged.
 - `Ctrl + C` (or **Stop**) stops the running command. **Clear** empties the console.
 - A Flatpak app installed here gets its Arctic colours straight away (Zed, for example).
 
-It runs `dnf` and `flatpak` only; it isn't a general terminal. The installer's messages mention
-"the Software app": that's Get apps.
+The installer's messages mention "the Software app": that's Get apps.
+
+## Remove apps
+
+![Remove apps, with a tab per source](images/remove-apps.png)
+
+**Remove apps** is card `5` in Get apps, **Remove apps** in the launcher, or **Settings → Default
+apps → Install and remove apps**. It has a tab per source: **Flatpak**, **Fedora packages**,
+**Web apps** and **Terminal apps**. Pick an app and press **Remove…** (or `Delete`/`Enter`);
+`Ctrl + Tab` moves between the tabs.
+
+Nothing is removed before you confirm, and the confirmation says exactly what goes:
+
+- **Fedora packages**: every package dnf would remove: the app, the packages that need it, and
+  the ones nothing needs any more (untick **Also remove packages nothing else needs** to keep
+  those). Removing asks for your password. When snapshots are set up, one is taken first, so the
+  change can be undone (see [Updates](Updates.md)).
+- **Flatpak**: the app goes for everyone (or only for you, if you installed it that way). Its
+  settings and data in `~/.var/app` stay unless you tick **Also delete its settings and data**.
+  Runtimes no other app uses go too.
+- **Web apps**: the app leaves the launcher; its sign-in stays unless you tick **Also sign out and
+  delete its data**. Kept sign-in data is listed under **Saved sign-in data**, where you can delete
+  it later.
+
+You can also remove an app from the launcher: select it and press `Shift + Delete` (or `Delete`
+when the text cursor is at the end), or right-click it.
+
+Some packages can't be removed from here, and the page says why:
+
+- **Part of Arctic Linux**: the desktop itself, the session, the package manager, the boot
+  loader and the other packages listed in `/usr/share/arctic/shell/scripts/protected-packages.conf`,
+  and everything the Arctic desktop needs (such as Blueman or the volume control). A removal that
+  would take one of them along is refused as a whole.
+- **Your login shell**: choose another shell first.
+- **Your only terminal**: `Super + Enter` would stop working; install another terminal first.
+
+Administrators can protect more packages with `fnmatch` patterns, one per line, in
+`/etc/arctic/protected-packages.d/*.conf`. `sudo dnf remove` in a terminal isn't limited by this.
+
+Remove apps isn't offered while you're trying Arctic Linux from the USB stick.
 
 ## dnf: Fedora's packages
 
@@ -353,7 +419,7 @@ terminal:
 ```sh
 dnf search thunderbird            # find a package
 sudo dnf install thunderbird      # install it
-sudo dnf remove thunderbird       # remove it
+sudo dnf remove thunderbird       # remove it (or use Remove apps)
 sudo dnf upgrade                  # update everything installed with dnf
 ```
 
@@ -373,7 +439,7 @@ Then:
 flatpak search spotify
 flatpak install flathub com.spotify.Client
 flatpak update                    # update every Flatpak app
-flatpak list                      # what's installed
+flatpak list                      # what's installed (Remove apps lists them too)
 ```
 
 Installed Flatpak apps appear in the launcher.

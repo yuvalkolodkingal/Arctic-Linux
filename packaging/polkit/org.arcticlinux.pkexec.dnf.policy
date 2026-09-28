@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
-<!-- Arctic Linux: Get apps (the shell's install console) runs `pkexec /usr/bin/dnf5 …`.
-     An administrator's password, asked in the shell's own dialog, is kept for a few
-     minutes, so installing a second app right after the first doesn't ask again. -->
+<!-- Arctic Linux: Get apps (the shell's app installer, its Remove apps page and its console) runs
+     `pkexec /usr/bin/dnf5 install|remove …`. An administrator's password, asked in the shell's own
+     dialog, is kept for a few minutes, so installing a second app right after the first doesn't
+     ask again. -->
 <policyconfig>
   <vendor>Arctic Linux</vendor>
   <vendor_url>https://github.com/yuvalkolodkingal/O-Tism</vendor_url>

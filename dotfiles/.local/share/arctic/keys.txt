@@ -8,7 +8,7 @@
     Super + F                Files
     Super + Shift + F        Files in the terminal (yazi)
     Super + V                Clipboard history
-    Super + Shift + A        Get apps (install with dnf or Flatpak)
+    Super + Shift + A        Get apps (install or remove apps)
     Super + Shift + W        Wallpapers
     Super + /                This sheet
 

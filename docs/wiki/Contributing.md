@@ -61,7 +61,10 @@ Run the same checks CI runs (see [Building from source](Building-from-Source#con
 go vet ./... && go test ./...                                   # engine
 python3 -m unittest discover -s shell/tests                      # shell helpers
 node shell/tests/test-launcher.cjs                               # launcher ranking, calculator
-node shell/tests/test-package-search.cjs                         # Get apps completion
+node shell/tests/test-package-search.cjs                         # Get apps completion and search
+node shell/tests/test-getapps.cjs                                # Get apps pages: cards, Esc, row states
+python3 -m unittest shell/tests/test_apps.py                     # apps.py, jobs, protected packages
+shell/tests/test-dnf5-remove.sh                                  # (container, root) Remove apps vs the real dnf5
 python3 -m unittest discover -s packaging/firstboot              # arctic-firstboot
 python3 -m unittest discover -s packaging/updates -p 'test_*.py' # arctic-update
 python3 -m unittest discover -s design/themegen/tests            # theme engine, wallpaper colours, arctic-theme

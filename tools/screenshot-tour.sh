@@ -143,6 +143,13 @@ if [[ "$PHASES" == *live* ]]; then
       && [ -s "$OUT/packages.txt.new" ] && mv "$OUT/packages.txt.new" "$OUT/packages.txt" \
       || { echo "note: could not list the Fedora packages" >&2; rm -f "$OUT/packages.txt.new"; }
   fi
+  # With summaries and repositories, for the Fedora packages page (package-index.py's TSV).
+  if [ -z "$(find "$OUT/packages.tsv" -mmin -1440 2>/dev/null)" ]; then
+    dnf -q repoquery --available --qf "$(printf '%%{name}\t%%{repoid}\t%%{summary}')\n" 2>/dev/null \
+      | sort -t "$(printf '\t')" -k1,1 -u > "$OUT/packages.tsv.new" \
+      && [ -s "$OUT/packages.tsv.new" ] && mv "$OUT/packages.tsv.new" "$OUT/packages.tsv" \
+      || { echo "note: could not list the Fedora packages with summaries" >&2; rm -f "$OUT/packages.tsv.new"; }
+  fi
   if [ -z "$(find "$OUT/flathub.txt" -mmin -1440 2>/dev/null)" ]; then
     curl -fsSL --max-time 120 https://flathub.org/api/v2/appstream \
       | python3 -c 'import json,sys; print("\n".join(sorted(json.load(sys.stdin))))' > "$OUT/flathub.txt.new" \

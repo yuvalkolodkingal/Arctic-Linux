@@ -80,6 +80,7 @@ var ENTRIES = [
     ["apps", "apps.files", "Files", "file manager thunar nautilus folders"],
     ["apps", "apps.editor", "Text editor", "code zed"],
     ["apps", "apps.video", "Videos", "vlc mpv player"],
+    ["apps", "apps.software", "Install and remove apps", "get apps remove uninstall software flatpak flathub dnf fedora web app terminal"],
     ["network", "network.wifi", "Wi-Fi", "wireless"],
     ["network", "network.connections", "Connections", "vpn ethernet proxy"],
     ["bluetooth", "bluetooth.power", "Bluetooth", "on off"],
