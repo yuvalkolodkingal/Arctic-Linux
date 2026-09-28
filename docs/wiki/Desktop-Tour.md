@@ -106,6 +106,15 @@ A search finds more than apps. The apps you open most come first.
 - **The web**: the last row searches the web for what you typed. Start with `?` to search only
   the web. Pick the search engine in Settings › Default apps › Web search.
 
+### Reminders: start with `remind`
+
+`Super + Ctrl + R` opens the launcher with `remind ` typed. Say when, then what: `remind 10m tea`,
+`remind 1h 30m stretch`, `remind me at 17:30 to call Ana` or `remind 5pm leave`. The row shows
+when it will be; `Enter` sets it. When it's time, a notification you can't miss says it, with
+**Again in 10 minutes**. A reminder set before the laptop sleeps still comes when it wakes, but
+not after a restart. `arctic-remind list` shows what's set; **Cancel reminders** is in the
+[command menu](Command-Menu) (Apps).
+
 ### Calculator: start with `=`
 
 ![The launcher calculator showing the result of =12*4](images/launcher-calculator.png)

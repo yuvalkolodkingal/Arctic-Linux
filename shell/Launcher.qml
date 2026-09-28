@@ -85,6 +85,9 @@ Popover {
             return [sources.webRow(parsed.text) || { kind: 'none', name: 'Search the web', desc: 'Type what to look for after ?, like ? fedora release date', glyph: 'globe' }];
         if (view === 'apps') return LauncherSearch.rank(apps, parsed.text, item => sources.boost(item));
         if (!parsed.text) return specials;
+        // "remind 10m tea" (arctic-remind; Super + Ctrl + R opens the launcher with "remind ").
+        const reminder = LauncherSearch.reminderRow(parsed.text);
+        if (reminder) return [reminder];
         // Settings is one of the specials, so its desktop entry would show twice. A unit
         // conversion ("10 km to mi") goes first; files and the web search follow the rest.
         const units = LauncherSearch.looksLikeConversion(parsed.text) ? sources.qalcRow(parsed.text) : null;
@@ -122,6 +125,7 @@ Popover {
         case 'window': if (item.ref) item.ref.activate(); close(); break;
         case 'action': item.action.execute(); close(); break;
         case 'web': Quickshell.execDetached(['xdg-open', item.url]); close(); break;
+        case 'remind': Quickshell.execDetached(['arctic-remind', '--', item.args]); close(); break;
         // Shift + Enter opens the folder a file is in.
         case 'file': Quickshell.execDetached(['xdg-open', alternate && !item.folder ? item.path.replace(/\/[^/]*$/, '') || '/' : item.path]); close(); break;
         case 'command':

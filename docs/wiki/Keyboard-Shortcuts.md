@@ -72,6 +72,7 @@ screen at any time.
 | `Super + Shift + N` | Do not disturb on / off |
 | `Super + Shift + T` | Switch between light and dark (Winter and Polar night, or your wallpaper's colours) |
 | `Super + Shift + R` | Reload the desktop configuration |
+| `Super + Ctrl + R` | Set a reminder: type when and what, like `10m tea` or `17:30 call Ana` |
 | `Print` | Screenshot of an area you select |
 | `Shift + Print` | Screenshot of the whole screen |
 | `Super + Print` | Screenshot of the current window |
@@ -108,6 +109,7 @@ Tap to click and natural scrolling are on for touchpads.
 | `=` then a sum | Calculator (units too, like `= 10 km to mi`); `Enter` copies the answer |
 | `>` then a command | Run a command; `Shift + Enter` runs it in the terminal |
 | `?` then words | Search the web |
+| `remind` then when and what | A reminder, like `remind 10m tea` or `remind 17:30 call Ana` |
 | `Shift + Enter` on a file | Open the folder it's in |
 | `↑` / `↓` | Move through the results |
 | `Enter` | Open |

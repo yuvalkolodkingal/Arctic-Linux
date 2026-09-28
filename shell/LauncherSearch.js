@@ -190,3 +190,64 @@ function remember(stats, id, now, keep) {
         ids.sort((a, b) => out[b].t - out[a].t).slice(keep || 200).forEach(k => { delete out[k]; });
     return out;
 }
+
+// ---- reminders ("remind 10m tea", "remind me at 17:30 to call Ana") ---------------------------
+// The same words arctic-remind understands (both are tested with tests/fixtures/reminders.json):
+// "in" and durations (10m, 1h 30m, 90 seconds, a bare number = minutes), or "at" and a time
+// (17:30, 5pm, 5:30 pm), then optionally "to", then what to say. {ok, seconds} or {ok, hour,
+// minute}, with text and when ("in 10 minutes", "at 17:30"); {ok: false} when it can't tell.
+var UNITS = { s: 1, sec: 1, secs: 1, second: 1, seconds: 1, m: 60, min: 60, mins: 60, minute: 60, minutes: 60,
+              h: 3600, hr: 3600, hrs: 3600, hour: 3600, hours: 3600, d: 86400, day: 86400, days: 86400 };
+function parseReminder(input) {
+    let rest = String(input || '').trim().replace(/^me\s+/i, '');
+    let seconds = 0, hour = -1, minute = 0, m;
+    const time = /^(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?=\s|$)/i.exec(rest);
+    if (time && (time[2] !== undefined || time[3] !== undefined || /^at\s/i.test(rest))) {
+        hour = parseInt(time[1], 10);
+        minute = time[2] !== undefined ? parseInt(time[2], 10) : 0;
+        const half = (time[3] || '').toLowerCase();
+        if (half && (hour < 1 || hour > 12)) return { ok: false };
+        if (half === 'pm' && hour < 12) hour += 12;
+        if (half === 'am' && hour === 12) hour = 0;
+        if (hour > 23 || minute > 59) return { ok: false };
+        rest = rest.slice(time[0].length);
+    } else {
+        rest = rest.replace(/^in\s+/i, '');
+        const part = /^(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)?(?![a-z])\s*(?:and\s+)?/i;
+        while ((m = part.exec(rest)) !== null) {
+            seconds += parseFloat(m[1]) * (m[2] ? UNITS[m[2].toLowerCase()] : 60);
+            rest = rest.slice(m[0].length);
+            if (!m[2]) break;           // a bare number is minutes, and the end of the time
+        }
+        seconds = Math.round(seconds);
+        if (seconds < 1 || seconds > 30 * 86400) return { ok: false };
+    }
+    const text = rest.trim().replace(/^to\s+/i, '').trim();
+    const out = { ok: true, text: text || 'Reminder' };
+    if (hour >= 0) {
+        out.hour = hour;
+        out.minute = minute;
+        out.when = 'at ' + (hour < 10 ? '0' : '') + hour + ':' + (minute < 10 ? '0' : '') + minute;
+    } else {
+        out.seconds = seconds;
+        out.when = 'in ' + spell(seconds);
+    }
+    return out;
+}
+function spell(seconds) {
+    const parts = [];
+    [[86400, 'day'], [3600, 'hour'], [60, 'minute'], [1, 'second']].forEach(u => {
+        const n = Math.floor(seconds / u[0]);
+        if (n > 0) { parts.push(n + ' ' + u[1] + (n === 1 ? '' : 's')); seconds -= n * u[0]; }
+    });
+    return parts.join(' ');
+}
+// The launcher row for "remind …" (null when the query isn't one).
+function reminderRow(query) {
+    const m = /^remind(?:\s+(.*))?$/i.exec(String(query || '').trim());
+    if (!m) return null;
+    const r = parseReminder(m[1] || '');
+    if (!r.ok) return { kind: 'none', name: 'Remind me…', desc: 'Say when, then what: remind 10m tea · remind 17:30 call Ana', glyph: 'clock' };
+    return { kind: 'remind', name: 'Remind me ' + r.when + ': ' + r.text, desc: 'Enter sets the reminder · a notification says it',
+             glyph: 'clock', args: (m[1] || '').trim() };
+}

@@ -16,6 +16,8 @@
   "apps.emoji": {"label": "Emoji", "icon": "sparkle", "keys": "Super + Ctrl + E", "run": ["arctic-shell-ipc", "emoji", "toggle"], "ipc": "emoji toggle"},
   "apps.clipboard": {"label": "Clipboard history", "icon": "copy", "keys": "Super + V", "run": ["arctic-shell-ipc", "clipboard", "toggle"], "ipc": "clipboard toggle"},
   "apps.calculator": {"label": "Calculator", "icon": "hash", "desc": "In the launcher: type = and a sum", "run": ["arctic-shell-ipc", "launcher", "search", "="], "ipc": "launcher search"},
+  "apps.reminder": {"label": "Reminder", "icon": "clock", "desc": "A notification when it’s time", "keys": "Super + Ctrl + R", "run": ["arctic-remind", "--ask"]},
+  "apps.reminders-cancel": {"label": "Cancel reminders", "icon": "x", "run": ["arctic-remind", "cancel", "all"], "test": "arctic-remind pending"},
   "apps.monitor": {"label": "System monitor", "icon": "cpu", "keys": "Ctrl + Shift + Esc", "run": ["arctic-sysmon"]},
 
   "learn": {"label": "Learn", "icon": "help"},

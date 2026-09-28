@@ -43,6 +43,7 @@
     Super + Shift + N        Do not disturb
     Super + Shift + T        Switch Winter / Polar night
     Super + Shift + R        Reload the desktop config
+    Super + Ctrl + R         Set a reminder
     Print                    Screenshot an area (Shift: screen, Super: window)
     Super + Ctrl + C         Capture menu
 

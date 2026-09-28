@@ -79,4 +79,17 @@ let many = {};
 for (let i = 0; i < 12; i++) many = S.remember(many, 'k' + i, now + i, 10);
 assert.equal(Object.keys(many).length, 10);
 assert.ok(!many.k0 && !many.k1 && many.k11);
+// ---- reminders: the same cases as arctic-remind (tests/test_arctic_remind.py) -------------------
+const cases = JSON.parse(fs.readFileSync(__dirname + '/fixtures/reminders.json', 'utf8'));
+for (const [text, want] of cases) {
+    const got = plain(S.parseReminder(text));
+    if (want === null) assert.equal(got.ok, false, text);
+    else assert.deepEqual(got, Object.assign({ ok: true }, want), text);
+}
+assert.equal(S.reminderRow('remind 10m tea').name, 'Remind me in 10 minutes: tea');
+assert.equal(S.reminderRow('remind 10m tea').args, '10m tea');
+assert.equal(S.reminderRow('remind').kind, 'none');
+assert.equal(S.reminderRow('Remind me at 5pm to leave').name, 'Remind me at 17:00: leave');
+assert.equal(S.reminderRow('reminders'), null);
+assert.equal(S.reminderRow('zen'), null);
 console.log('Launcher sources checks passed.');
