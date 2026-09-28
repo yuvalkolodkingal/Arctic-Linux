@@ -54,6 +54,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     contrast-set on|off           high contrast (arctic-theme contrast)
     fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
     wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]     a new picture every so often
+    theme-install URL | theme-remove NAME     themes from the web (arctic-theme install / remove)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2134,6 +2135,7 @@ def _theme_items(data):
                 swatches = item.get('swatches') if isinstance(item.get('swatches'), dict) else {}
                 entry.update(gallery=True, label=str(item.get('label') or ident), mode=str(item.get('mode') or ''),
                              pair=str(item.get('pair') or ''),
+                             installedFrom=str(item.get('installed_from') or ''),
                              swatches={k: v for k, v in swatches.items()
                                        if isinstance(k, str) and isinstance(v, str) and re.fullmatch(r'#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?', v)})
             out.append(entry)
@@ -2716,6 +2718,40 @@ def cmd_font_set(paths, args):
     return result
 
 
+# ---- themes from the web (arctic-theme install / remove) -----------------------------------------
+
+def _theme_json_verb(argv, what):
+    if not which('arctic-theme'):
+        raise Failure('arctic-theme isn’t installed.')
+    code, out, err = run(['arctic-theme'] + argv + ['--json'], timeout=150)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict) or not data.get('ok'):
+        message = (strip_ansi(err).strip().splitlines() or ['The theme couldn’t be {}.'.format(what)])[-1]
+        message = message.replace('arctic-theme: ', '')
+        raise Failure(message[:1].upper() + message[1:] + ('' if message.endswith('.') else '.'))
+    return data
+
+
+def cmd_theme_install(paths, args):
+    """theme-install URL: a theme repository (GitHub, GitLab, Codeberg); only its colours and
+    pictures are kept."""
+    if len(args) != 1 or not re.fullmatch(r'https://[^\s]{1,300}', args[0]):
+        raise Failure('A theme link starts with https://, like https://github.com/owner/name.')
+    data = _theme_json_verb(['install', args[0]], 'installed')
+    result = cmd_theme(paths, [])
+    result.update(installed=dict(name=data.get('name'), label=data.get('label'),
+                                 dropped=[str(d) for d in data.get('dropped', [])][:50],
+                                 backgrounds=data.get('backgrounds', 0)))
+    return result
+
+
+def cmd_theme_remove(paths, args):
+    if len(args) != 1 or not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,63}', args[0]):
+        raise Failure('usage: theme-remove NAME')
+    _theme_json_verb(['remove', args[0]], 'removed')
+    return cmd_theme(paths, [])
+
+
 # ---- wallpaper rotation (arctic-wallpaper rotate) ------------------------------------------------
 
 ROTATE_EVERY = ('off', '30m', '1h', '1d')
@@ -2803,7 +2839,8 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
 COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
                  'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
                  'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
-                 'weather-place': cmd_weather_place,
+                 'weather-place': cmd_weather_place, 'theme-install': cmd_theme_install,
+                 'theme-remove': cmd_theme_remove,
                  'fonts': cmd_fonts, 'font-set': cmd_font_set})
 WRITERS |= {'shell-option-set', 'weather-place'}
 

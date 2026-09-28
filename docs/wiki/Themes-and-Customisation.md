@@ -56,6 +56,26 @@ is a pair: `Super + Shift + T` (and [light by day, dark at night](#light-by-day-
 switches between Catppuccin Latte and Mocha, not to Winter. The colour sources and licences are
 in `design/themes/<name>/SOURCE`.
 
+### A theme from the web
+
+**Settings › Appearance › Add a theme from the web**, or:
+
+```sh
+arctic-theme install https://github.com/owner/omarchy-nord-theme   # GitHub, GitLab or Codeberg
+arctic-theme install ~/Downloads/some-theme.tar.gz                 # or a .tar.gz of one
+arctic-theme set nord                                              # the name: without omarchy- / -theme
+arctic-theme remove nord                                           # only themes you added
+```
+
+Arctic reads the theme's `colors.toml` (the keys Omarchy themes use; a `light.mode` file makes it a
+light theme) and makes an Arctic theme from it with the same engine and contrast guarantees as the
+gallery, so every app that follows the theme follows it. Its pictures (`backgrounds/*.png`, `.jpg`,
+`.webp`, at most 24, each opened to check it is a picture) and `preview.png` are kept in the
+theme's folder, `backgrounds/` (add them with **Add pictures…** to use one as the wallpaper). Nothing
+else is kept: terminal and editor configs, scripts, templates and links are left out and listed,
+so installing a theme never runs anything from it. The download is at most 50 MB. It lands in
+`~/.config/arctic/themes/<name>/`, with `source.json` saying where it came from.
+
 ## Colours from your wallpaper
 
 When you use a picture of your own as the wallpaper, Arctic Linux makes a theme from it: the

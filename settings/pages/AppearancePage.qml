@@ -25,6 +25,7 @@ Page {
     property var shellOptions: ({ weather: false, weatherUnits: "auto", barWeather: false })
     property var weatherPlace: ({ available: false, place: null })
     property var placeResults: []
+    property bool installing: false
     property string busyTheme: ""
     property string busyWall: ""
     property bool importing: false
@@ -52,6 +53,31 @@ Page {
                 page.weatherPlace = r;
                 page.placeResults = [];
                 Backend.notify("success", "The weather is for " + (r.place ? r.place.name : "your time zone") + " now", false);
+            }
+        });
+    }
+    // A theme from the web (arctic-theme install): only its colours and pictures are kept.
+    function installTheme(url) {
+        if (installing || !url)
+            return;
+        installing = true;
+        Backend.call(["theme-install", url], r => {
+            page.installing = false;
+            if (!r.ok)
+                return;
+            page.theme = r;
+            themeUrl.text = "";
+            const i = r.installed || {};
+            const left = (i.dropped || []).length;
+            Backend.notify("success", (i.label || "The theme") + " is installed" + (left ? "; " + left + (left === 1 ? " file" : " files") + " that weren't colours or pictures were left out" : ""), false);
+        });
+    }
+    function removeTheme(id) {
+        Backend.call(["theme-remove", id], r => {
+            if (r.ok) {
+                page.theme = r;
+                Theme.reload();
+                Backend.notify("success", "Theme removed", false);
             }
         });
     }
@@ -230,6 +256,7 @@ Page {
                         desc: (modelData.mode === "light" ? "Light" : "Dark") + (galleryCard.pairTheme ? " · pairs with " + galleryCard.pairTheme.label : "")
                         selected: page.theme.current === modelData.id
                         onClicked: page.setTheme(modelData.id)
+                        Accessible.description: modelData.installedFrom ? "Added from " + modelData.installedFrom : ""
                         // A small desktop in the theme's colours: the bar, a window with two
                         // lines of text, a terminal, and one dot of its "here" accent.
                         Item { width: 1; height: Theme.space2 }
@@ -261,6 +288,13 @@ Page {
                                 border.width: 1
                                 border.color: galleryCard.sw.line || "transparent"
                             }
+                        }
+                        // A theme you added can go again (not while it is the one in use).
+                        ArButton {
+                            visible: !!galleryCard.modelData.installedFrom && page.theme.current !== galleryCard.modelData.id
+                            text: "Remove"
+                            gapColor: Theme.surfaceRaised
+                            onClicked: page.removeTheme(galleryCard.modelData.id)
                         }
                     }
                 }
@@ -294,6 +328,31 @@ Page {
                 onActivated: v => Backend.call(["theme-mode", v], r => {
                     if (r.ok) { page.theme = r; Theme.reload(); }
                 })
+            }
+        }
+        SettingRow {
+            searchKey: "appearance.themeinstall"
+            visible: page.theme.modern === true
+            title: "Add a theme from the web"
+            desc: "A GitHub, GitLab or Codeberg link to a theme (Omarchy themes work). Only its colours and pictures are kept; nothing in it runs."
+            resettable: false
+            stacked: true
+            Row {
+                spacing: Theme.space2
+                ArInput {
+                    id: themeUrl
+                    width: 360
+                    placeholder: "https://github.com/owner/name"
+                    accessibleName: "Theme link"
+                    enabled: !page.installing
+                    onAccepted: page.installTheme(themeUrl.text.trim())
+                }
+                ArButton {
+                    text: page.installing ? "Installing…" : "Install"
+                    enabled: !page.installing && themeUrl.text.trim().startsWith("https://")
+                    gapColor: Theme.surfaceRaised
+                    onClicked: page.installTheme(themeUrl.text.trim())
+                }
             }
         }
         SettingRow {

@@ -134,6 +134,34 @@ class WeatherTest(Home):
         self.assertIn('reach', self.helper('weather-place', 'search', 'Haifa', ok=False)['error'])
 
 
+class ThemeInstallTest(Home):
+    def test_install_and_remove(self):
+        state = self.home / 'themes.json'
+        stub(self.bin, 'arctic-theme', '''\
+            echo "arctic-theme $*" >> "{1}"
+            case "$1" in
+              list) cat "{0}" 2>/dev/null || echo '[{{"name": "winter", "label": "Winter", "mode": "light", "gallery": false}}]' ;;
+              current) echo '{{"name": "polar-night"}}' ;;
+              install)
+                [ "$2" = https://github.com/o/omarchy-nord-theme ] || {{ echo "arctic-theme: use a GitHub, GitLab or Codeberg link" >&2; exit 1; }}
+                echo '[{{"name": "nord", "label": "Nord", "mode": "dark", "gallery": true, "installed_from": "https://github.com/o/omarchy-nord-theme", "swatches": {{"ground": "#2e3440"}}}}]' > "{0}"
+                echo '{{"ok": true, "name": "nord", "label": "Nord", "dropped": ["kitty.conf", "neovim.lua"], "backgrounds": 1}}' ;;
+              remove) rm -f "{0}"; echo '{{"ok": true, "name": "nord"}}' ;;
+            esac
+            '''.format(state, self.log))
+        data = self.helper('theme-install', 'https://github.com/o/omarchy-nord-theme')
+        nord = [t for t in data['themes'] if t['id'] == 'nord'][0]
+        self.assertEqual((nord['installedFrom'], nord['gallery']), ('https://github.com/o/omarchy-nord-theme', True))
+        self.assertEqual(data['installed']['dropped'], ['kitty.conf', 'neovim.lua'])
+        self.assertIn('arctic-theme install https://github.com/o/omarchy-nord-theme --json', self.calls())
+        self.assertIn('Use a GitHub', self.helper('theme-install', 'https://example.com/x', ok=False)['error'])
+        for bad in ('http://github.com/o/r', 'github.com/o/r', ''):
+            self.helper('theme-install', bad, ok=False)
+        data = self.helper('theme-remove', 'nord')
+        self.assertNotIn('nord', [t['id'] for t in data['themes']])
+        self.helper('theme-remove', '../x', ok=False)
+
+
 class WallpaperRotateTest(Home):
     def test_rotate(self):
         self.assertEqual(self.helper('wallpaper-rotate')['available'], False)

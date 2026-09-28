@@ -43,6 +43,7 @@ var ENTRIES = [
     ["appearance", "appearance.gallery", "More themes", "nord catppuccin gruvbox tokyo night rose pine everforest palette colour scheme gallery"],
     ["appearance", "appearance.schedule", "Switch light and dark by itself", "automatic dark mode sunset sunrise night schedule"],
     ["appearance", "appearance.wallpaper", "Wallpaper", "background picture desktop image add upload drop rename delete my own pictures"],
+    ["appearance", "appearance.themeinstall", "Add a theme from the web", "install theme github omarchy url download colours"],
     ["appearance", "appearance.weather", "Weather in the calendar", "forecast temperature rain open-meteo"],
     ["appearance", "appearance.weatherplace", "Weather place", "location town city where"],
     ["appearance", "appearance.rotate", "Change the wallpaper by itself", "rotate slideshow cycle shuffle every hour day random wallpaper"],

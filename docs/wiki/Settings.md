@@ -86,6 +86,10 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   picture), Dark or Light.
 - **More themes:** Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine and Everforest, drawn from
   their own colours; a pair (Catppuccin Latte and Mocha) switches as one with `Super + Shift + T`.
+- **Add a theme from the web:** paste a GitHub, GitLab or Codeberg link to a theme repository
+  (Omarchy themes work) and press **Install**. Only its colours and pictures are kept; the
+  notification says how many other files were left out. A theme you added has **Remove** on its
+  card (switch to another theme first).
 - **Weather** (off until you turn it on; nothing is asked before): **Weather in the calendar**
   shows the weather now and for five days under the month, from
   [Open-Meteo](https://open-meteo.com) (no account). **Place** is your time zone's city unless you
