@@ -27,8 +27,10 @@ Scope {
     // confirmed every screen is covered — only then is the session really locked.
     readonly property bool locked: lock.locked
     readonly property bool secure: lock.secure
-    // Toasts hide and the count above starts while locked (NotificationService).
-    Binding { target: NotificationService; property: 'locked'; value: root.locked }
+    // Set by lock() and the unlock: in Fedora's Quickshell snapshot lock.locked doesn't announce
+    // its changes (bindings on it keep the old value), so the Caps Lock check and
+    // NotificationService's count (toasts hide, the "N notifications" line) follow this.
+    property bool showing: false
 
     function lock() {
         if (Session.live) {
@@ -46,6 +48,8 @@ Scope {
         // The password is typed in the first layout (the installer's), whatever was active.
         if (KeyboardService.multiple && KeyboardService.index !== 0) KeyboardService.set(0);
         lock.locked = true;
+        root.showing = true;
+        NotificationService.locked = true;
     }
     function submit() {
         if (state === 'checking' || state === 'success') return;
@@ -83,7 +87,17 @@ Scope {
         }
     }
     // Let the green "accepted" ring show for a moment before the screen unlocks.
-    Timer { id: unlockTimer; interval: 180; onTriggered: { lock.locked = false; root.password = ''; root.state = 'idle'; } }
+    Timer {
+        id: unlockTimer
+        interval: 180
+        onTriggered: {
+            lock.locked = false;
+            root.showing = false;
+            NotificationService.locked = false;
+            root.password = '';
+            root.state = 'idle';
+        }
+    }
 
     // arctic-wallpaper records the picture it drew; fall back to the theme's lock wallpaper.
     FileView {
@@ -103,7 +117,7 @@ Scope {
     Timer {
         interval: 500
         repeat: true
-        running: lock.locked
+        running: root.showing
         onRunningChanged: if (!running) root.capsLock = false
         onTriggered: if (!capsQuery.running) capsQuery.running = true
     }

@@ -37,7 +37,7 @@ Singleton {
     readonly property var centreEntries: entries.filter(e => e.keep)
     readonly property int count: centreEntries.length
     property int unseen: 0              // kept since the centre was last opened
-    property bool locked: false         // set by LockScreen
+    property bool locked: false         // set by LockScreen's lock() and unlock
     property int lockedCount: 0         // kept while the screen was locked
     property var config: Rules.parseConfig('')
     property var dnd: ({ mode: 'off', until: 0, skip: 0 })
@@ -100,12 +100,12 @@ Singleton {
         replaced.forEach(id => { const at = toastIndex(id); if (at >= 0 && slot < 0) slot = at; drop(id); });
         // Closing it from inside Notify would send NotificationClosed before its id (the
         // snapshot lacks Quickshell's ordering fix), so that waits for the next turn.
-        if (!decision.toast && !decision.keep) { Qt.callLater(service.dismissLater, n); return; }
+        if (!decision.toast && !decision.keep) { later(() => n.dismiss()); return; }
         live[e.id] = n;
         const id = e.id;
         n.closed.connect(reason => service.closedByApp(id, reason));
         // replaces_id: the server updates the same object in place.
-        const update = () => Qt.callLater(service.updated, id);
+        const update = () => { updates[id] = true; later(service.flushUpdates); };
         n.summaryChanged.connect(update);
         n.bodyChanged.connect(update);
         n.actionsChanged.connect(update);
@@ -118,10 +118,27 @@ Singleton {
             noteApp(e);
         }
         if (decision.toast && !adopted && !locked) showToast(id, Rules.toastTimeout(n), slot);
-        else if (!e.keep) Qt.callLater(service.remove, id);
+        else if (!e.keep) later(() => service.remove(id));
         save();
     }
-    function dismissLater(n) { if (n) n.dismiss(); }
+    // Work for the next turn of the event loop. (Qt.callLater runs a function once per turn
+    // with the last arguments given, so each job is queued here instead.)
+    property var jobs: []
+    property var updates: ({})
+    function later(job) {
+        jobs.push(job);
+        Qt.callLater(service.runJobs);
+    }
+    function runJobs() {
+        const run = jobs;
+        jobs = [];
+        run.forEach(job => { try { job(); } catch (e) { console.warn('Arctic notifications:', e); } });
+    }
+    function flushUpdates() {
+        const ids = Object.keys(updates).map(Number);
+        updates = {};
+        ids.forEach(id => updated(id));
+    }
     function updated(id) {
         const e = find(id), n = live[id];
         if (!e || !n) return;
