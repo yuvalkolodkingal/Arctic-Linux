@@ -21,6 +21,11 @@ downloads the apps you pick.
 | Know what happens the first time it starts | [First boot](First-Boot) |
 | Learn your way around the desktop | [Desktop tour](Desktop-Tour) and [Keyboard shortcuts](Keyboard-Shortcuts) |
 | Change settings: displays, keyboard, windows, default apps | [Settings](Settings) |
+| Warmer colours at night, or no sleep during a presentation | [Night light and keep awake](Night-Light-and-Keep-Awake) |
+| Print or scan | [Printing and scanning](Printing-and-Scanning) |
+| Use USB drives, phones, cameras and network shares | [Drives, phones and cameras](Drives-and-Phones) |
+| Duplicate or extend your screen, or close the lid on a dock | [Screens and the laptop lid](Screens-and-Laptop-Lid) |
+| Send files to your phone, or log in over SSH | [Sharing and phones](Sharing-and-Phones) |
 | Add, remove or change apps | [Apps and software](Apps-and-Software) |
 | Set up an NVIDIA, Intel, AMD or Broadcom driver | [Drivers](Drivers) |
 | Keep it up to date, or undo an update | [Updates](Updates) |
