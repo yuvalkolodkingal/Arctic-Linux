@@ -5,14 +5,16 @@
 # it in Files, edit it (satty when installed, else swappy) or move it to the trash.
 #
 #   arctic-screenshot area   [--copy-only] [--edit]
-#   arctic-screenshot screen [--all] [--copy-only] [--edit]     --all: every monitor in one picture
-#   arctic-screenshot window [--copy-only] [--edit]
+#   arctic-screenshot screen [--all] [--delay SECONDS] [--copy-only] [--edit]
+#   arctic-screenshot window [--pick] [--delay SECONDS] [--copy-only] [--edit]
 #   arctic-screenshot text | qr      copy the text (OCR) or the QR code in an area (arctic-ocr)
 #   arctic-screenshot edit FILE      edit a screenshot; the edit is saved next to it and copied
+# --all: every monitor in one picture; --pick: click the window (else the focused one);
+# --delay: wait 1 to 10 seconds first (no countdown: it would be in the picture).
 # Pressing a capture key again while an area is being selected cancels the selection.
 set -uo pipefail
 
-usage() { sed -n '6,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '7,13p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 mode="${1:-area}"
 (( $# )) && shift
@@ -104,12 +106,14 @@ if [[ "$mode" == edit ]]; then
   exit 0
 fi
 
-all=0 copy_only=0 edit=0
+all=0 copy_only=0 edit=0 pick=0 delay=0
 while (( $# )); do
   case "$1" in
     --all) all=1 ;;
     --copy-only) copy_only=1 ;;
     --edit) edit=1 ;;
+    --pick) pick=1 ;;
+    --delay) delay="${2:-}"; [[ "$delay" =~ ^([1-9]|10)$ ]] || usage; shift ;;
     *) usage ;;
   esac
   shift
@@ -139,6 +143,7 @@ case "$mode" in
     scale="$(scale_of "${sel#*	}")"
     grim ${scale:+-s "$scale"} -g "${sel%%	*}" "$file" ;;
   screen)
+    sleep "$delay"
     info="$(arctic-capture output 2>/dev/null)"
     name="$(json name <<<"$info")"
     if (( all )) || [[ -z "$name" ]]; then
@@ -147,7 +152,14 @@ case "$mode" in
       grim -s "$(json scale <<<"$info")" -o "$name" "$file"
     fi ;;
   window)
-    info="$(arctic-capture window 2>/dev/null)"
+    if (( pick )); then
+      # Only the windows on screen can be clicked (slurp -r: no free areas).
+      sel="$(arctic-capture rects 2>/dev/null | slurp -r -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
+      info="{\"geometry\": \"${sel%%	*}\", \"output\": \"${sel#*	}\"}"
+    else
+      sleep "$delay"
+      info="$(arctic-capture window 2>/dev/null)"
+    fi
     geom="$(json geometry <<<"$info")"
     if [[ -n "$geom" ]]; then
       scale="$(scale_of "$(json output <<<"$info")")"
