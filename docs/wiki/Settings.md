@@ -260,6 +260,19 @@ They're saved as `exec-once=` lines in `settings.conf` and start from the next l
 by Arctic** lists what the desktop itself starts; those live in `autostart.conf` in
 `~/.config/mango/arctic`.
 
+## Web apps
+
+The websites you added as apps (see [Web apps](Web-Apps); you add them in the launcher's **Get
+apps → Web apps**). For each one: its **Name** and **Icon** (a letter icon, or the site's own icon
+again), **Open other sites in your browser**, **Extra sites** that stay inside the app (a sign-in
+site it uses), **Notifications** (Allow, Ask or Block), the **Engine** (Brave, Chrome or Vivaldi
+for protected video and calls), **Open email links in this app** for mail sites, **Developer
+tools**, **Rendering** (Software when the window stays blank), trusted certificates of your own
+devices, **Permissions** (reset), **Sign out** and **Remove**. Removing keeps the sign-in data
+unless you tick **Also delete sign-in data**; kept data is listed under **Saved sign-in data**,
+where **Forget** deletes it. `arctic-settings webapps` opens this page; so does **Web App
+Settings…** in a web app's menu. The page needs the `arctic-webapps` package.
+
 ## About
 
 ![The About page](images/settings-about.png)
