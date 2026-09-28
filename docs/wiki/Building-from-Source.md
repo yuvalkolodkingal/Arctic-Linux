@@ -1,6 +1,6 @@
 # Building from source
 
-Everything in Arctic Linux is built from the [repository](https://github.com/yuvalkolodkingal/O-Tism):
+Everything in Arctic Linux is built from the [repository](https://github.com/yuvalkolodkingal/Arctic-Linux):
 the RPM packages, the live ISO, and the tests that boot and install it in a virtual machine. The
 builds run inside Fedora 44 containers, so your own machine only needs a container engine.
 
@@ -21,8 +21,8 @@ builds run inside Fedora 44 containers, so your own machine only needs a contain
 ## Quick start
 
 ```sh
-git clone https://github.com/yuvalkolodkingal/O-Tism.git
-cd O-Tism
+git clone https://github.com/yuvalkolodkingal/Arctic-Linux.git
+cd Arctic-Linux
 tools/build-rpms.sh                                  # RPMs → out/repo
 tools/build-iso.sh                                   # live ISO → out/iso
 tools/test-iso.sh --firmware uefi --mode try         # boot it in QEMU, screenshots in out/test
@@ -226,7 +226,7 @@ QML is checked with `qmllint` (`/usr/lib64/qt6/bin/qmllint`, from `qt6-qtdeclara
 ### The package repository
 
 Installed systems update Arctic's own packages from a signed dnf repository on this project's
-GitHub Pages site, https://yuvalkolodkingal.github.io/O-Tism/, with two channels:
+GitHub Pages site, https://yuvalkolodkingal.github.io/Arctic-Linux/, with two channels:
 
 | Channel | Built from | On an Arctic system |
 |---|---|---|

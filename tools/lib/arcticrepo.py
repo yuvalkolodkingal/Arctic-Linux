@@ -702,7 +702,7 @@ th, td {{ text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var
 <body>
 <main>
 <h1>Arctic Linux packages</h1>
-<p>The signed package repository of <a href="https://github.com/yuvalkolodkingal/O-Tism">Arctic Linux</a>:
+<p>The signed package repository of <a href="https://github.com/yuvalkolodkingal/Arctic-Linux">Arctic Linux</a>:
 the arctic-* packages and mangowm, built for Fedora 44. Arctic Linux has it built in
 (arctic-release): <b>stable</b> (builds of the main branch) is on, <b>testing</b> (builds of the
 development branch) is off. To follow testing, or to go back:</p>

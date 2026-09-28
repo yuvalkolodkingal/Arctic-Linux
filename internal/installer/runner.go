@@ -82,6 +82,8 @@ func quote(s string) string {
 type Result struct {
 	Stdout   string
 	ExitCode int
+	// Output is the end of the command's output, stderr included (what a failure says).
+	Output string
 }
 
 // Runner executes the plan.
@@ -187,7 +189,7 @@ func (r *ExecRunner) Run(ctx context.Context, c Cmd) (Result, error) {
 	err := cmd.Run()
 	pw.Close()
 	<-done
-	res := Result{Stdout: stdout.String()}
+	res := Result{Stdout: stdout.String(), Output: strings.Join(tail.lines(), "\n")}
 	if cmd.ProcessState != nil {
 		res.ExitCode = cmd.ProcessState.ExitCode()
 	}
@@ -317,8 +319,13 @@ type Recorder struct {
 	GlobFn func(pattern string) []string
 	// Respond answers Run: stdout, and an error to simulate a failure. nil = DefaultRespond.
 	Respond func(c Cmd) (string, error)
+	// TargetUsersFn and MountHoldersFn answer the ProcessRunner checks (n = earlier calls);
+	// nil = nothing uses the target.
+	TargetUsersFn  func(n int) []Proc
+	MountHoldersFn func(n int) []Proc
 
-	mu sync.Mutex
+	mu                       sync.Mutex
+	targetCalls, holderCalls int
 }
 
 func (r *Recorder) emit(s string) {
@@ -362,10 +369,11 @@ func (r *Recorder) Run(ctx context.Context, c Cmd) (Result, error) {
 	}
 	out, err := respond(c)
 	if err != nil {
+		res := Result{Stdout: out, ExitCode: 1, Output: err.Error()}
 		if c.AllowFail {
-			return Result{Stdout: out, ExitCode: 1}, nil
+			return res, nil
 		}
-		return Result{Stdout: out, ExitCode: 1}, &CmdError{Cmd: c.String(), Err: err}
+		return res, &CmdError{Cmd: c.String(), Err: err}
 	}
 	if c.OnLine != nil {
 		for _, l := range strings.Split(out, "\n") {

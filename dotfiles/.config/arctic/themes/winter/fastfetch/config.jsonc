@@ -1,0 +1,51 @@
+// Arctic Linux — fastfetch, Winter theme.
+// Rendered by arctic-themegen from design/themegen/templates/fastfetch/config.jsonc.tmpl into
+// every theme folder. ~/.config/fastfetch/config.jsonc links to
+// ~/.config/arctic/current/fastfetch/config.jsonc, so the colours follow the theme (and the
+// wallpaper, with auto colours on). To change the layout, replace that link with a copy of this
+// file: the copy keeps today's colours. `neofetch` draws neofetch.jsonc from the same folder.
+//
+// The fox is the Arctic mark in block characters, as in /usr/share/arctic/fastfetch/logo.txt
+// ($1 fur, $2 eyes). The os, wm, theme and updates lines come from `arctic-fetch --info …`
+// (os: "Arctic Linux 0.2 (Fedora 44)"; updates: what the last daily check left, never a new
+// check); where that prints nothing the line is left out, or fastfetch's own module stands in.
+// Keys are padded with spaces: display.key.width would move the cursor to a column instead,
+// which also ends up in piped output. The rule has a fixed length: fastfetch 2.60 cuts a "─"
+// rule sized to user@host in the middle of a character.
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "data",
+    "source": "$1    ▗██▙▖        ▗▟██▖\n$1    ▟████▙▖    ▗▟████▙\n$1   ▐████████████████▛▘ ▗▄▖\n$1  ▗█████████████████ ▗████▙\n$1  ▟████████████████▙ ▐█████▙\n$1  ██████$2██$1██████$2██$1██▖ ██████\n$1  ▝▀███████████████▛ ▄██████▌\n$1     ▀▜████████████ ▐███████▘\n$1        ▀████████▀ ▗████████\n$1          ▝▀██▀▘ ▗▟████████▘\n$1 ▟███▄▖       ▄▄██████████▘\n$1▐████████▙▄▄▟███████████▛▘\n$1 ▜████████████████████▛▀\n$1   ▀▀██████████████▀▀",
+    "color": { "1": "#1d242d", "2": "#84500d" },
+    "padding": { "left": 2, "right": 4 }
+  },
+  "display": {
+    "separator": "",
+    "brightColor": false,
+    "color": { "keys": "#136c76", "title": "#84500d" },
+    "percent": { "color": { "green": "#1d7350", "yellow": "#9a4812", "red": "#b3261e" } },
+    "size": { "binaryPrefix": "iec", "ndigits": 1 }
+  },
+  "modules": [
+    { "type": "title", "color": { "user": "bold_#84500d", "at": "#5f6b79", "host": "bold_default" } },
+    { "type": "separator", "string": "─", "outputColor": "#5f6b79", "times": 20 },
+    { "type": "command", "key": "os        ", "text": "arctic-fetch --info os" },
+    { "type": "os", "key": "os        ", "condition": { "succeeded": false } },
+    { "type": "kernel", "key": "kernel    ", "format": "{release}" },
+    { "type": "uptime", "key": "uptime    ", "format": "{?days}{days} d {?}{?hours}{hours} h {?}{/days}{minutes} min{/}" },
+    { "type": "packages", "key": "packages  ", "combined": true },
+    { "type": "shell", "key": "shell     " },
+    { "type": "command", "key": "wm        ", "text": "arctic-fetch --info wm", "format": "{result} {##5f6b79}· Wayland" },
+    { "type": "wm", "key": "wm        ", "condition": { "succeeded": false } },
+    { "type": "terminal", "key": "terminal  " },
+    { "type": "command", "key": "theme     ", "text": "arctic-fetch --info theme" },
+    { "type": "cpu", "key": "cpu       " },
+    { "type": "gpu", "key": "gpu       " },
+    { "type": "memory", "key": "memory    " },
+    { "type": "disk", "key": "disk {mountpoint<5}" },
+    { "type": "command", "key": "updates   ", "text": "arctic-fetch --info updates" },
+    "break",
+    { "type": "colors", "symbol": "background" }
+  ]
+}

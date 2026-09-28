@@ -4,6 +4,9 @@
     wallpapers.py list              JSON {items: [...], current, folder, theme}
     wallpapers.py folder <path|url> remember an extra folder of your own pictures
     wallpapers.py apply <key>       apply a wallpaper through `arctic-wallpaper <key>`
+    wallpapers.py import <path|url>…  copy pictures into your folder (checked with Pillow)
+    wallpapers.py delete <path>     delete one of your pictures (not the one in use)
+    wallpapers.py rename <path> <name>  rename one of your pictures (same folder and type)
 
 Items are the Arctic design wallpapers (snowfield, aurora, fox) — shown in the active theme's
 variant and applied by name, so they follow Winter / Polar night switches — followed by the
@@ -13,10 +16,16 @@ pictures in your folder (default ~/Pictures/Wallpapers). Design wallpapers are l
 Thumbnails (480×300 JPEG, Pillow; SVGs rendered with rsvg-convert) are cached in
 ~/.cache/arctic/thumbs. Settings live in ~/.config/arctic/wallpapers.json ({"folder": …}).
 The applied choice is kept by arctic-wallpaper in ~/.config/arctic/wallpaper.
+
+Import, delete and rename only touch files inside your folder (pictures downloaded from
+Wallhaven are in its wallhaven/ subfolder, see wallhaven.py): a picture from elsewhere (a
+drag from Thunar, the file chooser) is copied in, never moved, after Pillow has read it all.
 """
+import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -33,6 +42,10 @@ SETTINGS = CONFIG / 'wallpapers.json'
 DESIGN = [('snowfield', 'Snowfield'), ('aurora', 'Aurora'), ('fox', 'Fox')]
 IMAGES = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.svg'}
 THUMB = (480, 300)
+# Pillow formats a copied picture may have, and the file suffix it gets.
+FORMATS = {'JPEG': '.jpg', 'PNG': '.png', 'WEBP': '.webp', 'BMP': '.bmp', 'GIF': '.gif'}
+MAX_BYTES = 200 * 1024 * 1024
+MAX_PIXELS = 400_000_000
 
 
 def settings():
@@ -106,9 +119,7 @@ def default_folder():
 def thumbnail(path):
     """Cached thumbnail for an image, as a file path, or '' when it can't be read."""
     from PIL import Image, ImageOps
-    stat = path.stat()
-    key = hashlib.sha256('{}\0{}\0{}'.format(path, stat.st_mtime_ns, stat.st_size).encode()).hexdigest()[:32]
-    thumb = CACHE / (key + '.jpg')
+    thumb = CACHE / (cache_key(path) + '.jpg')
     if thumb.exists():
         return str(thumb)
     CACHE.mkdir(parents=True, exist_ok=True)
@@ -132,6 +143,163 @@ def thumbnail(path):
         if temp:
             os.unlink(temp.name)
     return str(thumb)
+
+
+def cache_key(path):
+    stat = path.stat()
+    return hashlib.sha256('{}\0{}\0{}'.format(path, stat.st_mtime_ns, stat.st_size).encode()).hexdigest()[:32]
+
+
+def check_image(path):
+    """Pillow must recognise and fully decode the picture; returns its format (JPEG, PNG, …).
+    Raises ValueError with a sentence otherwise."""
+    from PIL import Image
+    try:
+        size = path.stat().st_size
+    except OSError:
+        raise ValueError('That file can’t be read.') from None
+    if size > MAX_BYTES:
+        raise ValueError('That picture is larger than 200 MB.')
+    try:
+        with Image.open(path) as img:
+            fmt = img.format
+            if img.width * img.height > MAX_PIXELS:
+                raise ValueError('That picture has too many pixels to use as a wallpaper.')
+            img.verify()
+        with Image.open(path) as img:      # verify() leaves the image unusable: decode it again
+            img.seek(0)
+            img.load()
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError('{} isn’t a picture Arctic can use (JPEG, PNG, WebP, BMP or GIF).'.format(path.name)) from None
+    if fmt not in FORMATS:
+        raise ValueError('{} is a {} picture; use JPEG, PNG, WebP, BMP or GIF.'.format(path.name, fmt or 'unknown'))
+    return fmt
+
+
+def user_folder():
+    return Path(settings().get('folder') or default_folder()).expanduser()
+
+
+def own_file(raw):
+    """A picture inside your folder (resolved), else ValueError: design wallpapers and files
+    elsewhere are never deleted or renamed."""
+    path = Path(unquote(urlparse(raw).path) if raw.startswith('file:') else raw).expanduser()
+    folder = user_folder().resolve()
+    try:
+        real = path.resolve()
+        real.relative_to(folder)
+    except (OSError, ValueError):
+        raise ValueError('Only pictures in your wallpaper folder can be changed here.') from None
+    if not real.is_file() or real.suffix.lower() not in IMAGES:
+        raise ValueError('That picture is missing. Refresh the list and try again.')
+    return real
+
+
+def forget_thumb(path):
+    try:
+        (CACHE / (cache_key(path) + '.jpg')).unlink()
+    except OSError:
+        pass
+
+
+def free_name(folder, stem, suffix):
+    stem = re.sub(r'[\x00-\x1f/\\]', '', stem).strip().strip('.') or 'wallpaper'
+    stem = stem[:120]
+    candidate = folder / (stem + suffix)
+    n = 2
+    while candidate.exists():
+        candidate = folder / '{} ({}){}'.format(stem, n, suffix)
+        n += 1
+    return candidate
+
+
+def import_pictures(sources):
+    """Copy pictures (paths or file:// URLs, e.g. dropped from Thunar) into your folder."""
+    folder = user_folder()
+    folder.mkdir(parents=True, exist_ok=True)
+    added, errors = [], []
+    for raw in sources:
+        raw = raw.strip()
+        if not raw:
+            continue
+        src = Path(unquote(urlparse(raw).path) if raw.startswith('file:') else raw).expanduser()
+        try:
+            if not src.is_file():
+                raise ValueError('{} isn’t a file.'.format(src.name or raw))
+            fmt = check_image(src)
+            real = src.resolve()
+            if real.parent == folder.resolve():
+                added.append(str(real))       # already there
+                continue
+            dest = free_name(folder, src.stem, FORMATS[fmt])
+            fd, temp = tempfile.mkstemp(prefix='.import.', dir=str(folder))
+            os.close(fd)
+            try:
+                shutil.copyfile(src, temp)
+                os.chmod(temp, 0o644)
+                os.replace(temp, dest)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.unlink(temp)
+                raise
+            with contextlib.suppress(Exception):
+                thumbnail(dest)
+            added.append(str(dest))
+        except (ValueError, OSError) as error:
+            errors.append(str(error) if isinstance(error, ValueError) else '{}: {}'.format(src.name, error.strerror or error))
+    return dict(ok=bool(added) or not errors, added=added, errors=errors, folder=str(folder),
+                error=' '.join(errors) if errors and not added else '')
+
+
+def is_current(path):
+    chosen = current()
+    try:
+        return chosen.startswith(('/', '~')) and Path(chosen).expanduser().resolve() == path
+    except OSError:
+        return False
+
+
+def delete_picture(raw):
+    path = own_file(raw)
+    if is_current(path):
+        raise ValueError('That picture is your wallpaper now. Choose another one first.')
+    forget_thumb(path)
+    path.unlink()
+    return dict(ok=True, deleted=str(path))
+
+
+def rename_picture(raw, name):
+    path = own_file(raw)
+    stem = name.strip()
+    if stem.lower().endswith(path.suffix.lower()):
+        stem = stem[:-len(path.suffix)]
+    if not stem or re.search(r'[\x00-\x1f/\\]', stem) or stem.startswith('.') or len(stem) > 120:
+        raise ValueError('Use a name without slashes, up to 120 characters.')
+    dest = path.with_name(stem + path.suffix)
+    if dest == path:
+        return dict(ok=True, path=str(path))
+    if dest.exists():
+        raise ValueError('There is already a picture called {}.'.format(dest.name))
+    was_current = is_current(path)
+    forget_thumb(path)
+    path.rename(dest)
+    if was_current:
+        # arctic-wallpaper keeps the choice as a path: point it at the new name.
+        (CONFIG / 'wallpaper').write_text(str(dest) + '\n')
+    with contextlib.suppress(Exception):
+        thumbnail(dest)
+    return dict(ok=True, path=str(dest), current=was_current)
+
+
+def apply(key):
+    if key not in {n for n, _ in DESIGN} and not Path(key).is_file():
+        raise ValueError('That picture is missing. Refresh the list and try again.')
+    result = subprocess.run(['arctic-wallpaper', key], capture_output=True, text=True, timeout=60)
+    if result.returncode:
+        raise RuntimeError((result.stderr or result.stdout).strip()[-300:] or 'The wallpaper could not be set.')
+    return key
 
 
 def design_file(stem):
@@ -170,7 +338,8 @@ def library():
             if not thumb:
                 continue
             items.append(dict(key=str(path), name=path.stem.replace('-', ' ').replace('_', ' '),
-                              path=str(path), thumb=thumb, arctic=False))
+                              path=str(path), thumb=thumb, arctic=False,
+                              wallhaven=path.parent.name == 'wallhaven' and path.stem.startswith('wallhaven-')))
     return dict(items=items, current=current(), folder=str(folder), folderExists=folder.is_dir(), theme=active)
 
 
@@ -188,15 +357,18 @@ def main():
         save(data)
         print(json.dumps(dict(ok=True, folder=str(path))))
     elif action == 'apply':
-        key = sys.argv[2]
-        if key not in {n for n, _ in DESIGN} and not Path(key).is_file():
-            raise ValueError('That picture is missing. Refresh the list and try again.')
-        result = subprocess.run(['arctic-wallpaper', key], capture_output=True, text=True, timeout=30)
-        if result.returncode:
-            raise RuntimeError((result.stderr or result.stdout).strip()[-300:] or 'The wallpaper could not be set.')
-        print(json.dumps(dict(ok=True, current=key)))
+        print(json.dumps(dict(ok=True, current=apply(sys.argv[2]))))
+    elif action == 'import':
+        result = import_pictures(sys.argv[2:])
+        print(json.dumps(result))
+        if not result['ok']:
+            sys.exit(1)
+    elif action == 'delete':
+        print(json.dumps(delete_picture(sys.argv[2])))
+    elif action == 'rename':
+        print(json.dumps(rename_picture(sys.argv[2], sys.argv[3])))
     else:
-        raise ValueError('usage: wallpapers.py list | folder <path> | apply <key>')
+        raise ValueError('usage: wallpapers.py list | folder <path> | apply <key> | import <path>… | delete <path> | rename <path> <name>')
 
 
 if __name__ == '__main__':

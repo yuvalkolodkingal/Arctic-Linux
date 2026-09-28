@@ -77,6 +77,17 @@ const (
 	CopyRemoveUSBNoLUKS = "Take it out now, then restart. Your computer will start Arctic Linux."
 )
 
+// A weak disk passphrase or password is a warning, never a reason to refuse (BUILD-SPEC
+// §4.1): on its step below min_score (the UI shows it; the options carry it), and in the
+// Summary's Encryption row (the whole value) or Account row (after ", ").
+const (
+	CopyWeakPassphrase    = "This passphrase is easy to guess: someone who has your computer could read your files. You can still use it."
+	CopyWeakPassword      = "This password is easy to guess: someone at your computer could log in as you. You can still use it."
+	CopyWeakPasswordDisk  = "This password is easy to guess: someone who has your computer could read your files. You can still use it."
+	CopyWeakPassphraseRow = "On — easy-to-guess passphrase; you’ll type it each time the computer starts"
+	CopyWeakPasswordRow   = "easy-to-guess password"
+)
+
 // Status lines during install (design/guidelines/20-installer-copy.md).
 const (
 	StatusDisk     = "Preparing the disk…"

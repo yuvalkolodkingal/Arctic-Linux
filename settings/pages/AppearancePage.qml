@@ -1,10 +1,14 @@
 // Appearance: the theme (Winter, Polar night, or made from the wallpaper — arctic-theme),
-// the wallpaper (the shell's picker backend), reduced motion (arctic-motion), text size in
-// GTK apps (gsettings) and the pointer (Mango cursor_theme / cursor_size).
+// the wallpaper (the shell's picker backend: the same list and thumbnails as Super + Shift + W),
+// your own pictures (added with the file chooser — the xdg-desktop-portal one, through qt6ct —
+// or dropped from Files, renamed, deleted), Wallhaven (WallhavenBrowser.qml), reduced motion
+// (arctic-motion), text size in GTK apps (gsettings) and the pointer (Mango cursor_theme /
+// cursor_size).
 // Without the newer arctic-theme (set/auto/mode/list), only Winter and Polar night are offered
 // and the rest says why.
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Templates as T
 import ".."
 import "../components"
@@ -21,6 +25,7 @@ Page {
     property var cursors: []
     property string busyTheme: ""
     property string busyWall: ""
+    property bool importing: false
 
     function load() {
         Backend.call(["theme"], r => { if (r.ok) page.theme = r; });
@@ -31,6 +36,29 @@ Page {
     }
     function loadWallpapers() {
         Backend.call(["wallpapers"], r => { if (r.ok) page.walls = r; });
+    }
+    // Copy pictures (paths or file:// URLs) into the wallpaper folder.
+    function importPictures(urls) {
+        const list = [];
+        for (let i = 0; i < urls.length; i++)
+            if (String(urls[i]).startsWith("file:") || String(urls[i]).startsWith("/"))
+                list.push(String(urls[i]));
+        if (!list.length) {
+            Backend.notify("info", "Only pictures from this computer can be added.", false);
+            return;
+        }
+        page.importing = true;
+        Backend.call(["wallpaper-import"].concat(list), r => {
+            page.importing = false;
+            if (!r.ok)
+                return;
+            page.loadWallpapers();
+            const n = r.added.length;
+            if (r.errors && r.errors.length)
+                Backend.notify("info", (n === 1 ? "1 picture added. " : n + " pictures added. ") + r.errors.join(" "), false);
+            else
+                Backend.notify("success", n === 1 ? "Picture added" : n + " pictures added", false);
+        });
     }
     function setTheme(id) {
         if (busyTheme !== "" || id === theme.current)
@@ -150,89 +178,272 @@ Page {
         SettingRow {
             searchKey: "appearance.wallpaper"
             title: "Wallpaper"
-            desc: page.walls.available === false ? (page.walls.reason || "") : "The Arctic wallpapers follow Winter and Polar night. Super + Shift + W opens the picker from anywhere."
+            desc: page.walls.available === false ? (page.walls.reason || "")
+                  : "The Arctic wallpapers follow Winter and Polar night. Add your own pictures, or drop them here from Files. Super + Shift + W opens the picker from anywhere."
             stacked: true
-            Flow {
+            Column {
                 width: parent.width
                 spacing: Theme.space3
-                Repeater {
-                    model: page.walls.items || []
-                    T.AbstractButton {
-                        id: thumb
-                        required property var modelData
-                        readonly property bool chosen: page.walls.current === modelData.key
-                        width: 152
-                        height: 112
-                        focusPolicy: Qt.StrongFocus
-                        hoverEnabled: true
-                        Accessible.role: Accessible.RadioButton
-                        Accessible.name: modelData.name
-                        Accessible.checked: chosen
-                        onClicked: {
-                            if (page.busyWall !== "")
-                                return;
-                            page.busyWall = modelData.key;
-                            Backend.call(["wallpaper-set", modelData.key], r => {
-                                page.busyWall = "";
-                                if (r.ok) {
-                                    page.walls = Object.assign({}, page.walls, { current: thumb.modelData.key });
-                                    Backend.notify("success", "Wallpaper changed", false);
-                                }
-                            });
+                ArButton {
+                    iconName: "plus"
+                    text: page.importing ? "Adding…" : "Add pictures…"
+                    enabled: !page.importing && page.walls.available !== false
+                    onClicked: fileDialog.open()
+                }
+                DropArea {
+                    id: drop
+                    width: parent.width
+                    height: wallFlow.implicitHeight
+                    enabled: page.walls.available !== false
+                    onEntered: drag => drag.accepted = drag.hasUrls
+                    onDropped: drop => {
+                        if (drop.hasUrls) {
+                            drop.acceptProposedAction();
+                            page.importPictures(drop.urls);
                         }
-                        Keys.onReturnPressed: clicked()
-                        background: Item {}
-                        contentItem: Column {
-                            spacing: Theme.space1
-                            Rectangle {
-                                width: thumb.width
-                                height: 86
-                                radius: Theme.radiusMd
-                                color: Theme.surfaceSunken
-                                border.width: thumb.chosen ? 2 : 1
-                                border.color: thumb.chosen ? Theme.accentEdge : thumb.hovered ? Theme.lineStrong : Theme.line
-                                Image {
-                                    anchors.fill: parent
-                                    anchors.margins: thumb.chosen ? 2 : 1
-                                    source: thumb.modelData.thumb ? "file://" + thumb.modelData.thumb : ""
-                                    sourceSize: Qt.size(300, 172)
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
-                                    smooth: true
-                                }
-                                Rectangle {
-                                    visible: page.busyWall === thumb.modelData.key
-                                    anchors.fill: parent
-                                    radius: parent.radius
-                                    color: Theme.scrim
-                                    ArText {
-                                        anchors.centerIn: parent
-                                        text: "Setting…"
-                                        size: 13
-                                        lh: 18
-                                        color: "#ffffff"
+                    }
+                    Flow {
+                        id: wallFlow
+                        width: parent.width
+                        spacing: Theme.space3
+                        Repeater {
+                            model: page.walls.items || []
+                            T.AbstractButton {
+                                id: thumb
+                                required property var modelData
+                                readonly property bool chosen: page.walls.current === modelData.key
+                                width: 152
+                                height: 112
+                                focusPolicy: Qt.StrongFocus
+                                hoverEnabled: true
+                                Accessible.role: Accessible.RadioButton
+                                Accessible.name: modelData.name
+                                Accessible.checked: chosen
+                                Accessible.description: modelData.arctic ? "" : "F2 renames it, Delete deletes it"
+                                Keys.onPressed: event => {
+                                    if (thumb.modelData.arctic)
+                                        return;
+                                    if (event.key === Qt.Key_F2) {
+                                        renameDialog.start(thumb.modelData);
+                                        event.accepted = true;
+                                    } else if (event.key === Qt.Key_Delete) {
+                                        deleteDialog.start(thumb.modelData);
+                                        event.accepted = true;
                                     }
                                 }
-                                FocusRing {
-                                    show: thumb.visualFocus
-                                    radius: Theme.radiusMd
-                                    gapColor: Theme.surfaceRaised
+                                onClicked: {
+                                    if (page.busyWall !== "")
+                                        return;
+                                    page.busyWall = modelData.key;
+                                    Backend.call(["wallpaper-set", modelData.key], r => {
+                                        page.busyWall = "";
+                                        if (r.ok) {
+                                            page.walls = Object.assign({}, page.walls, { current: thumb.modelData.key });
+                                            Backend.notify("success", "Wallpaper changed", false);
+                                        }
+                                    });
+                                }
+                                Keys.onReturnPressed: clicked()
+                                background: Item {}
+                                contentItem: Column {
+                                    spacing: Theme.space1
+                                    Rectangle {
+                                        width: thumb.width
+                                        height: 86
+                                        radius: Theme.radiusMd
+                                        color: Theme.surfaceSunken
+                                        border.width: thumb.chosen ? 2 : 1
+                                        border.color: thumb.chosen ? Theme.accentEdge : thumb.hovered ? Theme.lineStrong : Theme.line
+                                        Image {
+                                            anchors.fill: parent
+                                            anchors.margins: thumb.chosen ? 2 : 1
+                                            source: thumb.modelData.thumb ? "file://" + thumb.modelData.thumb : ""
+                                            sourceSize: Qt.size(300, 172)
+                                            fillMode: Image.PreserveAspectCrop
+                                            asynchronous: true
+                                            smooth: true
+                                        }
+                                        Rectangle {
+                                            visible: page.busyWall === thumb.modelData.key
+                                            anchors.fill: parent
+                                            radius: parent.radius
+                                            color: Theme.scrim
+                                            ArText {
+                                                anchors.centerIn: parent
+                                                text: "Setting…"
+                                                size: 13
+                                                lh: 18
+                                                color: "#ffffff"
+                                            }
+                                        }
+                                        FocusRing {
+                                            show: thumb.visualFocus
+                                            radius: Theme.radiusMd
+                                            gapColor: Theme.surfaceRaised
+                                        }
+                                        // Your own pictures: rename and delete (shown on hover and focus).
+                                        Row {
+                                            visible: !thumb.modelData.arctic && (thumb.hovered || thumb.activeFocus)
+                                            anchors.top: parent.top
+                                            anchors.right: parent.right
+                                            anchors.margins: 6
+                                            spacing: 4
+                                            Repeater {
+                                                model: [{ icon: "edit", tip: "Rename" }, { icon: "trash", tip: "Delete" }]
+                                                T.AbstractButton {
+                                                    id: hit
+                                                    required property var modelData
+                                                    required property int index
+                                                    width: 26
+                                                    height: 26
+                                                    hoverEnabled: true
+                                                    focusPolicy: Qt.NoFocus
+                                                    Accessible.role: Accessible.Button
+                                                    Accessible.name: modelData.tip + " " + thumb.modelData.name
+                                                    onClicked: index === 0 ? renameDialog.start(thumb.modelData) : deleteDialog.start(thumb.modelData)
+                                                    background: Rectangle {
+                                                        radius: 8
+                                                        color: hit.hovered ? (hit.index === 1 ? Theme.error : Theme.surfaceRaised) : "#b3000000"
+                                                    }
+                                                    contentItem: Icon {
+                                                        name: hit.modelData.icon
+                                                        size: 16
+                                                        color: hit.hovered && hit.index === 0 ? Theme.ink : "#ffffff"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ArText {
+                                        width: thumb.width
+                                        text: thumb.modelData.name
+                                        size: 13
+                                        lh: 18
+                                        elide: Text.ElideRight
+                                        weight: thumb.chosen ? Font.DemiBold : Font.Normal
+                                        color: thumb.chosen ? Theme.ink : Theme.inkMuted
+                                    }
                                 }
                             }
-                            ArText {
-                                width: thumb.width
-                                text: thumb.modelData.name
-                                size: 13
-                                lh: 18
-                                elide: Text.ElideRight
-                                weight: thumb.chosen ? Font.DemiBold : Font.Normal
-                                color: thumb.chosen ? Theme.ink : Theme.inkMuted
-                            }
+                        }
+                    }
+                    // Dragging pictures over the list.
+                    Rectangle {
+                        visible: drop.containsDrag
+                        anchors.fill: parent
+                        anchors.margins: -Theme.space2
+                        radius: Theme.radiusLg
+                        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.14)
+                        border.width: 2
+                        border.color: Theme.accentEdge
+                        ArText {
+                            anchors.centerIn: parent
+                            text: "Drop to add to your wallpapers"
+                            size: 15
+                            lh: 22
+                            weight: Font.DemiBold
                         }
                     }
                 }
             }
         }
+    }
+
+    Group {
+        title: "Wallhaven"
+        desc: "Wallpapers from wallhaven.cc, made by its community. Nothing is fetched until you search."
+        WallhavenBrowser {
+            onWallpaperSet: page.loadWallpapers()
+        }
+    }
+
+    // Add pictures: the file chooser (xdg-desktop-portal through qt6ct, Qt's own dialog otherwise).
+    FileDialog {
+        id: fileDialog
+        title: "Add pictures to your wallpapers"
+        fileMode: FileDialog.OpenFiles
+        nameFilters: ["Pictures (*.jpg *.jpeg *.png *.webp *.bmp *.gif *.JPG *.JPEG *.PNG *.WEBP)"]
+        currentFolder: "file://" + Theme.home + "/Pictures"
+        onAccepted: page.importPictures(selectedFiles)
+    }
+
+    ArDialog {
+        id: renameDialog
+        parent: T.Overlay.overlay
+        width: 440
+        title: "Rename picture"
+        property var item: null
+        function start(it) {
+            item = it;
+            nameField.text = it.name ? String(it.path).split("/").pop().replace(/\.[^.]+$/, "") : "";
+            nameField.error = "";
+            open();
+            nameField.input.forceActiveFocus();
+            nameField.input.selectAll();
+        }
+        function save() {
+            Backend.call(["wallpaper-rename", item.path, nameField.text.trim()], r => {
+                if (r.ok) {
+                    renameDialog.close();
+                    page.loadWallpapers();
+                    Backend.notify("success", "Picture renamed", false);
+                } else {
+                    nameField.error = r.error;
+                }
+            }, true);
+        }
+        ArInput {
+            id: nameField
+            width: parent.width
+            label: "Name"
+            maximumLength: 120
+            onAccepted: renameDialog.save()
+        }
+        buttons: [
+            ArButton {
+                text: "Cancel"
+                onClicked: renameDialog.close()
+            },
+            ArButton {
+                variant: "primary"
+                text: "Rename"
+                enabled: nameField.text.trim() !== ""
+                onClicked: renameDialog.save()
+            }
+        ]
+    }
+
+    ArDialog {
+        id: deleteDialog
+        parent: T.Overlay.overlay
+        width: 440
+        iconName: "trash"
+        tone: "error"
+        title: "Delete “" + (item ? item.name : "") + "”?"
+        body: "The picture is deleted from " + (item ? page.tildePath(String(item.path).replace(/\/[^/]*$/, "")) : "your folder") + ". This can’t be undone."
+        property var item: null
+        function start(it) {
+            item = it;
+            open();
+        }
+        buttons: [
+            ArButton {
+                text: "Cancel"
+                focus: true
+                onClicked: deleteDialog.close()
+            },
+            ArButton {
+                variant: "destructive"
+                text: "Delete"
+                onClicked: Backend.call(["wallpaper-delete", deleteDialog.item.path], r => {
+                    deleteDialog.close();
+                    if (r.ok) {
+                        page.loadWallpapers();
+                        Backend.notify("success", "Picture deleted", false);
+                    }
+                })
+            }
+        ]
     }
 
     Group {
