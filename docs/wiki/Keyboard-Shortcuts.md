@@ -98,7 +98,7 @@ was on `Super + W` before Arctic Linux 0.3; `Super + W` is now free for a shortc
 | `Ctrl + Print` | An area to the clipboard only (the notification offers **Save**) |
 | `Super + Ctrl + Print` | Copy the text in an area (text recognition) |
 | `Super + Shift + C` | Pick a colour anywhere on the screen and copy it as `#rrggbb` |
-| `Super + Alt + R` | Record the screen: click a screen or drag an area; press again to stop |
+| `Super + Alt + R` | Record the screen (an area, a window or the screen, with or without sound); press again to stop |
 
 Screenshots are saved in `~/Pictures/Screenshots` and copied to the clipboard. Click the
 notification to open the picture; its other actions (middle-click it) show it in your file

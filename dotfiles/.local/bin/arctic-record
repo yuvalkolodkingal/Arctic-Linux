@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# arctic-record — record the screen (Super+Alt+R or Alt+Print; the same key stops it).
-# Click a monitor to record all of it, or drag an area. wf-recorder writes
+# arctic-record — record the screen (Super+Alt+R; the same key stops it). The shell asks what to
+# record and which sound (its "Record the screen" card); without it, click a monitor to record all
+# of it, or drag an area. wf-recorder writes
 # ~/Videos/Screencasts/Screencast <date>.mp4 (or .webm) with the first encoder that works on this
 # computer: the graphics card's H.264, AV1 or VP9, else VP9 on the processor.
 #
 #   arctic-record toggle                     stop, or pick what to record and start
-#   arctic-record start [area|screen] [--audio none|desktop|mic]
+#   arctic-record start [area|window|screen] [--audio none|desktop|mic]
 #   arctic-record stop
 #   arctic-record status [--json]            --json: one line, {"ok":true,"recording":…}
 # While recording, $XDG_RUNTIME_DIR/arctic/record.json holds the state (the bar reads it) and a
@@ -83,7 +84,7 @@ start() {
   local kind=area audio=none
   while (( $# )); do
     case "$1" in
-      area|screen) kind="$1" ;;
+      area|window|screen) kind="$1" ;;
       --audio) audio="${2:-}"; shift ;;
       *) usage ;;
     esac
@@ -95,9 +96,16 @@ start() {
     notify-send -a "Screen recording" "Screen recording isn’t installed" "Install the wf-recorder package." 2>/dev/null
     exit 1; }
 
+  # The choice is the dialog's next default.
+  local prefs="${XDG_STATE_HOME:-$HOME/.local/state}/arctic/record.json"
+  mkdir -p "${prefs%/*}" && printf '{"kind": "%s", "audio": "%s"}\n' "$kind" "$audio" > "$prefs"
+
   local geom=""
   if [[ "$kind" == screen ]]; then
     geom="$(arctic-capture output 2>/dev/null | field geometry)"
+  elif [[ "$kind" == window ]]; then
+    # Where the window is now: a recording keeps that rectangle, it doesn't follow the window.
+    geom="$(arctic-capture window 2>/dev/null | field geometry)"
   else
     # One selection at a time, shared with the other capture keys: the key again cancels it.
     mkdir -p "$run/capture" && chmod 700 "$run/capture"
@@ -234,7 +242,8 @@ stop() {
 
 case "${1:-}" in
   toggle)
-    if recording_pid >/dev/null; then stop; else start area; fi ;;
+    if recording_pid >/dev/null; then stop
+    elif ! arctic-shell-ipc record open >/dev/null 2>&1; then start area; fi ;;
   start) shift; start "$@" ;;
   stop) stop ;;
   status) status "${2:-}" ;;

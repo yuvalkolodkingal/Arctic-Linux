@@ -215,8 +215,10 @@ There's no lock screen in the live session.
   it out of clipboard history.
 - **Colours:** `Super + Shift + C`, then click: the colour is copied as `#rrggbb`, and the
   notification can copy it as `rgb()` or `hsl()` too.
-- **Screen recording:** `Super + Alt + R`, then click a screen or drag an area. A notification
-  stays up while it records; press `Super + Alt + R` again (or **Stop recording**) to save it in
+- **Screen recording:** `Super + Alt + R` asks what to record (an area or a screen you then
+  click, the window you were in, or the screen you're on) and which sound (none, the desktop's
+  or your microphone's); `Enter` starts with your last choice. A notification stays up while it
+  records; press `Super + Alt + R` again (or **Stop recording**) to save it in
   `~/Videos/Screencasts`. It uses your graphics card's video encoder when it has one.
 - **Sharing your screen:** when an app (a video call, OBS) asks to share your screen, a list of
   your screens and windows appears: pick one, or press `Esc` to share nothing.

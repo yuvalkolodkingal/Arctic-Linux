@@ -13,13 +13,13 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
-//   clipboard toggle · emoji toggle · record refresh · share pick <fifo>
+//   clipboard toggle · emoji toggle · record open|refresh · share pick <fifo>
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates, clipboard, emoji, sharePicker].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, clipboard, emoji, sharePicker, recordDialog].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -87,6 +87,7 @@ ShellRoot {
     EmojiPicker { id: emoji }
     PowerKey { locked: lockScreen.secure }
     SharePicker { id: sharePicker }
+    RecordDialog { id: recordDialog }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -168,6 +169,8 @@ ShellRoot {
     }
     IpcHandler {
         target: 'record'
+        // arctic-record toggle, when nothing is recording: what to record, and which sound.
+        function open(): void { shell.present(recordDialog, null); }
         // arctic-record started or stopped a recording (RecordService re-reads record.json).
         function refresh(): void { RecordService.refresh(); }
     }

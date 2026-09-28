@@ -31,6 +31,7 @@ PolkitDialog 1.0 PolkitDialog.qml
 Popover 1.0 Popover.qml
 PopupSurface 1.0 PopupSurface.qml
 PowerKey 1.0 PowerKey.qml
+RecordDialog 1.0 RecordDialog.qml
 PowerMenu 1.0 PowerMenu.qml
 RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml
