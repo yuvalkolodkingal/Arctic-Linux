@@ -41,7 +41,7 @@
 %global webkit_built    %(pkg-config --modversion webkitgtk-6.0 2>/dev/null || echo 2.50)
 
 Name:           arctic-linux
-Version:        0.2.1
+Version:        0.3.0
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -1416,6 +1416,25 @@ fi
 # metapackage: no files
 
 %changelog
+* Mon Sep 28 2026 Arctic Linux <arctic@arcticlinux.org> - 0.3.0-1
+- Get apps opens to a chooser: Flathub apps, Fedora packages, web apps, terminal apps and a
+  console; Remove apps lists what you installed per source and shows every package a removal
+  takes with it; Delete on a launcher app removes it
+- Web apps: arctic-webapp (Go) turns any website into an app with its own window, icon, sign-in
+  and scope, in the new arctic-webapps package (arctic-webapp-host on WebKitGTK 6.0, with a
+  Chromium-family runtime for protected video and calls)
+- Every bar item opens an Arctic menu (Wi-Fi and network, Bluetooth with the shell's own pairing
+  agent, sound, battery and power, calendar, media, brightness, tray menus); Quick Settings on
+  Super + A; the shell is the notification server, with a notification centre and do not disturb
+- Super + B opens the browser (Super + W is free); Super + Shift + S takes a screenshot; text and
+  QR codes from the screen, a colour picker, screen recording, a screen-share picker, clipboard
+  history and emoji panels, Alt + Tab, a drop-down terminal
+- Night light, keep awake, XDG autostart, printing and scanning, USB drives and phones, Flatpak
+  and firmware updates, the laptop lid and screen modes, Users, Sharing, and more Settings pages
+- A command menu on Super + Alt + Space, launcher search for settings, windows, files and units,
+  more OSD kinds, automatic light and dark, a theme gallery, an Accessibility page, a first-login
+  welcome, reminders and user hooks
+
 * Mon Sep 28 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.1-1
 - The repository moved to github.com/yuvalkolodkingal/Arctic-Linux: the package
   repository is now https://yuvalkolodkingal.github.io/Arctic-Linux/ (Pages doesn't

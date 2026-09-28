@@ -3,7 +3,7 @@ package webapp
 // Version is the web-app engine version written into app.json. version_test keeps it equal to
 // backend.EngineVersion (the manager does not import backend: it pulls in the installer), so
 // the release bump raises both.
-const Version = "0.2.1"
+const Version = "0.3.0"
 
 // Schema is the app.json schema version.
 const Schema = 1

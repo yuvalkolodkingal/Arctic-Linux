@@ -36,7 +36,7 @@ import time
 import tomllib
 from pathlib import Path
 
-VERSION = "0.2.1-mock"
+VERSION = "0.3.0-mock"
 ENV = os.environ
 
 

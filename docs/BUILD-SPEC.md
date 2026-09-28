@@ -57,8 +57,8 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 0.2.1, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.1/` of the
+Version 0.3.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.3.0/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 
@@ -561,7 +561,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 0.2.1, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 0.3.0, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
