@@ -2475,6 +2475,51 @@ def cmd_shell_set(paths, args):
     return dict(ok=True, **{args[0]: data[args[0]]})
 
 
+# ---- saved networks and VPNs (the shell's network.py) --------------------------------------------
+
+def network_script(paths, args):
+    script = shell_script(paths, 'network.py')
+    if not script:
+        raise Failure('The shell’s network helper isn’t installed.')
+    _code, out, _err = run([sys.executable, str(script)] + args, timeout=90)
+    try:
+        data = json.loads(out.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise Failure('The network helper didn’t answer.')
+    if not data.get('ok'):
+        raise Failure(data.get('error') or 'That didn’t work.')
+    return data
+
+
+def cmd_network_saved(paths, _args):
+    """Saved Wi-Fi networks and VPN connections."""
+    try:
+        data = network_script(paths, ['saved'])
+    except Failure:
+        return dict(ok=True, available=False, saved=[], vpn=[])
+    return dict(ok=True, available=True, saved=data.get('saved', []), vpn=data.get('vpn', []))
+
+
+def cmd_network_forget(paths, args):
+    if not args or not all(re.fullmatch(r'[0-9a-fA-F-]{36}', a) for a in args):
+        raise Failure('usage: network-forget UUID…')
+    network_script(paths, ['forget'] + [x for a in args for x in ('--uuid', a)])
+    return cmd_network_saved(paths, [])
+
+
+def cmd_vpn(paths, args):
+    """vpn-up|vpn-down UUID, vpn-import PATH."""
+    verb = args[0] if args else ''
+    if verb in ('up', 'down') and len(args) == 2 and re.fullmatch(r'[0-9a-fA-F-]{36}', args[1]):
+        network_script(paths, ['vpn-' + verb, '--uuid', args[1]])
+    elif verb == 'import' and len(args) == 2:
+        path = args[1][7:] if args[1].startswith('file://') else args[1]
+        network_script(paths, ['vpn-import', '--file', path])
+    else:
+        raise Failure('usage: vpn up|down UUID | vpn import PATH')
+    return cmd_network_saved(paths, [])
+
+
 def cmd_bluetooth_pair(_paths, _args):
     """Pair a device: the shell's Bluetooth menu on its pairing page (codes come up in Arctic's
     own dialog); without the shell, the Bluetooth manager."""
@@ -2624,6 +2669,7 @@ COMMANDS = {
     'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,
+    'network-saved': cmd_network_saved, 'network-forget': cmd_network_forget, 'vpn': cmd_vpn,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
 }
 

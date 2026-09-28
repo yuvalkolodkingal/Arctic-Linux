@@ -17,6 +17,7 @@
     network.py airplane on|off       every radio off (rfkill), then back to how they were
     network.py share --uuid U [--reveal]   a QR code (SVG) a phone camera joins with
     network.py vpn-up --uuid U [--ask]  |  vpn-down --uuid U
+    network.py vpn-import --file PATH [--type openvpn|wireguard]
 
 One-shot commands print one JSON line: {"ok":true,…} or {"ok":false,"error":"<sentence>",
 "code":"<code>"} and exit 0/1. `watch` prints one object per line with a "type": "state"
@@ -586,6 +587,33 @@ def cmd_vpn_up(args, stdin):
     return {'ok': True}
 
 
+def vpn_type(path):
+    """OpenVPN or WireGuard, from the file: WireGuard configurations have an [Interface]."""
+    try:
+        with open(path, encoding='utf-8', errors='replace') as f:
+            text = f.read(65536)
+    except OSError:
+        raise Failure('not_found', 'That file can’t be read.')
+    if re.search(r'^\s*\[Interface\]', text, re.M):
+        return 'wireguard'
+    if path.lower().endswith('.ovpn') or re.search(r'^\s*(client|remote|dev\s+tun)\b', text, re.M):
+        return 'openvpn'
+    raise Failure('usage', 'That file isn’t an OpenVPN or WireGuard configuration.')
+
+
+def cmd_vpn_import(args):
+    kind = args.type or vpn_type(args.file)
+    if FIXTURE:
+        return {'ok': True, 'kind': kind}
+    code, out, err = nmcli('connection', 'import', 'type', kind, 'file', args.file)
+    if code != 0:
+        if 'plugin' in (err or '').lower():
+            raise Failure('failed', 'Install NetworkManager-openvpn to import OpenVPN files.')
+        raise Failure(*error_for(code, err, os.path.basename(args.file)))
+    m = re.search(r"Connection '(.+)' \(([0-9a-f-]{36})\)", out)
+    return {'ok': True, 'kind': kind, 'name': m.group(1) if m else '', 'uuid': m.group(2) if m else ''}
+
+
 # ---- watch ------------------------------------------------------------------------------------
 def lines_of(fd, buf):
     """Read what is available on fd; returns (complete lines, rest, eof)."""
@@ -759,6 +787,9 @@ def parse(argv):
     u.add_argument('--uuid', required=True)
     u.add_argument('--name')
     u.add_argument('--ask', action='store_true')
+    vi = sub.add_parser('vpn-import')
+    vi.add_argument('--file', required=True)
+    vi.add_argument('--type', choices=['openvpn', 'wireguard'])
     v = sub.add_parser('vpn-down')
     v.add_argument('--uuid', required=True)
     return p.parse_args(argv)
@@ -802,6 +833,8 @@ def main(argv=None, stdin=None):
             out = cmd_airplane(args.mode == 'on')
         elif args.cmd == 'vpn-up':
             out = cmd_vpn_up(args, stdin)
+        elif args.cmd == 'vpn-import':
+            out = cmd_vpn_import(args)
         elif args.cmd == 'vpn-down':
             out = simple('connection', 'down', 'uuid', args.uuid)
         else:

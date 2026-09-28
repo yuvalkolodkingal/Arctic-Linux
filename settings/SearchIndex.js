@@ -85,6 +85,8 @@ var ENTRIES = [
     ["apps", "apps.editor", "Text editor", "code zed"],
     ["apps", "apps.video", "Videos", "vlc mpv player"],
     ["network", "network.wifi", "Wi-Fi", "wireless"],
+    ["network", "network.saved", "Saved Wi-Fi networks", "forget password known networks"],
+    ["network", "network.vpn", "Import a VPN file", "openvpn wireguard ovpn conf vpn"],
     ["network", "network.connections", "Connections", "vpn ethernet proxy"],
     ["bluetooth", "bluetooth.power", "Bluetooth", "on off"],
     ["bluetooth", "bluetooth.devices", "Devices", "headphones mouse keyboard pair"],

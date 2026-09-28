@@ -1199,6 +1199,32 @@ class BatteryTest(Home):
         self.helper('shell-set', 'batteryWarnings', 'maybe', ok=False)
 
 
+class SavedNetworksTest(Home):
+    UUID = '11111111-2222-3333-4444-555555555555'
+
+    def setUp(self):
+        super().setUp()
+        shell = self.tmp / 'shell/scripts'
+        shell.mkdir(parents=True)
+        (shell / 'network.py').write_text(
+            'import json, sys\n'
+            'open(sys.argv[0] + ".log", "a").write(" ".join(sys.argv[1:]) + "\\n")\n'
+            'print(json.dumps({"ok": True, "saved": [{"uuid": "%s", "ssid": "Home"}], "vpn": []}))\n' % self.UUID)
+        self.env['ARCTIC_SHELL_DIR'] = str(self.tmp / 'shell')
+        self.log_file = shell / 'network.py.log'
+
+    def test_saved_forget_and_vpn(self):
+        self.assertEqual(self.helper('network-saved')['saved'][0]['ssid'], 'Home')
+        self.helper('network-forget', self.UUID)
+        self.helper('network-forget', 'not-a-uuid', ok=False)
+        self.helper('vpn', 'up', self.UUID)
+        self.helper('vpn', 'import', 'file:///home/ada/work.conf')
+        self.helper('vpn', 'sideways', self.UUID, ok=False)
+        self.assertEqual(self.log_file.read_text().splitlines(), [
+            'saved', 'forget --uuid %s' % self.UUID, 'saved', 'vpn-up --uuid %s' % self.UUID, 'saved',
+            'vpn-import --file /home/ada/work.conf', 'saved'])
+
+
 class PowerProfileTest(Home):
     def test_missing(self):
         self.assertFalse(self.helper('power-profile')['available'])

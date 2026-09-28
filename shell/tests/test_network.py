@@ -332,6 +332,26 @@ class Commands(unittest.TestCase):
         code, out = self.run_helper('share', '--uuid', UUID, '--reveal', scenario=scenario)
         self.assertEqual(out['password'], 'hunter22')
 
+    def test_vpn_import(self):
+        wg = self.bin / 'work.conf'
+        wg.write_text('[Interface]\nPrivateKey = x\n[Peer]\n')
+        ovpn = self.bin / 'office.ovpn'
+        ovpn.write_text('client\nremote vpn.example 1194\n')
+        other = self.bin / 'notes.txt'
+        other.write_text('hello\n')
+        self.assertEqual(network.vpn_type(str(wg)), 'wireguard')
+        self.assertEqual(network.vpn_type(str(ovpn)), 'openvpn')
+        with self.assertRaises(network.Failure):
+            network.vpn_type(str(other))
+        scenario = {'connection import': {'out': "Connection 'work' (%s) successfully added.\n" % UUID}}
+        code, out = self.run_helper('vpn-import', '--file', str(wg), scenario=scenario)
+        self.assertEqual(out, {'ok': True, 'kind': 'wireguard', 'name': 'work', 'uuid': UUID})
+        self.assertIn(['connection', 'import', 'type', 'wireguard', 'file', str(wg)], self.argv())
+        scenario = {'connection import': {'code': 1, 'err': 'Error: failed to find VPN plugin for openvpn.\n'}}
+        code, out = self.run_helper('vpn-import', '--file', str(ovpn), scenario=scenario)
+        self.assertEqual(code, 1)
+        self.assertIn('NetworkManager-openvpn', out['error'])
+
     def test_forget_by_ssid(self):
         code, _ = self.run_helper('forget', '--ssid', 'Home', scenario=STATUS)
         self.assertEqual(code, 0)
