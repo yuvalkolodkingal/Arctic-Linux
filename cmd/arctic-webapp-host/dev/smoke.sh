@@ -7,8 +7,8 @@
 #
 # Checks: the window's Wayland app_id is the app id, the title follows the page, the page sees
 # webapp.FetchUserAgent (so discovery fetches as the app will), the page's favicon replaces the
-# letter icon through the manager, a second start keeps one window and the pid file, and remove
-# stops the app. Screenshots land in DIR (default
+# letter icon through the manager, a second start keeps one window and the pid file, SIGTERM
+# saves the window state, and remove stops the app. Screenshots land in DIR (default
 # /tmp/webapp-shots). The navigation rules themselves are unit-tested in internal/webapp/policy.
 #
 # Containers can't create the user namespaces WebKit's bubblewrap sandbox needs, so this script
@@ -138,6 +138,14 @@ timeout 20 arctic-webapp-host --app-id "$ID" >/dev/null 2>&1 || fail "second sta
 sleep 1
 [ "$(windows | grep -c .)" = 1 ] || fail "second start: $(windows | grep -c .) windows"
 [ "$(cat "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" 2>/dev/null)" = "$PID1" ] || fail "second start changed the pid file"
+
+# SIGTERM (logout) closes the window the normal way: it saves its state, and the pid file goes.
+kill -TERM "$PID1"
+wait_for '[ -z "$(windows)" ]' || fail "SIGTERM did not close the window"
+grep -q '"last_url": "http://127.0.0.1' "$XDG_DATA_HOME/arctic/webapps/$ID/state.json" 2>/dev/null || fail "no state.json after SIGTERM"
+wait_for '[ ! -e "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" ]' || fail "pid file left after SIGTERM"
+arctic-webapp-host --app-id "$ID" >>"$WORK/host.log" 2>&1 &
+wait_for '[ -n "$(windows)" ]' || fail "no window after a restart"
 
 # remove stops the app.
 arctic-webapp remove "$ID" --json | grep -q '"stopped":true' || fail "remove did not stop the app"

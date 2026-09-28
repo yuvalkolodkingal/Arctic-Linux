@@ -83,6 +83,12 @@ void arctic_present(void) {
 }
 
 void arctic_quit(void) {
+    /* Close the window first so it saves its size, zoom and page (close-request). */
+    if (S.window) {
+        GtkWindow *w = S.window;
+        S.window = NULL;
+        gtk_window_close(w);
+    }
     if (S.app) g_application_quit(G_APPLICATION(S.app));
 }
 
@@ -498,7 +504,7 @@ static void title_cb(WebKitWebView *view, GParamSpec *ps, gpointer data) {
     (void)ps;
     (void)data;
     const char *t = webkit_web_view_get_title(view);
-    gtk_window_set_title(S.window, t && *t ? t : S.cfg.app_name);
+    if (S.window) gtk_window_set_title(S.window, t && *t ? t : S.cfg.app_name);
 }
 
 static void uri_cb(WebKitWebView *view, GParamSpec *ps, gpointer data) {
@@ -877,6 +883,13 @@ static void find_stop_cb(GtkSearchEntry *e, gpointer d) {
     gtk_widget_grab_focus(GTK_WIDGET(S.view));
 }
 
+static void window_destroy_cb(GtkWidget *w, gpointer d) {
+    (void)w;
+    (void)d;
+    S.window = NULL;
+    S.view = NULL;
+}
+
 static gboolean close_request_cb(GtkWindow *w, gpointer d) {
     (void)d;
     goCloseRequest(S.cfg.handle, gtk_widget_get_width(GTK_WIDGET(w)), gtk_widget_get_height(GTK_WIDGET(w)),
@@ -983,6 +996,7 @@ static void build_window(void) {
     gtk_window_set_child(S.window, box);
     add_shortcuts(win);
     g_signal_connect(win, "close-request", G_CALLBACK(close_request_cb), NULL);
+    g_signal_connect(win, "destroy", G_CALLBACK(window_destroy_cb), NULL);
     update_nav_buttons();
     goThemeChanged(S.cfg.handle); /* applies the theme now that the view exists */
     if (S.cfg.notice && !S.first_notice_shown) {
