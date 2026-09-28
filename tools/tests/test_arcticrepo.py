@@ -504,12 +504,12 @@ class Index(unittest.TestCase):
             orig = ar.read_package
             ar.read_package = ar.parse_filename
             try:
-                page = ar.render_index(d, "https://example.org/O-Tism/", "ABCD1234ABCD1234")
+                page = ar.render_index(d, "https://example.org/Arctic-Linux/", "ABCD1234ABCD1234")
             finally:
                 ar.read_package = orig
             self.assertIn("Stable", page)
             self.assertIn("Testing", page)
-            self.assertIn("https://example.org/O-Tism/repo/testing/fedora-44/x86_64/", page)
+            self.assertIn("https://example.org/Arctic-Linux/repo/testing/fedora-44/x86_64/", page)
             self.assertIn("abcdef123456", page)
             self.assertIn("ABCD 1234 ABCD 1234", page)
 

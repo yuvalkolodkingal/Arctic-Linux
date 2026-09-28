@@ -198,13 +198,14 @@ func fullWizard(t *testing.T, c *client) {
 	}
 	c.ok("SetStep", map[string]any{"id": "disk", "data": map[string]any{"disk": "/dev/nvme0n1", "mode": "erase"}})
 	c.ok("Next", nil)
-	// Encryption: weak passphrase, then a suggested one.
+	// Encryption: no passphrase, then a suggested one (a weak one would pass too, with a
+	// warning: TestWeakSecretsInstall).
 	if s := c.ok("CheckPassphrase", map[string]any{"text": "hunter2"}); s["label"] != "Too short" || s["ok"] != false {
 		t.Fatalf("check %v", s)
 	}
-	c.ok("SetSecrets", map[string]any{"luks_passphrase": "aaaaaaaaaaaa"})
-	if _, err := c.call("Next", nil); err == nil || err["fields"].(map[string]any)["passphrase"] == nil {
-		t.Fatalf("weak passphrase accepted: %v", err)
+	c.ok("SetSecrets", map[string]any{"luks_passphrase": ""})
+	if _, err := c.call("Next", nil); err == nil || err["fields"].(map[string]any)["passphrase"] != "Type a passphrase." {
+		t.Fatalf("empty passphrase accepted: %v", err)
 	}
 	sug := c.ok("SuggestPassphrase", nil)["text"].(string)
 	if len(strings.Fields(sug)) != 4 {
@@ -370,6 +371,75 @@ func TestProgressEvents(t *testing.T) {
 		if !statuses[s] {
 			t.Errorf("missing status %q (got %v)", s, statuses)
 		}
+	}
+}
+
+// A 3-character disk passphrase and a 1-character password pass Next, the Summary and
+// Start: only a warning says so. An empty one is still refused, by Next and by Start.
+func TestWeakSecretsInstall(t *testing.T) {
+	e := newEngine(t, mock.Options{Wired: true, FailModule: "none"}, false)
+	c, stop := newClient(t, e)
+	defer stop()
+	c.ok("Hello", map[string]any{"client": "installer-ui", "version": 1})
+	c.ok("Subscribe", nil)
+	for c.ok("GetWizard", nil)["current"] != "encryption" {
+		c.ok("Next", nil)
+	}
+	if s := c.ok("CheckPassphrase", map[string]any{"text": "abc"}); s["score"] != float64(0) || s["label"] != "Too short" || s["ok"] != false {
+		t.Fatalf("check %v", s)
+	}
+	enc := c.ok("GetStep", map[string]any{"id": "encryption"})["options"].(map[string]any)
+	if enc["min_score"] != float64(2) || enc["weak_warning"] != wizard.CopyWeakPassphrase {
+		t.Fatalf("encryption options %v", enc)
+	}
+	c.ok("SetSecrets", map[string]any{"luks_passphrase": "abc"})
+	if w := c.ok("Next", nil); w["current"] != "account" {
+		t.Fatalf("a 3-character passphrase must pass Next: %v", w)
+	}
+	c.ok("SetStep", map[string]any{"id": "account", "data": map[string]any{"full_name": "Noa Levi"}})
+	if _, err := c.call("Next", nil); err == nil || err["fields"].(map[string]any)["password"] != "Type a password." {
+		t.Fatalf("no password accepted: %v", err)
+	}
+	c.ok("SetSecrets", map[string]any{"user_password": "x"})
+	acc := c.ok("GetStep", map[string]any{"id": "account"})["options"].(map[string]any)
+	if acc["weak_warning"] != wizard.CopyWeakPassword || acc["strength"].(map[string]any)["label"] != "Too short" {
+		t.Fatalf("account options %v", acc)
+	}
+	if w := c.ok("Next", nil); w["current"] != "apps" {
+		t.Fatalf("a 1-character password must pass Next: %v", w)
+	}
+	c.ok("Next", nil)
+	// The Summary notes them in their rows; the erase warning stays one sentence.
+	sum := c.ok("GetSummary", nil)
+	if want := "Installing will erase everything on Samsung SSD 980. This can’t be undone."; sum["warning"] != want {
+		t.Fatalf("summary warning %q, want %q", sum["warning"], want)
+	}
+	rows := map[string]any{}
+	for _, r := range sum["rows"].([]any) {
+		rows[r.(map[string]any)["label"].(string)] = r.(map[string]any)["value"]
+	}
+	if rows["Encryption"] != wizard.CopyWeakPassphraseRow || rows["Account"] != "Noa Levi (noa) on noa-thinkpad, "+wizard.CopyWeakPasswordRow {
+		t.Fatalf("summary rows %v", rows)
+	}
+	if w := c.ok("Next", nil); w["current"] != "install" {
+		t.Fatalf("Next from summary: %v", w)
+	}
+	// Start still refuses an empty password (the UI can't send one; a script could).
+	c.ok("SetSecrets", map[string]any{"user_password": ""})
+	if _, err := c.call("Start", nil); err == nil || err["fields"].(map[string]any)["password"] != "Type a password." {
+		t.Fatalf("Start without a password: %v", err)
+	}
+	c.ok("SetSecrets", map[string]any{"user_password": "x"})
+	// And an empty disk passphrase.
+	c.ok("SetSecrets", map[string]any{"luks_passphrase": ""})
+	if _, err := c.call("Start", nil); err == nil || err["fields"].(map[string]any)["passphrase"] != "Type a passphrase." {
+		t.Fatalf("Start without a passphrase: %v", err)
+	}
+	c.ok("SetSecrets", map[string]any{"luks_passphrase": "abc"})
+	c.ok("Start", nil)
+	done := c.waitEvent(func(m map[string]any) bool { return m["event"] == "done" }, 30*time.Second)
+	if done["first_name"] != "Noa" {
+		t.Fatalf("done %v", done)
 	}
 }
 

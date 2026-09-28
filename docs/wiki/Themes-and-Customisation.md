@@ -87,6 +87,7 @@ and the login screen uses it too.
 | **yazi**, **btop** | theme files | next start |
 | **zsh** prompt, completion menu, suggestions and syntax highlighting | a colour file in the theme folder | at the next prompt |
 | **fzf** | an options file (your own `FZF_DEFAULT_OPTS` still apply on top) | every run |
+| **fastfetch**, **neofetch** | layouts in the theme folder: the fox, keys and title in the theme's colours ([Terminal and shell](Terminal-and-Shell#fastfetch-and-neofetch)) | every run |
 | **foot**, **Alacritty** | the same palette as kitty | new windows |
 | **Zen Browser** | light/dark follows the system; the accent colour only with `arctic-theme zen on` | next start |
 | Firefox, Chromium, Collabora Office, Electron apps | light/dark follows the system | at once |
@@ -112,6 +113,12 @@ Winter and a Polar night version:
 An Arctic wallpaper follows the theme when you switch. Your own pictures (from
 `~/Pictures/Wallpapers`, or any folder you choose with **Choose folder…**) stay as they are, and
 with **Match colours to wallpaper** on, the desktop takes its colours from them.
+
+To add pictures, use **Settings → Appearance → Add pictures…** or drag them there from Files;
+Settings copies them into your folder and can rename or delete them. **Settings → Appearance →
+Wallhaven** finds wallpapers on [wallhaven.cc](https://wallhaven.cc) and sets one with a click
+(it lands in `~/Pictures/Wallpapers/wallhaven`, so the picker lists it too). See
+[Settings](Settings#appearance).
 
 From a terminal:
 

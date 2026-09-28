@@ -39,13 +39,62 @@
 - Upgrading? If you replaced `~/.config/mango/arctic/binds.conf` or `apps.conf` with your own copy,
   it doesn't get the new keys: compare it with `/usr/share/arctic/mango/`.
 
+## Arctic Linux 0.2.1
+
+A fix release for 0.2, with a few additions to Settings and the terminal.
+
+**Download:** [GitHub releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases). The image is
+`Arctic-Linux-0.2-x86_64.iso` with its `.sha256`.
+
+### The project has a new address
+
+The repository is now <https://github.com/yuvalkolodkingal/Arctic-Linux> (it was `O-Tism`), and
+Arctic's package repository is <https://yuvalkolodkingal.github.io/Arctic-Linux/>. Old GitHub
+links still lead to the right place, but the package repository's old address doesn't.
+
+**If you installed 0.2.0**, your system still looks for Arctic's updates at the old address.
+Run this once (then updates work as before):
+
+```sh
+sudo dnf upgrade --refresh --setopt=arctic.baseurl=https://yuvalkolodkingal.github.io/Arctic-Linux/repo/stable/fedora-44/x86_64/ arctic-release
+```
+
+See [Troubleshooting](Troubleshooting#updates-stopped-after-the-repository-was-renamed).
+
+### Installer
+
+- **A finished install is never thrown away at the last step.** On an NVIDIA laptop with an
+  encrypted disk, 0.2.0 could fail at *Setting up your account* because the encrypted disk was
+  still in use, and then removed the new boot entry. The installer now waits for the NVIDIA
+  driver build that runs in the background, stops helpers left running in the new system,
+  releases copies of its disks held by other services, and tries closing the disk again. If it
+  still can't be closed, the install counts as done and the Done screen says a restart finishes
+  it. Once the account is created, a failure no longer removes the boot entry or partitions.
+- **One network hiccup no longer fails an app.** dnf and Flatpak downloads that fail because of
+  the network are tried again three times.
+- **A short passphrase or password no longer stops you.** Any disk passphrase or account password
+  is accepted once you've typed it twice; below **Fair** (or under 8 characters for the password)
+  the step shows a warning that it's easy to guess, and its Summary row notes it.
+
+### Settings
+
+- **Wallpapers:** add your own pictures with the file chooser or by dragging them from Files;
+  rename and delete them. **Wallhaven:** search wallhaven.cc and set a wallpaper with one click,
+  with filters that fit your screens and an optional API key. See [Settings](Settings#appearance).
+- **Displays:** arrange your screens by dragging them. See [Settings](Settings#displays).
+
+### Terminal
+
+- **fastfetch** in the Arctic design, in the theme's colours, and a **neofetch** command. See
+  [Terminal and shell](Terminal-and-Shell).
+
 ## Arctic Linux 0.2.0
 
 Arctic Linux 0.2 installs on real hardware, sets up the drivers your computer needs, offers 126
 apps in the installer, takes its colours from your wallpaper, has a settings app, and updates
 itself, its own packages included.
 
-**Download:** [GitHub releases](https://github.com/yuvalkolodkingal/O-Tism/releases). The image is
+**Download:** [GitHub releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases). The image is
 `Arctic-Linux-0.2-x86_64.iso` with its `.sha256`. See
 [Download and create a USB](Download-and-Create-a-USB).
 
@@ -142,7 +191,7 @@ See [Settings](Settings).
 
 - **Arctic's own packages update online.** The desktop, the shell, the installer, the branding
   and Mango come from the Arctic package repository on the project's GitHub Pages site,
-  <https://yuvalkolodkingal.github.io/O-Tism/>, which `arctic-release` sets up together with its
+  <https://yuvalkolodkingal.github.io/Arctic-Linux/>, which `arctic-release` sets up together with its
   signing key. Fedora's packages keep coming from Fedora's repositories.
 - **Signed.** Every package in the repository is signed, and so is the repository's metadata;
   dnf checks both (`gpgcheck=1`, `repo_gpgcheck=1`) before it installs anything. Each release of
@@ -172,12 +221,12 @@ once. Put the published repository file in `/etc/yum.repos.d/` under the same na
 the place of 0.1's disabled copy:
 
 ```sh
-sudo curl -fsSL -o /etc/yum.repos.d/arctic.repo https://yuvalkolodkingal.github.io/O-Tism/arctic.repo
+sudo curl -fsSL -o /etc/yum.repos.d/arctic.repo https://yuvalkolodkingal.github.io/Arctic-Linux/arctic.repo
 sudo dnf upgrade
 ```
 
 dnf asks whether to import the Arctic Linux key. Check that the fingerprint it shows is the one on
-<https://yuvalkolodkingal.github.io/O-Tism/>, then answer `y`. The upgrade brings the 0.2
+<https://yuvalkolodkingal.github.io/Arctic-Linux/>, then answer `y`. The upgrade brings the 0.2
 `arctic-release`, which has the repository and its key built in. Remove the file you added, so
 the system follows `arctic-release`'s settings from now on, and restart:
 
@@ -230,7 +279,7 @@ Then log out and back in. **Snapshots** aren't set up on a 0.1 system; to turn t
   by their developers.
 - **Testing:** version 0.2 has been tested mainly in QEMU virtual machines and the installer's
   demo mode, and the driver detection with simulated hardware. Please
-  [report](https://github.com/yuvalkolodkingal/O-Tism/issues) how it works on your computer.
+  [report](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) how it works on your computer.
 
 ## Arctic Linux 0.1.0
 
@@ -238,7 +287,7 @@ The first release of Arctic Linux: one live USB image that you can try without c
 computer, and a step-by-step installer that sets up an encrypted Fedora 44 system with the Mango
 desktop and the apps you pick.
 
-**Download:** [GitHub releases](https://github.com/yuvalkolodkingal/O-Tism/releases). The image is
+**Download:** [GitHub releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases). The image is
 `Arctic-Linux-0.1-x86_64.iso` with its `.sha256`. See
 [Download and create a USB](Download-and-Create-a-USB).
 
@@ -331,4 +380,4 @@ desktop and the apps you pick.
   (everything on the bar has its own shortcut), and the lock screen doesn't show how many
   notifications are hidden.
 - **Testing:** version 0.1 has been tested mainly in QEMU virtual machines (UEFI and BIOS). Please
-  [report](https://github.com/yuvalkolodkingal/O-Tism/issues) how it works on your computer.
+  [report](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) how it works on your computer.

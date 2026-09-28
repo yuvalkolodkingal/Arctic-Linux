@@ -27,6 +27,8 @@ StepPage {
     readonly property var opts: Wizard.step.options || {}
     readonly property var drivers: (Wizard.doneInfo && Wizard.doneInfo.drivers) || opts.drivers || []
     readonly property var secureBoot: (Wizard.doneInfo && Wizard.doneInfo.secure_boot) || opts.secure_boot || null
+    // Sentences about a success with a caveat (the new disk couldn't be closed at the end).
+    readonly property var notes: (Wizard.doneInfo && Wizard.doneInfo.notes) || opts.notes || []
 
     function primary() {
         rebootError = "";
@@ -168,6 +170,13 @@ StepPage {
                 iconName: "cpu"
                 title: page.drivers.length === 1 ? "Driver" : "Drivers"
                 desc: page.drivers.map(d => d.text).join("\n")
+            }
+
+            ArBanner {
+                visible: page.notes.length > 0
+                width: parent.width
+                kind: "info"
+                text: page.notes.join(" ").replace(/&/g, "&amp;").replace(/</g, "&lt;")
             }
 
             // Restart refused or failed: say so, and how else to restart.

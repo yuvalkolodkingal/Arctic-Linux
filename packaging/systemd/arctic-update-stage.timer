@@ -1,6 +1,6 @@
 [Unit]
 Description=Daily check for Arctic Linux updates
-Documentation=https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates
+Documentation=https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Updates
 ConditionKernelCommandLine=!rd.live.image
 
 [Timer]
