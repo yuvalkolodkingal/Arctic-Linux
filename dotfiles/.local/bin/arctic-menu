@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""arctic-menu — the command menu: every system action in one keyboard-driven tree.
+
+  arctic-menu              open or close it (Super + Alt + Space)
+  arctic-menu BRANCH       open or close it at a branch or row: capture (Super + Ctrl + C),
+                           toggle, style.theme, …
+  arctic-menu --list [BRANCH]   the rows that can run here: "Where › Label<TAB>id" lines
+
+The menu is the shell's (arctic-shell-ipc menu toggle|toggleAt). Without the shell
+(ARCTIC_SHELL=waybar) its rows open in fuzzel instead, minus those that need the shell.
+The rows are the shell's menu/arctic-menu.json with ~/.config/arctic/menu.json merged over it
+by id; the Command Menu wiki page describes the format.
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+HOME = os.path.expanduser("~")
+CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "arctic")
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*(\.[a-z0-9][a-z0-9_-]*)*$")
+
+
+def parse(text):
+    """Menu JSON with whole-line // comments, as the shell reads it (MenuModel.parse)."""
+    body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
+    data = json.loads(body) if body.strip() else {}
+    return data if isinstance(data, dict) else {}
+
+
+def load(paths):
+    """Merge the menu files in order: later files change fields by id; "hidden" removes."""
+    by_id, order = {}, []
+    for i, path in enumerate(paths):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = parse(f.read())
+        except (OSError, ValueError):
+            if i == 0:
+                raise
+            continue
+        for entry_id, fields in data.items():
+            if not ID_RE.match(entry_id) or not isinstance(fields, dict):
+                continue
+            if entry_id not in by_id:
+                by_id[entry_id] = {"id": entry_id}
+                order.append(entry_id)
+            by_id[entry_id].update({k: v for k, v in fields.items() if k != "id"})
+
+    def hidden(entry_id):
+        parts = entry_id.split(".")
+        return any(by_id.get(".".join(parts[:n]), {}).get("hidden") for n in range(1, len(parts) + 1))
+    return [by_id[i] for i in order if not hidden(i)]
+
+
+def runnable(entry, live, which=shutil.which):
+    """Can this row run without the shell? (the fallback has no IPC and no providers)"""
+    run = entry.get("run")
+    if not (isinstance(run, list) and run and all(isinstance(a, str) for a in run)):
+        return isinstance(run, str) and run.strip() != "" and not entry.get("ipc")
+    if run[0] == "arctic-shell-ipc" or entry.get("ipc"):
+        return False
+    if entry.get("when") == "live" and not live or entry.get("when") == "installed" and live:
+        return False
+    needs = entry.get("needs") if isinstance(entry.get("needs"), list) else [run[0]]
+    return all(isinstance(c, str) and which(c) for c in needs)
+
+
+def rows(entries, branch, live, which=shutil.which):
+    """(where › label, entry) for every row under `branch` ('' = everything) that can run."""
+    by_id = {e["id"]: e for e in entries}
+    out = []
+    for e in entries:
+        if branch and not e["id"].startswith(branch + "."):
+            continue
+        if not runnable(e, live, which):
+            continue
+        if isinstance(e.get("test"), str) and e["test"].strip():
+            if subprocess.run(["sh", "-c", e["test"]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL).returncode != 0:
+                continue
+        parts = e["id"].split(".")
+        trail = [by_id.get(".".join(parts[:n]), {}).get("label", parts[n - 1]) for n in range(1, len(parts))]
+        if branch:
+            trail = trail[len(branch.split(".")):]
+        out.append((" › ".join(trail + [e.get("label", e["id"])]), e))
+    return out
+
+
+def shell_dir():
+    try:
+        out = subprocess.run(["arctic-shell", "--path"], capture_output=True, text=True, timeout=5)
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return "/usr/share/arctic/shell"
+
+
+def is_live():
+    return shutil.which("arctic-is-live") is not None and subprocess.run(["arctic-is-live"]).returncode == 0
+
+
+def main(argv):
+    args = list(argv)
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0
+    listing = bool(args) and args[0] == "--list"
+    if listing:
+        args = args[1:]
+    branch = args[0].strip().lower() if args else ""
+    if branch and not ID_RE.match(branch):
+        print("arctic-menu: no such branch: " + branch, file=sys.stderr)
+        return 2
+    if not listing and shutil.which("arctic-shell-ipc"):
+        call = ["arctic-shell-ipc", "menu", "toggleAt", branch] if branch else ["arctic-shell-ipc", "menu", "toggle"]
+        if subprocess.run(call, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            return 0
+    try:
+        entries = load([os.path.join(shell_dir(), "menu", "arctic-menu.json"), os.path.join(CONFIG, "menu.json")])
+    except (OSError, ValueError) as e:
+        print("arctic-menu: can't read the menu: {}".format(e), file=sys.stderr)
+        return 1
+    choices = rows(entries, branch, is_live())
+    if listing:
+        for label, e in choices:
+            print(label + "\t" + e["id"])
+        return 0
+    if not choices or not shutil.which("fuzzel"):
+        return 1
+    labels = [label for label, _ in choices]
+    picked = subprocess.run(["fuzzel", "--dmenu", "--index", "--prompt", "  ", "--placeholder", "Menu",
+                             "--lines", str(min(15, len(labels)))],
+                            input="\n".join(labels) + "\n", capture_output=True, text=True)
+    if picked.returncode != 0 or not picked.stdout.strip().isdigit():
+        return 0
+    index = int(picked.stdout.strip())
+    if not 0 <= index < len(choices):
+        return 0
+    run = choices[index][1]["run"]
+    command = ["sh", "-c", run] if isinstance(run, str) else run
+    subprocess.Popen(command, cwd=HOME, stdin=subprocess.DEVNULL, start_new_session=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -43,6 +43,7 @@ It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `p
 | Wallpapers | `Wallpapers.qml`, `scripts/wallpapers.py` | Searchable thumbnail grid. The Arctic wallpapers (from `~/.local/share/arctic/wallpapers` or `/usr/share/backgrounds/arctic`) show the active theme's variant and follow Winter / Polar night; your own pictures come from `~/Pictures/Wallpapers` or a folder you choose. Applies through `arctic-wallpaper`. The "Match colours to wallpaper" switch is `arctic-theme auto on\|off` (read from `~/.config/arctic/settings.json`). Thumbnails (Pillow; SVGs via rsvg-convert) in `~/.cache/arctic/thumbs`, settings in `~/.config/arctic/wallpapers.json`. |
 | Updates | `UpdateIndicator.qml`, `UpdatePopover.qml`, `UpdateService.qml`, `UpdateStatus.js` | While updates wait for the next restart (`/var/lib/arctic/update-status.json` from `arctic-update` says `ready` and `/system-update` exists): the amber "Restart to update" pill on the bar, a card with the number and size of the updates and **Restart and install** (`arctic-power restart`), and one notification per download (remembered in `~/.cache/arctic/update-notified`). Never on the live USB. |
 | Power menu | `PowerMenu.qml` | Under the power item or Super+Esc: Settings, Lock screen, Log out, Suspend, Restart, Shut down (live: Settings, Restart, Shut down). Runs `arctic-power <action>`; Settings runs `arctic-settings`. |
+| Command menu | `CommandMenu.qml`, `MenuModel.js`, `menu/arctic-menu.json`, `SettingsIndex.qml` | Super+Alt+Space (Super+Ctrl+C: Capture). Every system action in one keyboard-driven tree: Apps, Learn, Capture, Toggle, Style, Setup (every Settings page, from Settings' own `SearchIndex.js`), Install, Remove, Update, System. The rows are data, merged with `~/.config/arctic/menu.json` by id; one `sh` script per open checks which commands and IPC functions exist (a row that can't run is hidden) and reads the toggles' states. Type to search the branch. `arctic-menu` falls back to fuzzel without the shell. Tests: `tests/test-command-menu.cjs`, `tests/test_arctic_menu.py`. |
 | Keyboard shortcuts | `KeysSheet.qml` | Super+/: `keys.txt` from `~/.local/share/arctic` or `/usr/share/arctic`. |
 | OSD | `Osd.qml`, `AudioService.qml` | 280×48 frosted pill, bottom centre. Follows PipeWire volume changes directly; brightness when `arctic-osd` calls `arctic-shell-ipc osd brightness` (brightnessctl). 1.2 s, then fades. |
 | Lock screen | `LockScreen.qml`, `pam/arctic-lock` | ext-session-lock (the session stays locked if the shell dies) + PAM (`pam_unix`, from this folder). Blurred wallpaper under frost, clock, avatar (`~/.face` or your initial), name, password field with focus / error / success rings, battery, Wi-Fi and power bottom-right. Off on the live USB. |
@@ -74,10 +75,11 @@ notifications.
 
 | Target | Functions |
 |---|---|
-| `launcher` | `toggle`, `open`, `close`, `search <text>` (e.g. `"=12*4"`) |
+| `launcher` | `toggle`, `open`, `close`, `search <text>` (e.g. `"=12*4"`), `apps` (every app) |
 | `apps` | `install` (Get apps), `toggle` |
 | `wallpapers` | `toggle`, `open` |
 | `power` | `toggle` |
+| `menu` | `toggle`, `toggleAt <branch>` (e.g. `capture`), `open <branch>`, `search <text>`, `close` |
 | `keys` | `toggle` |
 | `osd` | `volume`, `brightness` |
 | `lock` | `lock`, `isLocked` (true once the compositor confirms the lock covers every screen) |

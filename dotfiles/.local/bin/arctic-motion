@@ -4,12 +4,17 @@
 #   arctic-motion off      reduce motion: no window animations, GTK animations off,
 #                          the shell only fades, the fetch fox stays on its still frame
 #   arctic-motion on       normal motion
+#   arctic-motion toggle   one or the other (the command menu's Toggle › Reduce motion)
 #   arctic-motion          show the current setting
 set -euo pipefail
 
 FILE="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/motion.conf"
 
-case "${1:-}" in
+want="${1:-}"
+if [[ "$want" == toggle ]]; then
+  if [[ -f "$FILE" ]]; then want=on; else want=off; fi
+fi
+case "$want" in
   off|reduce)
     mkdir -p "$(dirname "$FILE")"
     cat > "$FILE" <<'EOF'
@@ -24,7 +29,7 @@ EOF
   "")
     if [[ -f "$FILE" ]]; then echo "reduced"; else echo "normal"; fi; exit 0 ;;
   *)
-    echo "usage: arctic-motion [on|off]" >&2; exit 2 ;;
+    echo "usage: arctic-motion [on|off|toggle]" >&2; exit 2 ;;
 esac
 mmsg dispatch reload_config >/dev/null 2>&1 || true
 arctic-shell-ipc shell reload >/dev/null 2>&1 || true

@@ -13,12 +13,13 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
+//   menu toggle|toggleAt <branch>|open <branch>|close (the command menu)
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, commandMenu].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -53,6 +54,13 @@ ShellRoot {
         updates.pointX = x !== undefined ? x : (target ? target.width - 160 : 0);
         present(updates, target);
     }
+    // The command menu (Super + Alt + Space), at a branch if one is named ("capture"); pressing
+    // the same key again closes it.
+    function toggleMenu(path) {
+        if (commandMenu.isAt(path) && commandMenu.screen === Outputs.focused) { commandMenu.close(); return; }
+        commandMenu.show(path);
+        present(commandMenu, null);
+    }
     function toggleKeys() {
         if (keys.open) keys.close(); else present(keys, null);
     }
@@ -75,6 +83,7 @@ ShellRoot {
     PowerMenu { id: power; shell: shell }
     UpdatePopover { id: updates }
     KeysSheet { id: keys }
+    CommandMenu { id: commandMenu }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -91,6 +100,11 @@ ShellRoot {
             if (!launcher.open) shell.toggleLauncher(null);
             launcher.setQuery(text);
         }
+        // Every app (the command menu's Apps › Every app).
+        function apps(): void {
+            if (!launcher.open) shell.toggleLauncher(null);
+            launcher.openView('apps');
+        }
     }
     IpcHandler {
         target: 'apps'
@@ -105,6 +119,16 @@ ShellRoot {
     IpcHandler {
         target: 'power'
         function toggle(): void { shell.togglePower(null, undefined); }
+    }
+    IpcHandler {
+        target: 'menu'
+        function toggle(): void { shell.toggleMenu(''); }
+        // A branch or row by its id, e.g. `arctic-shell-ipc menu toggleAt capture` (Super + Ctrl + C).
+        function toggleAt(path: string): void { shell.toggleMenu(path); }
+        function open(path: string): void { commandMenu.show(path); shell.present(commandMenu, null); }
+        function close(): void { commandMenu.close(); }
+        // Open it with something typed, e.g. `arctic-shell-ipc menu search night`.
+        function search(text: string): void { commandMenu.show(''); shell.present(commandMenu, null); commandMenu.search(text); }
     }
     IpcHandler {
         target: 'keys'

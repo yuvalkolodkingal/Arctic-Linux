@@ -13,6 +13,7 @@ screen at any time.
 | Shortcut | Does |
 |---|---|
 | `Super + Space` | Open the launcher: apps, `=` calculator, `>` commands (press again to close) |
+| `Super + Alt + Space` | The [command menu](Command-Menu): every system action in one place |
 | `Super + Enter` | Open your terminal |
 | `Super + W` | Open your browser |
 | `Super + E` | Open your code editor |
@@ -74,6 +75,7 @@ screen at any time.
 | `Print` | Screenshot of an area you select |
 | `Shift + Print` | Screenshot of the whole screen |
 | `Super + Print` | Screenshot of the current window |
+| `Super + Ctrl + C` | The capture menu: screenshots, recording, text and colour ([command menu](Command-Menu) › Capture) |
 
 ## Hardware keys
 

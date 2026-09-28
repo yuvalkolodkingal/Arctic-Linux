@@ -67,3 +67,32 @@ function mode(query) {
     if (t.startsWith('>')) return { mode: 'command', text: t.slice(1).trim() };
     return { mode: 'search', text: q.trim() };
 }
+
+// The pages and settings of Arctic Settings, read from its SearchIndex.js (the same file its
+// own search uses) without running it: {pages: [{id, title, icon, words}], entries:
+// [{page, key, title, words}]}. Empty lists when the file doesn't look as expected.
+function parseSettings(text) {
+    const src = String(text || '');
+    const str = '"((?:[^"\\\\]|\\\\.)*)"';
+    const out = { pages: [], entries: [] };
+    const pages = /var\s+PAGES\s*=\s*\[([\s\S]*?)\];/.exec(src);
+    const entries = /var\s+ENTRIES\s*=\s*\[([\s\S]*?)\];/.exec(src);
+    const unquote = s => { try { return JSON.parse('"' + s + '"'); } catch (e) { return s; } };
+    if (pages) {
+        const objects = pages[1].match(/\{[^{}]*\}/g) || [];
+        objects.forEach(o => {
+            const page = {};
+            const field = new RegExp('(\\w+)\\s*:\\s*' + str, 'g');
+            let m;
+            while ((m = field.exec(o)) !== null) page[m[1]] = unquote(m[2]);
+            if (page.id && page.title) out.pages.push({ id: page.id, title: page.title, icon: page.icon || '', words: page.words || '' });
+        });
+    }
+    if (entries) {
+        const row = new RegExp('\\[\\s*' + [str, str, str, str].join('\\s*,\\s*') + '\\s*\\]', 'g');
+        let m;
+        while ((m = row.exec(entries[1])) !== null)
+            out.entries.push({ page: unquote(m[1]), key: unquote(m[2]), title: unquote(m[3]), words: unquote(m[4]) });
+    }
+    return out;
+}

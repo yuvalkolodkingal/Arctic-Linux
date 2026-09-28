@@ -2,6 +2,7 @@
 
   Everyday
     Super + Space            Apps (press again to close)
+    Super + Alt + Space      Command menu: every system action
     Super + Enter            Terminal
     Super + W                Browser
     Super + E                Code editor
@@ -43,6 +44,7 @@
     Super + Shift + T        Switch Winter / Polar night
     Super + Shift + R        Reload the desktop config
     Print                    Screenshot an area (Shift: screen, Super: window)
+    Super + Ctrl + C         Capture menu
 
   Touchpad
     3 fingers                Move focus
