@@ -49,6 +49,7 @@ RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml
 ShadowLayers 1.0 ShadowLayers.qml
 SignalIcon 1.0 SignalIcon.qml
+SoundPanel 1.0 SoundPanel.qml
 Spinner 1.0 Spinner.qml
 Tip 1.0 Tip.qml
 UpdateIndicator 1.0 UpdateIndicator.qml

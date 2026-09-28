@@ -98,12 +98,12 @@ FocusScope {
                 accessibleName: row.label
                 valueText: Math.round(row.value * 100) + ' %'
                 onMoved: row.moved(value)
-                Binding on value { value: row.muted ? 0 : Math.min(1, row.value); when: !slider.pressed; restoreMode: Binding.RestoreNone }
+                Binding on value { value: row.muted || !isFinite(row.value) ? 0 : Math.min(1, row.value); when: !slider.pressed; restoreMode: Binding.RestoreNone }
             }
             Text {
                 Layout.preferredWidth: 40
                 horizontalAlignment: Text.AlignRight
-                text: row.muted ? 'Off' : Math.round(row.value * 100) + ' %'
+                text: row.muted ? 'Off' : isFinite(row.value) ? Math.round(row.value * 100) + ' %' : ''
                 color: Theme.inkMuted
                 font.family: Theme.fontSans
                 font.pixelSize: 13

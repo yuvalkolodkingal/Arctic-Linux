@@ -38,9 +38,11 @@ Popover {
     readonly property var panels: ({
         network: networkPanel,
         bluetooth: bluetoothPanel,
+        sound: soundPanel,
     })
     Component { id: networkPanel; NetworkPanel { menu: host } }
     Component { id: bluetoothPanel; BluetoothPanel { menu: host } }
+    Component { id: soundPanel; SoundPanel { menu: host } }
 
     FocusScope {
         anchors.fill: parent

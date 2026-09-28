@@ -223,8 +223,10 @@ PanelWindow {
             visible: AudioService.available
             iconName: AudioService.muted ? 'volume-mute' : 'volume'
             text: AudioService.muted ? 'Muted' : AudioService.percent + '%'
-            tooltip: (AudioService.description ? AudioService.description + ' · ' : '') + (AudioService.muted ? 'Muted' : AudioService.percent + '%')
-            onClicked: Quickshell.execDetached(['pavucontrol'])
+            hasMenu: true
+            active: bar.menuOpen('sound')
+            tooltip: (AudioService.description ? AudioService.description + ' · ' : '') + (AudioService.muted ? 'Muted' : AudioService.percent + '%') + '  (Super + Ctrl + A)'
+            onClicked: bar.shell.togglePanel('sound', bar.screen, volumeItem.mapToItem(null, volumeItem.width / 2, 0).x)
             onRightClicked: AudioService.toggleMute()
             onScrolled: steps => AudioService.step(steps)
             onHoverChanged: h => h ? bar.hint(volumeItem, tooltip) : bar.unhint(volumeItem)

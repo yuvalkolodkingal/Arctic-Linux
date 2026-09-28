@@ -201,6 +201,11 @@ ShellRoot {
         function close(): void { shell.closePanel(); }
     }
     IpcHandler {
+        target: 'audio'
+        // The next output device (Shift + Mute key, `arctic-osd output next`).
+        function nextOutput(): void { AudioService.nextOutput(); }
+    }
+    IpcHandler {
         target: 'bluetooth'
         // The Bluetooth menu on its pairing page (Settings → Bluetooth → Pair a device).
         function pair(): void { shell.openPanel('bluetooth', null, undefined, { page: 'pair', keyboard: true }); }
