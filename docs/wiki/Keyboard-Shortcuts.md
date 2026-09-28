@@ -90,6 +90,7 @@ These also work while the screen is locked.
 | Mute | Mute or unmute |
 | Microphone mute | Turn the microphone off or on |
 | Brightness up / down | Change the screen brightness |
+| Display key (on many laptops, Fn + a function key with a screen on it) | The screens menu, as `Super + P` |
 | Play/Pause, Next, Previous | Control the music or video that's playing |
 
 ## Touchpad

@@ -70,6 +70,38 @@ Page {
         }
     }
 
+    // Stream 5: keep awake for a while (arctic-keep-awake, also Super + Ctrl + I).
+    Group {
+        id: awake
+        property var state: ({ helper: false, on: false })
+        function load() {
+            Backend.call(["keep-awake"], r => { if (r.ok) awake.state = r; }, true);
+        }
+        Component.onCompleted: load()
+        Timer { interval: 30000; repeat: true; running: awake.state.on === true; onTriggered: awake.load() }
+        visible: state.helper === true && page.idle.live !== true
+        title: "Keep awake"
+        SettingRow {
+            searchKey: "power.awake"
+            title: "Keep the computer awake"
+            desc: awake.state.on ? (awake.state.until ? "On until " + awake.state.untilText : "On until you turn it off") + ": the screen doesn’t lock and the computer doesn’t sleep."
+                : "For a presentation or a long download: no lock and no sleep for a while. Super\u00a0+\u00a0Ctrl\u00a0+\u00a0I turns it on and off."
+            resettable: false
+            ArSelect {
+                width: 200
+                model: (awake.state.on ? [{ value: "now", label: awake.state.until ? "Until " + awake.state.untilText : "Until turned off" }] : [])
+                    .concat([{ value: "off", label: "Off" }, { value: "30", label: "30 minutes" }, { value: "60", label: "1 hour" },
+                        { value: "120", label: "2 hours" }].concat(awake.state.on && !awake.state.until ? [] : [{ value: "0", label: "Until turned off" }]))
+                value: awake.state.on ? "now" : "off"
+                onActivated: v => {
+                    if (v === "now")
+                        return;
+                    Backend.call(["keep-awake"].concat(v === "off" ? ["off"] : v === "0" ? ["on"] : ["on", v]), r => { if (r.ok) awake.state = Object.assign({ helper: true }, r); });
+                }
+            }
+        }
+    }
+
     // Stream 5: times on battery, dimming and screens off (idle.conf's other keys; arctic_system.py
     // idle-more, `arctic-session idle` reads them). Hidden in the live session.
     Group {

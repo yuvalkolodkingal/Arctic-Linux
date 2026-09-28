@@ -272,6 +272,8 @@ afterwards), and **Take snapshot** takes one now.
 
 - **When you're away:** lock the screen after, and suspend after, a time you pick (or never).
   The screen always locks before the computer sleeps. Saved in `~/.config/arctic/idle.conf`.
+- **Keep awake:** no lock and no sleep for 30 minutes, 1 hour, 2 hours or until you turn it off
+  (`Super + Ctrl + I` turns it on and off). See [Night light and keep awake](Night-Light-and-Keep-Awake).
 - **On battery** (on laptops): other times while unplugged, or **Same as plugged in** (the
   default). Plugging in or unplugging switches between them.
 - **Around the lock:** **Dim the screen before it locks** (half as bright 30 seconds before, on

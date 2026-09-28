@@ -118,6 +118,7 @@ var ENTRIES = [
     ["sharing", "sharing.password", "Allow password login", "ssh keys authorized_keys"],
     ["power", "power.lock", "Lock the screen after", "idle timeout screensaver"],
     ["power", "power.suspend", "Suspend after", "sleep idle"],
+    ["power", "power.awake", "Keep the computer awake", "keep awake caffeine presentation no sleep no lock inhibit"],
     ["power", "power.battery.times", "Times on battery", "battery unplugged lock suspend sooner save power"],
     ["power", "power.dim", "Dim the screen before it locks", "fade dim warning locking soon brightness"],
     ["power", "power.screenoff", "Turn the screens off after locking", "display off dpms blank monitor sleep"],

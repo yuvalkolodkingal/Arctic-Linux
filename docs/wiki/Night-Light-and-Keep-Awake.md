@@ -56,7 +56,8 @@ lock and the computer doesn't suspend when you're away, which is handy for prese
 downloads and builds. Full-screen videos, games and slideshows already keep the screen awake by
 themselves.
 
-For a set time, use the command:
+For a set time, pick 30 minutes, 1 hour or 2 hours in **Settings → Power and lock → Keep awake**,
+or use the command:
 
 ```
 arctic-keep-awake on 90       # for an hour and a half
