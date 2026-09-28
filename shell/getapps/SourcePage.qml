@@ -89,7 +89,7 @@ FocusScope {
         for (let i = jobs.length - 1; i >= 0; i--) if (jobs[i].kind === 'install' && jobs[i].source === source && jobs[i].ids.indexOf(id) >= 0) return jobs[i];
         return null;
     }
-    function desktopOf(item) { return flathub ? item.id : item.pkg ? item.id : ''; }
+    function desktopOf(item) { return item.desktop || (flathub ? item.id : item.pkg ? item.id : ''); }
     function install(item) {
         if (!item) return;
         const state = stateOf(item);

@@ -167,6 +167,7 @@ def cmd_sources(_args):
 # ---- AppStream catalogues ---------------------------------------------------------------------
 
 LANG = '{http://www.w3.org/XML/1998/namespace}lang'
+CATALOG_FORMAT = 2        # bump when parse_appstream's items change (old caches are then ignored)
 
 
 def fedora_catalog_files():
@@ -221,6 +222,12 @@ def parse_appstream(path, icon_root=None, origin_icons=None):
                         categories=[c.text.strip() for c in element.findall('categories/category') if c.text],
                         keywords=[k.text.strip() for k in element.findall('keywords/keyword')
                                   if k.text and k.get(LANG) is None][:12])
+            # The launcher entry it installs, when that isn't named after the component.
+            for launchable in element.findall('launchable'):
+                if launchable.get('type') == 'desktop-id' and launchable.text:
+                    desktop = launchable.text.strip()
+                    item['desktop'] = desktop[:-8] if desktop.endswith('.desktop') else desktop
+                    break
             pkg = (element.findtext('pkgname') or '').strip()
             if pkg:
                 item['pkg'] = pkg
@@ -268,7 +275,7 @@ def parse_appstream(path, icon_root=None, origin_icons=None):
 
 
 def cached_catalog(source, files, parse):
-    key = [[str(f), f.stat().st_mtime_ns, f.stat().st_size] for f in files]
+    key = [CATALOG_FORMAT] + [[str(f), f.stat().st_mtime_ns, f.stat().st_size] for f in files]
     cache = CACHE / 'appstream-{}.json'.format(source)
     try:
         data = json.loads(cache.read_text())

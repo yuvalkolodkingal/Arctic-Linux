@@ -101,6 +101,7 @@ FEDORA_XML = '''<?xml version="1.0" encoding="UTF-8"?>
     <developer_name>The GIMP team</developer_name>
     <project_license>GPL-3.0-or-later</project_license>
     <description><p>GIMP is an <em>image</em> editor.</p><p xml:lang="de">Nein</p><p>Second.</p></description>
+    <launchable type="desktop-id">gimp.desktop</launchable>
     <icon type="stock">gimp</icon>
     <icon type="cached" width="64" height="64">gimp_gimp.png</icon>
     <categories><category>Graphics</category></categories>
@@ -290,6 +291,7 @@ class CatalogTests(Apps):
         self.assertEqual(gimp['keywords'], ['photo'])
         self.assertEqual(gimp['categories'], ['Graphics'])
         self.assertEqual(gimp['developer'], 'The GIMP team')
+        self.assertEqual(gimp['desktop'], 'gimp')
         self.assertEqual(gimp['description'], ['GIMP is an image editor.', 'Second.'])
         self.assertEqual(gimp['icon'], str(self.share / 'swcatalog/icons/fedora/64x64/gimp_gimp.png'))
 
