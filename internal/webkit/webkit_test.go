@@ -4,6 +4,7 @@ package webkit
 
 import (
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,5 +46,51 @@ func TestVersion(t *testing.T) {
 	}
 	if os.Getenv("WAYLAND_DISPLAY") == "" && os.Getenv("DISPLAY") == "" {
 		t.Logf("WebKitGTK %s (no display, as intended)", v)
+	}
+}
+
+// The WebKitGTK symbols the shim links against are the ones in symbols.allow: a new one is a
+// deliberate change (docs/BUILD-SPEC.md §11: the host must start on the oldest supported
+// WebKitGTK, and it links with -z now).
+func TestWebKitSymbolsAllowed(t *testing.T) {
+	nm, err := exec.LookPath("nm")
+	if err != nil {
+		t.Skip("nm (binutils) not installed")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(nm, "-D", "--undefined-only", self).Output()
+	if err != nil {
+		t.Skipf("nm: %v", err)
+	}
+	data, err := os.ReadFile("symbols.allow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			allowed[line] = true
+		}
+	}
+	seen := 0
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 0 {
+			continue
+		}
+		sym, _, _ := strings.Cut(f[len(f)-1], "@")
+		if !strings.HasPrefix(sym, "webkit_") {
+			continue
+		}
+		seen++
+		if !allowed[sym] {
+			t.Errorf("the shim uses %s, which symbols.allow doesn't list", sym)
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no webkit_ symbols found: is the shim linked into the test binary?")
 	}
 }
