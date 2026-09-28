@@ -74,9 +74,10 @@ The packages it builds:
 | `arctic-backgrounds` | The six wallpapers, SVG and 3840×2160 PNG |
 | `arctic-fonts` | Figtree |
 | `arctic-selinux` | SELinux file contexts for `/nix` |
-| `arctic-desktop-config` | `/etc/skel`, the Mango configuration, the themes, the `arctic-*` commands, `arctic-firstboot` |
+| `arctic-desktop-config` | `/etc/skel`, the Mango configuration, the themes, the `arctic-*` commands, `arctic-firstboot`, the theme engine (`arctic-themegen`) and theme hooks, automatic updates and snapper's snapshots around dnf transactions, the app-theming defaults (dconf, Flatpak) |
 | `arctic-shell` | The Quickshell desktop shell and `arctic-shell` |
-| `arctic-installer` | `arcticd`, `arctic-install`, the app catalog, the installer UI, the systemd socket |
+| `arctic-settings` | Arctic Settings (`arctic-settings`, `Super + S`) |
+| `arctic-installer` | `arcticd`, `arctic-install`, the app catalog (with the drivers), the installer UI, the systemd socket |
 | `sddm-wayland-mango` | Runs the SDDM login screen on Mango |
 | `arctic-sddm-theme` | The login screen |
 | `arctic-plymouth-theme` | The boot splash and disk passphrase prompt |
