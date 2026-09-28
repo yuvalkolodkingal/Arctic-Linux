@@ -13,11 +13,41 @@ import re
 import shlex
 import subprocess
 import sys
+import shutil
 import threading
 import time
+import tomllib
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
+MODULES_DIR = os.path.join(ROOT, "modules")
+
+
+def catalog_app_ids():
+    """Every app the picker lists, straight from modules/catalog.toml."""
+    with open(os.path.join(MODULES_DIR, "catalog.toml"), "rb") as f:
+        cat = tomllib.load(f)
+    return [mid for c in cat["category"] for mid in c["modules"]]
+
+
+_ENGINE = []
+
+
+def engine_catalog():
+    """`arctic-install catalog --json` (the engine's own catalog, defaults and estimate), or
+    None without a Go toolchain."""
+    if not _ENGINE:
+        doc = None
+        if shutil.which("go"):
+            r = subprocess.run(["go", "run", "./cmd/arctic-install", "catalog", "--json", "--catalog", MODULES_DIR],
+                               cwd=ROOT, capture_output=True, text=True, timeout=300)
+            if r.returncode == 0:
+                doc = json.loads(r.stdout)
+            else:
+                print("arctic-install catalog failed:", r.stderr, file=sys.stderr)
+        _ENGINE.append(doc)
+    return _ENGINE[0]
 
 
 class Bridge:
@@ -110,10 +140,30 @@ class MockBridgeTest(unittest.TestCase):
         self.assertFalse(any(d["install_media"] for d in disk["options"]["disks"]))
         self.assertEqual(disk["data"]["mode"], "erase")
         apps = b.ok("GetStep", {"id": "apps"})
-        self.assertEqual([c["id"] for c in apps["options"]["categories"]],
-                         ["browser", "editor", "terminal", "shell", "files", "office", "video", "extras"])
+        cats = apps["options"]["categories"]
+        self.assertEqual([c["id"] for c in cats],
+                         ["browser", "editor", "terminal", "shell", "files", "office", "video",
+                          "music", "photos", "graphics", "recording", "chat", "email", "notes", "reading",
+                          "gaming", "security", "sync", "dev", "containers", "extras"])
+        # The design's seven sections are open; the optional groups start collapsed.
+        self.assertEqual([c["id"] for c in cats if not c["collapsed"]],
+                         ["browser", "editor", "terminal", "shell", "files", "office", "video"])
+        mods = {m["id"]: m for m in apps["options"]["modules"]}
+        self.assertEqual(sorted(mods), sorted(catalog_app_ids()))
+        self.assertEqual((mods["steam"]["category"], mods["steam"]["source"], mods["steam"]["proprietary"]),
+                         ("gaming", "RPM Fusion", True))
+        self.assertEqual(mods["zen"]["source"], "Flathub")
+        self.assertFalse(mods["zen"]["proprietary"])
         est = b.ok("EstimateDownload", {"selection": apps["data"]["selection"]})
-        self.assertRegex(est["label"], r"^\d+ apps? · [\d.]+ (GB|MB) download$")
+        self.assertEqual(est["apps"], sum(1 for m in mods.values() if m["default"]))
+        self.assertRegex(est["label"], r"^\d+ apps · [\d.]+ [MG]B download$")
+        # The same numbers as the engine's catalog.EstimateDownload (when Go is here).
+        eng = engine_catalog()
+        if eng is None:
+            print("SKIPPED: engine estimate comparison (no Go toolchain)", file=sys.stderr)
+        else:
+            self.assertEqual(est, eng["estimate"])
+            self.assertEqual(sorted(mods), sorted(m["id"] for m in eng["modules"] if not m.get("hidden")))
 
     def test_network_blocks_next_until_online(self):
         b = self.start()
@@ -150,7 +200,7 @@ class MockBridgeTest(unittest.TestCase):
         b = self.start()
         self.walk_to("apps")
         sel = b.ok("GetStep", {"id": "apps"})["data"]["selection"]
-        sel["extras"] = ["steam"]
+        sel["gaming"] = ["steam"]
         b.ok("SetStep", {"id": "apps", "data": {"selection": sel}})
         b.ok("Next")
         summary = b.ok("GetSummary")
@@ -256,6 +306,18 @@ class MockBridgeTest(unittest.TestCase):
             bad = dict(sel, **{cid: []})
             err = b.call("SetStep", {"id": "apps", "data": {"selection": bad}})["error"]
             self.assertIn(cid, err["fields"])
+
+    def test_requires_and_conflicts_like_the_engine(self):
+        # catalog.Validate's messages, keyed by the app's group.
+        b = self.start()
+        sel = b.ok("GetStep", {"id": "apps"})["data"]["selection"]
+        for cid, ids, msg in (("containers", ["podman-desktop"], "Podman Desktop needs Podman. Tick it too."),
+                              ("dev", ["lazygit"], "lazygit needs Git. Tick it too.")):
+            err = b.call("SetStep", {"id": "apps", "data": {"selection": dict(sel, **{cid: ids})}})["error"]
+            self.assertEqual(err["code"], "invalid")
+            self.assertEqual(err["fields"], {cid: msg})
+        ok = dict(sel, containers=["podman", "podman-desktop"], dev=["git", "lazygit"])
+        b.ok("SetStep", {"id": "apps", "data": {"selection": ok}})
 
     def test_disk_options_have_labels(self):
         # The UI shows the engine's label (the path when there is no model, e.g. virtio)

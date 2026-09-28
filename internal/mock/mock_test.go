@@ -40,7 +40,8 @@ func TestFailTarget(t *testing.T) {
 	if got := b.failTarget(c, c.Apps(sel)); got != "collabora" {
 		t.Errorf("default selection: %q, want the last flatpak (collabora)", got)
 	}
-	sel["extras"] = []string{"steam", "gimp"}
+	sel["gaming"] = []string{"steam"}
+	sel["graphics"] = []string{"gimp"}
 	if got := b.failTarget(c, c.Apps(sel)); got != "steam" {
 		t.Errorf("with steam: %q", got)
 	}

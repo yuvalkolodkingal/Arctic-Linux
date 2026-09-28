@@ -1,0 +1,26 @@
+id = "shotcut"
+name = "Shotcut"
+summary = "Straightforward video editor."
+category = "recording"
+role = "video editor"
+default = false
+tile = "shotcut"
+icon = "film"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: shotcut 26.9.6.
+method = "dnf"
+packages = ["shotcut"]
+download_mb = 103
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.shotcut.Shotcut"
+runtime = "org.kde.Platform//6.11"
+verified = true
+download_mb = 103

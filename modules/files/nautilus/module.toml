@@ -12,10 +12,10 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: nautilus 50 (2.6 MB + GNOME libraries)
+# Fedora 44: nautilus 50 (2.6 MB + GNOME libraries, 18 MB in all)
 method = "dnf"
 packages = ["nautilus"]
-download_mb = 25
+download_mb = 18
 
 [defaults]
 desktop_id = "org.gnome.Nautilus.desktop"

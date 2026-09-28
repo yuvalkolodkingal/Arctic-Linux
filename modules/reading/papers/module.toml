@@ -1,0 +1,30 @@
+id = "papers"
+name = "Papers"
+summary = "Clean, simple PDF reader."
+category = "reading"
+role = "PDF reader"
+default = false
+tile = "papers"
+icon = "file"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: papers 49.8 (GNOME's successor to Evince).
+method = "dnf"
+packages = ["papers"]
+download_mb = 18
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.Papers"
+runtime = "org.gnome.Platform//51"
+verified = true
+download_mb = 15
+
+[defaults]
+desktop_id = "org.gnome.Papers.desktop"
+mime = ["application/pdf"]

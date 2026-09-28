@@ -1,0 +1,32 @@
+id = "emacs"
+name = "Emacs"
+summary = "The endlessly extensible editor."
+category = "editor"
+default = false
+tile = "emacs"
+icon = "code"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: emacs 30.2, pure-GTK (native Wayland) build.
+method = "dnf"
+packages = ["emacs-pgtk"]
+download_mb = 161
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnu.emacs"
+runtime = "org.freedesktop.Sdk//25.08"
+desktop_id = "org.gnu.emacs.desktop"
+command = "gtk-launch org.gnu.emacs"
+verified = false
+download_mb = 57
+
+[defaults]
+desktop_id = "emacs.desktop"
+role = "editor"
+command = "emacs"

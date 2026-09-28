@@ -1,0 +1,25 @@
+id = "strawberry"
+name = "Strawberry"
+summary = "Music player for big local collections."
+category = "music"
+default = false
+tile = "strawberry"
+icon = "music"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: strawberry 1.2.28 (newer than Flathub).
+method = "dnf"
+packages = ["strawberry"]
+download_mb = 12
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.strawberrymusicplayer.strawberry"
+runtime = "org.kde.Platform//6.11"
+verified = true
+download_mb = 13

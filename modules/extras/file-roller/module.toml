@@ -1,0 +1,39 @@
+id = "file-roller"
+name = "File Roller"
+summary = "Open and create zip and other archives."
+category = "extras"
+role = "archive manager"
+default = false
+tile = "file-roller"
+icon = "package"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: file-roller 44.7; Thunar's archive plugin uses it.
+method = "dnf"
+packages = ["file-roller"]
+download_mb = 10
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.FileRoller"
+runtime = "org.gnome.Platform//50"
+verified = false
+download_mb = 3
+
+[defaults]
+desktop_id = "org.gnome.FileRoller.desktop"
+mime = [
+  "application/zip",
+  "application/x-7z-compressed",
+  "application/x-tar",
+  "application/gzip",
+  "application/x-compressed-tar",
+  "application/x-xz-compressed-tar",
+  "application/x-zstd-compressed-tar",
+  "application/vnd.rar",
+]

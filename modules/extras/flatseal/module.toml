@@ -1,0 +1,25 @@
+id = "flatseal"
+name = "Flatseal"
+summary = "Review what each Flatpak app may access."
+category = "extras"
+role = "permissions tool"
+default = false
+tile = "flatseal"
+icon = "shield-check"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.github.tchx84.Flatseal"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 1
+
+[[install]]
+method = "dnf"
+packages = ["flatseal"]
+download_mb = 80

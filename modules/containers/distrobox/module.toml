@@ -1,0 +1,18 @@
+id = "distrobox"
+name = "Distrobox"
+summary = "Use other Linux distros inside containers."
+category = "containers"
+role = "container tool"
+default = false
+tile = "distrobox"
+icon = "grid"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: distrobox 1.8.2.5 (pulls podman).
+method = "dnf"
+packages = ["distrobox"]
+download_mb = 64

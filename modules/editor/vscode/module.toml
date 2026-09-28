@@ -1,0 +1,36 @@
+id = "vscode"
+name = "Visual Studio Code"
+short = "VS Code"
+summary = "Microsoft's popular code editor."
+category = "editor"
+default = false
+tile = "vscode"
+icon = "code"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# Proprietary (Microsoft licence, telemetry on). Community Flathub wrapper; its terminal runs inside the sandbox. Better: Microsoft's RPM repo (KnownRepos "vscode", package code, ~110 MB) once vendor repos are supported.
+method = "flatpak"
+remote = "flathub"
+ref = "com.visualstudio.code"
+runtime = "org.freedesktop.Sdk//25.08"
+verified = false
+download_mb = 246
+
+[defaults]
+desktop_id = "com.visualstudio.code.desktop"
+role = "editor"
+command = "gtk-launch com.visualstudio.code"
+mime = [
+  "text/plain",
+  "text/markdown",
+  "text/x-python",
+  "text/x-csrc",
+  "text/x-shellscript",
+  "application/json",
+  "application/toml",
+]

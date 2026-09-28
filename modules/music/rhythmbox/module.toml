@@ -1,0 +1,25 @@
+id = "rhythmbox"
+name = "Rhythmbox"
+summary = "Classic music library and radio player."
+category = "music"
+default = false
+tile = "rhythmbox"
+icon = "music"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: rhythmbox 3.4.9.
+method = "dnf"
+packages = ["rhythmbox"]
+download_mb = 15
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.Rhythmbox3"
+runtime = "org.gnome.Platform//50"
+verified = false
+download_mb = 5

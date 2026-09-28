@@ -1,0 +1,19 @@
+id = "virt-manager"
+name = "Virtual Machine Manager"
+short = "virt-manager"
+summary = "Advanced virtual machines with KVM."
+category = "containers"
+role = "virtual machine app"
+default = false
+tile = "virt-manager"
+icon = "monitor"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: virt-manager 5.1.0; weak deps bring libvirt-daemon-kvm and qemu-kvm, presets enable virtqemud/virtnetworkd sockets.
+method = "dnf"
+packages = ["virt-manager"]
+download_mb = 86

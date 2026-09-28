@@ -1,0 +1,42 @@
+id = "loupe"
+name = "Image Viewer (Loupe)"
+short = "Loupe"
+summary = "Fast, simple image viewer."
+category = "photos"
+role = "image viewer"
+default = false
+tile = "loupe"
+icon = "image"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: loupe 50.0.
+method = "dnf"
+packages = ["loupe"]
+download_mb = 16
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.Loupe"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 7
+
+[defaults]
+desktop_id = "org.gnome.Loupe.desktop"
+mime = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/heif",
+  "image/jxl",
+  "image/tiff",
+  "image/bmp",
+  "image/svg+xml",
+]

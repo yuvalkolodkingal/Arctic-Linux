@@ -1,0 +1,18 @@
+id = "mangohud"
+name = "MangoHud"
+summary = "On-screen FPS and hardware stats in games."
+category = "gaming"
+role = "game overlay"
+default = false
+tile = "mangohud"
+icon = "cpu"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: mangohud 0.8.3. Flatpak games need org.freedesktop.Platform.VulkanLayer.MangoHud//25.08 (11 MB) as well.
+method = "dnf"
+packages = ["mangohud"]
+download_mb = 2

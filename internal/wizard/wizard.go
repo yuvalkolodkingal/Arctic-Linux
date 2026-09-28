@@ -887,11 +887,25 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 			{Step: StepDisk, Icon: "disk", Label: "Disk", Value: diskValue},
 			{Step: StepEncryption, Icon: "shield-lock", Label: "Encryption", Value: enc},
 			{Step: StepAccount, Icon: "user", Label: "Account", Value: account},
-			{Step: StepApps, Icon: "grid", Label: "Apps", Value: strings.Join(apps, ", ")},
+			{Step: StepApps, Icon: "grid", Label: "Apps", Value: appList(apps)},
 		},
 		Warning:      warning,
 		PrimaryLabel: primary,
 	}
+}
+
+// summaryApps is how many app names the Summary's Apps row lists before "and N more":
+// the Summary page doesn't scroll, and a long pick would push the erase warning under
+// the footer.
+const summaryApps = 12
+
+// appList is the Summary's Apps value: the names, or the first summaryApps of them and
+// how many more.
+func appList(names []string) string {
+	if len(names) <= summaryApps {
+		return strings.Join(names, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(names[:summaryApps], ", "), len(names)-summaryApps)
 }
 
 func capitalize(s string) string {

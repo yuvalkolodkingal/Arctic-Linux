@@ -1,0 +1,27 @@
+id = "gnome-boxes"
+name = "GNOME Boxes"
+short = "Boxes"
+summary = "Try other systems in virtual machines."
+category = "containers"
+role = "virtual machine app"
+default = false
+tile = "gnome-boxes"
+icon = "monitor"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: gnome-boxes 50.0 with libvirt/QEMU (Fedora presets enable the virtqemud sockets).
+method = "dnf"
+packages = ["gnome-boxes"]
+download_mb = 146
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.Boxes"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 48

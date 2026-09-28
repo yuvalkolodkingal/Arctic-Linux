@@ -1,0 +1,20 @@
+id = "amberol"
+name = "Amberol"
+summary = "Plays music, and nothing else."
+category = "music"
+default = false
+tile = "amberol"
+icon = "music"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora.
+method = "flatpak"
+remote = "flathub"
+ref = "io.bassi.Amberol"
+runtime = "org.gnome.Platform//51"
+verified = true
+download_mb = 5

@@ -1,0 +1,18 @@
+id = "gamemode"
+name = "GameMode"
+summary = "Gives games full speed while they run."
+category = "gaming"
+role = "game booster"
+default = false
+tile = "gamemode"
+icon = "sparkle"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: gamemode 1.8.2; gamemoded is D-Bus activated, Flatpak games reach it through the portal.
+method = "dnf"
+packages = ["gamemode"]
+download_mb = 1

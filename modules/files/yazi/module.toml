@@ -12,11 +12,12 @@ requires = []
 conflicts = []
 
 [[install]]
-# COPR lihaohong/yazi builds 26.9.1 for Fedora 44 (checked with dnf copr enable).
+# COPR lihaohong/yazi builds 26.9.1 for Fedora 44 (checked with dnf copr enable). Its weak deps
+# (fd-find, ripgrep, fzf, zoxide, jq, poppler-utils, ImageMagick, p7zip, resvg) make it ~45 MB.
 method = "copr"
 copr = "lihaohong/yazi"
 packages = ["yazi"]
-download_mb = 12
+download_mb = 45
 
 [[install]]
 method = "nix"

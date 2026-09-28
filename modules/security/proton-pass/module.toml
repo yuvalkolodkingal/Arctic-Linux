@@ -1,0 +1,20 @@
+id = "proton-pass"
+name = "Proton Pass"
+summary = "Encrypted passwords from Proton."
+category = "security"
+role = "password manager"
+default = false
+tile = "proton-pass"
+icon = "key"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "me.proton.Pass"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 144

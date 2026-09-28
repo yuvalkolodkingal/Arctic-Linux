@@ -1,0 +1,40 @@
+id = "haruna"
+name = "Haruna"
+summary = "Feature-rich player built on mpv."
+category = "video"
+default = false
+tile = "haruna"
+icon = "play"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: haruna 1.8.1.
+method = "dnf"
+packages = ["haruna"]
+download_mb = 63
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.kde.haruna"
+runtime = "org.kde.Platform//6.11"
+desktop_id = "org.kde.haruna.desktop"
+command = "gtk-launch org.kde.haruna"
+verified = true
+download_mb = 10
+
+[defaults]
+desktop_id = "org.kde.haruna.desktop"
+mime = [
+  "video/mp4",
+  "video/x-matroska",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+  "audio/mpeg",
+  "audio/flac",
+  "audio/ogg",
+]

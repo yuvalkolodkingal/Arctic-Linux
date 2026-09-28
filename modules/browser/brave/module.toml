@@ -1,0 +1,31 @@
+id = "brave"
+name = "Brave"
+summary = "Blocks ads and trackers out of the box."
+category = "browser"
+default = false
+tile = "brave"
+icon = "shield-check"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Flathub, verified by brave.com. Brave's own RPM repo (key in distribution-gpg-keys/brave) is the alternative.
+method = "flatpak"
+remote = "flathub"
+ref = "com.brave.Browser"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 219
+
+[defaults]
+desktop_id = "com.brave.Browser.desktop"
+role = "browser"
+command = "gtk-launch com.brave.Browser"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]

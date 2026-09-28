@@ -1,0 +1,21 @@
+id = "pika-backup"
+name = "Pika Backup"
+summary = "Easy, encrypted backups of your files."
+category = "extras"
+role = "backup app"
+default = false
+tile = "pika-backup"
+icon = "clock"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora. Scheduled backups need its background monitor to start at login (XDG autostart).
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.World.PikaBackup"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 16

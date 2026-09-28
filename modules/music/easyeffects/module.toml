@@ -1,0 +1,26 @@
+id = "easyeffects"
+name = "Easy Effects"
+summary = "Equaliser and effects for all your sound."
+category = "music"
+role = "audio tool"
+default = false
+tile = "easyeffects"
+icon = "sliders"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Shares the KDE 6.10 runtime with Collabora; the Fedora RPM pulls ~296 MB of plugins and libraries.
+method = "flatpak"
+remote = "flathub"
+ref = "com.github.wwmm.easyeffects"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 54
+
+[[install]]
+method = "dnf"
+packages = ["easyeffects"]
+download_mb = 296

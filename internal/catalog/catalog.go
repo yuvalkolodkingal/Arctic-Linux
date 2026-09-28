@@ -37,6 +37,8 @@ type Category struct {
 	Note     string   `toml:"note" json:"note"`
 	Role     string   `toml:"role" json:"role"` // used in "Installing Zed, your code editor…"
 	Modules  []string `toml:"modules" json:"modules"`
+	// Collapsed sections start folded in the picker (the optional "More apps" groups).
+	Collapsed bool `toml:"collapsed" json:"collapsed"`
 }
 
 // Rule is the picker hint ("Pick one" / "Pick any").
@@ -101,6 +103,7 @@ type Module struct {
 	Icon        string    `toml:"icon" json:"icon"`
 	InLiveImage bool      `toml:"in_live_image" json:"in_live_image"`
 	GPU         bool      `toml:"gpu" json:"gpu"`
+	Proprietary bool      `toml:"proprietary" json:"proprietary"` // not free software; the picker tags it
 	Requires    []string  `toml:"requires" json:"requires,omitempty"`
 	Conflicts   []string  `toml:"conflicts" json:"conflicts,omitempty"`
 	Install     []Install `toml:"install" json:"install"`
@@ -295,6 +298,9 @@ func (c *Catalog) check() error {
 		}
 		if cat.Required && defaults == 0 {
 			bad("category %q is required but has no default", cat.ID)
+		}
+		if cat.Required && cat.Collapsed {
+			bad("category %q: a required category can't start collapsed", cat.ID)
 		}
 	}
 	for id, m := range c.Modules {
@@ -605,12 +611,13 @@ func (c *Catalog) EstimateDownload(sel Selection) Estimate {
 
 // PickerCategory / PickerModule are the JSON shapes of the apps step options.
 type PickerCategory struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Choice   string `json:"choice"`
-	Required bool   `json:"required"`
-	Rule     string `json:"rule"`
-	Note     string `json:"note"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Choice    string `json:"choice"`
+	Required  bool   `json:"required"`
+	Rule      string `json:"rule"`
+	Note      string `json:"note"`
+	Collapsed bool   `json:"collapsed"`
 }
 
 type PickerModule struct {
@@ -627,6 +634,7 @@ type PickerModule struct {
 	Method      string  `json:"method"`
 	Verified    bool    `json:"verified"`
 	InLiveImage bool    `json:"in_live_image"`
+	Proprietary bool    `json:"proprietary"`
 }
 
 // Picker is the catalog as the apps step shows it.
@@ -639,14 +647,15 @@ type Picker struct {
 func (c *Catalog) Picker() Picker {
 	var p Picker
 	for _, cat := range c.Categories {
-		p.Categories = append(p.Categories, PickerCategory{ID: cat.ID, Name: cat.Name, Choice: cat.Choice, Required: cat.Required, Rule: cat.Rule(), Note: cat.Note})
+		p.Categories = append(p.Categories, PickerCategory{ID: cat.ID, Name: cat.Name, Choice: cat.Choice, Required: cat.Required,
+			Rule: cat.Rule(), Note: cat.Note, Collapsed: cat.Collapsed})
 		for _, id := range cat.Modules {
 			m := c.Modules[id]
 			in := m.Primary()
 			p.Modules = append(p.Modules, PickerModule{
 				ID: m.ID, Name: m.Name, Summary: m.Summary, Category: m.Category, Default: m.Default, Always: m.Always,
 				Tile: m.Tile, Icon: m.Icon, DownloadMB: m.DownloadMB(), Source: SourceLabel(in), Method: in.Method,
-				Verified: in.Verified, InLiveImage: m.InLiveImage,
+				Verified: in.Verified, InLiveImage: m.InLiveImage, Proprietary: m.Proprietary,
 			})
 		}
 	}

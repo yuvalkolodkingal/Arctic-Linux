@@ -1,0 +1,34 @@
+id = "okular"
+name = "Okular"
+summary = "Reads PDFs, e-books and comics, with notes."
+category = "reading"
+role = "document viewer"
+default = false
+tile = "okular"
+icon = "file"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Shares the KDE 6.10 runtime with Collabora; the RPM pulls ~183 MB.
+method = "flatpak"
+remote = "flathub"
+ref = "org.kde.okular"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 40
+
+[[install]]
+method = "dnf"
+packages = ["okular"]
+download_mb = 183
+
+[defaults]
+desktop_id = "org.kde.okular.desktop"
+mime = [
+  "application/pdf",
+  "application/epub+zip",
+  "image/vnd.djvu",
+]

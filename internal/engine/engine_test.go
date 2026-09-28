@@ -232,10 +232,10 @@ func fullWizard(t *testing.T, c *client) {
 	if apps["note"] != "8 apps · 2.1 GB download" {
 		t.Fatalf("apps footer %v", apps["note"])
 	}
-	c.ok("SetStep", map[string]any{"id": "apps", "data": map[string]any{"selection": map[string]any{"extras": []string{"steam"}}}})
+	c.ok("SetStep", map[string]any{"id": "apps", "data": map[string]any{"selection": map[string]any{"gaming": []string{"steam"}}}})
 	est := c.ok("EstimateDownload", map[string]any{"selection": map[string]any{
 		"browser": []string{"zen"}, "editor": []string{"zed"}, "terminal": []string{"kitty"}, "shell": []string{"zsh"},
-		"files": []string{"yazi", "thunar"}, "office": []string{"collabora"}, "video": []string{"vlc"}, "extras": []string{"steam"}}})
+		"files": []string{"yazi", "thunar"}, "office": []string{"collabora"}, "video": []string{"vlc"}, "gaming": []string{"steam"}}})
 	if est["apps"] != float64(9) {
 		t.Fatalf("estimate %v", est)
 	}

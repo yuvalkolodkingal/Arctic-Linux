@@ -1,0 +1,20 @@
+id = "element"
+name = "Element"
+summary = "Secure chat on the Matrix network."
+category = "chat"
+role = "messenger"
+default = false
+tile = "element"
+icon = "chat"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "im.riot.Riot"
+runtime = "org.freedesktop.Platform//26.08"
+verified = false
+download_mb = 181

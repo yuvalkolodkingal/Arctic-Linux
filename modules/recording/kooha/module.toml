@@ -1,0 +1,21 @@
+id = "kooha"
+name = "Kooha"
+summary = "Record your screen in one click."
+category = "recording"
+role = "screen recorder"
+default = false
+tile = "kooha"
+icon = "record"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Uses the screen-cast portal (xdg-desktop-portal-wlr on Mango).
+method = "flatpak"
+remote = "flathub"
+ref = "io.github.seadve.Kooha"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 1

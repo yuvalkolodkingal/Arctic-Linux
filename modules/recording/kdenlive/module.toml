@@ -1,0 +1,25 @@
+id = "kdenlive"
+name = "Kdenlive"
+summary = "Full-featured video editor."
+category = "recording"
+role = "video editor"
+default = false
+tile = "kdenlive"
+icon = "film"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.kde.kdenlive"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 107
+
+[[install]]
+method = "dnf"
+packages = ["kdenlive"]
+download_mb = 238

@@ -11,7 +11,8 @@ It never touches the system. Knobs (environment):
     ARCTIC_MOCK_ONLINE=1      start online on Wi-Fi (Tundra-5G), default: offline
     ARCTIC_MOCK_WIRED=1       start on a wired connection (network step auto-skipped)
     ARCTIC_MOCK_FAIL=<id>     optional app that fails to download (default: steam if
-                              selected, else the last selected extra/video app)
+                              selected, else the last selected optional or video app)
+    ARCTIC_MOCK_CATALOG=<dir> catalog directory (default: the repo's modules/)
     ARCTIC_MOCK_FAIL_TWICE=1  the failing app also fails its retry
     ARCTIC_MOCK_FATAL=<n>     a core step fails the first n installs (1 = once; shows the
                               "Something went wrong" view)
@@ -26,6 +27,8 @@ import re
 import sys
 import threading
 import time
+import tomllib
+from pathlib import Path
 
 VERSION = "0.2.0-mock"
 ENV = os.environ
@@ -135,50 +138,59 @@ WIFI = [
 ]
 WIFI_PASSWORDS = {"Tundra-5G": "polarnight", "Snowfield": "snowfield", "Aurora Guest": "guest1234"}
 
-# Categories and apps from the design bundle (CATEGORIES / APPS). choice "one" | "any";
-# required as in modules/catalog.toml (Office is "one" but may be left empty).
-CATEGORIES = [
-    ("browser", "Browser", "one", "Becomes your default browser.", True),
-    ("editor", "Editor", "any", "", False),
-    ("terminal", "Terminal", "one", "Opens with Super + Enter.", True),
-    ("shell", "Shell", "one", "What runs inside the terminal.", True),
-    ("files", "File manager", "any", "", False),
-    ("office", "Office", "one", "", False),
-    ("video", "Video", "any", "", False),
-    ("extras", "Extras", "any", "Nothing here is ticked by default.", False),
-]
-# id, name, category, summary, default, download_mb, source, in_live_image, role
-MODULES = [
-    ("zen", "Zen Browser", "browser", "Calm, privacy-first browser with vertical tabs.", True, 112, "flatpak", True, "web browser"),
-    ("firefox", "Firefox", "browser", "The classic open-source browser.", False, 78, "dnf", False, "web browser"),
-    ("chromium", "Chromium", "browser", "Open-source base of Chrome.", False, 104, "dnf", False, "web browser"),
-    ("zed", "Zed", "editor", "Fast, modern code editor.", True, 142, "flatpak", False, "code editor"),
-    ("vscodium", "VSCodium", "editor", "VS Code without the telemetry.", False, 131, "flatpak", False, "code editor"),
-    ("neovim", "Neovim", "editor", "Keyboard-driven text editor for the terminal.", False, 9, "dnf", False, "text editor"),
-    ("helix", "Helix", "editor", "Modal editor that works out of the box.", False, 21, "dnf", False, "text editor"),
-    ("kitty", "kitty", "terminal", "Fast, GPU-drawn terminal.", True, 0, "dnf", True, "terminal"),
-    ("alacritty", "Alacritty", "terminal", "Minimal GPU terminal.", False, 4, "dnf", False, "terminal"),
-    ("foot", "foot", "terminal", "Lightweight Wayland terminal.", False, 1, "dnf", False, "terminal"),
-    ("zsh", "zsh", "shell", "Friendly shell with smart completion.", True, 0, "dnf", True, "shell"),
-    ("fish", "fish", "shell", "Shell with suggestions as you type.", False, 4, "dnf", False, "shell"),
-    ("bash", "bash", "shell", "The standard Linux shell.", False, 0, "dnf", True, "shell"),
-    ("yazi", "yazi", "files", "Quick file manager inside the terminal.", True, 6, "copr", False, "file manager"),
-    ("thunar", "Thunar", "files", "Simple windowed file manager.", True, 0, "dnf", True, "file manager"),
-    ("nautilus", "Files (Nautilus)", "files", "GNOME's file manager.", False, 12, "dnf", False, "file manager"),
-    ("collabora", "Collabora Office", "office", "Documents, spreadsheets and slides.", True, 780, "flatpak", False, "office suite"),
-    ("libreoffice", "LibreOffice", "office", "The full classic office suite.", False, 310, "dnf", False, "office suite"),
-    ("onlyoffice", "ONLYOFFICE", "office", "Office suite close to Microsoft formats.", False, 420, "flatpak", False, "office suite"),
-    ("vlc", "VLC", "video", "Plays almost any video or audio file.", True, 96, "flatpak", False, "video player"),
-    ("mpv", "mpv", "video", "Minimal, keyboard-driven player.", False, 14, "dnf", False, "video player"),
-    ("celluloid", "Celluloid", "video", "Simple player built on mpv.", False, 18, "flatpak", False, "video player"),
-    ("flathub", "Flathub", "extras", "Adds the Flathub app store (Flatpak).", False, 1, "flatpak", False, "app store"),
-    ("steam", "Steam", "extras", "Games and the Steam store.", False, 290, "flatpak", False, "game store"),
-    ("gimp", "GIMP", "extras", "Photo editing and painting.", False, 165, "flatpak", False, "photo editor"),
-    ("inkscape", "Inkscape", "extras", "Vector drawing.", False, 120, "flatpak", False, "drawing app"),
-    ("signal", "Signal", "extras", "Private messaging.", False, 150, "flatpak", False, "messenger"),
-    ("obs", "OBS Studio", "extras", "Screen recording and streaming.", False, 190, "flatpak", False, "screen recorder"),
-]
+# Categories and apps come from the real catalog (modules/catalog.toml and every
+# modules/<category>/<id>/module.toml), so the UI sees exactly what the engine offers:
+# names, order, defaults, first install method and download sizes. ARCTIC_MOCK_CATALOG
+# points at another catalog directory.
+CATALOG_DIR = Path(ENV.get("ARCTIC_MOCK_CATALOG") or Path(__file__).resolve().parents[2] / "modules")
+SOURCES = {"flatpak": "Flathub", "copr": "COPR", "nix": "Nix"}
+
+
+def load_catalog(root):
+    with open(root / "catalog.toml", "rb") as f:
+        cat = tomllib.load(f)
+    categories, modules, system = [], [], []
+    links = {}   # id -> (requires, conflicts), as the engine's catalog.Validate checks them
+    for c in cat["category"]:
+        # id, name, choice ("one" | "any"), note, required, collapsed, role
+        categories.append((c["id"], c["name"], c["choice"], c.get("note", ""), bool(c.get("required")),
+                           bool(c.get("collapsed")), c.get("role", "app")))
+        for mid in c["modules"]:
+            with open(root / c["id"] / mid / "module.toml", "rb") as f:
+                m = tomllib.load(f)
+            first = (m.get("install") or [{}])[0]
+            method = first.get("method", "")
+            source = SOURCES.get(method, "Fedora")
+            if method == "dnf" and any(r.startswith("rpmfusion") for r in first.get("repos", [])):
+                source = "RPM Fusion"
+            # id, name, category, summary, default, download_mb, method, in_live_image, role,
+            # source, tile, icon, runtime, verified, proprietary, always
+            modules.append((m["id"], m["name"], m["category"], m["summary"], bool(m.get("default")),
+                            first.get("download_mb", 0), method, bool(m.get("in_live_image")),
+                            m.get("role") or c.get("role", "app"), source, m.get("tile") or m["id"], m.get("icon", ""),
+                            first.get("runtime", ""), bool(first.get("verified")), bool(m.get("proprietary")),
+                            bool(m.get("always"))))
+            links[m["id"]] = (list(m.get("requires") or []), list(m.get("conflicts") or []))
+    for f in sorted(root.glob("_system/*/module.toml")):
+        with open(f, "rb") as fh:
+            m = tomllib.load(fh)
+        first = (m.get("install") or [{}])[0]
+        if m.get("always") and not m.get("in_live_image"):
+            system.append((m["id"], first.get("download_mb", 0), first.get("runtime", "")))
+    return categories, modules, system, cat.get("runtimes", {}), links
+
+
+CATEGORIES, MODULES, SYSTEM, RUNTIMES, LINKS = load_catalog(CATALOG_DIR)
+SUMMARY_APPS = 12   # like the engine's wizard.appList: the Summary doesn't scroll
+
+
+def app_list(names):
+    if len(names) <= SUMMARY_APPS:
+        return ", ".join(names)
+    return f"{', '.join(names[:SUMMARY_APPS])} and {len(names) - SUMMARY_APPS} more"
+
 MOD = {m[0]: m for m in MODULES}
+OPTIONAL_GROUPS = {c[0] for c in CATEGORIES if c[5]}   # the collapsed "More apps" sections
 
 STEPS = [
     ("welcome", "Welcome to Arctic Linux", "This takes about 10 minutes. First, pick the language you'd like to use."),
@@ -291,16 +303,27 @@ class MockEngine:
         return out
 
     def estimate(self, selection):
+        # Like catalog.EstimateDownload: the ticked apps' first methods, the always-installed
+        # system modules, and every shared Flatpak runtime once; live-image apps cost nothing.
         ids = []
         for c in CATEGORIES:
-            ids.extend(i for i in selection.get(c[0], []) if i in MOD)
-        mb = sum(MOD[i][5] for i in ids if not MOD[i][7])
-        # Flatpak apps share the GNOME/KDE runtimes: count them once.
-        if any(MOD[i][6] == "flatpak" and not MOD[i][7] for i in ids):
-            mb += 380
-        size = f"{mb / 1000:.1f} GB" if mb >= 1000 else f"{mb} MB"
+            ids.extend(i for i in selection.get(c[0], []) if i in MOD and MOD[i][2] == c[0])
+        mb, runtimes = 0.0, set()
+        paid = [(MOD[i][5], MOD[i][12]) for i in ids if not MOD[i][7]]
+        for mod_mb, runtime in paid + [(s[1], s[2]) for s in SYSTEM]:
+            mb += mod_mb
+            if runtime and runtime not in runtimes:
+                runtimes.add(runtime)
+                mb += RUNTIMES.get(runtime, 0)
+        b = int(mb * 1000 * 1000)
+        if b >= 1000 ** 3:
+            size = f"{b / 1000 ** 3:.1f}".rstrip("0").rstrip(".") + " GB"
+        else:
+            size = f"{(b + 500_000) // 1_000_000} MB"
         n = len(ids)
-        return {"apps": n, "bytes": mb * 1000 * 1000, "label": f"{n} app{'s' if n != 1 else ''} · {size} download"}
+        noun = "app" if n == 1 else "apps"
+        label = f"{n} {noun} · {size} download" if b else f"{n} {noun} · nothing to download"
+        return {"apps": n, "bytes": b, "label": label}
 
     def disk(self, path=None):
         path = path or self.data["disk"]["disk"]
@@ -381,9 +404,12 @@ class MockEngine:
                        "encryption": self.data["encryption"].get("enabled", True)}
         elif sid == "apps":
             options = {"categories": [{"id": c[0], "name": c[1], "choice": c[2], "note": c[3], "required": c[4],
-                                       "rule": "Pick one" if c[2] == "one" else "Pick any"} for c in CATEGORIES],
-                       "modules": [{"id": m[0], "name": m[1], "summary": m[3], "category": m[2], "default": m[4], "tile": m[0],
-                                    "download_mb": m[5], "source": m[6], "in_live_image": m[7]} for m in MODULES]}
+                                       "rule": "Pick one" if c[2] == "one" else "Pick any", "collapsed": c[5]}
+                                      for c in CATEGORIES],
+                       "modules": [{"id": m[0], "name": m[1], "summary": m[3], "category": m[2], "default": m[4],
+                                    "always": m[15], "tile": m[10], "icon": m[11], "download_mb": 0 if m[7] else m[5],
+                                    "source": m[9], "method": m[6], "verified": m[13], "in_live_image": m[7],
+                                    "proprietary": m[14]} for m in MODULES]}
         elif sid == "done":
             first = (self.data["account"]["full_name"] or "").split(" ")[0]
             data = {"apps_installed": sum(1 for s in self.module_status.values() if s == "installed"), "first_name": first}
@@ -435,6 +461,20 @@ class MockEngine:
                     fields[c[0]] = f"Pick one {c[1].lower()}."
                 elif c[4] and not chosen:
                     fields[c[0]] = f"Pick a {c[1].lower()}."
+            if not fields:
+                # Like catalog.Validate: conflicts, then requires, per ticked app in catalog
+                # order; the first message for a group wins.
+                have = {m[0] for m in MODULES if m[15] or any(m[0] in sel.get(k, []) for k in sel)}
+                for m in MODULES:
+                    if m[0] not in have:
+                        continue
+                    requires, conflicts = LINKS.get(m[0], ([], []))
+                    for x in conflicts:
+                        if x in have:
+                            fields.setdefault(m[2], f"{m[1]} and {MOD[x][1]} can't be installed together.")
+                    for r in requires:
+                        if r not in have:
+                            fields.setdefault(m[2], f"{m[1]} needs {MOD[r][1]}. Tick it too.")
         if fields:
             raise InvalidError("Some fields need attention.", fields)
 
@@ -569,7 +609,7 @@ class MockEngine:
             {"step": "timezone", "label": "Time zone", "value": f"{city} ({offset})" if offset else city},
             {"step": "disk", "label": "Disk", "value": disk_value},
             {"step": "account", "label": "Account", "value": f"{acct['full_name']} ({acct['username']}) on {acct['hostname']}"},
-            {"step": "apps", "label": "Apps", "value": ", ".join(apps) if apps else "No extra apps"},
+            {"step": "apps", "label": "Apps", "value": app_list(apps) if apps else "No extra apps"},
         ]
         return {"rows": rows, "warning": warning, "primary_label": primary}
 
@@ -653,7 +693,7 @@ class MockEngine:
             self.module_status[i] = "queued"
             self.emit({"event": "module", "id": i, "name": MOD[i][1], "status": "queued", "percent": 0})
         fail_id = ENV.get("ARCTIC_MOCK_FAIL") or ("steam" if "steam" in ids else next(
-            (i for i in reversed(ids) if MOD[i][2] in ("extras", "video")), None))
+            (i for i in reversed(ids) if MOD[i][2] == "video" or MOD[i][2] in OPTIONAL_GROUPS), None))
         n = len(ids)
         for k, i in enumerate(ids):
             name, cat, role = MOD[i][1], MOD[i][2], MOD[i][8]
@@ -682,7 +722,9 @@ class MockEngine:
                 self.emit({"event": "attention", "module": {"id": i, "name": name}, "title": f"{name} couldn’t be downloaded",
                            "message": "The download server didn't answer.",
                            "help": f"Everything else is fine — {name} is optional and you can add it later from the Software app.",
-                           "details": f"flatpak install --system -y flathub {i}\nerror: Unable to connect to dl.flathub.org: Could not resolve hostname",
+                           "details": (f"flatpak install --system -y flathub {i}\nerror: Unable to connect to dl.flathub.org: Could not resolve hostname"
+                                       if MOD[i][6] == "flatpak" else
+                                       f"dnf install -y {i}\nCurl error (6): Could not resolve host: mirrors.fedoraproject.org"),
                            "optional": True, "retry_label": "Try again", "skip_label": f"Skip {name}"})
                 self.retry_event.clear()
                 self.retry_event.wait()

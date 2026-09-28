@@ -1,0 +1,23 @@
+id = "dolphin"
+name = "Dolphin"
+summary = "KDE's file manager with tabs and split view."
+category = "files"
+default = false
+tile = "dolphin"
+icon = "folder"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: dolphin 26.08.1 (4.7 MB + KDE Frameworks).
+method = "dnf"
+packages = ["dolphin"]
+download_mb = 100
+
+[defaults]
+desktop_id = "org.kde.dolphin.desktop"
+role = "files"
+command = "dolphin"
+mime = ["inode/directory"]

@@ -11,10 +11,10 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: firefox 156 (94 MB)
+# Fedora 44: firefox 156 (94 MB; 109 MB with its dependencies)
 method = "dnf"
 packages = ["firefox"]
-download_mb = 100
+download_mb = 109
 
 [[install]]
 method = "flatpak"

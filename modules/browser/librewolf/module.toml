@@ -1,0 +1,30 @@
+id = "librewolf"
+name = "LibreWolf"
+summary = "Firefox tuned for privacy, with no telemetry."
+category = "browser"
+default = false
+tile = "librewolf"
+icon = "shield-lock"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "io.gitlab.librewolf-community"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 157
+
+[defaults]
+desktop_id = "io.gitlab.librewolf-community.desktop"
+role = "browser"
+command = "gtk-launch io.gitlab.librewolf-community"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]

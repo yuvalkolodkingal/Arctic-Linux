@@ -11,10 +11,10 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: chromium 154 (139 MB)
+# Fedora 44: chromium 154 (139 MB; 164 MB with its dependencies)
 method = "dnf"
 packages = ["chromium"]
-download_mb = 140
+download_mb = 164
 
 [[install]]
 method = "flatpak"

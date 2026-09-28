@@ -236,15 +236,19 @@ the ISO needs room (Qt 5 apps stay themed through qt5ct, which also answers to "
 Categories for the picker come from the design (`CATEGORIES` in the design bundle.js):
 browser "one" ("Becomes your default browser."), editor "many", terminal "one" ("Opens with
 Super + Enter."), shell "one" ("What runs inside the terminal."; bash always installed), files
-"many", office "one", video "many", extras "many" ("Nothing here is ticked by default."). Tile ids = design app tiles (`zen`, `firefox`, `chromium`, `zed`,
-`vscodium`, `neovim`, `helix`, `kitty`, `foot`, `alacritty`, `zsh`, `fish`, `bash`, `yazi`,
-`thunar`, `nautilus`, `collabora`, `libreoffice`, `onlyoffice`, `vlc`, `mpv`, `celluloid`,
-`steam`, `obs`, `gimp`, `inkscape`, `signal`, `flathub`).
+"many", office "one", video "many". These seven sections are always open. After them,
+under "More apps", come the optional groups, all "many", marked `collapsed = true` in
+`modules/catalog.toml` (they start folded and nothing in them is ticked by default): music,
+photos, graphics, recording, chat, email, notes, reading, gaming, security, sync, dev,
+containers and extras (utilities). The picker has a search box across every app, and
+`proprietary = true` modules carry a Proprietary tag. Tiles for the design's 28 apps are the
+design's own; every other module gets a tile drawn the same way (category tint + one line
+glyph from its `icon`) by `installer-ui/dev/export-assets.js`.
 
 ## 5. Catalog manifest
 
 `modules/<category>/<id>/module.toml` as in PLAN §4.1, fields: `id, name, summary, category,
-default, tile, in_live_image, gpu, requires, conflicts, [[install]] method = "dnf"|"copr"|"flatpak"|"nix"
+default, tile, icon, in_live_image, gpu, proprietary, requires, conflicts, [[install]] method = "dnf"|"copr"|"flatpak"|"nix"
 (+ packages | copr+packages | remote+ref | attr), verified, download_mb, [defaults] desktop_id, mime,
 [session] …`. Hidden mandatory modules live in `modules/_system/`. Profiles (`profiles/*.toml`)
 reference module ids only.

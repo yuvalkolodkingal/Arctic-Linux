@@ -1,0 +1,33 @@
+id = "evolution"
+name = "Evolution"
+summary = "Email and calendar, with Exchange support."
+category = "email"
+default = false
+tile = "evolution"
+icon = "mail"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: evolution 3.60.2 + evolution-ews (Microsoft 365 / Exchange).
+method = "dnf"
+packages = ["evolution", "evolution-ews"]
+download_mb = 137
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.Evolution"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 25
+
+[defaults]
+desktop_id = "org.gnome.Evolution.desktop"
+mime = [
+  "x-scheme-handler/mailto",
+  "message/rfc822",
+  "text/calendar",
+]

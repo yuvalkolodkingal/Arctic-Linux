@@ -1,0 +1,20 @@
+id = "bazaar"
+name = "Bazaar"
+summary = "Browse and install apps from Flathub."
+category = "extras"
+role = "app store"
+default = false
+tile = "bazaar"
+icon = "grid"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "io.github.kolunmi.Bazaar"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 11

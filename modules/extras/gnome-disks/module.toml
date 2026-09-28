@@ -1,0 +1,19 @@
+id = "gnome-disks"
+name = "GNOME Disks"
+short = "Disks"
+summary = "Format drives and write disk images."
+category = "extras"
+role = "disk utility"
+default = false
+tile = "gnome-disks"
+icon = "disk"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: gnome-disk-utility 46.1 (udisks2 is already in the image).
+method = "dnf"
+packages = ["gnome-disk-utility"]
+download_mb = 2

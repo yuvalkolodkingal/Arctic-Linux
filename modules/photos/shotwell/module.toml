@@ -1,0 +1,26 @@
+id = "shotwell"
+name = "Shotwell"
+summary = "Import and organise your photos."
+category = "photos"
+role = "photo organiser"
+default = false
+tile = "shotwell"
+icon = "image"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: shotwell 33.
+method = "dnf"
+packages = ["shotwell"]
+download_mb = 15
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.Shotwell"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 15

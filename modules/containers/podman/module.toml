@@ -1,0 +1,18 @@
+id = "podman"
+name = "Podman"
+summary = "Run containers without a background daemon."
+category = "containers"
+role = "container tool"
+default = false
+tile = "podman"
+icon = "package"
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: podman 5.8.7, podman-compose 1.6.0. (podman-docker adds a docker command but conflicts with Docker's own packages.)
+method = "dnf"
+packages = ["podman", "podman-compose"]
+download_mb = 64

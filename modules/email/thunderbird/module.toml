@@ -1,0 +1,35 @@
+id = "thunderbird"
+name = "Thunderbird"
+summary = "Email, calendar and contacts in one."
+category = "email"
+default = false
+tile = "thunderbird"
+icon = "mail"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Mozilla's own Flathub build, release channel (156). The capitalised org.mozilla.Thunderbird is the legacy id (still ESR 140); org.mozilla.thunderbird_esr is ESR 153.
+method = "flatpak"
+remote = "flathub"
+ref = "org.mozilla.thunderbird"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 124
+
+[[install]]
+method = "dnf"
+packages = ["thunderbird"]
+desktop_id = "net.thunderbird.Thunderbird.desktop"
+command = "thunderbird"
+download_mb = 132
+
+[defaults]
+desktop_id = "org.mozilla.thunderbird.desktop"
+mime = [
+  "x-scheme-handler/mailto",
+  "message/rfc822",
+  "text/calendar",
+]
