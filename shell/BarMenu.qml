@@ -39,10 +39,12 @@ Popover {
         network: networkPanel,
         bluetooth: bluetoothPanel,
         sound: soundPanel,
+        tray: trayPanel,
     })
     Component { id: networkPanel; NetworkPanel { menu: host } }
     Component { id: bluetoothPanel; BluetoothPanel { menu: host } }
     Component { id: soundPanel; SoundPanel { menu: host } }
+    Component { id: trayPanel; TrayPanel { menu: host } }
 
     FocusScope {
         anchors.fill: parent

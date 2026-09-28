@@ -52,6 +52,7 @@ SignalIcon 1.0 SignalIcon.qml
 SoundPanel 1.0 SoundPanel.qml
 Spinner 1.0 Spinner.qml
 Tip 1.0 Tip.qml
+TrayPanel 1.0 TrayPanel.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml
 Wallpapers 1.0 Wallpapers.qml

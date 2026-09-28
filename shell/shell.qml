@@ -18,6 +18,9 @@ import Quickshell.Io
 // The bar's menus all open in one BarMenu (one menu at a time); Quick Settings is its `quick` panel.
 ShellRoot {
     id: shell
+    // What `shell: …` bindings below hand out: inside `Bar { shell: shell }` the name would
+    // resolve to Bar's own (still unset) `shell` property, not to this id.
+    readonly property var root: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
@@ -81,7 +84,8 @@ ShellRoot {
     }
     function togglePanel(name, screen, x, options) {
         const target = screen || Outputs.focused;
-        if (menuHost.open && menuHost.screen === target && menuHost.panel === name && !(options && options.page)) { menuHost.close(); return; }
+        const sameItem = !options || options.item === undefined || options.item === menuHost.options.item;
+        if (menuHost.open && menuHost.screen === target && menuHost.panel === name && sameItem && !(options && options.page)) { menuHost.close(); return; }
         openPanel(name, target, x, options);
     }
     function openPanel(name, screen, x, options) {
@@ -94,7 +98,8 @@ ShellRoot {
                 openPanel('quick', target, undefined, Object.assign({}, options || {}, { page: name }));
             return;
         }
-        const same = menuHost.open && menuHost.screen === target && menuHost.panel === name;
+        const same = menuHost.open && menuHost.screen === target && menuHost.panel === name
+                     && (!options || options.item === undefined || options.item === menuHost.options.item);
         menuHost.panel = name;
         menuHost.options = options || {};
         menuHost.pointX = anchor !== null ? anchor : target.width - Theme.space2 - Theme.frameWidth - 190;
@@ -121,19 +126,19 @@ ShellRoot {
     Variants {
         id: bars
         model: Quickshell.screens
-        Bar { shell: shell }
+        Bar { shell: root }
     }
 
-    Launcher { id: launcher; shell: shell }
+    Launcher { id: launcher; shell: root }
     Wallpapers { id: wallpapers }
-    PowerMenu { id: power; shell: shell }
+    PowerMenu { id: power; shell: root }
     UpdatePopover { id: updates }
     KeysSheet { id: keys }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
     PolkitDialog { id: polkit }
-    BarMenu { id: menuHost; shell: shell }
+    BarMenu { id: menuHost; shell: root }
     BluetoothPairDialog { id: btPair }
 
     // ---- IPC (arctic-shell-ipc <target> <function>) -----------------------------------------
@@ -199,6 +204,11 @@ ShellRoot {
         function toggle(name: string): void { shell.togglePanel(name, null, undefined, { keyboard: true }); }
         function open(name: string): void { shell.openPanel(name, null, undefined, { keyboard: true }); }
         function close(): void { shell.closePanel(); }
+    }
+    IpcHandler {
+        target: 'bar'
+        // The bar on the focused screen takes the keyboard (Super + Alt + B), or gives it back.
+        function focus(): void { const b = shell.barOn(Outputs.focused); if (b) b.toggleFocusMode(); }
     }
     IpcHandler {
         target: 'audio'

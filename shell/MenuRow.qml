@@ -20,6 +20,8 @@ Item {
     property string trailingText: ''
     property string kbd: ''
     property bool selected: false
+    property string toggle: ''          // 'checkbox' or 'radio' (tray menus): drawn with `checked`
+    property bool checked: false
     property bool busy: false
     property bool destructive: false
     property int labelWeight: Font.Normal
@@ -35,7 +37,7 @@ Item {
     Accessible.role: Accessible.MenuItem
     Accessible.name: label
     Accessible.description: errorText || detail
-    Accessible.checked: selected
+    Accessible.checked: selected || checked
 
     Keys.onPressed: event => {
         MenuState.keyboardNav = true;
@@ -140,6 +142,31 @@ Item {
                 font.family: Theme.fontSans
                 font.pixelSize: 12
                 lineHeight: 1.2
+            }
+        }
+        // A tray menu's check box or radio item.
+        Rectangle {
+            visible: row.toggle !== ''
+            Layout.preferredWidth: 16
+            Layout.preferredHeight: 16
+            radius: row.toggle === 'radio' ? 8 : Theme.radiusXs
+            color: 'transparent'
+            border.width: 1.5
+            border.color: row.enabled ? Theme.lineStrong : Theme.line
+            Icon {
+                visible: row.toggle === 'checkbox' && row.checked
+                anchors.centerIn: parent
+                name: 'check'
+                size: 14
+                color: row.enabled ? Theme.ink : Theme.inkDisabled
+            }
+            Rectangle {
+                visible: row.toggle === 'radio' && row.checked
+                anchors.centerIn: parent
+                width: 8
+                height: 8
+                radius: 4
+                color: row.enabled ? Theme.ink : Theme.inkDisabled
             }
         }
         Spinner {

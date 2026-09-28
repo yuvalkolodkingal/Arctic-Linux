@@ -31,8 +31,72 @@ PanelWindow {
     readonly property bool menuHere: menuHost !== null && menuHost.open && menuHost.screen === bar.screen
     function menuOpen(name) { return menuHere && menuHost.panel === name; }
     function hint(item, text) { if (!menuHere) tipPopup.request(item, text); }
+
+    // ---- keyboard mode (Super + Alt + B): Left/Right across the items, Enter opens --------
+    // The bar takes the keyboard (Top layer); a menu it opens (Overlay) takes it while open and
+    // gives it back on close. Esc, the key again or 10 s without a key leave the mode.
+    property bool focusMode: false
+    property Item focusedStop: null
+    WlrLayershell.keyboardFocus: focusMode ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    function barStops() {
+        const out = [];
+        function walk(item) {
+            const kids = item.children;
+            for (let i = 0; i < kids.length; i++) {
+                if (!kids[i].visible) continue;
+                if (kids[i].barStop === true) out.push(kids[i]); else walk(kids[i]);
+            }
+        }
+        walk(bar.contentItem);
+        return out.sort((a, b) => a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x);
+    }
+    function moveFocus(item) {
+        if (focusedStop) focusedStop.keyboardFocused = false;
+        focusedStop = item;
+        if (item) item.keyboardFocused = true;
+    }
+    function enterFocusMode() {
+        const stops = barStops();
+        focusMode = true;
+        moveFocus(stops.length ? stops[0] : null);
+        barKeys.forceActiveFocus();
+        idle.restart();
+    }
+    function leaveFocusMode() {
+        focusMode = false;
+        moveFocus(null);
+        idle.stop();
+    }
+    function toggleFocusMode() { if (focusMode) leaveFocusMode(); else enterFocusMode(); }
+    Timer { id: idle; interval: 10000; onTriggered: if (!bar.menuHere) bar.leaveFocusMode() }
+    onMenuHereChanged: {
+        if (menuHere) tipPopup.dismiss();
+        else if (focusMode) { barKeys.forceActiveFocus(); idle.restart(); }
+    }
+    Item {
+        id: barKeys
+        focus: true
+        Keys.onPressed: event => {
+            if (!bar.focusMode) return;
+            idle.restart();
+            const stops = bar.barStops();
+            const at = stops.indexOf(bar.focusedStop);
+            if (event.key === Qt.Key_Right || event.key === Qt.Key_Tab) bar.moveFocus(stops[Math.min(stops.length - 1, at + 1)] || null);
+            else if (event.key === Qt.Key_Left || event.key === Qt.Key_Backtab) bar.moveFocus(stops[Math.max(0, at - 1)] || null);
+            else if (event.key === Qt.Key_Home) bar.moveFocus(stops[0] || null);
+            else if (event.key === Qt.Key_End) bar.moveFocus(stops[stops.length - 1] || null);
+            else if (event.key === Qt.Key_Escape) bar.leaveFocusMode();
+            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space || event.key === Qt.Key_Down) {
+                const item = bar.focusedStop;
+                if (!item) return;
+                item.press();
+                // An item without a menu starts something else (an app, a workspace): done.
+                if (item.hasMenu !== true) bar.leaveFocusMode();
+            } else return;
+            event.accepted = true;
+        }
+    }
     function unhint(item) { tipPopup.release(item); }
-    onMenuHereChanged: if (menuHere) tipPopup.dismiss()
     // Where a panel's menu hangs: the centre x of the visible bar item that owns it, else null.
     function ownerOf(name) {
         const owners = {
@@ -177,12 +241,18 @@ PanelWindow {
         }
 
         Repeater {
-            // nm-applet's own icon is folded into the network item below.
-            model: SystemTray.items.values.filter(i => i.id !== 'nm-applet')
+            // nm-applet's own icon is folded into the network item below, and blueman's applet
+            // (started by "More Bluetooth options…") into the Bluetooth item.
+            model: SystemTray.items.values.filter(i => i.id !== 'nm-applet' && !String(i.id).startsWith('blueman'))
             BarItem {
                 id: trayItem
                 required property var modelData
+                function openMenu() {
+                    bar.shell.togglePanel('tray', bar.screen, trayItem.mapToItem(null, trayItem.width / 2, 0).x, { item: trayItem.modelData });
+                }
                 implicitWidth: 16 + 2 * Theme.space2
+                hasMenu: modelData.hasMenu
+                active: bar.menuOpen('tray') && bar.menuHost.options.item === modelData
                 tooltip: modelData.tooltipTitle || modelData.title || modelData.id
                 Image {
                     Layout.preferredWidth: 16
@@ -191,18 +261,11 @@ PanelWindow {
                     source: trayItem.modelData.icon
                     fillMode: Image.PreserveAspectFit
                 }
-                onClicked: modelData.onlyMenu && modelData.hasMenu ? menu.open() : modelData.activate()
+                onClicked: modelData.onlyMenu && modelData.hasMenu ? openMenu() : modelData.activate()
                 onMiddleClicked: modelData.secondaryActivate()
-                onRightClicked: if (modelData.hasMenu) menu.open()
+                onRightClicked: if (modelData.hasMenu) openMenu()
                 onScrolled: steps => modelData.scroll(steps, false)
                 onHoverChanged: h => h ? bar.hint(trayItem, tooltip) : bar.unhint(trayItem)
-                QsMenuAnchor {
-                    id: menu
-                    menu: trayItem.modelData.menu
-                    anchor.item: trayItem
-                    anchor.edges: Edges.Bottom
-                    anchor.gravity: Edges.Bottom
-                }
             }
         }
 

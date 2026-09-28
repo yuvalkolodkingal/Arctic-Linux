@@ -17,6 +17,8 @@ Rectangle {
     property bool keyboardFocused: false
     property bool hasMenu: false        // left click opens a bar menu (BarMenu)
     property bool active: false         // …and that menu is open now
+    readonly property bool barStop: interactive     // reachable in the bar's keyboard mode
+    function press() { clicked(); }
     default property alias extra: row.data
     signal clicked()
     signal rightClicked()
