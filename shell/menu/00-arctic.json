@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "about": "The command menu (Super + Alt + Space; Super + Ctrl + C opens Capture): its branches and rows. The files in this folder are read in name order, then ~/.config/arctic/menu.json, merged by id; the fields are described at the top of shell/MenuModel.js and on the Command Menu wiki page. A row whose command is not installed is hidden, and so is a branch with nothing in it.",
+  "entries": {
+    "apps": {"label": "Apps", "icon": "grid"},
+    "apps.all": {"label": "Every app", "icon": "grid", "keys": "Super + Space", "run": ["arctic-shell-ipc", "launcher", "apps"], "ipc": "launcher apps"},
+    "apps.terminal": {"label": "Terminal", "icon": "terminal", "keys": "Super + Enter", "run": ["arctic-open", "terminal"]},
+    "apps.browser": {"label": "Browser", "icon": "globe", "keys": "Super + B", "run": ["arctic-open", "browser"]},
+    "apps.files": {"label": "Files", "icon": "folder", "keys": "Super + F", "run": ["arctic-open", "files"]},
+    "apps.editor": {"label": "Code editor", "icon": "code", "keys": "Super + E", "run": ["arctic-open", "editor"]},
+    "apps.emoji": {"label": "Emoji", "icon": "sparkle", "keys": "Super + Ctrl + E", "run": ["arctic-shell-ipc", "emoji", "toggle"], "ipc": "emoji toggle"},
+    "apps.clipboard": {"label": "Clipboard history", "icon": "copy", "keys": "Super + V", "run": ["arctic-shell-ipc", "clipboard", "toggle"], "ipc": "clipboard toggle"},
+    "apps.calculator": {"label": "Calculator", "icon": "hash", "desc": "In the launcher: type = and a sum", "run": ["arctic-shell-ipc", "launcher", "search", "="], "ipc": "launcher search"},
+    "apps.reminder": {"label": "Reminder", "icon": "clock", "desc": "A notification when it’s time", "keys": "Super + Ctrl + R", "run": ["arctic-remind", "--ask"]},
+    "apps.reminders-cancel": {"label": "Cancel reminders", "icon": "x", "run": ["arctic-remind", "cancel", "all"], "test": "arctic-remind pending"},
+    "apps.monitor": {"label": "System monitor", "icon": "cpu", "keys": "Ctrl + Shift + Esc", "run": ["arctic-sysmon"]},
+
+    "learn": {"label": "Learn", "icon": "help"},
+    "learn.keys": {"label": "Keyboard shortcuts", "icon": "keyboard", "keys": "Super + /", "run": ["arctic-keys"]},
+    "learn.wiki": {"label": "Arctic Linux wiki", "icon": "globe", "desc": "Guides to everything on this desktop", "run": ["xdg-open", "https://github.com/yuvalkolodkingal/O-Tism/wiki"]},
+    "learn.menu": {"label": "About this menu", "icon": "document", "desc": "What’s in it, and how to add your own rows", "run": ["xdg-open", "https://github.com/yuvalkolodkingal/O-Tism/wiki/Command-Menu"]},
+    "learn.welcome": {"label": "Welcome", "icon": "sparkle", "desc": "The keys that get you everywhere", "run": ["arctic-welcome", "--again"], "when": "installed"},
+    "learn.fedora": {"label": "Fedora documentation", "icon": "document", "desc": "Arctic Linux is built on Fedora", "run": ["xdg-open", "https://docs.fedoraproject.org/en-US/docs/"]},
+    "learn.about": {"label": "About this computer", "icon": "info", "run": ["arctic-settings", "about"]},
+
+    "capture": {"label": "Capture", "icon": "camera", "keys": "Super + Ctrl + C"},
+    "capture.area": {"label": "Screenshot of an area", "icon": "camera", "keys": "Print", "run": ["arctic-screenshot", "area"]},
+    "capture.window": {"label": "Screenshot of a window", "icon": "camera", "keys": "Super + Print", "run": ["arctic-screenshot", "window"]},
+    "capture.screen": {"label": "Screenshot of the screen", "icon": "camera", "keys": "Shift + Print", "run": ["arctic-screenshot", "screen"]},
+    "capture.record": {"label": "Record the screen", "labelOn": "Stop recording", "icon": "record", "keys": "Super + Alt + R", "run": ["arctic-record", "toggle"], "state": ["arctic-record", "status", "--json"]},
+    "capture.text": {"label": "Copy text from the screen", "icon": "document", "keys": "Super + Ctrl + Print", "run": ["arctic-ocr"]},
+    "capture.qr": {"label": "Read a QR code", "icon": "search", "run": ["arctic-ocr", "--qr"]},
+    "capture.color": {"label": "Pick a colour", "icon": "brush", "keys": "Super + Shift + C", "run": ["arctic-colorpick"]},
+    "capture.folder": {"label": "Open the Screenshots folder", "icon": "folder", "needs": ["xdg-open"], "run": ["sh", "-c", "d=\"$(xdg-user-dir PICTURES 2>/dev/null || echo \"$HOME/Pictures\")/Screenshots\"; mkdir -p \"$d\" && exec xdg-open \"$d\""]},
+
+    "toggle": {"label": "Toggle", "icon": "sliders"},
+    "toggle.dark": {"label": "Dark style", "icon": "moon", "keys": "Super + Shift + T", "run": ["arctic-theme", "toggle"], "state": "dark"},
+    "toggle.nightlight": {"label": "Night light", "icon": "brightness", "desc": "Warmer colours in the evening", "keys": "Super + Ctrl + N", "run": ["arctic-nightlight", "toggle"], "state": ["arctic-nightlight", "status", "--json"]},
+    "toggle.awake": {"label": "Keep awake", "icon": "eye", "desc": "Don’t lock or sleep", "keys": "Super + Ctrl + I", "run": ["arctic-keep-awake", "toggle"], "state": ["arctic-keep-awake", "status", "--json"]},
+    "toggle.dnd": {"label": "Do not disturb", "icon": "bell-off", "keys": "Super + Shift + N", "run": ["arctic-dnd", "toggle"], "state": ["arctic-dnd", "status"]},
+    "toggle.motion": {"label": "Reduce motion", "icon": "sparkle", "run": ["arctic-motion", "toggle"], "state": ["arctic-motion"]},
+    "toggle.contrast": {"label": "High contrast", "icon": "brush", "desc": "Stronger text and lines in any theme", "run": ["arctic-theme", "contrast", "toggle"], "state": ["arctic-theme", "contrast"]},
+
+    "style": {"label": "Style", "icon": "brush"},
+    "style.theme": {"label": "Theme", "icon": "brush", "provider": "themes", "needs": ["arctic-theme"]},
+    "style.font": {"label": "Code font", "icon": "code", "desc": "The terminal's and the shell's", "provider": "fonts", "needs": ["arctic-font"]},
+    "style.wallpapers": {"label": "Wallpaper", "icon": "image", "keys": "Super + Shift + W", "run": ["arctic-shell-ipc", "wallpapers", "open"]},
+    "style.appearance": {"label": "Appearance settings", "icon": "sliders", "run": ["arctic-settings", "appearance"]},
+
+    "setup": {"label": "Setup", "icon": "sliders", "desc": "Every page of Settings", "provider": "settings"},
+    "setup.kbptr": {"label": "Keyboard pointer", "icon": "keyboard", "desc": "Move and click with the keyboard", "keys": "Super + Alt + K", "run": ["arctic-kbptr"], "needs": ["arctic-kbptr", "wl-kbptr"]},
+    "setup.hooks": {"label": "Open my hooks folder", "icon": "folder", "desc": "Your scripts for desktop events", "run": ["arctic-hook", "--open"]},
+
+    "install": {"label": "Install", "icon": "download"},
+    "install.apps": {"label": "Get apps", "icon": "package", "desc": "Flathub, Fedora packages and web apps", "keys": "Super + Shift + A", "run": ["arctic-shell-ipc", "apps", "install"], "ipc": "apps install"},
+    "install.flathub": {"label": "An app from Flathub", "icon": "package", "run": ["arctic-shell-ipc", "apps", "source", "flathub"], "ipc": "apps source"},
+    "install.fedora": {"label": "A Fedora package", "icon": "package", "run": ["arctic-shell-ipc", "apps", "source", "fedora"], "ipc": "apps source"},
+    "install.web": {"label": "A web app", "icon": "globe", "run": ["arctic-shell-ipc", "apps", "source", "web"], "ipc": "apps source"},
+    "install.console": {"label": "The package console", "icon": "terminal", "desc": "dnf and flatpak commands", "run": ["arctic-shell-ipc", "apps", "source", "console"], "ipc": "apps source"},
+
+    "remove": {"label": "Remove", "icon": "trash"},
+    "remove.apps": {"label": "Remove apps", "icon": "trash", "desc": "Apps, packages and web apps you installed", "run": ["arctic-shell-ipc", "apps", "remove"], "ipc": "apps remove"},
+
+    "update": {"label": "Update", "icon": "refresh"},
+    "update.now": {"label": "Check for updates now", "icon": "download", "desc": "They install the next time you restart", "run": ["arctic-update", "now"], "when": "installed"},
+    "update.settings": {"label": "Update settings", "icon": "sliders", "run": ["arctic-settings", "updates"]},
+    "update.firmware": {"label": "Update firmware", "icon": "cpu", "needs": ["fwupdmgr", "arctic-open"], "run": ["arctic-open", "terminal", "--hold", "-e", "fwupdmgr", "update"], "when": "installed"},
+    "update.sound": {"label": "Restart sound", "icon": "volume", "desc": "When sound stops working", "run": ["systemctl", "--user", "restart", "pipewire", "pipewire-pulse", "wireplumber"]},
+    "update.wifi": {"label": "Restart Wi-Fi", "icon": "wifi", "needs": ["nmcli"], "run": ["sh", "-c", "nmcli radio wifi off && sleep 1 && nmcli radio wifi on"]},
+    "update.shell": {"label": "Restart the desktop shell", "icon": "restart", "desc": "The bar, launcher and menus", "run": ["arctic-shell", "--restart"]},
+
+    "windows": {"label": "Open windows", "icon": "tiling", "desc": "Every window on every workspace", "provider": "windows"},
+
+    "system": {"label": "System", "icon": "power"},
+    "system.lock": {"label": "Lock screen", "icon": "lock", "keys": "Super + L", "run": ["arctic-power", "lock"], "when": "installed"},
+    "system.logout": {"label": "Log out", "icon": "log-out", "run": ["arctic-power", "logout"], "when": "installed"},
+    "system.suspend": {"label": "Suspend", "icon": "sleep", "run": ["arctic-power", "suspend"], "when": "installed"},
+    "system.restart": {"label": "Restart", "icon": "restart", "run": ["arctic-power", "restart"]},
+    "system.poweroff": {"label": "Shut down", "icon": "power", "run": ["arctic-power", "poweroff"]}
+  }
+}

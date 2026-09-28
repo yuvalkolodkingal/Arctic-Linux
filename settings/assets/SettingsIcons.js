@@ -6,6 +6,7 @@
 var EXTRA = {
  "display": "<rect x=\"3\" y=\"4.5\" width=\"18\" height=\"12\" rx=\"2\"/><path d=\"M9 20h6 M12 16.5V20\"/>",
  "mouse": "<rect x=\"6.5\" y=\"3\" width=\"11\" height=\"18\" rx=\"5.5\"/><path d=\"M12 3v5.5\"/>",
+ "accessibility": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><circle cx=\"12\" cy=\"7.6\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M8 10.3l4 .9 4-.9 M12 11.2v3.1 M12 14.3l-2 3.7 M12 14.3l2 3.7\"/>",
  "printer": "<path d=\"M7 8.5V3.5h10v5 M7 17H5a2 2 0 0 1-2-2v-4.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-2\"/><rect x=\"7\" y=\"13.5\" width=\"10\" height=\"7\" rx=\"1\"/>"
 };
 function svg(name, color, stroke) {

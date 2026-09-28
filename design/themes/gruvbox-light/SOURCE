@@ -1,0 +1,4 @@
+Upstream: https://github.com/morhetz/gruvbox
+Licence: MIT (the upstream project's licence; confirm before each release)
+Gruvbox's light palette (bg, bg0_h, bg1, fg, fg2-4, gray and the neutral and faded colours).
+Only the colour values are used; Arctic renders every file itself from its own templates.

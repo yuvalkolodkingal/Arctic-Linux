@@ -61,6 +61,16 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     webapp-reset-permissions ID | webapp-refresh ID | webapp-clear ID | webapp-open ID | webapp-runtimes
     webapp-remove ID keep|delete | webapp-forget ID
     nightlight, keep-awake, autostart, printers, datetime, more-updates …   see arctic_system.py
+    shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch,
+                                  weather, weatherUnits, barWeather
+    weather-place [search TEXT | set NAME LAT LON [DETAIL] | zone]    where the weather is for
+    daylight | daylight-set off|sun|hours LIGHT DARK      light and dark by the clock (arctic-daylight)
+    accessibility                 what the Accessibility page needs (the keyboard pointer, wl-kbptr,
+                                  high contrast)
+    contrast-set on|off           high contrast (arctic-theme contrast)
+    fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
+    wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]     a new picture every so often
+    theme-install URL | theme-remove NAME     themes from the web (arctic-theme install / remove)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2341,8 +2351,17 @@ def _theme_items(data):
             out.append(dict(id=item, name=item.replace('-', ' ').capitalize()))
         elif isinstance(item, dict) and (item.get('id') or item.get('name')):
             ident = str(item.get('id') or item.get('name'))
-            out.append(dict(id=ident, name=str(item.get('name') or ident), dark=item.get('dark'),
-                            kind=str(item.get('kind') or item.get('type') or '')))
+            entry = dict(id=ident, name=str(item.get('name') or ident), dark=item.get('dark'),
+                         kind=str(item.get('kind') or item.get('type') or ''))
+            # The theme gallery (arctic-themes-extra): its label, mode, pair and colours.
+            if item.get('gallery') is True:
+                swatches = item.get('swatches') if isinstance(item.get('swatches'), dict) else {}
+                entry.update(gallery=True, label=str(item.get('label') or ident), mode=str(item.get('mode') or ''),
+                             pair=str(item.get('pair') or ''),
+                             installedFrom=str(item.get('installed_from') or ''),
+                             swatches={k: v for k, v in swatches.items()
+                                       if isinstance(k, str) and isinstance(v, str) and re.fullmatch(r'#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?', v)})
+            out.append(entry)
     return out
 
 
@@ -2450,11 +2469,24 @@ def cmd_text_scale(paths, args):
         code, _o, err = run(['gsettings', 'set'] + schema + [format_number(value)], timeout=5)
         if code != 0:
             raise Failure(err.strip() or 'Text size couldn’t be changed.')
+        # The terminals follow (arctic-font size): 10.5 pt at 100%, to the nearest half point.
+        if which('arctic-font'):
+            size = 'reset' if value == 1 else format_number(round(TERMINAL_PT * value * 2) / 2)
+            run(['arctic-font', 'size', size, '--json'], timeout=20)
     code, out, _err = run(['gsettings', 'get'] + schema, timeout=5)
     try:
-        return dict(ok=True, available=code == 0, value=float(out.strip()) if code == 0 else 1.0)
+        result = dict(ok=True, available=code == 0, value=float(out.strip()) if code == 0 else 1.0)
     except ValueError:
         return dict(ok=True, available=False, value=1.0)
+    if which('arctic-font'):
+        code, out, _err = run(['arctic-font', 'current', '--json'], timeout=10)
+        data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+        if code == 0 and isinstance(data, dict) and isinstance(data.get('size'), (int, float)):
+            result['terminalPt'] = data['size']
+    return result
+
+
+TERMINAL_PT = 10.5      # arctic-font's default terminal size
 
 
 def apply_cursor_gsettings(options):
@@ -3099,6 +3131,241 @@ def cmd_set_cursor(paths, args):
     return result
 
 
+# ---- the shell's own options (~/.config/arctic/shell.json) --------------------------------------
+# The shell watches the file, so a change shows at once. Only the keys below are written here;
+# every other key in the file is kept as it is.
+
+WEB_ENGINES = (('duckduckgo', 'DuckDuckGo'), ('startpage', 'Startpage'), ('brave', 'Brave Search'),
+               ('ecosia', 'Ecosia'), ('google', 'Google'), ('bing', 'Bing'))
+
+
+def _web_search_ok(value):
+    return value in dict(WEB_ENGINES) or bool(re.fullmatch(r'https://[^\s"\\]{1,200}', value) and '%s' in value)
+
+
+def _as_bool(value):
+    return value == 'true'
+
+
+SHELL_OPTIONS = {
+    # key: (default, check(value) -> bool[, convert(value) -> what shell.json holds])
+    'webSearch': ('duckduckgo', _web_search_ok),
+    # Weather (WeatherService.qml): off until turned on; units; the temperature on the bar.
+    'weather': (False, lambda v: v in ('true', 'false'), _as_bool),
+    'weatherUnits': ('auto', lambda v: v in ('auto', 'metric', 'imperial')),
+    'barWeather': (False, lambda v: v in ('true', 'false'), _as_bool),
+}
+
+
+def read_shell_json(paths):
+    data = _loads(read_text(paths.arctic / 'shell.json') or '')
+    return data if isinstance(data, dict) else {}
+
+
+def cmd_shell_options(paths, _args):
+    data = read_shell_json(paths)
+    out = {key: data.get(key, spec[0]) for key, spec in SHELL_OPTIONS.items()}
+    out.update(ok=True, engines=[dict(id=i, name=n) for i, n in WEB_ENGINES])
+    return out
+
+
+def cmd_shell_option_set(paths, args):
+    if len(args) != 2 or args[0] not in SHELL_OPTIONS:
+        raise Failure('usage: shell-option-set {} VALUE'.format('|'.join(SHELL_OPTIONS)))
+    key, value = args
+    spec = SHELL_OPTIONS[key]
+    if not spec[1](value):
+        raise Failure('That isn’t a value Arctic can use for this.')
+    data = read_shell_json(paths)
+    data[key] = spec[2](value) if len(spec) > 2 else value
+    atomic_write(paths.arctic / 'shell.json', json.dumps(data, indent=2) + '\n')
+    return cmd_shell_options(paths, [])
+
+
+# ---- where you are, for the weather (shell/scripts/weather.py, Open-Meteo) ------------------------
+
+def cmd_weather_place(paths, args):
+    """weather-place                       the place the weather is for
+    weather-place search TEXT           places called that (asks Open-Meteo's geocoding)
+    weather-place set NAME LAT LON [DETAIL]   use that place (~/.config/arctic/location.json)
+    weather-place zone                  back to your time zone's city"""
+    script = shell_script(paths, 'weather.py')
+    if not script:
+        return dict(ok=True, available=False)
+    location = paths.arctic / 'location.json'
+    if args and args[0] == 'search' and len(args) == 2:
+        code, out, _err = run([sys.executable, str(script), 'geocode', args[1], '--json'], timeout=20)
+        data = _loads(out.strip())
+        if not isinstance(data, dict) or not data.get('ok'):
+            raise Failure((data or {}).get('error') if isinstance(data, dict) else 'Places couldn’t be searched.')
+        return dict(ok=True, available=True, places=data.get('places', []))
+    if args and args[0] == 'set' and len(args) in (4, 5):
+        try:
+            lat, lon = float(args[2]), float(args[3])
+        except ValueError:
+            raise Failure('A place needs a latitude and a longitude.') from None
+        name, detail = args[1].strip(), (args[4].strip() if len(args) == 5 else '')
+        if not (0 < len(name) <= 80 and len(detail) <= 120 and -90 <= lat <= 90 and -180 <= lon <= 180):
+            raise Failure('That isn’t a place Arctic can use.')
+        atomic_write(location, json.dumps(dict(name=name, detail=detail, lat=round(lat, 4), lon=round(lon, 4))) + '\n')
+    elif args == ['zone']:
+        with contextlib.suppress(FileNotFoundError):
+            location.unlink()
+    elif args:
+        raise Failure('usage: weather-place [search TEXT | set NAME LAT LON [DETAIL] | zone]')
+    code, out, _err = run([sys.executable, str(script), 'place', '--json'], timeout=10)
+    data = _loads(out.strip())
+    if not isinstance(data, dict) or not data.get('ok'):
+        return dict(ok=True, available=True, place=None)
+    return dict(ok=True, available=True, place=dict(name=data.get('name'), detail=data.get('detail', ''),
+                                                     source=data.get('source')))
+
+
+# ---- light and dark by the clock (arctic-daylight) ------------------------------------------------
+
+def cmd_daylight(paths, args):
+    if not which('arctic-daylight'):
+        return dict(ok=True, available=False)
+    argv = ['arctic-daylight'] + (list(args) if args else ['--json'])
+    code, out, err = run(argv, timeout=60)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if not isinstance(data, dict):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['The light and dark schedule couldn’t be read.'])[-1])
+    if not data.get('ok'):
+        raise Failure(data.get('error') or 'That didn’t work.')
+    data['available'] = True
+    return data
+
+
+def cmd_daylight_set(paths, args):
+    if not args or args[0] not in ('off', 'sun', 'hours') or (args[0] == 'hours') != (len(args) == 3) \
+            or (args[0] != 'hours' and len(args) != 1):
+        raise Failure('usage: daylight-set off|sun|hours LIGHT DARK')
+    if not which('arctic-daylight'):
+        raise Failure('arctic-daylight isn’t installed.')
+    return cmd_daylight(paths, args)
+
+
+# ---- the code font (arctic-font) ------------------------------------------------------------------
+
+def cmd_fonts(paths, _args):
+    if not which('arctic-font'):
+        return dict(ok=True, available=False)
+    code, out, err = run(['arctic-font', 'list', '--json'], timeout=20)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['The fonts couldn’t be listed.'])[-1])
+    return dict(ok=True, available=True, current=str(data.get('current') or ''), size=data.get('size'),
+                fonts=[str(f.get('family')) for f in data.get('fonts', []) if isinstance(f, dict) and f.get('family')],
+                symbols=data.get('symbols') is True)
+
+
+def cmd_font_set(paths, args):
+    if len(args) != 1 or not args[0].strip():
+        raise Failure('usage: font-set FAMILY')
+    if not which('arctic-font'):
+        raise Failure('arctic-font isn’t installed.')
+    code, out, err = run(['arctic-font', 'set', args[0], '--json'], timeout=30)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if not isinstance(data, dict) or not data.get('ok'):
+        raise Failure((data or {}).get('error') if isinstance(data, dict) else (strip_ansi(err).strip() or 'The font couldn’t be changed.'))
+    result = cmd_fonts(paths, [])
+    result.update(changed=data.get('changed', []), skipped=data.get('skipped', []))
+    return result
+
+
+# ---- themes from the web (arctic-theme install / remove) -----------------------------------------
+
+def _theme_json_verb(argv, what):
+    if not which('arctic-theme'):
+        raise Failure('arctic-theme isn’t installed.')
+    code, out, err = run(['arctic-theme'] + argv + ['--json'], timeout=150)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict) or not data.get('ok'):
+        message = (strip_ansi(err).strip().splitlines() or ['The theme couldn’t be {}.'.format(what)])[-1]
+        message = message.replace('arctic-theme: ', '')
+        raise Failure(message[:1].upper() + message[1:] + ('' if message.endswith('.') else '.'))
+    return data
+
+
+def cmd_theme_install(paths, args):
+    """theme-install URL: a theme repository (GitHub, GitLab, Codeberg); only its colours and
+    pictures are kept."""
+    if len(args) != 1 or not re.fullmatch(r'https://[^\s]{1,300}', args[0]):
+        raise Failure('A theme link starts with https://, like https://github.com/owner/name.')
+    data = _theme_json_verb(['install', args[0]], 'installed')
+    result = cmd_theme(paths, [])
+    result.update(installed=dict(name=data.get('name'), label=data.get('label'),
+                                 dropped=[str(d) for d in data.get('dropped', [])][:50],
+                                 backgrounds=data.get('backgrounds', 0)))
+    return result
+
+
+def cmd_theme_remove(paths, args):
+    if len(args) != 1 or not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,63}', args[0]):
+        raise Failure('usage: theme-remove NAME')
+    _theme_json_verb(['remove', args[0]], 'removed')
+    return cmd_theme(paths, [])
+
+
+# ---- wallpaper rotation (arctic-wallpaper rotate) ------------------------------------------------
+
+ROTATE_EVERY = ('off', '30m', '1h', '1d')
+
+
+def cmd_wallpaper_rotate(paths, args):
+    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]: a new picture every so often,
+    without changing the chosen wallpaper or the colours."""
+    if not which('arctic-wallpaper'):
+        return dict(ok=True, available=False, every='off')
+    if args:
+        every = args[0]
+        if every not in ROTATE_EVERY or (every == 'off') != (len(args) == 1) or len(args) > 3 \
+                or (len(args) == 3 and args[2] != 'shuffle'):
+            raise Failure('usage: wallpaper-rotate off | 30m|1h|1d FOLDER|arctic [shuffle]')
+        argv = ['arctic-wallpaper', 'rotate', every] + ([] if every == 'off' else
+                                                          [args[1]] + (['--shuffle'] if len(args) == 3 else []))
+        code, _out, err = run(argv, timeout=30)
+        if code != 0:
+            message = (strip_ansi(err).strip().splitlines() or ['The wallpaper rotation couldn’t be changed.'])[-1]
+            message = message.replace('arctic-wallpaper: ', '')
+            raise Failure(message[:1].upper() + message[1:])
+    code, out, _err = run(['arctic-wallpaper', 'rotate'], timeout=10)
+    data = _loads(out.strip())
+    if code != 0 or not isinstance(data, dict):
+        return dict(ok=True, available=True, every='off')
+    every = data.get('every') if data.get('every') in ROTATE_EVERY else 'off'
+    return dict(ok=True, available=True, every=every, folder=str(data.get('folder') or ''),
+                shuffle=data.get('shuffle') is True)
+
+
+# ---- accessibility ---------------------------------------------------------------------------------
+
+def cmd_accessibility(paths, _args):
+    """What the Accessibility page shows besides motion, text size and the pointer. contrast is
+    None when arctic-theme can't say (an older one: the row is hidden)."""
+    contrast = None
+    if which('arctic-theme'):
+        code, out, _err = run(['arctic-theme', 'contrast', '--json'], timeout=10)
+        data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+        if code == 0 and isinstance(data, dict) and data.get('ok'):
+            contrast = data.get('contrast') == 'high'
+    return dict(ok=True, kbptr=bool(which('wl-kbptr')), kbptrHelper=bool(which('arctic-kbptr')), contrast=contrast)
+
+
+def cmd_contrast_set(paths, args):
+    """High contrast on or off: arctic-theme relinks the active theme to its high-contrast take."""
+    if len(args) != 1 or args[0] not in ('on', 'off'):
+        raise Failure('usage: contrast-set on|off')
+    if not which('arctic-theme'):
+        raise Failure('arctic-theme isn’t installed.')
+    code, out, err = run(['arctic-theme', 'contrast', args[0], '--json'], timeout=60)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict) or not data.get('ok'):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['High contrast couldn’t be changed.'])[-1])
+    return cmd_accessibility(paths, [])
+
+
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
@@ -3146,6 +3413,15 @@ sys.modules.setdefault('arctic_settings', sys.modules[__name__])   # when run as
 import arctic_system  # noqa: E402
 COMMANDS.update(arctic_system.COMMANDS)
 WRITERS |= arctic_system.WRITERS
+
+# The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
+COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
+                 'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
+                 'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
+                 'weather-place': cmd_weather_place, 'theme-install': cmd_theme_install,
+                 'theme-remove': cmd_theme_remove,
+                 'fonts': cmd_fonts, 'font-set': cmd_font_set})
+WRITERS |= {'shell-option-set', 'weather-place'}
 
 
 def main(argv=None):

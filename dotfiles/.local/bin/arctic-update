@@ -294,7 +294,7 @@ check_last_install() {
   case ${result:-none} in
     installed)
       say "The updates scheduled before the last restart were installed (or removed by hand)."
-      status_set armed=false armed_boot= armed_at= boot_failures=0 install_error= ;;
+      status_set armed=false armed_boot= armed_at= boot_failures=0 install_error= installed_at=@now ;;
     incomplete)
       install_failed "$since" ;;
     not-started)

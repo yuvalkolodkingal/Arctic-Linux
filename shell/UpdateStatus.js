@@ -11,7 +11,7 @@
 // installs stop until `arctic-update now`).
 
 const EMPTY = { state: 'idle', packages: 0, download_mb: 0, staged_at: '', notify_key: '', armed: false, message: '',
-                boot_failures: 0, install_error: '', install_failed_at: '' };
+                boot_failures: 0, install_error: '', install_failed_at: '', installed_at: '' };
 
 function parse(text) {
     let data = null;
@@ -31,6 +31,8 @@ function parse(text) {
     out.boot_failures = Number.isFinite(failures) && failures > 0 ? Math.floor(failures) : 0;
     out.install_error = typeof data.install_error === 'string' ? data.install_error : '';
     out.install_failed_at = typeof data.install_failed_at === 'string' ? data.install_failed_at : '';
+    // installed_at: when updates scheduled for a restart were installed (the post-update hooks).
+    out.installed_at = typeof data.installed_at === 'string' ? data.installed_at : '';
     return out;
 }
 

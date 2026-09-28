@@ -10,6 +10,7 @@
 - [Desktop tour](Desktop-Tour)
 - [Menus on the bar and Quick settings](Bar-Menus)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
+- [Command menu](Command-Menu)
 - [Notifications](Notifications)
 - [Settings](Settings)
 - [Night light and keep awake](Night-Light-and-Keep-Awake)

@@ -15,6 +15,7 @@ import Quickshell.Io
 //   launcher toggle · wallpapers toggle · power toggle · osd volume|brightness|brightnessLevel
 //   apps install|remove|toggle · apps open|source <page> · apps search <page> <text> · apps uninstall <desktop-id>
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
+//   menu toggle|toggleAt <branch>|open <branch>|close (the command menu) · welcome firstLogin
 //   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory|reload
 //   keyboard next|set|menu
 //   clipboard toggle · emoji toggle · record open|refresh · share pick <fifo> · capture freeze|thaw
@@ -32,7 +33,8 @@ ShellRoot {
         // close(), not open = false: a popover's `dismissed` clears what it held (the Wi-Fi
         // share card forgets the password).
         [launcher, wallpapers, power, keys, updates, notificationCenter, keyboardPanel,
-         clipboard, emoji, sharePicker, recordDialog, menuHost, wifiShare].forEach(p => { if (p !== except && p.open) p.close(); });
+         clipboard, emoji, sharePicker, recordDialog, menuHost, wifiShare, commandMenu, firstLoginCard]
+            .forEach(p => { if (p !== except && p.open) p.close(); });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -76,6 +78,13 @@ ShellRoot {
         if (!UpdateService.ready) return;
         updates.pointX = x !== undefined ? x : (target ? target.width - 160 : 0);
         present(updates, target);
+    }
+    // The command menu (Super + Alt + Space), at a branch if one is named ("capture"); pressing
+    // the same key again closes it.
+    function toggleMenu(path) {
+        if (commandMenu.isAt(path) && commandMenu.screen === Outputs.focused) { commandMenu.close(); return; }
+        commandMenu.show(path);
+        present(commandMenu, null);
     }
     // The notification centre, under the bar's bell (right-aligned when opened by a key).
     function toggleNotifications(screen, x) {
@@ -187,6 +196,8 @@ ShellRoot {
     PowerMenu { id: power; shell: root }
     UpdatePopover { id: updates }
     KeysSheet { id: keys }
+    CommandMenu { id: commandMenu }
+    FirstLogin { id: firstLoginCard }
     ClipboardPanel { id: clipboard }
     EmojiPicker { id: emoji }
     PowerKey { locked: lockScreen.secure }
@@ -221,6 +232,11 @@ ShellRoot {
             if (!launcher.open) shell.toggleLauncher(null);
             launcher.setQuery(text);
         }
+        // Every app (the command menu's Apps › Every app).
+        function apps(): void {
+            if (!launcher.open) shell.toggleLauncher(null);
+            launcher.openView('apps');
+        }
     }
     IpcHandler {
         target: 'apps'
@@ -244,6 +260,16 @@ ShellRoot {
         function toggle(): void { shell.togglePower(null, undefined); }
     }
     IpcHandler {
+        target: 'menu'
+        function toggle(): void { shell.toggleMenu(''); }
+        // A branch or row by its id, e.g. `arctic-shell-ipc menu toggleAt capture` (Super + Ctrl + C).
+        function toggleAt(path: string): void { shell.toggleMenu(path); }
+        function open(path: string): void { commandMenu.show(path); shell.present(commandMenu, null); }
+        function close(): void { commandMenu.close(); }
+        // Open it with something typed, e.g. `arctic-shell-ipc menu search night`.
+        function search(text: string): void { commandMenu.show(''); shell.present(commandMenu, null); commandMenu.search(text); }
+    }
+    IpcHandler {
         target: 'keys'
         function toggle(): void { shell.toggleKeys(); }
     }
@@ -251,6 +277,10 @@ ShellRoot {
         target: 'osd'
         function volume(): void { osd.showVolume(); }
         function brightness(): void { osd.showBrightness(); }
+        // Any level with an icon and a label, e.g. `osd level brightness 40 "DELL U2720Q"`.
+        function level(icon: string, percent: int, label: string): void { osd.showLevel(icon, percent, label); }
+        // An icon (a design icon name) and a few words, e.g. `osd notice keyboard "Caps Lock on" ""`.
+        function notice(icon: string, text: string, detail: string): void { osd.showNotice(icon, text, detail); }
         // arctic-osd after brightness.py stepped the focused monitor: its level and name.
         function brightnessLevel(percent: int, monitor: string): void { osd.showBrightnessLevel(percent, monitor); }
     }
@@ -265,6 +295,8 @@ ShellRoot {
         target: 'welcome'
         // (not "show": `quickshell ipc call … show` is read as its own show subcommand)
         function open(): void { welcome.show(); }
+        // The installed system's welcome, at a new account's first login (arctic-welcome).
+        function firstLogin(): void { if (!Session.live) shell.present(firstLoginCard, null); }
     }
     IpcHandler {
         target: 'whatsnew'

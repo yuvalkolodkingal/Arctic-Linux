@@ -9,6 +9,10 @@
         print a static palette (JSON)
   arctic-themegen check --palette FILE [--json]
         validate a palette and report the contrast guarantees (exit 1 if one fails)
+  arctic-themegen contrast --palette FILE
+        print the high-contrast take of a palette (JSON; exit 1 if it can't meet its guarantees)
+  arctic-themegen named --colors FILE --name NAME [--label TEXT]
+        print a gallery palette made from a colors.toml (design/themes/<name>) (JSON)
 
 --palette takes a JSON file, '-' for stdin, or a built-in name. Exit status: 0 ok, 1 a
 contrast check failed, 2 bad input (message on stderr).
@@ -17,7 +21,7 @@ import argparse
 import json
 import sys
 
-from . import __version__, derive, palette as pal, render as rnd
+from . import __version__, derive, named, palette as pal, render as rnd
 from .palette import ThemegenError
 
 
@@ -44,6 +48,14 @@ def _parser():
     b = sub.add_parser("builtin", help="print a static palette")
     b.add_argument("name", choices=sorted(pal.BUILTINS))
 
+    h = sub.add_parser("contrast", help="the high-contrast take of a palette")
+    h.add_argument("--palette", required=True)
+
+    n = sub.add_parser("named", help="a gallery palette from a colors.toml")
+    n.add_argument("--colors", required=True, metavar="FILE")
+    n.add_argument("--name", required=True)
+    n.add_argument("--label", default=None)
+
     c = sub.add_parser("check", help="validate a palette and check its contrast")
     c.add_argument("--palette", required=True)
     c.add_argument("--json", action="store_true")
@@ -63,11 +75,21 @@ def main(argv=None):
                 raise ThemegenError("--name must match [a-z0-9][a-z0-9._-]*")
             p = derive.from_wallpaper(args.image, args.mode, args.base, args.name, args.label)
             sys.stdout.write(pal.dumps(p))
+        elif args.command == "contrast":
+            sys.stdout.write(pal.dumps(derive.high_contrast(pal.load(args.palette))))
+        elif args.command == "named":
+            try:
+                with open(args.colors, encoding="utf-8") as f:
+                    text = f.read()
+            except OSError as e:
+                raise ThemegenError("{}: {}".format(args.colors, e.strerror))
+            sys.stdout.write(pal.dumps(named.from_colors(named.load_colors(text, args.colors), args.name, args.label)))
         elif args.command == "builtin":
             sys.stdout.write(pal.dumps(pal.builtin(args.name)))
         elif args.command == "check":
             p = pal.load(args.palette)
-            failures = derive.check(p)
+            # A high-contrast take (arctic-themegen contrast) is held to its stronger pairs too.
+            failures = derive.check(p) + (derive.check_high_contrast(p) if p.get("contrast") == "high" else [])
             if args.json:
                 print(json.dumps({"ok": not failures, "contrast": derive.contrast_report(p),
                                   "failures": [{"foreground": f, "background": b, "ratio": r, "required": q}

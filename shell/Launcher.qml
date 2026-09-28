@@ -9,12 +9,14 @@ import "assets/Icons.js" as Icons
 import "getapps"
 
 // The launcher (design Launcher, Super+Space): a 520px frosted card that hangs from the bar
-// over a scrim. Type to find apps; "=" is a calculator, ">" runs a command. With nothing
-// typed it offers Apps, Get apps, Remove apps, Wallpapers, Settings and Fetch (the original
-// shell's), and on the live USB "Install Arctic Linux" first. Keyboard first: ↑/↓ or Tab move,
-// Enter opens, Esc goes back or closes; Shift+Delete (or Delete at the end of the text) removes
-// the selected app after a confirmation (getapps/RemoveSheet). Get apps is a set of pages inside
-// the card (getapps/GetApps.qml). The card can be dragged to any screen edge, where it docks.
+// over a scrim. Type to find apps, Settings pages, open windows, app actions and files (and
+// a web search after them; LauncherSources.qml); "=" is a calculator (units too, with qalc),
+// ">" runs a command, "?" searches the web. With nothing typed it offers Apps, Get apps, Remove
+// apps, Wallpapers, Settings and Fetch (the original shell's), and on the live USB "Install
+// Arctic Linux" first. Keyboard first: ↑/↓ or Tab move, Enter opens, Esc goes back or closes;
+// Shift+Delete (or Delete at the end of the text) removes the selected app after a confirmation
+// (getapps/RemoveSheet). Get apps is a set of pages inside the card (getapps/GetApps.qml). The
+// card can be dragged to any screen edge, where it docks.
 Popover {
     id: launcher
     required property var shell
@@ -90,20 +92,42 @@ Popover {
                      // Web apps and terminal apps keep their own icons (a TUI called "Settings
                      // monitor" isn't Settings).
                      tile: e.id.startsWith('org.arcticlinux.WebApp.') || e.id.startsWith('org.arcticlinux.TerminalApp.') ? '' : Icons.tileFor(e.id, e.name),
-                     icon: e.icon }))
+                     icon: e.icon, id: 'app:' + e.id }))
+    LauncherSources {
+        id: sources
+        active: launcher.open
+        text: launcher.parsed.mode === 'search' && launcher.view === 'home' ? launcher.parsed.text : ''
+        calc: launcher.parsed.mode === 'calc' && !Calc.evaluate(launcher.parsed.text).ok ? launcher.parsed.text : ''
+        apps: launcher.apps
+    }
     readonly property var results: {
         if (parsed.mode === 'calc') {
             const calc = Calc.evaluate(parsed.text);
+            const units = calc.ok ? null : sources.qalcRow(parsed.text);
+            if (units) return [units];
+            if (!calc.ok && parsed.text && sources.hasQalc && sources.qalcFor !== parsed.text)
+                return [{ kind: 'none', name: 'Working it out…', desc: '= ' + parsed.text, glyph: 'hash' }];
             return [calc.ok ? { kind: 'calc', name: calc.text, desc: '= ' + parsed.text + ' · Enter copies the result', glyph: 'hash' }
                             : { kind: 'none', name: parsed.text ? 'Can’t work that out' : 'Calculator', desc: calc.error, glyph: 'hash' }];
         }
         if (parsed.mode === 'command')
             return [parsed.text ? { kind: 'command', name: parsed.text, desc: 'Run this command · Shift + Enter runs it in a terminal', glyph: 'prompt' }
                                 : { kind: 'none', name: 'Run a command', desc: 'Type a command after >, like > htop', glyph: 'prompt' }];
-        if (view === 'apps') return withGetSearch(LauncherSearch.rank(apps, parsed.text));
+        if (parsed.mode === 'web')
+            return [sources.webRow(parsed.text) || { kind: 'none', name: 'Search the web', desc: 'Type what to look for after ?, like ? fedora release date', glyph: 'globe' }];
+        if (view === 'apps') return withGetSearch(LauncherSearch.rank(apps, parsed.text, item => sources.boost(item)));
         if (!parsed.text) return specials;
-        // Settings is one of the specials, so its desktop entry would show twice.
-        return withGetSearch(LauncherSearch.rank(specials.concat(apps.filter(a => a.entry.id !== 'org.arcticlinux.Settings')), parsed.text).slice(0, 50));
+        // "remind 10m tea" (arctic-remind; Super + Ctrl + R opens the launcher with "remind ").
+        const reminder = LauncherSearch.reminderRow(parsed.text);
+        if (reminder) return [reminder];
+        // Settings is one of the specials, so its desktop entry would show twice. A unit
+        // conversion ("10 km to mi") goes first; "Find it in Get apps" (no app found), then files
+        // and the web search follow the rest.
+        const units = LauncherSearch.looksLikeConversion(parsed.text) ? sources.qalcRow(parsed.text) : null;
+        return withGetSearch((units ? [units] : [])
+            .concat(LauncherSearch.rank(specials.concat(apps.filter(a => a.entry.id !== 'org.arcticlinux.Settings'), sources.extra),
+                                        parsed.text, item => sources.boost(item)).slice(0, 50)))
+            .concat(sources.tail(parsed.text));
     }
     // No app found: offer to look for it in Get apps.
     function withGetSearch(found) {
@@ -119,9 +143,12 @@ Popover {
     }
     function activate(item, alternate) {
         if (!item) return;
+        sources.remember(item.id);
         switch (item.kind) {
         case 'app':
-            if (item.entry.runInTerminal)
+            if (alternate && sources.hybridGpu && !item.entry.runInTerminal)
+                Quickshell.execDetached({ command: ['arctic-gpu', 'run'].concat(item.entry.command), workingDirectory: item.entry.workingDirectory || Session.home });
+            else if (item.entry.runInTerminal)
                 Quickshell.execDetached({ command: inTerminal(item.entry.command, false), workingDirectory: item.entry.workingDirectory || Session.home });
             else
                 item.entry.execute();
@@ -136,6 +163,13 @@ Popover {
         case 'fetch': Quickshell.execDetached(inTerminal(['arctic-fetch'], true)); close(); break;
         case 'install': Quickshell.execDetached(['arctic-start-installer']); close(); break;
         case 'calc': Quickshell.execDetached(['wl-copy', '--', item.name]); close(); break;
+        case 'setting': Quickshell.execDetached(['arctic-settings', item.page].concat(item.key ? [item.key] : [])); close(); break;
+        case 'window': if (item.ref) item.ref.activate(); close(); break;
+        case 'action': item.action.execute(); close(); break;
+        case 'web': Quickshell.execDetached(['xdg-open', item.url]); close(); break;
+        case 'remind': Quickshell.execDetached(['arctic-remind', '--', item.args]); close(); break;
+        // Shift + Enter opens the folder a file is in.
+        case 'file': Quickshell.execDetached(['xdg-open', alternate && !item.folder ? item.path.replace(/\/[^/]*$/, '') || '/' : item.path]); close(); break;
         case 'command':
             if (alternate) Quickshell.execDetached(inTerminal(['sh', '-c', item.name], true));
             else Quickshell.execDetached(['sh', '-c', item.name]);
@@ -196,7 +230,7 @@ Popover {
                     anchors.rightMargin: Theme.space3
                     spacing: Theme.space3
                     Icon {
-                        name: launcher.view === 'apps' ? 'grid' : launcher.parsed.mode === 'calc' ? 'hash' : launcher.parsed.mode === 'command' ? 'prompt' : 'search'
+                        name: launcher.view === 'apps' ? 'grid' : launcher.parsed.mode === 'calc' ? 'hash' : launcher.parsed.mode === 'command' ? 'prompt' : launcher.parsed.mode === 'web' ? 'globe' : 'search'
                         size: 20
                         color: Theme.inkMuted
                     }
@@ -233,7 +267,7 @@ Popover {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: !field.text
-                            text: launcher.view === 'apps' ? 'Search every app' : 'Search apps, or type = to calculate'
+                            text: launcher.view === 'apps' ? 'Search every app' : 'Search apps, settings, windows and files'
                             color: Theme.inkSubtle
                             font: field.font
                         }
@@ -270,6 +304,8 @@ Popover {
                     height: 52
                     radius: Theme.radiusMd
                     color: selected ? Theme.accentSoft : rowMouse.containsMouse ? Theme.surfaceSunken : 'transparent'
+                    border.width: selected && Theme.highContrast ? Theme.lineWidth : 0      // high contrast: an edge too
+                    border.color: Theme.focus
                     Behavior on color { ColorAnimation { duration: Theme.durationFast } }
                     RowLayout {
                         anchors.fill: parent
@@ -366,6 +402,11 @@ Popover {
                     label: 'remove'
                     keys: [ Kbd { text: 'Delete' } ]
                     visible: !Session.live && !!launcher.results[launcher.current] && launcher.results[launcher.current].kind === 'app'
+                }
+                Hint {
+                    label: 'on the graphics chip'
+                    visible: removeHint.visible && sources.hybridGpu
+                    keys: [ Kbd { text: 'Shift + Enter' } ]
                 }
                 Item { Layout.fillWidth: true }
                 // (they make room for "remove" while an app is selected)

@@ -21,6 +21,61 @@ Press `Super + Shift + T` to switch between light and dark. The bar, launcher, w
 terminal, notifications, lock screen and your apps all change together, and the Arctic wallpapers
 switch to their matching version.
 
+### Light by day, dark at night
+
+Arctic Linux can switch by itself: in Settings › Appearance, **Switch light and dark by itself**
+is **Off** (the default), **Sunset to sunrise** or **Custom hours** (for example light from 07:00,
+dark from 19:00). Sunrise and sunset are worked out on the computer from where your time zone is
+(tzdata's coordinates for it): no location service, nothing is sent anywhere. `Super + Shift + T`
+still switches whenever you like; the schedule takes over again at the next change. The same from
+a terminal:
+
+```sh
+arctic-daylight                  # the schedule and today's times
+arctic-daylight sun              # light from sunrise, dark from sunset
+arctic-daylight hours 07:00 19:00
+arctic-daylight off
+```
+
+It uses `arctic-theme light|dark`, so with **Match colours to wallpaper** on it switches your
+wallpaper's theme between its light and dark take. A change that falls while the computer sleeps
+happens when it wakes. The setting is kept in `~/.config/arctic/daylight.json`.
+
+## More themes
+
+Settings › Appearance › **More themes** has ten more looks, each drawn as a small desktop in its
+own colours: **Nord**, **Catppuccin Mocha** and **Latte**, **Gruvbox** and **Gruvbox Light**,
+**Tokyo Night**, **Rosé Pine** and **Rosé Pine Dawn**, **Everforest** and **Everforest Light**
+(package `arctic-themes-extra`). Click one to use it, or `arctic-theme set catppuccin-mocha`.
+
+They are made by Arctic's theme engine from each theme's published colours, so they behave like
+Winter and Polar night: the same contrast guarantees (the build refuses a theme that misses one),
+every app that follows the theme follows them, and the warm "here" accent stays, so the selected
+row or the focused field looks like "here" in every theme. A theme with a light and a dark take
+is a pair: `Super + Shift + T` (and [light by day, dark at night](#light-by-day-dark-at-night))
+switches between Catppuccin Latte and Mocha, not to Winter. The colour sources and licences are
+in `design/themes/<name>/SOURCE`.
+
+### A theme from the web
+
+**Settings › Appearance › Add a theme from the web**, or:
+
+```sh
+arctic-theme install https://github.com/owner/omarchy-nord-theme   # GitHub, GitLab or Codeberg
+arctic-theme install ~/Downloads/some-theme.tar.gz                 # or a .tar.gz of one
+arctic-theme set nord                                              # the name: without omarchy- / -theme
+arctic-theme remove nord                                           # only themes you added
+```
+
+Arctic reads the theme's `colors.toml` (the keys Omarchy themes use; a `light.mode` file makes it a
+light theme) and makes an Arctic theme from it with the same engine and contrast guarantees as the
+gallery, so every app that follows the theme follows it. Its pictures (`backgrounds/*.png`, `.jpg`,
+`.webp`, at most 24, each opened to check it is a picture) and `preview.png` are kept in the
+theme's folder, `backgrounds/` (add them with **Add pictures…** to use one as the wallpaper). Nothing
+else is kept: terminal and editor configs, scripts, templates and links are left out and listed,
+so installing a theme never runs anything from it. The download is at most 50 MB. It lands in
+`~/.config/arctic/themes/<name>/`, with `source.json` saying where it came from.
+
 ## Colours from your wallpaper
 
 When you use a picture of your own as the wallpaper, Arctic Linux makes a theme from it: the
@@ -52,6 +107,7 @@ arctic-theme mode dark           # light or dark for wallpaper colours: auto, da
 arctic-theme toggle              # light <-> dark, the same as Super + Shift + T
 arctic-theme reload              # apply the theme to running apps again and run the hooks
 arctic-theme current --json      # the theme's name, mode, colours and settings, as JSON
+arctic-theme contrast on         # high contrast for whatever theme is active (off: back to normal)
 ```
 
 - `set` with any theme but `wallpaper` turns **Match colours to wallpaper** off. `set wallpaper`
@@ -71,6 +127,7 @@ and the login screen uses it too.
 | `~/.config/arctic/current` | A link to the folder of the theme in use. Apps read their colours through it. |
 | `~/.config/arctic/theme` | The name of the theme in use (the desktop shell watches it). |
 | `~/.config/arctic/themes/wallpaper/` | The theme made from your wallpaper |
+| `~/.local/state/arctic/themes-hc/` | High-contrast takes of the themes you used with high contrast on (made again when needed) |
 | `/usr/share/arctic/themes/` | Winter and Polar night |
 
 ## Which apps follow the theme
@@ -130,9 +187,28 @@ arctic-wallpaper current                   # print the picture in use
 
 PNG, JPEG, WebP, GIF, BMP, TIFF and SVG pictures all work.
 
+### A new wallpaper every so often
+
+**Settings → Appearance → Change the wallpaper by itself**, or:
+
+```sh
+arctic-wallpaper rotate 1h                 # every hour, from your wallpaper folder, in name order
+arctic-wallpaper rotate 30m arctic --shuffle   # every 30 minutes, Arctic's own, in random order
+arctic-wallpaper rotate 1d ~/Pictures/Trips    # every day, from any folder
+arctic-wallpaper rotate off                # stop
+arctic-wallpaper next                      # the next picture now
+```
+
+Only the picture changes: the wallpaper you chose (`~/.config/arctic/wallpaper`) and the colours
+stay, so **Match colours to wallpaper** doesn't remake the theme every half hour, and a theme
+switch or the next login starts from your choice again. In random order every picture comes once
+before any comes again. Your [wallpaper hooks](#hooks-for-other-events) run with each picture.
+The setting is kept in `~/.config/arctic/wallpaper-rotate.json` and runs as the systemd user
+timer `arctic-wallpaper-rotate` (`systemctl --user list-timers` shows the next change).
+
 ## Reduced motion
 
-If animations bother you, turn them off with **Reduce motion** in Settings (**Appearance**), or:
+If animations bother you, turn them off with **Reduce motion** in Settings (**Accessibility**), or:
 
 ```sh
 arctic-motion off     # no window animations, the shell only fades, the terminal fox stays still
@@ -142,6 +218,21 @@ arctic-motion         # show the current setting
 
 This also turns off animations in GTK apps. For the start-up screen, add `arctic.reduce_motion=1`
 to the kernel command line; the fox and its dots then stay still.
+
+## High contrast
+
+**High contrast** in Settings (**Accessibility**), or `arctic-theme contrast on`, keeps the theme
+you chose, light or dark, and draws it with more contrast: text at least 12:1 against its
+background (7:1 for secondary text, status colours and amber "here" text), lines and focus rings
+you can see (4.5:1, and thicker in the shell's menus), solid instead of frosted panels and fewer
+shades of background. Hues stay the same, so Nord is still Nord.
+
+Every app that follows the theme follows this too, and GTK 4 apps also get their own
+high-contrast style. Switching themes, light and dark, or the wallpaper keeps it on. The
+high-contrast take of a theme is made the first time you use it (in
+`~/.local/state/arctic/themes-hc/`), which takes a second.
+
+`settings.json` remembers it as `"contrast": "high"`.
 
 ## The screen frame
 
@@ -293,6 +384,33 @@ cp "$ARCTIC_THEME_DIR/kitty.conf" ~/.config/my-app/colors.conf
 A file of yours with the same name as one of Arctic's replaces it, and a file of that name that
 isn't executable turns Arctic's hook off. Hooks must be quick: each is stopped after 5 seconds,
 and one that fails is reported but never stops the switch.
+
+### Hooks for other events
+
+The same rules work for more than the theme. Put executable files in the event's folder in
+`~/.config/arctic/`, and `arctic-hook` runs them when it happens:
+
+| Folder | When | `$1` |
+|---|---|---|
+| `wallpaper-hooks.d` | You chose a new wallpaper | the picture |
+| `font-hooks.d` | You chose another code font | the font |
+| `lock-hooks.d` | The screen has locked | — |
+| `unlock-hooks.d` | The screen has unlocked | — |
+| `battery-low-hooks.d` | The battery is low | the percentage |
+| `post-update-hooks.d` | The first login after updates were installed at a restart | the Arctic version |
+| `login-hooks.d` | Every login, once the desktop has started | — |
+
+Each hook also gets `ARCTIC_HOOK_EVENT` and `ARCTIC_HOOK_VALUE`. Names ending in `.sample` are
+skipped, so you can keep examples next to your hooks. What a hook prints shows up in
+`journalctl --user -t arctic-hook`. For example, to pause music when the screen locks:
+
+```sh
+#!/bin/sh
+# ~/.config/arctic/lock-hooks.d/10-pause
+playerctl pause
+```
+
+`arctic-hook --list` shows every event and the hooks it would run.
 
 ## Making your own theme
 

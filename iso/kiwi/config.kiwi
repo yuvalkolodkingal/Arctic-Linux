@@ -80,6 +80,9 @@
 		<package name="zsh"/>
 		<package name="Thunar"/>
 		<package name="vlc"/>
+		<!-- stream 6: more themes and the terminal's Nerd Font symbols (arctic-shell recommends them). -->
+		<package name="arctic-themes-extra"/>
+		<package name="arctic-fonts-symbols"/>
 		<!-- App theming (docs/BUILD-SPEC.md "App theming"; arctic-desktop-config requires them):
 		     adw-gtk3 for GTK 3 apps, qt5ct/qt6ct for Qt 5 (VLC) and Qt 6 apps, btop (recommended
 		     by arctic-desktop). Fedora builds qt5ct/qt6ct with KDE colour-scheme support, which

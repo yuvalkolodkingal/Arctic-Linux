@@ -17,4 +17,5 @@ PrintersPage 1.0 PrintersPage.qml
 DateTimePage 1.0 DateTimePage.qml
 UsersPage 1.0 UsersPage.qml
 AboutPage 1.0 AboutPage.qml
+AccessibilityPage 1.0 AccessibilityPage.qml
 WallhavenBrowser 1.0 WallhavenBrowser.qml

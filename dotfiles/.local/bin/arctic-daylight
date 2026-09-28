@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""arctic-daylight — switch between light and dark by itself (Settings > Appearance).
+
+  arctic-daylight [--json]          the schedule, today's times and what it wants now
+  arctic-daylight off               only when you switch (Super + Shift + T); the default
+  arctic-daylight sun               light from sunrise, dark from sunset, where your time zone is
+  arctic-daylight hours LIGHT DARK  light from LIGHT, dark from DARK (24-hour HH:MM)
+  arctic-daylight apply             switch to what the schedule says now and set a timer for the
+                                    next change (login, that timer and every change above run it)
+
+Switching is `arctic-theme light|dark`: Winter and Polar night, or the light or dark take on
+your wallpaper's colours. Switching by hand still works; the schedule takes over again at the
+next sunrise or sunset. Sunrise and sunset come from the place chosen for the weather
+(~/.config/arctic/location.json), else the coordinates tzdata gives your time zone
+(/usr/share/zoneinfo/zone1970.tab): no location service, nothing leaves the computer.
+The next change is a transient systemd user timer (arctic-daylight) on the wall clock, so it
+also happens when the computer wakes after sleeping through it.
+Settings: ~/.config/arctic/daylight.json.
+"""
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
+import sys
+from datetime import date, datetime, time as dtime, timedelta
+
+HOME = os.path.expanduser("~")
+CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "arctic")
+FILE = os.path.join(CONFIG, "daylight.json")
+ZONEINFO = os.environ.get("ARCTIC_ZONEINFO") or "/usr/share/zoneinfo"
+LOCALTIME = os.environ.get("ARCTIC_LOCALTIME") or "/etc/localtime"
+DEFAULTS = {"mode": "off", "light": "07:00", "dark": "19:00"}
+HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+UNIT = "arctic-daylight"
+
+
+class Error(Exception):
+    pass
+
+
+# ---- the sun ------------------------------------------------------------------------------------
+
+def sun_times(day, lat, lon):
+    """Sunrise and sunset on `day` at (lat, lon), as Unix times (the sunrise equation, NOAA's
+    constants; within a minute or two), or (None, None) in polar day or night."""
+    n = (date(day.year, day.month, day.day) - date(2000, 1, 1)).days + 0.0008
+    mean = n - lon / 360.0
+    anomaly = math.radians((357.5291 + 0.98560028 * mean) % 360)
+    centre = 1.9148 * math.sin(anomaly) + 0.02 * math.sin(2 * anomaly) + 0.0003 * math.sin(3 * anomaly)
+    ecliptic = math.radians((math.degrees(anomaly) + centre + 180 + 102.9372) % 360)
+    transit = 2451545.0 + mean + 0.0053 * math.sin(anomaly) - 0.0069 * math.sin(2 * ecliptic)
+    declination = math.asin(math.sin(ecliptic) * math.sin(math.radians(23.4397)))
+    phi = math.radians(lat)
+    cos_hour = (math.sin(math.radians(-0.833)) - math.sin(phi) * math.sin(declination)) / (math.cos(phi) * math.cos(declination))
+    if not -1 <= cos_hour <= 1:
+        return None, None
+    hour = math.degrees(math.acos(cos_hour)) / 360.0
+    to_unix = lambda julian: (julian - 2440587.5) * 86400.0   # noqa: E731
+    return to_unix(transit - hour), to_unix(transit + hour)
+
+
+def parse_coordinates(text):
+    """ISO 6709 as in zone1970.tab (+DDMM+DDDMM or +DDMMSS+DDDMMSS) -> (lat, lon)."""
+    m = re.fullmatch(r"([+-])(\d{2})(\d{2})(\d{2})?([+-])(\d{3})(\d{2})(\d{2})?", text)
+    if not m:
+        return None
+    lat = int(m.group(2)) + int(m.group(3)) / 60 + int(m.group(4) or 0) / 3600
+    lon = int(m.group(6)) + int(m.group(7)) / 60 + int(m.group(8) or 0) / 3600
+    return (lat if m.group(1) == "+" else -lat, lon if m.group(5) == "+" else -lon)
+
+
+def time_zone():
+    zone = os.environ.get("ARCTIC_TIMEZONE") or ""
+    if not zone:
+        target = os.path.realpath(LOCALTIME)
+        marker = os.sep + "zoneinfo" + os.sep
+        if marker in target:
+            zone = target.split(marker, 1)[1]
+    return zone
+
+
+def location():
+    """(lat, lon, where): the place chosen for the weather (Settings > Appearance > Weather,
+    ~/.config/arctic/location.json), else your time zone's coordinates; or None."""
+    try:
+        with open(os.path.join(CONFIG, "location.json"), encoding="utf-8") as f:
+            chosen = json.load(f)
+        lat, lon = float(chosen["lat"]), float(chosen["lon"])
+        if -90 <= lat <= 90 and -180 <= lon <= 180 and isinstance(chosen.get("name"), str) and chosen["name"]:
+            return (lat, lon, chosen["name"][:80])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    zone = time_zone()
+    if not zone:
+        return None
+    try:
+        with open(os.path.join(ZONEINFO, "zone1970.tab"), encoding="utf-8") as f:
+            for line in f:
+                cols = line.rstrip("\n").split("\t")
+                if len(cols) >= 3 and not line.startswith("#") and cols[2] == zone:
+                    coords = parse_coordinates(cols[1])
+                    return (coords[0], coords[1], zone) if coords else None
+    except OSError:
+        pass
+    return None
+
+
+# ---- the schedule -------------------------------------------------------------------------------
+
+def load():
+    data = dict(DEFAULTS)
+    try:
+        with open(FILE, encoding="utf-8") as f:
+            saved = json.load(f)
+        if isinstance(saved, dict):
+            if saved.get("mode") in ("off", "sun", "hours"):
+                data["mode"] = saved["mode"]
+            for key in ("light", "dark"):
+                if isinstance(saved.get(key), str) and HHMM.match(saved[key]):
+                    data[key] = saved[key]
+    except (OSError, ValueError):
+        pass
+    return data
+
+
+def save(data):
+    os.makedirs(CONFIG, exist_ok=True)
+    tmp = FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, FILE)
+
+
+def at(day, hhmm):
+    h, m = (int(x) for x in hhmm.split(":"))
+    return datetime.combine(day, dtime(h, m))
+
+
+def day_times(data, day, place):
+    """(light from, dark from) on `day` as local datetimes, and where they came from."""
+    if data["mode"] == "sun" and place:
+        rise, fall = sun_times(day, place[0], place[1])
+        if rise is not None:
+            return datetime.fromtimestamp(rise).replace(second=0, microsecond=0), \
+                datetime.fromtimestamp(fall).replace(second=0, microsecond=0), "sun"
+    return at(day, data["light"]), at(day, data["dark"]), "hours"
+
+
+def plan(data, now, place):
+    """What the schedule wants now ('light', 'dark' or None when off) and when it next changes."""
+    if data["mode"] == "off":
+        return None, None, None
+    light, dark, source = day_times(data, now.date(), place)
+    if light <= dark:
+        want = "light" if light <= now < dark else "dark"
+    else:                                       # custom hours that wrap midnight
+        want = "dark" if dark <= now < light else "light"
+    changes = []
+    for offset in (0, 1, 2):
+        d = now.date() + timedelta(days=offset)
+        l, k, _ = day_times(data, d, place)
+        changes += [l, k]
+    upcoming = sorted(c for c in changes if c > now)
+    return want, (upcoming[0] if upcoming else None), source
+
+
+def status(now=None):
+    now = now or datetime.now()
+    data = load()
+    place = location()
+    want, nxt, source = plan(data, now, place)
+    light, dark, _ = day_times(data, now.date(), place)
+    out = dict(ok=True, mode=data["mode"], light=data["light"], dark=data["dark"], want=want,
+               next=nxt.isoformat(timespec="minutes") if nxt else None,
+               today=dict(light=light.strftime("%H:%M"), dark=dark.strftime("%H:%M")) if data["mode"] != "off" else None,
+               zone=place[2] if place else time_zone(), located=place is not None)
+    if data["mode"] == "sun" and source != "sun":
+        out["message"] = ("No sunrise or sunset for your time zone today; using {} and {}.".format(data["light"], data["dark"])
+                          if place else "Arctic doesn't know where your time zone is; using {} and {}.".format(data["light"], data["dark"]))
+    return out
+
+
+# ---- doing it -----------------------------------------------------------------------------------
+
+def run(argv):
+    try:
+        return subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def current_mode():
+    result = run(["arctic-theme", "current", "--json"]) if shutil.which("arctic-theme") else None
+    try:
+        return json.loads(result.stdout).get("mode") if result and result.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def apply(now=None):
+    now = now or datetime.now()
+    data = load()
+    if shutil.which("systemctl"):
+        run(["systemctl", "--user", "stop", UNIT + ".timer"])
+    want, nxt, _ = plan(data, now, location())
+    if want is None:
+        return
+    if shutil.which("arctic-theme") and current_mode() != want:
+        run(["arctic-theme", want])
+    if nxt and shutil.which("systemd-run"):
+        run(["systemd-run", "--user", "--quiet", "--collect", "--unit", UNIT, "--description", "Arctic Linux: light or dark",
+             "--on-calendar", nxt.strftime("%Y-%m-%d %H:%M:%S"), "--timer-property", "AccuracySec=1s",
+             os.path.realpath(__file__), "apply"])
+
+
+def main(argv):
+    args = [a for a in argv if a != "--json"]
+    as_json = "--json" in argv
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0
+    verb = args[0] if args else ""
+    if verb == "apply" and len(args) == 1:
+        apply()
+        return 0
+    if verb in ("off", "sun") and len(args) == 1:
+        data = load()
+        data["mode"] = verb
+        save(data)
+        apply()
+    elif verb == "hours" and len(args) == 3:
+        if not (HHMM.match(args[1]) and HHMM.match(args[2])) or args[1] == args[2]:
+            raise Error("Give two different times of day, like 07:00 19:00.")
+        data = load()
+        data.update(mode="hours", light="{:0>5}".format(args[1]), dark="{:0>5}".format(args[2]))
+        save(data)
+        apply()
+    elif verb:
+        raise Error("usage: arctic-daylight [--json] | off | sun | hours LIGHT DARK | apply")
+    info = status()
+    if as_json or verb:
+        print(json.dumps(info))
+    elif info["mode"] == "off":
+        print("off: light or dark only when you switch")
+    else:
+        print("{}: light from {}, dark from {} today; next change {}".format(
+            info["mode"], info["today"]["light"], info["today"]["dark"], info["next"] or "—"))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Error as e:
+        print(json.dumps({"ok": False, "error": str(e)}))
+        sys.exit(1)

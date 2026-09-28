@@ -2,6 +2,7 @@
 
   Everyday
     Super + Space            Apps (press again to close)
+    Super + Alt + Space      Command menu: every system action
     Super + Enter            Terminal
     Super + Alt + Enter      Drop-down terminal (again to hide)
     Super + B                Browser
@@ -73,6 +74,11 @@
     Ctrl + Shift + Esc       What's running (system monitor)
     Super + Ctrl + S         Share: send to phones and computers nearby
     Super + Shift + R        Reload the desktop config
+    Super + Ctrl + R         Set a reminder
+    Super + Alt + K          Keyboard pointer (move and click with the keyboard)
+
+  Hardware keys
+    Caps Lock, Num Lock      Shows whether it is on
 
   Capture
     Print                    Screenshot of an area (drag, or click a window)
@@ -83,6 +89,7 @@
     Super + Ctrl + Print     Copy the text in an area
     Super + Shift + C        Pick a colour
     Super + Alt + R          Record the screen (again to stop)
+    Super + Ctrl + C         Capture menu (every capture tool)
 
   Touchpad
     3 fingers                Move focus

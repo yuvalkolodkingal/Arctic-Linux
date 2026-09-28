@@ -13,6 +13,7 @@ screen at any time, and type to find one (`screen`, `window`, `Alt`…).
 | Shortcut | Does |
 |---|---|
 | `Super + Space` | Open the launcher: apps, `=` calculator, `>` commands (press again to close) |
+| `Super + Alt + Space` | The [command menu](Command-Menu): every system action in one place |
 | `Super + Enter` | Open your terminal |
 | `Super + Alt + Enter` | The drop-down terminal: shows over your windows; press again to hide it |
 | `Super + B` | Open your browser |
@@ -114,6 +115,8 @@ left `Alt` for the `Super + Alt` shortcuts.
 | `Ctrl + Shift + Esc` | What's running: a system monitor (Mission Center or GNOME System Monitor when installed, else btop) |
 | `Super + Ctrl + S` | Share: send the clipboard or files with [LocalSend](Sharing-and-Phones), or open KDE Connect |
 | `Super + Shift + R` | Reload the desktop configuration |
+| `Super + Ctrl + R` | Set a reminder: type when and what, like `10m tea` or `17:30 call Ana` |
+| `Super + Alt + K` | Keyboard pointer: labels on the screen; type one to move the pointer there and click (when wl-kbptr is installed) |
 
 ## Screenshots and capture
 
@@ -126,6 +129,7 @@ left `Alt` for the `Super + Alt` shortcuts.
 | `Super + Ctrl + Print` | Copy the text in an area (text recognition) |
 | `Super + Shift + C` | Pick a colour anywhere on the screen and copy it as `#rrggbb` |
 | `Super + Alt + R` | Record the screen (an area, a window or the screen, with or without sound); press again to stop |
+| `Super + Ctrl + C` | The capture menu: every capture tool in one list, for keyboards without `Print` ([command menu](Command-Menu) › Capture) |
 
 Screenshots are saved in `~/Pictures/Screenshots` and copied to the clipboard. Click the
 notification to open the picture; its other actions (middle-click it) show it in your file
@@ -149,6 +153,7 @@ These also work while the screen is locked.
 | Microphone mute | Turn the microphone off or on |
 | Brightness up / down | Change the brightness of the screen you're on (external monitors through DDC/CI) |
 | Display key (on many laptops, Fn + a function key with a screen on it) | The screens menu, as `Super + P` |
+| Caps Lock, Num Lock | Shows "Caps Lock on" or "off" for a moment (when the keyboard has the light) |
 | Play/Pause, Next, Previous | Control the music or video that's playing |
 | Keyboard light up / down | Change the keyboard backlight |
 
@@ -175,9 +180,13 @@ Tap to click and natural scrolling are on for touchpads.
 
 | Key | Does |
 |---|---|
-| Type | Search apps |
-| `=` then a sum | Calculator; `Enter` copies the answer |
+| Type | Search apps, Settings, open windows, app actions and files (the web is the last row) |
+| `=` then a sum | Calculator (units too, like `= 10 km to mi`); `Enter` copies the answer |
 | `>` then a command | Run a command; `Shift + Enter` runs it in the terminal |
+| `?` then words | Search the web |
+| `remind` then when and what | A reminder, like `remind 10m tea` or `remind 17:30 call Ana` |
+| `Shift + Enter` on a file | Open the folder it's in |
+| `Shift + Enter` on an app | On a laptop with two graphics chips: run it on the discrete one (`arctic-gpu run`) |
 | `↑` / `↓` | Move through the results |
 | `Enter` | Open |
 | `Shift + Delete`, or `Delete` with the cursor at the end | Remove the selected app (asks first) |

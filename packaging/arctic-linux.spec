@@ -9,6 +9,7 @@
 #   arctic-logos           branding/logos/ (install-path tree) system-logos
 #   arctic-backgrounds     design/wallpapers/*.svg (+ PNG rendered here)
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
+#   arctic-fonts-symbols   Nerd Fonts "Symbols Only" (Source1, the one download) + packaging/fonts
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
 #                          dotfiles/.local/bin → /usr/bin, packaging/updates/ (automatic updates,
@@ -39,6 +40,12 @@
 # docs/BUILD-SPEC.md §11). The fallback keeps rpmspec -q and dnf builddep working before the
 # -devel package is installed.
 %global webkit_built    %(pkg-config --modversion webkitgtk-6.0 2>/dev/null || echo 2.50)
+# --- stream 6: Nerd Font symbols (arctic-fonts-symbols). Fedora has no symbols-only Nerd Font,
+# so the upstream release is Source1, pinned by version and SHA-256 (checked in %%prep);
+# tools/build-rpms.sh downloads it next to the Mango tarball.
+%global nerd_version    3.5.1
+%global nerd_sha256     01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996
+# --- end stream 6
 
 Name:           arctic-linux
 Version:        0.3.0
@@ -49,6 +56,9 @@ Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manag
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
 URL:            https://github.com/yuvalkolodkingal/Arctic-Linux
 Source0:        arctic-linux-%{version}.tar.gz
+# --- stream 6
+Source1:        https://github.com/ryanoasis/nerd-fonts/releases/download/v%{nerd_version}/NerdFontsSymbolsOnly.tar.xz#/NerdFontsSymbolsOnly-%{nerd_version}.tar.xz
+# --- end stream 6
 
 ExclusiveArch:  x86_64
 
@@ -60,6 +70,9 @@ BuildRequires:  systemd-rpm-macros
 BuildRequires:  desktop-file-utils
 BuildRequires:  findutils
 BuildRequires:  tar
+# --- stream 6: Source1 is a .tar.xz
+BuildRequires:  xz
+# --- end stream 6
 # %%check: packaging/updates' unit tests (arctic-update's helper)
 BuildRequires:  python3
 # The theme engine renders the static themes in %%build; %%check runs its tests.
@@ -147,6 +160,23 @@ Requires:       fontpackages-filesystem
 %description -n arctic-fonts
 Figtree (SIL Open Font License), the interface typeface of Arctic Linux, installed system
 wide. JetBrains Mono comes from Fedora's jetbrains-mono-fonts-all.
+
+# --- stream 6 (Nerd Font symbols) -------------------------------------------------------------
+%package -n arctic-fonts-symbols
+Summary:        Nerd Font symbols for the terminal (icons in yazi, eza and prompts)
+BuildArch:      noarch
+# The release's LICENSE (MIT, the patcher) and its readme's table of icon sets: Codicons and Font
+# Awesome CC-BY-4.0, Material Design Apache-2.0, Pomicons OFL-1.1-RFN, Weather Icons OFL-1.1,
+# Font Logos Unlicense, the rest MIT.
+License:        MIT AND CC-BY-4.0 AND Apache-2.0 AND OFL-1.1-RFN AND OFL-1.1 AND Unlicense
+Requires:       fontpackages-filesystem
+Requires:       fontconfig
+
+%description -n arctic-fonts-symbols
+The "Symbols Only" fonts of Nerd Fonts %{nerd_version} (Symbols Nerd Font and Symbols Nerd Font
+Mono), set up as a fallback after the code font, so file managers like yazi, eza --icons and
+shell prompts show their icons in any terminal without a patched font.
+# --- end stream 6
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-selinux
@@ -277,6 +307,19 @@ in /usr/share/arctic/theme-hooks.d (GTK, Qt, Zed, Zen). App theming: the GTK, ic
 and font defaults for GTK/libadwaita and Flatpak apps (dconf distro database) and the Flatpak
 overrides that let Flatpak apps read the GTK colours.
 
+# --- stream 6 (theme gallery) ------------------------------------------------------------------
+%package -n arctic-themes-extra
+Summary:        More themes for Arctic Linux: Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine, Everforest
+BuildArch:      noarch
+Requires:       arctic-desktop-config = %{version}-%{release}
+
+%description -n arctic-themes-extra
+Optional themes for Arctic Linux, made from the colours of Nord, Catppuccin, Gruvbox, Tokyo
+Night, Rosé Pine and Everforest by Arctic's theme engine: the same roles and contrast
+guarantees as Winter and Polar night, with the amber "here" accent kept. Pick one in
+Settings > Appearance or with arctic-theme set NAME.
+# --- end stream 6
+
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
 Summary:        Arctic Linux desktop shell (Quickshell)
@@ -315,6 +358,17 @@ Recommends:     ddcutil
 # Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
 Recommends:     qrencode
 Recommends:     NetworkManager-openvpn
+# --- stream 6 (launcher, command menu): the launcher finds files with fd and converts units
+# with qalc when they are installed.
+Recommends:     fd-find
+Recommends:     qalculate
+# The keyboard pointer (Super + Alt + K, arctic-kbptr).
+Recommends:     wl-kbptr
+# The theme gallery in Settings > Appearance.
+Recommends:     arctic-themes-extra = %{version}-%{release}
+# Icons in the terminal (yazi, eza --icons, prompts).
+Recommends:     arctic-fonts-symbols = %{version}-%{release}
+# --- end stream 6
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar with its own menus (network
@@ -628,6 +682,11 @@ networking, portals, Flatpak and Nix.
 # =============================================================================================
 %prep
 %autosetup -n arctic-linux-%{version}
+# --- stream 6: Source1 (Nerd Font symbols), only as the pinned release
+echo "%{nerd_sha256}  %{SOURCE1}" | sha256sum -c --quiet -
+mkdir -p _build/nerd-symbols
+tar -xJf %{SOURCE1} -C _build/nerd-symbols
+# --- end stream 6
 
 %build
 # ---- Go: arcticd + arctic-install (stdlib only, or vendored modules) ----
@@ -663,6 +722,15 @@ for t in winter polar-night; do
   PYTHONPATH=design python3 -m themegen builtin "$t" \
     | PYTHONPATH=design python3 -m themegen render --palette - --out "_build/themes/$t" --quiet
 done
+# --- stream 6: the theme gallery (design/themes/*/colors.toml); `named` refuses a palette that
+# can't meet the contrast guarantees, so a bad one fails the build.
+rm -rf _build/themes-extra
+for toml in design/themes/*/colors.toml; do
+  t="$(basename "$(dirname "$toml")")"
+  PYTHONPATH=design python3 -m themegen named --colors "$toml" --name "$t" \
+    | PYTHONPATH=design python3 -m themegen render --palette - --out "_build/themes-extra/$t" --quiet
+done
+# --- end stream 6
 
 # ---- Wallpapers: SVG → 3840×2160 PNG ----
 mkdir -p _build/backgrounds
@@ -741,6 +809,15 @@ if ls branding/fonts/Figtree-*.ttf >/dev/null 2>&1; then
 else
   install -pm 0644 design/fonts/Figtree-*.woff2 %{buildroot}%{_datadir}/fonts/arctic/
 fi
+# --- stream 6: arctic-fonts-symbols (after the code font in fontconfig's fallback list)
+install -d %{buildroot}%{_datadir}/fonts/arctic-symbols
+install -pm 0644 _build/nerd-symbols/SymbolsNerdFont-Regular.ttf _build/nerd-symbols/SymbolsNerdFontMono-Regular.ttf \
+  %{buildroot}%{_datadir}/fonts/arctic-symbols/
+install -Dpm 0644 packaging/fonts/66-arctic-nerd-symbols.conf \
+  %{buildroot}%{_datadir}/fontconfig/conf.avail/66-arctic-nerd-symbols.conf
+install -d %{buildroot}%{_sysconfdir}/fonts/conf.d
+ln -s %{_datadir}/fontconfig/conf.avail/66-arctic-nerd-symbols.conf %{buildroot}%{_sysconfdir}/fonts/conf.d/
+# --- end stream 6
 
 # ---------------------------------------------------------------- arctic-selinux
 install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinux/packages/arctic-nix.pp
@@ -802,6 +879,9 @@ ln -s %{_datadir}/arctic/themes/polar-night/fastfetch/config.jsonc %{buildroot}%
 install -Dpm 0644 dotfiles/.local/share/arctic/keys.txt %{buildroot}%{_datadir}/arctic/keys.txt
 install -d %{buildroot}%{_datadir}/arctic/themes
 cp -a _build/themes/. %{buildroot}%{_datadir}/arctic/themes/
+# --- stream 6: the theme gallery (arctic-themes-extra)
+install -d %{buildroot}%{_datadir}/arctic/themes-extra
+cp -a _build/themes-extra/. %{buildroot}%{_datadir}/arctic/themes-extra/
 # The theme engine (arctic-themegen, run by arctic-theme) and the design data it reads.
 themegen=%{buildroot}%{_datadir}/arctic/themegen
 install -d "$themegen/data/exports" "$themegen/data/icons" "$themegen/data/logos"
@@ -1279,6 +1359,15 @@ fi
 %files -n arctic-fonts
 %{_datadir}/fonts/arctic/
 
+# --- stream 6
+%files -n arctic-fonts-symbols
+%license _build/nerd-symbols/LICENSE
+%doc _build/nerd-symbols/README.md
+%{_datadir}/fonts/arctic-symbols/
+%{_datadir}/fontconfig/conf.avail/66-arctic-nerd-symbols.conf
+%{_sysconfdir}/fonts/conf.d/66-arctic-nerd-symbols.conf
+# --- end stream 6
+
 %files -n arctic-selinux
 %license LICENSE
 %dir %{_datadir}/selinux/packages
@@ -1343,6 +1432,11 @@ fi
 %dir %{_sysconfdir}/xdg/xdg-desktop-portal-wlr
 %config(noreplace) %{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
 %{_libexecdir}/arctic/arctic-share-picker
+
+# --- stream 6
+%files -n arctic-themes-extra
+%license LICENSE
+%{_datadir}/arctic/themes-extra/
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic

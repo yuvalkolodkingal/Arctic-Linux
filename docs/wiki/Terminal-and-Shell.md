@@ -129,6 +129,27 @@ font_size 12
 background_opacity 0.95
 ```
 
+### The code font
+
+Settings › Appearance › **Code font** (or the [command menu](Command-Menu)'s Style › Code font)
+picks any monospace font installed. `arctic-font` changes it in kitty (which reloads), foot, and
+alacritty, sets GTK's monospace font, and the shell's own code text follows. It only changes a
+line that still holds what Arctic wrote there, so a font you set yourself stays, and it says so:
+
+```sh
+arctic-font list                 # monospace fonts installed
+arctic-font set "Fira Code"
+arctic-font size 12              # the terminals' size (arctic-font size reset: 10.5)
+```
+
+### Icons in the terminal
+
+yazi, `eza --icons` and many prompts draw icons from the Nerd Font symbols. Arctic installs them
+(the `arctic-fonts-symbols` package: Nerd Fonts' "Symbols Only" fonts) and puts them after the code
+font, so whichever code font you pick, letters come from it and the icons from the symbols; you
+don't need a patched "Nerd Font". Settings › Appearance › **Icons in the terminal** says whether
+they are installed. A patched Nerd Font you install yourself shows up in the code font list too.
+
 kitty's own shortcuts work as usual; for example `Ctrl + Shift + T` opens a new tab and
 `Ctrl + Shift + Enter` a new window inside kitty. See kitty's documentation for the full list.
 

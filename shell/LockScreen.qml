@@ -103,8 +103,10 @@ Scope {
     onSecureChanged: {
         fingerMisses = 0;
         fingerFailures = 0;
-        if (secure)
+        if (secure) {
             listenForFinger();
+            Quickshell.execDetached(['arctic-hook', 'lock']);     // your lock hooks, once every screen is covered
+        }
     }
     onLockedChanged: if (!locked && fingerPam.active) fingerPam.abort()
     Process {
@@ -174,6 +176,7 @@ Scope {
             NotificationService.locked = false;
             root.password = '';
             root.state = 'idle';
+            Quickshell.execDetached(['arctic-hook', 'unlock']);
         }
     }
 

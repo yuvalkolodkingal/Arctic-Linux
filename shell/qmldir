@@ -5,6 +5,8 @@ singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 singleton UpdateService 1.0 UpdateService.qml
+singleton SettingsIndex 1.0 SettingsIndex.qml
+singleton WeatherService 1.0 WeatherService.qml
 singleton NotificationService 1.0 NotificationService.qml
 singleton KeyboardService 1.0 KeyboardService.qml
 singleton RecordService 1.0 RecordService.qml
@@ -32,10 +34,12 @@ BluetoothPairDialog 1.0 BluetoothPairDialog.qml
 BluetoothPanel 1.0 BluetoothPanel.qml
 CalendarPanel 1.0 CalendarPanel.qml
 ClipboardPanel 1.0 ClipboardPanel.qml
+CommandMenu 1.0 CommandMenu.qml
 DisplayPanel 1.0 DisplayPanel.qml
 DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
 EmojiPicker 1.0 EmojiPicker.qml
+FirstLogin 1.0 FirstLogin.qml
 FocusRing 1.0 FocusRing.qml
 FrozenScreens 1.0 FrozenScreens.qml
 HelperToggle 1.0 HelperToggle.qml
@@ -66,6 +70,7 @@ KeyboardItem 1.0 KeyboardItem.qml
 KeyboardPanel 1.0 KeyboardPanel.qml
 KeysSheet 1.0 KeysSheet.qml
 Launcher 1.0 Launcher.qml
+LauncherSources 1.0 LauncherSources.qml
 LiveWelcome 1.0 LiveWelcome.qml
 LockScreen 1.0 LockScreen.qml
 Mark 1.0 Mark.qml
@@ -87,6 +92,8 @@ Toasts 1.0 Toasts.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml
 Wallpapers 1.0 Wallpapers.qml
+WeatherCard 1.0 WeatherCard.qml
+WeatherItem 1.0 WeatherItem.qml
 WifiShare 1.0 WifiShare.qml
 WhatsNew 1.0 WhatsNew.qml
 Workspaces 1.0 Workspaces.qml

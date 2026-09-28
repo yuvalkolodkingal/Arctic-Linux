@@ -99,14 +99,38 @@ Use `↑` and `↓` to move, `Enter` to open, and `Esc` to go back or close. Pre
 to close it. The launcher hangs from the bar; drag its grip to dock it to another edge of the
 screen.
 
+### More than apps
+
+A search finds more than apps. The apps you open most come first.
+
+- **Settings**: a page ("Bluetooth") or a single setting ("Reduce motion") opens Settings
+  right at it.
+- **Open windows**: `Enter` brings the window forward.
+- **What an app can do**: its own actions, like a browser's "New private window".
+- **Files and folders** in your home folder, when `fd` is installed (Arctic installs it). `Enter`
+  opens one; `Shift + Enter` opens the folder it's in.
+- **Unit conversions**: `10 km to mi` or `72 °F to °C`, when `qalc` is installed (Arctic installs
+  it). `Enter` copies the answer.
+- **The web**: the last row searches the web for what you typed. Start with `?` to search only
+  the web. Pick the search engine in Settings › Default apps › Web search.
+
+### Reminders: start with `remind`
+
+`Super + Ctrl + R` opens the launcher with `remind ` typed. Say when, then what: `remind 10m tea`,
+`remind 1h 30m stretch`, `remind me at 17:30 to call Ana` or `remind 5pm leave`. The row shows
+when it will be; `Enter` sets it. When it's time, a notification you can't miss says it, with
+**Again in 10 minutes**. A reminder set before the laptop sleeps still comes when it wakes, but
+not after a restart. `arctic-remind list` shows what's set; **Cancel reminders** is in the
+[command menu](Command-Menu) (Apps).
+
 ### Calculator: start with `=`
 
 ![The launcher calculator showing the result of =12*4](images/launcher-calculator.png)
 
 Type `=` and a sum, like `=12*4` or `=(3+4)^2`. The answer appears as you type; `Enter` copies it
 to the clipboard. It understands `+ - * / % ^`, brackets, `pi` and `e`, and `sqrt`, `abs`, `round`,
-`floor`, `ceil`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `ln`, `log` and `exp`. It only does
-arithmetic, so nothing you type here can run a program.
+`floor`, `ceil`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `ln`, `log` and `exp`. What it can't
+work out (units, currencies, `= 3 h to min`) goes to `qalc` when that is installed.
 
 ### Commands: start with `>`
 

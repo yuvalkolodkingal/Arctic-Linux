@@ -88,11 +88,34 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   wallpaper picker (`Super + Shift + W`).
 - **Light or dark:** for the theme made from your wallpaper: Automatic (whatever suits the
   picture), Dark or Light.
+- **More themes:** Nord, Catppuccin, Gruvbox, Tokyo Night, Rosé Pine and Everforest, drawn from
+  their own colours; a pair (Catppuccin Latte and Mocha) switches as one with `Super + Shift + T`.
+- **Add a theme from the web:** paste a GitHub, GitLab or Codeberg link to a theme repository
+  (Omarchy themes work) and press **Install**. Only its colours and pictures are kept; the
+  notification says how many other files were left out. A theme you added has **Remove** on its
+  card (switch to another theme first).
+- **Weather** (off until you turn it on; nothing is asked before): **Weather in the calendar**
+  shows the weather now and for five days under the month, from
+  [Open-Meteo](https://open-meteo.com) (no account). **Place** is your time zone's city unless you
+  search for your town (Enter searches; pick one of the results); the light/dark schedule's
+  sunrise and sunset use the same place. **Units**: automatic (°F for US English, else °C), °C or
+  °F. Only the rounded coordinates
+  of the place (about 1 km) are sent, about once an hour while it is on.
+- **Icons in the terminal:** whether the Nerd Font symbols yazi, eza and prompts use are
+  installed (`arctic-fonts-symbols`), with a way to get them when they aren't.
+- **Code font:** the monospace font for the terminals (kitty, foot, alacritty), GTK's monospace
+  font and the shell (`arctic-font`); a font you set in a terminal's own file is left alone.
+- **Switch light and dark by itself:** Off, Sunset to sunrise (where your time zone is) or Custom
+  hours. See [Themes and customisation](Themes-and-Customisation#light-by-day-dark-at-night).
 - **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers` (the same
   list as the wallpaper picker). **Add pictures…** opens the file chooser; you can also drag
   pictures here from Files. Added pictures are copied into `~/Pictures/Wallpapers` (only real
   pictures: JPEG, PNG, WebP, BMP or GIF). Point at one of your own pictures to **rename** or
   **delete** it (or select it and press `F2` or `Delete`). The picture in use can't be deleted.
+- **Change the wallpaper by itself:** a new picture every 30 minutes, hour or day, from your
+  pictures or Arctic's own, in name order or **in random order** (every picture once before any
+  comes again). Your chosen wallpaper and the colours stay as they are; the next login starts from
+  the chosen one again. Wallpaper hooks run with each picture.
 - **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
   press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
   pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at
@@ -105,11 +128,7 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
 - **Wallhaven API key** (optional): with the key from your Wallhaven account (Settings → Account),
   searches use your account's filters, and **NSFW** can be ticked. It's kept in
   `~/.config/arctic/wallhaven.json`, which only you can read; **Remove** deletes it.
-- **Reduce motion:** windows and menus fade instead of moving, and the fox in the terminal stays
-  still.
-- **Text size in apps:** 100% to 175% for GTK apps such as Files and most dialogs. The bar and
-  menus keep their size.
-- **Pointer size** (Normal, Large, Larger) and **Pointer style** (the cursor themes installed).
+Reduce motion, text size and the pointer moved to [Accessibility](#accessibility) in 0.3.
 
 See [Themes and customisation](Themes-and-Customisation) for how themes work and `arctic-theme`.
 
@@ -232,6 +251,10 @@ Music, Pictures and PDF documents. The first four are saved in `~/.config/arctic
 would. **Get apps** installs more; they show up here. **Install and remove apps** opens Get apps
 or Remove apps (`arctic-shell-ipc apps install|remove`).
 
+- **Web search:** the engine for the launcher's last row and for `?` searches (DuckDuckGo,
+  Startpage, Brave Search, Ecosia, Google or Bing). Saved in `~/.config/arctic/shell.json`
+  (`webSearch`; your own `https://…%s…` address works there too).
+
 ## Network
 
 ![The Network page](images/settings-network.png)
@@ -321,6 +344,25 @@ afterwards), and **Take snapshot** takes one now.
 
 The live session never locks or suspends on its own; these settings apply once Arctic Linux is
 installed.
+
+## Accessibility
+
+Bigger, calmer and easier to reach from the keyboard.
+
+- **High contrast:** stronger text, lines and focus rings in whatever theme you use, the bar and
+  apps too (see [High contrast](Themes-and-Customisation#high-contrast)).
+- **Text size in apps:** 100% to 200% for GTK apps such as Files and most dialogs, and the
+  terminals too (10.5 pt at 100%, 13 pt at 125%, through `arctic-font size`). The bar and menus
+  keep their size.
+- **Pointer size** (Normal, Large, Larger) and **Pointer style** (the cursor themes installed).
+- **Reduce motion:** windows and menus fade instead of moving, and the fox in the terminal stays
+  still.
+- **Keyboard pointer** (`Super + Alt + K`): labels appear on the screen; type one to move the
+  pointer there, narrow it down if you like, then click with the keyboard. The key again closes
+  it. It needs `wl-kbptr` (Arctic installs it; **Get it** opens Get apps when it's missing).
+- **Not available yet:** a screen reader (Orca doesn't get the keyboard access it needs on
+  compositors like Mango), a magnifier (Mango has none) and an on-screen keyboard (none that works
+  here is packaged for Fedora 44). The page says so rather than hiding it.
 
 ## Startup apps
 
