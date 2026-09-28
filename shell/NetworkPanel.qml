@@ -272,6 +272,13 @@ FocusScope {
             }
         }
 
+        MenuRow {
+            visible: Tools.has('arctic-settings')
+            icon: 'key'
+            label: 'Add a VPN…'
+            detail: 'Import an OpenVPN or WireGuard file in Settings'
+            onActivated: panel.external(['arctic-settings', 'network'])
+        }
         MenuSeparator {}
         MenuRow {
             visible: Tools.has('arctic-settings')

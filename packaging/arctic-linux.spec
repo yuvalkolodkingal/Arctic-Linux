@@ -259,8 +259,9 @@ Requires:       python3-gobject-base
 Requires:       glib2
 Requires:       pipewire-utils
 Recommends:     ddcutil
-# Sharing a Wi-Fi network as a QR code
+# Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
 Recommends:     qrencode
+Recommends:     NetworkManager-openvpn
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar with its own menus (network
