@@ -34,6 +34,8 @@ typedef struct {
     GtkWidget *audio;                 /* mute button, shown while the page plays audio */
     GSimpleAction *open_link_action;  /* context menu: open a link in your browser */
     gboolean favicon_done;
+    char *failed_uri;                 /* the page an error page stands in for (retry when online) */
+    gboolean error_page_loading;      /* the next load is that error page, not a new page */
     GtkCssProvider *css;
     GFileMonitor *theme_monitor;
     GHashTable *notifications;        /* tag → WebKitNotification (ref) */
@@ -130,8 +132,10 @@ void arctic_set_theme(const char *css, int dark, const char *ground) {
     if (!display) return;
     if (!S.css) {
         S.css = gtk_css_provider_new();
+        /* Above the user's gtk.css (which imports the theme at start), so the colours of a theme
+         * switch show at once whether or not GTK re-reads that file. */
         gtk_style_context_add_provider_for_display(display, GTK_STYLE_PROVIDER(S.css),
-                                                   GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+                                                   GTK_STYLE_PROVIDER_PRIORITY_USER + 1);
     }
     gtk_css_provider_load_from_string(S.css, css ? css : "");
     GtkSettings *gs = gtk_settings_get_default();
@@ -531,6 +535,12 @@ static void load_changed_cb(WebKitWebView *view, WebKitLoadEvent ev, gpointer da
     (void)data;
     update_nav_buttons();
     gtk_button_set_icon_name(GTK_BUTTON(S.reload), ev == WEBKIT_LOAD_FINISHED ? "view-refresh-symbolic" : "process-stop-symbolic");
+    if (ev == WEBKIT_LOAD_STARTED) {
+        if (S.error_page_loading)
+            S.error_page_loading = FALSE;
+        else
+            g_clear_pointer(&S.failed_uri, g_free);
+    }
     if (ev == WEBKIT_LOAD_FINISHED) {
         const char *uri = webkit_web_view_get_uri(view);
         if (uri) goLoadFinished(S.cfg.handle, (char *)uri);
@@ -549,6 +559,31 @@ static gboolean load_failed_cb(WebKitWebView *view, WebKitLoadEvent ev, const ch
     if (!html) return FALSE;
     webkit_web_view_load_alternate_html(S.view, html, uri, NULL);
     free(html);
+    g_free(S.failed_uri);
+    S.failed_uri = g_strdup(uri);
+    S.error_page_loading = TRUE;
+    return TRUE;
+}
+
+/* Back online: reload the page an error page stood in for. */
+static void network_changed_cb(GNetworkMonitor *m, gboolean available, gpointer d) {
+    (void)d;
+    if (!available || !S.failed_uri || !S.view) return;
+    if (g_network_monitor_get_connectivity(m) != G_NETWORK_CONNECTIVITY_FULL) return;
+    char *uri = S.failed_uri;
+    S.failed_uri = NULL;
+    webkit_web_view_load_uri(S.view, uri);
+    g_free(uri);
+}
+
+/* Ctrl + scroll zooms, like the keys. */
+static gboolean scroll_cb(GtkEventControllerScroll *c, double dx, double dy, gpointer d) {
+    (void)dx;
+    (void)d;
+    GdkModifierType mods = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(c));
+    if (!(mods & GDK_CONTROL_MASK) || dy == 0) return FALSE;
+    double z = webkit_web_view_get_zoom_level(S.view);
+    webkit_web_view_set_zoom_level(S.view, CLAMP(dy < 0 ? z * 1.1 : z / 1.1, 0.3, 5.0));
     return TRUE;
 }
 
@@ -991,6 +1026,11 @@ static void build_window(void) {
     gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), 0);
     g_signal_connect(click, "pressed", G_CALLBACK(mouse_cb), NULL);
     gtk_widget_add_controller(GTK_WIDGET(S.view), GTK_EVENT_CONTROLLER(click));
+    GtkEventController *scroll = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+    gtk_event_controller_set_propagation_phase(scroll, GTK_PHASE_CAPTURE);
+    g_signal_connect(scroll, "scroll", G_CALLBACK(scroll_cb), NULL);
+    gtk_widget_add_controller(GTK_WIDGET(S.view), scroll);
+    g_signal_connect(g_network_monitor_get_default(), "network-changed", G_CALLBACK(network_changed_cb), NULL);
     gtk_box_append(GTK_BOX(box), GTK_WIDGET(S.view));
 
     gtk_window_set_child(S.window, box);

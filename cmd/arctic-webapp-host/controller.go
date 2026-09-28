@@ -299,7 +299,13 @@ func (c *controller) ThemeChanged() {
 		p = theme.Default
 	}
 	c.palette = p
-	webkit.SetTheme(theme.HostCSS(p), p.Dark, p.Ground)
+	// The theme's GTK colours too (current/gtk.css, what ~/.config/gtk-4.0/gtk.css imports), so
+	// plain widgets follow a switch even if GTK doesn't re-read the user's gtk.css.
+	css := theme.HostCSS(p)
+	if data, err := os.ReadFile(filepath.Join(filepath.Dir(theme.File(c.paths.Home)), "gtk.css")); err == nil && len(data) < 256<<10 {
+		css = string(data) + "\n" + css
+	}
+	webkit.SetTheme(css, p.Dark, p.Ground)
 }
 
 func (c *controller) Idle() {}

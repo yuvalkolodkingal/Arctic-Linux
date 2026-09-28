@@ -7,8 +7,8 @@
 #
 # Checks: the window's Wayland app_id is the app id, the title follows the page, the page sees
 # webapp.FetchUserAgent (so discovery fetches as the app will), the page's favicon replaces the
-# letter icon through the manager, a second start keeps one window and the pid file, SIGTERM
-# saves the window state, and remove stops the app. Screenshots land in DIR (default
+# letter icon through the manager, a theme switch recolours the header live, a second start
+# keeps one window and the pid file, SIGTERM saves the window state, and remove stops the app. Screenshots land in DIR (default
 # /tmp/webapp-shots). The navigation rules themselves are unit-tested in internal/webapp/policy.
 #
 # Containers can't create the user namespaces WebKit's bubblewrap sandbox needs, so this script
@@ -90,6 +90,12 @@ export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 LIBGL_ALWAYS_SOFTWARE=1 WEBKIT
 export ARCTIC_WEBAPP_ALLOW_ROOT=1
 export WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 GDK_BACKEND=wayland
 
+# The Arctic themes, Winter first (the window follows ~/.config/arctic/current live).
+mkdir -p "$XDG_CONFIG_HOME/arctic/themes"
+cp -r "$REPO/dotfiles/.config/arctic/themes/winter" "$REPO/dotfiles/.config/arctic/themes/polar-night" "$XDG_CONFIG_HOME/arctic/themes/"
+ln -sfn themes/winter "$XDG_CONFIG_HOME/arctic/current"
+echo winter > "$XDG_CONFIG_HOME/arctic/theme"
+
 ID="$(arctic-webapp install "http://127.0.0.1:$PORT/" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"], d; print(d["app"]["id"])')"
 echo "installed $ID"
 touch "$WORK/requests.log.icon"
@@ -123,6 +129,15 @@ wait_for '[ -n "$(windows)" ]' || fail "no window with app_id $ID"
 wait_for 'windows | grep -q "Smoke Home"' || fail "title did not follow the page: $(windows)"
 sleep 2
 grim "$OUT/webapp-window.png" && echo "screenshot: $OUT/webapp-window.png"
+# A theme switch (arctic-theme relinks current and rewrites theme) recolours the header live.
+HEADER_LIGHT="$(grim -g "640,4 1x1" -t ppm - | od -An -tx1 | tail -1)"
+ln -sfn themes/polar-night "$XDG_CONFIG_HOME/arctic/current"
+echo polar-night > "$XDG_CONFIG_HOME/arctic/theme"
+sleep 1.5
+HEADER_DARK="$(grim -g "640,4 1x1" -t ppm - | od -An -tx1 | tail -1)"
+[ "$HEADER_LIGHT" != "$HEADER_DARK" ] || fail "the header did not follow the theme switch ($HEADER_LIGHT)"
+grim "$OUT/webapp-window-dark.png" && echo "screenshot: $OUT/webapp-window-dark.png"
+
 UA_GOT="$(grep "^/$(printf '\t')" "$WORK/requests.log" | tail -1 | cut -f2)"
 [ "$UA_GOT" = "$UA_WANT" ] || fail "user agent: the page saw \"$UA_GOT\"; webapp.FetchUserAgent is \"$UA_WANT\""
 PID1="$(cat "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" 2>/dev/null || true)"
