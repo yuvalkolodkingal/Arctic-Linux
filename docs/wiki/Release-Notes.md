@@ -7,8 +7,8 @@
 - **`Super + B` opens your browser.** It was `Super + W`, which is now free for a shortcut of
   your own. If you had bound `Super + B` yourself, Settings > Shortcuts shows that it no longer
   runs (Arctic's shortcuts come first), so you can move it to another key.
-- **`Super + Shift + S` takes a screenshot of an area**, as on Windows; `Print` still does. Drag
-  over an area or click a window. `Shift + Print` now takes the screen you're on (not every
+- **`Super + Shift + S` takes a screenshot of an area**, as on Windows; `Print` still does. The
+  screen freezes while you drag over an area or click a window, so menus and tooltips stay in it. `Shift + Print` now takes the screen you're on (not every
   screen at once), window screenshots leave out the border, and `Ctrl + Print` copies an area
   without saving it.
 - **The screenshot notification does more:** click it to open the picture; its buttons show it in

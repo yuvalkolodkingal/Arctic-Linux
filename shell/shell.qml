@@ -13,7 +13,7 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
-//   clipboard toggle · emoji toggle · record open|refresh · share pick <fifo>
+//   clipboard toggle · emoji toggle · record open|refresh · share pick <fifo> · capture freeze|thaw
 ShellRoot {
     id: shell
 
@@ -88,6 +88,7 @@ ShellRoot {
     PowerKey { locked: lockScreen.secure }
     SharePicker { id: sharePicker }
     RecordDialog { id: recordDialog }
+    FrozenScreens { id: frozenScreens }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -157,6 +158,17 @@ ShellRoot {
         target: 'emoji'
         function toggle(): void { shell.toggleEmoji(); }
     }
+    IpcHandler {
+        target: 'capture'
+        // arctic-screenshot: show the monitors as they were at the key press while you select an
+        // area (the picture already has any open popover in it), then take them away.
+        function freeze(dir: string): bool {
+            closePopoversSoon.restart();
+            return frozenScreens.freeze(dir);
+        }
+        function thaw(): void { frozenScreens.thaw(); }
+    }
+    Timer { id: closePopoversSoon; interval: 1; onTriggered: shell.closePopovers(null) }
     IpcHandler {
         target: 'share'
         // arctic-share-picker (the screen-share portal's chooser) waits on this FIFO for the

@@ -18,6 +18,7 @@ DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
 EmojiPicker 1.0 EmojiPicker.qml
 FocusRing 1.0 FocusRing.qml
+FrozenScreens 1.0 FrozenScreens.qml
 Icon 1.0 Icon.qml
 InstallConsole 1.0 InstallConsole.qml
 Kbd 1.0 Kbd.qml

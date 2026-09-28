@@ -92,7 +92,7 @@ was on `Super + W` before Arctic Linux 0.3; `Super + W` is now free for a shortc
 
 | Shortcut | Does |
 |---|---|
-| `Print` or `Super + Shift + S` | Screenshot of an area: drag over it, or click a window |
+| `Print` or `Super + Shift + S` | Screenshot of an area: the screen freezes; drag over an area, or click a window |
 | `Shift + Print` | Screenshot of the screen you're on |
 | `Super + Print` | Screenshot of the current window |
 | `Ctrl + Print` | An area to the clipboard only (the notification offers **Save**) |

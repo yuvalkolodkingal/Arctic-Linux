@@ -142,6 +142,40 @@ class CaptureTest(unittest.TestCase):
         (theme / 'capture-colors.env').write_text('SLURP_ARGS="-c $(rm -rf ~) -w 99999"\n')
         self.assertEqual(self.run_helper('slurp-args'), (0, ''))
 
+    def test_freeze_and_crop(self):
+        # A fake grim that writes a 2-pixel-per-point frame whose pixels encode their position.
+        self.fake('grim', 'exec python3 - "$@" <<"EOF"\n'
+                  'import sys\n'
+                  'from PIL import Image\n'
+                  'a = sys.argv[1:]\n'
+                  'scale, name, out = float(a[a.index("-s") + 1]), a[a.index("-o") + 1], a[-1]\n'
+                  'w, h = {"eDP-1": (1536, 960), "HDMI-A-1": (1920, 1080)}[name]\n'
+                  'img = Image.new("RGB", (round(w * scale), round(h * scale)))\n'
+                  'img.putdata([(x % 256, y % 256, 7) for y in range(img.height) for x in range(img.width)])\n'
+                  'img.save(out, "PPM")\n'
+                  'EOF')
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow')
+        env = {'XDG_RUNTIME_DIR': str(self.root / 'run')}
+        frozen = self.json('freeze', env=env)
+        self.assertEqual([(o['name'], o['scale']) for o in frozen['outputs']], [('eDP-1', 1.25), ('HDMI-A-1', 1)])
+        out = self.root / 'shot.png'
+        crop = self.json('crop', '100,40 200x100', 'eDP-1', str(out), env=env)
+        self.assertEqual((crop['width'], crop['height']), (250, 125))       # 1.25 × the layout size
+        from PIL import Image
+        with Image.open(out) as shot:
+            self.assertEqual(shot.getpixel((0, 0)), (125, 50, 7))           # (100 × 1.25, 40 × 1.25)
+        # On the second monitor, in layout coordinates; an area over both isn't cropped.
+        self.json('crop', '1600,10 20x20', 'HDMI-A-1', str(out), env=env)
+        with Image.open(out) as shot:
+            self.assertEqual(shot.getpixel((0, 0)), (64, 10, 7))
+        self.assertEqual(self.json('crop', '1500,10 100x20', 'eDP-1', str(out), env=env)['code'], 'not_found')
+        self.json('thaw', env=env)
+        self.assertFalse((self.root / 'run/arctic/capture/frozen').exists())
+        self.assertEqual(self.json('crop', '1,1 2x2', 'eDP-1', str(out), env=env)['code'], 'not_found')
+
     def test_pixel_from_a_grim_frame(self):
         frame = b'P6\n# grim\n2 2\n255\n' + bytes([30, 42, 56]) + bytes(9)
         data = self.json('pixel', stdin=frame)

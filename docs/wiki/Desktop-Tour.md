@@ -203,7 +203,8 @@ There's no lock screen in the live session.
 
 ## Capture and the clipboard
 
-- **Screenshots:** `Print` or `Super + Shift + S` lets you drag over an area or click a window,
+- **Screenshots:** `Print` or `Super + Shift + S` freezes the screen (so an open menu or a
+  tooltip stays in the picture) and lets you drag over an area or click a window,
   `Shift + Print` takes the screen you're on, `Super + Print` the current window, and
   `Ctrl + Print` copies an area without saving it. Screenshots are saved in
   `~/Pictures/Screenshots` and copied to the clipboard. Click the notification to open the

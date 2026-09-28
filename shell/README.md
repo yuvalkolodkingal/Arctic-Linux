@@ -51,6 +51,7 @@ It needs `quickshell`, `python3`, `python3-pillow` (wallpaper thumbnails) and `p
 | Live welcome | `LiveWelcome.qml` | "You're trying Arctic Linux" card (Install Arctic Linux / Keep trying), once per boot via `arctic-welcome`, and the Install tile bottom-left. On the desktop layer, under windows. |
 | Share your screen | `SharePicker.qml` | When an app asks to share the screen, xdg-desktop-portal-wlr runs `/usr/libexec/arctic/arctic-share-picker`, which opens this card (`share pick <fifo>`): every monitor and window (`arctic-capture sources --json`); Share writes `Monitor: <name>` / `Window: <id>` to the FIFO, Cancel or Esc an empty line (nothing is shared). |
 | Record the screen | `RecordDialog.qml`, `RecordService.qml` | Super+Alt+R (`arctic-record toggle`) when nothing records: Area (then click a screen or drag) · Window · Screen, and No sound · Desktop sound · Microphone; Enter starts with the last choice (`~/.local/state/arctic/record.json`). `RecordService` exposes `recording`, `elapsed` and `stop()` for a bar indicator. |
+| Frozen screen | `FrozenScreens.qml` | While you select an area for a screenshot, `arctic-screenshot` shows every monitor as it was at the key press (`arctic-capture freeze` → `capture freeze <dir>`, one click-through overlay layer per screen, `arctic-freeze`), and cuts the screenshot from that picture; `capture thaw`, or two minutes, takes them away. |
 | Power button | `PowerKey.qml` | Holds a `handle-power-key` inhibitor (`systemd-inhibit … cat`) while the shell runs and the screen is unlocked, so the power button opens the power menu (Mango bind → `arctic-power`); when the shell exits, `cat` gets EOF and logind handles the button again. |
 | Polkit agent | `PolkitDialog.qml` | Password dialog for system changes. If it can't register (another agent runs), the shell starts `arctic-session polkit`. |
 | Tokens and state | `Theme.qml`, `Session.qml`, `Outputs.qml`, `NetworkService.qml`, `DndService.qml` | See below. |
@@ -94,6 +95,7 @@ notifications.
 | `emoji` | `toggle` (the emoji picker, Super + Ctrl + E) |
 | `record` | `open` (the "Record the screen" card), `refresh` (arctic-record started or stopped a recording; `RecordService` re-reads it) |
 | `share` | `pick <fifo>` (the screen-share portal's chooser, arctic-share-picker, waits on the FIFO) |
+| `capture` | `freeze <dir>` (show the frozen monitors; true when shown), `thaw` |
 
 ## Developing
 
