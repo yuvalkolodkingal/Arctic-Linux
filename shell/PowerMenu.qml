@@ -1,16 +1,15 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 
 // The power menu (design Menu), under the bar's power item or from Super + Esc.
 // Items name what will happen. Settings comes first (the system menu is where people look for
 // it); on the live USB there is nothing to lock or log out of, so Restart and Shut down follow.
-// The actions run `arctic-power <action>`; Settings runs `arctic-settings`.
+// The actions run `arctic-power <action>`; Settings runs `arctic-settings`. Rows and keys are
+// the bar menus' (MenuList, MenuRow): arrows, Home/End, a letter jumps, Enter runs, Esc closes.
 Popover {
     id: menu
     required property var shell
-    property int current: 0
     readonly property var actions: Session.live
         ? [ { id: 'settings', label: 'Settings', icon: 'sliders', keys: 'Super + S' },
             { id: 'restart', label: 'Restart', icon: 'restart' },
@@ -29,9 +28,10 @@ Popover {
     cardRadius: Theme.radiusLg
     shadow: 2
     cardWidth: 232
-    cardHeight: column.implicitHeight + 2 * Theme.space1
-    focusItem: column
-    onOpened: current = 0
+    cardHeight: list.implicitHeight
+    focusItem: list
+    // The first row is highlighted on open, from the keyboard (Super + Esc) or a click, as before.
+    onOpened: { MenuState.keyboardNav = true; Qt.callLater(() => list.start()); }
 
     function run(action) {
         close();
@@ -40,51 +40,18 @@ Popover {
         else Quickshell.execDetached(['arctic-power', action.id]);
     }
 
-    Column {
-        id: column
+    MenuList {
+        id: list
         anchors.fill: parent
-        anchors.margins: Theme.space1
-        spacing: 0
         focus: true
-        Keys.onDownPressed: menu.current = (menu.current + 1) % menu.actions.length
-        Keys.onUpPressed: menu.current = (menu.current - 1 + menu.actions.length) % menu.actions.length
-        Keys.onTabPressed: menu.current = (menu.current + 1) % menu.actions.length
-        Keys.onReturnPressed: menu.run(menu.actions[menu.current])
-        Keys.onEnterPressed: menu.run(menu.actions[menu.current])
-        Keys.onEscapePressed: menu.close()
         Repeater {
             model: menu.actions
-            Rectangle {
-                id: item
+            MenuRow {
                 required property var modelData
-                required property int index
-                readonly property bool selected: menu.current === index
-                width: column.width
-                height: 34
-                radius: Theme.radiusSm
-                color: selected ? Theme.surfaceSunken : 'transparent'
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.space3
-                    anchors.rightMargin: Theme.space3
-                    spacing: Theme.space2
-                    Icon { name: item.modelData.icon; size: 18; color: Theme.ink }
-                    Text {
-                        Layout.fillWidth: true
-                        text: item.modelData.label
-                        color: Theme.ink
-                        font.family: Theme.fontSans
-                        font.pixelSize: 15
-                    }
-                    Kbd { visible: !!item.modelData.keys; text: item.modelData.keys || '' }
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onPositionChanged: menu.current = item.index
-                    onClicked: menu.run(item.modelData)
-                }
+                icon: modelData.icon
+                label: modelData.label
+                kbd: modelData.keys || ''
+                onActivated: menu.run(modelData)
             }
         }
     }
