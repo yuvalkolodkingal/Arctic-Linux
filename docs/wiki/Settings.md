@@ -208,25 +208,31 @@ would. **Get apps** installs more; they show up here.
 
 ![The Network page](images/settings-network.png)
 
-Your connections and a Wi-Fi switch. Join a Wi-Fi network from the network icon on the bar.
-**Open the editor** starts the connection editor (`nm-connection-editor`) for VPNs, proxies and
-fixed addresses; **Open nmtui** lists the Wi-Fi networks around you in a terminal.
+Your connections and a Wi-Fi switch. Join a Wi-Fi network from the network menu on the bar
+(`Super + Ctrl + W`, see [Menus on the bar](Bar-Menus)). **Saved Wi-Fi networks** lists the ones
+you joined, with **Forget**. **VPN** has a button per VPN connection and **Import…** for an
+OpenVPN (`.ovpn`) or WireGuard (`.conf`) file from your VPN provider; each VPN then has a switch
+in the network menu. **Open the editor** starts the connection editor (`nm-connection-editor`) for
+proxies, fixed addresses and certificate logins; **Open nmtui** lists the Wi-Fi networks around
+you in a terminal.
 
 ## Bluetooth
 
 ![The Bluetooth page](images/settings-bluetooth.png)
 
 Bluetooth on or off, and your devices, with **Connect**, **Disconnect** and **Forget**. **Pair a
-device** opens the Bluetooth manager (`blueman-manager`), which also asks for pairing codes. On a
-computer without a Bluetooth adapter the page says so.
+device** opens the Bluetooth menu on the bar on its pairing page; pairing codes appear in Arctic's
+own dialog (without the Arctic shell, the Bluetooth manager `blueman-manager` opens instead).
+**Open the Bluetooth manager** is there for file transfer and advanced settings. On a computer
+without a Bluetooth adapter the page says so.
 
 ## Sound
 
 ![The Sound page](images/settings-sound.png)
 
 Where sound plays (**Play sound on**) and its volume, and which microphone you speak into and its
-volume. **Open the volume control** starts the full mixer, for the volume of each app and device
-profiles.
+volume. **Open the sound menu** shows the menu on the bar, with a volume for each app;
+**Open the volume control** starts the full mixer for device profiles and routing.
 
 ## Updates
 
