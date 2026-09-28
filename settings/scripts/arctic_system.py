@@ -12,6 +12,10 @@ are its (one JSON object per command, Failure for a sentence, argv lists, never 
     more-updates | more-update-run apps|firmware  Flatpak apps and firmware (arctic-update)
     lid | lid-set suspend|lock|screen-off          closing the lid without another screen (lid.conf)
     effects | effects-set lighter auto|on|off | game on|off      arctic-effects
+    sharing | sharing-set allow NAME on|off | ssh on|off | ssh-password on|off
+                                  firewall and remote login (pkexec arctic-system-helper)
+    snapshots | snapshot-run create TEXT | undo PRE POST          snapper, through the same helper
+    troubleshoot sound|wifi|bluetooth|shell       restart that part of the desktop (arctic-restart)
 """
 import os
 import re
@@ -414,6 +418,124 @@ def cmd_effects_set(paths, args):
     return cmd_effects(paths, [])
 
 
+# ---- troubleshooting (arctic-restart) ---------------------------------------------------------------
+
+def cmd_troubleshoot(paths, args):
+    """troubleshoot sound|wifi|bluetooth|shell: restart that part of the desktop."""
+    if args not in (['sound'], ['wifi'], ['bluetooth'], ['shell']):
+        raise Failure('usage: troubleshoot sound|wifi|bluetooth|shell')
+    return _helper_json(['arctic-restart', args[0], '--json'], timeout=120)
+
+
+# ---- sharing: firewall and remote login (arctic-system-helper through pkexec) --------------------
+
+SYSTEM_HELPER = '/usr/libexec/arctic/arctic-system-helper'
+ALLOWS = ('mdns', 'localsend', 'kdeconnect', 'ssh')
+
+
+def _system_helper(paths, args, timeout=300):
+    """Run the root helper through pkexec (the shell's password dialog); tests point
+    ARCTIC_SYSTEM_HELPER at a stand-in that runs without pkexec."""
+    helper = paths.env.get('ARCTIC_SYSTEM_HELPER')
+    argv = [helper] + list(args) if helper else ['pkexec', SYSTEM_HELPER] + list(args)
+    if not helper and not (which('pkexec', paths.env) and os.path.exists(SYSTEM_HELPER)):
+        raise Failure('Settings’ system helper isn’t installed (arctic-desktop-config).')
+    code, out, err = run(argv, timeout=timeout)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code in (126, 127) and not isinstance(data, dict):
+        raise Failure('That needs your password, and it wasn’t given.')
+    if not isinstance(data, dict) or not data.get('ok'):
+        raise Failure((data or {}).get('error') or (strip_ansi(err).strip().splitlines() or ['That didn’t work.'])[-1])
+    return data
+
+
+def _firewall(paths):
+    env = dict(paths.env, LC_ALL='C')
+    info = dict(installed=bool(which('firewall-cmd', paths.env)), running=False, zone='', services=[], ports=[],
+                readable=False)
+    if not info['installed']:
+        return info
+    code, out, _err = run(['firewall-cmd', '--state'], timeout=10, env=env)
+    info['running'] = code == 0 and out.strip() == 'running'
+    if not info['running']:
+        return info
+    code, zone, _err = run(['firewall-cmd', '--get-default-zone'], timeout=10, env=env)
+    zone = zone.strip()
+    if code != 0 or not re.fullmatch(r'[A-Za-z0-9_-]{1,32}', zone):
+        return info
+    code1, services, _e = run(['firewall-cmd', '--zone=' + zone, '--list-services'], timeout=10, env=env)
+    code2, ports, _e = run(['firewall-cmd', '--zone=' + zone, '--list-ports'], timeout=10, env=env)
+    info.update(zone=zone, services=services.split(), ports=ports.split(), readable=code1 == 0 and code2 == 0)
+    return info
+
+
+def cmd_sharing(paths, _args):
+    env = dict(paths.env, LC_ALL='C')
+    firewall = _firewall(paths)
+    services, ports = set(firewall['services']), set(firewall['ports'])
+    allows = dict(mdns='mdns' in services, kdeconnect='kdeconnect' in services, ssh='ssh' in services,
+                  localsend={'53317/tcp', '53317/udp'} <= ports)
+    _c, host, _e = run(['hostname'], timeout=5, env=env)
+    flatpaks = [str(Path(p) / 'app/org.localsend.localsend_app')
+                for p in (paths.data / 'flatpak', '/var/lib/flatpak')]
+    installed = dict(localsend=bool(which('localsend', paths.env) or which('localsend_app', paths.env))
+                     or any(os.path.isdir(p) for p in flatpaks),
+                     kdeconnect=bool(which('kdeconnectd', paths.env)) or os.path.exists('/usr/bin/kdeconnectd'),
+                     firewallConfig=bool(which('firewall-config', paths.env)))
+    sshd = which('sshd', paths.env) or (os.path.exists('/usr/sbin/sshd') and '/usr/sbin/sshd')
+    ssh = dict(installed=bool(sshd), enabled=False, active=False,
+               passwordLogin=not os.path.exists(paths.env.get('ARCTIC_SSH_KEYS_ONLY') or
+                                                '/etc/ssh/sshd_config.d/40-arctic-keys-only.conf'),
+               authorizedKeys=(paths.home / '.ssh/authorized_keys').is_file(), fingerprint='', user=paths.env.get('USER', ''))
+    if sshd:
+        _c, enabled, _e = run(['systemctl', 'is-enabled', 'sshd.service'], timeout=5, env=env)
+        _c, active, _e = run(['systemctl', 'is-active', 'sshd.service'], timeout=5, env=env)
+        ssh.update(enabled=enabled.strip() == 'enabled', active=active.strip() == 'active')
+        _c, key, _e = run(['ssh-keygen', '-lf', '/etc/ssh/ssh_host_ed25519_key.pub'], timeout=5, env=env)
+        ssh['fingerprint'] = key.split()[1] if len(key.split()) > 1 else ''
+    from arctic_settings import is_live
+    return dict(ok=True, hostname=host.strip(), mdnsName=host.strip().split('.')[0] + '.local' if host.strip() else '',
+                avahi=bool(which('avahi-daemon', paths.env)) or os.path.exists('/usr/sbin/avahi-daemon'),
+                firewall=firewall, allows=allows, installed=installed, ssh=ssh, live=is_live(paths))
+
+
+def cmd_sharing_set(paths, args):
+    """sharing-set allow NAME on|off | ssh on|off | ssh-password on|off (root helper, pkexec)."""
+    if len(args) == 3 and args[0] == 'allow' and args[1] in ALLOWS and args[2] in ('on', 'off'):
+        _system_helper(paths, ['firewall-allow', args[1], args[2]])
+    elif len(args) == 2 and args[0] in ('ssh', 'ssh-password') and args[1] in ('on', 'off'):
+        _system_helper(paths, list(args))
+        if args == ['ssh', 'on'] and _firewall(paths)['running']:
+            _system_helper(paths, ['firewall-allow', 'ssh', 'on'])     # the password is still kept
+    else:
+        raise Failure('usage: sharing-set allow mdns|localsend|kdeconnect|ssh on|off | ssh on|off | ssh-password on|off')
+    return cmd_sharing(paths, [])
+
+
+# ---- snapshots (snapper, through the root helper) -------------------------------------------------
+
+def cmd_snapshots(paths, _args):
+    if not which('snapper', paths.env) and not os.path.exists('/usr/bin/snapper'):
+        return dict(ok=True, available=False, config=False, pairs=[], singles=[])
+    data = _system_helper(paths, ['snapshots'])
+    data['available'] = True
+    return data
+
+
+def cmd_snapshot_run(paths, args):
+    """snapshot-run create TEXT | undo PRE POST (undo opens a terminal: snapper shows what it does)."""
+    if len(args) == 2 and args[0] == 'create':
+        _system_helper(paths, ['snapshot-create', args[1]])
+        return cmd_snapshots(paths, [])
+    if len(args) == 3 and args[0] == 'undo' and args[1].isdigit() and args[2].isdigit():
+        helper = paths.env.get('ARCTIC_SYSTEM_HELPER')
+        argv = ([helper] if helper else ['pkexec', SYSTEM_HELPER]) + ['snapshot-undo', args[1], args[2]]
+        subprocess.Popen(['arctic-open', 'terminal', '--hold', '-e'] + argv, stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return dict(ok=True, started='undo')
+    raise Failure('usage: snapshot-run create TEXT | undo PRE POST')
+
+
 COMMANDS = {
     'nightlight': cmd_nightlight, 'nightlight-set': cmd_nightlight_set, 'keep-awake': cmd_keep_awake,
     'autostart': cmd_autostart, 'autostart-set': cmd_autostart_set,
@@ -421,6 +543,9 @@ COMMANDS = {
     'datetime': cmd_datetime, 'datetime-set': cmd_datetime_set,
     'more-updates': cmd_more_updates, 'more-update-run': cmd_more_update_run,
     'lid': cmd_lid, 'lid-set': cmd_lid_set, 'effects': cmd_effects, 'effects-set': cmd_effects_set,
+    'troubleshoot': cmd_troubleshoot,
+    'sharing': cmd_sharing, 'sharing-set': cmd_sharing_set, 'snapshots': cmd_snapshots,
+    'snapshot-run': cmd_snapshot_run,
 }
 # Commands that read, change and write back a file of ours (they run one at a time).
 WRITERS = {'nightlight-set', 'autostart-set', 'lid-set', 'effects-set'}

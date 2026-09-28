@@ -150,4 +150,36 @@ Page {
             }
         }
     }
+
+    // Restart one part of the desktop (arctic-restart), not the computer.
+    Group {
+        title: "If something stops working"
+        desc: "Restart just that part of the desktop. Your apps and files stay as they are."
+        SettingRow {
+            searchKey: "about.troubleshoot"
+            title: "Sound, Wi-Fi, Bluetooth or the desktop shell"
+            desc: "The shell is the bar, the launcher and the notifications. Ctrl + Shift + Esc shows what’s running."
+            resettable: false
+            stacked: true
+            Flow {
+                width: parent.width
+                spacing: Theme.space2
+                Repeater {
+                    model: [{ id: "sound", label: "Restart sound" }, { id: "wifi", label: "Restart Wi-Fi" },
+                        { id: "bluetooth", label: "Restart Bluetooth" }, { id: "shell", label: "Restart the shell" }]
+                    ArButton {
+                        required property var modelData
+                        text: modelData.label
+                        iconName: "refresh"
+                        size: "sm"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: Backend.call(["troubleshoot", modelData.id], r => {
+                            if (r.ok)
+                                Backend.notify("success", "Restarted", false);
+                        })
+                    }
+                }
+            }
+        }
+    }
 }

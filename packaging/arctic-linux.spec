@@ -506,6 +506,11 @@ Recommends:     sane-backends-drivers-scanners
 Recommends:     simple-scan
 # Stream 5 (system): firmware updates (arctic-update firmware; also in @core).
 Requires:       fwupd
+# Stream 5 (system): SSH keys once per session (gcr-ssh-agent), the firewall Settings shows
+# (firewalld, in @core too), system monitor (Ctrl+Shift+Esc falls back to btop).
+Requires:       gcr
+Requires:       firewalld
+Recommends:     firewall-config
 # Stream 5 (system): phones (MTP, iPhone), cameras and network shares in Thunar (gvfs).
 Recommends:     gvfs
 Recommends:     gvfs-mtp
@@ -688,6 +693,12 @@ install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
+# Stream 5 (system): the SSH agent's socket for the session (gcr-ssh-agent), and the root helper
+# Settings uses for the firewall, remote login and snapshots (pkexec, org.arcticlinux.system).
+install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
+install -Dpm 0755 packaging/system/arctic-system-helper %{buildroot}%{_libexecdir}/arctic/arctic-system-helper
+install -Dpm 0644 packaging/polkit/org.arcticlinux.system.policy \
+  %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 # Automatic updates (arctic-update, in /usr/bin with the helpers above) and snapshots.
 install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
 install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
@@ -974,6 +985,11 @@ if [ ! -e %{_sharedstatedir}/arctic/.update-presets ]; then
   systemctl --no-reload preset arctic-update-stage.timer snapper-cleanup.timer >/dev/null 2>&1 || :
   mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.update-presets || :
 fi
+# Stream 5: the SSH agent's socket for every user, once (the user preset covers new users).
+if [ ! -e %{_sharedstatedir}/arctic/.ssh-agent-preset ]; then
+  systemctl --global --no-reload preset gcr-ssh-agent.socket >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.ssh-agent-preset || :
+fi
 # Stream 5: the same once for the Flatpak update timer (new in 0.3).
 if [ ! -e %{_sharedstatedir}/arctic/.flatpak-update-preset ]; then
   systemctl --no-reload preset arctic-flatpak-update.timer >/dev/null 2>&1 || :
@@ -1100,6 +1116,9 @@ fi
 %dir %{_sysconfdir}/arctic/mango
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
 %{_sysconfdir}/profile.d/arctic-graphics.sh
+%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
+%{_libexecdir}/arctic/arctic-system-helper
+%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 %dir %{_datadir}/arctic
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt

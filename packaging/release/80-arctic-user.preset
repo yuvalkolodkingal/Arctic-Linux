@@ -11,3 +11,7 @@ enable xdg-user-dirs.service
 # through arctic-session, which skips anything already running. arctic-desktop-config may
 # ship user units later; they are enabled here by name so a preset-all picks them up.
 enable arctic-*.service
+
+# SSH keys unlocked once per session (gcr-ssh-agent; /etc/profile.d/arctic-ssh-agent.sh names
+# its socket). Stream 5.
+enable gcr-ssh-agent.socket

@@ -182,6 +182,17 @@ Your connections and a Wi-Fi switch. Join a Wi-Fi network from the network icon 
 **Open the editor** starts the connection editor (`nm-connection-editor`) for VPNs, proxies and
 fixed addresses; **Open nmtui** lists the Wi-Fi networks around you in a terminal.
 
+## Sharing
+
+What other computers and phones on your network can reach. **Firewall** says whether it's on
+(firewalld, which lets in only what's allowed) and opens its own settings when
+`firewall-config` is installed. **Let in**: **Find printers and devices on the network** (mDNS),
+**LocalSend** (port 53317, shown when LocalSend is installed) and **KDE Connect** (shown when
+it's installed). **Remote login (SSH)** turns the SSH server on or off and says how to connect
+(`ssh you@arctic.local`); **Allow password login** off means only keys in
+`~/.ssh/authorized_keys` can log in. These change the whole computer, so they ask for your
+password (once for a few minutes). Remote login is hidden in the live session.
+
 ## Bluetooth
 
 ![The Bluetooth page](images/settings-bluetooth.png)
@@ -208,6 +219,9 @@ install when you restart) and the **Channel**, Stable or Testing. These are the 
 `arctic-update auto on|off` and `arctic-update channel stable|testing`; see [Updates](Updates).
 **Apps and firmware** shows how the daily update of your Flatpak apps went, with **Update apps
 now**, and the firmware updates fwupd has for this computer, with **Install in a terminal**.
+**Snapshots**: every dnf transaction takes a snapshot before and after. **Show snapshots**
+(asks for your password) lists them; **Undo…** undoes one update in a terminal window (restart
+afterwards), and **Take snapshot** takes one now.
 
 ## Power and lock
 
@@ -264,6 +278,13 @@ Which Arctic Linux and Fedora you run, the computer's model, processor, graphics
 storage, and the versions of the window manager, shell and kernel. **Open the wiki** comes here,
 and **Report a problem** has **Copy details** (a summary of the above to paste into an issue) and
 **Open issues**.
+
+## About: if something stops working
+
+**If something stops working** restarts one part of the desktop: **Restart sound** (PipeWire),
+**Restart Wi-Fi**, **Restart Bluetooth** (asks for your password) or **Restart the shell** (the
+bar, launcher and notifications). The same from a terminal: `arctic-restart
+sound|wifi|bluetooth|shell`. `Ctrl + Shift + Esc` opens a system monitor.
 
 ## If Settings won't open
 

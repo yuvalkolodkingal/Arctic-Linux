@@ -175,6 +175,22 @@ Yes, from version 0.2. The system uses btrfs, and snapper takes a snapshot befor
 dnf transaction, so you can put back files an update changed. See
 [Updates](Updates#snapshots).
 
+### Why is there no Hibernate?
+
+Arctic Linux doesn't set up hibernation, for three reasons:
+
+1. **No disk swap.** Arctic installs compressed swap in memory (zram), as Fedora does.
+   Hibernating needs swap on disk at least as large as the memory in use, and kernel arguments
+   that point at it.
+2. **Secure Boot.** With Secure Boot on, Fedora's kernel locks itself down, and lockdown doesn't
+   allow hibernating to ordinary swap. Arctic keeps Secure Boot on.
+3. **Untested on Arctic's disk layout.** A swap file on btrfs inside an encrypted disk needs
+   special care, and a resume that fails loses everything that was open.
+
+So the power menu shows **Hibernate** only when the computer really can (someone set it up by
+hand, with Secure Boot off), and a nearly empty battery suspends. **Restart into firmware** shows
+when the firmware offers its setup screen.
+
 ## The project
 
 ### Why is the repository called O-Tism?

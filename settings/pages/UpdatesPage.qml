@@ -157,6 +157,72 @@ Page {
         }
     }
 
+    // Snapshots (snapper, root's; listed through Settings' root helper, so only when asked).
+    Group {
+        id: snapGroup
+        property var snaps: ({ asked: false })
+        function load() {
+            Backend.call(["snapshots"], r => { if (r.ok) snapGroup.snaps = Object.assign({ asked: true }, r); });
+        }
+        visible: page.up.available === true
+        title: "Snapshots"
+        desc: "Every update takes a snapshot of the system before and after, so you can undo one."
+        SettingRow {
+            searchKey: "updates.snapshots"
+            visible: !snapGroup.snaps.asked
+            title: "Undo an update"
+            desc: "Lists the snapshots. It asks for your password."
+            resettable: false
+            ArButton {
+                text: "Show snapshots"
+                iconName: "clock"
+                gapColor: Theme.surfaceRaised
+                onClicked: snapGroup.load()
+            }
+        }
+        SettingRow {
+            visible: snapGroup.snaps.asked === true && snapGroup.snaps.config === false
+            title: "Snapshots aren’t set up"
+            desc: "The installer sets them up when the system is on btrfs. See the wiki’s Updates page."
+            resettable: false
+        }
+        Repeater {
+            model: snapGroup.snaps.asked ? (snapGroup.snaps.pairs || []).slice(0, 6) : []
+            SettingRow {
+                id: pairRow
+                required property var modelData
+                title: pairRow.modelData.description || "Software change"
+                desc: String(pairRow.modelData.date || "").replace(/:\d\d$/, "") + " · snapshots " + pairRow.modelData.pre + " and " + pairRow.modelData.post
+                resettable: false
+                ArButton {
+                    text: "Undo…"
+                    size: "sm"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.call(["snapshot-run", "undo", String(pairRow.modelData.pre), String(pairRow.modelData.post)], r => {
+                        if (r.ok)
+                            Backend.notify("info", "A terminal shows what’s undone. Restart afterwards.", false);
+                    })
+                }
+            }
+        }
+        SettingRow {
+            visible: snapGroup.snaps.asked === true && snapGroup.snaps.config === true
+            title: "Take a snapshot now"
+            desc: "Before you change something by hand, for example."
+            resettable: false
+            ArButton {
+                text: "Take snapshot"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.call(["snapshot-run", "create", "Taken in Settings"], r => {
+                    if (r.ok) {
+                        snapGroup.snaps = Object.assign({ asked: true }, r);
+                        Backend.notify("success", "Snapshot taken", false);
+                    }
+                })
+            }
+        }
+    }
+
     Group {
         visible: page.up.available === true
         title: "How updates come"

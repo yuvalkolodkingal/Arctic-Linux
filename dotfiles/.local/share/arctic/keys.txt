@@ -44,6 +44,7 @@
     Super + Ctrl + N         Night light on / off
     Super + Ctrl + I         Keep awake (no lock or sleep) on / off
     Super + P                Screens: laptop only, duplicate, extend
+    Ctrl + Shift + Esc       What's running (system monitor)
     Super + Shift + R        Reload the desktop config
     Print                    Screenshot an area (Shift: screen, Super: window)
 

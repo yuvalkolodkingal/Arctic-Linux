@@ -47,7 +47,7 @@ case "${1:-}" in
       pkill -u "$UID" -x swayidle 2>/dev/null
       for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -u "$UID" -x swayidle >/dev/null 2>&1 || break; sleep 0.1; done
     fi
-    lock_after=300 suspend_after=900
+    lock_after=300 suspend_after=900 dim_before_lock=30
     conf="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/idle.conf"
     if [[ -r "$conf" ]]; then
       while IFS='=' read -r key value; do
@@ -55,6 +55,7 @@ case "${1:-}" in
         case "$key" in
           lock_after) lock_after=$value ;;
           suspend_after) suspend_after=$value ;;
+          dim_before_lock) dim_before_lock=$value ;;
         esac
       done < "$conf"
     fi
@@ -63,6 +64,15 @@ case "${1:-}" in
     [[ -r "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake" ]] && read -r awake < "${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake"
     if [[ "$awake" =~ ^[0-9]+$ ]] && (( awake == 0 || awake > $(date +%s) )); then lock_after=0 suspend_after=0; fi
     args=(-w)
+    # Dim the screen a little before it locks (dim_before_lock seconds; 0 = don't); any key or
+    # movement brings the brightness back. Screens without a backlight (monitors) stay as they are.
+    if (( lock_after > 0 && dim_before_lock > 0 && lock_after > dim_before_lock )) && command -v brightnessctl >/dev/null 2>&1; then
+      # swayidle's sh expands it: half the brightness, at least 1%.
+      # shellcheck disable=SC2016
+      args+=(timeout "$(( lock_after - dim_before_lock ))"
+             'brightnessctl -q -s set "$(( $(brightnessctl -m | cut -d, -f4 | tr -d %) / 2 + 1 ))%"'
+             resume 'brightnessctl -q -r')
+    fi
     (( lock_after > 0 )) && args+=(timeout "$lock_after" 'arctic-lock')
     (( suspend_after > 0 )) && args+=(timeout "$suspend_after" 'systemctl suspend')
     args+=(before-sleep 'arctic-lock')

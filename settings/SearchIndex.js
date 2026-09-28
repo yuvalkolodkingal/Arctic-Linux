@@ -18,6 +18,8 @@ var PAGES = [
       words: "browser terminal files editor video music pictures pdf open with" },
     { id: "network", title: "Network", icon: "wifi", file: "NetworkPage.qml",
       words: "wi-fi wifi internet ethernet wired vpn connection" },
+    { id: "sharing", title: "Sharing", icon: "send", file: "SharingPage.qml",
+      words: "firewall ssh remote login localsend kde connect mdns ports" },
     { id: "bluetooth", title: "Bluetooth", icon: "bluetooth", file: "BluetoothPage.qml",
       words: "headphones devices pair wireless" },
     { id: "sound", title: "Sound", icon: "volume", file: "SoundPage.qml",
@@ -100,6 +102,13 @@ var ENTRIES = [
     ["updates", "updates.channel", "Update channel", "stable testing beta"],
     ["updates", "updates.apps", "Flatpak apps", "flathub app updates"],
     ["updates", "updates.firmware", "Firmware", "fwupd bios uefi device updates"],
+    ["updates", "updates.snapshots", "Snapshots", "undo an update rollback snapper restore btrfs"],
+    ["sharing", "sharing.firewall", "Firewall", "ports allow block security incoming"],
+    ["sharing", "sharing.mdns", "Find printers and devices", "mdns avahi bonjour discovery"],
+    ["sharing", "sharing.localsend", "LocalSend", "airdrop send files nearby"],
+    ["sharing", "sharing.kdeconnect", "KDE Connect", "phone android gsconnect"],
+    ["sharing", "sharing.ssh", "Remote login (SSH)", "ssh sshd remote server login terminal"],
+    ["sharing", "sharing.password", "Allow password login", "ssh keys authorized_keys"],
     ["power", "power.lock", "Lock the screen after", "idle timeout screensaver"],
     ["power", "power.suspend", "Suspend after", "sleep idle"],
     ["power", "power.profile", "Power mode", "performance balanced power saver battery"],
@@ -116,7 +125,8 @@ var ENTRIES = [
     ["datetime", "datetime.language", "Language", "locale region translation"],
     ["about", "about.system", "This computer", "cpu processor memory ram graphics gpu disk storage"],
     ["about", "about.software", "Software", "version mango quickshell kernel"],
-    ["about", "about.help", "Help and feedback", "wiki issues bug report"]
+    ["about", "about.help", "Help and feedback", "wiki issues bug report"],
+    ["about", "about.troubleshoot", "If something stops working", "fix broken no sound wifi bluetooth restart reset shell bar"]
 ];
 
 function pageIndex(id) {

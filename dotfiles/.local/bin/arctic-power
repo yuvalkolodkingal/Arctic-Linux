@@ -4,34 +4,159 @@
 #   arctic-power                 open the menu: Settings, Lock screen, Log out, Suspend, Restart,
 #                                Shut down (the live session offers Settings, Restart, Shut down)
 #   arctic-power lock|logout|suspend|restart|poweroff    do it now
+#   arctic-power hibernate       when the computer is set up for it (arctic-power can)
+#   arctic-power firmware        restart into the firmware setup (UEFI), when it offers that
+#   arctic-power can [--json]    what this computer can do: hibernate, firmware setup
+#   arctic-power prepare restart|poweroff|logout [--json]
+#                                before those: is something still installing (dnf, rpm, Flatpak,
+#                                fwupd, arctic-update)? Then ask every window to close (as Super+Q
+#                                does) and wait up to 5 s for them; say which are still open
 #
+# Log out, Restart and Shut down run `prepare` first and ask (fuzzel) when something is still
+# installing or a window stays open (an app asking to save, say); --now skips that.
 # The menu is the shell's; without the shell a fuzzel menu opens instead.
 # Items name what will happen (design voice: buttons say the consequence).
 set -uo pipefail
+
+UPDATE_LOCK="${ARCTIC_UPDATE_LOCK:-/run/lock/arctic-update.lock}"
+WAIT_STEPS="${ARCTIC_POWER_WAIT_STEPS:-20}"   # × 0.25 s for windows to close
+
+logind_can() {   # logind_can CanHibernate → yes|no|na|challenge
+  busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager "$1" 2>/dev/null \
+    | sed -n 's/^s "\(.*\)"$/\1/p'
+}
+
+json_escape() { local s="${1//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "${s//$'\t'/ }"; }
+
+# What is still installing or updating (one label per line).
+busy_list() {
+  local p
+  for p in dnf5 dnf rpm flatpak fwupdmgr; do
+    pgrep -x "$p" >/dev/null 2>&1 && echo "$p"
+  done
+  if [[ -e "$UPDATE_LOCK" ]]; then
+    flock -n -s -E 75 "$UPDATE_LOCK" true 2>/dev/null
+    (( $? == 75 )) && echo "arctic-update"
+  fi
+}
+
+# Open windows as "id<TAB>app id<TAB>title" (Mango's IPC).
+clients() {
+  mmsg get all-clients 2>/dev/null | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except ValueError:
+    data = []
+for c in data if isinstance(data, list) else []:
+    if isinstance(c, dict) and "id" in c:
+        print("{}\t{}\t{}".format(c["id"], c.get("appid") or c.get("app_id") or "", (c.get("title") or "").replace("\t", " ")))
+' 2>/dev/null
+}
+
+prepare() {   # prepare restart|poweroff|logout [--json]
+  local json=0 busy open line id first=1
+  [[ "${2:-}" == --json ]] && json=1
+  busy="$(busy_list)"
+  if [[ -z "$busy" ]] && command -v mmsg >/dev/null 2>&1; then
+    while IFS=$'\t' read -r id _; do
+      [[ -n "$id" ]] && mmsg dispatch killclient "client,$id" >/dev/null 2>&1
+    done < <(clients)
+    for (( i = 0; i < WAIT_STEPS; i++ )); do
+      [[ -z "$(clients)" ]] && break
+      sleep 0.25
+    done
+  fi
+  open="$(clients)"
+  if (( json )); then
+    printf '{"ok": true, "busy": ['
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      (( first )) || printf ', '; first=0
+      printf '"%s"' "$(json_escape "$line")"
+    done <<<"$busy"
+    printf '], "open": ['
+    first=1
+    while IFS=$'\t' read -r id app title; do
+      [[ -z "$id" ]] && continue
+      (( first )) || printf ', '; first=0
+      printf '{"id": %d, "appid": "%s", "title": "%s"}' "$id" "$(json_escape "$app")" "$(json_escape "$title")"
+    done <<<"$open"
+    printf ']}\n'
+  fi
+  PREP_BUSY="$busy" PREP_OPEN="$open"
+}
+
+# Ask before acting when prepare found something; true = go ahead.
+confirm() {   # confirm <action words, e.g. "Restart">
+  local what reason choice
+  prepare "$1"
+  if [[ -n "$PREP_BUSY" ]]; then
+    reason="Something is still installing ($(echo "$PREP_BUSY" | paste -sd, - | sed 's/,/, /g'))"
+  elif [[ -n "$PREP_OPEN" ]]; then
+    what="$(echo "$PREP_OPEN" | head -n 1 | cut -f3)"
+    [[ -n "$what" ]] || what="$(echo "$PREP_OPEN" | head -n 1 | cut -f2)"
+    reason="${what:-A window} is still open"
+  else
+    return 0
+  fi
+  command -v fuzzel >/dev/null 2>&1 || return 0
+  choice="$(printf '%s\n' "Cancel" "$2 anyway" | fuzzel --dmenu --prompt "  " --placeholder "$reason" \
+    --lines 2 --width 48 2>/dev/null)" || return 1
+  [[ "$choice" == "$2 anyway" ]]
+}
 
 act() {
   case "$1" in
     lock)             exec arctic-lock ;;
     logout)           mmsg dispatch quit >/dev/null 2>&1 || loginctl terminate-session "${XDG_SESSION_ID:-}" ;;
     suspend)          systemctl suspend ;;
+    hibernate)        systemctl hibernate ;;
     restart|reboot)   systemctl reboot ;;
     poweroff|shutdown) systemctl poweroff ;;
-    *) echo "usage: arctic-power [lock|logout|suspend|restart|poweroff]" >&2; exit 2 ;;
+    firmware)         systemctl reboot --firmware-setup ;;
+    *) echo "usage: arctic-power [lock|logout|suspend|hibernate|restart|poweroff|firmware|can|prepare] [--now]" >&2; exit 2 ;;
   esac
 }
 
-if [[ -n "${1:-}" ]]; then act "$1"; exit; fi
+gentle() {   # gentle <action> <word for the question> [--now]
+  if [[ "${3:-}" != --now ]] && ! confirm "$1" "$2"; then exit 0; fi
+  act "$1"
+}
+
+if [[ -n "${1:-}" ]]; then
+  case "$1" in
+    can)
+      h="$(logind_can CanHibernate)" f="$(logind_can CanRebootToFirmwareSetup)"
+      if [[ "${2:-}" == --json ]]; then
+        printf '{"ok": true, "hibernate": %s, "firmware": %s}\n' \
+          "$([[ $h == yes ]] && echo true || echo false)" "$([[ $f == yes ]] && echo true || echo false)"
+      else
+        echo "hibernate: ${h:-unknown}"; echo "firmware setup: ${f:-unknown}"
+      fi ;;
+    prepare)
+      case "${2:-}" in restart|poweroff|logout) prepare "$2" "${3:-}" ;; *) act usage ;; esac ;;
+    logout)   gentle logout "Log out" "${2:-}" ;;
+    restart|reboot) gentle restart "Restart" "${2:-}" ;;
+    poweroff|shutdown) gentle poweroff "Shut down" "${2:-}" ;;
+    firmware) gentle firmware "Restart" "${2:-}" ;;
+    *) act "$1" ;;
+  esac
+  exit
+fi
 arctic-shell-ipc power toggle >/dev/null 2>&1 && exit 0
 
 items=("Settings" "Lock screen" "Log out" "Suspend" "Restart" "Shut down")
+[[ "$(logind_can CanHibernate)" == yes ]] && items=("Settings" "Lock screen" "Log out" "Suspend" "Hibernate" "Restart" "Shut down")
 arctic-is-live 2>/dev/null && items=("Settings" "Restart" "Shut down")
 choice="$(printf '%s\n' "${items[@]}" | fuzzel --dmenu --prompt "  " --placeholder "Power" \
   --lines "${#items[@]}" --width 24 2>/dev/null)" || exit 0
 case "$choice" in
   "Settings")    exec arctic-settings ;;
   "Lock screen") act lock ;;
-  "Log out")     act logout ;;
+  "Log out")     gentle logout "Log out" ;;
   "Suspend")     act suspend ;;
-  "Restart")     act restart ;;
-  "Shut down")   act poweroff ;;
+  "Hibernate")   act hibernate ;;
+  "Restart")     gentle restart "Restart" ;;
+  "Shut down")   gentle poweroff "Shut down" ;;
 esac

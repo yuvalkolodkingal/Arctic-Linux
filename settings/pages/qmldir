@@ -5,6 +5,7 @@ InputPage 1.0 InputPage.qml
 ShortcutsPage 1.0 ShortcutsPage.qml
 AppsPage 1.0 AppsPage.qml
 NetworkPage 1.0 NetworkPage.qml
+SharingPage 1.0 SharingPage.qml
 BluetoothPage 1.0 BluetoothPage.qml
 SoundPage 1.0 SoundPage.qml
 UpdatesPage 1.0 UpdatesPage.qml
