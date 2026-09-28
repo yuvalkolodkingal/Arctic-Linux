@@ -75,7 +75,9 @@ Plugging in or unplugging shows "Charging" or "On battery" at the bottom of the 
 
 Click the clock for today's date, your time zone and a calendar with week numbers. The arrow keys
 move the day, `Page Up` / `Page Down` the month (with `Shift`, the year) and `Home` comes back to
-today.
+today. With the weather on (**Settings → Appearance → Weather**), the calendar shows it now and
+for five days under the month, and **Show the temperature on the bar** puts it right of the clock
+("21°"); click it for the calendar.
 
 ## Music and video (`Super + Ctrl + M`)
 

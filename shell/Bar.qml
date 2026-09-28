@@ -9,8 +9,10 @@ import Quickshell.Services.UPower
 
 // The top bar (design TopBar): 34px frost with a 1px line along the bottom.
 // Left: fox mark (launcher) and workspaces 1–5, plus the "Live session" tag on the live USB.
-// Centre: the clock. Right: Install (live only) or Restart to update (updates waiting),
-// notifications and Bluetooth (quiet), tray, network, volume, battery, power. Anything the system can't report is hidden, never faked.
+// Centre: the clock, with what listens and the modes that are on to its left, and the
+// temperature and what's playing to its right. Right: Install (live only) or Restart to update
+// (updates waiting), notifications and Bluetooth (quiet), tray, network, volume, battery, power.
+// Anything the system can't report is hidden, never faked.
 PanelWindow {
     id: bar
     required property var modelData
@@ -197,12 +199,26 @@ PanelWindow {
         anchors.verticalCenter: parent.verticalCenter
         bar: bar
     }
-    // Right of the clock while a media player exists: its title; click for the media menu,
-    // middle click plays or pauses, scrolling skips.
-    BarItem {
-        id: mediaItem
+    // Right of the clock: the temperature (Settings > Appearance > Weather > "Show the
+    // temperature on the bar"), only with a reading; a click opens the calendar, which has the
+    // forecast under the month.
+    WeatherItem {
+        id: weatherItem
         anchors.left: clockItem.right
         anchors.leftMargin: Theme.space2
+        anchors.verticalCenter: parent.verticalCenter
+        visible: WeatherService.showInBar
+        hasMenu: true
+        tooltip: WeatherService.summary + '  (Super + Ctrl + T)'
+        onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
+        onHoverChanged: h => h ? bar.hint(weatherItem, tooltip) : bar.unhint(weatherItem)
+    }
+    // Right of the clock (and the temperature) while a media player exists: its title; click for
+    // the media menu, middle click plays or pauses, scrolling skips.
+    BarItem {
+        id: mediaItem
+        anchors.left: weatherItem.visible ? weatherItem.right : clockItem.right
+        anchors.leftMargin: weatherItem.visible ? Theme.space1 : Theme.space2
         anchors.verticalCenter: parent.verticalCenter
         visible: MediaService.available && MediaService.title !== ''
         hasMenu: true

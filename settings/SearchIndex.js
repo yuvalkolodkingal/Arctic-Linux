@@ -58,6 +58,7 @@ var ENTRIES = [
     ["appearance", "appearance.themeinstall", "Add a theme from the web", "install theme github omarchy url download colours"],
     ["appearance", "appearance.weather", "Weather in the calendar", "forecast temperature rain open-meteo"],
     ["appearance", "appearance.weatherplace", "Weather place", "location town city where"],
+    ["appearance", "appearance.barweather", "Show the temperature on the bar", "weather degrees top bar clock"],
     ["appearance", "appearance.rotate", "Change the wallpaper by itself", "rotate slideshow cycle shuffle every hour day random wallpaper"],
     ["appearance", "appearance.wallhaven", "Find wallpapers on Wallhaven", "wallhaven online download internet search browse wallpaper"],
     ["appearance", "appearance.wallhaven.key", "Wallhaven API key", "wallhaven account apikey nsfw sketchy"],
