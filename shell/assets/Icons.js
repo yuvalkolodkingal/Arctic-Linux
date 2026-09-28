@@ -72,6 +72,8 @@ const TILE_MATCH = [
 
 function tileFor(id, name) {
     const key = (String(id || '') + ' ' + String(name || '')).toLowerCase();
+    // Web apps (arctic-webapp) keep their own icon: a web app named "Signal" isn't Signal.
+    if (key.startsWith('org.arcticlinux.webapp.')) return '';
     for (let i = 0; i < TILE_MATCH.length; i++) if (TILE_MATCH[i][1].test(key)) return TILE_MATCH[i][0];
     return '';
 }
