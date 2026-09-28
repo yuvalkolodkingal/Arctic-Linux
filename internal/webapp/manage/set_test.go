@@ -8,10 +8,13 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"image"
 	"image/png"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -167,5 +170,25 @@ func TestPunycode(t *testing.T) {
 		if got := asciiHost(in); got != want {
 			t.Errorf("asciiHost(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// "Add with a letter icon" works when the site can't be reached; other icons still need it.
+func TestInstallOfflineWithLetterIcon(t *testing.T) {
+	m := testManager(t)
+	srv := httptest.NewServer(http.NotFoundHandler())
+	addr := srv.URL
+	srv.Close() // nothing listens there now
+	_, err := m.Install(context.Background(), api.InstallParams{URL: addr})
+	if code(err) != webapp.CodeFetch {
+		t.Fatalf("without a letter icon: %v", err)
+	}
+	res, err := m.Install(context.Background(), api.InstallParams{URL: addr + "/app", Icon: json.RawMessage(`"monogram"`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := m.Paths.Load(res.App.ID)
+	if err != nil || a.Icon.Source != "monogram" || a.StartURL != addr+"/app" || a.Scope.Scheme != "http" {
+		t.Fatalf("%+v %v", a, err)
 	}
 }

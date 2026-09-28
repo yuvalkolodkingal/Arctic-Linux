@@ -38,6 +38,10 @@ func (m *Manager) Install(ctx context.Context, p api.InstallParams) (api.Install
 			return res, webapp.Errorf(webapp.CodeBadRequest, "Say which site to add.")
 		}
 		pr, err := m.Inspect(ctx, p.URL)
+		if err != nil && wantsMonogram(p) && unreachable(err) {
+			// "Add with a letter icon" while offline: the typed address is all there is.
+			pr, err = m.offlinePreview(p.URL)
+		}
 		if err != nil {
 			return res, err
 		}
@@ -303,4 +307,35 @@ func (m *Manager) fetchIcon(ctx context.Context, raw string) (chosenIcon, string
 	}
 	sum := sha256.Sum256(resp.Body)
 	return chosenIcon{img: img, source: "url", purpose: "any", url: u.String(), sha256: hex.EncodeToString(sum[:])}, ""
+}
+
+func wantsMonogram(p api.InstallParams) bool {
+	var s string
+	return p.IconFile == "" && p.IconURL == "" && json.Unmarshal(p.Icon, &s) == nil && s == "monogram"
+}
+
+// unreachable: the site couldn't be read at all (offline, no answer, DNS), as opposed to an
+// answer Arctic refuses (not a web page, too large, TLS).
+func unreachable(err error) bool {
+	switch webapp.AsError(err).Code {
+	case webapp.CodeOffline, webapp.CodeFetch, webapp.CodeTimeout:
+		return true
+	}
+	return false
+}
+
+// offlinePreview builds a preview from the typed address alone: its host's site as the scope,
+// the site label as the name and a letter icon.
+func (m *Manager) offlinePreview(raw string) (api.Preview, error) {
+	u, err := discover.Normalize(raw)
+	if err != nil {
+		return api.Preview{}, err
+	}
+	site := m.psl().Site(u.Host)
+	name, source := discover.PickName(nil, discover.Head{}, u.Host, site)
+	res := &discover.Result{
+		Input: u, FinalURL: u, Name: name, NameSource: source, StartURL: u.String(),
+		Site: site, Scheme: u.Scheme, Category: "Network", Insecure: u.Scheme == "http",
+	}
+	return m.storePreview(raw, res)
 }
