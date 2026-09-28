@@ -1,6 +1,6 @@
 // Default apps: which app opens for each role. The keyboard roles (browser, terminal, files,
 // editor) go to ~/.config/arctic/default-apps, which arctic-open reads after the installer's
-// /etc/arctic/default-apps (Super + W, Super + Enter, Super + F, Super + E); links and files
+// /etc/arctic/default-apps (Super + B, Super + Enter, Super + F, Super + E); links and files
 // open through ~/.config/mimeapps.list, the file `xdg-mime default` writes.
 pragma ComponentBehavior: Bound
 import QtQuick

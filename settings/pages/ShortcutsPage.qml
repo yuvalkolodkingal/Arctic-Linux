@@ -1,7 +1,8 @@
 // Shortcuts: Arctic's shortcut sheet (keys.txt, parsed like the shell's KeysSheet), every bind
 // in the Mango config, and your own shortcuts that run a command or open an app — written as
 // `bind=MODS,KEY,spawn_shell,COMMAND` lines in settings.conf. Mango uses the first bind for a
-// key, so a key that is already taken is refused rather than silently ignored.
+// key, so a key that is already taken is refused rather than silently ignored, and a bind of yours
+// that Arctic took over later (a new default on the same keys) is flagged: it never runs.
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
@@ -13,14 +14,40 @@ Page {
     title: "Shortcuts"
     lede: "Everything on this desktop has a shortcut. Add your own to open apps or run commands."
 
-    property var binds: ({ sheet: [], all: [], mine: [] })
+    property var binds: ({ sheet: [], all: [], mine: [], shadowed: [] })
     property string filter: ""
     property bool showAll: false
     readonly property string f: filter.trim().toLowerCase()
     function matches(a, b) {
         return f === "" || String(a).toLowerCase().indexOf(f) >= 0 || String(b).toLowerCase().indexOf(f) >= 0;
     }
+    // What the bind that wins does, in the sheet's words when it has some ("Browser").
+    function winner(s) {
+        return s.label + " is " + (s.sheet || s.what) + " in " + s.file;
+    }
+    readonly property var shadowed: binds.shadowed || []
     onShown: Backend.call(["binds"], r => { if (r.ok) page.binds = r; })
+
+    // Mango runs only the first bind for a key, and Arctic's files come before yours: when an
+    // update gives one of your keys to Arctic, say so rather than let it fail silently.
+    ArBanner {
+        visible: page.shadowed.length > 0
+        width: parent.width
+        kind: "warning"
+        strong: true
+        title: page.shadowed.length === 1 ? "One of your shortcuts doesn’t run"
+            : page.shadowed.length + " of your shortcuts don’t run"
+        text: {
+            if (page.shadowed.length === 0)
+                return "";
+            const s = page.shadowed[0];
+            const others = page.shadowed.slice(1).map(o => o.label + " (" + o.what + ", " + o.file + ")");
+            return "Arctic’s “" + (s.shadowedBy.sheet || s.shadowedBy.what) + "” shortcut uses " + s.shadowedBy.label
+                + ", so yours (" + s.what + ") never runs. Remove it and add it on another key."
+                + (s.file === "user.conf" ? " It’s in ~/.config/mango/user.conf." : "")
+                + (others.length ? " Also " + others.join(", ") + "." : "");
+        }
+    }
 
     ArInput {
         width: 360
@@ -32,12 +59,12 @@ Page {
 
     Group {
         title: "Your shortcuts"
-        desc: "They run a command or open an app. Super + Shift + R reloads the config if one doesn’t work straight away."
+        desc: "They run a command or open an app. Super + Shift + R reloads the config if one doesn’t work straight away. Arctic’s own shortcuts come first: if Arctic later uses one of your keys, this page tells you."
         SettingRow {
             searchKey: "shortcuts.mine"
             visible: page.binds.mine.length === 0
             title: "None yet"
-            desc: "For example Super + Alt + B to open a second browser, or a key for a script."
+            desc: "For example Super + Alt + F to open Firefox, or a key for a script."
             resettable: false
             ArButton {
                 text: "Add a shortcut"
@@ -52,21 +79,42 @@ Page {
                 id: mineRow
                 required property var modelData
                 title: modelData.label
-                desc: modelData.command
+                desc: modelData.shadowedBy ? modelData.command + " · doesn’t run: " + page.winner(modelData.shadowedBy) : modelData.command
                 resettable: false
-                ArButton {
-                    variant: "ghost"
-                    size: "sm"
-                    iconName: "trash"
-                    text: "Remove"
-                    gapColor: Theme.surfaceRaised
-                    onClicked: Backend.call(["bind-remove", String(mineRow.modelData.index)], r => {
-                        if (r.ok) {
-                            page.binds = r;
-                            Backend.refresh();
-                            Backend.notify("success", "Shortcut removed", true);
+                Row {
+                    spacing: Theme.space4
+                    Row {
+                        visible: !!mineRow.modelData.shadowedBy
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space1
+                        Icon {
+                            name: "alert"
+                            size: 16
+                            color: Theme.warning
+                            anchors.verticalCenter: parent.verticalCenter
                         }
-                    })
+                        ArText {
+                            text: "Doesn’t run"
+                            size: 13
+                            lh: 20
+                            weight: Font.DemiBold
+                            color: Theme.warning
+                        }
+                    }
+                    ArButton {
+                        variant: "ghost"
+                        size: "sm"
+                        iconName: "trash"
+                        text: "Remove"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: Backend.call(["bind-remove", String(mineRow.modelData.index)], r => {
+                            if (r.ok) {
+                                page.binds = r;
+                                Backend.refresh();
+                                Backend.notify("success", "Shortcut removed", true);
+                            }
+                        })
+                    }
                 }
             }
         }
@@ -130,6 +178,7 @@ Page {
                 required property var modelData
                 title: modelData.what || modelData.action
                 desc: String(modelData.file).split("/").pop() + (modelData.keymode !== "default" ? " · " + modelData.keymode : "")
+                    + (modelData.shadowedBy ? " · doesn’t run (" + page.winner(modelData.shadowedBy) + ")" : "")
                 resettable: false
                 compact: true
                 ArText {
@@ -269,6 +318,17 @@ Page {
             iconName: "grid"
             onClicked: appPicker.start()
         }
+        // An app picked above: start it, or bring back its window when it's open already.
+        ArCheck {
+            id: focusCheck
+            visible: /^(gtk-launch|arctic-open --focus) [A-Za-z0-9._-]+$/.test(addDialog.command.trim())
+            checked: true
+            text: "If it’s open, bring its window back"
+            onToggled: {
+                const id = addDialog.command.trim().split(" ").pop();
+                commandField.text = (checked ? "arctic-open --focus " : "gtk-launch ") + id;
+            }
+        }
         ArText {
             visible: addDialog.error !== ""
             width: parent.width
@@ -300,7 +360,7 @@ Page {
         actionText: "Use this app"
         items: apps
         onPicked: v => {
-            commandField.text = "gtk-launch " + v;
+            commandField.text = (focusCheck.checked ? "arctic-open --focus " : "gtk-launch ") + v;
             addDialog.open();
         }
         onOpened: if (apps.length === 0) Backend.call(["startup"], r => {

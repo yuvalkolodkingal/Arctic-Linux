@@ -5,11 +5,12 @@
 #
 # Targets: launcher toggle|open|close · apps install · wallpapers toggle|open · power toggle
 #          keys toggle · osd volume|brightness · lock lock|isLocked · welcome open
-#          dnd refresh · shell reload|live
+#          dnd refresh · shell reload|live · clipboard toggle · emoji toggle · record open|refresh
+#          share pick <fifo> · capture freeze <dir>|thaw
 #          notifications center|dismiss|dismissAll|invoke|count|history|dnd on|off|toggle|1h|tomorrow|status
 # Exits non-zero when the shell isn't running, so callers can fall back to something else.
 set -uo pipefail
-(( $# >= 2 )) || { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+(( $# >= 2 )) || { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 command -v quickshell >/dev/null 2>&1 || exit 1
 dir="$(arctic-shell --path 2>/dev/null)" || exit 1
 # `quickshell ipc call` exits non-zero when no instance of this shell is running.

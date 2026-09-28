@@ -277,7 +277,7 @@ instead.
   sudo systemctl start arctic-firstboot
   ```
 
-- **`Super + W` (or E, F) says "No app set":** the app for that role isn't installed. Install one,
+- **`Super + B` (or E, F) says "No app set":** the app for that role isn't installed. Install one,
   or set another in `~/.config/arctic/default-apps` (see
   [Themes and customisation](Themes-and-Customisation#default-apps)).
 
@@ -321,6 +321,29 @@ The screen locks after 5 minutes without use and the computer suspends after 15.
 times (or turn them off) in [Settings](Settings#power-and-lock) (`Super + S`), **Power and lock**.
 They're saved in `~/.config/arctic/idle.conf` (`lock_after=` and `suspend_after=`, in seconds, 0
 for never) and apply at once.
+
+### A shortcut I made doesn't work
+
+- **Settings > Shortcuts says "Doesn't run":** Arctic uses those keys now (0.3 moved the browser to
+  `Super + B` and added `Super + Shift + S`, `Alt + Tab` and others), and Arctic's shortcuts come
+  first. Remove yours and add it on another key.
+- **It holds Alt and Shift:** with two keyboard layouts, `Alt + Shift` switches the layout, so such
+  a shortcut switches it too. Pick other keys, or another switch key in Settings.
+- **You replaced `binds.conf` with your own copy:** it doesn't get Arctic's new shortcuts. Compare
+  it with `/usr/share/arctic/mango/binds.conf`.
+
+### Screen sharing shows no list of screens
+
+The list comes from `/etc/xdg/xdg-desktop-portal-wlr/mango`, which xdg-desktop-portal-wlr reads in
+Mango sessions. Log out and back in after installing Arctic's update (the portal reads its
+settings when it starts), or run `systemctl --user restart xdg-desktop-portal-wlr`.
+
+### Recording won't start
+
+`Super + Alt + R` tries your graphics card's video encoders, then one on the processor. What
+went wrong is in `$XDG_RUNTIME_DIR/arctic/record.log` (`/run/user/1000/arctic/record.log`), and
+`~/.cache/arctic/record-codec` remembers the encoder that worked (delete it to try them all
+again). `wf-recorder` must be installed.
 
 ### A setting doesn't stick
 

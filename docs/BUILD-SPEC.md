@@ -95,7 +95,8 @@ daemon; the shell is its own notification server). arctic-shell Requires glib2 (
 SDDM (theme `arctic`, greeter on mango or weston) → `mango.desktop` → `~/.config/mango/config.conf`
 (from /etc/skel). Autostart (`dotfiles/.config/mango/arctic/autostart.conf`):
 `arctic-theme apply`, `arctic-shell` (Quickshell: bar, launcher, wallpapers, OSD, lock, live
-welcome, notification server), `arctic-session mako|nm-applet|clipboard|idle`. The Quickshell
+welcome, notification server), `arctic-session mako|nm-applet|clipboard|idle`, `arctic-settings
+--check-binds` (once: where shortcuts moved, your shortcuts an Arctic key shadows). The Quickshell
 polkit agent is used if `Quickshell.Services.Polkit` works, else lxqt-policykit via
 `arctic-session polkit`. Notifications work the same way: the shell owns
 `org.freedesktop.Notifications` (toasts, the notification centre, do not disturb), so
@@ -107,8 +108,16 @@ Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
 `lock lock`, `keys toggle`, `notifications center|dismiss|dismissAll|invoke|dnd <mode>` (through
-`arctic-notify` and `arctic-dnd`, which fall back to makoctl), `keyboard next|set|menu`. Mango binds
-call these.
+`arctic-notify` and `arctic-dnd`, which fall back to makoctl), `keyboard next|set|menu`,
+`clipboard toggle`, `emoji toggle`, `record open|refresh`, `share pick <fifo>`,
+`capture freeze <dir>|thaw`. Mango binds and the arctic-* helpers call these.
+
+Capture (arctic-desktop-config): `arctic-screenshot`, `arctic-ocr`, `arctic-colorpick` and
+`arctic-record` select with slurp and capture with grim / wf-recorder; `arctic-capture` parses
+Mango's IPC for them. Screen sharing in Mango sessions: `/etc/xdg/xdg-desktop-portal-wlr/mango`
+(`chooser_type=simple`) runs `/usr/libexec/arctic/arctic-share-picker`, which lists every monitor
+and window (the shell's "Share your screen" card over IPC, else fuzzel) and prints
+xdg-desktop-portal-wlr's `Monitor: <output>` / `Window: <id>`.
 
 ### 3.1 App theming
 

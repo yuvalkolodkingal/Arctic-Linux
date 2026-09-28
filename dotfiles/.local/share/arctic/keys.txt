@@ -3,11 +3,13 @@
   Everyday
     Super + Space            Apps (press again to close)
     Super + Enter            Terminal
-    Super + W                Browser
+    Super + Alt + Enter      Drop-down terminal (again to hide)
+    Super + B                Browser
     Super + E                Code editor
     Super + F                Files
     Super + Shift + F        Files in the terminal (yazi)
     Super + V                Clipboard history
+    Super + Ctrl + E         Emoji
     Super + Shift + A        Get apps (install with dnf or Flatpak)
     Super + Shift + W        Wallpapers
     Super + /                This sheet
@@ -22,7 +24,16 @@
     Super + T                Float / tile
     Super + M                Maximise
     Super + Shift + M        Full screen
+    Alt + Tab                Switch windows (Alt + ` goes back)
+    Super + Alt + Tab        Switch windows on every workspace
     Super + Tab              Next window
+    Super + J                Jump to a window by its letter
+    Super + Backspace        Back to the previous window
+    Super + H                Hide the window (Shift: bring it back)
+    Super + Shift + P        Pin a window over every workspace
+    Super + Alt + ← → ↑ ↓    Join the neighbour's tab group
+    Super + Alt + G          Leave the tab group
+    Super + Alt + Page Up    Previous / next tab (Page Down)
     Super + O                Overview
     Super + N                Next layout
     Super + drag             Move (left button) / resize (right button)
@@ -32,6 +43,7 @@
     Super + Shift + 1 … 5    Move window to workspace
     Super + Page Up / Down   Previous / next workspace
     Super + , / .            Focus the other monitor
+    Super + `                Scratch workspace (Shift: move the window)
 
   System
     Super + L                Lock
@@ -44,7 +56,16 @@
     Super + Shift + N        Do not disturb
     Super + Shift + T        Switch Winter / Polar night
     Super + Shift + R        Reload the desktop config
-    Print                    Screenshot an area (Shift: screen, Super: window)
+
+  Capture
+    Print                    Screenshot of an area (drag, or click a window)
+    Super + Shift + S        Screenshot of an area
+    Shift + Print            Screenshot of this screen
+    Super + Print            Screenshot of the window
+    Ctrl + Print             An area to the clipboard only
+    Super + Ctrl + Print     Copy the text in an area
+    Super + Shift + C        Pick a colour
+    Super + Alt + R          Record the screen (again to stop)
 
   Touchpad
     3 fingers                Move focus

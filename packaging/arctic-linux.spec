@@ -220,6 +220,15 @@ Requires:       libdnf5-plugin-actions
 Requires:       snapper
 Requires:       btrfs-progs
 Requires:       findutils
+# Stream 4 (shortcuts and capture): gio and gdbus for the screenshot notification's buttons
+# (open, show in Files, move to the trash); swappy edits screenshots (satty isn't in Fedora;
+# swappy's weak deps bring its icon font); wf-recorder records the screen (arctic-record);
+# tesseract (its data package brings English) and zxing-cpp read text and QR codes (arctic-ocr).
+Requires:       glib2
+Recommends:     swappy
+Recommends:     wf-recorder
+Recommends:     tesseract
+Recommends:     python3-zxing-cpp
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
@@ -254,6 +263,11 @@ Requires:       polkit
 # Stream 3b (notifications): gdbus checks who owns org.freedesktop.Notifications.
 Requires:       glib2
 Requires:       arctic-fonts = %{version}-%{release}
+# Stream 4 (input): the emoji picker lists unicode-emoji's emoji in the colour emoji font and
+# types them with wtype (the clipboard panel's paste uses it too); without wtype they're copied.
+Requires:       unicode-emoji
+Requires:       google-noto-color-emoji-fonts
+Recommends:     wtype
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,
@@ -704,6 +718,9 @@ install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/fla
 # QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
 # an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
 install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 4 (capture): the screen-share picker xdg-desktop-portal-wlr runs in Mango sessions.
+install -Dpm 0644 packaging/desktop/xdg-desktop-portal-wlr.ini %{buildroot}%{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+install -Dpm 0755 packaging/desktop/arctic-share-picker %{buildroot}%{_libexecdir}/arctic/arctic-share-picker
 # arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own
 # subpackages; neofetch is listed below (%%ghost).
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer|neofetch' \
@@ -1127,6 +1144,10 @@ fi
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 %dir %{_sharedstatedir}/arctic
 %ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
+# Stream 4 (capture): the screen-share picker.
+%dir %{_sysconfdir}/xdg/xdg-desktop-portal-wlr
+%config(noreplace) %{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+%{_libexecdir}/arctic/arctic-share-picker
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic

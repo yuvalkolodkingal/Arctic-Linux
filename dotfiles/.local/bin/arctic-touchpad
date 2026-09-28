@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# arctic-touchpad — the touchpad key (XF86TouchpadToggle / On / Off): turn the touchpad off or on
+# for this session, with an on-screen notice. It starts from Settings' choice (disable_trackpad
+# in settings.conf or user.conf); Settings > Keyboard and mouse changes it for good.
+#
+#   arctic-touchpad toggle | on | off | status
+set -uo pipefail
+
+state="${XDG_RUNTIME_DIR:-/tmp}/arctic/touchpad"
+
+current() {   # on | off
+  if [[ -f "$state" ]]; then cat "$state"; return; fi
+  local conf="${HOME}/.config/mango" value
+  value="$(grep -hsE '^[[:space:]]*disable_trackpad[[:space:]]*=' "$conf/settings.conf" "$conf/user.conf" | tail -n1)"
+  if [[ "${value##*=}" =~ ^[[:space:]]*1 ]]; then echo off; else echo on; fi
+}
+
+set_to() {
+  local off=0
+  [[ "$1" == off ]] && off=1
+  mmsg dispatch setoption,disable_trackpad,"$off" >/dev/null 2>&1 || return 1
+  mkdir -p "${state%/*}" && echo "$1" > "$state"
+  local label="Touchpad on" icon=input-touchpad-symbolic
+  [[ "$1" == off ]] && label="Touchpad off"
+  notify-send -a arctic-osd -e -t 1200 -h string:x-canonical-private-synchronous:arctic-osd \
+    -i "$icon" "$label" 2>/dev/null || true
+}
+
+case "${1:-}" in
+  toggle) if [[ "$(current)" == on ]]; then set_to off; else set_to on; fi ;;
+  on|off) set_to "$1" ;;
+  status) current ;;
+  *) sed -n '6p' "$0" | sed 's/^# \{0,1\}/usage: /' >&2; exit 2 ;;
+esac

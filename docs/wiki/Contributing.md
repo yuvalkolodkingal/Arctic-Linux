@@ -12,7 +12,7 @@ Open an [issue](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) and inc
 - for installer problems, the log from **Save log to USB** (see
   [Troubleshooting](Troubleshooting#saving-the-installer-log));
 - for desktop problems, the output of `journalctl --user -b` or `arctic-shell --foreground`;
-- a screenshot (`Print` saves one to `~/Pictures/Screenshots`).
+- a screenshot (`Print` or `Super + Shift + S` saves one to `~/Pictures/Screenshots`).
 
 ## Before you change something
 

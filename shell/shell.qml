@@ -16,12 +16,14 @@ import Quickshell.Io
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
 //   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory|reload
 //   keyboard next|set|menu
+//   clipboard toggle · emoji toggle · record open|refresh · share pick <fifo> · capture freeze|thaw
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates, notificationCenter, keyboardPanel].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, notificationCenter, keyboardPanel,
+         clipboard, emoji, sharePicker, recordDialog].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -78,6 +80,13 @@ ShellRoot {
     function toggleKeys() {
         if (keys.open) keys.close(); else present(keys, null);
     }
+    // Clipboard history (Super + V) and emoji (Super + Ctrl + E), on the focused screen.
+    function toggleClipboard() {
+        if (clipboard.open) clipboard.close(); else present(clipboard, null);
+    }
+    function toggleEmoji() {
+        if (emoji.open) emoji.close(); else present(emoji, null);
+    }
     function lock() {
         closePopovers(null);
         lockScreen.lock();
@@ -97,6 +106,12 @@ ShellRoot {
     PowerMenu { id: power; shell: shell }
     UpdatePopover { id: updates }
     KeysSheet { id: keys }
+    ClipboardPanel { id: clipboard }
+    EmojiPicker { id: emoji }
+    PowerKey { locked: lockScreen.secure }
+    SharePicker { id: sharePicker }
+    RecordDialog { id: recordDialog }
+    FrozenScreens { id: frozenScreens }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -186,6 +201,42 @@ ShellRoot {
         target: 'updates'
         function toggle(): void { shell.toggleUpdates(null, undefined); }
         function refresh(): void { UpdateService.refresh(); }
+    }
+    IpcHandler {
+        target: 'clipboard'
+        function toggle(): void { shell.toggleClipboard(); }
+    }
+    IpcHandler {
+        target: 'emoji'
+        function toggle(): void { shell.toggleEmoji(); }
+    }
+    IpcHandler {
+        target: 'capture'
+        // arctic-screenshot: show the monitors as they were at the key press while you select an
+        // area (the picture already has any open popover in it), then take them away.
+        function freeze(dir: string): bool {
+            closePopoversSoon.restart();
+            return frozenScreens.freeze(dir);
+        }
+        function thaw(): void { frozenScreens.thaw(); }
+    }
+    Timer { id: closePopoversSoon; interval: 1; onTriggered: shell.closePopovers(null) }
+    IpcHandler {
+        target: 'share'
+        // arctic-share-picker (the screen-share portal's chooser) waits on this FIFO for the
+        // answer; false when the path isn't one it made.
+        function pick(reply: string): bool {
+            if (!sharePicker.start(reply)) return false;
+            shell.present(sharePicker, null);
+            return true;
+        }
+    }
+    IpcHandler {
+        target: 'record'
+        // arctic-record toggle, when nothing is recording: what to record, and which sound.
+        function open(): void { shell.present(recordDialog, null); }
+        // arctic-record started or stopped a recording (RecordService re-reads record.json).
+        function refresh(): void { RecordService.refresh(); }
     }
     IpcHandler {
         target: 'shell'

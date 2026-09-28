@@ -434,11 +434,13 @@ class ShortcutsTest(Home):
         self.assertEqual(launcher[0]['label'], 'Super + Space')
 
     def test_add_and_remove(self):
-        data = self.helper('bind-add', 'super+alt', 'B', 'firefox --new-window')
-        self.assertEqual(data['mine'][0]['label'], 'Super + Alt + B')
-        self.assertIn('keymode=default\nbind=SUPER+ALT,b,spawn_shell,firefox --new-window\n', self.settings)
-        self.assertIn('Super + Alt + B', [b['label'] for b in data['all'] if b['mine']])
-        self.helper('bind-add', 'SUPER+ALT', 'b', 'foot', ok=False)            # already yours
+        data = self.helper('bind-add', 'super+alt', 'F', 'firefox --new-window')
+        self.assertEqual(data['mine'][0]['label'], 'Super + Alt + F')
+        self.assertIn('keymode=default\nbind=SUPER+ALT,f,spawn_shell,firefox --new-window\n', self.settings)
+        self.assertIn('Super + Alt + F', [b['label'] for b in data['all'] if b['mine']])
+        self.assertNotIn('shadowedBy', data['mine'][0])
+        self.assertEqual(data['shadowed'], [])
+        self.helper('bind-add', 'SUPER+ALT', 'f', 'foot', ok=False)            # already yours
         data = self.helper('bind-remove', 0)
         self.assertEqual(data['mine'], [])
         self.assertNotIn('bind=', self.settings)
@@ -453,6 +455,70 @@ class ShortcutsTest(Home):
         self.helper('bind-add', 'SUPER+ALT', 'a', 'a,,b', ok=False)
         self.helper('bind-add', 'SUPER+ALT', 'a', '', ok=False)
         self.helper('bind-add', 'NONE', 'F9', 'foot')                   # function keys may go alone
+
+    def test_new_default_keys(self):
+        self.assertIn('arctic-open browser', self.helper('bind-add', 'SUPER', 'b', 'foot', ok=False)['error'])
+        self.assertIn('arctic-screenshot', self.helper('bind-add', 'SUPER+SHIFT', 's', 'foot', ok=False)['error'])
+        self.assertEqual(self.helper('bind-add', 'SUPER', 'w', 'firefox')['mine'][0]['label'], 'Super + W')
+
+    def write_conf(self, name, text):
+        (self.home / '.config/mango' / name).write_text(text)
+
+    def test_binds_arctic_took_over_are_flagged(self):
+        # Your Super + B from before 0.3 (Settings wrote it), now Arctic's browser key.
+        self.write_conf('settings.conf', 'keymode=default\nbind=SUPER,b,spawn_shell,firefox\n')
+        data = self.helper('binds')
+        shadow = data['mine'][0]['shadowedBy']
+        self.assertEqual((shadow['label'], shadow['file'], shadow['sheet']), ('Super + B', 'apps.conf', 'Browser'))
+        self.assertEqual([(s['label'], s['what'], s['file']) for s in data['shadowed']],
+                         [('Super + B', 'firefox', 'settings.conf')])
+        mine = [b for b in data['all'] if b['mine']]
+        self.assertEqual(mine[0]['shadowedBy']['what'], 'arctic-open browser')
+        # Arctic's own binds are never reported as yours.
+        self.assertFalse([b for b in data['all'] if not b['mine'] and 'shadowedBy' in b])
+
+    def test_shadowing_follows_mango(self):
+        self.write_conf('user.conf', textwrap.dedent('''\
+            bind=SUPER+SHIFT,s,spawn,grim
+            bindr=SUPER,q,spawn,foot
+            bind=SUPER+CTRL,code:49,spawn,a
+            bind=SUPER+CTRL,grave,spawn,b
+            bindc=SUPER+ALT,x,spawn,c
+            bind=SUPER+ALT,x,spawn,d
+            keymode=resize
+            bind=SUPER,Space,spawn,e
+            keymode=common
+            bind=SUPER,Space,spawn,f
+            '''))
+        data = self.helper('binds')
+        found = {(s['what'], s['file']): s['shadowedBy']['label'] for s in data['shadowed']}
+        self.assertEqual(found, {('grim', 'user.conf'): 'Super + Shift + S',     # Arctic's screenshot key
+                                 ('b', 'user.conf'): 'Super + Ctrl + `',          # code:49 is the grave key
+                                 ('f', 'user.conf'): 'Super + Space'})           # common meets default
+        # A release bind doesn't meet a press bind, a `c` bind lets the next one run too, and
+        # another keymode is another set of keys.
+
+    def test_login_notices_are_said_once(self):
+        ids = lambda data: [n['id'] for n in data['notices']]     # noqa: E731
+        first = self.helper('notices')
+        self.assertEqual(ids(first), ['keys-0.3.0'])
+        self.assertEqual(first['notices'][0]['action'], ['arctic-keys'])
+        self.assertEqual(self.helper('notices')['notices'], [])
+        # A shortcut of yours that an Arctic key took over: said once, and again if that changes.
+        self.write_conf('user.conf', 'bind=SUPER,b,spawn,firefox\n')
+        shadow = self.helper('notices')['notices']
+        self.assertEqual(len(shadow), 1)
+        self.assertIn('“Browser” shortcut uses Super + B, so yours (firefox)', shadow[0]['body'])
+        self.assertEqual(self.helper('notices')['notices'], [])
+        self.write_conf('user.conf', 'bind=SUPER,b,spawn,firefox\nbind=SUPER+SHIFT,s,spawn,grim\n')
+        self.assertEqual(self.helper('notices')['notices'][0]['summary'], '2 of your shortcuts don’t run')
+        # Your own copy of binds.conf (not the link to Arctic's) doesn't get the new keys.
+        (self.share / 'mango').mkdir()
+        shutil.copy(DOTFILES / '.config/mango/arctic/binds.conf', self.share / 'mango/binds.conf')
+        self.assertEqual(self.helper('notices')['notices'], [])                  # the same file
+        with open(self.home / '.config/mango/arctic/binds.conf', 'a') as mine:
+            mine.write('bind=SUPER,x,spawn,foot\n')
+        self.assertEqual(ids(self.helper('notices')), ['copied-binds.conf-0.3.0'])
 
 
 class StartupTest(Home):
@@ -960,6 +1026,7 @@ class DefaultAppsTest(Home):
         browser = self.role(data, 'browser')
         self.assertEqual([c['id'] for c in browser['candidates']], ['org.mozilla.firefox', 'app.zen_browser.zen'])
         self.assertEqual(browser['current'], 'app.zen_browser.zen')        # /etc/arctic/default-apps
+        self.assertEqual(browser['keys'], 'Super + B')
         self.assertFalse(browser['overridden'])
         terminal = self.role(data, 'terminal')
         self.assertEqual([c['id'] for c in terminal['candidates']], ['foot', 'kitty'])   # not xterm (no --hold)
@@ -1003,6 +1070,29 @@ class DefaultAppsTest(Home):
         opener.write_text(script)
         subprocess.run(['bash', str(opener), 'browser'], env=env, check=True, timeout=10)
         self.assertIn('exec gtk-launch org.mozilla.firefox', ran.read_text())
+        # The drop-down terminal's window gets its app id in the terminal's own words.
+        stub(self.bin, 'setsid', 'shift; for a in "$@"; do printf "[%s]" "$a"; done >> "{}"; echo >> "{}"\n'.format(ran, ran))
+        stub(self.bin, 'kitty', 'exit 0\n')
+        subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'org.arcticlinux.Dropdown'], env=env, check=True, timeout=10)
+        self.assertTrue(ran.read_text().splitlines()[-1].endswith('[arctic-open][--class][org.arcticlinux.Dropdown]'))
+        subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'x.y', '--hold', '-e', 'btop'], env=env, check=True, timeout=10)
+        self.assertTrue(ran.read_text().splitlines()[-1].endswith('[--class][x.y][--hold][-e][btop]'))
+        # --focus: the open window comes back (Mango), else the app starts.
+        stub(self.bin, 'mmsg', 'echo "mmsg $*" >> "{}"; [ "$1" = get ] && echo \'{{"clients": [{{"id": 7, "appid": "Firefox"}}]}}\'\n'.format(self.log))
+        subprocess.run(['bash', str(opener), '--focus', 'org.mozilla.firefox'], env=env, check=True, timeout=10)
+        self.assertIn('mmsg dispatch focusid client,7', self.calls())
+        subprocess.run(['bash', str(opener), '--focus', 'org.gnome.Nautilus'], env=env, check=True, timeout=10)
+        self.assertTrue(ran.read_text().splitlines()[-1].endswith('[gtk-launch][org.gnome.Nautilus]'))
+        # A terminal that can't set an app id is passed over for one that can.
+        (self.home / '.config/arctic').mkdir(parents=True, exist_ok=True)
+        (self.home / '.config/arctic/default-apps').write_text('terminal=konsole\n')
+        stub(self.bin, 'konsole', 'exit 0\n')
+        subprocess.run(['bash', str(opener), 'terminal', '--app-id', 'x.y'], env=env, check=True, timeout=10)
+        self.assertIn('exec kitty "$@"', ran.read_text().splitlines()[-1])
+        subprocess.run(['bash', str(opener), 'terminal'], env=env, check=True, timeout=10)
+        self.assertIn('exec konsole "$@"', ran.read_text().splitlines()[-1])
+        for bad in (['terminal', '--app-id', 'a b'], ['terminal', '--hold'], ['browser', '--app-id', 'x']):
+            self.assertEqual(subprocess.run(['bash', str(opener)] + bad, env=env, timeout=10, capture_output=True).returncode, 2)
 
 
 class IdleTest(Home):
@@ -1285,6 +1375,35 @@ class MiscTest(Home):
         data = self.helper('keyboard-data')
         self.assertTrue(data['layouts'])
         self.assertTrue(data['switchKeys'])
+        self.assertIn('compose:ralt', [o['id'] for o in data['composeKeys']])
+        # Arctic's own keys stay clear of Alt + Shift; a bind of yours with Ctrl + Shift is named.
+        self.assertNotIn('grp:alt_shift_toggle', data['switchClashes'])
+        (self.home / '.config/mango/user.conf').write_text('bind=CTRL+SHIFT,F12,spawn,btop\n')
+        clashes = self.helper('keyboard-data')['switchClashes']
+        self.assertIn('Ctrl + Shift + F12 (btop)', clashes['grp:ctrl_shift_toggle'])
+
+    def test_clipboard_history(self):
+        stub(self.bin, 'cliphist', 'echo "cliphist $*" >> "{}"; [ "$1" = list ] && printf "2\\tb\\n1\\ta\\n"; exit 0\n'.format(self.log))
+        stub(self.bin, 'arctic-session', 'echo "arctic-session $*" >> "{}"\n'.format(self.log))
+        data = self.helper('clipboard')
+        self.assertEqual((data['available'], data['history'], data['entries']), (True, True, 2))
+        data = self.helper('clipboard-set', 'history', 'off')
+        self.assertFalse(data['history'])
+        self.assertIn('history=off\n', (self.home / '.config/arctic/clipboard.conf').read_text())
+        self.assertIn('arctic-session clipboard --restart', self.calls())
+        self.assertTrue(self.helper('clipboard-set', 'history', 'on')['history'])
+        self.helper('clipboard-clear')
+        self.assertIn('cliphist wipe', self.calls())
+        self.helper('clipboard-set', 'history', 'maybe', ok=False)
+
+    def test_shortcuts_that_would_switch_the_layout_are_refused(self):
+        self.helper('bind-add', 'SUPER+ALT+SHIFT', 'x', 'foot')            # one layout: nothing to switch
+        (self.home / '.config/mango/user.conf').write_text('xkb_rules_layout=us,il\nxkb_rules_options=grp:alt_shift_toggle\n')
+        self.assertIn('Alt + Shift switches', self.helper('bind-add', 'SUPER+ALT+SHIFT', 'y', 'foot', ok=False)['error'])
+        self.helper('bind-add', 'SUPER+CTRL+SHIFT', 'y', 'foot')
+        (self.home / '.config/mango/user.conf').write_text('xkb_rules_layout=us,il\nxkb_rules_options=grp:alt_space_toggle\n')
+        self.assertIn('Alt + Space switches', self.helper('bind-add', 'SUPER+ALT', 'space', 'foot', ok=False)['error'])
+        self.helper('bind-add', 'SUPER+ALT+SHIFT', 'y', 'foot')
 
     def test_unknown_command(self):
         result = subprocess.run([sys.executable, str(HELPER), 'frobnicate'], env=self.env, capture_output=True, text=True)

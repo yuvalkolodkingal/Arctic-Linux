@@ -43,6 +43,10 @@ case "${1:-}" in
     done ;;
   nm-applet) run_once nm-applet nm-applet --indicator ;;
   clipboard)
+    # Clipboard history (cliphist, Super + V). Settings (Keyboard and mouse) turns it off with
+    # history=off in ~/.config/arctic/clipboard.conf and applies that with `clipboard --restart`.
+    if [[ "${2:-}" == --restart ]]; then pkill -u "$UID" -f "wl-paste --watch cliphist" 2>/dev/null; fi
+    grep -qsx 'history=off' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/clipboard.conf" && exit 0
     pgrep -u "$UID" -f "wl-paste --watch cliphist" >/dev/null 2>&1 || \
       { command -v cliphist >/dev/null && setsid -f wl-paste --watch cliphist store >/dev/null 2>&1; } ;;
   idle)
