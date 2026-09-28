@@ -17,6 +17,9 @@ It never touches the system. Knobs (environment):
                               "Something went wrong" view)
     ARCTIC_MOCK_SPEED=<f>     install speed multiplier (default 1.0 = about 40 s)
     ARCTIC_MOCK_LOG=<path>    append every request/response to this file
+    ARCTIC_MOCK_HW=none       no drivers found (default: an NVIDIA hybrid laptop, so the
+                              Apps step offers the NVIDIA and Intel drivers)
+    ARCTIC_MOCK_SECUREBOOT=0  Secure Boot off (default on: the Done step shows the key steps)
 """
 
 import json
