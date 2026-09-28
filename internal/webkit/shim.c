@@ -740,6 +740,14 @@ static gboolean shortcut_cb(GtkWidget *w, GVariant *args, gpointer data) {
     } else if (!strcmp(what, "inspector")) {
         if (!S.cfg.devtools) return FALSE;
         webkit_web_inspector_show(webkit_web_view_get_inspector(S.view));
+    } else if (!strcmp(what, "open-in-browser")) {
+        const char *uri = webkit_web_view_get_uri(S.view);
+        if (uri && (g_str_has_prefix(uri, "https://") || g_str_has_prefix(uri, "http://"))) arctic_open_external(uri);
+    } else if (!strcmp(what, "settings")) {
+        /* "Web app settings…": the Settings page for web apps, detached, argv only. */
+        char *argv[] = {"arctic-settings", "webapps", NULL};
+        g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                      NULL, NULL, NULL, NULL);
     } else if (!strcmp(what, "escape")) {
         if (!gtk_revealer_get_reveal_child(GTK_REVEALER(S.revealer))) return FALSE;
         hide_banner();
@@ -770,6 +778,53 @@ static void add_shortcuts(GtkWidget *window) {
         gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(c), gtk_shortcut_new(t, a));
     }
     gtk_widget_add_controller(window, c);
+}
+
+/* The header's menu: the same actions as the keys, so they can be found. */
+static void menu_action_cb(GSimpleAction *a, GVariant *p, gpointer data) {
+    (void)a;
+    (void)p;
+    shortcut_cb(NULL, NULL, data);
+}
+
+static GtkWidget *build_menu(GtkWidget *window) {
+    static const struct {
+        const char *action, *label, *section;
+    } items[] = {
+        {"zoom-in", "Zoom In", "zoom"},        {"zoom-out", "Zoom Out", "zoom"},
+        {"zoom-reset", "Actual Size", "zoom"}, {"find", "Find…", "page"},
+        {"print", "Print…", "page"},           {"copy-link", "Copy Link", "page"},
+        {"open-in-browser", "Open in Browser", "page"}, {"reload-hard", "Reload Without Cache", "page"},
+        {"settings", "Web App Settings…", "app"},
+    };
+    GMenu *menu = g_menu_new();
+    GMenu *section = NULL;
+    const char *current = "";
+    for (size_t i = 0; i < G_N_ELEMENTS(items); i++) {
+        GSimpleAction *a = g_simple_action_new(items[i].action, NULL);
+        g_signal_connect(a, "activate", G_CALLBACK(menu_action_cb), (gpointer)items[i].action);
+        g_action_map_add_action(G_ACTION_MAP(window), G_ACTION(a));
+        g_object_unref(a);
+        if (strcmp(current, items[i].section)) {
+            if (section) {
+                g_menu_append_section(menu, NULL, G_MENU_MODEL(section));
+                g_object_unref(section);
+            }
+            section = g_menu_new();
+            current = items[i].section;
+        }
+        char *detailed = g_strdup_printf("win.%s", items[i].action);
+        g_menu_append(section, items[i].label, detailed);
+        g_free(detailed);
+    }
+    g_menu_append_section(menu, NULL, G_MENU_MODEL(section));
+    g_object_unref(section);
+    GtkWidget *button = gtk_menu_button_new();
+    gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(button), "open-menu-symbolic");
+    gtk_widget_set_tooltip_text(button, "Menu");
+    gtk_menu_button_set_menu_model(GTK_MENU_BUTTON(button), G_MENU_MODEL(menu));
+    g_object_unref(menu);
+    return button;
 }
 
 /* Mouse buttons 8 and 9 go back and forward. */
@@ -858,6 +913,7 @@ static void build_window(void) {
     g_signal_connect(S.back_to_app, "clicked", G_CALLBACK(back_to_app_cb), NULL);
     S.host_label = gtk_label_new("");
     gtk_widget_add_css_class(S.host_label, "arctic-host");
+    gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), build_menu(win));
     S.audio = icon_button("audio-volume-high-symbolic", "Mute", G_CALLBACK(mute_cb));
     gtk_widget_set_visible(S.audio, FALSE);
     gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), S.audio);
