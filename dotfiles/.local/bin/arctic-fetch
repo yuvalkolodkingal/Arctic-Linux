@@ -9,18 +9,20 @@
 #
 #   arctic-fetch            animate (interactive terminals only)
 #   arctic-fetch --static   draw the rest frame once
+#   arctic-fetch --info os|base|wm|shell|theme|updates
+#                           print one line of system info, or nothing where it doesn't apply;
+#                           the fastfetch layouts (fastfetch and this greeting) use them
+#
+# The info column is fastfetch's, drawn with the greeting layout
+# (~/.local/share/arctic/fastfetch/greeting.jsonc, else /usr/share/arctic/fastfetch/), so it
+# shows what `fastfetch` shows; without fastfetch (or with ARCTIC_FETCH_FASTFETCH=0) the
+# script finds the same things itself.
 #
 # Colours are terminal palette slots, so the greeting follows the active theme:
 # fox = foreground, eyes = color3 (amber), labels = color6, user = color3 bold,
 # separator and dim text = color8, then two rows of swatches (colours 0–7, 8–15).
 
 FOX_W=24
-
-# Column maths below counts characters, so make sure the shell works in UTF-8.
-case "$(locale charmap 2>/dev/null)" in
-  UTF-8|utf8) ;;
-  *) export LC_CTYPE=C.UTF-8 ;;
-esac
 
 fox_frame() {   # fox_frame <rest|blink|ear|tail> -> sets array F
   F=(
@@ -53,39 +55,235 @@ fox_row() {
   printf '%s' "${row//A/$'\e[33m'█$'\e[39m'}"
 }
 
-# ---- system info --------------------------------------------------------
-info_lines() {
+# ---- facts: arctic-fetch --info NAME (each sets REPLY; empty = doesn't apply) ------------
+
+# A value as os-release and theme.env write it: "double quoted" (\" \\ \$ \` escapes),
+# 'single quoted' or bare.
+unquote() {
+  local v=$1
+  if [[ ${#v} -ge 2 && $v == \"*\" ]]; then
+    v=${v:1:${#v}-2}
+    v=${v//\\\"/\"}; v=${v//\\\$/\$}; v=${v//\\\`/\`}; v=${v//\\\\/\\}
+  elif [[ ${#v} -ge 2 && $v == \'*\' ]]; then
+    v=${v:1:${#v}-2}
+  fi
+  REPLY=$v
+}
+
+# os-release → OS_NAME OS_ID OS_ID_LIKE OS_VERSION OS_VERSION_ID OS_PRETTY OS_BASE.
+# ARCTIC_OS_RELEASE reads another file (tests).
+load_os_release() {
+  OS_NAME="" OS_ID="" OS_ID_LIKE="" OS_VERSION="" OS_VERSION_ID="" OS_PRETTY="" OS_BASE=""
+  local f="${ARCTIC_OS_RELEASE:-/etc/os-release}" key value
+  [[ -r $f || -n ${ARCTIC_OS_RELEASE:-} ]] || f=/usr/lib/os-release
+  [[ -r $f ]] || return 1
+  while IFS='=' read -r key value || [[ -n $key ]]; do
+    unquote "$value"
+    case $key in
+      NAME) OS_NAME=$REPLY ;;
+      ID) OS_ID=$REPLY ;;
+      ID_LIKE) OS_ID_LIKE=$REPLY ;;
+      VERSION) OS_VERSION=$REPLY ;;
+      VERSION_ID) OS_VERSION_ID=$REPLY ;;
+      PRETTY_NAME) OS_PRETTY=$REPLY ;;
+    esac
+  done < "$f"
+  [[ -n $OS_NAME ]] || OS_NAME=Linux
+  # What it is built on: Arctic says so in VERSION ("0.2 (Fedora 44 base)").
+  if [[ $OS_VERSION =~ \(([^\(\)]*[0-9])\ base\) ]]; then
+    OS_BASE=${BASH_REMATCH[1]}
+  elif [[ $OS_ID == fedora ]]; then
+    OS_BASE="Fedora $OS_VERSION_ID"
+  elif [[ " $OS_ID_LIKE " == *" fedora "* ]]; then
+    local v; v="$(rpm -E %fedora 2>/dev/null)"
+    [[ $v =~ ^[0-9]+$ ]] || v=$OS_VERSION_ID
+    OS_BASE="Fedora $v"
+  else
+    OS_BASE=${OS_ID_LIKE:-$OS_ID}
+  fi
+}
+
+# "Arctic Linux 0.2 (Fedora 44)"; elsewhere the system's own PRETTY_NAME.
+fact_os() {
+  REPLY=""
+  load_os_release || return 0
+  if [[ $OS_ID != fedora && $OS_BASE == Fedora\ * && -n $OS_VERSION_ID ]]; then
+    REPLY="$OS_NAME $OS_VERSION_ID ($OS_BASE)"
+  else
+    REPLY=${OS_PRETTY:-$OS_NAME${OS_VERSION_ID:+ $OS_VERSION_ID}}
+  fi
+}
+
+fact_base() { REPLY=""; load_os_release && REPLY=$OS_BASE; }
+
+# Mango (fastfetch would say "mango"); nothing under any other window manager.
+fact_wm() {
+  REPLY=""
+  if [[ -n ${MANGO_INSTANCE_SIGNATURE:-} || ${XDG_CURRENT_DESKTOP:-} == mango* ]]; then REPLY=Mango; fi
+}
+
+# Your login shell and its version: "zsh 5.9". (Run from this script, fastfetch's own shell
+# module would name the bash that runs it.)
+fact_shell() {
+  REPLY=""
+  local sh="${SHELL##*/}" v=""
+  case $sh in
+    "") return 0 ;;
+    bash) v=${BASH_VERSION%%[(-]*} ;;
+    zsh|fish) v="$("$SHELL" --version 2>/dev/null)"; [[ $v =~ ([0-9]+(\.[0-9]+)+) ]] && v=${BASH_REMATCH[1]} || v="" ;;
+  esac
+  REPLY="$sh${v:+ $v}"
+}
+
+# The Arctic theme: "Polar night", "Winter"; a theme made from the wallpaper (or your own)
+# also says light or dark: "Wallpaper · dark".
+fact_theme() {
+  REPLY=""
+  local env="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/theme.env" key value name="" label="" mode=""
+  [[ -r $env ]] || return 0
+  while IFS='=' read -r key value || [[ -n $key ]]; do
+    unquote "$value"
+    case $key in
+      ARCTIC_THEME) name=$REPLY ;;
+      ARCTIC_THEME_NAME) label=$REPLY ;;
+      ARCTIC_THEME_MODE) mode=$REPLY ;;
+    esac
+  done < "$env"
+  label=${label:-$name}
+  case $name in
+    winter|polar-night|"") REPLY=$label ;;
+    *) REPLY="$label${mode:+ · $mode}" ;;
+  esac
+}
+
+# Megabytes as the bar shows them: 0.4 MB, 84 MB, 1.5 GB.
+size_text() {
+  REPLY=""
+  [[ $1 =~ ^([0-9]+)(\.([0-9]))? ]] || return 0
+  local i=$((10#${BASH_REMATCH[1]})) d=$((10#${BASH_REMATCH[3]:-0})) t
+  if (( i >= 1000 )); then
+    t=$(( (i * 10 + d + 512) / 1024 )); REPLY="$((t / 10)).$((t % 10)) GB"
+  elif (( i >= 10 )); then
+    REPLY="$(( i + (d >= 5) )) MB"
+  elif (( i > 0 || d > 0 )); then
+    REPLY="$i.$d MB"
+  fi
+}
+
+# The value of "KEY" in $JSON: a string's text, or a number / true / false / null as written.
+jfield() {
+  local re="\"$1\"[[:space:]]*:[[:space:]]*(\"([^\"\\\\]*)\"|[^,}[:space:]]+)"
+  REPLY=""
+  [[ $JSON =~ $re ]] || return 1
+  if [[ ${BASH_REMATCH[1]} == \"* ]]; then REPLY=${BASH_REMATCH[2]}; else REPLY=${BASH_REMATCH[1]}; fi
+}
+
+# arctic-update's last word, from the status file its daily check writes (no dnf, no
+# network: the same file the bar's indicator reads). Nothing without arctic-update, on the
+# live USB, or before a status file exists. ARCTIC_UPDATE_STATUS / ARCTIC_UPDATE_TEST_ROOT
+# as for arctic-update.
+fact_updates() {
+  REPLY=""
+  command -v arctic-update >/dev/null 2>&1 || return 0
+  local root="${ARCTIC_UPDATE_TEST_ROOT:-}" cmdline=""
+  [[ ${ARCTIC_FORCE_LIVE:-0} == 1 ]] && return 0
+  read -r cmdline 2>/dev/null < "$root/proc/cmdline"
+  [[ " $cmdline " == *" rd.live.image "* ]] && return 0
+  local file="${ARCTIC_UPDATE_STATUS:-$root/var/lib/arctic/update-status.json}"
+  [[ -r $file && -s $file ]] || return 0
+  local JSON="" state packages=0 mb="" armed="" checked="" failures=0 auto="" size="" when=""
+  IFS= read -r -d '' JSON < "$file"
+  jfield state && state=$REPLY
+  jfield packages && [[ $REPLY =~ ^[0-9]+$ ]] && packages=$REPLY
+  jfield download_mb && mb=$REPLY
+  jfield armed && armed=$REPLY
+  jfield checked_at && [[ $REPLY != null ]] && checked=$REPLY
+  jfield boot_failures && [[ $REPLY =~ ^[0-9]+$ ]] && failures=$REPLY
+  jfield auto && auto=$REPLY
+  size_text "$mb"; size=${REPLY:+ ($REPLY)}
+  local n="$packages updates"
+  (( packages == 1 )) && n="1 update"
+  if [[ -n $checked ]]; then
+    local at now today yday
+    if at="$(date -d "$checked" +%s 2>/dev/null)"; then
+      printf -v now '%(%s)T' -1
+      printf -v today '%(%F)T' "$now"
+      printf -v yday '%(%F)T' "$(( now - 86400 ))"
+      printf -v checked '%(%F)T' "$at"
+      if [[ $checked == "$today" ]]; then when="today"
+      elif [[ $checked == "$yday" ]]; then when="yesterday"
+      else when="$(( (now - at) / 86400 )) days ago"; fi
+    fi
+  fi
+  case $state in
+    checking|downloading) REPLY="checking now…" ;;
+    failed)
+      if (( failures >= 2 )); then REPLY="paused after failed installs · arctic-update now"
+      else REPLY="the last check failed · arctic-update"; fi ;;
+    ready)
+      if (( packages > 0 )) && [[ $armed == true && -L $root/system-update ]]; then
+        REPLY="$n ready$size · restart to install"
+      elif (( packages > 0 )) && [[ $armed != true ]]; then
+        REPLY="$n downloaded$size · arctic-update apply"
+      else
+        REPLY="downloaded again at the next check"
+      fi ;;
+    *)
+      if [[ $auto == off ]]; then REPLY="automatic updates off${when:+ · checked $when}"
+      elif [[ -n $when ]]; then REPLY="up to date · checked $when"
+      else REPLY="not checked yet"; fi ;;
+  esac
+}
+
+info() {
+  case ${1:-} in
+    os|base|wm|shell|theme|updates) "fact_$1" ;;
+    *) printf 'usage: arctic-fetch --info os|base|wm|shell|theme|updates\n' >&2; return 2 ;;
+  esac
+  [[ -z $REPLY ]] || printf '%s\n' "$REPLY"
+}
+
+# ---- the info column ----------------------------------------------------------------
+
+# fastfetch with the greeting layout: the same detection as `fastfetch` itself.
+fastfetch_info() {
+  [[ ${ARCTIC_FETCH_FASTFETCH:-1} != 0 ]] || return 1
+  command -v fastfetch >/dev/null 2>&1 || return 1
+  local f layout=""
+  for f in "${XDG_DATA_HOME:-$HOME/.local/share}/arctic/fastfetch/greeting.jsonc" \
+           /usr/share/arctic/fastfetch/greeting.jsonc; do
+    if [[ -r $f ]]; then layout=$f; break; fi
+  done
+  [[ -n $layout ]] || return 1
+  mapfile -t INFO < <(fastfetch --config "$layout" --logo none --pipe false 2>/dev/null)
+  # user@host, the rule and at least one line of info
+  (( ${#INFO[@]} >= 3 ))
+}
+
+# Without fastfetch: the same lines, found here.
+builtin_info() {
   local os base kernel wm shell term theme up user host
   user="${USER:-$(id -un)}"
   host="$(cat /etc/hostname 2>/dev/null || hostname 2>/dev/null || echo localhost)"
   host="${host%%.*}"
 
-  if [[ -r /etc/os-release ]]; then
-    # shellcheck source=/dev/null
-    os="$(. /etc/os-release; echo "${NAME:-Linux} ${VERSION_ID:-}")"
-    base="$(. /etc/os-release
-      if [[ "${ID:-}" == fedora ]]; then echo "Fedora ${VERSION_ID:-}"
-      elif [[ " ${ID_LIKE:-} " == *" fedora "* ]]; then echo "Fedora $(rpm -E %fedora 2>/dev/null || echo "${VERSION_ID:-}")"
-      else echo "${ID_LIKE:-${ID:-}}"; fi)"
+  if load_os_release; then
+    os="$OS_NAME${OS_VERSION_ID:+ $OS_VERSION_ID}"; base=$OS_BASE
   else
     os="$(uname -s)"; base=""
   fi
   kernel="$(uname -r)"; kernel="${kernel%%-*}"
 
-  if [[ -n "${MANGO_INSTANCE_SIGNATURE:-}" || "${XDG_CURRENT_DESKTOP:-}" == mango* ]]; then
-    wm=$'Mango \e[90m· Wayland\e[39m'
+  fact_wm
+  if [[ -n $REPLY ]]; then
+    wm="$REPLY"$' \e[90m· Wayland\e[39m'
   elif [[ -n "${XDG_CURRENT_DESKTOP:-}" ]]; then
     wm="${XDG_CURRENT_DESKTOP}"
   else
     wm="—"
   fi
 
-  local sh="${SHELL##*/}"
-  case "$sh" in
-    zsh)  shell="zsh $(zsh --version 2>/dev/null | awk '{print $2}')" ;;
-    bash) shell="bash ${BASH_VERSION%%(*}" ;;
-    *)    shell="$sh" ;;
-  esac
+  fact_shell; shell=$REPLY
 
   if [[ -n "${KITTY_WINDOW_ID:-}" ]]; then
     term="kitty $(kitty --version 2>/dev/null | awk '{print $2}')"
@@ -93,10 +291,7 @@ info_lines() {
     term="${TERM_PROGRAM:-${TERM:-—}}"
   fi
 
-  theme="Polar night"
-  local env="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/theme.env"
-  # shellcheck source=/dev/null
-  if [[ -r "$env" ]]; then theme="$(. "$env"; echo "$ARCTIC_THEME_NAME")"; fi
+  fact_theme; theme="${REPLY:-Polar night}"
 
   local s; s="$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)"
   local d=$((s / 86400)) h=$((s % 86400 / 3600)) m=$((s % 3600 / 60))
@@ -116,6 +311,16 @@ info_lines() {
   local sw1="" sw2="" i
   for i in 0 1 2 3 4 5 6 7; do sw1+=$'\e[4'"$i"$'m   '; sw2+=$'\e[10'"$i"$'m   '; done
   INFO+=("$sw1"$'\e[0m' "$sw2"$'\e[0m')
+}
+
+# INFO_W: columns the widest info line takes (escape sequences don't count).
+info_width() {
+  local line plain
+  INFO_W=0
+  for line in "${INFO[@]}"; do
+    plain="${line//$'\e'\[*([0-9;?])[A-Za-z]/}"
+    (( ${#plain} > INFO_W )) && INFO_W=${#plain}
+  done
 }
 
 draw_all() {   # full greeting, rest frame
@@ -146,13 +351,31 @@ reduce_motion() {
 }
 
 main() {
+  if [[ "${1:-}" == --info ]]; then
+    info "${2:-}"
+    return
+  fi
+
+  # Column maths below counts characters, so make sure the shell works in UTF-8.
+  case "$(locale charmap 2>/dev/null)" in
+    UTF-8|utf8) ;;
+    *) export LC_CTYPE=C.UTF-8 ;;
+  esac
+  shopt -s extglob
+
   local static=0
   [[ "${1:-}" == --static ]] && static=1
   [[ -t 1 ]] || static=1
-  (( ${COLUMNS:-$(tput cols 2>/dev/null || echo 80)} < 60 )) && static=1
   reduce_motion && static=1
 
-  info_lines
+  fastfetch_info || builtin_info
+  # The animation redraws the fox by moving the cursor up, which only works while no line
+  # wraps: narrower terminals get the rest frame.
+  info_width
+  local need=$(( FOX_W + 2 + INFO_W ))
+  (( need < 60 )) && need=60
+  (( ${COLUMNS:-$(tput cols 2>/dev/null || echo 80)} < need )) && static=1
+
   printf '\n'
   draw_all
   (( static )) && { printf '\n'; return 0; }

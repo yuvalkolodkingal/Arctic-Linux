@@ -85,6 +85,9 @@
 		<package name="qt5ct"/>
 		<package name="qt6ct"/>
 		<package name="btop"/>
+		<!-- fastfetch draws `fastfetch`, `neofetch` and the arctic-fetch greeting's info
+		     (arctic-desktop-config requires it; named so it is never left out). -->
+		<package name="fastfetch"/>
 		<package name="arctic-installer"/>
 		<package name="arctic-live"/>
 		<package name="livesys-scripts"/>
