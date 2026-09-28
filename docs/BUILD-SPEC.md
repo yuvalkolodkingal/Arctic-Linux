@@ -206,9 +206,47 @@ stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
 `pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install`, `xdg-open`.
 Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
 
-Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
+Displays: an arrangement editor (every display a rectangle to scale; drag and drop, or `Tab` to
+one and move it with the arrow keys) whose geometry is all in the helper, as pure tested functions:
+`arctic_settings.py display-arrange LAYOUT [--move NAME X Y [--threshold PX] | --nudge NAME
+left|right|up|down | --main NAME | --enable NAME | --disable NAME | --anchor NAME]` (nothing is
+applied). Positions are logical px; a display's size there is its mode, turned for 90°/270°,
+divided by the scale in single precision and cut to whole pixels (wlroots
+`wlr_output_effective_resolution`: 2560×1600 at 150 % is 1706×1066). Every display that is on
+touches another along an edge (a dropped one by at least 1/8 of the shorter edge), none overlap,
+and the top-left corner is 0,0 (XWayland misreads clicks at negative positions); a drop goes to
+the nearest such place, lined up with the others' edges or centres within 12 screen px, and
+displays left unconnected follow; after a scale, rotation or mode change the others settle round
+that display on the side they were on; the last display that is on can't be switched off.
+Apply runs `wlr-randr` at once (the tidied layout) and asks to keep it for 15 s; a detached
 watchdog (`arctic_settings.py display-revert --if-pending TOKEN --after 20`) puts the old layout
-back even if Settings is gone; kept layouts become `monitorrule` lines.
+back even if Settings is gone; kept layouts become `monitorrule` lines, the main display's
+first; a display switched off is never saved (`disable:1` would also blank a laptop's only
+screen), so off lasts until logout. Rules of displays that aren't connected (or are off) stay,
+without `x`/`y` where they would overlap the kept layout (one rule per display: the monitor at
+home must not come back on top of the laptop's place from work).
+
+Mango 0.17.3's `monitorrule` (read in the 0.17.3 tarball: `src/config/parse_config.c`,
+`parse_option`, the `monitorrule` branch; applied by `src/manage/monitor.c`
+`apply_rule_to_state`): comma-separated `key:value`, e.g.
+`monitorrule=name:^HDMI-A-1$,width:3840,height:2160,refresh:60,x:1706,y:0,scale:2,rr:0,vrr:0`.
+`name` is a regex (hence `^…$`; `make`, `model`, `serial` also match); `x`/`y` are logical px
+(left out: placed automatically, `wlr_output_layout_add_auto`); `scale`; `rr` 0–7 is the
+`wl_output_transform` (1 = 90, 2 = 180, 3 = 270, 4 = flipped, 5–7 = flipped-90/180/270, the order
+of wlr-randr's names); `vrr` 0/1; the mode is used only when `width`, `height` and `refresh` are
+all set, else the preferred one; also `disable`, `custom`, `hdr`, `hdr_*`, `icc`. A new output
+takes the first rule that matches (`handle_new_output`), a config reload the last one
+(`parse_config.c` `reapply_monitor_rules`), so Settings writes one `^NAME$` rule per display.
+
+Main display: Mango has no primary output (no option or dispatch for one in 0.17.3; `monitor.c`
+`set_selected_monitor` keeps XWayland's RandR primary on the focused display,
+`xwayland_primary.c`). At login `main.c` selects the monitor under the pointer, which starts at
+0,0, so that display is where you start: focus, the first windows, the launcher, OSD and menus (the
+shell follows the focused output, `shell/Outputs.qml`) and mako's notifications (no `output=`).
+The bar is on every display (`Variants` over `Quickshell.screens`). So Settings' "main display"
+is the one covering the layout's top-left corner (else the one nearest to it, where Mango moves
+the pointer), and **Make main** swaps it with the display there; nothing stores a primary
+separately.
 
 The live image (`iso/kiwi/config.kiwi`, and so the installed system) lists `arctic-settings`,
 `nm-connection-editor`, `blueman`, `pavucontrol` and `wlr-randr` explicitly.
