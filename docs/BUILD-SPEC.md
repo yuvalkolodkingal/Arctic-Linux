@@ -119,8 +119,8 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 | `SuggestPassphrase` | — | `{text:"four random words"}` (EFF short wordlist, embedded) |
 | `SuggestAccount` | `{full_name}` | `{username, hostname}` (hostname = `{username}-{model}` from DMI, lowercased, `-` joined) |
 | `SetSecrets` | `{luks_passphrase?, user_password?}` | `{ok}` (kept in memory only, never logged or written) |
-| `EstimateDownload` | `{selection}` | `{apps:int, bytes:int, label:"9 apps · 1.4 GB download"}` |
-| `GetSummary` | — | `{rows:[{step, icon, label, value}], warning, primary_label}` (rows for welcome, keyboard, timezone, disk, encryption, account, apps — each `step` is a Goto target; primary "Erase disk and install" or "Install alongside {OS}") |
+| `EstimateDownload` | `{selection}` | `{apps:int, drivers?:int, bytes:int, label:"9 apps · 1.4 GB download"}` (drivers are not apps: `"8 apps + 2 drivers · 3 GB download"`) |
+| `GetSummary` | — | `{rows:[{step, icon, label, value}], warning, primary_label}` (rows for welcome, keyboard, timezone, disk, encryption, account, apps — each `step` is a Goto target; primary "Erase disk and install" or "Install alongside {OS}"). When a driver was detected an 8th row follows: `{step:"apps", icon:"cpu", label:"Drivers", value:"NVIDIA driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile; …"}` (+ ". Secure Boot is on: you’ll confirm the driver’s key once after restarting" when a built driver needs the key; "None — …" when all were unticked). The UI takes the row's `icon` |
 | `Start` | — | `{ok}` then events. Also "Try again" after a failure. Re-probes the disks first: if the chosen disk is gone, is not the same device (model/serial/WWN/size) or, alongside, its partitions or free space changed, it answers `{code:"state"}` and refuses until the Disk step is passed again |
 | `RetryModule` / `SkipModule` | `{id}` | `{ok}` |
 | `SaveLog` | — | `{path, on_usb, device?, label?, safe_to_remove, message}`: to a FAT/exFAT file system on a removable disk that is not the install medium (mounted in place, else mounted, written, synced and unmounted: `path` is then the file's path on the stick and `safe_to_remove` true), else `/home/liveuser` or /tmp (lost on restart). `message` is the sentence to show |
@@ -131,7 +131,7 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
   - `{"event":"progress","percent":0-100,"phase":"disk"|"copy"|"configure"|"bootloader"|"apps"|"finalize","status":"Installing Zed, your code editor…","eta_seconds":420,"substeps":[{"id":"disk","label":"Preparing the disk","state":"done"|"active"|"todo"},…4 items: disk, system ("Copying Arctic Linux"), apps ("Installing your apps"), finish ("Setting up your account")]}`
   - `{"event":"module","id":"zed","name":"Zed","status":"queued"|"downloading"|"installed"|"failed"|"skipped"|"deferred","percent":0-100}`
   - `{"event":"attention","module":{"id","name"},"message":"The download server didn't answer.","optional":true}` → UI shows step 11 (Try again / Skip {App}); core failures: `{"event":"failed","message":"…","fatal":true,"can_change":true}` → Save log / Try again / Change (Back or Goto).
-  - `{"event":"done","apps_installed":9,"first_name":"Noa"}`
+  - `{"event":"done","apps_installed":9,"first_name":"Noa","drivers"?:[{id,name,device,status:"installed"|"deferred"|"skipped",text}],"secure_boot"?:{code,title,intro,steps:[…],note,failed?}}` — `drivers` lists what happened to each ticked driver with a sentence for it (drivers get no `module` events and are not in `apps_installed`); `secure_boot` is present when the akmods signing key waits for enrolment in shim's MokManager on the next restart (Secure Boot enforced, UEFI, a driver built by akmods): `code` is the one-time password (8 digits, typed on the number row — MokManager reads the keyboard as US QWERTY), `steps` the MokManager screens. With `failed:true` (mokutil refused) there is no code and the steps say how to enroll the key by hand. Driver failures use the `attention` event like apps (title "The NVIDIA driver couldn’t be installed", skip label "Skip the driver").
   - Status lines follow `design/guidelines/20-installer-copy.md`.
 
 ### 4.1 Wizard steps (ids fixed; copy = design/guidelines/20-installer-copy.md)
@@ -140,16 +140,16 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 |---|---|---|---|
 | 1 | `welcome` | `{language:"en_US.UTF-8"}` | `{languages:[{id,name(native),english}], suggested}` |
 | 2 | `keyboard` | `{layout:"us", variant:"", xkb:{layout, variant, options, keymap, latin}}` (`xkb` is read-only, what the choice gives: Latin layouts alone; non-Latin ones as `us,<layout>` with `grp:alt_shift_toggle` and a Latin console keymap). A valid SetStep also writes `xkb` to the live system's `/etc/arctic/mango/keyboard.conf` (sourced by the live session); the UI then runs `mmsg dispatch reload_config`, so passwords are typed as on the installed system | `{layouts:[{layout,variant,name,description,suggested:bool}]}` |
-| 3 | `network` | `{}` | `{online,wired,ssid}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online |
+| 3 | `network` | `{}` | `{online,wired,ssid,driver_hint?}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online. `driver_hint` is set when a detected Wi-Fi card only works once its driver is installed (Broadcom wl): how to get online meanwhile |
 | 4 | `timezone` | `{timezone:"Asia/Jerusalem", auto_time:true}` | `{detected:{city,timezone,source:"network"\|"default"}, regions:{Europe:[{city,timezone}],…}}` |
 | 5 | `disk` | `{disk:"/dev/nvme0n1", mode:"erase"\|"alongside"}` | `{disks:[{path,model,size_bytes,size_label,removable,install_media:bool,existing_os:[…],alongside_possible:bool,alongside_label:"Uses 120 GB of free space"}]}` (install media excluded; alongside needs ≥ 40 GB free, on UEFI an ESP to share, on MBR room for two primary partitions) |
 | 6 | `encryption` | `{enabled:true}` | `{min_score:2}` (passphrase via SetSecrets) |
 | 7 | `account` | `{full_name, username, hostname, autologin:false}` (username: not a user or group the copied system has) | `{hostname_hint:"Suggested from your name and computer"}` (password via SetSecrets) |
-| 8 | `apps` | `{selection:{browser:["zen"],editor:["zed"],…}}` | catalog: `{categories:[{id,name,choice:"one"\|"any",note}], modules:[{id,name,summary,category,default,tile,download_mb,source,in_live_image}]}` |
+| 8 | `apps` | `{selection:{drivers:["nvidia","intel-media"],browser:["zen"],editor:["zed"],…}}` | catalog: `{categories:[{id,name,choice:"one"\|"any",note,hardware?}], modules:[{id,name,summary,category,default,tile,download_mb,source,in_live_image,device?}]}` — the `drivers` category (`hardware:true`) comes first and is present only when a driver matched this computer's hardware; its modules carry `device` (the detected card's name, also filled into `summary`) and are `default` (ticked) when detected. Selecting a driver whose hardware wasn't found is a field error on `drivers` |
 | 9 | `summary` | — | via GetSummary |
 | 10 | `install` | — | events |
 | 11 | (attention/error, not a step) | | |
-| 12 | `done` | — | `{apps_installed, first_name}` |
+| 12 | `done` | — | `{apps_installed, first_name}`; options `{card_title, card, secondary, drivers?, secure_boot?}` (as in the `done` event) |
 
 Categories for the picker come from the design (`CATEGORIES` in the design bundle.js):
 browser "one" ("Becomes your default browser."), editor "many", terminal "one" ("Opens with
@@ -166,6 +166,43 @@ default, tile, in_live_image, gpu, requires, conflicts, [[install]] method = "dn
 (+ packages | copr+packages | remote+ref | attr), verified, download_mb, [defaults] desktop_id, mime,
 [session] …`. Hidden mandatory modules live in `modules/_system/`. Profiles (`profiles/*.toml`)
 reference module ids only.
+
+**Drivers** (`modules/drivers/<id>/`): the `drivers` category in `catalog.toml` has
+`hardware = true` (must be `choice = "any"`, not required) and is listed first. Its modules are
+offered — ticked — only when one of their `[[detect]]` rules matches a PCI device of the
+computer (engine start: `/sys/bus/pci/devices/*/{vendor,device,class,boot_vga,driver}` named
+from hwdata's `pci.ids`; Secure Boot from efivarfs `SecureBoot`/`SetupMode` and shim's
+`MokSBStateRT`). The schema is strict (unknown keys are errors):
+
+```toml
+[[detect]]                    # one or more; any rule matching any device offers the driver
+bus = "pci"                   # only "pci"
+vendor = "10de"               # four lower-case hex digits
+class = ["0300", "0302"]      # class+subclass, ≥ 1 (0300 VGA, 0302 3D controller, 0380, 0280 Wi-Fi)
+device_min = "1e00"           # inclusive range … (either bound may be left out)
+device_max = "ffff"
+# devices = ["43a0", "43b1"]  # … or an explicit list, not both
+# exclude = ["1f9d"]          # never these devices
+[akmod]                       # a kernel module akmods builds (first [[install]] must be dnf
+name = "nvidia"               #   with rpmfusion-nonfree): akmods --akmod <name>
+module = "nvidia"             #   modinfo -k <kver> <module> proves the build
+[boot]
+kernel_args = ["rd.driver.blacklist=nouveau,nova_core", "modprobe.blacklist=nouveau,nova_core", "nvidia-drm.modeset=1"]
+luks_display_args = ["plymouth.use-simpledrm=1"]  # + when LUKS and the device draws the boot screen
+network_hint = "Your {device} needs …"             # Network step note ({device} = detected name)
+```
+
+`[[detect]]`, `[akmod]`, `[boot]` and `network_hint` are only allowed in a hardware category and
+required there (`[[detect]]`); drivers can't be hidden or `always`. `{device}` in `summary` is
+filled with the detected device's name. Shipped: `nvidia` (Turing and newer, `akmod-nvidia` +
+`xorg-x11-drv-nvidia-cuda` + `libva-nvidia-driver`), `nvidia-580xx` (Maxwell–Volta, the last
+series for them; conflicts with `nvidia`), `broadcom-wl` (`akmod-wl`, chips with no working
+in-kernel driver), `intel-media` (RPM Fusion `intel-media-driver`, Broadwell and newer) and
+`amd-video` (`mesa-va-drivers-freeworld` / `mesa-vulkan-drivers-freeworld` swaps). Kepler and
+older NVIDIA cards get nothing (their drivers have no GBM, which Mango needs). The
+`[runtimes]` entry `akmods` sizes the build tools, counted once. Mock fixtures:
+`internal/hw/fixtures.go` (`arcticd --mock --mock-hw NAME`, `arctic-install plan --hardware
+mock:NAME [--secure-boot] [--offline]`; the mock default is `nvidia-laptop`, Secure Boot on).
 
 ## 6. Engine behaviour (v0.1 scope)
 
@@ -185,7 +222,23 @@ with a Latin console keymap),
 app diff (dnf remove/install in chroot, flatpak from host with FLATPAK_* into /mnt, nix via
 `nix --store /mnt profile add`; a Flatpak app the image ships — Zen when the ISO fits in 2 GiB —
 counts as in the live image whatever the catalog says: kept when ticked, uninstalled with its
-unused runtimes when not), setfiles relabel, unmount. The target directory is made a private
+unused runtimes when not), setfiles relabel, unmount. Drivers (internal/installer/drivers.go):
+installed in the chroot in the apps' dnf transaction with the RPM Fusion repositories; for an
+akmod driver `akmods` is installed and its key created (`kmodgenca -a`) first, then after the
+transaction `akmods --force --kernels <kver> --akmod <name>` runs for each kernel with its
+kernel-devel and `modinfo` checks the module (failure → attention: Try again / Skip, which
+removes the packages again; unattended → akmods.service builds it at boot). The `[boot]`
+kernel arguments of the installed drivers go on with `grubby --update-kernel=ALL --args=…`
+(boot entries, GRUB_CMDLINE_LINUX and /etc/kernel/cmdline) — so only when an NVIDIA driver is
+installed. With Secure Boot enforced on UEFI, `mokutil --import
+/etc/pki/akmods/certs/public_key.der --hash-file /dev/stdin` gets the SHA-512 crypt hash of the
+engine's random one-time code (shown on the Done screen, never logged). Offline at Start,
+drivers are not tried: they go to `/var/lib/arctic/pending.json` with `akmod` and
+`kernel_args`, plus `"mok_hash":"/var/lib/arctic/mok.hash"` (Secure Boot), and
+arctic-firstboot installs, builds, adds the arguments and queues the key once online.
+Hybrid laptops keep rendering on the integrated GPU (wlroots uses the `boot_vga` card);
+`/etc/profile.d/arctic-graphics.sh` sets `LIBVA_DRIVER_NAME=nvidia`, `NVD_BACKEND=direct` and
+`__GLX_VENDOR_LIBRARY_NAME=nvidia` only when NVIDIA's driver drives the boot display. The target directory is made a private
 mount point first (its mounts must not leak into services' mount namespaces, or LUKS can't be
 closed at the end); os-prober only runs for "alongside". Every command goes through a
 `Runner` interface; `--dry-run` prints the plan; unit tests use a fake Runner and golden files.
