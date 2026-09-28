@@ -139,8 +139,10 @@ ShellRoot {
         target: 'osd'
         function volume(): void { osd.showVolume(); }
         function brightness(): void { osd.showBrightness(); }
-        // An icon (a design icon name) and a few words, e.g. `osd message keyboard "Caps Lock on"`.
-        function message(icon: string, text: string): void { osd.showMessage(icon, text); }
+        // Any level with an icon and a label, e.g. `osd level brightness 40 "DELL U2720Q"`.
+        function level(icon: string, percent: int, label: string): void { osd.showLevel(icon, percent, label); }
+        // An icon (a design icon name) and a few words, e.g. `osd notice keyboard "Caps Lock on" ""`.
+        function notice(icon: string, text: string, detail: string): void { osd.showNotice(icon, text, detail); }
     }
     IpcHandler {
         target: 'lock'

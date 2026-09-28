@@ -7,8 +7,9 @@
 #   arctic-osd volume up|down|mute
 #   arctic-osd mic mute
 #   arctic-osd brightness up|down
-#   arctic-osd caps                  Caps Lock on / off (the Caps Lock key runs it)
-#   arctic-osd show ICON TEXT        an icon and a few words, for scripts
+#   arctic-osd lock-keys [--seed]    Caps Lock / Num Lock on or off (their keys run it; --seed at
+#                                    login only records the lights)
+#   arctic-osd notice ICON TEXT [DETAIL]   an icon and a few words, for scripts
 set -uo pipefail
 
 STEP=5
@@ -21,27 +22,51 @@ show() {   # show <icon> <value 0-100> <label>  (notification fallback)
     -h "int:value:$2" -i "$ICONS/$1.svg" "$3" 2>/dev/null || true
 }
 
-message() {   # message <icon> <text>: the shell's icon-and-words OSD, else a notification
-  arctic-shell-ipc osd message "$1" "$2" >/dev/null 2>&1 && return 0
-  local icon=()
+notice() {   # notice <icon> <text> [detail]: the shell's icon-and-words OSD, else a notification
+  arctic-shell-ipc osd notice "$1" "$2" "${3:-}" >/dev/null 2>&1 && return 0
+  local icon=() body="$2"
   [[ -f "$ICONS/$1.svg" ]] && icon=(-i "$ICONS/$1.svg")
-  notify-send -a arctic-osd -e -t 1200 -h string:x-canonical-private-synchronous:arctic-osd \
-    "${icon[@]}" "$2" 2>/dev/null || true
+  [[ -n "${3:-}" ]] && body="$2 · $3"
+  notify-send -a arctic-osd -e -t 1600 -h string:x-canonical-private-synchronous:arctic-osd \
+    "${icon[@]}" "$body" 2>/dev/null || true
+}
+
+# The Caps Lock and Num Lock lights, as "caps=0|1 num=0|1" (a light that isn't there stays out).
+lock_lights() {
+  local name led on out=""
+  for name in caps num; do
+    on=""
+    for led in "${ARCTIC_LEDS_DIR:-/sys/class/leds}"/*::"${name}lock"/brightness; do
+      [[ -r "$led" ]] || continue
+      on=0
+      if [[ "$(cat "$led" 2>/dev/null)" != 0 ]]; then on=1; break; fi
+    done
+    [[ -n "$on" ]] && out+="$name=$on "
+  done
+  echo "${out% }"
 }
 
 case "${1:-}" in
-  show)   # show ICON TEXT, for scripts: "Touchpad off", a mode turned on
-    message "${2:-info}" "${3:-}"; exit 0 ;;
-  caps)   # the Caps Lock key (binds.conf): its state from the keyboard light, once it has changed
-    sleep 0.15
-    state=""
-    for led in /sys/class/leds/*::capslock/brightness; do
-      [[ -r "$led" ]] || continue
-      state=off
-      if [[ "$(cat "$led" 2>/dev/null)" != 0 ]]; then state=on; break; fi
+  notice)   # notice ICON TEXT [DETAIL], for scripts: "Touchpad off", a mode turned on
+    notice "${2:-info}" "${3:-}" "${4:-}"; exit 0 ;;
+  lock-keys)   # after Caps Lock or Num Lock (binds.conf): say what changed; --seed only records
+    state_dir="${XDG_RUNTIME_DIR:-/tmp}/arctic"
+    mkdir -p "$state_dir"
+    now="$(lock_lights)"
+    before="$(cat "$state_dir/lock-keys" 2>/dev/null)"
+    printf '%s\n' "$now" > "$state_dir/lock-keys"
+    [[ "${2:-}" == --seed || -z "$before" ]] && exit 0
+    # Only a light that changed: a Caps key remapped in Settings, or one that switches the
+    # layout, changes nothing, so it says nothing (and neither does a keyboard without lights).
+    for pair in $now; do
+      [[ " $before " == *" $pair "* ]] && continue
+      case "$pair" in
+        caps=1) notice keyboard "Caps Lock on" ;;
+        caps=0) notice keyboard "Caps Lock off" ;;
+        num=1)  notice hash "Num Lock on" ;;
+        num=0)  notice hash "Num Lock off" ;;
+      esac
     done
-    # No keyboard light to ask (some laptops, most VMs): say nothing rather than guess.
-    [[ -n "$state" ]] && message keyboard "Caps Lock $state"
     exit 0 ;;
 esac
 
@@ -75,7 +100,7 @@ case "${1:-} ${2:-}" in
     floor=$(( max / 100 )); (( floor > 0 )) || floor=1
     brightnessctl -q --min-value="$floor" set "${STEP}%-" ;;
   *)
-    echo "usage: arctic-osd volume up|down|mute | mic mute | brightness up|down | caps | show ICON TEXT" >&2; exit 2 ;;
+    echo "usage: arctic-osd volume up|down|mute | mic mute | brightness up|down | lock-keys | notice ICON TEXT [DETAIL]" >&2; exit 2 ;;
 esac
 
 arctic-shell-ipc osd "$1" >/dev/null 2>&1 && exit 0

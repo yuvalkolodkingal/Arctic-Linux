@@ -150,8 +150,13 @@ def schedule(text_words):
     if result.returncode != 0:
         save([r for r in load() if r["id"] != ident])
         raise Error("The reminder couldn't be set: " + (result.stderr.strip().splitlines() or ["systemd-run failed"])[-1])
-    notify("Reminder set", "{} ({}): {}".format(parsed["when"].capitalize(), due.strftime("%H:%M"), parsed["text"]),
-           "-t", "4000", "-u", "low")
+    # A notice on screen (arctic-osd; a notification without the shell).
+    if shutil.which("arctic-osd"):
+        subprocess.run(["arctic-osd", "notice", "clock", "Reminder set for " + due.strftime("%H:%M"), parsed["text"]],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        notify("Reminder set", "{} ({}): {}".format(parsed["when"].capitalize(), due.strftime("%H:%M"), parsed["text"]),
+               "-t", "4000", "-u", "low")
     print(json.dumps({"ok": True, "id": ident, "due": int(due.timestamp()), "text": parsed["text"], "when": parsed["when"]}))
 
 

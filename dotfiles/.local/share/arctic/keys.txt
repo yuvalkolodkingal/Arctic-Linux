@@ -48,7 +48,7 @@
     Super + Ctrl + C         Capture menu
 
   Hardware keys
-    Caps Lock                Shows whether Caps Lock is on
+    Caps Lock, Num Lock      Shows whether it is on
 
   Touchpad
     3 fingers                Move focus

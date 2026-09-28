@@ -88,7 +88,7 @@ These also work while the screen is locked.
 | Mute | Mute or unmute |
 | Microphone mute | Turn the microphone off or on |
 | Brightness up / down | Change the screen brightness |
-| Caps Lock | Shows "Caps Lock on" or "off" for a moment (when the keyboard has a Caps Lock light) |
+| Caps Lock, Num Lock | Shows "Caps Lock on" or "off" for a moment (when the keyboard has the light) |
 | Play/Pause, Next, Previous | Control the music or video that's playing |
 
 ## Touchpad
