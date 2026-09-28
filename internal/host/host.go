@@ -39,6 +39,12 @@ type Options struct {
 	Target string
 	// VolumeID of the live ISO, used to recognise the install media.
 	VolumeID string
+	// TestHardware (VM tests only) replaces the probed PCI devices with a hw fixture, so a
+	// driver like NVIDIA's is offered and built without the card; Secure Boot stays probed.
+	TestHardware string
+	// TestOnline (VM tests only) reports the network as online although NetworkManager's
+	// connectivity check can't reach the internet (the guest goes through a proxy).
+	TestOnline bool
 }
 
 // Backend is the real system backend.
@@ -361,6 +367,9 @@ func (b *Backend) Network(ctx context.Context) protocol.NetworkState {
 	}
 	c, err := output(ctx, "nmcli", "networking", "connectivity", "check")
 	st.Online = err == nil && strings.TrimSpace(c) == "full"
+	if b.opts.TestOnline {
+		st.Online, st.Wired = true, true
+	}
 	return st
 }
 

@@ -14,7 +14,7 @@ from the stick, and choose whether to try Arctic Linux or install it.
 
 ## 1. Download the image
 
-Open the [latest release](https://github.com/yuvalkolodkingal/O-Tism/releases/latest) and, under
+Open the [latest release](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/latest) and, under
 **Assets**, download both files:
 
 | File | What it is |

@@ -142,7 +142,9 @@ logging in."*
 - **Encrypt the disk (recommended)** is on. Encryption means that if your computer is lost or
   stolen, nobody can read your files without the passphrase.
 - **The strength meter** says **Too short**, **Weak**, **Fair**, **Good** or **Strong**, and counts
-  the words. You can continue from **Fair** upwards.
+  the words. Any passphrase is accepted once both fields match. Below **Fair**, a warning says
+  *"This passphrase is easy to guess: someone who has your computer could read your files. You
+  can still use it."* — **Next** still works.
 - **Suggest a passphrase** makes one up for you from four random words. They're easy to remember
   and hard to guess. Write it down somewhere safe.
 
@@ -161,14 +163,15 @@ your files, even without your password. See [Encryption](#encryption) below for 
 |---|---|---|
 | **Your name** | Your name, as you'd like it shown | — |
 | **Username** | Lowercase letters, numbers, `-` and `_` | From your name. You can change it. |
-| **Password** and **Confirm password** | At least 8 characters that aren't easy to guess | — |
+| **Password** and **Confirm password** | Any password; both fields must match. Under 8 characters, a warning says it's easy to guess, but you can still use it | — |
 | **Computer name** | How other devices on your network see this computer | Your username and your computer's model, for example `noa-thinkpad` |
 
 Two switches, both off to start with:
 
 - **Use this password for the disk passphrase too**: uses your account password as the disk
-  passphrase, so you only remember one. The password then has to be **Fair** or better on the
-  strength meter. Only shown when encryption is on.
+  passphrase, so you only remember one. Below **Fair** on the strength meter, the same kind of
+  warning appears (someone who has your computer could read your files); you can still use it.
+  Only shown when encryption is on.
 - **Log in automatically**: skips the login screen after you've unlocked the disk.
 
 Your account can make system changes with `sudo` (it's in the `wheel` group). The `root` account
@@ -245,7 +248,7 @@ you confirm the driver's key once after restarting; see
 
 **Ready to install.** *"Check everything below. Nothing has been written to your disk yet."*
 
-Each row (language and keyboard, time zone, disk and encryption, account, apps) has a **Change**
+Each row (language, keyboard, time zone, disk, encryption, account, apps) has a **Change**
 link that takes you back to that step; your other answers are kept. The apps row lists up to 12
 apps, then *"and N more"*.
 
@@ -255,6 +258,11 @@ Secure Boot on it adds *"Secure Boot is on: you'll confirm the driver's key once
 restarting"*. If you unticked every driver it says *"None — your hardware keeps its open-source
 drivers"*. The warning says exactly what will
 happen, for example *"Installing will erase everything on Samsung SSD 980. This can't be undone."*
+
+If your disk passphrase or password is easy to guess, its row says so: the Encryption row reads
+*"On — easy-to-guess passphrase; you'll type it each time the computer starts"*, and the Account
+row ends with *"easy-to-guess password"*. You can still install; press **Change** to pick a
+stronger one.
 
 The button names what it does: **Erase disk and install**, or **Install alongside Windows**
 (or whichever system is on the disk). On this screen `Enter` alone doesn't start the install:

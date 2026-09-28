@@ -2,8 +2,8 @@
 
 How the pieces of Arctic Linux fit together: the live USB, the installer (a Go engine and a
 Quickshell UI), the desktop shell, the packages and the ISO. The contracts between components are
-fixed in [`docs/BUILD-SPEC.md`](https://github.com/yuvalkolodkingal/O-Tism/blob/main/docs/BUILD-SPEC.md);
-the reasons behind them are in [`docs/PLAN.md`](https://github.com/yuvalkolodkingal/O-Tism/blob/main/docs/PLAN.md).
+fixed in [`docs/BUILD-SPEC.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/BUILD-SPEC.md);
+the reasons behind them are in [`docs/PLAN.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/PLAN.md).
 
 ## The big picture
 

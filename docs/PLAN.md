@@ -14,7 +14,7 @@ upstream repos) on 2026-09-27. Facts marked 🔍 are unverified and must be prov
 
 | # | Decision |
 |---|---|
-| D1 | **Name:** Arctic Linux. The internal identifier and package prefix is `arctic` (`arctic-installer`, `arctic-release`, …). The repo stays `O-Tism` until renamed on GitHub. |
+| D1 | **Name:** Arctic Linux. The internal identifier and package prefix is `arctic` (`arctic-installer`, `arctic-release`, …). The repository was called `O-Tism` until it was renamed `Arctic-Linux` on GitHub (0.2.1); the Go module path keeps `github.com/yuvalkolodkingal/o-tism`. |
 | D2 | **Base:** Fedora **stable**. Fedora 44 is current ✅ (GA 2026-04-28). Fedora 45 GA is due 2026-10-20 ✅. Development starts on F44, and the first public release will most likely ship on F45 (see §10). |
 | D3 | **WM:** "Mango" = **MangoWM**, formerly MangoWC/maomaowm ✅. Upstream is now `github.com/mangowm/mango`, v0.17.3. The package is `mangowm`, the binary `mango`, the IPC client `mmsg`, and the session file `mango.desktop`. We need version ≥ 0.17.1, which ships `mango-session.target`. |
 | D4 | **One generic live ISO.** Its boot menu offers **Try Arctic Linux** (the full OS running from the USB, nothing written to disk) and **Install Arctic Linux** (goes straight into the installer). |
@@ -74,7 +74,7 @@ Installed Arctic Linux: SDDM (arctic theme) → mango.desktop → graphical-sess
 ## 3. Repository layout
 
 ```
-O-Tism/  (repo; product = Arctic Linux)
+Arctic-Linux/  (repo; product = Arctic Linux)
 ├── cmd/
 │   ├── arcticd/              # installer engine daemon (root, socket-activated)
 │   └── arctic-install/       # CLI client: --profile x.toml --unattended | --dry-run | --interactive-stub

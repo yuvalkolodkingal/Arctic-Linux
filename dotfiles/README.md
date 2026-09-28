@@ -49,6 +49,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `.config/qt5ct`, `.config/qt6ct` | Qt 5 (VLC) and Qt 6 apps: Fusion with the active theme's palette (`QT_QPA_PLATFORMTHEME=qt6ct`, set in `mango/arctic/look.conf` and `environment.d`) | Platforms |
 | `.config/zed/settings.json` | Zed: the "Arctic" theme (the theme hook puts it in Zed's themes folder, also for the Flatpak) and the Arctic fonts | — |
 | `.config/yazi/theme.toml`, `.config/btop/` | Links to the active theme's yazi and btop themes | — |
+| `.config/fastfetch/config.jsonc` | Link to the active theme's fastfetch layout (the theme folder also has `fastfetch/neofetch.jsonc`, for `neofetch`) | — |
 | `.config/foot`, `.config/alacritty` | The other terminals, with kitty's palette from the active theme | Terminal |
 | `.zshrc`, `.zprofile`, `.bashrc.d/arctic.sh` | Prompt (`~ ❯`, amber arrow; the theme's `zsh/colors.zsh`), history, completion, fzf colours (`fzf/fzfrc`), the fox greeting | Terminal |
 | `.config/arctic/themes/{winter,polar-night}/` | **Generated** (by the theme engine, `design/themegen`) colour files for every app above, `theme.json` (every token) for the shell and `palette.json` | tokens |
@@ -64,7 +65,9 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-theme [set <theme>\|toggle\|auto on\|off\|mode auto\|dark\|light\|list\|current]` | Switch the whole desktop's theme (`Super + Shift + T` toggles light / dark); the shell restyles live. With auto colours on (the default) your own wallpapers colour the desktop |
 | `arctic-themegen render\|palette\|builtin\|check` | The theme engine: render a palette into a theme folder, make a palette from a picture |
 | `arctic-wallpaper [snowfield\|aurora\|fox\|<picture>]` | Pick a wallpaper; the Arctic ones follow theme switches, your pictures set the colours when auto colours are on. Also the shell's picker (`Super + Shift + W`, with a "Match colours to wallpaper" switch) |
-| `arctic-fetch [--static]` | The animated fox greeting (runs when a terminal opens; any key skips it) |
+| `arctic-fetch [--static]` | The animated fox greeting (runs when a terminal opens; any key skips it); its lines are fastfetch's (`.local/share/arctic/fastfetch/greeting.jsonc`) |
+| `arctic-fetch --info os\|base\|wm\|shell\|theme\|updates` | One line for the fastfetch layouts, e.g. "Arctic Linux 0.2 (Fedora 44)" |
+| `fastfetch`, `neofetch` | The fox and a system summary, in the active theme's colours (`.config/fastfetch/config.jsonc` links to the theme's layout); `neofetch` is fastfetch with neofetch's layout |
 | `arctic-motion [on\|off]` | Reduced motion: no animations anywhere, still fox |
 | `arctic-launcher ["=12*4"]` | Open or close the launcher (`Super + Space`), optionally with something typed |
 | `arctic-open terminal\|browser\|editor\|files\|files-tui` | Open the app you picked for a role |

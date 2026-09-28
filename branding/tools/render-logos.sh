@@ -58,7 +58,10 @@ render_svg "$SRC/arctic-lockup-winter.svg" "$px/fedora_logo_med.png" 279
 render_svg "$SRC/arctic-lockup-mono-white.svg" "$px/fedora_whitelogo_med.png" 279
 cp "$SRC/arctic-lockup-mono-white.svg" "$px/fedora_whitelogo.svg"
 render_svg "$SRC/arctic-lockup-polar-night.svg" "$px/fedora-gdm-logo.png" 149
+# os-release LOGO=arctic-logo-icon: fastfetch, GNOME's About page, hostnamectl and friends look
+# for it here (PNG and SVG) as well as in the icon theme.
 render_svg "$SRC/arctic-logo-icon.svg" "$px/arctic-logo-icon.png" 256 256
+cp "$SRC/arctic-logo-icon.svg" "$px/arctic-logo-icon.svg"
 
 # Watermark for Plymouth's spinner/bgrt themes (used only if someone switches
 # away from the arctic theme) and the 16 px favicon lighttpd & co. expect.
@@ -66,3 +69,8 @@ render_svg "$SRC/arctic-lockup-polar-night.svg" "$OUT/usr/share/plymouth/themes/
 render_svg "$SRC/arctic-logo-icon-16.svg" "$OUT/etc/favicon.png" 16 16
 
 log "logos written to branding/logos ($(find "$OUT" -type f | wc -l) files)"
+
+# The fox as text art for fastfetch / neofetch (arctic-desktop-config installs it in
+# /usr/share/arctic/fastfetch; design/themegen/templates/fastfetch carry the same text).
+python3 "$TOOLS_DIR/fastfetch_logo.py" --out "$REPO_DIR/dotfiles/.local/share/arctic/fastfetch/logo.txt" >/dev/null
+log "fastfetch logo written to dotfiles/.local/share/arctic/fastfetch/logo.txt"

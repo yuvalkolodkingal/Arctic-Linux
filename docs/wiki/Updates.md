@@ -246,7 +246,7 @@ you're using and send the fix upstream.
 **Get the source:**
 
 ```sh
-git clone https://github.com/yuvalkolodkingal/O-Tism ~/src/O-Tism
+git clone https://github.com/yuvalkolodkingal/Arctic-Linux ~/src/Arctic-Linux
 ```
 
 **The shell** (bar, launcher, popovers) is QML that runs straight from the checkout. Stop the
@@ -254,13 +254,13 @@ installed one and run yours; its messages appear in the terminal:
 
 ```sh
 arctic-shell --stop
-quickshell -p ~/src/O-Tism/shell
+quickshell -p ~/src/Arctic-Linux/shell
 ```
 
 Save a file and restart it (`Ctrl + C`, then the same command) to see the change. `arctic-shell`
-starts the installed shell again; `ARCTIC_SHELL_DIR=~/src/O-Tism/shell arctic-shell --restart`
+starts the installed shell again; `ARCTIC_SHELL_DIR=~/src/Arctic-Linux/shell arctic-shell --restart`
 makes it use yours in the background. See the shell's
-[README](https://github.com/yuvalkolodkingal/O-Tism/tree/main/shell) for the tests.
+[README](https://github.com/yuvalkolodkingal/Arctic-Linux/tree/main/shell) for the tests.
 
 **Mango** (windows, shortcuts, gaps): put your settings in `~/.config/mango/user.conf` and press
 `Super + Shift + R` to reload. See [Themes and customisation](Themes-and-Customisation#mango-settings-in-userconf).
@@ -269,7 +269,7 @@ makes it use yours in the background. See the shell's
 ones you have:
 
 ```sh
-cd ~/src/O-Tism
+cd ~/src/Arctic-Linux
 tools/build-rpms.sh                           # → out/repo, in a Fedora container
 sudo dnf upgrade ./out/repo/*.rpm             # installs newer versions of the packages you have
 ```
