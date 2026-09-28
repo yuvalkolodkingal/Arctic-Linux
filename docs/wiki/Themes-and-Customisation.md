@@ -87,6 +87,7 @@ and the login screen uses it too.
 | **yazi**, **btop** | theme files | next start |
 | **zsh** prompt, completion menu, suggestions and syntax highlighting | a colour file in the theme folder | at the next prompt |
 | **fzf** | an options file (your own `FZF_DEFAULT_OPTS` still apply on top) | every run |
+| **fastfetch**, **neofetch** | layouts in the theme folder: the fox, keys and title in the theme's colours ([Terminal and shell](Terminal-and-Shell#fastfetch-and-neofetch)) | every run |
 | **foot**, **Alacritty** | the same palette as kitty | new windows |
 | **Zen Browser** | light/dark follows the system; the accent colour only with `arctic-theme zen on` | next start |
 | Firefox, Chromium, Collabora Office, Electron apps | light/dark follows the system | at once |
