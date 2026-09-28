@@ -41,12 +41,14 @@ Popover {
         sound: soundPanel,
         tray: trayPanel,
         calendar: calendarPanel,
+        battery: batteryPanel,
     })
     Component { id: networkPanel; NetworkPanel { menu: host } }
     Component { id: bluetoothPanel; BluetoothPanel { menu: host } }
     Component { id: soundPanel; SoundPanel { menu: host } }
     Component { id: trayPanel; TrayPanel { menu: host } }
     Component { id: calendarPanel; CalendarPanel { menu: host } }
+    Component { id: batteryPanel; BatteryPanel { menu: host } }
 
     FocusScope {
         anchors.fill: parent

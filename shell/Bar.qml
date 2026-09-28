@@ -299,23 +299,18 @@ PanelWindow {
         }
         BarItem {
             id: batteryItem
-            readonly property var device: UPower.displayDevice
-            readonly property bool present: device !== null && device.ready && device.isLaptopBattery
-            readonly property int percent: present ? Math.round(device.percentage > 1 ? device.percentage : device.percentage * 100) : 0
-            readonly property bool charging: present && (device.state === UPowerDeviceState.Charging || device.state === UPowerDeviceState.PendingCharge)
-            readonly property bool full: present && device.state === UPowerDeviceState.FullyCharged
-            function duration(seconds) {
-                const h = Math.floor(seconds / 3600), m = Math.round((seconds % 3600) / 60);
-                return h > 0 ? h + ' h ' + m + ' min' : m + ' min';
-            }
-            visible: present
-            interactive: false
-            iconName: charging ? 'battery-charging' : 'battery'
-            iconColor: present && !charging && percent <= 10 ? Theme.error : Theme.ink
-            text: percent + '%'
-            tooltip: full ? 'Fully charged' : charging ? (device.timeToFull > 0 ? 'Charging · full in ' + duration(device.timeToFull) : 'Charging')
-                     : present && device.timeToEmpty > 0 ? percent + '% · ' + duration(device.timeToEmpty) + ' left' : percent + '%'
-            // Battery has no action, but still explains itself on hover.
+            // Charge, and the battery menu (power mode, charge limit) on click. At or below
+            // UPower's low level the word travels with the colour.
+            readonly property var b: BatteryService
+            visible: b.present
+            hasMenu: true
+            active: bar.menuOpen('battery')
+            iconName: b.charging ? 'battery-charging' : 'battery'
+            iconColor: b.present && !b.charging && b.percent <= 10 ? Theme.error : Theme.ink
+            text: b.percent + '%' + (b.low ? ' · Low' : '')
+            tooltip: (b.full ? 'Fully charged' : b.percent + '%' + (b.timeText ? ' · ' + b.timeText : ''))
+                     + (PowerService.available && PowerService.current ? ' · ' + PowerService.current.label : '') + '  (Super + Ctrl + P)'
+            onClicked: bar.shell.togglePanel('battery', bar.screen, batteryItem.mapToItem(null, batteryItem.width / 2, 0).x)
             onHoverChanged: h => h ? bar.hint(batteryItem, tooltip) : bar.unhint(batteryItem)
         }
         BarItem {
