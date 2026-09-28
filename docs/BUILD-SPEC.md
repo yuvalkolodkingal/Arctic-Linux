@@ -107,7 +107,7 @@ waybar/fuzzel configs stay in the dotfiles as a fallback (`ARCTIC_SHELL=waybar`)
 Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <target> <fn>`,
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install|remove|open <page>|source <name>|search <page> <text>|uninstall
-<desktop-id>` (Get apps), `power toggle`, `osd volume|brightness`, `lock lock`, `keys toggle`,
+<desktop-id>` (Get apps), `power toggle`, `osd volume|brightness|brightnessLevel`, `lock lock`, `keys toggle`,
 `notifications center|dismiss|dismissAll|invoke|dnd <mode>` (through `arctic-notify` and
 `arctic-dnd`, which fall back to makoctl), `keyboard next|set|menu`, `clipboard toggle`,
 `emoji toggle`, `record open|refresh`, `share pick <fifo>`, `capture freeze <dir>|thaw`, and for

@@ -5,7 +5,7 @@
 #
 # Targets: launcher toggle|open|close · wallpapers toggle|open · power toggle
 #          apps install|remove|open <page>|source <name>|search <page> <text>|uninstall <desktop-id>
-#          keys toggle · osd volume|brightness · lock lock|isLocked · welcome open
+#          keys toggle · osd volume|brightness|brightnessLevel · lock lock|isLocked · welcome open
 #          dnd refresh · shell reload|live · clipboard toggle · emoji toggle · record open|refresh
 #          share pick <fifo> · capture freeze <dir>|thaw
 #          notifications center|dismiss|dismissAll|invoke|count|history|dnd on|off|toggle|1h|tomorrow|status

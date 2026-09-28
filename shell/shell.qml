@@ -12,7 +12,7 @@ import Quickshell.Io
 // from the Arctic design tokens (Theme.qml).
 //
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
-//   launcher toggle · wallpapers toggle · power toggle · osd volume|brightness
+//   launcher toggle · wallpapers toggle · power toggle · osd volume|brightness|brightnessLevel
 //   apps install|remove|toggle · apps open|source <page> · apps search <page> <text> · apps uninstall <desktop-id>
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
 //   notifications center|dismiss|dismissAll|invoke|count|history|dnd|clearHistory|reload
