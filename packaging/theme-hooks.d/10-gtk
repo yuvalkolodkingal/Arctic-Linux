@@ -15,6 +15,8 @@
 # (adw-gtk3-dark / adw-gtk3, the names the dconf defaults use) and gtk-3.0/settings.ini, so
 # running GTK 3 apps, and Flatpak GTK 3 apps through the settings portal, restyle with the
 # copies made here.
+# Same content? (coreutils only: diffutils' cmp is not always installed.)
+same() { command -v sha256sum >/dev/null && [[ -f $1 && -f $2 ]] && [[ "$(sha256sum < "$1")" == "$(sha256sum < "$2")" ]]; }
 set -u
 
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -28,7 +30,7 @@ if [[ -r "$dir/gtk.css" ]]; then
     if [[ -L "$f" || ! -e "$f" ]] || { head -n1 "$f" | grep -qxF "$marker"; } 2>/dev/null; then
       tmp="$(mktemp "$f.XXXXXX" 2>/dev/null)" || continue
       if { printf '%s\n' "$marker"; cat "$dir/gtk.css"; } > "$tmp" 2>/dev/null; then
-        if [[ ! -L "$f" ]] && cmp -s "$tmp" "$f"; then
+        if [[ ! -L "$f" ]] && same "$tmp" "$f"; then
           :                                   # already current
         else
           chmod 0644 "$tmp" && mv -f "$tmp" "$f"

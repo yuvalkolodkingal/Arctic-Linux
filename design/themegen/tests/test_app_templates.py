@@ -550,7 +550,7 @@ class HooksTest(unittest.TestCase):
         # No gsettings, flatpak or running apps: only what the hooks do on disk is tested.
         self.bin = Path(self.tmp.name) / "bin"
         self.bin.mkdir()
-        for tool in ("bash", "python3", "sed", "cp", "mv", "mkdir", "cat", "cmp", "rm", "grep", "mktemp",
+        for tool in ("bash", "python3", "sed", "cp", "mv", "mkdir", "cat", "cmp", "sha256sum", "rm", "grep", "mktemp",
                      "chmod", "readlink", "dirname", "basename", "ln", "head", "touch", "stat", "env"):
             path = shutil.which(tool)
             if path:

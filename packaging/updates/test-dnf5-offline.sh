@@ -86,7 +86,7 @@ chmod 0755 /usr/local/bin/systemctl
 : > /run/fake-systemctl.log
 
 build() {  # NAME RELEASE [PRE-SCRIPTLET-EXIT]
-  local top=/root/rpmbuild
+  local top="${TMPDIR:-/tmp}/arctic-rpmbuild"
   mkdir -p "$top/SPECS"
   cat > "$top/SPECS/$1.spec" <<EOF
 Name: $1
@@ -105,7 +105,7 @@ echo $2 > %{buildroot}/usr/share/$1/release
 %files
 /usr/share/$1
 EOF
-  rpmbuild -bb --quiet "$top/SPECS/$1.spec" >/dev/null 2>&1 || fail "rpmbuild $1-1-$2"
+  rpmbuild -bb --quiet --define "_topdir $top" "$top/SPECS/$1.spec" >/dev/null 2>&1 || fail "rpmbuild $1-1-$2"
   cp "$top/RPMS/noarch/$1-1-$2.noarch.rpm" "$SRV/pool/"
 }
 publish() {  # CHANNEL NAME-RELEASE…: put these packages in a channel's repository
