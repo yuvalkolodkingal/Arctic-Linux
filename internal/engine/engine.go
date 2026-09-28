@@ -514,6 +514,7 @@ func (e *Engine) Start(ctx context.Context) *protocol.Error {
 	if perr := e.wiz.ReadyToInstall(); perr != nil {
 		return perr
 	}
+	// Only a missing secret stops the install: a weak one is a warning (the steps, the Summary).
 	if d.Encryption.Enabled && len(e.secrets.LUKS) == 0 {
 		return protocol.Errorf(protocol.CodeState, "The encryption passphrase is missing. Go back to the Encryption step.")
 	}
@@ -621,17 +622,18 @@ func (e *Engine) run(ctx context.Context, job *backend.Job) {
 	}
 	drivers, sb := e.driverResults(job)
 	e.wiz.SetDriverResults(drivers, sb)
+	e.wiz.DoneNotes = job.Outcome.Notes
 	e.wiz.Finish(installed)
 	first := wizard.FirstName(job.Data.Account.FullName)
 	res, _ := e.wiz.Get(wizard.StepDone)
 	ev := protocol.DoneEvent{Event: protocol.EventDone, AppsInstalled: installed, FirstName: first, Deferred: deferred, Title: res.Title, Help: res.Help,
-		Drivers: drivers, SecureBoot: sb}
+		Drivers: drivers, SecureBoot: sb, Notes: job.Outcome.Notes}
 	e.doneEv = &ev
 	// The secrets are not needed any more.
 	wipe(e.secrets.LUKS)
 	wipe(e.secrets.Password)
 	e.secrets = backend.Secrets{}
-	e.log.Printf("install finished: %d apps installed, deferred %v, drivers %+v, key enrolment %q", installed, deferred, job.Outcome.Drivers, job.Outcome.MOK)
+	e.log.Printf("install finished: %d apps installed, deferred %v, drivers %+v, key enrolment %q, notes %q", installed, deferred, job.Outcome.Drivers, job.Outcome.MOK, job.Outcome.Notes)
 	e.broadcastLocked(ev, false)
 	e.broadcastLocked(protocol.WizardEvent{Event: protocol.EventWizard, WizardResult: e.wiz.Snapshot()}, false)
 }

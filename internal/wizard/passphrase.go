@@ -55,11 +55,12 @@ func parseWordList(s string) []string {
 // Strength labels, indexed by score (BUILD-SPEC §4: CheckPassphrase).
 var StrengthLabels = [...]string{"Too short", "Weak", "Fair", "Good", "Strong"}
 
-// MinPassphraseScore is the lowest score Next accepts for the disk passphrase ("Fair").
+// MinPassphraseScore is the disk passphrase score ("Fair") below which the installer warns
+// that it is easy to guess. It is advisory: any non-empty passphrase is accepted.
 const MinPassphraseScore = 2
 
-// MinPasswordScore is the lowest score accepted for the account password ("Weak": 8+ chars,
-// not a well-known password).
+// MinPasswordScore is the account password score ("Weak": 8+ characters) below which the
+// installer warns. Advisory too: any non-empty password is accepted.
 const MinPasswordScore = 1
 
 // Strength is the result of CheckPassphrase.
@@ -67,9 +68,15 @@ type Strength struct {
 	Score int     `json:"score"`
 	Label string  `json:"label"`
 	Words int     `json:"words"`
-	OK    bool    `json:"ok"`
+	OK    bool    `json:"ok"` // Score ≥ MinPassphraseScore; advisory, it doesn't block anything
 	Bits  float64 `json:"-"`
 }
+
+// WeakPassphrase says whether the installer warns about this disk passphrase.
+func (s Strength) WeakPassphrase() bool { return s.Score < MinPassphraseScore }
+
+// WeakPassword says whether the installer warns about this account password.
+func (s Strength) WeakPassword() bool { return s.Score < MinPasswordScore }
 
 // wordBits is the entropy of one word drawn from the embedded list (log2 1296 ≈ 10.34).
 var wordBits = math.Log2(float64(len(Words)))
@@ -77,7 +84,8 @@ var wordBits = math.Log2(float64(len(Words)))
 // CheckPassphrase scores a passphrase 0–4. It is a small zxcvbn-style estimate: words from the
 // embedded list count as one guess each, repeats and runs ("aaaa", "1234") count almost
 // nothing, well-known passwords are "Weak", everything else counts by its character classes.
-// Fewer than 8 characters is always "Too short". ok is score ≥ 2 ("Fair").
+// Fewer than 8 characters is always "Too short". ok is score ≥ 2 ("Fair"). The score only
+// drives the meter and the weak-passphrase warnings: it never blocks the install.
 func CheckPassphrase(s string) Strength {
 	words := countWords(s)
 	runes := []rune(s)

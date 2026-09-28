@@ -132,6 +132,7 @@ $ chroot /mnt rpm -q --quiet ffmpeg-free
 $ chroot /mnt dnf swap -y --allowerasing ffmpeg-free ffmpeg
 $ chroot /mnt dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver intel-media-driver yazi openh264 mozilla-openh264 gstreamer1-plugin-openh264 glibc-langpack-en kitty kitty-shell-integration zsh Thunar vlc vlc-plugins-freeworld
 $ chroot /mnt flock -w 1800 /run/akmods/akmods.lock true
+? processes using /mnt: none
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub app.zen_browser.zen
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub dev.zed.Zed
@@ -195,7 +196,10 @@ $ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/b
 $ chroot /mnt snapper --no-dbus -c root create-config /
 $ chroot /mnt snapper --no-dbus -c root set-config NUMBER_CLEANUP=yes NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no
 $ setfiles -F -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt/.snapshots /mnt/etc/snapper /mnt/etc/sysconfig/snapper
+? processes using /mnt: none
 $ umount --recursive /mnt
+$ sync
+? other mount namespaces with /mnt: none
 $ udevadm settle --timeout=30
 $ cryptsetup close luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad
 $ umount /mnt

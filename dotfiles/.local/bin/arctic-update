@@ -73,7 +73,7 @@ Arctic Linux updates: downloaded in the background, installed the next time you 
   arctic-update help
 
 Settings: /etc/arctic/update.conf
-More: https://github.com/yuvalkolodkingal/O-Tism/wiki/Updates
+More: https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Updates
 EOF
 }
 

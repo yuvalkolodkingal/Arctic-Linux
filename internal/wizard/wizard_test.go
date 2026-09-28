@@ -294,13 +294,17 @@ func TestAccountValidation(t *testing.T) {
 		t.Errorf("Next must validate everything, got %v", err)
 	}
 	set(t, w, "account", `{"username":"noa"}`)
-	env.secrets.PasswordSet, env.secrets.Password = true, CheckPassphrase("short")
-	if err := w.Next(); err == nil || err.Fields["password"] != "Use at least 8 characters." {
-		t.Errorf("weak password: %v", err)
-	}
 	env.secrets.PasswordSet = false
 	if err := w.Next(); err == nil || err.Fields["password"] != "Type a password." {
 		t.Errorf("missing password: %v", err)
+	}
+	// A short password is a warning, not a refusal (Next returns to the Summary it came from).
+	env.secrets.PasswordSet, env.secrets.Password = true, CheckPassphrase("x")
+	if err := w.Next(); err != nil || w.Current() != StepSummary {
+		t.Errorf("a 1-character password must pass Next: %v (at %s)", err, w.Current())
+	}
+	if err := w.ReadyToInstall(); err != nil {
+		t.Errorf("a 1-character password must pass ReadyToInstall: %v", err)
 	}
 }
 
@@ -339,12 +343,86 @@ func TestEncryptionValidation(t *testing.T) {
 	if err := w.Next(); err == nil || err.Fields["passphrase"] != "Type a passphrase." {
 		t.Errorf("missing passphrase: %v", err)
 	}
-	env.secrets.LUKSSet, env.secrets.LUKS = true, CheckPassphrase("aaaaaaaaaa")
-	if err := w.Next(); err == nil || !strings.HasPrefix(err.Fields["passphrase"], "Make it a bit longer") {
-		t.Errorf("weak passphrase: %v", err)
+	// A weak or short passphrase is a warning (min_score, weak_warning), not a refusal.
+	r, _ := w.Get("encryption")
+	if o := r.Options.(map[string]any); o["min_score"] != MinPassphraseScore || o["weak_warning"] != CopyWeakPassphrase {
+		t.Errorf("encryption options %v", o)
 	}
+	env.secrets.LUKSSet, env.secrets.LUKS = true, CheckPassphrase("abc")
+	if s := env.secrets.LUKS; s.Label != "Too short" || s.OK || !s.WeakPassphrase() {
+		t.Errorf("3 characters: %+v", s)
+	}
+	mustNext(t, w)
+	if w.Current() != StepAccount {
+		t.Fatalf("a 3-character passphrase must pass Next, at %s", w.Current())
+	}
+	// Encryption off needs no passphrase.
+	w.Goto(StepEncryption)
+	env.secrets.LUKSSet = false
 	set(t, w, "encryption", `{"enabled":false}`)
 	mustNext(t, w)
+}
+
+// Short secrets pass every step and ReadyToInstall; the Summary notes them in the
+// Encryption and Account rows, and its erase warning stays one sentence.
+func TestWeakSecretsWarnOnly(t *testing.T) {
+	const (
+		erase   = "Installing will erase everything on Samsung SSD 980. This can’t be undone."
+		encOn   = "On — you’ll type your passphrase each time the computer starts"
+		encOff  = "Off — anyone with this computer can read your files"
+		account = "Noa Levi (noa) on noa-thinkpad"
+		weakAcc = account + ", " + CopyWeakPasswordRow
+	)
+	for _, c := range []struct {
+		name, luks, password string
+		encrypt              bool
+		enc, account         string
+	}{
+		{"strong", "acid acorn acre aged", "winter fox 2026", true, encOn, account},
+		{"short passphrase", "abc", "winter fox 2026", true, CopyWeakPassphraseRow, account},
+		{"weak passphrase", "aaaaaaaaaaaa", "winter fox 2026", true, CopyWeakPassphraseRow, account},
+		{"short password", "acid acorn acre aged", "x", true, encOn, weakAcc},
+		{"both", "abc", "x", true, CopyWeakPassphraseRow, weakAcc},
+		// "Weak" (8+ characters, easy to guess) is only a warning for the disk passphrase.
+		{"weak password", "acid acorn acre aged", "password", true, encOn, account},
+		// No encryption: the passphrase isn't used, so it isn't mentioned.
+		{"no encryption", "abc", "x", false, encOff, weakAcc},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w, env := newTest(t)
+			env.net.Online = true
+			for w.Current() != StepEncryption {
+				mustNext(t, w)
+			}
+			set(t, w, "encryption", fmt.Sprintf(`{"enabled":%v}`, c.encrypt))
+			env.secrets.LUKSSet, env.secrets.LUKS = true, CheckPassphrase(c.luks)
+			mustNext(t, w)
+			set(t, w, "account", `{"full_name":"Noa Levi"}`)
+			env.secrets.PasswordSet, env.secrets.Password = true, CheckPassphrase(c.password)
+			if r, _ := w.Get(StepAccount); r.Options.(map[string]any)["strength"] != env.secrets.Password {
+				t.Errorf("account options strength %v", r.Options.(map[string]any)["strength"])
+			}
+			mustNext(t, w)
+			mustNext(t, w) // apps
+			if err := w.ReadyToInstall(); err != nil {
+				t.Fatalf("ReadyToInstall: %v", err)
+			}
+			s := w.Summary()
+			if s.Warning != erase {
+				t.Errorf("summary warning %q, want %q", s.Warning, erase)
+			}
+			rows := map[string]string{}
+			for _, r := range s.Rows {
+				rows[r.Label] = r.Value
+			}
+			if rows["Encryption"] != c.enc || rows["Account"] != c.account {
+				t.Errorf("summary rows: encryption %q, account %q; want %q, %q", rows["Encryption"], rows["Account"], c.enc, c.account)
+			}
+			if err := w.Next(); err != nil || w.Current() != StepInstall {
+				t.Errorf("Next from summary: %v (at %s)", err, w.Current())
+			}
+		})
+	}
 }
 
 func TestDiskValidation(t *testing.T) {

@@ -32,6 +32,18 @@
 #                                               a session fails (a failed login), collect.sh runs
 #                                               from the root debug shell on tty9 instead
 #   tools/test-install.sh --out DIR             default out/test/install/<firmware>
+#   tools/test-install.sh --test-hardware NAME  the engine sees this hardware fixture's PCI devices
+#                                               (internal/hw/fixtures.go, e.g. nvidia-laptop): its
+#                                               drivers are ticked, installed and built by akmods
+#                                               for the new system's kernel (no card needed)
+#   tools/test-install.sh --online-via-proxy    give the guest the internet through this host's
+#                                               HTTPS proxy ($HTTPS_PROXY on 127.0.0.1, reached as
+#                                               10.0.2.2 from QEMU's user network) and its CA
+#                                               (ARCTIC_CA_BUNDLE or /root/.ccr/ca-bundle.crt, also
+#                                               added to the new system for its dnf); the engine
+#                                               treats the network as online (--test-online)
+#   e.g. the NVIDIA + LUKS case: --profile profiles/ci/nvidia.toml --test-hardware nvidia-laptop
+#        --online-via-proxy
 #
 # Stage "install": a fresh 40 GB sparse target disk (target.qcow2) and, for UEFI, a fresh
 # writable OVMF variable store (OVMF_VARS.fd) in the output directory, plus a small data CD
@@ -48,7 +60,8 @@
 # serial-boot.log. Screenshots (PNG) of every step land in the output directory.
 #
 # The VM has user-mode networking: in this sandbox there is no internet behind it, so the
-# install runs offline and the app downloads are deferred to first boot.
+# install runs offline and the app downloads are deferred to first boot (unless
+# --online-via-proxy).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,6 +81,8 @@ BOOT_APPEND=auto
 INSTALLER=""
 VIA=service
 OUT=""
+TEST_HARDWARE=""
+ONLINE_PROXY=0
 # Test secrets only (typed into the VM and passed to the installer).
 LUKS_PASSPHRASE="glacier lantern frost harbor"
 USER_PASSWORD="arctic-ci-pass"
@@ -86,7 +101,9 @@ while (( $# )); do
     --installer) INSTALLER="$2"; shift 2 ;;
     --via) VIA="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
-    -h|--help) sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --test-hardware) TEST_HARDWARE="$2"; shift 2 ;;
+    --online-via-proxy) ONLINE_PROXY=1; shift ;;
+    -h|--help) sed -n '2,58p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
@@ -121,6 +138,19 @@ if [[ -n "$INSTALLER" ]]; then
   cp "$INSTALLER" "$DATA/arctic-install"
 fi
 q() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+UNATTENDED_ARGS=""
+[[ -n "$TEST_HARDWARE" ]] && UNATTENDED_ARGS+=" --test-hardware $(q "$TEST_HARDWARE")"
+if (( ONLINE_PROXY )); then
+  proxy="${HTTPS_PROXY:-${https_proxy:-}}"
+  port="${proxy##*:}"; port="${port%%/*}"
+  [[ "$proxy" == *127.0.0.1:* || "$proxy" == *localhost:* ]] && [[ "$port" =~ ^[0-9]+$ ]] ||
+    arctic_die "--online-via-proxy needs HTTPS_PROXY=http://127.0.0.1:PORT (got '${proxy:-nothing}')"
+  ca="${ARCTIC_CA_BUNDLE:-/root/.ccr/ca-bundle.crt}"
+  [[ -r "$ca" ]] || arctic_die "--online-via-proxy: no CA bundle at $ca (set ARCTIC_CA_BUNDLE)"
+  cp "$ca" "$DATA/proxy-ca.crt"
+  echo "PROXY_PORT=$port" > "$DATA/proxy.env"
+  UNATTENDED_ARGS+=" --test-online"
+fi
 cat > "$DATA/run.sh" <<EOF
 #!/bin/bash
 # tools/test-install.sh: runs as root in the live session (typed into a terminal):
@@ -144,6 +174,27 @@ if [ -x "\$D/arctic-install" ]; then
   say "using the arctic-install from the test data drive"
 fi
 VIA=$(q "$VIA")
+PROXY=""
+if [ -f "\$D/proxy.env" ]; then
+  # --online-via-proxy: the host's proxy through QEMU's user network, and its CA for TLS.
+  . "\$D/proxy.env"
+  PROXY="http://10.0.2.2:\$PROXY_PORT"
+  export https_proxy="\$PROXY" HTTPS_PROXY="\$PROXY" no_proxy=localhost,127.0.0.1 NO_PROXY=localhost,127.0.0.1
+  cp "\$D/proxy-ca.crt" /etc/pki/ca-trust/source/anchors/arctic-test-proxy.crt && update-ca-trust extract
+  say "online through \$PROXY: \$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://mirrors.fedoraproject.org/ 2>&1)"
+  # The new system is copied from the image (/run/rootfsbase), without that CA; dnf in its
+  # chroot checks TLS against the new system's trust store. Add the CA as soon as the system
+  # is configured (crypttab written), long before the apps phase downloads anything.
+  ( for _ in \$(seq 1 7200); do
+      if grep -qs luks /mnt/etc/crypttab || grep -qs 'subvol=@' /mnt/etc/fstab; then
+        sleep 5
+        cp "\$D/proxy-ca.crt" /mnt/etc/pki/ca-trust/source/anchors/arctic-test-proxy.crt &&
+          chroot /mnt update-ca-trust extract && say "proxy CA added to the new system"
+        break
+      fi
+      sleep 2
+    done ) &
+fi
 {
   echo "== live system"; cat /proc/cmdline; findmnt /run/rootfsbase; findmnt -t squashfs
   lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS
@@ -155,12 +206,14 @@ if [ "\$VIA" = service ]; then
   # What arcticd.service gets: a system service's SELinux domain and environment.
   say "running the install as a systemd service (\$(getenforce))"
   systemd-run --wait --pipe --collect --quiet id -Z 2>&1 | tee -a "\$S"
+  penv=()
+  [ -n "\$PROXY" ] && penv=(-E https_proxy -E HTTPS_PROXY -E no_proxy -E NO_PROXY)
   systemd-run --wait --pipe --collect --quiet --unit=arctic-test-install \\
-    -E ARCTIC_LUKS_PASSPHRASE -E ARCTIC_USER_PASSWORD \\
-    "\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
+    -E ARCTIC_LUKS_PASSPHRASE -E ARCTIC_USER_PASSWORD "\${penv[@]}" \\
+    "\$AI" unattended --profile /run/arctic-test-profile.toml$UNATTENDED_ARGS 2>&1 | tee -a "\$S"
   rc=\${PIPESTATUS[0]}
 else
-  "\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
+  "\$AI" unattended --profile /run/arctic-test-profile.toml$UNATTENDED_ARGS 2>&1 | tee -a "\$S"
   rc=\${PIPESTATUS[0]}
 fi
 say "ARCTIC-INSTALL-DURATION=\$(( \$(date +%s) - start ))s"

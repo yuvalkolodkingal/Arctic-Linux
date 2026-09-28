@@ -122,7 +122,7 @@ Page {
                 text: "Open the wiki"
                 iconRight: "external"
                 gapColor: Theme.surfaceRaised
-                onClicked: Backend.openUrl(page.about.wiki || "https://github.com/yuvalkolodkingal/O-Tism/wiki")
+                onClicked: Backend.openUrl(page.about.wiki || "https://github.com/yuvalkolodkingal/Arctic-Linux/wiki")
             }
         }
         SettingRow {
@@ -145,7 +145,7 @@ Page {
                     text: "Open issues"
                     iconRight: "external"
                     gapColor: Theme.surfaceRaised
-                    onClicked: Backend.openUrl(page.about.issues || "https://github.com/yuvalkolodkingal/O-Tism/issues")
+                    onClicked: Backend.openUrl(page.about.issues || "https://github.com/yuvalkolodkingal/Arctic-Linux/issues")
                 }
             }
         }

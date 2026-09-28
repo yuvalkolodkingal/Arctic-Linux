@@ -9,7 +9,7 @@
 # replaces it on updates: don't edit it (docs/BUILD-SPEC.md §9).
 [arctic-testing]
 name=Arctic Linux $releasever - $basearch - Testing
-baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/testing/fedora-$releasever/$basearch/
+baseurl=https://yuvalkolodkingal.github.io/Arctic-Linux/repo/testing/fedora-$releasever/$basearch/
 type=rpm-md
 enabled=0
 gpgcheck=1
@@ -26,7 +26,7 @@ priority=90
 
 [arctic-testing-source]
 name=Arctic Linux $releasever - Testing Source
-baseurl=https://yuvalkolodkingal.github.io/O-Tism/repo/testing/fedora-$releasever/source/
+baseurl=https://yuvalkolodkingal.github.io/Arctic-Linux/repo/testing/fedora-$releasever/source/
 type=rpm-md
 enabled=0
 gpgcheck=1
