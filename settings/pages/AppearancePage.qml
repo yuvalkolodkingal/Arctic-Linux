@@ -21,6 +21,7 @@ Page {
     property var walls: ({ items: [], current: "", available: true })
     property var daylight: ({ available: false, mode: "off" })
     property var fonts: ({ available: false, fonts: [] })
+    property var rotate: ({ available: false, every: "off" })
     property string busyTheme: ""
     property string busyWall: ""
     property bool importing: false
@@ -29,7 +30,18 @@ Page {
         Backend.call(["theme"], r => { if (r.ok) page.theme = r; });
         Backend.call(["daylight"], r => { if (r.ok) page.daylight = r; }, true);
         Backend.call(["fonts"], r => { if (r.ok) page.fonts = r; }, true);
+        Backend.call(["wallpaper-rotate"], r => { if (r.ok) page.rotate = r; }, true);
         loadWallpapers();
+    }
+    // A new picture every so often (arctic-wallpaper rotate): from your folder or Arctic's own.
+    function setRotate(every, folder, shuffle) {
+        const args = every === "off" ? ["off"] : [every, folder || page.walls.folder || "arctic"].concat(shuffle ? ["shuffle"] : []);
+        Backend.call(["wallpaper-rotate"].concat(args), r => {
+            if (r.ok) {
+                page.rotate = r;
+                Backend.notify("success", r.every === "off" ? "The wallpaper stays as it is" : "The wallpaper changes by itself now", false);
+            }
+        });
     }
     // Light and dark by the clock (arctic-daylight): off, sunset to sunrise, or custom hours.
     function setDaylight(args) {
@@ -520,6 +532,46 @@ Page {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    Group {
+        title: "Change the wallpaper by itself"
+        desc: "Your chosen wallpaper and colours stay the same; this only changes the picture."
+        visible: page.rotate.available === true
+        SettingRow {
+            searchKey: "appearance.rotate"
+            title: "New wallpaper"
+            resettable: false
+            ArSelect {
+                width: 200
+                model: [{ value: "off", label: "Never" }, { value: "30m", label: "Every 30 minutes" },
+                    { value: "1h", label: "Every hour" }, { value: "1d", label: "Every day" }]
+                value: page.rotate.every || "off"
+                onActivated: v => page.setRotate(v, page.rotate.folder, page.rotate.shuffle === true)
+            }
+        }
+        SettingRow {
+            title: "From"
+            desc: page.rotate.folder && page.rotate.folder !== "arctic" ? page.tildePath(page.rotate.folder) : ""
+            visible: page.rotate.every && page.rotate.every !== "off"
+            resettable: false
+            ArSegmented {
+                accessibleName: "Pictures to use"
+                model: [{ value: "mine", label: "Your pictures" }, { value: "arctic", label: "Arctic's" }]
+                value: page.rotate.folder === "arctic" ? "arctic" : "mine"
+                onActivated: v => page.setRotate(page.rotate.every, v === "arctic" ? "arctic" : page.walls.folder, page.rotate.shuffle === true)
+            }
+        }
+        SettingRow {
+            title: "In random order"
+            visible: page.rotate.every && page.rotate.every !== "off"
+            resettable: false
+            RowSwitch {
+                checked: page.rotate.shuffle === true
+                Accessible.name: "In random order"
+                onToggled: page.setRotate(page.rotate.every, page.rotate.folder, checked)
             }
         }
     }

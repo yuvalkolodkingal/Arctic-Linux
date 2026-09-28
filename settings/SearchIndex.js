@@ -43,6 +43,7 @@ var ENTRIES = [
     ["appearance", "appearance.gallery", "More themes", "nord catppuccin gruvbox tokyo night rose pine everforest palette colour scheme gallery"],
     ["appearance", "appearance.schedule", "Switch light and dark by itself", "automatic dark mode sunset sunrise night schedule"],
     ["appearance", "appearance.wallpaper", "Wallpaper", "background picture desktop image add upload drop rename delete my own pictures"],
+    ["appearance", "appearance.rotate", "Change the wallpaper by itself", "rotate slideshow cycle shuffle every hour day random wallpaper"],
     ["appearance", "appearance.wallhaven", "Find wallpapers on Wallhaven", "wallhaven online download internet search browse wallpaper"],
     ["appearance", "appearance.wallhaven.key", "Wallhaven API key", "wallhaven account apikey nsfw sketchy"],
     ["windows", "windows.gaps", "Gap between windows", "gaps inner spacing"],

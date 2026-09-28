@@ -51,6 +51,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
                                   high contrast)
     contrast-set on|off           high contrast (arctic-theme contrast)
     fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
+    wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]     a new picture every so often
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2665,6 +2666,37 @@ def cmd_font_set(paths, args):
     return result
 
 
+# ---- wallpaper rotation (arctic-wallpaper rotate) ------------------------------------------------
+
+ROTATE_EVERY = ('off', '30m', '1h', '1d')
+
+
+def cmd_wallpaper_rotate(paths, args):
+    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]: a new picture every so often,
+    without changing the chosen wallpaper or the colours."""
+    if not which('arctic-wallpaper'):
+        return dict(ok=True, available=False, every='off')
+    if args:
+        every = args[0]
+        if every not in ROTATE_EVERY or (every == 'off') != (len(args) == 1) or len(args) > 3 \
+                or (len(args) == 3 and args[2] != 'shuffle'):
+            raise Failure('usage: wallpaper-rotate off | 30m|1h|1d FOLDER|arctic [shuffle]')
+        argv = ['arctic-wallpaper', 'rotate', every] + ([] if every == 'off' else
+                                                          [args[1]] + (['--shuffle'] if len(args) == 3 else []))
+        code, _out, err = run(argv, timeout=30)
+        if code != 0:
+            message = (strip_ansi(err).strip().splitlines() or ['The wallpaper rotation couldn’t be changed.'])[-1]
+            message = message.replace('arctic-wallpaper: ', '')
+            raise Failure(message[:1].upper() + message[1:])
+    code, out, _err = run(['arctic-wallpaper', 'rotate'], timeout=10)
+    data = _loads(out.strip())
+    if code != 0 or not isinstance(data, dict):
+        return dict(ok=True, available=True, every='off')
+    every = data.get('every') if data.get('every') in ROTATE_EVERY else 'off'
+    return dict(ok=True, available=True, every=every, folder=str(data.get('folder') or ''),
+                shuffle=data.get('shuffle') is True)
+
+
 # ---- accessibility ---------------------------------------------------------------------------------
 
 def cmd_accessibility(paths, _args):
@@ -2720,7 +2752,7 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
 # The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
 COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
                  'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
-                 'contrast-set': cmd_contrast_set,
+                 'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
                  'fonts': cmd_fonts, 'font-set': cmd_font_set})
 WRITERS |= {'shell-option-set'}
 

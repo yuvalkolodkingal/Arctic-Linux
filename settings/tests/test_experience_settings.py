@@ -105,6 +105,31 @@ class TextSizeTest(Home):
         self.helper('text-scale', '3', ok=False)
 
 
+class WallpaperRotateTest(Home):
+    def test_rotate(self):
+        self.assertEqual(self.helper('wallpaper-rotate')['available'], False)
+        state = self.home / 'rotate.json'
+        stub(self.bin, 'arctic-wallpaper', '''\
+            echo "arctic-wallpaper $*" >> "{1}"
+            [ "$1" = rotate ] || exit 2
+            case "$2" in
+              "") cat "{0}" 2>/dev/null || echo '{{"every": "off"}}' ;;
+              off) rm -f "{0}" ;;
+              *) [ "$3" = /nowhere ] && {{ echo "arctic-wallpaper: there is no folder /nowhere" >&2; exit 2; }}
+                 s=false; [ "$4" = --shuffle ] && s=true
+                 printf '{{"every": "%s", "folder": "%s", "shuffle": %s}}\\n' "$2" "$3" "$s" > "{0}" ;;
+            esac
+            '''.format(state, self.log))
+        self.assertEqual(self.helper('wallpaper-rotate')['every'], 'off')
+        data = self.helper('wallpaper-rotate', '1h', '/pics', 'shuffle')
+        self.assertEqual((data['every'], data['folder'], data['shuffle']), ('1h', '/pics', True))
+        self.assertIn('arctic-wallpaper rotate 1h /pics --shuffle', self.calls())
+        self.assertEqual(self.helper('wallpaper-rotate', 'off')['every'], 'off')
+        self.assertIn('There is no folder', self.helper('wallpaper-rotate', '30m', '/nowhere', ok=False)['error'])
+        for bad in (('5m', '/pics'), ('30m',), ('off', '/pics'), ('1h', '/pics', 'twice')):
+            self.helper('wallpaper-rotate', *bad, ok=False)
+
+
 class AccessibilityTest(Home):
     def test_keyboard_pointer(self):
         self.assertFalse(self.helper('accessibility')['kbptr'])
