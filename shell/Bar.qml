@@ -105,6 +105,7 @@ PanelWindow {
             sound: volumeItem,
             battery: batteryItem,
             notifications: bellItem,
+            keyboard: keyboardItem,
             calendar: clockItem,
             media: mediaItem,
         };
@@ -246,15 +247,45 @@ PanelWindow {
         }
 
         // Quiet group: notifications and Bluetooth sit in ink-muted.
+        // The bell: the notification centre (right click: do not disturb). A dot marks what
+        // arrived since the centre was last opened. When the shell doesn't own notifications
+        // (mako in the fallback), it is 0.2's bell: do not disturb, right click brings one back.
         BarItem {
             id: bellItem
-            visible: DndService.available
+            readonly property bool centre: NotificationService.owned
+            readonly property int unseen: NotificationService.unseen
+            visible: centre || DndService.available
             iconName: DndService.active ? 'bell-off' : 'bell'
             iconColor: Theme.inkMuted
-            tooltip: DndService.active ? 'Do not disturb is on · only urgent notifications show' : 'Notifications · click for do not disturb'
-            onClicked: DndService.toggle()
-            onRightClicked: Quickshell.execDetached(['makoctl', 'restore'])
+            tooltip: !centre ? (DndService.active ? 'Do not disturb is on · only urgent notifications show' : 'Notifications · click for do not disturb')
+                     : (DndService.active ? 'Do not disturb is on' : unseen > 0 ? unseen + (unseen === 1 ? ' new notification' : ' new notifications') : 'Notifications')
+                       + '  (Super + Alt + N · right click: do not disturb)'
+            onClicked: centre ? bar.shell.toggleNotifications(bar.screen, bellItem.mapToItem(null, bellItem.width / 2, 0).x) : DndService.toggle()
+            onRightClicked: centre ? DndService.toggle() : Quickshell.execDetached(['makoctl', 'restore'])
             onHoverChanged: h => h ? bar.hint(bellItem, tooltip) : bar.unhint(bellItem)
+            Item {
+                // Unseen: a dot on the bell's shoulder, in ink (a count, not a status colour).
+                visible: bellItem.centre && bellItem.unseen > 0 && !DndService.active
+                Layout.preferredWidth: 0
+                Layout.preferredHeight: 0
+                Layout.leftMargin: -Theme.space1
+                Rectangle {
+                    x: -7
+                    y: -8
+                    width: 6
+                    height: 6
+                    radius: 3
+                    color: Theme.ink
+                    border.width: 1
+                    border.color: Theme.frost
+                }
+            }
+        }
+        // The keyboard layout ("EN"), only with more than one layout.
+        KeyboardItem {
+            id: keyboardItem
+            onRightClicked: bar.shell.toggleKeyboardMenu(bar.screen, keyboardItem.mapToItem(null, keyboardItem.width / 2, 0).x)
+            onHoverChanged: h => h ? bar.hint(keyboardItem, tooltip) : bar.unhint(keyboardItem)
         }
         BarItem {
             id: bluetoothItem

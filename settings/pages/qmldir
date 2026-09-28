@@ -7,6 +7,7 @@ AppsPage 1.0 AppsPage.qml
 NetworkPage 1.0 NetworkPage.qml
 BluetoothPage 1.0 BluetoothPage.qml
 SoundPage 1.0 SoundPage.qml
+NotificationsPage 1.0 NotificationsPage.qml
 UpdatesPage 1.0 UpdatesPage.qml
 PowerPage 1.0 PowerPage.qml
 StartupPage 1.0 StartupPage.qml

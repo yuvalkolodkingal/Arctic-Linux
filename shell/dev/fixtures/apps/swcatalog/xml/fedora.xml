@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<components version="0.16" origin="fedora">
+  <component type="desktop-application">
+    <id>org.gimp.GIMP</id>
+    <pkgname>gimp</pkgname>
+    <name>GIMP</name>
+    <summary>Create images and edit photographs</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>GIMP is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.inkscape.Inkscape</id>
+    <pkgname>inkscape</pkgname>
+    <name>Inkscape</name>
+    <summary>Vector-based drawing program</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Inkscape is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.kde.krita</id>
+    <pkgname>krita</pkgname>
+    <name>Krita</name>
+    <summary>Digital painting, creative freedom</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Krita is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.videolan.vlc</id>
+    <pkgname>vlc</pkgname>
+    <name>VLC media player</name>
+    <summary>Plays nearly every video and music format</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>VLC media player is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>AudioVideo</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>com.obsproject.Studio</id>
+    <pkgname>obs-studio</pkgname>
+    <name>OBS Studio</name>
+    <summary>Live streaming and video recording software</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>OBS Studio is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>AudioVideo</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.mozilla.firefox</id>
+    <pkgname>firefox</pkgname>
+    <name>Firefox</name>
+    <summary>Fast, private and safe web browser</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Firefox is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Network</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.mozilla.thunderbird</id>
+    <pkgname>thunderbird</pkgname>
+    <name>Thunderbird</name>
+    <summary>Email, calendar and chat</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Thunderbird is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Network</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>htop</id>
+    <pkgname>htop</pkgname>
+    <name>Htop</name>
+    <summary>Interactive process viewer</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Htop is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>System</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>btop</id>
+    <pkgname>btop</pkgname>
+    <name>btop++</name>
+    <summary>Resource monitor</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>btop++ is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>System</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>nvim</id>
+    <pkgname>neovim</pkgname>
+    <name>Neovim</name>
+    <summary>Vim-fork focused on extensibility and usability</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Neovim is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Development</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.blender.Blender</id>
+    <pkgname>blender</pkgname>
+    <name>Blender</name>
+    <summary>3D modeling, animation and rendering</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Blender is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.audacityteam.Audacity</id>
+    <pkgname>audacity</pkgname>
+    <name>Audacity</name>
+    <summary>Record and edit audio files</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Audacity is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>AudioVideo</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.kde.kdenlive</id>
+    <pkgname>kdenlive</pkgname>
+    <name>Kdenlive</name>
+    <summary>Video editor</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>Kdenlive is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>AudioVideo</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.darktable.darktable</id>
+    <pkgname>darktable</pkgname>
+    <name>darktable</name>
+    <summary>Organize and develop raw images</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>darktable is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Graphics</category></categories>
+  </component>
+  <component type="desktop-application">
+    <id>org.libreoffice.LibreOffice.writer</id>
+    <pkgname>libreoffice</pkgname>
+    <name>LibreOffice Writer</name>
+    <summary>Create and edit text documents</summary>
+    <project_license>GPL-3.0-or-later</project_license>
+    <description><p>LibreOffice Writer is a test fixture for Get apps screenshots.</p></description>
+    <categories><category>Office</category></categories>
+  </component>
+</components>

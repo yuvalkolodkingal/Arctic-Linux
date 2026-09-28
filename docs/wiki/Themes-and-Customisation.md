@@ -157,7 +157,7 @@ Save the file and the frame goes away at once; set it back to `true` to bring it
 
 ## Default apps
 
-`Super + Enter`, `Super + W`, `Super + E`, `Super + F` and `Super + Shift + F` open your terminal,
+`Super + Enter`, `Super + B`, `Super + E`, `Super + F` and `Super + Shift + F` open your terminal,
 browser, editor, file manager and terminal file manager. The installer writes your picks to
 `/etc/arctic/default-apps`. The easiest way to change them is **Default apps** in Settings
 (`Super + S`), which also sets the apps that open links and files. By hand, create
@@ -215,8 +215,8 @@ border_radius=0
 # A different keyboard layout for your session
 xkb_rules_layout=gb
 
-# An extra shortcut: Super + B opens Firefox
-bind=SUPER,b,spawn,firefox
+# An extra shortcut: Super + Alt + F opens Firefox
+bind=SUPER+ALT,f,spawn,firefox
 ```
 
 Press `Super + Shift + R` to reload.
@@ -224,8 +224,9 @@ Press `Super + Shift + R` to reload.
 ### Changing a shortcut
 
 Mango uses the first shortcut it reads for a key, so a `bind=` line in `user.conf` can add new
-shortcuts but can't replace one of Arctic's. To change Arctic's shortcuts, replace the link to
-`binds.conf` with your own copy:
+shortcuts but can't replace one of Arctic's. If a later update gives one of your keys to Arctic,
+Settings > Shortcuts tells you that your shortcut no longer runs. To change Arctic's shortcuts,
+replace the link to `binds.conf` with your own copy:
 
 ```sh
 cp --remove-destination /usr/share/arctic/mango/binds.conf ~/.config/mango/arctic/binds.conf

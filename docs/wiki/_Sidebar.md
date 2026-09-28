@@ -10,6 +10,7 @@
 - [Desktop tour](Desktop-Tour)
 - [Menus on the bar and Quick settings](Bar-Menus)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
+- [Notifications](Notifications)
 - [Settings](Settings)
 - [Apps and software](Apps-and-Software)
 - [Drivers](Drivers)

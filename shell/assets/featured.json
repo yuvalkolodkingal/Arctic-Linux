@@ -1,0 +1,1897 @@
+{
+ "schema": 1,
+ "apps": [
+  {
+   "id": "zen",
+   "name": "Zen Browser",
+   "summary": "Calm, privacy-first browser with vertical tabs.",
+   "category": "browser",
+   "tile": "zen",
+   "glyph": "compass",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "app.zen_browser.zen",
+    "verified": true
+   }
+  },
+  {
+   "id": "firefox",
+   "name": "Firefox",
+   "summary": "The classic open-source browser.",
+   "category": "browser",
+   "tile": "firefox",
+   "glyph": "globe",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.mozilla.firefox",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "firefox"
+    ]
+   }
+  },
+  {
+   "id": "brave",
+   "name": "Brave",
+   "summary": "Blocks ads and trackers out of the box.",
+   "category": "browser",
+   "tile": "brave",
+   "glyph": "shield-check",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.brave.Browser",
+    "verified": true
+   }
+  },
+  {
+   "id": "chrome",
+   "name": "Google Chrome",
+   "summary": "Google's browser, synced to your account.",
+   "category": "browser",
+   "tile": "chrome",
+   "glyph": "globe",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.google.Chrome",
+    "verified": false
+   }
+  },
+  {
+   "id": "librewolf",
+   "name": "LibreWolf",
+   "summary": "Firefox tuned for privacy, with no telemetry.",
+   "category": "browser",
+   "tile": "librewolf",
+   "glyph": "shield-lock",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.gitlab.librewolf-community",
+    "verified": true
+   }
+  },
+  {
+   "id": "chromium",
+   "name": "Chromium",
+   "summary": "Open-source base of Chrome.",
+   "category": "browser",
+   "tile": "chromium",
+   "glyph": "globe",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.github.ungoogled_software.ungoogled_chromium",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "chromium"
+    ]
+   }
+  },
+  {
+   "id": "vivaldi",
+   "name": "Vivaldi",
+   "summary": "Feature-packed browser you can reshape.",
+   "category": "browser",
+   "tile": "vivaldi",
+   "glyph": "sliders",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.vivaldi.Vivaldi",
+    "verified": false
+   }
+  },
+  {
+   "id": "zed",
+   "name": "Zed",
+   "summary": "Fast, modern code editor.",
+   "category": "editor",
+   "tile": "zed",
+   "glyph": "code",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "dev.zed.Zed",
+    "verified": false
+   }
+  },
+  {
+   "id": "vscode",
+   "name": "Visual Studio Code",
+   "summary": "Microsoft's popular code editor.",
+   "category": "editor",
+   "tile": "vscode",
+   "glyph": "code",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.visualstudio.code",
+    "verified": false
+   }
+  },
+  {
+   "id": "vscodium",
+   "name": "VSCodium",
+   "summary": "VS Code without the telemetry.",
+   "category": "editor",
+   "tile": "vscodium",
+   "glyph": "code",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.vscodium.codium",
+    "verified": true
+   }
+  },
+  {
+   "id": "neovim",
+   "name": "Neovim",
+   "summary": "Keyboard-driven text editor for the terminal.",
+   "category": "editor",
+   "tile": "neovim",
+   "glyph": "prompt",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "neovim"
+    ]
+   }
+  },
+  {
+   "id": "helix",
+   "name": "Helix",
+   "summary": "Modal editor that works out of the box.",
+   "category": "editor",
+   "tile": "helix",
+   "glyph": "prompt",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "helix"
+    ]
+   }
+  },
+  {
+   "id": "kate",
+   "name": "Kate",
+   "summary": "KDE's capable text and code editor.",
+   "category": "editor",
+   "tile": "kate",
+   "glyph": "edit",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.kde.kate",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "kate"
+    ]
+   }
+  },
+  {
+   "id": "emacs",
+   "name": "Emacs",
+   "summary": "The endlessly extensible editor.",
+   "category": "editor",
+   "tile": "emacs",
+   "glyph": "code",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnu.emacs",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "emacs-pgtk"
+    ]
+   }
+  },
+  {
+   "id": "text-editor",
+   "name": "Text Editor",
+   "summary": "Simple notepad for everyday text.",
+   "category": "editor",
+   "tile": "text-editor",
+   "glyph": "file",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.TextEditor",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "gnome-text-editor"
+    ]
+   }
+  },
+  {
+   "id": "kitty",
+   "name": "kitty",
+   "summary": "Fast, GPU-drawn terminal.",
+   "category": "terminal",
+   "tile": "kitty",
+   "glyph": "terminal",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "kitty",
+     "kitty-shell-integration"
+    ]
+   }
+  },
+  {
+   "id": "alacritty",
+   "name": "Alacritty",
+   "summary": "Minimal GPU terminal.",
+   "category": "terminal",
+   "tile": "alacritty",
+   "glyph": "terminal",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "alacritty"
+    ]
+   }
+  },
+  {
+   "id": "foot",
+   "name": "foot",
+   "summary": "Lightweight Wayland terminal.",
+   "category": "terminal",
+   "tile": "foot",
+   "glyph": "terminal",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "foot"
+    ]
+   }
+  },
+  {
+   "id": "konsole",
+   "name": "Konsole",
+   "summary": "KDE's terminal with tabs, splits and profiles.",
+   "category": "terminal",
+   "tile": "konsole",
+   "glyph": "terminal",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "konsole"
+    ]
+   }
+  },
+  {
+   "id": "zsh",
+   "name": "zsh",
+   "summary": "Friendly shell with smart completion.",
+   "category": "shell",
+   "tile": "zsh",
+   "glyph": "prompt",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "zsh"
+    ]
+   }
+  },
+  {
+   "id": "fish",
+   "name": "fish",
+   "summary": "Shell with suggestions as you type.",
+   "category": "shell",
+   "tile": "fish",
+   "glyph": "prompt",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "fish"
+    ]
+   }
+  },
+  {
+   "id": "thunar",
+   "name": "Thunar",
+   "summary": "Simple windowed file manager.",
+   "category": "files",
+   "tile": "thunar",
+   "glyph": "folder",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "Thunar"
+    ]
+   }
+  },
+  {
+   "id": "nautilus",
+   "name": "Files (Nautilus)",
+   "summary": "GNOME's file manager.",
+   "category": "files",
+   "tile": "nautilus",
+   "glyph": "folder",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "nautilus"
+    ]
+   }
+  },
+  {
+   "id": "dolphin",
+   "name": "Dolphin",
+   "summary": "KDE's file manager with tabs and split view.",
+   "category": "files",
+   "tile": "dolphin",
+   "glyph": "folder",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "dolphin"
+    ]
+   }
+  },
+  {
+   "id": "nemo",
+   "name": "Nemo",
+   "summary": "Familiar, full-featured file manager.",
+   "category": "files",
+   "tile": "nemo",
+   "glyph": "folder",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "nemo"
+    ]
+   }
+  },
+  {
+   "id": "pcmanfm-qt",
+   "name": "PCManFM-Qt",
+   "summary": "Very light windowed file manager.",
+   "category": "files",
+   "tile": "pcmanfm-qt",
+   "glyph": "folder",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "pcmanfm-qt"
+    ]
+   }
+  },
+  {
+   "id": "collabora",
+   "name": "Collabora Office",
+   "summary": "Documents, spreadsheets and slides.",
+   "category": "office",
+   "tile": "collabora",
+   "glyph": "document",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.collaboraoffice.Office",
+    "verified": true
+   }
+  },
+  {
+   "id": "libreoffice",
+   "name": "LibreOffice",
+   "summary": "The full classic office suite.",
+   "category": "office",
+   "tile": "libreoffice",
+   "glyph": "document",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.libreoffice.LibreOffice",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "libreoffice-writer",
+     "libreoffice-calc",
+     "libreoffice-impress"
+    ]
+   }
+  },
+  {
+   "id": "onlyoffice",
+   "name": "ONLYOFFICE",
+   "summary": "Office suite close to Microsoft formats.",
+   "category": "office",
+   "tile": "onlyoffice",
+   "glyph": "document",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.onlyoffice.desktopeditors",
+    "verified": true
+   }
+  },
+  {
+   "id": "mpv",
+   "name": "mpv",
+   "summary": "Minimal, keyboard-driven player.",
+   "category": "video",
+   "tile": "mpv",
+   "glyph": "play",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.mpv.Mpv",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "mpv"
+    ]
+   }
+  },
+  {
+   "id": "celluloid",
+   "name": "Celluloid",
+   "summary": "Simple player built on mpv.",
+   "category": "video",
+   "tile": "celluloid",
+   "glyph": "film",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.github.celluloid_player.Celluloid",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "celluloid"
+    ]
+   }
+  },
+  {
+   "id": "haruna",
+   "name": "Haruna",
+   "summary": "Feature-rich player built on mpv.",
+   "category": "video",
+   "tile": "haruna",
+   "glyph": "play",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.kde.haruna",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "haruna"
+    ]
+   }
+  },
+  {
+   "id": "kodi",
+   "name": "Kodi",
+   "summary": "Media centre for your TV, films and music.",
+   "category": "video",
+   "tile": "kodi",
+   "glyph": "home",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "tv.kodi.Kodi",
+    "verified": true
+   }
+  },
+  {
+   "id": "jellyfin",
+   "name": "Jellyfin Media Player",
+   "summary": "Watch your Jellyfin server's library.",
+   "category": "video",
+   "tile": "jellyfin",
+   "glyph": "film",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.jellyfin.JellyfinDesktop",
+    "verified": true
+   }
+  },
+  {
+   "id": "spotify",
+   "name": "Spotify",
+   "summary": "Stream music and podcasts.",
+   "category": "music",
+   "tile": "spotify",
+   "glyph": "music",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.spotify.Client",
+    "verified": false
+   }
+  },
+  {
+   "id": "strawberry",
+   "name": "Strawberry",
+   "summary": "Music player for big local collections.",
+   "category": "music",
+   "tile": "strawberry",
+   "glyph": "music",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.strawberrymusicplayer.strawberry",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "strawberry"
+    ]
+   }
+  },
+  {
+   "id": "tauon",
+   "name": "Tauon",
+   "summary": "Stylish player for your music library.",
+   "category": "music",
+   "tile": "tauon",
+   "glyph": "music",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.github.taiko2k.tauonmb",
+    "verified": true
+   }
+  },
+  {
+   "id": "amberol",
+   "name": "Amberol",
+   "summary": "Plays music, and nothing else.",
+   "category": "music",
+   "tile": "amberol",
+   "glyph": "music",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.bassi.Amberol",
+    "verified": true
+   }
+  },
+  {
+   "id": "rhythmbox",
+   "name": "Rhythmbox",
+   "summary": "Classic music library and radio player.",
+   "category": "music",
+   "tile": "rhythmbox",
+   "glyph": "music",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.Rhythmbox3",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "rhythmbox"
+    ]
+   }
+  },
+  {
+   "id": "shortwave",
+   "name": "Shortwave",
+   "summary": "Listen to internet radio stations.",
+   "category": "music",
+   "tile": "shortwave",
+   "glyph": "volume",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "de.haeckerfelix.Shortwave",
+    "verified": true
+   }
+  },
+  {
+   "id": "easyeffects",
+   "name": "Easy Effects",
+   "summary": "Equaliser and effects for all your sound.",
+   "category": "music",
+   "tile": "easyeffects",
+   "glyph": "sliders",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.github.wwmm.easyeffects",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "easyeffects"
+    ]
+   }
+  },
+  {
+   "id": "loupe",
+   "name": "Image Viewer (Loupe)",
+   "summary": "Fast, simple image viewer.",
+   "category": "photos",
+   "tile": "loupe",
+   "glyph": "image",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.Loupe",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "loupe"
+    ]
+   }
+  },
+  {
+   "id": "gthumb",
+   "name": "gThumb",
+   "summary": "Browse, view and touch up photos.",
+   "category": "photos",
+   "tile": "gthumb",
+   "glyph": "image",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.gThumb",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "gthumb"
+    ]
+   }
+  },
+  {
+   "id": "shotwell",
+   "name": "Shotwell",
+   "summary": "Import and organise your photos.",
+   "category": "photos",
+   "tile": "shotwell",
+   "glyph": "image",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.Shotwell",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "shotwell"
+    ]
+   }
+  },
+  {
+   "id": "digikam",
+   "name": "digiKam",
+   "summary": "Professional photo management.",
+   "category": "photos",
+   "tile": "digikam",
+   "glyph": "camera",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.kde.digikam",
+    "verified": true
+   }
+  },
+  {
+   "id": "darktable",
+   "name": "darktable",
+   "summary": "Develop RAW photos like a darkroom.",
+   "category": "photos",
+   "tile": "darktable",
+   "glyph": "camera",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.darktable.Darktable",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "darktable"
+    ]
+   }
+  },
+  {
+   "id": "rawtherapee",
+   "name": "RawTherapee",
+   "summary": "Detailed RAW photo processing.",
+   "category": "photos",
+   "tile": "rawtherapee",
+   "glyph": "camera",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.rawtherapee.RawTherapee",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "rawtherapee"
+    ]
+   }
+  },
+  {
+   "id": "gimp",
+   "name": "GIMP",
+   "summary": "Photo editing and painting.",
+   "category": "graphics",
+   "tile": "gimp",
+   "glyph": "brush",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gimp.GIMP",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "gimp"
+    ]
+   }
+  },
+  {
+   "id": "krita",
+   "name": "Krita",
+   "summary": "Digital painting for artists.",
+   "category": "graphics",
+   "tile": "krita",
+   "glyph": "brush",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.kde.krita",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "krita"
+    ]
+   }
+  },
+  {
+   "id": "inkscape",
+   "name": "Inkscape",
+   "summary": "Vector drawing.",
+   "category": "graphics",
+   "tile": "inkscape",
+   "glyph": "pen-nib",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.inkscape.Inkscape",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "inkscape"
+    ]
+   }
+  },
+  {
+   "id": "blender",
+   "name": "Blender",
+   "summary": "3D modelling, animation and rendering.",
+   "category": "graphics",
+   "tile": "blender",
+   "glyph": "package",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.blender.Blender",
+    "verified": false
+   }
+  },
+  {
+   "id": "pinta",
+   "name": "Pinta",
+   "summary": "Easy drawing and image editing.",
+   "category": "graphics",
+   "tile": "pinta",
+   "glyph": "edit",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.github.PintaProject.Pinta",
+    "verified": true
+   }
+  },
+  {
+   "id": "freecad",
+   "name": "FreeCAD",
+   "summary": "3D design for real-world objects.",
+   "category": "graphics",
+   "tile": "freecad",
+   "glyph": "package",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.freecad.FreeCAD",
+    "verified": true
+   }
+  },
+  {
+   "id": "obs",
+   "name": "OBS Studio",
+   "summary": "Screen recording and streaming.",
+   "category": "recording",
+   "tile": "obs",
+   "glyph": "record",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.obsproject.Studio",
+    "verified": true
+   }
+  },
+  {
+   "id": "gpu-screen-recorder",
+   "name": "GPU Screen Recorder",
+   "summary": "Record gameplay with almost no slowdown.",
+   "category": "recording",
+   "tile": "gpu-screen-recorder",
+   "glyph": "record",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.dec05eba.gpu_screen_recorder",
+    "verified": true
+   }
+  },
+  {
+   "id": "kooha",
+   "name": "Kooha",
+   "summary": "Record your screen in one click.",
+   "category": "recording",
+   "tile": "kooha",
+   "glyph": "record",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.github.seadve.Kooha",
+    "verified": true
+   }
+  },
+  {
+   "id": "audacity",
+   "name": "Audacity",
+   "summary": "Record and edit audio.",
+   "category": "recording",
+   "tile": "audacity",
+   "glyph": "mic",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.audacityteam.Audacity",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "audacity"
+    ]
+   }
+  },
+  {
+   "id": "kdenlive",
+   "name": "Kdenlive",
+   "summary": "Full-featured video editor.",
+   "category": "recording",
+   "tile": "kdenlive",
+   "glyph": "film",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.kde.kdenlive",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "kdenlive"
+    ]
+   }
+  },
+  {
+   "id": "shotcut",
+   "name": "Shotcut",
+   "summary": "Straightforward video editor.",
+   "category": "recording",
+   "tile": "shotcut",
+   "glyph": "film",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.shotcut.Shotcut",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "shotcut"
+    ]
+   }
+  },
+  {
+   "id": "handbrake",
+   "name": "HandBrake",
+   "summary": "Convert videos to other formats.",
+   "category": "recording",
+   "tile": "handbrake",
+   "glyph": "refresh",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "fr.handbrake.ghb",
+    "verified": true
+   }
+  },
+  {
+   "id": "signal",
+   "name": "Signal",
+   "summary": "Private messaging.",
+   "category": "chat",
+   "tile": "signal",
+   "glyph": "chat",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.signal.Signal",
+    "verified": false
+   }
+  },
+  {
+   "id": "discord",
+   "name": "Discord",
+   "summary": "Voice, video and text chat for communities.",
+   "category": "chat",
+   "tile": "discord",
+   "glyph": "chat",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.discordapp.Discord",
+    "verified": true
+   }
+  },
+  {
+   "id": "telegram",
+   "name": "Telegram",
+   "summary": "Fast messaging that syncs everywhere.",
+   "category": "chat",
+   "tile": "telegram",
+   "glyph": "send",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.telegram.desktop",
+    "verified": true
+   }
+  },
+  {
+   "id": "element",
+   "name": "Element",
+   "summary": "Secure chat on the Matrix network.",
+   "category": "chat",
+   "tile": "element",
+   "glyph": "chat",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "im.riot.Riot",
+    "verified": false
+   }
+  },
+  {
+   "id": "slack",
+   "name": "Slack",
+   "summary": "Team chat for work.",
+   "category": "chat",
+   "tile": "slack",
+   "glyph": "hash",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.slack.Slack",
+    "verified": false
+   }
+  },
+  {
+   "id": "zoom",
+   "name": "Zoom",
+   "summary": "Video meetings and calls.",
+   "category": "chat",
+   "tile": "zoom",
+   "glyph": "camera",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "us.zoom.Zoom",
+    "verified": false
+   }
+  },
+  {
+   "id": "zapzap",
+   "name": "ZapZap",
+   "summary": "WhatsApp in its own window (unofficial).",
+   "category": "chat",
+   "tile": "zapzap",
+   "glyph": "chat",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.rtosta.zapzap",
+    "verified": true
+   }
+  },
+  {
+   "id": "thunderbird",
+   "name": "Thunderbird",
+   "summary": "Email, calendar and contacts in one.",
+   "category": "email",
+   "tile": "thunderbird",
+   "glyph": "mail",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.mozilla.thunderbird",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "thunderbird"
+    ]
+   }
+  },
+  {
+   "id": "evolution",
+   "name": "Evolution",
+   "summary": "Email and calendar, with Exchange support.",
+   "category": "email",
+   "tile": "evolution",
+   "glyph": "mail",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.Evolution",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "evolution",
+     "evolution-ews"
+    ]
+   }
+  },
+  {
+   "id": "betterbird",
+   "name": "Betterbird",
+   "summary": "Thunderbird with extra fixes and features.",
+   "category": "email",
+   "tile": "betterbird",
+   "glyph": "mail",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "eu.betterbird.Betterbird",
+    "verified": true
+   }
+  },
+  {
+   "id": "obsidian",
+   "name": "Obsidian",
+   "summary": "Markdown notes, linked like a second brain.",
+   "category": "notes",
+   "tile": "obsidian",
+   "glyph": "edit",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "md.obsidian.Obsidian",
+    "verified": true
+   }
+  },
+  {
+   "id": "joplin",
+   "name": "Joplin",
+   "summary": "Notes and to-dos that sync anywhere.",
+   "category": "notes",
+   "tile": "joplin",
+   "glyph": "edit",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "net.cozic.joplin_desktop",
+    "verified": false
+   }
+  },
+  {
+   "id": "logseq",
+   "name": "Logseq",
+   "summary": "Outliner for daily notes and ideas.",
+   "category": "notes",
+   "tile": "logseq",
+   "glyph": "edit",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.logseq.Logseq",
+    "verified": true
+   }
+  },
+  {
+   "id": "appflowy",
+   "name": "AppFlowy",
+   "summary": "Docs, wikis and boards, like Notion.",
+   "category": "notes",
+   "tile": "appflowy",
+   "glyph": "grid",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.appflowy.AppFlowy",
+    "verified": true
+   }
+  },
+  {
+   "id": "standard-notes",
+   "name": "Standard Notes",
+   "summary": "Simple notes, end-to-end encrypted.",
+   "category": "notes",
+   "tile": "standard-notes",
+   "glyph": "lock",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.standardnotes.standardnotes",
+    "verified": false
+   }
+  },
+  {
+   "id": "xournalpp",
+   "name": "Xournal++",
+   "summary": "Handwritten notes and PDF annotation.",
+   "category": "notes",
+   "tile": "xournalpp",
+   "glyph": "pen-nib",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.github.xournalpp.xournalpp",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "xournalpp"
+    ]
+   }
+  },
+  {
+   "id": "planify",
+   "name": "Planify",
+   "summary": "To-do lists and task planning.",
+   "category": "notes",
+   "tile": "planify",
+   "glyph": "check-circle",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.github.alainm23.planify",
+    "verified": true
+   }
+  },
+  {
+   "id": "papers",
+   "name": "Papers",
+   "summary": "Clean, simple PDF reader.",
+   "category": "reading",
+   "tile": "papers",
+   "glyph": "file",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.Papers",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "papers"
+    ]
+   }
+  },
+  {
+   "id": "okular",
+   "name": "Okular",
+   "summary": "Reads PDFs, e-books and comics, with notes.",
+   "category": "reading",
+   "tile": "okular",
+   "glyph": "file",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.kde.okular",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "okular"
+    ]
+   }
+  },
+  {
+   "id": "zathura",
+   "name": "Zathura",
+   "summary": "Minimal, keyboard-driven PDF reader.",
+   "category": "reading",
+   "tile": "zathura",
+   "glyph": "file",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.pwmt.zathura",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "zathura",
+     "zathura-pdf-mupdf"
+    ]
+   }
+  },
+  {
+   "id": "foliate",
+   "name": "Foliate",
+   "summary": "Comfortable e-book reader.",
+   "category": "reading",
+   "tile": "foliate",
+   "glyph": "book",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.github.johnfactotum.Foliate",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "foliate"
+    ]
+   }
+  },
+  {
+   "id": "calibre",
+   "name": "calibre",
+   "summary": "Organise and convert your e-book library.",
+   "category": "reading",
+   "tile": "calibre",
+   "glyph": "book",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.calibre_ebook.calibre",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "calibre"
+    ]
+   }
+  },
+  {
+   "id": "pdfarranger",
+   "name": "PDF Arranger",
+   "summary": "Merge, split and reorder PDF pages.",
+   "category": "reading",
+   "tile": "pdfarranger",
+   "glyph": "copy",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.github.jeromerobert.pdfarranger",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "pdfarranger"
+    ]
+   }
+  },
+  {
+   "id": "steam",
+   "name": "Steam",
+   "summary": "Games and the Steam store.",
+   "category": "gaming",
+   "tile": "steam",
+   "glyph": "gamepad",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.valvesoftware.Steam",
+    "verified": false
+   }
+  },
+  {
+   "id": "heroic",
+   "name": "Heroic",
+   "summary": "Plays your Epic, GOG and Amazon games.",
+   "category": "gaming",
+   "tile": "heroic",
+   "glyph": "gamepad",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.heroicgameslauncher.hgl",
+    "verified": true
+   }
+  },
+  {
+   "id": "lutris",
+   "name": "Lutris",
+   "summary": "One library for games from everywhere.",
+   "category": "gaming",
+   "tile": "lutris",
+   "glyph": "gamepad",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "net.lutris.Lutris",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "lutris"
+    ]
+   }
+  },
+  {
+   "id": "bottles",
+   "name": "Bottles",
+   "summary": "Run Windows apps and games.",
+   "category": "gaming",
+   "tile": "bottles",
+   "glyph": "package",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.usebottles.bottles",
+    "verified": true
+   }
+  },
+  {
+   "id": "prism",
+   "name": "Prism Launcher",
+   "summary": "Manage Minecraft versions and mods.",
+   "category": "gaming",
+   "tile": "prism",
+   "glyph": "gamepad",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.prismlauncher.PrismLauncher",
+    "verified": true
+   }
+  },
+  {
+   "id": "protonplus",
+   "name": "ProtonPlus",
+   "summary": "Adds newer Proton versions for Windows games.",
+   "category": "gaming",
+   "tile": "protonplus",
+   "glyph": "download",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.vysp3r.ProtonPlus",
+    "verified": true
+   }
+  },
+  {
+   "id": "mangohud",
+   "name": "MangoHud",
+   "summary": "On-screen FPS and hardware stats in games.",
+   "category": "gaming",
+   "tile": "mangohud",
+   "glyph": "cpu",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "mangohud"
+    ]
+   }
+  },
+  {
+   "id": "gamemode",
+   "name": "GameMode",
+   "summary": "Gives games full speed while they run.",
+   "category": "gaming",
+   "tile": "gamemode",
+   "glyph": "sparkle",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "gamemode"
+    ]
+   }
+  },
+  {
+   "id": "keepassxc",
+   "name": "KeePassXC",
+   "summary": "Offline password manager you control.",
+   "category": "security",
+   "tile": "keepassxc",
+   "glyph": "key",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.keepassxc.KeePassXC",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "keepassxc"
+    ]
+   }
+  },
+  {
+   "id": "bitwarden",
+   "name": "Bitwarden",
+   "summary": "Open-source password manager with sync.",
+   "category": "security",
+   "tile": "bitwarden",
+   "glyph": "key",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.bitwarden.desktop",
+    "verified": true
+   }
+  },
+  {
+   "id": "onepassword",
+   "name": "1Password",
+   "summary": "Password manager for families and teams.",
+   "category": "security",
+   "tile": "onepassword",
+   "glyph": "key",
+   "proprietary": true,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.onepassword.OnePassword",
+    "verified": true
+   }
+  },
+  {
+   "id": "proton-pass",
+   "name": "Proton Pass",
+   "summary": "Encrypted passwords from Proton.",
+   "category": "security",
+   "tile": "proton-pass",
+   "glyph": "key",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "me.proton.Pass",
+    "verified": false
+   }
+  },
+  {
+   "id": "authenticator",
+   "name": "Authenticator",
+   "summary": "Two-factor codes for your accounts.",
+   "category": "security",
+   "tile": "authenticator",
+   "glyph": "clock",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.belmoussaoui.Authenticator",
+    "verified": true
+   }
+  },
+  {
+   "id": "protonvpn",
+   "name": "Proton VPN",
+   "summary": "Free, no-logs VPN from Proton.",
+   "category": "security",
+   "tile": "protonvpn",
+   "glyph": "shield-check",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.protonvpn.www",
+    "verified": false
+   }
+  },
+  {
+   "id": "tor-browser",
+   "name": "Tor Browser",
+   "summary": "Browse anonymously over Tor.",
+   "category": "security",
+   "tile": "tor-browser",
+   "glyph": "eye-off",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.torproject.torbrowser-launcher",
+    "verified": true
+   }
+  },
+  {
+   "id": "qbittorrent",
+   "name": "qBittorrent",
+   "summary": "Full-featured torrent downloader.",
+   "category": "sync",
+   "tile": "qbittorrent",
+   "glyph": "download",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.qbittorrent.qBittorrent",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "qbittorrent"
+    ]
+   }
+  },
+  {
+   "id": "transmission",
+   "name": "Transmission",
+   "summary": "Simple, light torrent downloader.",
+   "category": "sync",
+   "tile": "transmission",
+   "glyph": "download",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.transmissionbt.Transmission",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "transmission-gtk"
+    ]
+   }
+  },
+  {
+   "id": "syncthing",
+   "name": "Syncthing",
+   "summary": "Syncs folders between your devices, privately.",
+   "category": "sync",
+   "tile": "syncthing",
+   "glyph": "refresh",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "syncthing"
+    ]
+   }
+  },
+  {
+   "id": "nextcloud",
+   "name": "Nextcloud",
+   "summary": "Syncs files with your Nextcloud server.",
+   "category": "sync",
+   "tile": "nextcloud",
+   "glyph": "cloud",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.nextcloud.desktopclient.nextcloud",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "nextcloud-client"
+    ]
+   }
+  },
+  {
+   "id": "localsend",
+   "name": "LocalSend",
+   "summary": "Send files to nearby phones and computers.",
+   "category": "sync",
+   "tile": "localsend",
+   "glyph": "send",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.localsend.localsend_app",
+    "verified": true
+   }
+  },
+  {
+   "id": "git",
+   "name": "Git",
+   "summary": "Version control, with the GitHub command line.",
+   "category": "dev",
+   "tile": "git",
+   "glyph": "branch",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "git",
+     "gh"
+    ]
+   }
+  },
+  {
+   "id": "meld",
+   "name": "Meld",
+   "summary": "Compare files and folders side by side.",
+   "category": "dev",
+   "tile": "meld",
+   "glyph": "copy",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.meld",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "meld"
+    ]
+   }
+  },
+  {
+   "id": "dbeaver",
+   "name": "DBeaver",
+   "summary": "One tool for every database.",
+   "category": "dev",
+   "tile": "dbeaver",
+   "glyph": "database",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.dbeaver.DBeaverCommunity",
+    "verified": false
+   }
+  },
+  {
+   "id": "bruno",
+   "name": "Bruno",
+   "summary": "Test APIs, with collections kept in Git.",
+   "category": "dev",
+   "tile": "bruno",
+   "glyph": "external",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.usebruno.Bruno",
+    "verified": true
+   }
+  },
+  {
+   "id": "podman",
+   "name": "Podman",
+   "summary": "Run containers without a background daemon.",
+   "category": "containers",
+   "tile": "podman",
+   "glyph": "package",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "podman",
+     "podman-compose"
+    ]
+   }
+  },
+  {
+   "id": "podman-desktop",
+   "name": "Podman Desktop",
+   "summary": "Manage containers and images visually.",
+   "category": "containers",
+   "tile": "podman-desktop",
+   "glyph": "package",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.podman_desktop.PodmanDesktop",
+    "verified": true
+   }
+  },
+  {
+   "id": "distrobox",
+   "name": "Distrobox",
+   "summary": "Use other Linux distros inside containers.",
+   "category": "containers",
+   "tile": "distrobox",
+   "glyph": "grid",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "distrobox"
+    ]
+   }
+  },
+  {
+   "id": "gnome-boxes",
+   "name": "GNOME Boxes",
+   "summary": "Try other systems in virtual machines.",
+   "category": "containers",
+   "tile": "gnome-boxes",
+   "glyph": "monitor",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.Boxes",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "gnome-boxes"
+    ]
+   }
+  },
+  {
+   "id": "virt-manager",
+   "name": "Virtual Machine Manager",
+   "summary": "Advanced virtual machines with KVM.",
+   "category": "containers",
+   "tile": "virt-manager",
+   "glyph": "monitor",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "virt-manager"
+    ]
+   }
+  },
+  {
+   "id": "waydroid",
+   "name": "Waydroid",
+   "summary": "Android apps. Gets 1 GB on first run.",
+   "category": "containers",
+   "tile": "waydroid",
+   "glyph": "phone",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "waydroid"
+    ]
+   }
+  },
+  {
+   "id": "bazaar",
+   "name": "Bazaar",
+   "summary": "Browse and install apps from Flathub.",
+   "category": "extras",
+   "tile": "bazaar",
+   "glyph": "grid",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.github.kolunmi.Bazaar",
+    "verified": true
+   }
+  },
+  {
+   "id": "flatseal",
+   "name": "Flatseal",
+   "summary": "Review what each Flatpak app may access.",
+   "category": "extras",
+   "tile": "flatseal",
+   "glyph": "shield-check",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "com.github.tchx84.Flatseal",
+    "verified": true
+   },
+   "dnf": {
+    "packages": [
+     "flatseal"
+    ]
+   }
+  },
+  {
+   "id": "mission-center",
+   "name": "Mission Center",
+   "summary": "See what's using your CPU, memory and GPU.",
+   "category": "extras",
+   "tile": "mission-center",
+   "glyph": "cpu",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.missioncenter.MissionCenter",
+    "verified": true
+   }
+  },
+  {
+   "id": "gnome-disks",
+   "name": "GNOME Disks",
+   "summary": "Format drives and write disk images.",
+   "category": "extras",
+   "tile": "gnome-disks",
+   "glyph": "disk",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "gnome-disk-utility"
+    ]
+   }
+  },
+  {
+   "id": "pika-backup",
+   "name": "Pika Backup",
+   "summary": "Easy, encrypted backups of your files.",
+   "category": "extras",
+   "tile": "pika-backup",
+   "glyph": "clock",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.World.PikaBackup",
+    "verified": true
+   }
+  },
+  {
+   "id": "file-roller",
+   "name": "File Roller",
+   "summary": "Open and create zip and other archives.",
+   "category": "extras",
+   "tile": "file-roller",
+   "glyph": "package",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "org.gnome.FileRoller",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "file-roller"
+    ]
+   }
+  },
+  {
+   "id": "btrfs-assistant",
+   "name": "Btrfs Assistant",
+   "summary": "Browse and restore system snapshots.",
+   "category": "extras",
+   "tile": "btrfs-assistant",
+   "glyph": "clock",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "btrfs-assistant"
+    ]
+   }
+  }
+ ]
+}

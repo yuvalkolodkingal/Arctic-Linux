@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# arctic-clipboard — clipboard history (Super+V): the shell's panel (search, pictures, paste,
+# remove), or without the shell a fuzzel list of what you copied (cliphist, text only).
+arctic-shell-ipc clipboard toggle >/dev/null 2>&1 && exit 0
+if pkill -x fuzzel 2>/dev/null; then exit 0; fi
+set -o pipefail
+cliphist list | fuzzel --dmenu --prompt "Clipboard  " | cliphist decode | wl-copy

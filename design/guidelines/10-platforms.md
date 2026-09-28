@@ -13,7 +13,7 @@ How the tokens land on each part of the system. Ready files are in `assets/Expor
 | Terminal | kitty | `kitty-arctic-winter.conf`, `kitty-arctic-polar-night.conf` | Includes the 16 ANSI colours, cursor, selection, tab and border colours, JetBrains Mono 10.5pt, 10×12 padding. |
 | Boot menu | GRUB 2 theme | `grub-theme.txt` | Only background image, PF2 fonts, the list and labels. Selected item = amber 9-slice pixmap (radius 10). Generate PF2 with `grub2-mkfont`. |
 | Boot splash | Plymouth script | `plymouth-arctic.script` | Mark breathing + eye blink + three amber dots; honours `arctic.reduce_motion=1`. Passphrase prompt uses the Input (lg) look. |
-| Notifications | mako / swaync | from JSON | `background-color` = `surface-raised`, `text-color` = `ink`, `border-color` = `line`, `border-radius=14`, `width=340`, `margin=12`, critical border = `error`. |
+| Notifications | the Arctic shell's toasts (`shell/Toasts.qml`, the same tokens); mako in the waybar fallback | from JSON | `background-color` = `surface-raised`, `text-color` = `ink`, `border-color` = `line`, `border-radius=14`, `width=340`, `margin=12`, critical border = `error`. |
 | OSD | swayosd | from JSON | 280×48 pill, `frost`, progress fill `accent`, track `surface-sunken`. |
 | Launcher | fuzzel / anyrun / custom | from JSON | 520px, `frost` + blur 28, `radius-xl`, selection `accent-soft`, match highlight `accent-text`. |
 | Lock | swaylock-effects / QML | `Theme.qml` | Same card as SDDM without user picker and session menu. Ring colours: `focus` while typing, `error` on wrong, `success` on verified. |

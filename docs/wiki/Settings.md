@@ -15,7 +15,8 @@ arctic-settings displays     # open it on a page
 ```
 
 The page names for `arctic-settings <page>` are `appearance`, `windows`, `displays`, `input`,
-`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `updates`, `power`, `startup` and `about`.
+`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `notifications`, `updates`, `power`, `startup`
+and `about`.
 
 ## Finding a setting
 
@@ -62,6 +63,7 @@ file). That's what `Ctrl + Z` uses.
 | Wi-Fi on or off | NetworkManager (`nmcli`) | At once |
 | Bluetooth, sound | BlueZ and PipeWire directly | At once |
 | Updates | through `arctic-update` | At once |
+| Notifications: schedule, history, per-app choices | `~/.config/arctic/notifications.json`; do not disturb through `arctic-dnd` | At once |
 
 `settings.conf` is read after Arctic's own Mango files and **before** your
 `~/.config/mango/user.conf`, so anything you set by hand in `user.conf` still wins. When it does,
@@ -119,8 +121,9 @@ How windows sit on the screen, move and take focus. Changes show at once.
   corners, and whether a window on its own gets gaps and a border.
 - **Motion and effects:** window animations and their speed, the frosted bar, shadows, and
   dimming the windows you aren't using.
-- **Focus:** focus follows the mouse, the pointer follows the focus, and whether apps can bring
-  themselves forward (for example a browser when you click a link in another app).
+- **Focus:** focus follows the mouse, the pointer follows the focus, whether apps can bring
+  themselves forward (for example a browser when you click a link in another app), and a **hot
+  corner** that opens the overview when you push the pointer into it (off at first).
 - **Layout:** the layout every workspace starts in (`Super + N` still switches the one you're on),
   whether new windows open as the main window, and the width of the main area.
 
@@ -174,22 +177,33 @@ leave a laptop's only screen dark the next time it starts without its dock.
 
 ![The Keyboard and mouse page](images/settings-input.png)
 
-- **Keyboard:** your layouts (**Add a layout**), the keys that switch between them, what the
-  Caps Lock key does (many people make it a second Esc or Ctrl), and a box to try your keyboard.
+- **Keyboard:** your layouts (**Add a layout**), the keys that switch between them (with the
+  shortcuts those keys would also fire, if any), what the Caps Lock key does (many people make it
+  a second Esc or Ctrl), the **Compose key** (press it, then two keys: `'` then `e` types é), and a
+  box to try your keyboard.
 - **Typing:** repeat delay and rate, and Num Lock on when you log in.
 - **Touchpad:** tap to click, tap and drag, natural scrolling, turning the touchpad off while
   typing, pointer speed and acceleration, scrolling speed, right click, middle click with both
   buttons, and turning the touchpad off altogether.
 - **Mouse:** pointer speed and acceleration, natural scrolling, scrolling speed and left-handed.
+- **Clipboard:** **Keep clipboard history** (what `Super + V` shows; off keeps only what you
+  copied last) and **Clear history**. Saved in `~/.config/arctic/clipboard.conf`.
 
 ## Shortcuts
 
 ![The Shortcuts page](images/settings-shortcuts.png)
 
 Every shortcut of the desktop, searchable, and **Your shortcuts**. **Add a shortcut**: click the
-key box and press the keys, then type a command or pick an app to open. Mango uses the first
-shortcut it finds for a key, so Settings refuses a key that's already taken. Your shortcuts are
-saved as `bind=` lines in `settings.conf`.
+key box and press the keys, then type a command or pick an app to open (with **If it's open,
+bring its window back**, on at first, the key shows the app's window instead of opening another). Mango uses the first
+shortcut it finds for a key, so Settings refuses a key that's already taken, and one that holds
+the keys that switch your keyboard layout. Your shortcuts are saved as `bind=` lines in
+`settings.conf`.
+
+Arctic's own shortcuts come first. When an update gives Arctic a key you had bound (0.3 moved the
+browser to `Super + B` and added `Super + Shift + S`), a banner at the top says which of your
+shortcuts no longer run, and the row is marked **Doesn't run**: remove it and add it again on
+another key.
 
 **Every shortcut in your Mango config** lists everything Mango has, including the ones in your
 `user.conf`. The main ones are also on [Keyboard shortcuts](Keyboard-Shortcuts).
@@ -199,10 +213,11 @@ saved as `bind=` lines in `settings.conf`.
 ![The Default apps page](images/settings-apps.png)
 
 The apps your keyboard shortcuts open, and the ones links and files open in: Web browser
-(`Super + W`), Terminal (`Super + Enter`), Files (`Super + F`), Text editor (`Super + E`), Videos,
+(`Super + B`), Terminal (`Super + Enter`), Files (`Super + F`), Text editor (`Super + E`), Videos,
 Music, Pictures and PDF documents. The first four are saved in `~/.config/arctic/default-apps`
 (read by `arctic-open`), and every one also in `~/.config/mimeapps.list`, as `xdg-mime default`
-would. **Get apps** installs more; they show up here.
+would. **Get apps** installs more; they show up here. **Install and remove apps** opens Get apps
+or Remove apps (`arctic-shell-ipc apps install|remove`).
 
 ## Network
 
@@ -233,6 +248,14 @@ without a Bluetooth adapter the page says so.
 Where sound plays (**Play sound on**) and its volume, and which microphone you speak into and its
 volume. **Open the sound menu** shows the menu on the bar, with a volume for each app;
 **Open the volume control** starts the full mixer for device profiles and routing.
+
+## Notifications
+
+**Do not disturb** now, for an hour or until tomorrow, and **on a schedule** (every day between
+two times); whether the notification centre **keeps its notifications after a restart**, and
+**Clear**; and for every app that has sent a notification, what it may do: pop up, stay in the
+centre only, show even during do not disturb, or keep even its urgent ones quiet then. See
+[Notifications](Notifications).
 
 ## Updates
 

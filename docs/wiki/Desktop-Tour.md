@@ -33,7 +33,8 @@ A thin bar runs along the top of the screen.
 |---|---|---|
 | **Install** (amber, live USB only) | Opens the installer | — |
 | **Restart to update** (amber, only while updates wait) | Shows the updates and **Restart and install**; see [Updates](Updates) | — |
-| **Bell** | Turns do not disturb on or off | Right-click brings back the last notification |
+| **Bell** (a dot: something new) | Opens the [notification centre](Notifications) (`Super + Alt + N`) | Right-click turns do not disturb on or off |
+| **Keyboard layout** (`EN`, `HE`; only with two or more layouts) | Switches to the next layout | Right-click lists the layouts |
 | **Bluetooth** (only with a Bluetooth adapter) | The Bluetooth menu: your devices, pairing (`Super + Ctrl + B`) | Right-click turns Bluetooth on or off |
 | **Tray icons** from running apps | The app's own action or menu | Right-click opens the menu, scrolling is passed to the app |
 | **Network** | The network menu: Wi-Fi, wired, VPN (`Super + Ctrl + W`) | Right-click opens **Settings → Network** |
@@ -87,7 +88,8 @@ through them. On a touchpad, swipe with four fingers left or right.
 `Enter`. Before you type anything, it offers:
 
 - **Apps**: every app on this computer
-- **Get apps**: install new apps (see below)
+- **Get apps**: install and remove apps (see below)
+- **Remove apps**: uninstall Flatpak apps, Fedora packages and web apps
 - **Wallpapers**: change the desktop picture
 - **Settings**: appearance, displays, keyboard, apps and more (`Super + S`)
 - **Fetch**: the fox greeting in a terminal
@@ -113,12 +115,14 @@ in your terminal and keeps the window open so you can read the output.
 
 ## Get apps
 
-![The Get apps console suggesting packages for a typed name](images/get-apps.png)
+![Get apps: where should the app come from?](images/get-apps.png)
 
-`Super + Shift + A`, or **Get apps** in the launcher, opens a small console for installing apps.
-Type an app's name and press `Enter` to install it, and `Tab` to complete a name. Installs run on
-their own, without `[y/N]` questions; your password is asked once, in a dialog. Full details are
-on [Apps and software](Apps-and-Software#get-apps).
+`Super + Shift + A`, or **Get apps** in the launcher, asks where the app should come from:
+**Flathub apps**, **Fedora packages**, **Web apps** (any website as an app), **Terminal apps**,
+**Remove apps** or the **Console**. Search, press `Enter` to install; Flathub needs no password,
+Fedora asks once, in a dialog. Installs carry on when you close the launcher. `Shift + Delete` on
+an app in the launcher removes it, after showing what goes. Full details are on
+[Apps and software](Apps-and-Software#get-apps).
 
 ## Settings
 
@@ -163,12 +167,16 @@ to use it, or search by name.
 ## Notifications and do not disturb
 
 Notifications appear as cards in the top-right corner of the screen and go away after a few
-seconds; urgent ones have a red edge and stay until you dismiss them.
+seconds; urgent ones have a red edge and stay until you dismiss them. Everything also waits in
+the notification centre under the bell (`Super + Alt + N`), grouped by app.
 
-- `Super + Delete` dismisses the newest one, `Super + Shift + Delete` dismisses them all.
-- **Do not disturb** (`Super + Shift + N`, or click the bell) hides everything except urgent
-  notifications. The bell icon changes while it's on.
-- Right-click the bell to bring back the last notification you dismissed.
+- `Super + Delete` closes the newest pop-up, `Super + Shift + Delete` closes them all (they stay
+  in the centre); `Super + Alt + ,` acts on the newest one.
+- **Do not disturb** (`Super + Shift + N`, right-click the bell, or the switch in the centre)
+  keeps pop-ups quiet, for an hour, until tomorrow or on a schedule. Urgent notifications and
+  Arctic's own alerts still show. The bell icon changes while it's on.
+
+All of it, with the per-app choices in Settings: [Notifications](Notifications).
 
 ## Volume and brightness
 
@@ -207,11 +215,34 @@ There's no lock screen in the live session.
 `Super + /` opens a sheet with every shortcut. Press `Esc` to close it. The same list is on
 [Keyboard shortcuts](Keyboard-Shortcuts).
 
-## Screenshots and the clipboard
+## Capture and the clipboard
 
-- `Print` lets you select an area, `Shift + Print` takes the whole screen, `Super + Print` the
-  current window. Screenshots are saved in `~/Pictures/Screenshots` and copied to the clipboard.
-- `Super + V` shows your clipboard history. Pick an entry to copy it again.
+- **Screenshots:** `Print` or `Super + Shift + S` freezes the screen (so an open menu or a
+  tooltip stays in the picture) and lets you drag over an area or click a window,
+  `Shift + Print` takes the screen you're on, `Super + Print` the current window, and
+  `Ctrl + Print` copies an area without saving it. Screenshots are saved in
+  `~/Pictures/Screenshots` and copied to the clipboard. Click the notification to open the
+  picture; middle-click it for the rest: show it in your file manager, open it in the editor
+  (swappy: arrows, text, boxes and blur) or move it to the trash.
+- **Text from the screen:** `Super + Ctrl + Print`, then select the text: it's recognised and
+  copied. It reads your language and your keyboard layouts' languages; when one isn't installed,
+  a notification offers to add it. `arctic-ocr --qr` copies what a QR code says instead, and keeps
+  it out of clipboard history.
+- **Colours:** `Super + Shift + C`, then click: the colour is copied as `#rrggbb`, and the
+  notification can copy it as `rgb()` or `hsl()` too.
+- **Screen recording:** `Super + Alt + R` asks what to record (an area or a screen you then
+  click, the window you were in, or the screen you're on) and which sound (none, the desktop's
+  or your microphone's); `Enter` starts with your last choice. A notification stays up while it
+  records; press `Super + Alt + R` again (or **Stop recording**) to save it in
+  `~/Videos/Screencasts`. It uses your graphics card's video encoder when it has one.
+- **Sharing your screen:** when an app (a video call, OBS) asks to share your screen, a list of
+  your screens and windows appears: pick one, or press `Esc` to share nothing.
+- **Clipboard history:** `Super + V` shows what you copied, pictures included. Type to filter;
+  `Enter` copies an entry again, `Shift + Enter` also pastes it, `Delete` removes it. Clipboard
+  history is blacked out in screenshots and screen shares.
+- **Emoji:** `Super + Ctrl + E`, type a word (`heart`, `thumbs`), then `Enter` types the emoji
+  where you were typing; `Shift + Enter` copies it, and `Alt + 1` … `6` picks the skin tone. The
+  ones you use come first.
 
 ## Password prompts
 

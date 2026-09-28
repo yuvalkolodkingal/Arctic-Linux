@@ -13,6 +13,10 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     undo                          put the previous settings.conf back (from the backups)
     binds                         the shortcut sheet (keys.txt), every bind in the config, yours
     bind-add MODS KEY COMMAND     add a shortcut that runs COMMAND (checked for clashes)
+    notices                       what to say once at login about shortcuts (arctic-settings --check-binds)
+    clipboard                     clipboard history: kept or not, and how many entries
+    clipboard-set history on|off  keep clipboard history (~/.config/arctic/clipboard.conf)
+    clipboard-clear               forget clipboard history (cliphist wipe)
     bind-remove INDEX
     startup                       startup apps: yours (exec-once in settings.conf) and Arctic's
     startup-add COMMAND | --app DESKTOP-ID
@@ -43,6 +47,11 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
                                   instead of failing when Wallhaven can't be reached
     updates | update-run now|apply|channel NAME|auto on|off                     (arctic-update)
     network | wifi on|off         NetworkManager status (nmcli)
+    notifications                 do not disturb, its schedule, history and the per-app rules
+    notification-set KEY VALUE    history on|off, schedule on|off, schedule-from / schedule-to HH:MM
+    notification-rule-set APP KEY on|off…   toasts, history, allow_during_dnd, silence_urgent
+    notification-history-clear    empty the notification centre
+    dnd-set on|off|1h|tomorrow    do not disturb now (arctic-dnd)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
 
@@ -310,6 +319,7 @@ OPTIONS = {
     # focus and layout
     'sloppyfocus': B + (1,), 'warpcursor': B + (1,), 'focus_on_activate': B + (1,),
     'new_is_master': B + (1,), 'default_mfact': ('float', 0.1, 0.9, 0.55),
+    'enable_hotarea': B + (0,), 'hotarea_corner': ('int', 0, 3, 2),
     # cursor
     'cursor_size': ('int', 12, 128, 24), 'cursor_theme': ('cursor', 0, 0, ''),
     'cursor_hide_timeout': ('int', 0, 600, 0),
@@ -788,7 +798,7 @@ KEY_NAMES = {'return': 'Enter', 'space': 'Space', 'slash': '/', 'comma': ',', 'p
              'left': '←', 'right': '→', 'up': '↑', 'down': '↓', 'print': 'Print',
              'page_up': 'Page Up', 'page_down': 'Page Down', 'minus': '-', 'equal': '=',
              'grave': '`', 'semicolon': ';', 'apostrophe': "'", 'bracketleft': '[', 'bracketright': ']',
-             'backslash': '\\'}
+             'backslash': '\\', 'code:49': '`', 'caps_lock': 'Caps Lock'}
 DISPATCHERS = {
     'killclient': 'Close the window', 'togglefloating': 'Float / tile the window',
     'togglemaximizescreen': 'Maximise', 'togglefullscreen': 'Full screen',
@@ -799,6 +809,14 @@ DISPATCHERS = {
     'tagtoleft': 'Move the window to the previous workspace', 'tagtoright': 'Move the window to the next workspace',
     'focusmon': 'Focus the other monitor', 'tagmon': 'Move the window to the other monitor',
     'reload_config': 'Reload the desktop config', 'quit': 'Log out', 'switch_keyboard_layout': 'Next keyboard layout',
+    'switcher': 'Switch windows', 'togglejump': 'Jump to a window', 'focuslast': 'Back to the previous window',
+    'toggle_special_tag': 'Scratch workspace', 'tag_special_tag': 'Move the window to the scratch workspace',
+    'toggle_named_scratchpad': 'Drop-down window', 'minimized': 'Hide the window',
+    'restore_minimized': 'Bring back a hidden window', 'groupjoin': 'Join a tab group',
+    'groupfocus': 'Next / previous tab in the group', 'groupleave': 'Leave the tab group',
+    'toggleglobal': 'Show the window on every workspace', 'centerwin': 'Centre the window',
+    'toggle_trackpad_enable': 'Touchpad on / off', 'toggle_scratchpad': 'Show hidden windows',
+    'setlayout': 'Layout',
 }
 RE_KEY = re.compile(r'^(?:[A-Za-z0-9_]{1,40}|code:\d{1,3})$')
 FREE_KEYS = re.compile(r'^(?:F\d{1,2}|XF86\w+|Print|Pause|Scroll_Lock|Menu)$')
@@ -835,8 +853,35 @@ def combo_label(mods, key):
     return ' + '.join(names + [key_label(key)])
 
 
+def combo_id(mods, key):
+    """What Mango matches a key press on. code:49 is the key above Tab (grave on us)."""
+    key = key.lower()
+    return (frozenset(mods), 'grave' if key == 'code:49' else key)
+
+
+def mark_shadowed(binds):
+    """Mango runs only the first bind that matches a key press, unless that bind has the `c`
+    flag, so a later bind on the same keys in the same keymode (or in `common`, which applies in
+    every mode) never runs. Release binds (`r`) and press binds don't meet."""
+    for i, bind in enumerate(binds):
+        for earlier in binds[:i]:
+            if earlier['combo'] != bind['combo'] or ('r' in earlier['flags']) != ('r' in bind['flags']):
+                continue
+            if 'c' in earlier['flags']:
+                continue
+            if earlier['keymode'] != bind['keymode'] and 'common' not in (earlier['keymode'], bind['keymode']):
+                continue
+            bind['shadowedBy'] = dict(label=earlier['label'], what=earlier['what'],
+                                      file=os.path.basename(earlier['file']))
+            break
+    for bind in binds:
+        del bind['combo']
+    return binds
+
+
 def chain_binds(paths):
-    """Keyboard binds in the config chain: [{mods, key, action, args, file, keymode, label}]."""
+    """Keyboard binds in the config chain: [{mods, key, action, args, file, keymode, label,
+    flags, shadowedBy?}]."""
     out = []
     keymode = 'default'
     for key, value, origin in read_chain(paths):
@@ -862,8 +907,19 @@ def chain_binds(paths):
                 what += ' ' + args.split(',')[0]
         out.append(dict(mods=sorted(mods), key=parts[1], action=action, args=args, file=origin,
                         keymode=keymode, label=combo_label(mods, parts[1]), what=what,
-                        mine=same_file(origin, paths.settings_conf)))
-    return out
+                        mine=same_file(origin, paths.settings_conf), flags=key[4:],
+                        combo=combo_id(mods, parts[1])))
+    return mark_shadowed(out)
+
+
+def arctic_file(paths, origin):
+    """A file of Arctic's own (its Mango config, links into /usr/share/arctic, the theme's
+    colours), rather than one of yours."""
+    if same_file(origin, paths.settings_conf) or same_file(origin, paths.user_conf):
+        return False
+    real = os.path.realpath(origin)
+    return any(real.startswith(os.path.realpath(str(root)) + os.sep)
+               for root in (paths.mango / 'arctic', paths.share, paths.arctic, paths.etc))
 
 
 def parse_sheet(text):
@@ -889,9 +945,102 @@ def cmd_binds(paths, _args):
         if sheet:
             break
     model = load_settings(paths)
-    mine = [dict(index=i, label=combo_label(parse_mods(b['mods']), b['key']), command=b['command'],
-                 mods=b['mods'], key=b['key']) for i, b in enumerate(model.binds)]
-    return dict(ok=True, sheet=parse_sheet(sheet or ''), all=chain_binds(paths), mine=mine)
+    binds = chain_binds(paths)
+    mine = []
+    for i, b in enumerate(model.binds):
+        mods = parse_mods(b['mods'])
+        entry = dict(index=i, label=combo_label(mods, b['key']), command=b['command'], mods=b['mods'], key=b['key'])
+        shadow = next((c['shadowedBy'] for c in binds if c['mine'] and 'shadowedBy' in c
+                       and combo_id(c['mods'], c['key']) == combo_id(mods, b['key'])
+                       and c['args'] == b['command']), None)
+        if shadow:
+            entry['shadowedBy'] = shadow
+        mine.append(entry)
+    # Your binds (settings.conf, user.conf or a file you sourced) that never run, with the
+    # sheet's words for the bind that wins ("Browser" rather than "arctic-open browser").
+    sections = parse_sheet(sheet or '')
+    words = {row['keys']: row['what'] for section in sections for row in section['rows']}
+    for c in binds:
+        if 'shadowedBy' in c:
+            c['shadowedBy']['sheet'] = words.get(c['shadowedBy']['label'], '')
+    shadowed = [dict(label=c['label'], what=c['what'], file=os.path.basename(c['file']), shadowedBy=c['shadowedBy'])
+                for c in binds if 'shadowedBy' in c and not arctic_file(paths, c['file'])]
+    return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed)
+
+
+def cmd_notices(paths, _args):
+    """Things to say once, at login, about the shortcuts: where 0.3 moved the browser, your own
+    shortcuts that an Arctic key now shadows, and copies of Arctic's binds files that don't get
+    new keys. Each notice is said once (~/.local/state/arctic/notices.json)."""
+    state = paths.state / 'arctic' / 'notices.json'
+    try:
+        shown = set(json.loads(read_text(state) or '{}').get('shown', []))
+    except (ValueError, AttributeError):
+        shown = set()
+    notices = []
+    if 'keys-0.3.0' not in shown:
+        notices.append(dict(id='keys-0.3.0', summary='Super + B opens your browser',
+                            body='It was Super + W before Arctic Linux 0.3. Super + Shift + S takes a screenshot, '
+                                 'and Super + / shows every shortcut.',
+                            action=['arctic-keys'], actionLabel='Show shortcuts'))
+    shadowed = cmd_binds(paths, [])['shadowed']
+    if shadowed:
+        ident = 'shadowed-' + '|'.join(sorted('{}:{}'.format(s['label'], s['what']) for s in shadowed))
+        if ident not in shown:
+            s = shadowed[0]
+            notices.append(dict(
+                id=ident, summary='A shortcut of yours doesn’t run' if len(shadowed) == 1
+                else '{} of your shortcuts don’t run'.format(len(shadowed)),
+                body='Arctic’s “{}” shortcut uses {}, so yours ({}) never runs. Pick another key for it.'.format(
+                    s['shadowedBy'].get('sheet') or s['shadowedBy']['what'], s['label'], s['what']),
+                action=['arctic-settings', 'shortcuts'], actionLabel='Open Shortcuts'))
+    for name in ('apps.conf', 'binds.conf'):
+        mine, arctic = paths.mango / 'arctic' / name, paths.share / 'mango' / name
+        ident = 'copied-{}-0.3.0'.format(name)
+        if ident in shown or mine.is_symlink() or not mine.is_file() or not arctic.is_file():
+            continue
+        if read_text(mine) != read_text(arctic):
+            notices.append(dict(
+                id=ident, summary='Your copy of {} doesn’t have the new shortcuts'.format(name),
+                body='You replaced Arctic’s {} with your own copy, so the keys Arctic Linux 0.3 added '
+                     '(Super + B browser, Super + Shift + S screenshot, Alt + Tab) aren’t in it.'.format(name),
+                action=['gio', 'open', str(arctic)], actionLabel='Show the new file'))
+    if notices:
+        state.parent.mkdir(parents=True, exist_ok=True)
+        # The shadowed set is remembered as it is now, so a later change is said again.
+        kept = {i for i in shown if not i.startswith('shadowed-')} | {n['id'] for n in notices}
+        if not any(n['id'].startswith('shadowed-') for n in notices):
+            kept |= {i for i in shown if i.startswith('shadowed-')}
+        atomic_write(state, json.dumps(dict(shown=sorted(kept))) + '\n')
+    return dict(ok=True, notices=notices)
+
+
+def clipboard_history_on(paths):
+    return (read_text(paths.arctic / 'clipboard.conf') or '').split().count('history=off') == 0
+
+
+def cmd_clipboard(paths, _args):
+    entries = 0
+    if which('cliphist', paths.env):
+        code, out, _err = run(['cliphist', 'list'], env=paths.env)
+        entries = len(out.splitlines()) if code == 0 else 0
+    return dict(ok=True, history=clipboard_history_on(paths), entries=entries,
+                available=bool(which('cliphist', paths.env)))
+
+
+def cmd_clipboard_set(paths, args):
+    if len(args) != 2 or args[0] != 'history' or args[1] not in ('on', 'off'):
+        raise Failure('usage: clipboard-set history on|off')
+    atomic_write(paths.arctic / 'clipboard.conf',
+                 '# Clipboard history (Super + V), set in Settings > Keyboard and mouse.\nhistory={}\n'.format(args[1]))
+    run(['arctic-session', 'clipboard', '--restart'], env=paths.env)
+    return cmd_clipboard(paths, [])
+
+
+def cmd_clipboard_clear(paths, _args):
+    if not which('cliphist', paths.env) or run(['cliphist', 'wipe'], env=paths.env)[0] != 0:
+        raise Failure('Clipboard history couldn’t be cleared.')
+    return cmd_clipboard(paths, [])
 
 
 def validate_command(command, what='command'):
@@ -918,20 +1067,28 @@ def cmd_bind_add(paths, args):
         key = key.lower()
     if not (mods - {'SHIFT'}) and not FREE_KEYS.match(key):
         raise Failure('Add Super, Ctrl or Alt, so the shortcut doesn’t take over a key you type with.')
+    layouts, options = chain_keyboard(paths)
+    switch = next((o for o in options if o.startswith('grp:')), 'grp:alt_shift_toggle')
+    if len(layouts) > 1 and switch_clash(switch, mods, key):
+        chord = ' + '.join(MOD_NAMES[m] for m in ['SUPER', 'CTRL', 'ALT', 'SHIFT'] if m in SWITCH_CHORDS[switch][0])
+        if SWITCH_CHORDS[switch][1]:
+            chord = ' + '.join(filter(None, [chord, key_label(SWITCH_CHORDS[switch][1])]))
+        raise Failure('{} switches your keyboard layout, so this shortcut would switch it too. Pick another key, '
+                      'or change “Switch layouts with” on the Keyboard and mouse page.'.format(chord))
     command = validate_command(args[2])
     # Mango joins spawn arguments split at commas again, but stops at an empty part or a "0".
     parts = command.split(',')
     if len(parts) > 5 or any(p == '' or p == '0' for p in parts[1:]):
         raise Failure('Mango can’t pass that many commas on. Put the command in a script instead.')
-    combo = (frozenset(mods), key.lower())
+    combo = combo_id(mods, key)
     for bind in chain_binds(paths):
-        if bind['keymode'] not in ('default', 'common'):
+        if bind['keymode'] not in ('default', 'common') or 'r' in bind['flags']:
             continue
-        if (frozenset(bind['mods']), bind['key'].lower()) == combo:
+        if combo_id(bind['mods'], bind['key']) == combo:
             raise Failure('{} already does something: {}. Pick another key.'.format(bind['label'], bind['what']))
     model = load_settings(paths)
     for bind in model.binds:
-        if (frozenset(parse_mods(bind['mods'])), bind['key'].lower()) == combo:
+        if combo_id(parse_mods(bind['mods']), bind['key']) == combo:
             raise Failure('You already have a shortcut on {}.'.format(combo_label(mods, key)))
     model.binds.append(dict(mods=mods_text(mods), key=key, command=command))
     result = save_settings(paths, model)
@@ -1790,7 +1947,7 @@ IMAGES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'im
 ROLES = [
     dict(id='browser', label='Web browser', open='browser', icon='globe', categories=['WebBrowser'],
          mimes=['x-scheme-handler/http', 'x-scheme-handler/https', 'text/html', 'application/xhtml+xml'],
-         keys='Super + W'),
+         keys='Super + B'),
     dict(id='terminal', label='Terminal', open='terminal', icon='terminal', categories=['TerminalEmulator'],
          mimes=[], keys='Super + Enter'),
     dict(id='files', label='Files', open='files', icon='folder', categories=['FileManager'],
@@ -2053,6 +2210,36 @@ def cmd_idle_set(paths, args):
 SWITCH_KEYS = ['grp:alt_shift_toggle', 'grp:ctrl_shift_toggle', 'grp:caps_toggle', 'grp:alt_space_toggle',
                'grp:shifts_toggle', 'grp:toggle', 'grp:lalt_lshift_toggle', 'grp:alt_caps_toggle']
 CAPS_OPTIONS = ['caps:escape', 'ctrl:nocaps', 'caps:backspace', 'caps:super', 'caps:none', 'caps:swapescape']
+# The Compose key: press it, then two keys (' then e types é).
+COMPOSE_OPTIONS = ['compose:ralt', 'compose:menu', 'compose:rctrl', 'compose:caps', 'compose:sclk']
+COMPOSE_LABELS = {'compose:ralt': 'Right Alt', 'compose:menu': 'Menu', 'compose:rctrl': 'Right Ctrl',
+                  'compose:caps': 'Caps Lock', 'compose:sclk': 'Scroll Lock'}
+# The keys a layout-switch option takes over: (modifiers the chord holds, the key or None).
+# Any shortcut holding them switches the layout too (Alt + Shift + Tab under Alt + Shift).
+SWITCH_CHORDS = {
+    'grp:alt_shift_toggle': ({'ALT', 'SHIFT'}, None), 'grp:lalt_lshift_toggle': ({'ALT', 'SHIFT'}, None),
+    'grp:ctrl_shift_toggle': ({'CTRL', 'SHIFT'}, None), 'grp:alt_space_toggle': ({'ALT'}, 'space'),
+    'grp:caps_toggle': (set(), 'caps_lock'), 'grp:alt_caps_toggle': ({'ALT'}, 'caps_lock'),
+}
+
+
+def switch_clash(option, mods, key):
+    chord = SWITCH_CHORDS.get(option)
+    if not chord:
+        return False
+    need, chord_key = chord
+    return need <= set(mods) and (chord_key is None or key.lower() == chord_key)
+
+
+def chain_keyboard(paths):
+    """(layouts, options) as Mango reads them: the last xkb_rules_* in the chain."""
+    values = {}
+    for key, value, _origin in read_chain(paths):
+        if key in ('xkb_rules_layout', 'xkb_rules_options'):
+            values[key] = value
+    layouts = [l for l in values.get('xkb_rules_layout', 'us').split(',') if l.strip()]
+    options = [o for o in values.get('xkb_rules_options', '').split(',') if o.strip()]
+    return layouts, options
 
 
 def parse_evdev_lst(text):
@@ -2087,8 +2274,18 @@ def cmd_keyboard_data(paths, _args):
         layouts = [dict(id='us', label='English (US)')]
     switch = [dict(id=o, label=options.get(o, o)) for o in SWITCH_KEYS if o in options or not options]
     caps = [dict(id=o, label=options.get(o, {'caps:none': 'Caps Lock is disabled'}.get(o, o))) for o in CAPS_OPTIONS]
+    compose = [dict(id=o, label=COMPOSE_LABELS[o]) for o in COMPOSE_OPTIONS if o in options or not options]
+    # The shortcuts each switch option would also fire (Settings says so under the choice).
+    clashes = {o: [] for o in SWITCH_CHORDS}
+    for bind in chain_binds(paths):
+        if bind['keymode'] not in ('default', 'common') or 'shadowedBy' in bind:
+            continue
+        for option in clashes:
+            if switch_clash(option, bind['mods'], bind['key']):
+                clashes[option].append('{} ({})'.format(bind['label'], bind['what']))
     return dict(ok=True, layouts=sorted(layouts, key=lambda l: l['label'].lower()), variants=variants,
-                switchKeys=switch, capsOptions=caps)
+                switchKeys=switch, capsOptions=caps, composeKeys=compose,
+                switchClashes={o: v for o, v in clashes.items() if v})
 
 
 def cmd_cursor_themes(paths, _args):
@@ -2531,6 +2728,137 @@ def cmd_bluetooth_pair(_paths, _args):
                          stderr=subprocess.DEVNULL, start_new_session=True)
         return dict(ok=True, opened='blueman')
     raise Failure('The Arctic shell isn’t running, and the Bluetooth manager isn’t installed.')
+# ---- notifications --------------------------------------------------------------------------------
+# The shell's notification server (shell/NotificationService.qml) reads
+# ~/.config/arctic/notifications.json (written here) and keeps its own state in
+# ~/.local/state/arctic/notifications/ (apps.json: the apps seen, for the rules list).
+# Do not disturb goes through arctic-dnd, which talks to the shell or to mako.
+
+NOTIFY_RULE_KEYS = ('toasts', 'history', 'allow_during_dnd', 'silence_urgent')
+NOTIFY_RULE_DEFAULTS = dict(toasts=True, history=True, allow_during_dnd=False, silence_urgent=False)
+HHMM = re.compile(r'^([01]?\d|2[0-3]):[0-5]\d$')
+
+
+def notifications_file(paths):
+    return paths.arctic / 'notifications.json'
+
+
+def notifications_state(paths):
+    return paths.state / 'arctic' / 'notifications'
+
+
+def read_notification_config(paths):
+    data = _loads(read_text(notifications_file(paths)) or '')
+    data = data if isinstance(data, dict) else {}
+    schedule = data.get('dnd_schedule') if isinstance(data.get('dnd_schedule'), dict) else {}
+    start, end = str(schedule.get('from', '')), str(schedule.get('to', ''))
+    rules = data.get('apps') if isinstance(data.get('apps'), dict) else {}
+    apps = {}
+    for key, rule in rules.items():
+        if isinstance(rule, dict):
+            apps[str(key)] = {k: rule[k] for k in NOTIFY_RULE_KEYS if isinstance(rule.get(k), bool)}
+    return {'history': data.get('history') is not False,
+            'dnd_schedule': {'enabled': schedule.get('enabled') is True,
+                             'from': start if HHMM.match(start) else '22:00', 'to': end if HHMM.match(end) else '07:00'},
+            'apps': apps}
+
+
+def write_notification_config(paths, config):
+    atomic_write(notifications_file(paths), json.dumps(config, indent=1, sort_keys=True) + '\n')
+    if which('arctic-shell-ipc'):       # the shell re-reads it (its watch needs the file to exist)
+        run(['arctic-shell-ipc', 'notifications', 'reload'], timeout=5)
+
+
+def cmd_notifications(paths, _args):
+    config = read_notification_config(paths)
+    seen = _loads(read_text(notifications_state(paths) / 'apps.json') or '')
+    seen = seen.get('apps') if isinstance(seen, dict) and isinstance(seen.get('apps'), list) else []
+    apps, keys = [], set()
+    for app in seen:
+        if isinstance(app, dict) and isinstance(app.get('key'), str) and app['key'] and app['key'] not in keys:
+            keys.add(app['key'])
+            apps.append(dict(key=app['key'], name=str(app.get('app_name') or app['key']),
+                             desktopEntry=str(app.get('desktop_entry') or ''), lastSeen=app.get('last_seen') or 0))
+    for key in sorted(set(config['apps']) - keys):     # rules for apps not seen lately
+        apps.append(dict(key=key, name=key, desktopEntry='', lastSeen=0))
+    for app in apps:
+        app['rule'] = dict(NOTIFY_RULE_DEFAULTS, **config['apps'].get(app['key'], {}))
+    # The shell answers on / off when it owns notifications, "unowned" when mako (or another
+    # daemon) has them; arctic-dnd answers either way.
+    code, out, _err = run(['arctic-shell-ipc', 'notifications', 'dnd', 'status'], timeout=5) if which('arctic-shell-ipc') else (1, '', '')
+    owned = code == 0 and out.strip() in ('on', 'off')
+    dnd = out.strip() == 'on' if owned else False
+    if not owned and which('arctic-dnd'):
+        code, out, _err = run(['arctic-dnd', 'status'], timeout=5)
+        status = _loads(out) or {}
+        dnd = isinstance(status, dict) and status.get('class') == 'dnd'
+    return dict(ok=True, owned=owned, dnd=dnd, history=config['history'], schedule=config['dnd_schedule'], apps=apps)
+
+
+def cmd_notification_set(paths, args):
+    """notification-set history on|off · schedule on|off · schedule-from HH:MM · schedule-to HH:MM"""
+    if len(args) != 2:
+        raise Failure('usage: notification-set history|schedule on|off, or schedule-from|schedule-to HH:MM')
+    key, value = args
+    config = read_notification_config(paths)
+    if key in ('history', 'schedule') and value in ('on', 'off'):
+        if key == 'history':
+            config['history'] = value == 'on'
+        else:
+            config['dnd_schedule']['enabled'] = value == 'on'
+    elif key in ('schedule-from', 'schedule-to') and HHMM.match(value):
+        config['dnd_schedule'][key.split('-')[1]] = '{:0>5}'.format(value)
+    else:
+        raise Failure('That isn’t a notification setting Settings knows.')
+    write_notification_config(paths, config)
+    return cmd_notifications(paths, [])
+
+
+def cmd_notification_rule_set(paths, args):
+    """notification-rule-set APP KEY on|off [KEY on|off…]; KEY: toasts, history,
+    allow_during_dnd, silence_urgent. Rules that match the defaults are dropped."""
+    if len(args) < 3 or len(args) % 2 == 0:
+        raise Failure('usage: notification-rule-set APP KEY on|off…')
+    app, pairs = args[0], args[1:]
+    if not app or len(app) > 200 or any(ord(ch) < 32 for ch in app):
+        raise Failure('That app name can’t be used.')
+    config = read_notification_config(paths)
+    rule = dict(NOTIFY_RULE_DEFAULTS, **config['apps'].get(app, {}))
+    for key, value in zip(pairs[::2], pairs[1::2]):
+        if key not in NOTIFY_RULE_KEYS or value not in ('on', 'off'):
+            raise Failure('usage: notification-rule-set APP toasts|history|allow_during_dnd|silence_urgent on|off')
+        rule[key] = value == 'on'
+    changed = {k: v for k, v in rule.items() if v != NOTIFY_RULE_DEFAULTS[k]}
+    if changed:
+        config['apps'][app] = changed
+    else:
+        config['apps'].pop(app, None)
+    write_notification_config(paths, config)
+    return cmd_notifications(paths, [])
+
+
+def cmd_notification_history_clear(paths, _args):
+    """Clear the notification centre: through the shell when it runs, else the saved history."""
+    code = run(['arctic-shell-ipc', 'notifications', 'clearHistory'], timeout=5)[0] if which('arctic-shell-ipc') else 1
+    if code != 0:
+        try:
+            (notifications_state(paths) / 'history.json').unlink()
+        except FileNotFoundError:
+            pass
+    return cmd_notifications(paths, [])
+
+
+def cmd_dnd_set(paths, args):
+    """dnd-set on|off|1h|tomorrow — do not disturb now (arctic-dnd)."""
+    commands = {'on': ['on'], 'off': ['off'], '1h': ['for', '1h'], 'tomorrow': ['until-tomorrow']}
+    if len(args) != 1 or args[0] not in commands:
+        raise Failure('usage: dnd-set on|off|1h|tomorrow')
+    if not which('arctic-dnd'):
+        raise Failure('arctic-dnd isn’t installed.')
+    code, out, err = run(['arctic-dnd'] + commands[args[0]], timeout=10)
+    if code != 0:
+        raise Failure((err or out).strip() or 'Do not disturb couldn’t be changed.')
+    return cmd_notifications(paths, [])
 
 
 # ---- about --------------------------------------------------------------------------------------
@@ -2631,7 +2959,7 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
          'arcticUpdate': 'arctic-update', 'arcticMotion': 'arctic-motion', 'arcticWallpaper': 'arctic-wallpaper',
          'gsettings': 'gsettings', 'swayidle': 'swayidle', 'gtkLaunch': 'gtk-launch', 'xdgOpen': 'xdg-open',
          'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl',
-         'shellIpc': 'arctic-shell-ipc'}
+         'shellIpc': 'arctic-shell-ipc', 'arcticDnd': 'arctic-dnd'}
 
 
 def cmd_caps(paths, _args):
@@ -2656,6 +2984,8 @@ def cmd_set_cursor(paths, args):
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
+    'notices': cmd_notices, 'clipboard': cmd_clipboard, 'clipboard-set': cmd_clipboard_set,
+    'clipboard-clear': cmd_clipboard_clear,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
     'displays': cmd_displays, 'display-arrange': cmd_display_arrange, 'display-try': cmd_display_try,
     'display-keep': cmd_display_keep,
@@ -2671,6 +3001,9 @@ COMMANDS = {
     'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,
     'network-saved': cmd_network_saved, 'network-forget': cmd_network_forget, 'vpn': cmd_vpn,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
+    'notifications': cmd_notifications, 'notification-set': cmd_notification_set,
+    'notification-rule-set': cmd_notification_rule_set, 'notification-history-clear': cmd_notification_history_clear,
+    'dnd-set': cmd_dnd_set,
 }
 
 
@@ -2678,7 +3011,7 @@ COMMANDS = {
 # one at a time (settings_lock). display-revert takes the lock itself, after its wait.
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
-           'ensure-source', 'shell-set'}
+           'ensure-source', 'shell-set', 'notification-set', 'notification-rule-set'}
 
 
 def main(argv=None):

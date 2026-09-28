@@ -27,6 +27,10 @@ Scope {
     // confirmed every screen is covered — only then is the session really locked.
     readonly property bool locked: lock.locked
     readonly property bool secure: lock.secure
+    // Set by lock() and the unlock: in Fedora's Quickshell snapshot lock.locked doesn't announce
+    // its changes (bindings on it keep the old value), so the Caps Lock check and
+    // NotificationService's count (toasts hide, the "N notifications" line) follow this.
+    property bool showing: false
 
     function lock() {
         if (Session.live) {
@@ -41,7 +45,11 @@ Scope {
         powerOpen = false;
         reveal = false;
         wallpaperView.reload();
+        // The password is typed in the first layout (the installer's), whatever was active.
+        if (KeyboardService.multiple && KeyboardService.index !== 0) KeyboardService.set(0, true);
         lock.locked = true;
+        root.showing = true;
+        NotificationService.locked = true;
     }
     function submit() {
         if (state === 'checking' || state === 'success') return;
@@ -79,7 +87,17 @@ Scope {
         }
     }
     // Let the green "accepted" ring show for a moment before the screen unlocks.
-    Timer { id: unlockTimer; interval: 180; onTriggered: { lock.locked = false; root.password = ''; root.state = 'idle'; } }
+    Timer {
+        id: unlockTimer
+        interval: 180
+        onTriggered: {
+            lock.locked = false;
+            root.showing = false;
+            NotificationService.locked = false;
+            root.password = '';
+            root.state = 'idle';
+        }
+    }
 
     // arctic-wallpaper records the picture it drew; fall back to the theme's lock wallpaper.
     FileView {
@@ -92,6 +110,22 @@ Scope {
     readonly property string fallbackWallpaper: '/usr/share/backgrounds/arctic/' + Theme.tokens.lockWallpaper + '.svg'
 
     SystemClock { id: clock; precision: SystemClock.Minutes; enabled: lock.locked }
+
+    // Caps Lock, from the keyboard LEDs (sysfs has no change events, so it is read twice a
+    // second, only while locked).
+    property bool capsLock: false
+    Timer {
+        interval: 500
+        repeat: true
+        running: root.showing
+        onRunningChanged: if (!running) root.capsLock = false
+        onTriggered: if (!capsQuery.running) capsQuery.running = true
+    }
+    Process {
+        id: capsQuery
+        command: ['sh', '-c', 'cat /sys/class/leds/*::capslock/brightness 2>/dev/null']
+        stdout: StdioCollector { onStreamFinished: root.capsLock = /^[1-9]/m.test(text) }
+    }
 
     WlSessionLock {
         id: lock
@@ -141,6 +175,17 @@ Scope {
                     font.family: Theme.fontSans
                     font.pixelSize: 17
                     font.weight: Font.Medium
+                }
+                // How many arrived while locked: the count only, never what they say.
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: Theme.space2
+                    visible: NotificationService.lockedCount > 0
+                    text: NotificationService.lockedCount + (NotificationService.lockedCount === 1 ? ' notification' : ' notifications')
+                    color: Theme.inkMuted
+                    font.family: Theme.fontSans
+                    font.pixelSize: 13
+                    font.features: { 'tnum': 1 }
                 }
             }
 
@@ -197,7 +242,7 @@ Scope {
                         echoMode: root.reveal ? TextInput.Normal : TextInput.Password
                         passwordCharacter: '•'
                         placeholderText: 'Password'
-                        rightPadding: Theme.space3 + 18 + Theme.space2
+                        rightPadding: Theme.space3 + 18 + Theme.space2 + (layoutChip.visible ? layoutChip.width + Theme.space2 : 0)
                         inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
                         enabled: root.state !== 'checking' && root.state !== 'success'
                         error: root.state === 'error'
@@ -212,6 +257,37 @@ Scope {
                         Connections {
                             target: lock
                             function onLockedChanged() { if (lock.locked) field.forceActiveFocus(); }
+                        }
+                        // The keyboard layout the password is typed in (with more than one): a
+                        // click switches to the next.
+                        Rectangle {
+                            id: layoutChip
+                            visible: KeyboardService.multiple
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.space3 + 18 + Theme.space2
+                            anchors.verticalCenter: parent.verticalCenter
+                            implicitWidth: layoutText.implicitWidth + 2 * Theme.space2
+                            implicitHeight: 22
+                            radius: Theme.radiusSm
+                            color: Theme.surfaceSunken
+                            border.width: 1
+                            border.color: Theme.line
+                            Accessible.role: Accessible.Button
+                            Accessible.name: 'Keyboard layout: ' + KeyboardService.name
+                            Text {
+                                id: layoutText
+                                anchors.centerIn: parent
+                                text: KeyboardService.shortName
+                                color: Theme.inkMuted
+                                font.family: Theme.fontSans
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { KeyboardService.next(); field.forceActiveFocus(); }
+                            }
                         }
                         // Show / hide the password (design Input: eye at the end of password fields).
                         Icon {
@@ -235,8 +311,9 @@ Scope {
                     Layout.maximumWidth: 340
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
-                    text: root.message || (root.state === 'checking' ? 'Checking…' : root.state === 'success' ? 'Unlocked' : 'Locked')
-                    color: root.state === 'error' ? Theme.error : root.state === 'success' ? Theme.success : Theme.inkMuted
+                    readonly property bool caps: root.capsLock && !root.message && root.state === 'idle'
+                    text: root.message || (root.state === 'checking' ? 'Checking…' : root.state === 'success' ? 'Unlocked' : caps ? 'Caps Lock is on' : 'Locked')
+                    color: root.state === 'error' ? Theme.error : root.state === 'success' ? Theme.success : caps ? Theme.warning : Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 12
                     font.weight: Font.Medium

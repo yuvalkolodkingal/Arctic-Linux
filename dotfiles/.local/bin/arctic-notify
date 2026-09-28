@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# arctic-notify — the notification keys (Super+Delete, Super+Shift+Delete, Super+Alt+N,
+# Super+Alt+comma) and a way to look at what arrived.
+#
+#   arctic-notify dismiss        hide the newest pop-up (it stays in the notification centre)
+#   arctic-notify dismiss-all    hide every pop-up
+#   arctic-notify center         open or close the notification centre
+#   arctic-notify invoke         run the newest notification's default action
+#   arctic-notify history        what the centre holds, one JSON object per line, newest first
+#   arctic-notify count          how many notifications the centre holds
+#
+# The Arctic shell does it when it runs and owns notifications (arctic-shell-ipc); otherwise
+# mako (the waybar session): makoctl dismiss / dismiss --all / invoke / history, and `center`
+# brings back the last dismissed one (makoctl restore).
+set -uo pipefail
+
+usage() { sed -n '4,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+# The shell answers only when it owns the notification name (mako may own it instead).
+shell_owns() {
+  local answer
+  answer="$(arctic-shell-ipc notifications dnd status 2>/dev/null)" || return 1
+  [[ "$answer" == on || "$answer" == off ]]
+}
+ipc() { arctic-shell-ipc notifications "$@"; }
+
+case "${1:-}" in
+  dismiss|dismiss-all|center|centre|invoke|history|count) ;;
+  *) usage ;;
+esac
+
+if shell_owns; then
+  case "$1" in
+    dismiss)       ipc dismiss ;;
+    dismiss-all)   ipc dismissAll ;;
+    center|centre) ipc center ;;
+    invoke)        ipc invoke ;;
+    history)       ipc history ;;
+    count)         ipc count ;;
+  esac
+  exit $?
+fi
+
+command -v makoctl >/dev/null 2>&1 || { echo "arctic-notify: no notification service is running" >&2; exit 1; }
+case "$1" in
+  dismiss)       makoctl dismiss ;;
+  dismiss-all)   makoctl dismiss --all ;;
+  center|centre) makoctl restore ;;
+  invoke)        makoctl invoke ;;
+  history)       makoctl history ;;
+  count)         makoctl list 2>/dev/null | grep -c '^Notification ' ;;
+esac

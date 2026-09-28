@@ -39,6 +39,7 @@ PACKAGES=(
   grim slurp wl-clipboard cliphist brightnessctl playerctl wireplumber pavucontrol
   lxqt-policykit network-manager-applet NetworkManager-tui blueman libnotify xdg-user-dirs
   librsvg2-tools jetbrains-mono-fonts-all google-noto-sans-fonts
+  wtype swappy wf-recorder tesseract python3-zxing-cpp unicode-emoji google-noto-color-emoji-fonts
 )
 
 if (( DEPS )); then

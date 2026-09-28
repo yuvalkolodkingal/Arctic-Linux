@@ -50,7 +50,7 @@ jobs:
         run: |
           files=()
           for f in dotfiles/.local/bin/* tools/*.sh tools/lib/*.sh live/* iso/kiwi/config.sh \
-                   packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh \
+                   packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh packaging/desktop/arctic-share-picker \
                    packaging/updates/*.sh packaging/theme-hooks.d/* dotfiles/.bashrc.d/*.sh settings/dev/*.sh; do
             [ -f "$f" ] || continue
             case "$(head -n1 "$f")" in
@@ -126,6 +126,19 @@ jobs:
         # Downloads, schedules, installs (dnf5 offline _execute) and fails updates with a local
         # repository, and pins the dnf5 behaviour and messages arctic-update relies on.
         run: packaging/updates/test-dnf5-offline.sh
+
+  dnf5-remove:
+    name: dnf5 remove previews (Remove apps, real dnf5)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: dnf -y install git dnf5-plugins rpm-build createrepo_c python3 util-linux
+      - uses: actions/checkout@v4
+      - name: shell/tests/test-dnf5-remove.sh
+        # Previews removals as a normal user (dnf5 remove --store), pins the transaction reasons
+        # and repoquery fields shell/scripts/apps.py reads, and removes what the preview listed.
+        run: shell/tests/test-dnf5-remove.sh
 
   qml:
     name: qmllint

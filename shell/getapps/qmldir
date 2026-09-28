@@ -1,0 +1,15 @@
+GetApps 1.0 GetApps.qml
+ChooserPage 1.0 ChooserPage.qml
+SourcePage 1.0 SourcePage.qml
+AppRow 1.0 AppRow.qml
+DetailsSheet 1.0 DetailsSheet.qml
+JobCard 1.0 JobCard.qml
+RemovePage 1.0 RemovePage.qml
+RemoveSheet 1.0 RemoveSheet.qml
+ConsolePage 1.0 ConsolePage.qml
+Segmented 1.0 Segmented.qml
+Sheet 1.0 Sheet.qml
+PageHeader 1.0 PageHeader.qml
+Check 1.0 Check.qml
+WebAppPage 1.0 WebAppPage.qml
+TerminalAppPage 1.0 TerminalAppPage.qml

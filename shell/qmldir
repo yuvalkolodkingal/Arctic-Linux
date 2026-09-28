@@ -5,6 +5,10 @@ singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
 singleton UpdateService 1.0 UpdateService.qml
+singleton NotificationService 1.0 NotificationService.qml
+singleton KeyboardService 1.0 KeyboardService.qml
+singleton RecordService 1.0 RecordService.qml
+singleton AppsService 1.0 AppsService.qml
 singleton MenuState 1.0 MenuState.qml
 singleton Tools 1.0 Tools.qml
 singleton BluetoothService 1.0 BluetoothService.qml
@@ -27,19 +31,16 @@ BatteryPanel 1.0 BatteryPanel.qml
 BluetoothPairDialog 1.0 BluetoothPairDialog.qml
 BluetoothPanel 1.0 BluetoothPanel.qml
 CalendarPanel 1.0 CalendarPanel.qml
+ClipboardPanel 1.0 ClipboardPanel.qml
 DisplayPanel 1.0 DisplayPanel.qml
 DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
+EmojiPicker 1.0 EmojiPicker.qml
 FocusRing 1.0 FocusRing.qml
+FrozenScreens 1.0 FrozenScreens.qml
 HelperToggle 1.0 HelperToggle.qml
 Icon 1.0 Icon.qml
 InstallConsole 1.0 InstallConsole.qml
-Kbd 1.0 Kbd.qml
-KeysSheet 1.0 KeysSheet.qml
-Launcher 1.0 Launcher.qml
-LiveWelcome 1.0 LiveWelcome.qml
-LockScreen 1.0 LockScreen.qml
-Mark 1.0 Mark.qml
 MediaPanel 1.0 MediaPanel.qml
 MenuField 1.0 MenuField.qml
 MenuHeader 1.0 MenuHeader.qml
@@ -52,22 +53,38 @@ MenuSlider 1.0 MenuSlider.qml
 MenuSwitchRow 1.0 MenuSwitchRow.qml
 ModeIndicators 1.0 ModeIndicators.qml
 NetworkPanel 1.0 NetworkPanel.qml
-Osd 1.0 Osd.qml
-PolkitDialog 1.0 PolkitDialog.qml
-Popover 1.0 Popover.qml
-PopupSurface 1.0 PopupSurface.qml
-PowerMenu 1.0 PowerMenu.qml
 QuickSettingsPanel 1.0 QuickSettingsPanel.qml
 QuickTile 1.0 QuickTile.qml
-RoundedImage 1.0 RoundedImage.qml
-ScreenFrame 1.0 ScreenFrame.qml
 ShadowLayers 1.0 ShadowLayers.qml
 SignalIcon 1.0 SignalIcon.qml
 SoundPanel 1.0 SoundPanel.qml
 Spinner 1.0 Spinner.qml
-Tip 1.0 Tip.qml
 Toggle 1.0 Toggle.qml
 TrayPanel 1.0 TrayPanel.qml
+WebAppClient 1.0 WebAppClient.qml
+Kbd 1.0 Kbd.qml
+KeyboardItem 1.0 KeyboardItem.qml
+KeyboardPanel 1.0 KeyboardPanel.qml
+KeysSheet 1.0 KeysSheet.qml
+Launcher 1.0 Launcher.qml
+LiveWelcome 1.0 LiveWelcome.qml
+LockScreen 1.0 LockScreen.qml
+Mark 1.0 Mark.qml
+NotificationCard 1.0 NotificationCard.qml
+NotificationCenter 1.0 NotificationCenter.qml
+Osd 1.0 Osd.qml
+PolkitDialog 1.0 PolkitDialog.qml
+Popover 1.0 Popover.qml
+PopupSurface 1.0 PopupSurface.qml
+PowerKey 1.0 PowerKey.qml
+RecordDialog 1.0 RecordDialog.qml
+PowerMenu 1.0 PowerMenu.qml
+RoundedImage 1.0 RoundedImage.qml
+ScreenFrame 1.0 ScreenFrame.qml
+SharePicker 1.0 SharePicker.qml
+Tip 1.0 Tip.qml
+ToastCard 1.0 ToastCard.qml
+Toasts 1.0 Toasts.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml
 Wallpapers 1.0 Wallpapers.qml

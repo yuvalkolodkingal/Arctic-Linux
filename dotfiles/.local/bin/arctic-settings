@@ -3,9 +3,12 @@
 #
 #   arctic-settings [page]    open Settings, on a page if you name one: appearance, windows,
 #                             displays, input, shortcuts, apps, network, bluetooth, sound,
-#                             updates, power, startup, about. If it is open already, it shows
-#                             that page and comes to the front.
+#                             notifications, updates, power, startup, about. If it is open
+#                             already, it shows that page and comes to the front.
 #   arctic-settings --path    print the folder the app runs from
+#   arctic-settings --check-binds
+#                             at login (autostart.conf): say once where shortcuts moved, and which
+#                             of your own shortcuts an Arctic key now shadows (notifications)
 #
 # The app is the first folder found of $ARCTIC_SETTINGS_DIR, /usr/share/arctic/settings
 # (package arctic-settings) and the checkout this script lives in (<repo>/settings).
@@ -23,13 +26,33 @@ settings_dir() {
 }
 
 usage() {
-  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# Notices from the backend (`notices`), one notification each, with its button.
+check_binds() {
+  arctic-is-live 2>/dev/null && return 0
+  sleep 8     # the notification server starts with the session
+  local summary body label action
+  python3 "$1/scripts/arctic_settings.py" notices 2>/dev/null | python3 -c '
+import json, sys
+for n in json.load(sys.stdin).get("notices", []):
+    print("\t".join([n["summary"], n["body"], n["actionLabel"], " ".join(n["action"])]))' 2>/dev/null |
+  while IFS=$'\t' read -r summary body label action; do
+    (
+      [[ "$(notify-send -a "Arctic Linux" -i preferences-desktop-keyboard -A "go=$label" \
+        "$summary" "$body" 2>/dev/null)" == go ]] || exit 0
+      read -ra argv <<<"$action"
+      "${argv[@]}"
+    ) </dev/null >/dev/null 2>&1 &
+  done
 }
 
 page="${1:-}"
 case "$page" in
   -h|--help) usage; exit 0 ;;
   --path|"") ;;
+  --check-binds) ;;
   *) [[ "$page" =~ ^[a-z]+$ ]] || { usage >&2; exit 2; } ;;
 esac
 
@@ -38,6 +61,7 @@ dir="$(settings_dir)" || {
   exit 1
 }
 if [[ "$page" == --path ]]; then echo "$dir"; exit 0; fi
+if [[ "$page" == --check-binds ]]; then check_binds "$dir"; exit 0; fi
 if ! command -v quickshell >/dev/null 2>&1; then
   notify-send -a "Arctic Linux" -i dialog-warning "Settings can't start" \
     "Quickshell isn't installed." 2>/dev/null

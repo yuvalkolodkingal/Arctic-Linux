@@ -9,6 +9,7 @@ import Quickshell.Services.Polkit
 Scope {
     id: root
     readonly property var flow: agent.flow
+    readonly property bool active: agent.isActive   // asking now (Get apps shows "Waiting for your password")
     property string password: ''
     // Asking right now (a bar menu lets go of the keyboard meanwhile: shell.modalOpen).
     readonly property bool active: dialog.open

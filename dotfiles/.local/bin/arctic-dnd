@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# arctic-dnd — Do not disturb (Super+Shift+N, or click the bell on the bar).
-# Hides every notification except critical ones (mako mode "do-not-disturb").
+# arctic-dnd — Do not disturb (Super+Shift+N, right click on the bell, or the notification centre).
+# Silenced notifications still wait in the notification centre; urgent ones and Arctic's own
+# alerts still pop up (Settings → Notifications can silence an app's urgent ones too).
 #
-#   arctic-dnd toggle | on | off | status
-# `status` prints JSON for the waybar bell (class "dnd" switches it to the bell-off icon).
+#   arctic-dnd toggle | on | off | for 1h | until-tomorrow | status
+#
+# The Arctic shell's own notification server does it when it runs and owns notifications
+# (`arctic-shell-ipc notifications dnd …`); otherwise mako's "do-not-disturb" mode (the waybar
+# session), where the timed choices simply turn it on. `status` prints JSON for the waybar bell
+# (class "dnd" switches it to the bell-off icon).
 set -uo pipefail
 
 MODE=do-not-disturb
@@ -12,16 +17,40 @@ refresh_bar() {
   arctic-shell-ipc dnd refresh >/dev/null 2>&1 || true
   pkill -RTMIN+8 -x waybar 2>/dev/null || true
 }
+# The shell's answer (on / off), or nothing when it isn't running or doesn't own notifications.
+shell_dnd() {
+  local answer
+  answer="$(arctic-shell-ipc notifications dnd "$1" 2>/dev/null)" || return 1
+  [[ "$answer" == on || "$answer" == off ]] || return 1
+  printf '%s\n' "$answer"
+}
+status_json() {
+  if [[ "$1" == on ]]; then
+    printf '{"text":" ","tooltip":"Do not disturb is on · only urgent notifications show","class":"dnd"}\n'
+  else
+    printf '{"text":" ","tooltip":"Notifications","class":"on"}\n'
+  fi
+}
 
-case "${1:-status}" in
-  toggle) makoctl mode -t "$MODE" >/dev/null; refresh_bar ;;
-  on)     active || makoctl mode -a "$MODE" >/dev/null; refresh_bar ;;
-  off)    active && makoctl mode -r "$MODE" >/dev/null; refresh_bar ;;
+cmd="${1:-status}"
+case "$cmd" in
+  for) [[ "${2:-}" == 1h ]] || { echo "usage: arctic-dnd for 1h" >&2; exit 2; }; cmd=1h ;;
+  until-tomorrow) cmd=tomorrow ;;
+esac
+
+case "$cmd" in
+  toggle|on|off|1h|tomorrow)
+    if shell_dnd "$cmd" >/dev/null; then pkill -RTMIN+8 -x waybar 2>/dev/null || true; exit 0; fi
+    case "$cmd" in
+      toggle) makoctl mode -t "$MODE" >/dev/null ;;
+      off)    active && makoctl mode -r "$MODE" >/dev/null ;;
+      *)      active || makoctl mode -a "$MODE" >/dev/null ;;
+    esac
+    refresh_bar ;;
   status)
-    if active; then
-      printf '{"text":" ","tooltip":"Do not disturb is on · only urgent notifications show","class":"dnd"}\n'
-    else
-      printf '{"text":" ","tooltip":"Notifications","class":"on"}\n'
+    if state="$(shell_dnd status)"; then status_json "$state"
+    elif active; then status_json on
+    else status_json off
     fi ;;
-  *) echo "usage: arctic-dnd toggle|on|off|status" >&2; exit 2 ;;
+  *) echo "usage: arctic-dnd toggle|on|off|for 1h|until-tomorrow|status" >&2; exit 2 ;;
 esac

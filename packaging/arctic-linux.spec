@@ -174,7 +174,9 @@ Requires:       libnotify
 Requires:       procps-ng
 Requires:       util-linux
 Requires:       librsvg2-tools
-Requires:       mako
+# Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
+# waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
+Recommends:     mako
 Requires:       swaybg
 Requires:       swayidle
 Requires:       swaylock
@@ -218,6 +220,15 @@ Requires:       libdnf5-plugin-actions
 Requires:       snapper
 Requires:       btrfs-progs
 Requires:       findutils
+# Stream 4 (shortcuts and capture): gio and gdbus for the screenshot notification's buttons
+# (open, show in Files, move to the trash); swappy edits screenshots (satty isn't in Fedora;
+# swappy's weak deps bring its icon font); wf-recorder records the screen (arctic-record);
+# tesseract (its data package brings English) and zxing-cpp read text and QR codes (arctic-ocr).
+Requires:       glib2
+Recommends:     swappy
+Recommends:     wf-recorder
+Recommends:     tesseract
+Recommends:     python3-zxing-cpp
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
@@ -247,16 +258,26 @@ Requires:       qt6-qtwayland
 Requires:       python3
 Requires:       python3-pillow
 Requires:       python3-pyte
+# ---- stream 2 (Get apps): Fedora's app catalogue, for app names, summaries and icons on the
+# Fedora packages page (without it the page lists every package by name)
+Recommends:     appstream-data
+# ---- end stream 2
 # pkexec, for Get apps
 Requires:       polkit
+# Stream 3b (notifications): gdbus checks who owns org.freedesktop.Notifications.
+Requires:       glib2
 Requires:       arctic-fonts = %{version}-%{release}
+# Stream 4 (input): the emoji picker lists unicode-emoji's emoji in the colour emoji font and
+# types them with wtype (the clipboard panel's paste uses it too); without wtype they're copied.
+Requires:       unicode-emoji
+Requires:       google-noto-color-emoji-fonts
+Recommends:     wtype
 # Stream 3a (bar menus): the Bluetooth pairing agent and battery.py talk D-Bus with
-# python3-dbus and a GLib main loop; gdbus checks for the power-profiles service; audio.py
-# reads ports and profiles with pw-dump and pw-cli; ddcutil sets external monitors'
-# brightness. (The network menu hides itself without nmcli.)
+# python3-dbus and a GLib main loop; gdbus (glib2, above) checks for the power-profiles
+# service; audio.py reads ports and profiles with pw-dump and pw-cli; ddcutil sets external
+# monitors' brightness. (The network menu hides itself without nmcli.)
 Requires:       python3-dbus
 Requires:       python3-gobject-base
-Requires:       glib2
 Requires:       pipewire-utils
 Recommends:     ddcutil
 # Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
@@ -266,8 +287,10 @@ Recommends:     NetworkManager-openvpn
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar with its own menus (network
 and Wi-Fi, Bluetooth with a pairing agent, sound, battery and power mode, calendar, media,
-tray menus) and Quick Settings, launcher, wallpaper picker, the get-apps console, on-screen
-display, lock screen and the live-session welcome card.
+tray menus) and Quick Settings, launcher with Get apps (Flathub, Fedora packages, web apps,
+terminal apps, a console) and Remove apps, wallpaper picker, on-screen display, lock screen,
+the live-session welcome card, and the notification server with its pop-ups and notification
+centre.
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
 
 # ---------------------------------------------------------------------------------------------
@@ -438,7 +461,9 @@ Recommends:     zsh
 Recommends:     Thunar
 Recommends:     vlc
 Requires:       fastfetch
-Requires:       mako
+# Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
+# waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
+Recommends:     mako
 Requires:       swaybg
 Requires:       swayidle
 Requires:       swaylock
@@ -711,6 +736,9 @@ install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/fla
 # QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
 # an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
 install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
+# Stream 4 (capture): the screen-share picker xdg-desktop-portal-wlr runs in Mango sessions.
+install -Dpm 0644 packaging/desktop/xdg-desktop-portal-wlr.ini %{buildroot}%{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+install -Dpm 0755 packaging/desktop/arctic-share-picker %{buildroot}%{_libexecdir}/arctic/arctic-share-picker
 # arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own
 # subpackages; neofetch is listed below (%%ghost).
 (cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer|neofetch' \
@@ -740,7 +768,7 @@ exec quickshell -p /usr/share/arctic/shell ipc call "$@"
 EOF
 fi
 chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-shell-ipc
-# Get apps: pkexec dnf5 with the password kept for a few minutes.
+# Get apps: pkexec dnf5 (install and remove) with the password kept for a few minutes.
 install -Dpm 0644 packaging/polkit/org.arcticlinux.pkexec.dnf.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
 
@@ -836,6 +864,10 @@ diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Settings.desktop
 # Settings' backend: the file formats it reads and writes (uses `mango -p` when installed).
 python3 -m unittest discover -s settings/tests -p 'test_*.py'
+# ---- stream 2 (Get apps): apps.py's contracts, the job commands, and that
+# protected-packages.conf covers modules/_system/desktop-base.
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s shell/tests -p 'test_apps.py'
+# ---- end stream 2
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer %{buildroot}%{_bindir}/arctic-update \
          %{buildroot}%{_datadir}/arctic/theme-hooks.d/*; do
@@ -1134,6 +1166,10 @@ fi
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 %dir %{_sharedstatedir}/arctic
 %ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
+# Stream 4 (capture): the screen-share picker.
+%dir %{_sysconfdir}/xdg/xdg-desktop-portal-wlr
+%config(noreplace) %{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
+%{_libexecdir}/arctic/arctic-share-picker
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=kitty
+Comment=Test fixture for screenshots
+Exec=kitty
+Icon=kitty

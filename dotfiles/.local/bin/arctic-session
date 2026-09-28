@@ -3,16 +3,19 @@
 # Used by ~/.config/mango/arctic/autostart.conf. If the service is already running
 # (for example as a systemd user unit from arctic-desktop-config), nothing happens.
 #
-#   arctic-session shell | waybar | mako | polkit | nm-applet | clipboard | idle [--restart]
+#   arctic-session shell | waybar | mako [--fallback] | polkit | nm-applet | clipboard | idle [--restart]
 #
 # `shell` starts the Arctic shell (Quickshell: bar, launcher, OSD, lock screen, polkit agent).
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
 # ~/.config/mango/user.conf), or when Quickshell isn't installed, it starts the fallback desktop
 # instead: waybar for the bar and lxqt-policykit for passwords (fuzzel is the launcher).
+#
+# `mako` does nothing in the shell's session: the shell is the notification server there.
+# The shell runs `mako --fallback` itself when it couldn't take the name (like the polkit agent).
 # `nm-applet` starts only with the fallback desktop: the shell has its own network menu.
 set -uo pipefail
 
-shell_session() {   # the Arctic shell (not the waybar fallback) runs this session
+shell_session() {   # the Arctic shell runs this session (not the waybar fallback)
   [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]] && command -v quickshell >/dev/null 2>&1 \
     && arctic-shell --path >/dev/null 2>&1
 }
@@ -26,21 +29,25 @@ run_once() {   # run_once <process name> <command...>
 
 case "${1:-}" in
   shell)
-    if [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]] && command -v quickshell >/dev/null 2>&1 \
-       && arctic-shell --path >/dev/null 2>&1; then
+    if shell_session; then
       arctic-shell   # quickshell -n: exits at once if it already runs
     else
       run_once waybar waybar
       "$0" polkit
     fi ;;
   waybar)    run_once waybar waybar ;;
-  mako)      run_once mako mako ;;
+  mako)
+    if [[ "${2:-}" == --fallback ]] || ! shell_session; then run_once mako mako; fi ;;
   polkit)
     for agent in /usr/libexec/lxqt-policykit-agent /usr/libexec/polkit-mate-authentication-agent-1 /usr/libexec/xfce-polkit; do
       if [[ -x "$agent" ]]; then run_once "$(basename "$agent" | cut -c1-15)" "$agent"; break; fi
     done ;;
   nm-applet) shell_session || run_once nm-applet nm-applet --indicator ;;
   clipboard)
+    # Clipboard history (cliphist, Super + V). Settings (Keyboard and mouse) turns it off with
+    # history=off in ~/.config/arctic/clipboard.conf and applies that with `clipboard --restart`.
+    if [[ "${2:-}" == --restart ]]; then pkill -u "$UID" -f "wl-paste --watch cliphist" 2>/dev/null; fi
+    grep -qsx 'history=off' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/clipboard.conf" && exit 0
     pgrep -u "$UID" -f "wl-paste --watch cliphist" >/dev/null 2>&1 || \
       { command -v cliphist >/dev/null && setsid -f wl-paste --watch cliphist store >/dev/null 2>&1; } ;;
   idle)
@@ -68,5 +75,5 @@ case "${1:-}" in
     (( suspend_after > 0 )) && args+=(timeout "$suspend_after" 'systemctl suspend')
     args+=(before-sleep 'arctic-lock')
     run_once swayidle swayidle "${args[@]}" ;;
-  *) echo "usage: arctic-session shell|waybar|mako|polkit|nm-applet|clipboard|idle [--restart]" >&2; exit 2 ;;
+  *) echo "usage: arctic-session shell|waybar|mako [--fallback]|polkit|nm-applet|clipboard|idle [--restart]" >&2; exit 2 ;;
 esac
