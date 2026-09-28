@@ -21,13 +21,22 @@ const (
 const MOKKeyPath = "/etc/pki/akmods/certs/public_key.der"
 
 // SecureBootSteps are the steps of shim's MokManager ("Perform MOK management") for code.
-func SecureBootSteps(code string) *protocol.SecureBootInfo {
+// later says the driver is only installed at first boot (offline): the blue screen then
+// comes on the restart after that.
+func SecureBootSteps(code string, later bool) *protocol.SecureBootInfo {
+	title, intro, first := CopySecureBootTitle, CopySecureBootIntro,
+		"Restart. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds."
+	if later {
+		title = "One more step once your driver is installed"
+		intro = "Secure Boot is on, so this computer only starts drivers it trusts. Your driver is installed the first time Arctic Linux is online; keep this code for the restart after that:"
+		first = "Restart once the driver is installed. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds."
+	}
 	return &protocol.SecureBootInfo{
 		Code:  code,
-		Title: CopySecureBootTitle,
-		Intro: CopySecureBootIntro,
+		Title: title,
+		Intro: intro,
 		Steps: []string{
-			"Restart. A blue screen, “Perform MOK management”, appears — press any key within 10 seconds.",
+			first,
 			"Choose “Enroll MOK”, then “Continue”, then “Yes”.",
 			"Type the one-time code " + code + " with the number keys above the letters, then press Enter.",
 			"Choose “Reboot”. Your driver starts from now on.",

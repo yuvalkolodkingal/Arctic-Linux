@@ -761,14 +761,19 @@ func (e *Engine) DebugString() string {
 func (e *Engine) driverResults(job *backend.Job) ([]protocol.DriverResult, *protocol.SecureBootInfo) {
 	mok := job.Outcome.MOK == backend.MOKRequested
 	var out []protocol.DriverResult
+	now, later := false, false // an akmod driver built now / put off to first boot
 	for _, d := range job.Outcome.Drivers {
 		if m, ok := e.cat.Modules[d.ID]; ok {
 			out = append(out, wizard.DriverResult(m, d.Status, mok))
+			if m.AkmodName() != "" {
+				now = now || d.Status == protocol.DriverInstalled
+				later = later || d.Status == protocol.DriverDeferred
+			}
 		}
 	}
 	switch job.Outcome.MOK {
 	case backend.MOKRequested:
-		return out, wizard.SecureBootSteps(job.MOKCode)
+		return out, wizard.SecureBootSteps(job.MOKCode, later && !now)
 	case backend.MOKFailed:
 		return out, wizard.SecureBootFailed()
 	}
