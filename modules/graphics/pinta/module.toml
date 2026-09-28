@@ -1,0 +1,21 @@
+id = "pinta"
+name = "Pinta"
+summary = "Easy drawing and image editing."
+category = "graphics"
+role = "drawing app"
+default = false
+tile = "pinta"
+icon = "edit"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44 only has the old Pinta 1.7.
+method = "flatpak"
+remote = "flathub"
+ref = "com.github.PintaProject.Pinta"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 57

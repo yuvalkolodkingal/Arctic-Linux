@@ -11,6 +11,13 @@ requires = []
 conflicts = []
 
 [[install]]
+# Fedora 44: celluloid 0.30, the same release as Flathub; avoids the 432 MB GNOME 51 runtime.
+# The RPM ships the same io.github.celluloid_player.Celluloid.desktop.
+method = "dnf"
+packages = ["celluloid"]
+download_mb = 23
+
+[[install]]
 method = "flatpak"
 remote = "flathub"
 ref = "io.github.celluloid_player.Celluloid"

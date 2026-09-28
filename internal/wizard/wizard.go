@@ -23,6 +23,8 @@ type Env interface {
 	DetectTimezone() Detected
 	Now() time.Time
 	Firmware() string // uefi | bios
+	// Hardware is what driver detection found (the catalog is already marked with it).
+	Hardware() hw.Hardware
 	// SystemNames are the user and group names the copied system already has; the new
 	// account can't use them (useradd --user-group would fail).
 	SystemNames() map[string]bool
@@ -121,6 +123,9 @@ type Wizard struct {
 	autoHost   string
 
 	AppsInstalled int
+	// Set by the engine when the install finished (Done screen).
+	DriverResults []protocol.DriverResult
+	SecureBoot    *protocol.SecureBootInfo
 }
 
 // New starts a wizard with defaults: the suggested language (from the live session's LANG),
@@ -416,6 +421,9 @@ func (w *Wizard) Get(id string) (protocol.StepResult, *protocol.Error) {
 			"info_title": CopyNetworkWhyTitle, "info": CopyNetworkWhy,
 			"auto_skipped": w.netSkipped,
 		}
+		if h := w.driverHint(); h != "" {
+			res.Options.(map[string]any)["driver_hint"] = h
+		}
 	case StepTimezone:
 		d := w.env.DetectTimezone()
 		if !ValidTimezone(d.Timezone) {
@@ -488,7 +496,14 @@ func (w *Wizard) Get(id string) (protocol.StepResult, *protocol.Error) {
 			usb = CopyRemoveUSBNoLUKS
 		}
 		res.Data = DoneData{AppsInstalled: w.AppsInstalled, FirstName: first}
-		res.Options = map[string]any{"card_title": CopyRemoveUSBTitle, "card": usb, "secondary": "Keep trying"}
+		opts := map[string]any{"card_title": CopyRemoveUSBTitle, "card": usb, "secondary": "Keep trying"}
+		if len(w.DriverResults) > 0 {
+			opts["drivers"] = w.DriverResults
+		}
+		if w.SecureBoot != nil {
+			opts["secure_boot"] = w.SecureBoot
+		}
+		res.Options = opts
 	}
 	return res, nil
 }
@@ -874,24 +889,40 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 	}
 	var apps []string
 	cat := w.env.Catalog()
-	for _, m := range cat.Resolve(d.Apps.Selection) {
-		if !m.Hidden && d.Apps.Selection.Contains(m.ID) {
-			apps = append(apps, m.DisplayShort())
-		}
+	for _, m := range cat.Apps(d.Apps.Selection) {
+		apps = append(apps, m.DisplayShort())
+	}
+	rows := []protocol.SummaryRow{
+		{Step: StepWelcome, Icon: "language", Label: "Language", Value: lang.Name},
+		{Step: StepKeyboard, Icon: "keyboard", Label: "Keyboard", Value: keyboard},
+		{Step: StepTimezone, Icon: "clock", Label: "Time zone", Value: tz},
+		{Step: StepDisk, Icon: "disk", Label: "Disk", Value: diskValue},
+		{Step: StepEncryption, Icon: "shield-lock", Label: "Encryption", Value: enc},
+		{Step: StepAccount, Icon: "user", Label: "Account", Value: account},
+		{Step: StepApps, Icon: "grid", Label: "Apps", Value: appList(apps)},
+	}
+	if v, ok := w.driversSummary(); ok {
+		rows = append(rows, protocol.SummaryRow{Step: StepApps, Icon: "cpu", Label: "Drivers", Value: v})
 	}
 	return protocol.SummaryResult{
-		Rows: []protocol.SummaryRow{
-			{Step: StepWelcome, Icon: "language", Label: "Language", Value: lang.Name},
-			{Step: StepKeyboard, Icon: "keyboard", Label: "Keyboard", Value: keyboard},
-			{Step: StepTimezone, Icon: "clock", Label: "Time zone", Value: tz},
-			{Step: StepDisk, Icon: "disk", Label: "Disk", Value: diskValue},
-			{Step: StepEncryption, Icon: "shield-lock", Label: "Encryption", Value: enc},
-			{Step: StepAccount, Icon: "user", Label: "Account", Value: account},
-			{Step: StepApps, Icon: "grid", Label: "Apps", Value: strings.Join(apps, ", ")},
-		},
+		Rows:         rows,
 		Warning:      warning,
 		PrimaryLabel: primary,
 	}
+}
+
+// summaryApps is how many app names the Summary's Apps row lists before "and N more":
+// the Summary page doesn't scroll, and a long pick would push the erase warning under
+// the footer.
+const summaryApps = 12
+
+// appList is the Summary's Apps value: the names, or the first summaryApps of them and
+// how many more.
+func appList(names []string) string {
+	if len(names) <= summaryApps {
+		return strings.Join(names, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(names[:summaryApps], ", "), len(names)-summaryApps)
 }
 
 func capitalize(s string) string {

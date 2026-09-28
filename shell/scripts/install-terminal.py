@@ -6,16 +6,20 @@ The shell's InstallConsole talks to this process with one JSON object per line o
 terminal state back as one JSON object per line on stdout ({output, running, secret, notice}).
 
 What you can type:
-  neovim htop                      install packages with dnf (sudo dnf install neovim htop)
-  flathub:org.gimp.GIMP            install a Flathub app (flatpak install flathub org.gimp.GIMP)
-  dnf install|remove|upgrade …     run as sudo dnf …
+  neovim htop                      install packages with dnf (pkexec dnf5 install -y neovim htop)
+  flathub:org.gimp.GIMP            install a Flathub app (flatpak install -y flathub org.gimp.GIMP)
+  dnf install|remove|upgrade …     run as pkexec dnf5 … -y
   dnf search|info|list …           run as dnf … (no password needed)
-  flatpak install flathub …        and other flatpak commands, as typed
+  flatpak install|uninstall|update … and other flatpak commands, as typed (changes with -y)
 
-Passwords (sudo) and confirmations (dnf's [y/N]) are answered in the console. While a
-program reads a password the input line is masked (see Console.prompt_is_secret), and a
-response typed for a prompt that has since changed is refused rather than sent, so a password
-can't land in a visible prompt. Nothing typed is written to a file or log.
+Installs run unattended: dnf and flatpak get -y, so nothing waits for a [y/N]. Root rights
+come from polkit (pkexec), whose password dialog is the shell's own (PolkitDialog); the
+org.arcticlinux.pkexec.dnf action keeps the authorisation for a few minutes, so a second
+install doesn't ask again. Should a program still ask something (a typed `sudo` command, or
+pkexec without the graphical agent), it is answered in the console: while a program reads a
+password the input line is masked (see Console.prompt_is_secret), and a response typed for a
+prompt that has since changed is refused rather than sent, so a password can't land in a
+visible prompt. Nothing typed is written to a file or log.
 """
 import fcntl
 import json
@@ -25,6 +29,7 @@ import re
 import selectors
 import shlex
 import struct
+import subprocess
 import sys
 import termios
 
@@ -34,14 +39,25 @@ COLUMNS, ROWS = 88, 26
 DNF_READONLY = {'search', 'info', 'list', 'repoquery', 'provides', 'whatprovides', 'check-update',
                 'repolist', 'repoinfo', 'history', 'help', '--help', '-h', '--version', 'advisory',
                 'changelog', 'leaves', 'environment'}
+# dnf5 itself (/usr/bin/dnf is a link to it): the path the polkit action names.
+DNF = '/usr/bin/dnf5'
+PKEXEC_DNF = ['pkexec', DNF]
+DNF_YES = {'-y', '--assumeyes', '--assumeno'}
+FLATPAK_CHANGES = {'install', 'uninstall', 'remove', 'update', 'upgrade', 'repair', 'remote-add',
+                   'remote-delete', 'mask', 'pin'}
+FLATPAK_YES = {'-y', '--assumeyes', '--noninteractive'}
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+@:-]*$')
 FLATHUB_PREFIX = 'flathub:'
+# Theme hooks that set up a newly installed Flatpak app (30-zed: the Arctic theme and fonts in
+# the Zed Flatpak's own config folder). Otherwise that happens at the next login or theme switch.
+FLATPAK_THEME_HOOKS = ('30-zed',)
 # sudo's password prompt, set through the environment (the commands stay plain `sudo dnf …`),
 # so the console can tell it apart from other prompts on the same line.
 SUDO_PROMPT = '[sudo] password for %p: '
 SUDO_PROMPT_SHOWN = re.compile(r'\[sudo\] password for \S+:$')
 WELCOME = ('Get apps\r\n'
-           'Type an app name to install it, or a dnf or flatpak command.\r\n'
+           'Type an app name to install it, or a dnf or flatpak command. Installs run on their\r\n'
+           'own: you are asked for your password once, in a dialog.\r\n'
            'Examples: neovim  ·  dnf search editor  ·  flathub:org.gimp.GIMP\r\n\r\n')
 
 
@@ -62,11 +78,15 @@ def build_command(text):
             raise ValueError('Add what dnf should do, like: dnf install neovim')
         if verb in DNF_READONLY:
             return ['dnf', *rest]
-        return ['sudo', 'dnf', *rest]
+        return [*PKEXEC_DNF, *with_yes(rest, verb, DNF_YES, '-y')]
     if head in ('flatpak', '/usr/bin/flatpak'):
-        if len(args) < 2:
+        rest = args[1:]
+        verb = next((a for a in rest if not a.startswith('-')), None)
+        if verb is None:
             raise ValueError('Add what flatpak should do, like: flatpak install flathub org.gimp.GIMP')
-        return ['flatpak', *args[1:]]
+        if verb in FLATPAK_CHANGES:
+            rest = with_yes(rest, verb, FLATPAK_YES, '-y')
+        return ['flatpak', *rest]
     # Bare names: a quick install. Package names only, no options.
     for name in args:
         if not NAME.match(name):
@@ -76,8 +96,49 @@ def build_command(text):
     if apps and packages:
         raise ValueError('Install Flathub apps and dnf packages separately.')
     if apps:
-        return ['flatpak', 'install', 'flathub', *apps]
-    return ['sudo', 'dnf', 'install', *packages]
+        return ['flatpak', 'install', '-y', 'flathub', *apps]
+    return [*PKEXEC_DNF, 'install', '-y', *packages]
+
+
+def theme_hook(name):
+    """The theme hook `name` as arctic-theme would run it (a file of yours wins), or None."""
+    config = os.environ.get('XDG_CONFIG_HOME') or os.path.join(os.path.expanduser('~'), '.config')
+    for d in (os.path.join(config, 'arctic', 'theme-hooks.d'),
+              os.path.join(os.environ.get('ARCTIC_DATA_DIR') or '/usr/share/arctic', 'theme-hooks.d')):
+        path = os.path.join(d, name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
+
+
+def after_flatpak_install(command):
+    """Run the theme hooks for Flatpak apps after `flatpak install` succeeded (in the
+    background; their output is not shown)."""
+    if not command or os.path.basename(command[0]) != 'flatpak':
+        return []
+    verb = next((a for a in command[1:] if not a.startswith('-')), None)
+    if verb != 'install':
+        return []
+    started = []
+    for name in FLATPAK_THEME_HOOKS:
+        path = theme_hook(name)
+        if path is None:
+            continue
+        try:
+            subprocess.Popen([path], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            started.append(path)
+        except OSError:
+            pass
+    return started
+
+
+def with_yes(args, verb, answers, flag):
+    """args with `flag` right after the verb, unless an answer (-y, --assumeno …) is given."""
+    if any(a in answers for a in args):
+        return list(args)
+    i = args.index(verb) + 1
+    return [*args[:i], flag, *args[i:]]
 
 
 class Console:
@@ -86,6 +147,7 @@ class Console:
         self.stream = pyte.ByteStream(self.screen)
         self.master = None
         self.pid = None
+        self.command = None
         self.secret = False
         self.notice = ''
         self.dirty = True
@@ -148,7 +210,7 @@ class Console:
             except OSError as error:
                 os.write(1, ('{}: {}\r\n'.format(command[0], error.strerror)).encode())
                 os._exit(127)
-        self.pid, self.master = pid, fd
+        self.pid, self.master, self.command = pid, fd, command
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', ROWS, COLUMNS, 0, 0))
         os.set_blocking(fd, False)
         self.dirty = True
@@ -201,6 +263,9 @@ class Console:
             self.master = self.pid = None
             self.secret = False
             code = os.waitstatus_to_exitcode(status)
+            if code == 0:
+                after_flatpak_install(self.command)
+            self.command = None
             self.write_output('\r\n' + ('Done.' if code == 0 else '[Exit ' + str(code) + ']') + '\r\n\r\n')
 
 

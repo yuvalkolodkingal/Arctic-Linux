@@ -1,0 +1,21 @@
+id = "tor-browser"
+name = "Tor Browser"
+summary = "Browse anonymously over Tor."
+category = "security"
+role = "private browser"
+default = false
+tile = "tor-browser"
+icon = "eye-off"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Launcher; downloads and signature-checks Tor Browser (~110 MB) on first start.
+method = "flatpak"
+remote = "flathub"
+ref = "org.torproject.torbrowser-launcher"
+runtime = "org.kde.Platform//6.11"
+verified = true
+download_mb = 102

@@ -1,0 +1,25 @@
+id = "lutris"
+name = "Lutris"
+summary = "One library for games from everywhere."
+category = "gaming"
+role = "game launcher"
+default = false
+tile = "lutris"
+icon = "gamepad"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "net.lutris.Lutris"
+runtime = "org.gnome.Platform//49"
+verified = true
+download_mb = 334
+
+[[install]]
+method = "dnf"
+packages = ["lutris"]
+download_mb = 581

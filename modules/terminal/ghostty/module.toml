@@ -1,0 +1,23 @@
+id = "ghostty"
+name = "Ghostty"
+summary = "Fast, native terminal with sensible defaults."
+category = "terminal"
+default = false
+tile = "ghostty"
+icon = "terminal"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora or on Flathub. COPR scottames/ghostty (the one ghostty.org lists) builds 1.3.1 for Fedora 44 (checked 2026-09-27).
+method = "copr"
+packages = ["ghostty"]
+copr = "scottames/ghostty"
+download_mb = 42
+
+[defaults]
+desktop_id = "com.mitchellh.ghostty.desktop"
+role = "terminal"
+command = "ghostty"

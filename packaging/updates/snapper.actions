@@ -1,0 +1,22 @@
+# Arctic Linux: a snapper snapshot before and after every dnf transaction, so an update can be
+# undone (`snapper -c root list`, `snapper -c root undochange PRE..POST`, or btrfs-assistant).
+# Installed as /etc/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions by arctic-desktop-config.
+#
+# dnf5 has no snapper plugin (python3-dnf-plugin-snapper is dnf4's); this is the snapper example
+# from libdnf5-actions(8), adapted:
+#   - only when snapper's "root" configuration exists (the installer creates it at the end of
+#     an install), so the live session and the installer's own dnf runs make no snapshots and
+#     print nothing;
+#   - `snapper --no-dbus`: works without snapperd, in the offline-update boot (updates are
+#     installed before D-Bus starts) and in chroots;
+#   - the "number" cleanup algorithm, so snapper-cleanup.timer keeps only the newest pairs
+#     (NUMBER_LIMIT in /etc/snapper/configs/root);
+#   - the description (the dnf command line) is read from /proc inside the shell, never pasted
+#     into the command, so no quoting in it can break the line;
+#   - enabled=host-only: `dnf --installroot=…` into another directory doesn't snapshot this system.
+# The snapshot number goes from pre_transaction to post_transaction in tmp.arctic_snapper_pre
+# (empty: no pre snapshot, so no post snapshot either).
+#
+# Format: callback:package_filter:direction:options:command (a space inside an argument is "\ ").
+pre_transaction:::enabled=host-only:/usr/bin/sh -c [\ -e\ /etc/snapper/configs/root\ ]\ &&\ n=$(/usr/bin/snapper\ --no-dbus\ -c\ root\ create\ -t\ pre\ -p\ -c\ number\ -d\ "$(xargs\ -0\ </proc/${pid}/cmdline)"\ 2>/dev/null);\ echo\ "tmp.arctic_snapper_pre=$n"
+post_transaction:::enabled=host-only:/usr/bin/sh -c [\ -n\ "${tmp.arctic_snapper_pre}"\ ]\ &&\ /usr/bin/snapper\ --no-dbus\ -c\ root\ create\ -t\ post\ --pre-number\ "${tmp.arctic_snapper_pre}"\ -c\ number\ -d\ "$(xargs\ -0\ </proc/${pid}/cmdline)"\ >/dev/null\ 2>&1;\ echo\ tmp.arctic_snapper_pre

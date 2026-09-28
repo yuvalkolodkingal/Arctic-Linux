@@ -4,7 +4,9 @@ singleton Outputs 1.0 Outputs.qml
 singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
+singleton UpdateService 1.0 UpdateService.qml
 AppTile 1.0 AppTile.qml
+ArcticSwitch 1.0 ArcticSwitch.qml
 ArcticButton 1.0 ArcticButton.qml
 ArcticField 1.0 ArcticField.qml
 Bar 1.0 Bar.qml
@@ -29,5 +31,7 @@ PowerMenu 1.0 PowerMenu.qml
 RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml
 Tip 1.0 Tip.qml
+UpdateIndicator 1.0 UpdateIndicator.qml
+UpdatePopover 1.0 UpdatePopover.qml
 Wallpapers 1.0 Wallpapers.qml
 Workspaces 1.0 Workspaces.qml

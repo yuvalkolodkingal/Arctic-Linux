@@ -11,10 +11,10 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: neovim 0.12 (8.6 MB + runtime deps)
+# Fedora 44: neovim 0.12.5 (8.6 MB); weak deps bring nodejs22, gcc and tree-sitter-cli (~106 MB).
 method = "dnf"
 packages = ["neovim"]
-download_mb = 12
+download_mb = 106
 
 [defaults]
 desktop_id = "nvim.desktop"

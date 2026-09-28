@@ -13,6 +13,11 @@ After=network-online.target nix-daemon.service multi-user.target
 # once the script has started, so nothing waits for it.
 Type=exec
 ExecStart=/usr/libexec/arctic/arctic-firstboot
+# Apps that can't be installed yet (offline, a mirror down) stay in pending.json and the script
+# exits 1: try again a little later rather than only at the next boot. Until then the unit is
+# "activating (auto-restart)", not failed.
+Restart=on-failure
+RestartSec=15min
 Nice=10
 IOSchedulingClass=idle
 

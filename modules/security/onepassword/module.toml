@@ -1,0 +1,22 @@
+id = "onepassword"
+name = "1Password"
+summary = "Password manager for families and teams."
+category = "security"
+role = "password manager"
+default = false
+tile = "onepassword"
+icon = "key"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# Proprietary, subscription; Flathub verified by AgileBits. Browser and SSH-agent integration are limited in the Flatpak; 1Password's RPM repo (key not in distribution-gpg-keys) is the full-featured route.
+method = "flatpak"
+remote = "flathub"
+ref = "com.onepassword.OnePassword"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 204

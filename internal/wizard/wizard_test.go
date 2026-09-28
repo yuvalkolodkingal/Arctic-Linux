@@ -2,6 +2,7 @@ package wizard
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ type fakeEnv struct {
 	secrets  SecretsInfo
 	firmware string
 	names    map[string]bool
+	hw       hw.Hardware
 }
 
 func (e *fakeEnv) Catalog() *catalog.Catalog      { return e.cat }
@@ -30,6 +32,7 @@ func (e *fakeEnv) DetectTimezone() Detected       { return Detected{"Asia/Jerusa
 func (e *fakeEnv) Now() time.Time                 { return time.Date(2026, 9, 27, 4, 42, 0, 0, time.UTC) }
 func (e *fakeEnv) Firmware() string               { return e.firmware }
 func (e *fakeEnv) SystemNames() map[string]bool   { return e.names }
+func (e *fakeEnv) Hardware() hw.Hardware          { return e.hw }
 
 func testDisks() []hw.Disk {
 	return []hw.Disk{
@@ -421,7 +424,7 @@ func TestAppsStep(t *testing.T) {
 	if err == nil || err.Fields["browser"] != "Pick just one browser." {
 		t.Fatalf("got %v", err)
 	}
-	d, err := set(t, w, "apps", `{"selection":{"browser":["firefox"],"files":["thunar","yazi"],"extras":["steam"]}}`)
+	d, err := set(t, w, "apps", `{"selection":{"browser":["firefox"],"files":["thunar","yazi"],"gaming":["steam"]}}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,5 +617,21 @@ func TestKeyboardConfig(t *testing.T) {
 	s := w.Summary()
 	if s.Rows[1].Value != "Hebrew layout, plus English (US) for passwords — Alt+Shift switches" {
 		t.Errorf("summary keyboard row %q", s.Rows[1].Value)
+	}
+}
+
+// The Summary doesn't scroll: a long pick lists the first names and how many more.
+func TestSummaryAppsListIsCapped(t *testing.T) {
+	names := make([]string, 0, 40)
+	for i := 1; i <= 40; i++ {
+		names = append(names, fmt.Sprintf("App%d", i))
+	}
+	if got := appList(names[:summaryApps]); got != strings.Join(names[:summaryApps], ", ") {
+		t.Errorf("%d apps: %q", summaryApps, got)
+	}
+	got := appList(names)
+	want := strings.Join(names[:summaryApps], ", ") + fmt.Sprintf(" and %d more", 40-summaryApps)
+	if got != want {
+		t.Errorf("40 apps: %q, want %q", got, want)
 	}
 }

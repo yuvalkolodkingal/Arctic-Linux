@@ -1,0 +1,19 @@
+id = "standard-notes"
+name = "Standard Notes"
+summary = "Simple notes, end-to-end encrypted."
+category = "notes"
+default = false
+tile = "standard-notes"
+icon = "lock"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.standardnotes.standardnotes"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 158

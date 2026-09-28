@@ -11,34 +11,39 @@ import sys
 import termios
 import time
 import unittest
+import unittest.mock
 
 spec = importlib.util.spec_from_file_location('install_terminal', Path(__file__).parents[1]/'scripts/install-terminal.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class CommandTests(unittest.TestCase):
-    """What each typed line runs: dnf through sudo, Flathub through flatpak, never a shell."""
+    """What each typed line runs: dnf through pkexec, Flathub through flatpak, never a shell.
+    Changes never wait for a [y/N]: they get -y unless the line answers already."""
 
     def test_bare_names_install_with_dnf(self):
-        self.assertEqual(module.build_command('neovim htop'), ['sudo', 'dnf', 'install', 'neovim', 'htop'])
+        self.assertEqual(module.build_command('neovim htop'), ['pkexec', '/usr/bin/dnf5', 'install', '-y', 'neovim', 'htop'])
 
     def test_flathub_ids_install_with_flatpak(self):
-        self.assertEqual(module.build_command('flathub:org.gimp.GIMP'), ['flatpak', 'install', 'flathub', 'org.gimp.GIMP'])
+        self.assertEqual(module.build_command('flathub:org.gimp.GIMP'), ['flatpak', 'install', '-y', 'flathub', 'org.gimp.GIMP'])
 
     def test_mixed_sources_are_refused(self):
         with self.assertRaises(ValueError):
             module.build_command('neovim flathub:org.gimp.GIMP')
 
-    def test_dnf_changes_need_sudo_and_queries_do_not(self):
-        self.assertEqual(module.build_command('dnf install -y fish'), ['sudo', 'dnf', 'install', '-y', 'fish'])
-        self.assertEqual(module.build_command('sudo dnf remove fish'), ['sudo', 'dnf', 'remove', 'fish'])
-        self.assertEqual(module.build_command('dnf upgrade'), ['sudo', 'dnf', 'upgrade'])
+    def test_dnf_changes_need_pkexec_and_queries_do_not(self):
+        self.assertEqual(module.build_command('dnf install -y fish'), ['pkexec', '/usr/bin/dnf5', 'install', '-y', 'fish'])
+        self.assertEqual(module.build_command('sudo dnf remove fish'), ['pkexec', '/usr/bin/dnf5', 'remove', '-y', 'fish'])
+        self.assertEqual(module.build_command('dnf upgrade'), ['pkexec', '/usr/bin/dnf5', 'upgrade', '-y'])
+        self.assertEqual(module.build_command('dnf --refresh upgrade --assumeno'), ['pkexec', '/usr/bin/dnf5', '--refresh', 'upgrade', '--assumeno'])
         self.assertEqual(module.build_command('dnf search editor'), ['dnf', 'search', 'editor'])
         self.assertEqual(module.build_command('dnf info neovim'), ['dnf', 'info', 'neovim'])
 
     def test_flatpak_commands_run_as_typed(self):
         self.assertEqual(module.build_command('flatpak install flathub org.gimp.GIMP'),
-                         ['flatpak', 'install', 'flathub', 'org.gimp.GIMP'])
+                         ['flatpak', 'install', '-y', 'flathub', 'org.gimp.GIMP'])
+        self.assertEqual(module.build_command('flatpak --user uninstall --noninteractive org.gimp.GIMP'),
+                         ['flatpak', '--user', 'uninstall', '--noninteractive', 'org.gimp.GIMP'])
         self.assertEqual(module.build_command('flatpak search gimp'), ['flatpak', 'search', 'gimp'])
 
     def test_other_commands_and_shell_syntax_are_refused(self):
@@ -172,6 +177,42 @@ os.write(1, b'\\r\\n' + (b'Authenticated' if password.strip() == b'test-secret-7
         self.console.interrupt()
         self.wait_for(lambda: self.console.pid is None)
         self.assertIn('[Exit ', self.snapshot()['output'])
+
+
+class FlatpakThemeHookTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.share = Path(self.tmp.name) / 'share'
+        (self.share / 'theme-hooks.d').mkdir(parents=True)
+        self.out = Path(self.tmp.name) / 'ran'
+        hook = self.share / 'theme-hooks.d/30-zed'
+        hook.write_text('#!/bin/sh\necho ran > "{}"\n'.format(self.out))
+        hook.chmod(0o755)
+        self.env = {'ARCTIC_DATA_DIR': str(self.share), 'XDG_CONFIG_HOME': str(Path(self.tmp.name) / 'config')}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_zed_hook_runs_after_a_flatpak_install(self):
+        with unittest.mock.patch.dict(os.environ, self.env):
+            self.assertEqual(module.after_flatpak_install(['pkexec', '/usr/bin/dnf5', 'install', '-y', 'zed']), [])
+            self.assertEqual(module.after_flatpak_install(['flatpak', 'update', '-y']), [])
+            started = module.after_flatpak_install(['flatpak', 'install', '-y', 'flathub', 'dev.zed.Zed'])
+        self.assertEqual(started, [str(self.share / 'theme-hooks.d/30-zed')])
+        deadline = time.monotonic() + 5
+        while not self.out.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.out.read_text(), 'ran\n')
+
+    def test_your_own_hook_wins_and_a_missing_one_is_skipped(self):
+        own = Path(self.env['XDG_CONFIG_HOME']) / 'arctic/theme-hooks.d/30-zed'
+        own.parent.mkdir(parents=True)
+        own.write_text('#!/bin/sh\nexit 0\n')
+        own.chmod(0o755)
+        with unittest.mock.patch.dict(os.environ, self.env):
+            self.assertEqual(module.theme_hook('30-zed'), str(own))
+            self.assertIsNone(module.theme_hook('99-none'))
 
 if __name__ == '__main__':
     unittest.main()

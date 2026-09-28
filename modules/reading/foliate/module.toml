@@ -1,0 +1,35 @@
+id = "foliate"
+name = "Foliate"
+summary = "Comfortable e-book reader."
+category = "reading"
+role = "e-book reader"
+default = false
+tile = "foliate"
+icon = "book"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: foliate 3.3.0 (pulls webkitgtk6).
+method = "dnf"
+packages = ["foliate"]
+download_mb = 93
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.github.johnfactotum.Foliate"
+runtime = "org.gnome.Platform//49"
+verified = true
+download_mb = 12
+
+[defaults]
+desktop_id = "com.github.johnfactotum.Foliate.desktop"
+mime = [
+  "application/epub+zip",
+  "application/x-mobipocket-ebook",
+  "application/vnd.amazon.mobi8-ebook",
+  "application/x-fictionbook+xml",
+]

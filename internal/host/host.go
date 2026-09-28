@@ -83,6 +83,16 @@ func IsLive() bool {
 	return strings.Contains(readTrim("/proc/cmdline"), "rd.live.image")
 }
 
+// ImageHasFlatpak reports whether the live image (the read-only root the installer copies,
+// else /) has a Flatpak app installed system-wide.
+func ImageHasFlatpak(ref string) bool {
+	root := "/run/rootfsbase"
+	if !exists(root) {
+		root = "/"
+	}
+	return exists(filepath.Join(root, "var/lib/flatpak/app", ref))
+}
+
 // Info implements backend.Backend.
 func (b *Backend) Info() backend.Info {
 	return backend.Info{Mock: false, Live: IsLive(), Firmware: Firmware()}
@@ -247,11 +257,18 @@ func partType(t string) string {
 }
 
 func isMedia(dev lsblkDev, volumeID string) bool {
-	if strings.HasPrefix(str(dev.Label), volumeID) {
+	if volumeID != "" && strings.HasPrefix(str(dev.Label), volumeID) {
 		return true
 	}
 	for _, m := range dev.Mountpoints {
 		if mp := str(m); mp == "/run/initramfs/live" || strings.HasPrefix(mp, "/run/initramfs/") {
+			return true
+		}
+	}
+	// Ventoy and similar boot the ISO file through a device-mapper device stacked on the
+	// stick's data partition: the live file system is a child of that partition.
+	for _, c := range dev.Children {
+		if isMedia(c, volumeID) {
 			return true
 		}
 	}
@@ -610,6 +627,11 @@ func LogTargets(data []byte, volumeID string) []LogTarget {
 				continue
 			}
 			if p := (hw.Partition{Type: partType(str(c.PartType))}); p.IsESP() {
+				continue
+			}
+			// Held by something stacked on it (device mapper, RAID): the kernel refuses to
+			// mount it ("Can't open blockdev").
+			if c.Type == "part" && len(c.Children) > 0 {
 				continue
 			}
 			t := LogTarget{Device: c.Path, FSType: fs, Label: str(c.Label)}

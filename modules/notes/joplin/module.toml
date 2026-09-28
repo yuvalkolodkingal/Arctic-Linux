@@ -1,0 +1,19 @@
+id = "joplin"
+name = "Joplin"
+summary = "Notes and to-dos that sync anywhere."
+category = "notes"
+default = false
+tile = "joplin"
+icon = "edit"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "net.cozic.joplin_desktop"
+runtime = "org.freedesktop.Platform//26.08"
+verified = false
+download_mb = 232

@@ -1,0 +1,26 @@
+id = "keepassxc"
+name = "KeePassXC"
+summary = "Offline password manager you control."
+category = "security"
+role = "password manager"
+default = false
+tile = "keepassxc"
+icon = "key"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: keepassxc 2.7.12. Native, so browser integration works with RPM browsers; Flatpak browsers (Zen) need extra setup.
+method = "dnf"
+packages = ["keepassxc"]
+download_mb = 13
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.keepassxc.KeePassXC"
+runtime = "org.kde.Platform//5.15-25.08"
+verified = true
+download_mb = 23

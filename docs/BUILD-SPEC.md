@@ -1,4 +1,4 @@
-# Arctic Linux v0.1 — build spec (contracts between components)
+# Arctic Linux v0.2 — build spec (contracts between components)
 
 This is the contract every component is built against. `docs/PLAN.md` explains the *why*;
 this file fixes the *what*: paths, package names, the engine ↔ UI protocol, and the wizard.
@@ -19,41 +19,53 @@ modules/<slot>/<id>/module.toml   app catalog (see §5)
 profiles/defaults.toml, profiles/ci/*.toml
 shell/                  Quickshell desktop shell (bar, launcher, wallpapers, get-apps console, OSD, lock, live welcome)
 installer-ui/           Quickshell installer frontend (the 12-step wizard)
+settings/               Arctic Settings, the settings app (Quickshell; §3.2)
 branding/sddm/arctic/   SDDM Qt6 QML login theme
 branding/grub/arctic/   GRUB theme (live ISO boot menu + installed system)
 branding/plymouth/arctic/  Plymouth script theme
 branding/logos/         generated PNG/SVG logos for system-logos
 dotfiles/               user home tree → /etc/skel
 design/                 design system sources (read-only input)
+design/themegen/        theme engine (arctic-themegen): palettes → theme folders, templates, wallpaper colours (§10)
 packaging/arctic-linux.spec   ONE spec, many subpackages (§2), Source0 = repo tarball
 packaging/mangowm.spec        Mango built from upstream
 live/                   live-session files (livesys session, arctic-live-session, sddm live conf)
 iso/kiwi/               kiwi-ng description for the live ISO
-tools/build-rpms.sh     builds all RPMs in a Fedora 44 container → out/repo (createrepo_c)
+tools/build-rpms.sh     builds all RPMs in a Fedora 44 container → out/repo (createrepo_c), out/BUILD-INFO;
+                        every build gets its own Release (§9)
 tools/build-iso.sh      builds the ISO with kiwi-ng in a privileged Fedora 44 container → out/iso
+tools/publish-repo.sh   adds a build to one channel of the package repository site: signs, prunes,
+                        createrepo_c, repomd.xml.asc, index + manifest (§9); --no-sign for local tests
+tools/test-repo.sh      dnf5 checks in Fedora 44 containers: arctic-release, offline behaviour,
+                        repoquery against a published site
+tools/lib/arcticrepo.py prune / manifest / fetch (the published site) / index for the repository
+tools/tests/            unit tests for tools/lib (python3 -m unittest discover -s tools/tests)
 tools/test-iso.sh       boots the ISO in QEMU (no KVM needed), takes screenshots
 tools/test-install.sh   installs from the ISO to a VM disk (arctic-install unattended, profiles/ci/offline.toml),
                         then boots it: LUKS prompt, SDDM login, desktop, logs over the serial port
 tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QMP helpers for the tests)
 .github/workflows/ci.yml   go test, shellcheck, python tests, node tests, qmllint
 .github/workflows/iso.yml  build RPMs + ISO, upload artifact, publish release (tag or manual)
+.github/workflows/repo.yml build, sign and publish the RPMs to the package repository on GitHub Pages (§9)
 ```
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 0.1.0, Release 1%{?dist}. `Source0: arctic-linux-%{version}.tar.gz` made by
-`git archive --prefix=arctic-linux-0.1.0/ HEAD` (tools/build-rpms.sh; uncommitted changes are
-included via `git stash create`). noarch unless it contains Go binaries.
+Version 0.2.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.0/` of the
+working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
+throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 
 | Subpackage | Installs | Notes |
 |---|---|---|
-| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.1, PRETTY_NAME="Arctic Linux 0.1 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` (the Arctic package repository, `enabled=0` with a placeholder address until the Arctic COPR is published), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
+| `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
 | `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
 | `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
-| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (skel's `~/.config/arctic/current` links there), `/etc/arctic/default-apps` (defaults) | Requires the desktop runtime (§3). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
+| `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf` | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte. |
+| `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
 | `sddm-wayland-mango` | `/usr/lib/sddm/sddm.conf.d/10-arctic.conf`, `/usr/libexec/arctic/sddm-compositor-mango`, `/usr/share/arctic/sddm/greeter.conf` | Provides+Conflicts `sddm-greeter-displayserver`. Requires sddm, mangowm, layer-shell-qt. Config per PLAN §7. If the mango greeter can't be made to work in the VM test, ship `10-arctic.conf` for `sddm-wayland-generic` (weston) instead and note it. |
 | `arctic-sddm-theme` | `/usr/share/sddm/themes/arctic/` ← `branding/sddm/arctic/` | Requires sddm, qt6-qtdeclarative, qt6-qt5compat only if used. |
@@ -63,7 +75,7 @@ included via `git stash create`). noarch unless it contains Go binaries.
 | `mangowm` (packaging/mangowm.spec) | upstream mango 0.17.3 | BuildRequires meson, gcc, `pkgconfig(wlroots-0.20)`, `pkgconfig(scenefx-0.5)`, wayland-devel, wayland-protocols-devel, libinput-devel, libxkbcommon-devel, pcre2-devel, pixman-devel, cjson-devel, pango-devel, libdrm-devel, xcb deps (`xorg-x11-server-Xwayland-devel`/libxcb-devel, xcb-util-wm-devel). `Source0: https://github.com/mangowm/mango/archive/refs/tags/0.17.3.tar.gz`. `/etc/mango/config.conf` marked `%config(noreplace)`. |
 
 Metapackage: `arctic-desktop` (subpackage, no files) Requires everything a desktop needs:
-mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-desktop-config,
+mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-settings, arctic-desktop-config,
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
 arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, mako, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
@@ -71,7 +83,8 @@ pipewire-pulseaudio, pavucontrol, network-manager-applet, NetworkManager-wifi, b
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
 gnome-keyring-pam, Thunar, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
-fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow.
+fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
+adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop.
 
 ## 3. Desktop session (installed and live)
 
@@ -86,6 +99,122 @@ Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
 `wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
 `lock lock`, `keys toggle`. Mango binds call these.
+
+### 3.1 App theming
+
+Every app and menu follows the active theme (`~/.config/arctic/current`, switched by
+`arctic-theme`): either it reads its colours through that link, or a theme hook updates it.
+App colour files are templates in `design/themegen/templates/` (placeholder syntax: the theme
+engine's interface; checked by `design/themegen/tests/test_app_templates.py`), rendered into
+every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
+
+**Toolkits and system settings**
+
+| What | Mechanism | Files |
+|---|---|---|
+| GTK 3 apps (Thunar, Zen's menus, Inkscape, …) | Theme `adw-gtk3` / `adw-gtk3-dark` (package `adw-gtk3-theme`), which uses libadwaita's named colours, so the theme's `gtk.css` recolours it | `~/.config/gtk-3.0/gtk.css` imports `arctic-colors.css` (dotfiles: link to `../arctic/current/gtk.css`; the 10-gtk hook replaces it with a copy); `settings.ini` (`gtk-theme-name=adw-gtk3`, dark variant via `gtk-application-prefer-dark-theme`) |
+| GTK 4 / libadwaita apps (Nautilus, Celluloid, GNOME apps) | `color-scheme` through the settings portal; colours from `~/.config/gtk-4.0/gtk.css` | `~/.config/gtk-4.0/{gtk.css,arctic-colors.css,settings.ini}` (no `gtk-application-prefer-dark-theme`: libadwaita rejects it) |
+| gsettings defaults | dconf **distro** database (Fedora's `/etc/dconf/profile/user` reads user → local → site → distro; `local.d` stays the administrator's) | `packaging/dconf/10-arctic` → `/etc/dconf/db/distro.d/10-arctic`, `dconf update` in `%posttrans`: `org.gnome.desktop.interface` gtk-theme `adw-gtk3-dark`, color-scheme `prefer-dark`, accent-color `yellow`, icon-theme `Adwaita`, cursor-theme `Adwaita`, cursor-size 24, font-name `Figtree 11`, document-font-name `Figtree 11`, monospace-font-name `JetBrains Mono 10` |
+| Portals | Mango's `/usr/share/xdg-desktop-portal/mango-portals.conf` (`default=gtk`): xdg-desktop-portal-gtk implements `org.freedesktop.impl.portal.Settings` (color-scheme, contrast, and the `org.gnome.desktop.interface` keys). It has no `accent-color`: libadwaita's accent comes from `gtk.css` | — |
+| Qt 5 and Qt 6 apps (VLC, OBS, …) | `QT_QPA_PLATFORMTHEME=qt6ct` (qt5ct and qt6ct both register the keys `qt5ct` and `qt6ct`): Fusion, the theme's palette, Figtree 11 / JetBrains Mono 10, Adwaita icons, portal file dialogs. qt5ct/qt6ct watch their config folder and re-read the palette ~3 s after it changes (20-qt hook). Kvantum is not used: Fedora's build pulls the same KDE Frameworks, and its themes are SVGs, not a palette | `templates/qt6ct/colors/arctic.conf.tmpl` (22 roles), `templates/qt5ct/colors/arctic.conf.tmpl` (21); `~/.config/qt6ct/qt6ct.conf`, `~/.config/qt5ct/qt5ct.conf` (`color_scheme_path=~/.config/arctic/current/qt*ct/colors/arctic.conf`, `custom_palette=true`); `env=QT_QPA_PLATFORMTHEME,qt6ct` in `~/.config/mango/arctic/look.conf` (apps started from the desktop) and `~/.config/environment.d/10-arctic.conf` plus the package's `/usr/lib/environment.d/50-arctic-qt.conf` (D-Bus/systemd activated apps; read after, so it also replaces the `xdgdesktopportal` of copies made by 0.1). The Arctic shell and the installer keep `qt6ct` too: the launcher's apps inherit the shell's environment, and the shell's controls take colours and fonts from `Theme.qml` |
+| Icons | Adwaita (+ AdwaitaLegacy, in the image already) for GTK and Qt. Papirus (with amber folders) was considered: 116 MB installed, and `papirus-folders` is not in Fedora | dconf, `settings.ini`, `qt*ct.conf` |
+| Cursor | Adwaita 24 px (in the image already; Bibata is not in Fedora). Mango's `cursor_theme`/`cursor_size` also export `XCURSOR_THEME`/`XCURSOR_SIZE` to apps and to systemd/D-Bus | `~/.config/mango/arctic/look.conf`, dconf, `settings.ini`, `environment.d` |
+| Flatpak apps | Global override `filesystems=xdg-config/gtk-3.0:ro;xdg-config/gtk-4.0:ro;xdg-config/fontconfig:ro;` (Flatpak also binds these into the app's own config folder, which is where GTK looks). They can't see `/usr/share/arctic`, hence the copy in `arctic-colors.css`. No `GTK_THEME` (it would replace libadwaita's stylesheet). GTK 3 Flatpaks load the theme named by the portal's `gtk-theme` from the runtime extensions `org.gtk.Gtk3theme.adw-gtk3` / `-dark`: hidden catalog modules `modules/_system/adw-gtk3-flatpak`, `adw-gtk3-dark-flatpak` (always installed from Flathub, deferred to first boot when offline; Flatpak also fetches the active one itself with any app install, since the dconf default names it). `tools/build-iso.sh` adds both when it preinstalls Zen. Host icon themes are visible to Flatpak apps in `/run/host/share/icons` | `packaging/flatpak/global` → `/var/lib/flatpak/overrides/global` (`%config(noreplace)`; `flatpak override --system` edits the same file) |
+
+**Apps**
+
+| App | Mechanism | Template → theme file | Wiring | Live |
+|---|---|---|---|---|
+| Quickshell shell, launcher, OSD, lock | `shell/Theme.qml` watches `theme.json` | (engine) | — | yes |
+| Mango, kitty, mako, fuzzel, swaylock, waybar | the engine's existing outputs | (engine) | `include`/`source=` of `~/.config/arctic/current/…` | built-in reloads |
+| Thunar | GTK 3 (above) | — | — | light/dark: yes; colours: next start (GTK reads `gtk.css` once) |
+| VLC | Qt 5 via qt5ct (above) | `qt5ct/colors/arctic.conf` | `~/.config/qt5ct/qt5ct.conf` | yes (20-qt) |
+| Zed (Flatpak `dev.zed.Zed`, or native) | theme family "Arctic" (one theme, `appearance` = the palette's mode), Zed schema v0.2.0 | `zed/themes/arctic.json` | 30-zed hook copies it to `~/.var/app/dev.zed.Zed/config/zed/themes/` (Flatpak) and `~/.config/zed/themes/` (native, if that folder exists) and writes `settings.json` (`"theme": "Arctic"`, fonts) only where none exists; skel ships `~/.config/zed/settings.json` | yes (Zed reloads theme files) |
+| yazi | `theme.toml` (keys of yazi 26.x's preset only) | `yazi/theme.toml` | `~/.config/yazi/theme.toml` → `../arctic/current/yazi/theme.toml` | next start |
+| btop | theme file | `btop/arctic.theme` | `~/.config/btop/themes/arctic.theme` → `../../arctic/current/btop/arctic.theme`; `~/.config/btop/btop.conf` `color_theme = "arctic"`, `theme_background = false` | next start |
+| zsh prompt, completion menu, zsh plugins | `ARCTIC_PROMPT_COLORS` (24-bit when `COLORTERM=truecolor`, else ANSI 2/3/1/8), `ma=` selection colour, `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE`, `ZSH_HIGHLIGHT_STYLES` | `zsh/colors.zsh` | `~/.zshrc` sources it and re-sources it before the next prompt when the link or file changes | next prompt |
+| fzf | options file | `fzf/fzfrc` | `FZF_DEFAULT_OPTS_FILE` in `~/.zshrc` and `~/.bashrc.d/arctic.sh` (your `FZF_DEFAULT_OPTS` still apply on top) | every run |
+| bat, delta (not installed) | `BAT_THEME=ansi` (delta honours it): the terminal's palette | — | `~/.zshrc`, `~/.bashrc.d/arctic.sh` | yes |
+| bash prompt | ANSI colours (the terminal palette) | — | — | yes |
+| foot, Alacritty (terminal alternatives) | same palette as kitty | `foot/colors.ini` (`[colors-<mode>]` + `initial-color-theme`), `alacritty/colors.toml` | `~/.config/foot/foot.ini` `include=~/.config/arctic/current/foot/colors.ini`; `~/.config/alacritty/alacritty.toml` `general.import` | new windows |
+| Zen Browser | light/dark through the portal (`prefers-color-scheme`); optional accent: pref `zen.theme.accent-color` | `zen/user.js` | 40-zen hook, only with `"zen_theme": true` in `~/.config/arctic/settings.json` (`arctic-theme zen on\|off`): a marked block in each profile's `user.js` (Flatpak `~/.var/app/app.zen_browser.zen/.zen` or `…/config/zen`, `~/.zen`, `~/.config/zen`), removed again when off. userChrome.css is not used (needs a legacy-stylesheet pref and breaks with Zen updates) | next start |
+| Collabora Office (Flatpak, KDE runtime, a Qt WebEngine shell around the Collabora Online UI) | light/dark through the portal (Qt's colour scheme → the web UI's `prefers-color-scheme`); no accent | — | — | — |
+| Firefox, Chromium, Electron apps (Signal) | portal colour scheme | — | — | yes |
+| Nautilus, Celluloid, LibreOffice (GTK 3 VCL), GIMP, Inkscape | GTK 3/4 (above) | — | — | as GTK |
+| Not themed: Helix, Neovim, VSCodium, OnlyOffice, Steam, mpv's OSD, fish (uses the terminal's ANSI colours) | their own themes | — | — | — |
+| GTK/Qt context menus, tray menus, dialogs | inherit their toolkit's theme; Mango draws no menus | — | — | — |
+
+**Theme hooks** (`packaging/theme-hooks.d/` → `/usr/share/arctic/theme-hooks.d/`, run by
+`arctic-theme reload` after the built-in reloads with `ARCTIC_THEME_DIR` (realpath of `current`),
+`ARCTIC_THEME_MODE=dark|light` and `ARCTIC_THEME_NAME`, 5 s each; each is quick, exits 0 and
+touches only files it wrote or links it shipped). GTK has one owner: after the hooks,
+arctic-theme sets `color-scheme` and `gtk-theme` (`adw-gtk3-dark`/`adw-gtk3`, through `''` when
+the name is unchanged so GTK re-reads `gtk.css`; plain Adwaita only when adw-gtk3 is missing)
+and `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini`, so GTK apps restyle
+once, with the copies `10-gtk` just made:
+
+| Hook | Does |
+|---|---|
+| `10-gtk` | `~/.config/gtk-{3,4}.0/arctic-colors.css` = copy of `$ARCTIC_THEME_DIR/gtk.css` (replaces the shipped link or its own earlier copy, never your file) |
+| `20-qt` | replaces `~/.config/qt5ct/qt5ct.conf` and `qt6ct.conf` with identical copies, which makes running Qt apps re-read the palette |
+| `30-zed` | copies `zed/themes/arctic.json` into Zed's themes folders (above) |
+| `40-zen` | the optional Zen accent (above) |
+
+**Packages** (`arctic-desktop-config` Requires, also listed in `iso/kiwi/config.kiwi`):
+`adw-gtk3-theme`, `qt6ct`, `qt5ct`, `adwaita-icon-theme`, `adwaita-cursor-theme`, `dconf`,
+`flatpak`; `arctic-desktop` Recommends `btop`. Added to the image (dnf5 against Fedora 44, vs the
+0.1 image's package list): adw-gtk3-theme 1.1 MB, btop 1.8 MB (+ rocm-smi 2.9 MB, its weak
+dependency), qt5ct + qt6ct about 150 MB installed / 63 MB download, because Fedora builds them
+with KDE colour-scheme support: KDE Frameworks 5 and 6 (ki18n 17 + 18 MB, kwidgetsaddons 7 + 5 MB,
+…), `breeze-icon-theme` 26 MB and `kf6-breeze-icons` 25 MB (kf5/kf6-kiconthemes) and
+`plasma-breeze-common` 40 MB (mostly Plasma's "Next" wallpaper, via kf5-kconfigwidgets). qt6ct
+alone is 80 MB of that; no default app is a Qt 6 widget app, so it is the first thing to drop if
+the ISO needs room (Qt 5 apps stay themed through qt5ct, which also answers to "qt6ct").
+
+### 3.2 Settings app (arctic-settings)
+
+A standalone Quickshell app (`settings/shell.qml`, a `FloatingWindow` titled "Arctic Settings";
+Mango floats it by title, `rules.conf`), opened by `arctic-settings [page]` (`Super + S`, since
+`Super + ,`/`.` already move focus between monitors in `binds.conf`; the
+launcher; the first item of the shell's power menu and of `arctic-power`'s fuzzel fallback).
+Pages: appearance, windows, displays, input, shortcuts, apps, network, bluetooth, sound,
+updates, power, startup, about. It looks native because it reuses the installer's components
+(`settings/components` = `installer-ui/components`, checked by `settings/tests/test_app_files.py`)
+on the live tokens (`~/.config/arctic/current/theme.json`, like the shell's Theme.qml).
+Every read and write goes through `settings/scripts/arctic_settings.py` (JSON out, tested).
+
+**Files it writes** (user-level only; atomic; validated with its key table and `mango -c FILE -p`;
+previous versions in `~/.local/state/arctic/settings-backups/`):
+
+| File | Contents |
+|---|---|
+| `~/.config/mango/settings.conf` | Mango options (only keys Mango 0.17.3 parses: gaps, borders, radius, animations + durations, blur, shadows, opacity, focus, `new_is_master`, `default_mfact`, cursor, repeat, `xkb_rules_*` (empty = `key= # none`), trackpad and mouse), `tagrule=id:*,layout_name:<layout>`, `monitorrule=name:^<out>$,…`, `keymode=default` + `bind=MODS,KEY,spawn_shell,COMMAND`, `exec-once=` startup apps; unknown lines are kept at the end |
+| `~/.config/mango/config.conf` | `source-optional=~/.config/mango/settings.conf` inserted before the `user.conf` line when missing (the skel copy has it) |
+| `~/.config/arctic/default-apps` | `role=command` for browser, terminal, files, editor (read by `arctic-open` after `/etc/arctic/default-apps`) |
+| `~/.config/mimeapps.list` | `[Default Applications]` for links and files (as `xdg-mime default`) |
+| `~/.config/arctic/idle.conf` | `lock_after=`, `suspend_after=` (seconds, 0 = never), read by `arctic-session idle` |
+| `$XDG_RUNTIME_DIR/arctic-settings-display.json` | the display layout to go back to while a change waits to be kept |
+
+**Commands it calls** (each missing one hides or explains its controls): `mmsg dispatch
+reload_config`, `mmsg get all-devices|all-clients`, `mango -p`; `arctic-theme set <name>|auto
+on|off|mode auto|dark|light|current --json|list --json` (the theming engine; falls back to
+`arctic-theme winter|polar-night`); `arctic-update status --json|now|apply|channel
+stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
+`scripts/wallpapers.py list|apply` (→ `arctic-wallpaper`); `arctic-session idle --restart`;
+`wlr-randr --json` / `wlr-randr --output …`; `nmcli`; `gdbus` (power profiles, tuned-ppd);
+`gsettings` (GTK text size, cursor); tools it opens: `nm-connection-editor`, `blueman-manager`,
+`pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install`, `xdg-open`.
+Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
+
+Displays: Apply runs `wlr-randr` at once and asks to keep the layout for 15 s; a detached
+watchdog (`arctic_settings.py display-revert --if-pending TOKEN --after 20`) puts the old layout
+back even if Settings is gone; kept layouts become `monitorrule` lines.
+
+The live image (`iso/kiwi/config.kiwi`, and so the installed system) lists `arctic-settings`,
+`nm-connection-editor`, `blueman`, `pavucontrol` and `wlr-randr` explicitly.
+
+IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|search|page|pages|ready|set|value|quit`
+(`arctic-settings` uses `page`/`open`; `settings/dev/headless.sh` the rest).
 
 ## 4. Engine ↔ installer UI protocol
 
@@ -119,8 +248,8 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 | `SuggestPassphrase` | — | `{text:"four random words"}` (EFF short wordlist, embedded) |
 | `SuggestAccount` | `{full_name}` | `{username, hostname}` (hostname = `{username}-{model}` from DMI, lowercased, `-` joined) |
 | `SetSecrets` | `{luks_passphrase?, user_password?}` | `{ok}` (kept in memory only, never logged or written) |
-| `EstimateDownload` | `{selection}` | `{apps:int, bytes:int, label:"9 apps · 1.4 GB download"}` |
-| `GetSummary` | — | `{rows:[{step, icon, label, value}], warning, primary_label}` (rows for welcome, keyboard, timezone, disk, encryption, account, apps — each `step` is a Goto target; primary "Erase disk and install" or "Install alongside {OS}") |
+| `EstimateDownload` | `{selection}` | `{apps:int, drivers?:int, bytes:int, label:"9 apps · 1.4 GB download"}` (drivers are not apps: `"8 apps + 2 drivers · 3 GB download"`) |
+| `GetSummary` | — | `{rows:[{step, icon, label, value}], warning, primary_label}` (rows for welcome, keyboard, timezone, disk, encryption, account, apps — each `step` is a Goto target; primary "Erase disk and install" or "Install alongside {OS}"). When a driver was detected an 8th row follows: `{step:"apps", icon:"cpu", label:"Drivers", value:"NVIDIA driver for your NVIDIA GeForce RTX 4060 Max-Q / Mobile; …"}` (+ ". Secure Boot is on: you’ll confirm the driver’s key once after restarting" when a built driver needs the key; "None — …" when all were unticked). The UI takes the row's `icon` |
 | `Start` | — | `{ok}` then events. Also "Try again" after a failure. Re-probes the disks first: if the chosen disk is gone, is not the same device (model/serial/WWN/size) or, alongside, its partitions or free space changed, it answers `{code:"state"}` and refuses until the Disk step is passed again |
 | `RetryModule` / `SkipModule` | `{id}` | `{ok}` |
 | `SaveLog` | — | `{path, on_usb, device?, label?, safe_to_remove, message}`: to a FAT/exFAT file system on a removable disk that is not the install medium (mounted in place, else mounted, written, synced and unmounted: `path` is then the file's path on the stick and `safe_to_remove` true), else `/home/liveuser` or /tmp (lost on restart). `message` is the sentence to show |
@@ -131,7 +260,7 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
   - `{"event":"progress","percent":0-100,"phase":"disk"|"copy"|"configure"|"bootloader"|"apps"|"finalize","status":"Installing Zed, your code editor…","eta_seconds":420,"substeps":[{"id":"disk","label":"Preparing the disk","state":"done"|"active"|"todo"},…4 items: disk, system ("Copying Arctic Linux"), apps ("Installing your apps"), finish ("Setting up your account")]}`
   - `{"event":"module","id":"zed","name":"Zed","status":"queued"|"downloading"|"installed"|"failed"|"skipped"|"deferred","percent":0-100}`
   - `{"event":"attention","module":{"id","name"},"message":"The download server didn't answer.","optional":true}` → UI shows step 11 (Try again / Skip {App}); core failures: `{"event":"failed","message":"…","fatal":true,"can_change":true}` → Save log / Try again / Change (Back or Goto).
-  - `{"event":"done","apps_installed":9,"first_name":"Noa"}`
+  - `{"event":"done","apps_installed":9,"first_name":"Noa","drivers"?:[{id,name,device,status:"installed"|"deferred"|"skipped",text}],"secure_boot"?:{code,title,intro,steps:[…],note,failed?}}` — `drivers` lists what happened to each ticked driver with a sentence for it (drivers get no `module` events and are not in `apps_installed`); `secure_boot` is present when the akmods signing key waits for enrolment in shim's MokManager on the next restart (Secure Boot enforced, UEFI, a driver built by akmods): `code` is the one-time password (8 digits, typed on the number row — MokManager reads the keyboard as US QWERTY), `steps` the MokManager screens. With `failed:true` (mokutil refused) there is no code and the steps say how to enroll the key by hand. Driver failures use the `attention` event like apps (title "The NVIDIA driver couldn’t be installed", skip label "Skip the driver").
   - Status lines follow `design/guidelines/20-installer-copy.md`.
 
 ### 4.1 Wizard steps (ids fixed; copy = design/guidelines/20-installer-copy.md)
@@ -140,32 +269,77 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 |---|---|---|---|
 | 1 | `welcome` | `{language:"en_US.UTF-8"}` | `{languages:[{id,name(native),english}], suggested}` |
 | 2 | `keyboard` | `{layout:"us", variant:"", xkb:{layout, variant, options, keymap, latin}}` (`xkb` is read-only, what the choice gives: Latin layouts alone; non-Latin ones as `us,<layout>` with `grp:alt_shift_toggle` and a Latin console keymap). A valid SetStep also writes `xkb` to the live system's `/etc/arctic/mango/keyboard.conf` (sourced by the live session); the UI then runs `mmsg dispatch reload_config`, so passwords are typed as on the installed system | `{layouts:[{layout,variant,name,description,suggested:bool}]}` |
-| 3 | `network` | `{}` | `{online,wired,ssid}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online |
+| 3 | `network` | `{}` | `{online,wired,ssid,driver_hint?}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online. `driver_hint` is set when a detected Wi-Fi card only works once its driver is installed (Broadcom wl): how to get online meanwhile |
 | 4 | `timezone` | `{timezone:"Asia/Jerusalem", auto_time:true}` | `{detected:{city,timezone,source:"network"\|"default"}, regions:{Europe:[{city,timezone}],…}}` |
 | 5 | `disk` | `{disk:"/dev/nvme0n1", mode:"erase"\|"alongside"}` | `{disks:[{path,model,size_bytes,size_label,removable,install_media:bool,existing_os:[…],alongside_possible:bool,alongside_label:"Uses 120 GB of free space"}]}` (install media excluded; alongside needs ≥ 40 GB free, on UEFI an ESP to share, on MBR room for two primary partitions) |
 | 6 | `encryption` | `{enabled:true}` | `{min_score:2}` (passphrase via SetSecrets) |
 | 7 | `account` | `{full_name, username, hostname, autologin:false}` (username: not a user or group the copied system has) | `{hostname_hint:"Suggested from your name and computer"}` (password via SetSecrets) |
-| 8 | `apps` | `{selection:{browser:["zen"],editor:["zed"],…}}` | catalog: `{categories:[{id,name,choice:"one"\|"any",note}], modules:[{id,name,summary,category,default,tile,download_mb,source,in_live_image}]}` |
+| 8 | `apps` | `{selection:{drivers:["nvidia","intel-media"],browser:["zen"],editor:["zed"],…}}` | catalog: `{categories:[{id,name,choice:"one"\|"any",note,hardware?}], modules:[{id,name,summary,category,default,tile,download_mb,source,in_live_image,device?}]}` — the `drivers` category (`hardware:true`) comes first and is present only when a driver matched this computer's hardware; its modules carry `device` (the detected card's name, also filled into `summary`) and are `default` (ticked) when detected. Selecting a driver whose hardware wasn't found is a field error on `drivers` |
 | 9 | `summary` | — | via GetSummary |
 | 10 | `install` | — | events |
 | 11 | (attention/error, not a step) | | |
-| 12 | `done` | — | `{apps_installed, first_name}` |
+| 12 | `done` | — | `{apps_installed, first_name}`; options `{card_title, card, secondary, drivers?, secure_boot?}` (as in the `done` event) |
 
 Categories for the picker come from the design (`CATEGORIES` in the design bundle.js):
 browser "one" ("Becomes your default browser."), editor "many", terminal "one" ("Opens with
 Super + Enter."), shell "one" ("What runs inside the terminal."; bash always installed), files
-"many", office "one", video "many", extras "many" ("Nothing here is ticked by default."). Tile ids = design app tiles (`zen`, `firefox`, `chromium`, `zed`,
-`vscodium`, `neovim`, `helix`, `kitty`, `foot`, `alacritty`, `zsh`, `fish`, `bash`, `yazi`,
-`thunar`, `nautilus`, `collabora`, `libreoffice`, `onlyoffice`, `vlc`, `mpv`, `celluloid`,
-`steam`, `obs`, `gimp`, `inkscape`, `signal`, `flathub`).
+"many", office "one", video "many". These seven sections are always open. After them,
+under "More apps", come the optional groups, all "many", marked `collapsed = true` in
+`modules/catalog.toml` (they start folded and nothing in them is ticked by default): music,
+photos, graphics, recording, chat, email, notes, reading, gaming, security, sync, dev,
+containers and extras (utilities). The picker has a search box across every app, and
+`proprietary = true` modules carry a Proprietary tag. Tiles for the design's 28 apps are the
+design's own; every other module gets a tile drawn the same way (category tint + one line
+glyph from its `icon`) by `installer-ui/dev/export-assets.js`.
 
 ## 5. Catalog manifest
 
 `modules/<category>/<id>/module.toml` as in PLAN §4.1, fields: `id, name, summary, category,
-default, tile, in_live_image, gpu, requires, conflicts, [[install]] method = "dnf"|"copr"|"flatpak"|"nix"
+default, tile, icon, in_live_image, gpu, proprietary, requires, conflicts, [[install]] method = "dnf"|"copr"|"flatpak"|"nix"
 (+ packages | copr+packages | remote+ref | attr), verified, download_mb, [defaults] desktop_id, mime,
 [session] …`. Hidden mandatory modules live in `modules/_system/`. Profiles (`profiles/*.toml`)
 reference module ids only.
+
+**Drivers** (`modules/drivers/<id>/`): the `drivers` category in `catalog.toml` has
+`hardware = true` (must be `choice = "any"`, not required) and is listed first. Its modules are
+offered — ticked — only when one of their `[[detect]]` rules matches a PCI device of the
+computer (engine start: `/sys/bus/pci/devices/*/{vendor,device,class,boot_vga,driver}` named
+from hwdata's `pci.ids`; Secure Boot from efivarfs `SecureBoot`/`SetupMode` and shim's
+`MokSBStateRT`). The schema is strict (unknown keys are errors):
+
+```toml
+[[detect]]                    # one or more; any rule matching any device offers the driver
+bus = "pci"                   # only "pci"
+vendor = "10de"               # four lower-case hex digits
+class = ["0300", "0302"]      # class+subclass, ≥ 1 (0300 VGA, 0302 3D controller, 0380, 0280 Wi-Fi)
+device_min = "1e00"           # inclusive range … (either bound may be left out)
+device_max = "ffff"
+# devices = ["43a0", "43b1"]  # … or an explicit list, not both
+# exclude = ["1f9d"]          # never these devices
+[akmod]                       # a kernel module akmods builds (first [[install]] must be dnf
+name = "nvidia"               #   with rpmfusion-nonfree): akmods --akmod <name>
+module = "nvidia"             #   modinfo -k <kver> <module> proves the build
+[boot]
+kernel_args = ["rd.driver.blacklist=nouveau,nova_core", "modprobe.blacklist=nouveau,nova_core", "nvidia-drm.modeset=1"]
+luks_display_args = ["plymouth.use-simpledrm=1"]  # + when LUKS and the device draws the boot screen
+network_hint = "Your {device} needs …"             # Network step note ({device} = detected name)
+```
+
+`[[detect]]`, `[akmod]`, `[boot]` and `network_hint` are only allowed in a hardware category and
+required there (`[[detect]]`); drivers can't be hidden or `always`. `{device}` in `summary` is
+filled with the detected device's name. Shipped: `nvidia` (Turing and newer, `akmod-nvidia` +
+`xorg-x11-drv-nvidia-cuda` + `libva-nvidia-driver`), `nvidia-580xx` (Maxwell–Volta, the last
+series for them; conflicts with `nvidia`), `broadcom-wl` (`akmod-wl`, chips with no working
+in-kernel driver), `intel-media` (RPM Fusion `intel-media-driver`, Broadwell and newer) and
+`amd-video` (`mesa-va-drivers-freeworld` installed beside Fedora's VA driver — in F44
+`mesa-dri-drivers` provides `mesa-va-drivers`, so it is never swapped — and a
+`mesa-vulkan-drivers-freeworld` swap; GCN/r600-class device ranges only, not R100–R500). A
+`swap` runs only when `rpm -q <old>` finds that exact package (dnf swap would follow provides).
+Kepler and
+older NVIDIA cards get nothing (their drivers have no GBM, which Mango needs). The
+`[runtimes]` entry `akmods` sizes the build tools, counted once. Mock fixtures:
+`internal/hw/fixtures.go` (`arcticd --mock --mock-hw NAME`, `arctic-install plan --hardware
+mock:NAME [--secure-boot] [--offline]`; the mock default is `nvidia-laptop`, Secure Boot on).
 
 ## 6. Engine behaviour (v0.1 scope)
 
@@ -183,7 +357,36 @@ greeter's copy and vconsole.conf; non-Latin layouts as `us,<layout>` + `grp:alt_
 with a Latin console keymap),
 `/etc/arctic/default-apps`, kernel-install/dracut, grub2-mkconfig, efibootmgr/grub2-install,
 app diff (dnf remove/install in chroot, flatpak from host with FLATPAK_* into /mnt, nix via
-`nix --store /mnt profile add`), setfiles relabel, unmount. Every command goes through a
+`nix --store /mnt profile add`; a Flatpak app the image ships — Zen when the ISO fits in 2 GiB —
+counts as in the live image whatever the catalog says: kept when ticked, uninstalled with its
+unused runtimes when not), setfiles relabel, unmount. Drivers (internal/installer/drivers.go):
+installed in the chroot in the apps' dnf transaction with the RPM Fusion repositories; for an
+akmod driver `akmods` is installed with `kernel-devel-matched-<kver>` of each installed kernel
+(else, when that version has left the repositories, the newest complete kernel: `kernel
+kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-devel-matched` — never
+the partial kernel dnf would pick for akmods alone) and its key created (`kmodgenca -a`) first;
+after the transaction the engine waits on `/run/akmods/akmods.lock` for the %posttrans build
+(which installs its kmod with dnf), then `akmods --force --kernels <kver> --akmod <name>` runs
+for each kernel with its kernel-devel and `modinfo` checks the module (failure → attention: Try
+again / Skip, which removes the packages again; unattended → put off: no kernel arguments, the
+package's own nouveau blacklist removed again, and the driver goes to pending.json for
+arctic-firstboot). akmods' `modprobe` of freshly built modules when the kernel version equals
+the live one is accepted (it cannot take over a bound device). The `[boot]` kernel arguments of
+the built drivers go on with `grubby --update-kernel=ALL --args=…` (boot entries,
+GRUB_CMDLINE_LINUX and /etc/kernel/cmdline) — so only when an NVIDIA driver is built. With
+Secure Boot enforced on UEFI, `mokutil --import /etc/pki/akmods/certs/public_key.der
+--hash-file /dev/stdin` gets the SHA-512 crypt hash of the engine's random one-time code (shown
+on the Done screen, never logged); if the install fails afterwards, cleanup runs `mokutil
+--revoke-import`. Offline at Start,
+drivers are not tried: they go to `/var/lib/arctic/pending.json` with `akmod` and
+`kernel_args`, plus `"mok_hash":"/var/lib/arctic/mok.hash"` (Secure Boot), and
+arctic-firstboot installs (akmods with kernel-devel and the key before the driver, as the
+engine), builds, adds the arguments and queues the key once online.
+Hybrid laptops keep rendering on the integrated GPU (wlroots uses the `boot_vga` card);
+`/etc/profile.d/arctic-graphics.sh` sets `LIBVA_DRIVER_NAME=nvidia`, `NVD_BACKEND=direct` and
+`__GLX_VENDOR_LIBRARY_NAME=nvidia` only when NVIDIA's driver drives the boot display. The target directory is made a private
+mount point first (its mounts must not leak into services' mount namespaces, or LUKS can't be
+closed at the end); os-prober only runs for "alongside". Every command goes through a
 `Runner` interface; `--dry-run` prints the plan; unit tests use a fake Runner and golden files.
 
 ## 7. Live ISO
@@ -196,7 +399,9 @@ livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO s
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.
-Volume id `Arctic-Linux-0.1`. Output `out/iso/Arctic-Linux-0.1-x86_64.iso` + `.sha256`.
+Volume id `Arctic-Linux-0.2` (the installer finds its media by the `Arctic-Linux` prefix). Output
+`out/iso/Arctic-Linux-0.2-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
+Release suffix, commit and `arctic_repos=enabled|disabled` from out/BUILD-INFO.
 
 Design assets not copied into `design/` (all 78 icons, 30 app tiles, lockups, wallpapers as
 SVG strings) can be exported by running the design bundle in node:
@@ -212,3 +417,345 @@ SVG strings) can be exported by running the design bundle in node:
   when `$HTTPS_PROXY` / the CA file exist) so they also work on GitHub runners.
 - `--privileged` is needed for kiwi (loop devices). No KVM: QEMU runs with TCG (slow).
 - Disk budget ≈ 30 GB free: clean container caches and intermediate kiwi roots.
+
+## 9. Package repository: versions, channels, publishing
+
+Arctic's own packages (all of `arctic-linux.spec` and `mangowm`) update from a signed dnf
+repository on the project's GitHub Pages site; Fedora's packages keep coming from Fedora. No COPR.
+
+**Versions.** Both specs: `Release: 1%{?arctic_snapshot}%{?dist}`. `tools/build-rpms.sh` defines
+`arctic_snapshot` as `.<commit time>.<build time>.git<commit, 7 hex>` (`--release-suffix auto`,
+the default; `none` gives `1.fc44`; any other value is used as given; env
+`ARCTIC_RELEASE_SUFFIX`): the commit's committer date as UTC `yyyymmddHHMMSS`, then the build's UTC
+`yyyymmddHHMM`, e.g. `arctic-shell-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44`. rpm
+compares the commit time first, so a build of newer code is always the newer package, whenever it
+was built: the repository's builds of later commits update what an ISO installed, even an ISO
+built afterwards from an older commit (a re-run for an old tag), and a stable build of a later
+commit updates a testing build. The same commit built twice: the later build wins. (Outside a
+git checkout the build time stands in for the commit time.) Every build of every commit is a new
+Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
+every stable system, and every package's scriptlets run again: they are written for that
+(arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
+when its module is unchanged). Version stays the spec's (arctic-linux 0.2.0, mangowm 0.17.3); a
+release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
+the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
+`build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
+`arctic_repos` (`enabled|disabled|not-built`), one `rpm=`/`srpm=` line per package built.
+
+**Site layout** (https://yuvalkolodkingal.github.io/O-Tism/):
+
+```
+repo/<channel>/fedora-<releasever>/x86_64/     x86_64 + noarch RPMs, repodata/ (+ repomd.xml.asc)
+repo/<channel>/fedora-<releasever>/source/     SRPMs, repodata/ (+ repomd.xml.asc)
+repo/<channel>/fedora-<releasever>/PUBLISH-INFO.json   when, which commit, ref and workflow run
+RPM-GPG-KEY-arctic                             the public signing key
+arctic.repo, arctic-testing.repo               repo files for other Fedora 44 systems (enabled, https gpgkey)
+index.html, manifest.json                      landing page; every file with size and sha256
+```
+
+Channels: `stable` ← pushes to `main`; `testing` ← pushes to `claude/busy-goodall-j42hmi`
+(`repo-testing.yml` starts `repo.yml` on `main` with channel `testing` and that commit, see *Pages
+setup*), or Actions → Repository → Run workflow with any channel and ref. Each directory keeps the newest 3 builds (distinct epoch:version-release in rpm order) of every
+package name. No debuginfo. One build is ~9 MB of RPMs + ~11 MB of SRPMs, so both channels
+stay far below the 900 MB budget `publish-repo.sh` enforces (Pages sites are limited to 1 GB).
+
+**On the system** (`arctic-release`): `/usr/share/dnf5/repos.d/arctic.repo` holds `[arctic]`
+(`baseurl=…/repo/stable/fedora-$releasever/$basearch/`, `enabled=1`, `gpgcheck=1`,
+`repo_gpgcheck=1`, `gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-arctic`, `metadata_expire=6h`,
+`skip_if_unavailable=True` — the live USB and the installer work offline —, `priority=90`, before
+Fedora's 99) and `[arctic-source]` (off); `arctic-testing.repo` the same for testing, all off. They
+are package files, replaced on updates; choices are overrides in `/etc/dnf/repos.override.d/`
+(`sudo dnf config-manager setopt arctic-testing.enabled=1` writes `99-config_manager.repo`).
+dnf5 5.4 on Fedora 44 reads `/etc/yum.repos.d`, `/etc/distro.repos.d` and `/usr/share/dnf5/repos.d`
+(`dnf5 --dump-main-config`); a file of the same name in `/etc/yum.repos.d` hides the one in
+`/usr/share/dnf5/repos.d`. Every package is signed and checked (`gpgcheck=1`): dnf imports the key
+into the rpmdb on first use (`-y`, as unattended updates run, accepts it; an interactive `dnf`
+asks once). `repomd.xml` is signed too (`repomd.xml.asc`) and checked (`repo_gpgcheck=1`): dnf
+imports the key for that check into the repository's cache on the first run with `-y`, which the
+automatic update check (`arctic-update stage`), `arctic-firstboot` and Get apps all use. Until
+then a dnf run without `-y` — `dnf-makecache.timer`, a declined prompt — skips the repository
+(verified on F44: "repomd.xml GPG signature verification error: Signing key not found", exit
+status 0), and so does any run after `dnf clean all` until the next `-y` run. Fedora's own
+`fedora`/`updates` repositories set `skip_if_unavailable=False`, so they, not Arctic's, are what
+fails offline; Arctic's are skipped quietly, which is why publishing checks the site with dnf5
+before deploying it (below).
+
+**The key.** `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` is installed from
+`packaging/release/RPM-GPG-KEY-arctic`, which is not committed yet: `tools/build-rpms.sh` puts the
+key into Source0 from `--gpg-public-key FILE` or `ARCTIC_GPG_PUBLIC_KEY` (its content; ci.yml,
+iso.yml and repo.yml pass the repository secret). Without any key the build still succeeds but
+warns, and arctic-release ships both repo files with `enabled=0`; `--require-gpg-key`
+(`ARCTIC_REQUIRE_GPG_KEY=1`, repo.yml) makes that an error. The spec's `%check` enforces: key ⇔
+`[arctic]` enabled, testing always off, no secret key material. To commit the key later:
+`curl -fsSL https://yuvalkolodkingal.github.io/O-Tism/RPM-GPG-KEY-arctic -o packaging/release/RPM-GPG-KEY-arctic`
+(publishing then checks it is the signing key). No tool here ever generates or stores a secret
+key; signing happens only in repo.yml with the secrets.
+
+**Publishing** (`.github/workflows/repo.yml`; the steps are scripts that run locally too):
+
+1. Channel from the event (push to main → stable, `workflow_dispatch` → input `channel` built
+   from input `ref`, default the workflow's commit). Then `gh api repos/<repo>/pages`
+   (`pages: read`): no Pages site, a source other than GitHub Actions, or a site URL other than
+   the one the packages point at fails the run at once, with what to change.
+2. `tools/build-rpms.sh --src <checkout of ref>` with `ARCTIC_GPG_PUBLIC_KEY` and
+   `ARCTIC_REQUIRE_GPG_KEY=1`.
+3. `tools/lib/arcticrepo.py fetch`: the site as published, so a publish of one channel keeps the
+   other. Source: the last successful repo.yml run's `github-pages` artifact (uploaded with
+   `retention-days: 90`, downloaded with `gh api` and `actions: read`) when its manifest.json is
+   the live one, or newer (the live site still serving the deployment before); else every file
+   listed in the live manifest.json, fetched with a cache-busting query and checked against size
+   and sha256. Nothing live (404) → the artifact if there is one; a first publish only when
+   the runs query worked and repo.yml has never succeeded (else Pages may just be briefly
+   unavailable: the run fails). `gh api` calls are retried with backoff; one that keeps failing
+   fails the run (404/410 for an artifact that expired meanwhile falls back to the live site, as
+   does an artifact that doesn't match its manifest). A live site that can't be fetched
+   completely, or one without manifest.json, fails the run; the `start_fresh` input starts both
+   channels over on purpose.
+4. `tools/publish-repo.sh` (in a fedora:44 container): imports `ARCTIC_GPG_PRIVATE_KEY`
+   (`--pinentry-mode loopback`, `ARCTIC_GPG_PASSPHRASE` through a passphrase file; empty works),
+   takes its fingerprint and requires `ARCTIC_GPG_PUBLIC_KEY` and a committed
+   `packaging/release/RPM-GPG-KEY-arctic` to have the same one; signs every new RPM and SRPM
+   (packages already published — same `SHA256HEADER` — are skipped) with
+   `rpmsign --addsign` (RPM 6: `%_openpgp_sign gpg`, `%_openpgp_sign_id <fingerprint>`,
+   `%_gpg_path`, `%_gpg_sign_cmd_extra_args --batch --yes --pinentry-mode loopback
+   --passphrase-file …`) and checks each with `rpmkeys -Kv` against an rpmdb holding only the
+   public key; refuses a new arctic-release without that key or with `[arctic]` disabled (it
+   would switch updates off for everyone who installs it); prunes; requires every package left
+   in the channel to verify (`--resign-old` / the `resign_old` input re-signs after a key
+   change); `createrepo_c --update --retain-old-md-by-age=2d` (the metadata a new repomd.xml
+   replaces stays two days: Pages lets caches serve the old repomd.xml for up to 10 minutes, and
+   the files it names must still be there; the mtimes survive through the Pages artifact); signs
+   `repodata/repomd.xml` (detached, armored, checked with gpg); writes the key, the .repo files,
+   PUBLISH-INFO.json, index.html and manifest.json; fails over the size budget.
+5. `tools/test-repo.sh --signed --channel <channel>`: in fedora:44 with `--network none`, the
+   new arctic-release replaces fedora-release, and dnf5 reads the site through `file://` the way
+   clients do, with every check on (`gpgcheck=1`, `repo_gpgcheck=1`, `skip_if_unavailable=0`):
+   `dnf5 -y makecache` verifies `repomd.xml.asc` (librepo, through rpm-sequoia on F44) for the
+   binary and source repositories, `repoquery` lists exactly the channel's files, and dnf5
+   installs arctic-backgrounds and reinstalls the new arctic-release from it, checking their
+   signatures against the key from arctic-release. Any error fails the run before anything is
+   uploaded (gpg and rpmkeys alone in step 4 don't prove what dnf5 accepts).
+6. `actions/upload-pages-artifact` (`retention-days: 90`), then the deploy job:
+   `actions/deploy-pages` in the `github-pages` environment (`pages: write`, `id-token: write`),
+   a check that the deployment's `page_url` is the base URL (fails otherwise) and that the live
+   manifest.json is the one just deployed (warns: the CDN may lag).
+
+Permissions: `contents: read` (build job also `actions: read`, `pages: read`). All runs share the
+concurrency group `arctic-repository-pages` (`cancel-in-progress: false`), so no two publishes
+overlap; GitHub keeps one waiting run per group, so a waiting run can be superseded (shown as
+cancelled) — the next push to main, or a re-run, publishes again.
+
+**Pages setup.** Settings → Pages → Source: GitHub Actions (step 1 fails until it is). Secrets
+`ARCTIC_GPG_PRIVATE_KEY`, `ARCTIC_GPG_PASSPHRASE` (may be empty), `ARCTIC_GPG_PUBLIC_KEY`; optional
+variable `ARCTIC_PAGES_URL` for a custom domain. The `github-pages` environment lets only the
+default branch deploy, and a new run waiting in the shared concurrency group would replace a
+waiting stable run. So pushes to `claude/busy-goodall-j42hmi` run `repo-testing.yml`, which waits
+until no publish is running or waiting and then starts `repo.yml` on `main` with channel `testing`
+and the pushed commit as `ref` (a newer push cancels an older forward that is still waiting).
+
+**Release ISOs** (`.github/workflows/iso.yml`) build with `ARCTIC_REQUIRE_GPG_KEY=1` in this
+repository (forks without the secret still build, with the Arctic repositories off), and a
+release is refused unless the ISO's `.build-info` says `arctic_repos=enabled`: an ISO whose
+arctic-release lacks the key would install systems that never get Arctic updates.
+
+**Changing the key** needs a transition release: installed systems only trust the key their
+arctic-release carries, so an arctic-release that trusts both keys has to reach them (signed with
+the old key) before packages are signed with the new one (`resign_old`). The checks above expect
+exactly one key everywhere today; a key change starts by relaxing them for the transition.
+
+**Locally, without a key:** `tools/publish-repo.sh --no-sign --site out/site --channel testing`
+(unsigned packages, no repomd.xml.asc) and `tools/test-repo.sh`: arctic-release replaces
+fedora-release, `dnf5 repolist --all`, the testing override, `dnf5 makecache`/`repoquery` with
+`--network none` succeed (the Arctic repositories are skipped) and fail with
+`skip_if_unavailable=0`, and `dnf5 repoquery --repo arctic` / `--repo arctic-testing` against the
+site served over HTTP lists exactly its packages (gpgcheck and repo_gpgcheck off for that
+unsigned test repository only). `tools/test-repo.sh --signed` against such an unsigned site
+fails, as it must ("GPG verification is enabled, but GPG signature is not available"; with only
+`repo_gpgcheck` off: "The package is not signed"); it passes only on a site signed with the key
+arctic-release carries, i.e. in repo.yml.
+
+**A new Fedora release** (F45): the site keeps one tree per release,
+`repo/<channel>/fedora-<releasever>/`, and arctic-release's `baseurl` uses `$releasever`, so each
+system reads its own. Build with `dist_version` 45 (and `ARCTIC_FEDORA_IMAGE` set to the F45
+image) and publish: the builds land in `fedora-45` next to `fedora-44`, which keeps its last
+builds. Publish fedora-45 before F44 systems upgrade (`dnf system-upgrade` then finds Arctic's F45
+packages); fedora-44 gets no new builds once main moves on. The landing page's "Fedora 44" text
+(`tools/lib/arcticrepo.py`) and the size budget (two trees) need a look then.
+## 10. Theming (theme engine, palettes, `arctic-theme`)
+
+The contract between the theme engine, the desktop and the apps that call it (the Arctic
+Settings app, the wallpaper picker). Keep these CLIs and formats stable; extend, don't change.
+
+### 9.1 Pieces and paths
+
+| What | Where |
+|---|---|
+| Theme engine (Python package `themegen`, stdlib + Pillow for wallpapers) | `design/themegen/` → `/usr/share/arctic/themegen/` (+ `data/`: `exports/arctic-tokens.json`, `exports/gtk-arctic-*.css`, `icons/*.svg`, `logos/arctic-mark-16-*.svg`); `dotfiles/install.sh` copies it to `~/.local/share/arctic/themegen/` |
+| Engine CLI | `/usr/bin/arctic-themegen` (← `dotfiles/.local/bin/arctic-themegen`; finds the engine in `$ARCTIC_THEMEGEN_DIR`, the repository, `~/.local/share/arctic/themegen`, `/usr/share/arctic/themegen`) |
+| Templates | `design/themegen/templates/**/<file>.tmpl` → `<theme>/<file>`; your own extra ones in `~/.config/arctic/templates/` (used by `arctic-theme` for the themes it makes) |
+| Static themes | `/usr/share/arctic/themes/{winter,polar-night}/`, rendered by the engine in the spec's `%build`; the same files are committed in `dotfiles/.config/arctic/themes/` (regenerate with `python3 design/tools/gen-desktop-themes.py`; a unit test fails when they are stale) |
+| Themes of your own | `~/.config/arctic/themes/<name>/` (wins over a system theme of the same name); `wallpaper` is the one made from the wallpaper |
+| Active theme | `~/.config/arctic/current` → the theme folder (absolute link for system themes, `themes/<name>` for yours); `~/.config/arctic/theme` holds its name (the shell watches this file) |
+| Settings | `~/.config/arctic/settings.json`: `"auto_colors"` (bool, **default true** when missing), `"wallpaper_mode"` (`auto`\|`dark`\|`light`, default `auto`). Other programs may add keys; `arctic-theme` keeps them |
+| Hooks | `/usr/share/arctic/theme-hooks.d/` (owned by arctic-desktop-config; packages drop executables here) and `~/.config/arctic/theme-hooks.d/` |
+
+A theme folder holds: `theme.json` (every design token for the shell; colours as QML
+`#AARRGGBB`), `gtk.css` (GTK3/4 + libadwaita colours), `theme.env` (sourced by the arctic-*
+scripts: `ARCTIC_THEME`, `ARCTIC_THEME_NAME`, `ARCTIC_GROUND`, `ARCTIC_COLOR_SCHEME`,
+`ARCTIC_GTK_PREFER_DARK` 1/0, `ARCTIC_WALLPAPER`, `ARCTIC_LOCK_WALLPAPER`, `ARCTIC_THEME_MODE`,
+`ARCTIC_THEME_BASE`; values shell-quoted), `palette.json` (the palette it was made from),
+`icons/*.svg` (design icons in the theme's ink, `mark.svg`, `download-on-accent.svg`) — these five
+are made by code — plus one file per template: `mango-colors.conf`, `kitty.conf`,
+`waybar-colors.css`, `mako.ini`, `fuzzel-colors.ini`, `swaylock.conf`, and whatever other
+templates add (e.g. `templates/qt6ct/colors/arctic.conf.tmpl` → `qt6ct/colors/arctic.conf`).
+
+### 9.2 Palette (JSON)
+
+```json
+{
+  "name": "polar-night",            // [a-z0-9][a-z0-9._-]{0,63}: the theme folder name
+  "label": "Polar night",           // shown to people; one line
+  "mode": "dark",                   // dark | light
+  "base": "polar-night",            // the static theme it builds on (defaults: by mode)
+  "colors": { "ground": "#12171e", "frost": "#1a212ad1", "...": "every role below" },
+  "wallpaper": "aurora-polar-night",     // a design wallpaper name or an absolute path
+  "lock_wallpaper": "fox-polar-night",
+  "source": { "...": "optional, informational (palettes made from a wallpaper)" }
+}
+```
+
+Colour roles (all required, `#rrggbb` or `#rrggbbaa`): `ground surface surface-raised
+surface-sunken frost scrim line line-strong ink ink-muted ink-subtle ink-disabled ink-inverse
+accent accent-hover accent-pressed on-accent accent-text accent-soft accent-edge focus selection
+warm warm-soft success success-soft warning warning-soft error error-soft on-error error-hover
+info info-soft aurora-1 aurora-2 aurora-3 term-background term-foreground term-cursor
+term-cursor-text-color term-selection-background term-selection-foreground ansi-0 … ansi-15`.
+Extra roles (`[a-z][a-z0-9-]*`) are allowed and usable in templates. The engine adds `shadow`
+(the design's window-shadow colour: `#000000cc` dark, `#12171e33` light) when it is missing.
+Optional roles (`shadow`) are always present in a rendered palette, so templates may use them;
+a renderer or test with its own role list (e.g. the app-template tests) must include them.
+`label`, `base`, `wallpaper` and `lock_wallpaper` default from the mode's static theme.
+Static palettes: `arctic-themegen builtin winter|polar-night` (from `arctic-tokens.json`).
+
+### 9.3 Templates
+
+`templates/**/<file>.tmpl` renders to `<theme>/<file>` (path relative to `templates/`, `.tmpl`
+dropped). Placeholders, and nothing else (no conditionals, no loops):
+
+| Placeholder | Output |
+|---|---|
+| `{{role}}` | the palette value as written |
+| `{{role\|hex}}` / `{{role\|hexa}}` | `#rrggbb` (alpha dropped) / `#rrggbbaa` (`ff` if none) |
+| `{{role\|nohash}}` / `{{role\|nohasha}}` | `rrggbb` / `rrggbbaa` |
+| `{{role\|rgb}}` | `r, g, b` |
+| `{{role\|rgba}}` | `rgba(r, g, b, a)`, a from the palette alpha (1 if none), up to 3 decimals |
+| `{{role\|alpha:0.35}}` | `rgba(r, g, b, 0.35)` |
+| `{{role\|argb}}` | `#aarrggbb` (Qt) |
+| `{{name}}` `{{label}}` `{{mode}}` `{{wallpaper}}` `{{lock_wallpaper}}` | palette fields |
+| `{{scheme}}` / `{{is_dark}}` | `prefer-dark`\|`prefer-light` / `true`\|`false` |
+| `{{font.sans}}` / `{{font.mono}}` | `Figtree` / `JetBrains Mono` (design tokens) |
+
+An unknown placeholder or filter, whitespace inside the braces, a filter on a non-colour, a bad
+`alpha:` value or an unterminated `{{` is an error naming `file:line` (render exits 2). A
+template may not produce `theme.json`, `gtk.css`, `theme.env`, `palette.json` or `icons/…`.
+Later template directories override earlier ones file by file (`--templates DIR`).
+
+Rendering writes each file atomically (temp file + rename, unchanged files untouched),
+`theme.json` last, and removes files a previous render left behind. It refuses a non-empty
+folder without `palette.json` unless `--force`.
+
+### 9.4 Colours from a wallpaper
+
+`arctic-themegen palette --from-wallpaper IMG` (PNG, JPEG, WebP, GIF, BMP, TIFF, SVG via
+rsvg-convert): the picture is decoded at ≤ 256 px (JPEG draft mode), reduced to 128 colours
+(median cut) and clustered by weighted k-means in OKLab. The accent seed is the cluster with the
+best mix of chroma (≥ 0.04 OKLCH) and hue share (the colourfulness-weighted part of the picture
+within ±15°, ≥ 1%), as in Material You's scoring (matugen); wallust (Lab/LCH k-means, contrast
+check) and pywal (median cut in RGB) were the other references. From the base palette (Polar
+night for dark, Winter for light, or `--base`) every role keeps its OKLab lightness, so the
+design's steps survive; then:
+
+- neutrals (grounds, surfaces, lines, inks, terminal background/foreground, ANSI 0/7/8/15) are
+  tinted toward the picture's colour cast (its mean OKLab a/b), at most 1.3× their base chroma;
+- the accent family (accent, hover, pressed, text, soft, edge, focus, selection, terminal
+  cursor/selection) takes the seed's hue and its chroma, clamped to 0.10–0.19;
+- aurora-1…3 rotate with the seed; ANSI 1–6 and 9–14 move toward the seed hue by half the
+  difference, at most 15°, scaled down so neighbouring hues keep ≥ 80% of their distance;
+- status colours (success, warning, error, info, on-error) and warm stay as in the base.
+
+Guaranteed (WCAG 2 contrast, enforced by moving lightness, checked by
+`arctic-themegen check`): ink on ground/surface ≥ 7:1 (also on raised/sunken); ink-muted
+≥ 4.5:1; accent-text on ground ≥ 4.5:1; on-accent on accent ≥ 4.5:1; focus on ground ≥ 3:1;
+ANSI 1–6 and 9–14 on term-background ≥ 4.5:1. Greyscale / low-chroma pictures keep the base
+accent (a grey picture gives exactly the base palette). `--mode auto` picks light when the
+picture's mean OKLab lightness is above 0.62, else dark; with `--base`, auto means the base's
+mode and a clash with `--mode` is an error. Output is deterministic; a 3840×2160 picture takes
+≈ 0.1–0.2 s (tested < 1 s). The palette's `source` records `image`, `size`, `mtime_ns`,
+`mode_setting`, `seed`, `fallback`, `cast`, `mean_lightness` (and, from arctic-theme,
+`fingerprint` of the engine and templates).
+
+### 9.5 `arctic-themegen`
+
+```
+arctic-themegen render --palette FILE|-|winter|polar-night --out DIR [--templates DIR]... [--force] [--quiet]
+arctic-themegen palette --from-wallpaper IMG [--mode auto|dark|light] [--base NAME|FILE] [--name wallpaper] [--label Wallpaper]
+arctic-themegen builtin winter|polar-night
+arctic-themegen check --palette FILE [--json]
+```
+
+Palettes go to stdout as JSON. Exit status 0 ok, 1 a contrast guarantee fails (`check`), 2 bad
+input (message on stderr, `arctic-themegen: …`).
+
+### 9.6 `arctic-theme`
+
+| Command | Does |
+|---|---|
+| `arctic-theme` / `arctic-theme current` | print the active theme's name |
+| `arctic-theme current --json` | `{"name", "label", "mode", "base", "dir", "source": "system"\|"user", "colors": {role: "#…"}, "auto_colors": bool, "wallpaper_mode": "auto"\|"dark"\|"light", "wallpaper": saved choice (design name, path or "")}` |
+| `arctic-theme list [--json]` | themes you can switch to; JSON: `[{"name", "label", "mode", "base", "dir", "source", "active": bool, "swatches": {"ground", "surface", "accent", "ink"}}]`; text: `* name<TAB>label<TAB>mode<TAB>source` |
+| `arctic-theme set NAME` | switch to NAME (`winter`, `polar-night`, `wallpaper`, or yours). Any NAME but `wallpaper` turns auto colours off. `set wallpaper` (re)makes the wallpaper theme from the current wallpaper — even an Arctic one — and leaves auto colours as they are |
+| `arctic-theme auto [on\|off]` | print or set auto colours. `on` follows the wallpaper now; `off` while the wallpaper theme is active goes back to Winter / Polar night of the same mode |
+| `arctic-theme mode [auto\|dark\|light]` | print or set light/dark for wallpaper colours; re-applies when auto colours are on or the wallpaper theme is active |
+| `arctic-theme toggle` | light ⇄ dark: flips `mode` when auto colours are on (or the wallpaper theme is active), else Winter ⇄ Polar night (Super+Shift+T) |
+| `arctic-theme reload` | built-in reloads + hooks for the active theme |
+| `arctic-theme apply` | at login (Mango autostart): follow the wallpaper if auto colours are on, else re-link the saved theme; then reload |
+| `arctic-theme sync [--force] [--no-redraw]` | if auto colours are on, follow the wallpaper now (no-op when up to date); `arctic-wallpaper` runs it |
+| `arctic-theme winter\|polar-night\|light\|dark` | kept from v0.1: `winter`/`polar-night` = `set`; `light`/`dark` = `mode` when auto colours are on, else `set winter`/`set polar-night` |
+
+Following the wallpaper: Arctic's own wallpapers (snowfield, aurora, fox — by name or any file
+under the design wallpaper folders) keep the static palettes — Winter or Polar night by
+`wallpaper_mode`, or the current light/dark for `auto` — so first boot (Polar night, aurora)
+looks exactly like the design. Any other picture makes `~/.config/arctic/themes/wallpaper`
+(`label` "Wallpaper", `lock_wallpaper` the base's) and switches to it; it is remade only when
+the picture (path, size, mtime), `wallpaper_mode` or the engine/templates changed.
+Exit status: 0 ok, 1 failure (message on stderr), 2 usage / unknown theme. Commands that
+change things take a lock (`~/.config/arctic/.theme.lock`).
+
+`arctic-wallpaper NAME|PICTURE` saves the choice, runs `arctic-theme sync --no-redraw` (skip with
+`ARCTIC_WALLPAPER_NO_SYNC=1`), then draws the wallpaper; Arctic wallpapers are drawn in the
+theme's variant (`ARCTIC_THEME_BASE` when it is winter/polar-night, else by `ARCTIC_THEME_MODE`).
+Without arguments it only redraws (no sync). The wallpaper picker's "Match colours to wallpaper"
+switch runs `arctic-theme auto on|off` and reads `settings.json`.
+
+### 9.7 Live reload and hooks
+
+After a switch `arctic-theme` links `current` (atomic rename), rewrites `~/.config/arctic/theme`,
+and reloads, best effort (a program that isn't running is skipped):
+
+| Program | How |
+|---|---|
+| Shell (Quickshell) | automatic: `Theme.qml` watches `~/.config/arctic/theme` and `current/theme.json`; also `arctic-shell-ipc shell reload` (background) |
+| Mango | `mmsg dispatch reload_config` (when `MANGO_INSTANCE_SIGNATURE` is set; mango ≥ 0.17.3 IPC) |
+| kitty | `pkill -USR1 -u $UID -x kitty` |
+| waybar (fallback bar) | `pkill -USR2 -u $UID -x waybar` |
+| mako | `makoctl reload` |
+| GTK | `gsettings set org.gnome.desktop.interface color-scheme prefer-dark\|prefer-light` and `gtk-theme adw-gtk3-dark\|adw-gtk3` (plain `Adwaita-dark\|Adwaita` only when adw-gtk3 is not installed; set to `''` first when unchanged, so GTK re-reads gtk.css). arctic-theme is the one writer of `gtk-theme` on a switch; the dconf defaults and the GTK theme hook use the same names, so a switch changes it once; `gtk-application-prefer-dark-theme` in `~/.config/gtk-3.0/settings.ini` |
+| Wallpaper | `arctic-wallpaper` (background redraw; not for `sync --no-redraw`) |
+
+Then every executable in `/usr/share/arctic/theme-hooks.d/` and `~/.config/arctic/theme-hooks.d/`
+runs, in file-name order (a file of yours replaces the system hook with the same name; a
+non-executable one disables it; `*~`, `.rpmnew`, `.rpmsave`, `.disabled` and dot files are
+skipped), with `ARCTIC_THEME_DIR=<real path of the active theme folder>`,
+`ARCTIC_THEME_MODE=dark|light`, `ARCTIC_THEME_NAME=<name>`, stdin from /dev/null and stdout sent
+to stderr. Hooks must be fast: each is stopped (its process group killed) after 5 s. A failing or
+slow hook is reported on stderr and never fails the switch.

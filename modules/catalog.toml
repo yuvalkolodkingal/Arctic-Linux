@@ -1,14 +1,30 @@
 # Arctic Linux app catalog — catalog-wide data.
 #
-# Categories are the installer's app picker sections, in the design's order (design bundle.js
-# CATEGORIES + components/AppChecklist). `modules` fixes the order of the tiles inside each
-# section; every visible module must be listed in exactly one category.
+# Categories are the installer's app picker sections, in picker order: the design's seven core
+# sections (design bundle.js CATEGORIES + components/AppChecklist) first, then the optional
+# groups; Extras (last) now holds the utilities. `modules` fixes the order of the tiles inside
+# each section (the first ticked app in that order wins a MIME type); every visible module must be listed in
+# exactly one category. `collapsed = true` sections start folded in the picker ("More apps":
+# nothing in them is ticked by default) and cannot be required.
 # Each module lives in modules/<category>/<id>/module.toml; hidden, always-installed modules in
 # modules/_system/<id>/module.toml. Profiles and the UI only ever reference module ids.
+
+# The drivers category is special (hardware = true): its modules carry [[detect]] rules and are
+# offered, ticked, only when a matching device is found on the computer; with none found the
+# section isn't shown at all.
 
 # Pinned nixpkgs for Nix-installed modules: head of nixos-26.05 on 2026-09-27
 # (git ls-remote https://github.com/NixOS/nixpkgs refs/heads/nixos-26.05).
 nixpkgs = "github:NixOS/nixpkgs/5e2305d577ca00acbba631b05cb1094d172b29f3"
+
+[[category]]
+id = "drivers"
+name = "Drivers"
+choice = "any"
+hardware = true
+note = "Found on this computer. These come from RPM Fusion and aren’t open source."
+role = "driver"
+modules = ["nvidia", "nvidia-580xx", "broadcom-wl", "intel-media", "amd-video"]
 
 [[category]]
 id = "browser"
@@ -17,7 +33,7 @@ choice = "one"
 required = true
 note = "Becomes your default browser."
 role = "web browser"
-modules = ["zen", "firefox", "chromium"]
+modules = ["zen", "firefox", "brave", "chrome", "librewolf", "chromium", "vivaldi"]
 
 [[category]]
 id = "editor"
@@ -25,7 +41,7 @@ name = "Editor"
 choice = "any"
 note = ""
 role = "code editor"
-modules = ["zed", "vscodium", "neovim", "helix"]
+modules = ["zed", "vscode", "vscodium", "neovim", "helix", "kate", "emacs", "text-editor"]
 
 [[category]]
 id = "terminal"
@@ -34,7 +50,7 @@ choice = "one"
 required = true
 note = "Opens with Super + Enter."
 role = "terminal"
-modules = ["kitty", "alacritty", "foot"]
+modules = ["kitty", "ghostty", "alacritty", "foot", "konsole"]
 
 [[category]]
 id = "shell"
@@ -51,7 +67,7 @@ name = "File manager"
 choice = "any"
 note = ""
 role = "file manager"
-modules = ["yazi", "thunar", "nautilus"]
+modules = ["yazi", "thunar", "nautilus", "dolphin", "nemo", "pcmanfm-qt"]
 
 [[category]]
 id = "office"
@@ -67,23 +83,152 @@ name = "Video"
 choice = "any"
 note = ""
 role = "video player"
-modules = ["vlc", "mpv", "celluloid"]
+modules = ["vlc", "mpv", "celluloid", "haruna", "kodi", "jellyfin"]
+
+[[category]]
+id = "music"
+name = "Music & audio"
+choice = "any"
+collapsed = true
+note = ""
+role = "music app"
+modules = ["spotify", "strawberry", "tauon", "amberol", "rhythmbox", "shortwave", "easyeffects"]
+
+[[category]]
+id = "photos"
+name = "Photos"
+choice = "any"
+collapsed = true
+note = ""
+role = "photo app"
+modules = ["loupe", "gthumb", "shotwell", "digikam", "darktable", "rawtherapee"]
+
+[[category]]
+id = "graphics"
+name = "Graphics & design"
+choice = "any"
+collapsed = true
+note = ""
+role = "graphics app"
+modules = ["gimp", "krita", "inkscape", "blender", "pinta", "freecad"]
+
+[[category]]
+id = "recording"
+name = "Recording & editing"
+choice = "any"
+collapsed = true
+note = ""
+role = "recording app"
+modules = ["obs", "gpu-screen-recorder", "kooha", "audacity", "kdenlive", "shotcut", "handbrake"]
+
+[[category]]
+id = "chat"
+name = "Chat & calls"
+choice = "any"
+collapsed = true
+note = ""
+role = "chat app"
+modules = ["signal", "discord", "telegram", "element", "slack", "zoom", "zapzap"]
+
+[[category]]
+id = "email"
+name = "Email & calendar"
+choice = "any"
+collapsed = true
+note = ""
+role = "email app"
+modules = ["thunderbird", "evolution", "betterbird"]
+
+[[category]]
+id = "notes"
+name = "Notes & tasks"
+choice = "any"
+collapsed = true
+note = ""
+role = "notes app"
+modules = ["obsidian", "joplin", "logseq", "appflowy", "standard-notes", "xournalpp", "planify"]
+
+[[category]]
+id = "reading"
+name = "PDF & e-books"
+choice = "any"
+collapsed = true
+note = ""
+role = "document viewer"
+modules = ["papers", "okular", "zathura", "foliate", "calibre", "pdfarranger"]
+
+[[category]]
+id = "gaming"
+name = "Games"
+choice = "any"
+collapsed = true
+note = ""
+role = "gaming app"
+modules = ["steam", "heroic", "lutris", "bottles", "prism", "protonplus", "mangohud", "gamemode"]
+
+[[category]]
+id = "security"
+name = "Passwords & privacy"
+choice = "any"
+collapsed = true
+note = ""
+role = "security app"
+modules = ["keepassxc", "bitwarden", "onepassword", "proton-pass", "authenticator", "protonvpn", "tor-browser"]
+
+[[category]]
+id = "sync"
+name = "Downloads & sync"
+choice = "any"
+collapsed = true
+note = ""
+role = "sync app"
+modules = ["qbittorrent", "transmission", "syncthing", "nextcloud", "localsend"]
+
+[[category]]
+id = "dev"
+name = "Developer tools"
+choice = "any"
+collapsed = true
+note = ""
+role = "developer tool"
+modules = ["git", "lazygit", "meld", "dbeaver", "bruno"]
+
+[[category]]
+id = "containers"
+name = "Containers & VMs"
+choice = "any"
+collapsed = true
+note = ""
+role = "virtualization tool"
+modules = ["podman", "podman-desktop", "distrobox", "gnome-boxes", "virt-manager", "waydroid"]
 
 [[category]]
 id = "extras"
-name = "Extras"
+name = "Utilities"
 choice = "any"
-note = "Nothing here is ticked by default."
-role = "app"
-modules = ["flathub", "steam", "gimp", "inkscape", "signal", "obs"]
+collapsed = true
+note = ""
+role = "utility"
+modules = ["flathub", "bazaar", "flatseal", "mission-center", "gnome-disks", "pika-backup", "file-roller", "btrfs-assistant"]
 
-# Download size (MB) of each shared Flatpak runtime, counted once per install.
-# Flathub API /api/v2/summary/<runtime> on 2026-09-27.
+# Download size (MB) of each shared download, counted once per install: the Flatpak runtimes
+# (Flathub API /api/v2/summary/<runtime> on 2026-09-27) and "akmods", the tools that build a
+# driver for the kernel (akmods, kernel-devel, gcc, rpm-build; about 550 MB on a bare Fedora 44
+# container on 2026-09-27, roughly half that on top of the live image). The defaults already pull
+# freedesktop 25.08 (Zen), the freedesktop 26.08 SDK (Zed) and KDE 6.10 (Collabora); every
+# other GNOME/KDE runtime costs 400+ MB the first time, which is why small GNOME apps whose
+# Fedora package is current install with dnf first. Not counted: org.freedesktop.Platform.GL.default
+# (~150 MB per freedesktop branch) and codecs-extra.
 [runtimes]
+"akmods" = 300
+"org.freedesktop.Platform//24.08" = 269
 "org.freedesktop.Platform//25.08" = 259
 "org.freedesktop.Platform//26.08" = 281
 "org.freedesktop.Sdk//25.08" = 609
 "org.freedesktop.Sdk//26.08" = 656
-"org.kde.Platform//6.10" = 392
+"org.gnome.Platform//49" = 419
 "org.gnome.Platform//50" = 420
 "org.gnome.Platform//51" = 432
+"org.kde.Platform//5.15-25.08" = 367
+"org.kde.Platform//6.10" = 392
+"org.kde.Platform//6.11" = 410

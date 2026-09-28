@@ -4,16 +4,19 @@ import QtQuick.Layouts
 import Quickshell
 
 // The power menu (design Menu), under the bar's power item or from Super + Esc.
-// Items name what will happen. On the live USB there is nothing to lock or log out of,
-// so only Restart and Shut down are offered. The actions run `arctic-power <action>`.
+// Items name what will happen. Settings comes first (the system menu is where people look for
+// it); on the live USB there is nothing to lock or log out of, so Restart and Shut down follow.
+// The actions run `arctic-power <action>`; Settings runs `arctic-settings`.
 Popover {
     id: menu
     required property var shell
     property int current: 0
     readonly property var actions: Session.live
-        ? [ { id: 'restart', label: 'Restart', icon: 'restart' },
+        ? [ { id: 'settings', label: 'Settings', icon: 'sliders', keys: 'Super + S' },
+            { id: 'restart', label: 'Restart', icon: 'restart' },
             { id: 'poweroff', label: 'Shut down', icon: 'power' } ]
-        : [ { id: 'lock', label: 'Lock screen', icon: 'lock', keys: 'Super + L' },
+        : [ { id: 'settings', label: 'Settings', icon: 'sliders', keys: 'Super + S' },
+            { id: 'lock', label: 'Lock screen', icon: 'lock', keys: 'Super + L' },
             { id: 'logout', label: 'Log out', icon: 'log-out' },
             { id: 'suspend', label: 'Suspend', icon: 'sleep' },
             { id: 'restart', label: 'Restart', icon: 'restart' },
@@ -32,6 +35,7 @@ Popover {
     function run(action) {
         close();
         if (action.id === 'lock') shell.lock();
+        else if (action.id === 'settings') Quickshell.execDetached(['arctic-settings']);
         else Quickshell.execDetached(['arctic-power', action.id]);
     }
 

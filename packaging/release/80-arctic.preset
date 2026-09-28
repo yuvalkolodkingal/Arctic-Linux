@@ -13,6 +13,18 @@ disable arcticd.service
 # Finishes app installs the installer had to put off (only runs when pending.json exists).
 enable arctic-firstboot.service
 
+# Updates (arctic-update): downloaded daily in the background, installed at the next restart
+# by dnf5-offline-transaction.service (static, wanted by system-update.target). Not
+# dnf5-automatic: it can only install into the running system (dnf5-plugin-automatic).
+enable arctic-update-stage.timer
+disable dnf5-automatic.timer
+disable dnf-automatic.timer
+# Snapper: the pre/post snapshots around dnf transactions (arctic-snapper.actions) are thinned
+# out by the cleanup timer (NUMBER_LIMIT). No hourly timeline snapshots, no boot snapshots.
+enable snapper-cleanup.timer
+disable snapper-timeline.timer
+disable snapper-boot.timer
+
 # Nix (Fedora's nix-daemon package). The service, not the socket, until CI shows no AVC
 # denials with the socket (docs/PLAN.md §6.6).
 enable nix-daemon.service

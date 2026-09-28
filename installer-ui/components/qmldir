@@ -17,6 +17,7 @@ ArSteps 1.0 ArSteps.qml
 ArTag 1.0 ArTag.qml
 ArText 1.0 ArText.qml
 ArToggle 1.0 ArToggle.qml
+AppGroupHeader 1.0 AppGroupHeader.qml
 AppRow 1.0 AppRow.qml
 AuroraBand 1.0 AuroraBand.qml
 CornerMask 1.0 CornerMask.qml

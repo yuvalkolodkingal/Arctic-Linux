@@ -11,10 +11,10 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: helix 25.07 (6.4 MB)
+# Fedora 44: helix 25.07.1 (6.4 MB); the weak dep helix-parsers adds ~100 MB.
 method = "dnf"
 packages = ["helix"]
-download_mb = 7
+download_mb = 108
 
 [defaults]
 desktop_id = "Helix.desktop"

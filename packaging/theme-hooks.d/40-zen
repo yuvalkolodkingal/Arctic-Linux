@@ -1,0 +1,109 @@
+#!/usr/bin/python3
+"""Arctic Linux theme hook: Zen Browser's accent colour (optional; docs/BUILD-SPEC.md "App theming").
+
+Run by `arctic-theme reload` with ARCTIC_THEME_DIR and ARCTIC_THEME_MODE; quick, never fails.
+
+Zen follows light and dark by itself (the desktop portal's colour scheme). With
+"zen_theme": true in ~/.config/arctic/settings.json (`arctic-theme zen on`) this hook also gives
+it the theme's accent: the user_pref lines of the active theme's zen/user.js go into a marked
+block at the end of the user.js of every Zen profile (the Flatpak's
+~/.var/app/app.zen_browser.zen/.zen or, in newer builds, its XDG folder
+~/.var/app/app.zen_browser.zen/config/zen; ~/.zen or ~/.config/zen for other builds). Zen reads user.js when it starts. With the setting off (the
+default) the block is removed again; nothing else in user.js is touched.
+"""
+import configparser
+import json
+import os
+import sys
+import tempfile
+
+BEGIN = "// >>> arctic-theme: written by the 40-zen theme hook (\"zen_theme\" in ~/.config/arctic/settings.json)"
+END = "// <<< arctic-theme"
+
+
+def profile_dirs(home, cfg):
+    for base in (os.path.join(home, ".var/app/app.zen_browser.zen/.zen"),
+                 os.path.join(home, ".var/app/app.zen_browser.zen/config/zen"),
+                 os.path.join(home, ".zen"), os.path.join(cfg, "zen")):
+        ini = configparser.ConfigParser(interpolation=None, strict=False)
+        try:
+            ini.read(os.path.join(base, "profiles.ini"), encoding="utf-8")
+        except (configparser.Error, UnicodeDecodeError):
+            continue
+        for section in ini.sections():
+            path = ini[section].get("path")
+            if not section.lower().startswith("profile") or not path:
+                continue
+            if ini[section].get("isrelative", "1") == "1":
+                path = os.path.join(base, path)
+            if os.path.isdir(path):
+                yield path
+
+
+def strip_block(text):
+    out, inside = [], False
+    for line in text.splitlines(keepends=True):
+        if line.rstrip("\n") == BEGIN:
+            inside = True
+        elif inside and line.rstrip("\n") == END:
+            inside = False
+        elif not inside:
+            out.append(line)
+    return "".join(out)
+
+
+def update(user_js, prefs):
+    try:
+        with open(user_js, encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        if not prefs:
+            return
+        text = ""
+    new = strip_block(text)
+    if prefs:
+        if new and not new.endswith("\n"):
+            new += "\n"
+        new += "\n".join([BEGIN, *prefs, END]) + "\n"
+    if new == text:
+        return
+    fd, tmp = tempfile.mkstemp(prefix=".user.js.", dir=os.path.dirname(user_js))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(new)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, user_js)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def main():
+    home = os.path.expanduser("~")
+    cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config")
+    try:
+        with open(os.path.join(cfg, "arctic", "settings.json"), encoding="utf-8") as f:
+            enabled = json.load(f).get("zen_theme") is True
+    except (OSError, ValueError, AttributeError):
+        enabled = False
+    prefs = []
+    if enabled:
+        theme = os.environ.get("ARCTIC_THEME_DIR") or os.path.join(cfg, "arctic", "current")
+        try:
+            with open(os.path.join(theme, "zen", "user.js"), encoding="utf-8") as f:
+                prefs = [l.strip() for l in f if l.startswith("user_pref(")]
+        except OSError:
+            return
+    for profile in profile_dirs(home, cfg):
+        try:
+            update(os.path.join(profile, "user.js"), prefs)
+        except OSError as e:
+            print("40-zen: %s: %s" % (profile, e), file=sys.stderr)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:  # a hook never fails the theme switch
+        print("40-zen: %s" % e, file=sys.stderr)
+    sys.exit(0)

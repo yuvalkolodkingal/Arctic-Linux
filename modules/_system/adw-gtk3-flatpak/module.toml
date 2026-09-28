@@ -1,0 +1,23 @@
+# The adw-gtk3 GTK 3 theme for Flatpak apps (Zen's menus and dialogs, other GTK 3 apps from
+# Flathub), so they match the desktop (docs/BUILD-SPEC.md "App theming"). Flatpak apps can't
+# see /usr/share/themes: they load the theme the gtk-theme setting names (adw-gtk3 in Winter,
+# adw-gtk3-dark in Polar night) from this runtime extension. Flatpak also fetches the active one
+# by itself when it installs or updates an app; installing both lets theme switches work
+# without that. Downloaded at install time; offline it is put off to first boot, like the codecs.
+id = "adw-gtk3-flatpak"
+name = "Light theme for Flatpak apps"
+summary = "adw-gtk3 for GTK 3 apps from Flathub (Winter)."
+category = "system"
+hidden = true
+always = true
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gtk.Gtk3theme.adw-gtk3"
+verified = false
+download_mb = 0.5

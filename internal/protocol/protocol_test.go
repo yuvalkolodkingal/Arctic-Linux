@@ -23,7 +23,7 @@ func TestWireShapes(t *testing.T) {
 		{Response{ID: json.RawMessage("7"), Error: FieldErrors("Fix it.", map[string]string{"username": "Use lowercase letters, numbers, - and _."})},
 			[]string{`{"id":7,"error":{"code":"invalid","message":"Fix it.","fields":{"username":"Use lowercase letters, numbers, - and _."}}}`}},
 		{Response{ID: json.RawMessage(`"a"`), Result: OKResult{OK: true}}, []string{`{"id":"a","result":{"ok":true}}`}},
-		{HelloResult{EngineVersion: "0.1.0", Firmware: "uefi"}, []string{`"engine_version":"0.1.0"`, `"mock":false`, `"live":false`, `"firmware":"uefi"`}},
+		{HelloResult{EngineVersion: "0.2.0", Firmware: "uefi"}, []string{`"engine_version":"0.2.0"`, `"mock":false`, `"live":false`, `"firmware":"uefi"`}},
 		{PassphraseResult{Score: 4, Label: "Strong", Words: 4, OK: true}, []string{`{"score":4,"label":"Strong","words":4,"ok":true}`}},
 		{EstimateResult{Apps: 9, Bytes: 1, Label: "l"}, []string{`{"apps":9,"bytes":1,"label":"l"}`}},
 		{SummaryResult{Rows: []SummaryRow{{Step: "disk", Label: "Disk", Value: "v"}}, Warning: "w", PrimaryLabel: "p"},

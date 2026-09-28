@@ -1,0 +1,64 @@
+name: Wiki
+
+# Publishes docs/wiki/ (one Markdown file per page, _Sidebar.md, _Footer.md, images/) to the
+# repository's GitHub wiki. The wiki is a separate git repository (<repo>.wiki.git); this job
+# mirrors docs/wiki/ into it, so edits made in the wiki's web editor are overwritten.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/wiki/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish docs/wiki to the wiki
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone the wiki repository
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! git clone \
+              "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki; then
+            msg="Could not clone ${GITHUB_REPOSITORY}.wiki.git. GitHub creates a wiki's repository only after its first page is saved in the web interface. One-time setup: make sure Wikis are enabled (Settings > General > Features > Wikis), open ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/wiki, click 'Create the first page', save it with any text, then re-run this workflow (Actions > Wiki > Run workflow). That page is replaced by docs/wiki/Home.md."
+            echo "::error title=The wiki isn't initialised::${msg}"
+            {
+              echo "### The wiki isn't initialised"
+              echo
+              echo "$msg"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Copy docs/wiki into the wiki
+        run: |
+          test -f docs/wiki/Home.md || { echo "::error::docs/wiki/Home.md is missing"; exit 1; }
+          # --delete removes pages that no longer exist in docs/wiki; the wiki's .git stays
+          # (excluded files are protected from deletion).
+          rsync -a --delete --exclude=.git docs/wiki/ wiki/
+          git -C wiki status --short
+
+      - name: Commit and push
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The wiki is already up to date."
+            exit 0
+          fi
+          git commit -q -m "Update the wiki from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
+          git push origin HEAD
+          echo "Published: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/wiki" >> "$GITHUB_STEP_SUMMARY"

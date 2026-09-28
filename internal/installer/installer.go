@@ -62,6 +62,10 @@ type Installer struct {
 	deferred   []string
 	flatpakRan bool
 	bootNum    string // firmware boot entry this run created (removed again on failure)
+	// Drivers (drivers.go).
+	drvStatus   map[string]string
+	akmodsReady bool
+	mokImported bool // mokutil --import queued this run's key (revoked on failure)
 }
 
 type layout struct {
@@ -162,6 +166,7 @@ func (in *Installer) Run(ctx context.Context) error {
 // firmware boot entry this run created.
 func (in *Installer) cleanup(ctx context.Context) {
 	in.R.Note("cleanup after failure")
+	in.revokeMOK(ctx)
 	in.R.Run(ctx, Cmd{Name: "umount", Args: []string{"-R", in.Opt.Target}, AllowFail: true})
 	if in.lay.luksName != "" {
 		in.R.Run(ctx, Cmd{Name: "udevadm", Args: []string{"settle", "--timeout=15"}, AllowFail: true})
@@ -630,6 +635,16 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 	if err := in.copyRoot(ctx, src); err != nil {
 		return err
 	}
+	in.t.Update(0.88, "")
+	// The copy has no SELinux labels (see copyRoot): label the new system before anything
+	// runs inside it. With SELinux enforcing, rpm runs scriptlets as rpm_script_t, which may
+	// not execute unlabelled files: every scriptlet in the chroot then fails with exit 127.
+	// The finalize phase relabels again, for the files the later steps create.
+	if code, err := in.relabel(ctx); err != nil {
+		return err
+	} else if code != 0 {
+		in.Rep.Logf("setfiles failed (exit %d); continuing, the finalize phase relabels again", code)
+	}
 	in.t.Update(0.9, "")
 	// API file systems for the chroot steps; /run carries the resolver stub for dnf.
 	for _, s := range [][]string{
@@ -645,7 +660,7 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 		}
 	}
 	// Live-only packages and files (livesys creates liveuser at boot, so the image has none).
-	if err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"remove", "-y", "--no-autoremove"}, LiveOnlyPackages...)}); err != nil {
+	if err := in.removeLivePackages(ctx); err != nil {
 		return err
 	}
 	for _, f := range []string{"/etc/sddm.conf.d/90-arctic-live.conf", "/etc/sysconfig/livesys"} {
@@ -657,6 +672,51 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 	return nil
 }
 
+// LiveOnlyUnits are the systemd units of LiveOnlyPackages that may be enabled in the image.
+var LiveOnlyUnits = []string{"livesys.service", "livesys-late.service", "arcticd.socket", "arcticd.service"}
+
+// removeLivePackages removes LiveOnlyPackages from the target. Should their scriptlets fail
+// (all they do is disable the packages' units), the units are disabled directly and the
+// packages removed without scriptlets: a live-only leftover must not stop the install.
+func (in *Installer) removeLivePackages(ctx context.Context) error {
+	args := append([]string{"remove", "-y", "--no-autoremove"}, LiveOnlyPackages...)
+	res, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "dnf", Args: args, AllowFail: true}))
+	if err != nil {
+		return err
+	}
+	if res.ExitCode == 0 {
+		return nil
+	}
+	in.Rep.Logf("removing the live-only packages failed (exit %d); removing them without their scriptlets", res.ExitCode)
+	if _, err := in.R.Run(ctx, Cmd{Name: "systemctl", Args: append([]string{"--root=" + in.Opt.Target, "disable"}, LiveOnlyUnits...), AllowFail: true}); err != nil {
+		return err
+	}
+	args = append([]string{"remove", "-y", "--no-autoremove", "--setopt=tsflags=noscripts"}, LiveOnlyPackages...)
+	return in.chroot(ctx, Cmd{Name: "dnf", Args: args})
+}
+
+// relabel sets the SELinux labels of the whole target (the API file systems and the vfat
+// ESP excepted) from the target's own file contexts. It returns setfiles' exit code.
+//
+// setfiles never crosses into another mounted file system (it runs with -x implied), so every
+// subvolume and /boot is named: left out, /home/<user>, /var/log and /boot would stay unlabelled
+// (unlabeled_t), and the login would fail to enter the home directory.
+func (in *Installer) relabel(ctx context.Context) (int, error) {
+	t := in.Opt.Target
+	args := []string{"-F", "-r", t,
+		"-e", in.tgt("/proc"), "-e", in.tgt("/sys"), "-e", in.tgt("/dev"), "-e", in.tgt("/run"), "-e", in.tgt("/boot/efi"),
+		in.tgt("/etc/selinux/targeted/contexts/files/file_contexts")}
+	for _, sv := range subvolumes {
+		args = append(args, in.tgt(sv.mount))
+	}
+	args = append(args, in.tgt("/boot"))
+	res, err := in.R.Run(ctx, Cmd{Name: "setfiles", Args: args, AllowFail: true})
+	if err != nil {
+		return 0, err
+	}
+	return res.ExitCode, nil
+}
+
 // copyRoot copies the live root to the target, then the ESP's files.
 //
 // The ESP is vfat, mounted at /boot/efi before the copy. The main rsync must not touch that
@@ -665,7 +725,8 @@ func (in *Installer) copyPhase(ctx context.Context) error {
 // mounted there, and its files are copied separately without owners, permissions or xattrs,
 // as Anaconda does for live images. The security.selinux xattr is not copied at all (the
 // kiwi-built image has files whose label the running policy can't set or remove, another
-// exit-23 failure); setfiles relabels the whole target in the finalize phase.
+// exit-23 failure); setfiles relabels the whole target right after the copy (copyPhase) and
+// again in the finalize phase.
 func (in *Installer) copyRoot(ctx context.Context, src string) error {
 	esp := "/boot/efi/*" // no ESP mounted: keep the (empty) directory from the image
 	if in.lay.esp != "" {
@@ -841,12 +902,21 @@ func (in *Installer) fstab() string {
 
 // ---- bootloader ----
 
+// kernelArgs are the arguments after "root=UUID=… ro" in /etc/kernel/cmdline (kernel-install
+// writes them into each BLS entry).
 func (in *Installer) kernelArgs() string {
-	args := "rootflags=subvol=@"
+	return "rootflags=subvol=@ " + in.grubArgs()
+}
+
+// grubArgs is GRUB_CMDLINE_LINUX. grub2-mkconfig rewrites the BLS entries' options from it,
+// and its 10_linux adds "rootflags=subvol=@" itself for a btrfs subvolume root, so it is not
+// repeated here (as Anaconda does; it would otherwise appear twice on the command line).
+func (in *Installer) grubArgs() string {
+	args := ""
 	if in.lay.luks {
-		args += " rd.luks.uuid=" + in.lay.luksName
+		args = "rd.luks.uuid=" + in.lay.luksName + " "
 	}
-	return args + " rhgb quiet"
+	return args + "rhgb quiet"
 }
 
 func (in *Installer) bootloaderPhase(ctx context.Context) error {
@@ -858,7 +928,7 @@ func (in *Installer) bootloaderPhase(ctx context.Context) error {
 		"GRUB_DEFAULT=saved",
 		"GRUB_DISABLE_SUBMENU=true",
 		`GRUB_TERMINAL_OUTPUT="gfxterm"`,
-		`GRUB_CMDLINE_LINUX="` + in.kernelArgs() + `"`,
+		`GRUB_CMDLINE_LINUX="` + in.grubArgs() + `"`,
 		`GRUB_DISABLE_RECOVERY="true"`,
 		"GRUB_ENABLE_BLSCFG=true",
 	}, "\n") + "\n"
@@ -971,10 +1041,11 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	sel := in.Job.Data.Apps.Selection
 	resolved := in.cat.Resolve(sel)
 	visible := in.isApp
+	inLive := in.inLiveImage
 
 	// 1. Apps already in the live image are installed by the copy.
 	for _, m := range resolved {
-		if m.InLiveImage {
+		if inLive(m) {
 			in.usedMethod[m.ID] = m.Primary()
 			if visible(m) {
 				in.Rep.Module(protocol.ModuleEvent{ID: m.ID, Name: m.Name, Status: protocol.ModInstalled, Percent: 100})
@@ -986,7 +1057,7 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	var rmPkgs, rmRefs []string
 	for _, id := range in.cat.Order {
 		m := in.cat.Modules[id]
-		if !m.InLiveImage || m.Always || sel.Contains(id) {
+		if !inLive(m) || m.Always || sel.Contains(id) {
 			continue
 		}
 		p := m.Primary()
@@ -1010,13 +1081,27 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 			in.Rep.Logf("removing %s failed (continuing): %v", ref, err)
 		}
 	}
+	if len(rmRefs) > 0 {
+		// The runtimes only the removed apps used (e.g. the Zen image's Platform and GL driver).
+		if _, err := in.R.Run(ctx, Cmd{Name: "flatpak", Args: []string{"uninstall", "--system", "-y", "--noninteractive", "--unused"}, Env: in.flatpakEnv()}); err != nil {
+			in.Rep.Logf("removing unused runtimes failed (continuing): %v", err)
+		}
+	}
 
 	// 3. Download what the live image doesn't have. dnf/COPR modules go in one transaction.
 	var todo []*catalog.Module
 	for _, m := range resolved {
-		if !m.InLiveImage {
-			todo = append(todo, m)
+		if inLive(m) {
+			continue
 		}
+		// Without a connection a driver would only fail; arctic-firstboot installs it once
+		// the new system is online.
+		if m.IsHardware() && in.Job.Offline {
+			in.Rep.Logf("%s: offline, putting it off to first boot", m.ID)
+			in.deferred = append(in.deferred, m.ID)
+			continue
+		}
+		todo = append(todo, m)
 	}
 	extra := []string{in.langpack()}
 	if in.Job.Data.Disk.Mode == wizard.ModeAlongside {
@@ -1032,7 +1117,7 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	// when the ISO was built without RPM Fusion): installed packages are a no-op for dnf.
 	var ensure []*catalog.Module
 	for _, m := range resolved {
-		if m.InLiveImage && in.isApp(m) && m.Primary().Method == catalog.MethodDNF {
+		if inLive(m) && in.isApp(m) && m.Primary().Method == catalog.MethodDNF {
 			ensure = append(ensure, m)
 			extra = append(extra, m.Primary().Packages...)
 		}
@@ -1084,6 +1169,9 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 		}
 		step()
 	}
+	if err := in.finishDrivers(ctx); err != nil {
+		return err
+	}
 	if in.flatpakRan {
 		if err := in.write(in.tgt("/var/lib/flatpak/.fedora-initialized"), "", 0o644); err != nil {
 			return err
@@ -1091,6 +1179,18 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	}
 	in.t.Update(1, "")
 	return nil
+}
+
+// inLiveImage reports whether the copy already brought the module: in_live_image in the
+// catalog, or a Flatpak app the live image happens to ship. tools/build-iso.sh preinstalls
+// Zen only while the ISO stays under 2 GiB (BUILD-SPEC §7), so the copied
+// /var/lib/flatpak decides, not the catalog.
+func (in *Installer) inLiveImage(m *catalog.Module) bool {
+	if m.InLiveImage {
+		return true
+	}
+	p := m.Primary()
+	return p.Method == catalog.MethodFlatpak && p.Ref != "" && in.R.Exists(in.tgt("/var/lib/flatpak/app/"+p.Ref))
 }
 
 func (in *Installer) batchStatus(batch []*catalog.Module) string {
@@ -1108,7 +1208,7 @@ func (in *Installer) batchStatus(batch []*catalog.Module) string {
 
 // isApp reports whether a module is one of the apps the person ticked (progress, events).
 func (in *Installer) isApp(m *catalog.Module) bool {
-	return !m.Hidden && in.Job.Data.Apps.Selection.Contains(m.ID)
+	return !m.Hidden && !m.IsHardware() && in.Job.Data.Apps.Selection.Contains(m.ID)
 }
 
 // installWithAttention tries every method of a module; when all fail it asks the person
@@ -1118,6 +1218,8 @@ func (in *Installer) installWithAttention(ctx context.Context, m *catalog.Module
 		if in.isApp(m) {
 			in.t.Update(0, backend.InstallingStatus(in.cat, m))
 			in.Rep.Module(protocol.ModuleEvent{ID: m.ID, Name: m.Name, Status: protocol.ModDownloading})
+		} else if m.IsHardware() {
+			in.t.Update(0, backend.InstallingStatus(in.cat, m))
 		}
 		var lastErr error
 		for _, meth := range m.Install {
@@ -1212,6 +1314,18 @@ func (in *Installer) setupRepos(ctx context.Context, meth catalog.Install) error
 	}
 	for _, s := range meth.Swap {
 		from, to, _ := strings.Cut(s, "=")
+		// Only swap out a package of exactly that name (rpm -q matches names, not provides, as
+		// arctic-firstboot checks too). dnf swap resolves `from` through provides as well, so
+		// a name another package has absorbed (F44: mesa-dri-drivers provides
+		// mesa-va-drivers) would erase that package and everything that needs it.
+		res, err := in.R.Run(ctx, Chroot(in.Opt.Target, Cmd{Name: "rpm", Args: []string{"-q", "--quiet", from}, AllowFail: true}))
+		if err != nil {
+			return err
+		}
+		if res.ExitCode != 0 {
+			in.R.Note("%s isn’t installed: nothing to swap for %s", from, to)
+			continue
+		}
 		if err := in.chroot(ctx, Cmd{Name: "dnf", Args: []string{"swap", "-y", "--allowerasing", from, to}}); err != nil {
 			return err
 		}
@@ -1221,10 +1335,17 @@ func (in *Installer) setupRepos(ctx context.Context, meth catalog.Install) error
 
 func (in *Installer) dnfInstall(ctx context.Context, mods, ensure []*catalog.Module, extra []string, progress func(float64)) error {
 	var pkgs []string
+	akmod := false
 	for _, m := range mods {
 		p := m.Primary()
 		if err := in.setupRepos(ctx, p); err != nil {
 			return err
+		}
+		if m.AkmodName() != "" {
+			akmod = true
+			if err := in.prepareAkmods(ctx); err != nil {
+				return err
+			}
 		}
 		pkgs = append(pkgs, p.Packages...)
 	}
@@ -1234,11 +1355,15 @@ func (in *Installer) dnfInstall(ctx context.Context, mods, ensure []*catalog.Mod
 		}
 	}
 	pkgs = append(pkgs, extra...)
-	return in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), OnLine: func(l string) {
+	err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, pkgs...), OnLine: func(l string) {
 		if d, t, ok := ParseDNF(l); ok && progress != nil {
 			progress(float64(d) / float64(t))
 		}
 	}})
+	if akmod {
+		in.waitAkmods(ctx)
+	}
+	return err
 }
 
 func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth catalog.Install) error {
@@ -1252,11 +1377,20 @@ func (in *Installer) installMethod(ctx context.Context, m *catalog.Module, meth 
 		if err := in.setupRepos(ctx, meth); err != nil {
 			return err
 		}
-		return in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, meth.Packages...), OnLine: func(l string) {
+		if m.AkmodName() != "" {
+			if err := in.prepareAkmods(ctx); err != nil {
+				return err
+			}
+		}
+		err := in.chroot(ctx, Cmd{Name: "dnf", Args: append([]string{"install", "-y"}, meth.Packages...), OnLine: func(l string) {
 			if d, t, ok := ParseDNF(l); ok {
 				report(100 * d / t)
 			}
 		}})
+		if m.AkmodName() != "" {
+			in.waitAkmods(ctx)
+		}
+		return err
 	case catalog.MethodFlatpak:
 		in.flatpakRan = true
 		if !in.remoteDone[meth.Remote] {
@@ -1336,18 +1470,31 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	if len(in.deferred) > 0 {
 		// Version 2 carries each module's install methods, because the catalog leaves the
 		// installed system together with arctic-installer (arctic-firstboot reads this).
+		// Drivers also carry what happens after their packages are in: the akmod to build
+		// and the kernel arguments to add; mok_hash is the one-time code's hash for
+		// enrolling the akmods key when Secure Boot is on (pendingDriverKey).
 		type pendingModule struct {
-			ID      string            `json:"id"`
-			Name    string            `json:"name"`
-			Install []catalog.Install `json:"install"`
+			ID         string            `json:"id"`
+			Name       string            `json:"name"`
+			Install    []catalog.Install `json:"install"`
+			Akmod      *catalog.Akmod    `json:"akmod,omitempty"`
+			KernelArgs []string          `json:"kernel_args,omitempty"`
 		}
 		var mods []pendingModule
 		for _, id := range in.deferred {
 			if m := in.cat.Modules[id]; m != nil {
-				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install})
+				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install, Akmod: m.Akmod, KernelArgs: m.KernelArgs(in.lay.luks)})
 			}
 		}
-		b, _ := json.MarshalIndent(map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}, "", "  ")
+		doc := map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}
+		hashPath, err := in.pendingDriverKey(ctx)
+		if err != nil {
+			return err
+		}
+		if hashPath != "" {
+			doc["mok_hash"] = hashPath
+		}
+		b, _ := json.MarshalIndent(doc, "", "  ")
 		if err := in.write(in.tgt("/var/lib/arctic/pending.json"), string(b)+"\n", 0o644); err != nil {
 			return err
 		}
@@ -1363,17 +1510,18 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	}
 	// SELinux labels before unmounting; fall back to a relabel at first boot.
 	t := in.Opt.Target
-	res, err := in.R.Run(ctx, Cmd{Name: "setfiles", Args: []string{"-F", "-r", t,
-		"-e", in.tgt("/proc"), "-e", in.tgt("/sys"), "-e", in.tgt("/dev"), "-e", in.tgt("/run"), "-e", in.tgt("/boot/efi"),
-		in.tgt("/etc/selinux/targeted/contexts/files/file_contexts"), t}, AllowFail: true})
+	code, err := in.relabel(ctx)
 	if err != nil {
 		return err
 	}
-	if res.ExitCode != 0 {
-		in.Rep.Logf("setfiles failed (exit %d); relabelling at first boot instead", res.ExitCode)
+	if code != 0 {
+		in.Rep.Logf("setfiles failed (exit %d); relabelling at first boot instead", code)
 		if err := in.write(in.tgt("/.autorelabel"), "-F\n", 0o644); err != nil {
 			return err
 		}
+	}
+	if err := in.setupSnapper(ctx); err != nil {
+		return err
 	}
 	in.t.Update(0.8, "")
 	if err := in.run(ctx, "umount", "--recursive", t); err != nil {
@@ -1391,6 +1539,50 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	// The private bind of the target directory (privateTarget).
 	_, err = in.R.Run(ctx, Cmd{Name: "umount", Args: []string{t}, AllowFail: true})
 	return err
+}
+
+// SnapperPolicy is the cleanup policy of snapper's root configuration: the snapshot pairs
+// around dnf transactions (arctic-snapper.actions) use the number algorithm, of which the newest
+// 10 are kept (5 marked important); no hourly timeline. Snapshots stay root's: no ALLOW_GROUPS
+// (snapperd would let every wheel process create, delete and undochange snapshots without a
+// password). The CLI works with sudo, and Btrfs Assistant asks through polkit.
+var SnapperPolicy = []string{"NUMBER_CLEANUP=yes", "NUMBER_LIMIT=10", "NUMBER_LIMIT_IMPORTANT=5",
+	"TIMELINE_CREATE=no"}
+
+// setupSnapper creates snapper's "root" configuration for the @ subvolume, which makes
+// /.snapshots a nested subvolume of @ (no fstab entry, as on Fedora). From then on every dnf
+// transaction on the new system gets a snapshot before and after it (arctic-snapper.actions
+// acts only once this configuration exists). It runs last, after the final relabel: nothing
+// the installer itself did is snapshotted, and only what snapper created needs labels.
+// Snapshots are a safety net: a failure here is logged, never fatal.
+func (in *Installer) setupSnapper(ctx context.Context) error {
+	if !in.R.Exists(in.tgt("/usr/bin/snapper")) {
+		in.Rep.Logf("snapper isn't in the new system; updates won't be snapshotted")
+		return nil
+	}
+	cmds := []Cmd{
+		Chroot(in.Opt.Target, Cmd{Name: "snapper", Args: []string{"--no-dbus", "-c", "root", "create-config", "/"}, AllowFail: true}),
+		Chroot(in.Opt.Target, Cmd{Name: "snapper", Args: append([]string{"--no-dbus", "-c", "root", "set-config"}, SnapperPolicy...), AllowFail: true}),
+		{Name: "setfiles", Args: []string{"-F", "-r", in.Opt.Target, in.tgt("/etc/selinux/targeted/contexts/files/file_contexts"),
+			in.tgt("/.snapshots"), in.tgt("/etc/snapper"), in.tgt("/etc/sysconfig/snapper")}, AllowFail: true},
+	}
+	for _, c := range cmds {
+		res, err := in.R.Run(ctx, c)
+		if err == nil && res.ExitCode == 0 {
+			continue
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if c.Name == "setfiles" {
+			// The first boot relabels (/.autorelabel) rather than leave /.snapshots unlabelled.
+			in.Rep.Logf("warning: labelling snapper's files failed (exit %d); relabelling at first boot", res.ExitCode)
+			return in.write(in.tgt("/.autorelabel"), "-F\n", 0o644)
+		}
+		in.Rep.Logf("warning: %s failed (exit %d, %v); updates won't be snapshotted", c.String(), res.ExitCode, err)
+		return nil
+	}
+	return nil
 }
 
 // roleOrder is the order of /etc/arctic/default-apps (arctic-open roles).

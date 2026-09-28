@@ -1,0 +1,34 @@
+id = "text-editor"
+name = "Text Editor"
+summary = "Simple notepad for everyday text."
+category = "editor"
+role = "text editor"
+default = false
+tile = "text-editor"
+icon = "file"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: gnome-text-editor 50.1.
+method = "dnf"
+packages = ["gnome-text-editor"]
+download_mb = 14
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "org.gnome.TextEditor"
+runtime = "org.gnome.Platform//51"
+desktop_id = "org.gnome.TextEditor.desktop"
+command = "gtk-launch org.gnome.TextEditor"
+verified = true
+download_mb = 1
+
+[defaults]
+desktop_id = "org.gnome.TextEditor.desktop"
+role = "editor"
+command = "gnome-text-editor"
+mime = ["text/plain", "text/markdown"]

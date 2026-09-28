@@ -1,0 +1,55 @@
+name: Repository (testing)
+
+# Pushes to the development branch publish the TESTING channel of the Arctic package repository
+# (docs/BUILD-SPEC.md §9). This workflow only forwards: it starts .github/workflows/repo.yml on
+# main (channel testing, ref = the pushed commit), because the github-pages environment only
+# lets the default branch deploy. It waits until no publish is running or waiting first: all
+# publishes share one concurrency group, in which a new waiting run would cancel the waiting one
+# (a stable publish must never be superseded by a testing one). A newer push cancels an older
+# forward that is still waiting, so only the latest commit is published.
+
+on:
+  push:
+    branches: [claude/busy-goodall-j42hmi]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write   # gh workflow run
+
+concurrency:
+  group: arctic-repository-testing-forward
+  cancel-in-progress: true
+
+jobs:
+  forward:
+    name: Publish this commit to the testing channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Wait for other publishes, then start one for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          busy() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/repo.yml/runs?per_page=30" \
+              --jq '[.workflow_runs[] | select(.status != "completed")] | length'
+          }
+          if ! n="$(busy 2>/dev/null)"; then
+            echo "::warning::repo.yml isn't on the default branch yet (merge it to main first); nothing published"
+            exit 0
+          fi
+          for _ in $(seq 1 140); do
+            [ "$n" = 0 ] && break
+            echo "$n publish run(s) running or waiting; checking again in a minute"
+            sleep 60
+            n="$(busy)"
+          done
+          [ "$n" = 0 ] || { echo "::error::publishes still busy after 140 minutes"; exit 1; }
+          gh workflow run repo.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f channel=testing -f ref="$GITHUB_SHA"
+          echo "Started a testing publish of \`$GITHUB_SHA\` ($GITHUB_REF_NAME) on main." >> "$GITHUB_STEP_SUMMARY"

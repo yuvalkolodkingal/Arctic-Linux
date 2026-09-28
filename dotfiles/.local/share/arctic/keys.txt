@@ -36,6 +36,7 @@
   System
     Super + L                Lock
     Super + Esc              Power menu
+    Super + S                Settings
     Super + I                Install Arctic Linux (live USB)
     Super + Delete           Dismiss notification (Shift: all)
     Super + Shift + N        Do not disturb

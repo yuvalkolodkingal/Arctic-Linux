@@ -1,0 +1,48 @@
+# NVIDIA's driver for GeForce RTX 20 series (Turing) and newer, from RPM Fusion nonfree
+# (rpmfusion.org/Howto/NVIDIA; 615.71.09 for Fedora 44 on 2026-09-27). akmod-nvidia is built
+# for the installed kernel by akmods, in the new system during the install (and again by
+# akmods.service for every later kernel). Turing is the oldest generation the current driver
+# series supports: 590 and later dropped Maxwell, Pascal and Volta (see nvidia-580xx).
+# Kepler and older (470xx/390xx/340xx) get nothing: those drivers have no GBM, which Mango
+# (wlroots) needs, so nouveau stays.
+id = "nvidia"
+name = "NVIDIA driver"
+summary = "NVIDIA’s own driver for your {device}: full speed for games, video and 3D apps."
+category = "drivers"
+role = "graphics driver"
+default = true
+tile = "driver-gpu"
+icon = "cpu"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = ["nvidia-580xx"]
+
+# Turing (TU102 = 10de:1e02) and every later generation: device ids from 1e00 up. Class 0300
+# is a card with outputs, 0302 the render-only GPU of a hybrid laptop.
+[[detect]]
+bus = "pci"
+vendor = "10de"
+class = ["0300", "0302"]
+device_min = "1e00"
+
+[akmod]
+name = "nvidia"
+module = "nvidia"
+
+# The arguments xorg-x11-drv-nvidia's %posttrans adds (nouveau and nova_core off, also in
+# the initramfs), plus kernel mode setting (the driver's default since 560; wlroots needs it).
+# The NVIDIA modules are left out of the initramfs (99-nvidia-dracut.conf), so with an
+# encrypted disk the passphrase prompt draws on simpledrm when this card drives the screen.
+[boot]
+kernel_args = ["rd.driver.blacklist=nouveau,nova_core", "modprobe.blacklist=nouveau,nova_core", "nvidia-drm.modeset=1"]
+luks_display_args = ["plymouth.use-simpledrm=1"]
+
+[[install]]
+# CUDA libraries for NVENC/NVDEC, CUDA apps and libva-nvidia-driver (VA-API video decoding
+# for Firefox and mpv; the "nvidia-vaapi-driver" project, packaged in Fedora).
+method = "dnf"
+packages = ["akmod-nvidia", "xorg-x11-drv-nvidia-cuda", "libva-nvidia-driver"]
+repos = ["rpmfusion-free", "rpmfusion-nonfree"]
+runtime = "akmods"
+download_mb = 540

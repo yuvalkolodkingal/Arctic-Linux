@@ -35,6 +35,11 @@ type Options struct {
 	Firmware string
 	// LogDir is where SaveLog writes (default os.TempDir()).
 	LogDir string
+	// Hardware names the hw.Fixtures machine ("" = hw.DefaultFixture, an NVIDIA hybrid
+	// laptop); NoSecureBoot turns Secure Boot off (it is on by default, so the Done screen
+	// shows the key enrolment steps).
+	Hardware     string
+	NoSecureBoot bool
 }
 
 // Backend is the mock backend.
@@ -113,10 +118,24 @@ func Inventory() []hw.Disk {
 		Path: "/dev/sdb", Model: "SanDisk Ultra", Serial: "4C530001230512117284", SizeBytes: 30_752_000_000, Transport: "usb", Removable: true,
 		InstallMedia: true, ReadOnly: false, PTType: "dos", SectorSize: 512,
 		Partitions: []hw.Partition{
-			{Path: "/dev/sdb1", Number: 1, StartByte: 0, SizeBytes: 2_000_000_000, Type: "0x0", FSType: "iso9660", Label: "Arctic-Linux-0.1"},
+			{Path: "/dev/sdb1", Number: 1, StartByte: 0, SizeBytes: 2_000_000_000, Type: "0x0", FSType: "iso9660", Label: "Arctic-Linux-0.2"},
 		},
 	}
 	return []hw.Disk{nvme, sata, usb}
+}
+
+// Hardware implements backend.Backend: a fixture machine (hw.Fixtures).
+func (b *Backend) Hardware(ctx context.Context) hw.Hardware {
+	name := b.opts.Hardware
+	if name == "" {
+		name = hw.DefaultFixture
+	}
+	h, ok := hw.Fixture(name, !b.opts.NoSecureBoot)
+	if !ok {
+		b.logf("unknown hardware fixture %q (have %v); no devices", name, hw.FixtureNames())
+		return hw.Hardware{SecureBoot: !b.opts.NoSecureBoot}
+	}
+	return h
 }
 
 // Disks implements backend.Backend.
@@ -401,6 +420,34 @@ func (b *Backend) Install(ctx context.Context, job *backend.Job, r backend.Repor
 		t.AppDone()
 		elapsed += d
 		t.Update(base+span, status)
+	}
+	// Drivers: downloaded with the apps, then built for the kernel (akmods); put off to first
+	// boot when offline. The signing key is enrolled when Secure Boot is on.
+	for _, m := range job.Drivers() {
+		st := protocol.DriverInstalled
+		if job.Offline {
+			st = protocol.DriverDeferred
+		} else {
+			t.Update(0.9, backend.InstallingStatus(c, m))
+			if err := b.sleep(ctx, 2*time.Second); err != nil {
+				return err
+			}
+			if m.AkmodName() != "" {
+				t.Update(0.95, backend.BuildingStatus(m))
+				if err := b.sleep(ctx, 4*time.Second); err != nil {
+					return err
+				}
+			}
+		}
+		b.logf("driver %s for %s: %s", m.ID, m.Device, st)
+		job.Outcome.Drivers = append(job.Outcome.Drivers, backend.DriverOutcome{ID: m.ID, Status: st})
+		if args := m.KernelArgs(job.Data.Encryption.Enabled); len(args) > 0 && st == protocol.DriverInstalled {
+			b.logf("kernel arguments: %s", strings.Join(args, " "))
+		}
+	}
+	if job.NeedsMOK() && job.MOKCode != "" {
+		job.Outcome.MOK = backend.MOKRequested
+		b.logf("driver signing key enrolment requested (Secure Boot)")
 	}
 	// Hidden modules that are downloaded (codecs) finish quietly inside the apps phase.
 	t.Update(1, "")

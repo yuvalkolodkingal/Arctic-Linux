@@ -1,0 +1,22 @@
+id = "zoom"
+name = "Zoom"
+summary = "Video meetings and calls."
+category = "chat"
+role = "video call app"
+default = false
+tile = "zoom"
+icon = "camera"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# Proprietary. Community Flathub wrapper (unverified).
+method = "flatpak"
+remote = "flathub"
+ref = "us.zoom.Zoom"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 304

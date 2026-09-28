@@ -1,0 +1,32 @@
+id = "steam"
+name = "Steam"
+summary = "Games and the Steam store."
+category = "gaming"
+role = "game store"
+default = false
+tile = "steam"
+icon = "gamepad"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# RPM Fusion nonfree: steam 1.0.0.87 + 32-bit libraries (~206 MB). It pulls steam-devices
+# (controller udev rules) and works with a host MangoHud/GameMode. With the RPM Fusion NVIDIA
+# driver, xorg-x11-drv-nvidia-libs.i686 follows through RPM boolean dependencies.
+method = "dnf"
+packages = ["steam"]
+repos = ["rpmfusion-free", "rpmfusion-nonfree"]
+download_mb = 206
+
+[[install]]
+# 36 MB app + org.freedesktop.Platform.Compat.i386 (140 MB) + GL32.default (160 MB).
+# Controllers need steam-devices on the host.
+method = "flatpak"
+remote = "flathub"
+ref = "com.valvesoftware.Steam"
+runtime = "org.freedesktop.Platform//26.08"
+verified = false
+download_mb = 336

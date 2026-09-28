@@ -1,0 +1,26 @@
+id = "krita"
+name = "Krita"
+summary = "Digital painting for artists."
+category = "graphics"
+role = "painting app"
+default = false
+tile = "krita"
+icon = "brush"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Krita 5.3 (the production release). Fedora 44 ships Krita 6.0, Krita's early-access Qt 6 / native Wayland line.
+method = "flatpak"
+remote = "flathub"
+ref = "org.kde.krita"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 263
+
+[[install]]
+method = "dnf"
+packages = ["krita"]
+download_mb = 135

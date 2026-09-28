@@ -1,0 +1,19 @@
+# Arctic Linux: desktop defaults for GTK, libadwaita and Flatpak apps (arctic-desktop-config).
+# Installed as /etc/dconf/db/distro.d/10-arctic, the "distro" database of Fedora's dconf profile
+# (/etc/dconf/profile/user: user-db:user, system-db:local, system-db:site, system-db:distro), so
+# an administrator's /etc/dconf/db/local.d and every user's own settings still win. The package
+# runs `dconf update`. docs/BUILD-SPEC.md "App theming".
+#
+# Polar night (dark) is the default theme; arctic-theme and its hooks switch gtk-theme and
+# color-scheme in the user's own settings (adw-gtk3 + prefer-light for Winter).
+
+[org/gnome/desktop/interface]
+gtk-theme='adw-gtk3-dark'
+color-scheme='prefer-dark'
+accent-color='yellow'
+icon-theme='Adwaita'
+cursor-theme='Adwaita'
+cursor-size=24
+font-name='Figtree 11'
+document-font-name='Figtree 11'
+monospace-font-name='JetBrains Mono 10'

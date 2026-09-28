@@ -1,0 +1,21 @@
+id = "freecad"
+name = "FreeCAD"
+summary = "3D design for real-world objects."
+category = "graphics"
+role = "CAD app"
+default = false
+tile = "freecad"
+icon = "package"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora 44.
+method = "flatpak"
+remote = "flathub"
+ref = "org.freecad.FreeCAD"
+runtime = "org.kde.Platform//6.11"
+verified = true
+download_mb = 414

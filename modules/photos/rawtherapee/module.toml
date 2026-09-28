@@ -1,0 +1,26 @@
+id = "rawtherapee"
+name = "RawTherapee"
+summary = "Detailed RAW photo processing."
+category = "photos"
+role = "photo editor"
+default = false
+tile = "rawtherapee"
+icon = "camera"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44: rawtherapee 5.13.
+method = "dnf"
+packages = ["rawtherapee"]
+download_mb = 25
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "com.rawtherapee.RawTherapee"
+runtime = "org.freedesktop.Platform//26.08"
+verified = false
+download_mb = 105

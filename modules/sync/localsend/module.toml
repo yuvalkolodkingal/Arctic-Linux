@@ -1,0 +1,21 @@
+id = "localsend"
+name = "LocalSend"
+summary = "Send files to nearby phones and computers."
+category = "sync"
+role = "file sharing app"
+default = false
+tile = "localsend"
+icon = "send"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora. Uses port 53317 on the local network.
+method = "flatpak"
+remote = "flathub"
+ref = "org.localsend.localsend_app"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 23

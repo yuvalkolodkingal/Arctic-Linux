@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!--
-  Arctic Linux 0.1 live ISO (kiwi-ng 11, Fedora 44).
+  Arctic Linux 0.2 live ISO (kiwi-ng 11, Fedora 44).
 
   Derived from fedora-kiwi-descriptions (branch f44): the LiveInstall profile
   (components/liveinstall.xml), BootCoreLive (components/boot.xml), BaseCommon/HardwareCommon
@@ -16,11 +16,11 @@
 	<description type="system">
 		<author>Arctic Linux</author>
 		<contact>https://github.com/yuvalkolodkingal/O-Tism/issues</contact>
-		<specification>Arctic Linux 0.1 live media (Fedora 44 base, Mango desktop)</specification>
+		<specification>Arctic Linux 0.2 live media (Fedora 44 base, Mango desktop)</specification>
 	</description>
 
 	<preferences>
-		<version>0.1.0</version>
+		<version>0.2.0</version>
 		<packagemanager>dnf5</packagemanager>
 		<locale>en_US</locale>
 		<keytable>us</keytable>
@@ -28,7 +28,7 @@
 		<release-version>44</release-version>
 		<bootloader-theme>arctic</bootloader-theme>
 		<type image="iso"
-			publisher="Arctic Linux" volid="Arctic-Linux-0.1" application_id="Arctic-Linux-0.1"
+			publisher="Arctic Linux" volid="Arctic-Linux-0.2" application_id="Arctic-Linux-0.2"
 			primary="true" flags="dmsquash" filesystem="erofs" erofscompression="lzma,level=6"
 			fscreateoptions="-Efragments -C 1048576"
 			mediacheck="true" firmware="uefi" efiparttable="gpt" efifatimagesize="30"
@@ -63,6 +63,13 @@
 		<namedCollection name="guest-desktop-agents"/>
 		<!-- The Arctic desktop, the installer and the live session -->
 		<package name="arctic-desktop"/>
+		<!-- Arctic Settings (arctic-desktop requires it too; named so it is never left out)
+		     and the tools its Network, Bluetooth and Sound pages open. -->
+		<package name="arctic-settings"/>
+		<package name="nm-connection-editor"/>
+		<package name="blueman"/>
+		<package name="pavucontrol"/>
+		<package name="wlr-randr"/>
 		<!-- Default apps the installer treats as already in the live image (in_live_image in
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
 		<package name="kitty"/>
@@ -70,6 +77,14 @@
 		<package name="zsh"/>
 		<package name="Thunar"/>
 		<package name="vlc"/>
+		<!-- App theming (docs/BUILD-SPEC.md "App theming"; arctic-desktop-config requires them):
+		     adw-gtk3 for GTK 3 apps, qt5ct/qt6ct for Qt 5 (VLC) and Qt 6 apps, btop (recommended
+		     by arctic-desktop). Fedora builds qt5ct/qt6ct with KDE colour-scheme support, which
+		     pulls KDE Frameworks 5/6 libraries, Breeze icons and plasma-breeze-common. -->
+		<package name="adw-gtk3-theme"/>
+		<package name="qt5ct"/>
+		<package name="qt6ct"/>
+		<package name="btop"/>
 		<package name="arctic-installer"/>
 		<package name="arctic-live"/>
 		<package name="livesys-scripts"/>
@@ -122,6 +137,10 @@
 		<package name="glibc-langpack-uk"/>
 		<package name="isomd5sum"/>
 		<package name="btrfs-progs"/>
+		<!-- Rollback: snapper snapshots around every dnf transaction on the installed system
+		     (the installer copies this root and creates snapper's root configuration) -->
+		<package name="snapper"/>
+		<package name="libdnf5-plugin-actions"/>
 		<package name="udisks2-btrfs"/>
 		<package name="cryptsetup"/>
 		<package name="rsync"/>

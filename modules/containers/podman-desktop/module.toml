@@ -1,0 +1,21 @@
+id = "podman-desktop"
+name = "Podman Desktop"
+summary = "Manage containers and images visually."
+category = "containers"
+role = "container tool"
+default = false
+tile = "podman-desktop"
+icon = "package"
+in_live_image = false
+gpu = true
+requires = ["podman"]
+conflicts = []
+
+[[install]]
+# Talks to the host's Podman, so it requires the Podman module.
+method = "flatpak"
+remote = "flathub"
+ref = "io.podman_desktop.PodmanDesktop"
+runtime = "org.freedesktop.Platform//26.08"
+verified = true
+download_mb = 174

@@ -426,8 +426,11 @@ func DefaultExists(path string) bool {
 	case path == "/run/rootfsbase",
 		strings.HasSuffix(path, "/boot/efi"),
 		strings.HasSuffix(path, "/boot/grub2/themes/arctic/theme.txt"),
+		strings.HasSuffix(path, "/usr/bin/snapper"),
 		path == "/etc/NetworkManager/system-connections",
-		strings.HasPrefix(path, "/dev/"), strings.HasPrefix(path, "/sys/class/block/"):
+		strings.HasPrefix(path, "/dev/"), strings.HasPrefix(path, "/sys/class/block/"),
+		strings.Contains(path, "/lib/modules/") && strings.HasSuffix(path, "/vmlinuz"), // kernel-core
+		strings.Contains(path, "/usr/src/kernels/"):                                    // kernel-devel, pulled in by akmods
 		return true
 	}
 	return false

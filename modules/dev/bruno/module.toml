@@ -1,0 +1,21 @@
+id = "bruno"
+name = "Bruno"
+summary = "Test APIs, with collections kept in Git."
+category = "dev"
+role = "API client"
+default = false
+tile = "bruno"
+icon = "external"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Open-core (MIT app, paid extras); Flathub metadata says proprietary.
+method = "flatpak"
+remote = "flathub"
+ref = "com.usebruno.Bruno"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 178

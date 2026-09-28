@@ -1,0 +1,21 @@
+id = "digikam"
+name = "digiKam"
+summary = "Professional photo management."
+category = "photos"
+role = "photo organiser"
+default = false
+tile = "digikam"
+icon = "camera"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# The Fedora RPM pulls over 1.5 GB of dependencies.
+method = "flatpak"
+remote = "flathub"
+ref = "org.kde.digikam"
+runtime = "org.kde.Platform//6.10"
+verified = true
+download_mb = 364

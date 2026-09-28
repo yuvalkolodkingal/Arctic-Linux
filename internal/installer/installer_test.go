@@ -270,6 +270,44 @@ func TestFallbackMethod(t *testing.T) {
 	}
 }
 
+func TestLivePackagesRemovedWithoutScriptlets(t *testing.T) {
+	// Real hardware, SELinux enforcing: the live packages' %preun scriptlets fail (exit 127).
+	// The install goes on: their units are disabled and the packages removed without scripts.
+	job := loadJob(t, "defaults.toml", "uefi")
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if s := c.String(); c.Name == "chroot" && strings.Contains(s, "dnf remove") && strings.Contains(s, "arctic-live") && !strings.Contains(s, "tsflags=noscripts") {
+			return "", errors.New("exit status 1")
+		}
+		return DefaultRespond(c)
+	}}
+	rep := newReporter()
+	if err := runPlan(t, job, rec, rep); err != nil {
+		t.Fatal(err)
+	}
+	plan := rec.Plan()
+	relabel := strings.Index(plan, "$ setfiles ")
+	remove := strings.Index(plan, "dnf remove -y --no-autoremove arctic-live")
+	if relabel < 0 || remove < 0 || relabel > remove {
+		t.Error("the target is not relabelled before the first command that runs inside it")
+	}
+	for _, want := range []string{
+		"$ systemctl --root=/mnt disable livesys.service livesys-late.service arcticd.socket arcticd.service",
+		"$ chroot /mnt dnf remove -y --no-autoremove --setopt=tsflags=noscripts arctic-live livesys-scripts arctic-installer dracut-live dracut-kiwi-live",
+	} {
+		if !strings.Contains(plan, want) {
+			t.Errorf("plan lacks %q", want)
+		}
+	}
+	// Whole-system relabels (with the API file system excludes); snapper's files get their own.
+	// setfiles doesn't cross mount points: every subvolume and /boot must be named.
+	if !strings.Contains(plan, "file_contexts /mnt /mnt/home /mnt/var/log /mnt/nix /mnt/boot\n") {
+		t.Error("setfiles doesn't relabel every mounted subvolume and /boot")
+	}
+	if n := strings.Count(plan, "$ setfiles -F -r /mnt -e "); n != 2 {
+		t.Errorf("want two relabels (after the copy and at the end), got %d", n)
+	}
+}
+
 func TestFatalFailureCleansUp(t *testing.T) {
 	job := loadJob(t, "defaults.toml", "uefi")
 	rec := &Recorder{Respond: func(c Cmd) (string, error) {
@@ -515,5 +553,134 @@ func TestQuote(t *testing.T) {
 	c := Cmd{Name: "efibootmgr", Args: []string{"--label", "Arctic Linux", `\EFI\fedora\shimx64.efi`, "it's"}, Env: []string{"A=b"}}
 	if got := c.String(); got != `A=b efibootmgr --label 'Arctic Linux' '\EFI\fedora\shimx64.efi' 'it'\''s'` {
 		t.Errorf("got %s", got)
+	}
+}
+
+// The ISO may ship Zen as a Flatpak (tools/build-iso.sh, only under 2 GiB) although the catalog
+// can't say so: the copied /var/lib/flatpak decides.
+func TestPreinstalledFlatpakFromTheImage(t *testing.T) {
+	zenInImage := func(p string) bool {
+		return DefaultExists(p) || p == "/mnt/var/lib/flatpak/app/app.zen_browser.zen"
+	}
+	// Ticked: kept from the copy, never downloaded, reported installed.
+	job := loadJob(t, "ci/default.toml", "uefi")
+	rec := &Recorder{ExistsFn: zenInImage}
+	rep := newReporter()
+	if err := runPlan(t, job, rec, rep); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range rec.Commands() {
+		if strings.Contains(c, "install") && strings.Contains(c, "app.zen_browser.zen") {
+			t.Errorf("downloads Zen although the image has it: %s", c)
+		}
+	}
+	if rep.modules["zen"] != protocol.ModInstalled {
+		t.Errorf("zen: %q, want installed", rep.modules["zen"])
+	}
+	if !strings.Contains(rec.Plan(), "browser=gtk-launch app.zen_browser.zen") {
+		t.Error("Zen is not the default browser")
+	}
+
+	// Unticked (Firefox instead): uninstalled from the target with its unused runtimes.
+	job = loadJob(t, "ci/default.toml", "uefi")
+	job.Data.Apps.Selection["browser"] = []string{"firefox"}
+	rec = &Recorder{ExistsFn: zenInImage}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	plan := rec.Plan()
+	for _, want := range []string{
+		"flatpak uninstall --system -y --noninteractive app.zen_browser.zen",
+		"flatpak uninstall --system -y --noninteractive --unused",
+	} {
+		if !strings.Contains(plan, want) {
+			t.Errorf("plan lacks %q", want)
+		}
+	}
+	if strings.Contains(plan, "browser=gtk-launch app.zen_browser.zen") {
+		t.Error("Zen is still the default browser")
+	}
+}
+
+// Snapper's root configuration is created last: after every dnf run in the new system and after
+// the final relabel, so the install itself leaves no snapshots and /.snapshots gets labelled.
+// Without snapper, or when it fails, the install still succeeds.
+func TestSnapperSetUpLast(t *testing.T) {
+	job := loadJob(t, "defaults.toml", "uefi")
+	rec := &Recorder{}
+	if err := runPlan(t, job, rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	cmds := rec.Commands()
+	index := func(prefix string, last bool) int {
+		found := -1
+		for i, c := range cmds {
+			if strings.HasPrefix(c, prefix) {
+				found = i
+				if !last {
+					break
+				}
+			}
+		}
+		return found
+	}
+	create := index("$ chroot /mnt snapper --no-dbus -c root create-config /", false)
+	set := index("$ chroot /mnt snapper --no-dbus -c root set-config NUMBER_CLEANUP=yes NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no", false)
+	label := index("$ setfiles -F -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt/.snapshots /mnt/etc/snapper /mnt/etc/sysconfig/snapper", false)
+	relabel := index("$ setfiles -F -r /mnt -e ", true)
+	dnf := index("$ chroot /mnt dnf", true)
+	umount := index("$ umount --recursive /mnt", false)
+	if create < 0 || set < 0 || label < 0 {
+		t.Fatalf("snapper not set up:\n%s", strings.Join(cmds, "\n"))
+	}
+	if !(dnf < relabel && relabel < create && create < set && set < label && label < umount) {
+		t.Errorf("order: last dnf %d, final relabel %d, create-config %d, set-config %d, label %d, umount %d", dnf, relabel, create, set, label, umount)
+	}
+	// Snapshots stay root's: ALLOW_GROUPS would let any wheel process create, delete and
+	// undochange snapshots through snapperd without a password.
+	if strings.Contains(cmds[set], "ALLOW_") || strings.Contains(cmds[set], "SYNC_ACL") {
+		t.Errorf("snapper grants access to non-root users: %s", cmds[set])
+	}
+
+	// Not in the image: nothing to set up, the install goes on.
+	rec = &Recorder{ExistsFn: func(p string) bool { return p != "/mnt/usr/bin/snapper" && DefaultExists(p) }}
+	rep := newReporter()
+	if err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, rep); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(rec.Plan(), "snapper") {
+		t.Error("runs snapper although it isn't installed")
+	}
+	if !strings.Contains(strings.Join(rep.logs, "\n"), "snapper isn't in the new system") {
+		t.Errorf("no log line about snapper: %v", rep.logs)
+	}
+
+	// create-config fails (say, not btrfs): logged, set-config skipped, the install finishes.
+	rec = &Recorder{Respond: func(c Cmd) (string, error) {
+		if strings.Contains(c.String(), "snapper --no-dbus -c root create-config") {
+			return "", errors.New("creating btrfs subvolume .snapshots failed")
+		}
+		return DefaultRespond(c)
+	}}
+	rep = newReporter()
+	if err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, rep); err != nil {
+		t.Fatalf("a snapper failure must not fail the install: %v", err)
+	}
+	if strings.Contains(rec.Plan(), "set-config") || !strings.Contains(rec.Plan(), "$ umount --recursive /mnt") {
+		t.Errorf("after a failed create-config: %s", rec.Plan())
+	}
+
+	// Labelling snapper's files fails: the first boot relabels instead.
+	rec = &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.Name == "setfiles" && strings.Contains(c.String(), "/mnt/.snapshots") {
+			return "", errors.New("exit status 1")
+		}
+		return DefaultRespond(c)
+	}}
+	if err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, newReporter()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rec.Plan(), "write /mnt/.autorelabel") {
+		t.Error("no /.autorelabel after snapper's files couldn't be labelled")
 	}
 }

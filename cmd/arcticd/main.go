@@ -28,6 +28,8 @@ func main() {
 	flag.Float64Var(&cfg.MockOptions.Speed, "mock-speed", 1, "mock: divide every delay by this")
 	flag.StringVar(&cfg.MockOptions.FailModule, "mock-fail", "", "mock: optional app whose first download fails (\"none\" for no failure)")
 	flag.BoolVar(&cfg.MockOptions.Wired, "mock-wired", false, "mock: start with a cable plugged in")
+	flag.StringVar(&cfg.MockOptions.Hardware, "mock-hw", "", "mock: hardware fixture (default nvidia-laptop; see arctic-install plan --help)")
+	flag.BoolVar(&cfg.MockOptions.NoSecureBoot, "mock-no-secureboot", false, "mock: Secure Boot off")
 	version := flag.Bool("version", false, "print the version")
 	flag.Parse()
 	if *version {

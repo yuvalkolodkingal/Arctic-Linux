@@ -47,6 +47,7 @@ $ rsync -aAXH --numeric-ids --info=progress2 --no-inc-recursive '--filter=-x sec
 $ rsync -rt --omit-dir-times /run/rootfsbase/boot/efi/ /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/grub2/1:2.12-64.fc44/EFI /mnt/boot/efi/
 $ cp -rn /mnt/usr/lib/efi/shim/16.1-5/EFI /mnt/boot/efi/
+$ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt /mnt/home /mnt/var/log /mnt/nix /mnt/boot
 $ mount --rbind /dev /mnt/dev
 $ mount --make-rslave /mnt/dev
 $ mount -t proc proc /mnt/proc
@@ -99,7 +100,7 @@ write /mnt/etc/default/grub (0644)
     | GRUB_DEFAULT=saved
     | GRUB_DISABLE_SUBMENU=true
     | GRUB_TERMINAL_OUTPUT="gfxterm"
-    | GRUB_CMDLINE_LINUX="rootflags=subvol=@ rd.luks.uuid=luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad rhgb quiet"
+    | GRUB_CMDLINE_LINUX="rd.luks.uuid=luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad rhgb quiet"
     | GRUB_DISABLE_RECOVERY="true"
     | GRUB_ENABLE_BLSCFG=true
     | GRUB_THEME="/boot/grub2/themes/arctic/theme.txt"
@@ -122,12 +123,15 @@ $ chroot /mnt rpm --import /usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KE
 $ chroot /mnt dnf install -y https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm
 $ chroot /mnt rpm --import /usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KEY-rpmfusion-nonfree-fedora-44
 $ chroot /mnt dnf install -y https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-44.noarch.rpm
+$ chroot /mnt rpm -q --quiet ffmpeg-free
 $ chroot /mnt dnf swap -y --allowerasing ffmpeg-free ffmpeg
 $ chroot /mnt dnf install -y yazi openh264 mozilla-openh264 gstreamer1-plugin-openh264 glibc-langpack-en kitty kitty-shell-integration zsh Thunar vlc vlc-plugins-freeworld
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub app.zen_browser.zen
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub dev.zed.Zed
 $ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub com.collaboraoffice.Office
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub org.gtk.Gtk3theme.adw-gtk3-dark
+$ FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak FLATPAK_CONFIG_DIR=/mnt/etc/flatpak FLATPAK_OS_CONFIG_DIR=/mnt/usr/share/flatpak FLATPAK_DOWNLOAD_TMPDIR=/mnt/var/tmp LC_ALL=C.UTF-8 flatpak install --system -y --noninteractive flathub org.gtk.Gtk3theme.adw-gtk3
 write /mnt/var/lib/flatpak/.fedora-initialized (0644, empty)
 
 # == finalize: Setting up your account…
@@ -175,7 +179,10 @@ write /mnt/etc/xdg/mimeapps.list (0644)
     | audio/ogg=vlc.desktop
 mkdir -p /mnt/var/log/arctic-install
 $ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install
-$ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt
+$ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt /mnt/home /mnt/var/log /mnt/nix /mnt/boot
+$ chroot /mnt snapper --no-dbus -c root create-config /
+$ chroot /mnt snapper --no-dbus -c root set-config NUMBER_CLEANUP=yes NUMBER_LIMIT=10 NUMBER_LIMIT_IMPORTANT=5 TIMELINE_CREATE=no
+$ setfiles -F -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt/.snapshots /mnt/etc/snapper /mnt/etc/sysconfig/snapper
 $ umount --recursive /mnt
 $ udevadm settle --timeout=30
 $ cryptsetup close luks-cce9f6bd-0000-4000-8000-cdf4ebfdedad

@@ -11,10 +11,10 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: fish 4.6
+# Fedora 44: fish 4.6 (16 MB with its weak dependencies)
 method = "dnf"
 packages = ["fish"]
-download_mb = 6
+download_mb = 16
 
 [defaults]
 shell = "/usr/bin/fish"

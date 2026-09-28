@@ -8,7 +8,7 @@
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
 #                                               the default install with apps from the live
 #                                               image; Zen, Zed and the codecs are deferred)
-#   tools/test-install.sh --iso PATH            default out/iso/Arctic-Linux-0.1-x86_64.iso
+#   tools/test-install.sh --iso PATH            default out/iso/Arctic-Linux-0.2-x86_64.iso
 #   tools/test-install.sh --install-timeout S   seconds for the install (default 7200)
 #   tools/test-install.sh --memory MiB --smp N  guest size (default 6144 MiB, 4 vCPUs)
 #   tools/test-install.sh --kvm                 use /dev/kvm when the host has it
@@ -17,7 +17,20 @@
 #                                               instead of the ISO's, to test engine fixes
 #                                               without rebuilding the ISO
 #   tools/test-install.sh --boot-append 'ARGS'  kernel arguments for the installed system's first
-#                                               boot (edited in GRUB; default none)
+#                                               boot, edited into its GRUB entry. Default without
+#                                               KVM: plymouth.use-simpledrm. Fedora's Plymouth
+#                                               ignores simpledrm when the disk is encrypted and
+#                                               waits 8 s (DeviceTimeout) for the GPU driver,
+#                                               which TCG never loads in time, so the stock boot
+#                                               falls back to the text prompt. '' for none.
+#   tools/test-install.sh --via service|sudo    how run.sh starts the engine. service (default):
+#                                               as a transient systemd service (systemd-run), the
+#                                               context the installer daemon arcticd runs in
+#                                               (SELinux unconfined_service_t, service
+#                                               environment); sudo: straight from the terminal
+#   tools/test-install.sh --boot-append '… systemd.debug_shell=tty9'   when collecting through
+#                                               a session fails (a failed login), collect.sh runs
+#                                               from the root debug shell on tty9 instead
 #   tools/test-install.sh --out DIR             default out/test/install/<firmware>
 #
 # Stage "install": a fresh 40 GB sparse target disk (target.qcow2) and, for UEFI, a fresh
@@ -43,7 +56,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/container.sh"
 
 ROOT="$(arctic_repo_root)"
-ISO="$ROOT/out/iso/Arctic-Linux-0.1-x86_64.iso"
+ISO="$ROOT/out/iso/Arctic-Linux-0.2-x86_64.iso"
 FIRMWARE=uefi
 STAGE=all
 PROFILE="$ROOT/profiles/ci/offline.toml"
@@ -51,8 +64,9 @@ INSTALL_TIMEOUT=7200
 MEMORY=6144
 SMP=4
 KVM=0
-BOOT_APPEND=""
+BOOT_APPEND=auto
 INSTALLER=""
+VIA=service
 OUT=""
 # Test secrets only (typed into the VM and passed to the installer).
 LUKS_PASSPHRASE="glacier lantern frost harbor"
@@ -68,10 +82,11 @@ while (( $# )); do
     --memory) MEMORY="$2"; shift 2 ;;
     --smp) SMP="$2"; shift 2 ;;
     --kvm) KVM=1; shift ;;
-    --boot-append) BOOT_APPEND="$BOOT_APPEND $2"; shift 2 ;;
+    --boot-append) BOOT_APPEND="$2"; shift 2 ;;
     --installer) INSTALLER="$2"; shift 2 ;;
+    --via) VIA="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
-    -h|--help) sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
@@ -89,6 +104,9 @@ OUT="$(cd "$OUT" && pwd)"
 if [[ "$STAGE" == boot ]]; then
   [[ -f "$OUT/target.qcow2" ]] || arctic_die "no installed disk at $OUT/target.qcow2 (run --stage install first)"
   rm -f "$OUT"/boot-*.png "$OUT/serial-boot.log" "$OUT/qemu-boot.log"
+  # Keep the log of the run that installed the disk; test.log starts afresh.
+  if [[ -f "$OUT/test.log" ]] && grep -q 'install stage' "$OUT/test.log"; then mv "$OUT/test.log" "$OUT/test-install-stage.log"; fi
+  rm -f "$OUT/test.log"
 else
   # A new install starts from a blank disk and a blank variable store.
   find "$OUT" -mindepth 1 -maxdepth 1 ! -name '.' -exec rm -rf {} +
@@ -117,11 +135,15 @@ say "ARCTIC-TEST-STARTED \$(date -u +%FT%TZ)"
 export ARCTIC_LUKS_PASSPHRASE=$(q "$LUKS_PASSPHRASE")
 export ARCTIC_USER_PASSWORD=$(q "$USER_PASSWORD")
 cp "\$D/profile.toml" /run/arctic-test-profile.toml
-AI=arctic-install
+AI=/usr/bin/arctic-install
 if [ -x "\$D/arctic-install" ]; then
-  cp "\$D/arctic-install" /run/arctic-install-test && AI=/run/arctic-install-test
+  # Under /usr/local/bin with its default label (bin_t), so that a service runs it in the
+  # same SELinux domain as the ISO's own binaries.
+  install -m 0755 "\$D/arctic-install" /usr/local/bin/arctic-install-test && AI=/usr/local/bin/arctic-install-test
+  restorecon "\$AI" 2>/dev/null
   say "using the arctic-install from the test data drive"
 fi
+VIA=$(q "$VIA")
 {
   echo "== live system"; cat /proc/cmdline; findmnt /run/rootfsbase; findmnt -t squashfs
   lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS
@@ -129,8 +151,18 @@ fi
   "\$AI" version
 } 2>&1 | tee -a "\$S"
 start=\$(date +%s)
-"\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
-rc=\${PIPESTATUS[0]}
+if [ "\$VIA" = service ]; then
+  # What arcticd.service gets: a system service's SELinux domain and environment.
+  say "running the install as a systemd service (\$(getenforce))"
+  systemd-run --wait --pipe --collect --quiet id -Z 2>&1 | tee -a "\$S"
+  systemd-run --wait --pipe --collect --quiet --unit=arctic-test-install \\
+    -E ARCTIC_LUKS_PASSPHRASE -E ARCTIC_USER_PASSWORD \\
+    "\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
+  rc=\${PIPESTATUS[0]}
+else
+  "\$AI" unattended --profile /run/arctic-test-profile.toml 2>&1 | tee -a "\$S"
+  rc=\${PIPESTATUS[0]}
+fi
 say "ARCTIC-INSTALL-DURATION=\$(( \$(date +%s) - start ))s"
 say "ARCTIC-ENGINE-LOG-BEGIN"
 cat /var/log/arctic-install/engine.log >> "\$S" 2>&1
@@ -163,6 +195,8 @@ sec() { echo; echo "== $*"; }
 echo ARCTIC-COLLECT-BEGIN
 sec "terminal shell"; echo "pid $pid: $(cat "/proc/$pid/comm" 2>/dev/null) ($(readlink "/proc/$pid/exe" 2>/dev/null))"
 sec "user"; getent passwd "$u"; id "$u"
+sec "home"; findmnt /home; ls -ldnZ / /home /home/* 2>&1; stat "/home/$u" 2>&1; getfacl -p /home "/home/$u" 2>&1 | head -20
+ls -lanZ "/home/$u" 2>&1 | head -30
 sec "getenforce"; getenforce
 sec "cmdline"; cat /proc/cmdline
 sec "os-release"; grep -E '^(NAME|VERSION|PRETTY_NAME)=' /etc/os-release
@@ -178,6 +212,7 @@ sec "efibootmgr"; efibootmgr -v 2>&1 | head -20
 sec "flatpak"; flatpak remotes --system; flatpak list --system
 sec "default apps"; cat /etc/arctic/default-apps
 sec "plymouth"; plymouth-set-default-theme 2>/dev/null
+journalctl -b -o short-monotonic --no-pager | grep -iE 'plymouth|virtio.gpu|simpledrm|fbcon|\[drm\]|cryptsetup' | head -40
 sec "sddm"; ls /etc/sddm.conf.d/ /usr/lib/sddm/sddm.conf.d/ 2>&1; journalctl -b -u sddm --no-pager | tail -40
 sec "journalctl -b -p warning"; journalctl -b -p warning --no-pager
 sec "AVC denials"; journalctl -b --no-pager -g 'avc: +denied' | tail -40
@@ -186,12 +221,28 @@ echo
 echo ARCTIC-COLLECT-END
 EOF
 chmod 0755 "$DATA/run.sh" "$DATA/collect.sh"
+# The launcher goes into the data CD's system area (its first 32 KiB, which ISO 9660 leaves
+# unused), so the command typed into the VM is only `sudo sh /dev/sr0`: under TCG a busy guest
+# can lose keys (QEMU's PS/2 queue holds 16 bytes), and the shorter the command the better.
+# bash stops at the exec, before the NUL padding and the file system behind it.
+cat > "$OUT/sysarea.sh" <<'EOF'
+#!/bin/bash
+# tools/test-install.sh: first bytes of the test data CD, run as `sudo sh /dev/sr0 [PID]`.
+mkdir -p /run/t
+mountpoint -q /run/t || mount -o ro /dev/disk/by-label/ARCTICTEST /run/t || exit 1
+if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
+exit 1
+EOF
 
 arctic_ensure_engine
 engine="$(arctic_engine)"
 arctic_container_args
 kvm_args=()
 if (( KVM )) && [[ -e /dev/kvm ]]; then kvm_args=(--device /dev/kvm); fi
+if [[ "$BOOT_APPEND" == auto ]]; then
+  BOOT_APPEND=""
+  if ! (( KVM )) || [[ ! -e /dev/kvm ]]; then BOOT_APPEND="plymouth.use-simpledrm"; fi
+fi
 iso_args=()
 if [[ "$STAGE" != boot ]]; then iso_args=(-v "$ISO:/iso:ro"); fi
 
@@ -217,11 +268,11 @@ def qemu_argv(name, with_iso):
          "-drive", f"file={out}/target.qcow2,if=none,id=disk,discard=unmap",
          "-device", f"virtio-blk-pci,drive=disk,bootindex={1 if with_iso else 0}",
          "-drive", f"file={out}/data.iso,media=cdrom,readonly=on,if=none,id=data",
-         "-device", "ide-cd,drive=data,bus=ide.1",
+         "-device", "ide-cd,drive=data,bus=ide.0",   # sr0: `sudo sh /dev/sr0` runs its launcher
          "-netdev", "user,id=net0", "-device", "virtio-net-pci,netdev=net0",
          "-device", "qemu-xhci", "-device", "usb-tablet", "-rtc", "base=utc"]
     if with_iso:
-        a += ["-drive", "file=/iso,media=cdrom,readonly=on,if=none,id=cd", "-device", "ide-cd,drive=cd,bus=ide.0,bootindex=0"]
+        a += ["-drive", "file=/iso,media=cdrom,readonly=on,if=none,id=cd", "-device", "ide-cd,drive=cd,bus=ide.1,bootindex=0"]
     if fw == "uefi":
         a += ["-drive", "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd",
               "-drive", f"if=pflash,format=raw,unit=1,file={out}/OVMF_VARS.fd"]
@@ -242,11 +293,12 @@ def wait_menu(vm, prefix, limit):
     log("boot menu not detected")
     return False
 
-def edit_entry(vm, prefix, args):
-    """GRUB: edit the selected entry, append kernel arguments to its linux line, boot."""
+def edit_entry(vm, prefix, args, line):
+    """GRUB: edit the selected entry, append kernel arguments to its linux line (`line`
+    lines below the first), boot."""
     vm.keys("e")
     time.sleep(1)
-    vm.keys("down", "down", "ctrl-e")
+    vm.keys(*(["down"] * line), "ctrl-e")
     vm.type_text(" " + args, gap=0.1)
     time.sleep(0.5)
     vm.shot(f"{prefix}-02-entry-edited")
@@ -256,7 +308,11 @@ def open_terminal(vm, prefix):
     vm.keys("meta_l-ret")
     time.sleep(75)
     vm.shot(f"{prefix}-terminal")
-    vm.keys("ret")        # skips the fetch animation (any key does) and gives a fresh prompt
+    # The fetch animation in .zshrc reads keys (any key skips it): press Enter, then give the
+    # prompt time to come up so the command isn't eaten by the animation.
+    vm.keys("ret")
+    time.sleep(15)
+    vm.keys("ret")
     time.sleep(5)
 
 def serial(name):
@@ -268,7 +324,7 @@ def stage_install():
     try:
         if wait_menu(vm, "install", 300):
             vm.keys("home")
-            edit_entry(vm, "install", LIVE_APPEND)
+            edit_entry(vm, "install", LIVE_APPEND, 2)   # setparams, (empty), linux
             log("selected 'Try Arctic Linux' with the journal on the serial port")
         start = time.time()
         # The live session is up when live-session logs its mode (journal → serial).
@@ -288,7 +344,7 @@ def stage_install():
         started = False
         for attempt in (1, 2, 3):
             open_terminal(vm, f"install-2{attempt}")
-            vm.type_text("sudo mount -m -L ARCTICTEST /run/t; sudo bash /run/t/run.sh")
+            vm.type_text("sudo sh /dev/sr0", gap=0.3)
             vm.keys("ret")
             t = time.time()
             while time.time() - t < 240 and vm.alive():
@@ -350,7 +406,8 @@ def stage_boot():
     try:
         if wait_menu(vm, "boot", 240):
             if boot_append:
-                edit_entry(vm, "boot", boot_append)
+                # A BLS entry: load_video, set gfxpayload=keep, insmod gzio, linux, initrd.
+                edit_entry(vm, "boot", boot_append, 3)
                 log(f"booting with extra arguments: {boot_append}")
             else:
                 vm.keys("ret")
@@ -364,13 +421,35 @@ def stage_boot():
             vm.shot("boot-31-no-prompt-detected")
             log("no passphrase prompt detected; typing the passphrase anyway")
             ok = False
-        vm.type_text(luks, gap=0.25)
-        time.sleep(1)
-        vm.shot("boot-32-luks-typed")
-        vm.keys("ret")
-        time.sleep(15)
-        vm.shot("boot-33-unlocking")
-        p = wait_for(vm, "boot-40", {"login"}, 1500, every=10)
+        # A dropped key means a wrong passphrase: Plymouth asks again (after the splash was
+        # back on screen), and the passphrase is typed again, up to three times.
+        p = None
+        for attempt in (1, 2, 3):
+            vm.type_text(luks, gap=0.3)
+            time.sleep(1)
+            vm.shot(f"boot-32-luks-typed-{attempt}")
+            vm.keys("ret")
+            time.sleep(15)
+            vm.shot(f"boot-33-unlocking-{attempt}")
+            t = time.time()
+            left_prompt = False
+            again = False
+            while time.time() - t < 1500 and vm.alive():
+                q = vm.shot("boot-40-probe")
+                kind = vmtest.classify(q) if q else "none"
+                if kind == "login":
+                    p = q
+                    break
+                if kind != "prompt":
+                    left_prompt = True
+                elif left_prompt:
+                    again = True
+                    break
+                time.sleep(10)
+            if not again:
+                break
+            log(f"the passphrase prompt is back (attempt {attempt}): typing it again")
+            vm.shot(f"boot-34-prompt-again-{attempt}")
         if p:
             time.sleep(30)
             vm.shot("boot-41-login")
@@ -379,10 +458,24 @@ def stage_boot():
             vm.shot("boot-41-no-login-detected")
             log("no login screen detected; typing the password anyway")
             ok = False
-        vm.type_text(password, gap=0.25)
-        time.sleep(1)
-        vm.shot("boot-42-password-typed")
-        vm.keys("ret")
+        for attempt in (1, 2, 3):
+            vm.type_text(password, gap=0.3)
+            time.sleep(1)
+            vm.shot(f"boot-42-password-typed-{attempt}")
+            vm.keys("ret")
+            # SDDM clears the field and says so when the password was wrong; the card stays.
+            t = time.time()
+            gone = False
+            while time.time() - t < 150 and vm.alive():
+                time.sleep(10)
+                q = vm.shot("boot-43-probe")
+                if q and vmtest.classify(q) != "login":
+                    gone = True
+                    break
+            if gone:
+                break
+            log(f"still on the login screen after the password (attempt {attempt}): typing it again")
+            vm.shot(f"boot-43-login-again-{attempt}")
         # The desktop: the login card is gone and the screen settles.
         t = time.time()
         prev = None
@@ -403,23 +496,44 @@ def stage_boot():
         log(f"session settled after {time.time() - t:.0f}s")
         time.sleep(30)
         vm.shot("boot-51-desktop")
-        open_terminal(vm, "boot-52")
-        vm.type_text("sudo mount -m -L ARCTICTEST /run/t; sudo bash /run/t/collect.sh $$")
-        vm.keys("ret")
-        time.sleep(10)
-        vm.shot("boot-53-sudo")
-        vm.type_text(password, gap=0.2)
-        vm.keys("ret")
-        t = time.time()
-        while time.time() - t < 300 and vm.alive():
-            if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
-                log("collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END)")
+        collected = False
+        for attempt in (1, 2, 3):
+            open_terminal(vm, f"boot-5{attempt + 1}")
+            vm.type_text("sudo sh /dev/sr0 $$", gap=0.3)
+            vm.keys("ret")
+            time.sleep(10)
+            vm.shot(f"boot-5{attempt + 1}-sudo")
+            vm.type_text(password, gap=0.3)
+            vm.keys("ret")
+            t = time.time()
+            while time.time() - t < 240 and vm.alive():
+                if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
+                    collected = True
+                    break
+                time.sleep(5)
+            vm.shot(f"boot-5{attempt + 1}-collected")
+            if collected:
+                log(f"collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt {attempt})")
                 break
-            time.sleep(5)
-        else:
-            log("collect.sh did not finish")
+            log(f"collect.sh did not finish (attempt {attempt})")
+        if not collected and "systemd.debug_shell" in boot_append:
+            # No session (e.g. the login failed): collect from the root debug shell on tty9.
+            log("collecting from the debug shell on tty9")
+            vm.keys("ctrl-alt-f9")
+            time.sleep(10)
+            vm.type_text("sh /dev/sr0", gap=0.3)
+            vm.keys("ret")
+            t = time.time()
+            while time.time() - t < 300 and vm.alive():
+                if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
+                    collected = True
+                    break
+                time.sleep(5)
+            vm.shot("boot-59-debug-shell")
+            log("collected from the debug shell" if collected else "debug shell collect did not finish")
+            ok = False   # the session itself didn't work
+        if not collected:
             ok = False
-        vm.shot("boot-54-collected")
         time.sleep(5)
         vm.shot("boot-99-final")
         return 0 if ok else 1
@@ -443,7 +557,7 @@ inner=$(cat <<'INNER'
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow xorriso
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
 dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
-xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -o "$OUT/data.iso" "$OUT/data"
+xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
 if [ "$STAGE" != boot ]; then
   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
   [ "$FIRMWARE" = uefi ] && cp /usr/share/edk2/ovmf/OVMF_VARS.fd "$OUT/OVMF_VARS.fd"

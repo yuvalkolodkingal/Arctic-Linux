@@ -1,0 +1,21 @@
+id = "protonvpn"
+name = "Proton VPN"
+summary = "Free, no-logs VPN from Proton."
+category = "security"
+role = "VPN"
+default = false
+tile = "protonvpn"
+icon = "shield-check"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Semi-official Flathub build (unverified; no split tunnelling). Proton's RPM repo is the official route.
+method = "flatpak"
+remote = "flathub"
+ref = "com.protonvpn.www"
+runtime = "org.gnome.Platform//50"
+verified = false
+download_mb = 35

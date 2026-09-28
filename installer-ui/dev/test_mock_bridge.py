@@ -13,11 +13,42 @@ import re
 import shlex
 import subprocess
 import sys
+import shutil
 import threading
 import time
+import tomllib
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
+MODULES_DIR = os.path.join(ROOT, "modules")
+
+
+def catalog_app_ids():
+    """Every app the picker lists, straight from modules/catalog.toml (not the drivers:
+    a hardware category offers only what was detected)."""
+    with open(os.path.join(MODULES_DIR, "catalog.toml"), "rb") as f:
+        cat = tomllib.load(f)
+    return [mid for c in cat["category"] if not c.get("hardware") for mid in c["modules"]]
+
+
+_ENGINE = []
+
+
+def engine_catalog():
+    """`arctic-install catalog --json` (the engine's own catalog, defaults and estimate), or
+    None without a Go toolchain."""
+    if not _ENGINE:
+        doc = None
+        if shutil.which("go"):
+            r = subprocess.run(["go", "run", "./cmd/arctic-install", "catalog", "--json", "--catalog", MODULES_DIR],
+                               cwd=ROOT, capture_output=True, text=True, timeout=300)
+            if r.returncode == 0:
+                doc = json.loads(r.stdout)
+            else:
+                print("arctic-install catalog failed:", r.stderr, file=sys.stderr)
+        _ENGINE.append(doc)
+    return _ENGINE[0]
 
 
 class Bridge:
@@ -110,10 +141,57 @@ class MockBridgeTest(unittest.TestCase):
         self.assertFalse(any(d["install_media"] for d in disk["options"]["disks"]))
         self.assertEqual(disk["data"]["mode"], "erase")
         apps = b.ok("GetStep", {"id": "apps"})
-        self.assertEqual([c["id"] for c in apps["options"]["categories"]],
-                         ["browser", "editor", "terminal", "shell", "files", "office", "video", "extras"])
+        cats = apps["options"]["categories"]
+        # The mock is an NVIDIA hybrid laptop: its drivers lead, marked as hardware.
+        self.assertEqual([c["id"] for c in cats],
+                         ["drivers", "browser", "editor", "terminal", "shell", "files", "office", "video",
+                          "music", "photos", "graphics", "recording", "chat", "email", "notes", "reading",
+                          "gaming", "security", "sync", "dev", "containers", "extras"])
+        self.assertEqual([c["id"] for c in cats if c.get("hardware")], ["drivers"])
+        # Drivers and the design's seven sections are open; the optional groups start collapsed.
+        self.assertEqual([c["id"] for c in cats if not c["collapsed"]],
+                         ["drivers", "browser", "editor", "terminal", "shell", "files", "office", "video"])
+        mods = {m["id"]: m for m in apps["options"]["modules"]}
+        drivers = [m for m in apps["options"]["modules"] if m["category"] == "drivers"]
+        self.assertEqual([m["id"] for m in drivers], ["nvidia", "intel-media"])
+        nvidia = drivers[0]
+        self.assertEqual((nvidia["id"], nvidia["tile"], nvidia["device"], nvidia["default"], nvidia["source"]),
+                         ("nvidia", "driver-gpu", "NVIDIA GeForce RTX 4060 Max-Q / Mobile", True, "RPM Fusion"))
+        self.assertIn("your NVIDIA GeForce RTX 4060 Max-Q / Mobile", nvidia["summary"])
+        app_ids = sorted(i for i, m in mods.items() if m["category"] != "drivers")
+        self.assertEqual(app_ids, sorted(catalog_app_ids()))
+        self.assertEqual((mods["steam"]["category"], mods["steam"]["source"], mods["steam"]["proprietary"]),
+                         ("gaming", "RPM Fusion", True))
+        self.assertEqual(mods["zen"]["source"], "Flathub")
+        self.assertFalse(mods["zen"]["proprietary"])
+        sel = apps["data"]["selection"]
+        self.assertEqual(sel["drivers"], ["nvidia", "intel-media"])
+        est = b.ok("EstimateDownload", {"selection": sel})
+        self.assertEqual(est["apps"], sum(1 for i in app_ids if mods[i]["default"]))
+        self.assertEqual(est["drivers"], 2)
+        self.assertRegex(est["label"], r"^\d+ apps \+ 2 drivers · [\d.]+ [MG]B download$")
+        # Without the drivers, the same numbers as the engine's catalog.EstimateDownload (which
+        # detects nothing here), when Go is here.
+        est_apps = b.ok("EstimateDownload", {"selection": {k: v for k, v in sel.items() if k != "drivers"}})
+        self.assertRegex(est_apps["label"], r"^\d+ apps · [\d.]+ [MG]B download$")
+        self.assertNotIn("drivers", est_apps)
+        eng = engine_catalog()
+        if eng is None:
+            print("SKIPPED: engine estimate comparison (no Go toolchain)", file=sys.stderr)
+        else:
+            self.assertEqual(est_apps, eng["estimate"])
+            self.assertEqual(app_ids, sorted(m["id"] for m in eng["modules"]
+                                             if not m.get("hidden") and m["category"] != "drivers"))
+
+    def test_no_drivers_detected(self):
+        b = self.start(ARCTIC_MOCK_HW="none")
+        apps = b.ok("GetStep", {"id": "apps"})
+        cats = [c["id"] for c in apps["options"]["categories"]]
+        self.assertEqual(cats[0], "browser")
+        self.assertNotIn("drivers", cats)
+        self.assertFalse(any(m["category"] == "drivers" for m in apps["options"]["modules"]))
         est = b.ok("EstimateDownload", {"selection": apps["data"]["selection"]})
-        self.assertRegex(est["label"], r"^\d+ apps? · [\d.]+ (GB|MB) download$")
+        self.assertRegex(est["label"], r"^\d+ apps · [\d.]+ [MG]B download$")
 
     def test_network_blocks_next_until_online(self):
         b = self.start()
@@ -150,10 +228,12 @@ class MockBridgeTest(unittest.TestCase):
         b = self.start()
         self.walk_to("apps")
         sel = b.ok("GetStep", {"id": "apps"})["data"]["selection"]
-        sel["extras"] = ["steam"]
+        sel["gaming"] = ["steam"]
         b.ok("SetStep", {"id": "apps", "data": {"selection": sel}})
         b.ok("Next")
         summary = b.ok("GetSummary")
+        self.assertEqual(summary["rows"][-1]["label"], "Drivers")
+        self.assertIn("NVIDIA driver for your NVIDIA GeForce RTX 4060", summary["rows"][-1]["value"])
         self.assertEqual(summary["primary_label"], "Erase disk and install")
         self.assertIn("erase everything on Samsung SSD 980", summary["warning"])
         self.assertEqual(b.ok("Next")["current"], "install")
@@ -166,8 +246,27 @@ class MockBridgeTest(unittest.TestCase):
         b.ok("RetryModule", {"id": "steam"})
         done = b.wait_event("done", timeout=60)
         self.assertEqual(done["first_name"], "Noa")
-        self.assertEqual(done["apps_installed"], len([m for c in sel.values() for m in c]))
+        self.assertEqual(done["apps_installed"], len([m for k, c in sel.items() if k != "drivers" for m in c]))
+        self.assertEqual([d["id"] for d in done["drivers"]], ["nvidia", "intel-media"])
+        self.assertRegex(done["secure_boot"]["code"], r"^\d{8}$")
+        self.assertIn(done["secure_boot"]["code"], done["secure_boot"]["steps"][2])
+        done_step = b.ok("GetStep", {"id": "done"})
+        self.assertEqual(done_step["options"]["secure_boot"], done["secure_boot"])
         self.assertEqual(b.ok("GetWizard")["current"], "done")
+
+    def test_offline_secure_boot_shows_the_later_key_steps(self):
+        # As the engine: offline, an akmod driver is put off to first boot and the code's hash
+        # is kept for arctic-firstboot, so the Done step shows SecureBootSteps(code, later).
+        b = self.start(ARCTIC_MOCK_WIRED="1", ARCTIC_MOCK_DROP="1", ARCTIC_MOCK_FAIL="none")
+        self.walk_to("summary")
+        b.ok("Next")
+        b.ok("Start")
+        done = b.wait_event("done", timeout=60)
+        self.assertEqual({d["status"] for d in done["drivers"]}, {"deferred"})
+        sb = done["secure_boot"]
+        self.assertEqual(sb["title"], "One more step once your driver is installed")
+        self.assertTrue(sb["steps"][0].startswith("Restart once the driver is installed."))
+        self.assertIn(sb["code"], sb["steps"][2])
 
     def test_core_failure_then_skip(self):
         b = self.start(ARCTIC_MOCK_FATAL="1", ARCTIC_MOCK_WIRED="1")
@@ -256,6 +355,18 @@ class MockBridgeTest(unittest.TestCase):
             bad = dict(sel, **{cid: []})
             err = b.call("SetStep", {"id": "apps", "data": {"selection": bad}})["error"]
             self.assertIn(cid, err["fields"])
+
+    def test_requires_and_conflicts_like_the_engine(self):
+        # catalog.Validate's messages, keyed by the app's group.
+        b = self.start()
+        sel = b.ok("GetStep", {"id": "apps"})["data"]["selection"]
+        for cid, ids, msg in (("containers", ["podman-desktop"], "Podman Desktop needs Podman. Tick it too."),
+                              ("dev", ["lazygit"], "lazygit needs Git. Tick it too.")):
+            err = b.call("SetStep", {"id": "apps", "data": {"selection": dict(sel, **{cid: ids})}})["error"]
+            self.assertEqual(err["code"], "invalid")
+            self.assertEqual(err["fields"], {cid: msg})
+        ok = dict(sel, containers=["podman", "podman-desktop"], dev=["git", "lazygit"])
+        b.ok("SetStep", {"id": "apps", "data": {"selection": ok}})
 
     def test_disk_options_have_labels(self):
         # The UI shows the engine's label (the path when there is no model, e.g. virtio)

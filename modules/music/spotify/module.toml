@@ -1,0 +1,21 @@
+id = "spotify"
+name = "Spotify"
+summary = "Stream music and podcasts."
+category = "music"
+default = false
+tile = "spotify"
+icon = "music"
+in_live_image = false
+gpu = true
+proprietary = true
+requires = []
+conflicts = []
+
+[[install]]
+# Proprietary. Community Flathub wrapper of Spotify's build (unverified); RPM Fusion only has lpf-spotify-client, which needs an interactive build.
+method = "flatpak"
+remote = "flathub"
+ref = "com.spotify.Client"
+runtime = "org.freedesktop.Platform//25.08"
+verified = false
+download_mb = 161

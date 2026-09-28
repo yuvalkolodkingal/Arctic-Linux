@@ -9,6 +9,21 @@ form, whose empty fields are left out ("ref", "packages", "repos", "swap", …):
     {"version": 2, "nixpkgs": "github:NixOS/nixpkgs/<rev>",
      "modules": [{"id": "zed", "name": "Zed",
                   "install": [{"method": "flatpak", "remote": "flathub", "ref": "dev.zed.Zed", …}]}]}
+Drivers (the catalog's hardware category) put off because the computer was offline also
+carry what the installer does after their packages (internal/installer/drivers.go):
+    {"id": "nvidia", …, "akmod": {"name": "nvidia", "module": "nvidia"},
+     "kernel_args": ["rd.driver.blacklist=nouveau,nova_core", …]}
+and, when Secure Boot is on, the file has "mok_hash": "/var/lib/arctic/mok.hash", the
+SHA-512 crypt hash of the one-time code the installer's Done screen showed. After such a
+driver's packages go in, akmods is installed with the development files of the installed
+kernels (kernel-devel-matched-<kver>; when that version has left the repositories, the newest
+complete kernel with its own) and its signing key is made (kmodgenca) — before the driver,
+because the akmod package's %posttrans starts a build in the background right away and that
+build signs only with a key that is already there. Then the module is built with akmods for
+every kernel that has its development files, its kernel arguments are added with grubby, and
+the akmods key is queued for enrolment with mokutil --import --hash-file, so MokManager asks
+for that code at the next restart. (A driver whose build the installer put off to boot comes
+here too, already installed: the same steps finish it.)
 This runs at boot (arctic-firstboot.service, after the network is up), tries each module's
 methods in order until one works — doing what the installer does for each method
 (installMethod / setupRepos) — and removes the modules that succeed. When nothing is left,
@@ -23,12 +38,23 @@ import tomllib
 from pathlib import Path
 
 PENDING = Path("/var/lib/arctic/pending.json")
+# Where /lib/modules and /usr/src/kernels are looked for (tests point it elsewhere).
+ROOT = Path("/")
 CATALOG = Path("/usr/share/arctic/catalog")
 NIX_PROFILE = "/nix/var/nix/profiles/default"
 # internal/installer FlatpakRemotes: the catalog's remote names and their .flatpakrepo files.
 FLATPAK_REMOTES = {"flathub": "https://dl.flathub.org/repo/flathub.flatpakrepo"}
 # internal/installer Options.FedoraRelease's default.
 DEFAULT_FEDORA_RELEASE = "44"
+# The akmods signing key (internal/wizard MOKKeyPath) and the EFI variables Secure Boot is
+# read from (internal/host SecureBoot).
+AKMODS_KEY = "/etc/pki/akmods/certs/public_key.der"
+# internal/installer KernelFallback: the newest complete kernel with its development files.
+KERNEL_FALLBACK = ["akmods", "kernel", "kernel-core", "kernel-modules", "kernel-modules-core",
+                   "kernel-modules-extra", "kernel-devel-matched"]
+EFIVARS = Path("/sys/firmware/efi/efivars")
+EFI_GLOBAL = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+SHIM_GUID = "605dab50-e046-4300-abb6-3dd810dd8b23"
 
 
 def log(msg):
@@ -69,6 +95,21 @@ def fedora_release():
     return DEFAULT_FEDORA_RELEASE
 
 
+def efi_byte(name):
+    """The first data byte of an EFI variable (after its 4 attribute bytes), or None."""
+    try:
+        data = (EFIVARS / name).read_bytes()
+    except OSError:
+        return None
+    return data[4] if len(data) > 4 else None
+
+
+def secure_boot():
+    """Secure Boot enforced: SecureBoot = 1, not in setup mode, shim validation on."""
+    return (efi_byte(f"SecureBoot-{EFI_GLOBAL}") == 1 and efi_byte(f"SetupMode-{EFI_GLOBAL}") != 1
+            and efi_byte(f"MokSBStateRT-{SHIM_GUID}") != 1)
+
+
 def find_manifest(module_id):
     for path in CATALOG.rglob("module.toml"):
         try:
@@ -84,8 +125,10 @@ class FirstBoot:
     """What the installer's installMethod does for one install method, on the running system.
     `run` executes a command and returns whether it worked (tests pass a fake)."""
 
-    def __init__(self, run=run, release=None, nixpkgs=""):
+    def __init__(self, run=run, release=None, nixpkgs="", root=None):
         self.run = run
+        self.root = Path(root or ROOT)
+        self.akmods_ready = False
         self.release = release or fedora_release()
         self.nixpkgs = nixpkgs or "nixpkgs"
         self.repos_done = set()
@@ -154,12 +197,86 @@ class FirstBoot:
         return False
 
     def install(self, module):
-        """Try a module's methods in order; True when one worked."""
-        return any(self.try_method(m) for m in module.get("install") or [] if isinstance(m, dict))
+        """Try a module's methods in order; True when one worked. A driver is then built and
+        its kernel arguments added (see the top)."""
+        akmod = module.get("akmod")
+        if isinstance(akmod, dict) and not self.prepare_akmods():
+            return False
+        if not any(self.try_method(m) for m in module.get("install") or [] if isinstance(m, dict)):
+            return False
+        if isinstance(akmod, dict) and not self.build(akmod):
+            return False
+        args = [a for a in module.get("kernel_args") or [] if isinstance(a, str)]
+        if args and not self.run(["grubby", "--update-kernel=ALL", "--args=" + " ".join(args)]):
+            return False
+        return True
+
+    def kernels(self):
+        """Installed kernel versions: /lib/modules/<kver> with its vmlinuz (kernel-core)."""
+        try:
+            dirs = sorted((self.root / "lib/modules").iterdir())
+        except OSError:
+            return []
+        return [d.name for d in dirs if (d / "vmlinuz").exists()]
+
+    def has_devel(self, kver):
+        return (self.root / "usr/src/kernels" / kver / "Makefile").exists()
+
+    def prepare_akmods(self):
+        """internal/installer prepareAkmods: akmods with each kernel's own development files
+        (never the newest kernel-devel-matched alone, which drags in a kernel without
+        kernel-modules), then the signing key, all before the driver's packages."""
+        if self.akmods_ready:
+            return True
+        kvers = self.kernels()
+        if not kvers or not self.run(["dnf", "install", "-y", "akmods",
+                                      *(f"kernel-devel-matched-{k}" for k in kvers)]):
+            log("the kernel's development files aren't available any more: installing the newest kernel with them")
+            if not self.run(["dnf", "install", "-y", *KERNEL_FALLBACK]):
+                return False
+        if not self.run(["kmodgenca", "-a"]):
+            return False
+        self.akmods_ready = True
+        return True
+
+    def build(self, akmod):
+        """Build a driver for every kernel with its development files and check it's there
+        (the build the akmod's %posttrans started holds akmods' lock; this waits for it)."""
+        name, module = akmod.get("name"), akmod.get("module")
+        if not isinstance(name, str) or not isinstance(module, str):
+            return False
+        built = 0
+        for kver in self.kernels():
+            if not self.has_devel(kver):
+                log(f"{name}: no kernel-devel for {kver}, akmods builds it when that kernel boots")
+                continue
+            if not (self.run(["akmods", "--force", "--kernels", kver, "--akmod", name])
+                    and self.run(["modinfo", "-k", kver, "-F", "version", module], quiet=True)):
+                return False
+            built += 1
+        return built > 0
 
 
-def retry(pending, firstboot):
-    """Try every pending module; returns the ones still left."""
+def enroll_key(pending, done, runner, sb=secure_boot):
+    """Queue the akmods key for enrolment once a driver that needs it is built (Secure Boot
+    on). Returns the mok_hash to keep for a later run ("" when done with it)."""
+    hash_file = pending.get("mok_hash") or ""
+    if not isinstance(hash_file, str) or not hash_file:
+        return ""
+    if not any(isinstance(m.get("akmod"), dict) for m in done):
+        return hash_file   # wait for the driver
+    if not sb():
+        log("Secure Boot is off: the driver key needs no enrolment")
+    elif runner(["mokutil", "--import", AKMODS_KEY, "--hash-file", hash_file]):
+        log("driver key queued: restart and type the one-time code from the installer (Enroll MOK)")
+    else:
+        log("couldn't ask to enroll the driver key; run: sudo mokutil --import " + AKMODS_KEY)
+    Path(hash_file).unlink(missing_ok=True)
+    return ""
+
+
+def retry(pending, firstboot, done=None):
+    """Try every pending module; returns the ones still left (the ones installed go to done)."""
     left = []
     for entry in pending.get("modules") or []:
         # Version 1 listed bare ids; look those up in the catalog if it's still installed.
@@ -175,13 +292,15 @@ def retry(pending, firstboot):
             ok = False
         if ok:
             log(f"{name}: installed")
+            if done is not None:
+                done.append(module)
         else:
-            log(f"{name}: still can't be installed, trying again next boot")
+            log(f"{name}: still can't be installed, trying again in 15 minutes")
             left.append(module)
     return left
 
 
-def main(runner=run):
+def main(runner=run, sb=secure_boot):
     if os.geteuid() != 0:
         sys.exit("arctic-firstboot must run as root")
     try:
@@ -195,10 +314,15 @@ def main(runner=run):
         log(f"can't read {PENDING}: not a JSON object")
         return 1
     nixpkgs = pending.get("nixpkgs") or ""
-    left = retry(pending, FirstBoot(run=runner, nixpkgs=nixpkgs))
+    done = []
+    left = retry(pending, FirstBoot(run=runner, nixpkgs=nixpkgs), done)
+    mok_hash = enroll_key(pending, done, runner, sb=sb)
     if left:
+        doc = {"version": 2, "nixpkgs": nixpkgs, "modules": left}
+        if mok_hash:
+            doc["mok_hash"] = mok_hash
         tmp = PENDING.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"version": 2, "nixpkgs": nixpkgs, "modules": left}, indent=2) + "\n")
+        tmp.write_text(json.dumps(doc, indent=2) + "\n")
         tmp.replace(PENDING)
         return 1
     PENDING.unlink(missing_ok=True)

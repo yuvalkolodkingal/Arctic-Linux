@@ -4,14 +4,20 @@
 # tools/build-rpms.sh, which also includes uncommitted work). The subpackages install straight
 # from the repository tree:
 #
-#   arctic-release         packaging/release/                  os-release, macros.dist, presets
+#   arctic-release         packaging/release/                  os-release, macros.dist, presets,
+#                                                              the Arctic repositories + key
 #   arctic-logos           branding/logos/ (install-path tree) system-logos
 #   arctic-backgrounds     design/wallpapers/*.svg (+ PNG rendered here)
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
 #   arctic-desktop-config  dotfiles/ → /etc/skel (Mango config, themes → /usr/share/arctic),
-#                          dotfiles/.local/bin → /usr/bin
+#                          dotfiles/.local/bin → /usr/bin, packaging/updates/ (automatic updates,
+#                          snapper snapshots around dnf transactions), design/themegen →
+#                          /usr/share/arctic/themegen (the theme engine; Winter and Polar night are rendered with it here),
+#                          packaging/theme-hooks.d → /usr/share/arctic, packaging/dconf, packaging/flatpak
+#                          (app theming defaults)
 #   arctic-shell           shell/ → /usr/share/arctic/shell
+#   arctic-settings        settings/ → /usr/share/arctic/settings, arctic-settings, packaging/settings/
 #   arctic-installer       cmd/ + internal/ (Go), modules/, profiles/, installer-ui/, packaging/systemd/
 #   sddm-wayland-mango     packaging/sddm-wayland-mango/
 #   arctic-sddm-theme      branding/sddm/arctic/
@@ -21,14 +27,16 @@
 #   arctic-desktop         (metapackage)
 
 %global dist_version    44
-%global arctic_version  0.1
+%global arctic_version  0.2
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
 
 Name:           arctic-linux
-Version:        0.1.0
-Release:        1%{?dist}
+Version:        0.2.0
+# tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
+# so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
+Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
 License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
 URL:            https://github.com/yuvalkolodkingal/O-Tism
@@ -44,6 +52,12 @@ BuildRequires:  systemd-rpm-macros
 BuildRequires:  desktop-file-utils
 BuildRequires:  findutils
 BuildRequires:  tar
+# %%check: packaging/updates' unit tests (arctic-update's helper)
+BuildRequires:  python3
+# The theme engine renders the static themes in %%build; %%check runs its tests.
+# %%py_byte_compile
+BuildRequires:  python3-rpm-macros
+BuildRequires:  python3-pillow
 
 %description
 Arctic Linux is a Fedora %{dist_version} based desktop built around the Mango Wayland
@@ -70,9 +84,11 @@ Requires:       fedora-repos(%{dist_version})
 %description -n arctic-release
 Release files that identify the system as Arctic Linux %{arctic_version} on a Fedora
 %{dist_version} base: os-release, the rpm dist macros, /etc/issue, the systemd presets
-(Fedora's policy plus Arctic's: SDDM, the installer socket, nix-daemon, no SSH server) and
-dnf defaults. It replaces fedora-release; Fedora's repositories (fedora-repos) stay in use.
-The Arctic package repository is defined but disabled until it is published.
+(Fedora's policy plus Arctic's: SDDM, the installer socket, nix-daemon, no SSH
+server) and dnf defaults. It replaces fedora-release; Fedora's repositories
+(fedora-repos) stay in use. It adds the signed Arctic package repository (the
+stable channel on, the testing channel off) and the key its packages are signed
+with.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-logos
@@ -125,6 +141,10 @@ License:        LGPL-2.1-or-later
 Requires:       selinux-policy-%{selinuxtype}
 Requires(post): selinux-policy-%{selinuxtype}
 Requires(post): policycoreutils
+# %%pre / %%post compare the module with the installed one (cp, cmp).
+Requires(pre):  coreutils
+Requires(post): coreutils
+Requires(post): diffutils
 Requires(postun): policycoreutils
 %{?selinux_requires}
 
@@ -143,6 +163,8 @@ Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-logos = %{version}-%{release}
 Requires:       bash
 Requires:       python3
+# arctic-themegen: colours from wallpapers
+Requires:       python3-pillow
 %{?systemd_requires}
 # kitty and zsh are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
@@ -164,16 +186,49 @@ Requires:       brightnessctl
 Requires:       playerctl
 Requires:       fastfetch
 Requires:       jetbrains-mono-fonts-all
+# App theming (docs/BUILD-SPEC.md "App theming"): GTK 3 apps use adw-gtk3, which takes the
+# theme's colours from ~/.config/gtk-3.0/gtk.css; Qt 5/6 apps use qt5ct/qt6ct (Fusion + the
+# theme's palette); the dconf defaults name Adwaita icons and cursors.
+Requires:       adw-gtk3-theme
+Requires:       qt6ct
+Requires:       qt5ct
+Requires:       adwaita-icon-theme
+Requires:       adwaita-cursor-theme
+Requires:       dconf
+# /var/lib/flatpak/overrides/global (Flatpak apps read the GTK colours).
+Requires:       flatpak
+Requires(posttrans): dconf
+Requires(postun): dconf
 Recommends:     waybar
 Recommends:     fuzzel
 Recommends:     lxqt-policykit
 Recommends:     network-manager-applet
+# arctic-update: offline updates (dnf5 upgrade --offline, dnf5-offline-transaction.service),
+# channels (dnf5 config-manager, in dnf5-plugins), snapshots around every dnf transaction
+# (the actions plugin runs snapper), the metered check (nmcli, when NetworkManager is there).
+Requires:       dnf5
+Requires:       dnf5-plugins
+Requires:       libdnf5-plugin-actions
+Requires:       snapper
+Requires:       btrfs-progs
+Requires:       findutils
 
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
 theme files and the keyboard cheat sheet in /usr/share/arctic (new home directories link to
 them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, zsh, GTK,
 waybar, fuzzel, mako), the arctic-* helper commands in /usr/bin and /etc/arctic/default-apps.
+Automatic updates: arctic-update-stage.timer downloads updates daily and
+schedules them to be installed at the next restart (dnf5 offline updates);
+arctic-update shows and changes that (/etc/arctic/update.conf). Snapper takes
+a snapshot before and after every dnf transaction once the installer has set
+it up for the root file system (arctic-snapper.actions, libdnf5 actions).
+
+It also has the theme engine (arctic-themegen, /usr/share/arctic/themegen), which makes a
+theme from the wallpaper when colours follow it (arctic-theme auto on), and the theme hooks
+in /usr/share/arctic/theme-hooks.d (GTK, Qt, Zed, Zen). App theming: the GTK, icon, cursor
+and font defaults for GTK/libadwaita and Flatpak apps (dconf distro database) and the Flatpak
+overrides that let Flatpak apps read the GTK colours.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-shell
@@ -186,12 +241,44 @@ Requires:       qt6-qtwayland
 Requires:       python3
 Requires:       python3-pillow
 Requires:       python3-pyte
+# pkexec, for Get apps
+Requires:       polkit
 Requires:       arctic-fonts = %{version}-%{release}
 
 %description -n arctic-shell
 The Arctic Linux desktop shell, written for Quickshell: top bar, launcher, wallpaper picker,
 the get-apps console, on-screen display, lock screen and the live-session welcome card.
 Start it with arctic-shell; arctic-shell-ipc calls into a running shell.
+
+# ---------------------------------------------------------------------------------------------
+%package -n arctic-settings
+Summary:        Arctic Settings, the settings app of Arctic Linux
+BuildArch:      noarch
+Requires:       quickshell
+Requires:       qt6-qtdeclarative
+Requires:       qt6-qtsvg
+Requires:       qt6-qtwayland
+Requires:       python3
+Requires:       hicolor-icon-theme
+# gdbus (power modes over D-Bus) and gsettings (GTK text size, pointer)
+Requires:       glib2
+# arctic-theme, arctic-motion, arctic-wallpaper, arctic-session, arctic-open; the wallpaper list
+Requires:       arctic-desktop-config = %{version}-%{release}
+Requires:       arctic-shell = %{version}-%{release}
+Requires:       arctic-fonts = %{version}-%{release}
+# Displays: list modes and try a layout (wlr-output-management)
+Requires:       wlr-randr
+# The tools the Network, Bluetooth and Sound pages open (arctic-desktop pulls them in too)
+Recommends:     nm-connection-editor
+Recommends:     blueman
+Recommends:     pavucontrol
+Recommends:     xdg-utils
+
+%description -n arctic-settings
+Arctic Settings: appearance and themes, windows (Mango gaps, borders, animations, focus,
+layout), displays, keyboard and mouse, shortcuts, default apps, network, Bluetooth, sound,
+updates, power and lock, startup apps. Changes go to ~/.config/mango/settings.conf and the
+Arctic helpers; nothing needs root. Start it with arctic-settings (Super+S).
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-installer
@@ -220,6 +307,12 @@ Requires:       openssl
 Requires:       NetworkManager
 Requires:       flatpak
 Requires:       dnf5
+# Drivers: device names for the Apps step (pci.ids), grubby for their kernel arguments and
+# mokutil to queue the akmods key for enrolment when Secure Boot is on. The installed system
+# is a copy of the live image, so mokutil stays for arctic-firstboot when this package goes.
+Requires:       hwdata
+Requires:       grubby
+Requires:       mokutil
 %{?systemd_requires}
 
 %description -n arctic-installer
@@ -310,6 +403,7 @@ Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-selinux = %{version}-%{release}
 Requires:       arctic-desktop-config = %{version}-%{release}
 Requires:       arctic-shell = %{version}-%{release}
+Requires:       arctic-settings = %{version}-%{release}
 Requires:       sddm-wayland-mango = %{version}-%{release}
 Requires:       arctic-sddm-theme = %{version}-%{release}
 Requires:       arctic-plymouth-theme = %{version}-%{release}
@@ -367,9 +461,19 @@ Requires:       python3-pillow
 Requires:       layer-shell-qt
 Requires:       tuned-ppd
 Requires:       mesa-dri-drivers
+# Updates and rollback (arctic-update, snapper snapshots of the btrfs root).
+Requires:       snapper
+Requires:       libdnf5-plugin-actions
+Requires:       btrfs-progs
 Recommends:     waybar
 Recommends:     lxqt-policykit
 Recommends:     adwaita-cursor-theme
+# Toolkit theming (also required by arctic-desktop-config): GTK 3 and Qt 5/6 apps.
+Requires:       adw-gtk3-theme
+Requires:       qt6ct
+Requires:       qt5ct
+# The terminal system monitor, themed like the rest (btop/arctic.theme).
+Recommends:     btop
 
 %description -n arctic-desktop
 Pulls in everything an Arctic Linux desktop needs: Mango, SDDM with the arctic theme and
@@ -399,6 +503,16 @@ fi
 # ---- SELinux module ----
 make -C packaging/selinux -f %{_datadir}/selinux/devel/Makefile arctic-nix.pp
 
+# ---- Static themes: Winter and Polar night, rendered by the theme engine (design/themegen)
+# from the design tokens. dotfiles/.config/arctic/themes holds the same files, for
+# dotfiles/install.sh; %%check makes sure they match.
+export PYTHONDONTWRITEBYTECODE=1
+rm -rf _build/themes
+for t in winter polar-night; do
+  PYTHONPATH=design python3 -m themegen builtin "$t" \
+    | PYTHONPATH=design python3 -m themegen render --palette - --out "_build/themes/$t" --quiet
+done
+
 # ---- Wallpapers: SVG → 3840×2160 PNG ----
 mkdir -p _build/backgrounds
 for svg in design/wallpapers/*.svg; do
@@ -427,8 +541,24 @@ ln -s ../usr/lib/issue.net %{buildroot}%{_sysconfdir}/issue.net
 install -Dpm 0644 $rel/macros.dist %{buildroot}%{_rpmconfigdir}/macros.d/macros.dist
 install -Dpm 0644 $rel/copr-arctic.conf %{buildroot}%{_sysconfdir}/dnf/plugins/copr.d/arctic.conf
 install -Dpm 0644 $rel/20-arctic-dnf-defaults.conf %{buildroot}%{_datadir}/dnf5/libdnf.conf.d/20-arctic-defaults.conf
-# Disabled until the Arctic COPR is published (see the file); Fedora's repos are unaffected.
-install -Dpm 0644 $rel/arctic.repo %{buildroot}%{_datadir}/dnf5/repos.d/arctic.repo
+# The Arctic repositories (docs/BUILD-SPEC.md §9), signed with the key in
+# packaging/release/RPM-GPG-KEY-arctic: committed, or put into Source0 by tools/build-rpms.sh
+# (--gpg-public-key / ARCTIC_GPG_PUBLIC_KEY). Without the key nothing from them could pass
+# gpgcheck, so they are shipped disabled; the build still succeeds (local test builds).
+install -d %{buildroot}%{_datadir}/dnf5/repos.d
+printf '%%s\n' %{_datadir}/dnf5/repos.d/arctic.repo %{_datadir}/dnf5/repos.d/arctic-testing.repo > release.files
+if [ -s $rel/RPM-GPG-KEY-arctic ]; then
+  install -Dpm 0644 $rel/RPM-GPG-KEY-arctic %{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic
+  echo %{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic >> release.files
+  install -pm 0644 $rel/arctic.repo $rel/arctic-testing.repo %{buildroot}%{_datadir}/dnf5/repos.d/
+else
+  echo "warning: $rel/RPM-GPG-KEY-arctic is missing: arctic-release ships the Arctic repositories DISABLED" >&2
+  for f in arctic.repo arctic-testing.repo; do
+    sed -e '1i # DISABLED: this arctic-release was built without the repository key (tools/build-rpms.sh).' \
+        -e 's/^enabled=1$/enabled=0/' $rel/$f > %{buildroot}%{_datadir}/dnf5/repos.d/$f
+    touch -r $rel/$f %{buildroot}%{_datadir}/dnf5/repos.d/$f
+  done
+fi
 install -Dpm 0644 $rel/80-arctic.preset %{buildroot}%{_presetdir}/80-arctic.preset
 install -pm 0644 $rel/85-display-manager.preset $rel/90-default.preset $rel/99-default-disable.preset %{buildroot}%{_presetdir}/
 install -Dpm 0644 $rel/80-arctic-user.preset %{buildroot}%{_userpresetdir}/80-arctic.preset
@@ -506,12 +636,49 @@ install -d %{buildroot}%{_bindir}
 install -pm 0755 dotfiles/.local/bin/* %{buildroot}%{_bindir}/
 install -Dpm 0644 dotfiles/.local/share/arctic/keys.txt %{buildroot}%{_datadir}/arctic/keys.txt
 install -d %{buildroot}%{_datadir}/arctic/themes
-cp -a dotfiles/.config/arctic/themes/. %{buildroot}%{_datadir}/arctic/themes/
+cp -a _build/themes/. %{buildroot}%{_datadir}/arctic/themes/
+# The theme engine (arctic-themegen, run by arctic-theme) and the design data it reads.
+themegen=%{buildroot}%{_datadir}/arctic/themegen
+install -d "$themegen/data/exports" "$themegen/data/icons" "$themegen/data/logos"
+tar -C design/themegen --exclude=./tests --exclude=__pycache__ -cf - . | tar -C "$themegen" -xf -
+install -pm 0644 design/exports/arctic-tokens.json design/exports/gtk-arctic-*.css "$themegen/data/exports/"
+install -pm 0644 design/icons/*.svg "$themegen/data/icons/"
+install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
+# Outside site-packages brp-python-bytecompile skips it: compile here, or every run would
+# compile from source (and fail to write __pycache__ into /usr/share).
+%py_byte_compile %{python3} %{buildroot}%{_datadir}/arctic/themegen
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
-# arctic-shell, arctic-shell-ipc and arctic-installer belong to their own subpackages.
-(cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-installer' \
+# Automatic updates (arctic-update, in /usr/bin with the helpers above) and snapshots.
+install -Dpm 0644 packaging/systemd/arctic-update-stage.service %{buildroot}%{_unitdir}/arctic-update-stage.service
+install -Dpm 0644 packaging/systemd/arctic-update-stage.timer %{buildroot}%{_unitdir}/arctic-update-stage.timer
+install -Dpm 0644 packaging/systemd/arctic-update-restage.timer %{buildroot}%{_unitdir}/arctic-update-restage.timer
+install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
+install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
+install -Dpm 0644 packaging/updates/snapper.actions \
+  %{buildroot}%{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
+install -Dpm 0644 packaging/updates/update.actions \
+  %{buildroot}%{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
+# The status file the shell's bar indicator watches (written by arctic-update).
+install -d %{buildroot}%{_sharedstatedir}/arctic
+touch %{buildroot}%{_sharedstatedir}/arctic/update-status.json
+# App theming (docs/BUILD-SPEC.md "App theming"): the hooks `arctic-theme reload` runs after a
+# theme change, GTK/icon/cursor/font defaults in dconf's "distro" database (Fedora's dconf
+# profile reads it after the user's and the administrator's), and Flatpak overrides.
+# theme-hooks.d: executables run after every theme switch (other packages may add theirs).
+install -d %{buildroot}%{_datadir}/arctic/theme-hooks.d
+install -pm 0755 packaging/theme-hooks.d/* %{buildroot}%{_datadir}/arctic/theme-hooks.d/
+install -Dpm 0644 packaging/dconf/10-arctic %{buildroot}%{_sysconfdir}/dconf/db/distro.d/10-arctic
+# The compiled database `dconf update` writes in %%posttrans: owned (%%ghost) so that erase
+# removes it and rpm -V knows it.
+touch %{buildroot}%{_sysconfdir}/dconf/db/distro
+install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/flatpak/overrides/global
+# QT_QPA_PLATFORMTHEME=qt6ct for systemd/D-Bus started apps, system-wide so that accounts with
+# an older copied ~/.config/environment.d/10-arctic.conf (xdgdesktopportal) follow too.
+install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
+# arctic-shell, arctic-shell-ipc, arctic-settings and arctic-installer belong to their own subpackages.
+(cd dotfiles/.local/bin && ls) | grep -vxE 'arctic-shell|arctic-shell-ipc|arctic-settings|arctic-installer' \
   | sed 's,^,%{_bindir}/,' > desktop-config.files
 # /usr/share/arctic/mango is shared with arctic-live (live.conf).
 (cd dotfiles/.config/mango/arctic && ls -- *.conf) | sed 's,^,%{_datadir}/arctic/mango/,' >> desktop-config.files
@@ -538,6 +705,19 @@ exec quickshell -p /usr/share/arctic/shell ipc call "$@"
 EOF
 fi
 chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-shell-ipc
+# Get apps: pkexec dnf5 with the password kept for a few minutes.
+install -Dpm 0644 packaging/polkit/org.arcticlinux.pkexec.dnf.policy \
+  %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
+
+# ---------------------------------------------------------------- arctic-settings
+# /usr/bin/arctic-settings was installed with the other helpers (dotfiles/.local/bin).
+install -d %{buildroot}%{_datadir}/arctic/settings
+# tests/ and dev/ (headless screenshots) are development-only.
+tar -C settings --exclude=./tests --exclude=./dev --exclude=./README.md -cf - . | tar -C %{buildroot}%{_datadir}/arctic/settings -xf -
+chmod 0755 %{buildroot}%{_datadir}/arctic/settings/scripts/arctic_settings.py
+desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/settings/org.arcticlinux.Settings.desktop
+install -Dpm 0644 packaging/settings/org.arcticlinux.Settings.svg \
+  %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg
 
 # ---------------------------------------------------------------- arctic-installer
 install -pm 0755 _build/bin/arcticd _build/bin/arctic-install %{buildroot}%{_bindir}/
@@ -590,13 +770,47 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
+# arctic-release: the key and enabled repositories go together; never secret key material;
+# the testing channel is always off by default.
+key=%{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic
+repos=%{buildroot}%{_datadir}/dnf5/repos.d
+for id in arctic arctic-source arctic-testing arctic-testing-source; do
+  grep -qx "\[$id\]" $repos/arctic.repo $repos/arctic-testing.repo || { echo "error: no [$id] repository" >&2; exit 1; }
+done
+if [ -e "$key" ]; then
+  grep -q -- '-----BEGIN PGP PUBLIC KEY BLOCK-----' "$key" || { echo "error: $key is not an armored public key" >&2; exit 1; }
+  if grep -q 'PRIVATE KEY' "$key"; then echo "error: $key holds a private key" >&2; exit 1; fi
+  grep -qx 'enabled=1' $repos/arctic.repo || { echo "error: arctic.repo is not enabled" >&2; exit 1; }
+elif grep -qx 'enabled=1' $repos/arctic.repo; then
+  echo "error: arctic.repo is enabled without its key" >&2; exit 1
+fi
+if grep -qx 'enabled=1' $repos/arctic-testing.repo; then
+  echo "error: arctic-testing.repo must be disabled by default" >&2; exit 1
+fi
+# The theme engine: colour maths, templates, wallpaper palettes and their contrast guarantees,
+# arctic-theme / arctic-wallpaper, and that dotfiles/.config/arctic/themes is current.
+# (ARCTIC_PERF_BUDGET: builders are slower and busier than a desktop.)
+ARCTIC_PERF_BUDGET=10 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s design/themegen/tests
+# The installed engine renders from the installed data exactly what %%build made.
+tg="%{buildroot}%{_bindir}/arctic-themegen"
+ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTECODE=1 python3 "$tg" builtin winter > _build/winter.json
+rm -rf _build/check-theme
+ARCTIC_THEMEGEN_DIR=%{buildroot}%{_datadir}/arctic/themegen PYTHONDONTWRITEBYTECODE=1 \
+  python3 "$tg" render --palette _build/winter.json --out _build/check-theme --quiet
+diff -r _build/check-theme %{buildroot}%{_datadir}/arctic/themes/winter
+desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Settings.desktop
+# Settings' backend: the file formats it reads and writes (uses `mango -p` when installed).
+python3 -m unittest discover -s settings/tests -p 'test_*.py'
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
-         %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer; do
+         %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer %{buildroot}%{_bindir}/arctic-update \
+         %{buildroot}%{_datadir}/arctic/theme-hooks.d/*; do
   case "$(head -n1 "$s")" in
     *python*) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$s" ;;
     *) bash -n "$s" ;;
   esac
 done
+# arctic-update's file handling (update.conf, dnf5's offline state, the status file).
+python3 -m unittest discover -s packaging/updates -p 'test_*.py'
 test -f %{buildroot}%{_datadir}/sddm/themes/arctic/metadata.desktop || \
   { echo "error: branding/sddm/arctic has no metadata.desktop" >&2; exit 1; }
 test -f %{buildroot}%{_datadir}/plymouth/themes/arctic/arctic.plymouth || \
@@ -617,6 +831,22 @@ for l in $skel_links; do
   t="$(readlink "$l")"
   case "$t" in /*) test -e "%{buildroot}$t" || { echo "error: $l -> $t: not in the package" >&2; exit 1; } ;; esac
 done
+# Relative links (yazi, btop, GTK, qt*ct colour schemes …) go through ~/.config/arctic/current:
+# in a copy of skel whose `current` is the buildroot's theme, every link must resolve.
+lhome="$PWD/_build/linkhome"; rm -rf "$lhome"; mkdir -p "$lhome"
+cp -a %{buildroot}%{_sysconfdir}/skel/. "$lhome/"
+for l in $(find "$lhome" -type l); do
+  t="$(readlink "$l")"
+  case "$t" in /*) ln -sfn "%{buildroot}$t" "$l" ;; esac
+done
+dangling="$(find -L "$lhome" -type l)"
+if [ -n "$dangling" ]; then echo "error: dangling links in /etc/skel:" >&2; echo "$dangling" >&2; exit 1; fi
+# The qt*ct colour schemes are absolute paths inside ~/.config/arctic/current.
+for q in qt5ct qt6ct; do
+  p="$(sed -n 's,^color_scheme_path=,,p' "$lhome/.config/$q/$q.conf")"
+  case "$p" in "~/"*) p="$lhome/${p#\~/}" ;; esac
+  test -z "$p" || test -f "$p" || { echo "error: $q color_scheme_path $p is missing" >&2; exit 1; }
+done
 # Mango configs: validated when mangowm is installed in the build root (tools/build-rpms.sh
 # installs the freshly built one); `mango -c FILE -p` rejects unknown keys.
 if command -v mango >/dev/null 2>&1; then
@@ -633,11 +863,28 @@ if command -v mango >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------------------------
+# Every build has a new Release, so every Arctic update updates arctic-selinux too; its module
+# rarely changes. semodule rebuilds the whole policy (the slowest step of an update), so an
+# update skips it when the module is byte-for-byte the one installed (the build is
+# reproducible) and semodule has it; anything else installs it as usual.
+%global arctic_selinux_state %{_localstatedir}/lib/rpm-state/arctic-selinux
+
 %pre -n arctic-selinux
 %selinux_relabel_pre -s %{selinuxtype}
+rm -rf %{arctic_selinux_state} || :
+if [ $1 -gt 1 ] && [ -f %{_datadir}/selinux/packages/arctic-nix.pp ]; then
+  mkdir -p %{arctic_selinux_state} && \
+    cp -p %{_datadir}/selinux/packages/arctic-nix.pp %{arctic_selinux_state}/arctic-nix.pp || :
+fi
 
 %post -n arctic-selinux
+if [ $1 -gt 1 ] && cmp -s %{arctic_selinux_state}/arctic-nix.pp %{_datadir}/selinux/packages/arctic-nix.pp && \
+   [ -e %{_sharedstatedir}/selinux/%{selinuxtype}/active/modules/200/arctic-nix ]; then
+  : # the same module is installed already
+else
 %selinux_modules_install -s %{selinuxtype} %{_datadir}/selinux/packages/arctic-nix.pp
+fi
+rm -rf %{arctic_selinux_state} || :
 
 %postun -n arctic-selinux
 %selinux_modules_uninstall -s %{selinuxtype} arctic-nix
@@ -660,13 +907,25 @@ for f in .zshrc .zprofile; do \
 done
 
 %post -n arctic-desktop-config
-%systemd_post arctic-firstboot.service
+%systemd_post arctic-firstboot.service arctic-update-stage.timer
 
 %preun -n arctic-desktop-config
-%systemd_preun arctic-firstboot.service
+%systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# Systems installed before automatic updates existed (0.1) get the new timers once, as the
+# presets say (%%systemd_post presets only on a first install). Removing the marker doesn't
+# undo a choice: `arctic-update auto off` also sets AUTO=off, which the timer's check honours.
+if [ ! -e %{_sharedstatedir}/arctic/.update-presets ]; then
+  systemctl --no-reload preset arctic-update-stage.timer snapper-cleanup.timer >/dev/null 2>&1 || :
+  mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.update-presets || :
+fi
+# Compile /etc/dconf/db/distro.d (the Arctic GTK/icon/cursor/font defaults).
+if [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
+
+%postun -n arctic-desktop-config
+if [ "$1" -eq 0 ] && [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
 
 %triggerin -n arctic-desktop-config -- zsh
 %{arctic_skel_zsh}
@@ -705,8 +964,11 @@ fi
 %systemd_postun arcticd.socket arcticd.service
 
 %post -n arctic-plymouth-theme
-# Make arctic the default splash; the initramfs is rebuilt by the image build / installer.
-if [ -x %{_sbindir}/plymouth-set-default-theme ]; then
+# Make arctic the default splash when the package is first installed (the image build; the
+# installer copies that system and rebuilds the initramfs). Updates leave the chosen theme alone.
+# The splash is in the initramfs: a changed theme shows once it is rebuilt (the next kernel
+# update, or `sudo dracut -f`).
+if [ $1 -eq 1 ] && [ -x %{_sbindir}/plymouth-set-default-theme ]; then
   %{_sbindir}/plymouth-set-default-theme arctic || :
 fi
 
@@ -718,7 +980,7 @@ if [ $1 -eq 0 ] && [ -x %{_sbindir}/plymouth-set-default-theme ]; then
 fi
 
 # ---------------------------------------------------------------------------------------------
-%files -n arctic-release
+%files -n arctic-release -f release.files
 %license LICENSE
 %doc packaging/release/README.md
 %{_prefix}/lib/os-release
@@ -741,7 +1003,6 @@ fi
 %dir %{_datadir}/dnf5/libdnf.conf.d
 %{_datadir}/dnf5/libdnf.conf.d/20-arctic-defaults.conf
 %dir %{_datadir}/dnf5/repos.d
-%{_datadir}/dnf5/repos.d/arctic.repo
 %dir %{_presetdir}
 %{_presetdir}/80-arctic.preset
 %{_presetdir}/85-display-manager.preset
@@ -785,9 +1046,26 @@ fi
 %dir %{_datadir}/arctic/mango
 %{_datadir}/arctic/keys.txt
 %{_datadir}/arctic/themes/
+%{_datadir}/arctic/themegen/
+%dir %{_datadir}/arctic/theme-hooks.d
+%{_datadir}/arctic/theme-hooks.d/*
+%config(noreplace) %{_sysconfdir}/dconf/db/distro.d/10-arctic
+%ghost %{_sysconfdir}/dconf/db/distro
+%dir %{_localstatedir}/lib/flatpak/overrides
+%config(noreplace) %{_localstatedir}/lib/flatpak/overrides/global
+%{_prefix}/lib/environment.d/50-arctic-qt.conf
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
+%{_unitdir}/arctic-update-stage.service
+%{_unitdir}/arctic-update-stage.timer
+%{_unitdir}/arctic-update-restage.timer
+%{_libexecdir}/arctic/arctic-update-helper
+%config(noreplace) %{_sysconfdir}/arctic/update.conf
+%config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
+%config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
+%dir %{_sharedstatedir}/arctic
+%ghost %attr(0644,root,root) %verify(not md5 size mtime) %{_sharedstatedir}/arctic/update-status.json
 
 %files -n arctic-shell
 %dir %{_datadir}/arctic
@@ -795,6 +1073,16 @@ fi
 %{_bindir}/arctic-shell
 %{_bindir}/arctic-shell-ipc
 %{_datadir}/arctic/shell/
+%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
+
+%files -n arctic-settings
+%dir %{_datadir}/arctic
+%license LICENSE
+%doc settings/README.md
+%{_bindir}/arctic-settings
+%{_datadir}/arctic/settings/
+%{_datadir}/applications/org.arcticlinux.Settings.desktop
+%{_datadir}/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg
 
 %files -n arctic-installer
 %dir %{_datadir}/arctic
@@ -844,5 +1132,13 @@ fi
 # metapackage: no files
 
 %changelog
+* Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.2.0-1
+- Arctic Linux 0.2: arctic-release enables the signed Arctic package repository (GitHub
+  Pages; stable channel on, testing channel off) and ships its public key
+- Every build has its own Release, 1.<UTC commit time>.<UTC build time>.git<commit>,
+  so builds of newer code update the ones before them
+- arctic-plymouth-theme sets the default splash on the first install only; arctic-selinux
+  skips reinstalling an unchanged module on updates
+
 * Sun Sep 27 2026 Arctic Linux <arctic@arcticlinux.org> - 0.1.0-1
 - Arctic Linux 0.1: first build of all subpackages from one spec

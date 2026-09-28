@@ -1,7 +1,10 @@
 /* Arctic Linux — GTK 4 / libadwaita colours from the active theme (Winter / Polar night).
    The theme file defines the arctic_* colours and maps them onto libadwaita's named colours
-   (accent_bg_color → accent, window_bg_color → surface, …). */
-@import url("../arctic/current/gtk.css");
+   (accent_bg_color → accent, window_bg_color → surface, …). arctic-colors.css is the active
+   theme's gtk.css: a link to ../arctic/current/gtk.css, which the 10-gtk theme hook replaces
+   with a copy of it, so that Flatpak apps (which see this folder, but not /usr/share/arctic)
+   get the same colours. docs/BUILD-SPEC.md "App theming". */
+@import url("arctic-colors.css");
 
 button, entry, spinbutton, dropdown > button {
   border-radius: 10px;

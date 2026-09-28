@@ -1,0 +1,27 @@
+id = "betterbird"
+name = "Betterbird"
+summary = "Thunderbird with extra fixes and features."
+category = "email"
+default = false
+tile = "betterbird"
+icon = "mail"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "flatpak"
+remote = "flathub"
+ref = "eu.betterbird.Betterbird"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 134
+
+[defaults]
+desktop_id = "eu.betterbird.Betterbird.desktop"
+mime = [
+  "x-scheme-handler/mailto",
+  "message/rfc822",
+  "text/calendar",
+]

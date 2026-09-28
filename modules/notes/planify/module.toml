@@ -1,0 +1,21 @@
+id = "planify"
+name = "Planify"
+summary = "To-do lists and task planning."
+category = "notes"
+role = "task app"
+default = false
+tile = "planify"
+icon = "check-circle"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora.
+method = "flatpak"
+remote = "flathub"
+ref = "io.github.alainm23.planify"
+runtime = "org.gnome.Platform//50"
+verified = true
+download_mb = 7

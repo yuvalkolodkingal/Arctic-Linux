@@ -11,10 +11,10 @@ requires = []
 conflicts = []
 
 [[install]]
-# Fedora 44: mpv 0.41
+# Fedora 44: mpv 0.41 (14 MB with its dependencies)
 method = "dnf"
 packages = ["mpv"]
-download_mb = 6
+download_mb = 14
 
 [[install]]
 method = "flatpak"

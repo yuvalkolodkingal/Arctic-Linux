@@ -1,0 +1,10 @@
+# Arctic Linux automatic updates: after every dnf transaction on this system, arctic-update
+# checks whether it invalidated the updates downloaded for the next restart (dnf5 removes
+# /system-update then) and, if so, has them checked again two minutes later
+# (arctic-update-restage.timer), reusing the packages already downloaded.
+# Installed as /etc/dnf/libdnf5-plugins/actions.d/arctic-update.actions by arctic-desktop-config.
+#
+# Format: callback:package_filter:direction:options:command (libdnf5-actions(8)).
+# enabled=host-only: not for `dnf --installroot=…` into another directory. The offline boot's
+# own transaction is skipped by arctic-update itself. It prints nothing.
+post_transaction:::enabled=host-only:/usr/bin/arctic-update after-transaction

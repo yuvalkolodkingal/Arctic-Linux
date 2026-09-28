@@ -19,6 +19,7 @@ FocusScope {
     property string nextIcon: ""          // leading icon on the primary button
     property string secondaryLabel: ""    // ghost button before the primary (Done: Keep trying)
     property bool valid: true
+    property var testState: null          // page-specific state for scripts (IPC state().step)
     property bool fade: false             // soft fade above the footer (scrolling content)
     property bool fillHeight: false       // page takes all remaining height
     property int measure: 560             // max content width (bundle: 480–640)

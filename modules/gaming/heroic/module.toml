@@ -1,0 +1,21 @@
+id = "heroic"
+name = "Heroic"
+summary = "Plays your Epic, GOG and Amazon games."
+category = "gaming"
+role = "game launcher"
+default = false
+tile = "heroic"
+icon = "gamepad"
+in_live_image = false
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Not in Fedora.
+method = "flatpak"
+remote = "flathub"
+ref = "com.heroicgameslauncher.hgl"
+runtime = "org.freedesktop.Platform//25.08"
+verified = true
+download_mb = 326

@@ -76,7 +76,8 @@ installer-ui/dev/test-headless.sh [out-dir]                # sway headless + gri
 ```
 
 `test-headless.sh` needs sway, grim, quickshell, python3 and (for the real key
-presses: Enter, Alt+Left, F1, Esc, Tab) wtype. On a container sway may need
+presses: Enter, Alt+Left, F1, Esc, Tab) wtype: without wtype it fails, unless
+`ARCTIC_TEST_NO_KEYS=1` (it then says SKIPPED and leaves the keyboard checks out). On a container sway may need
 `setcap -r /usr/bin/sway` (its cap_sys_nice file capability is refused).
 
 Assets are regenerated with

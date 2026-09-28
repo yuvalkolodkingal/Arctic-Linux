@@ -45,9 +45,13 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `.config/swaylock/config` | **Fallback lock**: ring amber while typing, red when wrong, green when accepted | LockScreen |
 | `.config/fontconfig/conf.d/60-arctic-figtree.conf` | Finds the design's Figtree files, which name their family "Figtree Light" | Typography |
 | `.config/kitty/` | JetBrains Mono 10.5, amber block cursor, the Arctic palette | Terminal |
-| `.config/gtk-3.0`, `gtk-4.0` | GTK and libadwaita colours, amber focus ring | Platforms → GTK |
-| `.zshrc`, `.zprofile`, `.bashrc.d/arctic.sh` | Prompt (`~ ❯`, amber arrow), history, completion, the fox greeting | Terminal |
-| `.config/arctic/themes/{winter,polar-night}/` | **Generated** colour files for every app above, and `theme.json` (every token) for the shell | tokens |
+| `.config/gtk-3.0`, `gtk-4.0` | GTK (adw-gtk3) and libadwaita colours from `arctic-colors.css` (a link to the theme's `gtk.css`, which the theme hook turns into a copy that Flatpak apps can read), amber focus ring, Adwaita icons and cursor, Figtree | Platforms → GTK |
+| `.config/qt5ct`, `.config/qt6ct` | Qt 5 (VLC) and Qt 6 apps: Fusion with the active theme's palette (`QT_QPA_PLATFORMTHEME=qt6ct`, set in `mango/arctic/look.conf` and `environment.d`) | Platforms |
+| `.config/zed/settings.json` | Zed: the "Arctic" theme (the theme hook puts it in Zed's themes folder, also for the Flatpak) and the Arctic fonts | — |
+| `.config/yazi/theme.toml`, `.config/btop/` | Links to the active theme's yazi and btop themes | — |
+| `.config/foot`, `.config/alacritty` | The other terminals, with kitty's palette from the active theme | Terminal |
+| `.zshrc`, `.zprofile`, `.bashrc.d/arctic.sh` | Prompt (`~ ❯`, amber arrow; the theme's `zsh/colors.zsh`), history, completion, fzf colours (`fzf/fzfrc`), the fox greeting | Terminal |
+| `.config/arctic/themes/{winter,polar-night}/` | **Generated** (by the theme engine, `design/themegen`) colour files for every app above, `theme.json` (every token) for the shell and `palette.json` | tokens |
 | `.config/arctic/current` | Symlink to the active theme; every app reads its colours through it | Theme switching |
 | `.local/bin/arctic-*` | The helper commands below | — |
 
@@ -57,8 +61,9 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 |---|---|
 | `arctic-shell [--foreground\|--restart\|--stop\|--path]` | Start the desktop shell (Quickshell) |
 | `arctic-shell-ipc <target> <function>` | Talk to the shell, e.g. `arctic-shell-ipc launcher toggle` (targets in [`../shell/README.md`](../shell/README.md)) |
-| `arctic-theme [winter\|polar-night\|toggle]` | Switch the whole desktop's theme (`Super + Shift + T`); the shell restyles live |
-| `arctic-wallpaper [snowfield\|aurora\|fox\|<picture>]` | Pick a wallpaper; the Arctic ones follow theme switches. Also the shell's picker (`Super + Shift + W`) |
+| `arctic-theme [set <theme>\|toggle\|auto on\|off\|mode auto\|dark\|light\|list\|current]` | Switch the whole desktop's theme (`Super + Shift + T` toggles light / dark); the shell restyles live. With auto colours on (the default) your own wallpapers colour the desktop |
+| `arctic-themegen render\|palette\|builtin\|check` | The theme engine: render a palette into a theme folder, make a palette from a picture |
+| `arctic-wallpaper [snowfield\|aurora\|fox\|<picture>]` | Pick a wallpaper; the Arctic ones follow theme switches, your pictures set the colours when auto colours are on. Also the shell's picker (`Super + Shift + W`, with a "Match colours to wallpaper" switch) |
 | `arctic-fetch [--static]` | The animated fox greeting (runs when a terminal opens; any key skips it) |
 | `arctic-motion [on\|off]` | Reduced motion: no animations anywhere, still fox |
 | `arctic-launcher ["=12*4"]` | Open or close the launcher (`Super + Space`), optionally with something typed |
@@ -70,6 +75,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 | `arctic-dnd [toggle]` | Do not disturb (`Super + Shift + N`) |
 | `arctic-screenshot area\|screen\|window` | `Print`, `Shift + Print`, `Super + Print` |
 | `arctic-keys` | Keyboard cheat sheet (`Super + /`) |
+| `arctic-settings [page]` | Settings (`Super + S`): appearance, windows, displays, keyboard and mouse, shortcuts, default apps, network, sound, updates, power, startup apps ([`../settings/README.md`](../settings/README.md)) |
 | `arctic-shell-ipc apps install` | Get apps: install with dnf or Flatpak (`Super + Shift + A`) |
 | `arctic-session shell\|mako\|…` | Start one session service once (used by autostart) |
 | `arctic-welcome` | The live USB's welcome card, once per boot |
@@ -77,11 +83,19 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 
 ## Changing things
 
+- **Settings** (`Super + S`) writes what you change there to `~/.config/mango/settings.conf`,
+  which `config.conf` reads just before `user.conf`.
 - **Your own settings** go in files Arctic never overwrites: `~/.config/mango/user.conf`,
   `~/.config/kitty/user.conf`, `~/.zshrc.local`, `~/.config/arctic/default-apps`.
 - **Colours** come from the design tokens. Change `design/tokens.json`, re-export
   `design/exports/arctic-tokens.json` from the design system, then run
-  `python3 design/tools/gen-desktop-themes.py` to regenerate both themes.
+  `python3 design/tools/gen-desktop-themes.py` to regenerate both themes (the per-app files
+  are templates in `design/themegen/templates/`).
+- **Colours from your wallpaper** are on by default (`arctic-theme auto on|off`): a picture of
+  yours becomes the `wallpaper` theme in `~/.config/arctic/themes/wallpaper`; Arctic's own
+  wallpapers keep Winter / Polar night. Scripts in `~/.config/arctic/theme-hooks.d/` run after
+  every theme change (with `ARCTIC_THEME_DIR` and `ARCTIC_THEME_MODE`); extra templates of
+  your own go in `~/.config/arctic/templates/`.
 - **Default apps** are read by `arctic-open` from `/etc/arctic/default-apps` (written by the
   installer) and `~/.config/arctic/default-apps`, as `role=command` lines, e.g.
   `browser=gtk-launch org.mozilla.firefox`.
@@ -98,8 +112,12 @@ home directory only points at them, so `dnf upgrade` reaches accounts that alrea
 | `~/.config/arctic/current` | a link to `/usr/share/arctic/themes/<theme>` (`arctic-theme` switches it; a theme folder of your own in `~/.config/arctic/themes/` is used first) |
 | `keys.txt` | not copied: the cheat sheet is read from `/usr/share/arctic/keys.txt` unless `~/.local/share/arctic/keys.txt` exists |
 
-The other files (kitty, GTK, waybar, fuzzel, mako, zsh) are ordinary copies that are yours to
-edit. `install.sh` (no packages) copies everything, including the files above, into the home
+The other files (kitty, GTK, Qt, Zed, btop, waybar, fuzzel, mako, zsh) are ordinary copies that
+are yours to edit. The links into `~/.config/arctic/current` (yazi's `theme.toml`, btop's
+`themes/arctic.theme`, GTK's `arctic-colors.css`) follow the theme; replace one with a copy to
+keep it as you leave it. After a theme switch, the hooks in `/usr/share/arctic/theme-hooks.d`
+update what can't follow a link (GTK for Flatpak apps, running Qt apps, Zed; docs/BUILD-SPEC.md
+§3.1). `install.sh` (no packages) copies everything, including the files above, into the home
 directory. The installer also writes `/etc/arctic/mango/keyboard.conf` (your keyboard layout)
 and `/etc/arctic/default-apps` (the apps you ticked); both are read at login.
 
