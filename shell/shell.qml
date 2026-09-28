@@ -205,6 +205,22 @@ ShellRoot {
         function open(name: string): void { shell.openPanel(name, null, undefined, { keyboard: true }); }
         function close(): void { shell.closePanel(); }
     }
+    // Quick Settings (Super + A) and the toggle registry behind its tiles.
+    IpcHandler {
+        target: 'quick'
+        function toggle(): void { shell.togglePanel('quick', null, undefined, { keyboard: true }); }
+        // A page: network, bluetooth, sound, battery, display, media; empty for the main page.
+        function open(page: string): void { shell.openPanel('quick', null, undefined, { keyboard: true, page: page }); }
+    }
+    IpcHandler {
+        target: 'toggle'
+        // `toggle set wifi off`: on, off or toggle; answers the new state or "unavailable".
+        function set(key: string, mode: string): string { return ToggleRegistry.set(key, mode); }
+        function get(key: string): string { return ToggleRegistry.get(key); }
+        function states(): string { return ToggleRegistry.states(); }
+        // Helpers (arctic-nightlight, arctic-keep-awake) call this after a change.
+        function refresh(key: string): void { ToggleRegistry.refresh(key); }
+    }
     IpcHandler {
         target: 'bar'
         // The bar on the focused screen takes the keyboard (Super + Alt + B), or gives it back.

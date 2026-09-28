@@ -43,6 +43,8 @@ Popover {
         calendar: calendarPanel,
         battery: batteryPanel,
         media: mediaPanel,
+        display: displayPanel,
+        quick: quickPanel,
     })
     Component { id: networkPanel; NetworkPanel { menu: host } }
     Component { id: bluetoothPanel; BluetoothPanel { menu: host } }
@@ -51,6 +53,8 @@ Popover {
     Component { id: calendarPanel; CalendarPanel { menu: host } }
     Component { id: batteryPanel; BatteryPanel { menu: host } }
     Component { id: mediaPanel; MediaPanel { menu: host } }
+    Component { id: displayPanel; DisplayPanel { menu: host } }
+    Component { id: quickPanel; QuickSettingsPanel { menu: host } }
 
     FocusScope {
         anchors.fill: parent

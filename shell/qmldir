@@ -11,6 +11,8 @@ singleton BluetoothService 1.0 BluetoothService.qml
 singleton BatteryService 1.0 BatteryService.qml
 singleton PowerService 1.0 PowerService.qml
 singleton MediaService 1.0 MediaService.qml
+singleton ToggleRegistry 1.0 ToggleRegistry.qml
+singleton BrightnessService 1.0 BrightnessService.qml
 AppTile 1.0 AppTile.qml
 ArcticSlider 1.0 ArcticSlider.qml
 ArcticSwitch 1.0 ArcticSwitch.qml
@@ -24,9 +26,11 @@ BatteryPanel 1.0 BatteryPanel.qml
 BluetoothPairDialog 1.0 BluetoothPairDialog.qml
 BluetoothPanel 1.0 BluetoothPanel.qml
 CalendarPanel 1.0 CalendarPanel.qml
+DisplayPanel 1.0 DisplayPanel.qml
 DockPosition 1.0 DockPosition.qml
 DragHandle 1.0 DragHandle.qml
 FocusRing 1.0 FocusRing.qml
+HelperToggle 1.0 HelperToggle.qml
 Icon 1.0 Icon.qml
 InstallConsole 1.0 InstallConsole.qml
 Kbd 1.0 Kbd.qml
@@ -51,6 +55,8 @@ PolkitDialog 1.0 PolkitDialog.qml
 Popover 1.0 Popover.qml
 PopupSurface 1.0 PopupSurface.qml
 PowerMenu 1.0 PowerMenu.qml
+QuickSettingsPanel 1.0 QuickSettingsPanel.qml
+QuickTile 1.0 QuickTile.qml
 RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml
 ShadowLayers 1.0 ShadowLayers.qml
@@ -58,6 +64,7 @@ SignalIcon 1.0 SignalIcon.qml
 SoundPanel 1.0 SoundPanel.qml
 Spinner 1.0 Spinner.qml
 Tip 1.0 Tip.qml
+Toggle 1.0 Toggle.qml
 TrayPanel 1.0 TrayPanel.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml
