@@ -119,7 +119,8 @@ rate**, **Scale**, **Rotation**, **Position** and **Variable refresh rate**.
 
 Press **Apply** and the change happens at once, with a question: **Keep these display
 settings?** If you don't press **Keep changes** within 15 seconds (for example because the screen
-went black), the old layout comes back by itself, even if Settings has closed. A kept layout is
+went black), the old layout comes back by itself. If Settings has closed in the meantime, a
+watchdog puts it back after 20 seconds. A kept layout is
 saved as `monitorrule` lines in `settings.conf`, listed under **Saved layout**; **Forget** removes
 it.
 
