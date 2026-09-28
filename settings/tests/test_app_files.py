@@ -49,7 +49,9 @@ class SearchIndexTest(unittest.TestCase):
 
     def test_pages_exist(self):
         files = re.findall(r'file: "([A-Za-z]+\.qml)"', self.index)
-        self.assertEqual(len(files), 13)
+        # 0.2's 13 pages plus the ones 0.3 adds (Web apps, …); each listed once.
+        self.assertGreaterEqual(len(files), 14)
+        self.assertEqual(len(files), len(set(files)))
         for name in files:
             self.assertIn(name, self.pages)
 
