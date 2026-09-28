@@ -1,8 +1,12 @@
 # Drivers
 
 Most hardware works with the open-source drivers that come with Fedora. For a few kinds of
-hardware a driver that isn't open source works better, or is the only one that works at all.
-From version 0.2, the installer finds that hardware and sets up the driver for you.
+hardware a driver from RPM Fusion works better, or is the only one that works at all. From
+version 0.2, the installer finds that hardware and sets up the driver for you.
+
+The NVIDIA and Broadcom drivers aren't open source. The Intel and AMD video drivers are open
+source, but they play formats Fedora leaves out for patent reasons, so they come from RPM Fusion
+too. (The installer's Drivers section calls them all "not open source".)
 
 ## What the installer looks for
 
@@ -102,7 +106,7 @@ At the first restart:
    you miss it, see [Missed the blue screen](#missed-the-blue-screen).)
 2. Choose **Enroll MOK**, then **Continue**, then **Yes**.
 3. Type the one-time code with the number keys above the letters (not the number pad), then
-   press `Enter`. Nothing appears while you type.
+   press `Enter`.
 4. Choose **Reboot**. The driver starts from now on.
 
 "MOK" is a Machine Owner Key: a key you, the owner of the computer, add to the ones Secure Boot
