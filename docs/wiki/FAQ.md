@@ -18,6 +18,9 @@ its own, and adds its desktop on top. It's an independent project, not an offici
 
 Yes. Arctic Linux's own code is under the MIT licence; the fonts are under the SIL Open Font
 Licence, and the Nix SELinux policy under the LGPL. The apps it installs keep their own licences.
+Apps that aren't open source are marked **Proprietary** in the installer, and the drivers it
+offers for your hardware come from RPM Fusion and aren't open source either; you can untick all of
+them.
 
 ### Who is it for?
 
@@ -80,15 +83,36 @@ disk of at least 40 GB.
 
 ### Does Secure Boot work?
 
-The USB stick and the installed system both start through Fedora's signed boot loader (shim), which
-is what Secure Boot checks. If your computer refuses to start it, see
+Yes. The USB stick and the installed system both start through Fedora's signed boot loader (shim),
+which is what Secure Boot checks. If your computer refuses to start it, see
 [Troubleshooting](Troubleshooting#the-usb-stick-doesnt-start).
+
+If you install the NVIDIA or Broadcom Wi-Fi driver, there's one extra step at the first restart:
+a blue **Perform MOK management** screen, where you confirm the driver's key with a code the
+installer shows you. You don't have to turn Secure Boot off. See
+[Drivers](Drivers#secure-boot-confirming-the-drivers-key).
 
 ### What about NVIDIA graphics?
 
-Arctic Linux 0.1 uses the open graphics drivers that come with Fedora and doesn't set up NVIDIA's
-own driver. If the screen stays black, use **Safe graphics mode**. See the
-[release notes](Release-Notes#known-limitations).
+From version 0.2 the installer finds NVIDIA cards and installs NVIDIA's own driver, ticked in a
+**Drivers** section of the Apps step: the current driver for GeForce RTX 20, GTX 16 and newer, and
+the 580 series for GTX 750 to 1080 Ti. It's built for your kernel while installing, so it works
+from the first login. On the live USB the open driver is used; if the screen stays black there,
+use **Safe graphics mode**. See [Drivers](Drivers).
+
+### What other drivers does it set up?
+
+Only what your computer needs: video acceleration for Intel and AMD graphics (so H.264 and H.265
+video plays on the graphics chip), and Broadcom's driver for the Broadcom Wi-Fi cards that have no
+working open driver. Each shows up ticked in the **Drivers** section only when the installer finds
+that hardware. See [Drivers](Drivers).
+
+### I installed 0.1 and my login keeps going back to the login screen.
+
+That's a known 0.1.0 bug: the installer left the home folder without SELinux labels. A one-time
+relabel fixes it; see
+[Troubleshooting](Troubleshooting#the-login-screen-goes-straight-back-after-the-password).
+The 0.2 installer doesn't have this problem.
 
 ## Using Arctic Linux
 
@@ -99,7 +123,13 @@ Press `Super + Shift + A` for **Get apps**, type the app's name and press `Enter
 
 ### Where's the Software app the installer mentions?
 
-In version 0.1 that's **Get apps** (`Super + Shift + A`).
+That's **Get apps** (`Super + Shift + A`).
+
+### Is there a settings app?
+
+Yes, from version 0.2: **Settings** (`Super + S`, or the first item of the power menu). It
+changes the look, windows, displays, keyboard and mouse, shortcuts, default apps, network,
+Bluetooth, sound, updates, power and startup apps. See [Settings](Settings).
 
 ### How do I update?
 
@@ -109,7 +139,8 @@ run `arctic-update now`; Flatpak apps update with `flatpak update`. See [Updates
 
 ### How do I switch to a light theme?
 
-Press `Super + Shift + T`. See [Themes and customisation](Themes-and-Customisation).
+Press `Super + Shift + T`, or pick Winter in [Settings](Settings#appearance), **Appearance**. See
+[Themes and customisation](Themes-and-Customisation).
 
 ### I don't have a Super key.
 
@@ -131,15 +162,18 @@ but mixing them with Arctic's desktop isn't something we've tested.
 
 ### Where are my settings?
 
-In your home folder: `~/.config/mango/user.conf` for the window manager,
+What you change in [Settings](Settings) goes to `~/.config/mango/settings.conf` and a few files in
+`~/.config/arctic/` (the page lists them all). Your own hand-written settings are in your home
+folder too: `~/.config/mango/user.conf` for the window manager,
 `~/.config/kitty/user.conf` for the terminal, `~/.zshrc.local` for zsh and
 `~/.config/arctic/` for the theme, wallpaper and default apps. See
 [Themes and customisation](Themes-and-Customisation#your-own-settings-files).
 
 ### Can I snapshot or roll back my system?
 
-The system uses btrfs, which supports snapshots, but version 0.1 doesn't set up snapshots or a
-rollback tool for you.
+Yes, from version 0.2. The system uses btrfs, and snapper takes a snapshot before and after every
+dnf transaction, so you can put back files an update changed. See
+[Updates](Updates#snapshots).
 
 ## The project
 
