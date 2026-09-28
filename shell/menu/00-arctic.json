@@ -46,6 +46,7 @@
     "style.appearance": {"label": "Appearance settings", "icon": "sliders", "run": ["arctic-settings", "appearance"]},
 
     "setup": {"label": "Setup", "icon": "sliders", "desc": "Every page of Settings", "provider": "settings"},
+    "setup.kbptr": {"label": "Keyboard pointer", "icon": "keyboard", "desc": "Move and click with the keyboard", "keys": "Super + Alt + K", "run": ["arctic-kbptr"], "needs": ["arctic-kbptr", "wl-kbptr"]},
     "setup.hooks": {"label": "Open my hooks folder", "icon": "folder", "desc": "Your scripts for desktop events", "run": ["arctic-hook", "--open"]},
 
     "install": {"label": "Install", "icon": "download"},

@@ -172,15 +172,16 @@ const pages = Search.parseSettings(fs.readFileSync(root + '../settings/SearchInd
 ctx = ctxWith({ cmds: everything, lines: ['provider\tstyle.theme\t[{"name":"winter","label":"Winter","mode":"light","active":false},'
     + '{"name":"polar-night","label":"Polar night","mode":"dark","active":true}]'] });
 const setup = Menu.rows(base, 'setup', ctx, { settingsPages: pages });
-assert.equal(setup.length, pages.length + 1, 'the pages, then the branch\'s own rows');
+assert.equal(setup.length, pages.length + 2, 'the pages, then the branch\'s own rows');
 assert.deepEqual(plain(setup[0].run), ['arctic-settings', pages[0].id]);
 assert.equal(setup[setup.length - 1].id, 'setup.hooks');
 const themes = Menu.rows(base, 'style.theme', ctx, {});
 assert.deepEqual(themes.map(t => [t.label, t.current]), [['Winter', false], ['Polar night', true]]);
 assert.deepEqual(plain(themes[0].run), ['arctic-theme', 'set', 'winter']);
 // No pages (Settings not installed): only its own rows; none of those either, and Setup hides.
-assert.deepEqual(ids(Menu.rows(base, 'setup', ctx, { settingsPages: [] })), ['setup.hooks']);
+assert.deepEqual(ids(Menu.rows(base, 'setup', ctx, { settingsPages: [] })), ['setup.kbptr', 'setup.hooks']);
 ctx.commands['arctic-hook'] = false;
+ctx.commands['wl-kbptr'] = false;
 assert.ok(!ids(Menu.rows(base, '', ctx, { settingsPages: [] })).includes('setup'));
 ctx.commands['arctic-hook'] = true;
 

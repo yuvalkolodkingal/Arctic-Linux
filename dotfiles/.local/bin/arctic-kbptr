@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# arctic-kbptr — the keyboard pointer (Super + Alt + K; Settings > Accessibility).
+# wl-kbptr labels the screen: type a label to move the pointer there, narrow it down if you
+# like, then click with the keyboard. The key again closes it. It uses the theme's colours when
+# the theme has a wl-kbptr config (~/.config/arctic/current/wl-kbptr/config).
+set -uo pipefail
+
+if ! command -v wl-kbptr >/dev/null 2>&1; then
+  arctic-osd notice alert "The keyboard pointer isn't installed" "Get apps: wl-kbptr" 2>/dev/null
+  exit 1
+fi
+pkill -u "$UID" -x wl-kbptr && exit 0      # open already: the key again closes it
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/arctic/current/wl-kbptr/config"
+if [[ -r "$conf" ]]; then
+  exec wl-kbptr -c "$conf" -o modes=tile,bisect
+fi
+exec wl-kbptr -o modes=tile,bisect

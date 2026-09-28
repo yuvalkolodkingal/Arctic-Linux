@@ -23,14 +23,14 @@ assert.deepEqual(plain(S.parseSettings('nothing here')), { pages: [], entries: [
 
 const settings = S.settingsCandidates(parsed.pages, parsed.entries);
 assert.equal(settings.length, parsed.pages.length + parsed.entries.length);
-const motion = settings.find(s => s.key === 'appearance.motion');
-assert.equal(motion.desc, 'Settings › Appearance');
-assert.equal(motion.id, 'setting:appearance/appearance.motion');
+const motion = settings.find(s => s.key === 'accessibility.motion');
+assert.equal(motion.desc, 'Settings › Accessibility');
+assert.equal(motion.id, 'setting:accessibility/accessibility.motion');
 // Ranked with apps: an app of the same name stays first; "dark mode" finds the setting.
 const apps = [{ kind: 'app', name: 'Network Manager', keywords: 'wifi', id: 'app:nm' }];
 const top = q => S.rank(apps.concat(settings), q)[0];
 assert.equal(top('network').kind, 'app');
-assert.equal(top('reduce motion').key, 'appearance.motion');
+assert.equal(top('reduce motion').key, 'accessibility.motion');
 assert.equal(top('wallpaper').key, 'appearance.wallpaper');
 assert.equal(S.rank(settings, 'bluetooth')[0].page, 'bluetooth');
 

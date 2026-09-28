@@ -62,5 +62,12 @@ class DaylightTest(Home):
             self.helper('daylight-set', *bad, ok=False)
 
 
+class AccessibilityTest(Home):
+    def test_keyboard_pointer(self):
+        self.assertFalse(self.helper('accessibility')['kbptr'])
+        stub(self.bin, 'wl-kbptr', 'exit 0\n')
+        self.assertTrue(self.helper('accessibility')['kbptr'])
+
+
 if __name__ == '__main__':
     unittest.main()

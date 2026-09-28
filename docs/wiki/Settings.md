@@ -84,6 +84,8 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   wallpaper picker (`Super + Shift + W`).
 - **Light or dark:** for the theme made from your wallpaper: Automatic (whatever suits the
   picture), Dark or Light.
+- **Switch light and dark by itself:** Off, Sunset to sunrise (where your time zone is) or Custom
+  hours. See [Themes and customisation](Themes-and-Customisation#light-by-day-dark-at-night).
 - **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers` (the same
   list as the wallpaper picker). **Add pictures…** opens the file chooser; you can also drag
   pictures here from Files. Added pictures are copied into `~/Pictures/Wallpapers` (only real
@@ -101,11 +103,7 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
 - **Wallhaven API key** (optional): with the key from your Wallhaven account (Settings → Account),
   searches use your account's filters, and **NSFW** can be ticked. It's kept in
   `~/.config/arctic/wallhaven.json`, which only you can read; **Remove** deletes it.
-- **Reduce motion:** windows and menus fade instead of moving, and the fox in the terminal stays
-  still.
-- **Text size in apps:** 100% to 175% for GTK apps such as Files and most dialogs. The bar and
-  menus keep their size.
-- **Pointer size** (Normal, Large, Larger) and **Pointer style** (the cursor themes installed).
+Reduce motion, text size and the pointer moved to [Accessibility](#accessibility) in 0.3.
 
 See [Themes and customisation](Themes-and-Customisation) for how themes work and `arctic-theme`.
 
@@ -204,6 +202,10 @@ Music, Pictures and PDF documents. The first four are saved in `~/.config/arctic
 (read by `arctic-open`), and every one also in `~/.config/mimeapps.list`, as `xdg-mime default`
 would. **Get apps** installs more; they show up here.
 
+- **Web search:** the engine for the launcher's last row and for `?` searches (DuckDuckGo,
+  Startpage, Brave Search, Ecosia, Google or Bing). Saved in `~/.config/arctic/shell.json`
+  (`webSearch`; your own `https://…%s…` address works there too).
+
 ## Network
 
 ![The Network page](images/settings-network.png)
@@ -250,6 +252,22 @@ install when you restart) and the **Channel**, Stable or Testing. These are the 
 
 The live session never locks or suspends on its own; these settings apply once Arctic Linux is
 installed.
+
+## Accessibility
+
+Bigger, calmer and easier to reach from the keyboard.
+
+- **Text size in apps:** 100% to 200% for GTK apps such as Files and most dialogs. The bar and
+  menus keep their size.
+- **Pointer size** (Normal, Large, Larger) and **Pointer style** (the cursor themes installed).
+- **Reduce motion:** windows and menus fade instead of moving, and the fox in the terminal stays
+  still.
+- **Keyboard pointer** (`Super + Alt + K`): labels appear on the screen; type one to move the
+  pointer there, narrow it down if you like, then click with the keyboard. The key again closes
+  it. It needs `wl-kbptr` (Arctic installs it; **Get it** opens Get apps when it's missing).
+- **Not available yet:** a screen reader (Orca doesn't get the keyboard access it needs on
+  compositors like Mango), a magnifier (Mango has none) and an on-screen keyboard (none that works
+  here is packaged for Fedora 44). The page says so rather than hiding it.
 
 ## Startup apps
 

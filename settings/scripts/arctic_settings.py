@@ -47,6 +47,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     caps                          which helper commands and tools are installed
     shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch
     daylight | daylight-set off|sun|hours LIGHT DARK      light and dark by the clock (arctic-daylight)
+    accessibility                 what the Accessibility page needs (the keyboard pointer, wl-kbptr)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -2612,6 +2613,13 @@ def cmd_daylight_set(paths, args):
     return cmd_daylight(paths, args)
 
 
+# ---- accessibility ---------------------------------------------------------------------------------
+
+def cmd_accessibility(paths, _args):
+    """What the Accessibility page shows besides motion, text size and the pointer."""
+    return dict(ok=True, kbptr=bool(which('wl-kbptr')), kbptrHelper=bool(which('arctic-kbptr')))
+
+
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
@@ -2639,7 +2647,7 @@ WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-rem
 
 # The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
 COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
-                 'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set})
+                 'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility})
 WRITERS |= {'shell-option-set'}
 
 

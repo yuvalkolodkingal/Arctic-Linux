@@ -2,8 +2,7 @@
 // and dark by the clock (arctic-daylight), the wallpaper (the shell's picker backend: the same
 // list and thumbnails as Super + Shift + W), your own pictures (added with the file chooser — the
 // xdg-desktop-portal one, through qt6ct — or dropped from Files, renamed, deleted), Wallhaven
-// (WallhavenBrowser.qml), reduced motion (arctic-motion), text size in GTK apps (gsettings) and
-// the pointer (Mango cursor_theme / cursor_size).
+// (WallhavenBrowser.qml). Reduced motion, text size and the pointer moved to Accessibility.
 // Without the newer arctic-theme (set/auto/mode/list), only Winter and Polar night are offered
 // and the rest says why.
 pragma ComponentBehavior: Bound
@@ -20,9 +19,6 @@ Page {
 
     property var theme: ({ available: true, modern: false, themes: [], current: "", mode: "auto", auto: false })
     property var walls: ({ items: [], current: "", available: true })
-    property var motion: ({ available: true, reduced: false })
-    property var textScale: ({ available: false, value: 1 })
-    property var cursors: []
     property var daylight: ({ available: false, mode: "off" })
     property string busyTheme: ""
     property string busyWall: ""
@@ -30,9 +26,6 @@ Page {
 
     function load() {
         Backend.call(["theme"], r => { if (r.ok) page.theme = r; });
-        Backend.call(["motion"], r => { if (r.ok) page.motion = r; });
-        Backend.call(["text-scale"], r => { if (r.ok) page.textScale = r; }, true);
-        Backend.call(["cursor-themes"], r => { if (r.ok) page.cursors = r.themes; }, true);
         Backend.call(["daylight"], r => { if (r.ok) page.daylight = r; }, true);
         loadWallpapers();
     }
@@ -504,74 +497,11 @@ Page {
         ]
     }
 
-    Group {
-        title: "Text and motion"
-        SettingRow {
-            searchKey: "appearance.motion"
-            title: "Reduce motion"
-            desc: "Windows and menus fade instead of moving, and the fox in the terminal stays still."
-            enabled: page.motion.available !== false
-            RowSwitch {
-                checked: page.motion.reduced === true
-                Accessible.name: "Reduce motion"
-                onToggled: Backend.call(["motion-set", checked ? "off" : "on"], r => {
-                    if (r.ok) {
-                        page.motion = r;
-                        Theme.reload();
-                        Backend.refresh();
-                    } else {
-                        checked = page.motion.reduced === true;
-                    }
-                })
-            }
-        }
-        SettingRow {
-            searchKey: "appearance.textscale"
-            visible: page.textScale.available === true
-            title: "Text size in apps"
-            desc: "For GTK apps such as Files and most dialogs. The bar and menus keep their size."
-            ArSelect {
-                width: 180
-                model: [{ value: "1", label: "Default" }, { value: "1.1", label: "110%" }, { value: "1.25", label: "125%" },
-                    { value: "1.5", label: "150%" }, { value: "1.75", label: "175%" }]
-                value: String(Math.round((page.textScale.value || 1) * 100) / 100)
-                onActivated: v => Backend.call(["text-scale", v], r => {
-                    if (r.ok) {
-                        page.textScale = r;
-                        Backend.notify("success", "Text size changed. Apps that are open may need a restart.", false);
-                    }
-                })
-            }
-        }
-    }
-
-    Group {
-        title: "Pointer"
-        SettingRow {
-            searchKey: "appearance.cursor"
-            title: "Pointer size"
-            keys: ["cursor_size"]
-            onResetRequested: Backend.reset(["cursor_size"])
-            ArSegmented {
-                accessibleName: "Pointer size"
-                model: [{ value: "24", label: "Normal" }, { value: "32", label: "Large" }, { value: "48", label: "Larger" }]
-                value: Backend.opt("cursor_size")
-                onActivated: v => Backend.set({ cursor_size: v }, "Pointer size changed")
-            }
-        }
-        SettingRow {
-            title: "Pointer style"
-            desc: "Cursor themes installed on this computer."
-            keys: ["cursor_theme"]
-            visible: page.cursors.length > 0
-            onResetRequested: Backend.reset(["cursor_theme"])
-            ArSelect {
-                width: 220
-                placeholder: "System default"
-                model: page.cursors.map(t => ({ value: t, label: t }))
-                value: Backend.opt("cursor_theme")
-                onActivated: v => Backend.set({ cursor_theme: v }, "Pointer style changed")
-            }
-        }
+    // Text size, the pointer and motion moved to Accessibility (0.3).
+    ArButton {
+        text: "Text size, pointer and motion are in Accessibility"
+        variant: "ghost"
+        iconRight: "chevron-right"
+        onClicked: Backend.launch(["arctic-settings", "accessibility"])
     }
 }

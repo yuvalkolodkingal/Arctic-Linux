@@ -11,4 +11,5 @@ UpdatesPage 1.0 UpdatesPage.qml
 PowerPage 1.0 PowerPage.qml
 StartupPage 1.0 StartupPage.qml
 AboutPage 1.0 AboutPage.qml
+AccessibilityPage 1.0 AccessibilityPage.qml
 WallhavenBrowser 1.0 WallhavenBrowser.qml

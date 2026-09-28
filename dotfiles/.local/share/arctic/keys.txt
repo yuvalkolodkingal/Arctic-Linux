@@ -44,6 +44,7 @@
     Super + Shift + T        Switch Winter / Polar night
     Super + Shift + R        Reload the desktop config
     Super + Ctrl + R         Set a reminder
+    Super + Alt + K          Keyboard pointer (move and click with the keyboard)
     Print                    Screenshot an area (Shift: screen, Super: window)
     Super + Ctrl + C         Capture menu
 

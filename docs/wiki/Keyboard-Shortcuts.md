@@ -73,6 +73,7 @@ screen at any time.
 | `Super + Shift + T` | Switch between light and dark (Winter and Polar night, or your wallpaper's colours) |
 | `Super + Shift + R` | Reload the desktop configuration |
 | `Super + Ctrl + R` | Set a reminder: type when and what, like `10m tea` or `17:30 call Ana` |
+| `Super + Alt + K` | Keyboard pointer: labels on the screen; type one to move the pointer there and click (when wl-kbptr is installed) |
 | `Print` | Screenshot of an area you select |
 | `Shift + Print` | Screenshot of the whole screen |
 | `Super + Print` | Screenshot of the current window |

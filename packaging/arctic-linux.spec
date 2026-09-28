@@ -254,6 +254,8 @@ Requires:       arctic-fonts = %{version}-%{release}
 # with qalc when they are installed.
 Recommends:     fd-find
 Recommends:     qalculate
+# The keyboard pointer (Super + Alt + K, arctic-kbptr).
+Recommends:     wl-kbptr
 # --- end stream 6
 
 %description -n arctic-shell

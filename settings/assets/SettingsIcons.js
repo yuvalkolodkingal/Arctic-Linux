@@ -5,7 +5,8 @@
 // "Iconography"); move them into the design system when it grows them.
 var EXTRA = {
  "display": "<rect x=\"3\" y=\"4.5\" width=\"18\" height=\"12\" rx=\"2\"/><path d=\"M9 20h6 M12 16.5V20\"/>",
- "mouse": "<rect x=\"6.5\" y=\"3\" width=\"11\" height=\"18\" rx=\"5.5\"/><path d=\"M12 3v5.5\"/>"
+ "mouse": "<rect x=\"6.5\" y=\"3\" width=\"11\" height=\"18\" rx=\"5.5\"/><path d=\"M12 3v5.5\"/>",
+ "accessibility": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><circle cx=\"12\" cy=\"7.6\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M8 10.3l4 .9 4-.9 M12 11.2v3.1 M12 14.3l-2 3.7 M12 14.3l2 3.7\"/>"
 };
 function svg(name, color, stroke) {
     if (!Object.prototype.hasOwnProperty.call(EXTRA, name))
