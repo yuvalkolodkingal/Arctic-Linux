@@ -69,12 +69,19 @@ Next stays off until you're online, because the installer downloads your apps.
 
 ### The passphrase or password isn't accepted
 
-- The disk passphrase must reach **Fair** on the strength meter. **Suggest a passphrase** makes a
-  strong one; a short sentence also works.
-- The account password needs at least 8 characters and must not be too easy to guess.
-- With **Use this password for the disk passphrase too**, the password must also reach Fair.
-- With a Hebrew, Arabic, Greek, Russian or Ukrainian keyboard, the disk passphrase must use
-  English (US) letters, numbers and symbols.
+Since Arctic Linux 0.2.1 a short or weak passphrase or password is never refused: the installer
+only warns that it's easy to guess, and **Next** stays on. If **Next** is still off:
+
+- Type it in both fields, the same way. *"Passphrases don't match yet."* or *"Passwords don't
+  match yet."* means the second field differs; **Show** (the eye) lets you compare them.
+- With a Hebrew, Arabic, Greek, Russian or Ukrainian keyboard, the disk passphrase (and the
+  password, with **Use this password for the disk passphrase too**) must use English (US)
+  letters, numbers and symbols.
+
+The warning *"This passphrase is easy to guess"* is advice, not an error. For a stronger one,
+**Suggest a passphrase** makes one from four random words; a short sentence also works.
+Arctic Linux 0.2.0 and older required **Fair** for the disk passphrase and 8 characters for the
+password.
 
 ### "That name is taken by the system"
 

@@ -142,7 +142,9 @@ logging in."*
 - **Encrypt the disk (recommended)** is on. Encryption means that if your computer is lost or
   stolen, nobody can read your files without the passphrase.
 - **The strength meter** says **Too short**, **Weak**, **Fair**, **Good** or **Strong**, and counts
-  the words. You can continue from **Fair** upwards.
+  the words. Any passphrase is accepted once both fields match. Below **Fair**, a warning says
+  *"This passphrase is easy to guess: someone who has your computer could read your files. You
+  can still use it."* — **Next** still works.
 - **Suggest a passphrase** makes one up for you from four random words. They're easy to remember
   and hard to guess. Write it down somewhere safe.
 
@@ -161,14 +163,15 @@ your files, even without your password. See [Encryption](#encryption) below for 
 |---|---|---|
 | **Your name** | Your name, as you'd like it shown | — |
 | **Username** | Lowercase letters, numbers, `-` and `_` | From your name. You can change it. |
-| **Password** and **Confirm password** | At least 8 characters that aren't easy to guess | — |
+| **Password** and **Confirm password** | Any password; both fields must match. Under 8 characters, a warning says it's easy to guess, but you can still use it | — |
 | **Computer name** | How other devices on your network see this computer | Your username and your computer's model, for example `noa-thinkpad` |
 
 Two switches, both off to start with:
 
 - **Use this password for the disk passphrase too**: uses your account password as the disk
-  passphrase, so you only remember one. The password then has to be **Fair** or better on the
-  strength meter. Only shown when encryption is on.
+  passphrase, so you only remember one. Below **Fair** on the strength meter, the same kind of
+  warning appears (someone who has your computer could read your files); you can still use it.
+  Only shown when encryption is on.
 - **Log in automatically**: skips the login screen after you've unlocked the disk.
 
 Your account can make system changes with `sudo` (it's in the `wheel` group). The `root` account

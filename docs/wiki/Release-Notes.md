@@ -33,6 +33,9 @@ See [Troubleshooting](Troubleshooting#updates-stopped-after-the-repository-was-r
   it. Once the account is created, a failure no longer removes the boot entry or partitions.
 - **One network hiccup no longer fails an app.** dnf and Flatpak downloads that fail because of
   the network are tried again three times.
+- **A short passphrase or password no longer stops you.** Any disk passphrase or account password
+  is accepted once you've typed it twice; below **Fair** (or under 8 characters for the password)
+  the step shows a warning that it's easy to guess, and the Summary mentions it.
 
 ### Settings
 

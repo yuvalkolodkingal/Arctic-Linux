@@ -11,6 +11,7 @@ import (
 	"github.com/yuvalkolodkingal/o-tism/internal/catalog"
 	"github.com/yuvalkolodkingal/o-tism/internal/mock"
 	"github.com/yuvalkolodkingal/o-tism/internal/profile"
+	"github.com/yuvalkolodkingal/o-tism/internal/wizard"
 	"github.com/yuvalkolodkingal/o-tism/modules"
 	"github.com/yuvalkolodkingal/o-tism/profiles"
 )
@@ -116,5 +117,23 @@ func TestUnattendedMock(t *testing.T) {
 	}
 	if strings.Contains(s, "acid acorn") || strings.Contains(s, "winter-fox") {
 		t.Error("secret printed")
+	}
+}
+
+// Short secrets don't stop an unattended install: the Summary it prints warns instead.
+func TestUnattendedWeakSecrets(t *testing.T) {
+	t.Setenv("ARCTIC_LUKS_PASSPHRASE", "abc")
+	t.Setenv("ARCTIC_USER_PASSWORD", "x")
+	t.Setenv("ARCTIC_MOCK_SPEED", "200")
+	var out bytes.Buffer
+	code := cmdUnattended([]string{"--profile", "profiles/ci/default.toml", "--mock", "--log", t.TempDir() + "/engine.log"}, &out)
+	if code != 0 {
+		t.Fatalf("exit %d\n%s", code, out.String())
+	}
+	s := out.String()
+	for _, want := range []string{wizard.CopyWeakBothSummary, "Done: Arctic Linux is ready"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("output lacks %q:\n%s", want, s)
+		}
 	}
 }

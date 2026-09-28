@@ -309,20 +309,24 @@ class MockBridgeTest(unittest.TestCase):
         b.ok("SkipModule", {"id": att["module"]["id"]})
         b.wait_event("done", timeout=60)
 
-    def test_summary_next_checks_the_disk_passphrase(self):
-        # "Use this password for the disk passphrase too" with a weak password: the engine
-        # refuses at Summary with the passphrase field (the UI points to Encryption).
+    def test_weak_secrets_only_warn(self):
+        # As the engine: a short or weak disk passphrase or password passes every step and
+        # the Summary, which says so after its warning; an empty one is still refused.
         b = self.start(ARCTIC_MOCK_WIRED="1")
         self.walk_to("account")
         b.ok("SetStep", {"id": "account", "data": {"full_name": "Noa Levi", "username": "noa", "hostname": "noa-thinkpad"}})
-        b.ok("SetSecrets", {"user_password": "iloveyou", "luks_passphrase": "iloveyou"})
-        self.assertFalse(b.ok("CheckPassphrase", {"text": "iloveyou"})["ok"])
-        b.ok("Next")
-        b.ok("Next")
-        self.assertEqual(b.ok("GetWizard")["current"], "summary")
-        err = b.call("Next")["error"]
-        self.assertEqual(err["code"], "invalid")
-        self.assertIn("passphrase", err["fields"])
+        b.ok("SetSecrets", {"user_password": ""})
+        self.assertIn("password", b.call("Next")["error"]["fields"])
+        b.ok("SetSecrets", {"user_password": "x", "luks_passphrase": "abc"})
+        self.assertFalse(b.ok("CheckPassphrase", {"text": "abc"})["ok"])
+        opts = b.ok("GetStep", {"id": "account"})["options"]
+        self.assertEqual((opts["min_score"], opts["strength"]["label"]), (1, "Too short"))
+        self.assertTrue(opts["weak_warning"].startswith("This password is easy to guess"))
+        self.assertEqual(b.ok("Next")["current"], "apps")
+        self.assertEqual(b.ok("Next")["current"], "summary")
+        self.assertTrue(b.ok("GetSummary")["warning"].endswith(" Your disk passphrase and password are easy to guess."))
+        self.assertEqual(b.ok("Next")["current"], "install")
+        b.ok("Start")
 
     def test_back_from_install_before_start(self):
         # Summary's Next moves to the install step; until Start, Back returns to Summary

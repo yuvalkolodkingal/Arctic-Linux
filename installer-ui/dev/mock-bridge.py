@@ -143,6 +143,10 @@ WIFI = [
     {"ssid": "Aurora Guest", "signal": 23, "secure": True},
 ]
 WIFI_PASSWORDS = {"Tundra-5G": "polarnight", "Snowfield": "snowfield", "Aurora Guest": "guest1234"}
+# A weak disk passphrase or password is a warning, never refused (wizard.CopyWeak*).
+WEAK_PASSPHRASE = "This passphrase is easy to guess: someone who has your computer could read your files. You can still use it."
+WEAK_PASSWORD = "This password is easy to guess: someone at your computer could log in as you. You can still use it."
+WEAK_PASSWORD_DISK = "This password is easy to guess: someone who has your computer could read your files. You can still use it."
 
 # Categories and apps come from the real catalog (modules/catalog.toml and every
 # modules/<category>/<id>/module.toml), so the UI sees exactly what the engine offers:
@@ -470,10 +474,16 @@ class MockEngine:
         elif sid == "disk":
             options = {"disks": [d for d in DISKS if not d["install_media"]]}
         elif sid == "encryption":
-            options = {"min_score": 2, "passphrase_set": "luks_passphrase" in self.secrets}
+            # min_score: below it the step warns (WEAK_PASSPHRASE); any passphrase is accepted.
+            options = {"min_score": 2, "passphrase_set": "luks_passphrase" in self.secrets, "weak_warning": WEAK_PASSPHRASE}
+            if "luks_passphrase" in self.secrets:
+                options["strength"] = self.check_passphrase(self.secrets["luks_passphrase"])
         elif sid == "account":
             options = {"hostname_hint": "Suggested from your name and computer", "password_set": "user_password" in self.secrets,
-                       "encryption": self.data["encryption"].get("enabled", True)}
+                       "encryption": self.data["encryption"].get("enabled", True),
+                       "min_score": 1, "weak_warning": WEAK_PASSWORD, "weak_disk_warning": WEAK_PASSWORD_DISK}
+            if "user_password" in self.secrets:
+                options["strength"] = self.check_passphrase(self.secrets["user_password"])
         elif sid == "apps":
             options = {"categories": [{"id": c[0], "name": c[1], "choice": c[2], "note": c[3], "required": c[4],
                                        "rule": "Pick one" if c[2] == "one" else "Pick any", "collapsed": c[5],
@@ -589,8 +599,7 @@ class MockEngine:
             p = self.secrets.get("luks_passphrase")
             if not p:
                 raise InvalidError("Choose a passphrase.", {"passphrase": "Choose a passphrase."})
-            if not self.check_passphrase(p)["ok"]:
-                raise InvalidError("This passphrase is too easy to guess.", {"passphrase": "This passphrase is too easy to guess. Add another word or two."})
+            # A weak passphrase is only a warning (the step, the Summary), as in the engine.
         if sid == "account":
             self.validate("account", self.data["account"])
             if not self.secrets.get("user_password"):
@@ -681,6 +690,15 @@ class MockEngine:
             primary = "Erase disk and install"
             warning = f"Installing will **erase everything on {name}**. This can't be undone."
         disk_value += ", encrypted" if enc else ", not encrypted"
+        # As the engine: a sentence after the warning when a secret is easy to guess.
+        weak_luks = enc and "luks_passphrase" in self.secrets and self.check_passphrase(self.secrets["luks_passphrase"])["score"] < 2
+        weak_pass = "user_password" in self.secrets and self.check_passphrase(self.secrets["user_password"])["score"] < 1
+        if weak_luks and weak_pass:
+            warning += " Your disk passphrase and password are easy to guess."
+        elif weak_luks:
+            warning += " Your disk passphrase is easy to guess."
+        elif weak_pass:
+            warning += " Your password is easy to guess."
         rows = [
             {"step": "welcome", "label": "Language and keyboard",
              "value": f"{self.lang_name(self.data['welcome']['language'])} · {self.layout_name(self.data['keyboard']['layout'], self.data['keyboard']['variant'])} layout"},

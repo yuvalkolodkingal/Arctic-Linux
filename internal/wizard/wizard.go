@@ -454,10 +454,11 @@ func (w *Wizard) Get(id string) (protocol.StepResult, *protocol.Error) {
 			"warning": CopyEraseWarning,
 		}
 	case StepEncryption:
+		// min_score is where the weak-passphrase warning stops; it never blocks Next.
 		s := w.env.Secrets()
 		opts := map[string]any{
 			"min_score": MinPassphraseScore, "warning": CopyPassphraseWarn, "help": CopyPassphraseHelp,
-			"off_warning": CopyNoEncryptWarn, "passphrase_set": s.LUKSSet,
+			"off_warning": CopyNoEncryptWarn, "passphrase_set": s.LUKSSet, "weak_warning": CopyWeakPassphrase,
 			"suggest_label": "Suggest a passphrase", "confirm_label": "Type it again",
 		}
 		if s.LUKSSet {
@@ -467,14 +468,21 @@ func (w *Wizard) Get(id string) (protocol.StepResult, *protocol.Error) {
 		res.Data = w.Data.Encryption
 		res.Options = opts
 	case StepAccount:
+		// min_score as on Encryption: below it the password gets weak_warning (with "Use this
+		// password for the disk passphrase too", below the passphrase's: weak_disk_warning).
 		s := w.env.Secrets()
 		res.Data = w.Data.Account
-		res.Options = map[string]any{
+		opts := map[string]any{
 			"username_hint": CopyUsernameHint, "hostname_hint": CopyHostnameHint, "hostname_help": CopyHostnameHelp,
 			"password_set": s.PasswordSet, "min_score": MinPasswordScore,
+			"weak_warning": CopyWeakPassword, "weak_disk_warning": CopyWeakPasswordDisk,
 			"same_passphrase_label": "Use this password for the disk passphrase too",
 			"encryption":            w.Data.Encryption.Enabled,
 		}
+		if s.PasswordSet {
+			opts["strength"] = s.Password
+		}
+		res.Options = opts
 	case StepApps:
 		res.Data = w.Data.Apps
 		p := cat.Picker()
@@ -812,14 +820,9 @@ func (w *Wizard) fieldErrors(id string, full bool) map[string]string {
 			f["mode"] = "Pick how to install."
 		}
 	case StepEncryption:
-		if full && w.Data.Encryption.Enabled {
-			s := w.env.Secrets()
-			switch {
-			case !s.LUKSSet:
-				f["passphrase"] = "Type a passphrase."
-			case s.LUKS.Score < MinPassphraseScore:
-				f["passphrase"] = "Make it a bit longer — four random words work well."
-			}
+		// Any passphrase will do: a weak one gets a warning (the step, the Summary), not a refusal.
+		if full && w.Data.Encryption.Enabled && !w.env.Secrets().LUKSSet {
+			f["passphrase"] = "Type a passphrase."
 		}
 	case StepAccount:
 		a := w.Data.Account
@@ -832,16 +835,9 @@ func (w *Wizard) fieldErrors(id string, full bool) map[string]string {
 		if m := ValidateHostname(a.Hostname); m != "" {
 			f["hostname"] = m
 		}
-		if full {
-			s := w.env.Secrets()
-			switch {
-			case !s.PasswordSet:
-				f["password"] = "Type a password."
-			case s.Password.Score == 0:
-				f["password"] = "Use at least 8 characters."
-			case s.Password.Score < MinPasswordScore:
-				f["password"] = "That password is too easy to guess. Pick another one."
-			}
+		// Any password will do, as for the passphrase: a weak one only gets a warning.
+		if full && !w.env.Secrets().PasswordSet {
+			f["password"] = "Type a password."
 		}
 	case StepApps:
 		for k, v := range w.env.Catalog().Validate(w.Data.Apps.Selection) {
@@ -887,6 +883,9 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 		warning = fmt.Sprintf("Installing will erase everything on %s. This can’t be undone.", diskName)
 		primary = "Erase disk and install"
 	}
+	if weak := w.weakSecrets(); weak != "" {
+		warning += " " + weak
+	}
 	account := fmt.Sprintf("%s (%s) on %s", d.Account.FullName, d.Account.Username, d.Account.Hostname)
 	if d.Account.Autologin {
 		account += ", logs in automatically"
@@ -913,6 +912,23 @@ func (w *Wizard) Summary() protocol.SummaryResult {
 		Warning:      warning,
 		PrimaryLabel: primary,
 	}
+}
+
+// weakSecrets is the Summary's sentence about a disk passphrase or password below its
+// min_score, or "". It is only a warning: Start takes any non-empty secret.
+func (w *Wizard) weakSecrets() string {
+	s := w.env.Secrets()
+	luks := w.Data.Encryption.Enabled && s.LUKSSet && s.LUKS.WeakPassphrase()
+	pass := s.PasswordSet && s.Password.WeakPassword()
+	switch {
+	case luks && pass:
+		return CopyWeakBothSummary
+	case luks:
+		return CopyWeakLUKSSummary
+	case pass:
+		return CopyWeakPassSummary
+	}
+	return ""
 }
 
 // summaryApps is how many app names the Summary's Apps row lists before "and N more":

@@ -1,7 +1,8 @@
 // Step 6 — Create an encryption passphrase (INSTALL_STEPS[5]). Strength meter
-// from the engine (CheckPassphrase), Next from "Fair" upward and when both match.
-// The passphrase only ever goes to SetSecrets. Coming back (Summary "Change"), the
-// engine still has it (options.passphrase_set): empty fields keep it.
+// from the engine (CheckPassphrase); Next once both fields match. Below "Fair"
+// (options.min_score) a warning banner says it is easy to guess, but any passphrase
+// is accepted. The passphrase only ever goes to SetSecrets. Coming back (Summary
+// "Change"), the engine still has it (options.passphrase_set): empty fields keep it.
 import QtQuick
 import ".."
 import "../components"
@@ -12,7 +13,7 @@ StepPage {
     title: "Create an encryption passphrase"
     lede: "You’ll type this each time the computer starts, before logging in."
     measure: 480
-    valid: !enabled_ || keep || (strength.ok === true && matches && latinError === "")
+    valid: !enabled_ || keep || (matches && latinError === "")
     helpText: "The passphrase protects everything on the disk. You’ll type it each time the computer starts. A few random words are easy to remember and hard to guess — try Suggest a passphrase."
 
     property bool enabled_: Wizard.step.data && Wizard.step.data.enabled !== undefined ? !!Wizard.step.data.enabled : true
@@ -26,6 +27,16 @@ StepPage {
     readonly property bool mismatch: confirm.text !== "" && pass.text !== confirm.text
     readonly property bool saved: !!(Wizard.step.options && Wizard.step.options.passphrase_set)
     readonly property bool keep: enabled_ && saved && pass.text === "" && confirm.text === ""
+    readonly property var opts: Wizard.step.options || {}
+    readonly property int minScore: opts.min_score !== undefined ? opts.min_score : 2
+    // Easy to guess: a warning, never a reason to keep Next off. For the typed passphrase
+    // once the engine has scored it; for a kept one from options.strength.
+    readonly property bool weak: enabled_ && (keep ? !!opts.strength && opts.strength.score < minScore : pass.text !== "" && strength.label !== "" && strength.score < minScore)
+    // For tests (IPC state().step).
+    testState: ({
+            weak: weak,
+            label: strength.label
+        })
     // The passphrase is asked for when the computer starts, where a layout that can't type
     // Latin letters isn't available (the engine installs English (US) there): only
     // characters typed with English (US) work.
@@ -150,6 +161,13 @@ StepPage {
                 text: "Suggest a passphrase"
                 onClicked: page.suggest()
             }
+        }
+
+        ArBanner {
+            visible: page.weak
+            width: parent.width
+            kind: "warning"
+            text: page.opts.weak_warning || "This passphrase is easy to guess: someone who has your computer could read your files. You can still use it."
         }
 
         ArBanner {

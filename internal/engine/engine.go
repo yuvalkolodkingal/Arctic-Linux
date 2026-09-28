@@ -514,6 +514,7 @@ func (e *Engine) Start(ctx context.Context) *protocol.Error {
 	if perr := e.wiz.ReadyToInstall(); perr != nil {
 		return perr
 	}
+	// Only a missing secret stops the install: a weak one is a warning (the steps, the Summary).
 	if d.Encryption.Enabled && len(e.secrets.LUKS) == 0 {
 		return protocol.Errorf(protocol.CodeState, "The encryption passphrase is missing. Go back to the Encryption step.")
 	}
