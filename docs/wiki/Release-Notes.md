@@ -162,7 +162,7 @@ For the app theming, also replace these 0.1 files, if you haven't edited them:
 cp /etc/skel/.config/gtk-3.0/gtk.css /etc/skel/.config/gtk-3.0/settings.ini ~/.config/gtk-3.0/
 cp /etc/skel/.config/gtk-4.0/gtk.css ~/.config/gtk-4.0/
 cp /etc/skel/.config/environment.d/10-arctic.conf ~/.config/environment.d/
-cp /etc/skel/.zshrc ~/.zshrc
+cp /usr/share/arctic/skel/.zshrc ~/.zshrc
 ```
 
 Then log out and back in. **Snapshots** aren't set up on a 0.1 system; to turn them on, see
