@@ -9,7 +9,13 @@
 # With ARCTIC_SHELL=waybar in the session environment (e.g. `env=ARCTIC_SHELL,waybar` in
 # ~/.config/mango/user.conf), or when Quickshell isn't installed, it starts the fallback desktop
 # instead: waybar for the bar and lxqt-policykit for passwords (fuzzel is the launcher).
+# `nm-applet` starts only with the fallback desktop: the shell has its own network menu.
 set -uo pipefail
+
+shell_session() {   # the Arctic shell (not the waybar fallback) runs this session
+  [[ "${ARCTIC_SHELL:-quickshell}" != waybar ]] && command -v quickshell >/dev/null 2>&1 \
+    && arctic-shell --path >/dev/null 2>&1
+}
 
 run_once() {   # run_once <process name> <command...>
   local name="$1"; shift
@@ -33,7 +39,7 @@ case "${1:-}" in
     for agent in /usr/libexec/lxqt-policykit-agent /usr/libexec/polkit-mate-authentication-agent-1 /usr/libexec/xfce-polkit; do
       if [[ -x "$agent" ]]; then run_once "$(basename "$agent" | cut -c1-15)" "$agent"; break; fi
     done ;;
-  nm-applet) run_once nm-applet nm-applet --indicator ;;
+  nm-applet) shell_session || run_once nm-applet nm-applet --indicator ;;
   clipboard)
     pgrep -u "$UID" -f "wl-paste --watch cliphist" >/dev/null 2>&1 || \
       { command -v cliphist >/dev/null && setsid -f wl-paste --watch cliphist store >/dev/null 2>&1; } ;;

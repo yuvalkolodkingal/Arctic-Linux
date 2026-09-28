@@ -201,7 +201,8 @@ commands.
   `~/.config/arctic/motion.conf`, `settings.conf` (written by Arctic Settings), then `user.conf`. The `arctic/*.conf` files are links to
   `/usr/share/arctic/mango/`, so package updates reach existing accounts.
 - **Autostart:** `arctic-theme apply`, `arctic-session shell|mako|nm-applet|clipboard|idle`,
-  `arctic-welcome`.
+  `arctic-welcome`. nm-applet runs only with the waybar fallback; the shell draws its own network,
+  Bluetooth (with a BlueZ pairing agent, `shell/scripts/bt-agent.py`) and sound menus.
 - **The shell** (`shell/`, run by `arctic-shell` as `quickshell -p /usr/share/arctic/shell`) draws
   the bar, frame, launcher, Get apps, wallpapers, power menu, shortcut sheet, OSD, lock screen
   (ext-session-lock + PAM), polkit agent and live welcome. Workspaces come from `mmsg watch`
