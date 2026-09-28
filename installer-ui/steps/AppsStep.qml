@@ -8,6 +8,9 @@
 // by default) start folded behind a header row, unless something in them is
 // ticked. The search box looks through every app (name, summary, group) and
 // shows the groups with matches open. Only open groups create their app rows.
+// When the engine refuses the picks on Next (a missing requirement: "Podman
+// Desktop needs Podman. Tick it too."), the group opens, says why in red under
+// its apps, and the footer shows the same sentence until the group is changed.
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -21,7 +24,9 @@ StepPage {
     measure: 640
     fade: true
     fillHeight: true
-    note: estimate
+    // The engine's apps errors are keyed by group; the first one replaces the estimate
+    // in the footer (the group also says it, in red, under its apps).
+    note: firstError !== "" ? Wizard.fieldErrors[firstError] : estimate
     valid: missingOne === ""
     helpText: "Pick the apps you want. Where it says Pick one, the app you choose becomes the default. More apps wait in the groups under More apps: open a group, or type to search every app. Use the arrow keys to move between apps and groups, Space to tick an app, and Space or Enter to open a group. Everything can be changed later."
 
@@ -48,6 +53,13 @@ StepPage {
                 return c.id;
         return "";
     }
+    // First group the engine flagged on Next ("Podman Desktop needs Podman. Tick it too.").
+    readonly property string firstError: {
+        for (const c of categories)
+            if (Wizard.fieldErrors[c.id] !== undefined)
+                return c.id;
+        return "";
+    }
     property string query: ""
     readonly property string needle: query.trim().toLowerCase()
     readonly property bool searching: needle !== ""
@@ -66,7 +78,8 @@ StepPage {
             open: categories.filter(c => c.collapsed && isOpen(c)).map(c => c.id),
             rows: rowCount,
             matches: matching.length,
-            query: query
+            query: query,
+            errors: categories.filter(c => Wizard.fieldErrors[c.id] !== undefined && isOpen(c) && (!searching || modulesOf(c.id).length > 0)).map(c => Wizard.fieldErrors[c.id])
         })
 
     function isOne(c) {
@@ -114,6 +127,7 @@ StepPage {
             s[c.id] = cur;
         }
         selection = s;
+        Wizard.clearFieldError(c.id);
     }
     function refreshEstimate() {
         Engine.call("EstimateDownload", {
@@ -200,6 +214,17 @@ StepPage {
             flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, p.y + item.height - flick.height + 56));
     }
 
+    // Scroll so the first flagged group's message (the end of its section) shows.
+    function revealError() {
+        for (let i = 0; i < sectionRepeater.count; i++) {
+            const s = sectionRepeater.itemAt(i);
+            if (s && s.cat.id === firstError && s.visible) {
+                ensureVisible(s.errorLine);
+                return;
+            }
+        }
+    }
+
     // Test hook (IPC "fill"): select / unselect / toggle app ids (a folded group
     // opens to show them), query, open / close group ids, scroll, focus
     // ("search", an app id or "group:<id>").
@@ -216,10 +241,14 @@ StepPage {
                 s[m.category] = (s[m.category] || []).filter(x => x !== id).concat([id]);
             }
             setOpen(m.category, true);
+            Wizard.clearFieldError(m.category);
         }
         for (const id of (v.unselect || [])) {
             for (const k in s)
-                s[k] = (s[k] || []).filter(x => x !== id);
+                if ((s[k] || []).indexOf(id) >= 0) {
+                    s[k] = s[k].filter(x => x !== id);
+                    Wizard.clearFieldError(k);
+                }
         }
         selection = s;
         // like clicking the app's row
@@ -262,6 +291,15 @@ StepPage {
                 o[c.id] = true;
         opened = o;
         refreshEstimate();
+    }
+    // After a refused Next, bring the first flagged group into view.
+    Connections {
+        target: Wizard
+        function onFieldErrorsChanged() {
+            // After the flagged group has opened and laid out its rows.
+            if (page.firstError !== "")
+                Qt.callLater(page.revealError);
+        }
     }
     Timer {
         id: estimateTimer
@@ -348,6 +386,7 @@ StepPage {
                     readonly property int picked: (page.selection[cat.id] || []).length
                     readonly property string rule: page.isOne(cat) ? (cat.required ? "Pick one" : "Pick one or none") : "Pick any"
                     property alias header: groupHeader
+                    property alias errorLine: errorLine
                     visible: !page.searching || apps.length > 0
                     width: sections.width
                     spacing: Theme.space2
@@ -485,6 +524,21 @@ StepPage {
                                 Component.onDestruction: page.rowCount--
                             }
                         }
+                    }
+
+                    // The engine's reason for refusing this group (e.g. a missing requirement).
+                    ArText {
+                        id: errorLine
+                        readonly property string message: Wizard.fieldErrors[section.cat.id] || ""
+                        visible: message !== "" && section.open
+                        width: parent.width
+                        text: message
+                        size: 13
+                        lh: 18
+                        wrapMode: Text.WordWrap
+                        color: Theme.error
+                        Accessible.role: Accessible.AlertMessage
+                        Accessible.name: message
                     }
                 }
             }

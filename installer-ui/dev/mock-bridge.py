@@ -150,6 +150,7 @@ def load_catalog(root):
     with open(root / "catalog.toml", "rb") as f:
         cat = tomllib.load(f)
     categories, modules, system = [], [], []
+    links = {}   # id -> (requires, conflicts), as the engine's catalog.Validate checks them
     for c in cat["category"]:
         # id, name, choice ("one" | "any"), note, required, collapsed, role
         categories.append((c["id"], c["name"], c["choice"], c.get("note", ""), bool(c.get("required")),
@@ -169,16 +170,17 @@ def load_catalog(root):
                             m.get("role") or c.get("role", "app"), source, m.get("tile") or m["id"], m.get("icon", ""),
                             first.get("runtime", ""), bool(first.get("verified")), bool(m.get("proprietary")),
                             bool(m.get("always"))))
+            links[m["id"]] = (list(m.get("requires") or []), list(m.get("conflicts") or []))
     for f in sorted(root.glob("_system/*/module.toml")):
         with open(f, "rb") as fh:
             m = tomllib.load(fh)
         first = (m.get("install") or [{}])[0]
         if m.get("always") and not m.get("in_live_image"):
             system.append((m["id"], first.get("download_mb", 0), first.get("runtime", "")))
-    return categories, modules, system, cat.get("runtimes", {})
+    return categories, modules, system, cat.get("runtimes", {}), links
 
 
-CATEGORIES, MODULES, SYSTEM, RUNTIMES = load_catalog(CATALOG_DIR)
+CATEGORIES, MODULES, SYSTEM, RUNTIMES, LINKS = load_catalog(CATALOG_DIR)
 MOD = {m[0]: m for m in MODULES}
 OPTIONAL_GROUPS = {c[0] for c in CATEGORIES if c[5]}   # the collapsed "More apps" sections
 
@@ -451,6 +453,20 @@ class MockEngine:
                     fields[c[0]] = f"Pick one {c[1].lower()}."
                 elif c[4] and not chosen:
                     fields[c[0]] = f"Pick a {c[1].lower()}."
+            if not fields:
+                # Like catalog.Validate: conflicts, then requires, per ticked app in catalog
+                # order; the first message for a group wins.
+                have = {m[0] for m in MODULES if m[15] or any(m[0] in sel.get(k, []) for k in sel)}
+                for m in MODULES:
+                    if m[0] not in have:
+                        continue
+                    requires, conflicts = LINKS.get(m[0], ([], []))
+                    for x in conflicts:
+                        if x in have:
+                            fields.setdefault(m[2], f"{m[1]} and {MOD[x][1]} can't be installed together.")
+                    for r in requires:
+                        if r not in have:
+                            fields.setdefault(m[2], f"{m[1]} needs {MOD[r][1]}. Tick it too.")
         if fields:
             raise InvalidError("Some fields need attention.", fields)
 
