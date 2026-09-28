@@ -34,6 +34,7 @@ PowerKey 1.0 PowerKey.qml
 PowerMenu 1.0 PowerMenu.qml
 RoundedImage 1.0 RoundedImage.qml
 ScreenFrame 1.0 ScreenFrame.qml
+SharePicker 1.0 SharePicker.qml
 Tip 1.0 Tip.qml
 UpdateIndicator 1.0 UpdateIndicator.qml
 UpdatePopover 1.0 UpdatePopover.qml

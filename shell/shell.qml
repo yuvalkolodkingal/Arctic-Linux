@@ -13,13 +13,13 @@ import Quickshell.Io
 // Run it with `arctic-shell`. Keybinds reach it through `arctic-shell-ipc <target> <function>`:
 //   launcher toggle · wallpapers toggle · apps install · power toggle · osd volume|brightness
 //   lock lock · keys toggle · welcome open · dnd refresh · updates toggle|refresh · shell reload
-//   clipboard toggle · emoji toggle · record refresh
+//   clipboard toggle · emoji toggle · record refresh · share pick <fifo>
 ShellRoot {
     id: shell
 
     // Only one popover at a time.
     function closePopovers(except) {
-        [launcher, wallpapers, power, keys, updates, clipboard, emoji].forEach(p => { if (p !== except && p.open) p.open = false; });
+        [launcher, wallpapers, power, keys, updates, clipboard, emoji, sharePicker].forEach(p => { if (p !== except && p.open) p.open = false; });
     }
     function present(popover, screen) {
         closePopovers(popover);
@@ -86,6 +86,7 @@ ShellRoot {
     ClipboardPanel { id: clipboard }
     EmojiPicker { id: emoji }
     PowerKey { locked: lockScreen.secure }
+    SharePicker { id: sharePicker }
     Osd { id: osd }
     LiveWelcome { id: welcome }
     LockScreen { id: lockScreen }
@@ -154,6 +155,16 @@ ShellRoot {
     IpcHandler {
         target: 'emoji'
         function toggle(): void { shell.toggleEmoji(); }
+    }
+    IpcHandler {
+        target: 'share'
+        // arctic-share-picker (the screen-share portal's chooser) waits on this FIFO for the
+        // answer; false when the path isn't one it made.
+        function pick(reply: string): bool {
+            if (!sharePicker.start(reply)) return false;
+            shell.present(sharePicker, null);
+            return true;
+        }
     }
     IpcHandler {
         target: 'record'

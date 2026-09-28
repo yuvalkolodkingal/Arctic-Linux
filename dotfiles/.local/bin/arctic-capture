@@ -7,7 +7,8 @@ selecting with slurp and the capturing with grim; this answers what needs parsin
     arctic-capture window            the focused window without its border (mmsg get focusing-client)
     arctic-capture output [NAME]     the focused (or that) monitor (mmsg get all-monitors)
     arctic-capture rects             visible windows as slurp's predefined rectangles (text lines)
-    arctic-capture sources           monitors and windows to share, "label<TAB>xdpw choice" lines
+    arctic-capture sources [--json]  monitors and windows to share, "label<TAB>xdpw choice" lines
+                                     (--json: {"ok":true,"sources":[{kind,label,app_id,value}]})
     arctic-capture pixel < FRAME.ppm the top-left pixel of a grim -t ppm frame, as hex/rgb/hsl
     arctic-capture ocr FILE          the text in a picture (tesseract), in your languages
     arctic-capture qr FILE           the QR codes in a picture (zxing-cpp, else zbarimg)
@@ -176,14 +177,14 @@ def cmd_rects(_args):
     return None
 
 
-def cmd_sources(_args):
+def cmd_sources(args):
     """What an app may share (the screen-share picker): "label<TAB>Monitor: NAME" for every
     monitor, then "label<TAB>Window: ID" for every window (ext-foreign-toplevel identifiers)."""
-    outs = monitors()
-    for m in outs:
+    found = []
+    for m in monitors():
         scale = m.get('scale') or 1
-        sys.stdout.write('Screen · {} ({} × {})\tMonitor: {}\n'.format(
-            m['name'], round(m['width'] * scale), round(m['height'] * scale), m['name']))
+        found.append(dict(kind='screen', app_id='', value='Monitor: ' + m['name'], label='Screen · {} ({} × {})'.format(
+            m['name'], round(m['width'] * scale), round(m['height'] * scale))))
     try:
         clients = mmsg('all-clients').get('clients', [])
     except Failure:
@@ -195,7 +196,11 @@ def cmd_sources(_args):
         title = re.sub(r'\s+', ' ', c.get('title') or '').strip()
         app = c.get('appid') or c.get('app_id') or 'Window'
         label = 'Window · {}{}'.format(app, ' — ' + title if title and title != app else '')
-        sys.stdout.write('{}\tWindow: {}\n'.format(label[:120], ident))
+        found.append(dict(kind='window', app_id=app, value='Window: ' + ident, label=label[:120]))
+    if args[:1] == ['--json']:
+        return dict(sources=found)
+    for source in found:
+        sys.stdout.write('{}\t{}\n'.format(source['label'], source['value']))
     return None
 
 

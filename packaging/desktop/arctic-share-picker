@@ -4,14 +4,30 @@
 # It prints what you picked, "Monitor: <output>" or "Window: <identifier>", and nothing when you
 # decline (xdg-desktop-portal-wlr(5)).
 #
-# The list names every monitor and every window (arctic-capture sources, from Mango). Without
-# Mango's answer, slurp picks a monitor by clicking it.
+# The list names every monitor and every window (arctic-capture sources, from Mango): the
+# shell's "Share your screen" card, else fuzzel. Without Mango's answer, slurp picks a monitor by
+# clicking it.
 set -uo pipefail
 
 # The portal is started by D-Bus: find Mango's socket if its environment didn't bring it.
 if [[ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]]; then
   sock="$(find "${XDG_RUNTIME_DIR:-/run/user/$UID}" -maxdepth 1 -name 'mango-*.sock' -type s 2>/dev/null | head -n1)"
   [[ -n "$sock" ]] && export MANGO_INSTANCE_SIGNATURE="$sock"
+fi
+
+# The shell's card answers on a FIFO: one line, empty when you decline.
+run="${XDG_RUNTIME_DIR:-/run/user/$UID}/arctic"
+mkdir -p "$run" && chmod 700 "$run"
+fifo="$run/share-$$.fifo"
+if mkfifo -m 600 "$fifo" 2>/dev/null; then
+  trap 'rm -f -- "$fifo"' EXIT
+  # Read-write, so opening doesn't wait for the shell's writer.
+  exec 3<>"$fifo"
+  if [[ "$(arctic-shell-ipc share pick "$fifo" 2>/dev/null)" == true ]]; then
+    IFS= read -r -t 120 answer <&3 || answer=""
+    [[ "$answer" =~ ^(Monitor|Window):\ [^[:cntrl:]]+$ ]] && printf '%s\n' "$answer"
+    exit 0
+  fi
 fi
 
 sources="$(arctic-capture sources 2>/dev/null)"

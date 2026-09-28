@@ -116,6 +116,10 @@ class CaptureTest(unittest.TestCase):
             'Screen · eDP-1 (1920 × 1200)\tMonitor: eDP-1', 'Screen · HDMI-A-1 (1920 × 1080)\tMonitor: HDMI-A-1',
             'Window · kitty — zsh\tWindow: id-1', 'Window · firefox — Arctic\tWindow: id-2',
             'Window · org.arcticlinux.Settings — Arctic Settings\tWindow: id-3'])
+        sources = self.json('sources', '--json')['sources']
+        self.assertEqual(sources[0], {'kind': 'screen', 'app_id': '', 'value': 'Monitor: eDP-1',
+                                      'label': 'Screen · eDP-1 (1920 × 1200)'})
+        self.assertEqual((sources[2]['kind'], sources[2]['app_id'], sources[2]['value']), ('window', 'kitty', 'Window: id-1'))
 
     def test_share_picker_is_the_portals_chooser(self):
         repo = HELPER.parents[3]

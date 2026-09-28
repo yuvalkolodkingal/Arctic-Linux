@@ -105,7 +105,8 @@ Capture (arctic-desktop-config): `arctic-screenshot`, `arctic-ocr`, `arctic-colo
 `arctic-record` select with slurp and capture with grim / wf-recorder; `arctic-capture` parses
 Mango's IPC for them. Screen sharing in Mango sessions: `/etc/xdg/xdg-desktop-portal-wlr/mango`
 (`chooser_type=simple`) runs `/usr/libexec/arctic/arctic-share-picker`, which lists every monitor
-and window (fuzzel) and prints xdg-desktop-portal-wlr's `Monitor: <output>` / `Window: <id>`.
+and window (the shell's "Share your screen" card over IPC, else fuzzel) and prints
+xdg-desktop-portal-wlr's `Monitor: <output>` / `Window: <id>`.
 
 ### 3.1 App theming
 
