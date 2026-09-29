@@ -300,6 +300,15 @@ class SetAndResetTest(Home):
         self.assertIn('mmsg dispatch reload_config', self.calls())
         self.assertEqual(data['source'], 'present')     # the repository config already has it
 
+    def test_a_save_that_changes_nothing_does_not_reload(self):
+        # A reload makes Mango re-apply every rule (monitor rules too): only when there's news.
+        self.helper('set', 'gappih=12')
+        reloads = self.calls().count('mmsg dispatch reload_config')
+        data = self.helper('set', 'gappih=12')
+        self.assertFalse(data['changed'])
+        self.assertFalse(data['reloaded'])
+        self.assertEqual(self.calls().count('mmsg dispatch reload_config'), reloads)
+
     def test_existing_user_gets_the_source_line_once(self):
         conf = self.home / '.config/mango/config.conf'
         conf.write_text(self.config.replace(S.SOURCE_LINE + '\n', ''))

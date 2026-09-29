@@ -689,7 +689,9 @@ def save_settings(paths, model, reload=True):
         else:
             backup(paths, paths.settings_conf)
         atomic_write(paths.settings_conf, text)
-    reloaded = reload_mango() if reload else False
+    # Only when Mango has something new to read: a reload re-applies every rule, monitor rules
+    # included, so a save that changed nothing shouldn't make Mango redo the screens.
+    reloaded = reload_mango() if reload and (old != text or source == 'added') else False
     return dict(ok=True, source=source, reloaded=reloaded, changed=old != text)
 
 
