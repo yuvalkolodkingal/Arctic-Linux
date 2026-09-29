@@ -228,7 +228,7 @@ FocusScope {
                     visible: panel.asking === entry.ssid
                     label: 'Password for “' + entry.ssid + '”'
                     secret: true
-                    minLength: entry.security === 'wep' ? 5 : 8
+                    minLength: entry.security === 'wep' ? 5 : entry.security === 'enterprise' ? 1 : 8
                     errorText: panel.askError
                     busy: panel.pending === entry.ssid
                     onVisibleChanged: if (visible) Qt.callLater(() => main.focusItem(password))
