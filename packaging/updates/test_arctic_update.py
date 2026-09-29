@@ -952,6 +952,19 @@ class ScenarioTests(unittest.TestCase):
         # Nothing new the next day.
         self.assertIn("up to date", self.cli("flatpak", "--auto").stdout)
 
+    def test_flatpak_count_in_any_locale(self):
+        # The service runs in the system's language; comm must compare in the C order the lists
+        # are sorted in (en_US puts org.gnome.baobab before org.gnome.Calculator, C doesn't).
+        english = dict(self.env, LC_ALL="en_US.UTF-8")
+        if subprocess.run(["sort"], input="a\nB\n", env=english, capture_output=True, text=True).stdout != "a\nB\n":
+            self.skipTest("needs the en_US.UTF-8 locale (glibc-langpack-en)")
+        self.fake_flatpak()
+        self.write("fake/flatpak-list", "org.gnome.Calculator\taaa111\norg.gnome.baobab\tbbb222\n")
+        self.env = english
+        p = self.cli("flatpak")
+        self.assertIn("1 app updated.", p.stdout)
+        self.assertNotIn("not in sorted order", p.stderr)
+
     def test_flatpak_follows_the_settings(self):
         self.fake_flatpak()
         for conf in ("AUTO=off\n", "AUTO=download-only\n"):
