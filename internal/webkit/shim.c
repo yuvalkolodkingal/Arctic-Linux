@@ -461,8 +461,26 @@ static void init_notification_permissions_cb(WebKitWebContext *ctx, gpointer dat
 
 /* ---------------------------------------------------------------- downloads */
 
+/* "finished" follows "failed" too: the mark keeps it from offering to open a file that is
+ * partial, removed, or someone else's (a name that was taken). */
+static void download_failed_cb(WebKitDownload *d, GError *err, gpointer data) {
+    (void)data;
+    g_object_set_data(G_OBJECT(d), "arctic-failed", GINT_TO_POINTER(1));
+    if (g_error_matches(err, WEBKIT_DOWNLOAD_ERROR, WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER)) return;
+    const char *dest = webkit_download_get_destination(d);
+    char *name = dest ? g_path_get_basename(dest) : NULL;
+    GNotification *gn = g_notification_new("Download failed");
+    if (name) g_notification_set_body(gn, name);
+    char *tag = g_strdup_printf("download-%s", name ? name : "failed");
+    g_application_send_notification(G_APPLICATION(S.app), tag, gn);
+    g_free(tag);
+    g_object_unref(gn);
+    g_free(name);
+}
+
 static void download_finished_cb(WebKitDownload *d, gpointer data) {
     (void)data;
+    if (g_object_get_data(G_OBJECT(d), "arctic-failed")) return;
     const char *dest = webkit_download_get_destination(d);
     if (!dest) return;
     goDownloadFinished(S.cfg.handle, (char *)dest);
@@ -511,6 +529,7 @@ static void download_started_cb(WebKitNetworkSession *s, WebKitDownload *d, gpoi
     (void)s;
     (void)data;
     g_signal_connect(d, "decide-destination", G_CALLBACK(decide_destination_cb), NULL);
+    g_signal_connect(d, "failed", G_CALLBACK(download_failed_cb), NULL);
     g_signal_connect(d, "finished", G_CALLBACK(download_finished_cb), NULL);
 }
 
