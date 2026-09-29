@@ -39,7 +39,10 @@ can't land in a visible prompt. Nothing typed is written to a file or log.
 
 When stdin closes or SIGTERM / SIGHUP arrives (the shell stopped) while a job runs, the job
 still finishes: the runner stops reading requests but keeps the PTY open until the job exits,
-so a shell restart doesn't cut a dnf transaction short.
+so a shell restart doesn't cut a dnf transaction short. Quickshell SIGKILLs the process it
+started when the shell stops or reloads, so the PTY belongs to a child of it in a session of
+its own, which gets the end of its input then too (see main). A program still waiting for an
+answer at that point ([y/N], a password) is stopped with Ctrl+C: no one is left to answer it.
 """
 import fcntl
 import json
@@ -49,11 +52,13 @@ import re
 import selectors
 import signal
 import shlex
+import socket
 import struct
 import subprocess
 import sys
 import termios
 import time
+import traceback
 
 import pyte
 
@@ -107,6 +112,8 @@ FLATPAK_THEME_HOOKS = ('30-zed',)
 # so the console can tell it apart from other prompts on the same line.
 SUDO_PROMPT = '[sudo] password for %p: '
 SUDO_PROMPT_SHOWN = re.compile(r'\[sudo\] password for \S+:$')
+# A question at the cursor: dnf's "Is this ok [y/N]: ", flatpak's "[Y/n]: " and "[0-2]: ".
+ANSWER_PROMPT = re.compile(r'\[(?:[yY]/[nN]|\d+-\d+)\]:?$')
 WELCOME = ('Console\r\n'
            'Type a dnf or flatpak command, or an app name to install it. Removals list what goes\r\n'
            'and ask first. The other Get apps pages have search, details and Remove apps.\r\n'
@@ -299,6 +306,7 @@ class Console:
         self.secret = False
         self.notice = ''
         self.dirty = True
+        self.gone = False               # stdout is gone: no one reads the state any more
         self.last_emit = 0.0
         self.stream.feed(WELCOME.encode())
 
@@ -313,7 +321,10 @@ class Console:
         if self.finished is not None:
             state['finished'] = self.finished
             self.finished = None
-        print(json.dumps(state), flush=True)
+        try:
+            print(json.dumps(state), flush=True)
+        except OSError:
+            self.gone = True   # the shell went away (see main); a running job still finishes
         self.dirty = False
         self.last_emit = time.monotonic()
 
@@ -351,9 +362,17 @@ class Console:
         return self.at_sudo_prompt()
 
     def at_sudo_prompt(self):
+        return bool(SUDO_PROMPT_SHOWN.search(self.before_cursor()))
+
+    def before_cursor(self):
         cursor = self.screen.cursor
-        before_cursor = self.screen.display[cursor.y][:cursor.x].rstrip()
-        return bool(SUDO_PROMPT_SHOWN.search(before_cursor))
+        return self.screen.display[cursor.y][:cursor.x].rstrip()
+
+    def asking(self):
+        """Is the program waiting for an answer: a password, or dnf's or flatpak's [y/N]?"""
+        if self.master is None:
+            return False
+        return bool(ANSWER_PROMPT.search(self.before_cursor())) or self.prompt_is_secret()
 
     def start(self, text, command=None):
         """A line typed in the console (or, in tests, a given argv)."""
@@ -516,12 +535,83 @@ def handle(console, request):
 
 
 def main():
+    """The runner as the shell starts it. Quickshell kills that process outright (SIGKILL) when
+    the shell stops or reloads, which would hang up the PTY, and a dnf transaction with it. So
+    the console lives in a child in a session of its own (serve), and this process only relays
+    the shell's requests to it and its state lines back. When this process goes, the child reads
+    the end of its input: a running job finishes, then the child exits too."""
+    ours, theirs = socket.socketpair()
+    child = os.fork()
+    if child == 0:
+        ours.close()
+        os.setsid()
+        os.dup2(theirs.fileno(), 0)
+        os.dup2(theirs.fileno(), 1)
+        theirs.close()
+        code = 0
+        try:
+            serve()
+        except SystemExit as stop:
+            code = stop.code if isinstance(stop.code, int) else 0
+        except BaseException:
+            traceback.print_exc()
+            code = 1
+        os._exit(code)
+    theirs.close()
+    relay(ours, child)
+
+
+def relay(sock, child):
+    """Pass stdin to the console child and its output to stdout until the child exits. The end
+    of stdin, SIGTERM and SIGHUP (the shell is stopping) end the child's input instead: it
+    finishes a running job and stops, and this process with it."""
+    def close_input(*_args):
+        try:
+            sock.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, close_input)
+    selector = selectors.DefaultSelector()
+    selector.register(sys.stdin, selectors.EVENT_READ)
+    selector.register(sock, selectors.EVENT_READ)
+    while True:
+        for key, _ in selector.select():
+            if key.fileobj is sock:
+                try:
+                    data = sock.recv(65536)
+                except OSError:
+                    data = b''
+                if not data:
+                    os.waitpid(child, 0)
+                    return
+                try:
+                    while data:
+                        data = data[os.write(sys.stdout.fileno(), data):]
+                except OSError:
+                    close_input()   # no one reads the state any more
+                continue
+            data = os.read(sys.stdin.fileno(), 65536)
+            try:
+                if data:
+                    sock.sendall(data)
+                    continue
+            except OSError:
+                pass
+            selector.unregister(sys.stdin)
+            close_input()
+
+
+def serve():
+    """The console: requests on stdin, state lines on stdout (see the top of this file)."""
     console = Console()
     selector = selectors.DefaultSelector()
     selector.register(sys.stdin, selectors.EVENT_READ)
     reading = True
     incoming = b''
     stopping = []
+    cancelled = False
 
     def on_signal(signum, _frame):
         # The shell is stopping (or restarting): a running job still finishes, as after EOF.
@@ -534,7 +624,7 @@ def main():
     console.emit()
     try:
         while True:
-            if stopping and reading:
+            if (stopping or console.gone) and reading:
                 selector.unregister(sys.stdin)
                 reading = False
             if not reading and console.pid is None:
@@ -542,7 +632,10 @@ def main():
             timeout = EMIT_INTERVAL / 2 if console.pid else None
             events = selector.select(timeout) if reading else (time.sleep(EMIT_INTERVAL / 2) or [])
             for key, _ in events:
-                data = os.read(key.fd, 65536)
+                try:
+                    data = os.read(key.fd, 65536)
+                except OSError:
+                    data = b''   # the relay was killed with our state unread (ECONNRESET)
                 if not data:
                     # The shell went away: finish the running job, then stop.
                     selector.unregister(sys.stdin)
@@ -563,6 +656,11 @@ def main():
                     finally:
                         line = b''
             console.read()
+            if not reading and not cancelled and console.asking():
+                # No one is left to answer a [y/N] or a password: cancel it, as Ctrl+C would,
+                # rather than keep dnf's lock forever. A job that is working goes on.
+                console.interrupt()
+                cancelled = True
             if reading and console.due():
                 console.emit()
     finally:

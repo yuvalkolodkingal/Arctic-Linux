@@ -215,6 +215,16 @@ os.write(1, b'\\r\\n' + (b'Authenticated' if password.strip() == b'test-secret-7
         self.console.input('safe', False)
         self.wait_for(lambda: self.console.pid is None)
 
+    def test_asking_is_a_question_at_the_cursor(self):
+        self.console.start('question test', [sys.executable, '-c', "print('Working', flush=True); input('Is this ok [y/N]: ')"])
+        self.wait_for(lambda: 'Is this ok' in self.snapshot()['output'])
+        self.assertTrue(self.console.asking())
+        self.console.input('n', False)
+        self.wait_for(lambda: self.console.pid is None)
+        self.console.start('work test', [sys.executable, '-c', "import time; print('Is this ok [y/N]: n', flush=True); time.sleep(60)"])
+        self.wait_for(lambda: 'Is this ok' in self.snapshot()['output'])
+        self.assertFalse(self.console.asking())
+
     def test_interrupt_and_exit_status(self):
         self.console.start('interrupt test', [sys.executable, '-c', "import time; print('Ready', flush=True); time.sleep(60)"])
         self.wait_for(lambda: 'Ready' in self.snapshot()['output'])
@@ -374,6 +384,64 @@ exit 0
         runner.send_signal(signal.SIGTERM)
         self.assertEqual(runner.wait(timeout=10), 0)
         self.assertEqual((self.bin / 'finished').read_text(), 'done\n')
+        runner.stdin.close()
+        runner.stdout.close()
+
+    def runner_with_job(self, flatpak):
+        """A runner (as the shell starts it) whose install job runs `flatpak`; returns once the job runs."""
+        (self.bin / 'flatpak').write_text(flatpak)
+        runner = subprocess.Popen([sys.executable, str(Path(__file__).parents[1] / 'scripts/install-terminal.py')],
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=os.environ.copy())
+        runner.stdout.readline()
+        job = dict(id='j', kind='install', source='flatpak', ids=['org.gimp.GIMP'], installation='system')
+        runner.stdin.write((json.dumps(dict(action='run', job=job)) + '\n').encode())
+        runner.stdin.flush()
+        return runner
+
+    def wait_for_file(self, name, timeout=10):
+        deadline = time.monotonic() + timeout
+        while not (self.bin / name).exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        return (self.bin / name).read_text() if (self.bin / name).exists() else None
+
+    def test_the_job_survives_the_runner_being_killed(self):
+        # Quickshell SIGKILLs the runner when the shell stops or reloads. The job keeps its
+        # terminal (no SIGHUP) and finishes, though its progress piles up unread.
+        runner = self.runner_with_job('''#!/usr/bin/env python3
+import os, signal, sys, time
+here = os.path.dirname(os.path.abspath(__file__))
+signal.signal(signal.SIGHUP, lambda *_: open(os.path.join(here, 'hup'), 'w').write('hup'))
+open(os.path.join(here, 'started'), 'w').write('')
+for i in range(20):
+    print('Installing 1/1… %d%%' % (i * 5), flush=True)
+    time.sleep(0.05)
+open(os.path.join(here, 'finished'), 'w').write('done')
+''')
+        self.assertEqual(self.wait_for_file('started'), '')
+        runner.kill()
+        runner.wait(timeout=5)
+        self.assertEqual(self.wait_for_file('finished'), 'done')
+        self.assertFalse((self.bin / 'hup').exists())
+        runner.stdin.close()
+        runner.stdout.close()
+
+    def test_a_question_no_one_can_answer_is_cancelled(self):
+        # With the shell gone, a [Y/n] would wait forever (and keep dnf's lock): Ctrl+C ends it.
+        runner = self.runner_with_job('''#!/usr/bin/env python3
+import os, sys
+here = os.path.dirname(os.path.abspath(__file__))
+try:
+    input('Proceed with these changes to the system installation? [Y/n]: ')
+    open(os.path.join(here, 'answer'), 'w').write('answered')
+except KeyboardInterrupt:
+    open(os.path.join(here, 'answer'), 'w').write('interrupted')
+    sys.exit(130)
+''')
+        while '[Y/n]' not in json.loads(runner.stdout.readline()).get('output', ''):
+            pass
+        runner.kill()
+        runner.wait(timeout=5)
+        self.assertEqual(self.wait_for_file('answer'), 'interrupted')
         runner.stdin.close()
         runner.stdout.close()
 
