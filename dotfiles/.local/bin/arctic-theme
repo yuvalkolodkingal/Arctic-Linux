@@ -471,10 +471,11 @@ def unpack_theme(tar_path):
             if len(members) >= 20000 or m.offset_data > 512 * 1024 * 1024:
                 raise Error("that archive is too big to be a theme")
             members.append(m)
-        tops = {m.name.split("/", 1)[0] for m in members}
-        strip = len(tops) == 1 and any("/" in m.name for m in members)
-        for m in members:
-            parts = [p for p in m.name.split("/") if p not in ("", ".")]
+        # One folder around everything is left out; "./" (tar -C folder .) isn't a folder.
+        paths = [[p for p in m.name.split("/") if p not in ("", ".")] for m in members]
+        tops = {parts[0] for parts in paths if parts}
+        strip = len(tops) == 1 and any(len(parts) > 1 for parts in paths)
+        for m, parts in zip(members, paths):
             if m.name.startswith("/") or ".." in parts:
                 dropped.append(m.name)
                 continue
