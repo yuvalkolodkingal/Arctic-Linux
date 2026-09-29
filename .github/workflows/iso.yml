@@ -13,6 +13,10 @@ on:
         description: Release tag (default v1.0.0-build.<run number>)
         type: string
         default: ""
+      prerelease:
+        description: Mark the release as a pre-release (untick for a stable release such as v1.0.0)
+        type: boolean
+        default: true
       boot_test:
         description: Boot the ISO in QEMU and upload screenshots
         type: boolean
@@ -124,7 +128,7 @@ jobs:
             tag="$GITHUB_REF_NAME"; pre=""
           else
             tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.0.0-build.$GITHUB_RUN_NUMBER"
-            pre="--prerelease"
+            pre=""; [ "${{ inputs.prerelease }}" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
