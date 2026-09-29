@@ -137,9 +137,10 @@ Item {
     }
     function convert(expr) {
         qalcWanted = expr;
-        if (qalc.running || !expr || !hasQalc || /^\s*-/.test(expr)) return;
+        if (qalc.running || !expr || !hasQalc) return;
         qalcRunning = expr;
-        qalc.command = ['timeout', '3', 'qalc', '-t', expr];
+        // After a space, "-40 °F to °C" is an expression to qalc, never one of its options.
+        qalc.command = ['timeout', '3', 'qalc', '-t', ' ' + expr];
         qalc.running = true;
     }
     Process {
