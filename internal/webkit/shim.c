@@ -409,8 +409,16 @@ static void notification_closed_cb(WebKitNotification *n, gpointer data) {
 }
 
 static gboolean show_notification_cb(WebKitWebView *view, WebKitNotification *n, gpointer data) {
-    (void)view;
     (void)data;
+    /* WebKit can't take back a permission it granted (at start, or through the banner), so
+     * each notification asks Go again: "Block" in Settings works in the open window. */
+    char *origin = origin_of_view(view);
+    int allowed = goPermission(S.cfg.handle, 0, origin) == ARCTIC_ALLOW;
+    g_free(origin);
+    if (!allowed) {
+        webkit_notification_close(n);
+        return TRUE;
+    }
     char *tag = g_strdup_printf("n%" G_GUINT64_FORMAT, webkit_notification_get_id(n));
     GNotification *gn = g_notification_new(webkit_notification_get_title(n));
     const char *body = webkit_notification_get_body(n);

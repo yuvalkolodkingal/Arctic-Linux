@@ -64,6 +64,11 @@ func TestSetAppliedAndUserSet(t *testing.T) {
 	if err != nil || res.Applied != "next_start" {
 		t.Fatalf("rendering: %+v %v", res, err)
 	}
+	// So does forgetting a certificate: WebKit can't take back one it allowed.
+	res, err = m.Set(context.Background(), api.SetParams{ID: a.ID, ForgetCertificate: "ha.lan:8123"})
+	if err != nil || res.Applied != "next_start" {
+		t.Fatalf("forget-certificate: %+v %v", res, err)
+	}
 	res, err = m.Set(context.Background(), api.SetParams{ID: a.ID, AddDomain: "Accounts.Example.org", Devtools: yes(), ExtraDomains: nil})
 	if err != nil {
 		t.Fatal(err)

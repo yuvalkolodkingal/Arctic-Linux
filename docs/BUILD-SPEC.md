@@ -1017,7 +1017,9 @@ follow the app's option (allowed for in-scope origins by default); camera, micro
 location, clipboard ask in a banner outside the page; EME is denied. Downloads go to the XDG
 download directory under a safe unique name. A web-process crash reloads once a minute, then
 shows a banner. `SIGHUP` re-reads app.json (links, extra domains, notifications, devtools,
-certificates); `SIGTERM` quits after saving state. `run` removes
+trusted certificates; each notification is checked against the current option, since WebKit
+can't take back a grant; a forgotten certificate stays accepted until the window closes, so
+`set` reports `next_start` for it); `SIGTERM` quits after saving state. `run` removes
 `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS` from the environment, adds the NVIDIA workarounds on
 the proprietary driver and software rendering on request. Chromium-family runtimes run
 `--app=<url> --user-data-dir=<per-app>` (never `--no-sandbox` or `--class`); a running one is
