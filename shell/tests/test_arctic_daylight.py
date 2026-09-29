@@ -110,7 +110,10 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(self.mode.read_text().strip(), 'light')
         self.assertIn('arctic-theme light', self.calls())
         timer = [c for c in self.calls() if c.startswith('systemd-run')][-1]
-        self.assertIn('--unit arctic-daylight', timer)
+        # A unit of its own for each arming (the running service's name can't be reused), and
+        # what arctic-theme leaves running outlives the service.
+        self.assertRegex(timer, r'--unit arctic-daylight-\d{12}-\d+ ')
+        self.assertIn('--property KillMode=process', timer)
         self.assertIn('--on-calendar', timer)
         self.assertTrue(timer.endswith('arctic-daylight apply'))
         # Already light: applying again doesn't switch again.
@@ -123,7 +126,7 @@ class ScheduleTests(unittest.TestCase):
         self.log.write_text('')
         info = self.daylight('off')
         self.assertEqual(info['want'], None)
-        self.assertEqual(self.calls(), ['systemctl --user stop arctic-daylight.timer'])
+        self.assertEqual(self.calls(), ['systemctl --user stop arctic-daylight-*.timer'])
 
     def test_sun_where_the_zone_is(self):
         info = self.daylight('sun')
