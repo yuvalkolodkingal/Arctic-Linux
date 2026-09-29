@@ -10,7 +10,8 @@
 #                                /usr/share/arctic/shell instead, so --target never copies it)
 #
 # Copies: this folder's home tree, plus the design's fonts, wallpapers and logos and the theme
-# engine (../design/themegen) from ../design.
+# engine (../design/themegen) from ../design. Also builds the 3D greeting (../fetch) into
+# ~/.local/libexec/arctic when a compiler is there; without one, arctic-fetch draws its own fox.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,7 +28,7 @@ while (( $# )); do
     --deps)   DEPS=1; shift ;;
     --shell)  SHELL_COPY=1; shift ;;
     --no-shell) SHELL_COPY=0; shift ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,${/^[^#]/q;s/^# \{0,1\}//;p;}' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -40,6 +41,7 @@ PACKAGES=(
   lxqt-policykit network-manager-applet NetworkManager-tui blueman libnotify xdg-user-dirs
   librsvg2-tools jetbrains-mono-fonts-all google-noto-sans-fonts
   wtype swappy wf-recorder tesseract python3-zxing-cpp unicode-emoji google-noto-color-emoji-fonts
+  gcc make
 )
 
 if (( DEPS )); then
@@ -90,6 +92,16 @@ rm -rf "$engine" && mkdir -p "$engine/data/exports" "$engine/data/icons" "$engin
 cp "$DESIGN"/exports/arctic-tokens.json "$DESIGN"/exports/gtk-arctic-*.css "$engine/data/exports/"
 cp "$DESIGN"/icons/*.svg "$engine/data/icons/"
 cp "$DESIGN"/logos/arctic-mark-16-*.svg "$engine/data/logos/"
+
+# 2c. The 3D greeting (../fetch/fetch.c), which arctic-fetch prefers over its own shell-script
+# fox. Best-effort: without a compiler it prints a note and arctic-fetch falls back.
+libexec="$TARGET/.local/libexec/arctic"
+if [[ -f "$HERE/../fetch/fetch.c" ]] && command -v make >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
+  mkdir -p "$libexec"
+  if ! (cd "$HERE/../fetch" && make -s install DESTDIR= LIBEXECDIR="$libexec" && make -s clean) >/dev/null 2>&1; then
+    echo "note: could not build arctic-fetch-3d; arctic-fetch will draw its own fox instead." >&2
+  fi
+fi
 
 # 3. The shell, for installs without the arctic-shell package.
 if [[ "$SHELL_COPY" == 1 || ( "$SHELL_COPY" == auto && "$TARGET" == "$HOME" ) ]]; then

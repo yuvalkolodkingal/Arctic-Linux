@@ -2,16 +2,22 @@
 # arctic-fetch — the Arctic Linux terminal greeting. Spec: design components/Fetch and
 # guidelines/30-terminal-and-fetch.md.
 #
-# A block-art fox (same silhouette as the mark) beside system info. The fox blinks, twitches
-# an ear and flicks its tail (≈2.9 s), plays that twice, then rests. Any key skips to the rest
-# frame. Reduced motion (ARCTIC_REDUCE_MOTION=1, `arctic-motion off`, or --static) draws the
-# rest frame once.
+# The greeting is fetch.c (fetch/ in the source tree, built into
+# /usr/libexec/arctic/arctic-fetch-3d by arctic-desktop-config): the same silhouette as the
+# mark, turned into a point cloud and spun in 3D beside live system info. This script finds
+# that binary and runs it. Where it isn't there — a source checkout, or --fox — the script
+# draws the greeting itself in bash: a block-art fox that blinks, twitches an ear and flicks
+# its tail (≈2.9 s), plays that twice, then rests. Any key skips to the rest frame. Reduced
+# motion (ARCTIC_REDUCE_MOTION=1, `arctic-motion off`, or --static) draws one still frame.
 #
-#   arctic-fetch            animate (interactive terminals only)
-#   arctic-fetch --static   draw the rest frame once
+#   arctic-fetch             the 3D greeting (the fox where the 3D binary isn't installed)
+#   arctic-fetch --static    one still frame
+#   arctic-fetch --fox       the shell-drawn fox, even where the 3D binary is installed
 #   arctic-fetch --info os|base|wm|shell|theme|updates
-#                           print one line of system info, or nothing where it doesn't apply;
-#                           the fastfetch layouts (fastfetch and this greeting) use them
+#                            print one line of system info, or nothing where it doesn't
+#                            apply; the fastfetch layouts use them (the 3D greeting reads
+#                            the same files itself, in fetch.c)
+#   any other flag           passed through to the 3D greeting (--logo, --size, …)
 #
 # The info column is fastfetch's, drawn with the greeting layout
 # (~/.local/share/arctic/fastfetch/greeting.jsonc, else /usr/share/arctic/fastfetch/), so it
@@ -350,10 +356,46 @@ reduce_motion() {
   return 1
 }
 
+# The 3D greeting, where it's installed: ARCTIC_FETCH_3D says where (a test or a local
+# build), then the user's copy, then arctic-desktop-config's /usr/libexec/arctic/.
+find_3d() {
+  local c
+  for c in "${ARCTIC_FETCH_3D:-}" \
+           "$HOME/.local/libexec/arctic/arctic-fetch-3d" \
+           /usr/libexec/arctic/arctic-fetch-3d; do
+    [[ -n $c && -x $c ]] || continue
+    printf '%s\n' "$c"
+    return 0
+  done
+  return 1
+}
+
 main() {
   if [[ "${1:-}" == --info ]]; then
     info "${2:-}"
     return
+  fi
+
+  local fox=0 static=0
+  local -a pass=()
+  while (( $# )); do
+    case $1 in
+      --fox)    fox=1 ;;
+      --static) static=1 ;;
+      *)        pass+=("$1") ;;
+    esac
+    shift
+  done
+
+  local bin
+  if (( ! fox )) && bin="$(find_3d)"; then
+    local -a opts=()
+    (( ${#pass[@]} )) && opts+=("${pass[@]}")
+    (( static )) && opts+=(--frames 1)
+    reduce_motion && opts+=(--frames 1)
+    [[ -t 1 ]] || opts+=(--frames 1)
+    "$bin" "${opts[@]}"
+    return $?
   fi
 
   # Column maths below counts characters, so make sure the shell works in UTF-8.
@@ -363,8 +405,6 @@ main() {
   esac
   shopt -s extglob
 
-  local static=0
-  [[ "${1:-}" == --static ]] && static=1
   [[ -t 1 ]] || static=1
   reduce_motion && static=1
 

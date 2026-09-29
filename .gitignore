@@ -4,3 +4,4 @@ __pycache__/
 /out/
 /build/
 *.iso
+/fetch/arctic-fetch-3d

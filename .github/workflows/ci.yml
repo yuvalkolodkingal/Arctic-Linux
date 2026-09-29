@@ -102,6 +102,34 @@ jobs:
           printf '%s\n' "${files[@]}"
           shellcheck -x "${files[@]}"
 
+  fetch-c:
+    name: fetch.c builds and runs (arctic-fetch-3d)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: dnf -y install git gcc make file
+      - uses: actions/checkout@v4
+      # The vendored greeting is only compiled by the RPM build, which runs late and only in one
+      # job: a C error would otherwise reach main unnoticed. Nothing here needs more than a
+      # compiler and libm.
+      - name: make
+        run: make -C fetch
+      - name: it runs, and every field gathers
+        run: |
+          file fetch/arctic-fetch-3d
+          fetch/arctic-fetch-3d --version
+          fetch/arctic-fetch-3d --help | grep -q 'Usage: arctic-fetch-3d'
+          # One still frame with every field of the system config: this walks all the gather_*
+          # functions, so a crash in any of them fails here.
+          mkdir -p /tmp/fetch-home/.config/arctic/fetch
+          cp fetch/config /tmp/fetch-home/.config/arctic/fetch/config
+          HOME=/tmp/fetch-home XDG_CONFIG_HOME=/tmp/fetch-home/.config \
+            fetch/arctic-fetch-3d --frames 1 > /tmp/fetch.out
+          # The two fields Arctic added most recently, and the colour swatches the last field draws.
+          grep -aq 'Base' /tmp/fetch.out
+          grep -aqP '\x1b\[40m' /tmp/fetch.out
+
   shell-tests:
     name: Shell tests (Python, Node)
     runs-on: ubuntu-latest

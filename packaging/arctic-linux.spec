@@ -739,6 +739,11 @@ for svg in design/wallpapers/*.svg; do
   rsvg-convert -w 3840 -h 2160 -o "_build/backgrounds/$(basename "$svg" .svg).png" "$svg"
 done
 
+# ---- The 3D greeting: fetch.c (fetch/), a vendored fork of areofyl/fetch, built as
+# arctic-fetch-3d. The wrapper (dotfiles/.local/bin/arctic-fetch) runs it, and falls back to
+# the bash fox where it isn't installed, so this is the only part of the fetch that can fail.
+make -C fetch
+
 %install
 # ---------------------------------------------------------------- arctic-release
 rel=packaging/release
@@ -981,6 +986,15 @@ chmod 0755 %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-she
 # Get apps: pkexec dnf5 (install and remove) with the password kept for a few minutes.
 install -Dpm 0644 packaging/polkit/org.arcticlinux.pkexec.dnf.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.pkexec.dnf.policy
+
+# ---------------------------------------------------------------- arctic-fetch-3d
+# The 3D greeting, built above from fetch/. arctic-fetch (a wrapper in dotfiles/.local/bin,
+# installed with the other helpers) runs it, so the wrapper is what the shell calls; the
+# config here is the system default it reads when you haven't written your own.
+install -d %{buildroot}%{_libexecdir}/arctic
+install -pm 0755 fetch/arctic-fetch-3d %{buildroot}%{_libexecdir}/arctic/arctic-fetch-3d
+install -d %{buildroot}%{_datadir}/arctic/fetch
+install -pm 0644 fetch/config %{buildroot}%{_datadir}/arctic/fetch/config
 
 # ---------------------------------------------------------------- arctic-settings
 # /usr/bin/arctic-settings was installed with the other helpers (dotfiles/.local/bin).
@@ -1387,6 +1401,10 @@ fi
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 %{_libexecdir}/arctic/arctic-system-helper
+# The 3D greeting, and the system default for its config (the wrapper is %_bindir/arctic-fetch).
+%{_libexecdir}/arctic/arctic-fetch-3d
+%dir %{_datadir}/arctic/fetch
+%{_datadir}/arctic/fetch/config
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 %{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 %dir %{_datadir}/arctic

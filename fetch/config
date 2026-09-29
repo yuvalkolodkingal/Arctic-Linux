@@ -1,0 +1,35 @@
+# /usr/share/arctic/fetch/config — the system default for arctic-fetch-3d.
+#
+# The same list lives in config_defaults() in fetch.c, so this file is here to be
+# edited, not needed: copy it to ~/.config/arctic/fetch/config to change what you
+# see (that path wins over this one). One field name per line; comment out or remove
+# a line to hide that field; the order of the lines is the order of the column.
+#
+# Fields: os, base, host, kernel, uptime, packages, shell, display, wm,
+#         displaymanager, theme, updates, icons, font, cursor, terminal, cpu,
+#         gpu, memory, swap, disk, ip, battery, powerprofile, locale, colors
+#     ---  a blank line
+#   disk=/home   an extra mount point
+#   custom_Label=value   your own line
+#
+# Settings (also in this file):
+#   label_color=cyan      label colour: a name or an ANSI number
+#   title_color=yellow    the user@host colour
+#   separator=─           the rule under the title
+
+os
+base
+host
+kernel
+uptime
+packages
+shell
+wm
+terminal
+theme
+updates
+cpu
+gpu
+memory
+disk
+colors
