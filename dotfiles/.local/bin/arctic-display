@@ -1,0 +1,351 @@
+#!/usr/bin/env python3
+"""arctic-display — display mode (Super+P) and the laptop lid.
+
+    arctic-display mode                 pick a mode from a menu (Super+P)
+    arctic-display mode laptop|mirror|extend|external
+                                        laptop screen only / the same picture on every screen
+                                        (wl-mirror) / one big desktop / the other screen only
+    arctic-display status [--json]
+    arctic-display lid-closed | lid-opened
+                                        Mango's switchbind=fold / unfold (binds.conf)
+    arctic-display screens off | on     every screen dark, and back (swayidle, a little after
+                                        the lock: `arctic-session idle`)
+
+Modes last until you log out, re-plug a screen or change the layout in Settings > Displays
+(nothing is written to settings.conf). With the lid closed and another screen connected, the
+laptop panel turns off and the windows move over; without one, the choice in Settings > Power and
+lock (~/.config/arctic/lid.conf: when_closed=suspend|lock|screen-off) applies. For lock and
+screen-off, `arctic-session lid` keeps logind from suspending (a handle-lid-switch inhibitor).
+Changes go through Mango (mmsg dispatch enable_monitor / disable_monitor / sleep_monitor …).
+Each command prints one JSON line; failures print {"ok": false, "error": "…"} and exit 1.
+"""
+import glob
+import json
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+INTERNAL = ('eDP', 'LVDS', 'DSI')
+MODES = {'laptop': 'Laptop screen only', 'mirror': 'Duplicate', 'extend': 'Extend',
+         'external': 'Other screen only'}
+LID_CHOICES = ('suspend', 'lock', 'screen-off')
+
+
+class Failure(Exception):
+    """A sentence for the person."""
+
+
+def env(name, default=''):
+    return os.environ.get(name, default)
+
+
+def runtime_file():
+    return Path(env('XDG_RUNTIME_DIR') or tempfile.gettempdir()) / 'arctic' / 'display.json'
+
+
+def lid_conf():
+    return Path(env('XDG_CONFIG_HOME') or Path(env('HOME') or Path.home()) / '.config') / 'arctic' / 'lid.conf'
+
+
+def run(argv, timeout=15):
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        return done.returncode, done.stdout, done.stderr
+    except (OSError, subprocess.SubprocessError) as error:
+        return 127, '', str(error)
+
+
+def read_state():
+    try:
+        data = json.loads(runtime_file().read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_state(state):
+    path = runtime_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix='.display.', dir=str(path.parent))
+    with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+        json.dump(state, handle)
+    os.replace(tmp, path)
+
+
+def is_internal(name):
+    return name.split('-', 1)[0] in INTERNAL
+
+
+def outputs():
+    """[{name, internal, enabled, description}] from wlr-randr (every output Mango knows)."""
+    code, out, err = run(['wlr-randr', '--json'])
+    if code != 0:
+        raise Failure('The screens couldn’t be read (wlr-randr: {}).'.format((err.strip() or 'failed').splitlines()[-1]))
+    try:
+        data = json.loads(out)
+    except ValueError:
+        raise Failure('wlr-randr answered something unexpected.') from None
+    return [dict(name=o['name'], internal=is_internal(o['name']), enabled=bool(o.get('enabled')),
+                 description=o.get('description') or o['name']) for o in data if o.get('name')]
+
+
+def dispatch(*args):
+    code, _out, err = run(['mmsg', 'dispatch', ','.join(args)])
+    if code != 0:
+        raise Failure('Mango didn’t take the change: ' + (err.strip() or 'mmsg failed') + '.')
+
+
+def stop_mirrors(state):
+    for pid in state.pop('mirrors', []) or []:
+        try:
+            if 'wl-mirror' in Path('/proc/{}/cmdline'.format(int(pid))).read_bytes().decode(errors='replace'):
+                os.kill(int(pid), signal.SIGTERM)
+        except (OSError, ValueError):
+            pass
+
+
+def current_mode(outs, state):
+    internal = [o for o in outs if o['internal']]
+    external = [o for o in outs if not o['internal']]
+    if state.get('mirrors'):
+        return 'mirror'
+    if not internal or not external:
+        return 'single'
+    on_internal = any(o['enabled'] for o in internal)
+    on_external = any(o['enabled'] for o in external)
+    return 'extend' if on_internal and on_external else 'laptop' if on_internal else 'external'
+
+
+def status():
+    state = read_state()
+    outs = outputs()
+    internal = [o for o in outs if o['internal']]
+    external = [o for o in outs if not o['internal']]
+    choices = list(MODES) if internal and external else ['extend'] if len(outs) > 1 else []
+    if len(outs) > 1 and not internal and which('wl-mirror'):
+        choices = ['extend', 'mirror']
+    if 'mirror' in choices and not which('wl-mirror'):
+        choices.remove('mirror')
+    return dict(ok=True, outputs=outs, mode=current_mode(outs, state), choices=choices,
+                labels={k: MODES[k] for k in choices}, internal_off_by=state.get('internal_off_by') or '',
+                lid=lid_state())
+
+
+def which(name):
+    for folder in env('PATH', '/usr/bin:/bin').split(':'):
+        if folder and os.access(os.path.join(folder, name), os.X_OK):
+            return os.path.join(folder, name)
+    return None
+
+
+def set_mode(mode):
+    if mode not in MODES:
+        raise Failure('usage: arctic-display mode laptop|mirror|extend|external')
+    state = read_state()
+    outs = outputs()
+    internal = [o['name'] for o in outs if o['internal']]
+    external = [o['name'] for o in outs if not o['internal']]
+    if not external or (mode != 'extend' and mode != 'mirror' and not internal):
+        raise Failure('Only one screen is connected.')
+    stop_mirrors(state)
+    if mode in ('extend', 'mirror'):
+        for name in internal + external:
+            dispatch('enable_monitor', name)
+        state.pop('internal_off_by', None)
+    elif mode == 'laptop':
+        for name in internal:
+            dispatch('enable_monitor', name)
+        for name in external:
+            dispatch('disable_monitor', name)
+        state.pop('internal_off_by', None)
+    else:
+        for name in external:
+            dispatch('enable_monitor', name)
+        for name in internal:
+            dispatch('disable_monitor', name)
+        state['internal_off_by'] = 'mode'
+    if mode == 'mirror':
+        if not which('wl-mirror'):
+            raise Failure('Duplicating needs wl-mirror (sudo dnf install wl-mirror).')
+        source = (internal or [outs[0]['name']])[0]
+        pids = []
+        for name in [n for n in internal + external if n != source]:
+            child = subprocess.Popen(['wl-mirror', '--fullscreen-output', name, source], stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            pids.append(child.pid)
+        state['mirrors'] = pids
+    state['mode'] = mode
+    write_state(state)
+    result = status()
+    tell(MODES[mode])
+    return result
+
+
+def menu():
+    """Super+P: the modes in a fuzzel menu (the shell's own panel can call `mode NAME`)."""
+    info = status()
+    if not info['choices']:
+        tell('Only one screen is connected')
+        return info
+    labels = [info['labels'][c] for c in info['choices']]
+    try:
+        picked = subprocess.run(['fuzzel', '--dmenu', '--prompt', '  ', '--placeholder', 'Screens',
+                                 '--lines', str(len(labels)), '--width', '24'],
+                                input='\n'.join(labels) + '\n', capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        raise Failure('The screen menu needs fuzzel.') from None
+    choice = picked.stdout.strip()
+    for key in info['choices']:
+        if info['labels'][key] == choice:
+            return set_mode(key)
+    return info
+
+
+def tell(text):
+    """The on-screen pill (mako draws arctic-osd notifications as the OSD)."""
+    if which('notify-send'):
+        run(['notify-send', '-a', 'arctic-osd', '-e', '-t', '1500',
+             '-h', 'string:x-canonical-private-synchronous:arctic-osd', text], timeout=5)
+
+
+# ---- the lid --------------------------------------------------------------------------------------
+
+def lid_state():
+    """'closed', 'open' or '' (no lid, or it can't be read)."""
+    for path in glob.glob(env('ARCTIC_LID_GLOB') or '/proc/acpi/button/lid/*/state'):
+        try:
+            return 'closed' if 'closed' in Path(path).read_text() else 'open'
+        except OSError:
+            continue
+    code, out, _err = run(['gdbus', 'call', '--system', '--dest', 'org.freedesktop.login1', '--object-path',
+                           '/org/freedesktop/login1', '--method', 'org.freedesktop.DBus.Properties.Get',
+                           'org.freedesktop.login1.Manager', 'LidClosed'], timeout=5)
+    if code == 0 and 'true' in out:
+        return 'closed'
+    return 'open' if code == 0 else ''
+
+
+def when_closed():
+    try:
+        for line in lid_conf().read_text(encoding='utf-8').splitlines():
+            key, _, value = line.partition('=')
+            if key.strip() == 'when_closed' and value.strip() in LID_CHOICES:
+                return value.strip()
+    except OSError:
+        pass
+    return 'suspend'
+
+
+def lid(closed):
+    state = read_state()
+    outs = outputs()
+    internal = [o['name'] for o in outs if o['internal']]
+    external_on = [o['name'] for o in outs if not o['internal'] and o['enabled']]
+    done = 'nothing'
+    if closed:
+        # A tablet-mode switch fires the same binding: act only when the lid is really shut.
+        if lid_state() != 'closed' or not internal:
+            return dict(ok=True, done='nothing', reason='the lid isn’t closed')
+        if external_on:
+            stop_mirrors(state)
+            for name in internal:
+                dispatch('disable_monitor', name)
+            state['internal_off_by'] = 'lid'
+            done = 'laptop screen off'
+        elif when_closed() == 'lock':
+            # Not through run(): swaylock -f stays behind holding a captured pipe open.
+            try:
+                subprocess.run(['arctic-lock'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, timeout=30, check=False)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            for name in internal:
+                dispatch('sleep_monitor', name)
+            state['internal_asleep'] = True
+            done = 'locked'
+        elif when_closed() == 'screen-off':
+            for name in internal:
+                dispatch('sleep_monitor', name)
+            state['internal_asleep'] = True
+            done = 'screen off'
+    else:
+        if state.pop('internal_off_by', '') == 'lid':
+            for name in internal:
+                dispatch('enable_monitor', name)
+            done = 'laptop screen on'
+        if state.pop('internal_asleep', False):
+            for name in internal:
+                dispatch('wakeup_monitor', name)
+            done = 'screen on'
+    write_state(state)
+    return dict(ok=True, done=done)
+
+
+# ---- screens off after the lock ---------------------------------------------------------------
+
+def screens(off):
+    """Put every lit screen to sleep (Mango's sleep_monitor: the layout stays), or wake the ones
+    this put to sleep. A laptop panel behind a closed lid stays dark."""
+    state = read_state()
+    if off:
+        names = []
+        for name in [o['name'] for o in outputs() if o['enabled']]:
+            try:
+                dispatch('sleep_monitor', name)
+                names.append(name)
+            except Failure:
+                pass
+        state['asleep'] = sorted(set(state.get('asleep') or []) | set(names))
+        write_state(state)
+        return dict(ok=True, done='screens off', screens=names)
+    names = [n for n in state.pop('asleep', []) or [] if isinstance(n, str)]
+    closed = lid_state() == 'closed'
+    woken = []
+    for name in names:
+        if closed and is_internal(name):
+            continue
+        try:
+            dispatch('wakeup_monitor', name)
+            woken.append(name)
+        except Failure:
+            pass
+    write_state(state)
+    return dict(ok=True, done='screens on', screens=woken)
+
+
+def main(argv):
+    verb = argv[0] if argv else 'status'
+    if verb in ('-h', '--help'):
+        print(__doc__.strip())
+        return 0
+    if verb == 'status':
+        result = status()
+        if '--json' not in argv[1:]:
+            print('Mode: {}; screens: {}'.format(result['mode'], ', '.join(
+                o['name'] + ('' if o['enabled'] else ' (off)') for o in result['outputs'])))
+            return 0
+    elif verb == 'mode':
+        result = set_mode(argv[1]) if len(argv) > 1 else menu()
+    elif verb in ('lid-closed', 'lid-opened'):
+        result = lid(verb == 'lid-closed')
+    elif verb == 'lid' and len(argv) > 1 and argv[1] in ('closed', 'open'):
+        result = lid(argv[1] == 'closed')
+    elif verb == 'screens' and len(argv) > 1 and argv[1] in ('off', 'on'):
+        result = screens(argv[1] == 'off')
+    else:
+        print('usage: arctic-display status [--json] | mode [laptop|mirror|extend|external] | lid-closed | lid-opened'
+              ' | screens off|on', file=sys.stderr)
+        return 2
+    print(json.dumps(result))
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Failure as error:
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)

@@ -15,6 +15,7 @@ Rectangle {
         id: label
         anchors.centerIn: parent
         text: kbd.text
+        textFormat: Text.PlainText
         color: kbd.inverse ? Theme.inkInverse : Theme.inkMuted
         font.family: Theme.fontMono
         font.pixelSize: kbd.inverse ? 11 : 12

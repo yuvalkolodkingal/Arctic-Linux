@@ -47,7 +47,8 @@ MAX_BYTES = 400 * 1024
 W, H = 1280, 800          # the guest's desktop mode (virtio-gpu default)
 
 LIVE_STEPS = ["boot-menu", "boot-splash", "live-welcome", "live-desktop", "osd-volume",
-              "launcher", "launcher-calculator", "wallpapers", "get-apps", "power-menu", "keys",
+              "launcher", "launcher-calculator", "wallpapers", "get-apps", "get-apps-flathub",
+              "get-apps-console", "power-menu", "keys",
               "terminal-fetch", "tiling", "theme-winter", "zen-browser", "installer"]
 INSTALLER_SHOTS = ["installer-01-welcome", "installer-02-keyboard", "installer-03-network",
                    "installer-04-timezone", "installer-05-disk", "installer-06-encryption",
@@ -469,7 +470,7 @@ class Tour:
     def start_agent(self):
         if self.agent and self.agent.hello.is_set():
             return
-        files = {n: f"{OUT}/{n}" for n in ("packages.txt", "flathub.txt") if os.path.exists(f"{OUT}/{n}")}
+        files = {n: f"{OUT}/{n}" for n in ("packages.txt", "flathub.txt", "packages.tsv", "flathub.tsv") if os.path.exists(f"{OUT}/{n}")}
         if not self.agent:
             self.agent = Agent(self.port, files)
         cmd = (f"curl -fsSo /tmp/tour-agent.sh 10.0.2.2:{self.port}/agent && "
@@ -572,7 +573,9 @@ class Tour:
             self.prepare_session()
             for name, fn in (("osd-volume", self.osd_volume), ("launcher", self.launcher),
                              ("launcher-calculator", self.launcher_calc), ("wallpapers", self.wallpapers),
-                             ("get-apps", self.get_apps), ("power-menu", self.power_menu), ("keys", self.keys_sheet)):
+                             ("get-apps", self.get_apps), ("get-apps-flathub", self.get_apps_flathub),
+                             ("get-apps-console", self.get_apps_console),
+                             ("power-menu", self.power_menu), ("keys", self.keys_sheet)):
                 if self.want(name):
                     self.run_step(name, fn)
             if self.want_any(["terminal-fetch", "tiling", "theme-winter"]):
@@ -688,7 +691,7 @@ class Tour:
           sheet of this build stays empty when that file is missing (its FileView never falls
           back to /usr/share/arctic/keys.txt), so the shell is restarted to read it."""
         seeded = []
-        for n in ("packages.txt", "flathub.txt"):
+        for n in ("packages.txt", "flathub.txt", "packages.tsv", "flathub.tsv"):
             if os.path.exists(f"{OUT}/{n}"):
                 self.sh(f"mkdir -p ~/.cache/arctic && curl -fsS -o ~/.cache/arctic/{n} "
                         f"10.0.2.2:{self.port}/file/{n} && touch ~/.cache/arctic/{n}")
@@ -762,10 +765,11 @@ class Tour:
         self.wait_for(self.empty_desktop, "the empty desktop", 60, 3.0)
         base = self.probe()
         base = shutil.copy(base, f"{OUT}/popup-base.png")
-        self.vm.keys(chord)
         how = "shortcut"
-        if not self.wait_change(base, what, 120, thresh=0.01, every=2.0):
-            log(f"{what}: nothing after {chord}; opening it over IPC ({ipc_open})")
+        if chord:
+            self.vm.keys(chord)
+        if not chord or not self.wait_change(base, what, 120, thresh=0.01, every=2.0):
+            log(f"{what}: " + (f"nothing after {chord}; " if chord else "") + f"opening it over IPC ({ipc_open})")
             self.sh(f"arctic-shell-ipc {ipc_open}", check=False)
             how = "IPC"
             if not self.wait_change(base, what, 120, thresh=0.01, every=2.0):
@@ -807,9 +811,24 @@ class Tour:
                    ready=grid_filled, settle_timeout=600)
 
     def get_apps(self):
-        # The console's input line is at the bottom of its card (centred: x 300-1007).
-        self.popup("get-apps", "meta_l-shift-a", "Get apps", "apps install", "apps toggle",
-                   field=(640, 604), typed=E.get("GETAPPS_QUERY", "gimp"), check=(260, 90, 1020, 630))
+        # The chooser: its cards fill the 640-wide card under the bar.
+        def chooser_drawn(p):
+            return busy(p, (320, 90, 960, 330)) > 20
+        self.popup("get-apps", "meta_l-shift-a", "Get apps", "apps install", "apps toggle", ready=chooser_drawn)
+
+    def get_apps_flathub(self):
+        # Flathub apps with a search already typed (over IPC: no typing needed); the rows are
+        # under the search field of the 760-wide card.
+        def rows_drawn(p):
+            return busy(p, (260, 140, 1020, 330)) > 10
+        query = E.get("GETAPPS_QUERY", "gimp")
+        self.popup("get-apps-flathub", None, "Flathub apps", f"apps search flatpak {query}", "apps toggle",
+                   ready=rows_drawn, settle_timeout=300)
+
+    def get_apps_console(self):
+        # The Console's input line is at the bottom of its card (centred: x 260-1020).
+        self.popup("get-apps-console", None, "the Get apps console", "apps open console", "apps toggle",
+                   field=(640, 604), typed="neovim", check=(260, 90, 1020, 630))
 
     def power_menu(self):
         self.popup("power-menu", "meta_l-esc", "the power menu", "power toggle", "power toggle")

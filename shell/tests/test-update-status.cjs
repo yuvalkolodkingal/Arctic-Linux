@@ -22,7 +22,7 @@ const ready = U.parse(written);
 assert.deepEqual(plain(ready), {
     state: 'ready', packages: 12, download_mb: 84.3, staged_at: '2026-09-27T21:53:15+00:00', notify_key: '', armed: true,
     message: '12 updates will be installed the next time you restart.',
-    boot_failures: 0, install_error: '', install_failed_at: '',
+    boot_failures: 0, install_error: '', install_failed_at: '', installed_at: '',
 });
 // Missing, empty, broken or odd files mean "nothing waiting", never an exception.
 for (const bad of ['', '{', 'null', '[]', '42', '"ready"', '{"state": 3, "packages": "many", "armed": "true"}']) {
@@ -82,5 +82,8 @@ const paused = Object.assign({}, failed, { boot_failures: 2, install_error: 'see
 assert.equal(U.failureNotification(paused),
     'Installing updates failed again at the last restart. Automatic updates are paused: run arctic-update now to try again.');
 assert.equal(U.parse('{"boot_failures": "lots"}').boot_failures, 0);
+// installed_at: when scheduled updates went in (the post-update hooks run once for each).
+assert.equal(U.parse('{"installed_at": "2026-09-28T07:00:00Z"}').installed_at, '2026-09-28T07:00:00Z');
+assert.equal(U.parse('{"installed_at": 5}').installed_at, '');
 
 console.log('update status: ok');

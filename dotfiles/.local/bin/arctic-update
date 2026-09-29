@@ -10,6 +10,12 @@
 #   arctic-update metered [skip|allow]
 #   arctic-update stage                      the daily check (arctic-update-stage.timer, root)
 #   arctic-update after-transaction          dnf's post-transaction hook (arctic-update.actions)
+#   arctic-update flatpak [--auto] [--user] [--notify]
+#                                            update Flatpak apps now (--auto: the daily timers' run;
+#                                            --user: only your own installation)
+#   arctic-update firmware [--json] | firmware install    firmware updates (fwupd)
+#   arctic-update upgrade check [--json] | upgrade download
+#                                            the next Fedora release, once Arctic has it
 #
 # How it works: `dnf5 upgrade --offline` downloads the updates and tests the transaction; this
 # script then marks it ready for the next boot the way `dnf5 offline reboot` does (status
@@ -18,6 +24,9 @@
 # the updates and restarts into the updated system. Offline transactions prepared by anything
 # else (`dnf5 install --offline`, `dnf5 system-upgrade download`) are left alone. Settings:
 # /etc/arctic/update.conf. The shell's bar indicator reads /var/lib/arctic/update-status.json.
+# Flatpak apps are updated in place instead (a running app keeps its version until it restarts),
+# daily by arctic-flatpak-update.timer with the same AUTO and METERED settings; firmware is
+# fwupd's (fwupd-refresh.timer keeps its list current), installed when you ask.
 # Wiki: Updates.
 set -uo pipefail
 
@@ -35,6 +44,7 @@ R=$TEST_ROOT
 
 CONF="${ARCTIC_UPDATE_CONF:-$R/etc/arctic/update.conf}"
 STATUS_FILE="${ARCTIC_UPDATE_STATUS:-$R/var/lib/arctic/update-status.json}"
+FLATPAK_STATUS="${ARCTIC_FLATPAK_STATUS:-$R/var/lib/arctic/flatpak-status.json}"
 DATADIR=$R/usr/lib/sysimage/libdnf5/offline
 STATE="$DATADIR/offline-transaction-state.toml"
 TRANSACTION="$DATADIR/transaction.json"
@@ -70,6 +80,11 @@ Arctic Linux updates: downloaded in the background, installed the next time you 
   arctic-update auto [on|off|download-only]
                                            show or change automatic updates
   arctic-update metered [skip|allow]       downloads on metered connections
+  arctic-update flatpak [--notify]         update Flatpak apps now (yours and the system's)
+  arctic-update firmware [--json]          firmware updates fwupd offers for this computer
+  arctic-update firmware install           install them (in a terminal: fwupdmgr update)
+  arctic-update upgrade check [--json]     is the next Fedora release ready for Arctic Linux?
+  arctic-update upgrade download           download it (dnf5 system-upgrade), then restart into it
   arctic-update help
 
 Settings: /etc/arctic/update.conf
@@ -279,7 +294,7 @@ check_last_install() {
   case ${result:-none} in
     installed)
       say "The updates scheduled before the last restart were installed (or removed by hand)."
-      status_set armed=false armed_boot= armed_at= boot_failures=0 install_error= ;;
+      status_set armed=false armed_boot= armed_at= boot_failures=0 install_error= installed_at=@now ;;
     incomplete)
       install_failed "$since" ;;
     not-started)
@@ -458,7 +473,7 @@ cmd_status() {
   is_root && offline="$(offline_class)"
   helper report "${json[@]}" --channel "$(current_channel)" --offline "$offline" --busy "$(busy)" \
     --status-file "$STATUS_FILE" --conf "$CONF" --state "$STATE" --transaction "$TRANSACTION" \
-    --magic "$MAGIC" --datadir "$DATADIR"
+    --magic "$MAGIC" --datadir "$DATADIR" --flatpak-status "$FLATPAK_STATUS"
 }
 
 # The daily check (arctic-update-stage.service, as root).
@@ -768,6 +783,157 @@ cmd_after_transaction() {
   return 0
 }
 
+# Flatpak apps: `flatpak update` of the system installation (and yours, when you run it); a
+# running app keeps its version until it restarts, so nothing waits for a restart. Updating a
+# signed app needs no password (Flatpak's polkit policy). --auto is the daily timer's run
+# (root): it follows AUTO (only download-and-install-on-reboot updates apps by itself) and
+# METERED. Runtimes nothing uses any more are removed afterwards, as GNOME Software does.
+# The result goes to $FLATPAK_STATUS (root) for `status`; --notify says it in a notification.
+flatpak_commits() {  # flatpak_commits --system|--user → "app commit" lines, in C order for comm
+  flatpak list "$1" --app --columns=application,active 2>/dev/null | LC_ALL=C sort
+}
+cmd_flatpak() {
+  local auto=no notify=no only_user=no a
+  for a in "$@"; do
+    case $a in
+      --auto) auto=yes ;;
+      --notify) notify=yes ;;
+      --user) only_user=yes ;;
+      *) usage >&2; exit 2 ;;
+    esac
+  done
+  command -v flatpak >/dev/null 2>&1 || die "Flatpak isn't installed."
+  if is_live; then
+    [[ $auto == yes ]] && return 0
+    refuse_live
+  fi
+  if [[ $auto == yes ]]; then
+    is_root || [[ $only_user == yes ]] || \
+      die "flatpak --auto is what arctic-flatpak-update.service runs, as root; use: arctic-update flatpak"
+    load_config
+    if [[ $AUTO != download-and-install-on-reboot ]]; then
+      say "Automatic updates are '$AUTO' ($CONF): Flatpak apps are updated when you run arctic-update flatpak."
+      return 0
+    fi
+    if [[ $METERED == skip ]] && connection_metered; then
+      say "Metered connection: not updating Flatpak apps (METERED=allow in $CONF changes that)."
+      return 0
+    fi
+    if connection_offline; then
+      say "Not connected to the internet; the next check tries again."
+      return 0
+    fi
+  fi
+  local installs=(--system) inst before after changed=0 failed="" out
+  (( EUID != 0 )) && installs+=(--user)
+  [[ $only_user == yes ]] && installs=(--user)
+  for inst in "${installs[@]}"; do
+    [[ $inst == --user && ! -d "${HOME:-/nonexistent}/.local/share/flatpak" ]] && continue
+    before="$(flatpak_commits "$inst")"
+    if ! out="$(flatpak update "$inst" --noninteractive -y 2>&1)"; then
+      failed="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n 1)"
+      warn "flatpak update $inst failed: ${failed:-no reason given}"
+    else
+      flatpak uninstall "$inst" --unused --noninteractive -y >/dev/null 2>&1 || true
+    fi
+    after="$(flatpak_commits "$inst")"
+    changed=$(( changed + $(LC_ALL=C comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | grep -c .) ))
+  done
+  local msg state=idle
+  if [[ -n $failed ]]; then
+    state=failed msg="Updating Flatpak apps failed: $failed"
+  elif (( changed )); then
+    msg="$(plural "$changed" app) updated."
+  else
+    msg="Your Flatpak apps are up to date."
+  fi
+  say "$msg"
+  # The system installation's result is the root status file; yours (the user timer's) is kept
+  # in your home.
+  local record="$FLATPAK_STATUS"
+  [[ $only_user == yes ]] && record="${XDG_STATE_HOME:-$HOME/.local/state}/arctic/flatpak-update.json"
+  if is_root || [[ $only_user == yes ]]; then
+    helper write-status "$record" state="$state" checked_at=@now apps_updated="$changed" \
+      "message=$msg" || warn "can't write $record"
+  fi
+  if [[ $notify == yes ]] && command -v notify-send >/dev/null 2>&1; then
+    if [[ $state == failed ]]; then
+      notify-send -a "Arctic updates" -u normal "Apps weren't updated" "$failed" >/dev/null 2>&1 || true
+    else
+      notify-send -a "Arctic updates" "Apps" "$msg" >/dev/null 2>&1 || true
+    fi
+  fi
+  [[ $state == idle ]]
+}
+
+# Firmware (fwupd): what fwupd offers for this computer's devices, from its own metadata. Installing
+# runs fwupdmgr in your terminal, where it shows its progress and asks before it restarts.
+cmd_firmware() {
+  case ${1:-} in
+    ""|--json)
+      if ! command -v fwupdmgr >/dev/null 2>&1; then
+        if [[ ${1:-} == --json ]]; then printf '{"available": false, "devices": [], "error": "fwupd is not installed"}\n'
+        else say "Firmware updates need fwupd (sudo dnf install fwupd)."; fi
+        return 0
+      fi
+      local json=() out rc
+      [[ ${1:-} == --json ]] && json=(--json)
+      out="$(LC_ALL=C fwupdmgr get-updates --json --no-unreported-check --no-metadata-check 2>/dev/null)"
+      rc=$?
+      # Exit code 2: nothing to update (fwupd may print nothing then).
+      (( rc == 2 )) && [[ -z $out ]] && out='{"Devices": []}'
+      printf '%s\n' "$out" | helper firmware "${json[@]}" ;;
+    install)
+      refuse_live
+      command -v fwupdmgr >/dev/null 2>&1 || die "Firmware updates need fwupd (sudo dnf install fwupd)."
+      if [[ -n ${WAYLAND_DISPLAY:-} ]] && [[ ! -t 0 ]] && command -v arctic-open >/dev/null 2>&1; then
+        exec arctic-open terminal --hold -e fwupdmgr update
+      fi
+      exec fwupdmgr update ;;
+    *) usage >&2; exit 2 ;;
+  esac
+}
+
+# The next Fedora release: Arctic publishes its repository for a release only once that release
+# is out and Arctic works on it, so the repository answering for $releasever + 1 is the signal.
+# `download` is dnf5 system-upgrade (a snapshot is taken around it, as around every dnf
+# transaction), then `dnf5 offline reboot`, which asks before it restarts into the upgrade.
+# arctic-update itself leaves that transaction alone (it's dnf5 system-upgrade's).
+NOTES_URL="https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Release-Notes"
+current_release() {
+  local id
+  id="$(sed -n 's/^PLATFORM_ID="\{0,1\}platform:f\([0-9]*\)"\{0,1\}$/\1/p' "$R/etc/os-release" "$R/usr/lib/os-release" 2>/dev/null | head -n 1)"
+  if [[ -n $id ]]; then echo "$id"; else rpm -E %fedora 2>/dev/null; fi
+}
+cmd_upgrade() {
+  local now next repo section=arctic url available=false
+  now="$(current_release)"
+  [[ $now =~ ^[0-9]+$ ]] || die "can't tell which Fedora release this is"
+  next=$(( now + 1 ))
+  case ${1:-check} in
+    check)
+      repo="$R/usr/share/dnf5/repos.d/arctic.repo"
+      [[ "$(current_channel)" == testing ]] && { repo="$R/usr/share/dnf5/repos.d/arctic-testing.repo" section=arctic-testing; }
+      url="$(helper repomd-url "$repo" "$section" "$next" "$(uname -m)")"
+      if [[ -n $url ]] && curl -fsI --max-time 20 -o /dev/null "$url" 2>/dev/null; then available=true; fi
+      if [[ ${2:-} == --json ]]; then
+        printf '{"ok": true, "available": %s, "current": %d, "next": %d, "notes": "%s"}\n' "$available" "$now" "$next" "$NOTES_URL"
+      elif [[ $available == true ]]; then
+        say "Fedora $next is ready for Arctic Linux. Upgrade with: arctic-update upgrade download" "Release notes: $NOTES_URL"
+      else
+        say "Arctic Linux isn't ready for Fedora $next yet; you're on Fedora $now."
+      fi ;;
+    download)
+      refuse_live
+      as_root
+      say "Downloading Fedora $next (a few gigabytes). You can keep working."
+      dnf5 system-upgrade download --releasever="$next" -y || die "the download didn't work (see above)"
+      say "" "Fedora $next is downloaded. Restarting installs it; that takes a while, and the computer restarts again at the end."
+      dnf5 offline reboot ;;
+    *) usage >&2; exit 2 ;;
+  esac
+}
+
 cmd=${1:-status}
 (( $# )) && shift
 case $cmd in
@@ -780,6 +946,9 @@ case $cmd in
   metered)           cmd_metered "$@" ;;
   stage)             cmd_stage ;;
   after-transaction) cmd_after_transaction ;;
+  flatpak)           cmd_flatpak "$@" ;;
+  firmware)          cmd_firmware "$@" ;;
+  upgrade)           cmd_upgrade "$@" ;;
   help|-h|--help)    usage ;;
   *)                 usage >&2; exit 2 ;;
 esac

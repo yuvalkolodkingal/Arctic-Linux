@@ -70,7 +70,10 @@ ALIASES = {
 # Actions in dnf5's transaction.json that bring a package in (the rest: "Remove", "Replaced", …).
 INBOUND = {"Install", "Upgrade", "Downgrade", "Reinstall"}
 # Fields of the status file, and their types (anything else is kept as a string).
-STATUS_TYPES = {"packages": int, "download_mb": float, "armed": bool, "boot_failures": int}
+STATUS_TYPES = {"packages": int, "download_mb": float, "armed": bool, "boot_failures": int,
+                "apps_updated": int}
+# Flatpak apps: /var/lib/arctic/flatpak-status.json, written by `arctic-update flatpak` (root).
+FLATPAK_STATUS = "/var/lib/arctic/flatpak-status.json"
 STATES = ("idle", "checking", "downloading", "ready", "failed")
 
 
@@ -378,6 +381,23 @@ def channel_from_repos(text):
     return "none"
 
 
+def repomd_url(text, section, releasever, basearch):
+    """The repomd.xml URL of a repository section of a .repo file for another release (the
+    Fedora upgrade check), or "" when the section has no baseurl."""
+    current, base = None, ""
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+        elif current == section and line.split("=", 1)[0].strip() == "baseurl" and "=" in line:
+            base = line.split("=", 1)[1].strip().split()[0] if line.split("=", 1)[1].strip() else ""
+            break
+    if not base.startswith("https://") and not base.startswith("http://"):
+        return ""
+    base = base.replace("$releasever", str(releasever)).replace("$basearch", basearch)
+    return base.rstrip("/") + "/repodata/repomd.xml"
+
+
 # ---- status file ---------------------------------------------------------------------------
 
 def now_iso():
@@ -546,6 +566,48 @@ def build_report(status_file, settings, state, armed, rpms, channel, offline="",
     return report
 
 
+def apps_report(flatpak_status):
+    """The Flatpak half of the report: the last `arctic-update flatpak` run (the daily timer's
+    or yours), or None when there was none yet."""
+    f = flatpak_status if isinstance(flatpak_status, dict) else {}
+    if not f.get("checked_at"):
+        return None
+    return {"state": f.get("state") if f.get("state") in ("idle", "failed") else "idle",
+            "checked_at": f.get("checked_at"), "updated": f.get("apps_updated") or 0,
+            "message": f.get("message") or ""}
+
+
+def parse_firmware(text):
+    """`fwupdmgr get-updates --json` → {"available", "devices": [{name, vendor, version, update,
+    summary, reboot}], "error"}. fwupd answers {"Devices": [...]} (an empty list, or a plain
+    sentence with exit code 2, when there's nothing to update) and {"Error": {...}} when its
+    daemon can't be reached."""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        data = None
+    if not isinstance(data, dict):
+        nothing = "no updat" in str(text or "").lower() or "no updatable" in str(text or "").lower()
+        return {"available": nothing, "devices": [], "error": "" if nothing else printable(text)[:200]}
+    if "Error" in data:
+        error = data["Error"] if isinstance(data["Error"], dict) else {}
+        return {"available": False, "devices": [], "error": printable(str(error.get("Message", "")))[:200]}
+    devices = []
+    for device in data.get("Devices") or []:
+        releases = device.get("Releases") or []
+        if not isinstance(device, dict) or not releases:
+            continue
+        newest = releases[0]
+        flags = device.get("Flags") or []
+        devices.append({"name": printable(str(device.get("Name", "")))[:120],
+                        "vendor": printable(str(device.get("Vendor", "")))[:80],
+                        "version": printable(str(device.get("Version", "")))[:40],
+                        "update": printable(str(newest.get("Version", "")))[:40],
+                        "summary": printable(str(newest.get("Summary", "")))[:200],
+                        "reboot": any(f in flags for f in ("needs-reboot", "needs-shutdown"))})
+    return {"available": True, "devices": devices, "error": ""}
+
+
 def held_message(state, cmd):
     if state == "transaction-incomplete":
         return (f"An offline transaction prepared with '{cmd}' didn't finish at a restart (dnf5 offline log "
@@ -602,6 +664,11 @@ def format_report(r):
         rows.append(("Problem", r["message"] or "The last check failed."))
     else:
         rows.append(("Waiting", r["message"] or "Nothing: the system is up to date."))
+    apps = r.get("apps")
+    if apps:
+        done = (f"{plural(apps['updated'], 'app')} updated" if apps["updated"] else "all up to date")
+        rows.append(("Flatpak apps", apps["message"] if apps["state"] == "failed" and apps["message"]
+                     else f"{done} ({when(apps['checked_at'])})"))
     if r.get("boot_failures") and state != "failed":
         when_failed = when(r.get("install_failed_at"))
         rows.append(("Last restart", f"installing the updates failed ({when_failed})"
@@ -654,6 +721,10 @@ def main(argv=None):
     c.add_argument("--transaction", default=TRANSACTION)
     c.add_argument("--magic", default=MAGIC)
     c.add_argument("--datadir", default=DATADIR)
+    c.add_argument("--flatpak-status", default=FLATPAK_STATUS)
+    c = sub.add_parser("firmware"); c.add_argument("--json", action="store_true")
+    c = sub.add_parser("repomd-url"); c.add_argument("file"); c.add_argument("section")
+    c.add_argument("releasever"); c.add_argument("basearch")
     a = p.parse_args(argv)
 
     if a.cmd == "config":
@@ -710,7 +781,23 @@ def main(argv=None):
         report = build_report(read_json(a.status_file), settings, state,
                               is_armed(a.magic, a.datadir), load_transaction(a.transaction),
                               a.channel, a.offline, a.busy == "yes", table=table)
+        report["apps"] = apps_report(read_json(a.flatpak_status))
         print(json.dumps(report, indent=2) if a.json else format_report(report))
+    elif a.cmd == "repomd-url":
+        print(repomd_url(read_text(a.file), a.section, a.releasever, a.basearch))
+    elif a.cmd == "firmware":
+        # fwupdmgr's JSON on stdin (arctic-update firmware).
+        fw = parse_firmware(sys.stdin.read())
+        if a.json:
+            print(json.dumps(fw))
+        elif not fw["available"]:
+            print("Firmware updates: fwupd isn't available" + (f" ({fw['error']})" if fw["error"] else "") + ".")
+        elif not fw["devices"]:
+            print("Firmware: up to date.")
+        else:
+            for d in fw["devices"]:
+                print(f"{d['name']}: {d['version']} → {d['update']}" + (f" ({d['summary']})" if d["summary"] else ""))
+            print("Install with: arctic-update firmware install")
     return 0
 
 

@@ -129,6 +129,28 @@ font_size 12
 background_opacity 0.95
 ```
 
+### The code font
+
+Settings › Appearance › **Code font** (or the [command menu](Command-Menu)'s Style › Code font)
+picks any monospace font installed. `arctic-font` changes it in kitty (which reloads), foot, and
+alacritty, sets GTK's monospace font (the family; GTK sizes it with the text size), and the
+shell's own code text follows. It only changes a line or setting that still holds what Arctic
+wrote there, so a font you set yourself stays, and it says so:
+
+```sh
+arctic-font list                 # monospace fonts installed
+arctic-font set "Fira Code"
+arctic-font size 12              # the terminals' size (arctic-font size reset: 10.5)
+```
+
+### Icons in the terminal
+
+yazi, `eza --icons` and many prompts draw icons from the Nerd Font symbols. Arctic installs them
+(the `arctic-fonts-symbols` package: Nerd Fonts' "Symbols Only" fonts) and puts them after the code
+font, so whichever code font you pick, letters come from it and the icons from the symbols; you
+don't need a patched "Nerd Font". Settings › Appearance › **Icons in the terminal** says whether
+they are installed. A patched Nerd Font you install yourself shows up in the code font list too.
+
 kitty's own shortcuts work as usual; for example `Ctrl + Shift + T` opens a new tab and
 `Ctrl + Shift + Enter` a new window inside kitty. See kitty's documentation for the full list.
 
@@ -174,6 +196,23 @@ sudo usermod --shell /bin/bash "$USER"         # bash
 ```
 
 Install fish first with `sudo dnf install fish` if you didn't pick it in the installer.
+
+## The drop-down terminal
+
+`Super + Alt + Enter` shows a terminal over your windows, 80 % of the screen wide; press it again
+to hide it (what runs in it keeps running). It's your terminal with the app id
+`org.arcticlinux.Dropdown`: kitty, foot, Alacritty or Ghostty. If yours can't set one (Konsole),
+the first of those that is installed is used.
+
+## SSH keys
+
+Arctic runs an SSH agent for your session (`gcr-ssh-agent`): the first time a key is used (a
+`git push`, `ssh server`), a dialog asks for its passphrase, and the key stays unlocked until you
+log out. `ssh-add -l` lists the keys it holds. `SSH_AUTH_SOCK` points at
+`$XDG_RUNTIME_DIR/gcr/ssh` (`/etc/profile.d/arctic-ssh-agent.sh`); an agent you start yourself
+wins. To turn it off: `systemctl --user disable --now gcr-ssh-agent.socket`.
+
+To log in to this computer from another one, see **Settings → Sharing → Remote login**.
 
 ## Other terminals
 

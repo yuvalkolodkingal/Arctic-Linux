@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""arctic-remind — reminders: a notification when it's time (Super + Ctrl + R).
+
+  arctic-remind WHEN [WHAT…]     e.g.  10m tea · 1h 30m stretch · 17:30 call Ana · 5pm leave
+                                 (a bare number is minutes; "in", "at", "me" and "to" may be said)
+  arctic-remind --ask            ask when and what: the launcher with "remind " typed, else fuzzel
+  arctic-remind list [--json]    the reminders still to come
+  arctic-remind pending          exit 0 when there is one (for the command menu)
+  arctic-remind cancel ID|all
+  arctic-remind fire ID          what the timer runs: the notification, with "Again in 10 minutes"
+
+Each reminder is a transient systemd user timer (arctic-reminder-ID) on the wall clock, so one
+set before the laptop sleeps still comes, late, after it wakes. What it says is kept in
+~/.local/state/arctic/reminders.json, never on a command line. Timers don't survive a restart.
+"""
+import json
+import os
+import re
+import secrets
+import shutil
+import subprocess
+import sys
+import time
+from datetime import datetime, timedelta
+
+HOME = os.path.expanduser("~")
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "arctic")
+FILE = os.path.join(STATE, "reminders.json")
+SNOOZE = 600
+UNITS = {"s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1, "m": 60, "min": 60, "mins": 60, "minute": 60,
+         "minutes": 60, "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600, "d": 86400, "day": 86400,
+         "days": 86400}
+TIME_RE = re.compile(r"^(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?=\s|$)", re.I)
+PART_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)?(?![a-z])\s*(?:and\s+)?",
+                     re.I)
+
+
+class Error(Exception):
+    pass
+
+
+def spell(seconds):
+    parts = []
+    for size, name in ((86400, "day"), (3600, "hour"), (60, "minute"), (1, "second")):
+        n = seconds // size
+        if n:
+            parts.append("{} {}{}".format(n, name, "" if n == 1 else "s"))
+            seconds -= n * size
+    return " ".join(parts)
+
+
+def parse(text):
+    """The launcher's grammar (LauncherSearch.parseReminder): a dict with seconds or hour and
+    minute, text and when; None when it can't tell when."""
+    rest = re.sub(r"^me\s+", "", text.strip(), flags=re.I)
+    out = {}
+    m = TIME_RE.match(rest)
+    if m and (m.group(2) is not None or m.group(3) is not None or re.match(r"^at\s", rest, re.I)):
+        hour, minute = int(m.group(1)), int(m.group(2) or 0)
+        half = (m.group(3) or "").lower()
+        if half and not 1 <= hour <= 12:
+            return None
+        if half == "pm" and hour < 12:
+            hour += 12
+        if half == "am" and hour == 12:
+            hour = 0
+        if hour > 23 or minute > 59:
+            return None
+        rest = rest[m.end():]
+        out.update(hour=hour, minute=minute, when="at {:02d}:{:02d}".format(hour, minute))
+    else:
+        rest = re.sub(r"^in\s+", "", rest, flags=re.I)
+        seconds = 0.0
+        while True:
+            m = PART_RE.match(rest)
+            if not m:
+                break
+            seconds += float(m.group(1)) * (UNITS[m.group(2).lower()] if m.group(2) else 60)
+            rest = rest[m.end():]
+            if not m.group(2):
+                break
+        seconds = round(seconds)
+        if not 1 <= seconds <= 30 * 86400:
+            return None
+        out.update(seconds=seconds, when="in " + spell(seconds))
+    out["text"] = re.sub(r"^to\s+", "", rest.strip(), flags=re.I).strip() or "Reminder"
+    return out
+
+
+def due_time(parsed, now=None):
+    """When, as a local datetime: a time of day is today, or tomorrow when it has passed."""
+    now = now or datetime.now()
+    if "seconds" in parsed:
+        return now + timedelta(seconds=parsed["seconds"])
+    due = now.replace(hour=parsed["hour"], minute=parsed["minute"], second=0, microsecond=0)
+    return due if due > now else due + timedelta(days=1)
+
+
+# ---- state ----------------------------------------------------------------------------------
+
+def load():
+    try:
+        with open(FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        items = data.get("reminders", []) if isinstance(data, dict) else []
+    except (OSError, ValueError):
+        items = []
+    return [r for r in items if isinstance(r, dict) and isinstance(r.get("id"), str) and isinstance(r.get("due"), (int, float))]
+
+
+def save(items):
+    os.makedirs(STATE, exist_ok=True)
+    tmp = FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"reminders": items}, f, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, FILE)
+
+
+def upcoming(items, now=None):
+    now = time.time() if now is None else now
+    return sorted((r for r in items if r["due"] > now - 60), key=lambda r: r["due"])
+
+
+def notify(title, body, *extra):
+    if shutil.which("notify-send"):
+        subprocess.run(["notify-send", "-a", "Reminders", "-i", "alarm-symbolic"] + list(extra) + [title, body],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ---- commands -------------------------------------------------------------------------------
+
+def schedule(text_words):
+    parsed = parse(" ".join(text_words))
+    if parsed is None:
+        raise Error("Say when first: 10m, 1h 30m, 17:30 or 5pm, then what to remind you of.")
+    add(parsed)
+
+
+def add(parsed):
+    """Set the reminder parse() describes (a timer that runs `fire`)."""
+    if not shutil.which("systemd-run"):
+        raise Error("Reminders need systemd-run (systemd), which isn't here.")
+    due = due_time(parsed)
+    ident = secrets.token_hex(4)
+    items = upcoming(load())
+    items.append({"id": ident, "text": parsed["text"][:200], "due": int(due.timestamp())})
+    save(items)
+    unit = "arctic-reminder-" + ident
+    result = subprocess.run(["systemd-run", "--user", "--quiet", "--unit", unit, "--collect",
+                             "--description", "Arctic Linux reminder", "--on-calendar", due.strftime("%Y-%m-%d %H:%M:%S"),
+                             "--timer-property", "AccuracySec=1s",
+                             os.path.realpath(__file__), "fire", ident],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    if result.returncode != 0:
+        save([r for r in load() if r["id"] != ident])
+        raise Error("The reminder couldn't be set: " + (result.stderr.strip().splitlines() or ["systemd-run failed"])[-1])
+    # A notice on screen (arctic-osd; a notification without the shell).
+    if shutil.which("arctic-osd"):
+        subprocess.run(["arctic-osd", "notice", "clock", "Reminder set for " + due.strftime("%H:%M"), parsed["text"]],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        notify("Reminder set", "{} ({}): {}".format(parsed["when"].capitalize(), due.strftime("%H:%M"), parsed["text"]),
+               "-t", "4000", "-u", "low")
+    print(json.dumps({"ok": True, "id": ident, "due": int(due.timestamp()), "text": parsed["text"], "when": parsed["when"]}))
+
+
+def fire(ident):
+    items = load()
+    mine = [r for r in items if r["id"] == ident]
+    save([r for r in items if r["id"] != ident])
+    if not mine:
+        return
+    text = mine[0]["text"]
+    if not shutil.which("notify-send"):
+        return
+    # Waits for the notification: "Again in 10 minutes" sets it once more.
+    result = subprocess.run(["notify-send", "-a", "Reminders", "-i", "alarm-symbolic", "-u", "critical", "-w",
+                             "-A", "snooze=Again in 10 minutes", "Reminder", text],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    if result.stdout.strip() == "snooze":
+        # The text as it is: parsed again, "2 pills" would read as 2 more minutes and "pills".
+        add({"seconds": SNOOZE, "when": "in " + spell(SNOOZE), "text": text})
+
+
+def cancel(which):
+    items = load()
+    gone = items if which == "all" else [r for r in items if r["id"] == which]
+    if not gone:
+        raise Error("There's no reminder " + which + ".")
+    for r in gone:
+        subprocess.run(["systemctl", "--user", "stop", "arctic-reminder-{}.timer".format(r["id"])],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    save([r for r in items if r not in gone])
+    print(json.dumps({"ok": True, "cancelled": len(gone)}))
+
+
+def ask():
+    if shutil.which("arctic-shell-ipc") and subprocess.run(["arctic-shell-ipc", "launcher", "search", "remind "],
+                                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        return
+    if not shutil.which("fuzzel"):
+        raise Error("There's nothing to ask with: neither the Arctic shell nor fuzzel is running.")
+    answer = subprocess.run(["fuzzel", "--dmenu", "--prompt", "Remind me  ", "--placeholder", "10m tea · 17:30 call Ana",
+                             "--lines", "0"], input="", capture_output=True, text=True)
+    words = answer.stdout.strip()
+    if answer.returncode == 0 and words:
+        try:
+            schedule([words])
+        except Error as e:
+            notify("No reminder set", str(e))
+
+
+def main(argv):
+    args = list(argv)
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0 if args else 2
+    verb = args[0]
+    if verb == "--":
+        return main(args[1:]) if len(args) > 1 else 2
+    if verb == "--ask":
+        ask()
+    elif verb == "list":
+        items = upcoming(load())
+        if "--json" in args:
+            print(json.dumps({"ok": True, "reminders": items}))
+        else:
+            for r in items:
+                print("{}  {}  {}".format(r["id"], datetime.fromtimestamp(r["due"]).strftime("%a %H:%M"), r["text"]))
+    elif verb == "pending":
+        return 0 if upcoming(load()) else 1
+    elif verb == "cancel" and len(args) == 2:
+        cancel(args[1])
+    elif verb == "fire" and len(args) == 2:
+        fire(args[1])
+    else:
+        schedule(args)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Error as e:
+        print(json.dumps({"ok": False, "error": str(e)}))
+        sys.exit(1)

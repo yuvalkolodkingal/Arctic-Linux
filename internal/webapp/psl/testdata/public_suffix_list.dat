@@ -1,0 +1,58 @@
+// A small excerpt of the Public Suffix List (https://publicsuffix.org/list/), in its format,
+// for tests that must not depend on the system copy. This Source Code Form is subject to the
+// terms of the Mozilla Public License, v. 2.0.
+
+// ===BEGIN ICANN DOMAINS===
+
+// com : https://www.iana.org/domains/root/db
+com
+
+// org
+org
+
+// net
+net
+
+// il
+il
+co.il
+org.il
+
+// io
+io
+
+// jp: wildcards and exceptions
+jp
+*.kawasaki.jp
+!city.kawasaki.jp
+
+// ck
+*.ck
+!www.ck
+
+// uk
+uk
+co.uk
+ac.uk
+
+// hk: internationalised rules are in Unicode
+hk
+公司.hk
+
+// arpa
+arpa
+home.arpa
+
+// ===END ICANN DOMAINS===
+// ===BEGIN PRIVATE DOMAINS===
+
+// GitHub, Inc.
+github.io
+
+// Cloudflare
+pages.dev
+
+// Blogspot
+blogspot.com   trailing words on a line are ignored
+
+// ===END PRIVATE DOMAINS===

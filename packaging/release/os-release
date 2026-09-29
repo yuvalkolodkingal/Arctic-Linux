@@ -1,13 +1,13 @@
 NAME="Arctic Linux"
-VERSION="0.2 (Fedora 44 base)"
+VERSION="0.3 (Fedora 44 base)"
 ID=arctic
 ID_LIKE=fedora
-VERSION_ID=0.2
+VERSION_ID=0.3
 PLATFORM_ID="platform:f44"
-PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)"
+PRETTY_NAME="Arctic Linux 0.3 (Fedora 44 base)"
 ANSI_COLOR="0;38;2;239;166;55"
 LOGO=arctic-logo-icon
-CPE_NAME="cpe:/o:arcticlinux:arctic_linux:0.2"
+CPE_NAME="cpe:/o:arcticlinux:arctic_linux:0.3"
 DEFAULT_HOSTNAME="arctic"
 HOME_URL="https://github.com/yuvalkolodkingal/Arctic-Linux"
 DOCUMENTATION_URL="https://github.com/yuvalkolodkingal/Arctic-Linux/tree/main/docs"

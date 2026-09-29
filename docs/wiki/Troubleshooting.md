@@ -239,8 +239,13 @@ own in `~/.config/mango/` is the cause, move `user.conf` away and press `Super +
 
 ### No network
 
-- Click the network icon on the bar to pick a Wi-Fi network, or right-click it for the connection
-  editor.
+- Click the network icon on the bar (`Super + Ctrl + W`) to pick a Wi-Fi network; see
+  [Menus on the bar](Bar-Menus#network-and-wi-fi-super--ctrl--w). **Edit connections…** at the
+  bottom opens the connection editor.
+- **"“Home” needs its Wi-Fi password again":** the saved password stopped working (the router's
+  password changed). Click **Enter password** in the notification and type the new one.
+- **A company or school network (eduroam) won't join:** check the sign-in method with your IT
+  department; networks that need a certificate of your own are set up in **Edit connections…**.
 - From a terminal:
 
   ```sh
@@ -277,7 +282,7 @@ instead.
   sudo systemctl start arctic-firstboot
   ```
 
-- **`Super + W` (or E, F) says "No app set":** the app for that role isn't installed. Install one,
+- **`Super + B` (or E, F) says "No app set":** the app for that role isn't installed. Install one,
   or set another in `~/.config/arctic/default-apps` (see
   [Themes and customisation](Themes-and-Customisation#default-apps)).
 
@@ -306,10 +311,16 @@ moved or restored `/nix`, restore the labels with `sudo restorecon -R /nix`.
 
 ### Sound, Bluetooth or brightness
 
-- **Sound:** click the volume icon on the bar for the volume mixer, or pick the output device in
-  [Settings](Settings#sound), **Sound**.
+- **Sound:** click the volume icon on the bar for the sound menu: where sound plays, the
+  microphone and a volume per app. A device's `…` (or the `›` on its slider) switches between
+  headphones and speakers and picks the profile (for example a headset's microphone mode).
 - **Bluetooth:** the Bluetooth icon only appears when the computer has a Bluetooth adapter. Click it
-  for the Bluetooth manager, or use [Settings](Settings#bluetooth), **Bluetooth**.
+  for the Bluetooth menu. **Pair a new device** shows codes in Arctic's own dialog; if no dialog
+  appears while pairing, another Bluetooth program (such as Blueman's applet) took over pairing:
+  close it, open the menu's pairing page again and retry.
+- **The "Mic" or "Camera" indicator doesn't show for an app:** it shows for apps that use the
+  microphone or camera through PipeWire (browsers, OBS, video calls). Apps that open the camera
+  device directly aren't seen.
 - **Broadcom Wi-Fi:** some Broadcom cards only work with the driver the installer adds; see
   [Drivers](Drivers#wi-fi-doesnt-work-on-a-broadcom-card).
 - **Brightness keys:** these change the built-in screen; external monitors usually have their own
@@ -320,7 +331,36 @@ moved or restored `/nix`, restore the labels with `sudo restorecon -R /nix`.
 The screen locks after 5 minutes without use and the computer suspends after 15. Change the
 times (or turn them off) in [Settings](Settings#power-and-lock) (`Super + S`), **Power and lock**.
 They're saved in `~/.config/arctic/idle.conf` (`lock_after=` and `suspend_after=`, in seconds, 0
-for never) and apply at once.
+for never) and apply at once. The same file holds `lock_after_battery=` and
+`suspend_after_battery=` (on battery), `dim_before_lock=` (seconds; 0 turns dimming off) and
+`screen_off_after=` (seconds after the lock; 0 leaves the screens on).
+
+The screens turn off a minute after the lock; a key or the mouse turns them on again. If a
+screen doesn't come back on your hardware, set **Turn the screens off after locking** to
+**Never** and tell us in an issue.
+
+### A shortcut I made doesn't work
+
+- **Settings > Shortcuts says "Doesn't run":** Arctic uses those keys now (0.3 moved the browser to
+  `Super + B` and added `Super + Shift + S`, `Alt + Tab` and others), and Arctic's shortcuts come
+  first. Remove yours and add it on another key.
+- **It holds Alt and Shift:** with two keyboard layouts, `Alt + Shift` switches the layout, so such
+  a shortcut switches it too. Pick other keys, or another switch key in Settings.
+- **You replaced `binds.conf` with your own copy:** it doesn't get Arctic's new shortcuts. Compare
+  it with `/usr/share/arctic/mango/binds.conf`.
+
+### Screen sharing shows no list of screens
+
+The list comes from `/etc/xdg/xdg-desktop-portal-wlr/mango`, which xdg-desktop-portal-wlr reads in
+Mango sessions. Log out and back in after installing Arctic's update (the portal reads its
+settings when it starts), or run `systemctl --user restart xdg-desktop-portal-wlr`.
+
+### Recording won't start
+
+`Super + Alt + R` tries your graphics card's video encoders, then one on the processor. What
+went wrong is in `$XDG_RUNTIME_DIR/arctic/record.log` (`/run/user/1000/arctic/record.log`), and
+`~/.cache/arctic/record-codec` remembers the encoder that worked (delete it to try them all
+again). `wf-recorder` must be installed.
 
 ### A setting doesn't stick
 

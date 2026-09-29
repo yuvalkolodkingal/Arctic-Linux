@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# arctic-emoji — the emoji picker (Super+Ctrl+E): the shell's picker, or without the shell a
+# fuzzel list (search by name). The emoji is typed into the window you were in (wtype), or
+# copied when wtype isn't installed.
+arctic-shell-ipc emoji toggle >/dev/null 2>&1 && exit 0
+if pkill -x fuzzel 2>/dev/null; then exit 0; fi
+set -uo pipefail
+index="$(arctic-shell --path 2>/dev/null)/scripts/emoji-index.py"
+[[ -f "$index" ]] || index=/usr/share/arctic/shell/scripts/emoji-index.py
+pick="$(python3 "$index" --lines | fuzzel --dmenu --prompt "Emoji  " | cut -f1)" || exit 0
+[[ -n "$pick" ]] || exit 0
+python3 "$index" --used "$pick"
+sleep 0.15    # let fuzzel's layer go, so the keys reach your window
+wtype -- "$pick" 2>/dev/null || wl-copy -- "$pick"

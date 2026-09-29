@@ -13,6 +13,7 @@ ToolTip {
     rightPadding: Theme.space2
     contentItem: Text {
         text: tip.text
+        textFormat: Text.PlainText
         color: Theme.inkInverse
         font.family: Theme.fontSans
         font.pixelSize: 12

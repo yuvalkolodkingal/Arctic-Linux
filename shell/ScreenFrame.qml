@@ -7,9 +7,10 @@ import Quickshell.Wayland
 // and a `line` hairline, so the desktop reads as one framed sheet (the original shell's
 // identity). Amber stays reserved for focus and selection.
 //
-// It reserves its width on the left, right and bottom (the bar reserves the top band), so
-// Mango lays windows out inside it and keeps its own 8px gap; the inner radius is the window
-// radius plus that gap, so window corners sit concentric with the frame's.
+// It reserves its width on the left, right and bottom (the bar reserves the top band; while the
+// bar is hidden the frame reserves the top too and reaches the screen's edge), so Mango lays
+// windows out inside it and keeps its own 8px gap; the inner radius is the window radius plus
+// that gap, so window corners sit concentric with the frame's.
 // Turn it off with {"frame": false} in ~/.config/arctic/shell.json.
 Scope {
     id: root
@@ -20,7 +21,7 @@ Scope {
         screen: root.modelData
         visible: Theme.frameWidth > 0
         anchors { top: true; bottom: true; left: true; right: true }
-        margins.top: Theme.barHeight
+        margins.top: Theme.topInset
         color: 'transparent'
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Bottom
@@ -87,4 +88,8 @@ Scope {
     Reserve { anchors { left: true; top: true; bottom: true } }
     Reserve { anchors { right: true; top: true; bottom: true } }
     Reserve { anchors { bottom: true; left: true; right: true } }
+    Reserve {
+        anchors { top: true; left: true; right: true }
+        visible: Theme.frameWidth > 0 && Session.barHidden
+    }
 }

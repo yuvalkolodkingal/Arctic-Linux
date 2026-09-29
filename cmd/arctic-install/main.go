@@ -541,6 +541,7 @@ func (u *unattended) follow(events <-chan any) int {
 func cmdCatalog(args []string, out io.Writer) int {
 	fs := flag.NewFlagSet("catalog", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "print JSON (every module with its install methods)")
+	featured := fs.Bool("featured", false, "print Get apps' Arctic picks (shell/assets/featured.json)")
 	dir := fs.String("catalog", "", "catalog directory")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -548,6 +549,14 @@ func cmdCatalog(args []string, out io.Writer) int {
 	cat, where, err := daemon.LoadCatalog(*dir)
 	if err != nil {
 		return fail("catalog %s: %v", where, err)
+	}
+	if *featured {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", " ")
+		if err := enc.Encode(cat.Featured()); err != nil {
+			return fail("catalog: %v", err)
+		}
+		return 0
 	}
 	if *asJSON {
 		mods := make([]*catalog.Module, 0, len(cat.Order))

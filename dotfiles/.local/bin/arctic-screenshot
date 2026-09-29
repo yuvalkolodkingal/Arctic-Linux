@@ -1,40 +1,212 @@
 #!/usr/bin/env bash
-# arctic-screenshot — Print (area), Shift+Print (whole screen), Super+Print (focused window).
-# Saves to ~/Pictures/Screenshots and copies the image to the clipboard.
+# arctic-screenshot — Print or Super+Shift+S (an area: drag, or click a window), Shift+Print (this
+# screen), Super+Print (the focused window), Ctrl+Print (an area, to the clipboard only).
+# Saves to ~/Pictures/Screenshots and copies the image. The notification's buttons open it, show
+# it in Files, edit it (satty when installed, else swappy) or move it to the trash.
+#
+#   arctic-screenshot area   [--copy-only] [--edit]
+#   arctic-screenshot screen [--all] [--delay SECONDS] [--copy-only] [--edit]
+#   arctic-screenshot window [--pick] [--delay SECONDS] [--copy-only] [--edit]
+#   arctic-screenshot text | qr      copy the text (OCR) or the QR code in an area (arctic-ocr)
+#   arctic-screenshot edit FILE      edit a screenshot; the edit is saved next to it and copied
+# --all: every monitor in one picture; --pick: click the window (else the focused one);
+# --delay: wait 1 to 10 seconds first (no countdown: it would be in the picture).
+# Pressing a capture key again while an area is being selected cancels the selection. With the
+# shell running, the screen freezes while you select an area (menus and tooltips stay as they
+# were) and the screenshot is cut from that picture.
 set -uo pipefail
 
-dir="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots"
-mkdir -p "$dir"
-file="$dir/Screenshot $(date '+%Y-%m-%d %H.%M.%S').png"
+usage() { sed -n '7,13p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
-case "${1:-area}" in
-  area)
-    geom="$(slurp -d 2>/dev/null)" || exit 0
-    grim -g "$geom" "$file" ;;
-  screen)
-    grim "$file" ;;
-  window)
-    geom="$(mmsg get focusing-client 2>/dev/null | python3 -c '
-import json, sys
-def find(o):
-    if isinstance(o, dict):
-        if all(k in o for k in ("x", "y", "width", "height")):
-            return o
-        for v in o.values():
-            r = find(v)
-            if r: return r
-    elif isinstance(o, list):
-        for v in o:
-            r = find(v)
-            if r: return r
-c = find(json.load(sys.stdin))
-if c and c["width"] > 0:
-    print("{},{} {}x{}".format(int(c["x"]), int(c["y"]), int(c["width"]), int(c["height"])))
-' 2>/dev/null)"
-    if [[ -n "$geom" ]]; then grim -g "$geom" "$file"; else grim "$file"; fi ;;
-  *) echo "usage: arctic-screenshot area|screen|window" >&2; exit 2 ;;
+mode="${1:-area}"
+(( $# )) && shift
+case "$mode" in
+  text) exec arctic-ocr "$@" ;;
+  qr)   exec arctic-ocr --qr "$@" ;;
 esac
 
-[[ -f "$file" ]] || exit 1
+dir="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots"
+run="${XDG_RUNTIME_DIR:-/tmp}/arctic/capture"
+
+editor() {   # the screenshot editor, if one is installed
+  if command -v satty >/dev/null 2>&1; then echo satty
+  elif command -v swappy >/dev/null 2>&1; then echo swappy; fi
+}
+
+show_in_files() {   # select the file in the file manager, else open its folder
+  local uri
+  uri="$(arctic-capture uri "$1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["uri"])' 2>/dev/null)"
+  [[ -n "$uri" ]] && gdbus call --session --timeout 2 --dest org.freedesktop.FileManager1 \
+    --object-path /org/freedesktop/FileManager1 --method org.freedesktop.FileManager1.ShowItems \
+    "['$uri']" "" >/dev/null 2>&1 && return
+  gio open "$(dirname "$1")" >/dev/null 2>&1
+}
+
+notify_saved() {   # notify_saved FILE SUMMARY — waits for a button, so it runs detached
+  local file="$1" action args=(-a Screenshot -i "$1" -h "string:image-path:$1" -A "default=Open")
+  [[ -n "$(editor)" ]] && args+=(-A "edit=Edit")
+  args+=(-A "folder=Show in Files" -A "trash=Move to Trash")
+  action="$(notify-send "${args[@]}" "$2" "Copied to the clipboard · ${file/#$HOME/\~}" 2>/dev/null)" || return 0
+  case "$action" in
+    default) gio open "$file" >/dev/null 2>&1 ;;
+    edit)    "$0" edit "$file" ;;
+    folder)  show_in_files "$file" ;;
+    trash)   gio trash -- "$file" 2>/dev/null ;;
+  esac
+}
+
+notify_copied() {   # notify_copied TMPFILE — clipboard only; Save keeps the picture
+  local action
+  action="$(notify-send -a Screenshot -i "$1" -h "string:image-path:$1" -A "save=Save" \
+    "Screenshot copied" "It’s on the clipboard, not saved." 2>/dev/null)"
+  if [[ "$action" == save ]]; then
+    mkdir -p "$dir"
+    local file; file="$(target)"
+    mv -- "$1" "$file" && notify_saved "$file" "Screenshot saved"
+  fi
+  rm -f -- "$1"
+}
+
+detach() { ( exec 9>&-; "$@" ) </dev/null >/dev/null 2>&1 & disown; }
+
+target() {   # a new file name in the Screenshots folder: " (2)", " (3)"… on a clash
+  local base; base="$dir/Screenshot $(date '+%Y-%m-%d %H.%M.%S')"
+  local file="$base.png" n=2
+  while [[ -e "$file" ]]; do file="$base ($n).png"; n=$(( n + 1 )); done
+  printf '%s\n' "$file"
+}
+
+fail() { notify-send -a Screenshot -i dialog-error "Couldn’t take the screenshot" "$1" 2>/dev/null; exit 1; }
+
+json() {   # json KEY < {"ok":…} — one field of arctic-capture's answer ("" when missing)
+  python3 -c 'import json,sys
+try: v = json.load(sys.stdin).get(sys.argv[1], "")
+except ValueError: v = ""
+print(v if not isinstance(v, bool) else int(v))' "$1"
+}
+
+if [[ "$mode" == edit ]]; then
+  file="${1:-}"
+  [[ -f "$file" ]] || usage
+  ed="$(editor)"
+  [[ -n "$ed" ]] || fail "No screenshot editor is installed (swappy or satty)."
+  out="${file%.png} (edited).png"
+  n=2
+  while [[ -e "$out" ]]; do out="${file%.png} (edited $n).png"; n=$(( n + 1 )); done
+  if [[ "$ed" == satty ]]; then
+    satty --filename "$file" --output-filename "$out" --early-exit >/dev/null 2>&1
+  else
+    swappy -f "$file" -o "$out" >/dev/null 2>&1
+  fi
+  # Closing the editor without drawing anything leaves no copy behind.
+  if [[ -s "$out" ]] && ! arctic-capture same "$file" "$out" >/dev/null 2>&1; then
+    wl-copy --type image/png < "$out"
+    notify_saved "$out" "Edited screenshot saved"
+  else
+    rm -f -- "$out"
+  fi
+  exit 0
+fi
+
+all=0 copy_only=0 edit=0 pick=0 delay=0
+while (( $# )); do
+  case "$1" in
+    --all) all=1 ;;
+    --copy-only) copy_only=1 ;;
+    --edit) edit=1 ;;
+    --pick) pick=1 ;;
+    --delay) delay="${2:-}"; [[ "$delay" =~ ^([1-9]|10)$ ]] || usage; shift ;;
+    *) usage ;;
+  esac
+  shift
+done
+case "$mode" in area|screen|window) ;; *) usage ;; esac
+
+# One selection at a time: the same key again cancels it (slurp has no other way to close).
+mkdir -p "$run" && chmod 700 "$run"
+exec 9>"$run.lock"
+if ! flock -n 9; then pkill -x slurp; exit 0; fi
+
+if (( copy_only )); then
+  file="$run/copy-$(date +%s%N).png"
+else
+  mkdir -p "$dir" || fail "The Screenshots folder couldn’t be made."
+  file="$(target)"
+fi
+
+style() {   # slurp's options in the theme's colours
+  mapfile -t STYLE < <(arctic-capture slurp-args 2>/dev/null)
+}
+
+frozen=0
+freeze() {   # show every monitor as it is now, in the shell, until thaw
+  pgrep -u "$UID" -x quickshell >/dev/null 2>&1 || return 0
+  local info; info="$(arctic-capture freeze 2>/dev/null)" || return 0
+  if [[ "$(arctic-shell-ipc capture freeze "$(json dir <<<"$info")" 2>/dev/null)" == true ]]; then
+    frozen=1
+    trap thaw EXIT
+  else
+    arctic-capture thaw >/dev/null 2>&1
+  fi
+}
+thaw() {
+  (( frozen )) || return 0
+  frozen=0
+  arctic-shell-ipc capture thaw >/dev/null 2>&1
+  arctic-capture thaw >/dev/null 2>&1
+}
+
+scale_of() {   # scale_of OUTPUT — that monitor's scale, so grim neither blurs nor enlarges it
+  arctic-capture output "$1" 2>/dev/null | json scale
+}
+
+case "$mode" in
+  area)
+    style
+    freeze
+    sel="$(arctic-capture rects 2>/dev/null | slurp "${STYLE[@]}" -d -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
+    [[ -n "$sel" ]] || exit 0
+    # From the frozen picture; an area over two monitors (or no freeze) comes from grim.
+    if (( ! frozen )) || ! arctic-capture crop "${sel%%	*}" "${sel#*	}" "$file" >/dev/null 2>&1; then
+      scale="$(scale_of "${sel#*	}")"
+      grim ${scale:+-s "$scale"} -g "${sel%%	*}" "$file"
+    fi
+    thaw ;;
+  screen)
+    sleep "$delay"
+    info="$(arctic-capture output 2>/dev/null)"
+    name="$(json name <<<"$info")"
+    if (( all )) || [[ -z "$name" ]]; then
+      grim "$file"
+    else
+      grim -s "$(json scale <<<"$info")" -o "$name" "$file"
+    fi ;;
+  window)
+    if (( pick )); then
+      # Only the windows on screen can be clicked (slurp -r: no free areas).
+      style
+      sel="$(arctic-capture rects 2>/dev/null | slurp "${STYLE[@]}" -r -f '%x,%y %wx%h	%o' 2>/dev/null)" || exit 0
+      info="{\"geometry\": \"${sel%%	*}\", \"output\": \"${sel#*	}\"}"
+    else
+      sleep "$delay"
+      info="$(arctic-capture window 2>/dev/null)"
+    fi
+    geom="$(json geometry <<<"$info")"
+    if [[ -n "$geom" ]]; then
+      scale="$(scale_of "$(json output <<<"$info")")"
+      grim ${scale:+-s "$scale"} -g "$geom" "$file"
+    else
+      grim "$file"
+    fi ;;
+esac
+flock -u 9
+
+[[ -s "$file" ]] || fail "grim couldn’t capture the screen."
 wl-copy --type image/png < "$file"
-notify-send -a "Screenshot" -i "$file" "Screenshot saved" "Copied to the clipboard · ${file/#$HOME/\~}" 2>/dev/null || true
+if (( edit )) && [[ -n "$(editor)" ]] && (( ! copy_only )); then
+  detach "$0" edit "$file"
+elif (( copy_only )); then
+  detach notify_copied "$file"
+else
+  detach notify_saved "$file" "Screenshot saved"
+fi

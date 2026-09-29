@@ -11,6 +11,7 @@ Popover {
     scrim: false
     cardColor: Theme.surfaceRaised
     cardRadius: Theme.radiusLg
+    shadow: 2
     cardWidth: 340
     cardHeight: column.implicitHeight + 2 * Theme.space4
     focusItem: restartButton
@@ -49,6 +50,7 @@ Popover {
         Text {
             Layout.fillWidth: true
             text: UpdateService.detail
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.inkMuted
             font.family: Theme.fontSans

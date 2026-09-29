@@ -14,10 +14,13 @@ scratchpad; see each task prompt).
 ```
 cmd/arcticd/            installer engine daemon (Go, root)
 cmd/arctic-install/     engine CLI: dry-run, unattended, bridge (Go)
+cmd/arctic-webapp/      web-app manager (Go, CGO_ENABLED=0; §11)
+cmd/arctic-webapp-host/ web-app window (Go + cgo, WebKitGTK 6.0; §11)
+internal/webapp/…       web-app core, discovery, icons, policies (pure Go); internal/webkit/ the cgo shim
 internal/…              engine packages (Go)
 modules/<slot>/<id>/module.toml   app catalog (see §5)
 profiles/defaults.toml, profiles/ci/*.toml
-shell/                  Quickshell desktop shell (bar, launcher, wallpapers, get-apps console, OSD, lock, live welcome)
+shell/                  Quickshell desktop shell (bar, launcher, wallpapers, Get apps and Remove apps, OSD, lock, live welcome)
 installer-ui/           Quickshell installer frontend (the 12-step wizard)
 settings/               Arctic Settings, the settings app (Quickshell; §3.2)
 branding/sddm/arctic/   SDDM Qt6 QML login theme
@@ -54,10 +57,14 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 0.2.1, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.2.1/` of the
+Version 0.3.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.3.0/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
+The one other source is `Source1`, the Nerd Fonts "Symbols Only" release for
+`arctic-fonts-symbols` (Fedora has no symbols-only Nerd Font): pinned in the spec by
+`nerd_version` and `nerd_sha256`, downloaded by tools/build-rpms.sh next to the Mango tarball and
+checked against the SHA-256 there and again in `%prep`.
 
 | Subpackage | Installs | Notes |
 |---|---|---|
@@ -65,11 +72,13 @@ throwaway index, and so is the repository key, §9). noarch unless it contains G
 | `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/pixmaps/arctic-logo-icon.{png,svg}` (os-release `LOGO`), `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
 | `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
+| `arctic-fonts-symbols` | `/usr/share/fonts/arctic-symbols/SymbolsNerdFont{,Mono}-Regular.ttf` ← Source1, `/usr/share/fontconfig/conf.avail/66-arctic-nerd-symbols.conf` ← `packaging/fonts/` (+ its link in `/etc/fonts/conf.d/`) | noarch. The symbols appended weakly after `monospace`, JetBrains Mono and Adwaita Mono, so the terminal's icons (yazi, eza, prompts) work with any code font. License from the release's LICENSE and readme: MIT AND CC-BY-4.0 AND Apache-2.0 AND OFL-1.1-RFN AND OFL-1.1 AND Unlicense. Recommended by `arctic-shell` (with `arctic-themes-extra`), listed in `config.kiwi`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
 | `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf`; fastfetch (§3.1): `/usr/share/arctic/fastfetch/{greeting.jsonc,logo.txt}` ← `dotfiles/.local/share/arctic/fastfetch/`, `/etc/xdg/fastfetch/config.jsonc` → the Polar night theme's `fastfetch/config.jsonc` (accounts without the skel link: root, older accounts); `neofetch`: `/usr/libexec/arctic/neofetch` ← `dotfiles/.local/bin/neofetch` (fastfetch with the theme's `fastfetch/neofetch.jsonc`; a real neofetch found on `PATH` runs instead) and `%ghost /usr/bin/neofetch` → it, created in `%posttrans` only when that name is free: a `%ghost` never conflicts with another package's file, so a neofetch package (none in Fedora 44) installs over it, and `%triggerpostun -- neofetch` links it again when that package goes (rpm leaves the shared path's file behind) | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1), fastfetch. Provides `neofetch = %{version}-%{release}` (satisfies what depends on neofetch; `dnf install neofetch` says it is there, and would install a real neofetch package by name). No `Conflicts: neofetch`: it would make installing a real neofetch remove arctic-desktop-config (and arctic-desktop). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
-| `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte. |
+| `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte, polkit (pkexec, for Get apps), python3-dbus, python3-gobject-base (the Bluetooth pairing agent), glib2, pipewire-utils; Recommends appstream-data (Fedora app names and icons in Get apps), ddcutil (external monitors' brightness), qrencode (Wi-Fi share), NetworkManager-openvpn. %check runs `shell/tests/test_apps.py`. |
 | `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
+| `arctic-webapps` | `/usr/bin/arctic-webapp`, `/usr/libexec/arctic/arctic-webapp-host` | arch x86_64. The manager is pure Go; the host is cgo against WebKitGTK 6.0 and GTK 4 (BuildRequires gcc, `pkgconfig(webkitgtk-6.0)`, `pkgconfig(gtk4)`, `pkgconfig(libsoup-3.0)`). Requires `webkitgtk6.0 >=` the version built against, librsvg2-tools, hicolor-icon-theme, publicsuffix-list. %check: the host's NEEDED, no NEEDED in the manager, `--version` of both, `render-sample` + desktop-file-validate. Required by `arctic-desktop`; Recommended by `arctic-shell` (§11). |
 | `sddm-wayland-mango` | `/usr/lib/sddm/sddm.conf.d/10-arctic.conf`, `/usr/libexec/arctic/sddm-compositor-mango`, `/usr/share/arctic/sddm/greeter.conf` | Provides+Conflicts `sddm-greeter-displayserver`. Requires sddm, mangowm, layer-shell-qt. Config per PLAN §7. If the mango greeter can't be made to work in the VM test, ship `10-arctic.conf` for `sddm-wayland-generic` (weston) instead and note it. |
 | `arctic-sddm-theme` | `/usr/share/sddm/themes/arctic/` ← `branding/sddm/arctic/` | Requires sddm, qt6-qtdeclarative, qt6-qt5compat only if used. |
 | `arctic-plymouth-theme` | `/usr/share/plymouth/themes/arctic/` ← `branding/plymouth/arctic/` | Requires plymouth-plugin-script. %post: `plymouth-set-default-theme arctic` (no initrd rebuild in %post). |
@@ -80,28 +89,50 @@ throwaway index, and so is the repository key, §9). noarch unless it contains G
 Metapackage: `arctic-desktop` (subpackage, no files) Requires everything a desktop needs:
 mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-settings, arctic-desktop-config,
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
-arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, mako, swaybg, swayidle,
+arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
-pipewire-pulseaudio, pavucontrol, network-manager-applet, NetworkManager-wifi, blueman,
+pipewire-pulseaudio, NetworkManager-wifi, bluez,
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
 gnome-keyring-pam, Thunar, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
 fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
-adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop.
+adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop, mako (the waybar session's notification
+daemon; the shell is its own notification server), pavucontrol, network-manager-applet and
+blueman (the shell draws its own sound, network and Bluetooth menus and pairs with its own
+agent; the waybar session and the menus' "More…" links still use them). arctic-shell Requires glib2 (gdbus).
 
 ## 3. Desktop session (installed and live)
 
 SDDM (theme `arctic`, greeter on mango or weston) → `mango.desktop` → `~/.config/mango/config.conf`
 (from /etc/skel). Autostart (`dotfiles/.config/mango/arctic/autostart.conf`):
 `arctic-theme apply`, `arctic-shell` (Quickshell: bar, launcher, wallpapers, OSD, lock, live
-welcome), `arctic-session mako|nm-applet|clipboard|idle`. The Quickshell polkit agent is used if
-`Quickshell.Services.Polkit` works, else lxqt-policykit via `arctic-session polkit`.
+welcome, notification server), `arctic-session mako|nm-applet|clipboard|idle`, `arctic-settings
+--check-binds` (once: where shortcuts moved, your shortcuts an Arctic key shadows). The Quickshell
+polkit agent is used if `Quickshell.Services.Polkit` works, else lxqt-policykit via
+`arctic-session polkit`. Notifications work the same way: the shell owns
+`org.freedesktop.Notifications` (toasts, the notification centre, do not disturb), so
+`arctic-session mako` does nothing in the shell's session; the shell stops a mako started early by
+D-Bus activation and runs `arctic-session mako --fallback` if nobody could take the name.
 waybar/fuzzel configs stay in the dotfiles as a fallback (`ARCTIC_SHELL=waybar`).
 
 Quickshell IPC (for keybinds): `quickshell -p /usr/share/arctic/shell ipc call <target> <fn>`,
 wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launcher toggle`,
-`wallpapers toggle`, `apps install` (get-apps console), `power toggle`, `osd volume|brightness`,
-`lock lock`, `keys toggle`. Mango binds call these.
+`wallpapers toggle`, `apps install|remove|open <page>|source <name>|search <page> <text>|uninstall
+<desktop-id>` (Get apps), `power toggle`, `osd volume|brightness|brightnessLevel`, `lock lock`, `keys toggle`,
+`notifications center|dismiss|dismissAll|invoke|dnd <mode>` (through `arctic-notify` and
+`arctic-dnd`, which fall back to makoctl), `keyboard next|set|menu`, `clipboard toggle`,
+`emoji toggle`, `record open|refresh`, `share pick <fifo>`, `capture freeze <dir>|thaw`, and for
+the bar's own menus `panel toggle|open|close <name>` (network, bluetooth, sound, battery,
+calendar, media, display, notifications, keyboard), `quick toggle|open [page]` (Quick Settings),
+`toggle set|get|states|refresh`, `bar focus` (keyboard mode), `bluetooth pair`,
+`media playPause|next|previous`, `audio nextOutput`. Mango binds (Super + A,
+Super + Ctrl + W/B/A/P/D/T/M, Super + Alt + B) and the arctic-* helpers call these.
+Capture (arctic-desktop-config): `arctic-screenshot`, `arctic-ocr`, `arctic-colorpick` and
+`arctic-record` select with slurp and capture with grim / wf-recorder; `arctic-capture` parses
+Mango's IPC for them. Screen sharing in Mango sessions: `/etc/xdg/xdg-desktop-portal-wlr/mango`
+(`chooser_type=simple`) runs `/usr/libexec/arctic/arctic-share-picker`, which lists every monitor
+and window (the shell's "Share your screen" card over IPC, else fuzzel) and prints
+xdg-desktop-portal-wlr's `Monitor: <output>` / `Window: <id>`.
 
 ### 3.1 App theming
 
@@ -146,7 +177,8 @@ every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
 | Firefox, Chromium, Electron apps (Signal) | portal colour scheme | — | — | yes |
 | Nautilus, Celluloid, LibreOffice (GTK 3 VCL), GIMP, Inkscape | GTK 3/4 (above) | — | — | as GTK |
 | Not themed: Helix, Neovim, VSCodium, OnlyOffice, Steam, mpv's OSD, fish (uses the terminal's ANSI colours) | their own themes | — | — | — |
-| GTK/Qt context menus, tray menus, dialogs | inherit their toolkit's theme; Mango draws no menus | — | — | — |
+| Tray menus | drawn by the shell (QsMenuOpener) in the bar-menu style, from the shell's tokens | — | — | yes |
+| GTK/Qt context menus, dialogs | inherit their toolkit's theme; Mango draws no menus | — | — | — |
 
 **Theme hooks** (`packaging/theme-hooks.d/` → `/usr/share/arctic/theme-hooks.d/`, run by
 `arctic-theme reload` after the built-in reloads with `ARCTIC_THEME_DIR` (realpath of `current`),
@@ -211,7 +243,7 @@ stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
 `scripts/wallpapers.py list|apply` (→ `arctic-wallpaper`); `arctic-session idle --restart`;
 `wlr-randr --json` / `wlr-randr --output …`; `nmcli`; `gdbus` (power profiles, tuned-ppd);
 `gsettings` (GTK text size, cursor); tools it opens: `nm-connection-editor`, `blueman-manager`,
-`pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install`, `xdg-open`.
+`pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install|remove`, `xdg-open`.
 Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
 
 Wallpapers (Appearance): the shell's `scripts/wallpapers.py` (`list`, `apply`, `import`, `delete`,
@@ -273,6 +305,36 @@ The live image (`iso/kiwi/config.kiwi`, and so the installed system) lists `arct
 IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|search|page|pages|ready|set|value|quit`
 (`arctic-settings` uses `page`/`open`; `settings/dev/headless.sh` the rest).
 
+### 3.3 System helpers (0.3)
+
+Command-line helpers in `dotfiles/.local/bin` (→ /usr/bin); each status prints one JSON line,
+`{"ok": true, …}` or `{"ok": false, "error": "<sentence>"}`. Settings' commands for them are in
+`settings/scripts/arctic_system.py`; the bar and Quick Settings use the same commands.
+
+| Helper | Does | State |
+|---|---|---|
+| `arctic-nightlight on\|off\|toggle [--quiet]\|status --json\|set K=V…\|apply` | night light (wlsunset) on a schedule: sunset to sunrise (location from the time zone), custom hours or always | `~/.config/arctic/nightlight.conf`; `$XDG_RUNTIME_DIR/arctic/nightlight.json` |
+| `arctic-keep-awake on [MIN]\|off\|toggle [--quiet]\|status --json` | no lock or suspend for a while | `$XDG_RUNTIME_DIR/arctic/keep-awake` (end time, 0 = until off) |
+| `arctic-screensaver run\|status` | answers `org.freedesktop.ScreenSaver` (apps keeping the screen on) | `$XDG_RUNTIME_DIR/arctic/inhibitors.json` |
+| `arctic-display status --json\|mode [NAME]\|lid-closed\|lid-opened\|screens off\|on` | Super+P / display key, the lid (`switchbind=fold\|unfold`), screens off after the lock | `$XDG_RUNTIME_DIR/arctic/display.json`; `~/.config/arctic/lid.conf` |
+| `arctic-effects status\|lighter auto\|on\|off\|game on\|off\|toggle\|apply` | lighter effects in VMs / without a GPU driver; game mode | `~/.config/arctic/effects.{json,conf}` (config.conf sources the .conf) |
+| `arctic-power can\|prepare\|hibernate\|firmware\|…` | power menu checks (busy installs, closing windows gracefully, Hibernate, firmware setup) | — |
+| `arctic-drives list\|eject DEV` | removable drives (udisks2; udiskie mounts them) | `~/.config/arctic/drives.conf` |
+| `arctic-share`, `arctic-gpu`, `arctic-restart`, `arctic-sysmon` | LocalSend / KDE Connect; discrete GPU (switcheroo-control); restart sound, Wi-Fi, Bluetooth, the shell; system monitor | — |
+
+`arctic-session idle` (swayidle) reads `~/.config/arctic/idle.conf`: `lock_after=`,
+`suspend_after=` (plugged in), `lock_after_battery=`, `suspend_after_battery=` (missing = the
+same), `dim_before_lock=`, `screen_off_after=`; keep awake and `inhibitors.json` drop the lock and
+suspend timeouts. `arctic-session power-watch` restarts it when the power source changes.
+`arctic-session nightlight|drives|lid|effects|screensaver` start the rest from autostart.conf.
+System-wide changes: polkit (`timedatectl`, `localectl`, `hostnamectl`, AccountsService) or
+`pkexec /usr/libexec/arctic/arctic-system-helper` (action `org.arcticlinux.system`,
+`auth_admin_keep`; firewall allows, sshd, keys-only SSH, snapper). Keys-only SSH is
+`/etc/ssh/sshd_config.d/40-arctic-keys-only.conf` plus `/etc/arctic/ssh-keys-only`, which Settings
+reads (sshd_config.d is root-only). Units:
+`arctic-flatpak-update.timer` (system and user), `gcr-ssh-agent.socket` (user preset), and the
+XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
+
 ## 4. Engine ↔ installer UI protocol
 
 - `arcticd` listens on `/run/arcticd.sock` (systemd socket activation: `arcticd.socket`,
@@ -282,7 +344,7 @@ IPC: `quickshell -p /usr/share/arctic/settings ipc call settings open|reveal|sea
   failure, and never touches the system.
 - The UI runs `arctic-install bridge [--socket PATH]`, which relays newline-delimited JSON
   between its stdin/stdout and the socket (Quickshell `Process` + `SplitParser`, as in
-  `shell/InstallConsole.qml`). `arctic-install bridge --mock` starts an in-process mock engine
+  `shell/AppsService.qml`). `arctic-install bridge --mock` starts an in-process mock engine
   instead (same code as `arcticd --mock`), so the UI can run with no daemon and no root.
 - Messages (one JSON object per line):
   - request `{"id": 7, "method": "SetStep", "params": {...}}`
@@ -469,8 +531,8 @@ livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO s
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.
-Volume id `Arctic-Linux-0.2` (the installer finds its media by the `Arctic-Linux` prefix). Output
-`out/iso/Arctic-Linux-0.2-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
+Volume id `Arctic-Linux-0.3` (the installer finds its media by the `Arctic-Linux` prefix). Output
+`out/iso/Arctic-Linux-0.3-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
 Release suffix, commit and `arctic_repos=enabled|disabled` from out/BUILD-INFO.
 
 Design assets not copied into `design/` (all 78 icons, 30 app tiles, lockups, wallpapers as
@@ -506,7 +568,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 0.2.1, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 0.3.0, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
@@ -829,3 +891,138 @@ skipped), with `ARCTIC_THEME_DIR=<real path of the active theme folder>`,
 `ARCTIC_THEME_MODE=dark|light`, `ARCTIC_THEME_NAME=<name>`, stdin from /dev/null and stdout sent
 to stderr. Hooks must be fast: each is stopped (its process group killed) after 5 s. A failing or
 slow hook is reported on stderr and never fails the switch.
+
+## 11. Web apps (`arctic-webapps`)
+
+Any website as an app with its own launcher entry, icon, window, Wayland app_id and signed-in
+profile (user guide: `docs/wiki/Web-Apps.md`). Everything is per user; nothing needs root.
+
+**Pieces.** `/usr/bin/arctic-webapp` (the manager: pure Go, `CGO_ENABLED=0`, a PIE with no
+DT_NEEDED; never loads GTK or WebKit) and `/usr/libexec/arctic/arctic-webapp-host` (one app's
+window: Go + a hand-written C shim, cgo against WebKitGTK 6.0, GTK 4 and libsoup 3; only
+`arctic-webapp run` starts it; `ARCTIC_WEBAPP_HOST` overrides the path for development). cgo
+lives only in `internal/webkit/` and `cmd/arctic-webapp-host/`, and every file there starts
+with `//go:build cgo && webkit` (a test enforces it), so `go test ./...` without WebKit headers
+skips them and no stub host can be built. Every decision the window makes (scope, navigation,
+permissions, downloads, crashes, theme) is pure Go in `internal/webapp/policy` and
+`internal/webapp/theme`; the shim reports facts and applies answers. The host links with
+`-z now`, so it never calls a WebKitGTK symbol newer than the version it is built against, and
+the package Requires `webkitgtk6.0 >= <that version>`. A Chromium-family browser is the per-app
+fallback engine for sites that need WebRTC calls or Widevine DRM, which Fedora's WebKitGTK lacks.
+
+**Ids.** `org.arcticlinux.WebApp.<Slug>_<hash>`, grammar
+`^org\.arcticlinux\.WebApp\.[A-Za-z][A-Za-z0-9]{0,31}_[0-9a-f]{6,8}$` (also a valid GApplication
+id; no `-`). Slug: the name's ASCII letters and digits in CamelCase, else the site label, else
+`App`. Hash: the first 6 hex digits of SHA-256 over the identity (the manifest `id`, else the
+start URL without fragment; `#N` appended for copy N), 8 when another identity holds the 6-digit
+id. The id is the GApplication id, the Wayland app_id, the `.desktop` basename, `StartupWMClass`
+(WebKit engine), the D-Bus name and the first icon name. Reinstalling a site whose data was kept
+reuses the kept id, so you stay signed in. Mango's `activation_bypass` rule for
+`^org\.arcticlinux\.WebApp\.` (rules.conf; mangowm ≥ 0.17.3) lets a second start raise the
+window.
+
+**Files.**
+
+| What | Path | Mode | Writer |
+|---|---|---|---|
+| Registry lock (flock; shared for readers, exclusive for writes, 5 s → `busy`) | `$XDG_DATA_HOME/arctic/webapps/.lock` | 0600 | manager |
+| Record (schema 1) / kept record | `…/webapps/<id>/app.json` / `app.removed.json` | 0600 (dir 0700) | manager |
+| Source icon (≤ 512 px PNG) | `…/webapps/<id>/icon.png` | 0600 | manager |
+| Window state, permissions | `…/webapps/<id>/state.json`, `permissions.json` | 0600 | host |
+| WebKit profile (cookies.sqlite, storage) | `…/webapps/<id>/profile/` | 0700 | WebKit |
+| WebKit cache | `$XDG_CACHE_HOME/arctic/webapps/<id>/` | 0700 | WebKit |
+| Browser profile | `…/webapps/<id>/chromium/` (dnf Chromium) or `~/.var/app/<ref>/data/arctic-webapps/<id>/` (Flatpak) | 0700 | browser |
+| Launcher entry | `$XDG_DATA_HOME/applications/<id>.desktop` | 0644 | manager |
+| Icons (48, 64, 128, 256, 512 px) | `$XDG_DATA_HOME/icons/hicolor/<n>x<n>/apps/<icon>.png`, `<icon>` = `<id>` then `<id>.r<N>` after each change | 0644 | manager |
+| Log (1 MiB, one rotation, URLs without query) | `$XDG_STATE_HOME/arctic/webapps/<id>.log` | 0600 | host |
+| Pid file (primary instance only), previews | `$XDG_RUNTIME_DIR/arctic-webapp/<id>.pid`, `inspect-<token>/` | 0700 dir | host / manager |
+
+All writes are atomic (temp file, fsync, rename). `app.json` holds `schema, render,
+engine_version, id, copy, name, name_source, input_url, start_url, manifest_url, manifest_id,
+scope{site,scheme,manifest}, extra_domains, category, theme_color, icon{name,rev,source,url,sha256,purpose},
+runtime (webkit | chromium:brave|chrome|vivaldi|chromium|ungoogled), wm_class, handlers ([] |
+["mailto"]), options{links: browser|app, notifications: allow|ask|block, devtools, rendering:
+auto|software}, tls_exceptions[{host,sha256,pem}] (private-network hosts only), user_set,
+created, updated`. A record whose id doesn't match its directory, whose URLs aren't http(s), or
+with an unknown value is refused.
+
+**`.desktop` keys, in order:** `Type=Application`, `Version=1.5`, `Name`, `Comment=Web app · <host>`,
+`Exec=arctic-webapp run <id>` (`… %u` only for a mail-link app), `TryExec=arctic-webapp`,
+`Icon=<icon>`, `Terminal=false`, `StartupNotify=true`, `StartupWMClass`, `SingleMainWindow=true`,
+`Categories=<Main>;X-Arctic-WebApp;` (Calendar → `Office;Calendar;X-Arctic-WebApp;`),
+`Keywords=web;app;<host>;`, `MimeType=x-scheme-handler/mailto;` (mail-link apps only),
+`X-Arctic-WebApp-Id`, `X-Arctic-WebApp-URL`, `X-Arctic-WebApp-Runtime`, `X-Arctic-WebApp-Schema=1`.
+Never a URL in Exec, never `WebBrowser` or `NoDisplay`. `arctic-webapp render-sample DIR` writes
+two fixture entries for `desktop-file-validate` in `%check`.
+
+**CLI.** `arctic-webapp inspect URL | install (URL | --preview TOKEN) [options] | list [--sizes]
+[--kept] | show ID | run ID [URI] [--url URL] | launch ID [--url URL] | update (ID… | --all) |
+set ID [options] | clear-data ID | remove ID… [--keep-data] | forget ID… | icon ID --from-file F
+--source host-favicon | trust-certificate ID --host H --pem F | repair | runtimes | serve |
+render-sample DIR | version [--webkit]`. Exit 0 ok, 1 error, 2 usage; messages on stderr start
+`arctic-webapp: `. It refuses to run as root (CI containers set `ARCTIC_WEBAPP_ALLOW_ROOT=1`).
+With `--json`: exactly one line on stdout, `{"ok":true,…}` or
+`{"ok":false,"code":"<code>","error":"<sentence>"[,"fields":{…}]}` (`fields` only with code
+`invalid`), nothing on stderr and no progress lines. Success shapes: `inspect` `{"preview":…}`,
+`install` `{"app","desktop_file","launched"}`, `list` `{"apps":[…],"kept":[…]}` (`kept` with
+`--kept`), `show` `{"app"}`, `launch` `{"pid"}` or `{"focused":true}`, `update`
+`{"updated":[{"id","changed","kept"}]}`, `set` `{"app","applied": live|next_start|saved}`,
+`remove` `{"removed":[{"id","stopped","kept_data"}]}`, `repair` `{"repaired","orphans_removed"}`,
+`runtimes` `{"runtimes"}`, `version` `{"version","host","host_present"[,"webkit_version"]}`,
+`clear-data`/`forget` `{}`. App info: `id, name, url, host, icon_name, icon_path (128 px),
+category, runtime, runtime_available, running, links, notifications, devtools, rendering,
+extra_domains, handlers, handlers_supported, tls_exceptions[{host,sha256}], data_bytes (null
+without --sizes), problem ("" | no-desktop-file | no-registry | runtime-missing), created, updated`.
+
+**`serve`** (the shell's Get apps and Remove apps pages): JSON lines on stdin/stdout in the §4
+envelope, snake_case. Methods `Hello` (`engine_version, protocol_version, runtimes[{id, name,
+available, drm, webrtc, install?{module, method, ref?}}]`), `Runtimes`, `Inspect{url}` (a new
+one cancels the previous), `Install{token | url, name, icon (index | "monogram"), icon_file,
+icon_url, category, runtime, links, notifications, mail_links, new_copy, launch}`,
+`List{sizes, kept}`, `Get{id, sizes}`, `Launch{id, url}`, `Update{ids, all}`, `Set{id, name,
+icon{file | monogram | url | {} = from the site}, category, runtime, links, extra_domains,
+add_domain, remove_domain, notifications, mail_links, devtools, rendering, reset_permissions,
+forget_certificate}`, `Remove{ids, keep_data}`, `Forget{ids}`, `ClearData{id}`,
+`Cancel{request}`. Events: `{"event":"progress","request","stage": page|manifest|icons|render,
+"message"}` and `{"event":"changed","ids"}` (after the response to a write). Error codes:
+`invalid` (with `fields`), `bad_request`, `unknown_method`, `not_found`, `state`, `offline`,
+`timeout`, `internal`, `exists`, `fetch`, `http`, `tls`, `too_large`, `not_html`, `busy`,
+`unsupported`. `serve` exits on end of input and deletes its previews. The Inspect result
+(`preview`): `token, url, final_url, host, host_ascii, secure, name, name_source, short_name,
+start_url, scope, manifest_url, display, theme_color, category, suggested_id, installed,
+icons[{index, source, purpose, size, format, path}], recommended_icon, handlers_supported,
+warnings[{code: drm_unsupported|calls_unsupported|login_wall|insecure, message}],
+suggested_runtime`; its token stays installable for an hour.
+
+**Discovery rules.** http(s) only; https is added when there is no scheme; no userinfo, no
+control characters, ≤ 2,048 bytes; the host is kept in lowercase ASCII, Punycode (`xn--`) for an
+internationalised name, the form WebKit reports pages in (the preview's `host` shows it decoded).
+Fetch: dial and TLS 5 s, headers 10 s, 30 s per inspect,
+TLS ≥ 1.2 and never an unverified certificate, ≤ 5 redirects and never https → http, HTML read
+to 1 MiB, manifest 256 KiB, images 2 MiB (≤ 4096 px, checked before decoding), 8 MiB in all. The
+user agent is WebKitGTK's own (pinned by the host's smoke test). Once the page came from a public
+address, its manifest and icons may not come from loopback, private, shared (100.64.0.0/10,
+Tailscale) or link-local addresses (checked at connect time). The manager is built without cgo,
+so Go's resolver can't do mDNS: `.local` names are resolved by glibc (`getent ahosts`, argv,
+3 s, through nss-mdns), for fetching and for the trust-certificate check. The page's JavaScript never runs. If the page redirected to another
+site (a sign-in wall), that page's name and icons are ignored and the typed origin is probed.
+Scope = the start URL's registrable domain from Fedora's Public Suffix List (exact host:port for
+IP addresses and localhost) plus extra domains. Icons: never `og:image`, never third-party
+favicon services; WebP/AVIF/JXL are skipped; SVG goes through `rsvg-convert` (stdin, argv, 5 s)
+and is never installed; letter icons use the app-tile tints (never amber).
+
+**Window rules.** Only user link clicks (and gesture-driven "other" navigations) to pages out of
+scope leave the app, for your default browser (`x-scheme-handler/https`); redirects, script
+navigations and form posts stay, so single sign-on works. `window.open` makes a popup in the
+same session with `window.opener` kept (OAuth). Permissions: stored per origin; notifications
+follow the app's option (allowed for in-scope origins by default); camera, microphone, screen,
+location, clipboard ask in a banner outside the page; EME is denied. Downloads go to the XDG
+download directory under a safe unique name. A web-process crash reloads once a minute, then
+shows a banner. `SIGHUP` re-reads app.json (links, extra domains, notifications, devtools,
+trusted certificates; each notification is checked against the current option, since WebKit
+can't take back a grant; a forgotten certificate stays accepted until the window closes, so
+`set` reports `next_start` for it); `SIGTERM` quits after saving state. `run` removes
+`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS` from the environment, adds the NVIDIA workarounds on
+the proprietary driver and software rendering on request. Chromium-family runtimes run
+`--app=<url> --user-data-dir=<per-app>` (never `--no-sandbox` or `--class`); a running one is
+focused with `mmsg` instead of opening a second window.

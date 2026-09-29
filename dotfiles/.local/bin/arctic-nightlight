@@ -1,0 +1,512 @@
+#!/usr/bin/env python3
+"""arctic-nightlight — night light: a warmer screen in the evening (Super+Ctrl+N).
+
+    arctic-nightlight on | off | toggle [--quiet]   warm the screen now / back to normal now
+    arctic-nightlight status [--json]
+    arctic-nightlight set KEY=VALUE…                 mode=off|sunset|hours|always temp=2500–6000
+                                                     from=HH:MM to=HH:MM lat=… lon=… (blank: from
+                                                     the time zone)
+    arctic-nightlight apply                          start, restart or stop wlsunset to match
+                                                     (arctic-session nightlight runs it at login)
+
+The schedule lives in ~/.config/arctic/nightlight.conf (Settings > Displays writes it through
+`set`). on/off/toggle don't change it: they last until the schedule would change anyway (the
+next sunset or sunrise, or the custom hours), or until you log out when there's no schedule.
+wlsunset draws the colour through Mango's gamma control; "sunset to sunrise" takes its
+location from the time zone (tzdata's zone1970.tab) unless lat/lon are set. wlsunset can't
+change its temperature while it runs, so every change restarts it.
+Each command prints one JSON line; failures print {"ok": false, "error": "…"} and exit 1.
+"""
+import json
+import math
+import os
+import re
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+MODES = ('off', 'sunset', 'hours', 'always')
+DEFAULTS = {'mode': 'off', 'temp': '4000', 'from': '20:00', 'to': '07:00', 'lat': '', 'lon': ''}
+NEUTRAL = 6500           # wlsunset's day temperature
+TEMP_MIN, TEMP_MAX = 2500, 6000
+FADE = 1800              # seconds wlsunset takes to warm up with custom hours (-d)
+SETTLE = 45 * 60         # an "on until sunset" lasts until the evening fade is done
+RE_TIME = re.compile(r'^([01]?\d|2[0-3]):([0-5]\d)$')
+RE_COORD = re.compile(r'^([+-]\d{2})(\d{2})(\d{2})?([+-]\d{3})(\d{2})(\d{2})?$')
+
+
+class Failure(Exception):
+    """A sentence for the person."""
+
+
+def env(name, default=''):
+    return os.environ.get(name, default)
+
+
+def config_dir():
+    return Path(env('XDG_CONFIG_HOME') or Path(env('HOME') or Path.home()) / '.config') / 'arctic'
+
+
+def runtime_dir():
+    return Path(env('XDG_RUNTIME_DIR') or tempfile.gettempdir()) / 'arctic'
+
+
+CONF = config_dir() / 'nightlight.conf'
+STATE = runtime_dir() / 'nightlight.json'
+LOG = runtime_dir() / 'nightlight.log'
+
+
+def now():
+    return float(env('ARCTIC_NOW') or time.time())
+
+
+def atomic_write(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix='.' + path.name + '.', dir=str(path.parent))
+    with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+        handle.write(text)
+    os.replace(tmp, path)
+
+
+# ---- settings -----------------------------------------------------------------------------------
+
+def read_conf():
+    conf = dict(DEFAULTS)
+    try:
+        lines = CONF.read_text(encoding='utf-8').splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        key, sep, value = line.partition('=')
+        key, value = key.strip(), value.strip()
+        if sep and key in DEFAULTS:
+            try:
+                conf[key] = check(key, value)
+            except Failure:
+                pass   # a bad hand edit falls back to the default
+    return conf
+
+
+def check(key, value):
+    """The value as stored, or Failure with a sentence."""
+    if key == 'mode':
+        if value not in MODES:
+            raise Failure('Night light can be off, sunset to sunrise, custom hours or always on.')
+    elif key == 'temp':
+        if not value.isdigit() or not TEMP_MIN <= int(value) <= TEMP_MAX:
+            raise Failure('Pick a warmth between {} K and {} K.'.format(TEMP_MIN, TEMP_MAX))
+        value = str(int(value))
+    elif key in ('from', 'to'):
+        match = RE_TIME.match(value)
+        if not match:
+            raise Failure('Times look like 20:00.')
+        value = '{:02d}:{}'.format(int(match.group(1)), match.group(2))
+    elif key in ('lat', 'lon'):
+        if value:
+            try:
+                number = float(value)
+            except ValueError:
+                raise Failure('The location needs a latitude and longitude in degrees.') from None
+            if not math.isfinite(number) or abs(number) > (90 if key == 'lat' else 180):
+                raise Failure('That location isn’t on Earth.')
+            value = '{:.4f}'.format(number)
+    else:
+        raise Failure('Unknown setting {}.'.format(key))
+    return value
+
+
+def minutes(hhmm):
+    h, m = hhmm.split(':')
+    return int(h) * 60 + int(m)
+
+
+def write_conf(conf):
+    if minutes(conf['from']) <= minutes(conf['to']):
+        raise Failure('Night light starts in the evening and ends in the morning: “from” must be later than “to”.')
+    if bool(conf['lat']) != bool(conf['lon']):
+        raise Failure('Give both a latitude and a longitude, or neither.')
+    text = ('# Written by arctic-nightlight (Settings > Displays > Night light).\n'
+            '# mode: off, sunset (sunset to sunrise), hours (from–to) or always; temp in kelvin.\n'
+            '# lat/lon: blank means the location of your time zone.\n')
+    text += ''.join('{}={}\n'.format(key, conf[key]) for key in DEFAULTS)
+    atomic_write(CONF, text)
+
+
+# ---- where and when -----------------------------------------------------------------------------
+
+def zone_name():
+    """The time zone's name (Europe/Berlin) from $TZ or /etc/localtime."""
+    tz = env('TZ').lstrip(':')
+    if '/' in tz and not tz.startswith('/'):
+        return tz
+    target = os.path.realpath(env('ARCTIC_LOCALTIME') or '/etc/localtime')
+    return target.split('/zoneinfo/', 1)[1] if '/zoneinfo/' in target else ''
+
+
+def parse_coordinates(text):
+    match = RE_COORD.match(text)
+    if not match:
+        return None
+    parts = match.groups()
+
+    def degrees(d, m, s):
+        sign = -1 if d.startswith('-') else 1
+        return sign * (abs(int(d)) + int(m) / 60 + int(s or 0) / 3600)
+    return round(degrees(*parts[0:3]), 4), round(degrees(*parts[3:6]), 4)
+
+
+def zone_location(name):
+    """(lat, lon) of a time zone from tzdata's zone1970.tab (else zone.tab), or None."""
+    if not name:
+        return None
+    folder = Path(env('ARCTIC_ZONEINFO') or '/usr/share/zoneinfo')
+    for table in ('zone1970.tab', 'zone.tab'):
+        try:
+            lines = (folder / table).read_text(encoding='utf-8').splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            fields = line.split('\t')
+            if len(fields) >= 3 and not line.startswith('#') and fields[2] == name:
+                return parse_coordinates(fields[1])
+    return None
+
+
+def location(conf):
+    """(lat, lon, where) for sunset mode; where is 'manual', the zone name, or '' (unknown)."""
+    if conf['lat'] and conf['lon']:
+        return float(conf['lat']), float(conf['lon']), 'manual'
+    name = zone_name()
+    found = zone_location(name)
+    if found:
+        return found[0], found[1], name
+    return None, None, ''
+
+
+def sun_times(lat, lon, day):
+    """Sunrise and sunset (epoch seconds) of the UTC day that contains `day`, or 'night' /
+    'day' when the sun doesn't rise or set (the sunrise equation, NOAA's simplification)."""
+    n = math.floor(day / 86400) + 2440587.5 + 0.5 - 2451545.0 + 0.0008
+    mean = n - lon / 360
+    anomaly = math.radians((357.5291 + 0.98560028 * mean) % 360)
+    centre = 1.9148 * math.sin(anomaly) + 0.02 * math.sin(2 * anomaly) + 0.0003 * math.sin(3 * anomaly)
+    ecliptic = math.radians((math.degrees(anomaly) + centre + 180 + 102.9372) % 360)
+    transit = 2451545.0 + mean + 0.0053 * math.sin(anomaly) - 0.0069 * math.sin(2 * ecliptic)
+    declination = math.asin(math.sin(ecliptic) * math.sin(math.radians(23.4397)))
+    phi = math.radians(lat)
+    cos_hour = ((math.sin(math.radians(-0.833)) - math.sin(phi) * math.sin(declination))
+                / (math.cos(phi) * math.cos(declination)))
+    if cos_hour > 1:
+        return 'night'
+    if cos_hour < -1:
+        return 'day'
+    hour = math.degrees(math.acos(cos_hour)) / 360
+
+    def epoch(julian):
+        return (julian - 2440587.5) * 86400
+    return epoch(transit - hour), epoch(transit + hour)
+
+
+def events(conf, t):
+    """[(epoch, warm_after)] around t, sorted: when the schedule turns warm or back."""
+    out = []
+    if conf['mode'] == 'hours' or (conf['mode'] == 'sunset' and location(conf)[0] is None):
+        base = time.localtime(t)
+        for day in (-1, 0, 1, 2):
+            for hhmm, warm in ((conf['from'], True), (conf['to'], False)):
+                h, m = hhmm.split(':')
+                stamp = time.mktime((base.tm_year, base.tm_mon, base.tm_mday + day, int(h), int(m), 0, 0, 0, -1))
+                out.append((stamp, warm))
+    elif conf['mode'] == 'sunset':
+        lat, lon, _where = location(conf)
+        for day in (-1, 0, 1, 2):
+            times = sun_times(lat, lon, t + day * 86400)
+            if isinstance(times, tuple):
+                out += [(times[0], False), (times[1], True)]
+            else:
+                noon = (math.floor(t / 86400) + day) * 86400 + 43200
+                out.append((noon, times == 'night'))
+    return sorted(out)
+
+
+def scheduled(conf, t):
+    """Whether the schedule makes the screen warm at t."""
+    if conf['mode'] in ('off', 'always'):
+        return conf['mode'] == 'always'
+    past = [warm for stamp, warm in events(conf, t) if stamp <= t]
+    return past[-1] if past else False
+
+
+def next_change(conf, t):
+    """When the schedule next changes after t, or 0 (never)."""
+    current = scheduled(conf, t)
+    for stamp, warm in events(conf, t):
+        if stamp > t + 60 and warm != current:
+            return stamp
+    return 0
+
+
+# ---- runtime state and wlsunset -----------------------------------------------------------------
+
+def read_state():
+    try:
+        data = json.loads(STATE.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_state(state):
+    atomic_write(STATE, json.dumps(state) + '\n')
+
+
+def override(state, t):
+    """The on/off override that is still in force, or None."""
+    value = state.get('override')
+    until = state.get('until') or 0
+    if value in ('on', 'off') and (not until or until > t):
+        return value
+    return None
+
+
+def alive(pid, name):
+    """pid runs `name` (and isn't a zombie)."""
+    try:
+        cmdline = Path('/proc/{}/cmdline'.format(int(pid))).read_bytes().split(b'\0')
+        status = Path('/proc/{}/stat'.format(int(pid))).read_text().rsplit(')', 1)[1].split()
+    except (OSError, ValueError, IndexError, TypeError):
+        return False
+    return status[0] != 'Z' and any(os.path.basename(a.decode(errors='replace')) == name for a in cmdline[:2])
+
+
+def wlsunset_args(conf, warm_now_forced):
+    temp = int(conf['temp'])
+    if warm_now_forced or conf['mode'] == 'always':
+        # Warm all day: wlsunset needs a day temperature above the night one, so one kelvin more.
+        return ['wlsunset', '-t', str(temp), '-T', str(temp + 1), '-S', '00:00', '-s', '23:59', '-d', '0']
+    if conf['mode'] == 'sunset':
+        lat, lon, _where = location(conf)
+        if lat is not None:
+            return ['wlsunset', '-t', str(temp), '-T', str(NEUTRAL), '-l', str(lat), '-L', str(lon)]
+    return ['wlsunset', '-t', str(temp), '-T', str(NEUTRAL), '-S', conf['to'], '-s', conf['from'], '-d', str(FADE)]
+
+
+def which(name):
+    for folder in env('PATH', '/usr/bin:/bin').split(':'):
+        if folder and os.access(os.path.join(folder, name), os.X_OK):
+            return os.path.join(folder, name)
+    return None
+
+
+def stop(pid, name):
+    if pid and alive(pid, name):
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+        except OSError:
+            pass
+        for _ in range(20):
+            if not alive(pid, name):
+                break
+            time.sleep(0.05)
+
+
+def apply(state=None):
+    """Make wlsunset match the settings and the override; returns the state written."""
+    t = now()
+    conf = read_conf()
+    state = read_state() if state is None else state
+    forced = override(state, t)
+    if not forced:
+        state.pop('override', None)
+        state.pop('until', None)
+    warm = forced == 'on' or (forced is None and conf['mode'] != 'off')
+    want = wlsunset_args(conf, forced == 'on') if warm else None
+    running = state.get('pid') and alive(state['pid'], 'wlsunset')
+    if running and state.get('args') == want:
+        return state
+    stop(state.get('pid'), 'wlsunset')
+    state.pop('pid', None)
+    state.pop('args', None)
+    state['error'] = ''
+    if want:
+        if not which('wlsunset'):
+            state['error'] = 'Night light needs wlsunset (sudo dnf install wlsunset).'
+        else:
+            LOG.parent.mkdir(parents=True, exist_ok=True)
+            with open(LOG, 'wb') as log:
+                child = subprocess.Popen(want, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                         start_new_session=True)
+            time.sleep(float(env('ARCTIC_NIGHTLIGHT_SETTLE') or 0.4))
+            said = LOG.read_text(errors='replace').strip().splitlines()
+            # wlsunset keeps running when a screen refuses gamma control; when every screen
+            # does ("registry: adding output N" … "gamma control of output … (N) failed").
+            outputs = {line.split()[-1] for line in said if line.startswith('registry: adding output')}
+            refused = {line.split('(')[-1].split(')')[0] for line in said if 'gamma control' in line and 'failed' in line}
+            no_gamma = (outputs and outputs <= refused) or (child.poll() is not None and refused)
+            if child.poll() is None and not no_gamma:
+                state.update(pid=child.pid, args=want)
+            else:
+                stop(child.pid, 'wlsunset')
+                state['error'] = ('This screen doesn’t let apps change its colours, so night light can’t work here.'
+                                  if no_gamma or any('gamma' in line.lower() for line in said)
+                                  else 'wlsunset stopped: ' + (said[-1] if said else 'no reason given') + '.')
+    write_state(state)
+    schedule_expiry(state)
+    return state
+
+
+def schedule_expiry(state):
+    """A sleeping copy of this command re-applies when an override runs out."""
+    until = state.get('until') or 0
+    old = state.get('timer')
+    if old and alive(old, 'arctic-nightlight'):
+        try:
+            os.kill(int(old), signal.SIGTERM)
+        except OSError:
+            pass
+    state.pop('timer', None)
+    if until and until > now():
+        child = subprocess.Popen([sys.executable, os.path.abspath(__file__), '_expire', str(until)],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL, start_new_session=True)
+        state['timer'] = child.pid
+    write_state(state)
+
+
+def clock(stamp):
+    return time.strftime('%H:%M', time.localtime(stamp)) if stamp else ''
+
+
+def status():
+    t = now()
+    conf = read_conf()
+    state = read_state()
+    forced = override(state, t)
+    lat, _lon, where = location(conf)
+    active = forced == 'on' if forced else scheduled(conf, t)
+    change = next_change(conf, t) if conf['mode'] in ('sunset', 'hours') else 0
+    return dict(ok=True, available=bool(which('wlsunset')), mode=conf['mode'], temp=int(conf['temp']),
+                **{'from': conf['from']}, to=conf['to'], lat=conf['lat'], lon=conf['lon'],
+                location=where, fallback=conf['mode'] == 'sunset' and lat is None,
+                active=active, override=forced or '', until=int(state.get('until') or 0) if forced else 0,
+                untilText=clock(state.get('until')) if forced else '', nextChange=int(change),
+                nextChangeText=clock(change), running=bool(state.get('pid') and alive(state['pid'], 'wlsunset')),
+                error=state.get('error') or '')
+
+
+def force(value, quiet):
+    t = now()
+    conf = read_conf()
+    state = read_state()
+    if value == 'toggle':
+        current = override(state, t)
+        value = 'off' if (current == 'on' if current else scheduled(conf, t)) else 'on'
+    if (value == 'on') == scheduled(conf, t):
+        state.pop('override', None)      # the schedule already does this
+        state.pop('until', None)
+    else:
+        until = next_change(conf, t) if conf['mode'] in ('sunset', 'hours') else 0
+        if until and value == 'on':
+            until += SETTLE
+        state.update(override=value, until=int(until))
+    apply(state)
+    result = status()
+    if not quiet:
+        tell(result)
+    return result
+
+
+def tell(result):
+    """The on-screen pill (mako draws arctic-osd notifications as the OSD)."""
+    if not which('notify-send'):
+        return
+    if result['active']:
+        text = 'Night light on' + (' until ' + result['untilText'] if result['untilText'] else '')
+    else:
+        text = 'Night light off' + (' until ' + result['untilText'] if result['untilText'] else '')
+    if result['error']:
+        text = result['error']
+    icon = config_dir() / 'current/icons/brightness.svg'
+    try:
+        subprocess.run(['notify-send', '-a', 'arctic-osd', '-e', '-t', '1500',
+                        '-h', 'string:x-canonical-private-synchronous:arctic-osd', '-i', str(icon), text],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def refresh_shell():
+    """The shell's Quick Settings tile and indicator read the new state (nothing without it)."""
+    if not which('arctic-shell-ipc'):
+        return
+    try:
+        subprocess.run(['arctic-shell-ipc', 'toggle', 'refresh', 'night-light'], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def main(argv):
+    verb = argv[0] if argv else 'status'
+    rest = argv[1:]
+    if verb in ('-h', '--help'):
+        print(__doc__.strip())
+        return 0
+    if verb == '_expire':
+        # The timer: sleep until the override runs out, then re-apply (unless replaced meanwhile).
+        # Short naps against the wall clock: sleep's clock stops while the computer is suspended.
+        until = float(rest[0])
+        left = until - now()
+        while left > 0:
+            time.sleep(min(30, left))
+            left = until - now()
+        state = read_state()
+        if (state.get('until') or 0) == int(until):
+            state.pop('timer', None)
+            apply(state)
+            refresh_shell()
+        return 0
+    if verb == 'status':
+        result = status()
+        if '--json' not in rest:
+            text = 'on' if result['active'] else 'off'
+            print('Night light is {} ({}{})'.format(text, result['mode'],
+                  ', until ' + result['untilText'] if result['untilText'] else ''))
+            return 0
+    elif verb in ('on', 'off', 'toggle'):
+        result = force(verb, '--quiet' in rest)
+    elif verb == 'apply':
+        apply()
+        result = status()
+    elif verb == 'set':
+        conf = read_conf()
+        for arg in rest:
+            key, sep, value = arg.partition('=')
+            if not sep:
+                raise Failure('usage: arctic-nightlight set KEY=VALUE…')
+            conf[key] = check(key, value.strip())
+        write_conf(conf)
+        state = read_state()
+        state.pop('override', None)
+        state.pop('until', None)
+        apply(state)
+        result = status()
+    else:
+        print('usage: arctic-nightlight on|off|toggle|status [--json]|set KEY=VALUE…|apply', file=sys.stderr)
+        return 2
+    if verb != 'status':
+        refresh_shell()
+    print(json.dumps(result))
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Failure as error:
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)

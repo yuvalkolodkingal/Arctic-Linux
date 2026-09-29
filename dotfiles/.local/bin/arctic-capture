@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""arctic-capture — the capture helpers' shared engine (standard library only).
+
+The bash front ends (arctic-screenshot, arctic-colorpick, arctic-ocr, arctic-record) do the
+selecting with slurp and the capturing with grim; this answers what needs parsing:
+
+    arctic-capture window            the focused window without its border (mmsg get focusing-client)
+    arctic-capture output [NAME]     the focused (or that) monitor (mmsg get all-monitors)
+    arctic-capture rects             visible windows as slurp's predefined rectangles (text lines)
+    arctic-capture sources [--json]  monitors and windows to share, "label<TAB>xdpw choice" lines
+    arctic-capture slurp-args        slurp's options in the theme's colours, one per line
+                                     (--json: {"ok":true,"sources":[{kind,label,app_id,value}]})
+    arctic-capture pixel < FRAME.ppm the top-left pixel of a grim -t ppm frame, as hex/rgb/hsl
+    arctic-capture freeze            a picture of every monitor now (the shell shows them while you
+                                     select, so menus and tooltips stay as they were)
+    arctic-capture crop GEOMETRY OUTPUT FILE
+                                     save that part of the frozen OUTPUT as a PNG (pixel-exact)
+    arctic-capture thaw              delete the frozen pictures
+    arctic-capture ocr FILE          the text in a picture (tesseract), in your languages
+    arctic-capture qr FILE           the QR codes in a picture (zxing-cpp, else zbarimg)
+    arctic-capture uri FILE          a file:// URI (for FileManager1.ShowItems)
+    arctic-capture same FILE FILE    exit 0 when two pictures have the same pixels (Pillow)
+    arctic-capture swatch HEX FILE   a small SVG swatch for the colour notification
+
+Every command but `rects`, `sources` and `slurp-args` prints one JSON line: {"ok": true, …} or
+{"ok": false, "code": "…", "error": "One sentence."}.
+"""
+import colorsys
+import concurrent.futures
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+HOME = Path(os.environ.get('HOME', '/'))
+CONFIG = Path(os.environ.get('XDG_CONFIG_HOME') or HOME / '.config')
+
+# Locale or keyboard-layout code → tesseract language pack.
+TESS_LANGS = {
+    'en': 'eng', 'us': 'eng', 'gb': 'eng', 'he': 'heb', 'il': 'heb', 'ar': 'ara', 'ara': 'ara',
+    'ru': 'rus', 'uk': 'ukr', 'ua': 'ukr', 'el': 'ell', 'gr': 'ell', 'de': 'deu', 'fr': 'fra',
+    'es': 'spa', 'it': 'ita', 'pt': 'por', 'br': 'por', 'nl': 'nld', 'pl': 'pol', 'tr': 'tur',
+    'ja': 'jpn', 'jp': 'jpn', 'ko': 'kor', 'kr': 'kor', 'zh_CN': 'chi_sim', 'zh_TW': 'chi_tra',
+    'cn': 'chi_sim', 'tw': 'chi_tra', 'cs': 'ces', 'cz': 'ces', 'sv': 'swe', 'se': 'swe',
+    'fi': 'fin', 'da': 'dan', 'dk': 'dan', 'no': 'nor', 'nb': 'nor', 'hu': 'hun', 'ro': 'ron',
+}
+LANG_NAMES = {
+    'eng': 'English', 'heb': 'Hebrew', 'ara': 'Arabic', 'rus': 'Russian', 'ukr': 'Ukrainian',
+    'ell': 'Greek', 'deu': 'German', 'fra': 'French', 'spa': 'Spanish', 'ita': 'Italian',
+    'por': 'Portuguese', 'nld': 'Dutch', 'pol': 'Polish', 'tur': 'Turkish', 'jpn': 'Japanese',
+    'kor': 'Korean', 'chi_sim': 'Chinese (Simplified)', 'chi_tra': 'Chinese (Traditional)',
+    'ces': 'Czech', 'swe': 'Swedish', 'fin': 'Finnish', 'dan': 'Danish', 'nor': 'Norwegian',
+    'hun': 'Hungarian', 'ron': 'Romanian',
+}
+
+
+class Failure(Exception):
+    def __init__(self, code, error, **extra):
+        super().__init__(error)
+        self.code, self.error, self.extra = code, error, extra
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + '\n')
+
+
+def run(argv, timeout=20, stdin=None):
+    try:
+        return subprocess.run(argv, capture_output=True, timeout=timeout, input=stdin)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+# ---- the Mango config chain (the last value of a key wins, as in Mango) --------------------------
+
+def expand(path):
+    return Path(os.path.expandvars(os.path.expanduser(path.strip())))
+
+
+def config_values(key, start=None):
+    """Every value of `key` in the chain from ~/.config/mango/config.conf, following source=."""
+    values, seen = [], set()
+
+    def visit(path, depth):
+        try:
+            real = os.path.realpath(path)
+            if depth > 10 or real in seen:
+                return
+            seen.add(real)
+            text = Path(path).read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            return
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith('#') or '=' not in line:
+                continue
+            name, value = (part.strip() for part in line.split('=', 1))
+            value = re.split(r'\s#', value, maxsplit=1)[0].strip()
+            if name in ('source', 'source-optional'):
+                visit(expand(value), depth + 1)
+            elif name == key:
+                values.append(value)
+
+    visit(start or CONFIG / 'mango' / 'config.conf', 0)
+    return values
+
+
+def border_width():
+    for value in reversed(config_values('borderpx')):
+        if value.isdigit():
+            return int(value)
+    return 2     # Mango's default and look.conf's
+
+
+# ---- Mango state ---------------------------------------------------------------------------------
+
+def mmsg(*query):
+    result = run(['mmsg', 'get'] + list(query), timeout=5)
+    if result is None or result.returncode != 0:
+        raise Failure('no_display', 'Mango didn’t answer (is this a Mango session?).')
+    try:
+        return json.loads(result.stdout.decode('utf-8', 'replace'))
+    except ValueError:
+        raise Failure('no_display', 'Mango’s answer couldn’t be read.') from None
+
+
+def geometry(x, y, width, height):
+    return '{},{} {}x{}'.format(int(x), int(y), int(width), int(height))
+
+
+def cmd_window(_args):
+    client = mmsg('focusing-client')
+    if not isinstance(client, dict) or 'error' in client or not client.get('width'):
+        raise Failure('no_window', 'No window has the focus.')
+    inset = 0 if client.get('is_fullscreen') else border_width()
+    x, y = client['x'] + inset, client['y'] + inset
+    width, height = client['width'] - 2 * inset, client['height'] - 2 * inset
+    if width <= 0 or height <= 0:
+        raise Failure('no_window', 'The window is too small to capture.')
+    return dict(geometry=geometry(x, y, width, height), app_id=client.get('appid') or client.get('app_id') or '',
+                title=client.get('title') or '', output=client.get('monitor') or '')
+
+
+def monitors():
+    data = mmsg('all-monitors')
+    return [m for m in data.get('monitors', []) if isinstance(m, dict) and m.get('name')]
+
+
+def cmd_output(args):
+    outs = monitors()
+    if not outs:
+        raise Failure('no_display', 'Mango reported no monitors.')
+    if args:
+        focused = next((m for m in outs if m['name'] == args[0]), None)
+        if focused is None:
+            raise Failure('no_display', 'There is no monitor called {}.'.format(args[0]))
+    else:
+        focused = next((m for m in outs if m.get('active')), outs[0])
+    return dict(name=focused['name'], count=len(outs), scale=focused.get('scale', 1),
+                geometry=geometry(focused['x'], focused['y'], focused['width'], focused['height']))
+
+
+def visible_windows(clients):
+    """Windows on screen now, floating ones first (they are on top), then tiled ones."""
+    shown = [c for c in clients if isinstance(c, dict) and c.get('is_visible')
+             and not c.get('is_minimized') and c.get('width', 0) > 0 and c.get('height', 0) > 0]
+    return [c for c in shown if c.get('is_floating')] + [c for c in shown if not c.get('is_floating')]
+
+
+def cmd_rects(_args):
+    try:
+        clients = mmsg('all-clients').get('clients', [])
+    except Failure:
+        return None      # no windows to offer: slurp still selects areas
+    inset = border_width()
+    for c in visible_windows(clients):
+        pad = 0 if c.get('is_fullscreen') else inset
+        label = re.sub(r'\s+', ' ', c.get('appid') or c.get('title') or 'window')
+        sys.stdout.write('{} {}\n'.format(geometry(c['x'] + pad, c['y'] + pad, c['width'] - 2 * pad,
+                                                   c['height'] - 2 * pad), label))
+    return None
+
+
+def cmd_sources(args):
+    """What an app may share (the screen-share picker): "label<TAB>Monitor: NAME" for every
+    monitor, then "label<TAB>Window: ID" for every window (ext-foreign-toplevel identifiers)."""
+    found = []
+    for m in monitors():
+        scale = m.get('scale') or 1
+        found.append(dict(kind='screen', app_id='', value='Monitor: ' + m['name'], label='Screen · {} ({} × {})'.format(
+            m['name'], round(m['width'] * scale), round(m['height'] * scale))))
+    try:
+        clients = mmsg('all-clients').get('clients', [])
+    except Failure:
+        clients = []
+    for c in clients:
+        ident = c.get('foreign_toplevel_id') if isinstance(c, dict) else None
+        if not ident or c.get('is_namedscratchpad'):
+            continue
+        title = re.sub(r'\s+', ' ', c.get('title') or '').strip()
+        app = c.get('appid') or c.get('app_id') or 'Window'
+        label = 'Window · {}{}'.format(app, ' — ' + title if title and title != app else '')
+        found.append(dict(kind='window', app_id=app, value='Window: ' + ident, label=label[:120]))
+    if args[:1] == ['--json']:
+        return dict(sources=found)
+    for source in found:
+        sys.stdout.write('{}\t{}\n'.format(source['label'], source['value']))
+    return None
+
+
+def cmd_slurp_args(_args):
+    """The theme's capture-colors.env (SLURP_ARGS="-b #… -c #…"), checked word by word, so a
+    stray file can't pass slurp anything but colours, a width and a font name."""
+    path = CONFIG / 'arctic' / 'current' / 'capture-colors.env'
+    try:
+        text = path.read_text(encoding='utf-8')
+    except OSError:
+        return None
+    match = re.search(r'^SLURP_ARGS="([^"\n]*)"$', text, re.M)
+    words = match.group(1).split() if match else []
+    allowed = {'-b': r'#[0-9a-fA-F]{8}', '-c': r'#[0-9a-fA-F]{8}', '-s': r'#[0-9a-fA-F]{8}',
+               '-B': r'#[0-9a-fA-F]{8}', '-w': r'[0-9]{1,2}', '-F': r'[A-Za-z][A-Za-z0-9 -]{0,40}'}
+    for flag, value in zip(words[::2], words[1::2]):
+        if flag in allowed and re.fullmatch(allowed[flag], value):
+            sys.stdout.write('{}\n{}\n'.format(flag, value))
+    return None
+
+
+# ---- the frozen screen ---------------------------------------------------------------------------
+
+FROZEN = Path(os.environ.get('XDG_RUNTIME_DIR') or '/tmp') / 'arctic' / 'capture' / 'frozen'
+
+
+def cmd_freeze(_args):
+    outs = monitors()
+    if not outs:
+        raise Failure('no_display', 'Mango reported no monitors.')
+    cmd_thaw([])
+    FROZEN.mkdir(parents=True, mode=0o700)
+
+    def grab(m):
+        # At the monitor's own scale: grim's default is the largest scale of all monitors.
+        result = run(['grim', '-t', 'ppm', '-s', str(m.get('scale') or 1), '-o', m['name'],
+                      str(FROZEN / (m['name'] + '.ppm'))], timeout=10)
+        return result is not None and result.returncode == 0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(outs)) as pool:
+        grabbed = list(pool.map(grab, outs))
+    frozen = [dict(name=m['name'], x=m['x'], y=m['y'], width=m['width'], height=m['height'],
+                   scale=m.get('scale') or 1, file=str(FROZEN / (m['name'] + '.ppm')))
+              for m, ok in zip(outs, grabbed) if ok]
+    if not frozen:
+        cmd_thaw([])
+        raise Failure('capture_failed', 'grim couldn’t capture the screen.')
+    (FROZEN / 'frozen.json').write_text(json.dumps(dict(outputs=frozen)))
+    return dict(dir=str(FROZEN), outputs=frozen)
+
+
+def crop_box(geometry, out):
+    """'x,y wxh' (layout px) → the box in that output's frozen picture (physical px), or None
+    when the area isn't all on it."""
+    match = re.fullmatch(r'(-?\d+),(-?\d+) (\d+)x(\d+)', geometry.strip())
+    if not match:
+        raise Failure('usage', 'The area should look like "X,Y WxH".')
+    x, y, w, h = (int(v) for v in match.groups())
+    if w <= 0 or h <= 0:
+        return None
+    left, top = x - out['x'], y - out['y']
+    if left < 0 or top < 0 or left + w > out['width'] or top + h > out['height']:
+        return None
+    s = out['scale']
+    return (round(left * s), round(top * s), round((left + w) * s), round((top + h) * s))
+
+
+def cmd_crop(args):
+    if len(args) != 3:
+        raise Failure('usage', 'usage: arctic-capture crop GEOMETRY OUTPUT FILE')
+    try:
+        outs = json.loads((FROZEN / 'frozen.json').read_text()).get('outputs', [])
+    except (OSError, ValueError):
+        raise Failure('not_found', 'Nothing is frozen.') from None
+    out = next((o for o in outs if o['name'] == args[1]), None)
+    box = crop_box(args[0], out) if out else None
+    if box is None:
+        raise Failure('not_found', 'That area isn’t all on one frozen screen.')
+    from PIL import Image
+    with Image.open(out['file']) as image:
+        box = (box[0], box[1], min(box[2], image.width), min(box[3], image.height))
+        image.crop(box).save(args[2], 'PNG')
+    return dict(file=args[2], width=box[2] - box[0], height=box[3] - box[1])
+
+
+def cmd_thaw(_args):
+    if FROZEN.is_dir():
+        for path in FROZEN.iterdir():
+            path.unlink(missing_ok=True)
+        FROZEN.rmdir()
+    return {}
+
+
+# ---- colour --------------------------------------------------------------------------------------
+
+def ppm_first_pixel(data):
+    """The top-left pixel of a binary PPM (P6, maxval ≤ 255) — what `grim -t ppm` writes."""
+    fields, pos = [], 0
+    while len(fields) < 4:
+        while pos < len(data) and data[pos:pos + 1].isspace():
+            pos += 1
+        if data[pos:pos + 1] == b'#':
+            while pos < len(data) and data[pos:pos + 1] != b'\n':
+                pos += 1
+            continue
+        start = pos
+        while pos < len(data) and not data[pos:pos + 1].isspace():
+            pos += 1
+        if start == pos:
+            raise Failure('capture_failed', 'The captured frame was empty.')
+        fields.append(data[start:pos])
+    if fields[0] != b'P6' or int(fields[3]) > 255:
+        raise Failure('capture_failed', 'The captured frame wasn’t a picture grim makes.')
+    pixel = data[pos + 1:pos + 4]
+    if len(pixel) < 3:
+        raise Failure('capture_failed', 'The captured frame was cut short.')
+    return tuple(pixel)
+
+
+def colour(rgb):
+    r, g, b = rgb
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    hsl = [round(h * 360) % 360, round(s * 100), round(l * 100)]
+    return dict(hex='#{:02x}{:02x}{:02x}'.format(r, g, b), rgb=[r, g, b], hsl=hsl,
+                rgb_text='rgb({}, {}, {})'.format(r, g, b), hsl_text='hsl({}, {}%, {}%)'.format(*hsl))
+
+
+def cmd_pixel(_args):
+    return colour(ppm_first_pixel(sys.stdin.buffer.read()))
+
+
+def cmd_swatch(args):
+    if len(args) != 2 or not re.fullmatch(r'#[0-9a-fA-F]{6}', args[0]):
+        raise Failure('usage', 'usage: arctic-capture swatch #rrggbb FILE')
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+           '<rect x="4" y="4" width="56" height="56" rx="12" fill="{}" stroke="#8a94a6" stroke-opacity="0.5" '
+           'stroke-width="2"/></svg>\n').format(args[0].lower())
+    Path(args[1]).write_text(svg)
+    return dict(file=args[1])
+
+
+# ---- text and QR codes ---------------------------------------------------------------------------
+
+def installed_langs():
+    result = run(['tesseract', '--list-langs'])
+    if result is None:
+        raise Failure('missing_tool', 'Text recognition (tesseract) isn’t installed.', tool='tesseract')
+    text = (result.stdout + result.stderr).decode('utf-8', 'replace')
+    return [line.strip() for line in text.splitlines()[1:]
+            if re.fullmatch(r'[A-Za-z_]+', line.strip() or '-') and line.strip() not in ('osd', 'equ')]
+
+
+def wanted_langs():
+    """Your locale's language, then your keyboard layouts', then English."""
+    wanted = []
+    lang = os.environ.get('LC_ALL') or os.environ.get('LC_MESSAGES') or os.environ.get('LANG') or ''
+    code = lang.split('.')[0]
+    for candidate in (code, code.split('_')[0]):
+        if candidate in TESS_LANGS:
+            wanted.append(TESS_LANGS[candidate])
+            break
+    for value in config_values('xkb_rules_layout')[-1:]:
+        for layout in value.split(','):
+            if layout.strip() in TESS_LANGS:
+                wanted.append(TESS_LANGS[layout.strip()])
+    wanted.append('eng')
+    return list(dict.fromkeys(wanted))
+
+
+def cmd_ocr(args):
+    if len(args) != 1:
+        raise Failure('usage', 'usage: arctic-capture ocr FILE')
+    installed = installed_langs()
+    wanted = wanted_langs()
+    langs = [lang for lang in wanted if lang in installed][:3] or installed[:1]
+    missing = [lang for lang in wanted if lang not in installed]
+    if not langs:
+        raise Failure('missing_tool', 'Text recognition has no languages installed.', tool='tesseract-langpack-eng')
+    result = run(['tesseract', args[0], '-', '-l', '+'.join(langs)], timeout=60)
+    if result is None or result.returncode != 0:
+        raise Failure('capture_failed', 'Text recognition failed on that picture.')
+    lines = [line.rstrip() for line in result.stdout.decode('utf-8', 'replace').splitlines()]
+    text = '\n'.join(lines).strip()
+    extra = dict(missing=missing[:1], missing_name=LANG_NAMES.get(missing[0], missing[0]) if missing else '')
+    if not text:
+        raise Failure('not_found', 'No text found in that area.', langs=langs, **extra)
+    return dict(text=text, lines=len([line for line in lines if line.strip()]), langs=langs, **extra)
+
+
+def decode_qr(path):
+    try:
+        import zxingcpp  # python3-zxing-cpp
+        from PIL import Image
+        with Image.open(path) as image:
+            found = zxingcpp.read_barcodes(image.convert('L'), formats=zxingcpp.BarcodeFormat.QRCode)
+        return [r.text for r in found if r.text]
+    except ImportError:
+        pass
+    if not shutil.which('zbarimg'):
+        raise Failure('missing_tool', 'A QR code reader (python3-zxing-cpp or zbar) isn’t installed.',
+                      tool='python3-zxing-cpp')
+    result = run(['zbarimg', '-q', '--raw', '-Sdisable', '-Sqrcode.enable', path])
+    if result is None:
+        raise Failure('capture_failed', 'Reading the QR code failed.')
+    return [line for line in result.stdout.decode('utf-8', 'replace').splitlines() if line.strip()]
+
+
+def describe_code(text):
+    """(kind, what the notification may show): secrets are never shown."""
+    lower = text.lower()
+    if re.match(r'https?://', lower):
+        return 'url', text if len(text) <= 60 else text[:59] + '…'
+    if lower.startswith('otpauth://'):
+        return 'otpauth', ''
+    if lower.startswith('wifi:'):
+        ssid = re.search(r'(?:^|;)S:((?:\\.|[^;])*)', text[5:])
+        return 'wifi', re.sub(r'\\(.)', r'\1', ssid.group(1)) if ssid else ''
+    return 'text', text if len(text) <= 60 else text[:59] + '…'
+
+
+def cmd_qr(args):
+    if len(args) != 1:
+        raise Failure('usage', 'usage: arctic-capture qr FILE')
+    codes = decode_qr(args[0])
+    if not codes:
+        raise Failure('not_found', 'No QR code found in that area.')
+    kind, shown = describe_code(codes[0])
+    return dict(codes=codes, kind=kind, shown=shown)
+
+
+def cmd_same(args):
+    """Whether two pictures have the same pixels (an editor closed without changes)."""
+    if len(args) != 2:
+        raise Failure('usage', 'usage: arctic-capture same FILE FILE')
+    from PIL import Image, ImageChops
+    with Image.open(args[0]) as a, Image.open(args[1]) as b:
+        same = a.size == b.size and ImageChops.difference(a.convert('RGBA'), b.convert('RGBA')).getbbox() is None
+    if not same:
+        raise Failure('different', 'The pictures differ.')
+    return {}
+
+
+def cmd_uri(args):
+    if len(args) != 1:
+        raise Failure('usage', 'usage: arctic-capture uri FILE')
+    return dict(uri=Path(os.path.abspath(args[0])).as_uri())
+
+
+COMMANDS = {'window': cmd_window, 'output': cmd_output, 'rects': cmd_rects, 'sources': cmd_sources, 'slurp-args': cmd_slurp_args,
+            'freeze': cmd_freeze, 'crop': cmd_crop, 'thaw': cmd_thaw, 'pixel': cmd_pixel,
+            'swatch': cmd_swatch, 'ocr': cmd_ocr, 'qr': cmd_qr, 'uri': cmd_uri, 'same': cmd_same}
+
+
+def main(argv):
+    if not argv or argv[0] not in COMMANDS:
+        sys.stderr.write(__doc__.split('\n\n')[2] + '\n')
+        return 2
+    try:
+        result = COMMANDS[argv[0]](argv[1:])
+    except Failure as failure:
+        emit(dict(ok=False, code=failure.code, error=failure.error, **failure.extra))
+        return 2 if failure.code == 'usage' else 1
+    if result is not None:
+        emit(dict(ok=True, **result))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

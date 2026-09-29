@@ -6,7 +6,6 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Pam
-import Quickshell.Services.UPower
 
 // The lock screen (design LockScreen): the wallpaper blurred under frost, the clock, your
 // avatar and name, and the password field, whose ring is amber while you type, red when the
@@ -27,6 +26,10 @@ Scope {
     // confirmed every screen is covered — only then is the session really locked.
     readonly property bool locked: lock.locked
     readonly property bool secure: lock.secure
+    // Set by lock() and the unlock: in Fedora's Quickshell snapshot lock.locked doesn't announce
+    // its changes (bindings on it keep the old value), so the Caps Lock check and
+    // NotificationService's count (toasts hide, the "N notifications" line) follow this.
+    property bool showing: false
 
     function lock() {
         if (Session.live) {
@@ -41,7 +44,11 @@ Scope {
         powerOpen = false;
         reveal = false;
         wallpaperView.reload();
+        // The password is typed in the first layout (the installer's), whatever was active.
+        if (KeyboardService.multiple && KeyboardService.index !== 0) KeyboardService.set(0, true);
         lock.locked = true;
+        root.showing = true;
+        NotificationService.locked = true;
     }
     function submit() {
         if (state === 'checking' || state === 'success') return;
@@ -78,8 +85,102 @@ Scope {
             root.password = '';
         }
     }
+    // Stream 5: the fingerprint reader unlocks too (pam/arctic-lock-fingerprint: pam_fprintd), next
+    // to the password, when a finger is saved (fprintd-list), the lid is open (logind) and
+    // shell.json doesn't say "lock_fingerprint": false (Settings > Users and sign-in). It listens
+    // again each time its 30 s wait runs out; three fingers that don't match, or a reader that
+    // keeps failing, stop it until the next lock.
+    property bool fingerprint: false    // listening now
+    property int fingerMisses: 0
+    property int fingerFailures: 0
+    property double fingerStarted: 0
+    function listenForFinger() {
+        if (!lock.secure || state === 'success' || fingerPam.active || fingerMisses >= 3 || fingerFailures >= 3
+                || Session.settings.lock_fingerprint === false || fingerCheck.running || lidCheck.running)
+            return;
+        fingerCheck.running = true;
+    }
+    onSecureChanged: {
+        fingerMisses = 0;
+        fingerFailures = 0;
+        if (secure) {
+            listenForFinger();
+            Quickshell.execDetached(['arctic-hook', 'lock']);     // your lock hooks, once every screen is covered
+        }
+    }
+    // Unlocked (with the password, say): the reader is let go now, not when its 30 s wait ends.
+    // `showing`, not `locked`, whose change this Quickshell doesn't announce.
+    onShowingChanged: if (!showing && fingerPam.active) fingerPam.abort()
+    Process {
+        id: fingerCheck
+        command: ['fprintd-list', Session.user]
+        stdout: StdioCollector {
+            onStreamFinished: if (/^\s*- #\d+:/m.test(text)) lidCheck.running = true
+        }
+    }
+    Process {
+        id: lidCheck
+        command: ['gdbus', 'call', '--system', '--dest', 'org.freedesktop.login1', '--object-path', '/org/freedesktop/login1',
+            '--method', 'org.freedesktop.DBus.Properties.Get', 'org.freedesktop.login1.Manager', 'LidClosed']
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (/true/.test(text) || !lock.secure || root.state === 'success')
+                    return;
+                root.fingerStarted = Date.now();
+                fingerPam.start();
+            }
+        }
+    }
+    Timer { id: fingerAgain; interval: 1000; onTriggered: root.listenForFinger() }
+    PamContext {
+        id: fingerPam
+        configDirectory: Quickshell.shellDir + '/pam'
+        config: 'arctic-lock-fingerprint'
+        onActiveChanged: root.fingerprint = active
+        onPamMessage: {
+            if (responseRequired) {
+                respond('');
+            } else if (messageIsError && /match/i.test(message)) {
+                root.fingerMisses++;
+                root.message = 'That finger didn’t match. Try again, or type your password.';
+            }
+        }
+        onCompleted: result => {
+            if (result === PamResult.Success) {
+                if (!lock.locked || root.state === 'success')
+                    return;
+                root.state = 'success';
+                root.message = '';
+                unlockTimer.restart();
+                return;
+            }
+            if (result === PamResult.MaxTries)
+                root.fingerMisses = 3;
+            else if (Date.now() - root.fingerStarted < 5000)
+                root.fingerFailures++;
+            if (lock.locked)
+                fingerAgain.restart();
+        }
+        onError: {
+            root.fingerFailures++;
+            if (lock.locked)
+                fingerAgain.restart();
+        }
+    }
+
     // Let the green "accepted" ring show for a moment before the screen unlocks.
-    Timer { id: unlockTimer; interval: 180; onTriggered: { lock.locked = false; root.password = ''; root.state = 'idle'; } }
+    Timer {
+        id: unlockTimer
+        interval: 180
+        onTriggered: {
+            lock.locked = false;
+            root.showing = false;
+            NotificationService.locked = false;
+            root.password = '';
+            root.state = 'idle';
+            Quickshell.execDetached(['arctic-hook', 'unlock']);
+        }
+    }
 
     // arctic-wallpaper records the picture it drew; fall back to the theme's lock wallpaper.
     FileView {
@@ -92,6 +193,22 @@ Scope {
     readonly property string fallbackWallpaper: '/usr/share/backgrounds/arctic/' + Theme.tokens.lockWallpaper + '.svg'
 
     SystemClock { id: clock; precision: SystemClock.Minutes; enabled: lock.locked }
+
+    // Caps Lock, from the keyboard LEDs (sysfs has no change events, so it is read twice a
+    // second, only while locked).
+    property bool capsLock: false
+    Timer {
+        interval: 500
+        repeat: true
+        running: root.showing
+        onRunningChanged: if (!running) root.capsLock = false
+        onTriggered: if (!capsQuery.running) capsQuery.running = true
+    }
+    Process {
+        id: capsQuery
+        command: ['sh', '-c', 'cat /sys/class/leds/*::capslock/brightness 2>/dev/null']
+        stdout: StdioCollector { onStreamFinished: root.capsLock = /^[1-9]/m.test(text) }
+    }
 
     WlSessionLock {
         id: lock
@@ -141,6 +258,17 @@ Scope {
                     font.family: Theme.fontSans
                     font.pixelSize: 17
                     font.weight: Font.Medium
+                }
+                // How many arrived while locked: the count only, never what they say.
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: Theme.space2
+                    visible: NotificationService.lockedCount > 0
+                    text: NotificationService.lockedCount + (NotificationService.lockedCount === 1 ? ' notification' : ' notifications')
+                    color: Theme.inkMuted
+                    font.family: Theme.fontSans
+                    font.pixelSize: 13
+                    font.features: { 'tnum': 1 }
                 }
             }
 
@@ -197,7 +325,7 @@ Scope {
                         echoMode: root.reveal ? TextInput.Normal : TextInput.Password
                         passwordCharacter: '•'
                         placeholderText: 'Password'
-                        rightPadding: Theme.space3 + 18 + Theme.space2
+                        rightPadding: Theme.space3 + 18 + Theme.space2 + (layoutChip.visible ? layoutChip.width + Theme.space2 : 0)
                         inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
                         enabled: root.state !== 'checking' && root.state !== 'success'
                         error: root.state === 'error'
@@ -212,6 +340,37 @@ Scope {
                         Connections {
                             target: lock
                             function onLockedChanged() { if (lock.locked) field.forceActiveFocus(); }
+                        }
+                        // The keyboard layout the password is typed in (with more than one): a
+                        // click switches to the next.
+                        Rectangle {
+                            id: layoutChip
+                            visible: KeyboardService.multiple
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.space3 + 18 + Theme.space2
+                            anchors.verticalCenter: parent.verticalCenter
+                            implicitWidth: layoutText.implicitWidth + 2 * Theme.space2
+                            implicitHeight: 22
+                            radius: Theme.radiusSm
+                            color: Theme.surfaceSunken
+                            border.width: 1
+                            border.color: Theme.line
+                            Accessible.role: Accessible.Button
+                            Accessible.name: 'Keyboard layout: ' + KeyboardService.name
+                            Text {
+                                id: layoutText
+                                anchors.centerIn: parent
+                                text: KeyboardService.shortName
+                                color: Theme.inkMuted
+                                font.family: Theme.fontSans
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { KeyboardService.next(); field.forceActiveFocus(); }
+                            }
                         }
                         // Show / hide the password (design Input: eye at the end of password fields).
                         Icon {
@@ -235,19 +394,54 @@ Scope {
                     Layout.maximumWidth: 340
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
-                    text: root.message || (root.state === 'checking' ? 'Checking…' : root.state === 'success' ? 'Unlocked' : 'Locked')
-                    color: root.state === 'error' ? Theme.error : root.state === 'success' ? Theme.success : Theme.inkMuted
+                    readonly property bool caps: root.capsLock && !root.message && root.state === 'idle'
+                    text: root.message || (root.state === 'checking' ? 'Checking…' : root.state === 'success' ? 'Unlocked'
+                        : caps ? 'Caps Lock is on'
+                        : root.fingerprint ? 'Locked. Touch the fingerprint reader or type your password.' : 'Locked')
+                    color: root.state === 'error' ? Theme.error : root.state === 'success' ? Theme.success : caps ? Theme.warning : Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 12
                     font.weight: Font.Medium
+                }
+                // What is playing (only while a player exists): title — artist, play/pause, next.
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: false
+                    Layout.maximumWidth: 340
+                    Layout.topMargin: Theme.space2
+                    visible: MediaService.available
+                    spacing: Theme.space1
+                    Icon { name: 'music'; size: 16; color: Theme.inkMuted }
+                    Text {
+                        Layout.maximumWidth: 250
+                        elide: Text.ElideRight
+                        text: MediaService.title + (MediaService.artist ? ' — ' + MediaService.artist : '')
+                        textFormat: Text.PlainText
+                        color: Theme.inkMuted
+                        font.family: Theme.fontSans
+                        font.pixelSize: 12
+                    }
+                    ArcticButton {
+                        variant: 'ghost'; size: 'sm'; iconOnly: true
+                        iconName: MediaService.playing ? 'pause' : 'play'
+                        label: MediaService.playing ? 'Pause' : 'Play'
+                        enabled: MediaService.available && MediaService.active.canTogglePlaying
+                        onClicked: { MediaService.playPause(); field.forceActiveFocus(); }
+                    }
+                    ArcticButton {
+                        variant: 'ghost'; size: 'sm'; iconOnly: true
+                        iconName: 'skip-forward'
+                        label: 'Next'
+                        enabled: MediaService.available && MediaService.active.canGoNext
+                        onClicked: { MediaService.next(); field.forceActiveFocus(); }
+                    }
                 }
             }
 
             // Battery, Wi-Fi and power, bottom-right.
             Rectangle {
                 id: statusPill
-                readonly property var battery: UPower.displayDevice
-                readonly property bool hasBattery: battery !== null && battery.ready && battery.isLaptopBattery
+                readonly property bool hasBattery: BatteryService.present
                 anchors { right: parent.right; bottom: parent.bottom; rightMargin: 16; bottomMargin: 14 }
                 implicitWidth: statusRow.implicitWidth + 2 * Theme.space1
                 implicitHeight: Theme.controlMd + 2
@@ -266,13 +460,13 @@ Scope {
                         visible: statusPill.hasBattery || NetworkService.available
                         Icon {
                             visible: statusPill.hasBattery
-                            name: statusPill.hasBattery && statusPill.battery.state === UPowerDeviceState.Charging ? 'battery-charging' : 'battery'
+                            name: BatteryService.charging ? 'battery-charging' : 'battery'
                             size: 16
                             color: Theme.ink
                         }
                         Text {
                             visible: statusPill.hasBattery
-                            text: statusPill.hasBattery ? Math.round(statusPill.battery.percentage > 1 ? statusPill.battery.percentage : statusPill.battery.percentage * 100) + '%' : ''
+                            text: statusPill.hasBattery ? BatteryService.percent + '%' : ''
                             color: Theme.ink
                             font.family: Theme.fontSans
                             font.pixelSize: 12

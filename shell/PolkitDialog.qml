@@ -9,6 +9,7 @@ import Quickshell.Services.Polkit
 Scope {
     id: root
     readonly property var flow: agent.flow
+    readonly property bool active: agent.isActive   // asking now (Get apps shows "Waiting for your password")
     property string password: ''
 
     PolkitAgent { id: agent }
@@ -72,6 +73,7 @@ Scope {
                     Text {
                         Layout.fillWidth: true
                         text: root.flow ? root.flow.message : ''
+                        textFormat: Text.PlainText
                         color: Theme.inkMuted
                         font.family: Theme.fontSans
                         font.pixelSize: 15
@@ -97,6 +99,7 @@ Scope {
                 Layout.topMargin: Theme.space2
                 visible: text !== ''
                 text: !root.flow ? '' : root.flow.failed ? 'That password didn’t work. Try again.' : root.flow.supplementaryMessage
+                textFormat: Text.PlainText
                 color: root.flow && (root.flow.failed || root.flow.supplementaryIsError) ? Theme.error : Theme.inkMuted
                 font.family: Theme.fontSans
                 font.pixelSize: 13

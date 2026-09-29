@@ -13,6 +13,10 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     undo                          put the previous settings.conf back (from the backups)
     binds                         the shortcut sheet (keys.txt), every bind in the config, yours
     bind-add MODS KEY COMMAND     add a shortcut that runs COMMAND (checked for clashes)
+    notices                       what to say once at login about shortcuts (arctic-settings --check-binds)
+    clipboard                     clipboard history: kept or not, and how many entries
+    clipboard-set history on|off  keep clipboard history (~/.config/arctic/clipboard.conf)
+    clipboard-clear               forget clipboard history (cliphist wipe)
     bind-remove INDEX
     startup                       startup apps: yours (exec-once in settings.conf) and Arctic's
     startup-add COMMAND | --app DESKTOP-ID
@@ -43,8 +47,30 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
                                   instead of failing when Wallhaven can't be reached
     updates | update-run now|apply|channel NAME|auto on|off                     (arctic-update)
     network | wifi on|off         NetworkManager status (nmcli)
+    notifications                 do not disturb, its schedule, history and the per-app rules
+    notification-set KEY VALUE    history on|off, schedule on|off, schedule-from / schedule-to HH:MM
+    notification-rule-set APP KEY on|off…   toasts, history, allow_during_dnd, silence_urgent
+    notification-history-clear    empty the notification centre
+    dnd-set on|off|1h|tomorrow    do not disturb now (arctic-dnd)
     about                         Arctic and Fedora versions, hardware, Mango and Quickshell
     caps                          which helper commands and tools are installed
+    webapps                       web apps and kept sign-in data, with sizes (arctic-webapp list)
+    webapp-set ID KEY VALUE       change a web app (KEY: name links notifications devtools rendering
+                                  runtime category mail-links add-domain remove-domain
+                                  forget-certificate icon)
+    webapp-reset-permissions ID | webapp-refresh ID | webapp-clear ID | webapp-open ID | webapp-runtimes
+    webapp-remove ID keep|delete | webapp-forget ID
+    nightlight, keep-awake, autostart, printers, datetime, more-updates …   see arctic_system.py
+    shell-options | shell-option-set KEY VALUE    the shell's options (shell.json): webSearch,
+                                  weather, weatherUnits, barWeather
+    weather-place [search TEXT | set NAME LAT LON [DETAIL] | zone]    where the weather is for
+    daylight | daylight-set off|sun|hours LIGHT DARK      light and dark by the clock (arctic-daylight)
+    accessibility                 what the Accessibility page needs (the keyboard pointer, wl-kbptr,
+                                  high contrast)
+    contrast-set on|off           high contrast (arctic-theme contrast)
+    fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
+    wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]     a new picture every so often
+    theme-install URL | theme-remove NAME     themes from the web (arctic-theme install / remove)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
 then `mango -c FILE -p` when Mango is installed) and backed up to
@@ -63,6 +89,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -172,14 +199,30 @@ def atomic_write(path, text, mode=None):
         raise
 
 
+def backup_stamp(paths, name):
+    """A name part for the next backup of `name` that sorts after every backup it already has.
+    One clock reading (seconds and microseconds from two readings could go backwards across a
+    second), and never earlier than the newest backup, so undo always takes the latest one."""
+    def micros(stamp):
+        day, micro = stamp.rsplit('-', 1)
+        return int(time.mktime(time.strptime(day, '%Y%m%d-%H%M%S'))) * 1000000 + int(micro)
+    now = time.time_ns() // 1000
+    olds = sorted(p.name[len(name) + 1:].split('.')[0] for p in paths.backups.glob(name + '.*'))
+    if olds:
+        try:
+            now = max(now, micros(olds[-1]) + 1)
+        except ValueError:
+            pass
+    return time.strftime('%Y%m%d-%H%M%S', time.localtime(now // 1000000)) + '-%06d' % (now % 1000000)
+
+
 def backup(paths, path):
     """Copy path into the backups folder (newest BACKUPS_KEPT per file). Returns the copy."""
     path = Path(path)
     if not path.is_file():
         return None
     paths.backups.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime('%Y%m%d-%H%M%S') + '-%06d' % (time.time_ns() // 1000 % 1000000)
-    target = paths.backups / '{}.{}'.format(path.name, stamp)
+    target = paths.backups / '{}.{}'.format(path.name, backup_stamp(paths, path.name))
     shutil.copy2(path, target)
     olds = sorted(paths.backups.glob(path.name + '.*'))
     for old in olds[:-BACKUPS_KEPT]:
@@ -197,8 +240,7 @@ def backup_absent(paths, path):
     """Record in the backups that path didn't exist, so the first change can be undone too."""
     path = Path(path)
     paths.backups.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime('%Y%m%d-%H%M%S') + '-%06d' % (time.time_ns() // 1000 % 1000000)
-    target = paths.backups / '{}.{}{}'.format(path.name, stamp, ABSENT)
+    target = paths.backups / '{}.{}{}'.format(path.name, backup_stamp(paths, path.name), ABSENT)
     target.write_text('', encoding='utf-8')
     return target
 
@@ -310,6 +352,7 @@ OPTIONS = {
     # focus and layout
     'sloppyfocus': B + (1,), 'warpcursor': B + (1,), 'focus_on_activate': B + (1,),
     'new_is_master': B + (1,), 'default_mfact': ('float', 0.1, 0.9, 0.55),
+    'enable_hotarea': B + (0,), 'hotarea_corner': ('int', 0, 3, 2),
     # cursor
     'cursor_size': ('int', 12, 128, 24), 'cursor_theme': ('cursor', 0, 0, ''),
     'cursor_hide_timeout': ('int', 0, 600, 0),
@@ -788,7 +831,7 @@ KEY_NAMES = {'return': 'Enter', 'space': 'Space', 'slash': '/', 'comma': ',', 'p
              'left': '←', 'right': '→', 'up': '↑', 'down': '↓', 'print': 'Print',
              'page_up': 'Page Up', 'page_down': 'Page Down', 'minus': '-', 'equal': '=',
              'grave': '`', 'semicolon': ';', 'apostrophe': "'", 'bracketleft': '[', 'bracketright': ']',
-             'backslash': '\\'}
+             'backslash': '\\', 'code:49': '`', 'caps_lock': 'Caps Lock'}
 DISPATCHERS = {
     'killclient': 'Close the window', 'togglefloating': 'Float / tile the window',
     'togglemaximizescreen': 'Maximise', 'togglefullscreen': 'Full screen',
@@ -799,6 +842,14 @@ DISPATCHERS = {
     'tagtoleft': 'Move the window to the previous workspace', 'tagtoright': 'Move the window to the next workspace',
     'focusmon': 'Focus the other monitor', 'tagmon': 'Move the window to the other monitor',
     'reload_config': 'Reload the desktop config', 'quit': 'Log out', 'switch_keyboard_layout': 'Next keyboard layout',
+    'switcher': 'Switch windows', 'togglejump': 'Jump to a window', 'focuslast': 'Back to the previous window',
+    'toggle_special_tag': 'Scratch workspace', 'tag_special_tag': 'Move the window to the scratch workspace',
+    'toggle_named_scratchpad': 'Drop-down window', 'minimized': 'Hide the window',
+    'restore_minimized': 'Bring back a hidden window', 'groupjoin': 'Join a tab group',
+    'groupfocus': 'Next / previous tab in the group', 'groupleave': 'Leave the tab group',
+    'toggleglobal': 'Show the window on every workspace', 'centerwin': 'Centre the window',
+    'toggle_trackpad_enable': 'Touchpad on / off', 'toggle_scratchpad': 'Show hidden windows',
+    'setlayout': 'Layout',
 }
 RE_KEY = re.compile(r'^(?:[A-Za-z0-9_]{1,40}|code:\d{1,3})$')
 FREE_KEYS = re.compile(r'^(?:F\d{1,2}|XF86\w+|Print|Pause|Scroll_Lock|Menu)$')
@@ -835,8 +886,35 @@ def combo_label(mods, key):
     return ' + '.join(names + [key_label(key)])
 
 
+def combo_id(mods, key):
+    """What Mango matches a key press on. code:49 is the key above Tab (grave on us)."""
+    key = key.lower()
+    return (frozenset(mods), 'grave' if key == 'code:49' else key)
+
+
+def mark_shadowed(binds):
+    """Mango runs only the first bind that matches a key press, unless that bind has the `c`
+    flag, so a later bind on the same keys in the same keymode (or in `common`, which applies in
+    every mode) never runs. Release binds (`r`) and press binds don't meet."""
+    for i, bind in enumerate(binds):
+        for earlier in binds[:i]:
+            if earlier['combo'] != bind['combo'] or ('r' in earlier['flags']) != ('r' in bind['flags']):
+                continue
+            if 'c' in earlier['flags']:
+                continue
+            if earlier['keymode'] != bind['keymode'] and 'common' not in (earlier['keymode'], bind['keymode']):
+                continue
+            bind['shadowedBy'] = dict(label=earlier['label'], what=earlier['what'],
+                                      file=os.path.basename(earlier['file']))
+            break
+    for bind in binds:
+        del bind['combo']
+    return binds
+
+
 def chain_binds(paths):
-    """Keyboard binds in the config chain: [{mods, key, action, args, file, keymode, label}]."""
+    """Keyboard binds in the config chain: [{mods, key, action, args, file, keymode, label,
+    flags, shadowedBy?}]."""
     out = []
     keymode = 'default'
     for key, value, origin in read_chain(paths):
@@ -862,8 +940,19 @@ def chain_binds(paths):
                 what += ' ' + args.split(',')[0]
         out.append(dict(mods=sorted(mods), key=parts[1], action=action, args=args, file=origin,
                         keymode=keymode, label=combo_label(mods, parts[1]), what=what,
-                        mine=same_file(origin, paths.settings_conf)))
-    return out
+                        mine=same_file(origin, paths.settings_conf), flags=key[4:],
+                        combo=combo_id(mods, parts[1])))
+    return mark_shadowed(out)
+
+
+def arctic_file(paths, origin):
+    """A file of Arctic's own (its Mango config, links into /usr/share/arctic, the theme's
+    colours), rather than one of yours."""
+    if same_file(origin, paths.settings_conf) or same_file(origin, paths.user_conf):
+        return False
+    real = os.path.realpath(origin)
+    return any(real.startswith(os.path.realpath(str(root)) + os.sep)
+               for root in (paths.mango / 'arctic', paths.share, paths.arctic, paths.etc))
 
 
 def parse_sheet(text):
@@ -889,9 +978,102 @@ def cmd_binds(paths, _args):
         if sheet:
             break
     model = load_settings(paths)
-    mine = [dict(index=i, label=combo_label(parse_mods(b['mods']), b['key']), command=b['command'],
-                 mods=b['mods'], key=b['key']) for i, b in enumerate(model.binds)]
-    return dict(ok=True, sheet=parse_sheet(sheet or ''), all=chain_binds(paths), mine=mine)
+    binds = chain_binds(paths)
+    mine = []
+    for i, b in enumerate(model.binds):
+        mods = parse_mods(b['mods'])
+        entry = dict(index=i, label=combo_label(mods, b['key']), command=b['command'], mods=b['mods'], key=b['key'])
+        shadow = next((c['shadowedBy'] for c in binds if c['mine'] and 'shadowedBy' in c
+                       and combo_id(c['mods'], c['key']) == combo_id(mods, b['key'])
+                       and c['args'] == b['command']), None)
+        if shadow:
+            entry['shadowedBy'] = shadow
+        mine.append(entry)
+    # Your binds (settings.conf, user.conf or a file you sourced) that never run, with the
+    # sheet's words for the bind that wins ("Browser" rather than "arctic-open browser").
+    sections = parse_sheet(sheet or '')
+    words = {row['keys']: row['what'] for section in sections for row in section['rows']}
+    for c in binds:
+        if 'shadowedBy' in c:
+            c['shadowedBy']['sheet'] = words.get(c['shadowedBy']['label'], '')
+    shadowed = [dict(label=c['label'], what=c['what'], file=os.path.basename(c['file']), shadowedBy=c['shadowedBy'])
+                for c in binds if 'shadowedBy' in c and not arctic_file(paths, c['file'])]
+    return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed)
+
+
+def cmd_notices(paths, _args):
+    """Things to say once, at login, about the shortcuts: where 0.3 moved the browser, your own
+    shortcuts that an Arctic key now shadows, and copies of Arctic's binds files that don't get
+    new keys. Each notice is said once (~/.local/state/arctic/notices.json)."""
+    state = paths.state / 'arctic' / 'notices.json'
+    try:
+        shown = set(json.loads(read_text(state) or '{}').get('shown', []))
+    except (ValueError, AttributeError):
+        shown = set()
+    notices = []
+    if 'keys-0.3.0' not in shown:
+        notices.append(dict(id='keys-0.3.0', summary='Super + B opens your browser',
+                            body='It was Super + W before Arctic Linux 0.3. Super + Shift + S takes a screenshot, '
+                                 'and Super + / shows every shortcut.',
+                            action=['arctic-keys'], actionLabel='Show shortcuts'))
+    shadowed = cmd_binds(paths, [])['shadowed']
+    if shadowed:
+        ident = 'shadowed-' + '|'.join(sorted('{}:{}'.format(s['label'], s['what']) for s in shadowed))
+        if ident not in shown:
+            s = shadowed[0]
+            notices.append(dict(
+                id=ident, summary='A shortcut of yours doesn’t run' if len(shadowed) == 1
+                else '{} of your shortcuts don’t run'.format(len(shadowed)),
+                body='Arctic’s “{}” shortcut uses {}, so yours ({}) never runs. Pick another key for it.'.format(
+                    s['shadowedBy'].get('sheet') or s['shadowedBy']['what'], s['label'], s['what']),
+                action=['arctic-settings', 'shortcuts'], actionLabel='Open Shortcuts'))
+    for name in ('apps.conf', 'binds.conf'):
+        mine, arctic = paths.mango / 'arctic' / name, paths.share / 'mango' / name
+        ident = 'copied-{}-0.3.0'.format(name)
+        if ident in shown or mine.is_symlink() or not mine.is_file() or not arctic.is_file():
+            continue
+        if read_text(mine) != read_text(arctic):
+            notices.append(dict(
+                id=ident, summary='Your copy of {} doesn’t have the new shortcuts'.format(name),
+                body='You replaced Arctic’s {} with your own copy, so the keys Arctic Linux 0.3 added '
+                     '(Super + B browser, Super + Shift + S screenshot, Alt + Tab) aren’t in it.'.format(name),
+                action=['gio', 'open', str(arctic)], actionLabel='Show the new file'))
+    if notices:
+        state.parent.mkdir(parents=True, exist_ok=True)
+        # The shadowed set is remembered as it is now, so a later change is said again.
+        kept = {i for i in shown if not i.startswith('shadowed-')} | {n['id'] for n in notices}
+        if not any(n['id'].startswith('shadowed-') for n in notices):
+            kept |= {i for i in shown if i.startswith('shadowed-')}
+        atomic_write(state, json.dumps(dict(shown=sorted(kept))) + '\n')
+    return dict(ok=True, notices=notices)
+
+
+def clipboard_history_on(paths):
+    return (read_text(paths.arctic / 'clipboard.conf') or '').split().count('history=off') == 0
+
+
+def cmd_clipboard(paths, _args):
+    entries = 0
+    if which('cliphist', paths.env):
+        code, out, _err = run(['cliphist', 'list'], env=paths.env)
+        entries = len(out.splitlines()) if code == 0 else 0
+    return dict(ok=True, history=clipboard_history_on(paths), entries=entries,
+                available=bool(which('cliphist', paths.env)))
+
+
+def cmd_clipboard_set(paths, args):
+    if len(args) != 2 or args[0] != 'history' or args[1] not in ('on', 'off'):
+        raise Failure('usage: clipboard-set history on|off')
+    atomic_write(paths.arctic / 'clipboard.conf',
+                 '# Clipboard history (Super + V), set in Settings > Keyboard and mouse.\nhistory={}\n'.format(args[1]))
+    run(['arctic-session', 'clipboard', '--restart'], env=paths.env)
+    return cmd_clipboard(paths, [])
+
+
+def cmd_clipboard_clear(paths, _args):
+    if not which('cliphist', paths.env) or run(['cliphist', 'wipe'], env=paths.env)[0] != 0:
+        raise Failure('Clipboard history couldn’t be cleared.')
+    return cmd_clipboard(paths, [])
 
 
 def validate_command(command, what='command'):
@@ -918,20 +1100,28 @@ def cmd_bind_add(paths, args):
         key = key.lower()
     if not (mods - {'SHIFT'}) and not FREE_KEYS.match(key):
         raise Failure('Add Super, Ctrl or Alt, so the shortcut doesn’t take over a key you type with.')
+    layouts, options = chain_keyboard(paths)
+    switch = next((o for o in options if o.startswith('grp:')), 'grp:alt_shift_toggle')
+    if len(layouts) > 1 and switch_clash(switch, mods, key):
+        chord = ' + '.join(MOD_NAMES[m] for m in ['SUPER', 'CTRL', 'ALT', 'SHIFT'] if m in SWITCH_CHORDS[switch][0])
+        if SWITCH_CHORDS[switch][1]:
+            chord = ' + '.join(filter(None, [chord, key_label(SWITCH_CHORDS[switch][1])]))
+        raise Failure('{} switches your keyboard layout, so this shortcut would switch it too. Pick another key, '
+                      'or change “Switch layouts with” on the Keyboard and mouse page.'.format(chord))
     command = validate_command(args[2])
     # Mango joins spawn arguments split at commas again, but stops at an empty part or a "0".
     parts = command.split(',')
     if len(parts) > 5 or any(p == '' or p == '0' for p in parts[1:]):
         raise Failure('Mango can’t pass that many commas on. Put the command in a script instead.')
-    combo = (frozenset(mods), key.lower())
+    combo = combo_id(mods, key)
     for bind in chain_binds(paths):
-        if bind['keymode'] not in ('default', 'common'):
+        if bind['keymode'] not in ('default', 'common') or 'r' in bind['flags']:
             continue
-        if (frozenset(bind['mods']), bind['key'].lower()) == combo:
+        if combo_id(bind['mods'], bind['key']) == combo:
             raise Failure('{} already does something: {}. Pick another key.'.format(bind['label'], bind['what']))
     model = load_settings(paths)
     for bind in model.binds:
-        if (frozenset(parse_mods(bind['mods'])), bind['key'].lower()) == combo:
+        if combo_id(parse_mods(bind['mods']), bind['key']) == combo:
             raise Failure('You already have a shortcut on {}.'.format(combo_label(mods, key)))
     model.binds.append(dict(mods=mods_text(mods), key=key, command=command))
     result = save_settings(paths, model)
@@ -1790,7 +1980,7 @@ IMAGES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'im
 ROLES = [
     dict(id='browser', label='Web browser', open='browser', icon='globe', categories=['WebBrowser'],
          mimes=['x-scheme-handler/http', 'x-scheme-handler/https', 'text/html', 'application/xhtml+xml'],
-         keys='Super + W'),
+         keys='Super + B'),
     dict(id='terminal', label='Terminal', open='terminal', icon='terminal', categories=['TerminalEmulator'],
          mimes=[], keys='Super + Enter'),
     dict(id='files', label='Files', open='files', icon='folder', categories=['FileManager'],
@@ -2035,6 +2225,9 @@ def cmd_idle_set(paths, args):
         raise Failure('Suspend can’t come before the screen locks.')
     text = ('# Written by Arctic Settings. `arctic-session idle` (swayidle) reads it; 0 means never.\n'
             'lock_after={}\nsuspend_after={}\n').format(lock, suspend)
+    # Stream 5: keep the other keys (battery times, dimming, screens off: arctic_system.py).
+    text += ''.join(line + '\n' for line in (read_text(paths.idle_conf) or '').splitlines()
+                    if re.match(r'^\w+=\d+$', line) and line.split('=')[0] not in ('lock_after', 'suspend_after'))
     if paths.idle_conf.exists():
         backup(paths, paths.idle_conf)
     atomic_write(paths.idle_conf, text)
@@ -2053,6 +2246,36 @@ def cmd_idle_set(paths, args):
 SWITCH_KEYS = ['grp:alt_shift_toggle', 'grp:ctrl_shift_toggle', 'grp:caps_toggle', 'grp:alt_space_toggle',
                'grp:shifts_toggle', 'grp:toggle', 'grp:lalt_lshift_toggle', 'grp:alt_caps_toggle']
 CAPS_OPTIONS = ['caps:escape', 'ctrl:nocaps', 'caps:backspace', 'caps:super', 'caps:none', 'caps:swapescape']
+# The Compose key: press it, then two keys (' then e types é).
+COMPOSE_OPTIONS = ['compose:ralt', 'compose:menu', 'compose:rctrl', 'compose:caps', 'compose:sclk']
+COMPOSE_LABELS = {'compose:ralt': 'Right Alt', 'compose:menu': 'Menu', 'compose:rctrl': 'Right Ctrl',
+                  'compose:caps': 'Caps Lock', 'compose:sclk': 'Scroll Lock'}
+# The keys a layout-switch option takes over: (modifiers the chord holds, the key or None).
+# Any shortcut holding them switches the layout too (Alt + Shift + Tab under Alt + Shift).
+SWITCH_CHORDS = {
+    'grp:alt_shift_toggle': ({'ALT', 'SHIFT'}, None), 'grp:lalt_lshift_toggle': ({'ALT', 'SHIFT'}, None),
+    'grp:ctrl_shift_toggle': ({'CTRL', 'SHIFT'}, None), 'grp:alt_space_toggle': ({'ALT'}, 'space'),
+    'grp:caps_toggle': (set(), 'caps_lock'), 'grp:alt_caps_toggle': ({'ALT'}, 'caps_lock'),
+}
+
+
+def switch_clash(option, mods, key):
+    chord = SWITCH_CHORDS.get(option)
+    if not chord:
+        return False
+    need, chord_key = chord
+    return need <= set(mods) and (chord_key is None or key.lower() == chord_key)
+
+
+def chain_keyboard(paths):
+    """(layouts, options) as Mango reads them: the last xkb_rules_* in the chain."""
+    values = {}
+    for key, value, _origin in read_chain(paths):
+        if key in ('xkb_rules_layout', 'xkb_rules_options'):
+            values[key] = value
+    layouts = [l for l in values.get('xkb_rules_layout', 'us').split(',') if l.strip()]
+    options = [o for o in values.get('xkb_rules_options', '').split(',') if o.strip()]
+    return layouts, options
 
 
 def parse_evdev_lst(text):
@@ -2087,8 +2310,18 @@ def cmd_keyboard_data(paths, _args):
         layouts = [dict(id='us', label='English (US)')]
     switch = [dict(id=o, label=options.get(o, o)) for o in SWITCH_KEYS if o in options or not options]
     caps = [dict(id=o, label=options.get(o, {'caps:none': 'Caps Lock is disabled'}.get(o, o))) for o in CAPS_OPTIONS]
+    compose = [dict(id=o, label=COMPOSE_LABELS[o]) for o in COMPOSE_OPTIONS if o in options or not options]
+    # The shortcuts each switch option would also fire (Settings says so under the choice).
+    clashes = {o: [] for o in SWITCH_CHORDS}
+    for bind in chain_binds(paths):
+        if bind['keymode'] not in ('default', 'common') or 'shadowedBy' in bind:
+            continue
+        for option in clashes:
+            if switch_clash(option, bind['mods'], bind['key']):
+                clashes[option].append('{} ({})'.format(bind['label'], bind['what']))
     return dict(ok=True, layouts=sorted(layouts, key=lambda l: l['label'].lower()), variants=variants,
-                switchKeys=switch, capsOptions=caps)
+                switchKeys=switch, capsOptions=caps, composeKeys=compose,
+                switchClashes={o: v for o, v in clashes.items() if v})
 
 
 def cmd_cursor_themes(paths, _args):
@@ -2118,8 +2351,17 @@ def _theme_items(data):
             out.append(dict(id=item, name=item.replace('-', ' ').capitalize()))
         elif isinstance(item, dict) and (item.get('id') or item.get('name')):
             ident = str(item.get('id') or item.get('name'))
-            out.append(dict(id=ident, name=str(item.get('name') or ident), dark=item.get('dark'),
-                            kind=str(item.get('kind') or item.get('type') or '')))
+            entry = dict(id=ident, name=str(item.get('name') or ident), dark=item.get('dark'),
+                         kind=str(item.get('kind') or item.get('type') or ''))
+            # The theme gallery (arctic-themes-extra): its label, mode, pair and colours.
+            if item.get('gallery') is True:
+                swatches = item.get('swatches') if isinstance(item.get('swatches'), dict) else {}
+                entry.update(gallery=True, label=str(item.get('label') or ident), mode=str(item.get('mode') or ''),
+                             pair=str(item.get('pair') or ''),
+                             installedFrom=str(item.get('installed_from') or ''),
+                             swatches={k: v for k, v in swatches.items()
+                                       if isinstance(k, str) and isinstance(v, str) and re.fullmatch(r'#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?', v)})
+            out.append(entry)
     return out
 
 
@@ -2156,7 +2398,8 @@ def cmd_theme(paths, _args):
 
 def cmd_theme_set(paths, args):
     name = args[0] if args else ''
-    if not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', name):
+    # arctic-theme's names: an installed theme keeps the dots of its repository's name.
+    if not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,63}', name):
         raise Failure('That isn’t a theme name.')
     state = cmd_theme(paths, [])
     if not state['available']:
@@ -2227,11 +2470,24 @@ def cmd_text_scale(paths, args):
         code, _o, err = run(['gsettings', 'set'] + schema + [format_number(value)], timeout=5)
         if code != 0:
             raise Failure(err.strip() or 'Text size couldn’t be changed.')
+        # The terminals follow (arctic-font size): 10.5 pt at 100%, to the nearest half point.
+        if which('arctic-font'):
+            size = 'reset' if value == 1 else format_number(round(TERMINAL_PT * value * 2) / 2)
+            run(['arctic-font', 'size', size, '--json'], timeout=20)
     code, out, _err = run(['gsettings', 'get'] + schema, timeout=5)
     try:
-        return dict(ok=True, available=code == 0, value=float(out.strip()) if code == 0 else 1.0)
+        result = dict(ok=True, available=code == 0, value=float(out.strip()) if code == 0 else 1.0)
     except ValueError:
         return dict(ok=True, available=False, value=1.0)
+    if which('arctic-font'):
+        code, out, _err = run(['arctic-font', 'current', '--json'], timeout=10)
+        data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+        if code == 0 and isinstance(data, dict) and isinstance(data.get('size'), (int, float)):
+            result['terminalPt'] = data['size']
+    return result
+
+
+TERMINAL_PT = 10.5      # arctic-font's default terminal size
 
 
 def apply_cursor_gsettings(options):
@@ -2424,6 +2680,258 @@ def cmd_wifi(paths, args):
     return cmd_network(paths, [])
 
 
+# ---- battery (the shell's battery.py) and shell settings ----------------------------------------
+
+SHELL_KEYS = {'batteryWarnings': ('true', 'false')}
+
+
+def shell_settings(paths):
+    try:
+        data = json.loads((paths.config / 'arctic/shell.json').read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def cmd_battery(paths, args):
+    """The laptop battery as the battery menu sees it (battery.py status: charge limit), plus
+    whether the low-battery warning is on. `battery limit on|off` sets UPower's charge limit."""
+    warnings = shell_settings(paths).get('batteryWarnings') is not False
+    script = shell_script(paths, 'battery.py')
+    if not script:
+        return dict(ok=True, present=False, warnings=warnings)
+    if args[:1] == ['limit'] and args[1:] in (['on'], ['off']):
+        code, out, _err = run([sys.executable, str(script), 'limit', args[1]], timeout=60)
+    elif not args:
+        code, out, _err = run([sys.executable, str(script), 'status'], timeout=20)
+    else:
+        raise Failure('usage: battery [limit on|off]')
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = dict(ok=False, error='The battery helper didn’t answer.')
+    if args and data.get('ok'):
+        return cmd_battery(paths, [])
+    if not data.get('ok'):
+        if args:
+            raise Failure(data.get('error') or 'That didn’t work.')
+        return dict(ok=True, present=False, warnings=warnings)
+    data['warnings'] = warnings
+    return data
+
+
+def cmd_shell_set(paths, args):
+    """shell-set KEY VALUE: one of the shell's own settings in ~/.config/arctic/shell.json
+    (read by the shell's Session.qml), keeping the others."""
+    if len(args) != 2 or args[0] not in SHELL_KEYS or args[1] not in SHELL_KEYS[args[0]]:
+        raise Failure('usage: shell-set batteryWarnings true|false')
+    data = shell_settings(paths)
+    data[args[0]] = args[1] == 'true'
+    atomic_write(paths.config / 'arctic/shell.json', json.dumps(data, indent=2) + '\n')
+    return dict(ok=True, **{args[0]: data[args[0]]})
+
+
+# ---- saved networks and VPNs (the shell's network.py) --------------------------------------------
+
+def network_script(paths, args):
+    script = shell_script(paths, 'network.py')
+    if not script:
+        raise Failure('The shell’s network helper isn’t installed.')
+    _code, out, _err = run([sys.executable, str(script)] + args, timeout=90)
+    try:
+        data = json.loads(out.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise Failure('The network helper didn’t answer.')
+    if not data.get('ok'):
+        raise Failure(data.get('error') or 'That didn’t work.')
+    return data
+
+
+def cmd_network_saved(paths, _args):
+    """Saved Wi-Fi networks and VPN connections."""
+    try:
+        data = network_script(paths, ['saved'])
+    except Failure:
+        return dict(ok=True, available=False, saved=[], vpn=[])
+    return dict(ok=True, available=True, saved=data.get('saved', []), vpn=data.get('vpn', []))
+
+
+def cmd_network_forget(paths, args):
+    if not args or not all(re.fullmatch(r'[0-9a-fA-F-]{36}', a) for a in args):
+        raise Failure('usage: network-forget UUID…')
+    network_script(paths, ['forget'] + [x for a in args for x in ('--uuid', a)])
+    return cmd_network_saved(paths, [])
+
+
+def local_path(arg):
+    """A path, or a file:// URL from a file dialog (percent-encoded)."""
+    return urllib.parse.unquote(arg[7:]) if arg.startswith('file://') else arg
+
+
+def cmd_network_ca_set(paths, args):
+    """network-ca-set UUID PATH: a company (802.1X) network checks its server with this certificate."""
+    if len(args) != 2 or not re.fullmatch(r'[0-9a-fA-F-]{36}', args[0]):
+        raise Failure('usage: network-ca-set UUID PATH')
+    network_script(paths, ['ca-set', '--uuid', args[0], '--file', local_path(args[1])])
+    return cmd_network_saved(paths, [])
+
+
+def cmd_vpn(paths, args):
+    """vpn-up|vpn-down UUID, vpn-import PATH."""
+    verb = args[0] if args else ''
+    if verb in ('up', 'down') and len(args) == 2 and re.fullmatch(r'[0-9a-fA-F-]{36}', args[1]):
+        network_script(paths, ['vpn-' + verb, '--uuid', args[1]])
+    elif verb == 'import' and len(args) == 2:
+        network_script(paths, ['vpn-import', '--file', local_path(args[1])])
+    else:
+        raise Failure('usage: vpn up|down UUID | vpn import PATH')
+    return cmd_network_saved(paths, [])
+
+
+def cmd_bluetooth_pair(_paths, _args):
+    """Pair a device: the shell's Bluetooth menu on its pairing page (codes come up in Arctic's
+    own dialog); without the shell, the Bluetooth manager."""
+    code, _out, _err = run(['arctic-shell-ipc', 'bluetooth', 'pair'], timeout=10)
+    if code == 0:
+        return dict(ok=True, opened='shell')
+    if which('blueman-manager'):
+        subprocess.Popen(['blueman-manager'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return dict(ok=True, opened='blueman')
+    raise Failure('The Arctic shell isn’t running, and the Bluetooth manager isn’t installed.')
+# ---- notifications --------------------------------------------------------------------------------
+# The shell's notification server (shell/NotificationService.qml) reads
+# ~/.config/arctic/notifications.json (written here) and keeps its own state in
+# ~/.local/state/arctic/notifications/ (apps.json: the apps seen, for the rules list).
+# Do not disturb goes through arctic-dnd, which talks to the shell or to mako.
+
+NOTIFY_RULE_KEYS = ('toasts', 'history', 'allow_during_dnd', 'silence_urgent')
+NOTIFY_RULE_DEFAULTS = dict(toasts=True, history=True, allow_during_dnd=False, silence_urgent=False)
+HHMM = re.compile(r'^([01]?\d|2[0-3]):[0-5]\d$')
+
+
+def notifications_file(paths):
+    return paths.arctic / 'notifications.json'
+
+
+def notifications_state(paths):
+    return paths.state / 'arctic' / 'notifications'
+
+
+def read_notification_config(paths):
+    data = _loads(read_text(notifications_file(paths)) or '')
+    data = data if isinstance(data, dict) else {}
+    schedule = data.get('dnd_schedule') if isinstance(data.get('dnd_schedule'), dict) else {}
+    start, end = str(schedule.get('from', '')), str(schedule.get('to', ''))
+    rules = data.get('apps') if isinstance(data.get('apps'), dict) else {}
+    apps = {}
+    for key, rule in rules.items():
+        if isinstance(rule, dict):
+            apps[str(key)] = {k: rule[k] for k in NOTIFY_RULE_KEYS if isinstance(rule.get(k), bool)}
+    return {'history': data.get('history') is not False,
+            'dnd_schedule': {'enabled': schedule.get('enabled') is True,
+                             'from': start if HHMM.match(start) else '22:00', 'to': end if HHMM.match(end) else '07:00'},
+            'apps': apps}
+
+
+def write_notification_config(paths, config):
+    atomic_write(notifications_file(paths), json.dumps(config, indent=1, sort_keys=True) + '\n')
+    if which('arctic-shell-ipc'):       # the shell re-reads it (its watch needs the file to exist)
+        run(['arctic-shell-ipc', 'notifications', 'reload'], timeout=5)
+
+
+def cmd_notifications(paths, _args):
+    config = read_notification_config(paths)
+    seen = _loads(read_text(notifications_state(paths) / 'apps.json') or '')
+    seen = seen.get('apps') if isinstance(seen, dict) and isinstance(seen.get('apps'), list) else []
+    apps, keys = [], set()
+    for app in seen:
+        if isinstance(app, dict) and isinstance(app.get('key'), str) and app['key'] and app['key'] not in keys:
+            keys.add(app['key'])
+            apps.append(dict(key=app['key'], name=str(app.get('app_name') or app['key']),
+                             desktopEntry=str(app.get('desktop_entry') or ''), lastSeen=app.get('last_seen') or 0))
+    for key in sorted(set(config['apps']) - keys):     # rules for apps not seen lately
+        apps.append(dict(key=key, name=key, desktopEntry='', lastSeen=0))
+    for app in apps:
+        app['rule'] = dict(NOTIFY_RULE_DEFAULTS, **config['apps'].get(app['key'], {}))
+    # The shell answers on / off when it owns notifications, "unowned" when mako (or another
+    # daemon) has them; arctic-dnd answers either way.
+    code, out, _err = run(['arctic-shell-ipc', 'notifications', 'dnd', 'status'], timeout=5) if which('arctic-shell-ipc') else (1, '', '')
+    owned = code == 0 and out.strip() in ('on', 'off')
+    dnd = out.strip() == 'on' if owned else False
+    if not owned and which('arctic-dnd'):
+        code, out, _err = run(['arctic-dnd', 'status'], timeout=5)
+        status = _loads(out) or {}
+        dnd = isinstance(status, dict) and status.get('class') == 'dnd'
+    return dict(ok=True, owned=owned, dnd=dnd, history=config['history'], schedule=config['dnd_schedule'], apps=apps)
+
+
+def cmd_notification_set(paths, args):
+    """notification-set history on|off · schedule on|off · schedule-from HH:MM · schedule-to HH:MM"""
+    if len(args) != 2:
+        raise Failure('usage: notification-set history|schedule on|off, or schedule-from|schedule-to HH:MM')
+    key, value = args
+    config = read_notification_config(paths)
+    if key in ('history', 'schedule') and value in ('on', 'off'):
+        if key == 'history':
+            config['history'] = value == 'on'
+        else:
+            config['dnd_schedule']['enabled'] = value == 'on'
+    elif key in ('schedule-from', 'schedule-to') and HHMM.match(value):
+        config['dnd_schedule'][key.split('-')[1]] = '{:0>5}'.format(value)
+    else:
+        raise Failure('That isn’t a notification setting Settings knows.')
+    write_notification_config(paths, config)
+    return cmd_notifications(paths, [])
+
+
+def cmd_notification_rule_set(paths, args):
+    """notification-rule-set APP KEY on|off [KEY on|off…]; KEY: toasts, history,
+    allow_during_dnd, silence_urgent. Rules that match the defaults are dropped."""
+    if len(args) < 3 or len(args) % 2 == 0:
+        raise Failure('usage: notification-rule-set APP KEY on|off…')
+    app, pairs = args[0], args[1:]
+    if not app or len(app) > 200 or any(ord(ch) < 32 for ch in app):
+        raise Failure('That app name can’t be used.')
+    config = read_notification_config(paths)
+    rule = dict(NOTIFY_RULE_DEFAULTS, **config['apps'].get(app, {}))
+    for key, value in zip(pairs[::2], pairs[1::2]):
+        if key not in NOTIFY_RULE_KEYS or value not in ('on', 'off'):
+            raise Failure('usage: notification-rule-set APP toasts|history|allow_during_dnd|silence_urgent on|off')
+        rule[key] = value == 'on'
+    changed = {k: v for k, v in rule.items() if v != NOTIFY_RULE_DEFAULTS[k]}
+    if changed:
+        config['apps'][app] = changed
+    else:
+        config['apps'].pop(app, None)
+    write_notification_config(paths, config)
+    return cmd_notifications(paths, [])
+
+
+def cmd_notification_history_clear(paths, _args):
+    """Clear the notification centre: through the shell when it runs, else the saved history."""
+    code = run(['arctic-shell-ipc', 'notifications', 'clearHistory'], timeout=5)[0] if which('arctic-shell-ipc') else 1
+    if code != 0:
+        try:
+            (notifications_state(paths) / 'history.json').unlink()
+        except FileNotFoundError:
+            pass
+    return cmd_notifications(paths, [])
+
+
+def cmd_dnd_set(paths, args):
+    """dnd-set on|off|1h|tomorrow — do not disturb now (arctic-dnd)."""
+    commands = {'on': ['on'], 'off': ['off'], '1h': ['for', '1h'], 'tomorrow': ['until-tomorrow']}
+    if len(args) != 1 or args[0] not in commands:
+        raise Failure('usage: dnd-set on|off|1h|tomorrow')
+    if not which('arctic-dnd'):
+        raise Failure('arctic-dnd isn’t installed.')
+    code, out, err = run(['arctic-dnd'] + commands[args[0]], timeout=10)
+    if code != 0:
+        raise Failure((err or out).strip() or 'Do not disturb couldn’t be changed.')
+    return cmd_notifications(paths, [])
+
+
 # ---- about --------------------------------------------------------------------------------------
 
 def parse_os_release(text):
@@ -2521,7 +3029,88 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
          'pwvucontrol': 'pwvucontrol', 'wdisplays': 'wdisplays', 'arcticTheme': 'arctic-theme',
          'arcticUpdate': 'arctic-update', 'arcticMotion': 'arctic-motion', 'arcticWallpaper': 'arctic-wallpaper',
          'gsettings': 'gsettings', 'swayidle': 'swayidle', 'gtkLaunch': 'gtk-launch', 'xdgOpen': 'xdg-open',
-         'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl'}
+         'arcticSession': 'arctic-session', 'nmtui': 'nmtui', 'wlCopy': 'wl-copy', 'powerprofilesctl': 'powerprofilesctl',
+         'shellIpc': 'arctic-shell-ipc', 'arcticDnd': 'arctic-dnd'}
+
+
+# ---- web apps (stream 1) -------------------------------------------------------------------------
+# The Web apps page runs arctic-webapp with an argv and passes its one line of --json through:
+# it already has ok and error (a sentence).
+
+WEBAPP_KEYS = {'name': '--name', 'links': '--links', 'notifications': '--notifications', 'devtools': '--devtools',
+               'rendering': '--rendering', 'runtime': '--runtime', 'category': '--category',
+               'mail-links': '--mail-links', 'add-domain': '--add-domain', 'remove-domain': '--remove-domain',
+               'forget-certificate': '--forget-certificate', 'icon': '--icon'}
+
+
+def run_webapp(args, timeout=60):
+    exe = which('arctic-webapp')
+    if not exe:
+        raise Failure('Web apps aren’t installed (package arctic-webapps).')
+    try:
+        proc = subprocess.run([exe] + args + ['--json'], capture_output=True, text=True, timeout=timeout,
+                              stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        raise Failure('Web apps took too long to answer. Try again.') from None
+    lines = [line for line in proc.stdout.splitlines() if line.strip()]
+    try:
+        result = json.loads(lines[-1]) if lines else None
+    except ValueError:
+        result = None
+    if not isinstance(result, dict) or 'ok' not in result:
+        raise Failure('Web apps answered with something Settings can’t read.')
+    return result
+
+
+def webapp_id(args, count=1):
+    if len(args) != count or not re.fullmatch(r'org\.arcticlinux\.WebApp\.[A-Za-z][A-Za-z0-9]{0,31}_[0-9a-f]{6,8}', args[0]):
+        raise Failure('That isn’t a web app.')
+    return args[0]
+
+
+def cmd_webapps(_paths, _args):
+    return run_webapp(['list', '--kept', '--sizes'])
+
+
+def cmd_webapp_set(_paths, args):
+    if len(args) != 3:
+        raise Failure('Expected a web app, a setting and a value.')
+    app, key, value = webapp_id(args[:1]), args[1], args[2]
+    if key not in WEBAPP_KEYS:
+        raise Failure('Settings can’t change “{}” for a web app.'.format(key))
+    if '\n' in value or '\0' in value or len(value) > 2048:
+        raise Failure('That value isn’t valid.')
+    return run_webapp(['set', app, WEBAPP_KEYS[key] + '=' + value])
+
+
+def cmd_webapp_reset_permissions(_paths, args):
+    return run_webapp(['set', webapp_id(args), '--reset-permissions'])
+
+
+def cmd_webapp_refresh(_paths, args):
+    return run_webapp(['update', webapp_id(args)], timeout=90)
+
+
+def cmd_webapp_clear(_paths, args):
+    return run_webapp(['clear-data', webapp_id(args)])
+
+
+def cmd_webapp_open(_paths, args):
+    return run_webapp(['launch', webapp_id(args)])
+
+
+def cmd_webapp_remove(_paths, args):
+    if len(args) != 2 or args[1] not in ('keep', 'delete'):
+        raise Failure('Expected a web app and keep or delete.')
+    return run_webapp(['remove', webapp_id(args[:1])] + (['--keep-data'] if args[1] == 'keep' else []))
+
+
+def cmd_webapp_forget(_paths, args):
+    return run_webapp(['forget', webapp_id(args)])
+
+
+def cmd_webapp_runtimes(_paths, _args):
+    return run_webapp(['runtimes'])
 
 
 def cmd_caps(paths, _args):
@@ -2543,9 +3132,246 @@ def cmd_set_cursor(paths, args):
     return result
 
 
+# ---- the shell's own options (~/.config/arctic/shell.json) --------------------------------------
+# The shell watches the file, so a change shows at once. Only the keys below are written here;
+# every other key in the file is kept as it is.
+
+WEB_ENGINES = (('duckduckgo', 'DuckDuckGo'), ('startpage', 'Startpage'), ('brave', 'Brave Search'),
+               ('ecosia', 'Ecosia'), ('google', 'Google'), ('bing', 'Bing'))
+
+
+def _web_search_ok(value):
+    return value in dict(WEB_ENGINES) or bool(re.fullmatch(r'https://[^\s"\\]{1,200}', value) and '%s' in value)
+
+
+def _as_bool(value):
+    return value == 'true'
+
+
+SHELL_OPTIONS = {
+    # key: (default, check(value) -> bool[, convert(value) -> what shell.json holds])
+    'webSearch': ('duckduckgo', _web_search_ok),
+    # Weather (WeatherService.qml): off until turned on; units; the temperature on the bar.
+    'weather': (False, lambda v: v in ('true', 'false'), _as_bool),
+    'weatherUnits': ('auto', lambda v: v in ('auto', 'metric', 'imperial')),
+    'barWeather': (False, lambda v: v in ('true', 'false'), _as_bool),
+}
+
+
+def read_shell_json(paths):
+    data = _loads(read_text(paths.arctic / 'shell.json') or '')
+    return data if isinstance(data, dict) else {}
+
+
+def cmd_shell_options(paths, _args):
+    data = read_shell_json(paths)
+    out = {key: data.get(key, spec[0]) for key, spec in SHELL_OPTIONS.items()}
+    out.update(ok=True, engines=[dict(id=i, name=n) for i, n in WEB_ENGINES])
+    return out
+
+
+def cmd_shell_option_set(paths, args):
+    if len(args) != 2 or args[0] not in SHELL_OPTIONS:
+        raise Failure('usage: shell-option-set {} VALUE'.format('|'.join(SHELL_OPTIONS)))
+    key, value = args
+    spec = SHELL_OPTIONS[key]
+    if not spec[1](value):
+        raise Failure('That isn’t a value Arctic can use for this.')
+    data = read_shell_json(paths)
+    data[key] = spec[2](value) if len(spec) > 2 else value
+    atomic_write(paths.arctic / 'shell.json', json.dumps(data, indent=2) + '\n')
+    return cmd_shell_options(paths, [])
+
+
+# ---- where you are, for the weather (shell/scripts/weather.py, Open-Meteo) ------------------------
+
+def cmd_weather_place(paths, args):
+    """weather-place                       the place the weather is for
+    weather-place search TEXT           places called that (asks Open-Meteo's geocoding)
+    weather-place set NAME LAT LON [DETAIL]   use that place (~/.config/arctic/location.json)
+    weather-place zone                  back to your time zone's city"""
+    script = shell_script(paths, 'weather.py')
+    if not script:
+        return dict(ok=True, available=False)
+    location = paths.arctic / 'location.json'
+    if args and args[0] == 'search' and len(args) == 2:
+        code, out, _err = run([sys.executable, str(script), 'geocode', args[1], '--json'], timeout=20)
+        data = _loads(out.strip())
+        if not isinstance(data, dict) or not data.get('ok'):
+            raise Failure((data or {}).get('error') if isinstance(data, dict) else 'Places couldn’t be searched.')
+        return dict(ok=True, available=True, places=data.get('places', []))
+    if args and args[0] == 'set' and len(args) in (4, 5):
+        try:
+            lat, lon = float(args[2]), float(args[3])
+        except ValueError:
+            raise Failure('A place needs a latitude and a longitude.') from None
+        name, detail = args[1].strip(), (args[4].strip() if len(args) == 5 else '')
+        if not (0 < len(name) <= 80 and len(detail) <= 120 and -90 <= lat <= 90 and -180 <= lon <= 180):
+            raise Failure('That isn’t a place Arctic can use.')
+        atomic_write(location, json.dumps(dict(name=name, detail=detail, lat=round(lat, 4), lon=round(lon, 4))) + '\n')
+    elif args == ['zone']:
+        with contextlib.suppress(FileNotFoundError):
+            location.unlink()
+    elif args:
+        raise Failure('usage: weather-place [search TEXT | set NAME LAT LON [DETAIL] | zone]')
+    code, out, _err = run([sys.executable, str(script), 'place', '--json'], timeout=10)
+    data = _loads(out.strip())
+    if not isinstance(data, dict) or not data.get('ok'):
+        return dict(ok=True, available=True, place=None)
+    return dict(ok=True, available=True, place=dict(name=data.get('name'), detail=data.get('detail', ''),
+                                                     source=data.get('source')))
+
+
+# ---- light and dark by the clock (arctic-daylight) ------------------------------------------------
+
+def cmd_daylight(paths, args):
+    if not which('arctic-daylight'):
+        return dict(ok=True, available=False)
+    argv = ['arctic-daylight'] + (list(args) if args else ['--json'])
+    code, out, err = run(argv, timeout=60)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if not isinstance(data, dict):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['The light and dark schedule couldn’t be read.'])[-1])
+    if not data.get('ok'):
+        raise Failure(data.get('error') or 'That didn’t work.')
+    data['available'] = True
+    return data
+
+
+def cmd_daylight_set(paths, args):
+    if not args or args[0] not in ('off', 'sun', 'hours') or (args[0] == 'hours') != (len(args) == 3) \
+            or (args[0] != 'hours' and len(args) != 1):
+        raise Failure('usage: daylight-set off|sun|hours LIGHT DARK')
+    if not which('arctic-daylight'):
+        raise Failure('arctic-daylight isn’t installed.')
+    return cmd_daylight(paths, args)
+
+
+# ---- the code font (arctic-font) ------------------------------------------------------------------
+
+def cmd_fonts(paths, _args):
+    if not which('arctic-font'):
+        return dict(ok=True, available=False)
+    code, out, err = run(['arctic-font', 'list', '--json'], timeout=20)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['The fonts couldn’t be listed.'])[-1])
+    return dict(ok=True, available=True, current=str(data.get('current') or ''), size=data.get('size'),
+                fonts=[str(f.get('family')) for f in data.get('fonts', []) if isinstance(f, dict) and f.get('family')],
+                symbols=data.get('symbols') is True)
+
+
+def cmd_font_set(paths, args):
+    if len(args) != 1 or not args[0].strip():
+        raise Failure('usage: font-set FAMILY')
+    if not which('arctic-font'):
+        raise Failure('arctic-font isn’t installed.')
+    code, out, err = run(['arctic-font', 'set', args[0], '--json'], timeout=30)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if not isinstance(data, dict) or not data.get('ok'):
+        raise Failure((data or {}).get('error') if isinstance(data, dict) else (strip_ansi(err).strip() or 'The font couldn’t be changed.'))
+    result = cmd_fonts(paths, [])
+    result.update(changed=data.get('changed', []), skipped=data.get('skipped', []))
+    return result
+
+
+# ---- themes from the web (arctic-theme install / remove) -----------------------------------------
+
+def _theme_json_verb(argv, what):
+    if not which('arctic-theme'):
+        raise Failure('arctic-theme isn’t installed.')
+    code, out, err = run(['arctic-theme'] + argv + ['--json'], timeout=150)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict) or not data.get('ok'):
+        message = (strip_ansi(err).strip().splitlines() or ['The theme couldn’t be {}.'.format(what)])[-1]
+        message = message.replace('arctic-theme: ', '')
+        raise Failure(message[:1].upper() + message[1:] + ('' if message.endswith('.') else '.'))
+    return data
+
+
+def cmd_theme_install(paths, args):
+    """theme-install URL: a theme repository (GitHub, GitLab, Codeberg); only its colours and
+    pictures are kept."""
+    if len(args) != 1 or not re.fullmatch(r'https://[^\s]{1,300}', args[0]):
+        raise Failure('A theme link starts with https://, like https://github.com/owner/name.')
+    data = _theme_json_verb(['install', args[0]], 'installed')
+    result = cmd_theme(paths, [])
+    result.update(installed=dict(name=data.get('name'), label=data.get('label'),
+                                 dropped=[str(d) for d in data.get('dropped', [])][:50],
+                                 backgrounds=data.get('backgrounds', 0)))
+    return result
+
+
+def cmd_theme_remove(paths, args):
+    if len(args) != 1 or not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,63}', args[0]):
+        raise Failure('usage: theme-remove NAME')
+    _theme_json_verb(['remove', args[0]], 'removed')
+    return cmd_theme(paths, [])
+
+
+# ---- wallpaper rotation (arctic-wallpaper rotate) ------------------------------------------------
+
+ROTATE_EVERY = ('off', '30m', '1h', '1d')
+
+
+def cmd_wallpaper_rotate(paths, args):
+    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]: a new picture every so often,
+    without changing the chosen wallpaper or the colours."""
+    if not which('arctic-wallpaper'):
+        return dict(ok=True, available=False, every='off')
+    if args:
+        every = args[0]
+        if every not in ROTATE_EVERY or (every == 'off') != (len(args) == 1) or len(args) > 3 \
+                or (len(args) == 3 and args[2] != 'shuffle'):
+            raise Failure('usage: wallpaper-rotate off | 30m|1h|1d FOLDER|arctic [shuffle]')
+        argv = ['arctic-wallpaper', 'rotate', every] + ([] if every == 'off' else
+                                                          [args[1]] + (['--shuffle'] if len(args) == 3 else []))
+        code, _out, err = run(argv, timeout=30)
+        if code != 0:
+            message = (strip_ansi(err).strip().splitlines() or ['The wallpaper rotation couldn’t be changed.'])[-1]
+            message = message.replace('arctic-wallpaper: ', '')
+            raise Failure(message[:1].upper() + message[1:])
+    code, out, _err = run(['arctic-wallpaper', 'rotate'], timeout=10)
+    data = _loads(out.strip())
+    if code != 0 or not isinstance(data, dict):
+        return dict(ok=True, available=True, every='off')
+    every = data.get('every') if data.get('every') in ROTATE_EVERY else 'off'
+    return dict(ok=True, available=True, every=every, folder=str(data.get('folder') or ''),
+                shuffle=data.get('shuffle') is True)
+
+
+# ---- accessibility ---------------------------------------------------------------------------------
+
+def cmd_accessibility(paths, _args):
+    """What the Accessibility page shows besides motion, text size and the pointer. contrast is
+    None when arctic-theme can't say (an older one: the row is hidden)."""
+    contrast = None
+    if which('arctic-theme'):
+        code, out, _err = run(['arctic-theme', 'contrast', '--json'], timeout=10)
+        data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+        if code == 0 and isinstance(data, dict) and data.get('ok'):
+            contrast = data.get('contrast') == 'high'
+    return dict(ok=True, kbptr=bool(which('wl-kbptr')), kbptrHelper=bool(which('arctic-kbptr')), contrast=contrast)
+
+
+def cmd_contrast_set(paths, args):
+    """High contrast on or off: arctic-theme relinks the active theme to its high-contrast take."""
+    if len(args) != 1 or args[0] not in ('on', 'off'):
+        raise Failure('usage: contrast-set on|off')
+    if not which('arctic-theme'):
+        raise Failure('arctic-theme isn’t installed.')
+    code, out, err = run(['arctic-theme', 'contrast', args[0], '--json'], timeout=60)
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or not isinstance(data, dict) or not data.get('ok'):
+        raise Failure((strip_ansi(err).strip().splitlines() or ['High contrast couldn’t be changed.'])[-1])
+    return cmd_accessibility(paths, [])
+
+
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
     'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
+    'notices': cmd_notices, 'clipboard': cmd_clipboard, 'clipboard-set': cmd_clipboard_set,
+    'clipboard-clear': cmd_clipboard_clear,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
     'displays': cmd_displays, 'display-arrange': cmd_display_arrange, 'display-try': cmd_display_try,
     'display-keep': cmd_display_keep,
@@ -2558,15 +3384,45 @@ COMMANDS = {
     'wallpaper-delete': cmd_wallpaper_delete, 'wallpaper-rename': cmd_wallpaper_rename, 'wallhaven': cmd_wallhaven,
     'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
+    'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,
+    'network-saved': cmd_network_saved, 'network-forget': cmd_network_forget, 'vpn': cmd_vpn,
+    'network-ca-set': cmd_network_ca_set,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
+    'notifications': cmd_notifications, 'notification-set': cmd_notification_set,
+    'notification-rule-set': cmd_notification_rule_set, 'notification-history-clear': cmd_notification_history_clear,
+    'dnd-set': cmd_dnd_set,
 }
+# Web apps (stream 1)
+TOOLS['arcticWebapp'] = 'arctic-webapp'
+COMMANDS.update({
+    'webapps': cmd_webapps, 'webapp-set': cmd_webapp_set, 'webapp-reset-permissions': cmd_webapp_reset_permissions,
+    'webapp-refresh': cmd_webapp_refresh, 'webapp-clear': cmd_webapp_clear, 'webapp-open': cmd_webapp_open,
+    'webapp-remove': cmd_webapp_remove, 'webapp-forget': cmd_webapp_forget, 'webapp-runtimes': cmd_webapp_runtimes,
+})
 
 
 # Commands that read, change and write back settings.conf (or another file of ours): they run
 # one at a time (settings_lock). display-revert takes the lock itself, after its wait.
 WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
-           'ensure-source'}
+           'ensure-source', 'shell-set', 'notification-set', 'notification-rule-set'}
+
+
+# Stream 5 (system): night light, keep awake, XDG autostart, printers, date and time, Flatpak
+# and firmware updates are in arctic_system.py (settings/tests/test_system_helpers.py).
+sys.modules.setdefault('arctic_settings', sys.modules[__name__])   # when run as a script
+import arctic_system  # noqa: E402
+COMMANDS.update(arctic_system.COMMANDS)
+WRITERS |= arctic_system.WRITERS
+
+# The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
+COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
+                 'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
+                 'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
+                 'weather-place': cmd_weather_place, 'theme-install': cmd_theme_install,
+                 'theme-remove': cmd_theme_remove,
+                 'fonts': cmd_fonts, 'font-set': cmd_font_set})
+WRITERS |= {'shell-option-set', 'weather-place'}
 
 
 def main(argv=None):

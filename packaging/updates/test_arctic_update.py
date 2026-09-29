@@ -920,5 +920,167 @@ class ScenarioTests(unittest.TestCase):
                            env=env, capture_output=True, text=True, timeout=60)
         self.assertIn("ignoring ARCTIC_UPDATE_TEST_ROOT", p.stderr)
 
+    # ---- Flatpak apps and firmware ------------------------------------------------------------
+    def fake_flatpak(self, fail=False):
+        """flatpak: `list` prints fake/flatpak-list; `update` bumps one app's commit (or fails)."""
+        self.write("fake/flatpak-list", "org.gimp.GIMP\taaa111\ndev.zed.Zed\tbbb222\n")
+        script = textwrap.dedent('''\
+            #!/bin/sh
+            echo "$*" >> "$ARCTIC_UPDATE_TEST_ROOT/fake/flatpak.log"
+            case "$1" in
+              list) cat "$ARCTIC_UPDATE_TEST_ROOT/fake/flatpak-list" ;;
+              update)
+                if [ -n "{fail}" ]; then echo "Looking for updates…"; echo "error: Unable to connect to dl.flathub.org"; exit 1; fi
+                sed -i 's/aaa111/ccc333/' "$ARCTIC_UPDATE_TEST_ROOT/fake/flatpak-list" ;;
+            esac
+            exit 0
+            ''').format(fail="yes" if fail else "")
+        self.write("fake/bin/flatpak", script)
+        os.chmod(self.path("fake/bin/flatpak"), 0o755)
+
+    def test_flatpak_apps_update_daily(self):
+        self.fake_flatpak()
+        p = self.cli("flatpak", "--auto")
+        self.assertIn("1 app updated.", p.stdout)
+        self.assertIn("update --system --noninteractive -y", self.calls("flatpak"))
+        self.assertIn("uninstall --system --unused --noninteractive -y", self.calls("flatpak"))
+        status = helper.read_json(self.path("var/lib/arctic/flatpak-status.json"))
+        self.assertEqual((status["state"], status["apps_updated"]), ("idle", 1))
+        report = json.loads(self.cli("status", "--json").stdout)
+        self.assertEqual((report["apps"]["updated"], report["apps"]["state"]), (1, "idle"))
+        self.assertIn("Flatpak apps", self.cli("status").stdout)
+        # Nothing new the next day.
+        self.assertIn("up to date", self.cli("flatpak", "--auto").stdout)
+
+    def test_flatpak_count_in_any_locale(self):
+        # The service runs in the system's language; comm must compare in the C order the lists
+        # are sorted in (en_US puts org.gnome.baobab before org.gnome.Calculator, C doesn't).
+        english = dict(self.env, LC_ALL="en_US.UTF-8")
+        if subprocess.run(["sort"], input="a\nB\n", env=english, capture_output=True, text=True).stdout != "a\nB\n":
+            self.skipTest("needs the en_US.UTF-8 locale (glibc-langpack-en)")
+        self.fake_flatpak()
+        self.write("fake/flatpak-list", "org.gnome.Calculator\taaa111\norg.gnome.baobab\tbbb222\n")
+        self.env = english
+        p = self.cli("flatpak")
+        self.assertIn("1 app updated.", p.stdout)
+        self.assertNotIn("not in sorted order", p.stderr)
+
+    def test_flatpak_follows_the_settings(self):
+        self.fake_flatpak()
+        for conf in ("AUTO=off\n", "AUTO=download-only\n"):
+            self.write("etc/arctic/update.conf", conf)
+            self.assertIn("when you run arctic-update flatpak", self.cli("flatpak", "--auto").stdout)
+        self.write("etc/arctic/update.conf", "AUTO=download-and-install-on-reboot\n")
+        self.write("fake/bin/nmcli", '#!/bin/sh\ncase "$*" in *METERED*) echo yes ;; *CONNECTIVITY*) echo full ;; esac\n')
+        self.assertIn("Metered connection", self.cli("flatpak", "--auto").stdout)
+        self.assertFalse([c for c in self.calls("flatpak") if c.startswith("update")])
+        # By hand it updates anyway; on the live USB the timer's run does nothing.
+        self.cli("flatpak")
+        self.assertTrue([c for c in self.calls("flatpak") if c.startswith("update")])
+        self.write("proc/cmdline", "BOOT_IMAGE=/images/pxeboot/vmlinuz rd.live.image quiet\n")
+        self.assertEqual(self.cli("flatpak", "--auto").stdout, "")
+        self.cli("flatpak", "--sideways", rc=2)
+
+    def test_upgrade_check(self):
+        import http.server
+        import threading
+        served = self.path("srv")
+        os.makedirs(os.path.join(served, "fedora-45/x86_64/repodata"))
+        Path(served, "fedora-45/x86_64/repodata/repomd.xml").write_text("<repomd/>")
+
+        class Quiet(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *a, **k):
+                super().__init__(*a, directory=served, **k)
+
+            def log_message(self, *a):
+                pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Quiet)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.write("usr/share/dnf5/repos.d/arctic.repo",
+                   "[arctic]\nbaseurl=http://127.0.0.1:{}/fedora-$releasever/$basearch/\n".format(server.server_port))
+        self.write("etc/os-release", 'NAME="Arctic Linux"\nPLATFORM_ID="platform:f44"\n')
+        self.env["NO_PROXY"] = self.env["no_proxy"] = "127.0.0.1"
+        data = json.loads(self.cli("upgrade", "check", "--json").stdout)
+        if os.uname().machine == "x86_64":
+            self.assertEqual((data["available"], data["current"], data["next"]), (True, 44, 45))
+        self.write("etc/os-release", 'PLATFORM_ID="platform:f45"\n')
+        data = json.loads(self.cli("upgrade", "check", "--json").stdout)
+        self.assertEqual((data["available"], data["next"]), (False, 46))
+        self.cli("upgrade", "sideways", rc=2)
+
+    def test_flatpak_user_installation(self):
+        self.fake_flatpak()
+        self.env["XDG_STATE_HOME"] = self.path("home-state")
+        self.env["HOME"] = self.path("home")
+        os.makedirs(self.path("home/.local/share/flatpak"))
+        self.assertIn("1 app updated.", self.cli("flatpak", "--auto", "--user").stdout)
+        self.assertIn("update --user --noninteractive -y", self.calls("flatpak"))
+        self.assertFalse([c for c in self.calls("flatpak") if c.startswith("update --system")])
+        status = helper.read_json(self.path("home-state/arctic/flatpak-update.json"))
+        self.assertEqual(status["apps_updated"], 1)
+        self.assertFalse(os.path.exists(self.path("var/lib/arctic/flatpak-status.json")))
+
+    def test_flatpak_failure_is_recorded(self):
+        self.fake_flatpak(fail=True)
+        p = self.cli("flatpak", "--auto", rc=1)
+        self.assertIn("Unable to connect to dl.flathub.org", p.stdout)
+        status = helper.read_json(self.path("var/lib/arctic/flatpak-status.json"))
+        self.assertEqual(status["state"], "failed")
+        self.assertFalse([c for c in self.calls("flatpak") if c.startswith("uninstall")])
+
+    def test_firmware(self):
+        self.write("fake/bin/fwupdmgr", textwrap.dedent('''\
+            #!/bin/sh
+            echo "$*" >> "$ARCTIC_UPDATE_TEST_ROOT/fake/fwupdmgr.log"
+            [ -e "$ARCTIC_UPDATE_TEST_ROOT/fake/fw-none" ] && exit 2
+            echo '{"Devices": [{"Name": "System Firmware", "Vendor": "LENOVO", "Version": "0.1.40",
+              "Flags": ["updatable", "needs-reboot"], "Releases": [{"Version": "0.1.42", "Summary": "Lenovo ThinkPad BIOS"}]}]}'
+            '''))
+        os.chmod(self.path("fake/bin/fwupdmgr"), 0o755)
+        fw = json.loads(self.cli("firmware", "--json").stdout)
+        self.assertEqual(fw["devices"], [{"name": "System Firmware", "vendor": "LENOVO", "version": "0.1.40",
+                                          "update": "0.1.42", "summary": "Lenovo ThinkPad BIOS", "reboot": True}])
+        self.assertIn("System Firmware: 0.1.40 → 0.1.42", self.cli("firmware").stdout)
+        self.write("fake/fw-none", "")
+        fw = json.loads(self.cli("firmware", "--json").stdout)
+        self.assertEqual((fw["available"], fw["devices"]), (True, []))
+        self.cli("firmware", "flash", rc=2)
+
+
+class UpgradeTests(unittest.TestCase):
+    def test_repomd_url(self):
+        repo = (ROOT / "packaging/release/arctic.repo").read_text()
+        url = helper.repomd_url(repo, "arctic", 45, "x86_64")
+        self.assertTrue(url.endswith("/repo/stable/fedora-45/x86_64/repodata/repomd.xml"), url)
+        self.assertTrue(url.startswith("https://"))
+        testing = (ROOT / "packaging/release/arctic-testing.repo").read_text()
+        self.assertIn("fedora-45/x86_64/repodata/repomd.xml", helper.repomd_url(testing, "arctic-testing", 45, "x86_64"))
+        self.assertEqual(helper.repomd_url(repo, "nothing", 45, "x86_64"), "")
+        self.assertEqual(helper.repomd_url("[arctic]\nbaseurl=file:///srv/repo\n", "arctic", 45, "x86_64"), "")
+
+
+class FirmwareParseTests(unittest.TestCase):
+    def test_no_daemon(self):
+        fw = helper.parse_firmware('{"Error": {"Domain": "g-io-error-quark", "Code": 1, "Message": "Failed to connect to daemon"}}')
+        self.assertEqual((fw["available"], fw["error"]), (False, "Failed to connect to daemon"))
+
+    def test_nothing_to_update(self):
+        self.assertEqual(helper.parse_firmware('{"Devices": []}')["devices"], [])
+        self.assertTrue(helper.parse_firmware("No updatable devices")["available"])
+        self.assertFalse(helper.parse_firmware("")["available"])
+
+    def test_devices_without_releases_are_skipped(self):
+        fw = helper.parse_firmware(json.dumps({"Devices": [{"Name": "Keyboard", "Releases": []},
+                                                           {"Name": "Dock\x1b[31m", "Version": "1", "Releases": [{"Version": "2"}]}]}))
+        self.assertEqual([(d["name"], d["update"], d["reboot"]) for d in fw["devices"]], [("Dock [31m", "2", False)])
+
+    def test_apps_report(self):
+        self.assertIsNone(helper.apps_report({}))
+        r = helper.apps_report({"checked_at": fixed_now(), "apps_updated": 3, "state": "idle"})
+        self.assertEqual((r["updated"], r["state"]), (3, "idle"))
+
+
 if __name__ == "__main__":
     unittest.main()

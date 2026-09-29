@@ -7,6 +7,12 @@
 #   arctic-wallpaper ~/Pictures/x.jpg   any picture of your own (stays the same across theme switches)
 #   arctic-wallpaper render             only render the PNG cache (used by arctic-lock)
 #   arctic-wallpaper current            print the picture in use
+#   arctic-wallpaper rotate 30m|1h|1d [FOLDER|arctic] [--shuffle]
+#                                       change the picture every 30 minutes, hour or day, from
+#                                       FOLDER (default: your wallpaper folder) or Arctic's own
+#   arctic-wallpaper rotate off|apply   stop, or start again at login (autostart.conf)
+#   arctic-wallpaper rotate             print the rotation as JSON
+#   arctic-wallpaper next               the next picture now (what the rotation runs)
 #
 # Arctic wallpapers are looked up in ~/.local/share/arctic/wallpapers, then
 # /usr/share/backgrounds/arctic: 1920×1080 SVGs, one per theme (plus rendered PNGs when packaged).
@@ -17,7 +23,13 @@
 #
 # Choosing a wallpaper also runs `arctic-theme sync`: with auto colours on (the default), your
 # own pictures colour the desktop (the 'wallpaper' theme) and Arctic's wallpapers bring back
-# Winter / Polar night. ARCTIC_WALLPAPER_NO_SYNC=1 skips that.
+# Winter / Polar night. ARCTIC_WALLPAPER_NO_SYNC=1 skips that. A new choice also runs your
+# wallpaper hooks (arctic-hook wallpaper PICTURE).
+#
+# Rotation changes only the picture: the saved choice and the colours stay as they are (the next
+# login and a theme switch start from the choice again), and the wallpaper hooks run with each
+# picture. It is kept in ~/.config/arctic/wallpaper-rotate.json and runs as the transient
+# systemd user timer arctic-wallpaper-rotate; in shuffle order every picture comes once per round.
 set -euo pipefail
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
@@ -75,6 +87,137 @@ render() {   # render <image> -> an image swaybg draws well (SVGs rendered to a 
 
 is_name() { [[ " $NAMES " == *" $1 "* ]]; }
 
+# detach CMD…: start CMD in the background, in a systemd scope of its own when there is a user
+# manager. The rotation timer and arctic-daylight run this script as a service, and systemd stops
+# whatever is left in a service's cgroup when the service ends: swaybg would go with it.
+detach() {
+  if command -v systemd-run >/dev/null 2>&1 \
+      && systemd-run --user --scope --quiet --collect -- setsid -f "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+  setsid -f "$@" >/dev/null 2>&1
+}
+
+# ---- rotation (stream 6) ----
+ROTATE="$CONF/wallpaper-rotate.json"
+QUEUE="$CACHE_DIR/wallpaper-rotate-queue"
+
+rotate_get() {   # rotate_get KEY: one value of wallpaper-rotate.json ('' when missing)
+  [[ -f "$ROTATE" ]] || return 0
+  python3 -c 'import json,sys
+try: v = json.load(open(sys.argv[1])).get(sys.argv[2], "")
+except Exception: v = ""
+print("1" if v is True else "" if v is False else v)' "$ROTATE" "$1" 2>/dev/null || true
+}
+
+your_folder() {   # the wallpaper picker's folder (wallpapers.py): its setting, else ~/Pictures/Wallpapers
+  local f="" pics=""
+  if [[ -f "$CONF/wallpapers.json" ]]; then
+    f="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("folder") or "")' "$CONF/wallpapers.json" 2>/dev/null || true)"
+  fi
+  if [[ -z "$f" ]]; then
+    pics="$(xdg-user-dir PICTURES 2>/dev/null || true)"
+    [[ -n "$pics" && "$pics" != "$HOME" ]] || pics="$HOME/Pictures"
+    f="$pics/Wallpapers"
+  fi
+  echo "${f/#\~/$HOME}"
+}
+
+rotation_pictures() {   # rotation_pictures FOLDER|arctic: the pictures to rotate through, sorted
+  local n f
+  if [[ "$1" == arctic ]]; then
+    for n in $NAMES; do find_design "$n-$VARIANT" || true; done
+    return 0
+  fi
+  [[ -d "$1" ]] || return 0
+  find "$1" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \
+    -o -iname '*.bmp' -o -iname '*.gif' -o -iname '*.svg' -o -iname '*.tif' -o -iname '*.tiff' \) -print \
+    | LC_ALL=C sort | while IFS= read -r f; do readlink -f "$f"; done
+}
+
+is_drawn() {   # is_drawn PICTURE NOW: is PICTURE the one drawn now (an SVG: its rendered PNG)
+  [[ "$1" == "$2" ]] || [[ "$1" == *.svg && "$2" == "$CACHE/$(basename "$1" .svg).png" ]]
+}
+
+next_picture() {   # next_picture FOLDER SHUFFLE: the picture after the one drawn now
+  local folder="$1" shuffle="$2" now all pick="" line found=0 left others=""
+  now="$(cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true)"
+  all="$(rotation_pictures "$folder")"
+  [[ -n "$all" ]] || return 1
+  if [[ -n "$shuffle" ]]; then
+    mkdir -p "$CACHE_DIR"
+    # A round: every picture once, in random order, then a new round. The queue file holds the
+    # folder, then the pictures left in this round (only ones still there count).
+    left=""
+    if [[ -f "$QUEUE" && "$(head -n1 "$QUEUE")" == "# $folder" ]]; then
+      left="$(tail -n +2 "$QUEUE" | grep -xF -- "$all" || true)"
+    fi
+    if [[ -z "$left" ]]; then
+      while IFS= read -r line; do    # not the one on the screen now, unless it's the only one
+        is_drawn "$line" "$now" || others+="$line"$'\n'
+      done <<<"$all"
+      left="$(printf '%s' "${others:-$all}" | shuf)"
+    fi
+    pick="$(head -n1 <<<"$left")"
+    { echo "# $folder"; tail -n +2 <<<"$left"; } > "$QUEUE"
+  else
+    while IFS= read -r line; do
+      if (( found )); then pick="$line"; break; fi
+      is_drawn "$line" "$now" && found=1
+    done <<<"$all"
+    [[ -n "$pick" ]] || pick="$(head -n1 <<<"$all")"
+  fi
+  echo "$pick"
+}
+
+arm_rotation() {   # arm_rotation EVERY: the transient timer (replacing an older one)
+  command -v systemd-run >/dev/null 2>&1 || { echo "arctic-wallpaper: systemd-run is needed to rotate" >&2; return 1; }
+  systemctl --user stop arctic-wallpaper-rotate.timer arctic-wallpaper-rotate.service >/dev/null 2>&1 || true
+  systemctl --user reset-failed arctic-wallpaper-rotate.timer arctic-wallpaper-rotate.service >/dev/null 2>&1 || true
+  systemd-run --user --unit=arctic-wallpaper-rotate --collect --quiet --property=KillMode=process \
+    --on-active="$1" --on-unit-active="$1" -- arctic-wallpaper next
+}
+
+rotate_cmd() {
+  local every="${1:-}" folder shuffle=""
+  case "$every" in
+    "")
+      if [[ -f "$ROTATE" ]]; then cat "$ROTATE"; else echo '{"every": "off"}'; fi ;;
+    off)
+      rm -f "$ROTATE" "$QUEUE"
+      systemctl --user stop arctic-wallpaper-rotate.timer arctic-wallpaper-rotate.service >/dev/null 2>&1 || true ;;
+    apply)
+      every="$(rotate_get every)"
+      case "$every" in 30m|1h|1d) arm_rotation "$every" ;; esac ;;
+    30m|1h|1d)
+      shift
+      folder=""
+      while (( $# )); do
+        case "$1" in
+          --shuffle) shuffle=1 ;;
+          *) [[ -z "$folder" ]] || { echo "usage: arctic-wallpaper rotate 30m|1h|1d [FOLDER|arctic] [--shuffle]" >&2; return 2; }
+             folder="$1" ;;
+        esac
+        shift
+      done
+      [[ -n "$folder" ]] || folder="$(your_folder)"
+      if [[ "$folder" != arctic ]]; then
+        folder="$(readlink -f "$folder" 2>/dev/null || true)"
+        [[ -d "$folder" ]] || { echo "arctic-wallpaper: there is no folder ${folder:-like that}" >&2; return 2; }
+      fi
+      [[ -n "$(rotation_pictures "$folder")" ]] || { echo "arctic-wallpaper: no pictures in $folder" >&2; return 2; }
+      mkdir -p "$CONF"
+      python3 -c 'import json,sys
+json.dump({"every": sys.argv[2], "folder": sys.argv[3], "shuffle": sys.argv[4] == "1"}, open(sys.argv[1] + ".tmp", "w"))
+print("", file=open(sys.argv[1] + ".tmp", "a"))' "$ROTATE" "$every" "$folder" "${shuffle:-0}"
+      mv "$ROTATE.tmp" "$ROTATE"
+      rm -f "$QUEUE"
+      arm_rotation "$every" ;;
+    *)
+      echo "usage: arctic-wallpaper rotate [30m|1h|1d [FOLDER|arctic] [--shuffle] | off | apply]" >&2; return 2 ;;
+  esac
+}
+
 img=""
 case "${1:-}" in
   render)
@@ -85,8 +228,19 @@ case "${1:-}" in
   current)
     cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true
     exit 0 ;;
+  rotate)
+    shift
+    rotate_cmd "$@"
+    exit $? ;;
+  next)
+    # The rotation's next picture: drawn and hooked, but neither saved nor coloured.
+    folder="$(rotate_get folder)"
+    [[ -n "$folder" ]] || folder="$(your_folder)"
+    img="$(next_picture "$folder" "$(rotate_get shuffle)" || true)"
+    [[ -n "$img" ]] || { echo "arctic-wallpaper: no pictures to rotate in $folder" >&2; exit 1; }
+    hook=1 ;;
   -h|--help)
-    sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   "")
     saved="$(cat "$CONF/wallpaper" 2>/dev/null || true)"
     if is_name "$saved"; then
@@ -96,6 +250,7 @@ case "${1:-}" in
     fi ;;
   *)
     mkdir -p "$CONF"
+    chosen=1
     if is_name "$1"; then
       printf '%s\n' "$1" > "$CONF/wallpaper"
       sync_colours
@@ -110,7 +265,7 @@ case "${1:-}" in
       sync_colours
       img="$path"
     else
-      echo "usage: arctic-wallpaper [snowfield|aurora|fox|<picture>|render|current]" >&2; exit 2
+      echo "usage: arctic-wallpaper [snowfield|aurora|fox|<picture>|render|current|rotate|next]" >&2; exit 2
     fi ;;
 esac
 
@@ -129,9 +284,13 @@ printf '%s\n' "$img" > "$CACHE_DIR/wallpaper-current"
 command -v swaybg >/dev/null 2>&1 || { echo "arctic-wallpaper: swaybg is not installed" >&2; exit 1; }
 # Replace the running swaybg without a flash: start the new one, then stop the old.
 old="$(pgrep -u "$UID" -x swaybg || true)"
-setsid -f swaybg -m fill -c "$ARCTIC_GROUND" -i "$img" >/dev/null 2>&1
+detach swaybg -m fill -c "$ARCTIC_GROUND" -i "$img"
 sleep 0.3
 if [[ -n "$old" ]]; then
   # shellcheck disable=SC2086
   kill $old 2>/dev/null || true
+fi
+# A new choice (not a redraw): your wallpaper hooks (arctic-hook), in the background.
+if [[ -n "${chosen:-}${hook:-}" ]] && command -v arctic-hook >/dev/null 2>&1; then
+  detach arctic-hook wallpaper "$img" || true
 fi

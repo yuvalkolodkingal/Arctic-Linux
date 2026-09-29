@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!--
-  Arctic Linux 0.2 live ISO (kiwi-ng 11, Fedora 44).
+  Arctic Linux 0.3 live ISO (kiwi-ng 11, Fedora 44).
 
   Derived from fedora-kiwi-descriptions (branch f44): the LiveInstall profile
   (components/liveinstall.xml), BootCoreLive (components/boot.xml), BaseCommon/HardwareCommon
@@ -16,11 +16,11 @@
 	<description type="system">
 		<author>Arctic Linux</author>
 		<contact>https://github.com/yuvalkolodkingal/Arctic-Linux/issues</contact>
-		<specification>Arctic Linux 0.2 live media (Fedora 44 base, Mango desktop)</specification>
+		<specification>Arctic Linux 0.3 live media (Fedora 44 base, Mango desktop)</specification>
 	</description>
 
 	<preferences>
-		<version>0.2.1</version>
+		<version>0.3.0</version>
 		<packagemanager>dnf5</packagemanager>
 		<locale>en_US</locale>
 		<keytable>us</keytable>
@@ -28,7 +28,7 @@
 		<release-version>44</release-version>
 		<bootloader-theme>arctic</bootloader-theme>
 		<type image="iso"
-			publisher="Arctic Linux" volid="Arctic-Linux-0.2" application_id="Arctic-Linux-0.2"
+			publisher="Arctic Linux" volid="Arctic-Linux-0.3" application_id="Arctic-Linux-0.3"
 			primary="true" flags="dmsquash" filesystem="erofs" erofscompression="lzma,level=6"
 			fscreateoptions="-Efragments -C 1048576"
 			mediacheck="true" firmware="uefi" efiparttable="gpt" efifatimagesize="30"
@@ -64,12 +64,15 @@
 		<!-- The Arctic desktop, the installer and the live session -->
 		<package name="arctic-desktop"/>
 		<!-- Arctic Settings (arctic-desktop requires it too; named so it is never left out)
-		     and the tools its Network, Bluetooth and Sound pages open. -->
+		     and the tools behind the bar menus' and Settings' "More…" links. -->
 		<package name="arctic-settings"/>
 		<package name="nm-connection-editor"/>
 		<package name="blueman"/>
 		<package name="pavucontrol"/>
 		<package name="wlr-randr"/>
+		<!-- Web apps (Get apps → Web apps; arctic-desktop requires it too; named so it is never
+		     left out). WebKitGTK 6.0 adds about 155 MiB installed. -->
+		<package name="arctic-webapps"/>
 		<!-- Default apps the installer treats as already in the live image (in_live_image in
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
 		<package name="kitty"/>
@@ -77,6 +80,9 @@
 		<package name="zsh"/>
 		<package name="Thunar"/>
 		<package name="vlc"/>
+		<!-- stream 6: more themes and the terminal's Nerd Font symbols (arctic-shell recommends them). -->
+		<package name="arctic-themes-extra"/>
+		<package name="arctic-fonts-symbols"/>
 		<!-- App theming (docs/BUILD-SPEC.md "App theming"; arctic-desktop-config requires them):
 		     adw-gtk3 for GTK 3 apps, qt5ct/qt6ct for Qt 5 (VLC) and Qt 6 apps, btop (recommended
 		     by arctic-desktop). Fedora builds qt5ct/qt6ct with KDE colour-scheme support, which
@@ -151,7 +157,7 @@
 		<package name="selinux-policy-targeted"/>
 		<package name="policycoreutils"/>
 		<!-- Desktop odds and ends -->
-		<package name="google-noto-emoji-fonts"/>
+		<package name="google-noto-color-emoji-fonts"/>
 		<package name="adwaita-cursor-theme"/>
 		<package name="adwaita-icon-theme"/>
 		<package name="bash-completion"/>
@@ -179,8 +185,8 @@
 		<ignore name="gfs2-utils"/>
 		<ignore name="reiserfs-utils"/>
 		<ignore name="qemu-user-static"/>
-		<!-- Weak dependencies nothing here uses: EPS for kimageformats, cpp for xrdb (~70 MB) -->
-		<ignore name="ghostscript"/>
+		<!-- Weak dependencies nothing here uses: cpp for xrdb. (Stream 5: ghostscript is
+		     no longer ignored, printing needs it: cups-filters → libcupsfilters.) -->
 		<ignore name="cpp"/>
 		<ignore name="glibc-all-langpacks"/>
 	</packages>

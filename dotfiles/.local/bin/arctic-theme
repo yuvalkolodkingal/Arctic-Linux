@@ -3,13 +3,24 @@
 
   arctic-theme                      print the active theme's name
   arctic-theme set NAME             switch to NAME: winter, polar-night, wallpaper (colours made
-                                    from the wallpaper now) or a folder in ~/.config/arctic/themes.
+                                    from the wallpaper now), a gallery theme (nord, catppuccin-mocha,
+                                    …: package arctic-themes-extra) or a folder in ~/.config/arctic/themes.
                                     Choosing anything but wallpaper turns auto colours off.
   arctic-theme auto [on|off]        colours follow the wallpaper: every new wallpaper remakes the
                                     'wallpaper' theme and switches to it (Arctic's own wallpapers
                                     keep Winter / Polar night). Without on|off, print on or off.
   arctic-theme mode [auto|dark|light]   light or dark for wallpaper colours (auto: from the picture)
-  arctic-theme toggle               light <-> dark (Super+Shift+T)
+  arctic-theme toggle               light <-> dark (Super+Shift+T); a gallery theme switches to
+                                    its pair (Catppuccin Mocha <-> Latte), else to Winter / Polar night
+  arctic-theme install URL|FILE [--json]
+                                    add a theme from a GitHub, GitLab or Codeberg repository (an
+                                    Omarchy theme works) or a .tar.gz of one: only its colours
+                                    (colors.toml) and pictures (backgrounds/) are kept
+  arctic-theme remove NAME [--json] remove a theme you added (the active one: Winter or Polar
+                                    night takes over first)
+  arctic-theme contrast [on|off|toggle] [--json]
+                                    high contrast: whatever theme is active, drawn with stronger
+                                    contrast (Settings > Accessibility). Without on|off, print it.
   arctic-theme zen [on|off]         give Zen Browser the theme's accent colour (read when Zen
                                     starts; default off). Without on|off, print on or off.
   arctic-theme current [--json]     the active theme (JSON: name, label, mode, colours, settings)
@@ -50,6 +61,9 @@ CURRENT = os.path.join(CONFIG, "current")
 SETTINGS = os.path.join(CONFIG, "settings.json")
 USER_THEMES = os.path.join(CONFIG, "themes")
 SYSTEM_THEMES = os.path.join(SYSTEM, "themes")
+EXTRA_THEMES = os.path.join(SYSTEM, "themes-extra")      # the gallery (arctic-themes-extra)
+# High contrast takes of the themes, made when needed (~/.local/state: not settings, remade).
+HC_THEMES = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "arctic", "themes-hc")
 HOOK_DIRS = (os.path.join(SYSTEM, "theme-hooks.d"), os.path.join(CONFIG, "theme-hooks.d"))
 USER_TEMPLATES = os.path.join(CONFIG, "templates")
 WALLPAPER_CHOICE = os.path.join(CONFIG, "wallpaper")
@@ -91,6 +105,10 @@ def save_settings(**changes):
     write_atomic(SETTINGS, json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
+def high_contrast(settings=None):
+    return (settings if settings is not None else load_settings()).get("contrast") == "high"
+
+
 def auto_colors(settings=None):
     value = (settings if settings is not None else load_settings()).get("auto_colors", True)
     return value if isinstance(value, bool) else True
@@ -112,10 +130,12 @@ def write_atomic(path, text):
 # ---- themes --------------------------------------------------------------------------------------
 
 def theme_dir(name):
-    """(folder, 'user'|'system') for a theme name, or (None, None). ~/.config/arctic/themes wins."""
+    """(folder, 'user'|'system'|'gallery') for a theme name, or (None, None).
+    ~/.config/arctic/themes wins, then Arctic's own, then the gallery."""
     if not NAME_RE.match(name or ""):
         return None, None
-    for folder, source in ((os.path.join(USER_THEMES, name), "user"), (os.path.join(SYSTEM_THEMES, name), "system")):
+    for folder, source in ((os.path.join(USER_THEMES, name), "user"), (os.path.join(SYSTEM_THEMES, name), "system"),
+                           (os.path.join(EXTRA_THEMES, name), "gallery")):
         if os.path.isfile(os.path.join(folder, "theme.json")):
             return folder, source
     return None, None
@@ -155,13 +175,14 @@ def theme_info(name, folder, source):
         for key, value in qml.items():
             role = re.sub(r"([A-Z]|(?<=[a-z])[0-9])", lambda m: "-" + m.group(1).lower(), key)
             colors[role] = css_color(value)
+    pair = pal.get("pair") if isinstance(pal.get("pair"), str) and NAME_RE.match(pal.get("pair") or "") else ""
     return {"name": name, "label": label, "mode": mode if mode in ("dark", "light") else "dark",
-            "base": base, "dir": folder, "source": source, "colors": colors}
+            "base": base, "dir": folder, "source": source, "colors": colors, "pair": pair}
 
 
 def all_themes():
     names = set()
-    for d in (USER_THEMES, SYSTEM_THEMES):
+    for d in (USER_THEMES, SYSTEM_THEMES, EXTRA_THEMES):
         try:
             names.update(n for n in os.listdir(d) if NAME_RE.match(n))
         except OSError:
@@ -268,6 +289,7 @@ def themegen():
                 sys.path.insert(0, parent)
             import themegen as tg
             import themegen.derive
+            import themegen.named
             import themegen.render  # noqa: F401
             return tg
     raise Error("the theme engine is missing (/usr/share/arctic/themegen)")
@@ -326,6 +348,226 @@ def make_wallpaper_theme(picture, mode, force=False):
     return True
 
 
+def hc_folder(name, folder):
+    """The high-contrast take of the theme in `folder`, in HC_THEMES/<name>: remade when the
+    theme's palette or the engine changes."""
+    import hashlib
+    tg = themegen()
+    source = read_json(os.path.join(folder, "palette.json"))
+    if not source.get("colors"):
+        raise Error("theme '{}' has no palette.json to make a high-contrast take from".format(name))
+    key = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest() + ":" + fingerprint(tg)
+    out = os.path.join(HC_THEMES, name)
+    if read_json(os.path.join(out, "palette.json")).get("hc_source") == key and os.path.isfile(os.path.join(out, "theme.json")):
+        return out
+    try:
+        p = tg.derive.high_contrast(tg.palette.validate(source))
+        p["hc_source"] = key
+        tg.render.render(p, out, template_dirs(), force=True)
+    except tg.palette.ThemegenError as e:
+        raise Error(str(e))
+    return out
+
+
+# ---- themes from the web (install / remove) -------------------------------------------------------
+
+# Only the colours and pictures of a theme repository are kept: nothing that can run code or name a
+# program (terminal configs, editor themes, scripts, templates) is ever copied.
+INSTALL_HOSTS = {
+    "github.com": "https://codeload.github.com/{o}/{r}/tar.gz/HEAD",
+    "codeberg.org": "https://codeberg.org/{o}/{r}/archive/HEAD.tar.gz",
+    "gitlab.com": "https://gitlab.com/{o}/{r}/-/archive/HEAD/{r}-HEAD.tar.gz",
+}
+DOWNLOAD_MAX = 50 * 1024 * 1024
+KEEP_LIMITS = {"colors.toml": 16 * 1024, "preview.png": 2 * 1024 * 1024}
+PICTURE_MAX = 25 * 1024 * 1024
+PICTURES_MAX = 24
+PICTURE_RE = re.compile(r"^backgrounds/[A-Za-z0-9][A-Za-z0-9._ -]{0,100}\.(png|jpe?g|webp)$", re.I)
+REPO_PART = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+
+
+def install_source(url):
+    """(tarball URL, repository name) for a forge URL, or raise Error."""
+    import urllib.parse
+    u = urllib.parse.urlsplit(url.strip())
+    if u.scheme != "https":
+        raise Error("theme links must start with https://")
+    host = (u.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    parts = [p for p in u.path.split("/") if p]
+    if host not in INSTALL_HOSTS or len(parts) < 2:
+        raise Error("use a GitHub, GitLab or Codeberg link to a theme repository, like https://github.com/owner/name")
+    owner, repo = parts[0], re.sub(r"\.git$", "", parts[1])
+    if not (REPO_PART.match(owner) and REPO_PART.match(repo)):
+        raise Error("that link doesn't name a repository")
+    return INSTALL_HOSTS[host].format(o=owner, r=repo), repo
+
+
+def install_name(repo):
+    """omarchy-nord-theme -> nord"""
+    name = repo.lower()
+    for prefix in ("omarchy-", "arctic-"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+    for suffix in (".tar.gz", ".tgz", ".tar", "-theme", "-main", "-master", "-head"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+    name = re.sub(r"[^a-z0-9._-]+", "-", name).strip("-._")
+    if not NAME_RE.match(name):
+        raise Error("can't make a theme name from {!r}".format(repo))
+    return name
+
+
+def download(url, path):
+    import urllib.request
+    request = urllib.request.Request(url, headers={"User-Agent": "Arctic-Linux arctic-theme install"})
+    got = 0
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response, open(path, "wb") as out:
+            while True:
+                chunk = response.read(1 << 16)
+                if not chunk:
+                    break
+                got += len(chunk)
+                if got > DOWNLOAD_MAX:
+                    raise Error("that theme is bigger than {} MB".format(DOWNLOAD_MAX >> 20))
+                out.write(chunk)
+    except Error:
+        raise
+    except Exception as e:  # noqa: BLE001 — every failure is one sentence
+        raise Error("couldn't download the theme ({})".format(getattr(e, "reason", None) or e))
+
+
+def looks_like_picture(data):
+    if not (data.startswith(b"\x89PNG\r\n\x1a\n") or data.startswith(b"\xff\xd8\xff")
+            or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")):
+        return False
+    try:
+        from PIL import Image
+    except ImportError:
+        return True
+    import io
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            im.verify()
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def unpack_theme(tar_path):
+    """({relative path: bytes} of what's kept, [what was dropped], light) from a theme tarball.
+    Members are read, never extracted: links, devices, absolute paths and '..' are dropped."""
+    import tarfile
+    kept, dropped, light, pictures = {}, [], False, 0
+    try:
+        tar = tarfile.open(tar_path, "r:*")
+    except (tarfile.TarError, OSError) as e:
+        raise Error("that isn't a theme archive ({})".format(e))
+    with tar:
+        members = []
+        for m in tar:                               # at most 20 000 entries and 512 MB unpacked
+            if len(members) >= 20000 or m.offset_data > 512 * 1024 * 1024:
+                raise Error("that archive is too big to be a theme")
+            members.append(m)
+        # One folder around everything is left out; "./" (tar -C folder .) isn't a folder.
+        paths = [[p for p in m.name.split("/") if p not in ("", ".")] for m in members]
+        tops = {parts[0] for parts in paths if parts}
+        strip = len(tops) == 1 and any(len(parts) > 1 for parts in paths)
+        for m, parts in zip(members, paths):
+            if m.name.startswith("/") or ".." in parts:
+                dropped.append(m.name)
+                continue
+            rel = "/".join(parts[1:] if strip else parts)
+            if not rel or m.isdir():
+                continue
+            if rel == "light.mode":                 # Omarchy's mark for a light theme
+                light = True
+                continue
+            limit = KEEP_LIMITS.get(rel) or (PICTURE_MAX if PICTURE_RE.match(rel) and pictures < PICTURES_MAX else 0)
+            if not m.isreg() or not limit or m.size > limit:
+                dropped.append(rel)
+                continue
+            data = tar.extractfile(m).read(limit + 1)
+            if len(data) > limit or (rel != "colors.toml" and not looks_like_picture(data)):
+                dropped.append(rel)
+                continue
+            if PICTURE_RE.match(rel):
+                pictures += 1
+            kept[rel] = data
+    return kept, sorted(set(dropped)), light
+
+
+def cmd_install(target, as_json):
+    import datetime
+    import tempfile
+    import tomllib
+    tg = themegen()
+    with tempfile.TemporaryDirectory() as tmp:
+        if os.path.isfile(target):
+            tar_path, repo, origin = target, os.path.basename(target), os.path.abspath(target)
+        else:
+            tarball, repo = install_source(target)
+            tar_path, origin = os.path.join(tmp, "theme.tar.gz"), target.strip()
+            download(tarball, tar_path)
+        name = install_name(repo)
+        if theme_dir(name)[0] or name in (WALLPAPER_THEME, "winter", "polar-night"):
+            raise Error("a theme called {} is already installed; remove it first".format(name))
+        kept, dropped, light = unpack_theme(tar_path)
+        if "colors.toml" not in kept:
+            raise Error("there's no colors.toml in it: Arctic reads a theme's colours from that file")
+        try:
+            text = kept["colors.toml"].decode("utf-8")
+            data = tg.named.load_colors(text, "colors.toml")
+            if "mode" not in tomllib.loads(text):
+                data["mode"] = "light" if light else "dark"
+            data["pair"] = ""                      # its pair isn't installed with it
+            palette = tg.named.from_colors(data, name, data.get("label") or name.replace("-", " ").title())
+        except (tg.palette.ThemegenError, UnicodeDecodeError, ValueError) as e:
+            raise Error("its colours can't be used: {}".format(e))
+        os.makedirs(USER_THEMES, exist_ok=True)
+        staging = tempfile.mkdtemp(prefix=".install-{}-".format(name), dir=USER_THEMES)
+        try:
+            tg.render.render(palette, staging, template_dirs(), force=True)
+            for rel, blob in kept.items():
+                if rel == "colors.toml":
+                    continue
+                path = os.path.join(staging, *rel.split("/"))
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(blob)
+            with open(os.path.join(staging, "source.json"), "w", encoding="utf-8") as f:
+                json.dump({"url": origin, "installed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+                           "dropped": dropped[:200]}, f, indent=2)
+            os.chmod(staging, 0o755)
+            os.replace(staging, os.path.join(USER_THEMES, name))
+        except BaseException:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
+    backgrounds = sum(1 for rel in kept if rel.startswith("backgrounds/"))
+    result = {"ok": True, "name": name, "label": palette.get("label") or name, "mode": palette["mode"],
+              "dropped": dropped[:50], "backgrounds": backgrounds}
+    if as_json:
+        print(json.dumps(result))
+    else:
+        print("Installed {} ({}): arctic-theme set {}".format(result["label"], result["mode"], name))
+        if dropped:
+            print("Left out: " + ", ".join(dropped[:12]) + (" and {} more".format(len(dropped) - 12) if len(dropped) > 12 else ""))
+
+
+def cmd_remove(name, as_json):
+    folder, source = theme_dir(name)
+    if not folder or source != "user" or not os.path.isfile(os.path.join(folder, "source.json")):
+        raise Error("only themes you added (arctic-theme install) can be removed", 2)
+    if active_name() == name:
+        activate(static_for_mode(theme_info(name, folder, source)["mode"]))
+    shutil.rmtree(folder)
+    shutil.rmtree(os.path.join(HC_THEMES, name), ignore_errors=True)
+    if as_json:
+        print(json.dumps({"ok": True, "name": name}))
+
+
 # ---- switching -----------------------------------------------------------------------------------
 
 def link_current(name):
@@ -337,7 +579,13 @@ def link_current(name):
     if os.path.isdir(CURRENT) and not os.path.islink(CURRENT):
         raise Error("{} is a folder, not a link; move it away and try again".format(CURRENT))
     # A theme of yours is linked relatively (the home folder can move); a packaged one absolutely.
+    # With high contrast on, the link goes to the theme's high-contrast take instead.
     target = os.path.join("themes", name) if source == "user" else folder
+    if high_contrast():
+        try:
+            target = hc_folder(name, folder)
+        except Error as e:        # the theme itself, rather than no theme
+            warn("{}; using it as it is".format(e))
     tmp = os.path.join(CONFIG, ".current.tmp-{}".format(os.getpid()))
     with contextlib.suppress(FileNotFoundError):
         os.unlink(tmp)
@@ -354,6 +602,29 @@ def activate(name, redraw=True):
 
 def static_for_mode(mode):
     return BUILTIN_FOR_MODE.get(mode, DEFAULT_THEME)
+
+
+def for_mode(mode, info=None):
+    """The theme to switch to for light or dark: the active one when it already is, its pair
+    when it has one of that mode (a gallery theme), else Winter or Polar night. A theme without
+    a pair is remembered on the way there (settings.json "return_to", until you set a theme), and
+    switching back returns to it: Nord has no light take, so Winter by day and Nord at night."""
+    info = info or active_info()
+    name = info.get("name")
+    if info.get("mode") == mode and name not in (None, WALLPAPER_THEME):
+        return name
+    pair = info.get("pair") or ""
+    folder, source = theme_dir(pair) if pair else (None, None)
+    if folder and theme_info(pair, folder, source)["mode"] == mode:
+        return pair
+    if name in BUILTIN_FOR_MODE.values():
+        back = load_settings().get("return_to")
+        folder, source = theme_dir(back) if isinstance(back, str) and NAME_RE.match(back) else (None, None)
+        if folder and theme_info(back, folder, source)["mode"] == mode:
+            return back
+    elif name and name != WALLPAPER_THEME:
+        save_settings(return_to=name)
+    return static_for_mode(mode)
 
 
 def follow_wallpaper(force=False):
@@ -384,6 +655,8 @@ def sync(force=False, redraw=True):
         return active_name()
     target, changed = follow_wallpaper(force=force)
     linked = os.path.realpath(CURRENT) == os.path.realpath(theme_dir(target)[0] or CURRENT + "-missing")
+    if high_contrast():
+        linked = os.path.realpath(CURRENT) == os.path.realpath(os.path.join(HC_THEMES, target))
     if changed or force or target != active_name() or not linked:
         activate(target, redraw=redraw)
     return target
@@ -542,7 +815,25 @@ def cmd_set(name):
     if auto_colors():
         save_settings(auto_colors=False)
         warn("auto colours are off now (arctic-theme auto on turns them back on)")
+    if load_settings().get("return_to"):          # a theme you chose: light / dark start from it
+        save_settings(return_to="")
     activate(name)
+
+
+def cmd_contrast(value, as_json=False):
+    if value is None:
+        on = high_contrast()
+        print(json.dumps({"ok": True, "contrast": "high" if on else "normal"}) if as_json else ("on" if on else "off"))
+        return
+    if value not in ("on", "off", "toggle"):
+        raise Error("usage: arctic-theme contrast [on|off|toggle]", 2)
+    on = (not high_contrast()) if value == "toggle" else value == "on"
+    save_settings(contrast="high" if on else "normal")
+    if have("gsettings"):     # libadwaita's own high-contrast styles, on top of the colours
+        run_quiet(["gsettings", "set", "org.gnome.desktop.a11y.interface", "high-contrast", "true" if on else "false"])
+    activate(active_name())
+    if as_json:
+        print(json.dumps({"ok": True, "contrast": "high" if on else "normal"}))
 
 
 def cmd_auto(value):
@@ -594,7 +885,7 @@ def cmd_toggle():
     if auto_colors() or info["name"] == WALLPAPER_THEME:
         cmd_mode(other)
     else:
-        activate("polar-night" if info["name"] == "winter" else "winter")
+        activate(for_mode(other, info))
 
 
 def cmd_apply():
@@ -617,7 +908,7 @@ def cmd_current(as_json):
         return
     settings = load_settings()
     info.update(auto_colors=auto_colors(settings), wallpaper_mode=wallpaper_mode(settings), wallpaper=saved_wallpaper(),
-                zen_theme=zen_theme(settings))
+                zen_theme=zen_theme(settings), contrast="high" if high_contrast(settings) else "normal")
     print(json.dumps(info, indent=2))
 
 
@@ -629,7 +920,11 @@ def cmd_list(as_json):
         for t in themes:
             c = t.pop("colors")
             t["active"] = t["name"] == active
-            t["swatches"] = {k: c.get(k) for k in ("ground", "surface", "accent", "ink")}
+            source = read_json(os.path.join(t["dir"], "source.json")) if t["source"] == "user" else {}
+            t["installed_from"] = source.get("url") if isinstance(source.get("url"), str) else None
+            t["gallery"] = t["source"] == "gallery" or bool(t["installed_from"])
+            t["swatches"] = {k: c.get(k) for k in ("ground", "surface", "surface-raised", "frost", "line", "ink",
+                                                   "ink-muted", "accent", "on-accent", "term-background")}
             out.append(t)
         print(json.dumps(out, indent=2))
         return
@@ -664,6 +959,12 @@ def main(argv):
             cmd_auto(rest[0] if rest else None)
         elif verb == "mode" and len(rest) <= 1:
             cmd_mode(rest[0] if rest else None)
+        elif verb == "contrast" and len(rest) <= 1:
+            cmd_contrast(rest[0] if rest else None, as_json)
+        elif verb == "install" and len(rest) == 1:
+            cmd_install(rest[0], as_json)
+        elif verb == "remove" and len(rest) == 1:
+            cmd_remove(rest[0], as_json)
         elif verb == "zen" and len(rest) <= 1:
             cmd_zen(rest[0] if rest else None)
         elif verb == "toggle" and not rest:
@@ -680,7 +981,7 @@ def main(argv):
             if auto_colors():
                 cmd_mode(verb)
             else:
-                cmd_set(static_for_mode(verb))
+                activate(for_mode(verb))
         else:
             usage(sys.stderr)
             return 2

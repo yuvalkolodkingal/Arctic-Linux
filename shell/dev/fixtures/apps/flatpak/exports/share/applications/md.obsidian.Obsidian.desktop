@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Obsidian
+Comment=Test fixture for screenshots
+Exec=flatpak run md.obsidian.Obsidian
+Icon=md.obsidian.Obsidian
+X-Flatpak=md.obsidian.Obsidian

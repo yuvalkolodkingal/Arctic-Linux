@@ -52,13 +52,17 @@ straight to the desktop after the disk passphrase.
 
 ![The installed desktop after logging in](images/installed-desktop.png)
 
-You start in the **Polar night** theme with the aurora wallpaper. From here:
+You start in the **Polar night** theme with the aurora wallpaper. The first time you log in, a
+**Welcome to Arctic Linux** card shows the keys that get you everywhere, a **Connect** button
+when you aren't online yet, **Get apps**, and **Light** or **Dark**. `Enter` or **Get started**
+closes it; it doesn't come back by itself (the [command menu](Command-Menu)'s **Learn ›
+Welcome**, or `arctic-welcome --again`, shows it again). From here:
 
 | Press | To |
 |---|---|
 | `Super + Space` | Open the launcher |
 | `Super + Enter` | Open a terminal (and meet the fox) |
-| `Super + W` | Open your browser |
+| `Super + B` | Open your browser |
 | `Super + /` | See every shortcut |
 | `Super + Shift + T` | Switch to the light Winter theme |
 
@@ -66,7 +70,7 @@ The [desktop tour](Desktop-Tour) walks through the rest.
 
 ## What's already set up
 
-- **Your apps**: the ones you ticked in the installer. `Super + Enter`, `Super + W`, `Super + E`
+- **Your apps**: the ones you ticked in the installer. `Super + Enter`, `Super + B`, `Super + E`
   and `Super + F` open the terminal, browser, editor and file manager you picked.
 - **Your language, keyboard layout, time zone and computer name.** The clock keeps itself right
   over the internet, unless you turned that off.
@@ -91,6 +95,9 @@ Sometimes an app can't be downloaded during the install.
 - **In an automated (unattended) install**, an app that can't be downloaded is retried once and
   then put off until later. It's written to `/var/lib/arctic/pending.json`, and the
   **arctic-firstboot** service installs it after the computer starts and is online.
+
+While apps are still on their way, the welcome card says which ones (**Finishing setup**), and
+a notification says **All set** once they're all installed.
 
 arctic-firstboot runs in the background and never holds up the login screen. It tries each app
 the same way the installer would have (dnf, COPR, Flatpak or Nix), removes the ones that worked

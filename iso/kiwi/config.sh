@@ -64,6 +64,10 @@ systemctl enable nix-daemon.service || :
 # checks the kernel command line, and snapper has no configuration until the installer's).
 systemctl enable arctic-update-stage.timer || :
 systemctl enable snapper-cleanup.timer || :
+# Stream 5: Flatpak apps updated daily (the system's, and each user's own), SSH keys once per
+# session (gcr-ssh-agent). The presets say so too.
+systemctl enable arctic-flatpak-update.timer || :
+systemctl --global enable arctic-flatpak-update.timer gcr-ssh-agent.socket || :
 systemctl disable dnf5-automatic.timer 2>/dev/null || :
 # No SSH server on the live USB or (since the installer copies this root) installed systems;
 # 80-arctic.preset already says so, this makes sure whatever the install order was.

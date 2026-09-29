@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=וואלה! חדשות;\\ evil news
+Comment=Web app · www.walla.co.il
+Exec=arctic-webapp run org.arcticlinux.WebApp.Walla_c0ffee
+TryExec=arctic-webapp
+Icon=org.arcticlinux.WebApp.Walla_c0ffee
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.arcticlinux.WebApp.Walla_c0ffee
+SingleMainWindow=true
+Categories=Office;Calendar;X-Arctic-WebApp;
+Keywords=web;app;www.walla.co.il;
+X-Arctic-WebApp-Id=org.arcticlinux.WebApp.Walla_c0ffee
+X-Arctic-WebApp-URL=https://www.walla.co.il/
+X-Arctic-WebApp-Runtime=webkit
+X-Arctic-WebApp-Schema=1

@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Netflix
+Comment=Web app · www.netflix.com
+Exec=arctic-webapp run org.arcticlinux.WebApp.Netflix_0a1b2c
+TryExec=arctic-webapp
+Icon=org.arcticlinux.WebApp.Netflix_0a1b2c
+Terminal=false
+StartupNotify=true
+StartupWMClass=brave-www.netflix.com__browse-Default
+SingleMainWindow=true
+Categories=AudioVideo;X-Arctic-WebApp;
+Keywords=web;app;www.netflix.com;
+X-Arctic-WebApp-Id=org.arcticlinux.WebApp.Netflix_0a1b2c
+X-Arctic-WebApp-URL=https://www.netflix.com/browse
+X-Arctic-WebApp-Runtime=chromium:brave
+X-Arctic-WebApp-Schema=1

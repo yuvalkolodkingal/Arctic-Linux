@@ -1,0 +1,531 @@
+"""Tests for scripts/network.py (the network menu's nmcli helper), with a fake nmcli.
+
+Run: python3 -m unittest discover -s shell/tests -p 'test_network.py'
+"""
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+SCRIPTS = Path(__file__).parents[1] / 'scripts'
+FIXTURES = Path(__file__).parent / 'fixtures'
+spec = importlib.util.spec_from_file_location('network', SCRIPTS / 'network.py')
+network = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(network)
+
+SECRET = 'correct horse:battery\\staple'
+UUID = '11111111-2222-3333-4444-555555555555'
+
+# A fake nmcli: logs its argv (one JSON list per line), copies whatever arrives through a
+# passwd-file into secrets.txt, and answers from the scenario in $FAKE_NMCLI.
+FAKE = r'''#!/usr/bin/env python3
+import json, os, sys
+root = os.path.dirname(os.path.abspath(__file__))
+args = sys.argv[1:]
+with open(os.path.join(root, 'argv.log'), 'a') as f:
+    f.write(json.dumps(args) + '\n')
+scenario = json.loads(os.environ.get('FAKE_NMCLI', '{}'))
+words = ' '.join(a for a in args if not a.startswith('-') or a in ('--active',))
+if 'passwd-file' in args:
+    path = args[args.index('passwd-file') + 1]
+    with open(path) as src, open(os.path.join(root, 'secrets.txt'), 'a') as dst:
+        dst.write(src.read())
+for key, answer in scenario.items():
+    if key in words:
+        sys.stdout.write(answer.get('out', ''))
+        sys.stderr.write(answer.get('err', ''))
+        sys.exit(answer.get('code', 0))
+sys.exit(0)
+'''
+
+STATUS = {
+    'device status': {'out': 'wlp2s0:wifi:connected:Home\nenp3s0:ethernet:unavailable:--\nlo:loopback:unmanaged:--\n'},
+    'connection show --active': {'out': 'Home:%s:802-11-wireless:wlp2s0:activated\n' % UUID},
+    'connection show uuid': {'out': 'Home\n'},
+    'connection show': {'out': 'Home:%s:802-11-wireless:1759000000:yes\n'
+                               'Work VPN:99999999-2222-3333-4444-555555555555:vpn:1758000000:no\n'
+                               'Wired connection 1:88888888-2222-3333-4444-555555555555:802-3-ethernet:0:yes\n' % UUID},
+    'radio': {'out': 'enabled:enabled\n'},
+    'device wifi list': {'out': '*:Home:82:5180 MHz:WPA2\n:Home:40:2437 MHz:WPA2\n:Café\\:5G:55:5500 MHz:WPA3\n'
+                                ':--:30:2412 MHz:WPA2\n::20:2412 MHz:\n:Airport:61:2412 MHz:\n:Corp:70:5200 MHz:WPA2 802.1X\n'},
+}
+
+
+class Parsing(unittest.TestCase):
+    def test_split_terse(self):
+        self.assertEqual(network.split_terse('a:b\\:c:d\\\\e:'), ['a', 'b:c', 'd\\e', ''])
+        self.assertEqual(network.split_terse(''), [''])
+
+    def test_security(self):
+        cases = {'': 'open', '--': 'open', 'OWE': 'owe', 'WEP': 'wep', 'WPA1': 'wpa-psk', 'WPA2': 'wpa-psk',
+                 'WPA1 WPA2': 'wpa-psk', 'WPA2 WPA3': 'wpa-psk', 'WPA3': 'sae', 'WPA2 802.1X': 'enterprise',
+                 'WPA3 802.1X': 'enterprise'}
+        for sec, want in cases.items():
+            self.assertEqual(network.security_of(sec), want, sec)
+
+    def test_wifi_list(self):
+        nets = network.parse_wifi_list(STATUS['device wifi list']['out'], {'Airport': 'u-airport'})
+        self.assertEqual([n['ssid'] for n in nets], ['Home', 'Airport', 'Corp', 'Café:5G'])
+        home = nets[0]
+        self.assertEqual((home['signal'], home['band'], home['in_use'], home['security']), (82, '5 GHz', True, 'wpa-psk'))
+        self.assertEqual((nets[1]['saved'], nets[1]['uuid'], nets[1]['security']), (True, 'u-airport', 'open'))
+        self.assertEqual(nets[3]['security'], 'sae')
+        self.assertEqual(nets[2]['security'], 'enterprise')
+        self.assertEqual(network.band_of('2437 MHz'), '2.4 GHz')
+        self.assertEqual(network.band_of('6115 MHz'), '6 GHz')
+
+    def test_state(self):
+        rows = lambda key: [network.split_terse(l) for l in STATUS[key]['out'].splitlines()]
+        state = network.build_state(rows('device status'), rows('connection show --active'),
+                                    rows('connection show'), rows('radio'))
+        self.assertEqual(state['wifi'], {'device': 'wlp2s0', 'state': 'connected', 'hardware': True, 'enabled': True})
+        self.assertEqual(state['wired'], [{'device': 'enp3s0', 'state': 'unavailable', 'connection': ''}])
+        self.assertEqual(state['active'][0]['name'], 'Home')
+        self.assertEqual(state['vpn'], [{'uuid': '99999999-2222-3333-4444-555555555555', 'name': 'Work VPN',
+                                         'kind': 'vpn', 'active': False, 'last_used': 1758000000}])
+
+    def test_errors(self):
+        self.assertEqual(network.error_for(4, 'Error: Connection activation failed: Secrets were required, but not provided.', 'Home')[0], 'auth')
+        code, text = network.error_for(3, '', 'Home')
+        self.assertEqual(code, 'timeout')
+        self.assertIn('“Home” didn’t answer', text)
+        self.assertEqual(network.error_for(10, 'Error: No network with SSID', 'Home')[0], 'not_found')
+        self.assertEqual(network.error_for(8, '', 'Home')[0], 'nm_down')
+        self.assertEqual(network.error_for(1, 'Error: Not authorized to control networking.', 'Home')[0], 'denied')
+        code, text = network.error_for(4, 'Error: something odd happened\nmore', 'Home')
+        self.assertEqual(code, 'failed')
+        self.assertEqual(text, 'Couldn’t connect to “Home”. something odd happened')
+
+    def test_rfkill(self):
+        text = json.dumps({'': [{'id': 0, 'type': 'wlan', 'device': 'phy0', 'soft': 'blocked', 'hard': 'unblocked'},
+                                {'id': 1, 'type': 'bluetooth', 'device': 'hci0', 'soft': 'blocked', 'hard': 'unblocked'},
+                                {'id': 2, 'type': 'bluetooth', 'device': 'hci1', 'soft': 'unblocked', 'hard': 'unblocked'},
+                                {'id': 3, 'type': 'nfc', 'device': 'nfc0', 'soft': 'unblocked', 'hard': 'unblocked'}]})
+        state = network.parse_rfkill(text)
+        self.assertEqual(state, {'wlan': True, 'bluetooth': False})
+        self.assertFalse(network.airplane_on(state))
+        self.assertTrue(network.airplane_on({'wlan': True, 'bluetooth': True}))
+        self.assertFalse(network.airplane_on({}))
+        self.assertEqual(network.parse_rfkill('not json'), {})
+
+    def test_qr_payload(self):
+        self.assertEqual(network.qr_payload('Home', 'wpa-psk', 'pa;ss:w"o,rd\\'), 'WIFI:T:WPA;S:Home;P:pa\\;ss\\:w\\"o\\,rd\\\\;;')
+        self.assertEqual(network.qr_payload('Café', 'sae', 'secret', hidden=True), 'WIFI:T:WPA;S:Café;P:secret;H:true;;')
+        self.assertEqual(network.qr_payload('Library', '', ''), 'WIFI:T:nopass;S:Library;;')
+        self.assertEqual(network.qr_payload('Old', 'none', 'abcde'), 'WIFI:T:WEP;S:Old;P:abcde;;')
+        with self.assertRaises(network.Failure):
+            network.qr_payload('eduroam', 'wpa-eap', '')
+
+    def test_state_changed_lines(self):
+        failed = ('/org/freedesktop/NetworkManager/Devices/3: org.freedesktop.NetworkManager.Device.StateChanged '
+                  '(uint32 120, uint32 60, uint32 7)')
+        self.assertEqual(network.parse_state_changed(failed), ('/org/freedesktop/NetworkManager/Devices/3', 120, 60, 7))
+        self.assertIsNone(network.parse_state_changed(
+            "/org/freedesktop/NetworkManager/Devices/3: org.freedesktop.DBus.Properties.PropertiesChanged ('x', {}, @as [])"))
+        self.assertIsNone(network.parse_state_changed(''))
+
+    def test_secret_input(self):
+        self.assertEqual(network.read_secret(io.StringIO(json.dumps({'secret': 'pw'}) + '\n')), 'pw')
+        for bad in ['', 'not json\n', json.dumps({'secret': ''}), json.dumps({'secret': 'a\nb'}),
+                    json.dumps({'secret': 'a\u0000b'}), json.dumps({'secret': 'x' * 5000}), json.dumps({'secret': 3})]:
+            with self.assertRaises(network.Failure, msg=bad):
+                network.read_secret(io.StringIO(bad))
+
+    def test_hotspot_state(self):
+        state = {'wifi': {'device': 'wlp2s0'}, 'active': [{'uuid': 'h', 'type': 'wifi', 'name': 'Arctic hotspot'},
+                                                         {'uuid': 'w', 'type': 'ethernet', 'name': 'Wired'}]}
+        network.mark_hotspot(state, {'uuid': 'h', 'ssid': 'ada hotspot'}, True)
+        self.assertEqual(state['hotspot'], {'active': True, 'uuid': 'h', 'ssid': 'ada hotspot'})
+        self.assertEqual(state['active'][0]['type'], 'hotspot')         # not the Wi-Fi network you're on
+        self.assertTrue(state['wifi']['ap_capable'])
+        state = network.mark_hotspot({'wifi': None, 'active': []}, None, False)
+        self.assertEqual(state['hotspot'], {'active': False, 'uuid': None, 'ssid': None})
+        self.assertEqual(network.hotspot_ssid('ada-laptop.home'), 'ada-laptop hotspot')
+        self.assertEqual(network.hotspot_ssid('localhost'), 'Arctic hotspot')
+        pw = network.hotspot_password()
+        self.assertEqual(len(pw), 12)
+        self.assertTrue(set(pw) <= set(network.PASSWORD_CHARS))
+
+    def test_tailscale_status(self):
+        text = json.dumps({'BackendState': 'Running', 'CurrentTailnet': {'Name': 'ada@example.com'}, 'Peer': {
+            'nodekey:a': {'HostName': 'nas', 'DNSName': 'nas.tail1234.ts.net.', 'TailscaleIPs': ['100.64.0.2', 'fd7a::2'],
+                          'Online': True, 'ExitNodeOption': True, 'ExitNode': True},
+            'nodekey:b': {'HostName': 'Phone', 'DNSName': 'phone.tail1234.ts.net.', 'TailscaleIPs': ['100.64.0.3'],
+                          'Online': True, 'ExitNodeOption': False},
+            'nodekey:c': {'HostName': 'vps', 'DNSName': '', 'TailscaleIPs': ['fd7a::4'], 'Online': False,
+                          'ExitNodeOption': True}}})
+        view = network.parse_tailscale(text)
+        self.assertEqual((view['state'], view['tailnet'], view['exit_node']), ('running', 'ada@example.com', 'nas'))
+        self.assertEqual(view['exit_nodes'], [{'ip': '100.64.0.2', 'name': 'nas', 'online': True, 'active': True},
+                                              {'ip': 'fd7a::4', 'name': 'vps', 'online': False, 'active': False}])
+        self.assertEqual(network.parse_tailscale(json.dumps({'BackendState': 'NeedsLogin'}))['state'], 'signed_out')
+        self.assertIsNone(network.parse_tailscale('failed to connect to local tailscaled; it doesn’t appear to be running'))
+        self.assertEqual(network.tailscale_failure('Access denied: prefs write access denied').code, 'denied')
+
+    def test_wep_key_type(self):
+        self.assertEqual(network.wep_key_type('abcde'), 'key')
+        self.assertEqual(network.wep_key_type('0123456789'), 'key')
+        self.assertEqual(network.wep_key_type('a longer passphrase'), 'passphrase')
+
+
+class Commands(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.bin = Path(self.tmp.name)
+        nmcli = self.bin / 'nmcli'
+        nmcli.write_text(FAKE.replace('/usr/bin/env python3', sys.executable, 1))
+        nmcli.chmod(0o755)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_helper(self, *args, scenario=None, stdin='', env=None):
+        e = dict(os.environ, PATH=str(self.bin) + ':/usr/bin:/bin', FAKE_NMCLI=json.dumps(scenario or {}))
+        e.pop('ARCTIC_NETWORK_FIXTURE', None)
+        e.update(env or {})
+        p = subprocess.run([sys.executable, str(SCRIPTS / 'network.py'), *args], input=stdin, capture_output=True,
+                           text=True, env=e, timeout=30)
+        lines = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
+        return p.returncode, lines[-1] if lines else None
+
+    def argv(self):
+        log = self.bin / 'argv.log'
+        return [json.loads(l) for l in log.read_text().splitlines()] if log.exists() else []
+
+    def secrets(self):
+        f = self.bin / 'secrets.txt'
+        return f.read_text() if f.exists() else ''
+
+    def assertNoSecretOnArgv(self):
+        for argv in self.argv():
+            for a in argv:
+                self.assertNotIn('horse', a, argv)
+
+    def test_status(self):
+        code, out = self.run_helper('status', scenario=STATUS)
+        self.assertEqual(code, 0)
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['wifi']['device'], 'wlp2s0')
+        self.assertEqual(out['saved'], [{'uuid': UUID, 'ssid': 'Home', 'autoconnect': True}])
+
+    def test_scan_marks_saved(self):
+        code, out = self.run_helper('scan', '--rescan', scenario=STATUS)
+        self.assertEqual(code, 0)
+        self.assertEqual(out['networks'][0]['uuid'], UUID)
+        self.assertIn(['device', 'wifi', 'rescan'], self.argv())
+
+    def test_join_new_psk_network_secret_through_pipe(self):
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'Café:5G' (%s) successfully added.\n" % UUID}
+        code, out = self.run_helper('connect', '--ssid', 'Café:5G', '--security', 'sae', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out), (0, {'ok': True, 'uuid': UUID}))
+        self.assertEqual(self.secrets(), '802-11-wireless-security.psk:%s\n' % SECRET)
+        self.assertNoSecretOnArgv()
+        add = next(a for a in self.argv() if a[:2] == ['connection', 'add'])
+        self.assertEqual(add[add.index('ssid') + 1], 'Café:5G')
+        self.assertEqual(add[add.index('wifi-sec.key-mgmt') + 1], 'sae')
+        up = next(a for a in self.argv() if 'up' in a)
+        self.assertEqual(up[:4], ['--wait', '40', 'connection', 'up'])
+        self.assertTrue(up[-1].startswith('/dev/fd/'))
+
+    def test_hidden_and_wep(self):
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'Lab' (%s) successfully added.\n" % UUID}
+        code, _ = self.run_helper('connect', '--ssid', 'Lab', '--security', 'wep', '--hidden', '--ask',
+                                  scenario=scenario, stdin=json.dumps({'secret': 'abcde'}) + '\n')
+        self.assertEqual(code, 0)
+        add = next(a for a in self.argv() if a[:2] == ['connection', 'add'])
+        self.assertEqual(add[add.index('802-11-wireless.hidden') + 1], 'yes')
+        self.assertEqual(add[add.index('wifi-sec.wep-key-type') + 1], 'key')
+        self.assertEqual(self.secrets(), '802-11-wireless-security.wep-key0:abcde\n')
+
+    def test_failed_join_deletes_the_new_profile(self):
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'Home' (%s) successfully added.\n" % UUID}
+        scenario['connection up'] = {'code': 4, 'err': 'Error: Connection activation failed: Secrets were required, but not provided.\n'}
+        code, out = self.run_helper('connect', '--ssid', 'Home', '--security', 'wpa-psk', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual(code, 1)
+        self.assertEqual(out['code'], 'auth')
+        self.assertEqual(out['error'], 'That password didn’t work for “Home”. Check it and try again.')
+        self.assertIn(['connection', 'delete', 'uuid', UUID], self.argv())
+        self.assertNoSecretOnArgv()
+
+    def test_saved_network_keeps_its_profile(self):
+        scenario = {'connection up': {'code': 3, 'err': 'Error: Timeout expired (40 seconds)\n'}}
+        code, out = self.run_helper('connect', '--uuid', UUID, '--name', 'Home', '--security', 'wpa-psk', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out['code']), (1, 'timeout'))
+        self.assertFalse(any('delete' in a for a in self.argv()))
+        self.assertEqual(self.secrets(), '802-11-wireless-security.psk:%s\n' % SECRET)
+
+    def test_company_network(self):
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'eduroam' (%s) successfully added.\n" % UUID}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--eap', 'ttls', '--phase2', 'pap',
+                                    '--identity', 'ada@uni.example', '--anonymous-identity', 'anon@uni.example',
+                                    '--domain', 'uni.example', '--system-ca', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out), (0, {'ok': True, 'uuid': UUID}))
+        add = next(a for a in self.argv() if a[:2] == ['connection', 'add'])
+        pairs = dict(zip(add[10::2], add[11::2]))
+        self.assertEqual(pairs['802-1x.eap'], 'ttls')
+        self.assertEqual(pairs['802-1x.phase2-auth'], 'pap')
+        self.assertEqual(pairs['802-1x.identity'], 'ada@uni.example')
+        self.assertEqual(pairs['802-1x.anonymous-identity'], 'anon@uni.example')
+        self.assertEqual(pairs['802-1x.domain-suffix-match'], 'uni.example')
+        self.assertEqual(pairs['802-1x.system-ca-certs'], 'yes')
+        self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
+        self.assertNoSecretOnArgv()
+
+    def test_saved_company_network_comes_up_as_saved(self):
+        code, out = self.run_helper('connect', '--uuid', UUID, '--name', 'eduroam', '--security', 'enterprise')
+        self.assertEqual((code, out), (0, {'ok': True, 'uuid': UUID}))
+        self.assertEqual(self.argv(), [['--wait', '40', 'connection', 'up', 'uuid', UUID]])
+        # Its password stopped working: the menu asks for it and sends it for this activation.
+        code, _ = self.run_helper('connect', '--uuid', UUID, '--name', 'eduroam', '--security', 'enterprise', '--ask',
+                                  stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual(code, 0)
+        self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
+        self.assertFalse(any(a[:2] == ['connection', 'add'] for a in self.argv()))
+
+    def test_company_login_for_a_saved_network_keeps_one_profile(self):
+        scenario = {'device status': STATUS['device status'],
+                    'connection show uuid': {'out': 'eduroam\n'},
+                    'connection show': {'out': 'eduroam:%s:802-11-wireless:1759000000:yes\n' % UUID}}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--identity', 'ada@uni.example', '--system-ca', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out), (0, {'ok': True, 'uuid': UUID}))
+        self.assertFalse(any(a[:2] == ['connection', 'add'] for a in self.argv()))
+        modify = next(a for a in self.argv() if a[:2] == ['connection', 'modify'])
+        self.assertEqual(modify[2:4], ['uuid', UUID])
+        self.assertEqual(modify[modify.index('802-1x.identity') + 1], 'ada@uni.example')
+        self.assertIn(['--wait', '40', 'connection', 'up', 'uuid', UUID], [a[:6] for a in self.argv()])
+        self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
+        # A sign-in that fails leaves the saved profile in place.
+        scenario['connection up'] = {'code': 4, 'err': 'Error: Connection activation failed: Secrets were required, but not provided.\n'}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--identity', 'ada', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out['code']), (1, 'auth'))
+        self.assertFalse(any('delete' in a for a in self.argv()))
+        self.assertNoSecretOnArgv()
+
+    def test_hotspot_first_time(self):
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'Arctic hotspot' (%s) successfully added.\n" % UUID}
+        code, out = self.run_helper('hotspot', 'on', '--ssid', 'ada hotspot', scenario=scenario)
+        self.assertEqual((code, out), (0, {'ok': True, 'active': True, 'uuid': UUID, 'ssid': 'ada hotspot'}))
+        add = next(a for a in self.argv() if a[:2] == ['connection', 'add'])
+        pairs = dict(zip(add[2::2], add[3::2]))
+        self.assertEqual((pairs['con-name'], pairs['802-11-wireless.mode'], pairs['ipv4.method'], pairs['wifi-sec.key-mgmt']),
+                         ('Arctic hotspot', 'ap', 'shared', 'wpa-psk'))
+        self.assertNotIn('wifi-sec.psk', pairs)                          # the password only through the pipe
+        secret = self.secrets()
+        self.assertRegex(secret, r'^802-11-wireless-security\.psk:[a-z2-9]{12}\n$')
+        self.assertFalse(any(secret.split(':', 1)[1].strip() in ' '.join(a) for a in self.argv()))
+
+    def test_hotspot_again_and_off(self):
+        scenario = dict(STATUS)
+        scenario['connection show'] = {'out': STATUS['connection show']['out'] +
+                                       'Arctic hotspot:77777777-2222-3333-4444-555555555555:802-11-wireless:0:no\n'}
+        code, out = self.run_helper('hotspot', 'on', scenario=scenario)
+        self.assertEqual((code, out['active'], out['uuid']), (0, True, '77777777-2222-3333-4444-555555555555'))
+        self.assertFalse(any(a[:2] == ['connection', 'add'] for a in self.argv()))
+        self.assertEqual(self.secrets(), '')                             # its saved password is used
+        code, out = self.run_helper('hotspot', 'off', scenario=scenario)
+        self.assertEqual((code, out), (0, {'ok': True, 'active': False}))
+        self.assertIn(['connection', 'down', 'uuid', '77777777-2222-3333-4444-555555555555'], self.argv())
+        # Saved networks leave the hotspot out.
+        code, out = self.run_helper('status', scenario=scenario)
+        self.assertEqual([s['ssid'] for s in out['saved']], ['Home'])
+        self.assertEqual(out['hotspot']['uuid'], '77777777-2222-3333-4444-555555555555')
+
+    def tailscale_bin(self, status, up=''):
+        (self.bin / 'tailscale').write_text('#!/bin/sh\necho "tailscale $*" >> "%s/ts.log"\n'
+                                            'case "$1" in status) cat "%s/ts-status.json" ;; up) %s ;; esac\n'
+                                            % (self.bin, self.bin, up or 'exit 0'))
+        (self.bin / 'tailscale').chmod(0o755)
+        (self.bin / 'ts-status.json').write_text(json.dumps(status))
+
+    def ts_log(self):
+        f = self.bin / 'ts.log'
+        return f.read_text().splitlines() if f.exists() else []
+
+    def test_tailscale_up_down_and_exit_node(self):
+        self.tailscale_bin({'BackendState': 'Stopped'})
+        self.assertEqual(self.run_helper('tailscale', 'up'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'exit-node', '100.64.0.2'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'exit-node', 'none'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'down'), (0, {'ok': True}))
+        self.assertEqual(self.run_helper('tailscale', 'exit-node', '$(reboot)')[0], 1)
+        self.assertEqual(self.ts_log(), ['tailscale status --json', 'tailscale up --timeout=30s',
+                                         'tailscale set --exit-node=100.64.0.2', 'tailscale set --exit-node=', 'tailscale down'])
+
+    def test_tailscale_sign_in_and_denied(self):
+        self.tailscale_bin({'BackendState': 'NeedsLogin'},
+                           up='printf "\\nTo authenticate, visit:\\n\\n\\thttps://login.tailscale.com/a/abc123\\n\\n"; sleep 3')
+        code, out = self.run_helper('tailscale', 'up')
+        self.assertEqual((code, out), (0, {'ok': True, 'login_url': 'https://login.tailscale.com/a/abc123'}))
+        self.tailscale_bin({'BackendState': 'Stopped'}, up='echo "Access denied: prefs write access denied" >&2; exit 1')
+        code, out = self.run_helper('tailscale', 'up')
+        self.assertEqual((code, out['code']), (1, 'denied'))
+        code, out = self.run_helper('tailscale', 'status')
+        self.assertEqual((code, out['state']), (0, 'stopped'))
+
+    def test_company_certificate(self):
+        pem = self.bin / 'uni ca.pem'
+        pem.write_text('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n')
+        home = self.bin / 'home'
+        home.mkdir()
+        code, out = self.run_helper('ca-set', '--uuid', UUID, '--file', str(pem), env={'HOME': str(home)})
+        self.assertEqual((code, out), (0, {'ok': True}))
+        dest = home / ('.cert/arctic/%s.pem' % UUID)
+        self.assertEqual(dest.read_text(), pem.read_text())
+        self.assertIn(['connection', 'modify', 'uuid', UUID, '802-1x.ca-cert', str(dest), '802-1x.system-ca-certs', 'no'],
+                      self.argv())
+        notes = self.bin / 'notes.txt'
+        notes.write_text('hello\n')
+        code, out = self.run_helper('ca-set', '--uuid', UUID, '--file', str(notes), env={'HOME': str(home)})
+        self.assertEqual((code, out['code']), (1, 'usage'))
+
+    def test_saved_tells_company_networks(self):
+        scenario = {'key-mgmt connection show uuid': {'out': 'wpa-eap\n'},     # before STATUS's broader keys
+                    'ca-cert connection show uuid': {'out': 'file\\:///home/ada/.cert/arctic/x.pem\n'}, **STATUS}
+        code, out = self.run_helper('saved', scenario=scenario)
+        self.assertEqual(out['saved'][0]['enterprise'], True)
+        self.assertEqual(out['saved'][0]['ca_cert'], '/home/ada/.cert/arctic/x.pem')
+
+    def test_company_network_refusals(self):
+        with self.assertRaises(network.Failure):
+            network.enterprise_settings('tls', 'mschapv2', 'ada')
+        with self.assertRaises(network.Failure):
+            network.enterprise_settings('peap', 'mschapv2', '')
+        self.assertIn('no', network.enterprise_settings('peap', 'mschapv2', 'ada', system_ca=False))
+        scenario = dict(STATUS)
+        scenario['connection add'] = {'out': "Connection 'eduroam' (%s) successfully added.\n" % UUID}
+        scenario['connection up'] = {'code': 4, 'err': 'Error: Connection activation failed: Secrets were required, but not provided.\n'}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--identity', 'ada', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out['code']), (1, 'auth'))
+        self.assertIn('username or password', out['error'])
+        self.assertIn(['connection', 'delete', 'uuid', UUID], self.argv())
+
+    def test_open_network_needs_no_secret(self):
+        scenario = {'device status': STATUS['device status'],
+                    'connection add': {'out': "Connection 'Airport' (%s) successfully added.\n" % UUID}}
+        code, _ = self.run_helper('connect', '--ssid', 'Airport', '--security', 'open', scenario=scenario)
+        self.assertEqual(code, 0)
+        add = next(a for a in self.argv() if a[:2] == ['connection', 'add'])
+        self.assertNotIn('wifi-sec.key-mgmt', add)
+        self.assertEqual(self.secrets(), '')
+
+    def test_refuses_a_multiline_secret(self):
+        code, out = self.run_helper('connect', '--uuid', UUID, '--ask', stdin=json.dumps({'secret': 'a\nb'}) + '\n')
+        self.assertEqual((code, out['code']), (1, 'bad_secret'))
+        self.assertEqual(self.argv(), [])
+
+    def test_forget_disconnect_radio_vpn(self):
+        self.assertEqual(self.run_helper('forget', '--uuid', UUID)[0], 0)
+        self.assertEqual(self.run_helper('disconnect', '--uuid', UUID)[0], 0)
+        self.assertEqual(self.run_helper('radio', 'wifi', 'off')[0], 0)
+        self.assertEqual(self.run_helper('autoconnect', '--uuid', UUID, 'off')[0], 0)
+        code, _ = self.run_helper('vpn-up', '--uuid', UUID, '--name', 'Work', '--ask', stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual(code, 0)
+        self.assertEqual(self.secrets(), 'vpn.secrets.password:%s\n' % SECRET)
+        argv = self.argv()
+        self.assertIn(['connection', 'delete', 'uuid', UUID], argv)
+        self.assertIn(['connection', 'down', 'uuid', UUID], argv)
+        self.assertIn(['radio', 'wifi', 'off'], argv)
+        self.assertIn(['connection', 'modify', 'uuid', UUID, 'connection.autoconnect', 'no'], argv)
+        self.assertNoSecretOnArgv()
+
+    def test_airplane_blocks_and_restores_radios(self):
+        state = self.bin / 'rfkill-state'
+        fake = self.bin / 'rfkill'
+        fake.write_text('#!/bin/sh\necho "rfkill $*" >> "%s"\n'
+                        'if [ "$1" = --json ]; then cat "%s"; fi\n' % (self.bin / 'rfkill.log', state))
+        fake.chmod(0o755)
+        state.write_text(json.dumps({'': [{'type': 'wlan', 'soft': 'unblocked'}, {'type': 'bluetooth', 'soft': 'blocked'}]}))
+        home = self.bin / 'state'
+        env = {'XDG_STATE_HOME': str(home)}
+        self.assertEqual(self.run_helper('airplane', 'on', env=env)[0], 0)
+        self.assertEqual(json.loads((home / 'arctic/airplane.json').read_text()), {'wlan': True, 'bluetooth': False})
+        self.assertEqual(self.run_helper('airplane', 'off', env=env)[0], 0)
+        log = (self.bin / 'rfkill.log').read_text().splitlines()
+        self.assertIn('rfkill block wlan', log)
+        self.assertIn('rfkill block bluetooth', log)
+        self.assertIn('rfkill unblock wlan', log)
+        self.assertNotIn('rfkill unblock bluetooth', log)        # it was off before
+
+    def test_share_sends_the_password_on_stdin(self):
+        qr = self.bin / 'qrencode'
+        qr.write_text('#!/bin/sh\necho "$*" > "%s"; cat > "%s"; echo "<?xml?><svg>code</svg>"\n'
+                      % (self.bin / 'qr-args', self.bin / 'qr-input'))
+        qr.chmod(0o755)
+        scenario = {'802-11-wireless.ssid': {'out': 'Home\n'},
+                    '802-11-wireless-security.key-mgmt': {'out': 'wpa-psk\n'},
+                    '802-11-wireless.hidden': {'out': 'no\n'},
+                    '802-11-wireless-security.psk': {'out': 'hunter22\n'}}
+        code, out = self.run_helper('share', '--uuid', UUID, scenario=scenario)
+        self.assertEqual((code, out['ssid'], out['svg']), (0, 'Home', '<svg>code</svg>\n'))
+        self.assertNotIn('password', out)
+        self.assertEqual((self.bin / 'qr-input').read_text(), 'WIFI:T:WPA;S:Home;P:hunter22;;')
+        self.assertNotIn('hunter22', (self.bin / 'qr-args').read_text())
+        code, out = self.run_helper('share', '--uuid', UUID, '--reveal', scenario=scenario)
+        self.assertEqual(out['password'], 'hunter22')
+
+    def test_vpn_import(self):
+        wg = self.bin / 'work.conf'
+        wg.write_text('[Interface]\nPrivateKey = x\n[Peer]\n')
+        ovpn = self.bin / 'office.ovpn'
+        ovpn.write_text('client\nremote vpn.example 1194\n')
+        other = self.bin / 'notes.txt'
+        other.write_text('hello\n')
+        self.assertEqual(network.vpn_type(str(wg)), 'wireguard')
+        self.assertEqual(network.vpn_type(str(ovpn)), 'openvpn')
+        with self.assertRaises(network.Failure):
+            network.vpn_type(str(other))
+        scenario = {'connection import': {'out': "Connection 'work' (%s) successfully added.\n" % UUID}}
+        code, out = self.run_helper('vpn-import', '--file', str(wg), scenario=scenario)
+        self.assertEqual(out, {'ok': True, 'kind': 'wireguard', 'name': 'work', 'uuid': UUID})
+        self.assertIn(['connection', 'import', 'type', 'wireguard', 'file', str(wg)], self.argv())
+        scenario = {'connection import': {'code': 1, 'err': 'Error: failed to find VPN plugin for openvpn.\n'}}
+        code, out = self.run_helper('vpn-import', '--file', str(ovpn), scenario=scenario)
+        self.assertEqual(code, 1)
+        self.assertIn('NetworkManager-openvpn', out['error'])
+
+    def test_forget_by_ssid(self):
+        code, _ = self.run_helper('forget', '--ssid', 'Home', scenario=STATUS)
+        self.assertEqual(code, 0)
+        self.assertIn(['connection', 'delete', 'uuid', UUID], self.argv())
+
+    def test_vpn_without_password_asks(self):
+        scenario = {'connection up': {'code': 4, 'err': 'Error: Connection activation failed: Secrets were required, but not provided.\n'}}
+        code, out = self.run_helper('vpn-up', '--uuid', UUID, '--name', 'Work', scenario=scenario)
+        self.assertEqual((code, out['code']), (1, 'auth'))
+        self.assertEqual(out['error'], 'Type the password for “Work”.')
+
+    def test_fixture_mode_runs_nothing(self):
+        env = {'ARCTIC_NETWORK_FIXTURE': str(FIXTURES / 'network.json')}
+        code, out = self.run_helper('scan', env=env)
+        self.assertEqual(code, 0)
+        self.assertGreater(len(out['networks']), 3)
+        code, out = self.run_helper('connect', '--ssid', 'Office', '--security', 'wpa-psk', '--ask', env=env,
+                                    stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual(code, 0)
+        self.assertEqual(self.argv(), [])
+        e = dict(os.environ, **env)
+        p = subprocess.run([sys.executable, str(SCRIPTS / 'network.py'), 'watch'], input='{"op":"scan","on":true}\n',
+                           capture_output=True, text=True, env=e, timeout=10)
+        kinds = [json.loads(l)['type'] for l in p.stdout.splitlines()]
+        self.assertEqual(kinds, ['state', 'networks'])
+
+
+if __name__ == '__main__':
+    unittest.main()

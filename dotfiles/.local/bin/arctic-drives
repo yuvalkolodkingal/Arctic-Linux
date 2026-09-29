@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""arctic-drives — USB drives, SD cards and other removable disks: what's plugged in, and eject.
+
+    arctic-drives list      one JSON line: {"ok": true, "drives": [{"device", "name", "size",
+                            "mounts": [...]}, …]} for every removable or hot-plugged disk
+    arctic-drives eject DEVICE
+                            unmount everything on it and power it off, so it's safe to unplug
+
+Mounting is udiskie's job (`arctic-session drives`, started at login): it mounts new drives under
+/run/media/$USER and says so in a notification. This helper is for the bar and the launcher;
+Thunar ejects from its side panel too. Failures print {"ok": false, "error": "…"} and exit 1.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+RE_DEVICE = re.compile(r'^/dev/[A-Za-z0-9_-]{1,64}$')
+
+
+class Failure(Exception):
+    """A sentence for the person."""
+
+
+def run(argv, timeout=30):
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
+                              env=dict(os.environ, LC_ALL='C'))
+        return done.returncode, done.stdout, done.stderr
+    except (OSError, subprocess.SubprocessError) as error:
+        return 127, '', str(error)
+
+
+def mounts_of(node):
+    out = [m for m in (node.get('mountpoints') or [node.get('mountpoint')]) if m]
+    for child in node.get('children') or []:
+        out += mounts_of(child)
+    return out
+
+
+def labels_of(node):
+    out = [node['label']] if node.get('label') else []
+    for child in node.get('children') or []:
+        out += labels_of(child)
+    return out
+
+
+def drives():
+    code, out, err = run(['lsblk', '--json', '--bytes', '-o',
+                          'NAME,PATH,TYPE,RM,HOTPLUG,SIZE,LABEL,MODEL,VENDOR,TRAN,MOUNTPOINT,MOUNTPOINTS'])
+    if code != 0:
+        raise Failure('The list of drives couldn’t be read: ' + (err.strip() or 'lsblk failed') + '.')
+    found = []
+    for disk in json.loads(out).get('blockdevices', []):
+        removable = disk.get('rm') in (True, '1', 1) or disk.get('hotplug') in (True, '1', 1)
+        if disk.get('type') != 'disk' or not removable or not int(disk.get('size') or 0):
+            continue
+        labels = labels_of(disk)
+        model = ' '.join(w.strip() for w in (disk.get('vendor') or '', disk.get('model') or '') if w.strip())
+        found.append(dict(device=disk.get('path') or '/dev/' + disk['name'],
+                          name=labels[0] if labels else model or disk['name'],
+                          model=model, size=int(disk.get('size') or 0), bus=disk.get('tran') or '',
+                          mounts=mounts_of(disk)))
+    return found
+
+
+def eject(device):
+    if not RE_DEVICE.match(device):
+        raise Failure('usage: arctic-drives eject /dev/NAME')
+    drive = next((d for d in drives() if d['device'] == device), None)
+    if not drive:
+        raise Failure('That drive isn’t plugged in any more.')
+    code, out, _err = run(['lsblk', '--json', '-o', 'PATH,MOUNTPOINT', device])
+    parts = [p['path'] for p in json.loads(out).get('blockdevices', []) if p.get('mountpoint')] if code == 0 else []
+    for part in parts:
+        code, _o, err = run(['udisksctl', 'unmount', '--block-device', part, '--no-user-interaction'])
+        if code != 0:
+            if 'busy' in err.lower():
+                raise Failure('Something is still using {}. Close the files and windows on it, then try again.'.format(drive['name']))
+            raise Failure('{} couldn’t be unmounted: {}'.format(drive['name'], err.strip().splitlines()[-1] if err.strip() else 'udisksctl failed'))
+    code, _o, err = run(['udisksctl', 'power-off', '--block-device', device, '--no-user-interaction'])
+    if code != 0 and parts == []:
+        raise Failure('{} couldn’t be powered off: {}'.format(drive['name'], err.strip().splitlines()[-1] if err.strip() else 'udisksctl failed'))
+    # Some card readers can't power off; unmounted is safe to unplug too.
+    return dict(ok=True, ejected=device, name=drive['name'], poweredOff=code == 0)
+
+
+def main(argv):
+    args = argv
+    verb = args[0] if args else 'list'
+    if verb in ('-h', '--help'):
+        print(__doc__.strip())
+        return 0
+    if verb == 'list':
+        result = dict(ok=True, drives=drives())
+    elif verb == 'eject' and len(args) == 2:
+        result = eject(args[1])
+    else:
+        print('usage: arctic-drives list | eject DEVICE', file=sys.stderr)
+        return 2
+    print(json.dumps(result))
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Failure as error:
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)

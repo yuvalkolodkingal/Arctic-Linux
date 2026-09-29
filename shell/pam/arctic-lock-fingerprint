@@ -1,0 +1,4 @@
+# PAM service for the Arctic lock screen's fingerprint reader (Quickshell PamContext, next to
+# pam/arctic-lock, which checks the password). pam_fprintd (the fprintd-pam package) asks fprintd
+# to match a saved finger of the user who is logged in; either service unlocks.
+auth required pam_fprintd.so max-tries=3 timeout=30

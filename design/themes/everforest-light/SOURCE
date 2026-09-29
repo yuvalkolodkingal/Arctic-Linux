@@ -1,0 +1,4 @@
+Upstream: https://github.com/sainnhe/everforest
+Licence: MIT (the upstream project's licence; confirm before each release)
+Everforest light, medium contrast: bg0-bg2, bg_dim, fg, grey0-2 and the accents.
+Only the colour values are used; Arctic renders every file itself from its own templates.

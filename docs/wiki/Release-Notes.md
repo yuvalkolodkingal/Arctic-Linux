@@ -1,5 +1,227 @@
 # Release notes
 
+## Arctic Linux 0.3.0
+
+Arctic Linux 0.3 installs apps from one place and turns any website into an app, gives every item
+on the bar its own menu, shows notifications itself, and adds the everyday tools people missed:
+screenshots you can draw on, screen recording, night light, printing and scanning, a command
+menu for every system action, and more themes.
+
+**Getting it:** an installed Arctic Linux 0.2 updates to 0.3 by itself, like any other update: it
+downloads in the background and installs the next time the computer starts. At the first login
+after that, a **What's new** card sums up the release.
+
+### What changes when you update
+
+- **`Super + B` opens your browser.** `Super + W`, where it was, is free for a shortcut of your
+  own.
+- **The bell opens the notification centre.** Click it for your notifications; right-click it for
+  do not disturb (in 0.2 a click turned do not disturb on or off). The Arctic shell shows
+  notifications itself now: mako only runs in the waybar fallback session, so settings in
+  `~/.config/mako` no longer apply to the Arctic desktop. Choose per app in **Settings →
+  Notifications** instead.
+- **Get apps starts with a choice** of where the app comes from: Flathub, Fedora packages, web
+  apps, terminal apps, Remove apps or the console.
+- **nm-applet, Blueman and the volume control (pavucontrol) are only recommended now**: the bar's
+  own menus do their work, and nm-applet only starts in the waybar session. They stay installed,
+  but you can remove them without removing the desktop.
+- **Apps that set themselves to start at login** (Discord, Steam, Nextcloud, KDE Connect…) now
+  start, as on other desktops. Switch any of them off in **Settings → Startup apps**.
+- **New packages come with the update**, so it is a bigger download than usual: the web-app
+  engine (`arctic-webapps`, on WebKitGTK 6.0), printing and scanning (CUPS, `ipp-usb`, Avahi,
+  `sane-airscan` and Document Scanner), firmware updates (fwupd), the colour emoji font, Nerd Font
+  symbols for the terminal (`arctic-fonts-symbols`), the extra themes (`arctic-themes-extra`), and
+  `fd`, `qalculate` and `wl-kbptr` for the launcher's search and the keyboard pointer.
+
+### Get apps and Remove apps
+
+- **One place to install anything** (`Super + Shift + A`): **Flathub apps** (with the
+  **Verified** badge), **Fedora packages** (the app catalogue, or every package with its
+  repository), **Web apps**, **Terminal apps** (a program like `btop` in the launcher) and a
+  **Console** for `dnf` and `flatpak` commands. Press a card's digit, or use the arrow keys.
+- **Installs keep going when you close the launcher.** A strip at the bottom shows progress,
+  **Show details** shows dnf's or Flatpak's own output, and a notification says when the app is
+  ready.
+- **Remove apps** has a tab per source: Flatpak, Fedora packages, web apps and terminal apps.
+  Before anything goes, it shows every package dnf would remove with it, takes a snapshot when
+  snapshots are set up, and keeps an app's settings and sign-in unless you tick the box. You can
+  also select an app in the launcher and press `Shift + Delete`.
+- **Arctic protects itself:** a removal that would take the desktop, the package manager, your
+  login shell or your only terminal along is refused, and says why.
+
+See [Apps and software](Apps-and-Software#get-apps).
+
+### Web apps
+
+- **Any website as an app**, with its own launcher entry, icon, window and sign-in, kept apart
+  from your browser: Get apps → **Web apps**, type the address, **Add app**. From a terminal:
+  `arctic-webapp install music.youtube.com`.
+- The window has Back, Forward and Reload, find in page and zoom; links to other sites open in
+  your browser, while sign-in pages stay in the app. Camera, microphone and location requests ask
+  in a bar outside the page, and the app's notifications show in the notification centre under its
+  name.
+- **Calls and protected video** (Meet, Teams, Netflix, Spotify…) need a Chromium-family engine:
+  the preview suggests Brave, Chrome, Vivaldi or Chromium, and the app then opens in that
+  browser's app window, still with its own profile.
+- **Settings → Web apps** changes a web app's name, icon, engine, notifications and permissions.
+
+See [Web apps](Web-Apps).
+
+### Menus on the bar
+
+- **Every item on the bar opens Arctic's own menu**, in the desktop's style, instead of a separate
+  app: see [Menus on the bar](Bar-Menus).
+  - **Network:** Wi-Fi networks with their signal, the password asked right under the network,
+    hidden networks and company or school Wi-Fi (eduroam), VPN and Tailscale switches (with
+    exit nodes), airplane mode, a hotspot, and **Share with a phone…** (a QR code of a saved
+    network).
+  - **Bluetooth:** your devices with their battery, and pairing, with the codes in Arctic's own
+    dialog.
+  - **Sound:** where sound plays, the microphone, a volume for each app, and headphone or speaker
+    ports and profiles.
+  - **Battery:** power mode, **Limit charging to 80 %** on laptops that support it, battery
+    health and your mouse's or headphones' battery. Arctic warns once when the battery is low and
+    again when it's about to run out.
+  - **The clock** opens a calendar with week numbers; **what's playing** sits next to it, with
+    its own menu, and on the lock screen.
+  - **Tray icons'** menus are drawn in the same style.
+- **Quick settings** on `Super + A`: Wi-Fi, Bluetooth, do not disturb, dark style, power mode,
+  microphone, VPN and airplane mode, with volume and brightness sliders.
+- **Keys:** `Super + Ctrl + W`, `B`, `A`, `P`, `T`, `M` and `D` open the network, Bluetooth,
+  sound, battery, calendar, media and brightness menus; `Super + Alt + B` walks the bar with the
+  arrow keys. In a menu, the arrow keys, `Enter` and `Esc` do what you'd expect, and `Ctrl + Tab`
+  moves to the next menu. `Shift + Mute` sends sound to the next output.
+- **The brightness keys** change the screen you're on, external monitors included when they
+  accept DDC/CI.
+- **"Mic", "Camera" and "Sharing"** show next to the clock while an app uses them.
+- **A saved Wi-Fi network whose password changed** asks for the new one in a notification.
+- nm-applet no longer starts with the Arctic shell (the waybar fallback still has it), and
+  Blueman's tray icon is hidden: the menus do their work. nm-applet, Blueman and the volume
+  control (pavucontrol) are still installed, but you can now remove them without removing the
+  desktop.
+
+### Notifications and do not disturb
+
+- **Pop-ups** appear in the top-right corner of the screen you're on, up to three at a time.
+  Urgent ones have a red edge and stay until you close them. Click one to act on it.
+- **The notification centre** (the bell, or `Super + Alt + N`) groups them by app and keeps the
+  last 50, also after a restart. `Super + Alt + ,` acts on the newest one. The lock screen only
+  says how many arrived, never what they say.
+- **Do not disturb** for an hour, until tomorrow, until you turn it off, or every day between two
+  times (**Settings → Notifications**). Arctic's own alerts and urgent notifications still show,
+  and you can let an app through or keep even its urgent ones quiet.
+- **Per app:** pop-ups, only the centre, or nothing, in **Settings → Notifications**.
+
+See [Notifications](Notifications).
+
+### Shortcuts and capture
+
+- **`Super + B` opens your browser.** It was `Super + W`, which is now free for a shortcut of
+  your own. If you had bound `Super + B` yourself, Settings > Shortcuts shows that it no longer
+  runs (Arctic's shortcuts come first), so you can move it to another key.
+- **`Super + Shift + S` takes a screenshot of an area**, as on Windows; `Print` still does. The
+  screen freezes while you drag over an area or click a window, so menus and tooltips stay in it. `Shift + Print` now takes the screen you're on (not every
+  screen at once), window screenshots leave out the border, and `Ctrl + Print` copies an area
+  without saving it.
+- **The screenshot notification does more:** click it to open the picture; its buttons show it in
+  your file manager, open it in an editor to draw arrows, text and boxes (swappy), or move it to
+  the trash.
+- **Copy text from the screen** with `Super + Ctrl + Print` (text recognition, in your language),
+  and **read QR codes** (`arctic-ocr --qr`; sign-in codes stay out of clipboard history).
+- **Pick a colour** anywhere with `Super + Shift + C`: it's copied as `#rrggbb`.
+- **Record the screen** with `Super + Alt + R`: click a screen or drag an area, press again to
+  stop. Recordings go to `~/Videos/Screencasts`, using your graphics card's encoder when it has one.
+- **Sharing your screen** in a video call or OBS shows a list of your screens and windows, so you
+  can share a single window.
+- **Clipboard history** (`Super + V`) is a panel with search and pictures: `Enter` copies, `Shift +
+  Enter` also pastes, `Delete` removes. It's blacked out in screenshots and screen shares.
+- **Emoji** with `Super + Ctrl + E`: search by name, `Enter` types it. The live USB and new installs
+  get the colour emoji font.
+- **Switching windows:** `Alt + Tab` (`` Alt + ` `` goes back; `Alt + Shift` would switch your keyboard
+  layout), `Super + Alt + Tab` for every workspace, `Super + J` to jump to a window by its letter,
+  `Super + Backspace` for the previous one.
+- **More window keys:** `Super + H` hides a window (`Super + Shift + H` brings it back),
+  `Super + Shift + P` pins one over every workspace, `Super + Alt` + arrows make tab groups.
+- **A scratch workspace** over the current one (`` Super + ` ``) and a **drop-down terminal**
+  (`Super + Alt + Enter`).
+- **Hardware keys:** the keyboard-light, touchpad, calculator and search keys work.
+- **Settings > Keyboard and mouse** has a **Compose key** (press it, then two keys to type é, ©…),
+  and says which shortcuts your layout-switch key would also fire; Settings refuses a new shortcut
+  that holds that key.
+- Upgrading? If you replaced `~/.config/mango/arctic/binds.conf` or `apps.conf` with your own copy,
+  it doesn't get the new keys: compare it with `/usr/share/arctic/mango/`.
+
+### Night light, printing, drives, screens and sharing
+
+- **Night light** (`Super + Ctrl + N`): warmer colours from sunset to sunrise (worked out from your
+  time zone, without looking up your location), on hours you choose, or always. **Keep awake**
+  (`Super + Ctrl + I`): no lock or sleep while you present or download; video calls and films
+  keep the screen on by themselves. See [Night light and keep awake](Night-Light-and-Keep-Awake).
+- **Printing and scanning** work without drivers for most printers and scanners made in the last
+  ten years, over USB or the network. **Settings → Printers and scanners** shows them; **Document
+  Scanner** scans to PDF. See [Printing and scanning](Printing-and-Scanning).
+- **USB drives and SD cards** are ready as soon as you plug them in, with a notification; eject
+  them in Thunar. **Phones, iPhones and cameras** show up in Thunar, and so do Windows and NAS
+  shares (`smb://`). See [Drives, phones and cameras](Drives-and-Phones).
+- **Screens:** `Super + P` duplicates or extends your screen for a projector. Closing the lid with
+  a monitor plugged in keeps you working on the monitor; without one, **Settings → Power and
+  lock** says whether the laptop suspends, locks or keeps running. **Lighter effects** turn
+  themselves on in a virtual machine, and **game mode** drops the gaps between windows. See
+  [Screens and the laptop lid](Screens-and-Laptop-Lid).
+- **Sharing:** `Super + Ctrl + S` sends the clipboard or files to phones and computers nearby with
+  LocalSend (from Get apps), or opens KDE Connect. **Settings → Sharing** shows what the firewall
+  lets in and turns remote login (SSH) on or off. See [Sharing and phones](Sharing-and-Phones).
+- **Updates for everything:** Flatpak apps are updated every day, firmware updates from fwupd are
+  offered in **Settings → Updates**, and **Undo…** there takes back one update. See
+  [Updates](Updates#flatpak-apps-firmware-and-nix).
+- **More in Settings:** **Date and time** (time zone, network time, the computer's language),
+  **Users and sign-in** (your picture, name, password and fingerprint; a saved fingerprint also
+  unlocks the lock screen), **Startup apps** with the apps that start themselves, and the
+  computer's name in **About**.
+- `Ctrl + Shift + Esc` shows what's running (a system monitor). On a laptop with two graphics
+  chips, `Shift + Enter` on an app in the launcher runs it on the discrete one.
+
+### The command menu, themes and the rest of the desktop
+
+- **The command menu** (`Super + Alt + Space`): every system action in one keyboard menu:
+  capture, toggles, themes, every Settings page, installing and removing apps, updates and power.
+  `Super + Ctrl + C` opens it at Capture. Add rows of your own in `~/.config/arctic/menu.json`.
+  See [Command menu](Command-Menu).
+- **The launcher finds more than apps:** Settings pages and single settings, open windows, an
+  app's own actions, files in your home folder, unit conversions (`10 km to mi`) and a web search
+  (start with `?`). The apps you open most come first.
+- **Reminders:** `Super + Ctrl + R`, then `10m tea` or `17:30 call Ana`; a notification you can't
+  miss says it when it's time.
+- **Weather** (off until you turn it on in **Settings → Appearance**): now and five days under the
+  calendar, from Open-Meteo, without an account. **Show the temperature on the bar** puts it next
+  to the clock.
+- **Themes:** ten more looks in **Settings → Appearance → More themes** (Nord, Catppuccin, Gruvbox,
+  Tokyo Night, Rosé Pine, Everforest), **Add a theme from the web** (Omarchy themes work; only their
+  colours and pictures are kept), **light by day, dark at night**, and a wallpaper that changes by
+  itself every 30 minutes, hour or day. See [Themes and customisation](Themes-and-Customisation).
+- **Accessibility**, a new Settings page: **High contrast** in any theme, a bigger text size for
+  apps and the terminal, pointer size, reduced motion, and a **keyboard pointer**
+  (`Super + Alt + K`) that moves and clicks the mouse from the keyboard.
+- **The bar:** a red **Recording 01:23** pill while you record the screen (click it to stop), and
+  `Super + Shift + Space` hides the bar until you press it again; the microphone, camera and
+  recording pills stay in the corner meanwhile. See [Menus on the bar](Bar-Menus#hiding-the-bar).
+- **Short notices** on the screen for Caps Lock, Num Lock and the keyboard layout.
+- **A welcome card** at a new account's first login shows the keys that get you everywhere.
+- **Hooks:** scripts of yours in `~/.config/arctic/` run when the wallpaper or font changes, the
+  screen locks or unlocks, the battery is low, after an update and at every login. See
+  [Hooks for other events](Themes-and-Customisation#hooks-for-other-events).
+- **Icons in the terminal:** the Nerd Font symbols yazi, eza and prompts use are installed, after
+  the code font.
+
+### Known limitations
+
+- **Web apps on the Arctic engine can't make calls or play protected video**: pick a
+  Chromium-family engine for those sites (the preview suggests one).
+- **No screen reader, magnifier or on-screen keyboard yet**: none works with Mango on Fedora 44;
+  Settings → Accessibility says so.
+- **Hiding the bar and the command menu need the Arctic shell**: in the waybar fallback session,
+  `Super + Shift + Space` does nothing and the command menu opens in fuzzel.
+
 ## Arctic Linux 0.2.1
 
 A fix release for 0.2, with a few additions to Settings and the terminal.

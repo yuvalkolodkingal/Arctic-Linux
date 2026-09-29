@@ -8,7 +8,7 @@
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
 #                                               the default install with apps from the live
 #                                               image; Zen, Zed and the codecs are deferred)
-#   tools/test-install.sh --iso PATH            default out/iso/Arctic-Linux-0.2-x86_64.iso
+#   tools/test-install.sh --iso PATH            default out/iso/Arctic-Linux-0.3-x86_64.iso
 #   tools/test-install.sh --install-timeout S   seconds for the install (default 7200)
 #   tools/test-install.sh --memory MiB --smp N  guest size (default 6144 MiB, 4 vCPUs)
 #   tools/test-install.sh --kvm                 use /dev/kvm when the host has it
@@ -69,7 +69,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/container.sh"
 
 ROOT="$(arctic_repo_root)"
-ISO="$ROOT/out/iso/Arctic-Linux-0.2-x86_64.iso"
+ISO="$ROOT/out/iso/Arctic-Linux-0.3-x86_64.iso"
 FIRMWARE=uefi
 STAGE=all
 PROFILE="$ROOT/profiles/ci/offline.toml"

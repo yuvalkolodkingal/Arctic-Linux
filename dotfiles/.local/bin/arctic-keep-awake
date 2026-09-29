@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# arctic-keep-awake — keep the computer awake (Super+Ctrl+I): the screen doesn't lock and the
+# computer doesn't suspend when you're away, for presentations, downloads or long builds.
+#
+#   arctic-keep-awake on [MINUTES] [--quiet]   until turned off, or for MINUTES (1–1440)
+#   arctic-keep-awake off [--quiet]
+#   arctic-keep-awake toggle [MINUTES] [--quiet]
+#   arctic-keep-awake status [--json]
+#
+# While it's on, `arctic-session idle` runs swayidle without its lock and suspend timeouts but
+# keeps "lock before sleep", so suspending by hand or closing the lid still locks first. The
+# state is one line in $XDG_RUNTIME_DIR/arctic/keep-awake (the end time in epoch seconds, 0 =
+# until turned off), so it ends with the session. on/off/toggle print the new status as JSON
+# and show a short on-screen note unless --quiet.
+set -uo pipefail
+
+STATE="${XDG_RUNTIME_DIR:-/tmp}/arctic/keep-awake"
+now() { date +%s; }
+
+until_value() {   # the end time, or nothing when keep awake is off (or ran out)
+  local value
+  [[ -r "$STATE" ]] || return 0
+  read -r value < "$STATE" || true
+  [[ "$value" =~ ^[0-9]+$ ]] || return 0
+  if (( value != 0 && value <= $(now) )); then return 0; fi
+  echo "$value"
+}
+
+status_json() {
+  local value left=0 text=""
+  value="$(until_value)"
+  if [[ -z "$value" ]]; then
+    printf '{"ok": true, "on": false, "until": 0, "untilText": "", "minutesLeft": 0}\n'
+    return
+  fi
+  if (( value > 0 )); then
+    left=$(( (value - $(now) + 59) / 60 ))
+    text="$(date -d "@$value" +%H:%M)"
+  fi
+  printf '{"ok": true, "on": true, "until": %d, "untilText": "%s", "minutesLeft": %d}\n' "$value" "$text" "$left"
+}
+
+fail() { printf '{"ok": false, "error": "%s"}\n' "$1"; exit 1; }
+
+restart_idle() {   # swayidle picks the state up (no-op in the live session)
+  arctic-session idle --restart >/dev/null 2>&1 || true
+  # The shell's Quick Settings tile and indicator too (nothing happens without the shell).
+  arctic-shell-ipc toggle refresh keep-awake >/dev/null 2>&1 || true
+}
+
+tell() {   # tell <text> — the on-screen pill (mako draws arctic-osd notifications as the OSD)
+  (( QUIET )) && return 0
+  notify-send -a arctic-osd -e -t 1500 -h string:x-canonical-private-synchronous:arctic-osd \
+    "$1" >/dev/null 2>&1 || true
+}
+
+turn_on() {   # turn_on [MINUTES]
+  local minutes="${1:-0}" value=0
+  if ! [[ "$minutes" =~ ^[0-9]+$ ]] || (( minutes > 1440 )); then
+    fail "Keep awake takes a number of minutes, up to a day."
+  fi
+  mkdir -p "${STATE%/*}"
+  (( minutes > 0 )) && value=$(( $(now) + minutes * 60 ))
+  printf '%s\n' "$value" > "$STATE"
+  restart_idle
+  if (( value > 0 )); then
+    # A sleeping copy turns it off at the end, unless it was changed meanwhile.
+    setsid -f "$0" _expire "$value" >/dev/null 2>&1 < /dev/null
+    tell "Keep awake on until $(date -d "@$value" +%H:%M)"
+  else
+    tell "Keep awake on"
+  fi
+}
+
+turn_off() {
+  rm -f "$STATE"
+  restart_idle
+  tell "Keep awake off"
+}
+
+QUIET=0
+args=()
+for a in "$@"; do
+  if [[ "$a" == --quiet ]]; then QUIET=1; else args+=("$a"); fi
+done
+set -- "${args[@]}"
+
+case "${1:-status}" in
+  on)     turn_on "${2:-0}"; status_json ;;
+  off)    turn_off; status_json ;;
+  toggle)
+    if [[ -n "$(until_value)" ]]; then turn_off; else turn_on "${2:-0}"; fi
+    status_json ;;
+  status)
+    if [[ "${2:-}" == --json ]]; then status_json; exit 0; fi
+    value="$(until_value)"
+    if [[ -z "$value" ]]; then echo "Keep awake is off"
+    elif (( value == 0 )); then echo "Keep awake is on"
+    else echo "Keep awake is on until $(date -d "@$value" +%H:%M)"; fi ;;
+  _expire)
+    [[ "${2:-}" =~ ^[0-9]+$ ]] || exit 2
+    # Short naps against the wall clock: sleep's clock stops while the computer is suspended,
+    # so one long sleep would end keep awake that much late. This ends it within 30 seconds
+    # of waking up when the end time went by meanwhile.
+    while left=$(( $2 - $(now) )); (( left > 0 )); do
+      sleep $(( left < 30 ? left : 30 ))
+    done
+    value=""
+    [[ -r "$STATE" ]] && read -r value < "$STATE"
+    if [[ "$value" == "$2" ]]; then turn_off; fi ;;
+  *) echo "usage: arctic-keep-awake on [MINUTES]|off|toggle [MINUTES]|status [--json]" >&2; exit 2 ;;
+esac

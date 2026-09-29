@@ -1,0 +1,21 @@
+[
+  ["10m tea", {"seconds": 600, "text": "tea", "when": "in 10 minutes"}],
+  ["me in 10 minutes to drink tea", {"seconds": 600, "text": "drink tea", "when": "in 10 minutes"}],
+  ["1h30m stretch", {"seconds": 5400, "text": "stretch", "when": "in 1 hour 30 minutes"}],
+  ["1 hour and 30 minutes stretch", {"seconds": 5400, "text": "stretch", "when": "in 1 hour 30 minutes"}],
+  ["90 seconds", {"seconds": 90, "text": "Reminder", "when": "in 1 minute 30 seconds"}],
+  ["10 tea", {"seconds": 600, "text": "tea", "when": "in 10 minutes"}],
+  ["2 days water the plants", {"seconds": 172800, "text": "water the plants", "when": "in 2 days"}],
+  ["at 17:30 call Ana", {"hour": 17, "minute": 30, "text": "call Ana", "when": "at 17:30"}],
+  ["5pm leave", {"hour": 17, "minute": 0, "text": "leave", "when": "at 17:00"}],
+  ["5:30 pm go", {"hour": 17, "minute": 30, "text": "go", "when": "at 17:30"}],
+  ["12am midnight snack", {"hour": 0, "minute": 0, "text": "midnight snack", "when": "at 00:00"}],
+  ["17:30", {"hour": 17, "minute": 30, "text": "Reminder", "when": "at 17:30"}],
+  ["at 5 bake", {"hour": 5, "minute": 0, "text": "bake", "when": "at 05:00"}],
+  ["13pm x", null],
+  ["24:00 x", null],
+  ["", null],
+  ["tea", null],
+  ["0m x", null],
+  ["31 days x", null]
+]

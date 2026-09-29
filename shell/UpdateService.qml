@@ -47,10 +47,32 @@ Singleton {
         failureNotified = UpdateStatus.failureKey(status);
         const file = Session.arcticCache + '/update-failure-notified';
         Quickshell.execDetached(['sh', '-c', 'mkdir -p "${1%/*}" && printf "%s\\n" "$2" > "$1"', 'sh', file, failureNotified]);
+        // x-arctic-alert: one of Arctic's own alerts, shown even under do not disturb.
         Quickshell.execDetached(['notify-send', '-a', 'Arctic Linux', '-u', 'critical', '-i', 'dialog-warning',
+                                 '-h', 'boolean:x-arctic-alert:true',
                                  'Updates weren\'t installed', UpdateStatus.failureNotification(status)]);
     }
-    onStatusChanged: announceFailure()
+    onStatusChanged: { announceFailure(); runPostUpdateHooks(); }
+
+    // Updates were installed at a restart: your post-update hooks (arctic-hook), once for each
+    // (the last one handled is kept in ~/.cache/arctic/post-update-hooked).
+    property string hooked: ''
+    property bool hookedLoaded: false
+    function runPostUpdateHooks() {
+        const at = status.installed_at;
+        if (!hookedLoaded || !at || at === hooked || Session.live) return;
+        hooked = at;
+        const file = Session.arcticCache + '/post-update-hooked';
+        Quickshell.execDetached(['sh', '-c', 'mkdir -p "${1%/*}" && printf "%s\\n" "$2" > "$1"', 'sh', file, at]);
+        Quickshell.execDetached(['sh', '-c', '. /etc/os-release 2>/dev/null; exec arctic-hook post-update "${VERSION_ID:-}"']);
+    }
+    onHookedLoadedChanged: runPostUpdateHooks()
+    FileView {
+        path: Session.arcticCache + '/post-update-hooked'
+        printErrors: false
+        onLoaded: { updates.hooked = text().trim(); updates.hookedLoaded = true; }
+        onLoadFailed: updates.hookedLoaded = true
+    }
     onFailureNotifiedLoadedChanged: announceFailure()
 
     FileView {

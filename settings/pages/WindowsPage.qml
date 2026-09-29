@@ -38,7 +38,8 @@ Page {
     }
     readonly property var windowKeys: ["gappih", "gappiv", "gappoh", "gappov", "borderpx", "border_radius", "smartgaps",
         "no_border_when_single", "animations", "layer_animations", "blur", "blur_layer", "shadows", "layer_shadows",
-        "unfocused_opacity", "sloppyfocus", "warpcursor", "focus_on_activate", "new_is_master", "default_mfact"].concat(speedKeys)
+        "unfocused_opacity", "sloppyfocus", "warpcursor", "focus_on_activate", "enable_hotarea", "hotarea_corner", "new_is_master",
+        "default_mfact"].concat(speedKeys)
     readonly property bool anyChanged: {
         for (let i = 0; i < windowKeys.length; i++)
             if (Backend.info(windowKeys[i]).set)
@@ -248,6 +249,30 @@ Page {
                 onToggled: Backend.set({ focus_on_activate: checked ? 1 : 0 })
             }
         }
+        SettingRow {
+            searchKey: "windows.hotcorner"
+            title: "Hot corner"
+            desc: "Push the pointer into a corner of the screen to open the overview (Super + O)."
+            keys: ["enable_hotarea", "hotarea_corner"]
+            onResetRequested: Backend.reset(["enable_hotarea", "hotarea_corner"])
+            Row {
+                spacing: Theme.space3
+                ArSelect {
+                    visible: Backend.isOn("enable_hotarea")
+                    width: 180
+                    model: [{ value: "0", label: "Top left" }, { value: "1", label: "Top right" },
+                            { value: "2", label: "Bottom left" }, { value: "3", label: "Bottom right" }]
+                    value: String(Backend.num("hotarea_corner"))
+                    onActivated: v => Backend.set({ hotarea_corner: v })
+                }
+                RowSwitch {
+                    anchors.verticalCenter: parent.verticalCenter
+                    Accessible.name: "Hot corner"
+                    checked: Backend.isOn("enable_hotarea")
+                    onToggled: Backend.set({ enable_hotarea: checked ? 1 : 0 })
+                }
+            }
+        }
     }
 
     Group {
@@ -290,6 +315,49 @@ Page {
                 from: 0.3; to: 0.7; stepSize: 0.05
                 value: Backend.num("default_mfact")
                 onCommitted: v => Backend.set({ default_mfact: v.toFixed(2) })
+            }
+        }
+    }
+
+    // Lighter effects and game mode (arctic-effects): Mango lines in ~/.config/arctic/effects.conf,
+    // sourced after settings.conf, so they win over the rows above while they're on.
+    Group {
+        id: effectsGroup
+        property var fx: ({ helper: false })
+        function set(what, value) {
+            Backend.call(["effects-set", what, value], r => {
+                if (r.ok) {
+                    effectsGroup.fx = r;
+                    Backend.refresh();
+                }
+            });
+        }
+        visible: fx.helper === true
+        title: "Effects"
+        desc: fx.lighter_active ? "Animations, blur and shadows are off while this is on, whatever the rows above say." : ""
+        Component.onCompleted: Backend.call(["effects"], r => { if (r.ok) effectsGroup.fx = r; }, true)
+        SettingRow {
+            searchKey: "windows.lighter"
+            title: "Lighter effects"
+            desc: "No animations, blur or shadows. Automatic turns them off in virtual machines and without a graphics driver."
+                + (effectsGroup.fx.reason === "vm" ? " On now: this is a virtual machine." : effectsGroup.fx.reason === "software" ? " On now: there’s no graphics driver." : "")
+            resettable: false
+            ArSegmented {
+                accessibleName: "Lighter effects"
+                model: [{ value: "auto", label: "Automatic" }, { value: "on", label: "On" }, { value: "off", label: "Off" }]
+                value: effectsGroup.fx.lighter || "auto"
+                onActivated: v => effectsGroup.set("lighter", v)
+            }
+        }
+        SettingRow {
+            searchKey: "windows.gamemode"
+            title: "Game mode"
+            desc: "Lighter effects and no gaps, until you turn it off or log out."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Game mode"
+                checked: effectsGroup.fx.game === true
+                onToggled: effectsGroup.set("game", checked ? "on" : "off")
             }
         }
     }

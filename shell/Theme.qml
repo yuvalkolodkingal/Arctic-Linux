@@ -21,6 +21,10 @@ Singleton {
     readonly property bool dark: tokens.dark
     readonly property string themeId: tokens.id
     readonly property string themeName: tokens.name
+    // High contrast (Settings > Accessibility): the theme is its high-contrast take (arctic-theme
+    // contrast on), and lines and focus rings get heavier too.
+    readonly property bool highContrast: tokens.contrast === 'high'
+    readonly property int lineWidth: highContrast ? 2 : 1
 
     // ---- colour (semantic tokens) -------------------------------------------------------
     readonly property color ground: c.ground
@@ -59,13 +63,17 @@ Singleton {
     readonly property color snow100: c.snow100
     readonly property color slate900: c.slate900
     function token(name) { return c[name] || c.ink; }
+    // shadow-sm / shadow-md, single-layer approximations (as settings/Theme.qml; ShadowLayers.qml)
+    readonly property color shadowSm: dark ? '#66000000' : '#1f12171e'
+    readonly property color shadowMd: dark ? '#b3000000' : '#2612171e'
 
     // ---- type -----------------------------------------------------------------------------
     // Figtree for the interface, JetBrains Mono for values that benefit from it. Some Figtree
     // builds register as "Figtree Light"; use whichever family is really installed.
     readonly property var families: Qt.fontFamilies()
     readonly property string fontSans: pick([tokens.fonts.sans, tokens.fonts.sans + ' Light', 'Noto Sans'])
-    readonly property string fontMono: pick([tokens.fonts.mono, 'JetBrains Mono NL', 'Noto Sans Mono', 'monospace'])
+    // The code font you chose (arctic-font writes shell.json "monoFont"), when it's installed.
+    readonly property string fontMono: pick([Session.settings.monoFont || '', tokens.fonts.mono, 'JetBrains Mono NL', 'Noto Sans Mono', 'monospace'])
     function pick(list) {
         for (let i = 0; i < list.length; i++) if (families.indexOf(list[i]) >= 0) return list[i];
         return list[list.length - 1];
@@ -86,11 +94,14 @@ Singleton {
     readonly property int radiusLg: tokens.radius.radiusLg
     readonly property int radiusXl: tokens.radius.radiusXl
     readonly property int barHeight: tokens.size.barHeight
+    // Where the shell's surfaces start: under the bar, or at the screen's top edge while the bar
+    // is hidden (Super + Shift + Space).
+    readonly property int topInset: Session.barHidden ? 0 : barHeight
     readonly property int controlSm: tokens.size.controlSm
     readonly property int controlMd: tokens.size.controlMd
     readonly property int controlLg: tokens.size.controlLg
     readonly property int targetMin: tokens.size.targetMin
-    readonly property int focusWidth: tokens.border.borderFocus
+    readonly property int focusWidth: highContrast ? Math.max(3, tokens.border.borderFocus) : tokens.border.borderFocus
 
     // Screen frame (the shell's rounded surround). Its inner radius is concentric with tiled
     // window corners: window radius + Mango's 8px gap.
