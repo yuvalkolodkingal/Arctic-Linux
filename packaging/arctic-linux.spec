@@ -246,6 +246,8 @@ Requires:       fastfetch
 # /usr/bin/neofetch is a %%ghost link made in %%posttrans only while nothing else is there, so a
 # real neofetch package installs over it without a file conflict (docs/BUILD-SPEC.md §2).
 Provides:       neofetch = %{version}-%{release}
+# The 3D greeting is compiled, so it lives in its own arch package: this one stays noarch.
+Requires:       arctic-fetch-3d = %{version}-%{release}
 Requires:       jetbrains-mono-fonts-all
 # App theming (docs/BUILD-SPEC.md "App theming"): GTK 3 apps use adw-gtk3, which takes the
 # theme's colours from ~/.config/gtk-3.0/gtk.css; Qt 5/6 apps use qt5ct/qt6ct (Fusion + the
@@ -483,6 +485,17 @@ browser. arctic-webapp adds, lists, changes and removes web apps (the launcher's
 Remove apps use it, and nothing needs a password); each app window is arctic-webapp-host, built
 on WebKitGTK. Sites that need protected media or video calls can open in a Chromium-family
 browser instead.
+
+# ---------------------------------------------------------------------------------------------
+%package -n arctic-fetch-3d
+Summary:        Arctic Linux 3D terminal greeting (arctic-fetch)
+License:        ISC
+Recommends:     arctic-desktop-config = %{version}-%{release}
+
+%description -n arctic-fetch-3d
+arctic-fetch-3d, the spinning 3D fox greeting built from fetch.c (a fork of areofyl/fetch).
+The arctic-fetch wrapper in arctic-desktop-config runs it, and falls back to the text fox
+where it isn't installed.
 
 # ---------------------------------------------------------------------------------------------
 %package -n sddm-wayland-mango
@@ -1418,12 +1431,6 @@ fi
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 %{_libexecdir}/arctic/arctic-system-helper
-# The 3D greeting, and the system default for its config (the wrapper is %_bindir/arctic-fetch).
-%{_libexecdir}/arctic/arctic-fetch-3d
-%dir %{_datadir}/arctic/fetch
-# noreplace, like update.conf and the other system defaults: the wrapper reads the user's own
-# ~/.config/arctic/fetch/config first, so an admin who edited this one keeps their edits.
-%config(noreplace) %{_datadir}/arctic/fetch/config
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 %{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 %dir %{_datadir}/arctic
@@ -1512,6 +1519,18 @@ fi
 %{_bindir}/arctic-webapp
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-webapp-host
+
+%files -n arctic-fetch-3d
+%license LICENSE
+# The 3D greeting, and the system default for its config (the wrapper is %%{_bindir}/arctic-fetch,
+# in arctic-desktop-config).
+%dir %{_libexecdir}/arctic
+%{_libexecdir}/arctic/arctic-fetch-3d
+%dir %{_datadir}/arctic
+%dir %{_datadir}/arctic/fetch
+# noreplace, like update.conf and the other system defaults: the wrapper reads the user's own
+# ~/.config/arctic/fetch/config first, so an admin who edited this one keeps their edits.
+%config(noreplace) %{_datadir}/arctic/fetch/config
 
 %files -n sddm-wayland-mango
 %dir %{_datadir}/arctic

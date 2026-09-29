@@ -11,8 +11,10 @@ CC ?= cc
 # CFLAGS would compile the RPM differently from the fetch-c CI job: the same source would then
 # be testable in one place and only fail in the other. A plain `=` beats the environment, so
 # this is the single flag set for both. Override on the command line if you need to.
+# -fPIE is part of the set because rpmbuild's LDFLAGS (still inherited, below) link with -pie
+# through redhat-hardened-ld: objects compiled without it fail to link there.
 CFLAGS = -O2 -g -pipe -Wall -Werror=format-security -fstack-protector-strong \
-         -fno-strict-aliasing -D_FORTIFY_SOURCE=2
+         -fno-strict-aliasing -D_FORTIFY_SOURCE=2 -fPIE
 LDFLAGS ?=
 LDLIBS = -lm
 VERSION := $(shell cat VERSION 2>/dev/null || echo 0)
