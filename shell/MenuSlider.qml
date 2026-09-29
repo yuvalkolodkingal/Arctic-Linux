@@ -46,6 +46,7 @@ FocusScope {
             Layout.fillWidth: true
             Layout.leftMargin: Theme.space2
             text: row.caption
+            textFormat: Text.PlainText
             elide: Text.ElideRight
             color: Theme.inkMuted
             font.family: Theme.fontSans

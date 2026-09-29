@@ -99,6 +99,7 @@ Popover {
             Text {
                 Layout.fillWidth: true
                 text: row.label
+                textFormat: Text.PlainText
                 elide: Text.ElideRight
                 color: Theme.ink
                 font.family: Theme.fontSans
@@ -107,6 +108,7 @@ Popover {
             Text {
                 visible: row.trailing !== ''
                 text: row.trailing
+                textFormat: Text.PlainText
                 color: Theme.inkSubtle
                 font.family: Theme.fontSans
                 font.pixelSize: 12

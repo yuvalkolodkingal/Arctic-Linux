@@ -86,11 +86,14 @@ MANGO_VERSION="$(spec_value mangowm.spec Version)"
 [[ "$VERSION" =~ ^[0-9][0-9A-Za-z.+~^_]*$ ]] || arctic_die "can't read Version from packaging/arctic-linux.spec"
 [[ "$MANGO_VERSION" =~ ^[0-9][0-9A-Za-z.+~^_]*$ ]] || arctic_die "can't read Version from packaging/mangowm.spec"
 MANGO_URL="https://github.com/mangowm/mango/archive/refs/tags/${MANGO_VERSION}.tar.gz"
-# --- stream 6: arctic-linux.spec's Source1, pinned there by version and SHA-256
+# --- stream 6: arctic-linux.spec's Source1, pinned there by version and SHA-256. Specs before
+# 0.3 (an older --src) have none, and nothing to fetch.
 NERD_VERSION="$(sed -n 's/^%global[[:space:]]\+nerd_version[[:space:]]\+//p' "$SRC/packaging/arctic-linux.spec" | head -n1)"
 NERD_SHA256="$(sed -n 's/^%global[[:space:]]\+nerd_sha256[[:space:]]\+//p' "$SRC/packaging/arctic-linux.spec" | head -n1)"
-[[ "$NERD_VERSION" =~ ^[0-9][0-9.]*$ && "$NERD_SHA256" =~ ^[0-9a-f]{64}$ ]] \
-  || arctic_die "can't read nerd_version / nerd_sha256 from packaging/arctic-linux.spec"
+if [[ -n "$NERD_VERSION$NERD_SHA256" ]]; then
+  [[ "$NERD_VERSION" =~ ^[0-9][0-9.]*$ && "$NERD_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+    || arctic_die "can't read nerd_version / nerd_sha256 from packaging/arctic-linux.spec"
+fi
 NERD_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_VERSION}/NerdFontsSymbolsOnly.tar.xz"
 # --- end stream 6
 
@@ -212,7 +215,7 @@ fi
 # --- stream 6: Source1 (the Nerd Font symbols release); a download that doesn't match the pinned
 # SHA-256 is refused here rather than by rpmbuild's %prep.
 nerd_tar="$OUT/sources/NerdFontsSymbolsOnly-$NERD_VERSION.tar.xz"
-if [[ "$ONLY" != mangowm && ! -s "$nerd_tar" ]]; then
+if [[ -n "$NERD_VERSION" && "$ONLY" != mangowm && ! -s "$nerd_tar" ]]; then
   arctic_log "downloading the Nerd Font symbols $NERD_VERSION"
   curl -fsSL --retry 3 --retry-delay 3 -o "$nerd_tar.part" "$NERD_URL" \
     || arctic_die "couldn't download $NERD_URL"

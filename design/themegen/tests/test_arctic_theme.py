@@ -206,6 +206,30 @@ class ArcticThemeTests(unittest.TestCase):
         self.assertEqual(names["winter"]["swatches"]["accent"], "#efa637")
         self.assertIn("* mine\tMine\tlight\tuser", self.theme("list").stdout)
 
+    def test_light_and_dark_come_back_to_a_theme_without_a_pair(self):
+        # Like Nord or Tokyo Night: no light take, so Winter by day and the theme again at night.
+        mine = palette.builtin("polar-night")
+        mine.update(name="mine", label="Mine")
+        render.render(mine, os.path.join(self.config, "themes", "mine"))
+        self.theme("set", "mine")
+        self.theme("light")
+        self.assertEqual(self.theme().stdout, "winter\n")
+        self.theme("dark")
+        self.assertEqual(self.theme().stdout, "mine\n")
+        self.theme("toggle")
+        self.theme("toggle")
+        self.assertEqual(self.theme().stdout, "mine\n")
+        # Winter chosen by hand: dark is Polar night.
+        self.theme("set", "winter")
+        self.theme("dark")
+        self.assertEqual(self.theme().stdout, "polar-night\n")
+        # Gone: Polar night again.
+        self.theme("set", "mine")
+        self.theme("light")
+        shutil.rmtree(os.path.join(self.config, "themes", "mine"))
+        self.theme("dark")
+        self.assertEqual(self.theme().stdout, "polar-night\n")
+
     def test_auto_colours_follow_your_pictures(self):
         self.choose(self.sea)
         self.theme("auto", "on")

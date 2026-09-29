@@ -87,6 +87,17 @@ render() {   # render <image> -> an image swaybg draws well (SVGs rendered to a 
 
 is_name() { [[ " $NAMES " == *" $1 "* ]]; }
 
+# detach CMD…: start CMD in the background, in a systemd scope of its own when there is a user
+# manager. The rotation timer and arctic-daylight run this script as a service, and systemd stops
+# whatever is left in a service's cgroup when the service ends: swaybg would go with it.
+detach() {
+  if command -v systemd-run >/dev/null 2>&1 \
+      && systemd-run --user --scope --quiet --collect -- setsid -f "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+  setsid -f "$@" >/dev/null 2>&1
+}
+
 # ---- rotation (stream 6) ----
 ROTATE="$CONF/wallpaper-rotate.json"
 QUEUE="$CACHE_DIR/wallpaper-rotate-queue"
@@ -124,11 +135,13 @@ rotation_pictures() {   # rotation_pictures FOLDER|arctic: the pictures to rotat
     | LC_ALL=C sort | while IFS= read -r f; do readlink -f "$f"; done
 }
 
-stem() { local b; b="$(basename "$1")"; echo "${b%.*}"; }
+is_drawn() {   # is_drawn PICTURE NOW: is PICTURE the one drawn now (an SVG: its rendered PNG)
+  [[ "$1" == "$2" ]] || [[ "$1" == *.svg && "$2" == "$CACHE/$(basename "$1" .svg).png" ]]
+}
 
 next_picture() {   # next_picture FOLDER SHUFFLE: the picture after the one drawn now
   local folder="$1" shuffle="$2" now all pick="" line found=0 left others=""
-  now="$(stem "$(cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true)")"
+  now="$(cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true)"
   all="$(rotation_pictures "$folder")"
   [[ -n "$all" ]] || return 1
   if [[ -n "$shuffle" ]]; then
@@ -141,7 +154,7 @@ next_picture() {   # next_picture FOLDER SHUFFLE: the picture after the one draw
     fi
     if [[ -z "$left" ]]; then
       while IFS= read -r line; do    # not the one on the screen now, unless it's the only one
-        [[ "$(stem "$line")" == "$now" ]] || others+="$line"$'\n'
+        is_drawn "$line" "$now" || others+="$line"$'\n'
       done <<<"$all"
       left="$(printf '%s' "${others:-$all}" | shuf)"
     fi
@@ -150,7 +163,7 @@ next_picture() {   # next_picture FOLDER SHUFFLE: the picture after the one draw
   else
     while IFS= read -r line; do
       if (( found )); then pick="$line"; break; fi
-      [[ "$(stem "$line")" == "$now" ]] && found=1
+      is_drawn "$line" "$now" && found=1
     done <<<"$all"
     [[ -n "$pick" ]] || pick="$(head -n1 <<<"$all")"
   fi
@@ -161,7 +174,7 @@ arm_rotation() {   # arm_rotation EVERY: the transient timer (replacing an older
   command -v systemd-run >/dev/null 2>&1 || { echo "arctic-wallpaper: systemd-run is needed to rotate" >&2; return 1; }
   systemctl --user stop arctic-wallpaper-rotate.timer arctic-wallpaper-rotate.service >/dev/null 2>&1 || true
   systemctl --user reset-failed arctic-wallpaper-rotate.timer arctic-wallpaper-rotate.service >/dev/null 2>&1 || true
-  systemd-run --user --unit=arctic-wallpaper-rotate --collect --quiet \
+  systemd-run --user --unit=arctic-wallpaper-rotate --collect --quiet --property=KillMode=process \
     --on-active="$1" --on-unit-active="$1" -- arctic-wallpaper next
 }
 
@@ -271,7 +284,7 @@ printf '%s\n' "$img" > "$CACHE_DIR/wallpaper-current"
 command -v swaybg >/dev/null 2>&1 || { echo "arctic-wallpaper: swaybg is not installed" >&2; exit 1; }
 # Replace the running swaybg without a flash: start the new one, then stop the old.
 old="$(pgrep -u "$UID" -x swaybg || true)"
-setsid -f swaybg -m fill -c "$ARCTIC_GROUND" -i "$img" >/dev/null 2>&1
+detach swaybg -m fill -c "$ARCTIC_GROUND" -i "$img"
 sleep 0.3
 if [[ -n "$old" ]]; then
   # shellcheck disable=SC2086
@@ -279,5 +292,5 @@ if [[ -n "$old" ]]; then
 fi
 # A new choice (not a redraw): your wallpaper hooks (arctic-hook), in the background.
 if [[ -n "${chosen:-}${hook:-}" ]] && command -v arctic-hook >/dev/null 2>&1; then
-  setsid -f arctic-hook wallpaper "$img" >/dev/null 2>&1 || true
+  detach arctic-hook wallpaper "$img" || true
 fi

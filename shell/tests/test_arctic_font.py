@@ -33,8 +33,13 @@ class FontTests(unittest.TestCase):
             (self.bin / name).write_text('#!/bin/sh\n' + body + '\n')
             (self.bin / name).chmod(0o755)
         stub('fc-list', 'printf "JetBrains Mono,JetBrains Mono NL\\nFira Code\\nSymbols Nerd Font Mono\\nNoto Color Emoji\\nFira Code\\nHack Nerd Font Mono\\n"')
-        for name in ('gsettings', 'pkill', 'arctic-hook'):
+        for name in ('pkill', 'arctic-hook'):
             stub(name, 'echo "{} $*" >> "{}"'.format(name, self.log))
+        # GTK's monospace font, as Arctic's dconf default sets it.
+        self.gtk = root / 'gtk'
+        self.gtk.write_text("'JetBrains Mono 10'\n")
+        stub('gsettings', 'echo "gsettings $*" >> "{0}"\n'
+                          'case "$1" in get) cat "{1}" ;; set) printf "\'%s\'\\n" "$4" > "{1}" ;; esac'.format(self.log, self.gtk))
         self.env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(self.config), PATH=str(self.bin) + ':/usr/bin:/bin')
 
     def tearDown(self):
@@ -73,6 +78,24 @@ class FontTests(unittest.TestCase):
         # Back again works too: the recorded value follows.
         self.font('set', 'JetBrains Mono')
         self.assertIn('font_family      JetBrains Mono\n', self.read('kitty', 'kitty.conf'))
+        self.assertEqual(self.gtk.read_text(), "'JetBrains Mono 10'\n")
+
+    def test_gtk_keeps_its_size_and_a_font_of_your_own(self):
+        # The text size (Settings) runs `size`: GTK scales its monospace font already.
+        data = self.font('size', '16')
+        self.assertNotIn('gtk', data['changed'])
+        self.assertFalse(any(c.startswith('gsettings set') for c in self.calls()))
+        # A size of your own stays when the family changes.
+        self.gtk.write_text("'JetBrains Mono 12'\n")
+        (self.config / 'arctic' / 'fonts.json').write_text('{"mono": "JetBrains Mono", "size": 16, "gtk": "JetBrains Mono 12"}')
+        self.assertIn('gtk', self.font('set', 'Fira Code')['changed'])
+        self.assertEqual(self.gtk.read_text(), "'Fira Code 12'\n")
+        # A font of your own is left alone, and said so.
+        self.gtk.write_text("'Iosevka 11'\n")
+        data = self.font('set', 'Hack Nerd Font Mono')
+        self.assertNotIn('gtk', data['changed'])
+        self.assertIn({'file': 'gsettings monospace-font-name', 'reason': 'has a font of your own'}, data['skipped'])
+        self.assertEqual(self.gtk.read_text(), "'Iosevka 11'\n")
 
     def test_a_font_of_your_own_is_left_alone(self):
         foot = self.config / 'foot' / 'foot.ini'

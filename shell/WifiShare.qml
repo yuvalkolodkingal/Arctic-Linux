@@ -61,6 +61,7 @@ Popover {
         Text {
             Layout.fillWidth: true
             text: 'Share “' + card.ssid + '”'
+            textFormat: Text.PlainText
             color: Theme.ink
             font.family: Theme.fontSans
             font.pixelSize: 20
@@ -71,6 +72,7 @@ Popover {
         Text {
             Layout.fillWidth: true
             text: card.error !== '' ? card.error : 'Scan this with a phone camera to join.'
+            textFormat: Text.PlainText
             color: card.error !== '' ? Theme.error : Theme.inkMuted
             font.family: Theme.fontSans
             font.pixelSize: 15

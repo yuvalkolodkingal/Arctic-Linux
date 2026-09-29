@@ -59,6 +59,7 @@ AbstractButton {
             Text {
                 visible: !control.iconOnly
                 text: control.text
+                textFormat: Text.PlainText
                 color: control.ink
                 font.family: Theme.fontSans
                 font.pixelSize: control.size === 'sm' ? 13 : 15

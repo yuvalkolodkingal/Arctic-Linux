@@ -59,6 +59,7 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: row.name
+                textFormat: Text.PlainText
                 color: Theme.ink
                 font.family: Theme.fontSans
                 font.pixelSize: 15
@@ -69,6 +70,7 @@ Rectangle {
                 Layout.fillWidth: true
                 visible: text !== ''
                 text: row.state_ === 'locked' && row.reason ? row.reason : row.summary
+                textFormat: Text.PlainText
                 color: Theme.inkMuted
                 font.family: Theme.fontSans
                 font.pixelSize: 12

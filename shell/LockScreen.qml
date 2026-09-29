@@ -416,6 +416,7 @@ Scope {
                         Layout.maximumWidth: 250
                         elide: Text.ElideRight
                         text: MediaService.title + (MediaService.artist ? ' — ' + MediaService.artist : '')
+                        textFormat: Text.PlainText
                         color: Theme.inkMuted
                         font.family: Theme.fontSans
                         font.pixelSize: 12

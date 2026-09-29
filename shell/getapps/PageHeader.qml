@@ -16,6 +16,7 @@ RowLayout {
     ArcticButton { variant: 'ghost'; size: 'sm'; iconName: 'chevron-left'; text: 'Back'; focusPolicy: Qt.NoFocus; onClicked: header.back() }
     Text {
         text: header.title
+        textFormat: Text.PlainText
         color: Theme.ink
         font.family: Theme.fontSans
         font.pixelSize: 16
@@ -24,6 +25,7 @@ RowLayout {
     Text {
         visible: text !== ''
         text: header.detail
+        textFormat: Text.PlainText
         color: Theme.inkSubtle
         font.family: Theme.fontSans
         font.pixelSize: 12

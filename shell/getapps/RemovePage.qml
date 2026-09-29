@@ -242,6 +242,7 @@ FocusScope {
                         Text {
                             Layout.fillWidth: true
                             text: keptRow.modelData.name + (keptRow.modelData.data_bytes ? ' · ' + GetAppsLogic.sizeText(keptRow.modelData.data_bytes) : '')
+                            textFormat: Text.PlainText
                             color: Theme.ink
                             font.family: Theme.fontSans
                             font.pixelSize: 13
@@ -266,6 +267,7 @@ FocusScope {
             Layout.fillWidth: true
             visible: page.toast !== ''
             text: page.toast
+            textFormat: Text.PlainText
             color: Theme.ink
             font.family: Theme.fontSans
             font.pixelSize: 13

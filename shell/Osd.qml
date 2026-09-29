@@ -182,6 +182,7 @@ Scope {
                     visible: osd.kind === 'notice'
                     Layout.fillWidth: true
                     text: osd.text
+                    textFormat: Text.PlainText
                     color: Theme.ink
                     elide: Text.ElideRight
                     font.family: Theme.fontSans
@@ -193,6 +194,7 @@ Scope {
                     visible: osd.kind === 'notice' && osd.detail !== ''
                     Layout.maximumWidth: 180
                     text: '· ' + osd.detail
+                    textFormat: Text.PlainText
                     color: Theme.inkMuted
                     elide: Text.ElideRight
                     font.family: Theme.fontSans
@@ -202,6 +204,7 @@ Scope {
                     visible: osd.kind === 'level' && osd.text !== ''
                     Layout.maximumWidth: 96
                     text: osd.text
+                    textFormat: Text.PlainText
                     color: Theme.inkMuted
                     elide: Text.ElideRight
                     font.family: Theme.fontSans
@@ -213,6 +216,7 @@ Scope {
                     Layout.maximumWidth: 88
                     elide: Text.ElideRight
                     text: osd.label
+                    textFormat: Text.PlainText
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 12
@@ -244,6 +248,7 @@ Scope {
                     horizontalAlignment: layout ? Text.AlignLeft : Text.AlignRight
                     elide: Text.ElideRight
                     text: layout ? osd.label : osd.value
+                    textFormat: Text.PlainText
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 13

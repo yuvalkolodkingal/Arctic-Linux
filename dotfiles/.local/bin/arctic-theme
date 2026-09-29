@@ -471,10 +471,11 @@ def unpack_theme(tar_path):
             if len(members) >= 20000 or m.offset_data > 512 * 1024 * 1024:
                 raise Error("that archive is too big to be a theme")
             members.append(m)
-        tops = {m.name.split("/", 1)[0] for m in members}
-        strip = len(tops) == 1 and any("/" in m.name for m in members)
-        for m in members:
-            parts = [p for p in m.name.split("/") if p not in ("", ".")]
+        # One folder around everything is left out; "./" (tar -C folder .) isn't a folder.
+        paths = [[p for p in m.name.split("/") if p not in ("", ".")] for m in members]
+        tops = {parts[0] for parts in paths if parts}
+        strip = len(tops) == 1 and any(len(parts) > 1 for parts in paths)
+        for m, parts in zip(members, paths):
             if m.name.startswith("/") or ".." in parts:
                 dropped.append(m.name)
                 continue
@@ -605,14 +606,24 @@ def static_for_mode(mode):
 
 def for_mode(mode, info=None):
     """The theme to switch to for light or dark: the active one when it already is, its pair
-    when it has one of that mode (a gallery theme), else Winter or Polar night."""
+    when it has one of that mode (a gallery theme), else Winter or Polar night. A theme without
+    a pair is remembered on the way there (settings.json "return_to", until you set a theme), and
+    switching back returns to it: Nord has no light take, so Winter by day and Nord at night."""
     info = info or active_info()
-    if info.get("mode") == mode and info.get("name") not in (None, WALLPAPER_THEME):
-        return info["name"]
+    name = info.get("name")
+    if info.get("mode") == mode and name not in (None, WALLPAPER_THEME):
+        return name
     pair = info.get("pair") or ""
     folder, source = theme_dir(pair) if pair else (None, None)
     if folder and theme_info(pair, folder, source)["mode"] == mode:
         return pair
+    if name in BUILTIN_FOR_MODE.values():
+        back = load_settings().get("return_to")
+        folder, source = theme_dir(back) if isinstance(back, str) and NAME_RE.match(back) else (None, None)
+        if folder and theme_info(back, folder, source)["mode"] == mode:
+            return back
+    elif name and name != WALLPAPER_THEME:
+        save_settings(return_to=name)
     return static_for_mode(mode)
 
 
@@ -804,6 +815,8 @@ def cmd_set(name):
     if auto_colors():
         save_settings(auto_colors=False)
         warn("auto colours are off now (arctic-theme auto on turns them back on)")
+    if load_settings().get("return_to"):          # a theme you chose: light / dark start from it
+        save_settings(return_to="")
     activate(name)
 
 
@@ -968,7 +981,7 @@ def main(argv):
             if auto_colors():
                 cmd_mode(verb)
             else:
-                cmd_set(for_mode(verb))
+                activate(for_mode(verb))
         else:
             usage(sys.stderr)
             return 2

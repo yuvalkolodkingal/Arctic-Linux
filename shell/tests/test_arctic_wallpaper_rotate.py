@@ -41,6 +41,10 @@ class RotateTests(unittest.TestCase):
         for name in ('swaybg', 'systemd-run', 'systemctl', 'arctic-hook'):
             (fakes / name).write_text('#!/bin/sh\necho "{} $*" >> "{}"\n'.format(name, self.log))
             (fakes / name).chmod(0o755)
+        # systemd-run --scope runs its command (in a scope of its own, for the real one).
+        with (fakes / 'systemd-run').open('a') as f:
+            f.write('case " $* " in *" --scope "*) while [ "$1" != -- ]; do shift; done; shift; exec "$@" ;; esac\n')
+        self.fakes = fakes
         (fakes / 'xdg-user-dir').write_text('#!/bin/sh\necho "{}"\n'.format(root / 'Pictures'))
         (fakes / 'xdg-user-dir').chmod(0o755)
         (fakes / 'pgrep').write_text('#!/bin/sh\nexit 1\n')
@@ -76,6 +80,7 @@ class RotateTests(unittest.TestCase):
         saved = json.loads(self.wallpaper('rotate').stdout)
         self.assertEqual(saved, {'every': '30m', 'folder': str(self.pictures.resolve()), 'shuffle': False})
         self.assertEqual(self.calls('systemd-run'), ['systemd-run --user --unit=arctic-wallpaper-rotate --collect --quiet '
+                                                     '--property=KillMode=process '
                                                      '--on-active=30m --on-unit-active=30m -- arctic-wallpaper next'])
         self.wallpaper('rotate', 'apply')
         self.assertEqual(len(self.calls('systemd-run')), 2)
@@ -105,11 +110,28 @@ class RotateTests(unittest.TestCase):
         self.assertEqual(seen, ['a.png', 'b.jpg', 'c.webp', 'a.png'])
         self.assertEqual((self.config / 'wallpaper').read_text(), 'fox\n')        # the choice stays
         self.assertEqual(len(self.calls('swaybg')), 4)
+        # swaybg runs in a scope of its own: the timer's service must not take it along when it ends.
+        self.assertEqual(len([c for c in self.calls('systemd-run --user --scope') if ' -- setsid -f swaybg ' in c]), 4)
         # Each picture runs the wallpaper hooks (in the background).
         deadline = time.monotonic() + 5
         while len(self.calls('arctic-hook')) < 4 and time.monotonic() < deadline:
             time.sleep(0.1)
         self.assertIn('arctic-hook wallpaper {}'.format((self.pictures / 'b.jpg').resolve()), self.calls('arctic-hook'))
+
+    def test_pictures_with_the_same_name(self):
+        (self.pictures / 'a.jpg').write_bytes(b'x')
+        self.wallpaper('rotate', '1h', str(self.pictures))
+        seen = []
+        for _ in range(5):
+            self.wallpaper('next')
+            seen.append(self.drawn())
+        self.assertEqual(seen, ['a.jpg', 'a.png', 'b.jpg', 'c.webp', 'a.jpg'])
+
+    def test_without_a_user_manager(self):
+        # systemd-run can't reach one: swaybg still starts (plain setsid).
+        (self.fakes / 'systemd-run').write_text('#!/bin/sh\necho "systemd-run $*" >> "{}"\nexit 1\n'.format(self.log))
+        self.wallpaper('snowfield')
+        self.assertEqual(len(self.calls('swaybg')), 1)
 
     def test_shuffle_shows_each_picture_once_a_round(self):
         self.wallpaper('rotate', '30m', str(self.pictures), '--shuffle')

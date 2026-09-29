@@ -93,6 +93,7 @@ Popover {
                 Text {
                     Layout.fillWidth: true
                     text: dialog.title
+                    textFormat: Text.PlainText
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 20
@@ -104,6 +105,7 @@ Popover {
                     Layout.fillWidth: true
                     visible: dialog.message !== ''
                     text: dialog.message
+                    textFormat: Text.PlainText
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 15
@@ -117,6 +119,7 @@ Popover {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: Theme.space5
             text: dialog.code.length === 6 ? dialog.code.slice(0, 3) + ' ' + dialog.code.slice(3) : dialog.code
+            textFormat: Text.PlainText
             color: Theme.ink
             font.family: Theme.fontMono
             font.pixelSize: 28

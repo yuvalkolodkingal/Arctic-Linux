@@ -55,6 +55,7 @@ Rectangle {
             Layout.maximumWidth: item.maxTextWidth > 0 ? item.maxTextWidth : -1
             elide: Text.ElideRight
             text: item.text
+            textFormat: Text.PlainText
             color: item.textColor
             font.family: Theme.fontSans
             font.pixelSize: 13

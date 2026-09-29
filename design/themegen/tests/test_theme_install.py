@@ -133,6 +133,13 @@ class InstallTests(unittest.TestCase):
             f.write(b"not a tarball")
         self.assertIn("archive", self.theme("install", junk, ok=False).stderr)
 
+    def test_an_archive_made_inside_the_theme_folder(self):
+        # tar -C folder . : every name starts with "./", and there is no folder to leave out.
+        path = os.path.join(self.root, "flat-theme.tar.gz")
+        archive(path, ".", {"colors.toml": NORD.encode(), "backgrounds/1-fjord.png": png()})
+        out = json.loads(self.theme("install", path, "--json").stdout)
+        self.assertEqual((out["name"], out["mode"], out["backgrounds"]), ("flat", "dark", 1))
+
     def test_links(self):
         for url in ("http://github.com/o/r", "https://example.com/o/r", "https://github.com/o", "file:///etc/x",
                     "https://github.com/o/r$(x)"):

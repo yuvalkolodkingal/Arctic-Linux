@@ -13,7 +13,7 @@ your wallpaper's colours. Switching by hand still works; the schedule takes over
 next sunrise or sunset. Sunrise and sunset come from the place chosen for the weather
 (~/.config/arctic/location.json), else the coordinates tzdata gives your time zone
 (/usr/share/zoneinfo/zone1970.tab): no location service, nothing leaves the computer.
-The next change is a transient systemd user timer (arctic-daylight) on the wall clock, so it
+The next change is a transient systemd user timer (arctic-daylight-…) on the wall clock, so it
 also happens when the computer wakes after sleeping through it.
 Settings: ~/.config/arctic/daylight.json.
 """
@@ -204,14 +204,19 @@ def apply(now=None):
     now = now or datetime.now()
     data = load()
     if shutil.which("systemctl"):
-        run(["systemctl", "--user", "stop", UNIT + ".timer"])
+        run(["systemctl", "--user", "stop", UNIT + "-*.timer"])
     want, nxt, _ = plan(data, now, location())
     if want is None:
         return
     if shutil.which("arctic-theme") and current_mode() != want:
         run(["arctic-theme", want])
     if nxt and shutil.which("systemd-run"):
-        run(["systemd-run", "--user", "--quiet", "--collect", "--unit", UNIT, "--description", "Arctic Linux: light or dark",
+        # A unit name of its own each time: the timer's service runs this, and systemd won't make a
+        # new unit under the name of one still running. KillMode=process: what arctic-theme leaves
+        # running (hooks, the wallpaper) outlives the service.
+        unit = "{}-{}-{}".format(UNIT, nxt.strftime("%Y%m%d%H%M"), os.getpid())
+        run(["systemd-run", "--user", "--quiet", "--collect", "--unit", unit, "--description", "Arctic Linux: light or dark",
+             "--property", "KillMode=process",
              "--on-calendar", nxt.strftime("%Y-%m-%d %H:%M:%S"), "--timer-property", "AccuracySec=1s",
              os.path.realpath(__file__), "apply"])
 

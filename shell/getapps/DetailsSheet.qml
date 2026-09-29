@@ -48,6 +48,7 @@ Sheet {
                 Text {
                     Layout.fillWidth: true
                     text: details.item ? details.item.name || details.item.id : ''
+                    textFormat: Text.PlainText
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 18
@@ -58,6 +59,7 @@ Sheet {
                     Layout.fillWidth: true
                     visible: text !== ''
                     text: details.item && details.item.developer ? details.item.developer : ''
+                    textFormat: Text.PlainText
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 13
@@ -82,6 +84,7 @@ Sheet {
                 Text {
                     Layout.fillWidth: true
                     text: details.item ? details.item.summary || (details.info ? details.info.summary : '') : ''
+                    textFormat: Text.PlainText
                     color: Theme.ink
                     font.family: Theme.fontSans
                     font.pixelSize: 14
@@ -95,6 +98,7 @@ Sheet {
                         required property string modelData
                         Layout.fillWidth: true
                         text: modelData
+                        textFormat: Text.PlainText
                         color: Theme.inkMuted
                         font.family: Theme.fontSans
                         font.pixelSize: 13
@@ -122,8 +126,8 @@ Sheet {
                         required property var modelData
                         Layout.fillWidth: true
                         spacing: Theme.space2
-                        Text { Layout.preferredWidth: 120; text: fact.modelData[0]; color: Theme.inkSubtle; font.family: Theme.fontSans; font.pixelSize: 12 }
-                        Text { Layout.fillWidth: true; text: fact.modelData[1]; color: Theme.ink; font.family: Theme.fontSans; font.pixelSize: 12; wrapMode: Text.Wrap }
+                        Text { Layout.preferredWidth: 120; text: fact.modelData[0]; textFormat: Text.PlainText; color: Theme.inkSubtle; font.family: Theme.fontSans; font.pixelSize: 12 }
+                        Text { Layout.fillWidth: true; text: fact.modelData[1]; textFormat: Text.PlainText; color: Theme.ink; font.family: Theme.fontSans; font.pixelSize: 12; wrapMode: Text.Wrap }
                     }
                 }
                 ArcticButton {

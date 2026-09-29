@@ -130,6 +130,7 @@ ColumnLayout {
                         Text {
                             Layout.fillWidth: true
                             text: suggestion.app ? suggestion.modelData.slice(8) : suggestion.modelData
+                            textFormat: Text.PlainText
                             color: Theme.ink
                             font.family: Theme.fontMono
                             font.pixelSize: 13
@@ -190,6 +191,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: text.length > 0
         text: terminal.notice
+        textFormat: Text.PlainText
         color: Theme.inkMuted
         wrapMode: Text.Wrap
         font.family: Theme.fontSans

@@ -2398,7 +2398,8 @@ def cmd_theme(paths, _args):
 
 def cmd_theme_set(paths, args):
     name = args[0] if args else ''
-    if not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', name):
+    # arctic-theme's names: an installed theme keeps the dots of its repository's name.
+    if not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,63}', name):
         raise Failure('That isn’t a theme name.')
     state = cmd_theme(paths, [])
     if not state['available']:

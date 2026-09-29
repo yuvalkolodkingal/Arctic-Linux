@@ -324,6 +324,7 @@ Popover {
                             Text {
                                 Layout.fillWidth: true
                                 text: row.modelData.name
+                                textFormat: Text.PlainText
                                 color: Theme.ink
                                 font.family: row.modelData.kind === 'command' ? Theme.fontMono : Theme.fontSans
                                 font.pixelSize: 15
@@ -335,6 +336,7 @@ Popover {
                                 Layout.fillWidth: true
                                 visible: text !== ''
                                 text: row.modelData.desc
+                                textFormat: Text.PlainText
                                 color: Theme.inkMuted
                                 font.family: Theme.fontSans
                                 font.pixelSize: 12
@@ -374,6 +376,7 @@ Popover {
                 visible: list.count === 0
                 horizontalAlignment: Text.AlignHCenter
                 text: 'No apps match “' + launcher.parsed.text + '”'
+                textFormat: Text.PlainText
                 color: Theme.inkMuted
                 font.family: Theme.fontSans
                 font.pixelSize: 13

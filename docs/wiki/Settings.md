@@ -105,7 +105,8 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
 - **Icons in the terminal:** whether the Nerd Font symbols yazi, eza and prompts use are
   installed (`arctic-fonts-symbols`), with a way to get them when they aren't.
 - **Code font:** the monospace font for the terminals (kitty, foot, alacritty), GTK's monospace
-  font and the shell (`arctic-font`); a font you set in a terminal's own file is left alone.
+  font and the shell (`arctic-font`); a font you set in a terminal's own file or in GTK is left
+  alone.
 - **Switch light and dark by itself:** Off, Sunset to sunrise (where your time zone is) or Custom
   hours. See [Themes and customisation](Themes-and-Customisation#light-by-day-dark-at-night).
 - **Wallpaper:** Arctic's wallpapers and your own pictures from `~/Pictures/Wallpapers` (the same

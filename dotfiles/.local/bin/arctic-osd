@@ -57,8 +57,17 @@ case "${1:-}" in
   lock-keys)   # after Caps Lock or Num Lock (binds.conf): say what changed; --seed only records
     state_dir="${XDG_RUNTIME_DIR:-/tmp}/arctic"
     mkdir -p "$state_dir"
-    now="$(lock_lights)"
     before="$(cat "$state_dir/lock-keys" 2>/dev/null)"
+    now="$(lock_lights)"
+    if [[ "${2:-}" != --seed && -n "$before" ]]; then
+      # Num Lock runs this on the key press (binds.conf): its light comes on just after, and goes
+      # off only when the key is let go. Give a light up to two seconds to change.
+      for _ in {1..40}; do
+        [[ "$now" == "$before" ]] || break
+        sleep 0.05
+        now="$(lock_lights)"
+      done
+    fi
     printf '%s\n' "$now" > "$state_dir/lock-keys"
     [[ "${2:-}" == --seed || -z "$before" ]] && exit 0
     # Only a light that changed: a Caps key remapped in Settings, or one that switches the
