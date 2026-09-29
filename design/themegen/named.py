@@ -20,6 +20,7 @@ status colours come from the theme's green, red and the other of yellow/orange (
 looks like "here"), and information from its own accent. Then the engine's contrast guarantees
 are enforced and checked (derive.enforce / check); a theme that can't meet them is refused.
 """
+import re
 import tomllib
 
 from . import color, derive
@@ -32,6 +33,9 @@ KEYS = (
     "bright_red", "bright_yellow", "bright_green", "bright_cyan", "bright_blue", "bright_magenta",
 )
 REQUIRED = ("background", "foreground", "red", "yellow", "green", "cyan", "blue", "magenta")
+# A label is written into comments and strings of every config (a CSS comment, Zed's JSON): a
+# downloaded theme's may hold letters, digits, spaces and a little punctuation, nothing that ends one.
+LABEL_RE = re.compile(r"[\w .,'()+&!-]{1,80}")
 STRUCTURE = ("ground", "surface", "surface-raised", "surface-sunken", "line", "line-strong")
 INKS = ("ink-muted", "ink-subtle", "ink-disabled")
 
@@ -61,6 +65,8 @@ def load_colors(text, where="colors.toml"):
         if not isinstance(value, str) or len(value) > 80 or any(ord(ch) < 32 for ch in value):
             raise ThemegenError("{}: {} must be one short line".format(where, key))
         out[key] = value
+    if out["label"] and not LABEL_RE.fullmatch(out["label"]):
+        raise ThemegenError("{}: label may only hold letters, digits, spaces and . , ' ( ) + & ! -".format(where))
     if out["pair"] and not NAME_RE.match(out["pair"]):
         raise ThemegenError("{}: pair must be a theme name".format(where))
     if out["here"] and out["here"] not in out:

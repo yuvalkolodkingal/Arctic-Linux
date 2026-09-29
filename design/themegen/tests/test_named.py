@@ -67,6 +67,9 @@ class NamedPaletteTests(unittest.TestCase):
                          (good + 'here = "gold"\n', "TOML"),       # a key twice
                          (good.replace('here = "yellow"', 'here = "gold"'), "here"),
                          (re.sub(r'pair = "[^"]*"', 'pair = "../x"', good), "pair"),
+                         # A label that ends the CSS comment or Zed's JSON string it's written into.
+                         (re.sub(r'label = "[^"]*"', r'label = "Evil */ x { } /* \\" "', good), "label"),
+                         (re.sub(r'label = "[^"]*"', 'label = "Line break"', good), "label"),
                          ("not toml = = 1", "TOML")):
             with self.subTest(why):
                 with self.assertRaises(ThemegenError):
