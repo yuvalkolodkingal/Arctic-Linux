@@ -139,7 +139,8 @@ def build_command(text):
             appslib.protection().check([a for a in rest[at + 1:] if not a.startswith('-')])
         if kind == 'unattended':
             return [*PKEXEC_DNF, *with_yes(rest, at, DNF_YES, '-y')]
-        return [*PKEXEC_DNF, *rest]
+        # A change that can remove packages always shows what goes and asks, even after a typed -y.
+        return [*PKEXEC_DNF, *[a for a in rest if a not in ('-y', '--assumeyes')]]
     if head in ('flatpak', '/usr/bin/flatpak'):
         rest = args[1:]
         at, known = command_word(rest, FLATPAK_GLOBAL_FLAGS, FLATPAK_GLOBAL_VALUES)

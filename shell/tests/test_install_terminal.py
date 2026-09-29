@@ -59,14 +59,15 @@ class CommandTests(unittest.TestCase):
     def test_changes_that_can_remove_packages_ask_and_are_checked_first(self):
         # dnf5's aliases (rm), commands that remove along the way (swap, do, distro-sync …),
         # --allowerasing, an unknown command (your own alias) and options before the command that
-        # aren't known here: no -y is added, and check_removal runs (as you) before pkexec.
+        # aren't known here: no -y (a typed one is dropped), and check_removal runs (as you)
+        # before pkexec.
         for text in ('dnf rm fish', 'dnf erase fish', 'dnf autoremove', 'dnf --repo fedora remove fish',
                      'dnf -c /etc/dnf/dnf.conf --setopt=x=1 rm quick*', 'dnf swap fish zsh', 'dnf do --action=remove fish',
                      'dnf distro-sync', 'dnf dsync', 'dnf downgrade fish', 'dnf group remove kde', 'dnf grp remove kde',
                      'dnf install --allowerasing fish', 'dnf -qy install fish', 'dnf --unknown upgrade', 'dnf purge fish',
-                     'sudo dnf remove -y fish'):
+                     'sudo dnf remove -y fish', 'dnf --assumeyes rm fish'):
             with self.subTest(text):
-                rest = text.split()[2 if text.startswith('sudo') else 1:]
+                rest = [a for a in text.split()[2 if text.startswith('sudo') else 1:] if a not in ('-y', '--assumeyes')]
                 command = module.build_command(text)
                 self.assertEqual(command, ['pkexec', '/usr/bin/dnf5', *rest])
                 self.assertEqual(module.console_commands(text), [[*module.CHECK, *rest], command])
