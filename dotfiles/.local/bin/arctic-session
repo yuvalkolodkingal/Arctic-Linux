@@ -28,6 +28,17 @@ run_once() {   # run_once <process name> <command...>
   setsid -f "$@" >/dev/null 2>&1
 }
 
+# end_all <pgrep -f pattern> — end those processes of yours. At login that includes what an
+# earlier login left running (logind lets it run on after you log out): its lid inhibitor no
+# longer counts once that session is over, and its power watcher would hold this one's lock.
+end_all() {
+  local pid
+  # setsid made each one a process group of its own: end it with its children (sleep, udevadm).
+  for pid in $(pgrep -u "$UID" -f "$1"); do
+    kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null
+  done
+}
+
 # battery | ac | nothing (no battery): from sysfs (ARCTIC_POWER_SUPPLY in tests). A mouse's or a
 # phone's battery (scope Device) doesn't count; any charger online means plugged in.
 power_source() {
@@ -82,6 +93,8 @@ case "${1:-}" in
     if [[ "${2:-}" == --restart ]]; then
       pkill -u "$UID" -x swayidle 2>/dev/null
       for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -u "$UID" -x swayidle >/dev/null 2>&1 || break; sleep 0.1; done
+    else
+      end_all "arctic-session power-watch"     # at login: one from an earlier login
     fi
     lock_after=300 suspend_after=900 dim_before_lock=30 screen_off_after=60
     lock_after_battery="" suspend_after_battery=""
@@ -133,12 +146,13 @@ case "${1:-}" in
     args+=(before-sleep 'arctic-lock')
     run_once swayidle swayidle "${args[@]}" ;;
   # Restarts the idle times when the computer is plugged in or unplugged (only started by `idle`
-  # when idle.conf has times for the battery). One per session: the lock file says so.
+  # when idle.conf has times for the battery). One per session: the lock file says so (the wait
+  # lets one that `idle` just ended at login let go of it).
   power-watch)
     lockfile="${XDG_RUNTIME_DIR:-/tmp}/arctic/power-watch.lock"
     mkdir -p "${lockfile%/*}"
     exec 9>"$lockfile"
-    flock -n 9 || exit 0
+    flock -w 2 9 || exit 0
     last="$(power_source)"
     [[ -n "$last" ]] || exit 0
     # A battery reports its charge every minute or so: restart only when the source changes.
@@ -161,21 +175,17 @@ case "${1:-}" in
     run_once udiskie udiskie "$auto" --notify --no-tray ;;
   # Closing the lid: "lock" or "screen off" in ~/.config/arctic/lid.conf (Settings > Power and
   # lock) keeps logind from suspending while the session runs; arctic-display does the rest.
+  # It runs at login and from Settings (--restart), and starts a fresh holder either way: one
+  # left from an earlier login no longer counts.
   lid)
     if arctic-is-live 2>/dev/null; then exit 0; fi
     why="Closing the lid does what you chose in Settings"
-    if [[ "${2:-}" == --restart ]]; then
-      # setsid made each holder a process group of its own: end it with its `sleep`.
-      for pid in $(pgrep -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux"); do
-        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null
-      done
-    fi
+    end_all "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux"
     choice="$(sed -n 's/^when_closed=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/arctic/lid.conf" 2>/dev/null | tail -n 1)"
     case "$choice" in
       lock|screen-off)
-        pgrep -u "$UID" -f "^systemd-inhibit --what=handle-lid-switch --who=Arctic Linux" >/dev/null 2>&1 || \
-          setsid -f systemd-inhibit --what=handle-lid-switch --who="Arctic Linux" --why="$why" --mode=block \
-            sleep infinity >/dev/null 2>&1 ;;
+        setsid -f systemd-inhibit --what=handle-lid-switch --who="Arctic Linux" --why="$why" --mode=block \
+          sleep infinity >/dev/null 2>&1 ;;
     esac ;;
   # Apps keeping the screen on through org.freedesktop.ScreenSaver (Chromium, Electron apps).
   screensaver) pgrep -u "$UID" -f "arctic-screensaver run" >/dev/null 2>&1 || \

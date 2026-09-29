@@ -9,6 +9,7 @@ Everything runs in test_arctic_settings.Home's throwaway home with stand-ins tha
 arguments; the root helper runs as the test user (ARCTIC_SYSTEM_HELPER_TEST=1).
 """
 import json
+import signal
 import subprocess
 import textwrap
 import unittest
@@ -175,6 +176,24 @@ class DimTest(Tools):
                                   'echo "UDEV  [2.0] change /devices/AC (power_supply)"\n')
         subprocess.run(watch, env=self.env, check=True, timeout=10)
         self.assertEqual(self.calls()[-1], 'setsid swayidle -w timeout 120 arctic-lock before-sleep arctic-lock')
+
+    def test_login_ends_the_watcher_an_earlier_login_left(self):
+        # logind lets it run on after you log out; it would hold this session's lock and restart
+        # swayidle from the old session. A restart within the session keeps the watcher.
+        stub(self.bin, 'arctic-is-live', 'exit 1\n')
+        stub(self.bin, 'pkill', 'exit 0\n')
+        stub(self.bin, 'swayidle', 'exit 0\n')
+        stub(self.bin, 'setsid', 'shift; echo "setsid $*" >> "{}"\n'.format(self.log))
+        old = subprocess.Popen(['sleep', '60'], start_new_session=True)
+        self.addCleanup(old.kill)
+        stub(self.bin, 'pgrep', 'case "$*" in *power-watch*) echo {} ;; *) exit 1 ;; esac\n'.format(old.pid))
+        subprocess.run(['bash', str(BIN / 'arctic-session'), 'idle', '--restart'], env=self.env, check=True, timeout=10)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            old.wait(timeout=0.3)
+        subprocess.run(['bash', str(BIN / 'arctic-session'), 'idle'], env=self.env, check=True, timeout=10)
+        self.assertEqual(old.wait(timeout=5), -signal.SIGTERM)
+        self.assertIn('setsid swayidle -w timeout 300 arctic-lock timeout 900 systemctl suspend before-sleep arctic-lock',
+                      self.calls())
 
     def test_settings(self):
         self.supplies(on_battery=True)

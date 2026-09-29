@@ -539,6 +539,22 @@ class DisplayTest(HelperHome):
         (self.home / '.config/arctic/lid.conf').write_text('when_closed=screen-off\n')
         subprocess.run(session, env=self.env, check=True, timeout=10)
         self.assertIn('--what=handle-lid-switch --who=Arctic Linux', ran.read_text())
+        # A holder an earlier login left running (logind no longer counts it once that session is
+        # over) is ended at login and a new one started; with "suspend" none is.
+        def leftover():
+            old = subprocess.Popen(['sleep', '60'], start_new_session=True)
+            self.addCleanup(old.kill)
+            stub(self.bin, 'pgrep', 'echo {}\n'.format(old.pid))
+            return old
+        old = leftover()
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(old.wait(timeout=5), -signal.SIGTERM)
+        self.assertEqual(len(ran.read_text().splitlines()), 2)
+        (self.home / '.config/arctic/lid.conf').write_text('when_closed=suspend\n')
+        old = leftover()
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(old.wait(timeout=5), -signal.SIGTERM)
+        self.assertEqual(len(ran.read_text().splitlines()), 2)
 
     def test_effects(self):
         mango = self.home / '.config/mango/config.conf'
