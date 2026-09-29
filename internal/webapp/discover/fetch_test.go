@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -155,17 +156,55 @@ func TestPrivateAddressGuard(t *testing.T) {
 			}
 			return webapp.PrivateIP(ip)
 		}
-		if _, err := f.Get(context.Background(), mustURL(page.URL), "text/html", MaxHTML, true); err != nil {
+		r, err := f.Get(context.Background(), mustURL(page.URL), "text/html", MaxHTML, true)
+		if err != nil {
 			t.Fatal(err)
 		}
-		f.PageDone()
-		_, err := f.Get(context.Background(), mustURL(icon.URL+"/i.png"), "image/*", MaxImage, false)
+		// A dial to a private address that lost the race (a Happy Eyeballs fallback) comes
+		// after the page's own and must not count: the page's connection does.
+		if err := f.control("tcp", "[fd00::1]:80", nil); err != nil {
+			t.Fatal(err)
+		}
+		f.pageFrom(r)
+		_, err = f.Get(context.Background(), mustURL(icon.URL+"/i.png"), "image/*", MaxImage, false)
 		if pagePublic && errCode(err) != webapp.CodeFetch {
 			t.Fatalf("public page → private icon: %v", err)
 		}
 		if !pagePublic && err != nil {
 			t.Fatalf("private page → private icon refused: %v", err)
 		}
+	}
+}
+
+// A public page's refresh to a private address that isn't a page leaves the page public: its
+// icons still may not come from your network.
+func TestPrivateAddressGuardAfterRefresh(t *testing.T) {
+	var iconHits atomic.Int32
+	priv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/i.png" {
+			iconHits.Add(1)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(pngBytes(64, color.NRGBA{1, 2, 3, 255}))
+	}))
+	defer priv.Close()
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, `<title>Pub</title><meta http-equiv=refresh content="0; url=%s/x.png"><link rel=icon href="%s/i.png" sizes=64x64>`, priv.URL, priv.URL)
+	}))
+	defer page.Close()
+	pageAddr := strings.TrimPrefix(page.URL, "http://")
+	f := NewFetcher(nil)
+	f.private = func(address string, ip net.IP) bool { return address != pageAddr && webapp.PrivateIP(ip) }
+	res, err := Discover(context.Background(), page.URL, Options{PSL: testPSL(t), Fetcher: f})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iconHits.Load() != 0 || len(res.Icons) != 0 {
+		t.Fatalf("a public page's icon came from a private address: %+v", res.Icons)
 	}
 }
 
@@ -188,7 +227,7 @@ func TestFetchMDNSName(t *testing.T) {
 	if err != nil || string(r.Body) != "<title>printer.local:"+port+"</title>" {
 		t.Fatalf("%v %+v", err, r)
 	}
-	f.PageDone()
+	f.pageFrom(r)
 	if !f.allowPrivate {
 		t.Fatal("a page on your own network may load its icons from it")
 	}
