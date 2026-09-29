@@ -219,7 +219,12 @@ class ArcticThemeTests(unittest.TestCase):
         self.theme("toggle")
         self.theme("toggle")
         self.assertEqual(self.theme().stdout, "mine\n")
+        # Winter chosen by hand: dark is Polar night.
+        self.theme("set", "winter")
+        self.theme("dark")
+        self.assertEqual(self.theme().stdout, "polar-night\n")
         # Gone: Polar night again.
+        self.theme("set", "mine")
         self.theme("light")
         shutil.rmtree(os.path.join(self.config, "themes", "mine"))
         self.theme("dark")
