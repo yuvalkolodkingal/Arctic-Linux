@@ -15,9 +15,12 @@ import signal
 import subprocess
 import textwrap
 import time
+import types
 import unittest
+from unittest import mock
 
 from test_arctic_settings import DOTFILES, Home, stub
+from test_system_tools import load_helper
 
 BIN = DOTFILES / '.local/bin'
 ZONES = 'CH\t+4723+00832\tEurope/Zurich\nDE,DK,NO,SE,SJ\t+5230+01322\tEurope/Berlin\tmost of Germany\n'
@@ -130,6 +133,27 @@ class NightLightTest(HelperHome):
         # Off in the Settings sense (mode=off) stops it for good.
         self.tool('arctic-nightlight', 'set', 'mode=off', at=noon)
         self.assertFalse(self.wlsunset_running())
+
+    def test_override_ends_after_a_suspend(self):
+        # The timer naps against the wall clock, so an override whose end went by while the
+        # computer was suspended (sleep's clock stops then) ends as soon as it wakes.
+        nl = load_helper('arctic-nightlight')
+
+        def expire(start, until, suspend):
+            """_expire on a pretend clock; the first nap also spans `suspend` seconds."""
+            clock, naps, applied = [float(start)], [], []
+
+            def nap(seconds):
+                naps.append(seconds)
+                clock[0] += seconds + (suspend if len(naps) == 1 else 0)
+            with mock.patch.object(nl, 'now', lambda: clock[0]), \
+                    mock.patch.object(nl, 'time', types.SimpleNamespace(sleep=nap)), \
+                    mock.patch.object(nl, 'read_state', lambda: dict(override='on', until=until)), \
+                    mock.patch.object(nl, 'apply', applied.append), mock.patch.object(nl, 'refresh_shell', list):
+                nl.main(['_expire', str(until)])
+            return naps, len(applied)
+        self.assertEqual(expire(1000000, 1003600, suspend=8 * 3600), ([30], 1))
+        self.assertEqual(expire(2000000, 2000045, suspend=0), ([30, 15], 1))
 
     def test_no_schedule(self):
         data = self.tool('arctic-nightlight', 'on', '--quiet')
