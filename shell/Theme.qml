@@ -146,7 +146,11 @@ Singleton {
         printErrors: false
         onFileChanged: reload()
         onLoaded: theme.apply(text())
-        onLoadFailed: if (!fallback) fallback = true
+        // The read that failed is only dropped by FileView *after* this signal returns, so
+        // switching path from inside the handler leaves the fallback read unowned: its result is
+        // discarded ("operation finished from dropped operation") and the desktop keeps no colours
+        // at all. Wait for the event loop instead, as `loadFailed` on a read that never started.
+        onLoadFailed: if (!fallback) Qt.callLater(function() { fallback = true })
     }
     // `arctic-theme` swaps the ~/.config/arctic/current symlink, which a file watch on
     // current/theme.json can't see (the watch follows the link once, to the file it pointed at

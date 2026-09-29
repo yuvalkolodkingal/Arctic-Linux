@@ -43,7 +43,11 @@ Popover {
         path: paths[candidate]
         printErrors: false
         onLoaded: sheet.parse(text())
-        onLoadFailed: if (candidate + 1 < paths.length) candidate++
+        // FileView drops its in-flight operation only after this signal returns, so moving on
+        // to the next path from inside the handler leaves that read unowned: its result is
+        // discarded ("operation finished from dropped operation") and the sheet stays empty.
+        // Wait for the event loop instead, as `loadFailed` on a read that never started would.
+        onLoadFailed: if (candidate + 1 < paths.length) Qt.callLater(function() { candidate++ })
     }
 
     ColumnLayout {
