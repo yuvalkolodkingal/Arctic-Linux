@@ -53,8 +53,9 @@ virtual machines. Settings then says so.
 
 `Super + Ctrl + I` turns keep awake on until you turn it off. While it's on, the screen doesn't
 lock and the computer doesn't suspend when you're away, which is handy for presentations, long
-downloads and builds. Full-screen videos, games and slideshows already keep the screen awake by
-themselves.
+downloads and builds. Videos, games and slideshows that ask for it (browsers playing a video,
+video players, most games) keep the screen awake by themselves; a window that is merely full
+screen doesn't, so a browser left full screen still locks.
 
 For a set time, pick 30 minutes, 1 hour or 2 hours in **Settings → Power and lock → Keep awake**,
 or use the command:
