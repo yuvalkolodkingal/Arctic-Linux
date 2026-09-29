@@ -201,7 +201,8 @@ void arctic_banner(const char *text, const char *primary) {
     gtk_revealer_set_reveal_child(GTK_REVEALER(S.revealer), TRUE);
 }
 
-static void ask_permission(WebKitPermissionRequest *req, int kind, const char *origin, const char *what) {
+/* who names the asker when it isn't the page (NULL: the origin's host). */
+static void ask_permission(WebKitPermissionRequest *req, int kind, const char *origin, const char *who, const char *what) {
     if (S.pending) { /* one question at a time: later ones are refused */
         webkit_permission_request_deny(req);
         return;
@@ -217,7 +218,7 @@ static void ask_permission(WebKitPermissionRequest *req, int kind, const char *o
         host = g_strdup(g_uri_get_host(u));
         g_uri_unref(u);
     }
-    char *text = g_strdup_printf("%s wants to %s.", host ? host : origin, what);
+    char *text = g_strdup_printf("%s wants to %s.", who ? who : host ? host : origin, what);
     gtk_label_set_text(GTK_LABEL(S.banner_label), text);
     gtk_button_set_label(GTK_BUTTON(S.banner_primary), "Allow");
     gtk_widget_set_visible(S.banner_primary, TRUE);
@@ -242,6 +243,8 @@ static gboolean permission_cb(WebKitWebView *view, WebKitPermissionRequest *req,
     (void)data;
     int kind = 10;
     const char *what = "use a device";
+    const char *who = NULL;
+    char *owned = NULL;
     if (WEBKIT_IS_NOTIFICATION_PERMISSION_REQUEST(req)) {
         kind = 0;
         what = "show notifications";
@@ -268,18 +271,24 @@ static gboolean permission_cb(WebKitWebView *view, WebKitPermissionRequest *req,
     } else if (WEBKIT_IS_MEDIA_KEY_SYSTEM_PERMISSION_REQUEST(req)) {
         kind = 8;
     } else if (WEBKIT_IS_WEBSITE_DATA_ACCESS_PERMISSION_REQUEST(req)) {
+        /* An embedded site (a sign-in or comments frame) asks for its own cookies on this page:
+         * name both. The answer isn't remembered here; WebKit keeps it for that pair. */
+        WebKitWebsiteDataAccessPermissionRequest *wd = WEBKIT_WEBSITE_DATA_ACCESS_PERMISSION_REQUEST(req);
+        const char *current = webkit_website_data_access_permission_request_get_current_domain(wd);
         kind = 9;
-        what = "use its data while you're on this site";
+        who = webkit_website_data_access_permission_request_get_requesting_domain(wd);
+        what = owned = g_strdup_printf("use its cookies while you're on %s", current ? current : "this site");
     }
     char *origin = origin_of_view(view);
     int answer = goPermission(S.cfg.handle, kind, origin);
     if (answer == ARCTIC_ALLOW)
         webkit_permission_request_allow(req);
     else if (answer == ARCTIC_ASK && view == S.view)
-        ask_permission(req, kind, origin, what);
+        ask_permission(req, kind, origin, who, what);
     else
         webkit_permission_request_deny(req);
     g_free(origin);
+    g_free(owned);
     return TRUE;
 }
 
