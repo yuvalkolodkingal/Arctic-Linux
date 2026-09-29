@@ -1169,8 +1169,11 @@ class ThemeTest(Home):
         self.helper('theme-mode', 'light')
         self.helper('theme-mode', 'sepia', ok=False)
         self.helper('theme-set', 'x; reboot', ok=False)
+        self.helper('theme-set', '../x', ok=False)
+        self.helper('theme-set', 'kanagawa.dragon')          # installed from omarchy-kanagawa.dragon-theme
         self.assertEqual([c for c in self.calls() if not c.endswith('--json')],
-                         ['arctic-theme set polar-night', 'arctic-theme auto off', 'arctic-theme mode light'])
+                         ['arctic-theme set polar-night', 'arctic-theme auto off', 'arctic-theme mode light',
+                          'arctic-theme set kanagawa.dragon'])
 
 
 class WallpaperFilesTest(Home):
