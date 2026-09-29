@@ -11,7 +11,7 @@
   kitty      ~/.config/kitty/kitty.conf       font_family, bold/italic fonts; kitty reloads
   foot       ~/.config/foot/foot.ini          font=FAMILY:size=PT (new windows)
   alacritty  ~/.config/alacritty/alacritty.toml   normal family, size (it reloads by itself)
-  gtk        gsettings monospace-font-name
+  gtk        gsettings monospace-font-name (only the family: GTK scales it with the text size)
   shell      ~/.config/arctic/shell.json "monoFont" (the shell's code text)
 After a change the font hooks run (arctic-hook font FAMILY). Editors such as Zed keep their
 own font settings.
@@ -29,6 +29,7 @@ ARCTIC = os.path.join(CONFIG_HOME, "arctic")
 STATE = os.path.join(ARCTIC, "fonts.json")
 SHELL_JSON = os.path.join(ARCTIC, "shell.json")
 DEFAULTS = {"mono": "JetBrains Mono", "size": 10.5}
+GTK_KEY = ["org.gnome.desktop.interface", "monospace-font-name"]
 FILES = {
     "kitty": os.path.join(CONFIG_HOME, "kitty", "kitty.conf"),
     "foot": os.path.join(CONFIG_HOME, "foot", "foot.ini"),
@@ -52,6 +53,8 @@ def load_state():
                 state["mono"] = data["mono"]
             if isinstance(data.get("size"), (int, float)) and 6 <= data["size"] <= 40:
                 state["size"] = float(data["size"])
+            if isinstance(data.get("gtk"), str) and FAMILY_RE.match(data["gtk"]):
+                state["gtk"] = data["gtk"]
     except (OSError, ValueError):
         pass
     return state
@@ -139,6 +142,22 @@ def alacritty(text, old, new):
 REWRITERS = {"kitty": kitty, "foot": foot, "alacritty": alacritty}
 
 
+def gtk_font(family, wrote):
+    """GTK's monospace font becomes FAMILY at the size it has, while it still holds `wrote`
+    (what Arctic set last): the value set, None when it's a font of your own, '' without gsettings."""
+    if not shutil.which("gsettings"):
+        return ""
+    got = subprocess.run(["gsettings", "get"] + GTK_KEY, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    if got.returncode != 0:
+        return ""
+    if got.stdout.strip() != "'{}'".format(wrote):
+        return None
+    size = re.search(r" (\d+(?:\.\d+)?)$", wrote)
+    value = "{} {}".format(family, size.group(1) if size else "10")
+    done = subprocess.run(["gsettings", "set"] + GTK_KEY + [value], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return value if done.returncode == 0 else ""
+
+
 def apply(family, size):
     state = load_state()
     old, new = (state["mono"], state["size"]), (family, size)
@@ -157,12 +176,17 @@ def apply(family, size):
             skipped.append({"file": path.replace(HOME, "~", 1), "reason": "has a font of your own"})
     if "kitty" in changed and shutil.which("pkill"):
         subprocess.run(["pkill", "-USR1", "-u", str(os.getuid()), "-x", "kitty"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # GTK: the family only. Its size stays, since GTK applies the text size to it already.
+    # (Arctic's dconf default is the family at 10 pt.)
+    gtk = state.get("gtk") or "{} 10".format(old[0])
+    if family != old[0]:
+        now = gtk_font(family, gtk)
+        if now:
+            gtk = now
+            changed.append("gtk")
+        elif now is None:
+            skipped.append({"file": "gsettings monospace-font-name", "reason": "has a font of your own"})
     if family != old[0] or size != old[1]:
-        if shutil.which("gsettings"):
-            done = subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "monospace-font-name",
-                                   "{} {}".format(family, round(size))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if done.returncode == 0:
-                changed.append("gtk")
         try:
             with open(SHELL_JSON, encoding="utf-8") as f:
                 shell = json.load(f)
@@ -173,7 +197,7 @@ def apply(family, size):
             shell["monoFont"] = family
             write_atomic(SHELL_JSON, json.dumps(shell, indent=2) + "\n")
             changed.append("shell")
-    write_atomic(STATE, json.dumps({"mono": family, "size": size}, indent=2) + "\n")
+    write_atomic(STATE, json.dumps({"mono": family, "size": size, "gtk": gtk}, indent=2) + "\n")
     if family != old[0] and shutil.which("arctic-hook"):
         subprocess.Popen(["arctic-hook", "font", family], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
