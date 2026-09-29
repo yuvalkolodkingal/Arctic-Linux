@@ -246,6 +246,7 @@ FocusScope {
             Layout.rightMargin: Theme.space3
             Layout.bottomMargin: Theme.space2
             text: panel.pageError || 'This device has nothing to choose.'
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: panel.pageError ? Theme.error : Theme.inkMuted
             font.family: Theme.fontSans

@@ -53,6 +53,7 @@ Rectangle {
                     id: label
                     anchors.centerIn: parent
                     text: segment.modelData.label
+                    textFormat: Text.PlainText
                     color: segment.selected ? Theme.ink : Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 13
