@@ -13,13 +13,17 @@ Singleton {
     readonly property var visibleToggles: toggles.filter(t => t.available)
 
     function byKey(key) { return toggles.find(t => t.key === key) || null; }
-    // mode: on, off or toggle. Returns the new state, or "unavailable".
+    // mode: on, off or toggle (true/false and 1/0 too, in any case). Returns the new state,
+    // "unavailable", or a usage line for any other mode (which changes nothing).
     function set(key, mode) {
+        const m = String(mode).toLowerCase();
+        const on = m === 'on' || m === 'true' || m === '1';
+        if (!on && m !== 'off' && m !== 'false' && m !== '0' && m !== 'toggle') return 'usage: toggle set <key> on|off|toggle';
         const t = byKey(key);
         if (!t || !t.available) return 'unavailable';
-        if (mode === 'toggle') t.toggle();
-        else t.set(mode === 'on');
-        return mode === 'toggle' ? (t.active ? 'off' : 'on') : mode;
+        if (m === 'toggle') t.toggle();
+        else t.set(on);
+        return m === 'toggle' ? (t.active ? 'off' : 'on') : on ? 'on' : 'off';
     }
     function get(key) {
         const t = byKey(key);

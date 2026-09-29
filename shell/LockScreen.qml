@@ -108,7 +108,9 @@ Scope {
             Quickshell.execDetached(['arctic-hook', 'lock']);     // your lock hooks, once every screen is covered
         }
     }
-    onLockedChanged: if (!locked && fingerPam.active) fingerPam.abort()
+    // Unlocked (with the password, say): the reader is let go now, not when its 30 s wait ends.
+    // `showing`, not `locked`, whose change this Quickshell doesn't announce.
+    onShowingChanged: if (!showing && fingerPam.active) fingerPam.abort()
     Process {
         id: fingerCheck
         command: ['fprintd-list', Session.user]

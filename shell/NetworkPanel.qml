@@ -82,9 +82,11 @@ FocusScope {
     function activate(n) {
         setError(n.ssid, '');
         if (n.in_use) { openActions(n); return; }
+        // A saved network comes up as it is saved, a company one too (whatever way it signs in).
+        if (n.saved || n.security === 'open' || n.security === 'owe') { connect(n, null); return; }
         if (n.security === 'enterprise') { openCompany(n.ssid, false); return; }
-        if (n.saved || n.security === 'open' || n.security === 'owe') connect(n, null);
-        else { askError = ''; asking = n.ssid; }
+        askError = '';
+        asking = n.ssid;
     }
     // A saved profile (uuid) is brought up; a new network gets a profile first. With `secret`
     // the helper reads it from stdin (--ask).

@@ -53,6 +53,9 @@ Singleton {
     function dismiss() { request = null; }
     // Blueman's applet makes itself the default agent; pairing from Arctic's menu asks back.
     function claimDefault() { if (agent.running) agent.write('{"op":"default"}\n'); }
+    // The user chose this device in the menu: for a minute its codes come marked "solicited",
+    // and only then does the dialog focus Pair.
+    function expect(address) { if (agent.running && address) agent.write(JSON.stringify({ op: 'expect', address: String(address) }) + '\n'); }
 
     function handle(line) {
         let data;
@@ -61,6 +64,10 @@ Singleton {
             // "Type this code" updates arrive again for every digit: keep the dialog, update it.
             if (data.kind === 'show_passkey' && bt.request && bt.request.kind === 'show_passkey' && bt.request.device === data.device)
                 data.id = bt.request.id;
+            // The agent asks one question at a time, but a code to type can still come meanwhile:
+            // the question it replaces is answered no rather than left waiting.
+            else if (bt.request && bt.request.kind !== 'show_passkey' && bt.request.kind !== 'show_pin')
+                bt.reply(false);
             bt.request = data;
         } else if (data.type === 'cancel') {
             if (bt.request && (data.id === 0 || data.id === bt.request.id)) bt.request = null;

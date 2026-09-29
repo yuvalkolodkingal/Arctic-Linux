@@ -284,6 +284,38 @@ class Commands(unittest.TestCase):
         self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
         self.assertNoSecretOnArgv()
 
+    def test_saved_company_network_comes_up_as_saved(self):
+        code, out = self.run_helper('connect', '--uuid', UUID, '--name', 'eduroam', '--security', 'enterprise')
+        self.assertEqual((code, out), (0, {'ok': True, 'uuid': UUID}))
+        self.assertEqual(self.argv(), [['--wait', '40', 'connection', 'up', 'uuid', UUID]])
+        # Its password stopped working: the menu asks for it and sends it for this activation.
+        code, _ = self.run_helper('connect', '--uuid', UUID, '--name', 'eduroam', '--security', 'enterprise', '--ask',
+                                  stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual(code, 0)
+        self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
+        self.assertFalse(any(a[:2] == ['connection', 'add'] for a in self.argv()))
+
+    def test_company_login_for_a_saved_network_keeps_one_profile(self):
+        scenario = {'device status': STATUS['device status'],
+                    'connection show uuid': {'out': 'eduroam\n'},
+                    'connection show': {'out': 'eduroam:%s:802-11-wireless:1759000000:yes\n' % UUID}}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--identity', 'ada@uni.example', '--system-ca', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out), (0, {'ok': True, 'uuid': UUID}))
+        self.assertFalse(any(a[:2] == ['connection', 'add'] for a in self.argv()))
+        modify = next(a for a in self.argv() if a[:2] == ['connection', 'modify'])
+        self.assertEqual(modify[2:4], ['uuid', UUID])
+        self.assertEqual(modify[modify.index('802-1x.identity') + 1], 'ada@uni.example')
+        self.assertIn(['--wait', '40', 'connection', 'up', 'uuid', UUID], [a[:6] for a in self.argv()])
+        self.assertEqual(self.secrets(), '802-1x.password:%s\n' % SECRET)
+        # A sign-in that fails leaves the saved profile in place.
+        scenario['connection up'] = {'code': 4, 'err': 'Error: Connection activation failed: Secrets were required, but not provided.\n'}
+        code, out = self.run_helper('enterprise', '--ssid', 'eduroam', '--identity', 'ada', '--ask',
+                                    scenario=scenario, stdin=json.dumps({'secret': SECRET}) + '\n')
+        self.assertEqual((code, out['code']), (1, 'auth'))
+        self.assertFalse(any('delete' in a for a in self.argv()))
+        self.assertNoSecretOnArgv()
+
     def test_hotspot_first_time(self):
         scenario = dict(STATUS)
         scenario['connection add'] = {'out': "Connection 'Arctic hotspot' (%s) successfully added.\n" % UUID}
