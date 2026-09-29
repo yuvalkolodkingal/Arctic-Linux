@@ -205,7 +205,9 @@ func (f *Fetcher) Get(ctx context.Context, u *url.URL, accept string, limit int6
 	if err != nil {
 		return nil, classify(err, u.Host)
 	}
-	r := &Response{URL: resp.Request.URL, ContentType: resp.Header.Get("Content-Type")}
+	final := *resp.Request.URL
+	final.Host = webapp.ASCIIHost(final.Host) // a redirect to a Unicode name, as WebKit would see it
+	r := &Response{URL: &final, ContentType: resp.Header.Get("Content-Type")}
 	if int64(len(body)) > read {
 		if !truncate {
 			return nil, webapp.Errorf(webapp.CodeTooLarge, "%s sent a file that is too large.", u.Host)

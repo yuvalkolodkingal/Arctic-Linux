@@ -80,8 +80,10 @@ func titleName(title, site string) string {
 	return webapp.CleanName(best)
 }
 
-// siteLabel is the registrable domain's first label ("walla" for walla.co.il).
+// siteLabel is the registrable domain's first label ("walla" for walla.co.il), decoded from
+// Punycode ("münchen" for xn--mnchen-3ya.de).
 func siteLabel(site string) string {
+	site = webapp.UnicodeHost(site)
 	if i := strings.IndexByte(site, '.'); i > 0 {
 		return site[:i]
 	}

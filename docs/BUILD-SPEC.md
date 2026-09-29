@@ -993,7 +993,9 @@ warnings[{code: drm_unsupported|calls_unsupported|login_wall|insecure, message}]
 suggested_runtime`; its token stays installable for an hour.
 
 **Discovery rules.** http(s) only; https is added when there is no scheme; no userinfo, no
-control characters, ≤ 2,048 bytes. Fetch: dial and TLS 5 s, headers 10 s, 30 s per inspect,
+control characters, ≤ 2,048 bytes; the host is kept in lowercase ASCII, Punycode (`xn--`) for an
+internationalised name, the form WebKit reports pages in (the preview's `host` shows it decoded).
+Fetch: dial and TLS 5 s, headers 10 s, 30 s per inspect,
 TLS ≥ 1.2 and never an unverified certificate, ≤ 5 redirects and never https → http, HTML read
 to 1 MiB, manifest 256 KiB, images 2 MiB (≤ 4096 px, checked before decoding), 8 MiB in all. The
 user agent is WebKitGTK's own (pinned by the host's smoke test). Once the page came from a public

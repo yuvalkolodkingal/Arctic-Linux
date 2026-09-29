@@ -165,14 +165,6 @@ func TestIconFromFileUpgradesLetterIcons(t *testing.T) {
 	}
 }
 
-func TestPunycode(t *testing.T) {
-	for in, want := range map[string]string{"bücher.de": "xn--bcher-kva.de", "münchen.example": "xn--mnchen-3ya.example", "example.com": "example.com", "пример.рф": "xn--e1afmkfd.xn--p1ai"} {
-		if got := asciiHost(in); got != want {
-			t.Errorf("asciiHost(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // "Add with a letter icon" works when the site can't be reached; other icons still need it.
 func TestInstallOfflineWithLetterIcon(t *testing.T) {
 	m := testManager(t)

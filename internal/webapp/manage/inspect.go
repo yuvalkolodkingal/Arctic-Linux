@@ -88,18 +88,14 @@ func (m *Manager) storePreview(input string, res *discover.Result) (api.Preview,
 	}
 	p := api.Preview{
 		Token: token, URL: res.Input.String(), FinalURL: res.FinalURL.String(),
-		Host: res.Input.Host, HostASCII: res.Input.Host, Secure: !res.Insecure,
+		// host is for reading (Unicode); host_ascii is the name the page really has, a defence
+		// against look-alike letters.
+		Host: webapp.UnicodeHost(res.Input.Host), HostASCII: res.Input.Host, Secure: !res.Insecure,
 		Name: res.Name, NameSource: res.NameSource, ShortName: res.ShortName, StartURL: res.StartURL,
 		Scope:       api.Scope{Site: res.Site, Scheme: res.Scheme, Manifest: res.ScopeURL},
 		ManifestURL: res.ManifestURL, Display: res.Display, ThemeColor: res.ThemeColor, Category: res.Category,
 		Installed: []string{}, Icons: []api.IconChoice{}, HandlersSupported: []string{}, Warnings: []api.Warning{},
 		SuggestedRuntime: "webkit",
-	}
-	if u := res.Input; u != nil {
-		p.HostASCII = asciiHost(u.Hostname())
-		if u.Port() != "" {
-			p.HostASCII += ":" + u.Port()
-		}
 	}
 	identity := webapp.Identity(res.ManifestID, res.StartURL, 1)
 	p.SuggestedID = webapp.NewID(res.Name, res.Site, identity, m.Paths.Owner)
@@ -261,15 +257,4 @@ func (m *Manager) DropPreviews(tokens []string) {
 			}
 		}
 	}
-}
-
-// asciiHost shows the host as ASCII (punycode for internationalised names) under the name, a
-// defence against look-alike letters.
-func asciiHost(h string) string {
-	for _, r := range h {
-		if r > 127 {
-			return toPunycodeHost(h)
-		}
-	}
-	return h
 }

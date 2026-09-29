@@ -35,6 +35,10 @@ uk
 co.uk
 ac.uk
 
+// hk: internationalised rules are in Unicode
+hk
+公司.hk
+
 // arpa
 arpa
 home.arpa
