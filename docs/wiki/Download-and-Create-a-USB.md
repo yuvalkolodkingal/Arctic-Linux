@@ -19,25 +19,25 @@ Open the [latest release](https://github.com/yuvalkolodkingal/Arctic-Linux/relea
 
 | File | What it is |
 |---|---|
-| `Arctic-Linux-0.2-x86_64.iso` | The USB image |
-| `Arctic-Linux-0.2-x86_64.iso.sha256` | Its checksum, to check the download |
+| `Arctic-Linux-1.0-x86_64.iso` | The USB image |
+| `Arctic-Linux-1.0-x86_64.iso.sha256` | Its checksum, to check the download |
 
 The release notes mention it when this build has Zen Browser preinstalled for the live session.
 
 ### If the release has `.part00`, `.part01` … files
 
 GitHub limits each download to 2 GB. When an image is larger than that, it's published in parts.
-Download every `Arctic-Linux-0.2-x86_64.iso.partNN` file and the `.sha256` file into one folder,
+Download every `Arctic-Linux-1.0-x86_64.iso.partNN` file and the `.sha256` file into one folder,
 then join them:
 
 ```sh
 # Linux or macOS
-cat Arctic-Linux-0.2-x86_64.iso.part* > Arctic-Linux-0.2-x86_64.iso
+cat Arctic-Linux-1.0-x86_64.iso.part* > Arctic-Linux-1.0-x86_64.iso
 ```
 
 ```powershell
 # Windows (PowerShell), listing every part in order
-cmd /c copy /b Arctic-Linux-0.2-x86_64.iso.part00+Arctic-Linux-0.2-x86_64.iso.part01 Arctic-Linux-0.2-x86_64.iso
+cmd /c copy /b Arctic-Linux-1.0-x86_64.iso.part00+Arctic-Linux-1.0-x86_64.iso.part01 Arctic-Linux-1.0-x86_64.iso
 ```
 
 ## 2. Check the download
@@ -47,21 +47,21 @@ A check makes sure the file arrived complete. Run it in the folder with both fil
 **Linux**
 
 ```sh
-sha256sum -c Arctic-Linux-0.2-x86_64.iso.sha256
+sha256sum -c Arctic-Linux-1.0-x86_64.iso.sha256
 ```
 
-It prints `Arctic-Linux-0.2-x86_64.iso: OK` when the file is good.
+It prints `Arctic-Linux-1.0-x86_64.iso: OK` when the file is good.
 
 **macOS**
 
 ```sh
-shasum -a 256 -c Arctic-Linux-0.2-x86_64.iso.sha256
+shasum -a 256 -c Arctic-Linux-1.0-x86_64.iso.sha256
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
-Get-FileHash .\Arctic-Linux-0.2-x86_64.iso -Algorithm SHA256
+Get-FileHash .\Arctic-Linux-1.0-x86_64.iso -Algorithm SHA256
 ```
 
 Compare the long number it prints with the one in the `.sha256` file (open it in Notepad). If
@@ -77,7 +77,7 @@ they differ, download the image again.
 
 1. Install it and open it.
 2. Choose the option to use an `.iso` file you already have, and pick
-   `Arctic-Linux-0.2-x86_64.iso`.
+   `Arctic-Linux-1.0-x86_64.iso`.
 3. Pick your USB stick and write the image.
 
 ### With `dd` (Linux)
@@ -86,7 +86,7 @@ Find your USB stick's name first. Run `lsblk` before and after plugging it in: t
 (for example `sdb`) is your stick. Then write the image, replacing `sdX` with that name:
 
 ```sh
-sudo dd if=Arctic-Linux-0.2-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if=Arctic-Linux-1.0-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync
 ```
 
 Double-check the name: `dd` overwrites whatever disk you give it without asking.
@@ -96,14 +96,14 @@ Double-check the name: `dd` overwrites whatever disk you give it without asking.
 ```sh
 diskutil list                         # find the stick, for example /dev/disk4
 diskutil unmountDisk /dev/disk4
-sudo dd if=Arctic-Linux-0.2-x86_64.iso of=/dev/rdisk4 bs=4m
+sudo dd if=Arctic-Linux-1.0-x86_64.iso of=/dev/rdisk4 bs=4m
 ```
 
 ### With Ventoy
 
 [Ventoy](https://www.ventoy.net) lets one USB stick hold several ISO images and shows a menu of
 them when the computer starts. Arctic Linux 0.2 works from it: copy
-`Arctic-Linux-0.2-x86_64.iso` onto the Ventoy stick like any other file, start the computer from
+`Arctic-Linux-1.0-x86_64.iso` onto the Ventoy stick like any other file, start the computer from
 the stick and pick it in Ventoy's menu. The other files on the stick stay as they are. Check
 the download first (step 2), and join the parts if the release has them. Both **Try Arctic Linux** and **Install Arctic Linux**
 work, and the installer never offers the Ventoy stick as a disk to install on.
