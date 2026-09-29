@@ -53,7 +53,11 @@ Version:        0.3.0
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
-License:        MIT AND LGPL-2.1-or-later AND OFL-1.1
+# ISC covers the vendored 3D greeting (fetch/, a fork of areofyl/fetch). Its text is fetch/LICENSE
+# in the source package and fetch/README.md names it; TODO: ship it as a %license in
+# arctic-desktop-config too (it needs renaming, as %license flattens and would collide with
+# the project's own LICENSE above).
+License:        MIT AND LGPL-2.1-or-later AND OFL-1.1 AND ISC
 URL:            https://github.com/yuvalkolodkingal/Arctic-Linux
 Source0:        arctic-linux-%{version}.tar.gz
 # --- stream 6
@@ -82,6 +86,10 @@ BuildRequires:  python3-pillow
 # ---- stream 1 (web apps): arctic-webapp-host (cgo): the C compiler, WebKitGTK 6.0, GTK 4,
 # libsoup 3; readelf in %%check
 BuildRequires:  gcc
+# The 3D greeting (fetch/) includes <math.h> and links -lm: both need glibc-devel, which used to
+# arrive only transitively through pkgconfig(webkitgtk-6.0). Ask for it: the C build must not
+# depend on an unrelated subpackage's dependency chain.
+BuildRequires:  glibc-devel
 BuildRequires:  binutils
 BuildRequires:  pkgconfig(webkitgtk-6.0)
 BuildRequires:  pkgconfig(gtk4)
@@ -1139,6 +1147,15 @@ test -n "$logo" && test -f "%{buildroot}%{_datadir}/pixmaps/$logo.png" && test -
   { echo "error: os-release LOGO=$logo has no /usr/share/pixmaps/$logo.png and .svg" >&2; exit 1; }
 # neofetch (a %%ghost link to the wrapper) and fastfetch's system config (a link into the themes).
 test -x %{buildroot}%{_libexecdir}/arctic/neofetch
+# The 3D greeting: a real ELF binary that reports its version and renders. Without this, a C
+# build that produced an empty or non-executable file would still package and only fail on a
+# user's first run of arctic-fetch.
+f3d=%{buildroot}%{_libexecdir}/arctic/arctic-fetch-3d
+test -x "$f3d" || { echo "error: arctic-fetch-3d is missing or not executable" >&2; exit 1; }
+test "$(head -c4 "$f3d")" = "$(printf '\177ELF')" || { echo "error: arctic-fetch-3d is not an ELF binary" >&2; exit 1; }
+"$f3d" --version >/dev/null || { echo "error: arctic-fetch-3d does not run" >&2; exit 1; }
+test -s "%{buildroot}%{_datadir}/arctic/fetch/config" || \
+  { echo "error: the arctic-fetch system config is missing or empty" >&2; exit 1; }
 test "$(readlink %{buildroot}%{_bindir}/neofetch)" = ../libexec/arctic/neofetch
 test -f "%{buildroot}$(readlink %{buildroot}%{_sysconfdir}/xdg/fastfetch/config.jsonc)"
 for t in winter polar-night; do
@@ -1404,7 +1421,9 @@ fi
 # The 3D greeting, and the system default for its config (the wrapper is %_bindir/arctic-fetch).
 %{_libexecdir}/arctic/arctic-fetch-3d
 %dir %{_datadir}/arctic/fetch
-%{_datadir}/arctic/fetch/config
+# noreplace, like update.conf and the other system defaults: the wrapper reads the user's own
+# ~/.config/arctic/fetch/config first, so an admin who edited this one keeps their edits.
+%config(noreplace) %{_datadir}/arctic/fetch/config
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 %{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 %dir %{_datadir}/arctic

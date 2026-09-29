@@ -7,7 +7,12 @@
 # a source checkout just needs `make`. Nothing here needs more than libm.
 
 CC ?= cc
-CFLAGS ?= -O2
+# Pinned, deliberately not `?=`. rpmbuild exports its own CFLAGS into %build, so an inherited
+# CFLAGS would compile the RPM differently from the fetch-c CI job: the same source would then
+# be testable in one place and only fail in the other. A plain `=` beats the environment, so
+# this is the single flag set for both. Override on the command line if you need to.
+CFLAGS = -O2 -g -pipe -Wall -Werror=format-security -fstack-protector-strong \
+         -fno-strict-aliasing -D_FORTIFY_SOURCE=2
 LDFLAGS ?=
 LDLIBS = -lm
 VERSION := $(shell cat VERSION 2>/dev/null || echo 0)
