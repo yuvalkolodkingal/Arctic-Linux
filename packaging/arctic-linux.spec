@@ -30,7 +30,7 @@
 #   arctic-desktop         (metapackage)
 
 %global dist_version    44
-%global arctic_version  0.3
+%global arctic_version  1.0
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
@@ -48,7 +48,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        0.3.0
+Version:        1.0.0
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -1566,6 +1566,13 @@ fi
 # metapackage: no files
 
 %changelog
+* Tue Sep 29 2026 Arctic Linux <arctic@arcticlinux.org> - 1.0.0-1
+- Arctic Linux 1.0: the first stable release, the 0.3 desktop with its fixes
+- The 3D terminal greeting (arctic-fetch-3d) is its own x86_64 package, required by
+  arctic-desktop-config; it links as a PIE with Fedora's hardening flags
+- The shortcut sheet (Super + /) and the theme recover from a failed file read instead of
+  coming up empty
+
 * Mon Sep 28 2026 Arctic Linux <arctic@arcticlinux.org> - 0.3.0-1
 - Get apps opens to a chooser: Flathub apps, Fedora packages, web apps, terminal apps and a
   console; Remove apps lists what you installed per source and shows every package a removal
