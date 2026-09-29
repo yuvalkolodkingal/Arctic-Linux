@@ -587,18 +587,27 @@ def cmd_enterprise(args, stdin):
     device = wifi_device()
     if not device:
         raise Failure('radio_off', 'There is no Wi-Fi on this computer.')
-    add = ['connection', 'add', 'type', 'wifi', 'ifname', device, 'con-name', args.ssid, 'ssid', args.ssid]
-    if args.hidden:
-        add += ['802-11-wireless.hidden', 'yes']
-    code, out, err = nmcli(*(add + settings))
-    m = re.search(r'\(([0-9a-f-]{36})\)', out)
-    if code != 0 or not m:
-        raise Failure(*error_for(code, err, args.ssid))
-    uuid = m.group(1)
+    hidden = ['802-11-wireless.hidden', 'yes'] if args.hidden else []
+    # A network saved before (joined here or set up in the connection editor) keeps its one
+    # profile: it takes the new sign-in and is brought up, and stays saved if that fails.
+    uuid = Reader().saved_map().get(args.ssid)
+    saved = uuid is not None
+    if saved:
+        code, _, err = nmcli('connection', 'modify', 'uuid', uuid, *(hidden + settings))
+        if code != 0:
+            raise Failure(*error_for(code, err, args.ssid))
+    else:
+        add = ['connection', 'add', 'type', 'wifi', 'ifname', device, 'con-name', args.ssid, 'ssid', args.ssid]
+        code, out, err = nmcli(*(add + hidden + settings))
+        m = re.search(r'\(([0-9a-f-]{36})\)', out)
+        if code != 0 or not m:
+            raise Failure(*error_for(code, err, args.ssid))
+        uuid = m.group(1)
     try:
         activate(uuid, args.ssid, secret_setting('enterprise'), secret)
     except Failure as e:
-        nmcli('connection', 'delete', 'uuid', uuid)
+        if not saved:
+            nmcli('connection', 'delete', 'uuid', uuid)
         if e.code == 'auth':
             raise Failure('auth', 'That username or password didn’t work for “%s”. Check them and try again.' % args.ssid)
         raise
