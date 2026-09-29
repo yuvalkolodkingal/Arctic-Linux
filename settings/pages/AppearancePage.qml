@@ -713,7 +713,7 @@ Page {
 
     Group {
         title: "Change the wallpaper by itself"
-        desc: "Your chosen wallpaper and colours stay the same; this only changes the picture."
+        desc: "A new picture now and then, with the colours following it."
         visible: page.rotate.available === true
         SettingRow {
             searchKey: "appearance.rotate"

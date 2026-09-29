@@ -1,6 +1,6 @@
 """arctic-wallpaper rotate / next (dotfiles/.local/bin): a new picture every so often, from your
-folder or Arctic's, without changing the saved choice or the colours; fake swaybg, systemd-run,
-systemctl and arctic-hook log what they're asked.
+folder or Arctic's; each picture is saved as the choice and the colours follow it (arctic-theme
+sync). Fake swaybg, systemd-run, systemctl, arctic-hook and arctic-theme log what they're asked.
 
 Run: python3 -m unittest discover -s shell/tests
 """
@@ -38,7 +38,7 @@ class RotateTests(unittest.TestCase):
         self.log = root / 'log'
         fakes = root / 'fakes'
         fakes.mkdir()
-        for name in ('swaybg', 'systemd-run', 'systemctl', 'arctic-hook'):
+        for name in ('swaybg', 'systemd-run', 'systemctl', 'arctic-hook', 'arctic-theme'):
             (fakes / name).write_text('#!/bin/sh\necho "{} $*" >> "{}"\n'.format(name, self.log))
             (fakes / name).chmod(0o755)
         # systemd-run --scope runs its command (in a scope of its own, for the real one).
@@ -101,14 +101,17 @@ class RotateTests(unittest.TestCase):
         self.wallpaper('rotate', '1h', 'a', 'b', code=2)
         self.assertFalse((self.config / 'wallpaper-rotate.json').exists())
 
-    def test_next_in_order_keeps_the_choice_and_the_colours(self):
+    def test_next_in_order_saves_the_picture_and_follows_its_colours(self):
         self.wallpaper('rotate', '1h', str(self.pictures))
         seen = []
         for _ in range(4):
             self.wallpaper('next')
             seen.append(self.drawn())
         self.assertEqual(seen, ['a.png', 'b.jpg', 'c.webp', 'a.png'])
-        self.assertEqual((self.config / 'wallpaper').read_text(), 'fox\n')        # the choice stays
+        # the choice follows the picture, so the colours never sit behind the wallpaper
+        self.assertEqual((self.config / 'wallpaper').read_text().strip(),
+                         str((self.pictures / 'a.png').resolve()))
+        self.assertEqual(self.calls('arctic-theme'), ['arctic-theme sync --no-redraw'] * 4)
         self.assertEqual(len(self.calls('swaybg')), 4)
         # swaybg runs in a scope of its own: the timer's service must not take it along when it ends.
         self.assertEqual(len([c for c in self.calls('systemd-run --user --scope') if ' -- setsid -f swaybg ' in c]), 4)
@@ -117,6 +120,27 @@ class RotateTests(unittest.TestCase):
         while len(self.calls('arctic-hook')) < 4 and time.monotonic() < deadline:
             time.sleep(0.1)
         self.assertIn('arctic-hook wallpaper {}'.format((self.pictures / 'b.jpg').resolve()), self.calls('arctic-hook'))
+
+    def test_next_over_arctic_saves_the_name_so_the_static_palettes_come_back(self):
+        self.wallpaper('rotate', '1h', 'arctic')
+        seen = []
+        for _ in range(4):
+            self.wallpaper('next')
+            seen.append(self.drawn())
+        self.assertEqual(seen, ['snowfield-polar-night.png', 'aurora-polar-night.png',
+                                'fox-polar-night.png', 'snowfield-polar-night.png'])
+        # A design wallpaper is saved by name: arctic-theme reads it as Arctic's own, not a picture.
+        self.assertEqual((self.config / 'wallpaper').read_text().strip(), 'snowfield')
+        self.assertEqual(self.calls('arctic-theme'), ['arctic-theme sync --no-redraw'] * 4)
+
+    def test_next_without_sync_saves_the_picture_but_leaves_the_colours(self):
+        self.env['ARCTIC_WALLPAPER_NO_SYNC'] = '1'
+        self.wallpaper('rotate', '1h', str(self.pictures))
+        self.wallpaper('next')
+        self.assertEqual((self.config / 'wallpaper').read_text().strip(),
+                         str((self.pictures / 'a.png').resolve()))
+        self.assertEqual(self.calls('arctic-theme'), [])
+        self.assertEqual(self.drawn(), 'a.png')
 
     def test_pictures_with_the_same_name(self):
         (self.pictures / 'a.jpg').write_bytes(b'x')

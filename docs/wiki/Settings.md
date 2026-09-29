@@ -116,8 +116,9 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   **delete** it (or select it and press `F2` or `Delete`). The picture in use can't be deleted.
 - **Change the wallpaper by itself:** a new picture every 30 minutes, hour or day, from your
   pictures or Arctic's own, in name order or **in random order** (every picture once before any
-  comes again). Your chosen wallpaper and the colours stay as they are; the next login starts from
-  the chosen one again. Wallpaper hooks run with each picture.
+  comes again). Each picture becomes your wallpaper and the colours follow it: your pictures
+  colour the desktop, Arctic's bring back Winter / Polar night. Wallpaper hooks run with each
+  picture.
 - **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
   press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
   pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at

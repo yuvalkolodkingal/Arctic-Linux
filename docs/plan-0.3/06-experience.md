@@ -1898,12 +1898,12 @@ arctic-hook --open             create ~/.config/arctic and open it in the file m
 
 - Last package of this section; if time runs short it moves to 0.3.1 without affecting anything
   else.
-- `arctic-wallpaper next [--folder DIR] [--shuffle]` (new verb): picks the next picture (by name, or
-  random without repeats in one pass) from the folder, draws it, records it in
-  `~/.cache/arctic/wallpaper-current` as today (`arctic-wallpaper:127`), and does **not** change the
-  saved choice (`~/.config/arctic/wallpaper`) or the colours (`ARCTIC_WALLPAPER_NO_SYNC=1`
-  behaviour). So auto colours don't regenerate the theme every half hour, and the next login starts
-  from the chosen picture.
+- `arctic-wallpaper next` (new verb): picks the next picture (by name, or random without repeats in
+  one pass) from the folder, records it in `~/.cache/arctic/wallpaper-current` as today
+  (`arctic-wallpaper:127`), saves it as the wallpaper choice (`~/.config/arctic/wallpaper`) and lets
+  the colours follow (`arctic-theme sync --no-redraw`, or `ARCTIC_WALLPAPER_NO_SYNC=1` to skip), so
+  the desktop never keeps the colours of a wallpaper that is no longer on screen. Arctic's own
+  wallpapers are saved by name, so they bring back Winter / Polar night like a manual choice does.
 - `arctic-wallpaper rotate off|30m|1h|1d [FOLDER]` saves
   `~/.config/arctic/wallpaper-rotate.json` `{"every":"30m","folder":"~/Pictures/Wallpapers","shuffle":true}`
   and arms `systemd-run --user --unit=arctic-wallpaper-rotate --collect --quiet
@@ -1911,8 +1911,7 @@ arctic-hook --open             create ~/.config/arctic and open it in the file m
   re-arms it at login (`autostart.conf`, after `arctic-theme apply`).
 - Settings > Appearance > Wallpaper: "Change the wallpaper" — Never / Every 30 minutes / Every hour
   / Every day, and "From" (your wallpaper folder, the design wallpapers, or a folder chosen with the
-  portal file chooser). Description: "Your chosen wallpaper and colours stay the same; this only
-  changes the picture."
+  portal file chooser). Description: "A new picture now and then, with the colours following it."
 - Fires the `wallpaper` hook with each picture.
 
 ---
