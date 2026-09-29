@@ -657,6 +657,14 @@ def split_nevra(nevra):
 WHY = {'User': 'asked', 'Dependency': 'needs-it', 'Clean': 'unused'}
 
 
+def rpm_installed(names):
+    """The installed packages among `names`, once per installed version. rpm also prints
+    "package X is not installed" on stdout for the others; those lines don't count."""
+    _code, text, _err = appslib.run(['rpm', '-q', '--qf', '%{NAME}\\n', *names], timeout=30)
+    wanted = set(names)
+    return [line.strip() for line in text.splitlines() if line.strip() in wanted]
+
+
 def installed_sizes(names):
     code, text, _err = appslib.run(['rpm', '-q', '--qf', '%{NAME}\t%{SIZE}\\n', *names], timeout=30)
     sizes = {}
@@ -740,8 +748,8 @@ def cmd_preview_remove(args):
         result['blocked'] = dict(package=shell_pkg, code='login-shell',
                                  message='{} is your login shell. Choose another shell first (see Terminal and shell).'.format(shell_name))
         return out(result)
-    code, text, _err = appslib.run(['rpm', '-q', '--qf', '%{NAME}\\n', *appslib.TERMINALS], timeout=10)
-    terminals = [t for t in text.split() if t in appslib.TERMINALS]
+    installed = set(rpm_installed(appslib.TERMINALS))
+    terminals = [t for t in appslib.TERMINALS if t in installed]
     if terminals and all(t in removed for t in terminals):
         keys = appslib.role_keys().get('terminal', 'Super + Enter')
         result['blocked'] = dict(package=terminals[0], code='only-terminal',

@@ -57,11 +57,16 @@ if tool == 'rpm':
         print('\n'.join(sorted(installed)))
         sys.exit(0)
     if args[0] == '-q':
+        # As the real rpm: a line on stdout for a missing package too, and a non-zero exit.
         fmt, names = args[2], args[3:]
+        missing = 0
         for name in names:
             if name in installed:
                 print('%s\t%s' % (name, installed[name]) if 'SIZE' in fmt else name)
-        sys.exit(0)
+            else:
+                missing += 1
+                print('package %s is not installed' % name)
+        sys.exit(missing)
 if tool == 'dnf5':
     if 'repoquery' in args and '--providers-of=requires' in args:
         print('\n'.join(data.get('closure', [])))
@@ -489,6 +494,12 @@ class PreviewTests(Apps):
         blocked = self.run_apps('preview-remove', 'dnf', 'kitty')['blocked']
         self.assertEqual(blocked['code'], 'only-terminal')
         self.assertIn('kitty is your only terminal', blocked['message'])
+
+    def test_only_terminal_counts_the_installed_ones(self):
+        # rpm answers "package foot is not installed" for the others (as data: kitty only).
+        self.assertEqual(self.run_apps('preview-remove', 'dnf', 'kitty')['blocked']['package'], 'kitty')
+        self.data['installed']['foot'] = 1
+        self.assertIsNone(self.run_apps('preview-remove', 'dnf', 'kitty')['blocked'])
 
     def test_default_browser_warning(self):
         (self.home / '.config/mango/arctic').mkdir(parents=True)
