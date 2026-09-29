@@ -133,8 +133,9 @@ background_opacity 0.95
 
 Settings › Appearance › **Code font** (or the [command menu](Command-Menu)'s Style › Code font)
 picks any monospace font installed. `arctic-font` changes it in kitty (which reloads), foot, and
-alacritty, sets GTK's monospace font, and the shell's own code text follows. It only changes a
-line that still holds what Arctic wrote there, so a font you set yourself stays, and it says so:
+alacritty, sets GTK's monospace font (the family; GTK sizes it with the text size), and the
+shell's own code text follows. It only changes a line or setting that still holds what Arctic
+wrote there, so a font you set yourself stays, and it says so:
 
 ```sh
 arctic-font list                 # monospace fonts installed

@@ -53,8 +53,9 @@ Winter and Polar night: the same contrast guarantees (the build refuses a theme 
 every app that follows the theme follows them, and the warm "here" accent stays, so the selected
 row or the focused field looks like "here" in every theme. A theme with a light and a dark take
 is a pair: `Super + Shift + T` (and [light by day, dark at night](#light-by-day-dark-at-night))
-switches between Catppuccin Latte and Mocha, not to Winter. The colour sources and licences are
-in `design/themes/<name>/SOURCE`.
+switches between Catppuccin Latte and Mocha, not to Winter. A theme with only one take, such as
+Nord or Tokyo Night, switches to Winter or Polar night and back to itself. The colour sources and
+licences are in `design/themes/<name>/SOURCE`.
 
 ### A theme from the web
 
