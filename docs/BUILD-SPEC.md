@@ -57,8 +57,8 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 0.3.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-0.3.0/` of the
+Version 1.0.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-1.0.0/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 The one other source is `Source1`, the Nerd Fonts "Symbols Only" release for
@@ -76,6 +76,7 @@ checked against the SHA-256 there and again in `%prep`.
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
 | `arctic-desktop-config` | `/etc/skel/` ← `dotfiles/` (minus install.sh/README and the files below), `/usr/bin/arctic-*` ← `dotfiles/.local/bin/*`, `/usr/share/arctic/mango/*.conf` ← `dotfiles/.config/mango/arctic/` (skel has links to them), `/usr/share/arctic/keys.txt`, `/usr/share/arctic/themes/{winter,polar-night}/` (rendered by the engine in %build; skel's `~/.config/arctic/current` links there), `/usr/share/arctic/themegen/` + `/usr/bin/arctic-themegen` (theme engine, §10), `/usr/share/arctic/theme-hooks.d/` ← `packaging/theme-hooks.d/`, `/etc/arctic/default-apps` (defaults), app theming (§3.1): `/etc/dconf/db/distro.d/10-arctic` (+ `%ghost` compiled `/etc/dconf/db/distro`), `/var/lib/flatpak/overrides/global`, `/usr/lib/environment.d/50-arctic-qt.conf`; fastfetch (§3.1): `/usr/share/arctic/fastfetch/{greeting.jsonc,logo.txt}` ← `dotfiles/.local/share/arctic/fastfetch/`, `/etc/xdg/fastfetch/config.jsonc` → the Polar night theme's `fastfetch/config.jsonc` (accounts without the skel link: root, older accounts); `neofetch`: `/usr/libexec/arctic/neofetch` ← `dotfiles/.local/bin/neofetch` (fastfetch with the theme's `fastfetch/neofetch.jsonc`; a real neofetch found on `PATH` runs instead) and `%ghost /usr/bin/neofetch` → it, created in `%posttrans` only when that name is free: a `%ghost` never conflicts with another package's file, so a neofetch package (none in Fedora 44) installs over it, and `%triggerpostun -- neofetch` links it again when that package goes (rpm leaves the shared path's file behind) | Requires the desktop runtime (§3), python3-pillow (wallpaper colours) and adw-gtk3-theme, qt5ct, qt6ct, dconf (§3.1), fastfetch. Provides `neofetch = %{version}-%{release}` (satisfies what depends on neofetch; `dnf install neofetch` says it is there, and would install a real neofetch package by name). No `Conflicts: neofetch`: it would make installing a real neofetch remove arctic-desktop-config (and arctic-desktop). Helper scripts must look in XDG dirs: `~/.local/share/arctic/…` then `/usr/share/arctic/…`, and wallpapers in `/usr/share/backgrounds/arctic`. |
 | `arctic-shell` | `/usr/share/arctic/shell/` ← `shell/`, `/usr/bin/arctic-shell` (`exec quickshell -p /usr/share/arctic/shell "$@"`) | Requires quickshell, python3, python3-pillow, python3-pyte, polkit (pkexec, for Get apps), python3-dbus, python3-gobject-base (the Bluetooth pairing agent), glib2, pipewire-utils; Recommends appstream-data (Fedora app names and icons in Get apps), ddcutil (external monitors' brightness), qrencode (Wi-Fi share), NetworkManager-openvpn. %check runs `shell/tests/test_apps.py`. |
+| `arctic-fetch-3d` | `/usr/libexec/arctic/arctic-fetch-3d` ← `fetch/` (built in %build with the Makefile's pinned CFLAGS, `-fPIE` included), `%config(noreplace) /usr/share/arctic/fetch/config` | arch x86_64 (compiled, so it can't live in noarch arctic-desktop-config), ISC. %check: an executable ELF that runs `--version`, and a non-empty config. Required by `arctic-desktop-config` at the same version-release. |
 | `arctic-settings` | `/usr/share/arctic/settings/` ← `settings/` (minus tests/, dev/), `/usr/bin/arctic-settings` ← `dotfiles/.local/bin/arctic-settings`, `/usr/share/applications/org.arcticlinux.Settings.desktop`, `/usr/share/icons/hicolor/scalable/apps/org.arcticlinux.Settings.svg` ← `packaging/settings/` | noarch. Requires quickshell, qt6-qtdeclarative, qt6-qtsvg, qt6-qtwayland, python3, wlr-randr, arctic-desktop-config, arctic-shell, arctic-fonts; Recommends nm-connection-editor, blueman, pavucontrol, xdg-utils. %check runs `settings/tests`. Required by `arctic-desktop`. |
 | `arctic-installer` | `/usr/bin/arcticd`, `/usr/bin/arctic-install`, `/usr/share/arctic/catalog/` ← `modules/`, `/usr/share/arctic/profiles/`, `/usr/share/arctic/installer-ui/` ← `installer-ui/`, `/usr/bin/arctic-installer` (`exec quickshell -p /usr/share/arctic/installer-ui "$@"`), `/usr/lib/systemd/system/arcticd.{socket,service}`, `/usr/share/applications/org.arcticlinux.Installer.desktop` | arch x86_64 (Go). BuildRequires golang. Go builds offline: vendor modules or stdlib only (prefer stdlib only; `github.com/BurntSushi/toml` allowed only if vendored). |
 | `arctic-webapps` | `/usr/bin/arctic-webapp`, `/usr/libexec/arctic/arctic-webapp-host` | arch x86_64. The manager is pure Go; the host is cgo against WebKitGTK 6.0 and GTK 4 (BuildRequires gcc, `pkgconfig(webkitgtk-6.0)`, `pkgconfig(gtk4)`, `pkgconfig(libsoup-3.0)`). Requires `webkitgtk6.0 >=` the version built against, librsvg2-tools, hicolor-icon-theme, publicsuffix-list. %check: the host's NEEDED, no NEEDED in the manager, `--version` of both, `render-sample` + desktop-file-validate. Required by `arctic-desktop`; Recommended by `arctic-shell` (§11). |
@@ -531,8 +532,8 @@ livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO s
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.
-Volume id `Arctic-Linux-0.3` (the installer finds its media by the `Arctic-Linux` prefix). Output
-`out/iso/Arctic-Linux-0.3-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
+Volume id `Arctic-Linux-1.0` (the installer finds its media by the `Arctic-Linux` prefix). Output
+`out/iso/Arctic-Linux-1.0-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
 Release suffix, commit and `arctic_repos=enabled|disabled` from out/BUILD-INFO.
 
 Design assets not copied into `design/` (all 78 icons, 30 app tiles, lockups, wallpapers as
@@ -568,7 +569,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 0.3.0, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 1.0.0, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),

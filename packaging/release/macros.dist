@@ -4,7 +4,7 @@
 %__bootstrap         ~bootstrap
 %fedora              44
 %fc44                1
-%arctic              0.3
+%arctic              1.0
 %distcore            .fc%{fedora}
 %dist                %{!?distprefix0:%{?distprefix}}%{expand:%{lua:for i=0,9999 do print("%{?distprefix" .. i .."}") end}}%{distcore}%{?with_bootstrap:%{__bootstrap}}%{?buildrelease:+build%{buildrelease}}
 %dist_vendor         Arctic Linux

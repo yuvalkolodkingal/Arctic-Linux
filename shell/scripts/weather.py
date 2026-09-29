@@ -35,7 +35,7 @@ LOCALTIME = os.environ.get("ARCTIC_LOCALTIME") or "/etc/localtime"
 # Tests point these at a local server; Arctic itself only ever asks Open-Meteo over https.
 FORECAST = os.environ.get("ARCTIC_WEATHER_API") or "https://api.open-meteo.com/v1/forecast"
 GEOCODE = os.environ.get("ARCTIC_GEOCODE_API") or "https://geocoding-api.open-meteo.com/v1/search"
-USER_AGENT = "Arctic-Linux/0.3 (weather in the calendar)"
+USER_AGENT = "Arctic-Linux/1.0 (weather in the calendar)"
 ATTRIBUTION = "Open-Meteo.com"
 IMPERIAL_LOCALES = ("en_US", "en_LR", "my_MM")
 

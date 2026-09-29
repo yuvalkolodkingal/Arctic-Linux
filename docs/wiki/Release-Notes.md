@@ -1,5 +1,18 @@
 # Release notes
 
+## Arctic Linux 1.0.0
+
+Arctic Linux 1.0 is the first stable release: the 0.3 desktop, with the fixes that followed it.
+Download `Arctic-Linux-1.0-x86_64.iso` from the
+[1.0.0 release](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/v1.0.0).
+
+**Getting it:** an installed Arctic Linux 0.3 updates to 1.0 by itself, like any other update.
+
+- **The shortcut sheet (`Super + /`) and the theme** no longer come up empty when a file read
+  fails the first time: they retry.
+- **The 3D terminal greeting** (`arctic-fetch`) is its own package, `arctic-fetch-3d`, which comes
+  with the update.
+
 ## Arctic Linux 0.3.0
 
 Arctic Linux 0.3 installs apps from one place and turns any website into an app, gives every item

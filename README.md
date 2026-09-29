@@ -22,7 +22,7 @@ and it only downloads the apps you pick.
 
 Download the ISO from the [releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases), write
 it to a USB stick (4 GB or more), for example with Fedora Media Writer or
-`sudo dd if=Arctic-Linux-0.2-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync`, and boot it.
+`sudo dd if=Arctic-Linux-1.0-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync`, and boot it.
 
 ## Updates
 
