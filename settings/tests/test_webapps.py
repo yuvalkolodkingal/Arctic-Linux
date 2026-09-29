@@ -5,6 +5,7 @@ arctic-webapp on PATH that records its argv and answers one line of --json.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -102,6 +103,29 @@ class WebAppCommands(unittest.TestCase):
         self.assertTrue(r['arcticWebapp'])
         r = self.run_helper('caps', env=dict(self.env, PATH=str(self.tmp / 'nowhere')))
         self.assertFalse(r['arcticWebapp'])
+
+
+class WebAppsPage(unittest.TestCase):
+    """An app whose browser was uninstalled still opens (in the Arctic engine) and can switch
+    engine, so the page keeps its Open button and settings; only a launcher entry or record
+    problem leaves Remove alone."""
+
+    def setUp(self):
+        self.qml = (REPO / 'settings' / 'pages' / 'WebAppsPage.qml').read_text()
+        m = re.search(r'function usable\(a\) \{(.*?)\n    \}', self.qml, re.S)
+        self.assertIsNotNone(m, 'WebAppsPage.qml has usable(a)')
+        self.usable = m.group(1)
+
+    def test_runtime_missing_is_usable(self):
+        self.assertEqual(sorted(re.findall(r'a\.problem === "([^"]*)"', self.usable)), ['', 'runtime-missing'])
+
+    def test_buttons_and_settings_follow_usable(self):
+        # Open, Settings and (for the others) Remove on each row, and the settings group below;
+        # nothing else decides by problem === "" any more.
+        self.assertEqual(self.qml.count('page.usable(appRow.modelData)'), 3)
+        self.assertIn('visible: !page.usable(appRow.modelData)', self.qml)
+        self.assertIn('visible: page.usable(page.app)', self.qml)
+        self.assertNotIn('problem === ""', self.qml.replace(self.usable, ''))
 
 
 if __name__ == '__main__':

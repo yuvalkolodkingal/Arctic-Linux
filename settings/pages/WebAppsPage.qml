@@ -72,6 +72,11 @@ Page {
             return Math.max(1, Math.round(bytes / 1e3)) + " kB";
         return (bytes / 1e6).toFixed(bytes < 1e8 ? 1 : 0) + " MB";
     }
+    // An app whose browser was uninstalled still opens (in the Arctic engine) and can switch
+    // engine; only a launcher entry or record problem leaves Remove alone.
+    function usable(a) {
+        return a !== null && (a.problem === "" || a.problem === "runtime-missing");
+    }
     function problem(p) {
         return ({ "no-desktop-file": "Launcher entry missing", "no-registry": "Record missing",
                   "runtime-missing": "Its browser isn’t installed" })[p] || "";
@@ -110,7 +115,7 @@ Page {
                 Row {
                     spacing: Theme.space2
                     ArButton {
-                        visible: appRow.modelData.problem === ""
+                        visible: page.usable(appRow.modelData)
                         variant: "ghost"
                         size: "sm"
                         iconName: "external"
@@ -119,14 +124,14 @@ Page {
                         onClicked: Backend.call(["webapp-open", appRow.modelData.id], r => {})
                     }
                     ArButton {
-                        visible: appRow.modelData.problem === "" && page.selected !== appRow.modelData.id
+                        visible: page.usable(appRow.modelData) && page.selected !== appRow.modelData.id
                         size: "sm"
                         text: "Settings"
                         gapColor: Theme.surfaceRaised
                         onClicked: page.selected = appRow.modelData.id
                     }
                     ArButton {
-                        visible: appRow.modelData.problem !== ""
+                        visible: !page.usable(appRow.modelData)
                         variant: "ghost"
                         size: "sm"
                         iconName: "trash"
@@ -143,7 +148,7 @@ Page {
     }
 
     Group {
-        visible: page.app !== null && page.app.problem === ""
+        visible: page.usable(page.app)
         title: page.app ? page.app.name : ""
         desc: page.app ? page.app.url : ""
         SettingRow {
