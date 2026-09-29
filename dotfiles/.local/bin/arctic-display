@@ -291,12 +291,13 @@ def screens(off):
     this put to sleep. A laptop panel behind a closed lid stays dark."""
     state = read_state()
     if off:
-        names = [o['name'] for o in outputs() if o['enabled']]
-        for name in names:
+        names = []
+        for name in [o['name'] for o in outputs() if o['enabled']]:
             try:
                 dispatch('sleep_monitor', name)
+                names.append(name)
             except Failure:
-                names.remove(name)
+                pass
         state['asleep'] = sorted(set(state.get('asleep') or []) | set(names))
         write_state(state)
         return dict(ok=True, done='screens off', screens=names)

@@ -515,6 +515,17 @@ class DisplayTest(HelperHome):
         self.lid.write_text('state:      closed\n')
         self.assertEqual(self.tool('arctic-display', 'screens', 'on')['screens'], ['HDMI-A-1'])
         self.assertNotIn('wakeup_monitor,eDP-1', self.dispatches())
+        # Mango refuses one screen: every other one still goes dark, and only those count as asleep.
+        self.lid.write_text('state:      open\n')
+        self.outputs.write_text(json.dumps(WLR_RANDR[:1] + [dict(name='DP-1', description='LG', enabled=True)]
+                                           + WLR_RANDR[1:]))
+        stub(self.bin, 'mmsg', 'echo "mmsg $*" >> "{}"\n[ "$2" = sleep_monitor,eDP-1 ] && exit 1\nexit 0\n'
+             .format(self.log))
+        before = len(self.dispatches())
+        self.assertEqual(self.tool('arctic-display', 'screens', 'off')['screens'], ['DP-1', 'HDMI-A-1'])
+        self.assertEqual(self.dispatches()[before:], ['sleep_monitor,eDP-1', 'sleep_monitor,DP-1',
+                                                      'sleep_monitor,HDMI-A-1'])
+        self.assertEqual(self.tool('arctic-display', 'screens', 'on')['screens'], ['DP-1', 'HDMI-A-1'])
 
     def test_session_holds_the_lid_switch(self):
         ran = self.tmp / 'inhibit.log'
