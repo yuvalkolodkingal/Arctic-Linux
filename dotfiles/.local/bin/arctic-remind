@@ -134,6 +134,11 @@ def schedule(text_words):
     parsed = parse(" ".join(text_words))
     if parsed is None:
         raise Error("Say when first: 10m, 1h 30m, 17:30 or 5pm, then what to remind you of.")
+    add(parsed)
+
+
+def add(parsed):
+    """Set the reminder parse() describes (a timer that runs `fire`)."""
     if not shutil.which("systemd-run"):
         raise Error("Reminders need systemd-run (systemd), which isn't here.")
     due = due_time(parsed)
@@ -174,7 +179,8 @@ def fire(ident):
                              "-A", "snooze=Again in 10 minutes", "Reminder", text],
                             stdin=subprocess.DEVNULL, capture_output=True, text=True)
     if result.stdout.strip() == "snooze":
-        schedule(["10m", text])
+        # The text as it is: parsed again, "2 pills" would read as 2 more minutes and "pills".
+        add({"seconds": SNOOZE, "when": "in " + spell(SNOOZE), "text": text})
 
 
 def cancel(which):

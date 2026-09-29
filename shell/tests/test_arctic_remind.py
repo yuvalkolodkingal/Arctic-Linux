@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 REPO = Path(__file__).parents[2]
@@ -98,6 +99,15 @@ class CommandTests(unittest.TestCase):
         self.assertNotEqual(again[0]['id'], ident)
         self.assertEqual(again[0]['text'], "tea; don't forget")
         self.assertTrue(any('-u critical' in c and 'Again in 10 minutes' in c for c in self.calls()))
+
+    def test_snooze_keeps_a_text_that_starts_with_a_number(self):
+        ident = json.loads(self.remind('8pm', '2', 'pills'))['id']
+        self.answer.write_text('snooze\n')
+        before = time.time()
+        self.remind('fire', ident)
+        again = self.saved()
+        self.assertEqual([r['text'] for r in again], ['2 pills'])
+        self.assertTrue(before + 590 <= again[0]['due'] <= time.time() + 610, again)
 
     def test_cancel(self):
         ident = json.loads(self.remind('17:30', 'call', 'Ana'))['id']
