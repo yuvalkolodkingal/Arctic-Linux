@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 REPO = Path(__file__).parents[2]
 HELPER = REPO / 'dotfiles' / '.local' / 'bin' / 'arctic-menu'
@@ -53,6 +54,14 @@ class ArcticMenuTests(unittest.TestCase):
         self.assertIn('System › Restart', labels)
         self.assertNotIn('System › Lock screen', labels)        # live session
         self.assertFalse(any(e['run'][0] == 'arctic-shell-ipc' for _, e in everything))
+
+    def test_the_waybar_desktop_doesnt_start_the_shell(self):
+        entries = self.menu.load([str(SHIPPED)])
+        ids = lambda: [e['id'] for _, e in self.menu.rows(entries, 'update', False, which=lambda c: True)]  # noqa: E731
+        with mock.patch.dict(os.environ, {'ARCTIC_SHELL': 'quickshell'}):
+            self.assertIn('update.shell', ids())            # the shell crashed: this brings it back
+        with mock.patch.dict(os.environ, {'ARCTIC_SHELL': 'waybar'}):
+            self.assertNotIn('update.shell', ids())
 
     def test_your_file_changes_hides_and_adds_rows(self):
         mine = self.root / 'menu.json'

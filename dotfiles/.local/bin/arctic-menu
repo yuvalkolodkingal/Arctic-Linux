@@ -113,6 +113,10 @@ def runnable(entry, live, which=shutil.which):
         return isinstance(run, str) and run.strip() != "" and not entry.get("ipc")
     if run[0] == "arctic-shell-ipc" or entry.get("ipc"):
         return False
+    # Restarting the shell starts it, which the waybar desktop doesn't want next to waybar. (After
+    # the shell crashed, in the Arctic shell's own session, it's what brings it back.)
+    if run[0] == "arctic-shell" and os.environ.get("ARCTIC_SHELL") == "waybar":
+        return False
     if entry.get("when") == "live" and not live or entry.get("when") == "installed" and live:
         return False
     needs = entry.get("needs") if isinstance(entry.get("needs"), list) else [run[0]]
