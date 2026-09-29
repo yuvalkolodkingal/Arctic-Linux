@@ -6,12 +6,17 @@ forwards every question BlueZ asks to the shell, one JSON object per line on std
 
     {"type":"ready","default":true}
     {"type":"request","id":3,"kind":"confirm","device":"/org/bluez/hci0/dev_…","address":"AA:…",
-     "name":"Pixel 9","icon":"phone","passkey":"042917"}
+     "name":"Pixel 9","icon":"phone","passkey":"042917","solicited":true}
     {"type":"cancel","id":3}     {"type":"released"}     {"type":"error","error":"…"}
 
 kinds: confirm, passkey, pin, show_passkey, show_pin, authorize, service. The shell answers on
-stdin: {"op":"reply","id":3,"accept":true,"value":"1234"}, {"op":"default"} (ask to be the
-default agent again) or {"op":"quit"}. A question left unanswered for 90 s is cancelled.
+stdin: {"op":"reply","id":3,"accept":true,"value":"1234"}, {"op":"expect","address":"AA:…"}
+(the user chose that device in the Bluetooth menu), {"op":"default"} (ask to be the default
+agent again) or {"op":"quit"}. A question left unanswered for 90 s is cancelled.
+"solicited" says the user started this: a code for a device they chose in the menu in the last
+minute. Anything else (a device pairing by itself, or asking to use a service) isn't, and the
+dialog then focuses its "no" button. One question at a time: another device asking while one
+waits is turned down, so the one on screen can still be answered.
 Services for devices that are paired and trusted are allowed without asking. PINs and
 passkeys are never logged.
 
@@ -22,10 +27,12 @@ python3-gobject; the request building and reply checks below work without them (
 import json
 import os
 import sys
+import time
 
 AGENT_PATH = '/org/arcticlinux/shell/agent'
 CAPABILITY = 'KeyboardDisplay'
 TIMEOUT_S = 90
+EXPECT_S = 60                  # a device chosen in the menu this long ago still counts as the user's
 
 # Bluetooth service UUIDs (16-bit, in the base UUID) → what the dialog says the device wants.
 SERVICES = {
@@ -59,6 +66,25 @@ def build_request(rid, kind, device, props, **extra):
         req['passkey'] = passkey_text(extra.pop('passkey'))
     req.update(extra)
     return req
+
+
+def expect(expected, address, now):
+    """The user chose the device at `address` in the Bluetooth menu at `now` (monotonic seconds);
+    choices older than EXPECT_S are dropped."""
+    for a in [a for a, t in expected.items() if now - t > EXPECT_S]:
+        del expected[a]
+    if address:
+        expected[str(address).upper()] = now
+
+
+def solicited(kind, address, expected, now):
+    """Whether the user started this question: a code or PIN for a device they chose in the
+    menu less than EXPECT_S ago. A pairing the other device starts (authorize) and a service
+    it wants to use (service) never are."""
+    if kind in ('authorize', 'service'):
+        return False
+    t = expected.get(str(address or '').upper())
+    return t is not None and 0 <= now - t <= EXPECT_S
 
 
 def check_passkey(value):
@@ -95,6 +121,7 @@ def main():
     bus = dbus.SystemBus()
     loop = GLib.MainLoop()
     pending = {}                  # id → (kind, reply, error, timer id, device)
+    expected = {}                 # address → when the user chose it in the menu
     counter = [0]
 
     def device_props(path):
@@ -108,6 +135,9 @@ def main():
         return dbus.DBusException('org.bluez.Error.' + name, name='org.bluez.Error.' + name)
 
     def ask(kind, device, reply, error, **extra):
+        if pending:
+            error(rejected())       # one at a time: the question on screen stays answerable
+            return
         counter[0] += 1
         rid = counter[0]
 
@@ -119,7 +149,9 @@ def main():
             return False
         timer = GLib.timeout_add_seconds(TIMEOUT_S, expire)
         pending[rid] = (kind, reply, error, timer, str(device))
-        emit(build_request(rid, kind, device, device_props(device), **extra))
+        props = device_props(device)
+        emit(build_request(rid, kind, device, props, **extra,
+                           solicited=solicited(kind, props.get('Address'), expected, time.monotonic())))
 
     def answer(op):
         item = pending.pop(op.get('id'), None)
@@ -242,6 +274,8 @@ def main():
                 continue
             if op.get('op') == 'reply':
                 answer(op)
+            elif op.get('op') == 'expect':
+                expect(expected, op.get('address'), time.monotonic())
             elif op.get('op') == 'default':
                 make_default()
             elif op.get('op') == 'quit':

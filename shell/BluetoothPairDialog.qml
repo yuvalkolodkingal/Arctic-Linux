@@ -6,6 +6,9 @@ import Quickshell
 // design Dialog like the polkit one: check a code, type a passkey or PIN, type a code on a
 // keyboard, or allow a device or one of its services. Esc, Cancel or a click outside says no;
 // the agent cancelling (or its 90 s timeout) closes it. Its layer is shielded in screen shares.
+// Pair (or the code field) has the focus only for pairing the user started from the Bluetooth
+// menu (the agent marks it "solicited"); a device asking by itself gets Cancel focused, so a
+// stray Enter or Space typed elsewhere says no.
 Popover {
     id: dialog
     readonly property var req: BluetoothService.request
@@ -21,7 +24,7 @@ Popover {
     shadow: 2
     cardWidth: 420
     cardHeight: body.implicitHeight + 2 * Theme.space5
-    focusItem: needsInput ? field : answerable ? primary : cancel
+    focusItem: !req || !req.solicited ? cancel : needsInput ? field : answerable ? primary : cancel
 
     // Esc, Cancel or a click outside: no.
     onDismissed: if (!answered) { answered = true; if (answerable) BluetoothService.reply(false); else BluetoothService.dismiss(); }

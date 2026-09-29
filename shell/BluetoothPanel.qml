@@ -71,6 +71,7 @@ FocusScope {
     function pair(d) {
         pairError = '';
         pairing = d.address;
+        BluetoothService.expect(d.address);
         d.pair();
     }
     function toggleConnect(d) {

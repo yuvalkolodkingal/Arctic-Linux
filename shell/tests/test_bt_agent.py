@@ -44,6 +44,40 @@ class Requests(unittest.TestCase):
         self.assertEqual(agent.service_name(''), 'a service')
 
 
+class Solicited(unittest.TestCase):
+    """Only pairing the user started from the menu gets its "yes" button focused."""
+
+    def test_a_code_for_a_device_chosen_in_the_menu(self):
+        expected = {}
+        agent.expect(expected, 'aa:bb:cc:dd:ee:ff', 100.0)
+        for kind in ('confirm', 'passkey', 'pin', 'show_passkey', 'show_pin'):
+            self.assertTrue(agent.solicited(kind, 'AA:BB:CC:DD:EE:FF', expected, 130.0), kind)
+        self.assertTrue(agent.solicited('confirm', 'AA:BB:CC:DD:EE:FF', expected, 100.0 + agent.EXPECT_S))
+
+    def test_other_devices_and_stale_choices_are_not(self):
+        expected = {}
+        agent.expect(expected, 'AA:BB:CC:DD:EE:FF', 100.0)
+        self.assertFalse(agent.solicited('confirm', '11:22:33:44:55:66', expected, 101.0))
+        self.assertFalse(agent.solicited('confirm', '', expected, 101.0))
+        self.assertFalse(agent.solicited('confirm', None, expected, 101.0))
+        self.assertFalse(agent.solicited('confirm', 'AA:BB:CC:DD:EE:FF', expected, 101.0 + agent.EXPECT_S))
+        self.assertFalse(agent.solicited('confirm', 'AA:BB:CC:DD:EE:FF', {}, 101.0))
+
+    def test_authorizations_never_are(self):
+        expected = {}
+        agent.expect(expected, 'AA:BB:CC:DD:EE:FF', 100.0)
+        self.assertFalse(agent.solicited('authorize', 'AA:BB:CC:DD:EE:FF', expected, 101.0))
+        self.assertFalse(agent.solicited('service', 'AA:BB:CC:DD:EE:FF', expected, 101.0))
+
+    def test_old_choices_are_dropped(self):
+        expected = {}
+        agent.expect(expected, 'AA:BB:CC:DD:EE:FF', 100.0)
+        agent.expect(expected, '11:22:33:44:55:66', 100.0 + agent.EXPECT_S + 1)
+        self.assertEqual(list(expected), ['11:22:33:44:55:66'])
+        agent.expect(expected, '', 100.0 + agent.EXPECT_S + 2)
+        self.assertEqual(list(expected), ['11:22:33:44:55:66'])
+
+
 class Replies(unittest.TestCase):
     def test_passkeys(self):
         self.assertEqual(agent.check_passkey('042917'), 42917)

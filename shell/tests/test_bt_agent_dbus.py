@@ -72,15 +72,19 @@ class AgentOnTheBus(unittest.TestCase):
         self.fail('the agent is not on the bus')
 
     def ask(self, method, *args):
-        """Call the agent like BlueZ does, in a thread (the call waits for the shell's answer)."""
+        """Call the agent like BlueZ does, in a thread (the call waits for the shell's answer), on a
+        connection of its own so calls can overlap."""
         result = {}
+        name = self.agent_name()
 
         def call():
-            obj = self.bus.get_object(self.agent_name(), AGENT)
+            bus = dbus.bus.BusConnection(self.address)
             try:
-                result['value'] = getattr(obj, method)(*args, dbus_interface='org.bluez.Agent1', timeout=20)
+                result['value'] = getattr(bus.get_object(name, AGENT), method)(*args, dbus_interface='org.bluez.Agent1', timeout=20)
             except dbus.DBusException as e:
                 result['error'] = e.get_dbus_name()
+            finally:
+                bus.close()
         t = threading.Thread(target=call)
         t.start()
         return t, result
@@ -110,6 +114,45 @@ class AgentOnTheBus(unittest.TestCase):
         self.agent.stdin.flush()
         t.join(10)
         self.assertEqual(result.get('value'), 42917)
+
+    def send(self, op):
+        self.agent.stdin.write(json.dumps(op) + '\n')
+        self.agent.stdin.flush()
+
+    def test_only_a_device_chosen_in_the_menu_is_solicited(self):
+        self.line()
+        t, result = self.ask('RequestConfirmation', dbus.ObjectPath(DEVICE), dbus.UInt32(1))
+        req = self.line()
+        self.assertFalse(req['solicited'])              # the device started it
+        self.send({'op': 'reply', 'id': req['id'], 'accept': False})
+        t.join(10)
+        self.assertEqual(result.get('error'), 'org.bluez.Error.Rejected')
+        self.send({'op': 'expect', 'address': '11:22:33:44:55:03'})
+        t, result = self.ask('RequestConfirmation', dbus.ObjectPath(DEVICE), dbus.UInt32(2))
+        req = self.line()
+        self.assertTrue(req['solicited'])
+        self.send({'op': 'reply', 'id': req['id'], 'accept': True})
+        t.join(10)
+        self.assertNotIn('error', result)
+        t, result = self.ask('RequestAuthorization', dbus.ObjectPath(DEVICE))
+        req = self.line()
+        self.assertEqual((req['kind'], req['solicited']), ('authorize', False))
+        self.send({'op': 'reply', 'id': req['id'], 'accept': False})
+        t.join(10)
+
+    def test_a_second_question_is_turned_down_while_one_waits(self):
+        self.line()
+        first, first_result = self.ask('RequestConfirmation', dbus.ObjectPath(DEVICE), dbus.UInt32(42917))
+        req = self.line()
+        second, second_result = self.ask('RequestAuthorization', dbus.ObjectPath(DEVICE))
+        second.join(10)
+        self.assertEqual(second_result.get('error'), 'org.bluez.Error.Rejected')
+        self.send({'op': 'reply', 'id': req['id'], 'accept': True})    # the first is still answerable
+        first.join(10)
+        self.assertNotIn('error', first_result)
+        t, result = self.ask('RequestAuthorization', dbus.ObjectPath(DEVICE))
+        self.assertEqual(self.line()['id'], req['id'] + 1)              # nothing was shown for the second
+        t.join(0)
 
 
 if __name__ == '__main__':
