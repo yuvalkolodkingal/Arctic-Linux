@@ -329,7 +329,9 @@ suspend timeouts. `arctic-session power-watch` restarts it when the power source
 `arctic-session nightlight|drives|lid|effects|screensaver` start the rest from autostart.conf.
 System-wide changes: polkit (`timedatectl`, `localectl`, `hostnamectl`, AccountsService) or
 `pkexec /usr/libexec/arctic/arctic-system-helper` (action `org.arcticlinux.system`,
-`auth_admin_keep`; firewall allows, sshd, keys-only SSH, snapper). Units:
+`auth_admin_keep`; firewall allows, sshd, keys-only SSH, snapper). Keys-only SSH is
+`/etc/ssh/sshd_config.d/40-arctic-keys-only.conf` plus `/etc/arctic/ssh-keys-only`, which Settings
+reads (sshd_config.d is root-only). Units:
 `arctic-flatpak-update.timer` (system and user), `gcr-ssh-agent.socket` (user preset), and the
 XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
 

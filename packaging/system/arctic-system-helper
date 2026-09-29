@@ -30,8 +30,14 @@ ALLOWS = {   # name → firewall-cmd arguments that allow it
 }
 TEST = os.environ.get('ARCTIC_SYSTEM_HELPER_TEST') == '1'   # pkexec never passes it on
 KEYS_ONLY = (TEST and os.environ.get('ARCTIC_SSH_KEYS_ONLY')) or '/etc/ssh/sshd_config.d/40-arctic-keys-only.conf'
-KEYS_ONLY_TEXT = ('# Written by Arctic Settings (Sharing > Allow password login: off). Remove this file to\n'
-                  '# allow passwords again.\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n')
+KEYS_ONLY_TEXT = ('# Written by Arctic Settings (Sharing > Allow password login: off). Turn that back on, or\n'
+                  '# remove this file and /etc/arctic/ssh-keys-only, to allow passwords again.\n'
+                  'PasswordAuthentication no\nKbdInteractiveAuthentication no\n')
+# Settings runs as you and can't look inside sshd_config.d (0700 root on Fedora), so a
+# world-readable file next to Arctic's other settings tells it the switch is off.
+KEYS_ONLY_MARK = (TEST and os.environ.get('ARCTIC_SSH_KEYS_ONLY_MARK')) or '/etc/arctic/ssh-keys-only'
+KEYS_ONLY_MARK_TEXT = ('# Written by Arctic Settings with /etc/ssh/sshd_config.d/40-arctic-keys-only.conf: remote\n'
+                       '# login takes keys only. Settings reads this file; sshd reads the other one.\n')
 RE_TEXT = re.compile(r'^[^\x00-\x1f\x7f]{1,80}$')
 
 
@@ -89,23 +95,30 @@ def ssh(on):
     return dict(ok=True, enabled=enabled.strip() == 'enabled', active=active.strip() == 'active')
 
 
+def write_file(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + '.new', 'w', encoding='utf-8') as handle:
+        handle.write(text)
+    os.chmod(path + '.new', 0o644)
+    os.replace(path + '.new', path)
+
+
 def ssh_password(on):
     if on:
-        try:
-            os.unlink(KEYS_ONLY)
-        except FileNotFoundError:
-            pass
+        for path in (KEYS_ONLY, KEYS_ONLY_MARK):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
     else:
-        os.makedirs(os.path.dirname(KEYS_ONLY), exist_ok=True)
-        with open(KEYS_ONLY + '.new', 'w', encoding='utf-8') as handle:
-            handle.write(KEYS_ONLY_TEXT)
-        os.chmod(KEYS_ONLY + '.new', 0o644)
-        os.replace(KEYS_ONLY + '.new', KEYS_ONLY)
+        write_file(KEYS_ONLY, KEYS_ONLY_TEXT)
     code, _out, err = run(['sshd', '-t'])
     if code != 0:
         if not on:
             os.unlink(KEYS_ONLY)
         raise Failure('The SSH server’s settings don’t check out: ' + last_line(err, 'sshd -t failed') + '.')
+    if not on:
+        write_file(KEYS_ONLY_MARK, KEYS_ONLY_MARK_TEXT)
     run(['systemctl', 'try-reload-or-restart', 'sshd.service'])
     log('ssh password login ' + ('on' if on else 'off'))
     return dict(ok=True, password_login=on)

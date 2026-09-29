@@ -543,6 +543,9 @@ def cmd_troubleshoot(paths, args):
 
 SYSTEM_HELPER = '/usr/libexec/arctic/arctic-system-helper'
 ALLOWS = ('mdns', 'localsend', 'kdeconnect', 'ssh')
+# The root helper writes this next to its sshd drop-in, which sits where only root can look
+# (/etc/ssh/sshd_config.d is 0700 on Fedora): it exists while remote login takes keys only.
+SSH_KEYS_ONLY_MARK = '/etc/arctic/ssh-keys-only'
 
 
 def _system_helper(paths, args, timeout=300):
@@ -596,8 +599,7 @@ def cmd_sharing(paths, _args):
                      firewallConfig=bool(which('firewall-config', paths.env)))
     sshd = which('sshd', paths.env) or (os.path.exists('/usr/sbin/sshd') and '/usr/sbin/sshd')
     ssh = dict(installed=bool(sshd), enabled=False, active=False,
-               passwordLogin=not os.path.exists(paths.env.get('ARCTIC_SSH_KEYS_ONLY') or
-                                                '/etc/ssh/sshd_config.d/40-arctic-keys-only.conf'),
+               passwordLogin=not os.path.exists(paths.env.get('ARCTIC_SSH_KEYS_ONLY_MARK') or SSH_KEYS_ONLY_MARK),
                authorizedKeys=(paths.home / '.ssh/authorized_keys').is_file(), fingerprint='', user=paths.env.get('USER', ''))
     if sshd:
         _c, enabled, _e = run(['systemctl', 'is-enabled', 'sshd.service'], timeout=5, env=env)
@@ -616,9 +618,13 @@ def cmd_sharing_set(paths, args):
     if len(args) == 3 and args[0] == 'allow' and args[1] in ALLOWS and args[2] in ('on', 'off'):
         _system_helper(paths, ['firewall-allow', args[1], args[2]])
     elif len(args) == 2 and args[0] in ('ssh', 'ssh-password') and args[1] in ('on', 'off'):
-        _system_helper(paths, list(args))
+        done = _system_helper(paths, list(args))
         if args == ['ssh', 'on'] and _firewall(paths)['running']:
             _system_helper(paths, ['firewall-allow', 'ssh', 'on'])     # the password is still kept
+        result = cmd_sharing(paths, [])
+        if 'password_login' in done:        # what the helper just did, whatever reading it back says
+            result['ssh']['passwordLogin'] = bool(done['password_login'])
+        return result
     else:
         raise Failure('usage: sharing-set allow mdns|localsend|kdeconnect|ssh on|off | ssh on|off | ssh-password on|off')
     return cmd_sharing(paths, [])

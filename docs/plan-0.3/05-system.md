@@ -348,6 +348,7 @@ The search `words` are listed per item below; `settings/SearchIndex.js` gets one
 | `~/.local/state/arctic/flatpak-update.json` | `arctic-update flatpak --user` | Settings |
 | `~/.local/state/arctic/whats-new-seen` | `WhatsNew.qml` | `WhatsNew.qml` |
 | `/etc/ssh/sshd_config.d/40-arctic-keys-only.conf` | the root helper | sshd |
+| `/etc/arctic/ssh-keys-only` (0644, beside the drop-in: sshd_config.d is 0700) | the root helper | Settings (Sharing) |
 
 The `shell.json` key spelling follows whatever the bar-menus review picks for `battery_warnings`
 (its open issue 15); this section writes snake_case keys.
