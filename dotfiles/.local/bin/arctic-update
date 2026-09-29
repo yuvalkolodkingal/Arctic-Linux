@@ -789,7 +789,7 @@ cmd_after_transaction() {
 # (root): it follows AUTO (only download-and-install-on-reboot updates apps by itself) and
 # METERED. Runtimes nothing uses any more are removed afterwards, as GNOME Software does.
 # The result goes to $FLATPAK_STATUS (root) for `status`; --notify says it in a notification.
-flatpak_commits() {  # flatpak_commits --system|--user → "app commit" lines
+flatpak_commits() {  # flatpak_commits --system|--user → "app commit" lines, in C order for comm
   flatpak list "$1" --app --columns=application,active 2>/dev/null | LC_ALL=C sort
 }
 cmd_flatpak() {
@@ -837,7 +837,7 @@ cmd_flatpak() {
       flatpak uninstall "$inst" --unused --noninteractive -y >/dev/null 2>&1 || true
     fi
     after="$(flatpak_commits "$inst")"
-    changed=$(( changed + $(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | grep -c .) ))
+    changed=$(( changed + $(LC_ALL=C comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | grep -c .) ))
   done
   local msg state=idle
   if [[ -n $failed ]]; then

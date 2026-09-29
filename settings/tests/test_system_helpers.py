@@ -15,9 +15,12 @@ import signal
 import subprocess
 import textwrap
 import time
+import types
 import unittest
+from unittest import mock
 
 from test_arctic_settings import DOTFILES, Home, stub
+from test_system_tools import load_helper
 
 BIN = DOTFILES / '.local/bin'
 ZONES = 'CH\t+4723+00832\tEurope/Zurich\nDE,DK,NO,SE,SJ\t+5230+01322\tEurope/Berlin\tmost of Germany\n'
@@ -130,6 +133,27 @@ class NightLightTest(HelperHome):
         # Off in the Settings sense (mode=off) stops it for good.
         self.tool('arctic-nightlight', 'set', 'mode=off', at=noon)
         self.assertFalse(self.wlsunset_running())
+
+    def test_override_ends_after_a_suspend(self):
+        # The timer naps against the wall clock, so an override whose end went by while the
+        # computer was suspended (sleep's clock stops then) ends as soon as it wakes.
+        nl = load_helper('arctic-nightlight')
+
+        def expire(start, until, suspend):
+            """_expire on a pretend clock; the first nap also spans `suspend` seconds."""
+            clock, naps, applied = [float(start)], [], []
+
+            def nap(seconds):
+                naps.append(seconds)
+                clock[0] += seconds + (suspend if len(naps) == 1 else 0)
+            with mock.patch.object(nl, 'now', lambda: clock[0]), \
+                    mock.patch.object(nl, 'time', types.SimpleNamespace(sleep=nap)), \
+                    mock.patch.object(nl, 'read_state', lambda: dict(override='on', until=until)), \
+                    mock.patch.object(nl, 'apply', applied.append), mock.patch.object(nl, 'refresh_shell', list):
+                nl.main(['_expire', str(until)])
+            return naps, len(applied)
+        self.assertEqual(expire(1000000, 1003600, suspend=8 * 3600), ([30], 1))
+        self.assertEqual(expire(2000000, 2000045, suspend=0), ([30, 15], 1))
 
     def test_no_schedule(self):
         data = self.tool('arctic-nightlight', 'on', '--quiet')
@@ -254,6 +278,34 @@ class KeepAwakeTest(HelperHome):
         self.assertTrue(self.state.exists())
         self.state.write_text('{}\n'.format(past))
         subprocess.run([str(self.bin / 'arctic-keep-awake'), '_expire', str(past)], env=self.env, check=True, timeout=10)
+        self.assertFalse(self.state.exists())
+
+    def test_expiry_across_a_suspend(self):
+        # A pretend wall clock: every nap moves it on; one nap can also span a night's suspend
+        # (sleep's own clock stops then, the wall clock doesn't).
+        clock = self.tmp / 'clock'
+        clock.write_text('1000000\n')
+        stub(self.bin, 'date', '[ "$1" = +%s ] && exec cat "{}"\nexec /bin/date "$@"\n'.format(clock))
+        stub(self.bin, 'sleep', textwrap.dedent('''\
+            echo "sleep $*" >> "{log}"
+            jump=0
+            [ -e "{clock}.suspend" ] && {{ jump=28800; rm "{clock}.suspend"; }}
+            echo $(( $(cat "{clock}") + $1 + jump )) > "{clock}"
+            ''').format(log=self.log, clock=clock))
+        expire = [str(self.bin / 'arctic-keep-awake'), '_expire']
+        # Suspended during the first nap of an hour's keep awake: it ends right after waking.
+        self.state.parent.mkdir(parents=True, exist_ok=True)
+        self.state.write_text('1003600\n')
+        (self.tmp / 'clock.suspend').touch()
+        subprocess.run(expire + ['1003600'], env=self.env, check=True, timeout=10)
+        self.assertEqual([c for c in self.calls() if c.startswith('sleep')], ['sleep 30'])
+        self.assertFalse(self.state.exists())
+        self.assertIn('arctic-session idle --restart', self.calls())
+        # Awake all along: naps of at most 30 seconds up to the end time.
+        clock.write_text('2000000\n')
+        self.state.write_text('2000045\n')
+        subprocess.run(expire + ['2000045'], env=self.env, check=True, timeout=10)
+        self.assertEqual([c for c in self.calls() if c.startswith('sleep')][1:], ['sleep 30', 'sleep 15'])
         self.assertFalse(self.state.exists())
 
     def test_bad_minutes(self):
@@ -463,6 +515,17 @@ class DisplayTest(HelperHome):
         self.lid.write_text('state:      closed\n')
         self.assertEqual(self.tool('arctic-display', 'screens', 'on')['screens'], ['HDMI-A-1'])
         self.assertNotIn('wakeup_monitor,eDP-1', self.dispatches())
+        # Mango refuses one screen: every other one still goes dark, and only those count as asleep.
+        self.lid.write_text('state:      open\n')
+        self.outputs.write_text(json.dumps(WLR_RANDR[:1] + [dict(name='DP-1', description='LG', enabled=True)]
+                                           + WLR_RANDR[1:]))
+        stub(self.bin, 'mmsg', 'echo "mmsg $*" >> "{}"\n[ "$2" = sleep_monitor,eDP-1 ] && exit 1\nexit 0\n'
+             .format(self.log))
+        before = len(self.dispatches())
+        self.assertEqual(self.tool('arctic-display', 'screens', 'off')['screens'], ['DP-1', 'HDMI-A-1'])
+        self.assertEqual(self.dispatches()[before:], ['sleep_monitor,eDP-1', 'sleep_monitor,DP-1',
+                                                      'sleep_monitor,HDMI-A-1'])
+        self.assertEqual(self.tool('arctic-display', 'screens', 'on')['screens'], ['DP-1', 'HDMI-A-1'])
 
     def test_session_holds_the_lid_switch(self):
         ran = self.tmp / 'inhibit.log'
@@ -476,6 +539,22 @@ class DisplayTest(HelperHome):
         (self.home / '.config/arctic/lid.conf').write_text('when_closed=screen-off\n')
         subprocess.run(session, env=self.env, check=True, timeout=10)
         self.assertIn('--what=handle-lid-switch --who=Arctic Linux', ran.read_text())
+        # A holder an earlier login left running (logind no longer counts it once that session is
+        # over) is ended at login and a new one started; with "suspend" none is.
+        def leftover():
+            old = subprocess.Popen(['sleep', '60'], start_new_session=True)
+            self.addCleanup(old.kill)
+            stub(self.bin, 'pgrep', 'echo {}\n'.format(old.pid))
+            return old
+        old = leftover()
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(old.wait(timeout=5), -signal.SIGTERM)
+        self.assertEqual(len(ran.read_text().splitlines()), 2)
+        (self.home / '.config/arctic/lid.conf').write_text('when_closed=suspend\n')
+        old = leftover()
+        subprocess.run(session, env=self.env, check=True, timeout=10)
+        self.assertEqual(old.wait(timeout=5), -signal.SIGTERM)
+        self.assertEqual(len(ran.read_text().splitlines()), 2)
 
     def test_effects(self):
         mango = self.home / '.config/mango/config.conf'

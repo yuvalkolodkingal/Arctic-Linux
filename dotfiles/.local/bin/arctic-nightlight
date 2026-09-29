@@ -458,8 +458,12 @@ def main(argv):
         return 0
     if verb == '_expire':
         # The timer: sleep until the override runs out, then re-apply (unless replaced meanwhile).
+        # Short naps against the wall clock: sleep's clock stops while the computer is suspended.
         until = float(rest[0])
-        time.sleep(max(0, until - now()))
+        left = until - now()
+        while left > 0:
+            time.sleep(min(30, left))
+            left = until - now()
         state = read_state()
         if (state.get('until') or 0) == int(until):
             state.pop('timer', None)
