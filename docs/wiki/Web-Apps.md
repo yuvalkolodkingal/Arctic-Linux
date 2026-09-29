@@ -117,7 +117,8 @@ Pressing it again brings the open window to the front.
   usual workarounds.
 - **A site on your network has a self-signed certificate**: the page says the connection isn't
   private. Arctic only lets you trust a certificate for sites on your own network (names ending in
-  `.lan`, `.local`, `.home.arpa`, `.internal`, or private addresses).
+  `.lan`, `.local`, `.home.arpa`, `.internal`, or private addresses, Tailscale's 100.x ones
+  included).
 - **Sign out of an app**: `arctic-webapp clear-data ID` deletes its cookies and data and keeps the
   app.
 - **Log**: `~/.local/state/arctic/webapps/ID.log` (addresses without their query part).

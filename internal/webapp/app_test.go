@@ -10,6 +10,9 @@ func TestPrivateHostLiteral(t *testing.T) {
 		"router.home.arpa": true, "grafana.internal": true,
 		"8.8.8.8": false, "example.com": false, "lan": false, ".lan": false, "evil.lan.example.com": false,
 		"2001:4860:4860::8888": false, "local": false,
+		// RFC 6598 shared space (carrier-grade NAT, Tailscale): 100.64.0.0 to 100.127.255.255.
+		"100.64.0.1": true, "100.101.102.103:8123": true, "100.127.255.255": true, "::ffff:100.64.0.1": true,
+		"100.63.255.255": false, "100.128.0.1": false,
 	} {
 		if got := PrivateHostLiteral(host); got != want {
 			t.Errorf("PrivateHostLiteral(%q) = %v, want %v", host, got, want)
