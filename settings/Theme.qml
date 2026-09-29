@@ -147,7 +147,11 @@ Singleton {
         printErrors: false
         onFileChanged: reload()
         onLoaded: theme.apply(text())
-        onLoadFailed: if (!fallback) fallback = true
+        // The read that failed is only dropped by FileView *after* this signal returns, so
+        // switching path from inside the handler leaves the fallback read unowned: its result is
+        // discarded and Settings keeps whatever colours it had. Wait for the event loop instead
+        // (as shell/Theme.qml does).
+        onLoadFailed: if (!fallback) Qt.callLater(function() { fallback = true })
     }
     // `arctic-theme` swaps the ~/.config/arctic/current link, which a watch on
     // current/theme.json doesn't see; it rewrites ~/.config/arctic/theme, watched here. It
