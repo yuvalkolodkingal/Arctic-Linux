@@ -529,8 +529,8 @@ livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO s
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.
-Volume id `Arctic-Linux-0.2` (the installer finds its media by the `Arctic-Linux` prefix). Output
-`out/iso/Arctic-Linux-0.2-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
+Volume id `Arctic-Linux-0.3` (the installer finds its media by the `Arctic-Linux` prefix). Output
+`out/iso/Arctic-Linux-0.3-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
 Release suffix, commit and `arctic_repos=enabled|disabled` from out/BUILD-INFO.
 
 Design assets not copied into `design/` (all 78 icons, 30 app tiles, lockups, wallpapers as

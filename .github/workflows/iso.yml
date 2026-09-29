@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ISO: Arctic-Linux-0.2-x86_64.iso
+  ISO: Arctic-Linux-0.3-x86_64.iso
 
 jobs:
   iso:
@@ -128,7 +128,7 @@ jobs:
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
-            echo "Arctic Linux 0.2 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
+            echo "Arctic Linux 0.3 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
             echo
             echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
             echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."

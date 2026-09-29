@@ -30,7 +30,7 @@
 #   arctic-desktop         (metapackage)
 
 %global dist_version    44
-%global arctic_version  0.2
+%global arctic_version  0.3
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
