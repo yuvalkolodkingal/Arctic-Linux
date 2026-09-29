@@ -46,6 +46,7 @@
     "style.font": {"label": "Code font", "icon": "code", "desc": "The terminal's and the shell's", "provider": "fonts", "needs": ["arctic-font"]},
     "style.wallpapers": {"label": "Wallpaper", "icon": "image", "keys": "Super + Shift + W", "run": ["arctic-shell-ipc", "wallpapers", "open"]},
     "style.appearance": {"label": "Appearance settings", "icon": "sliders", "run": ["arctic-settings", "appearance"]},
+    "style.bar": {"label": "Hide the top bar", "labelOn": "Show the top bar", "icon": "eye-off", "keys": "Super + Shift + Space", "shell": "toggleBar", "state": ["arctic-shell-ipc", "bar", "hidden"], "when": "installed"},
 
     "setup": {"label": "Setup", "icon": "sliders", "desc": "Every page of Settings", "provider": "settings"},
     "setup.kbptr": {"label": "Keyboard pointer", "icon": "keyboard", "desc": "Move and click with the keyboard", "keys": "Super + Alt + K", "run": ["arctic-kbptr"], "needs": ["arctic-kbptr", "wl-kbptr"]},

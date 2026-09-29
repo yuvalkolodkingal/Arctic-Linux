@@ -16,7 +16,7 @@ PanelWindow {
     screen: Outputs.focused
     visible: !NotificationService.locked && count > 0
     anchors { top: true; right: true }
-    margins.top: Theme.barHeight + Theme.frameWidth + Theme.space2
+    margins.top: Theme.topInset + Theme.frameWidth + Theme.space2
     margins.right: Theme.frameWidth + Theme.space2
     implicitWidth: 340
     implicitHeight: Math.max(1, stack.implicitHeight)

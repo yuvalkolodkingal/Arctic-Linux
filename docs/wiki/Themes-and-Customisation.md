@@ -396,7 +396,7 @@ The same rules work for more than the theme. Put executable files in the event's
 | `font-hooks.d` | You chose another code font | the font |
 | `lock-hooks.d` | The screen has locked | — |
 | `unlock-hooks.d` | The screen has unlocked | — |
-| `battery-low-hooks.d` | The battery is low | the percentage |
+| `battery-low-hooks.d` | The battery is low (once per discharge, at the level where Arctic warns, even with the warning off) | the percentage |
 | `post-update-hooks.d` | The first login after updates were installed at a restart | the Arctic version |
 | `login-hooks.d` | Every login, once the desktop has started | — |
 

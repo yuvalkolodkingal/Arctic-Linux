@@ -94,6 +94,9 @@ Singleton {
     readonly property int radiusLg: tokens.radius.radiusLg
     readonly property int radiusXl: tokens.radius.radiusXl
     readonly property int barHeight: tokens.size.barHeight
+    // Where the shell's surfaces start: under the bar, or at the screen's top edge while the bar
+    // is hidden (Super + Shift + Space).
+    readonly property int topInset: Session.barHidden ? 0 : barHeight
     readonly property int controlSm: tokens.size.controlSm
     readonly property int controlMd: tokens.size.controlMd
     readonly property int controlLg: tokens.size.controlLg

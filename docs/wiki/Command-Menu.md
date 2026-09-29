@@ -29,7 +29,7 @@ show a switch with their current state.
 | **Learn** | Keyboard shortcuts, this wiki, the welcome card again, Fedora’s documentation, About this computer |
 | **Capture** | Screenshot of an area, a window or the screen; record the screen (and stop); copy text from the screen; read a QR code; pick a colour; open the Screenshots folder |
 | **Toggle** | Dark style, night light, keep awake, do not disturb, reduce motion, high contrast |
-| **Style** | Theme (every theme you can switch to, the current one ticked), wallpaper, Appearance settings |
+| **Style** | Theme (every theme you can switch to, the current one ticked), wallpaper, Appearance settings, hide the top bar (and show it again) |
 | **Setup** | Every page of [Settings](Settings), and the folder for your [hooks](Themes-and-Customisation#hooks-for-other-events) |
 | **Install** | Get apps, and straight to Flathub, Fedora packages, web apps or the package console |
 | **Remove** | Remove apps |
@@ -72,7 +72,7 @@ mistake in it is left out until it's fixed.
 | `run` / `sh` | The command (see above) |
 | `order` | Where it goes among its neighbours (smaller first; 1000 when not given) |
 | `target` | The id of another branch to open instead |
-| `shell` and `args` | An Arctic action by name: `settings` (page, setting), `url` (an `https://` address), `openView` (`apps`), `openGetApps`, `openPanel`, `toggleWallpapers`, `toggleKeys`, `lock`, `openWelcome` |
+| `shell` and `args` | An Arctic action by name: `settings` (page, setting), `url` (an `https://` address), `openView` (`apps`), `openGetApps`, `openPanel`, `toggleWallpapers`, `toggleKeys`, `toggleBar`, `lock`, `openWelcome` |
 | `needs` | Commands that must be installed for the row to show (default: the one it runs) |
 | `when` | `"live"` or `"installed"`: show it only on the live USB, or only on an installed system; or `{"live": false, "command": "swappy", "file": "/path", "outputs": 2}`, all of which must hold |
 | `test` | A shell condition; the row shows only when it succeeds |

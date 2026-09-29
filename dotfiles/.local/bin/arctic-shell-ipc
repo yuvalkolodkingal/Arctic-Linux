@@ -10,7 +10,7 @@
 #          share pick <fifo> · capture freeze <dir>|thaw
 #          notifications center|dismiss|dismissAll|invoke|count|history|dnd on|off|toggle|1h|tomorrow|status
 #          panel toggle|open|close <menu> · quick toggle|open [page] · toggle set|get|states|refresh
-#          bar focus · bluetooth pair · media playPause|next|previous · audio nextOutput
+#          bar focus|toggleHidden|hidden · bluetooth pair · media playPause|next|previous · audio nextOutput
 # Exits non-zero when the shell isn't running, so callers can fall back to something else.
 set -uo pipefail
 (( $# >= 2 )) || { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }

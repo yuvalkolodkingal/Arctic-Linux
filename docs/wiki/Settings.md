@@ -99,8 +99,9 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   [Open-Meteo](https://open-meteo.com) (no account). **Place** is your time zone's city unless you
   search for your town (Enter searches; pick one of the results); the light/dark schedule's
   sunrise and sunset use the same place. **Units**: automatic (°F for US English, else °C), °C or
-  °F. Only the rounded coordinates
-  of the place (about 1 km) are sent, about once an hour while it is on.
+  °F. **Show the temperature on the bar** puts it right of the clock (click it for the calendar).
+  Only the rounded coordinates of the place (about 1 km) are sent, about once an hour while it is
+  on.
 - **Icons in the terminal:** whether the Nerd Font symbols yazi, eza and prompts use are
   installed (`arctic-fonts-symbols`), with a way to get them when they aren't.
 - **Code font:** the monospace font for the terminals (kitty, foot, alacritty), GTK's monospace

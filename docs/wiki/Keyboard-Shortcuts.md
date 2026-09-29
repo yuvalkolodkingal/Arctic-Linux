@@ -91,6 +91,7 @@ Every item on the bar opens its own menu; these keys open them from anywhere.
 | `Super + Ctrl + T` | Calendar |
 | `Super + Ctrl + M` | Music and video that's playing |
 | `Super + Alt + B` | Use the bar with the keyboard: `←` `→` move, `Enter` opens, `Esc` leaves |
+| `Super + Shift + Space` | Hide the bar, or show it again (until you log out). The keys above still open its menus |
 | `Shift` + Mute key | Play sound on the next output (speakers, headphones, HDMI) |
 
 If the key that switches keyboard layouts is Right Alt alone (Settings → Keyboard), use the

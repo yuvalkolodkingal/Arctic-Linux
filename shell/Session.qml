@@ -34,6 +34,11 @@ Singleton {
     property var settings: ({})
     readonly property bool frame: settings.frame !== false
 
+    // The top bar hidden with Super + Shift + Space (`bar toggleHidden`): for this session only,
+    // so a restart of the shell or a new login brings it back. Never on the live USB, whose bar
+    // holds the Install item.
+    property bool barHidden: false
+
     function reload() {
         motionView.reload();
         settingsView.reload();

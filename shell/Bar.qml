@@ -9,13 +9,17 @@ import Quickshell.Services.UPower
 
 // The top bar (design TopBar): 34px frost with a 1px line along the bottom.
 // Left: fox mark (launcher) and workspaces 1–5, plus the "Live session" tag on the live USB.
-// Centre: the clock. Right: Install (live only) or Restart to update (updates waiting),
-// notifications and Bluetooth (quiet), tray, network, volume, battery, power. Anything the system can't report is hidden, never faked.
+// Centre: the clock, with what records or listens and the modes that are on to its left, and the
+// temperature and what's playing to its right. Right: Install (live only) or Restart to update
+// (updates waiting), notifications and Bluetooth (quiet), tray, network, volume, battery, power.
+// Anything the system can't report is hidden, never faked. Super + Shift + Space hides it
+// (Session.barHidden): the window goes, and its exclusive zone with it.
 PanelWindow {
     id: bar
     required property var modelData
     required property var shell
     screen: modelData
+    visible: !Session.barHidden
 
     anchors { top: true; left: true; right: true }
     implicitHeight: Theme.barHeight
@@ -69,6 +73,7 @@ PanelWindow {
     }
     function toggleFocusMode() { if (focusMode) leaveFocusMode(); else enterFocusMode(); }
     Timer { id: idle; interval: 10000; onTriggered: if (!bar.menuHere) bar.leaveFocusMode() }
+    onVisibleChanged: if (!visible && focusMode) leaveFocusMode()
     onMenuHereChanged: {
         if (menuHere) tipPopup.dismiss();
         else if (focusMode) { barKeys.forceActiveFocus(); idle.restart(); }
@@ -113,13 +118,23 @@ PanelWindow {
         return item && item.visible ? item : null;
     }
     function anchorFor(name) {
+        if (!bar.visible) return name in hiddenAnchors ? hiddenAnchors[name] : null;
         const item = ownerOf(name);
         return item ? item.mapToItem(null, item.width / 2, 0).x : null;
+    }
+    // While the bar is hidden its menus still open by key, where they hung before it went
+    // (shell.toggleBar() calls this just before hiding it).
+    property var hiddenAnchors: ({})
+    function rememberAnchors() {
+        const out = {};
+        ['network', 'bluetooth', 'sound', 'battery', 'notifications', 'keyboard', 'calendar', 'media']
+            .forEach(n => { const x = anchorFor(n); if (x !== null) out[n] = x; });
+        hiddenAnchors = out;
     }
     // The menus on this bar from left to right (Ctrl+Tab in a menu).
     function panelOrder() {
         return Object.keys(bar.menuHost.panels)
-            .filter(n => ownerOf(n) !== null)
+            .filter(n => anchorFor(n) !== null)
             .sort((a, b) => anchorFor(a) - anchorFor(b));
     }
 
@@ -190,19 +205,33 @@ PanelWindow {
         onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
         onHoverChanged: h => h ? bar.hint(clockItem, tooltip) : bar.unhint(clockItem)
     }
-    // Left of the clock: what is listening or watching, and the modes that are on.
+    // Left of the clock: what records, listens or watches, and the modes that are on.
     ModeIndicators {
         anchors.right: clockItem.left
         anchors.rightMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
         bar: bar
     }
-    // Right of the clock while a media player exists: its title; click for the media menu,
-    // middle click plays or pauses, scrolling skips.
-    BarItem {
-        id: mediaItem
+    // Right of the clock: the temperature (Settings > Appearance > Weather > "Show the
+    // temperature on the bar"), only with a reading; a click opens the calendar, which has the
+    // forecast under the month.
+    WeatherItem {
+        id: weatherItem
         anchors.left: clockItem.right
         anchors.leftMargin: Theme.space2
+        anchors.verticalCenter: parent.verticalCenter
+        visible: WeatherService.showInBar
+        hasMenu: true
+        tooltip: WeatherService.summary + '  (Super + Ctrl + T)'
+        onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
+        onHoverChanged: h => h ? bar.hint(weatherItem, tooltip) : bar.unhint(weatherItem)
+    }
+    // Right of the clock (and the temperature) while a media player exists: its title; click for
+    // the media menu, middle click plays or pauses, scrolling skips.
+    BarItem {
+        id: mediaItem
+        anchors.left: weatherItem.visible ? weatherItem.right : clockItem.right
+        anchors.leftMargin: weatherItem.visible ? Theme.space1 : Theme.space2
         anchors.verticalCenter: parent.verticalCenter
         visible: MediaService.available && MediaService.title !== ''
         hasMenu: true

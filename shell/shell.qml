@@ -20,7 +20,7 @@ import Quickshell.Io
 //   keyboard next|set|menu
 //   clipboard toggle · emoji toggle · record open|refresh · share pick <fifo> · capture freeze|thaw
 //   panel toggle|open|close <network|bluetooth|sound|battery|calendar|media|display> ·
-//   quick toggle|open [page] · toggle set|get|states · bar focus
+//   quick toggle|open [page] · toggle set|get|states · bar focus|toggleHidden|hidden
 // The bar's menus all open in one BarMenu (one menu at a time); Quick Settings is its `quick` panel.
 ShellRoot {
     id: shell
@@ -115,6 +115,16 @@ ShellRoot {
     function toggleEmoji() {
         if (emoji.open) emoji.close(); else present(emoji, null);
     }
+    // Super + Shift + Space: the bar goes from every screen (its exclusive zone with it, so
+    // windows take the room) or comes back. For this session only; never on the live USB, whose
+    // bar holds the Install item. Answers "hidden" or "shown".
+    function toggleBar() {
+        if (Session.live) return 'shown';
+        if (!Session.barHidden) for (let i = 0; i < bars.instances.length; i++) bars.instances[i].rememberAnchors();
+        Session.barHidden = !Session.barHidden;
+        if (Session.barHidden) osd.showNotice('eye-off', 'Top bar hidden', 'Super + Shift + Space shows it');
+        return Session.barHidden ? 'hidden' : 'shown';
+    }
     function lock() {
         closePopovers(null);
         if (btPair.open) btPair.close();        // says no to a pending pairing question
@@ -189,6 +199,11 @@ ShellRoot {
         id: bars
         model: Quickshell.screens
         Bar { shell: root }
+    }
+    // While the bar is hidden: what records, listens or watches, in the top-right corner.
+    Variants {
+        model: Quickshell.screens
+        PrivacyPeek {}
     }
 
     Launcher { id: launcher; shell: root }
@@ -377,7 +392,10 @@ ShellRoot {
     IpcHandler {
         target: 'bar'
         // The bar on the focused screen takes the keyboard (Super + Alt + B), or gives it back.
-        function focus(): void { const b = shell.barOn(Outputs.focused); if (b) b.toggleFocusMode(); }
+        function focus(): void { const b = shell.barOn(Outputs.focused); if (b && b.visible) b.toggleFocusMode(); }
+        // Super + Shift + Space: hide the bar on every screen, or show it again.
+        function toggleHidden(): string { return shell.toggleBar(); }
+        function hidden(): bool { return Session.barHidden; }
     }
     IpcHandler {
         target: 'media'

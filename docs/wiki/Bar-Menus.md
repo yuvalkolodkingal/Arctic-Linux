@@ -75,7 +75,9 @@ Plugging in or unplugging shows "Charging" or "On battery" at the bottom of the 
 
 Click the clock for today's date, your time zone and a calendar with week numbers. The arrow keys
 move the day, `Page Up` / `Page Down` the month (with `Shift`, the year) and `Home` comes back to
-today.
+today. With the weather on (**Settings → Appearance → Weather**), the calendar shows it now and
+for five days under the month, and **Show the temperature on the bar** puts it right of the clock
+("21°"); click it for the calendar.
 
 ## Music and video (`Super + Ctrl + M`)
 
@@ -103,9 +105,19 @@ an external monitor too, when it accepts DDC/CI, else the laptop's own screen.
 ## Indicators left of the clock
 
 While an app uses the **microphone** or the **camera**, or the screen is **shared**, a yellow pill
-with the word says so; hover it to see which app. Modes that are on (night light, keep awake, a
-VPN, airplane mode, a muted microphone) show as small icons there; click one to turn it back. Apps that open the
-camera directly instead of through PipeWire can't be seen.
+with the word says so; hover it to see which app. While you record the screen (`Super + Alt + R`),
+a red **Recording 01:23** pill counts the time; click it to stop. Modes that are on (night light,
+keep awake, a VPN, airplane mode, a muted microphone) show as small icons there; click one to turn
+it back. Apps that open the camera directly instead of through PipeWire can't be seen.
+
+## Hiding the bar
+
+`Super + Shift + Space` (or **Hide the top bar** in the [command menu](Command-Menu)'s Style
+branch) hides the bar on every screen, and windows move up into its place; press it again to bring
+the bar back. It stays hidden until you show it or log out. The keys above still open the menus,
+where they would hang from the bar, and the microphone, camera, sharing and recording pills move
+to the top-right corner of the screen while the bar is away. The live USB always keeps its bar (the
+Install button is on it), and the key needs the Arctic shell (not the waybar session).
 
 ## With the keyboard
 

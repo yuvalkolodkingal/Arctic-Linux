@@ -9,7 +9,9 @@ import Quickshell.Services.UPower
 // the critical action), other devices' batteries, and the low and critical warnings: one
 // notification each per discharge, cleared when charging starts. Settings' "Warn me when the
 // battery is low" (shell.json batteryWarnings) turns the low one off; the critical one always
-// shows, even under do not disturb (an Arctic alert).
+// shows, even under do not disturb (an Arctic alert). Once per discharge, at the low level, your
+// battery-low hooks run too (arctic-hook battery-low PERCENT, when it is installed), whether the
+// warning shows or not.
 Singleton {
     id: battery
     readonly property var device: UPower.displayDevice
@@ -32,6 +34,7 @@ Singleton {
                           threshold_supported: false, threshold_enabled: false, threshold_end: 0 })
     property bool warnedLow: false
     property bool warnedCritical: false
+    property bool hookedLow: false
     property var warnedDevices: ({})
 
     function duration(seconds) {
@@ -59,7 +62,11 @@ Singleton {
 
     function check() {
         if (!present) return;
-        if (charging || full || !onBattery) { warnedLow = false; warnedCritical = false; return; }
+        if (charging || full || !onBattery) { warnedLow = false; warnedCritical = false; hookedLow = false; return; }
+        if (percent <= info.percentage_low && !hookedLow) {
+            hookedLow = true;
+            Quickshell.execDetached(['sh', '-c', 'command -v arctic-hook >/dev/null 2>&1 && exec arctic-hook battery-low "$1"', 'sh', String(percent)]);
+        }
         if (percent <= info.percentage_critical && !warnedCritical) {
             warnedCritical = true;
             warnedLow = true;
