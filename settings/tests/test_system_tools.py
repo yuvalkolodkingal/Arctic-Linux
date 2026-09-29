@@ -241,6 +241,8 @@ class SystemHelperTest(Home):
                         ARCTIC_SSH_KEYS_ONLY_MARK=str(self.tmp / 'etc-arctic/ssh-keys-only'),
                         ARCTIC_SNAPPER_ROOT_CONFIG=str(self.tmp / 'snapper-root'), USER='you')
         stub(self.bin, 'firewall-cmd', FIREWALL.format(log=self.log))
+        # polkit's answer for reading the firewall's rules without a prompt: 0 yes, 2 only with a password.
+        stub(self.bin, 'pkcheck', 'echo "pkcheck $*" >> "{}"\n[ -n "$PK_NEEDS_PASSWORD" ] && exit 2\nexit 0\n'.format(self.log))
         stub(self.bin, 'logger', 'echo "logger $*" >> "{}"\n'.format(self.log))
         stub(self.bin, 'systemctl', textwrap.dedent('''\
             echo "systemctl $*" >> "{}"
@@ -328,6 +330,25 @@ class SystemHelperTest(Home):
         self.assertTrue(self.helper('sharing')['ssh']['passwordLogin'])
         self.helper('sharing-set', 'allow', 'telnet', 'on', ok=False)
         self.assertEqual(self.helper('snapshots')['config'], False)
+
+    def test_opening_sharing_never_asks_for_a_password(self):
+        # firewalld's server policy wants an admin password to read a zone's services and ports:
+        # the page used to raise one prompt per firewall-cmd call just by being opened.
+        self.env['PK_NEEDS_PASSWORD'] = '1'
+        data = self.helper('sharing')
+        self.assertEqual((data['firewall']['running'], data['firewall']['needsPassword'], data['firewall']['readable']),
+                         (True, True, False))
+        calls = '\n'.join(self.calls())
+        self.assertIn('pkcheck --action-id org.fedoraproject.FirewallD1.config.info --process ', calls)
+        self.assertNotIn('--list-services', calls)
+        self.assertNotIn('--get-default-zone', calls)
+        # "Show the rules": asked for, so it may ask.
+        data = self.helper('sharing', '--ask')
+        self.assertEqual((data['firewall']['needsPassword'], data['firewall']['readable'], data['allows']['mdns']),
+                         (False, True, True))
+        # Allowed without a password (Arctic's polkit rule): read as before.
+        del self.env['PK_NEEDS_PASSWORD']
+        self.assertTrue(self.helper('sharing')['firewall']['readable'])
 
 
 LSBLK_LUKS = {'blockdevices': [{'name': 'nvme0n1', 'type': 'disk', 'children': [

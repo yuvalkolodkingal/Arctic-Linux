@@ -1,0 +1,12 @@
+// Arctic Linux: reading the firewall's configuration (the services and ports a zone lets in)
+// needs no password in the active local session, as with Fedora Workstation's "desktop" policy.
+// firewalld's default "server" policy asks for an admin password even to look, so Settings >
+// Sharing brought up one password prompt after another just by being opened. Changing the
+// firewall still asks for your password (org.fedoraproject.FirewallD1.config and .all).
+polkit.addRule(function (action, subject) {
+    if ((action.id == "org.fedoraproject.FirewallD1.config.info" ||
+         action.id == "org.fedoraproject.FirewallD1.policies.info") &&
+        subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});

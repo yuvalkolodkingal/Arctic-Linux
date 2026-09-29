@@ -14,8 +14,11 @@ Page {
     lede: "What other computers and phones on your network can reach on this one."
     property var info: ({ firewall: { installed: true, running: false }, allows: {}, installed: {}, ssh: { installed: false }, live: false })
     property bool busy: false
-    function load() {
-        Backend.call(["sharing"], r => { if (r.ok) page.info = r; });
+    // Reading the firewall's rules never asks for a password by itself (opening this page, or
+    // passing it with Ctrl+PgDn, used to bring up one prompt after another); "Show the rules"
+    // asks once when your system still wants a password for that.
+    function load(ask) {
+        Backend.call(["sharing"].concat(ask ? ["--ask"] : []), r => { if (r.ok) page.info = r; });
     }
     function change(args, message) {
         page.busy = true;
@@ -42,9 +45,17 @@ Page {
                     return "No firewall is installed (sudo dnf install firewalld).";
                 if (!f.running)
                     return "The firewall is off: anything on the network can reach the services running here.";
+                if (f.needsPassword)
+                    return "On. Seeing what it lets in needs your password on this computer.";
                 return "On. It lets in only what’s allowed below" + (f.zone ? " (zone " + f.zone + ")" : "") + ".";
             }
             resettable: false
+            ArButton {
+                visible: page.info.firewall && page.info.firewall.needsPassword === true
+                text: "Show the rules"
+                gapColor: Theme.surfaceRaised
+                onClicked: page.load(true)
+            }
             ArButton {
                 visible: page.info.installed && page.info.installed.firewallConfig === true
                 text: "Firewall settings"
@@ -62,7 +73,7 @@ Page {
     }
 
     Group {
-        visible: page.info.firewall && page.info.firewall.running === true
+        visible: page.info.firewall && page.info.firewall.running === true && page.info.firewall.needsPassword !== true
         title: "Let in"
         desc: "Each asks for your password and lasts until you switch it off."
         SettingRow {
