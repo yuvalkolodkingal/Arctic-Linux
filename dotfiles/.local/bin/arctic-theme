@@ -596,6 +596,13 @@ def link_current(name):
 
 def activate(name, redraw=True):
     link_current(name)
+    # The last theme of each mode (settings.json last_dark_theme / last_light_theme): switching
+    # back to dark or light returns to it when it has no pair (Nord: Winter by day, Nord at night).
+    if name != WALLPAPER_THEME:
+        folder, source = theme_dir(name)
+        mode = theme_info(name, folder, source)["mode"]
+        if load_settings().get("last_{}_theme".format(mode)) != name:
+            save_settings(**{"last_{}_theme".format(mode): name})
     reload(redraw=redraw)
 
 
@@ -605,7 +612,8 @@ def static_for_mode(mode):
 
 def for_mode(mode, info=None):
     """The theme to switch to for light or dark: the active one when it already is, its pair
-    when it has one of that mode (a gallery theme), else Winter or Polar night."""
+    when it has one of that mode (a gallery theme), else the last theme of that mode you had,
+    else Winter or Polar night."""
     info = info or active_info()
     if info.get("mode") == mode and info.get("name") not in (None, WALLPAPER_THEME):
         return info["name"]
@@ -613,6 +621,11 @@ def for_mode(mode, info=None):
     folder, source = theme_dir(pair) if pair else (None, None)
     if folder and theme_info(pair, folder, source)["mode"] == mode:
         return pair
+    last = load_settings().get("last_{}_theme".format(mode))
+    if isinstance(last, str) and NAME_RE.match(last) and last != WALLPAPER_THEME:
+        folder, source = theme_dir(last)
+        if folder and theme_info(last, folder, source)["mode"] == mode:
+            return last
     return static_for_mode(mode)
 
 
