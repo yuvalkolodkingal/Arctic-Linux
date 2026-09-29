@@ -675,29 +675,78 @@ def installed_sizes(names):
     return sizes
 
 
+def store_transaction(args):
+    """(code, output, rpms): what `dnf5 ARGS` would do, worked out as you and stored instead of
+    run (`--store=DIR -y`, placed after the command). rpms is None when nothing was stored."""
+    folder = RUNTIME / 'arctic-apps' / ('remove-' + secrets.token_hex(8))
+    folder.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    cut = args.index('--') if '--' in args else len(args)
+    try:
+        code, text, err = appslib.run(['dnf5', *args[:cut], '--store=' + str(folder), '-y', *args[cut:]], timeout=300)
+        try:
+            rpms = json.loads((folder / 'transaction.json').read_text()).get('rpms', [])
+        except (OSError, ValueError, AttributeError):
+            rpms = None
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    return code, text + '\n' + err, rpms
+
+
+def removed_for_good(rpms):
+    """The package names a stored transaction takes away: every installed version goes and none
+    comes in (an upgrade that drops the oldest kernel, or `remove --oldinstallonly`, keeps it)."""
+    going, coming = {}, set()
+    for rpm in rpms:
+        name, _evr = split_nevra(rpm.get('nevra', ''))
+        if rpm.get('action') in ('Remove', 'Replaced'):
+            going[name] = going.get(name, 0) + 1
+        elif rpm.get('action') in ('Install', 'Upgrade', 'Downgrade', 'Reinstall'):
+            coming.add(name)
+    names = sorted(n for n in going if n not in coming)
+    installed = rpm_installed(names) if names else []
+    return [n for n in names if going[n] >= installed.count(n)]
+
+
+def removal_blocked(removed, asked):
+    """{package, code, message} when removing the packages `removed` (you named `asked`) would
+    take away part of Arctic Linux, your login shell or your only terminal; else None."""
+    protected = appslib.protection()
+    for name in removed:
+        if protected.match(name):
+            if name in asked:
+                message = '{} is part of Arctic Linux, so it can’t be removed.'.format(name)
+            elif asked:
+                message = 'Removing {} would also remove {}, which Arctic Linux needs.'.format(', '.join(asked), name)
+            else:
+                message = 'This would remove {}, which Arctic Linux needs.'.format(name)
+            return dict(package=name, code='protected', message=message)
+    shell_pkg, shell_name = login_shell_package()
+    if shell_pkg and shell_pkg in removed:
+        return dict(package=shell_pkg, code='login-shell',
+                    message='{} is your login shell. Choose another shell first (see Terminal and shell).'.format(shell_name))
+    installed = set(rpm_installed(appslib.TERMINALS))
+    terminals = [t for t in appslib.TERMINALS if t in installed]
+    if terminals and all(t in removed for t in terminals):
+        keys = appslib.role_keys().get('terminal', 'Super + Enter')
+        return dict(package=terminals[0], code='only-terminal',
+                    message='{} is your only terminal, so {} would stop working. Install another terminal first.'.format(terminals[0], keys))
+    return None
+
+
 def preview_dnf(names, autoremove):
     for name in names:
         if not appslib.NAME.match(name):
             raise Failure('“{}” isn’t a package name.'.format(name), 'invalid')
-    folder = RUNTIME / 'arctic-apps' / ('remove-' + secrets.token_hex(8))
-    folder.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    try:
-        code, text, err = appslib.run(['dnf5', 'remove', '--store=' + str(folder), '-y',
-                                       *([] if autoremove else ['--no-autoremove']), *names], timeout=300)
-        combined = text + '\n' + err
-        if code != 0:
-            if 'protected packages' in combined or 'protected package' in combined:
-                return None, combined
-            last = [l.strip() for l in combined.splitlines() if l.strip()]
-            raise Failure('dnf couldn’t work out this removal: {}'.format(last[-1] if last else 'it failed'), 'dnf')
-        try:
-            data = json.loads((folder / 'transaction.json').read_text())
-        except (OSError, ValueError):
-            raise Failure('{} isn’t installed.'.format(', '.join(names)), 'not-installed') from None
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
+    code, combined, rpms = store_transaction(['remove', *([] if autoremove else ['--no-autoremove']), *names])
+    if code != 0:
+        if 'protected packages' in combined or 'protected package' in combined:
+            return None, combined
+        last = [l.strip() for l in combined.splitlines() if l.strip()]
+        raise Failure('dnf couldn’t work out this removal: {}'.format(last[-1] if last else 'it failed'), 'dnf')
+    if rpms is None:
+        raise Failure('{} isn’t installed.'.format(', '.join(names)), 'not-installed')
     packages = []
-    for rpm in data.get('rpms', []):
+    for rpm in rpms:
         if rpm.get('action') != 'Remove':
             continue
         name, evr = split_nevra(rpm.get('nevra', ''))
@@ -737,23 +786,8 @@ def cmd_preview_remove(args):
     result['packages'] = packages
     result['frees_bytes'] = sum(p['install_bytes'] or 0 for p in packages)
     removed = {p['name'] for p in packages}
-    asked = ', '.join(names)
-    for p in packages:
-        if protected.match(p['name']):
-            result['blocked'] = dict(package=p['name'], code='protected',
-                                     message='Removing {} would also remove {}, which Arctic Linux needs.'.format(asked, p['name']))
-            return out(result)
-    shell_pkg, shell_name = login_shell_package()
-    if shell_pkg and shell_pkg in removed:
-        result['blocked'] = dict(package=shell_pkg, code='login-shell',
-                                 message='{} is your login shell. Choose another shell first (see Terminal and shell).'.format(shell_name))
-        return out(result)
-    installed = set(rpm_installed(appslib.TERMINALS))
-    terminals = [t for t in appslib.TERMINALS if t in installed]
-    if terminals and all(t in removed for t in terminals):
-        keys = appslib.role_keys().get('terminal', 'Super + Enter')
-        result['blocked'] = dict(package=terminals[0], code='only-terminal',
-                                 message='{} is your only terminal, so {} would stop working. Install another terminal first.'.format(terminals[0], keys))
+    result['blocked'] = removal_blocked([p['name'] for p in packages], names)
+    if result['blocked']:
         return out(result)
     entries = appslib.desktop_entries(system_desktop_dirs())
     owned = rpm_owners([e['path'] for e in entries.values()])

@@ -177,7 +177,7 @@ jobs:
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Install tools
-        run: dnf -y install git dnf5-plugins rpm-build createrepo_c python3 util-linux
+        run: dnf -y install git dnf5-plugins rpm-build createrepo_c python3 python3-pyte util-linux
       - uses: actions/checkout@v4
       - name: shell/tests/test-dnf5-remove.sh
         # Previews removals as a normal user (dnf5 remove --store), pins the transaction reasons

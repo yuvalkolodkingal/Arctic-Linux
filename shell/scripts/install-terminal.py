@@ -20,11 +20,13 @@ What you can type in the Console:
   neovim htop                      install packages with dnf (pkexec dnf5 install -y neovim htop)
   flathub:org.gimp.GIMP            install a Flathub app (flatpak install -y flathub org.gimp.GIMP)
   dnf install|upgrade …            run as pkexec dnf5 … -y
-  dnf remove|erase …               run as pkexec dnf5 …: it lists what goes and asks [y/N]
+  dnf remove|rm|swap …             run as pkexec dnf5 …: it lists what goes and asks [y/N]
   dnf search|info|list …           run as dnf … (no password needed)
   flatpak install|update …         and other flatpak commands, as typed (changes get -y, except
                                    uninstall/remove, which list what goes and ask first)
-Packages that are part of Arctic Linux (protected-packages.conf) can't be removed here.
+Packages that are part of Arctic Linux (protected-packages.conf), your login shell and your only
+terminal can't be removed here: every dnf change that can remove packages (see DNF_UNATTENDED)
+is first worked out as you (check_removal), and refused if it would take one of them along.
 
 Installs run unattended: dnf and flatpak get -y, so nothing waits for a [y/N]. Root rights
 come from polkit (pkexec), whose password dialog is the shell's own (PolkitDialog); the
@@ -59,18 +61,43 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import appslib  # noqa: E402
 
 COLUMNS, ROWS = 88, 26
-DNF_READONLY = {'search', 'info', 'list', 'repoquery', 'provides', 'whatprovides', 'check-update',
-                'repolist', 'repoinfo', 'history', 'help', '--help', '-h', '--version', 'advisory',
-                'changelog', 'leaves', 'environment'}
+DNF_READONLY = {'search', 'se', 'info', 'if', 'list', 'ls', 'repoquery', 'rq', 'provides', 'whatprovides',
+                'check-update', 'check-upgrade', 'repo', 'repolist', 'repoinfo', 'history', 'help', 'advisory',
+                'updateinfo', 'changelog', 'leaves', 'environment'}
 DNF = appslib.DNF
 PKEXEC_DNF = appslib.PKEXEC_DNF
 DNF_YES = {'-y', '--assumeyes', '--assumeno'}
-# Typed removals are left to confirm: dnf and flatpak list what goes and ask [y/N] here.
-DNF_REMOVALS = {'remove', 'erase', 'autoremove'}
+# dnf5's global options (dnf5 --help), so the command word after them is found. These take a
+# value, as --opt=VALUE or as the next word:
+DNF_GLOBAL_VALUES = {'-c', '--config', '--color', '--repofrompath', '--setopt', '--setvar', '-x', '--exclude',
+                     '--enable-repo', '--enablerepo', '--disable-repo', '--disablerepo', '--repo', '--repoid',
+                     '--enable-plugin', '--enableplugin', '--disable-plugin', '--disableplugin', '--comment',
+                     '--installroot', '--releasever', '--releasever-major', '--releasever-minor',
+                     '--dump-repo-config', '--forcearch'}
+DNF_GLOBAL_FLAGS = {'-h', '--help', '-q', '--quiet', '-C', '--cacheonly', '--refresh', '-y', '--assumeyes',
+                    '--assumeno', '--best', '--no-best', '--nobest', '--allow-vendor-change', '--no-allow-vendor-change',
+                    '--no-docs', '--nodocs', '--no-gpgchecks', '--nogpgcheck', '--no-plugins', '--noplugins',
+                    '--use-host-config', '--show-new-leaves', '--debugsolver', '--dump-main-config',
+                    '--dump-variables', '--version', '--skip-file-locks'}
+# Changes that don't remove packages (unless --allowerasing is given) run unattended, with -y.
+# Every other change can take packages away (remove, rm, autoremove, swap, do, distro-sync,
+# downgrade, replay, group remove, an alias of your own …): it is checked first (check_removal)
+# and asks [y/N] with the list.
+DNF_UNATTENDED = {'install', 'in', 'upgrade', 'up', 'update', 'upgrade-minimal', 'reinstall', 'rei', 'mark',
+                  'makecache', 'mc', 'clean', 'copr', 'config-manager', 'builddep', 'build-dep',
+                  'debuginfo-install', 'download', 'versionlock', 'check', 'needs-restarting'}
+DNF_GROUPS = {'group', 'grp'}   # their second word says what happens
+DNF_REMOVALS = {'remove', 'rm', 'erase', 'autoremove'}
 FLATPAK_CHANGES = {'install', 'uninstall', 'remove', 'update', 'upgrade', 'repair', 'remote-add',
                    'remote-delete', 'mask', 'pin'}
 FLATPAK_REMOVALS = {'uninstall', 'remove'}
 FLATPAK_YES = {'-y', '--assumeyes', '--noninteractive'}
+FLATPAK_GLOBAL_VALUES = {'--installation'}
+FLATPAK_GLOBAL_FLAGS = {'-h', '--help', '--version', '--default-arch', '--supported-arches', '--gl-drivers',
+                        '--installations', '--print-updated-env', '--print-system-only', '-v', '--verbose',
+                        '--ostree-verbose', '--user', '--system'}
+# The first step of a typed dnf change that can remove packages (check_removal, as you).
+CHECK = [sys.executable, os.path.abspath(__file__), '--check']
 NAME = appslib.NAME
 FLATHUB_PREFIX = 'flathub:'
 # Theme hooks that set up a newly installed Flatpak app (30-zed: the Arctic theme and fonts in
@@ -101,22 +128,25 @@ def build_command(text):
     head = args[0]
     if head in ('dnf', 'dnf5', '/usr/bin/dnf', '/usr/bin/dnf5'):
         rest = args[1:]
-        verb = next((a for a in rest if not a.startswith('-')), None)
-        if verb is None:
+        kind, at = dnf_kind(rest)
+        if kind is None:
+            if any(a in ('-h', '--help', '--version') for a in rest):
+                return ['dnf', *rest]
             raise ValueError('Add what dnf should do, like: dnf install neovim')
-        if verb in DNF_READONLY:
+        if kind == 'read':
             return ['dnf', *rest]
-        if verb in DNF_REMOVALS:
-            appslib.protection().check([a for a in rest[rest.index(verb) + 1:] if not a.startswith('-')])
-            return [*PKEXEC_DNF, *rest]
-        return [*PKEXEC_DNF, *with_yes(rest, verb, DNF_YES, '-y')]
+        if rest[at] in DNF_REMOVALS:
+            appslib.protection().check([a for a in rest[at + 1:] if not a.startswith('-')])
+        if kind == 'unattended':
+            return [*PKEXEC_DNF, *with_yes(rest, at, DNF_YES, '-y')]
+        return [*PKEXEC_DNF, *rest]
     if head in ('flatpak', '/usr/bin/flatpak'):
         rest = args[1:]
-        verb = next((a for a in rest if not a.startswith('-')), None)
-        if verb is None:
+        at, known = command_word(rest, FLATPAK_GLOBAL_FLAGS, FLATPAK_GLOBAL_VALUES)
+        if at is None:
             raise ValueError('Add what flatpak should do, like: flatpak install flathub org.gimp.GIMP')
-        if verb in FLATPAK_CHANGES and verb not in FLATPAK_REMOVALS:
-            rest = with_yes(rest, verb, FLATPAK_YES, '-y')
+        if known and rest[at] in FLATPAK_CHANGES and rest[at] not in FLATPAK_REMOVALS:
+            rest = with_yes(rest, at, FLATPAK_YES, '-y')
         return ['flatpak', *rest]
     # Bare names: a quick install. Package names only, no options.
     for name in args:
@@ -129,6 +159,81 @@ def build_command(text):
     if apps:
         return ['flatpak', 'install', '-y', 'flathub', *apps]
     return [*PKEXEC_DNF, 'install', '-y', *packages]
+
+
+def command_word(args, flags, values):
+    """(index of the command word in a program's arguments, whether every option before it is
+    one of `flags` or `values`); the index is None without one. `values` take the next word
+    unless given as --opt=VALUE."""
+    known, i = True, 0
+    while i < len(args):
+        word = args[i]
+        if not word.startswith('-') or word == '-':
+            return i, known
+        name = word.split('=', 1)[0]
+        if name not in flags and name not in values:
+            known = False
+        i += 2 if name in values and '=' not in word else 1
+    return None, known
+
+
+def dnf_kind(rest):
+    """(kind, index of the command word) of dnf's arguments: 'read' runs as you, 'unattended'
+    through pkexec with -y, and 'check' through pkexec after check_removal, asking [y/N]: every
+    change that can remove packages, and any line with an option before the command that isn't
+    known here (its command word might not be the one found). (None, None): no command."""
+    at, known = command_word(rest, DNF_GLOBAL_FLAGS, DNF_GLOBAL_VALUES)
+    if at is None:
+        return None, None
+    verb = rest[at]
+    second = next((a for a in rest[at + 1:] if not a.startswith('-')), '')
+    if verb in DNF_READONLY or (verb in DNF_GROUPS and second in ('list', 'info')):
+        return 'read', at
+    unattended = verb in DNF_UNATTENDED or (verb in DNF_GROUPS and second in ('install', 'upgrade'))
+    if unattended and known and '--allowerasing' not in rest:
+        return 'unattended', at
+    return 'check', at
+
+
+def console_commands(text):
+    """The commands one typed line runs, in order: a dnf change that can remove packages starts
+    with check_removal, which runs as you before pkexec asks for a password."""
+    command = build_command(text)
+    if command[:2] == PKEXEC_DNF and dnf_kind(command[2:])[0] == 'check':
+        return [[*CHECK, *command[2:]], command]
+    return [command]
+
+
+def check_removal(args):
+    """`install-terminal.py --check DNF_ARGS…`, in the console: work out what `dnf5 DNF_ARGS`
+    would remove, as you, the way Remove apps previews (dnf5 --store, see apps.py), and refuse
+    (exit 1, saying why) if it takes away part of Arctic Linux, your login shell or your only
+    terminal. Globs, name.arch, NEVRAs, provides and the packages that go along all count."""
+    import apps
+    try:
+        print('Checking what this would remove…', flush=True)
+        at, _known = command_word(args, DNF_GLOBAL_FLAGS, DNF_GLOBAL_VALUES)
+        named = [a for a in args[at + 1:] if not a.startswith('-')] if at is not None else []
+        if at is not None and args[at] in DNF_GROUPS:
+            named = named[1:]
+        # As stored, not run: dnf's own answers and --offline are left out.
+        code, output, rpms = apps.store_transaction([a for a in args if a not in DNF_YES | {'--offline'}])
+        if code != 0 and '--store' in output:
+            # A command that can't be stored (replay, offline reboot …).
+            print('The console can’t tell what this would remove, so it doesn’t run it. Nothing was changed.')
+            return 1
+        if code != 0:
+            last = [line.strip() for line in output.splitlines() if line.strip()][-3:]
+            print('dnf couldn’t work out what this would remove, so it wasn’t run. Nothing was changed.')
+            print('\n'.join(last))
+            return 1
+        blocked = apps.removal_blocked(apps.removed_for_good(rpms or []), named)
+        if blocked:
+            print(blocked['message'] + ' Nothing was changed.')
+            return 1
+        return 0
+    except KeyboardInterrupt:
+        return 130
 
 
 def theme_hook(name):
@@ -164,12 +269,12 @@ def after_flatpak_install(command):
     return started
 
 
-def with_yes(args, verb, answers, flag):
-    """args with `flag` right after the verb, unless an answer (-y, --assumeno …) is given."""
+def with_yes(args, at, answers, flag):
+    """args with `flag` right after the command word (at `at`), unless an answer (-y,
+    --assumeno …) is given."""
     if any(a in answers for a in args):
         return list(args)
-    i = args.index(verb) + 1
-    return [*args[:i], flag, *args[i:]]
+    return [*args[:at + 1], flag, *args[at + 1:]]
 
 
 def job_label(job):
@@ -253,7 +358,7 @@ class Console:
         """A line typed in the console (or, in tests, a given argv)."""
         if self.pid is not None:
             return
-        commands = [command] if command is not None else [build_command(text)]
+        commands = [command] if command is not None else console_commands(text)
         self.job = dict(id='', kind='console', source='', ids=[], phase='running', percent=None,
                         done=None, total=None, step='')
         self.queue = commands[1:]
@@ -278,9 +383,12 @@ class Console:
         self.spawn(commands[0])
 
     def spawn(self, command, shown=None):
-        shown = shown if shown is not None else ' '.join(shlex.quote(a) for a in command)
+        if shown is None:
+            # The check step says what it does itself.
+            shown = '' if command[:len(CHECK)] == CHECK else ' '.join(shlex.quote(a) for a in command)
         self.notice = ''
-        self.write_output('$ ' + shown + '\r\n')
+        if shown:
+            self.write_output('$ ' + shown + '\r\n')
         pid, fd = pty.fork()
         if pid == 0:
             env = os.environ.copy()
@@ -462,4 +570,6 @@ def main():
 
 
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--check']:
+        sys.exit(check_removal(sys.argv[2:]))
     main()
