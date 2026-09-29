@@ -1000,7 +1000,9 @@ TLS ≥ 1.2 and never an unverified certificate, ≤ 5 redirects and never https
 to 1 MiB, manifest 256 KiB, images 2 MiB (≤ 4096 px, checked before decoding), 8 MiB in all. The
 user agent is WebKitGTK's own (pinned by the host's smoke test). Once the page came from a public
 address, its manifest and icons may not come from loopback, private, shared (100.64.0.0/10,
-Tailscale) or link-local addresses (checked at connect time). The page's JavaScript never runs. If the page redirected to another
+Tailscale) or link-local addresses (checked at connect time). The manager is built without cgo,
+so Go's resolver can't do mDNS: `.local` names are resolved by glibc (`getent ahosts`, argv,
+3 s, through nss-mdns), for fetching and for the trust-certificate check. The page's JavaScript never runs. If the page redirected to another
 site (a sign-in wall), that page's name and icons are ignored and the typed origin is probed.
 Scope = the start URL's registrable domain from Fedora's Public Suffix List (exact host:port for
 IP addresses and localhost) plus extra domains. Icons: never `og:image`, never third-party

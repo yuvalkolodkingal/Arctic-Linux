@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -164,6 +166,31 @@ func TestPrivateAddressGuard(t *testing.T) {
 		if !pagePublic && err != nil {
 			t.Fatalf("private page → private icon refused: %v", err)
 		}
+	}
+}
+
+// A .local page is dialled at the address glibc finds for it (Go's resolver can't do mDNS).
+func TestFetchMDNSName(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("<title>" + r.Host + "</title>"))
+	}))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	getent := filepath.Join(t.TempDir(), "getent")
+	os.WriteFile(getent, []byte("#!/bin/sh\n[ \"$2\" = printer.local ] || exit 2\necho '127.0.0.1       STREAM printer.local'\n"), 0o755)
+	old := webapp.Getent
+	webapp.Getent = getent
+	defer func() { webapp.Getent = old }()
+
+	f := NewFetcher(nil)
+	f.client.Transport.(*http.Transport).Proxy = nil // whatever proxy the test's environment names
+	r, err := f.Get(context.Background(), mustURL("http://printer.local:"+port+"/"), "text/html", MaxHTML, true)
+	if err != nil || string(r.Body) != "<title>printer.local:"+port+"</title>" {
+		t.Fatalf("%v %+v", err, r)
+	}
+	f.PageDone()
+	if !f.allowPrivate {
+		t.Fatal("a page on your own network may load its icons from it")
 	}
 }
 

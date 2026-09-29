@@ -154,11 +154,12 @@ func (m *Manager) IconFromFile(id, path, source string) (bool, error) {
 	return changed, err
 }
 
-// LookupHost resolves names for the private-host check; tests replace it.
+// LookupHost resolves names for the private-host check (.local names through glibc and mDNS);
+// tests replace it.
 var LookupHost = func(host string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return net.DefaultResolver.LookupHost(ctx, host)
+	return webapp.LookupHost(ctx, host)
 }
 
 // privateHost: an IP literal in a private range, localhost, or a .local/.lan/.home.arpa/

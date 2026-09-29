@@ -136,6 +136,31 @@ func TestTrustCertificatePrivateOnly(t *testing.T) {
 	}
 }
 
+// A .local host is resolved through glibc (mDNS), which the manager's own resolver can't do,
+// and still has to resolve to your own network.
+func TestTrustCertificateMDNSHost(t *testing.T) {
+	m := testManager(t)
+	a := fixtureApp("Printer", "https://printer.local/")
+	put(t, m, a)
+	getent := filepath.Join(t.TempDir(), "getent")
+	os.WriteFile(getent, []byte(`#!/bin/sh
+case "$2" in
+printer.local) echo '192.168.1.30    STREAM printer.local' ;;
+evil.local) echo '93.184.216.34   STREAM evil.local' ;;
+*) exit 2 ;;
+esac
+`), 0o755)
+	old := webapp.Getent
+	webapp.Getent = getent
+	defer func() { webapp.Getent = old }()
+	if err := m.TrustCertificate(a.ID, "printer.local", selfSigned(t, "printer.local")); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.TrustCertificate(a.ID, "evil.local", selfSigned(t, "evil.local")); code(err) != webapp.CodeInvalid {
+		t.Fatalf("a .local name on a public address: %v", err)
+	}
+}
+
 func TestIconFromFileUpgradesLetterIcons(t *testing.T) {
 	m := testManager(t)
 	a := fixtureApp("Notes", "https://notes.example.org/")

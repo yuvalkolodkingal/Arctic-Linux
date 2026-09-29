@@ -61,6 +61,9 @@ func NewFetcher(rootCAs *x509.CertPool) *Fetcher {
 				// A proxy's own address says nothing about the destination; the proxy decides.
 				return plain.DialContext(ctx, network, addr)
 			}
+			if host, port, err := net.SplitHostPort(addr); err == nil && webapp.MDNSName(host) {
+				return dialMDNS(ctx, guarded, network, host, port)
+			}
 			return guarded.DialContext(ctx, network, addr)
 		},
 		TLSHandshakeTimeout:    5 * time.Second,
@@ -73,6 +76,29 @@ func NewFetcher(rootCAs *x509.CertPool) *Fetcher {
 	}
 	f.client = &http.Client{Transport: tr, CheckRedirect: checkRedirect}
 	return f
+}
+
+// dialMDNS dials a .local name at the addresses glibc finds for it (Go's resolver can't do
+// mDNS), one after another; the guard still checks each address as it connects.
+func dialMDNS(ctx context.Context, d *net.Dialer, network, host, port string) (net.Conn, error) {
+	addrs, err := webapp.LookupHost(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+	}
+	var first error
+	for _, a := range addrs {
+		c, err := d.DialContext(ctx, network, net.JoinHostPort(a, port))
+		if err == nil {
+			return c, nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	return nil, first
 }
 
 func proxyAddrs() map[string]bool {
