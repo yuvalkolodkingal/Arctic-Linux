@@ -15,8 +15,9 @@ are its (one JSON object per command, Failure for a sentence, argv lists, never 
     idle-more | idle-more-set lock-battery|suspend-battery S|same | dim on|off | screen-off S
                                   times on battery, dimming, screens off after the lock (idle.conf)
     effects | effects-set lighter auto|on|off | game on|off      arctic-effects
-    sharing | sharing-set allow NAME on|off | ssh on|off | ssh-password on|off
-                                  firewall and remote login (pkexec arctic-system-helper)
+    sharing [--ask] | sharing-set allow NAME on|off | ssh on|off | ssh-password on|off
+                                  firewall and remote login (pkexec arctic-system-helper); reading
+                                  the firewall never asks for a password unless --ask
     snapshots | snapshot-run create TEXT | undo PRE POST          snapper, through the same helper
     users | user-pictures | user-set picture PATH|--remove | name NAME | user-run password|disk|fingerprint
                                   your picture and name (AccountsService); password, disk
@@ -564,15 +565,36 @@ def _system_helper(paths, args, timeout=300):
     return data
 
 
-def _firewall(paths):
+# firewalld's default ("server") polkit policy asks for an admin password even to look at the
+# zone's services and ports (the ".config.info" action); Arctic's polkit rule (packaging/polkit/
+# 50-arctic-firewalld-read.rules) lets the active local session read them, as Fedora
+# Workstation's "desktop" policy does. Opening Sharing must never ask on its own, though: without
+# that permission the rules are left unread until you ask for them (sharing --ask).
+FIREWALL_READ_ACTION = 'org.fedoraproject.FirewallD1.config.info'
+
+
+def _may_read_firewall(paths):
+    """True when reading the firewall's rules won't ask for a password: pkcheck without
+    --allow-user-interaction answers without prompting (0 yes, 1 no, 2 only with a password)."""
+    if not which('pkcheck', paths.env):
+        return True     # can't tell; polkit without pkcheck is unusual
+    code, _out, _err = run(['pkcheck', '--action-id', FIREWALL_READ_ACTION, '--process', str(os.getpid())],
+                           timeout=10, env=_c_env(paths))
+    return code == 0
+
+
+def _firewall(paths, ask=False):
     env = dict(paths.env, LC_ALL='C')
     info = dict(installed=bool(which('firewall-cmd', paths.env)), running=False, zone='', services=[], ports=[],
-                readable=False)
+                readable=False, needsPassword=False)
     if not info['installed']:
         return info
     code, out, _err = run(['firewall-cmd', '--state'], timeout=10, env=env)
     info['running'] = code == 0 and out.strip() == 'running'
     if not info['running']:
+        return info
+    if not ask and not _may_read_firewall(paths):
+        info['needsPassword'] = True
         return info
     code, zone, _err = run(['firewall-cmd', '--get-default-zone'], timeout=10, env=env)
     zone = zone.strip()
@@ -584,9 +606,11 @@ def _firewall(paths):
     return info
 
 
-def cmd_sharing(paths, _args):
+def cmd_sharing(paths, args):
+    """sharing [--ask]: what the network may reach. --ask reads the firewall's rules even when
+    that asks for your password (the page's "Show the rules"); without it, it never asks."""
     env = dict(paths.env, LC_ALL='C')
-    firewall = _firewall(paths)
+    firewall = _firewall(paths, ask='--ask' in (args or []))
     services, ports = set(firewall['services']), set(firewall['ports'])
     allows = dict(mdns='mdns' in services, kdeconnect='kdeconnect' in services, ssh='ssh' in services,
                   localsend={'53317/tcp', '53317/udp'} <= ports)

@@ -927,6 +927,9 @@ install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdi
 install -Dpm 0755 packaging/system/arctic-system-helper %{buildroot}%{_libexecdir}/arctic/arctic-system-helper
 install -Dpm 0644 packaging/polkit/org.arcticlinux.system.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+# Reading the firewall's rules (Settings > Sharing) without a password in the active session.
+install -Dpm 0644 packaging/polkit/50-arctic-firewalld-read.rules \
+  %{buildroot}%{_datadir}/polkit-1/rules.d/50-arctic-firewalld-read.rules
 # Thunar's Send To menu: LocalSend (arctic-share files).
 install -Dpm 0644 packaging/desktop/arctic-sendto-localsend.desktop \
   %{buildroot}%{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
@@ -1432,6 +1435,7 @@ fi
 %{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 %{_libexecdir}/arctic/arctic-system-helper
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
+%{_datadir}/polkit-1/rules.d/50-arctic-firewalld-read.rules
 %{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
 %dir %{_datadir}/arctic
 %dir %{_datadir}/arctic/mango
