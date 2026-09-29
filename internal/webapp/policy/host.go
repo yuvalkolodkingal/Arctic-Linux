@@ -155,8 +155,12 @@ type Permissions struct {
 	Origins map[string]map[string]string `json:"origins"`
 }
 
+// permNames are the kinds a decision is remembered for, per origin. Not website data: that
+// request (an embedded site asking for its cookies) belongs to the pair of the embedded site
+// and the page, which WebKit's own store keeps; remembering it for the page alone would let
+// every other embedded site in too.
 var permNames = map[int]string{PermNotifications: "notifications", PermCamera: "camera", PermMicrophone: "microphone", PermScreen: "screen",
-	PermGeolocation: "geolocation", PermClipboard: "clipboard", PermPointerLock: "pointer-lock", PermDeviceInfo: "device-info", PermWebsiteData: "website-data"}
+	PermGeolocation: "geolocation", PermClipboard: "clipboard", PermPointerLock: "pointer-lock", PermDeviceInfo: "device-info"}
 
 // LoadPermissions reads permissions.json (empty when missing or broken).
 func LoadPermissions(path string) *Permissions {

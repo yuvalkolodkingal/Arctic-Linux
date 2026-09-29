@@ -61,9 +61,12 @@ it. Starting a web app that is already open brings its window to the front.
 
 Pages that want your camera, microphone, location or clipboard ask in a bar under the header,
 outside the page, so a page can't imitate it: **Allow** or **Block**, remembered for that site.
+A site embedded in the page that asks to use its own cookies there (a sign-in or comments
+frame) is named in the bar, and the answer holds for those two sites only.
 Notifications from the app's own site are allowed by default and show in Arctic's notification
-centre under the app's name and icon. Downloads go to your Downloads folder and never replace a
-file that is already there.
+centre under the app's name and icon; **Block** in Settings stops them in the open window too.
+Downloads go to your Downloads folder and never replace a file that is already there; one that
+fails says so.
 
 The window follows the Arctic theme, light or dark, and changes with it.
 
@@ -117,7 +120,8 @@ Pressing it again brings the open window to the front.
   usual workarounds.
 - **A site on your network has a self-signed certificate**: the page says the connection isn't
   private. Arctic only lets you trust a certificate for sites on your own network (names ending in
-  `.lan`, `.local`, `.home.arpa`, `.internal`, or private addresses).
+  `.lan`, `.local`, `.home.arpa`, `.internal`, or private addresses, Tailscale's 100.x ones
+  included).
 - **Sign out of an app**: `arctic-webapp clear-data ID` deletes its cookies and data and keeps the
   app.
 - **Log**: `~/.local/state/arctic/webapps/ID.log` (addresses without their query part).

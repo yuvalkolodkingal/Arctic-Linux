@@ -10,6 +10,8 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"github.com/yuvalkolodkingal/o-tism/internal/webapp"
 )
 
 // SystemPath is Fedora's copy of the list.
@@ -46,12 +48,13 @@ func Parse(r io.Reader) (*List, error) {
 		if i := strings.IndexAny(line, " \t"); i >= 0 {
 			line = line[:i]
 		}
+		// Internationalised rules ("公司.hk") are written in Unicode; hosts come in Punycode.
 		line = strings.ToLower(line)
 		if ex, ok := strings.CutPrefix(line, "!"); ok {
-			l.exceptions[ex] = true
+			l.exceptions[webapp.ASCIIHost(ex)] = true
 			continue
 		}
-		l.rules[line] = true
+		l.rules[webapp.ASCIIHost(line)] = true
 	}
 	return l, sc.Err()
 }
@@ -67,7 +70,7 @@ func (l *List) Site(hostport string) string {
 	if h, p, err := net.SplitHostPort(hostport); err == nil {
 		host, port = h, p
 	}
-	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	host = webapp.ASCIIHost(strings.TrimSuffix(strings.ToLower(host), "."))
 	withPort := func(h string) string {
 		if port == "" {
 			return h

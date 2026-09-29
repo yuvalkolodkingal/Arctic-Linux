@@ -23,6 +23,7 @@ func TestPSLMatchesLibsoup(t *testing.T) {
 		"mail.google.com", "music.youtube.com", "foo.bar.co.uk", "user.github.io", "a.b.user.github.io",
 		"www.walla.co.il", "app.slack.com", "outlook.office.com", "www.bbc.co.uk", "x.y.kawasaki.jp",
 		"city.kawasaki.jp", "a.city.kawasaki.jp", "www.ck", "example.pages.dev", "discord.com",
+		"www.xn--mnchen-3ya.de", "a.shop.xn--55qx5d.hk", // Punycode, as WebKit reports hosts
 	} {
 		want := BaseDomain(host)
 		if got := list.Site(host); got != want {

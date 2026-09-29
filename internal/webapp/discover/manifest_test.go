@@ -4,6 +4,9 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+
+	"github.com/yuvalkolodkingal/o-tism/internal/webapp"
+	"github.com/yuvalkolodkingal/o-tism/internal/webapp/policy"
 )
 
 func TestManifestW3CRules(t *testing.T) {
@@ -82,6 +85,10 @@ func TestNormalize(t *testing.T) {
 		"http://ha.lan:8123":           "http://ha.lan:8123/",
 		"ha.lan:8123/lovelace":         "https://ha.lan:8123/lovelace",
 		"HTTPS://A.org/?q=1":           "https://a.org/?q=1",
+		// Internationalised names in Punycode, as WebKit reports them.
+		"münchen.de/rathaus":          "https://xn--mnchen-3ya.de/rathaus",
+		"https://Bücher.example:8443": "https://xn--bcher-kva.example:8443/",
+		"https://m%C3%BCnchen.de/":    "https://xn--mnchen-3ya.de/",
 	}
 	for in, want := range ok {
 		u, err := Normalize(in)
@@ -93,6 +100,21 @@ func TestNormalize(t *testing.T) {
 		if _, err := Normalize(bad); err == nil {
 			t.Errorf("Normalize(%q) accepted", bad)
 		}
+	}
+}
+
+// An app added as münchen.de keeps the pages WebKit reports (xn--mnchen-3ya.de) in scope.
+func TestInternationalNameScope(t *testing.T) {
+	typed, err := Normalize("münchen.de/rathaus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := policy.Scope{Site: testPSL(t).Site(typed.Host), Scheme: typed.Scheme}
+	if s.Site != "xn--mnchen-3ya.de" || !s.In("https://xn--mnchen-3ya.de/foo") || !s.In("https://www.xn--mnchen-3ya.de/") {
+		t.Fatalf("scope %+v", s)
+	}
+	if id := webapp.Identity("", typed.String(), 1); id != "https://xn--mnchen-3ya.de/rathaus" {
+		t.Fatalf("identity %q", id)
 	}
 }
 
@@ -110,6 +132,9 @@ func TestPickName(t *testing.T) {
 		{nil, Head{Title: "Inbox (3) - user@gmail.com - Gmail"}, "mail.google.com", "google.com", "Inbox (3)", "title"},
 		{nil, Head{Title: "Welcome"}, "www.walla.co.il", "walla.co.il", "Walla", "host"},
 		{nil, Head{}, "192.168.1.5:8123", "192.168.1.5:8123", "192.168.1.5:8123", "host"},
+		// The site label of an internationalised name, decoded.
+		{nil, Head{}, "www.xn--mnchen-3ya.de", "xn--mnchen-3ya.de", "München", "host"},
+		{nil, Head{Title: "Stadtportal – München"}, "www.xn--mnchen-3ya.de", "xn--mnchen-3ya.de", "München", "title"},
 	}
 	for _, c := range cases {
 		n, s := PickName(c.m, c.head, c.host, c.site)

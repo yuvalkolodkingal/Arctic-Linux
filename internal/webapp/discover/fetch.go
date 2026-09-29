@@ -9,10 +9,12 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -39,9 +41,9 @@ type Fetcher struct {
 	AcceptLanguage string
 
 	mu           sync.Mutex
-	pagePhase    bool // the page itself is being fetched
-	pagePrivate  bool // the page came from a private address
-	allowPrivate bool // sub-resources may reach private addresses (the page is private)
+	pagePhase    bool            // the page itself is being fetched
+	allowPrivate bool            // sub-resources may reach private addresses (the page is private)
+	proxied      map[string]bool // remote addresses of connections to a proxy
 	budget       int64
 	// private classifies a dialled address; tests make one loopback server count as public.
 	private func(address string, ip net.IP) bool
@@ -50,7 +52,7 @@ type Fetcher struct {
 // NewFetcher builds a fetcher. rootCAs is nil for the system pool (tests pass their own).
 func NewFetcher(rootCAs *x509.CertPool) *Fetcher {
 	f := &Fetcher{UserAgent: webapp.FetchUserAgent, AcceptLanguage: acceptLanguage(), budget: MaxTotal, pagePhase: true,
-		private: func(_ string, ip net.IP) bool { return webapp.PrivateIP(ip) }}
+		proxied: map[string]bool{}, private: func(_ string, ip net.IP) bool { return webapp.PrivateIP(ip) }}
 	guarded := &net.Dialer{Timeout: 5 * time.Second, Control: f.control}
 	plain := &net.Dialer{Timeout: 5 * time.Second}
 	proxies := proxyAddrs()
@@ -59,7 +61,16 @@ func NewFetcher(rootCAs *x509.CertPool) *Fetcher {
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if proxies[addr] {
 				// A proxy's own address says nothing about the destination; the proxy decides.
-				return plain.DialContext(ctx, network, addr)
+				c, err := plain.DialContext(ctx, network, addr)
+				if err == nil {
+					f.mu.Lock()
+					f.proxied[c.RemoteAddr().String()] = true
+					f.mu.Unlock()
+				}
+				return c, err
+			}
+			if host, port, err := net.SplitHostPort(addr); err == nil && webapp.MDNSName(host) {
+				return dialMDNS(ctx, guarded, network, host, port)
 			}
 			return guarded.DialContext(ctx, network, addr)
 		},
@@ -73,6 +84,29 @@ func NewFetcher(rootCAs *x509.CertPool) *Fetcher {
 	}
 	f.client = &http.Client{Transport: tr, CheckRedirect: checkRedirect}
 	return f
+}
+
+// dialMDNS dials a .local name at the addresses glibc finds for it (Go's resolver can't do
+// mDNS), one after another; the guard still checks each address as it connects.
+func dialMDNS(ctx context.Context, d *net.Dialer, network, host, port string) (net.Conn, error) {
+	addrs, err := webapp.LookupHost(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+	}
+	var first error
+	for _, a := range addrs {
+		c, err := d.DialContext(ctx, network, net.JoinHostPort(a, port))
+		if err == nil {
+			return c, nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	return nil, first
 }
 
 func proxyAddrs() map[string]bool {
@@ -118,7 +152,9 @@ func acceptLanguage() string {
 
 // control runs at connect time with the resolved address, so DNS rebinding can't get around
 // it: once the page has come from a public address, its manifest and icons may not come from
-// loopback, private, link-local or unspecified addresses.
+// loopback, private, link-local or unspecified addresses. The page itself may come from
+// anywhere; where it came from is read from the connection it used (connPrivate), not from
+// the dials, since a Happy Eyeballs fallback dial may lose the race.
 func (f *Fetcher) control(network, address string, _ syscall.RawConn) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -130,25 +166,42 @@ func (f *Fetcher) control(network, address string, _ syscall.RawConn) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.pagePhase {
-		f.pagePrivate = f.private(address, ip)
+	if f.pagePhase || f.allowPrivate || !f.private(address, ip) {
 		return nil
 	}
-	if f.private(address, ip) && !f.allowPrivate {
-		return errPrivate
-	}
-	return nil
+	return errPrivate
 }
 
 var errPrivate = errors.New("a public page may not load from a private address")
 
-// PageDone ends the page phase: sub-resources may use private addresses only if the page came
-// from one.
-func (f *Fetcher) PageDone() {
+// connPrivate classifies the address a connection went to. A proxy's says nothing about the
+// destination (the proxy chose it), so it counts as public.
+func (f *Fetcher) connPrivate(c net.Conn) bool {
+	ta, ok := c.RemoteAddr().(*net.TCPAddr)
+	if !ok {
+		return false
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return !f.proxied[ta.String()] && f.private(ta.String(), ta.IP)
+}
+
+// PageDone ends the page phase without a page (an icon address you gave): public addresses
+// only.
+func (f *Fetcher) PageDone() { f.pageFrom(&Response{}) }
+
+// pageFrom ends the page phase with the page discovery kept: sub-resources may use private
+// addresses only if it came from one.
+func (f *Fetcher) pageFrom(page *Response) {
+	f.mu.Lock()
 	f.pagePhase = false
-	f.allowPrivate = f.pagePrivate
+	f.allowPrivate = page.private
+	f.mu.Unlock()
+	if !page.private {
+		// Connections kept from the page's hops (a redirect or refresh to your network) never
+		// met the guard; sub-resources dial afresh, through control.
+		f.client.CloseIdleConnections()
+	}
 }
 
 func checkRedirect(req *http.Request, via []*http.Request) error {
@@ -171,11 +224,22 @@ type Response struct {
 	ContentType string
 	Body        []byte
 	Truncated   bool
+	private     bool // (page phase) the last hop came over a connection to a private address
 }
 
 // Get fetches u with an Accept header, reading at most limit bytes. With truncate the body is
 // cut at the limit; otherwise going over it is a too_large error.
 func (f *Fetcher) Get(ctx context.Context, u *url.URL, accept string, limit int64, truncate bool) (*Response, error) {
+	f.mu.Lock()
+	page := f.pagePhase
+	f.mu.Unlock()
+	var private atomic.Bool
+	if page {
+		// GotConn fires for every hop with the connection it really used; the last is the page's.
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GotConn: func(ci httptrace.GotConnInfo) {
+			private.Store(f.connPrivate(ci.Conn))
+		}})
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, webapp.Errorf(webapp.CodeInvalid, "That isn’t a web address.")
@@ -205,7 +269,9 @@ func (f *Fetcher) Get(ctx context.Context, u *url.URL, accept string, limit int6
 	if err != nil {
 		return nil, classify(err, u.Host)
 	}
-	r := &Response{URL: resp.Request.URL, ContentType: resp.Header.Get("Content-Type")}
+	final := *resp.Request.URL
+	final.Host = webapp.ASCIIHost(final.Host) // a redirect to a Unicode name, as WebKit would see it
+	r := &Response{URL: &final, ContentType: resp.Header.Get("Content-Type"), private: private.Load()}
 	if int64(len(body)) > read {
 		if !truncate {
 			return nil, webapp.Errorf(webapp.CodeTooLarge, "%s sent a file that is too large.", u.Host)

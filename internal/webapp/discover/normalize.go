@@ -9,8 +9,8 @@ import (
 
 // Normalize turns what you typed into a URL: https:// is added when there is no scheme; only
 // http and https with a host are accepted; userinfo, whitespace, control characters and more
-// than 2,048 bytes are refused; the fragment is dropped. http is allowed (self-hosted apps on
-// your network) and gets the "insecure" warning.
+// than 2,048 bytes are refused; the fragment is dropped; the host is lowercase ASCII. http is
+// allowed (self-hosted apps on your network) and gets the "insecure" warning.
 func Normalize(input string) (*url.URL, error) {
 	s := strings.TrimSpace(input)
 	bad := webapp.Errorf(webapp.CodeInvalid, "That isn’t a web address. Try something like music.youtube.com.")
@@ -36,7 +36,9 @@ func Normalize(input string) (*url.URL, error) {
 	if (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.Opaque != "" {
 		return nil, bad
 	}
-	u.Host = strings.ToLower(u.Host)
+	// Lowercase, and Punycode for an internationalised name: the form WebKit reports pages in,
+	// so the scope, start URL and identity match them.
+	u.Host = webapp.ASCIIHost(strings.ToLower(u.Host))
 	u.Fragment, u.RawFragment = "", ""
 	if u.Path == "" {
 		u.Path = "/"

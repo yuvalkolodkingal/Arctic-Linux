@@ -292,8 +292,8 @@ func ValidDomain(d string) bool {
 }
 
 // PrivateHostLiteral reports whether a host[:port] names a private-network host by its text
-// alone: loopback, RFC 1918, ULA or link-local IP literals, localhost, and names ending .local,
-// .lan, .home.arpa or .internal. (For names, the manager also checks every resolved address.)
+// alone: loopback, RFC 1918, RFC 6598, ULA or link-local IP literals, localhost, and names ending
+// .local, .lan, .home.arpa or .internal. (For names, the manager also checks every resolved address.)
 func PrivateHostLiteral(hostport string) bool {
 	host := hostport
 	if h, _, err := net.SplitHostPort(hostport); err == nil {
@@ -314,8 +314,12 @@ func PrivateHostLiteral(hostport string) bool {
 	return false
 }
 
-// PrivateIP reports loopback, private (RFC 1918, ULA), link-local and unspecified addresses.
+// PrivateIP reports loopback, private (RFC 1918, ULA), shared (RFC 6598's 100.64.0.0/10:
+// carrier-grade NAT and Tailscale), link-local and unspecified addresses.
 func PrivateIP(ip net.IP) bool {
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1]&0xc0 == 64 {
+		return true
+	}
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsUnspecified() || ip.IsInterfaceLocalMulticast()
 }

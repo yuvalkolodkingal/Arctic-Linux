@@ -201,7 +201,8 @@ void arctic_banner(const char *text, const char *primary) {
     gtk_revealer_set_reveal_child(GTK_REVEALER(S.revealer), TRUE);
 }
 
-static void ask_permission(WebKitPermissionRequest *req, int kind, const char *origin, const char *what) {
+/* who names the asker when it isn't the page (NULL: the origin's host). */
+static void ask_permission(WebKitPermissionRequest *req, int kind, const char *origin, const char *who, const char *what) {
     if (S.pending) { /* one question at a time: later ones are refused */
         webkit_permission_request_deny(req);
         return;
@@ -217,7 +218,7 @@ static void ask_permission(WebKitPermissionRequest *req, int kind, const char *o
         host = g_strdup(g_uri_get_host(u));
         g_uri_unref(u);
     }
-    char *text = g_strdup_printf("%s wants to %s.", host ? host : origin, what);
+    char *text = g_strdup_printf("%s wants to %s.", who ? who : host ? host : origin, what);
     gtk_label_set_text(GTK_LABEL(S.banner_label), text);
     gtk_button_set_label(GTK_BUTTON(S.banner_primary), "Allow");
     gtk_widget_set_visible(S.banner_primary, TRUE);
@@ -242,6 +243,8 @@ static gboolean permission_cb(WebKitWebView *view, WebKitPermissionRequest *req,
     (void)data;
     int kind = 10;
     const char *what = "use a device";
+    const char *who = NULL;
+    char *owned = NULL;
     if (WEBKIT_IS_NOTIFICATION_PERMISSION_REQUEST(req)) {
         kind = 0;
         what = "show notifications";
@@ -268,18 +271,24 @@ static gboolean permission_cb(WebKitWebView *view, WebKitPermissionRequest *req,
     } else if (WEBKIT_IS_MEDIA_KEY_SYSTEM_PERMISSION_REQUEST(req)) {
         kind = 8;
     } else if (WEBKIT_IS_WEBSITE_DATA_ACCESS_PERMISSION_REQUEST(req)) {
+        /* An embedded site (a sign-in or comments frame) asks for its own cookies on this page:
+         * name both. The answer isn't remembered here; WebKit keeps it for that pair. */
+        WebKitWebsiteDataAccessPermissionRequest *wd = WEBKIT_WEBSITE_DATA_ACCESS_PERMISSION_REQUEST(req);
+        const char *current = webkit_website_data_access_permission_request_get_current_domain(wd);
         kind = 9;
-        what = "use its data while you're on this site";
+        who = webkit_website_data_access_permission_request_get_requesting_domain(wd);
+        what = owned = g_strdup_printf("use its cookies while you're on %s", current ? current : "this site");
     }
     char *origin = origin_of_view(view);
     int answer = goPermission(S.cfg.handle, kind, origin);
     if (answer == ARCTIC_ALLOW)
         webkit_permission_request_allow(req);
     else if (answer == ARCTIC_ASK && view == S.view)
-        ask_permission(req, kind, origin, what);
+        ask_permission(req, kind, origin, who, what);
     else
         webkit_permission_request_deny(req);
     g_free(origin);
+    g_free(owned);
     return TRUE;
 }
 
@@ -400,8 +409,16 @@ static void notification_closed_cb(WebKitNotification *n, gpointer data) {
 }
 
 static gboolean show_notification_cb(WebKitWebView *view, WebKitNotification *n, gpointer data) {
-    (void)view;
     (void)data;
+    /* WebKit can't take back a permission it granted (at start, or through the banner), so
+     * each notification asks Go again: "Block" in Settings works in the open window. */
+    char *origin = origin_of_view(view);
+    int allowed = goPermission(S.cfg.handle, 0, origin) == ARCTIC_ALLOW;
+    g_free(origin);
+    if (!allowed) {
+        webkit_notification_close(n);
+        return TRUE;
+    }
     char *tag = g_strdup_printf("n%" G_GUINT64_FORMAT, webkit_notification_get_id(n));
     GNotification *gn = g_notification_new(webkit_notification_get_title(n));
     const char *body = webkit_notification_get_body(n);
@@ -444,8 +461,26 @@ static void init_notification_permissions_cb(WebKitWebContext *ctx, gpointer dat
 
 /* ---------------------------------------------------------------- downloads */
 
+/* "finished" follows "failed" too: the mark keeps it from offering to open a file that is
+ * partial, removed, or someone else's (a name that was taken). */
+static void download_failed_cb(WebKitDownload *d, GError *err, gpointer data) {
+    (void)data;
+    g_object_set_data(G_OBJECT(d), "arctic-failed", GINT_TO_POINTER(1));
+    if (g_error_matches(err, WEBKIT_DOWNLOAD_ERROR, WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER)) return;
+    const char *dest = webkit_download_get_destination(d);
+    char *name = dest ? g_path_get_basename(dest) : NULL;
+    GNotification *gn = g_notification_new("Download failed");
+    if (name) g_notification_set_body(gn, name);
+    char *tag = g_strdup_printf("download-%s", name ? name : "failed");
+    g_application_send_notification(G_APPLICATION(S.app), tag, gn);
+    g_free(tag);
+    g_object_unref(gn);
+    g_free(name);
+}
+
 static void download_finished_cb(WebKitDownload *d, gpointer data) {
     (void)data;
+    if (g_object_get_data(G_OBJECT(d), "arctic-failed")) return;
     const char *dest = webkit_download_get_destination(d);
     if (!dest) return;
     goDownloadFinished(S.cfg.handle, (char *)dest);
@@ -494,6 +529,7 @@ static void download_started_cb(WebKitNetworkSession *s, WebKitDownload *d, gpoi
     (void)s;
     (void)data;
     g_signal_connect(d, "decide-destination", G_CALLBACK(decide_destination_cb), NULL);
+    g_signal_connect(d, "failed", G_CALLBACK(download_failed_cb), NULL);
     g_signal_connect(d, "finished", G_CALLBACK(download_finished_cb), NULL);
 }
 

@@ -241,6 +241,11 @@ func (m *Manager) Remove(ids []string, keepData bool) (api.RemoveResult, error) 
 			if !known {
 				return webapp.Errorf(webapp.CodeNotFound, "There’s no web app called %q.", id)
 			}
+			if keepData && a == nil && fileExists(m.Paths.AppDir(id)) {
+				// Without a readable record there is nothing to keep the sign-in data under;
+				// refuse rather than delete what you asked to keep.
+				return webapp.Errorf(webapp.CodeState, "Arctic can’t read the record of %s, so it can’t keep its sign-in data. Remove it with its sign-in data instead.", m.orphan(id, false).Name)
+			}
 			stopped, err := m.Paths.Stop(id, m.StopWait)
 			if err != nil {
 				name := id

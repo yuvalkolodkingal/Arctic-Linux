@@ -7,7 +7,8 @@
 #
 # Checks: the window's Wayland app_id is the app id, the title follows the page, the page sees
 # webapp.FetchUserAgent (so discovery fetches as the app will), the page's favicon replaces the
-# letter icon through the manager, a theme switch recolours the header live, a second start
+# letter icon through the manager, a theme switch recolours the header live, notifications set
+# to Block stop in the open window, a failed download isn't reported as finished, a second start
 # keeps one window and the pid file, SIGTERM saves the window state, and remove stops the app. Screenshots land in DIR (default
 # /tmp/webapp-shots). The navigation rules themselves are unit-tested in internal/webapp/policy.
 #
@@ -34,7 +35,7 @@ UA_WANT="$(sed -n 's/^const FetchUserAgent = "\(.*\)"$/\1/p' "$REPO/internal/web
 
 # ---- fixture site: records every request's path and User-Agent
 cat > "$WORK/site/server.py" <<'PY'
-import http.server, os, struct, sys, zlib
+import http.server, os, socket, struct, sys, time, zlib
 LOG = sys.argv[2]
 def png(size, rgb):
     raw = b"".join(b"\0" + bytes(rgb) * size for _ in range(size))
@@ -49,11 +50,28 @@ PAGES = {
          b"<a id=in href='/second'>in</a></body></html>",
     "/second": b"<!doctype html><title>Second Page</title><p>second</p>",
     "/app.webmanifest": b'{"name":"Smoke App","start_url":"/","icons":[]}',
+    "/notify": b"<!doctype html><title>Notify</title><script>"
+               b"new Notification('Smoke').onclose = () => fetch('/notification-closed');</script>",
+    "/notification-closed": b"ok",
 }
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         with open(LOG, "a") as f:
             f.write(self.path + "\t" + self.headers.get("User-Agent", "") + "\n")
+        if self.path in ("/good.bin", "/broken.bin"):
+            # Two downloads: the broken one's connection is reset halfway (a short body alone
+            # counts as finished).
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition", 'attachment; filename="%s"' % self.path[1:])
+            self.send_header("Content-Length", "10" if self.path == "/good.bin" else "1000000")
+            self.end_headers()
+            self.wfile.write(b"0123456789")
+            if self.path == "/broken.bin":
+                time.sleep(1)
+                self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+                self.connection.close()
+            return
         body = PAGES.get(self.path.split("?")[0])
         # The favicon appears only after install, so the app starts with a letter icon and the
         # window's favicon upgrade has something to do.
@@ -148,6 +166,21 @@ wait_for 'grep -q "\"source\": \"host-favicon\"" "$XDG_DATA_HOME/arctic/webapps/
 [ -f "$XDG_DATA_HOME/icons/hicolor/128x128/apps/$ID.r1.png" ] || fail "favicon upgrade: no .r1 icon"
 grep -q "^Icon=$ID.r1$" "$XDG_DATA_HOME/applications/$ID.desktop" || fail "favicon upgrade: launcher entry not updated"
 
+# Notifications set to Block reach the open window, though WebKit granted them at start: the
+# page's next notification is closed at once (the page hears its close event).
+arctic-webapp set "$ID" --notifications block --json | grep -q '"applied":"live"' || fail "notifications block: not applied live"
+sleep 0.5
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/notify" >/dev/null 2>&1 || fail "opening /notify"
+wait_for 'grep -q "^/notification-closed" "$WORK/requests.log"' || fail "a blocked notification was shown"
+
+# A download that fails is never announced as finished; one that completes is.
+APPLOG="$XDG_STATE_HOME/arctic/webapps/$ID.log"
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/broken.bin" >/dev/null 2>&1 || fail "opening /broken.bin"
+wait_for 'grep -q "download to .*broken" "$APPLOG"' || fail "the broken download didn't start"
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/good.bin" >/dev/null 2>&1 || fail "opening /good.bin"
+wait_for 'grep -q "downloaded .*good" "$APPLOG"' || fail "a finished download wasn't reported"
+if grep -q "downloaded .*broken" "$APPLOG"; then fail "a failed download was reported as finished: $(grep download "$APPLOG")"; fi
+
 # A second start raises the running app: still one window, same pid file.
 timeout 20 arctic-webapp-host --app-id "$ID" >/dev/null 2>&1 || fail "second start did not exit"
 sleep 1
@@ -170,7 +203,7 @@ pkill -f "$SWAY" 2>/dev/null
 exit "$FAILED"
 INNER
 chmod +x "$WORK/inner.sh"
-export SWAY WORK OUT ID UA_WANT
+export SWAY WORK OUT ID UA_WANT PORT
 if dbus-run-session -- "$WORK/inner.sh"; then
   echo "webapp smoke: PASS"
 else

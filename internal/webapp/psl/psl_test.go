@@ -40,6 +40,10 @@ func TestSite(t *testing.T) {
 		"localhost:3000":         "localhost:3000",
 		"nas":                    "nas",
 		"app.example.com:8443":   "example.com",
+		// Internationalised names: Punycode in and out, whichever form the rule is written in.
+		"a.shop.xn--55qx5d.hk": "shop.xn--55qx5d.hk",
+		"shop.公司.hk":           "shop.xn--55qx5d.hk",
+		"mail.münchen.de":      "xn--mnchen-3ya.de",
 	}
 	for host, want := range cases {
 		if got := l.Site(host); got != want {

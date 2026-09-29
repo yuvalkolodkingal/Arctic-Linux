@@ -133,6 +133,16 @@ func TestPermissions(t *testing.T) {
 	if p.Decide(origin, PermCamera, mail, "allow") != Allow || p.Decide(origin, PermNotifications, mail, "allow") != Deny || p.Decide(origin, PermDeviceInfo, mail, "allow") != Allow {
 		t.Fatal("stored decisions")
 	}
+	// Website data (an embedded site's cookies) is never remembered for the page's origin: one
+	// Allow would cover every other embedded site. An older file's entry is ignored.
+	p.Remember(origin, PermWebsiteData, true)
+	if p.Decide(origin, PermWebsiteData, mail, "allow") != Ask || p.Origins[origin]["website-data"] != "" {
+		t.Fatal("website data remembered per page")
+	}
+	p.Origins[origin]["website-data"] = "allow"
+	if p.Decide(origin, PermWebsiteData, mail, "allow") != Ask {
+		t.Fatal("a stored website-data grant still counts")
+	}
 }
 
 func TestStateAndRestore(t *testing.T) {

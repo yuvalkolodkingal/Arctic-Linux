@@ -156,6 +156,32 @@ func TestRemoveKeepDataThenForget(t *testing.T) {
 	}
 }
 
+// An app whose record can't be read (Settings lists it as "Record missing") is never removed
+// with its sign-in data when you asked to keep it: there is nothing to keep it under.
+func TestRemoveKeepDataRefusesABrokenRecord(t *testing.T) {
+	m := testManager(t)
+	a := fixtureApp("Notes", "https://notes.example.org/")
+	put(t, m, a)
+	os.WriteFile(m.Paths.AppFile(a.ID), []byte(`{"schema":1,"id":"`+a.ID+`","start_url":"javascript:alert(1)"}`), 0o600)
+	cookies := filepath.Join(m.Paths.Profile(a.ID), "cookies.sqlite")
+	if _, err := m.Remove([]string{a.ID}, true); code(err) != webapp.CodeState || !strings.Contains(webapp.AsError(err).Message, "Notes") {
+		t.Fatalf("keep-data on a broken record: %v", err)
+	}
+	if _, err := os.Stat(cookies); err != nil {
+		t.Fatal("sign-in data deleted despite --keep-data")
+	}
+	if _, err := os.Stat(m.Paths.DesktopFile(a.ID)); err != nil {
+		t.Fatal("the refused remove took the launcher entry")
+	}
+	// Removing it with its sign-in data still works.
+	if _, err := m.Remove([]string{a.ID}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(m.Paths.AppDir(a.ID)); !os.IsNotExist(err) {
+		t.Fatal("the app directory is still there")
+	}
+}
+
 func TestClearDataKeepsApp(t *testing.T) {
 	m := testManager(t)
 	a := fixtureApp("Notes", "https://notes.example.org/")

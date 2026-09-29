@@ -13,9 +13,9 @@ import (
 )
 
 // Set changes an app. Options a running WebKit app can take live (links, notifications,
-// devtools, extra sites, certificates, permissions) reach it through SIGHUP (applied "live");
-// the engine and rendering apply at the next start ("next_start"); name, icon and category only
-// rewrite files ("saved").
+// devtools, extra sites, permissions) reach it through SIGHUP (applied "live"); the engine,
+// rendering and a forgotten certificate apply at the next start ("next_start"); name, icon and
+// category only rewrite files ("saved").
 func (m *Manager) Set(ctx context.Context, p api.SetParams) (api.SetResult, error) {
 	var res api.SetResult
 	if p.ID == "" {
@@ -190,7 +190,9 @@ func (m *Manager) Set(ctx context.Context, p api.SetParams) (api.SetResult, erro
 					keep = append(keep, e)
 				}
 			}
-			a.TLSExceptions, live = keep, true
+			// WebKit can't take back a certificate it was told to allow: the open window
+			// keeps accepting it until it closes.
+			a.TLSExceptions, next = keep, true
 		}
 		if p.ResetPermissions {
 			if err := os.Remove(m.Paths.PermissionsFile(a.ID)); err != nil && !os.IsNotExist(err) {

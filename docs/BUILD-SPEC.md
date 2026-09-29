@@ -995,12 +995,16 @@ warnings[{code: drm_unsupported|calls_unsupported|login_wall|insecure, message}]
 suggested_runtime`; its token stays installable for an hour.
 
 **Discovery rules.** http(s) only; https is added when there is no scheme; no userinfo, no
-control characters, ≤ 2,048 bytes. Fetch: dial and TLS 5 s, headers 10 s, 30 s per inspect,
+control characters, ≤ 2,048 bytes; the host is kept in lowercase ASCII, Punycode (`xn--`) for an
+internationalised name, the form WebKit reports pages in (the preview's `host` shows it decoded).
+Fetch: dial and TLS 5 s, headers 10 s, 30 s per inspect,
 TLS ≥ 1.2 and never an unverified certificate, ≤ 5 redirects and never https → http, HTML read
 to 1 MiB, manifest 256 KiB, images 2 MiB (≤ 4096 px, checked before decoding), 8 MiB in all. The
 user agent is WebKitGTK's own (pinned by the host's smoke test). Once the page came from a public
-address, its manifest and icons may not come from loopback, private or link-local addresses
-(checked at connect time). The page's JavaScript never runs. If the page redirected to another
+address, its manifest and icons may not come from loopback, private, shared (100.64.0.0/10,
+Tailscale) or link-local addresses (checked at connect time). The manager is built without cgo,
+so Go's resolver can't do mDNS: `.local` names are resolved by glibc (`getent ahosts`, argv,
+3 s, through nss-mdns), for fetching and for the trust-certificate check. The page's JavaScript never runs. If the page redirected to another
 site (a sign-in wall), that page's name and icons are ignored and the typed origin is probed.
 Scope = the start URL's registrable domain from Fedora's Public Suffix List (exact host:port for
 IP addresses and localhost) plus extra domains. Icons: never `og:image`, never third-party
@@ -1015,7 +1019,9 @@ follow the app's option (allowed for in-scope origins by default); camera, micro
 location, clipboard ask in a banner outside the page; EME is denied. Downloads go to the XDG
 download directory under a safe unique name. A web-process crash reloads once a minute, then
 shows a banner. `SIGHUP` re-reads app.json (links, extra domains, notifications, devtools,
-certificates); `SIGTERM` quits after saving state. `run` removes
+trusted certificates; each notification is checked against the current option, since WebKit
+can't take back a grant; a forgotten certificate stays accepted until the window closes, so
+`set` reports `next_start` for it); `SIGTERM` quits after saving state. `run` removes
 `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS` from the environment, adds the NVIDIA workarounds on
 the proprietary driver and software rendering on request. Chromium-family runtimes run
 `--app=<url> --user-data-dir=<per-app>` (never `--no-sandbox` or `--class`); a running one is

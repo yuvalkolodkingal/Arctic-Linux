@@ -89,7 +89,7 @@ func Discover(ctx context.Context, input string, opt Options) (*Result, error) {
 			head = ParseHead(DecodeHTML(r2.Body, r2.ContentType))
 		}
 	}
-	f.PageDone()
+	f.pageFrom(resp) // the page kept, not a refresh target that wasn't a page
 
 	res := &Result{Input: typed, FinalURL: final}
 	typedSite := list.Site(typed.Host)
