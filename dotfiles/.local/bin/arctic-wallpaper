@@ -135,11 +135,13 @@ rotation_pictures() {   # rotation_pictures FOLDER|arctic: the pictures to rotat
     | LC_ALL=C sort | while IFS= read -r f; do readlink -f "$f"; done
 }
 
-stem() { local b; b="$(basename "$1")"; echo "${b%.*}"; }
+is_drawn() {   # is_drawn PICTURE NOW: is PICTURE the one drawn now (an SVG: its rendered PNG)
+  [[ "$1" == "$2" ]] || [[ "$1" == *.svg && "$2" == "$CACHE/$(basename "$1" .svg).png" ]]
+}
 
 next_picture() {   # next_picture FOLDER SHUFFLE: the picture after the one drawn now
   local folder="$1" shuffle="$2" now all pick="" line found=0 left others=""
-  now="$(stem "$(cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true)")"
+  now="$(cat "$CACHE_DIR/wallpaper-current" 2>/dev/null || true)"
   all="$(rotation_pictures "$folder")"
   [[ -n "$all" ]] || return 1
   if [[ -n "$shuffle" ]]; then
@@ -152,7 +154,7 @@ next_picture() {   # next_picture FOLDER SHUFFLE: the picture after the one draw
     fi
     if [[ -z "$left" ]]; then
       while IFS= read -r line; do    # not the one on the screen now, unless it's the only one
-        [[ "$(stem "$line")" == "$now" ]] || others+="$line"$'\n'
+        is_drawn "$line" "$now" || others+="$line"$'\n'
       done <<<"$all"
       left="$(printf '%s' "${others:-$all}" | shuf)"
     fi
@@ -161,7 +163,7 @@ next_picture() {   # next_picture FOLDER SHUFFLE: the picture after the one draw
   else
     while IFS= read -r line; do
       if (( found )); then pick="$line"; break; fi
-      [[ "$(stem "$line")" == "$now" ]] && found=1
+      is_drawn "$line" "$now" && found=1
     done <<<"$all"
     [[ -n "$pick" ]] || pick="$(head -n1 <<<"$all")"
   fi

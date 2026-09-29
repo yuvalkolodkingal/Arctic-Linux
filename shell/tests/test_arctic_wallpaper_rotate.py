@@ -118,6 +118,15 @@ class RotateTests(unittest.TestCase):
             time.sleep(0.1)
         self.assertIn('arctic-hook wallpaper {}'.format((self.pictures / 'b.jpg').resolve()), self.calls('arctic-hook'))
 
+    def test_pictures_with_the_same_name(self):
+        (self.pictures / 'a.jpg').write_bytes(b'x')
+        self.wallpaper('rotate', '1h', str(self.pictures))
+        seen = []
+        for _ in range(5):
+            self.wallpaper('next')
+            seen.append(self.drawn())
+        self.assertEqual(seen, ['a.jpg', 'a.png', 'b.jpg', 'c.webp', 'a.jpg'])
+
     def test_without_a_user_manager(self):
         # systemd-run can't reach one: swaybg still starts (plain setsid).
         (self.fakes / 'systemd-run').write_text('#!/bin/sh\necho "systemd-run $*" >> "{}"\nexit 1\n'.format(self.log))
