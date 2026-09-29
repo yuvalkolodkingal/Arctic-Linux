@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 REPO = Path(__file__).parents[2]
@@ -51,6 +52,16 @@ class LockKeysTests(unittest.TestCase):
         self.assertEqual(self.osd('lock-keys'), ['ipc osd notice keyboard Caps Lock off '])
         # A key that changed no light (Caps remapped, or switching layouts): nothing.
         self.assertEqual(self.osd('lock-keys'), [])
+
+    def test_waits_for_the_light(self):
+        # Num Lock runs it on the key press; the light goes off only when the key is let go.
+        self.light('input3::numlock', True)
+        self.assertEqual(self.osd('lock-keys', '--seed'), [])
+        run = subprocess.Popen(['bash', str(HELPER), 'lock-keys'], env=self.env)
+        time.sleep(0.4)
+        self.light('input3::numlock', False)
+        self.assertEqual(run.wait(timeout=30), 0)
+        self.assertEqual(self.log.read_text().splitlines(), ['ipc osd notice hash Num Lock off '])
 
     def test_no_state_yet_or_no_lights(self):
         self.light('input3::capslock', True)
