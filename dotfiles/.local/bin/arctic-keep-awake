@@ -99,7 +99,12 @@ case "${1:-status}" in
     else echo "Keep awake is on until $(date -d "@$value" +%H:%M)"; fi ;;
   _expire)
     [[ "${2:-}" =~ ^[0-9]+$ ]] || exit 2
-    sleep $(( $2 - $(now) > 0 ? $2 - $(now) : 0 ))
+    # Short naps against the wall clock: sleep's clock stops while the computer is suspended,
+    # so one long sleep would end keep awake that much late. This ends it within 30 seconds
+    # of waking up when the end time went by meanwhile.
+    while left=$(( $2 - $(now) )); (( left > 0 )); do
+      sleep $(( left < 30 ? left : 30 ))
+    done
     value=""
     [[ -r "$STATE" ]] && read -r value < "$STATE"
     if [[ "$value" == "$2" ]]; then turn_off; fi ;;

@@ -256,6 +256,34 @@ class KeepAwakeTest(HelperHome):
         subprocess.run([str(self.bin / 'arctic-keep-awake'), '_expire', str(past)], env=self.env, check=True, timeout=10)
         self.assertFalse(self.state.exists())
 
+    def test_expiry_across_a_suspend(self):
+        # A pretend wall clock: every nap moves it on; one nap can also span a night's suspend
+        # (sleep's own clock stops then, the wall clock doesn't).
+        clock = self.tmp / 'clock'
+        clock.write_text('1000000\n')
+        stub(self.bin, 'date', '[ "$1" = +%s ] && exec cat "{}"\nexec /bin/date "$@"\n'.format(clock))
+        stub(self.bin, 'sleep', textwrap.dedent('''\
+            echo "sleep $*" >> "{log}"
+            jump=0
+            [ -e "{clock}.suspend" ] && {{ jump=28800; rm "{clock}.suspend"; }}
+            echo $(( $(cat "{clock}") + $1 + jump )) > "{clock}"
+            ''').format(log=self.log, clock=clock))
+        expire = [str(self.bin / 'arctic-keep-awake'), '_expire']
+        # Suspended during the first nap of an hour's keep awake: it ends right after waking.
+        self.state.parent.mkdir(parents=True, exist_ok=True)
+        self.state.write_text('1003600\n')
+        (self.tmp / 'clock.suspend').touch()
+        subprocess.run(expire + ['1003600'], env=self.env, check=True, timeout=10)
+        self.assertEqual([c for c in self.calls() if c.startswith('sleep')], ['sleep 30'])
+        self.assertFalse(self.state.exists())
+        self.assertIn('arctic-session idle --restart', self.calls())
+        # Awake all along: naps of at most 30 seconds up to the end time.
+        clock.write_text('2000000\n')
+        self.state.write_text('2000045\n')
+        subprocess.run(expire + ['2000045'], env=self.env, check=True, timeout=10)
+        self.assertEqual([c for c in self.calls() if c.startswith('sleep')][1:], ['sleep 30', 'sleep 15'])
+        self.assertFalse(self.state.exists())
+
     def test_bad_minutes(self):
         self.tool('arctic-keep-awake', 'on', 'soon', ok=False)
         self.tool('arctic-keep-awake', 'on', 5000, ok=False)
