@@ -57,11 +57,16 @@ if tool == 'rpm':
         print('\n'.join(sorted(installed)))
         sys.exit(0)
     if args[0] == '-q':
+        # As the real rpm: a line on stdout for a missing package too, and a non-zero exit.
         fmt, names = args[2], args[3:]
+        missing = 0
         for name in names:
             if name in installed:
                 print('%s\t%s' % (name, installed[name]) if 'SIZE' in fmt else name)
-        sys.exit(0)
+            else:
+                missing += 1
+                print('package %s is not installed' % name)
+        sys.exit(missing)
 if tool == 'dnf5':
     if 'repoquery' in args and '--providers-of=requires' in args:
         print('\n'.join(data.get('closure', [])))
@@ -490,6 +495,12 @@ class PreviewTests(Apps):
         self.assertEqual(blocked['code'], 'only-terminal')
         self.assertIn('kitty is your only terminal', blocked['message'])
 
+    def test_only_terminal_counts_the_installed_ones(self):
+        # rpm answers "package foot is not installed" for the others (as data: kitty only).
+        self.assertEqual(self.run_apps('preview-remove', 'dnf', 'kitty')['blocked']['package'], 'kitty')
+        self.data['installed']['foot'] = 1
+        self.assertIsNone(self.run_apps('preview-remove', 'dnf', 'kitty')['blocked'])
+
     def test_default_browser_warning(self):
         (self.home / '.config/mango/arctic').mkdir(parents=True)
         (self.home / '.config/mango/arctic/apps.conf').write_text('bind=SUPER,b,spawn,arctic-open browser\n')
@@ -683,6 +694,64 @@ class JobTests(unittest.TestCase):
                     dict(kind='reboot', source='dnf', ids=['gimp'])):
             with self.subTest(job), self.assertRaises(ValueError):
                 self.build(**job)
+
+
+QMLTESTRUNNER = shutil.which('qmltestrunner') or shutil.which('qmltestrunner-qt6') or \
+    next((p for p in ('/usr/lib64/qt6/bin/qmltestrunner', '/usr/lib/qt6/bin/qmltestrunner') if os.path.exists(p)), None)
+# getapps/Check.qml in a folder of its own, with stand-ins for the shell's Theme, Icon and
+# FocusRing (the real Theme needs Quickshell).
+CHECK_STUBS = {
+    'qmldir': 'singleton Theme 1.0 Theme.qml\nIcon 1.0 Icon.qml\nFocusRing 1.0 FocusRing.qml\n',
+    'Theme.qml': 'pragma Singleton\nimport QtQuick\nQtObject {\n    property int space2: 8\n    property int radiusXs: 4\n'
+                 '    property color accent: "orange"\n    property color surfaceRaised: "white"\n    property color lineStrong: "grey"\n'
+                 '    readonly property color onAccent: Qt.rgba(0, 0, 0, 1)   // a literal would read as a signal handler\n    property color ink: "black"\n    property color inkDisabled: "grey"\n'
+                 '    property string fontSans: "sans"\n}\n',
+    'Icon.qml': 'import QtQuick\nItem { property string name; property int size; property color color }\n',
+    'FocusRing.qml': 'import QtQuick\nItem { property real targetRadius; property bool shown }\n',
+    'getapps/tst_check.qml': '''import QtQuick
+import QtTest
+
+Item {
+    id: root
+    width: 320
+    height: 80
+    property bool option: false
+    // As RemoveSheet uses it: the sheet's option follows onToggled.
+    Check { id: box; width: 300; text: "Also delete its data"; checked: root.option; onToggled: root.option = checked }
+    TestCase {
+        name: "Check"
+        when: windowShown
+        function test_keys_and_clicks_change_the_option() {
+            box.forceActiveFocus();
+            keyClick(Qt.Key_Return);
+            compare([box.checked, root.option], [true, true], "Return");
+            keyClick(Qt.Key_Enter);
+            compare([box.checked, root.option], [false, false], "Enter");
+            keyClick(Qt.Key_Space);
+            compare([box.checked, root.option], [true, true], "Space");
+            mouseClick(box);
+            compare([box.checked, root.option], [false, false], "click");
+        }
+    }
+}
+''',
+}
+
+
+@unittest.skipUnless(QMLTESTRUNNER, 'needs qmltestrunner (qt6-qtdeclarative-devel)')
+class CheckBoxTests(unittest.TestCase):
+    """The Remove sheet's check boxes: Enter changes the option a click changes."""
+
+    def test_enter_toggles_the_option(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'getapps').mkdir()
+            shutil.copy(REPO / 'shell/getapps/Check.qml', root / 'getapps/Check.qml')
+            for name, text in CHECK_STUBS.items():
+                (root / name).write_text(text)
+            done = subprocess.run([QMLTESTRUNNER, '-input', str(root / 'getapps/tst_check.qml')],
+                                  env=dict(os.environ, QT_QPA_PLATFORM='offscreen'), capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
 
 class ProgressTests(unittest.TestCase):

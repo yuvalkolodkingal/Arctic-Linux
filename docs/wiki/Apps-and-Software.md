@@ -359,7 +359,7 @@ packages. Remove the entry again in Remove apps; the program itself stays.
 | `flathub:org.gimp.GIMP` | Installs an app from Flathub (`flatpak install -y flathub org.gimp.GIMP`) |
 | `dnf search editor` | Searches Fedora's packages. `dnf info`, `dnf list` and other questions run without a password. |
 | `dnf install …`, `dnf upgrade` | Runs as `pkexec dnf5 … -y` |
-| `dnf remove …` | Runs as `pkexec dnf5 remove …`: dnf lists everything that goes and asks `[y/N]` in the console |
+| `dnf remove …` (and `rm`, `autoremove`, `swap`, `distro-sync`, `--allowerasing` …) | First works out what would go, without a password, and stops if that includes a package Arctic Linux needs, your login shell or your only terminal. Then runs as `pkexec dnf5 …`: dnf lists everything that goes and asks `[y/N]` in the console |
 | `flatpak install flathub …`, `flatpak update` | Runs as typed, with `-y` added; `flatpak uninstall` asks first |
 
 - `Tab` completes package names; **Refresh list** updates the list of names now (it refreshes

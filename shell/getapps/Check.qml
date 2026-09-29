@@ -11,8 +11,9 @@ AbstractButton {
     focusPolicy: Qt.StrongFocus
     Accessible.role: Accessible.CheckBox
     Accessible.name: text
-    Keys.onReturnPressed: toggle()
-    Keys.onEnterPressed: toggle()
+    // A click, not toggle(): toggle() doesn't emit toggled, which the sheets' options follow.
+    Keys.onReturnPressed: click()
+    Keys.onEnterPressed: click()
     implicitHeight: Math.max(24, label.implicitHeight)
     implicitWidth: row.implicitWidth
     background: null

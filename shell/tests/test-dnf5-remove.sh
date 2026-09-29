@@ -11,7 +11,10 @@
 #   - `repoquery --installed --providers-of=requires --recursive` gives the hard closure;
 #   - the `repoquery --installed --qf` fields and `rpm -qf --qf '[%{FILENAMES}\t%{=NAME}\n]'`;
 #   - `apps.py preview-remove dnf` turns all that into its preview, blocks a removal that takes
-#     a protected package along, and root's `dnf5 remove -y` then removes exactly that list.
+#     a protected package along, and root's `dnf5 remove -y` then removes exactly that list;
+#   - the console's check (`install-terminal.py --check`) refuses a typed removal that takes a
+#     protected package along, however it is typed (rm, a glob, name.arch, a NEVRA, an option
+#     before the command, `do --allowerasing`).
 # Test packages stand in for the desktop: t-app (a launcher entry) needs t-lib; t-meta needs
 # t-tool, as arctic-desktop needs blueman.
 #
@@ -19,7 +22,7 @@
 #                                             shell/tests/fixtures/apps/ (run locally)
 #
 # It changes the system it runs on (repositories, packages, users): it refuses to run outside a
-# container. Needs: dnf5 rpm-build createrepo_c python3 util-linux (runuser).
+# container. Needs: dnf5 rpm-build createrepo_c python3 python3-pyte util-linux (runuser).
 set -euo pipefail
 
 if (( EUID != 0 )); then echo "run as root (in a throwaway container)" >&2; exit 2; fi
@@ -33,6 +36,7 @@ UPDATE=0
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 APPS="$REPO/shell/scripts/apps.py"
+TERMINAL="$REPO/shell/scripts/install-terminal.py"
 FIXTURES="$HERE/fixtures/apps"
 SRV=/srv/arctic-remove-test
 WORK=/tmp/arctic-remove-test
@@ -140,6 +144,23 @@ set +e
 preview="$(as_user python3 "$APPS" preview-remove dnf t-nothere)"; code=$?
 set -e
 expect "a package that isn't installed" "$code:$(field "$preview" code)" "1:not-installed"
+
+step "The console checks what a typed removal takes along (install-terminal.py --check)"
+# t-meta is still protected here; it needs t-tool. Whatever form names t-tool, the check refuses.
+check() { as_user env ARCTIC_PROTECTED_DIR="$WORK/protected.d" python3 "$TERMINAL" --check "$@" 2>&1; }
+for typed in "rm t-tool" "remove t-too?" "remove t-tool.noarch" "remove t-tool-1-1.noarch" "remove t-tool-0:1-1.noarch" \
+             "--repo arctic-remove-test rm t-tool" "do --allowerasing --action=remove t-tool"; do
+  set +e
+  # shellcheck disable=SC2086  # the typed words, split as the console's shlex would
+  text="$(set -f; check $typed)"; code=$?
+  set -e
+  expect "refused: dnf $typed" "$code" 1
+  expect_in "  and says why" "$text" "would also remove t-meta, which Arctic Linux needs."
+done
+text="$(check rm t-leaf)" || fail "the check refused rm t-leaf: $text"
+ok "allowed: dnf rm t-leaf"
+rpm -q t-tool t-meta t-leaf >/dev/null || fail "the check removed something"
+ok "nothing was removed by the checks"
 
 step "apps.py installed dnf maps the launcher entry to its package"
 listing="$(as_user env XDG_DATA_DIRS=/usr/share python3 "$APPS" installed dnf)" || fail "installed dnf: $listing"
