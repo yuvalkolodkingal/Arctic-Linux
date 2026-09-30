@@ -9,6 +9,12 @@ import Quickshell.Wayland
 //           'center' — a centred card (keyboard shortcuts).
 //           'point'  — a menu under a bar item (power menu); set pointX to the item's centre.
 // Clicking outside the card or pressing Esc dismisses it; keyboard focus returns on close.
+//
+// shielded — the card gets a layer surface of its own just around it, '<layerName>-card',
+//            which rules.conf blacks out in screenshots, recordings and screen shares. Mango's
+//            shield covers a whole layer surface, so shielding this full-screen one would black
+//            out the whole screen below the bar while anything captures it. 'center' and
+//            'point' cards only: a dragged card would move its surface under the pointer.
 PanelWindow {
     id: popover
     property bool open: false
@@ -16,6 +22,7 @@ PanelWindow {
     property bool scrim: true
     property bool grabKeyboard: true
     property string layerName: 'arctic-popover'
+    property bool shielded: false
     property real cardWidth: 520
     property real cardHeight: 400
     property real pointX: 0
@@ -48,7 +55,17 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: layerName
-    WlrLayershell.keyboardFocus: open && grabKeyboard ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: open && grabKeyboard && !shielded ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+    // Where the card sits in this window (the shielded card's surface goes there too).
+    readonly property real cardX: popover.placement === 'dock' ? dockPos.animatedX
+        : popover.placement === 'point' ? Math.max(Theme.space2, Math.min(popover.pointX - surface.width / 2, popover.width - surface.width - Theme.space2))
+        : (popover.width - surface.width) / 2
+    readonly property real cardY: popover.placement === 'dock' ? dockPos.animatedY
+        : popover.placement === 'point' ? Theme.space1 + Theme.frameWidth
+        : Math.max(Theme.space4, (popover.height - surface.height) / 2 - Theme.topInset / 2)
+    // Room around the shielded card for its shadow.
+    readonly property int shieldPad: Theme.space2
 
     Timer { id: settle; interval: 120; onTriggered: popover.sizeSettled = popover.open }
     onOpenChanged: {
@@ -67,6 +84,25 @@ PanelWindow {
     }
 
     onBackingWindowVisibleChanged: if (backingWindowVisible) Qt.callLater(focusContent)
+
+    // The shielded card's own surface, above the scrim: it maps only once this window is
+    // shown, so Mango stacks it on top (layer surfaces stack in the order they map).
+    PanelWindow {
+        id: cardWindow
+        screen: popover.screen
+        visible: popover.shielded && popover.shown && popover.backingWindowVisible
+        color: 'transparent'
+        anchors { top: true; left: true }
+        margins.left: Math.max(0, popover.cardX - popover.shieldPad)
+        margins.top: Math.max(0, Theme.topInset + popover.cardY - popover.shieldPad)
+        implicitWidth: surface.width + 2 * popover.shieldPad
+        implicitHeight: surface.height + 2 * popover.shieldPad
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: popover.layerName + '-card'
+        WlrLayershell.keyboardFocus: popover.open && popover.grabKeyboard ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+        onBackingWindowVisibleChanged: if (backingWindowVisible) Qt.callLater(popover.focusContent)
+    }
 
     DockPosition {
         id: dockPos
@@ -91,6 +127,7 @@ PanelWindow {
     }
 
     ShadowLayers {
+        parent: popover.shielded ? cardWindow.contentItem : popover.contentItem
         target: surface
         elevation: popover.shadow
         radius: popover.cardRadius
@@ -98,6 +135,8 @@ PanelWindow {
 
     PopupSurface {
         id: surface
+        parent: popover.shielded ? cardWindow.contentItem : popover.contentItem
+        z: 1                            // above ShadowLayers wherever the two are reparented
         focus: true
         width: popover.cardWidth
         height: popover.cardHeight
@@ -106,12 +145,8 @@ PanelWindow {
         border.width: Theme.lineWidth
         border.color: Theme.line
         dockEdge: popover.placement === 'dock' ? dockPos.edge : ''
-        x: popover.placement === 'dock' ? dockPos.animatedX
-           : popover.placement === 'point' ? Math.max(Theme.space2, Math.min(popover.pointX - width / 2, popover.width - width - Theme.space2))
-           : (popover.width - width) / 2
-        y: popover.placement === 'dock' ? dockPos.animatedY
-           : popover.placement === 'point' ? Theme.space1 + Theme.frameWidth
-           : Math.max(Theme.space4, (popover.height - height) / 2 - Theme.topInset / 2)
+        x: popover.shielded ? popover.shieldPad : popover.cardX
+        y: popover.shielded ? popover.shieldPad : popover.cardY
         Behavior on width { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
         Behavior on height { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
         Keys.onEscapePressed: popover.close()
