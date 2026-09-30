@@ -7,8 +7,8 @@ import Quickshell.Io
 
 // Clipboard history (Super + V): what you copied, newest first (cliphist, through
 // scripts/clipboard.py). Type to filter; Enter copies it again, Shift + Enter also pastes it
-// into the window you were in, Delete removes it. Pictures show a small preview. The layer is
-// shielded from screenshots and screencasts (rules.conf), since history can hold passwords.
+// into the window you were in, Delete removes it. Pictures show a small preview. It is
+// hidden behind a warning while the screen is recorded or shared, since history can hold passwords.
 Popover {
     id: panel
     property var items: []
@@ -26,6 +26,7 @@ Popover {
     }
 
     layerName: 'arctic-clipboard'
+    hideWhileCaptured: true
     focusItem: field
     cardWidth: 520
     cardHeight: Math.min(layout.implicitHeight + 2 * Theme.space3, height - 32)

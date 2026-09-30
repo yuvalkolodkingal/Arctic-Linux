@@ -6,7 +6,7 @@ import Quickshell.Io
 // "Share with a phone…" from a saved network's page in the network menu: a QR code a phone
 // camera joins with (network.py share: nmcli reads the password, qrencode draws it from stdin),
 // and "Show password" for typing it instead. The password lives only in this card while it is
-// open and is cleared on close; the card (arctic-wifi-share-card) is blacked out in screen shares.
+// open and is cleared on close; a warning hides it while the screen is recorded or shared.
 Popover {
     id: card
     property string uuid: ''
@@ -17,7 +17,7 @@ Popover {
     property bool busy: false
 
     layerName: 'arctic-wifi-share'
-    shielded: true
+    hideWhileCaptured: true
     placement: 'center'
     cardColor: Theme.surfaceRaised
     shadow: 2

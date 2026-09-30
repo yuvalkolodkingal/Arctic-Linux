@@ -27,7 +27,7 @@ Scope {
     Popover {
         id: dialog
         layerName: 'arctic-polkit'
-        shielded: true
+        hideWhileCaptured: true
         placement: 'center'
         cardColor: Theme.surfaceRaised
         cardWidth: 420
