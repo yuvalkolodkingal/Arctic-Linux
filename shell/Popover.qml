@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 
@@ -9,6 +10,12 @@ import Quickshell.Wayland
 //           'center' — a centred card (keyboard shortcuts).
 //           'point'  — a menu under a bar item (power menu); set pointX to the item's centre.
 // Clicking outside the card or pressing Esc dismisses it; keyboard focus returns on close.
+//
+// hideWhileCaptured — while the screen is recorded (arctic-record) or shared (the portal), the
+//                     card shows a warning in place of its content, so a password dialog or
+//                     the clipboard doesn't end up in the recording; "Show anyway" brings it
+//                     back until the card closes. (Mango's shield_when_capture isn't used: it
+//                     blacks out the whole layer surface, which is the whole screen here.)
 PanelWindow {
     id: popover
     property bool open: false
@@ -16,6 +23,11 @@ PanelWindow {
     property bool scrim: true
     property bool grabKeyboard: true
     property string layerName: 'arctic-popover'
+    property bool hideWhileCaptured: false
+    property bool showAnyway: false
+    readonly property string capture: RecordService.recording ? 'recorded'
+                                    : PrivacyService.sharing.length > 0 ? 'shared' : ''
+    readonly property bool guarded: hideWhileCaptured && capture !== '' && !showAnyway
     property real cardWidth: 520
     property real cardHeight: 400
     property real pointX: 0
@@ -39,7 +51,8 @@ PanelWindow {
     signal opened()
 
     function close() { if (open) { open = false; dismissed(); } }
-    function focusContent() { if (open) (focusItem || surface).forceActiveFocus(); }
+    function focusContent() { if (open) (guarded ? showButton : focusItem || surface).forceActiveFocus(); }
+    onGuardedChanged: focusContent()
 
     visible: shown
     color: 'transparent'
@@ -55,6 +68,7 @@ PanelWindow {
         sizeSettled = false;
         if (open) settle.restart();
         if (open) {
+            showAnyway = false;
             fadeOut.stop();
             shade.opacity = 1;
             surface.popIn();
@@ -100,7 +114,7 @@ PanelWindow {
         id: surface
         focus: true
         width: popover.cardWidth
-        height: popover.cardHeight
+        height: Math.max(popover.cardHeight, popover.guarded ? guard.implicitHeight : 0)
         radius: popover.cardRadius
         color: popover.cardColor
         border.width: Theme.lineWidth
@@ -120,6 +134,63 @@ PanelWindow {
         Item {
             id: body
             anchors.fill: parent
+            visible: !popover.guarded
+        }
+        // The warning shown in place of the content while the screen is captured.
+        Item {
+            id: guard
+            anchors.fill: parent
+            visible: popover.guarded
+            implicitHeight: guardBody.implicitHeight + 2 * Theme.space5
+            ColumnLayout {
+                id: guardBody
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: Theme.space5 }
+                spacing: 0
+                RowLayout {
+                    spacing: Theme.space3
+                    Layout.fillWidth: true
+                    Rectangle {
+                        Layout.alignment: Qt.AlignTop
+                        implicitWidth: 40
+                        implicitHeight: 40
+                        radius: 20
+                        color: Theme.warningSoft
+                        Icon { anchors.centerIn: parent; name: 'eye-off'; size: 22; color: Theme.warning }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.space1
+                        Text {
+                            Layout.fillWidth: true
+                            text: 'Your screen is being ' + popover.capture
+                            color: Theme.ink
+                            font.family: Theme.fontSans
+                            font.pixelSize: 20
+                            font.weight: Font.DemiBold
+                            wrapMode: Text.Wrap
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: 'This is hidden so it doesn’t show up in the '
+                                  + (popover.capture === 'shared' ? 'screen share' : 'recording')
+                                  + '. Stop ' + (popover.capture === 'shared' ? 'sharing' : 'recording')
+                                  + ' to see it, or show it anyway.'
+                            color: Theme.inkMuted
+                            font.family: Theme.fontSans
+                            font.pixelSize: 15
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.topMargin: Theme.space6
+                    Layout.fillWidth: true
+                    spacing: Theme.space2
+                    Item { Layout.fillWidth: true }
+                    ArcticButton { variant: 'ghost'; text: 'Cancel'; onClicked: popover.close() }
+                    ArcticButton { id: showButton; text: 'Show anyway'; onClicked: popover.showAnyway = true }
+                }
+            }
         }
     }
 
