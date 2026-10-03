@@ -69,6 +69,7 @@ if (( FIXTURES )); then
   fixture org.mozilla.firefox "Firefox" firefox "Network;WebBrowser;" "text/html;x-scheme-handler/http;x-scheme-handler/https;"
   fixture dev.zed.Zed "Zed" zeditor "Development;TextEditor;" "text/plain;"
   fixture thunar "Thunar" thunar "System;FileManager;" "inode/directory;"
+  fixture org.gnome.Nautilus "Files (Nautilus)" nautilus "System;FileManager;" "inode/directory;"
   fixture vlc "VLC media player" vlc "AudioVideo;Player;" "video/mp4;video/x-matroska;audio/mpeg;"
   fixture org.gnome.Loupe "Image Viewer" loupe "Graphics;Viewer;" "image/png;image/jpeg;"
   printf '[Desktop Entry]\nType=Application\nName=kitty\nExec=kitty\nCategories=System;TerminalEmulator;\n' > "$apps/kitty.desktop"
