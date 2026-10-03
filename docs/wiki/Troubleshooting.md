@@ -98,7 +98,7 @@ scripts from running. The same bug also made some finished 0.1 installs refuse e
 [The login screen goes straight back](#the-login-screen-goes-straight-back-after-the-password)).
 The 0.2 installer labels the system right after copying it, and again at the end, including
 `/home`, `/var/log`, `/nix` and `/boot`. Download the 0.2 image
-(`Arctic-Linux-1.0-x86_64.iso`) and write the stick again.
+(`Arctic-Linux-1.1-x86_64.iso`) and write the stick again.
 
 ### "The NVIDIA driver couldn't be installed"
 

@@ -359,7 +359,7 @@ class InfoTest(unittest.TestCase):
         return str(f)
 
     def test_os_and_base(self):
-        self.assertEqual(self.info("os", ARCTIC_OS_RELEASE=str(OS_RELEASE)), "Arctic Linux 1.0 (Fedora 44)\n")
+        self.assertEqual(self.info("os", ARCTIC_OS_RELEASE=str(OS_RELEASE)), "Arctic Linux 1.1 (Fedora 44)\n")
         self.assertEqual(self.info("base", ARCTIC_OS_RELEASE=str(OS_RELEASE)), "Fedora 44\n")
         fedora = self.os_release('NAME="Fedora Linux"\nVERSION="44 (Workstation Edition)"\nID=fedora\n'
                                  'VERSION_ID=44\nPRETTY_NAME="Fedora Linux 44 (Workstation Edition)"\n')

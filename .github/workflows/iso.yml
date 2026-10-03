@@ -10,13 +10,17 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v1.0.0-build.<run number>)
+        description: Release tag (default v1.1.0-build.<run number>)
         type: string
         default: ""
       prerelease:
-        description: Mark the release as a pre-release (untick for a stable release such as v1.0.0)
+        description: Mark the release as a pre-release (untick for a stable release such as v1.1.0)
         type: boolean
         default: true
+      draft:
+        description: Keep the release as a draft for reviewing boot-test results before publication
+        type: boolean
+        default: false
       boot_test:
         description: Boot the ISO in QEMU and upload screenshots
         type: boolean
@@ -30,7 +34,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ISO: Arctic-Linux-1.0-x86_64.iso
+  ISO: Arctic-Linux-1.1-x86_64.iso
 
 jobs:
   iso:
@@ -127,12 +131,12 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.0.0-build.$GITHUB_RUN_NUMBER"
+            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.1.0-build.$GITHUB_RUN_NUMBER"
             pre=""; [ "${{ inputs.prerelease }}" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
-            echo "Arctic Linux 1.0 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
+            echo "Arctic Linux 1.1 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
             echo
             echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
             echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."
@@ -164,10 +168,15 @@ jobs:
               echo "On Windows (PowerShell): \`cmd /c copy /b $ISO.part00+$ISO.part01 $ISO\` (list every part)."
             fi
           } > notes.md
+          if [ -f "docs/releases/${tag}.md" ]; then
+            cat "docs/releases/${tag}.md" notes.md > release-notes.md
+            mv release-notes.md notes.md
+          fi
           if [ "$SPLIT" = true ]; then
             files=(out/iso/"$ISO".part* "out/iso/$ISO.sha256")
           else
             files=("out/iso/$ISO" "out/iso/$ISO.sha256")
           fi
+          draft=""; [ "${{ inputs.draft }}" != true ] || draft="--draft"
           gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
-            --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre
+            --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre $draft

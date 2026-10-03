@@ -11,7 +11,7 @@ import Quickshell.Io
 Singleton {
     id: engine
 
-    readonly property string clientVersion: "1.0.0"
+    readonly property string clientVersion: "1.1.0"
     property bool connected: false      // Hello answered
     property bool starting: false
     property string failure: ""         // why the bridge is not usable

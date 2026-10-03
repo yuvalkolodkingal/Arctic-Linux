@@ -241,5 +241,5 @@ commands.
   them.
 - The ISO is built by kiwi-ng from `iso/kiwi/config.kiwi`, derived from Fedora's own kiwi
   descriptions: hybrid ISO, UEFI (Fedora's signed shim) and BIOS, erofs root, volume id
-  `Arctic-Linux-1.0`. `config.sh` sets the live session, enables SDDM, `arcticd.socket` and
+  `Arctic-Linux-1.1`. `config.sh` sets the live session, enables SDDM, `arcticd.socket` and
   `nix-daemon`, sets the Plymouth theme and removes rescue images to keep the ISO under 2 GiB.

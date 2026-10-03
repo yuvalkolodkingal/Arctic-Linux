@@ -257,7 +257,7 @@ def serve():
         rid, method, params = req.get('id'), req.get('method'), req.get('params') or {}
         data = state()
         if method == 'Hello':
-            send(dict(id=rid, result=dict(engine_version='1.0.0', protocol_version=1, runtimes=[
+            send(dict(id=rid, result=dict(engine_version='1.1.0', protocol_version=1, runtimes=[
                 dict(id='webkit', name='Arctic', available=True, drm=False, webrtc=False),
                 dict(id='chromium:brave', name='Brave', available=True, drm=True, webrtc=True)])))
         elif method == 'Inspect':

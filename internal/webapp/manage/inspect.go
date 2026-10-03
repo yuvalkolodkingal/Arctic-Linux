@@ -171,7 +171,10 @@ func (m *Manager) warnings(res *discover.Result) ([]api.Warning, string) {
 				return "chromium:" + b.Variant, b.Name
 			}
 		}
-		return "", "Brave"
+		if drm {
+			return "", "Brave"
+		}
+		return "", "Chromium"
 	}
 	switch discover.Needs(res.Input.Hostname()) {
 	case "drm":
@@ -185,7 +188,7 @@ func (m *Manager) warnings(res *discover.Result) ([]api.Warning, string) {
 		if rt != "" {
 			suggested = rt
 		}
-		w = append(w, api.Warning{Code: "calls_unsupported", Message: fmt.Sprintf("Video and voice calls don’t work in the Arctic engine. %s can make them.", name)})
+		w = append(w, api.Warning{Code: "calls_unsupported", Message: fmt.Sprintf("Use %s for this site’s calling features. Calls need WebRTC, which the built-in engine doesn’t provide; the site must also enable calls for your account.", name)})
 	}
 	if res.LoginWall {
 		w = append(w, api.Warning{Code: "login_wall", Message: fmt.Sprintf("The site asked you to sign in, so Arctic used the name and icon from %s.", res.Input.Host)})

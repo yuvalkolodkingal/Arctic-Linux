@@ -1,4 +1,4 @@
 {
-  "calls_unsupported": ["meet.google.com", "teams.microsoft.com", "teams.live.com", "app.zoom.us", "discord.com", "app.slack.com", "whereby.com", "meet.jit.si"],
+  "calls_unsupported": ["web.whatsapp.com", "meet.google.com", "teams.microsoft.com", "teams.live.com", "app.zoom.us", "discord.com", "app.slack.com", "whereby.com", "meet.jit.si"],
   "drm_unsupported": ["netflix.com", "open.spotify.com", "primevideo.com", "tidal.com", "disneyplus.com", "max.com", "music.apple.com", "tv.apple.com", "deezer.com", "hulu.com"]
 }

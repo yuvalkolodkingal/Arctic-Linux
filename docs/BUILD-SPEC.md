@@ -57,8 +57,8 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 1.0.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-1.0.0/` of the
+Version 1.1.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-1.1.0/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 The one other source is `Source1`, the Nerd Fonts "Symbols Only" release for
@@ -532,8 +532,8 @@ livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO s
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.
-Volume id `Arctic-Linux-1.0` (the installer finds its media by the `Arctic-Linux` prefix). Output
-`out/iso/Arctic-Linux-1.0-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
+Volume id `Arctic-Linux-1.1` (the installer finds its media by the `Arctic-Linux` prefix). Output
+`out/iso/Arctic-Linux-1.1-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
 Release suffix, commit and `arctic_repos=enabled|disabled` from out/BUILD-INFO.
 
 Design assets not copied into `design/` (all 78 icons, 30 app tiles, lockups, wallpapers as
@@ -569,7 +569,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 1.0.0, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 1.1.0, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
@@ -910,6 +910,14 @@ permissions, downloads, crashes, theme) is pure Go in `internal/webapp/policy` a
 `-z now`, so it never calls a WebKitGTK symbol newer than the version it is built against, and
 the package Requires `webkitgtk6.0 >= <that version>`. A Chromium-family browser is the per-app
 fallback engine for sites that need WebRTC calls or Widevine DRM, which Fedora's WebKitGTK lacks.
+From 1.1, arctic-webapps Requires Chromium, WhatsApp Web is in the calling-site table, and
+Install uses the preview's suggested runtime unless the caller explicitly chooses one.
+Existing apps retain their selected runtime and their original sign-in profiles.
+Mango's portal preferences use GTK for Settings/FileChooser and wlr for ScreenCast/Screenshot.
+The native host synchronizes both GTK color-scheme properties: the modern interface scheme
+for widgets and the legacy prefer-dark flag that WebKit still uses for website media queries.
+Both native and Chromium smoke tests verify light → dark → light without a page reload.
+The Chromium test also exercises real local WebRTC data, audio RTP and decoded video.
 
 **Ids.** `org.arcticlinux.WebApp.<Slug>_<hash>`, grammar
 `^org\.arcticlinux\.WebApp\.[A-Za-z][A-Za-z0-9]{0,31}_[0-9a-f]{6,8}$` (also a valid GApplication

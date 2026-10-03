@@ -7,7 +7,7 @@
 #
 # Checks: the window's Wayland app_id is the app id, the title follows the page, the page sees
 # webapp.FetchUserAgent (so discovery fetches as the app will), the page's favicon replaces the
-# letter icon through the manager, a theme switch recolours the header live, notifications set
+# letter icon through the manager, theme switches update the header and website live, notifications set
 # to Block stop in the open window, a failed download isn't reported as finished, a second start
 # keeps one window and the pid file, SIGTERM saves the window state, and remove stops the app. Screenshots land in DIR (default
 # /tmp/webapp-shots). The navigation rules themselves are unit-tested in internal/webapp/policy.
@@ -34,83 +34,7 @@ export GOTOOLCHAIN=local GOPROXY=off GOFLAGS=-mod=mod
 UA_WANT="$(sed -n 's/^const FetchUserAgent = "\(.*\)"$/\1/p' "$REPO/internal/webapp/version.go")"
 
 # ---- fixture site: records every request's path and User-Agent
-cat > "$WORK/site/server.py" <<'PY'
-import http.server, os, socket, struct, sys, time, zlib
-LOG = sys.argv[2]
-def png(size, rgb):
-    raw = b"".join(b"\0" + bytes(rgb) * size for _ in range(size))
-    def chunk(t, d):
-        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
-ICON = png(96, (40, 110, 200))
-PAGES = {
-    "/": b"<!doctype html><html><head><title>Smoke Home</title><link rel=manifest href=/app.webmanifest></head>"
-         b"<body style='background:#9cf'><h1>Smoke</h1><a id=out href='https://example.com/elsewhere'>out</a>"
-         b"<a id=in href='/second'>in</a></body></html>",
-    "/second": b"<!doctype html><title>Second Page</title><p>second</p>",
-    "/app.webmanifest": b'{"name":"Smoke App","start_url":"/","icons":[]}',
-    "/notify": b"<!doctype html><title>Notify</title><script>"
-               b"new Notification('Smoke').onclose = () => fetch('/notification-closed');</script>",
-    "/notification-closed": b"ok",
-    "/conversation": b"<!doctype html><title>Conversation</title><script>setTimeout(()=>{let n=new Notification('Conversation 42');n.onclick=()=>{document.title='Opened conversation 42';fetch('/notification-target');};},1500)</script>",
-    "/notification-target": b"ok",
-    "/paste": b"<!doctype html><title>Paste fixture</title><div contenteditable id=editor>Paste here</div><script>editor.focus();editor.onpaste=e=>{fetch('/paste-result?files='+e.clipboardData.files.length+'&type='+encodeURIComponent(e.clipboardData.files[0]?.type)+'&types='+encodeURIComponent([...e.clipboardData.types].join(',')));setTimeout(()=>fetch('/paste-inserted?images='+editor.querySelectorAll('img').length),500);};</script>",
-    "/upload": b"<!doctype html><title>Upload fixture</title><input type=file autofocus multiple onchange=\"fetch('/upload-result?count='+this.files.length+'&name='+encodeURIComponent(this.files[0]?.name))\">",
-    "/media": b"<!doctype html><title>Native media fixture</title><audio src='/tone.wav' controls loop></audio><button autofocus onclick=\"document.querySelector('audio').play()\">Play</button>",
-    "/capabilities": b"<!doctype html><title>Capabilities</title><script>fetch('/capabilities-result?'+new URLSearchParams({rtc:typeof RTCPeerConnection,media:typeof navigator.mediaDevices?.getUserMedia,screen:typeof navigator.mediaDevices?.getDisplayMedia,session:typeof navigator.mediaSession}));</script>",
-}
-class H(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        with open(LOG, "a") as f:
-            f.write(self.path + "\t" + self.headers.get("User-Agent", "") + "\n")
-        if self.path in ("/good.bin", "/broken.bin"):
-            # Two downloads: the broken one's connection is reset halfway (a short body alone
-            # counts as finished).
-            self.send_response(200)
-            self.send_header("Content-Type", "application/octet-stream")
-            self.send_header("Content-Disposition", 'attachment; filename="%s"' % self.path[1:])
-            self.send_header("Content-Length", "10" if self.path == "/good.bin" else "1000000")
-            self.end_headers()
-            self.wfile.write(b"0123456789")
-            if self.path == "/broken.bin":
-                time.sleep(1)
-                self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
-                self.connection.close()
-            return
-        body = PAGES.get(self.path.split("?")[0])
-        if self.path == "/tone.wav":
-            import io, wave
-            audio = io.BytesIO()
-            with wave.open(audio, 'wb') as wav:
-                wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(8000)
-                wav.writeframes(b'\0\0' * 80000)
-            body = audio.getvalue()
-        if self.path.startswith(('/capabilities-result?', '/upload-result?', '/paste-result?', '/paste-inserted?')):
-            body = b'ok'
-
-        # The favicon appears only after install, so the app starts with a letter icon and the
-        # window's favicon upgrade has something to do.
-        if self.path == "/favicon.ico" and os.path.exists(LOG + ".icon"):
-            body = ICON
-        if body is None:
-            self.send_error(404)
-            return
-        self.send_response(200)
-        ctype = "text/html; charset=utf-8"
-        if self.path.endswith(".wav"):
-            ctype = "audio/wav"
-        elif self.path.endswith("manifest"):
-            ctype = "application/manifest+json"
-        elif self.path == "/favicon.ico":
-            ctype = "image/png"
-        self.send_header("Content-Type", ctype)
-        self.end_headers()
-        self.wfile.write(body)
-    def log_message(self, *a):
-        pass
-http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
-PY
+cp "$REPO/cmd/arctic-webapp-host/dev/fixture-server.py" "$WORK/site/server.py"
 PORT=18765
 python3 "$WORK/site/server.py" "$PORT" "$WORK/requests.log" &
 SERVER=$!
@@ -173,14 +97,23 @@ wait_for '[ -n "$(windows)" ]' || fail "no window with app_id $ID"
 wait_for 'windows | grep -q "Smoke Home"' || fail "title did not follow the page: $(windows)"
 sleep 2
 grim "$OUT/webapp-window.png" && echo "screenshot: $OUT/webapp-window.png"
-# A theme switch (arctic-theme relinks current and rewrites theme) recolours the header live.
+# Both the window and the website must follow the desktop, without reloading the page.
+wait_for 'grep -q "^/theme-result?dark=false" "$WORK/requests.log"' || fail "website did not start in the light desktop theme"
+PAGE_LOADS="$(grep -c "^/$(printf '\t')" "$WORK/requests.log")"
 HEADER_LIGHT="$(grim -g "640,4 1x1" -t ppm - | od -An -tx1 | tail -1)"
 ln -sfn themes/polar-night "$XDG_CONFIG_HOME/arctic/current"
 echo polar-night > "$XDG_CONFIG_HOME/arctic/theme"
+wait_for 'grep -q "^/theme-result?dark=true" "$WORK/requests.log"' || fail "website did not switch to dark live"
 sleep 1.5
 HEADER_DARK="$(grim -g "640,4 1x1" -t ppm - | od -An -tx1 | tail -1)"
 [ "$HEADER_LIGHT" != "$HEADER_DARK" ] || fail "the header did not follow the theme switch ($HEADER_LIGHT)"
 grim "$OUT/webapp-window-dark.png" && echo "screenshot: $OUT/webapp-window-dark.png"
+LIGHT_REPORTS="$(grep -c '^/theme-result?dark=false' "$WORK/requests.log" || true)"
+ln -sfn themes/winter "$XDG_CONFIG_HOME/arctic/current"
+echo winter > "$XDG_CONFIG_HOME/arctic/theme"
+wait_for '[ "$(grep -c "^/theme-result?dark=false" "$WORK/requests.log" || true)" -gt "$LIGHT_REPORTS" ]' || fail "website did not switch back to light live"
+[ "$(grep -c "^/$(printf '\t')" "$WORK/requests.log")" = "$PAGE_LOADS" ] || fail "theme switch reloaded the website"
+grep '^/theme-result?' "$WORK/requests.log" > "$OUT/theme.txt"
 
 UA_GOT="$(grep "^/$(printf '\t')" "$WORK/requests.log" | tail -1 | cut -f2)"
 [ "$UA_GOT" = "$UA_WANT" ] || fail "user agent: the page saw \"$UA_GOT\"; webapp.FetchUserAgent is \"$UA_WANT\""

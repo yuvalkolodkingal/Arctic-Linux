@@ -1,5 +1,24 @@
 # Release notes
 
+## Arctic Linux 1.1.0
+
+Download `Arctic-Linux-1.1-x86_64.iso` from the
+[1.1.0 release](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/v1.1.0).
+
+- Web-app websites follow the desktop's light/dark theme live, along with their windows.
+  Sites with their own appearance setting should be set to **System** or **Automatic**.
+- Chromium comes with the web-app package. New WhatsApp apps and other calling sites select
+  an available Chromium-family engine automatically; terminal installs now use the same
+  engine recommendation as Get apps.
+- Existing WhatsApp apps can switch to Chromium in **Settings → Web apps**. Pair again if
+  requested; the original profile is preserved. Web calling still depends on the site's
+  availability and account support.
+- This ISO includes the WhatsApp preview/install fix, accelerated video playback changes,
+  and Fish and Nautilus as the installer defaults.
+
+Existing systems can update with `sudo dnf --refresh upgrade`, then restart the desktop shell
+with `arctic-shell --restart`. There is no need to reinstall the OS.
+
 ## Arctic Linux 1.0.0
 
 Arctic Linux 1.0 is the first stable release: the 0.3 desktop, with the fixes that followed it.

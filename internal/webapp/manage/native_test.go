@@ -3,6 +3,7 @@ package manage
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -61,5 +62,30 @@ func TestAutostartRejectsInvalidID(t *testing.T) {
 	}
 	if err := m.Paths.RemoveAutostart("../../bad"); err == nil {
 		t.Fatal("accepted invalid removal")
+	}
+}
+
+func TestSwitchWhatsAppEnginePreservesOriginalProfile(t *testing.T) {
+	m := testManager(t)
+	a := fixtureApp("WhatsApp", "https://web.whatsapp.com/")
+	put(t, m, a)
+	bin := filepath.Join(m.Env.Root, "usr/bin/chromium-browser")
+	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := m.Set(context.Background(), api.SetParams{ID: a.ID, Runtime: str("chromium:chromium")})
+	if err != nil || res.App.Runtime != "chromium:chromium" {
+		t.Fatalf("engine switch: %+v %v", res, err)
+	}
+	cookies, err := os.ReadFile(filepath.Join(m.Paths.Profile(a.ID), "cookies.sqlite"))
+	if err != nil || string(cookies) != "cookies" {
+		t.Fatalf("original sign-in data was lost: %q %v", cookies, err)
+	}
+	plan, err := m.PlanRun(a.ID, "", "", false)
+	if err != nil || !plan.Browser || plan.Exec.Path != bin {
+		t.Fatalf("WhatsApp must launch the selected calling engine: %+v %v", plan, err)
 	}
 }

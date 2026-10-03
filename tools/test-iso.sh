@@ -7,7 +7,7 @@
 #   tools/test-iso.sh --mode safe|check|disk  the other boot menu entries
 #   tools/test-iso.sh --timeout 600           seconds to run after power-on (default 900)
 #   tools/test-iso.sh --interval 60           seconds between screenshots once booting
-#   tools/test-iso.sh --iso PATH              default out/iso/Arctic-Linux-1.0-x86_64.iso
+#   tools/test-iso.sh --iso PATH              default out/iso/Arctic-Linux-1.1-x86_64.iso
 #   tools/test-iso.sh --memory 4096 --smp 4   guest size (default 4 GiB, 4 vCPUs)
 #   tools/test-iso.sh --kvm                   use /dev/kvm when the host has it
 #   tools/test-iso.sh --vga std               QEMU display (virtio, default; std = bochs)
@@ -34,7 +34,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/container.sh"
 
 ROOT="$(arctic_repo_root)"
-ISO="$ROOT/out/iso/Arctic-Linux-1.0-x86_64.iso"
+ISO="$ROOT/out/iso/Arctic-Linux-1.1-x86_64.iso"
 FIRMWARE=uefi
 MODE=try
 TIMEOUT=900

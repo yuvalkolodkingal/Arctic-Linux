@@ -69,7 +69,10 @@ func (m *Manager) Install(ctx context.Context, p api.InstallParams) (api.Install
 	if !oneOf(category, webapp.Categories) {
 		fields["category"] = "Choose a category from the list."
 	}
-	runtime := "webkit"
+	runtime := pr.SuggestedRuntime
+	if runtime == "" {
+		runtime = "webkit"
+	}
 	if p.Runtime != "" {
 		runtime = p.Runtime
 	}
