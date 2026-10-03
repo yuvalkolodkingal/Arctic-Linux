@@ -278,6 +278,13 @@ done
 find /root/rpmbuild/RPMS -name '*.rpm' \( -name '*-debuginfo-*' -o -name '*-debugsource-*' \) -exec cp -f {} /out/debug/ \;
 find /root/rpmbuild/RPMS -name '*.rpm' ! -name '*-debuginfo-*' ! -name '*-debugsource-*' -exec cp -f {} /out/repo/ \;
 cp -f /root/rpmbuild/SRPMS/*.src.rpm /out/srpms/
+# Check the complete package set together: individual builds do not detect two
+# packages installing different contents at the same path. An empty RPM database
+# avoids Fedora/Arctic release replacement and dependency checks in this file check.
+transaction_root="$(mktemp -d)"
+rpm --root "$transaction_root" --initdb
+rpm --root "$transaction_root" --install --test --nodeps /out/repo/*.rpm
+rm -rf "$transaction_root"
 rm -rf /out/repo/repodata
 createrepo_c /out/repo >/dev/null
 
