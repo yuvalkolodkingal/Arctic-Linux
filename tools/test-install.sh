@@ -2,6 +2,8 @@
 # Install Arctic Linux to a VM disk from the live ISO and boot the result (QEMU, TCG).
 #
 #   tools/test-install.sh                       UEFI: install, then boot the installed disk
+#   tools/test-install.sh --stage boot --reliability-version 1.0 --upgrade-to 1.1
+#   tools/test-install.sh --reliability-version 1.1  assert live/installed network and app windows
 #   tools/test-install.sh --firmware bios       SeaBIOS instead of OVMF
 #   tools/test-install.sh --stage install       only the install (fresh disk)
 #   tools/test-install.sh --stage boot          only boot the disk a previous run installed
@@ -81,6 +83,8 @@ BOOT_APPEND=auto
 INSTALLER=""
 VIA=service
 OUT=""
+RELIABILITY_VERSION=""
+UPGRADE_TO=""
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 # Test secrets only (typed into the VM and passed to the installer).
@@ -89,6 +93,8 @@ USER_PASSWORD="arctic-ci-pass"
 
 while (( $# )); do
   case "$1" in
+    --upgrade-to) UPGRADE_TO="$2"; shift 2 ;;
+    --reliability-version) RELIABILITY_VERSION="$2"; shift 2 ;;
     --iso) ISO="$2"; shift 2 ;;
     --firmware) FIRMWARE="$2"; shift 2 ;;
     --stage) STAGE="$2"; shift 2 ;;
@@ -109,6 +115,13 @@ while (( $# )); do
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$STAGE" in all|install|boot) ;; *) arctic_die "--stage takes all, install or boot" ;; esac
+if [[ -n "$UPGRADE_TO" ]]; then
+  [[ "$STAGE" == boot && -n "$RELIABILITY_VERSION" && "$UPGRADE_TO" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] ||
+    arctic_die "--upgrade-to requires --stage boot and --reliability-version SOURCE"
+fi
+if [[ -n "$RELIABILITY_VERSION" ]]; then
+  [[ "$RELIABILITY_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || arctic_die "invalid reliability version"
+fi
 [[ -f "$PROFILE" ]] || arctic_die "no profile at $PROFILE"
 if [[ "$STAGE" != boot ]]; then
   [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
@@ -133,6 +146,10 @@ fi
 DATA="$OUT/data"
 rm -rf "$DATA"; mkdir -p "$DATA"
 cp "$PROFILE" "$DATA/profile.toml"
+if [[ -n "$RELIABILITY_VERSION" ]]; then
+  cp "$HERE/reliability/guest.py" "$DATA/guest.py"
+  printf '{"version":"%s","upgrade_to":"%s"}\n' "$RELIABILITY_VERSION" "$UPGRADE_TO" > "$DATA/config.json"
+fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
   cp "$INSTALLER" "$DATA/arctic-install"
@@ -201,6 +218,12 @@ fi
   nmcli general; nmcli networking connectivity check
   "\$AI" version
 } 2>&1 | tee -a "\$S"
+if [ -f "\$D/guest.py" ]; then
+  python3 "\$D/guest.py" live >> "\$S" 2>&1
+  smoke_rc=\$?
+  say "ARCTIC-LIVE-SMOKE-EXIT=\$smoke_rc"
+  if [ "\$smoke_rc" != 0 ]; then systemctl poweroff; exit "\$smoke_rc"; fi
+fi
 start=\$(date +%s)
 if [ "\$VIA" = service ]; then
   # What arcticd.service gets: a system service's SELinux domain and environment.
@@ -271,7 +294,15 @@ sec "journalctl -b -p warning"; journalctl -b -p warning --no-pager
 sec "AVC denials"; journalctl -b --no-pager -g 'avc: +denied' | tail -40
 sec "engine log (tail)"; tail -60 /var/log/arctic-install/engine.log
 echo
+if [ -f /run/t/guest.py ]; then
+  python3 /run/t/guest.py installed
+  echo "ARCTIC-INSTALLED-SMOKE-EXIT=$?"
+fi
 echo ARCTIC-COLLECT-END
+if [ -f /run/t/config.json ] && python3 -c 'import json; exit(not bool(json.load(open("/run/t/config.json")).get("upgrade_to")))'; then
+  sync
+  systemctl poweroff
+fi
 EOF
 chmod 0755 "$DATA/run.sh" "$DATA/collect.sh"
 # The launcher goes into the data CD's system area (its first 32 KiB, which ISO 9660 leaves
@@ -552,18 +583,19 @@ def stage_boot():
         collected = False
         for attempt in (1, 2, 3):
             open_terminal(vm, f"boot-5{attempt + 1}")
-            vm.type_text("sudo sh /dev/sr0 $$", gap=0.3)
+            vm.type_text("sudo sh /dev/sr0", gap=0.3)
             vm.keys("ret")
             time.sleep(10)
             vm.shot(f"boot-5{attempt + 1}-sudo")
             vm.type_text(password, gap=0.3)
             vm.keys("ret")
             t = time.time()
-            while time.time() - t < 240 and vm.alive():
+            while time.time() - t < (3000 if E.get("UPGRADE_TO") else 1200) and vm.alive():
                 if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
                     collected = True
                     break
                 time.sleep(5)
+            collected = vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END")
             vm.shot(f"boot-5{attempt + 1}-collected")
             if collected:
                 log(f"collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt {attempt})")
@@ -587,8 +619,13 @@ def stage_boot():
             ok = False   # the session itself didn't work
         if not collected:
             ok = False
+        if E.get("RELIABILITY_VERSION") and vmtest.serial_value(serial("boot"), "ARCTIC-INSTALLED-SMOKE-EXIT=") != "0":
+            ok = False
         time.sleep(5)
         vm.shot("boot-99-final")
+        if E.get("UPGRADE_TO") and not vm.wait_exit(120):
+            log("upgrade guest did not power off cleanly")
+            ok = False
         return 0 if ok else 1
     finally:
         vm.quit()
@@ -600,6 +637,15 @@ if stage in ("all", "install"):
 if rc == 0 and stage in ("all", "boot"):
     rc = stage_boot()
     log(f"boot stage: exit {rc}")
+    if rc == 0 and E.get("UPGRADE_TO"):
+        # stage_boot closes QEMU; start it again without the live ISO. Keep first-boot
+        # evidence separate so stale serial markers cannot satisfy the second boot.
+        os.rename(serial("boot"), f"{out}/serial-upgrade.log")
+        for f in os.listdir(out):
+            if f.startswith("boot-") and f.endswith(".png"):
+                os.rename(f"{out}/{f}", f"{out}/upgrade-{f}")
+        rc = stage_boot()
+        log(f"post-upgrade boot stage: exit {rc}")
 for f in os.listdir(out):
     if f.endswith("-probe.png"):
         os.remove(os.path.join(out, f))
@@ -629,7 +675,7 @@ arctic_log "install test ($FIRMWARE, stage $STAGE, profile $(basename "$PROFILE"
 rc=0
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
-  -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
+  -e UPGRADE_TO="$UPGRADE_TO" -e RELIABILITY_VERSION="$RELIABILITY_VERSION" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" \
