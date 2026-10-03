@@ -17,6 +17,7 @@ chmod 700 "$XDG_RUNTIME_DIR"
 cp "$REPO/packaging/desktop/mango-portals.conf" "$XDG_CONFIG_HOME/xdg-desktop-portal/"
 export PATH="$WORK/bin:$PATH" WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1
 export GDK_BACKEND=wayland LIBGL_ALWAYS_SOFTWARE=1
+export ARCTIC_WEBAPP_ALLOW_ROOT=1  # CI's throwaway user; production still rejects sudo
 unset GTK_THEME
 PORT=18766
 python3 "$REPO/cmd/arctic-webapp-host/dev/fixture-server.py" "$PORT" "$WORK/requests.log" &
