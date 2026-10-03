@@ -975,7 +975,9 @@ install -Dpm 0644 packaging/flatpak/global %{buildroot}%{_localstatedir}/lib/fla
 install -Dpm 0644 packaging/environment.d/50-arctic-qt.conf %{buildroot}%{_prefix}/lib/environment.d/50-arctic-qt.conf
 # Stream 4 (capture): the screen-share picker xdg-desktop-portal-wlr runs in Mango sessions.
 install -Dpm 0644 packaging/desktop/xdg-desktop-portal-wlr.ini %{buildroot}%{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
-install -Dpm 0644 packaging/desktop/mango-portals.conf %{buildroot}%{_datadir}/xdg-desktop-portal/mango-portals.conf
+# Mango owns its upstream /usr/share portal defaults. Arctic's system preferences
+# override those through the portal's /etc/xdg search path without sharing a file.
+install -Dpm 0644 packaging/desktop/mango-portals.conf %{buildroot}%{_sysconfdir}/xdg/xdg-desktop-portal/mango-portals.conf
 install -Dpm 0755 packaging/desktop/arctic-share-picker %{buildroot}%{_libexecdir}/arctic/arctic-share-picker
 # Stream 5 (system): XDG autostart in the Mango session (packaging/desktop/autostart): the
 # session target wants xdg-desktop-autostart.target, and the entries Arctic starts itself or
@@ -1488,7 +1490,8 @@ fi
 # Stream 4 (capture): the screen-share picker.
 %dir %{_sysconfdir}/xdg/xdg-desktop-portal-wlr
 %config(noreplace) %{_sysconfdir}/xdg/xdg-desktop-portal-wlr/mango
-%{_datadir}/xdg-desktop-portal/mango-portals.conf
+%dir %{_sysconfdir}/xdg/xdg-desktop-portal
+%config(noreplace) %{_sysconfdir}/xdg/xdg-desktop-portal/mango-portals.conf
 %{_libexecdir}/arctic/arctic-share-picker
 
 # --- stream 6

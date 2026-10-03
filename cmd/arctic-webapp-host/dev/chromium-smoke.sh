@@ -12,9 +12,10 @@ export GOTOOLCHAIN=local GOPROXY=off GOFLAGS=-mod=mod
 (cd "$REPO" && CGO_ENABLED=0 go build -o "$WORK/bin/arctic-webapp" ./cmd/arctic-webapp)
 export XDG_RUNTIME_DIR="$WORK/run" XDG_CONFIG_HOME="$WORK/config" XDG_DATA_HOME="$WORK/data"
 export XDG_CACHE_HOME="$WORK/cache" XDG_STATE_HOME="$WORK/state" XDG_CURRENT_DESKTOP=mango
-mkdir -p "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME/xdg-desktop-portal" "$XDG_DATA_HOME"
+export XDG_CONFIG_DIRS="$WORK/system-config:/etc/xdg"
+mkdir -p "$XDG_RUNTIME_DIR" "$WORK/system-config/xdg-desktop-portal" "$XDG_DATA_HOME"
 chmod 700 "$XDG_RUNTIME_DIR"
-cp "$REPO/packaging/desktop/mango-portals.conf" "$XDG_CONFIG_HOME/xdg-desktop-portal/"
+cp "$REPO/packaging/desktop/mango-portals.conf" "$WORK/system-config/xdg-desktop-portal/"
 export PATH="$WORK/bin:$PATH" WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1
 export GDK_BACKEND=wayland LIBGL_ALWAYS_SOFTWARE=1
 export ARCTIC_WEBAPP_ALLOW_ROOT=1  # CI's throwaway user; production still rejects sudo
@@ -47,7 +48,7 @@ wait_for 'ls "$XDG_RUNTIME_DIR"/wayland-[0-9] >/dev/null 2>&1' || fail "no Wayla
 WAYLAND_DISPLAY="$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9] | head -1)")"
 SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc.*.sock | head -1)"
 export WAYLAND_DISPLAY SWAYSOCK
-dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_CONFIG_HOME XDG_DATA_HOME
+dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_CONFIG_HOME XDG_CONFIG_DIRS XDG_DATA_HOME
 gsettings set org.gnome.desktop.interface gtk-theme Adwaita
 gsettings set org.gnome.desktop.interface color-scheme prefer-light
 gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop \
