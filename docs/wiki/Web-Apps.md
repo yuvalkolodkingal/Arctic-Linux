@@ -154,7 +154,7 @@ Pressing it again brings the open window to the front.
 ## Troubleshooting
 
 - **An existing WhatsApp app says calls are unsupported**: after updating to 1.1, open
-  **Settings → Web apps → WhatsApp → Open with** and choose **Chromium** (or an installed
+  **Settings → Web apps → WhatsApp → Engine** and choose **Chromium** (or an installed
   Chrome/Brave engine), then restart the app. Switching engines may require pairing again;
   the original engine's sign-in data is kept. WhatsApp must also offer web calls for your account.
 - **WhatsApp or another site declines the preview request** (HTTP 400, 401, 403, 405 or 429): Arctic offers a letter icon and lets you add the app. You can rename it in the preview and sign in when its window opens. An error page is never used as the app’s name or icon.

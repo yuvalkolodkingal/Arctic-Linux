@@ -306,7 +306,7 @@ Page {
         SettingRow {
             searchKey: "webapps.engine"
             title: "Engine"
-            desc: "Video calls and protected video (Netflix, Spotify) need Brave, Chrome or Vivaldi."
+            desc: "Calls need a Chromium-family engine. Protected video needs Brave, Chrome or Vivaldi."
             resettable: false
             ArSelect {
                 width: 220
