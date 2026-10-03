@@ -53,6 +53,12 @@ PAGES = {
     "/notify": b"<!doctype html><title>Notify</title><script>"
                b"new Notification('Smoke').onclose = () => fetch('/notification-closed');</script>",
     "/notification-closed": b"ok",
+    "/conversation": b"<!doctype html><title>Conversation</title><script>setTimeout(()=>{let n=new Notification('Conversation 42');n.onclick=()=>{document.title='Opened conversation 42';fetch('/notification-target');};},1500)</script>",
+    "/notification-target": b"ok",
+    "/paste": b"<!doctype html><title>Paste fixture</title><div contenteditable id=editor>Paste here</div><script>editor.focus();editor.onpaste=e=>{fetch('/paste-result?files='+e.clipboardData.files.length+'&type='+encodeURIComponent(e.clipboardData.files[0]?.type)+'&types='+encodeURIComponent([...e.clipboardData.types].join(',')));setTimeout(()=>fetch('/paste-inserted?images='+editor.querySelectorAll('img').length),500);};</script>",
+    "/upload": b"<!doctype html><title>Upload fixture</title><input type=file autofocus multiple onchange=\"fetch('/upload-result?count='+this.files.length+'&name='+encodeURIComponent(this.files[0]?.name))\">",
+    "/media": b"<!doctype html><title>Native media fixture</title><audio src='/tone.wav' controls loop></audio><button autofocus onclick=\"document.querySelector('audio').play()\">Play</button>",
+    "/capabilities": b"<!doctype html><title>Capabilities</title><script>fetch('/capabilities-result?'+new URLSearchParams({rtc:typeof RTCPeerConnection,media:typeof navigator.mediaDevices?.getUserMedia,screen:typeof navigator.mediaDevices?.getDisplayMedia,session:typeof navigator.mediaSession}));</script>",
 }
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -73,6 +79,16 @@ class H(http.server.BaseHTTPRequestHandler):
                 self.connection.close()
             return
         body = PAGES.get(self.path.split("?")[0])
+        if self.path == "/tone.wav":
+            import io, wave
+            audio = io.BytesIO()
+            with wave.open(audio, 'wb') as wav:
+                wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(8000)
+                wav.writeframes(b'\0\0' * 80000)
+            body = audio.getvalue()
+        if self.path.startswith(('/capabilities-result?', '/upload-result?', '/paste-result?', '/paste-inserted?')):
+            body = b'ok'
+
         # The favicon appears only after install, so the app starts with a letter icon and the
         # window's favicon upgrade has something to do.
         if self.path == "/favicon.ico" and os.path.exists(LOG + ".icon"):
@@ -82,7 +98,9 @@ class H(http.server.BaseHTTPRequestHandler):
             return
         self.send_response(200)
         ctype = "text/html; charset=utf-8"
-        if self.path.endswith("manifest"):
+        if self.path.endswith(".wav"):
+            ctype = "audio/wav"
+        elif self.path.endswith("manifest"):
             ctype = "application/manifest+json"
         elif self.path == "/favicon.ico":
             ctype = "image/png"
@@ -110,6 +128,7 @@ export WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 GDK_B
 
 # The Arctic themes, Winter first (the window follows ~/.config/arctic/current live).
 mkdir -p "$XDG_CONFIG_HOME/arctic/themes"
+cp "$REPO/cmd/arctic-webapp-host/dev/notification-fixture.py" "$WORK/notification-fixture.py"
 cp -r "$REPO/dotfiles/.config/arctic/themes/winter" "$REPO/dotfiles/.config/arctic/themes/polar-night" "$XDG_CONFIG_HOME/arctic/themes/"
 ln -sfn themes/winter "$XDG_CONFIG_HOME/arctic/current"
 echo winter > "$XDG_CONFIG_HOME/arctic/theme"
@@ -128,6 +147,9 @@ set -uo pipefail
 fail() { echo "FAIL: $*"; FAILED=1; }
 FAILED=0
 "$SWAY" -c "$WORK/sway.conf" >"$WORK/sway.log" 2>&1 &
+SWAY_PID=$!
+NOTIFY_PID=""
+trap 'kill "$SWAY_PID" 2>/dev/null || true; if [ -n "$NOTIFY_PID" ]; then kill "$NOTIFY_PID" 2>/dev/null || true; fi' EXIT
 for _ in $(seq 100); do ls "$XDG_RUNTIME_DIR"/wayland-[0-9] >/dev/null 2>&1 && break; sleep 0.05; done
 WAYLAND_DISPLAY="$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9] | head -1)")"
 SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc.*.sock | head -1)"
@@ -139,6 +161,10 @@ def walk(n):
     for c in n.get("nodes", []) + n.get("floating_nodes", []): yield from walk(c)
 print("\n".join(w.get("name") or "" for w in walk(json.load(sys.stdin))))' "$ID"; }
 wait_for() { for _ in $(seq 150); do eval "$1" && return 0; sleep 0.2; done; return 1; }
+
+python3 "$WORK/notification-fixture.py" "$WORK/notifications.jsonl" >"$WORK/notifications.log" 2>&1 &
+NOTIFY_PID=$!
+wait_for 'gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.GetCapabilities >/dev/null 2>&1' || fail "notification fixture unavailable"
 
 # The host directly, as `arctic-webapp run` would exec it: run removes the sandbox kill switch
 # this container needs (its argv and environment are unit-tested in internal/webapp/manage).
@@ -187,19 +213,136 @@ sleep 1
 [ "$(windows | grep -c .)" = 1 ] || fail "second start: $(windows | grep -c .) windows"
 [ "$(cat "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" 2>/dev/null)" = "$PID1" ] || fail "second start changed the pid file"
 
+# GTK/WebKit consumes the Wayland image clipboard from a real input gesture.
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/paste" >/dev/null 2>&1
+sleep 1
+wtype -s 1200 -M ctrl -k v -m ctrl -s 300 &
+PASTE_INPUT=$!
+sleep 0.3
+wl-copy --type image/png < "$XDG_DATA_HOME/icons/hicolor/128x128/apps/$ID.r1.png"
+wl-paste --list-types > "$OUT/clipboard-types.txt"
+wait "$PASTE_INPUT"
+grim "$OUT/clipboard.png"
+wait_for 'grep -Eq "^/paste-result\?files=1&type=image%2Fpng|^/paste-inserted\?images=1" "$WORK/requests.log"' || fail "image clipboard did not reach page"
+grep "^/paste-" "$WORK/requests.log" > "$OUT/clipboard-result.txt"
+wl-copy --clear
+
+# Native file chooser: keyboard file selection reaches WebKit's file input.
+printf 'fixture' > "$WORK/upload.txt"
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/upload" >/dev/null 2>&1
+sleep 1
+wtype -s 200 -k Return -s 200
+sleep 1
+grim "$OUT/upload-dialog.png"
+wtype -s 200 -M ctrl -k l -m ctrl -s 200 "$WORK/upload.txt" -s 200 -k Return -s 200
+sleep 1
+grim "$OUT/upload-after.png"
+wait_for 'grep -q "^/upload-result?count=1&name=upload.txt" "$WORK/requests.log"' || fail "native upload selection failed"
+
+# Asynchronous save: cancellation must not finish a download, then save a new file.
+arctic-webapp set "$ID" --ask-download on --json >/dev/null
+sleep 0.3
+BEFORE=$(grep -c 'downloaded .*good' "$APPLOG")
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/good.bin" >/dev/null 2>&1
+sleep 1
+wtype -s 200 -k Escape -s 200
+sleep 0.5
+[ "$(grep -c 'downloaded .*good' "$APPLOG")" = "$BEFORE" ] || fail "cancelled chooser saved download"
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/good.bin" >/dev/null 2>&1
+sleep 1
+grim "$OUT/save-dialog.png"
+wtype -s 200 -M ctrl -k l -m ctrl -s 100 -M ctrl -k a -m ctrl -s 100 "$WORK/saved.bin" -s 200 -k Return -s 200
+sleep 1
+grim "$OUT/save-after.png"
+wait_for '[ -f "$WORK/saved.bin" ]' || fail "native save selection failed"
+[ "$(cat "$WORK/saved.bin" 2>/dev/null)" = 0123456789 ] || fail "saved download content differs"
+arctic-webapp set "$ID" --ask-download off --json >/dev/null
+
+# Native lifecycle: a compositor close hides the window, preserving the primary process.
+arctic-webapp set "$ID" --keep-running on --start-at-login on --json >/dev/null
+sleep 0.3
+swaymsg "[app_id=\"$ID\"] kill" >/dev/null
+wait_for '[ -z "$(windows)" ]' || fail "close did not hide window"
+kill -0 "$PID1" || fail "hidden app exited"
+[ "$(cat "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid")" = "$PID1" ] || fail "hidden process changed"
+timeout 20 arctic-webapp-host --app-id "$ID" >/dev/null 2>&1 || fail "hidden activation failed"
+wait_for '[ -n "$(windows)" ]' || fail "activation did not restore window"
+
+# Website notification actions restore the hidden app and reach its conversation handler.
+arctic-webapp set "$ID" --notifications allow --json >/dev/null
+sleep 0.3
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/conversation" >/dev/null 2>&1
+swaymsg "[app_id=\"$ID\"] kill" >/dev/null
+wait_for 'grep -q "Conversation 42" "$WORK/notifications.jsonl"' || fail "hidden notification not delivered"
+grep -q "$ID" "$WORK/notifications.jsonl" || fail "notification missing app identity"
+gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.arcticlinux.TestNotifications.ClickLatest >/dev/null
+wait_for 'grep -q "^/notification-target" "$WORK/requests.log"' || fail "notification action lost conversation"
+wait_for '[ -n "$(windows)" ]' || fail "notification did not restore window"
+
+# Media uses the actual WebKit view and D-Bus service, not a mocked player.
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/media" >/dev/null 2>&1
+PLAYER="Arctic_${ID##*.}"
+wait_for 'playerctl -p "$PLAYER" metadata title 2>/dev/null | grep -q "Native media fixture"' || fail "MPRIS metadata unavailable"
+playerctl -p "$PLAYER" play || fail "MPRIS play action failed"
+wait_for '[ "$(playerctl -p "$PLAYER" status 2>/dev/null)" = Playing ]' || fail "MPRIS did not play"
+playerctl -p "$PLAYER" pause || fail "MPRIS pause action failed"
+wait_for '[ "$(playerctl -p "$PLAYER" status 2>/dev/null)" = Paused ]' || fail "MPRIS did not pause"
+playerctl -p "$PLAYER" position 2 || fail "MPRIS seek action failed"
+wait_for 'playerctl -p "$PLAYER" position 2>/dev/null | grep -q "^2"' || fail "MPRIS seek position differs"
+playerctl -p "$PLAYER" volume 0.5 || fail "MPRIS volume failed"
+wait_for 'playerctl -p "$PLAYER" volume 2>/dev/null | grep -q "^0.5"' || fail "MPRIS volume differs"
+timeout 20 arctic-webapp-host --app-id "$ID" --url "http://127.0.0.1:$PORT/capabilities" >/dev/null 2>&1
+wait_for 'grep -q "^/capabilities-result" "$WORK/requests.log"' || fail "capability probe failed"
+grep '^/capabilities-result' "$WORK/requests.log" > "$OUT/capabilities.txt"
+wait_for '! playerctl -l 2>/dev/null | grep -q "$PLAYER"' || fail "stale MPRIS after navigation"
+
+# Fullscreen and fractional scaling preserve a usable window and keyboard actions.
+wtype -s 200 -k F11 -s 200
+swaymsg -t get_tree | python3 -c 'import json,sys
+stack=[json.load(sys.stdin)]; found=False
+while stack:
+    n=stack.pop(); stack+=n.get("nodes",[])+n.get("floating_nodes",[])
+    if n.get("app_id")==sys.argv[1]: found=n.get("fullscreen_mode",0)>0
+sys.exit(0 if found else 1)' "$ID" || fail "fullscreen shortcut failed"
+wtype -s 200 -k F11 -s 200
+swaymsg output HEADLESS-1 scale 1.25 >/dev/null
+sleep 0.5
+grim "$OUT/webapp-scaled.png"
+swaymsg output HEADLESS-1 scale 1 >/dev/null
+
 # SIGTERM (logout) closes the window the normal way: it saves its state, and the pid file goes.
 kill -TERM "$PID1"
 wait_for '[ -z "$(windows)" ]' || fail "SIGTERM did not close the window"
-grep -q '"last_url": "http://127.0.0.1' "$XDG_DATA_HOME/arctic/webapps/$ID/state.json" 2>/dev/null || fail "no state.json after SIGTERM"
+wait_for 'grep -q "last_url.*http://127.0.0.1" "$XDG_DATA_HOME/arctic/webapps/$ID/state.json" 2>/dev/null' || fail "no state.json after SIGTERM"
+cp "$XDG_DATA_HOME/arctic/webapps/$ID/state.json" "$OUT/state.json"
+cp "$APPLOG" "$OUT/host-state.log"
+ls -la "$XDG_DATA_HOME/arctic/webapps/$ID" > "$OUT/state-files.txt"
 wait_for '[ ! -e "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" ]' || fail "pid file left after SIGTERM"
 arctic-webapp-host --app-id "$ID" >>"$WORK/host.log" 2>&1 &
 wait_for '[ -n "$(windows)" ]' || fail "no window after a restart"
 
+# A hidden startup maps no window; a second activation restores it.
+arctic-webapp quit "$ID" --json >/dev/null
+wait_for '[ ! -e "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" ]' || fail "Quit left a process"
+arctic-webapp-host --app-id "$ID" --background >>"$WORK/host.log" 2>&1 &
+wait_for '[ -e "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" ]' || fail "hidden startup failed"
+sleep 1
+[ -z "$(windows)" ] || fail "hidden startup mapped a window"
+timeout 20 arctic-webapp-host --app-id "$ID" >/dev/null 2>&1
+wait_for '[ -n "$(windows)" ]' || fail "startup instance did not restore"
+swaymsg "[app_id=\"$ID\"] kill" >/dev/null
+wait_for '[ -z "$(windows)" ]' || fail "second hide failed"
+arctic-webapp set "$ID" --keep-running off --json >/dev/null
+wait_for '[ ! -e "$XDG_RUNTIME_DIR/arctic-webapp/$ID.pid" ]' || fail "disabling background left hidden process"
+arctic-webapp-host --app-id "$ID" >>"$WORK/host.log" 2>&1 &
+wait_for '[ -n "$(windows)" ]' || fail "no window before remove"
+
 # remove stops the app.
 arctic-webapp remove "$ID" --json | grep -q '"stopped":true' || fail "remove did not stop the app"
 wait_for '[ -z "$(windows)" ]' || fail "window still open after remove"
+[ ! -e "$XDG_CONFIG_HOME/autostart/$ID.desktop" ] || fail "remove left startup entry"
 
-pkill -f "$SWAY" 2>/dev/null
+kill "$SWAY_PID" 2>/dev/null
 exit "$FAILED"
 INNER
 chmod +x "$WORK/inner.sh"

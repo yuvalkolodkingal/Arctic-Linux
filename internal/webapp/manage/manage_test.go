@@ -250,18 +250,15 @@ func TestPlanRunWebKit(t *testing.T) {
 	}
 }
 
-func TestPlanRunBrowserMissingFallsBack(t *testing.T) {
+func TestPlanRunBrowserMissingRequiresSelection(t *testing.T) {
 	m := testManager(t)
 	a := fixtureApp("Flix", "https://www.netflix.com/")
 	a.Runtime = "chromium:brave"
 	a.WMClass = "brave-www.netflix.com__-Default"
 	put(t, m, a)
 	plan, err := m.PlanRun(a.ID, "", "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if plan.Browser || !strings.Contains(strings.Join(plan.Exec.Argv, " "), "--notice runtime-missing") {
-		t.Fatalf("plan %+v", plan)
+	if code(err) != webapp.CodeUnsupported || plan.Exec.Path != "" {
+		t.Fatalf("missing runtime must not switch profiles: %+v %v", plan, err)
 	}
 	// With the Flatpak installed: flatpak run with a per-app profile in the sandbox's data dir.
 	os.MkdirAll(filepath.Join(m.Env.Root, "usr/bin"), 0o755)

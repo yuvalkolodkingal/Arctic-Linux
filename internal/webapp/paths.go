@@ -10,6 +10,7 @@ import (
 // Paths are the per-user directories web apps live in (XDG base directories with the usual
 // $HOME fallbacks). Nothing is system-wide: no root, pkexec or polkit.
 type Paths struct {
+	ConfigHome string
 	Home       string
 	DataHome   string // $XDG_DATA_HOME
 	CacheHome  string // $XDG_CACHE_HOME
@@ -35,10 +36,11 @@ func PathsFromEnv() (Paths, error) {
 		return filepath.Join(home, def)
 	}
 	p := Paths{
-		Home:      home,
-		DataHome:  xdg("XDG_DATA_HOME", ".local/share"),
-		CacheHome: xdg("XDG_CACHE_HOME", ".cache"),
-		StateHome: xdg("XDG_STATE_HOME", ".local/state"),
+		Home:       home,
+		ConfigHome: xdg("XDG_CONFIG_HOME", ".config"),
+		DataHome:   xdg("XDG_DATA_HOME", ".local/share"),
+		CacheHome:  xdg("XDG_CACHE_HOME", ".cache"),
+		StateHome:  xdg("XDG_STATE_HOME", ".local/state"),
 	}
 	if rt := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(rt) {
 		p.RuntimeDir = filepath.Join(rt, "arctic-webapp")

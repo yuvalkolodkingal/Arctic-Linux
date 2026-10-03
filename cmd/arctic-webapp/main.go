@@ -65,6 +65,8 @@ const usage = `usage:
   arctic-webapp trust-certificate ID --host HOST --pem FILE
   arctic-webapp repair [--json]
   arctic-webapp runtimes [--json]
+  arctic-webapp quit ID [--json]
+  arctic-webapp set ID [--keep-running on|off] [--start-at-login on|off] [--ask-download on|off]
   arctic-webapp serve
   arctic-webapp render-sample DIR
   arctic-webapp version [--webkit] [--json]
@@ -116,7 +118,7 @@ func (c *cli) main(args []string) int {
 
 func (c *cli) commands() map[string]func([]string) int {
 	return map[string]func([]string) int{
-		"list": c.cmdList, "show": c.cmdShow, "run": c.cmdRun, "launch": c.cmdLaunch,
+		"quit": c.cmdQuit, "list": c.cmdList, "show": c.cmdShow, "run": c.cmdRun, "launch": c.cmdLaunch,
 		"remove": c.cmdRemove, "forget": c.cmdForget, "clear-data": c.cmdClearData,
 		"repair": c.cmdRepair, "runtimes": c.cmdRuntimes, "inspect": c.cmdInspect,
 		"install": c.cmdInstall, "update": c.cmdUpdate, "set": c.cmdSet, "icon": c.cmdIcon,

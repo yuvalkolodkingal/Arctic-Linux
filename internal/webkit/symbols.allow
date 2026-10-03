@@ -1,5 +1,5 @@
-# WebKitGTK symbols arctic-webapp-host may call (webkit_test.go checks the build against this).
 # The host links with -z now: a symbol missing from an older WebKitGTK stops it from starting,
+# WebKitGTK symbols arctic-webapp-host may call (webkit_test.go checks the build against this).
 # so every addition must exist in WebKitGTK 2.50 (Fedora 44 shipped 2.52 before 2.54), or the
 # spec's webkitgtk6.0 floor must rise with it. 2.54-only features go through property names.
 webkit_clipboard_permission_request_get_type
@@ -13,9 +13,14 @@ webkit_device_info_permission_request_get_type
 webkit_download_cancel
 webkit_download_error_quark
 webkit_download_get_destination
+webkit_download_get_estimated_progress
 webkit_download_get_response
 webkit_download_set_allow_overwrite
 webkit_download_set_destination
+webkit_file_chooser_request_cancel
+webkit_file_chooser_request_get_mime_types_filter
+webkit_file_chooser_request_get_select_multiple
+webkit_file_chooser_request_select_files
 webkit_find_controller_search
 webkit_find_controller_search_finish
 webkit_find_controller_search_next
@@ -67,6 +72,7 @@ webkit_settings_set_enable_site_specific_quirks
 webkit_settings_set_hardware_acceleration_policy
 webkit_settings_set_javascript_can_open_windows_automatically
 webkit_uri_request_get_uri
+webkit_uri_response_get_content_length
 webkit_uri_response_get_http_headers
 webkit_uri_response_get_mime_type
 webkit_user_content_manager_new
@@ -80,6 +86,9 @@ webkit_web_context_set_spell_checking_enabled
 webkit_web_inspector_show
 webkit_web_view_can_go_back
 webkit_web_view_can_go_forward
+webkit_web_view_evaluate_javascript
+webkit_web_view_evaluate_javascript_finish
+webkit_web_view_get_estimated_load_progress
 webkit_web_view_get_favicon
 webkit_web_view_get_find_controller
 webkit_web_view_get_inspector

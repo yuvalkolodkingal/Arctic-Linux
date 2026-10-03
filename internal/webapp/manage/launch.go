@@ -68,8 +68,7 @@ func (m *Manager) PlanRun(id, uri, openURL string, inspect bool) (RunPlan, error
 				return plan, nil
 			}
 		}
-		// The browser was removed: open in the Arctic engine with a banner saying so.
-		notice = "runtime-missing"
+		return plan, webapp.Errorf(webapp.CodeUnsupported, "%s needs its selected browser. Reinstall it or choose an engine in Settings → Web apps; switching engines may require signing in again.", a.Name)
 	}
 	if !m.Env.Available("webkit") {
 		return plan, webapp.Errorf(webapp.CodeUnsupported, "The web app window isn’t installed (package arctic-webapps).")
@@ -91,6 +90,9 @@ func (m *Manager) Launch(id, openURL string) (api.LaunchResult, error) {
 	a, err := m.Paths.Load(id)
 	if err != nil {
 		return res, err
+	}
+	if _, browser := BrowserFor(a.Runtime); browser && !m.Env.Available(a.Runtime) {
+		return res, webapp.Errorf(webapp.CodeUnsupported, "%s needs its selected browser. Reinstall it or choose an engine in Settings → Web apps; switching engines may require signing in again.", a.Name)
 	}
 	if openURL != "" && !webURL(openURL) {
 		return res, webapp.Errorf(webapp.CodeInvalid, "That isn’t a web address.")

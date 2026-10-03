@@ -57,6 +57,9 @@ type Icon struct {
 
 // Options are the settings you can change while the app runs (SIGHUP applies them live).
 type Options struct {
+	KeepRunning   bool   `json:"keep_running"`
+	StartAtLogin  bool   `json:"start_at_login"`
+	AskDownload   bool   `json:"ask_download"`
 	Links         string `json:"links"`         // browser | app
 	Notifications string `json:"notifications"` // allow | ask | block
 	Devtools      bool   `json:"devtools"`

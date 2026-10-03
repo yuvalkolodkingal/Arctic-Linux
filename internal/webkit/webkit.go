@@ -23,14 +23,15 @@ import (
 
 // Config is the window's start configuration.
 type Config struct {
-	AppID, AppName, IconName string
-	StartURI, OpenURI        string
-	DataDir, CacheDir        string
-	Devtools, Software       bool
-	Zoom                     float64
-	Width, Height            int
-	Maximized                bool
-	Notice                   string // banner text shown at start ("" for none)
+	KeepRunning, Background, AskDownload bool
+	AppID, AppName, IconName             string
+	StartURI, OpenURI                    string
+	DataDir, CacheDir                    string
+	Devtools, Software                   bool
+	Zoom                                 float64
+	Width, Height                        int
+	Maximized                            bool
+	Notice                               string // banner text shown at start ("" for none)
 }
 
 // Controller receives the shim's callbacks. Every method runs on the GTK main thread and must
@@ -91,6 +92,7 @@ func Run(cfg Config, c Controller, args []string) int {
 		return p
 	}
 	cc := C.ArcticConfig{
+		keep_running: b2i(cfg.KeepRunning), background: b2i(cfg.Background), ask_download: b2i(cfg.AskDownload),
 		app_id: s(cfg.AppID), app_name: s(cfg.AppName), icon_name: s(cfg.IconName),
 		start_uri: s(cfg.StartURI), open_uri: s(cfg.OpenURI),
 		data_dir: s(cfg.DataDir), cache_dir: s(cfg.CacheDir),
@@ -176,3 +178,8 @@ func Quit() { C.arctic_quit() }
 
 // PostIdle makes the main loop call c.Idle() once (from any goroutine).
 func PostIdle(h cgo.Handle) { C.arctic_idle(C.uintptr_t(h)) }
+
+// SetOptions applies lifecycle and save-dialog preferences on the GTK thread.
+func SetOptions(keepRunning, askDownload bool) {
+	C.arctic_set_options(b2i(keepRunning), b2i(askDownload))
+}

@@ -96,6 +96,9 @@ func printInfo(w io.Writer, a api.AppInfo) {
 	row("links", a.Links)
 	row("notifications", a.Notifications)
 	row("devtools", a.Devtools)
+	row("keep running", a.KeepRunning)
+	row("start at login", a.StartAtLogin)
+	row("ask download", a.AskDownload)
 	row("rendering", a.Rendering)
 	if len(a.ExtraDomains) > 0 {
 		row("extra domains", strings.Join(a.ExtraDomains, ", "))
@@ -261,4 +264,24 @@ func (c *cli) cmdVersion(args []string) int {
 			fmt.Fprintln(w, "WebKitGTK", res.WebKitVersion)
 		}
 	})
+}
+
+// cmdQuit stops the verified app process, including an app running without a window.
+func (c *cli) cmdQuit(args []string) int {
+	_, pos, j, ok := c.flags("quit", args, nil)
+	if !ok || !c.needIDs("quit", j, pos, 1, 1) {
+		return 2
+	}
+	m, code := c.manager(j)
+	if m == nil {
+		return code
+	}
+	if _, err := m.Paths.Load(pos[0]); err != nil {
+		return c.fail(j, err)
+	}
+	stopped, err := m.Paths.Stop(pos[0], m.StopWait)
+	if err != nil {
+		return c.fail(j, err)
+	}
+	return c.ok(j, map[string]any{"stopped": stopped}, func(w io.Writer) { fmt.Fprintln(w, "App stopped") })
 }

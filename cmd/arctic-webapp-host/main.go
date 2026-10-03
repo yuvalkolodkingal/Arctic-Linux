@@ -36,6 +36,7 @@ func run(args []string) int {
 	openURL := fs.String("url", "", "")
 	inspect := fs.Bool("inspect", false, "")
 	notice := fs.String("notice", "", "")
+	background := fs.Bool("background", false, "")
 	version := fs.Bool("version", false, "")
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
 		fmt.Fprintln(os.Stderr, "usage: arctic-webapp-host --app-id ID [--url URL] [--inspect] | --version")
@@ -51,5 +52,6 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "arctic-webapp-host: %v\n", err)
 		return 1
 	}
+	c.background = *background && c.app.Options.KeepRunning
 	return c.run()
 }

@@ -17,6 +17,7 @@ typedef struct {
     const char *open_uri;     /* first page */
     const char *data_dir;     /* WebKit profile */
     const char *cache_dir;
+    int keep_running, background, ask_download;
     int devtools;
     int software;             /* rendering=software: no hardware acceleration */
     double zoom;
@@ -40,6 +41,7 @@ void arctic_load_alternate_html(const char *html, const char *uri);
 void arctic_open_external(const char *uri);
 void arctic_allow_certificate(const char *host, const char *pem);
 void arctic_set_devtools(int enabled);
+void arctic_set_options(int keep_running, int ask_download);
 void arctic_banner(const char *text, const char *primary);
 void arctic_present(void);
 void arctic_quit(void);
