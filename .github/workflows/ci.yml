@@ -83,7 +83,7 @@ jobs:
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Install tools
-        run: dnf -y install git ShellCheck file
+        run: dnf -y install git ShellCheck file fish
       - uses: actions/checkout@v4
       - name: shellcheck
         run: |
@@ -101,6 +101,7 @@ jobs:
           done
           printf '%s\n' "${files[@]}"
           shellcheck -x "${files[@]}"
+          fish --no-execute dotfiles/.config/fish/config.fish
 
   fetch-c:
     name: fetch.c builds and runs (arctic-fetch-3d)
