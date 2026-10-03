@@ -149,9 +149,10 @@ Pressing it again brings the open window to the front.
 
 ## Troubleshooting
 
+- **WhatsApp or another site declines the preview request** (HTTP 400, 401, 403, 405 or 429): Arctic offers a letter icon and lets you add the app. You can rename it in the preview and sign in when its window opens. An error page is never used as the app’s name or icon.
+- **Video playback is slow**: use `arctic-webapp set ID --rendering auto` and restart the app. The `arctic-webapps` package includes GStreamer’s VA-API/NVDEC plugins; hardware decoding also needs your GPU’s driver. Any driver workarounds you set in your environment still apply.
 - **The window stays blank or flickers** (some NVIDIA setups): turn on software rendering:
-  `arctic-webapp set ID --rendering software`. On the NVIDIA driver, Arctic already applies the
-  usual workarounds.
+  `arctic-webapp set ID --rendering software`. Automatic rendering keeps hardware acceleration and DMA-BUF enabled, including on NVIDIA. Use software rendering only for an app that needs it.
 - **A site on your network has a self-signed certificate**: the page says the connection isn't
   private. Arctic only lets you trust a certificate for sites on your own network (names ending in
   `.lan`, `.local`, `.home.arpa`, `.internal`, or private addresses, Tailscale's 100.x ones

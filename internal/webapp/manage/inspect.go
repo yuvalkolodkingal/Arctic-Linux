@@ -64,7 +64,7 @@ func (m *Manager) inspectDir(token string) string {
 
 // Inspect discovers a site and stores a preview you can install from within an hour.
 func (m *Manager) Inspect(ctx context.Context, rawURL string) (api.Preview, error) {
-	res, err := discover.Discover(ctx, rawURL, discover.Options{PSL: m.psl(), Fetcher: NewFetcher(), Progress: m.Progress})
+	res, err := discover.Discover(ctx, rawURL, discover.Options{PSL: m.psl(), Fetcher: NewFetcher(), Progress: m.Progress, MetadataFallback: true})
 	if err != nil {
 		return api.Preview{}, err
 	}
@@ -189,6 +189,9 @@ func (m *Manager) warnings(res *discover.Result) ([]api.Warning, string) {
 	}
 	if res.LoginWall {
 		w = append(w, api.Warning{Code: "login_wall", Message: fmt.Sprintf("The site asked you to sign in, so Arctic used the name and icon from %s.", res.Input.Host)})
+	}
+	if res.MetadataStatus != 0 {
+		w = append(w, api.Warning{Code: "metadata_unavailable", Message: fmt.Sprintf("The site declined the preview request (HTTP %d). You can still add it with a letter icon and sign in when it opens.", res.MetadataStatus)})
 	}
 	if res.Insecure {
 		w = append(w, api.Warning{Code: "insecure", Message: "This site doesn’t use a secure connection. Only add it if it’s on your own network."})

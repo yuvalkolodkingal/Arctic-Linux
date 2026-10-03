@@ -283,10 +283,17 @@ func TestPlanRunBrowserMissingRequiresSelection(t *testing.T) {
 }
 
 func TestRuntimeEnv(t *testing.T) {
-	env := runtimeEnv([]string{"A=1", "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1", "WEBKIT_DISABLE_DMABUF_RENDERER=0"}, "auto", true)
+	env := runtimeEnv([]string{"A=1", "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1", "WEBKIT_DISABLE_DMABUF_RENDERER=0"}, "auto")
 	got := strings.Join(env, " ")
-	if got != "A=1 WEBKIT_DISABLE_DMABUF_RENDERER=0 __NV_DISABLE_EXPLICIT_SYNC=1" {
+	if got != "A=1 WEBKIT_DISABLE_DMABUF_RENDERER=0" {
 		t.Fatalf("env %q", got)
+	}
+	if got := strings.Join(runtimeEnv([]string{"PATH=/usr/bin"}, "auto"), " "); got != "PATH=/usr/bin" {
+		t.Fatalf("automatic rendering disables acceleration: %q", got)
+	}
+	software := strings.Join(runtimeEnv(nil, "software"), " ")
+	if !strings.Contains(software, "WEBKIT_SKIA_ENABLE_CPU_RENDERING=1") || !strings.Contains(software, "WEBKIT_DISABLE_COMPOSITING_MODE=1") {
+		t.Fatalf("software rendering no longer opts out: %q", software)
 	}
 }
 

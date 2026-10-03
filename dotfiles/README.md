@@ -99,7 +99,7 @@ Then log in to the **Mango** session, or press `Super + Shift + R` in a running 
 - **Settings** (`Super + S`) writes what you change there to `~/.config/mango/settings.conf`,
   which `config.conf` reads just before `user.conf`.
 - **Your own settings** go in files Arctic never overwrites: `~/.config/mango/user.conf`,
-  `~/.config/kitty/user.conf`, `~/.zshrc.local`, `~/.config/arctic/default-apps`.
+  `~/.config/kitty/user.conf`, `~/.config/fish/config.local.fish`, `~/.zshrc.local`, `~/.config/arctic/default-apps`.
 - **Colours** come from the design tokens. Change `design/tokens.json`, re-export
   `design/exports/arctic-tokens.json` from the design system, then run
   `python3 design/tools/gen-desktop-themes.py` to regenerate both themes (the per-app files

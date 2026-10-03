@@ -13,8 +13,8 @@ These are ticked for you in the installer. Every one can be swapped or unticked.
 | Browser | **Zen Browser**: calm, privacy-first, with vertical tabs | `Super + B` | Flathub |
 | Code editor | **Zed**: fast, modern code editor | `Super + E` | Flathub (community build) |
 | Terminal | **kitty**: fast, GPU-drawn terminal | `Super + Enter` | Fedora |
-| Shell | **zsh**: friendly shell with smart completion | inside the terminal | Fedora |
-| File manager | **Thunar**: simple windowed file manager | `Super + F` | Fedora |
+| Shell | **Fish**: shell with suggestions as you type | inside the terminal | Fedora |
+| File manager | **Nautilus (GNOME Files)**: browse files and folders | `Super + F` | Fedora |
 | File manager in the terminal | **yazi** | `Super + Shift + F` | COPR `lihaohong/yazi` (Nix as a fallback) |
 | Office | **Collabora Office**: documents, spreadsheets and slides | the launcher | Flathub |
 | Video | **VLC**: plays almost any video or audio file | the launcher | Fedora |
@@ -79,8 +79,8 @@ package repository, and **Nix** the Nix package manager.
 
 | App | What it is | Comes from |
 |---|---|---|
-| **zsh** (ticked) | Friendly shell with smart completion. | Fedora |
-| fish | Shell with suggestions as you type. | Fedora |
+| zsh | Friendly shell with smart completion. | Fedora |
+| **fish** (ticked) | Shell with suggestions as you type. | Fedora |
 | bash | The standard Linux shell. | Fedora |
 
 ### File manager
@@ -88,8 +88,8 @@ package repository, and **Nix** the Nix package manager.
 | App | What it is | Comes from |
 |---|---|---|
 | **yazi** (ticked) | Quick file manager inside the terminal. | COPR `lihaohong/yazi`, else Nix |
-| **Thunar** (ticked) | Simple windowed file manager. | Fedora |
-| Files (Nautilus) | GNOME's file manager. | Fedora |
+| Thunar | Simple windowed file manager. | Fedora |
+| **Files (Nautilus)** (ticked) | GNOME's file manager. | Fedora |
 | Dolphin | KDE's file manager with tabs and split view. | Fedora |
 | Nemo | Familiar, full-featured file manager. | Fedora |
 | PCManFM-Qt | Very light windowed file manager. | Fedora |

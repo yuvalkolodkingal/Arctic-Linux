@@ -1,4 +1,4 @@
-# Arctic Linux — zsh (the default shell). Personal additions go in ~/.zshrc.local.
+# Arctic Linux — zsh (an optional shell). Personal additions go in ~/.zshrc.local.
 
 # ---- Environment --------------------------------------------------------
 typeset -U path

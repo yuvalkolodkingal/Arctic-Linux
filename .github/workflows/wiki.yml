@@ -19,21 +19,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  showcase-media:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/arctic-showcase'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: codex/showcase-media-2026-10-03
-      - name: Upload verified showcase assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sha256sum Arctic-Linux-Showcase-1080p.mp4
-          test "$(sha256sum Arctic-Linux-Showcase-1080p.mp4 | cut -d ' ' -f 1)" = dbb4afecb63fbab4a3e29eb76a52656fa9f45688ea5f3871a60a1bc109f971a8
-          gh release upload showcase-2026-10-03 --clobber Arctic-Linux-Showcase-1080p.mp4 Arctic-Linux-Showcase-Poster.png Arctic-Linux-Showcase-Source.zip captions.srt captions.vtt chapters.txt
-
   publish:
     name: Publish docs/wiki to the wiki
     runs-on: ubuntu-latest

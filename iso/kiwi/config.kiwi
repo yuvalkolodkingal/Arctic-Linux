@@ -77,8 +77,8 @@
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
 		<package name="kitty"/>
 		<package name="kitty-shell-integration"/>
-		<package name="zsh"/>
-		<package name="Thunar"/>
+		<package name="fish"/>
+		<package name="nautilus"/>
 		<package name="vlc"/>
 		<!-- stream 6: more themes and the terminal's Nerd Font symbols (arctic-shell recommends them). -->
 		<package name="arctic-themes-extra"/>

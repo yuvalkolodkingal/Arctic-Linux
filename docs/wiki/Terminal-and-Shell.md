@@ -1,6 +1,6 @@
 # Terminal and shell
 
-`Super + Enter` opens a terminal. Out of the box that's **kitty** running **zsh**, and a small
+`Super + Enter` opens a terminal. Out of the box that's **kitty** running **Fish**, and a small
 block-drawn fox says hello.
 
 ![kitty with the arctic-fetch fox greeting and the prompt](images/terminal-fetch.png)
@@ -36,13 +36,15 @@ arctic-fetch --static   # the resting fox, no animation
 
 ### Turning the greeting off
 
-`~/.zshrc` runs the greeting before it reads `~/.zshrc.local`, so the setting has to come earlier.
-Add this line to `~/.zprofile` (read once when you log in, and passed on to every terminal), then
-log out and back in:
+In Fish, run this once, then open a new terminal:
 
-```sh
-export ARCTIC_FETCH=0
+```fish
+set -Ux ARCTIC_FETCH 0
 ```
+
+Run `set -Ue ARCTIC_FETCH` to enable it again. You can also set `ARCTIC_FETCH` in `~/.config/fish/config.local.fish`.
+
+For zsh, put `export ARCTIC_FETCH=0` in `~/.zprofile` and log out and back in; the greeting runs before `~/.zshrc.local`.
 
 ## fastfetch and neofetch
 
@@ -154,9 +156,13 @@ they are installed. A patched Nerd Font you install yourself shows up in the cod
 kitty's own shortcuts work as usual; for example `Ctrl + Shift + T` opens a new tab and
 `Ctrl + Shift + Enter` a new window inside kitty. See kitty's documentation for the full list.
 
+## Fish
+
+Fish is the default shell. It provides suggestions as you type, completion and history search, and the Arctic fox greeting in interactive terminals. Arctic adds `~/.local/bin` and installed Nix profile tools to your `PATH`. Set `ARCTIC_FETCH=0` to skip the greeting. Put personal settings in `~/.config/fish/config.local.fish`.
+
 ## zsh
 
-zsh is the default shell. Arctic's `~/.zshrc` gives you:
+zsh is available in the installer. Arctic's `~/.zshrc` gives you:
 
 - **The prompt**: `~/projects ❯`. The folder is green, the Git branch (inside a Git repository)
   is shown dimmed after it, and the arrow is amber, turning red after a command fails.
@@ -179,13 +185,11 @@ export EDITOR=nvim
 alias gs='git status'
 ```
 
-## bash and fish
+## bash
 
 **bash** is always installed. If you picked it as your shell, you get the same `~/projects ❯`
-prompt and the same `ls` aliases (from `~/.bashrc.d/arctic.sh`). The fox greeting is zsh only;
+prompt and the same `ls` aliases (from `~/.bashrc.d/arctic.sh`). The fox greeting runs in Fish and zsh;
 run `arctic-fetch` whenever you like.
-
-**fish** uses its own prompt and settings.
 
 To change your login shell later (log out and back in afterwards):
 

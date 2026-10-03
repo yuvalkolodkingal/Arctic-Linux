@@ -15,31 +15,33 @@ import (
 
 // Result is everything discovery found about a site.
 type Result struct {
-	Input       *url.URL // the normalised typed URL
-	FinalURL    *url.URL // after redirects
-	Name        string
-	NameSource  string
-	ShortName   string
-	StartURL    string
-	Site        string // registrable domain (scope)
-	Scheme      string
-	ScopeURL    string // the manifest's scope, informational
-	ManifestURL string
-	ManifestID  string
-	Display     string
-	ThemeColor  string
-	Category    string
-	Icons       []Icon
-	LoginWall   bool
-	Insecure    bool
+	Input          *url.URL // the normalised typed URL
+	FinalURL       *url.URL // after redirects
+	Name           string
+	NameSource     string
+	ShortName      string
+	StartURL       string
+	Site           string // registrable domain (scope)
+	Scheme         string
+	ScopeURL       string // the manifest's scope, informational
+	ManifestURL    string
+	ManifestID     string
+	Display        string
+	ThemeColor     string
+	Category       string
+	Icons          []Icon
+	LoginWall      bool
+	Insecure       bool
+	MetadataStatus int // site rejected the metadata request; name/icon use local fallbacks
 }
 
 // Options configure one discovery.
 type Options struct {
-	PSL      *psl.List
-	Fetcher  *Fetcher // nil: a new one with the system roots
-	Progress func(stage, message string)
-	Timeout  time.Duration // default 30 s
+	PSL              *psl.List
+	Fetcher          *Fetcher // nil: a new one with the system roots
+	Progress         func(stage, message string)
+	Timeout          time.Duration // default 30 s
+	MetadataFallback bool          // new-app previews can proceed when a site rejects discovery
 }
 
 // probes are asked for on the typed origin when a login wall hides the page.
@@ -74,6 +76,20 @@ func Discover(ctx context.Context, input string, opt Options) (*Result, error) {
 	progress("page", "Opening "+typed.Host)
 	resp, err := f.Get(ctx, typed, "text/html,application/xhtml+xml", MaxHTML, true)
 	if err != nil {
+		if opt.MetadataFallback && resp != nil {
+			switch resp.StatusCode {
+			case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusMethodNotAllowed, http.StatusTooManyRequests:
+				// Sites such as WhatsApp may reject a plain HTTP client while opening
+				// normally in a browser. Discovery is optional metadata, not a gate
+				// on creating the app. Keep the typed URL and scope, never the error
+				// page or an authentication redirect, and make no further requests.
+				res := &Result{Input: typed, FinalURL: resp.URL, StartURL: typed.String(),
+					Site: list.Site(typed.Host), Scheme: typed.Scheme, Insecure: typed.Scheme == "http",
+					Category: "Network", MetadataStatus: resp.StatusCode}
+				res.Name, res.NameSource = PickName(nil, Head{}, typed.Hostname(), res.Site)
+				return res, nil
+			}
+		}
 		return nil, err
 	}
 	if !isHTML(resp) {
