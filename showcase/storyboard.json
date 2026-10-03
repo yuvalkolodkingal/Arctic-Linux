@@ -1,0 +1,294 @@
+[
+  {
+    "id": "intro",
+    "chapter": "Meet Arctic Linux",
+    "title": "A little calmer. A lot more yours.",
+    "body": "A keyboard-first Fedora desktop, inspired by the arctic fox.",
+    "image": "installed-desktop",
+    "type": "hero",
+    "narration": "Meet Arctic Linux. A calm, keyboard-first desktop built on Fedora, with the Mango tiling window manager. Let's go from the first boot to a day of getting things done."
+  },
+  {
+    "id": "boot",
+    "chapter": "01 \u00b7 From USB to your desktop",
+    "title": "Try it first.",
+    "body": "One live USB. Two clear choices.",
+    "image": "boot-menu",
+    "shortcut": "Try Arctic Linux \u00b7 Install Arctic Linux",
+    "narration": "Start with a live USB. The boot menu lets you try Arctic Linux or open the installer. You can explore the desktop before deciding to put it on your computer."
+  },
+  {
+    "id": "live",
+    "chapter": "01 \u00b7 From USB to your desktop",
+    "title": "Take a look around.",
+    "body": "The live session gives you a working desktop and an easy way to install.",
+    "image": "live-welcome",
+    "shortcut": "Super + I",
+    "narration": "The live welcome card gives you a few useful shortcuts. Keep trying the desktop, or choose Install Arctic Linux. The install button is also right there on the top bar."
+  },
+  {
+    "id": "welcome",
+    "chapter": "02 \u00b7 The installer",
+    "title": "One question at a time.",
+    "body": "Choose your language. Go back whenever you need.",
+    "image": "installer-01-welcome",
+    "tag": "Installer demonstration \u00b7 sample data",
+    "narration": "The installer starts with your language. Each screen asks one clear question, and the sidebar shows where you are. These installer screens use sample disks, networks, and account details."
+  },
+  {
+    "id": "keyboard",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Make the keys feel right.",
+    "body": "Pick your layout and test it before entering passwords.",
+    "image": "installer-02-keyboard",
+    "shortcut": "Enter \u00b7 Next    Alt + \u2190 \u00b7 Back",
+    "narration": "Choose your keyboard layout, then try typing in the test box. Your choice also applies to the live session, so the passwords you enter use the layout you expect."
+  },
+  {
+    "id": "network",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Get connected.",
+    "body": "Join Wi-Fi or plug in a cable. Your new system remembers the connection.",
+    "image": "installer-03-network",
+    "narration": "Connect to Wi-Fi, or use a network cable. Arctic downloads the apps you choose during installation, and carries your Wi-Fi settings into the installed system."
+  },
+  {
+    "id": "timezone",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Set your local time.",
+    "body": "Check the suggested region and city. Keep the clock in sync.",
+    "image": "installer-04-timezone",
+    "narration": "Next, check your time zone. The installer suggests a location, and you can change the region or city. Automatic time keeps the clock in sync."
+  },
+  {
+    "id": "disk",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Choose where Arctic lives.",
+    "body": "Erase a disk, or use free space alongside another system when available.",
+    "image": "installer-05-disk",
+    "tag": "Back up your files before installing",
+    "narration": "Choose your disk and how to install. Erasing replaces its contents. Installing alongside another system is offered when suitable free space is available. Back up your files before you continue."
+  },
+  {
+    "id": "encryption",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Private, from the start.",
+    "body": "Disk encryption is on by default. Keep your passphrase somewhere safe.",
+    "image": "installer-06-encryption",
+    "narration": "Disk encryption is on by default. Create a passphrase, or use the suggested one. You'll enter it when the computer starts. Keep it safe: forgotten passphrases cannot be recovered."
+  },
+  {
+    "id": "account",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Make it your computer.",
+    "body": "Your name, sign-in password, and computer name.",
+    "image": "installer-07-account",
+    "narration": "Create your account, set your sign-in password, and name the computer. Automatic login is optional. You can also choose to use your account password for the encrypted disk."
+  },
+  {
+    "id": "apps",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Choose the apps you want.",
+    "body": "Suggested favourites, swappable defaults, and drivers for detected hardware.",
+    "image": "installer-08-apps",
+    "narration": "The app picker comes with suggested favourites, but the choices are yours. Pick your browser, editor, terminal, file manager, office tools, and more. Relevant hardware drivers appear when they're needed."
+  },
+  {
+    "id": "summary",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Review. Then install.",
+    "body": "Nothing is written to your disk until you confirm on the Summary screen.",
+    "image": "installer-09-summary",
+    "narration": "The summary brings your choices together. Check the disk, encryption, account, and apps, and change anything you need. Nothing is written to the disk until you confirm the install here."
+  },
+  {
+    "id": "installing",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Let Arctic do the setup.",
+    "body": "Follow the progress as the system and selected apps are installed.",
+    "image": "installer-10-installing",
+    "narration": "The progress screen shows what's happening as Arctic sets up the system and installs your apps. If an optional app download fails, you can retry it or skip it and add it later."
+  },
+  {
+    "id": "done",
+    "chapter": "02 \u00b7 The installer",
+    "title": "Your desktop is ready.",
+    "body": "Restart, remove the USB, and follow any driver instructions shown.",
+    "image": "installer-12-done",
+    "narration": "When setup finishes, review the final notes, restart, and remove the USB. If a driver needs a Secure Boot key, the installer gives you the instructions for that first restart."
+  },
+  {
+    "id": "day",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "Room for your day.",
+    "body": "A quiet bar. Five workspaces. Your apps, one shortcut away.",
+    "image": "installed-desktop",
+    "narration": "Now for everyday life on Arctic. The desktop keeps the bar small and the workspace open. Five workspaces help you separate tasks, and the apps you picked are ready to use."
+  },
+  {
+    "id": "launcher",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "Open it. Find it. Keep moving.",
+    "body": "Search apps, files, open windows, and settings from one launcher.",
+    "image": "launcher",
+    "shortcut": "Super + Space",
+    "narration": "Press Super and Space to open the launcher. Type an app name and press Enter. It also finds files, open windows, and settings, so you can get to the next task quickly."
+  },
+  {
+    "id": "calculator",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "Small tasks, handled here.",
+    "body": "Calculate, convert units, run commands, and set reminders.",
+    "image": "launcher-calculator",
+    "shortcut": "=12*4    > htop    remind 10m tea",
+    "narration": "The launcher handles small jobs too. Start with an equals sign to calculate, and press Enter to copy the answer. You can convert units, run commands, or set a reminder for later."
+  },
+  {
+    "id": "tiling",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "Windows make room for each other.",
+    "body": "Mango tiles new windows automatically. The amber border shows your focus.",
+    "image": "tiling",
+    "shortcut": "Super + arrows \u00b7 Change focus",
+    "narration": "Open a few windows and Mango arranges them automatically. The amber border marks the one you're using. Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks."
+  },
+  {
+    "id": "files",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "Keep your files close.",
+    "body": "A graphical file manager, or a terminal workflow. Choose what suits you.",
+    "image": "tiling",
+    "crop": [
+      652,
+      430,
+      610,
+      345
+    ],
+    "shortcut": "Super + F \u00b7 File manager",
+    "narration": "Use the file manager to browse documents and downloads beside your other windows. Prefer the terminal? Yazi is another option in the installer. Your chosen file manager opens with Super and F."
+  },
+  {
+    "id": "terminal",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "A terminal with a familiar face.",
+    "body": "Kitty, zsh, and the Arctic fox greeting. Flatpak and Nix are ready too.",
+    "image": "tiling",
+    "crop": [
+      8,
+      42,
+      640,
+      746
+    ],
+    "shortcut": "Super + Enter",
+    "narration": "Super and Enter opens your terminal. The default setup pairs Kitty with zsh and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools."
+  },
+  {
+    "id": "everyday",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "Browse. Write. Watch. Build.",
+    "body": "Suggested defaults for the things you do every day.",
+    "type": "apps",
+    "narration": "For everyday apps, Arctic suggests Zen for browsing, Zed for editing, Collabora Office for documents, and VLC for media. These are choices, not requirements. You can replace them during installation or later in Settings."
+  },
+  {
+    "id": "getapps",
+    "chapter": "03 \u00b7 A day on Arctic",
+    "title": "Need one more app?",
+    "body": "Get apps brings Flathub, Fedora packages, web apps, and terminal tools together.",
+    "image": "get-apps",
+    "shortcut": "Super + Shift + A",
+    "narration": "Need something else? Open Get apps. Choose Flathub, Fedora packages, a web app, or a terminal tool. Installations keep going when you close the launcher, and you get a notification when an app is ready."
+  },
+  {
+    "id": "settings",
+    "chapter": "04 \u00b7 Make it yours",
+    "title": "Find the setting. Change it.",
+    "body": "Search across Settings. Changes apply straight away, with undo.",
+    "image": "settings-search",
+    "shortcut": "Super + S    Ctrl + Z \u00b7 Undo",
+    "narration": "Super and S opens Arctic Settings. Search for a setting instead of hunting through pages. Changes apply straight away, and Control and Z undoes the last one."
+  },
+  {
+    "id": "appearance",
+    "chapter": "04 \u00b7 Make it yours",
+    "title": "Winter or Polar night.",
+    "body": "Two Arctic themes, with colours that can follow your wallpaper.",
+    "image": "settings-appearance",
+    "shortcut": "Super + Shift + T",
+    "narration": "Choose the light Winter theme or dark Polar night. Your own wallpaper can also provide the desktop's colours, carrying them through the shell, window borders, terminal, and supported apps."
+  },
+  {
+    "id": "winter",
+    "chapter": "04 \u00b7 Make it yours",
+    "title": "A fresh coat.",
+    "body": "The same desktop, in Winter.",
+    "image": "theme-winter",
+    "theme": "light",
+    "shortcut": "Super + Shift + W \u00b7 Wallpapers",
+    "narration": "Winter keeps the same layout, with soft snow-coloured surfaces. Open the wallpaper picker to choose Arctic artwork or your own pictures. Built-in wallpapers can follow the theme automatically.",
+    "source": "shell/dev/screenshots/wallpapers-winter.png"
+  },
+  {
+    "id": "quick",
+    "chapter": "05 \u00b7 The everyday details",
+    "title": "The controls you reach for.",
+    "body": "Volume, brightness, wireless connections, night light, and power mode.",
+    "image": "quick-settings",
+    "shortcut": "Super + A",
+    "narration": "Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode. Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task."
+  },
+  {
+    "id": "networkdaily",
+    "chapter": "05 \u00b7 The everyday details",
+    "title": "Stay connected.",
+    "body": "Join networks and manage connections from the bar.",
+    "image": "bar-network-menu",
+    "shortcut": "Super + Ctrl + W",
+    "narration": "The network menu lets you join Wi-Fi and manage saved connections or a VPN. Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps."
+  },
+  {
+    "id": "displays",
+    "chapter": "05 \u00b7 The everyday details",
+    "title": "Settle into your desk.",
+    "body": "Arrange monitors, adjust scaling, and choose how the laptop screen behaves.",
+    "image": "settings-displays",
+    "shortcut": "Super + P \u00b7 Screen modes",
+    "narration": "At your desk, arrange monitors and adjust their resolution, scale, and rotation. Super and P switches screen modes. Arctic also handles USB drives, printing, and scanning, with settings when you need them."
+  },
+  {
+    "id": "shortcuts",
+    "chapter": "05 \u00b7 The everyday details",
+    "title": "Learn a few keys. Add your own.",
+    "body": "Search the shortcut sheet, then tailor the desktop to your routine.",
+    "image": "keys",
+    "shortcut": "Super + /",
+    "narration": "You don't have to memorise every shortcut. Super and slash opens a searchable guide. Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in."
+  },
+  {
+    "id": "updates",
+    "chapter": "06 \u00b7 Keep it running",
+    "title": "Updates fit around your work.",
+    "body": "Background downloads. Install at restart. Settings shows what's waiting.",
+    "image": "settings-updates",
+    "narration": "Updates download in the background and install when the computer restarts. Settings shows what's waiting and lets you choose the update channel. System snapshots can help restore files after an update, and firmware updates are available when you ask."
+  },
+  {
+    "id": "lock",
+    "chapter": "06 \u00b7 Keep it running",
+    "title": "Step away with peace of mind.",
+    "body": "Lock the desktop, or choose suspend, restart, and shut down.",
+    "image": "lock-screen",
+    "shortcut": "Super + L \u00b7 Lock",
+    "narration": "When you step away, Super and L locks the screen. The power menu offers suspend, restart, and shut down. Arctic also locks before sleeping, with the timing controlled in Settings."
+  },
+  {
+    "id": "outro",
+    "chapter": "Arctic Linux",
+    "title": "Make room for your day.",
+    "body": "Try Arctic Linux. Choose your apps. Make it yours.",
+    "image": "installed-desktop",
+    "type": "outro",
+    "shortcut": "github.com/yuvalkolodkingal/Arctic-Linux",
+    "narration": "That's Arctic Linux: a guided installer, a calm desktop, and useful details for everyday work. Find the project, downloads, and full documentation on GitHub. Try it from a USB, and make it yours."
+  }
+]

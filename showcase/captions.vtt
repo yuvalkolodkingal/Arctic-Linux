@@ -1,0 +1,280 @@
+WEBVTT
+
+00:00:00.800 --> 00:00:02.291
+Meet Arctic Linux.
+
+00:00:02.361 --> 00:00:08.046
+A calm, keyboard-first desktop built on Fedora, with the Mango tiling window manager.
+
+00:00:08.116 --> 00:00:11.391
+Let's go from the first boot to a day of getting things done.
+
+00:00:12.811 --> 00:00:14.486
+Start with a live USB.
+
+00:00:14.556 --> 00:00:18.428
+The boot menu lets you try Arctic Linux or open the installer.
+
+00:00:18.498 --> 00:00:22.284
+You can explore the desktop before deciding to put it on your computer.
+
+00:00:23.704 --> 00:00:27.235
+The live welcome card gives you a few useful shortcuts.
+
+00:00:27.305 --> 00:00:30.942
+Keep trying the desktop, or choose Install Arctic Linux.
+
+00:00:31.012 --> 00:00:34.266
+The install button is also right there on the top bar.
+
+00:00:35.686 --> 00:00:37.830
+The installer starts with your language.
+
+00:00:37.900 --> 00:00:42.198
+Each screen asks one clear question, and the sidebar shows where you are.
+
+00:00:42.268 --> 00:00:46.625
+These installer screens use sample disks, networks, and account details.
+
+00:00:48.045 --> 00:00:51.640
+Choose your keyboard layout, then try typing in the test box.
+
+00:00:51.710 --> 00:00:57.523
+Your choice also applies to the live session, so the passwords you enter use the layout you expect.
+
+00:00:58.943 --> 00:01:01.663
+Connect to Wi-Fi, or use a network cable.
+
+00:01:01.733 --> 00:01:08.357
+Arctic downloads the apps you choose during installation, and carries your Wi-Fi settings into the installed system.
+
+00:01:09.777 --> 00:01:11.578
+Next, check your time zone.
+
+00:01:11.648 --> 00:01:16.309
+The installer suggests a location, and you can change the region or city.
+
+00:01:16.379 --> 00:01:18.769
+Automatic time keeps the clock in sync.
+
+00:01:20.189 --> 00:01:22.219
+Choose your disk and how to install.
+
+00:01:22.289 --> 00:01:24.389
+Erasing replaces its contents.
+
+00:01:24.460 --> 00:01:29.931
+Installing alongside another system is offered when suitable free space is available.
+
+00:01:30.001 --> 00:01:32.281
+Back up your files before you continue.
+
+00:01:33.701 --> 00:01:35.845
+Disk encryption is on by default.
+
+00:01:35.915 --> 00:01:38.699
+Create a passphrase, or use the suggested one.
+
+00:01:38.769 --> 00:01:40.956
+You'll enter it when the computer starts.
+
+00:01:41.026 --> 00:01:44.599
+Keep it safe: forgotten passphrases cannot be recovered.
+
+00:01:46.019 --> 00:01:49.763
+Create your account, set your sign-in password, and name the computer.
+
+00:01:49.833 --> 00:01:51.784
+Automatic login is optional.
+
+00:01:51.854 --> 00:01:55.811
+You can also choose to use your account password for the encrypted disk.
+
+00:01:57.231 --> 00:02:01.466
+The app picker comes with suggested favourites, but the choices are yours.
+
+00:02:01.536 --> 00:02:05.877
+Pick your browser, editor, terminal, file manager, office tools, and more.
+
+00:02:05.947 --> 00:02:08.770
+Relevant hardware drivers appear when they're needed.
+
+00:02:10.190 --> 00:02:12.575
+The summary brings your choices together.
+
+00:02:12.645 --> 00:02:17.007
+Check the disk, encryption, account, and apps, and change anything you need.
+
+00:02:17.077 --> 00:02:20.864
+Nothing is written to the disk until you confirm the install here.
+
+00:02:22.284 --> 00:02:27.649
+The progress screen shows what's happening as Arctic sets up the system and installs your apps.
+
+00:02:27.719 --> 00:02:32.530
+If an optional app download fails, you can retry it or skip it and add it later.
+
+00:02:33.950 --> 00:02:38.800
+When setup finishes, review the final notes, restart, and remove the USB.
+
+00:02:38.870 --> 00:02:44.812
+If a driver needs a Secure Boot key, the installer gives you the instructions for that first restart.
+
+00:02:46.232 --> 00:02:48.337
+Now for everyday life on Arctic.
+
+00:02:48.407 --> 00:02:51.831
+The desktop keeps the bar small and the workspace open.
+
+00:02:51.901 --> 00:02:56.797
+Five workspaces help you separate tasks, and the apps you picked are ready to use.
+
+00:02:58.217 --> 00:03:00.569
+Press Super and Space to open the launcher.
+
+00:03:00.639 --> 00:03:02.548
+Type an app name and press Enter.
+
+00:03:02.618 --> 00:03:08.197
+It also finds files, open windows, and settings, so you can get to the next task quickly.
+
+00:03:09.617 --> 00:03:11.846
+The launcher handles small jobs too.
+
+00:03:11.916 --> 00:03:16.364
+Start with an equals sign to calculate, and press Enter to copy the answer.
+
+00:03:16.434 --> 00:03:20.605
+You can convert units, run commands, or set a reminder for later.
+
+00:03:22.025 --> 00:03:25.662
+Open a few windows and Mango arranges them automatically.
+
+00:03:25.732 --> 00:03:28.111
+The amber border marks the one you're using.
+
+00:03:28.181 --> 00:03:33.887
+Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.
+
+00:03:35.307 --> 00:03:40.353
+Use the file manager to browse documents and downloads beside your other windows.
+
+00:03:40.423 --> 00:03:41.793
+Prefer the terminal?
+
+00:03:41.863 --> 00:03:44.413
+Yazi is another option in the installer.
+
+00:03:44.483 --> 00:03:47.800
+Your chosen file manager opens with Super and F.
+
+00:03:49.220 --> 00:03:51.588
+Super and Enter opens your terminal.
+
+00:03:51.658 --> 00:03:56.063
+The default setup pairs Kitty with zsh and the Arctic fox greeting.
+
+00:03:56.133 --> 00:04:00.624
+Flatpak and Nix are preinstalled, alongside Fedora's package tools.
+
+00:04:02.044 --> 00:04:10.460
+For everyday apps, Arctic suggests Zen for browsing, Zed for editing, Collabora Office for documents, and VLC for media.
+
+00:04:10.530 --> 00:04:12.785
+These are choices, not requirements.
+
+00:04:12.855 --> 00:04:16.620
+You can replace them during installation or later in Settings.
+
+00:04:18.040 --> 00:04:19.374
+Need something else?
+
+00:04:19.444 --> 00:04:20.670
+Open Get apps.
+
+00:04:20.740 --> 00:04:24.719
+Choose Flathub, Fedora packages, a web app, or a terminal tool.
+
+00:04:24.789 --> 00:04:30.282
+Installations keep going when you close the launcher, and you get a notification when an app is ready.
+
+00:04:31.702 --> 00:04:34.102
+Super and S opens Arctic Settings.
+
+00:04:34.172 --> 00:04:37.276
+Search for a setting instead of hunting through pages.
+
+00:04:37.346 --> 00:04:41.645
+Changes apply straight away, and Control and Z undoes the last one.
+
+00:04:43.065 --> 00:04:46.020
+Choose the light Winter theme or dark Polar night.
+
+00:04:46.090 --> 00:04:54.122
+Your own wallpaper can also provide the desktop's colours, carrying them through the shell, window borders, terminal, and supported apps.
+
+00:04:55.542 --> 00:04:59.350
+Winter keeps the same layout, with soft snow-coloured surfaces.
+
+00:04:59.420 --> 00:05:03.782
+Open the wallpaper picker to choose Arctic artwork or your own pictures.
+
+00:05:03.852 --> 00:05:07.255
+Built-in wallpapers can follow the theme automatically.
+
+00:05:08.675 --> 00:05:15.320
+Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode.
+
+00:05:15.390 --> 00:05:21.929
+Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task.
+
+00:05:23.349 --> 00:05:28.821
+The network menu lets you join Wi-Fi and manage saved connections or a VPN.
+
+00:05:28.891 --> 00:05:36.198
+Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps.
+
+00:05:37.618 --> 00:05:42.663
+At your desk, arrange monitors and adjust their resolution, scale, and rotation.
+
+00:05:42.733 --> 00:05:44.877
+Super and P switches screen modes.
+
+00:05:44.947 --> 00:05:50.568
+Arctic also handles USB drives, printing, and scanning, with settings when you need them.
+
+00:05:51.988 --> 00:05:54.406
+You don't have to memorise every shortcut.
+
+00:05:54.476 --> 00:05:57.217
+Super and slash opens a searchable guide.
+
+00:05:57.287 --> 00:06:03.143
+Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.
+
+00:06:04.563 --> 00:06:08.905
+Updates download in the background and install when the computer restarts.
+
+00:06:08.975 --> 00:06:12.612
+Settings shows what's waiting and lets you choose the update channel.
+
+00:06:12.682 --> 00:06:18.837
+System snapshots can help restore files after an update, and firmware updates are available when you ask.
+
+00:06:20.257 --> 00:06:23.083
+When you step away, Super and L locks the screen.
+
+00:06:23.153 --> 00:06:26.641
+The power menu offers suspend, restart, and shut down.
+
+00:06:26.711 --> 00:06:31.159
+Arctic also locks before sleeping, with the timing controlled in Settings.
+
+00:06:32.579 --> 00:06:38.990
+That's Arctic Linux: a guided installer, a calm desktop, and useful details for everyday work.
+
+00:06:39.060 --> 00:06:43.380
+Find the project, downloads, and full documentation on GitHub.
+
+00:06:43.450 --> 00:06:45.957
+Try it from a USB, and make it yours.

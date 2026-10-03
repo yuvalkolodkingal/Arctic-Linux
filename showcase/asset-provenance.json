@@ -1,0 +1,167 @@
+[
+  {
+    "scene": "intro",
+    "source": "docs/wiki/images/installed-desktop.png",
+    "crop": null
+  },
+  {
+    "scene": "boot",
+    "source": "docs/wiki/images/boot-menu.png",
+    "crop": null
+  },
+  {
+    "scene": "live",
+    "source": "docs/wiki/images/live-welcome.png",
+    "crop": null
+  },
+  {
+    "scene": "welcome",
+    "source": "docs/wiki/images/installer-01-welcome.png",
+    "crop": null
+  },
+  {
+    "scene": "keyboard",
+    "source": "docs/wiki/images/installer-02-keyboard.png",
+    "crop": null
+  },
+  {
+    "scene": "network",
+    "source": "docs/wiki/images/installer-03-network.png",
+    "crop": null
+  },
+  {
+    "scene": "timezone",
+    "source": "docs/wiki/images/installer-04-timezone.png",
+    "crop": null
+  },
+  {
+    "scene": "disk",
+    "source": "docs/wiki/images/installer-05-disk.png",
+    "crop": null
+  },
+  {
+    "scene": "encryption",
+    "source": "docs/wiki/images/installer-06-encryption.png",
+    "crop": null
+  },
+  {
+    "scene": "account",
+    "source": "docs/wiki/images/installer-07-account.png",
+    "crop": null
+  },
+  {
+    "scene": "apps",
+    "source": "docs/wiki/images/installer-08-apps.png",
+    "crop": null
+  },
+  {
+    "scene": "summary",
+    "source": "docs/wiki/images/installer-09-summary.png",
+    "crop": null
+  },
+  {
+    "scene": "installing",
+    "source": "docs/wiki/images/installer-10-installing.png",
+    "crop": null
+  },
+  {
+    "scene": "done",
+    "source": "docs/wiki/images/installer-12-done.png",
+    "crop": null
+  },
+  {
+    "scene": "day",
+    "source": "docs/wiki/images/installed-desktop.png",
+    "crop": null
+  },
+  {
+    "scene": "launcher",
+    "source": "docs/wiki/images/launcher.png",
+    "crop": null
+  },
+  {
+    "scene": "calculator",
+    "source": "docs/wiki/images/launcher-calculator.png",
+    "crop": null
+  },
+  {
+    "scene": "tiling",
+    "source": "docs/wiki/images/tiling.png",
+    "crop": null
+  },
+  {
+    "scene": "files",
+    "source": "docs/wiki/images/tiling.png",
+    "crop": [
+      652,
+      430,
+      610,
+      345
+    ]
+  },
+  {
+    "scene": "terminal",
+    "source": "docs/wiki/images/tiling.png",
+    "crop": [
+      8,
+      42,
+      640,
+      746
+    ]
+  },
+  {
+    "scene": "getapps",
+    "source": "docs/wiki/images/get-apps.png",
+    "crop": null
+  },
+  {
+    "scene": "settings",
+    "source": "docs/wiki/images/settings-search.png",
+    "crop": null
+  },
+  {
+    "scene": "appearance",
+    "source": "docs/wiki/images/settings-appearance.png",
+    "crop": null
+  },
+  {
+    "scene": "winter",
+    "source": "shell/dev/screenshots/wallpapers-winter.png",
+    "crop": null
+  },
+  {
+    "scene": "quick",
+    "source": "docs/wiki/images/quick-settings.png",
+    "crop": null
+  },
+  {
+    "scene": "networkdaily",
+    "source": "docs/wiki/images/bar-network-menu.png",
+    "crop": null
+  },
+  {
+    "scene": "displays",
+    "source": "docs/wiki/images/settings-displays.png",
+    "crop": null
+  },
+  {
+    "scene": "shortcuts",
+    "source": "docs/wiki/images/keys.png",
+    "crop": null
+  },
+  {
+    "scene": "updates",
+    "source": "docs/wiki/images/settings-updates.png",
+    "crop": null
+  },
+  {
+    "scene": "lock",
+    "source": "docs/wiki/images/lock-screen.png",
+    "crop": null
+  },
+  {
+    "scene": "outro",
+    "source": "docs/wiki/images/installed-desktop.png",
+    "crop": null
+  }
+]

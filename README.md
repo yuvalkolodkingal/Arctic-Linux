@@ -18,6 +18,12 @@ and it only downloads the apps you pick.
 - **Installer:** a Go engine (`arcticd`) behind a Quickshell wizard. Disk encryption is on by
   default (LUKS2 + btrfs).
 
+## Showcase
+
+[Watch the installer and daily-use showcase](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/showcase-2026-10-03)
+(6:48, 1080p, narrated with English captions). The [editable HyperFrames project](showcase/)
+includes the script, authentic repository screens, chapters, and caption files. Installer screens use demo data.
+
 ## Try it
 
 Download the ISO from the [releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases), write
