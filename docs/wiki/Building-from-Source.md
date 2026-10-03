@@ -95,7 +95,7 @@ Builds the live ISO with kiwi-ng from `iso/kiwi/` in a privileged Fedora 44 cont
 Fedora 44 + updates and the local repository from `build-rpms.sh`.
 
 ```sh
-tools/build-iso.sh                        # → out/iso/Arctic-Linux-1.0-x86_64.iso (+ .sha256)
+tools/build-iso.sh                        # → out/iso/Arctic-Linux-1.1-x86_64.iso (+ .sha256)
 tools/build-iso.sh --repo DIR             # the local RPM repository (default out/repo)
 tools/build-iso.sh --work DIR             # kiwi scratch space (default out/kiwi-work, ~15 GB)
 tools/build-iso.sh --keep-work            # keep the scratch space afterwards

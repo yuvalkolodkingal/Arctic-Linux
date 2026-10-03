@@ -55,7 +55,8 @@ jobs:
         run: |
           dnf -y install git golang gcc binutils webkitgtk6.0-devel gtk4-devel libsoup3-devel \
             publicsuffix-list librsvg2-tools desktop-file-utils sway grim dbus-daemon dbus-tools \
-            mesa-dri-drivers fontconfig google-noto-sans-fonts procps-ng python3 python3-gobject playerctl wtype wl-clipboard libcap
+            mesa-dri-drivers fontconfig google-noto-sans-fonts procps-ng python3 python3-gobject playerctl wtype wl-clipboard libcap \
+            chromium dconf gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gtk
       - uses: actions/checkout@v4
       - name: go vet (tagged), web-app tests, host build
         run: |
@@ -70,11 +71,13 @@ jobs:
           desktop-file-validate /tmp/webapp-sample/*.desktop
       - name: Headless smoke test (sandbox off only here; bwrap can't create namespaces in this container)
         run: cmd/arctic-webapp-host/dev/smoke.sh --out /tmp/webapp-shots
+      - name: Chromium app-window theme and call transport (sandbox off only in the container test)
+        run: cmd/arctic-webapp-host/dev/chromium-smoke.sh --out /tmp/webapp-shots/chromium
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: webapp-screenshots
-          path: /tmp/webapp-shots/*.png
+          path: /tmp/webapp-shots/
           retention-days: 7
 
   shellcheck:

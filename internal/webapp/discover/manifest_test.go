@@ -148,7 +148,7 @@ func TestCategoryAndNeeds(t *testing.T) {
 	if Category([]string{"news", "music"}) != "AudioVideo" || Category(nil) != "Network" || Category([]string{"productivity"}) != "Office" {
 		t.Fatal("category mapping")
 	}
-	for host, want := range map[string]string{"www.netflix.com": "drm", "open.spotify.com": "drm", "spotify.com": "", "meet.google.com": "calls", "app.slack.com": "calls", "example.org": ""} {
+	for host, want := range map[string]string{"www.netflix.com": "drm", "open.spotify.com": "drm", "spotify.com": "", "meet.google.com": "calls", "web.whatsapp.com": "calls", "whatsapp.com": "", "web.whatsapp.com.evil.test": "", "app.slack.com": "calls", "example.org": ""} {
 		if got := Needs(host); got != want {
 			t.Errorf("Needs(%q) = %q, want %q", host, got, want)
 		}

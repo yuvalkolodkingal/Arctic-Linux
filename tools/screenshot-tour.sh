@@ -10,7 +10,7 @@
 #   --only NAME[,NAME…]   retake only these images (names without .png; "installer" = all
 #                         installer-*); --skip NAME[,NAME…] leaves some out. The boot and the
 #                         steps an image depends on still run.
-#   --iso PATH            default out/rc/iso/Arctic-Linux-1.0-x86_64.iso (else out/iso/…)
+#   --iso PATH            default out/rc/iso/Arctic-Linux-1.1-x86_64.iso (else out/iso/…)
 #   --disk-dir DIR        an install made by tools/test-install.sh (target.qcow2, and OVMF_VARS.fd
 #                         for a UEFI install; default out/test/install/uefi). Both are copied to
 #                         the work dir and the copies are deleted afterwards; the originals are
@@ -86,8 +86,8 @@ while (( $# )); do
 done
 PHASES="${PHASES//both/live,installed}"
 if [[ -z "$ISO" ]]; then
-  ISO="$ROOT/out/rc/iso/Arctic-Linux-1.0-x86_64.iso"
-  [[ -f "$ISO" ]] || ISO="$ROOT/out/iso/Arctic-Linux-1.0-x86_64.iso"
+  ISO="$ROOT/out/rc/iso/Arctic-Linux-1.1-x86_64.iso"
+  [[ -f "$ISO" ]] || ISO="$ROOT/out/iso/Arctic-Linux-1.1-x86_64.iso"
 fi
 if [[ "$PHASES" == *live* ]]; then
   [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"

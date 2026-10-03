@@ -5,6 +5,18 @@ The native integration changes were exercised on Fedora 44 with GTK 4.22.5 and W
 local fixtures. It does not certify third-party applications or a physical Arctic desktop.
 The user explicitly deferred account-based acceptance tests.
 
+## Arctic Linux 1.1 verification
+
+The native page now follows light → dark → light live through `prefers-color-scheme`,
+without navigation or reload, as does a real Chromium 154 app window using Arctic's GTK
+Settings portal preference. The Chromium fixture also delivered a real WebRTC data channel,
+audio RTP and decoded video between two local peers. These generated-media loopback checks
+do not certify physical capture or an authenticated WhatsApp call.
+
+Chromium is a required dependency of arctic-webapps. WhatsApp Web previews recommend an
+available Chromium-family runtime; both Get apps and terminal installs honor that choice.
+Existing apps can change engines in Settings without deleting their original profile.
+
 ## Verified behavior
 
 | Area | Evidence and result |
@@ -88,6 +100,7 @@ CGO_ENABLED=0 GOPROXY=off go test ./...
 CGO_ENABLED=1 GOPROXY=off go vet -tags webkit ./...
 CGO_ENABLED=1 GOPROXY=off go test -tags webkit ./internal/webapp/... ./internal/webkit/... ./cmd/arctic-webapp/... ./cmd/arctic-webapp-host/...
 cmd/arctic-webapp-host/dev/smoke.sh --out /tmp/webapp-native-results
+cmd/arctic-webapp-host/dev/chromium-smoke.sh --out /tmp/webapp-chromium-results
 shellcheck cmd/arctic-webapp-host/dev/smoke.sh
 qmllint -I settings settings/pages/WebAppsPage.qml
 python3 -m unittest discover -s settings/tests -p test_webapps.py

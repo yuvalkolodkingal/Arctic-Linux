@@ -155,7 +155,9 @@ void arctic_set_theme(const char *css, int dark, const char *ground) {
     if (gs) {
         if (g_object_class_find_property(G_OBJECT_GET_CLASS(gs), "gtk-interface-color-scheme"))
             set_enum_by_nick(G_OBJECT(gs), "gtk-interface-color-scheme", dark ? "dark" : "light");
-        else if (g_object_class_find_property(G_OBJECT_GET_CLASS(gs), "gtk-application-prefer-dark-theme"))
+        /* WebKitGTK still observes this legacy flag for prefers-color-scheme, even when GTK
+         * itself uses gtk-interface-color-scheme. Keep both in sync for the website too. */
+        if (g_object_class_find_property(G_OBJECT_GET_CLASS(gs), "gtk-application-prefer-dark-theme"))
             g_object_set(gs, "gtk-application-prefer-dark-theme", dark ? TRUE : FALSE, NULL);
     }
     GdkRGBA rgba;
