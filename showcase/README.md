@@ -1,6 +1,6 @@
 # Arctic Linux showcase
 
-A 6 minute 48 second, 1920 × 1080 showcase made with HyperFrames. It walks through the live USB, every installer step, daily desktop use, personalisation, connectivity, displays, shortcuts, updates, and screen locking. Narration uses Kokoro's `af_heart` voice at its natural speed, with embedded sentence-aligned captions and separate SRT/VTT files.
+A 6 minute 47 second, 1920 × 1080 showcase made with HyperFrames. It walks through the live USB, every installer step, daily desktop use, personalisation, connectivity, displays, shortcuts, updates, and screen locking. Narration uses Kokoro's `af_heart` voice at its natural speed, with embedded sentence-aligned captions and separate SRT/VTT files.
 
 [Download the video, captions, and editable source](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/showcase-2026-10-03).
 
@@ -8,7 +8,7 @@ A 6 minute 48 second, 1920 × 1080 showcase made with HyperFrames. It walks thro
 
 ## What the video shows
 
-The screen images are authentic assets from this repository, using the Arctic brand colors, Figtree, JetBrains Mono, and fox mark. Installer screenshots use demo data; they do not represent an installation performed for this video. The tiling and file-manager screens were captured from an earlier live session, while the installer, shell, and Settings screens come from the project's documented UI previews. The video uses animated screenshots and feature cards, rather than a continuous live screen recording.
+The screen images are authentic assets from this repository, using the Arctic brand colors, Figtree, JetBrains Mono, and fox mark. Installer screenshots use demo data; they do not represent an installation performed for this video. Nautilus 50.3 and Kitty running Fish 4.6 were captured as real applications on Fedora 44 with Arctic’s styles. The tiling scene places those separate app captures over the Arctic desktop in HTML. The installer, shell, and Settings screens come from the project’s documented UI previews. The video uses animated screenshots and feature cards, rather than a continuous live screen recording.
 
 `asset-provenance.json` records every source image and any crop. Original screenshots remain unmodified in their existing locations. The Winter scene uses the current shell's wallpaper picker rather than an older screenshot with partially switched themes.
 

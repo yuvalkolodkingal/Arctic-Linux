@@ -148,39 +148,30 @@
     "chapter": "03 \u00b7 A day on Arctic",
     "title": "Windows make room for each other.",
     "body": "Mango tiles new windows automatically. The amber border shows your focus.",
-    "image": "tiling",
+    "image": "desktop",
     "shortcut": "Super + arrows \u00b7 Change focus",
-    "narration": "Open a few windows and Mango arranges them automatically. The amber border marks the one you're using. Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks."
+    "narration": "Open a few windows and Mango arranges them automatically. The amber border marks the one you're using. Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.",
+    "source": "showcase/assets/tiling-desktop.png"
   },
   {
     "id": "files",
     "chapter": "03 \u00b7 A day on Arctic",
-    "title": "Keep your files close.",
-    "body": "A graphical file manager, or a terminal workflow. Choose what suits you.",
-    "image": "tiling",
-    "crop": [
-      652,
-      430,
-      610,
-      345
-    ],
+    "title": "Your files, in Nautilus.",
+    "body": "GNOME Files for documents, downloads, and everything you keep.",
+    "image": "nautilus",
     "shortcut": "Super + F \u00b7 File manager",
-    "narration": "Use the file manager to browse documents and downloads beside your other windows. Prefer the terminal? Yazi is another option in the installer. Your chosen file manager opens with Super and F."
+    "narration": "Nautilus, also known as GNOME Files, is the graphical file manager in this walkthrough. Browse documents and downloads beside your other windows. Open your chosen file manager with Super and F.",
+    "source": "showcase/assets/nautilus-capture.png"
   },
   {
     "id": "terminal",
     "chapter": "03 \u00b7 A day on Arctic",
     "title": "A terminal with a familiar face.",
-    "body": "Kitty, zsh, and the Arctic fox greeting. Flatpak and Nix are ready too.",
-    "image": "tiling",
-    "crop": [
-      8,
-      42,
-      640,
-      746
-    ],
+    "body": "Kitty, Fish, and the Arctic fox greeting. Flatpak and Nix are ready too.",
+    "image": "kitty-fish",
     "shortcut": "Super + Enter",
-    "narration": "Super and Enter opens your terminal. The default setup pairs Kitty with zsh and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools."
+    "narration": "Super and Enter opens your terminal. The default setup pairs Kitty with Fish and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools.",
+    "source": "showcase/assets/kitty-fish-capture.png"
   },
   {
     "id": "everyday",

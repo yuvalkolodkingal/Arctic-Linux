@@ -48,6 +48,11 @@ h1{margin:0;font-size:68px;line-height:1.05;letter-spacing:-.025em;font-weight:6
 .app-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:1100px}
 .app-card{display:flex;flex-direction:column;gap:22px;padding:36px;background:#1a212a;border:1px solid #6b7a8a;border-radius:20px;min-height:245px}
 .app-symbol{font-family:'JetBrains Mono',monospace;font-size:24px;color:#aeb9c5}.app-name{font-size:44px;font-weight:600;line-height:1.1}.app-use{font-size:26px;color:#aeb9c5;line-height:1.4}
+.tiled-screen{position:relative;width:100%;aspect-ratio:1280/800;border:1px solid #6b7a8a;border-radius:18px;overflow:hidden;box-shadow:0 18px 60px #00000026}
+.tiled-screen .desktop{width:100%;height:100%;display:block}
+.tiled-screen .window{position:absolute;top:5.5%;height:93.25%;object-fit:fill;border:2px solid #2f3945;border-radius:12px}
+.tiled-screen .terminal{left:.625%;width:50%;border-color:#f6bd55}
+.tiled-screen .files{left:51.8%;width:47.5%}
 .caption{position:absolute;left:136px;bottom:70px;width:1648px;min-height:110px;display:flex;align-items:center;justify-content:center;text-align:center;color:#e9eef3;background:#12171e;padding:12px 24px;border-radius:14px;font-size:29px;line-height:1.4;z-index:100;}
 .caption-text{max-width:1550px}
 .progress-track{position:absolute;bottom:32px;left:72px;width:1776px;height:3px;background:#2f3945;z-index:110}
@@ -68,6 +73,8 @@ for i,s in enumerate(scenes):
     if s.get('type')=='apps':
         apps=[('01 · Browse','Zen','A browser for your everyday web.'),('02 · Create','Zed','An editor for code and projects.'),('03 · Write','Collabora Office','Documents, sheets, and slides.'),('04 · Play','VLC','Video and music, at your desk.')]
         media='<div class="app-grid">'+''.join(f'<div class="app-card entrance-card"><div class="app-symbol">{escape(k)}</div><div class="app-name">{escape(n)}</div><div class="app-use">{escape(d)}</div></div>' for k,n,d in apps)+'</div>'
+    elif s['id']=='tiling':
+        media='<div class="tiled-screen entrance-screen"><img class="desktop" src="assets/tiling-desktop.png" alt="Arctic desktop"><img class="window terminal" src="assets/kitty-fish-capture.png" alt="Kitty running Fish"><img class="window files" src="assets/nautilus-tiled-capture.png" alt="Nautilus files"></div>'
     else:
         media=f'<img class="screen entrance-screen" src="assets/{s["id"]}.png" alt="{escape(s["title"])}">'
     markup.append(f'''<section id="scene-{s['id']}" class="{' '.join(classes)}" aria-label="{escape(s['title'])}">

@@ -1,6 +1,6 @@
 {
   "hyperframes": "0.8.114",
-  "duration_seconds": 407.777,
+  "duration_seconds": 407.014,
   "resolution": [
     1920,
     1080
@@ -33,7 +33,7 @@
       "warningCount": 0
     }
   },
-  "caption_cues": 93,
+  "caption_cues": 92,
   "animation_map": {
     "reviewed": true,
     "tweens": 463,
@@ -47,18 +47,18 @@
     "kokoro-v1.0.onnx": "7d5df8ecf7d4b1878015a32686053fd0eebe2bc377234608764cc0ef3636a6c5",
     "voices-v1.0.bin": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
   },
-  "repository_source_commit": "9dd6f5b0ac49f5ebbf8104de290af3600b975db2",
+  "repository_source_commit": "a17d255f8861986dcfc054b8edbf206c321b442a",
   "render": {
-    "duration_seconds": 407.8,
-    "size_bytes": 40887802,
+    "duration_seconds": 407.033333,
+    "size_bytes": 39964140,
     "video_codec": "h264",
     "audio_codec": "aac",
     "subtitle_codec": "mov_text",
     "chapters": 8,
     "full_decode": "passed",
     "representative_frames": "reviewed",
-    "sha256": "f14f0018feafee02c293568cf54cd6b9024edff750e2908cc2ddf2f2aacd9e77",
-    "integrated_loudness_lufs": -13.6,
-    "true_peak_dbfs": -1.3
+    "sha256": "dbb4afecb63fbab4a3e29eb76a52656fa9f45688ea5f3871a60a1bc109f971a8",
+    "audio_integrated_lufs": -13.6,
+    "audio_true_peak_dbfs": -1.3
   }
 }

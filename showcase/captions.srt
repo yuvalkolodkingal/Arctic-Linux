@@ -207,165 +207,161 @@ The amber border marks the one you're using.
 Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.
 
 53
-00:03:35,307 --> 00:03:40,353
-Use the file manager to browse documents and downloads beside your other windows.
+00:03:35,307 --> 00:03:40,673
+Nautilus, also known as GNOME Files, is the graphical file manager in this walkthrough.
 
 54
-00:03:40,423 --> 00:03:41,793
-Prefer the terminal?
+00:03:40,743 --> 00:03:44,252
+Browse documents and downloads beside your other windows.
 
 55
-00:03:41,863 --> 00:03:44,413
-Yazi is another option in the installer.
+00:03:44,322 --> 00:03:47,447
+Open your chosen file manager with Super and F.
 
 56
-00:03:44,483 --> 00:03:47,800
-Your chosen file manager opens with Super and F.
-
-57
-00:03:49,220 --> 00:03:51,588
+00:03:48,867 --> 00:03:51,235
 Super and Enter opens your terminal.
 
-58
-00:03:51,658 --> 00:03:56,063
-The default setup pairs Kitty with zsh and the Arctic fox greeting.
+57
+00:03:51,305 --> 00:03:55,301
+The default setup pairs Kitty with Fish and the Arctic fox greeting.
 
-59
-00:03:56,133 --> 00:04:00,624
+58
+00:03:55,371 --> 00:03:59,861
 Flatpak and Nix are preinstalled, alongside Fedora's package tools.
 
-60
-00:04:02,044 --> 00:04:10,460
+59
+00:04:01,281 --> 00:04:09,697
 For everyday apps, Arctic suggests Zen for browsing, Zed for editing, Collabora Office for documents, and VLC for media.
 
-61
-00:04:10,530 --> 00:04:12,785
+60
+00:04:09,767 --> 00:04:12,022
 These are choices, not requirements.
 
-62
-00:04:12,855 --> 00:04:16,620
+61
+00:04:12,092 --> 00:04:15,858
 You can replace them during installation or later in Settings.
 
-63
-00:04:18,040 --> 00:04:19,374
+62
+00:04:17,278 --> 00:04:18,611
 Need something else?
 
-64
-00:04:19,444 --> 00:04:20,670
+63
+00:04:18,681 --> 00:04:19,908
 Open Get apps.
 
-65
-00:04:20,740 --> 00:04:24,719
+64
+00:04:19,978 --> 00:04:23,956
 Choose Flathub, Fedora packages, a web app, or a terminal tool.
 
-66
-00:04:24,789 --> 00:04:30,282
+65
+00:04:24,026 --> 00:04:29,520
 Installations keep going when you close the launcher, and you get a notification when an app is ready.
 
-67
-00:04:31,702 --> 00:04:34,102
+66
+00:04:30,940 --> 00:04:33,340
 Super and S opens Arctic Settings.
 
-68
-00:04:34,172 --> 00:04:37,276
+67
+00:04:33,410 --> 00:04:36,514
 Search for a setting instead of hunting through pages.
 
-69
-00:04:37,346 --> 00:04:41,645
+68
+00:04:36,584 --> 00:04:40,882
 Changes apply straight away, and Control and Z undoes the last one.
 
-70
-00:04:43,065 --> 00:04:46,020
+69
+00:04:42,302 --> 00:04:45,257
 Choose the light Winter theme or dark Polar night.
 
-71
-00:04:46,090 --> 00:04:54,122
+70
+00:04:45,327 --> 00:04:53,359
 Your own wallpaper can also provide the desktop's colours, carrying them through the shell, window borders, terminal, and supported apps.
 
-72
-00:04:55,542 --> 00:04:59,350
+71
+00:04:54,779 --> 00:04:58,587
 Winter keeps the same layout, with soft snow-coloured surfaces.
 
-73
-00:04:59,420 --> 00:05:03,782
+72
+00:04:58,657 --> 00:05:03,020
 Open the wallpaper picker to choose Arctic artwork or your own pictures.
 
-74
-00:05:03,852 --> 00:05:07,255
+73
+00:05:03,090 --> 00:05:06,492
 Built-in wallpapers can follow the theme automatically.
 
-75
-00:05:08,675 --> 00:05:15,320
+74
+00:05:07,912 --> 00:05:14,558
 Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode.
 
-76
-00:05:15,390 --> 00:05:21,929
+75
+00:05:14,628 --> 00:05:21,166
 Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task.
 
-77
-00:05:23,349 --> 00:05:28,821
+76
+00:05:22,586 --> 00:05:28,058
 The network menu lets you join Wi-Fi and manage saved connections or a VPN.
 
-78
-00:05:28,891 --> 00:05:36,198
+77
+00:05:28,128 --> 00:05:35,435
 Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps.
 
-79
-00:05:37,618 --> 00:05:42,663
+78
+00:05:36,855 --> 00:05:41,900
 At your desk, arrange monitors and adjust their resolution, scale, and rotation.
 
-80
-00:05:42,733 --> 00:05:44,877
+79
+00:05:41,970 --> 00:05:44,114
 Super and P switches screen modes.
 
-81
-00:05:44,947 --> 00:05:50,568
+80
+00:05:44,184 --> 00:05:49,806
 Arctic also handles USB drives, printing, and scanning, with settings when you need them.
 
-82
-00:05:51,988 --> 00:05:54,406
+81
+00:05:51,226 --> 00:05:53,644
 You don't have to memorise every shortcut.
 
-83
-00:05:54,476 --> 00:05:57,217
+82
+00:05:53,714 --> 00:05:56,455
 Super and slash opens a searchable guide.
 
-84
-00:05:57,287 --> 00:06:03,143
+83
+00:05:56,525 --> 00:06:02,381
 Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.
 
-85
-00:06:04,563 --> 00:06:08,905
+84
+00:06:03,801 --> 00:06:08,142
 Updates download in the background and install when the computer restarts.
 
-86
-00:06:08,975 --> 00:06:12,612
+85
+00:06:08,212 --> 00:06:11,850
 Settings shows what's waiting and lets you choose the update channel.
 
-87
-00:06:12,682 --> 00:06:18,837
+86
+00:06:11,920 --> 00:06:18,074
 System snapshots can help restore files after an update, and firmware updates are available when you ask.
 
-88
-00:06:20,257 --> 00:06:23,083
+87
+00:06:19,494 --> 00:06:22,321
 When you step away, Super and L locks the screen.
 
-89
-00:06:23,153 --> 00:06:26,641
+88
+00:06:22,391 --> 00:06:25,879
 The power menu offers suspend, restart, and shut down.
 
-90
-00:06:26,711 --> 00:06:31,159
+89
+00:06:25,949 --> 00:06:30,397
 Arctic also locks before sleeping, with the timing controlled in Settings.
 
-91
-00:06:32,579 --> 00:06:38,990
+90
+00:06:31,817 --> 00:06:38,228
 That's Arctic Linux: a guided installer, a calm desktop, and useful details for everyday work.
 
-92
-00:06:39,060 --> 00:06:43,380
+91
+00:06:38,298 --> 00:06:42,618
 Find the project, downloads, and full documentation on GitHub.
 
-93
-00:06:43,450 --> 00:06:45,957
+92
+00:06:42,688 --> 00:06:45,194
 Try it from a USB, and make it yours.

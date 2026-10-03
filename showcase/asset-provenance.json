@@ -86,28 +86,18 @@
   },
   {
     "scene": "tiling",
-    "source": "docs/wiki/images/tiling.png",
+    "source": "showcase/assets/tiling-desktop.png",
     "crop": null
   },
   {
     "scene": "files",
-    "source": "docs/wiki/images/tiling.png",
-    "crop": [
-      652,
-      430,
-      610,
-      345
-    ]
+    "source": "showcase/assets/nautilus-capture.png",
+    "crop": null
   },
   {
     "scene": "terminal",
-    "source": "docs/wiki/images/tiling.png",
-    "crop": [
-      8,
-      42,
-      640,
-      746
-    ]
+    "source": "showcase/assets/kitty-fish-capture.png",
+    "crop": null
   },
   {
     "scene": "getapps",
@@ -163,5 +153,23 @@
     "scene": "outro",
     "source": "docs/wiki/images/installed-desktop.png",
     "crop": null
+  },
+  {
+    "scene": "tiling",
+    "composition": "Separate real app captures placed over the Arctic desktop in HTML",
+    "captures": [
+      "showcase/assets/kitty-fish-capture.png",
+      "showcase/assets/nautilus-tiled-capture.png"
+    ]
+  },
+  {
+    "captures": [
+      "nautilus-capture.png",
+      "nautilus-tiled-capture.png",
+      "kitty-fish-capture.png"
+    ],
+    "environment": "Fedora 44, headless Sway, real Nautilus 50.3 / Kitty 0.47.1 / Fish 4.6.0",
+    "theme": "Repository GTK and Kitty styles; current libadwaita CSS variables set to the Arctic Polar night palette",
+    "continuous_os_recording": false
   }
 ]

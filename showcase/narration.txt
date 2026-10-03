@@ -34,9 +34,9 @@ The launcher handles small jobs too. Start with an equals sign to calculate, and
 
 Open a few windows and Mango arranges them automatically. The amber border marks the one you're using. Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.
 
-Use the file manager to browse documents and downloads beside your other windows. Prefer the terminal? Yazi is another option in the installer. Your chosen file manager opens with Super and F.
+Nautilus, also known as GNOME Files, is the graphical file manager in this walkthrough. Browse documents and downloads beside your other windows. Open your chosen file manager with Super and F.
 
-Super and Enter opens your terminal. The default setup pairs Kitty with zsh and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools.
+Super and Enter opens your terminal. The default setup pairs Kitty with Fish and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools.
 
 For everyday apps, Arctic suggests Zen for browsing, Zed for editing, Collabora Office for documents, and VLC for media. These are choices, not requirements. You can replace them during installation or later in Settings.
 

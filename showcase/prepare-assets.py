@@ -29,5 +29,7 @@ for name in ['arctic-mark-winter.svg','arctic-mark-polar-night.svg']:
 import urllib.request
 with urllib.request.urlopen('https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js') as src:
     (assets/'gsap.min.js').write_bytes(src.read())
+provenance.append({'scene':'tiling','composition':'Separate real app captures placed over the Arctic desktop in HTML','captures':['showcase/assets/kitty-fish-capture.png','showcase/assets/nautilus-tiled-capture.png']})
+provenance.append({'captures':['nautilus-capture.png','nautilus-tiled-capture.png','kitty-fish-capture.png'],'environment':'Fedora 44, headless Sway, real Nautilus 50.3 / Kitty 0.47.1 / Fish 4.6.0','theme':'Repository GTK and Kitty styles; current libadwaita CSS variables set to the Arctic Polar night palette','continuous_os_recording':False})
 (ROOT/'asset-provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
 print(f'Prepared {len(provenance)} authentic screen assets')

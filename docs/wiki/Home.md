@@ -11,6 +11,8 @@ changing anything, then **install it** when you're ready. The installer asks one
 per screen, encrypts your disk by default, sets up the drivers your computer needs and only
 downloads the apps you pick.
 
+**[Watch the full installer and daily-use showcase](Showcase)** — a narrated 1080p tour with Nautilus and Fish.
+
 ## Start here
 
 | You want to… | Read |

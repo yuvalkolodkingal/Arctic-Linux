@@ -1,5 +1,5 @@
 {
-  "duration": 407.777,
+  "duration": 407.014,
   "voice": "af_heart",
   "speed": 1.0,
   "scenes": [
@@ -186,45 +186,36 @@
       "chapter": "03 \u00b7 A day on Arctic",
       "title": "Windows make room for each other.",
       "body": "Mango tiles new windows automatically. The amber border shows your focus.",
-      "image": "tiling",
+      "image": "desktop",
       "shortcut": "Super + arrows \u00b7 Change focus",
       "narration": "Open a few windows and Mango arranges them automatically. The amber border marks the one you're using. Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.",
       "start": 201.225,
-      "duration": 13.283
+      "duration": 13.283,
+      "source": "showcase/assets/tiling-desktop.png"
     },
     {
       "id": "files",
       "chapter": "03 \u00b7 A day on Arctic",
-      "title": "Keep your files close.",
-      "body": "A graphical file manager, or a terminal workflow. Choose what suits you.",
-      "image": "tiling",
-      "crop": [
-        652,
-        430,
-        610,
-        345
-      ],
+      "title": "Your files, in Nautilus.",
+      "body": "GNOME Files for documents, downloads, and everything you keep.",
+      "image": "nautilus",
       "shortcut": "Super + F \u00b7 File manager",
-      "narration": "Use the file manager to browse documents and downloads beside your other windows. Prefer the terminal? Yazi is another option in the installer. Your chosen file manager opens with Super and F.",
+      "narration": "Nautilus, also known as GNOME Files, is the graphical file manager in this walkthrough. Browse documents and downloads beside your other windows. Open your chosen file manager with Super and F.",
+      "source": "showcase/assets/nautilus-capture.png",
       "start": 214.507,
-      "duration": 13.913
+      "duration": 13.56
     },
     {
       "id": "terminal",
       "chapter": "03 \u00b7 A day on Arctic",
       "title": "A terminal with a familiar face.",
-      "body": "Kitty, zsh, and the Arctic fox greeting. Flatpak and Nix are ready too.",
-      "image": "tiling",
-      "crop": [
-        8,
-        42,
-        640,
-        746
-      ],
+      "body": "Kitty, Fish, and the Arctic fox greeting. Flatpak and Nix are ready too.",
+      "image": "kitty-fish",
       "shortcut": "Super + Enter",
-      "narration": "Super and Enter opens your terminal. The default setup pairs Kitty with zsh and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools.",
-      "start": 228.42,
-      "duration": 12.824
+      "narration": "Super and Enter opens your terminal. The default setup pairs Kitty with Fish and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools.",
+      "source": "showcase/assets/kitty-fish-capture.png",
+      "start": 228.067,
+      "duration": 12.414
     },
     {
       "id": "everyday",
@@ -233,7 +224,7 @@
       "body": "Suggested defaults for the things you do every day.",
       "type": "apps",
       "narration": "For everyday apps, Arctic suggests Zen for browsing, Zed for editing, Collabora Office for documents, and VLC for media. These are choices, not requirements. You can replace them during installation or later in Settings.",
-      "start": 241.244,
+      "start": 240.481,
       "duration": 15.996
     },
     {
@@ -244,7 +235,7 @@
       "image": "get-apps",
       "shortcut": "Super + Shift + A",
       "narration": "Need something else? Open Get apps. Choose Flathub, Fedora packages, a web app, or a terminal tool. Installations keep going when you close the launcher, and you get a notification when an app is ready.",
-      "start": 257.24,
+      "start": 256.478,
       "duration": 13.662
     },
     {
@@ -255,7 +246,7 @@
       "image": "settings-search",
       "shortcut": "Super + S    Ctrl + Z \u00b7 Undo",
       "narration": "Super and S opens Arctic Settings. Search for a setting instead of hunting through pages. Changes apply straight away, and Control and Z undoes the last one.",
-      "start": 270.902,
+      "start": 270.14,
       "duration": 11.363
     },
     {
@@ -266,7 +257,7 @@
       "image": "settings-appearance",
       "shortcut": "Super + Shift + T",
       "narration": "Choose the light Winter theme or dark Polar night. Your own wallpaper can also provide the desktop's colours, carrying them through the shell, window borders, terminal, and supported apps.",
-      "start": 282.265,
+      "start": 281.502,
       "duration": 12.477
     },
     {
@@ -278,9 +269,9 @@
       "theme": "light",
       "shortcut": "Super + Shift + W \u00b7 Wallpapers",
       "narration": "Winter keeps the same layout, with soft snow-coloured surfaces. Open the wallpaper picker to choose Arctic artwork or your own pictures. Built-in wallpapers can follow the theme automatically.",
-      "start": 294.742,
-      "duration": 13.133,
-      "source": "shell/dev/screenshots/wallpapers-winter.png"
+      "source": "shell/dev/screenshots/wallpapers-winter.png",
+      "start": 293.979,
+      "duration": 13.133
     },
     {
       "id": "quick",
@@ -290,7 +281,7 @@
       "image": "quick-settings",
       "shortcut": "Super + A",
       "narration": "Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode. Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task.",
-      "start": 307.875,
+      "start": 307.112,
       "duration": 14.674
     },
     {
@@ -301,7 +292,7 @@
       "image": "bar-network-menu",
       "shortcut": "Super + Ctrl + W",
       "narration": "The network menu lets you join Wi-Fi and manage saved connections or a VPN. Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps.",
-      "start": 322.549,
+      "start": 321.786,
       "duration": 14.269
     },
     {
@@ -312,7 +303,7 @@
       "image": "settings-displays",
       "shortcut": "Super + P \u00b7 Screen modes",
       "narration": "At your desk, arrange monitors and adjust their resolution, scale, and rotation. Super and P switches screen modes. Arctic also handles USB drives, printing, and scanning, with settings when you need them.",
-      "start": 336.818,
+      "start": 336.055,
       "duration": 14.371
     },
     {
@@ -323,7 +314,7 @@
       "image": "keys",
       "shortcut": "Super + /",
       "narration": "You don't have to memorise every shortcut. Super and slash opens a searchable guide. Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.",
-      "start": 351.188,
+      "start": 350.426,
       "duration": 12.575
     },
     {
@@ -333,7 +324,7 @@
       "body": "Background downloads. Install at restart. Settings shows what's waiting.",
       "image": "settings-updates",
       "narration": "Updates download in the background and install when the computer restarts. Settings shows what's waiting and lets you choose the update channel. System snapshots can help restore files after an update, and firmware updates are available when you ask.",
-      "start": 363.763,
+      "start": 363.001,
       "duration": 15.693
     },
     {
@@ -344,7 +335,7 @@
       "image": "lock-screen",
       "shortcut": "Super + L \u00b7 Lock",
       "narration": "When you step away, Super and L locks the screen. The power menu offers suspend, restart, and shut down. Arctic also locks before sleeping, with the timing controlled in Settings.",
-      "start": 379.457,
+      "start": 378.694,
       "duration": 12.323
     },
     {
@@ -356,7 +347,7 @@
       "type": "outro",
       "shortcut": "github.com/yuvalkolodkingal/Arctic-Linux",
       "narration": "That's Arctic Linux: a guided installer, a calm desktop, and useful details for everyday work. Find the project, downloads, and full documentation on GitHub. Try it from a USB, and make it yours.",
-      "start": 391.779,
+      "start": 391.017,
       "duration": 14.797
     }
   ],
@@ -675,247 +666,241 @@
     },
     {
       "start": 215.307,
-      "end": 220.353,
-      "text": "Use the file manager to browse documents and downloads beside your other windows.",
+      "end": 220.673,
+      "text": "Nautilus, also known as GNOME Files, is the graphical file manager in this walkthrough.",
       "scene": "files"
     },
     {
-      "start": 220.423,
-      "end": 221.793,
-      "text": "Prefer the terminal?",
+      "start": 220.743,
+      "end": 224.252,
+      "text": "Browse documents and downloads beside your other windows.",
       "scene": "files"
     },
     {
-      "start": 221.863,
-      "end": 224.413,
-      "text": "Yazi is another option in the installer.",
+      "start": 224.322,
+      "end": 227.447,
+      "text": "Open your chosen file manager with Super and F.",
       "scene": "files"
     },
     {
-      "start": 224.483,
-      "end": 227.8,
-      "text": "Your chosen file manager opens with Super and F.",
-      "scene": "files"
-    },
-    {
-      "start": 229.22,
-      "end": 231.588,
+      "start": 228.867,
+      "end": 231.235,
       "text": "Super and Enter opens your terminal.",
       "scene": "terminal"
     },
     {
-      "start": 231.658,
-      "end": 236.063,
-      "text": "The default setup pairs Kitty with zsh and the Arctic fox greeting.",
+      "start": 231.305,
+      "end": 235.301,
+      "text": "The default setup pairs Kitty with Fish and the Arctic fox greeting.",
       "scene": "terminal"
     },
     {
-      "start": 236.133,
-      "end": 240.624,
+      "start": 235.371,
+      "end": 239.861,
       "text": "Flatpak and Nix are preinstalled, alongside Fedora's package tools.",
       "scene": "terminal"
     },
     {
-      "start": 242.044,
-      "end": 250.46,
+      "start": 241.281,
+      "end": 249.697,
       "text": "For everyday apps, Arctic suggests Zen for browsing, Zed for editing, Collabora Office for documents, and VLC for media.",
       "scene": "everyday"
     },
     {
-      "start": 250.53,
-      "end": 252.785,
+      "start": 249.767,
+      "end": 252.022,
       "text": "These are choices, not requirements.",
       "scene": "everyday"
     },
     {
-      "start": 252.855,
-      "end": 256.62,
+      "start": 252.092,
+      "end": 255.858,
       "text": "You can replace them during installation or later in Settings.",
       "scene": "everyday"
     },
     {
-      "start": 258.04,
-      "end": 259.374,
+      "start": 257.278,
+      "end": 258.611,
       "text": "Need something else?",
       "scene": "getapps"
     },
     {
-      "start": 259.444,
-      "end": 260.67,
+      "start": 258.681,
+      "end": 259.908,
       "text": "Open Get apps.",
       "scene": "getapps"
     },
     {
-      "start": 260.74,
-      "end": 264.719,
+      "start": 259.978,
+      "end": 263.956,
       "text": "Choose Flathub, Fedora packages, a web app, or a terminal tool.",
       "scene": "getapps"
     },
     {
-      "start": 264.789,
-      "end": 270.282,
+      "start": 264.026,
+      "end": 269.52,
       "text": "Installations keep going when you close the launcher, and you get a notification when an app is ready.",
       "scene": "getapps"
     },
     {
-      "start": 271.702,
-      "end": 274.102,
+      "start": 270.94,
+      "end": 273.34,
       "text": "Super and S opens Arctic Settings.",
       "scene": "settings"
     },
     {
-      "start": 274.172,
-      "end": 277.276,
+      "start": 273.41,
+      "end": 276.514,
       "text": "Search for a setting instead of hunting through pages.",
       "scene": "settings"
     },
     {
-      "start": 277.346,
-      "end": 281.645,
+      "start": 276.584,
+      "end": 280.882,
       "text": "Changes apply straight away, and Control and Z undoes the last one.",
       "scene": "settings"
     },
     {
-      "start": 283.065,
-      "end": 286.02,
+      "start": 282.302,
+      "end": 285.257,
       "text": "Choose the light Winter theme or dark Polar night.",
       "scene": "appearance"
     },
     {
-      "start": 286.09,
-      "end": 294.122,
+      "start": 285.327,
+      "end": 293.359,
       "text": "Your own wallpaper can also provide the desktop's colours, carrying them through the shell, window borders, terminal, and supported apps.",
       "scene": "appearance"
     },
     {
-      "start": 295.542,
-      "end": 299.35,
+      "start": 294.779,
+      "end": 298.587,
       "text": "Winter keeps the same layout, with soft snow-coloured surfaces.",
       "scene": "winter"
     },
     {
-      "start": 299.42,
-      "end": 303.782,
+      "start": 298.657,
+      "end": 303.02,
       "text": "Open the wallpaper picker to choose Arctic artwork or your own pictures.",
       "scene": "winter"
     },
     {
-      "start": 303.852,
-      "end": 307.255,
+      "start": 303.09,
+      "end": 306.492,
       "text": "Built-in wallpapers can follow the theme automatically.",
       "scene": "winter"
     },
     {
-      "start": 308.675,
-      "end": 315.32,
+      "start": 307.912,
+      "end": 314.558,
       "text": "Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode.",
       "scene": "quick"
     },
     {
-      "start": 315.39,
-      "end": 321.929,
+      "start": 314.628,
+      "end": 321.166,
       "text": "Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task.",
       "scene": "quick"
     },
     {
-      "start": 323.349,
-      "end": 328.821,
+      "start": 322.586,
+      "end": 328.058,
       "text": "The network menu lets you join Wi-Fi and manage saved connections or a VPN.",
       "scene": "networkdaily"
     },
     {
-      "start": 328.891,
-      "end": 336.198,
+      "start": 328.128,
+      "end": 335.435,
       "text": "Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps.",
       "scene": "networkdaily"
     },
     {
-      "start": 337.618,
-      "end": 342.663,
+      "start": 336.855,
+      "end": 341.9,
       "text": "At your desk, arrange monitors and adjust their resolution, scale, and rotation.",
       "scene": "displays"
     },
     {
-      "start": 342.733,
-      "end": 344.877,
+      "start": 341.97,
+      "end": 344.114,
       "text": "Super and P switches screen modes.",
       "scene": "displays"
     },
     {
-      "start": 344.947,
-      "end": 350.568,
+      "start": 344.184,
+      "end": 349.806,
       "text": "Arctic also handles USB drives, printing, and scanning, with settings when you need them.",
       "scene": "displays"
     },
     {
-      "start": 351.988,
-      "end": 354.406,
+      "start": 351.226,
+      "end": 353.644,
       "text": "You don't have to memorise every shortcut.",
       "scene": "shortcuts"
     },
     {
-      "start": 354.476,
-      "end": 357.217,
+      "start": 353.714,
+      "end": 356.455,
       "text": "Super and slash opens a searchable guide.",
       "scene": "shortcuts"
     },
     {
-      "start": 357.287,
-      "end": 363.143,
+      "start": 356.525,
+      "end": 362.381,
       "text": "Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.",
       "scene": "shortcuts"
     },
     {
-      "start": 364.563,
-      "end": 368.905,
+      "start": 363.801,
+      "end": 368.142,
       "text": "Updates download in the background and install when the computer restarts.",
       "scene": "updates"
     },
     {
-      "start": 368.975,
-      "end": 372.612,
+      "start": 368.212,
+      "end": 371.85,
       "text": "Settings shows what's waiting and lets you choose the update channel.",
       "scene": "updates"
     },
     {
-      "start": 372.682,
-      "end": 378.837,
+      "start": 371.92,
+      "end": 378.074,
       "text": "System snapshots can help restore files after an update, and firmware updates are available when you ask.",
       "scene": "updates"
     },
     {
-      "start": 380.257,
-      "end": 383.083,
+      "start": 379.494,
+      "end": 382.321,
       "text": "When you step away, Super and L locks the screen.",
       "scene": "lock"
     },
     {
-      "start": 383.153,
-      "end": 386.641,
+      "start": 382.391,
+      "end": 385.879,
       "text": "The power menu offers suspend, restart, and shut down.",
       "scene": "lock"
     },
     {
-      "start": 386.711,
-      "end": 391.159,
+      "start": 385.949,
+      "end": 390.397,
       "text": "Arctic also locks before sleeping, with the timing controlled in Settings.",
       "scene": "lock"
     },
     {
-      "start": 392.579,
-      "end": 398.99,
+      "start": 391.817,
+      "end": 398.228,
       "text": "That's Arctic Linux: a guided installer, a calm desktop, and useful details for everyday work.",
       "scene": "outro"
     },
     {
-      "start": 399.06,
-      "end": 403.38,
+      "start": 398.298,
+      "end": 402.618,
       "text": "Find the project, downloads, and full documentation on GitHub.",
       "scene": "outro"
     },
     {
-      "start": 403.45,
-      "end": 405.957,
+      "start": 402.688,
+      "end": 405.194,
       "text": "Try it from a USB, and make it yours.",
       "scene": "outro"
     }
