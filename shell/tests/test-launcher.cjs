@@ -60,3 +60,28 @@ assert.equal(names('qqqq').length, 0);
 assert.equal(names('').length, apps.length);
 assert.equal(names('')[0], 'kitty');                      // alphabetical when empty
 console.log('Launcher ranking and calculator checks passed.');
+
+// Live model rescans may repeat objects or contain an obsolete occurrence. IDs
+// are case-sensitive; byId chooses the XDG winner, never the name/model order.
+const systemSteam = { id: 'steam', name: 'Steam', command: ['steam'] };
+const userSteam = { id: 'steam', name: 'Steam', command: ['switcherooctl', 'launch', '-g', '1', 'steam'] };
+const sameName = { id: 'another-steam', name: 'Steam' };
+const caseVariant = { id: 'Steam', name: 'Steam' };
+const noDisplay = { id: 'nodisplay', noDisplay: true };
+const winners = new Map([['steam', userSteam], ['another-steam', sameName], ['Steam', caseVariant], ['nodisplay', noDisplay]]);
+const entries = Search.applicationEntries([systemSteam, userSteam, systemSteam, sameName, caseVariant,
+    noDisplay, { id: 'masked' }, { id: 'removed' }, null], id => winners.get(id));
+assert.deepEqual(Array.from(entries), [userSteam, sameName, caseVariant]);
+assert.strictEqual(entries[0], userSteam);
+assert.deepEqual(Search.applicationEntries([{ id: 'Steam' }], () => userSteam), []);
+for (const query of ['', 'steam']) {
+    const rows = entries.map(entry => ({ kind: 'app', id: 'app:' + entry.id, name: entry.name, entry }));
+    rows.push({ kind: 'window', name: 'Steam', ref: {} }, { kind: 'window', name: 'Steam', ref: {} },
+        { kind: 'action', id: 'action:steam/Store', name: 'Steam Store' },
+        { kind: 'action', id: 'action:steam/Library', name: 'Steam Library' });
+    const results = Search.rank(rows, query);
+    assert.equal(results.filter(r => r.kind === 'app').length, 3);
+    assert.equal(results.filter(r => r.kind === 'window').length, 2);
+    assert.equal(results.filter(r => r.kind === 'action').length, 2);
+}
+console.log('Launcher desktop ID and override checks passed.');

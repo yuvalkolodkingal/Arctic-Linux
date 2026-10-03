@@ -85,8 +85,8 @@ Popover {
         list.push({ kind: 'fetch', name: 'Fetch', desc: 'The Arctic greeting in a terminal', glyph: 'terminal', keywords: 'fastfetch neofetch system info' });
         return list;
     }
-    readonly property var apps: DesktopEntries.applications.values
-        .filter(e => !e.noDisplay)
+    readonly property var apps: LauncherSearch.applicationEntries(
+        DesktopEntries.applications.values, id => DesktopEntries.byId(id))
         .map(e => ({ kind: 'app', entry: e, name: e.name, desc: e.genericName || e.comment || '',
                      keywords: [e.genericName, e.comment].concat(e.keywords || []).concat(e.categories || []).join(' '),
                      // Web apps and terminal apps keep their own icons (a TUI called "Settings

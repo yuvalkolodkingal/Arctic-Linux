@@ -8,6 +8,23 @@ function words(text) {
     return String(text || '').toLowerCase().split(/[\s\-_.:/]+/).filter(w => w.length);
 }
 
+// Quickshell 0.2.1's live ObjectModel can contain the same desktop ID more than
+// once after a rescan reorders objects. Resolve IDs through byId rather than
+// choosing a model occurrence: the manager owns XDG precedence (including user
+// overrides and Hidden masks). Keep this at the app boundary, not in rank(),
+// where windows and desktop actions are intentionally separate results.
+function applicationEntries(values, byId) {
+    const seen = new Set();
+    const out = [];
+    for (const value of values || []) {
+        if (!value || !value.id || seen.has(value.id)) continue;
+        seen.add(value.id);
+        const entry = byId(value.id);
+        if (entry && entry.id === value.id && !entry.noDisplay) out.push(entry);
+    }
+    return out;
+}
+
 function nameScore(name, query) {
     name = String(name || '').toLowerCase();
     if (!query) return 0;
