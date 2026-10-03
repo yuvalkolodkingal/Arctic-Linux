@@ -36,7 +36,7 @@ Everything works as it will after you install. A few things to try:
 |---|---|
 | `Super + Space` | Open the launcher and search for apps. Type `=12*4` to use it as a calculator. |
 | `Super + Enter` | Open a terminal and see the fox greeting |
-| `Super + F` | Open the Thunar file manager |
+| `Super + F` | Open Nautilus (GNOME Files) |
 | `Super + Shift + W` | Pick a wallpaper |
 | `Super + Shift + T` | Switch between the Polar night and Winter themes |
 | `Super + /` | See every keyboard shortcut |

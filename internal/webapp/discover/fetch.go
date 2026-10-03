@@ -221,6 +221,7 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 // Response is a fetched body.
 type Response struct {
 	URL         *url.URL // after redirects
+	StatusCode  int
 	ContentType string
 	Body        []byte
 	Truncated   bool
@@ -228,7 +229,8 @@ type Response struct {
 }
 
 // Get fetches u with an Accept header, reading at most limit bytes. With truncate the body is
-// cut at the limit; otherwise going over it is a too_large error.
+// cut at the limit; otherwise going over it is a too_large error. HTTP errors return only
+// response headers/status alongside the error, so discovery can identify metadata refusals.
 func (f *Fetcher) Get(ctx context.Context, u *url.URL, accept string, limit int64, truncate bool) (*Response, error) {
 	f.mu.Lock()
 	page := f.pagePhase
@@ -252,8 +254,13 @@ func (f *Fetcher) Get(ctx context.Context, u *url.URL, accept string, limit int6
 		return nil, classify(err, u.Host)
 	}
 	defer resp.Body.Close()
+	final := *resp.Request.URL
+	final.Host = webapp.ASCIIHost(final.Host)
+	r := &Response{URL: &final, StatusCode: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), private: private.Load()}
 	if resp.StatusCode >= 400 {
-		return nil, webapp.Errorf(webapp.CodeHTTP, "%s answered with error %d.", u.Host, resp.StatusCode)
+		// Keep status and redirect information for discovery's metadata fallback. Never
+		// read the error page as app metadata (it may be a sign-in or bot challenge).
+		return r, webapp.Errorf(webapp.CodeHTTP, "%s answered with error %d.", u.Host, resp.StatusCode)
 	}
 	f.mu.Lock()
 	budget := f.budget
@@ -269,9 +276,6 @@ func (f *Fetcher) Get(ctx context.Context, u *url.URL, accept string, limit int6
 	if err != nil {
 		return nil, classify(err, u.Host)
 	}
-	final := *resp.Request.URL
-	final.Host = webapp.ASCIIHost(final.Host) // a redirect to a Unicode name, as WebKit would see it
-	r := &Response{URL: &final, ContentType: resp.Header.Get("Content-Type"), private: private.Load()}
 	if int64(len(body)) > read {
 		if !truncate {
 			return nil, webapp.Errorf(webapp.CodeTooLarge, "%s sent a file that is too large.", u.Host)

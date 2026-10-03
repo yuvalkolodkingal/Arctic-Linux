@@ -361,7 +361,7 @@ def open_terminal(vm, prefix):
     vm.keys("meta_l-ret")
     time.sleep(75)
     vm.shot(f"{prefix}-terminal")
-    # The fetch animation in .zshrc reads keys (any key skips it): press Enter, then give the
+    # The terminal’s fetch animation reads keys (any key skips it): press Enter, then give the
     # prompt time to come up so the command isn't eaten by the animation.
     vm.keys("ret")
     time.sleep(15)

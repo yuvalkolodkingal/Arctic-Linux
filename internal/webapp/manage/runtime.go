@@ -118,7 +118,7 @@ type Exec struct {
 }
 
 // HostExec builds the WebKit host's command line and environment for `run`.
-func HostExec(hostBin, id, openURL string, inspect bool, notice string, rendering string, environ []string, nvidia bool) Exec {
+func HostExec(hostBin, id, openURL string, inspect bool, notice string, rendering string, environ []string) Exec {
 	argv := []string{"arctic-webapp-host", "--app-id", id}
 	if openURL != "" {
 		argv = append(argv, "--url", openURL)
@@ -129,12 +129,14 @@ func HostExec(hostBin, id, openURL string, inspect bool, notice string, renderin
 	if notice != "" {
 		argv = append(argv, "--notice", notice)
 	}
-	return Exec{Path: hostBin, Argv: argv, Env: runtimeEnv(environ, rendering, nvidia)}
+	return Exec{Path: hostBin, Argv: argv, Env: runtimeEnv(environ, rendering)}
 }
 
-// runtimeEnv removes the WebKit sandbox kill switch (a web app always runs sandboxed), adds the
-// NVIDIA workarounds unless you set them yourself, and software rendering when asked.
-func runtimeEnv(environ []string, rendering string, nvidia bool) []string {
+// runtimeEnv removes the WebKit sandbox kill switch (a web app always runs sandboxed).
+// Automatic rendering keeps WebKit's accelerated DMA-BUF and explicit-sync paths on all
+// GPUs, including hybrid NVIDIA machines. Software rendering is an explicit per-app choice;
+// any driver workarounds supplied by the user are preserved.
+func runtimeEnv(environ []string, rendering string) []string {
 	var out []string
 	set := map[string]bool{}
 	for _, kv := range environ {
@@ -150,10 +152,6 @@ func runtimeEnv(environ []string, rendering string, nvidia bool) []string {
 			out = append(out, k+"="+v)
 			set[k] = true
 		}
-	}
-	if nvidia {
-		add("__NV_DISABLE_EXPLICIT_SYNC", "1")
-		add("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
 	}
 	if rendering == "software" {
 		add("WEBKIT_SKIA_ENABLE_CPU_RENDERING", "1")
@@ -171,7 +169,7 @@ func BrowserExec(b Browser, p webapp.Paths, e Env, id, openURL string, environ [
 		return Exec{}, false
 	}
 	common := []string{"--app=" + u.String(), "", "--no-first-run", "--no-default-browser-check"}
-	env := runtimeEnv(environ, "auto", false)
+	env := runtimeEnv(environ, "auto")
 	if b.Command != "" {
 		common[1] = "--user-data-dir=" + p.ChromiumProfile(id)
 		return Exec{Path: e.path(b.Command), Argv: append([]string{filepath.Base(b.Command)}, common...), Env: env}, true
@@ -196,7 +194,3 @@ func ChromiumWMClass(b Browser, startURL string) string {
 	}
 	return prefix + "-" + u.Host + "__" + strings.ReplaceAll(strings.TrimPrefix(path, "/"), "/", "_") + "-Default"
 }
-
-// NVIDIA reports the proprietary NVIDIA driver (its explicit sync and DMA-BUF renderer issues
-// need the WebKit workarounds).
-func NVIDIA() bool { return exists("/proc/driver/nvidia/version") }

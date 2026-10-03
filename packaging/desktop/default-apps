@@ -4,5 +4,5 @@
 terminal=kitty
 browser=gtk-launch app.zen_browser.zen
 editor=gtk-launch dev.zed.Zed
-files=thunar
+files=nautilus
 files-tui=kitty -e yazi

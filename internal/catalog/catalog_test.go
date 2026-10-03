@@ -169,8 +169,8 @@ func TestDefaults(t *testing.T) {
 	c := load(t)
 	sel := c.DefaultSelection()
 	want := Selection{
-		"browser": {"zen"}, "editor": {"zed"}, "terminal": {"kitty"}, "shell": {"zsh"},
-		"files": {"yazi", "thunar"}, "office": {"collabora"}, "video": {"vlc"},
+		"browser": {"zen"}, "editor": {"zed"}, "terminal": {"kitty"}, "shell": {"fish"},
+		"files": {"yazi", "nautilus"}, "office": {"collabora"}, "video": {"vlc"},
 		"music": {}, "photos": {}, "graphics": {}, "recording": {}, "chat": {}, "email": {}, "notes": {},
 		"reading": {}, "gaming": {}, "security": {}, "sync": {}, "dev": {}, "containers": {}, "extras": {},
 		"drivers": {}, // nothing detected
@@ -185,7 +185,7 @@ func TestDefaults(t *testing.T) {
 	for _, m := range c.Resolve(sel) {
 		ids = append(ids, m.ID)
 	}
-	if strings.Join(ids, " ") != "zen zed kitty zsh bash yazi thunar collabora vlc adw-gtk3-dark-flatpak adw-gtk3-flatpak codecs desktop-base flatpak nix" {
+	if strings.Join(ids, " ") != "zen zed kitty fish bash yazi nautilus collabora vlc adw-gtk3-dark-flatpak adw-gtk3-flatpak codecs desktop-base flatpak nix" {
 		t.Fatalf("resolve = %v", ids)
 	}
 }
@@ -198,12 +198,12 @@ func TestLiveImageFlags(t *testing.T) {
 			live[id] = true
 		}
 	}
-	for _, id := range []string{"kitty", "zsh", "bash", "thunar", "vlc", "desktop-base", "flatpak", "nix"} {
+	for _, id := range []string{"kitty", "fish", "bash", "nautilus", "vlc", "desktop-base", "flatpak", "nix"} {
 		if !live[id] {
 			t.Errorf("%s should be in the live image", id)
 		}
 	}
-	for _, id := range []string{"zen", "zed", "collabora", "yazi", "codecs", "adw-gtk3-flatpak", "adw-gtk3-dark-flatpak"} {
+	for _, id := range []string{"zsh", "thunar", "zen", "zed", "collabora", "yazi", "codecs", "adw-gtk3-flatpak", "adw-gtk3-dark-flatpak"} {
 		if live[id] {
 			t.Errorf("%s should be downloaded", id)
 		}
@@ -228,8 +228,8 @@ func TestEstimateDownload(t *testing.T) {
 	// Shared runtimes count once: Firefox (dnf) + two Platform 25.08 flatpaks.
 	sel := Selection{"browser": {"firefox"}, "terminal": {"kitty"}, "shell": {"zsh"}, "recording": {"obs"}, "office": {"libreoffice"}}
 	est = c.EstimateDownload(sel)
-	// firefox 109 + obs 199 + libreoffice 327 + Platform 25.08 259 (once) + codecs 40
-	if est.Bytes != 935*1000*1000 || est.Label != "5 apps · 935 MB download" {
+	// firefox 109 + zsh 4 + obs 199 + libreoffice 327 + Platform 25.08 259 (once) + codecs 40
+	if est.Bytes != 939*1000*1000 || est.Label != "5 apps · 939 MB download" {
 		t.Errorf("got %+v", est)
 	}
 

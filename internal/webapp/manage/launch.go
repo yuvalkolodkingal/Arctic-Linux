@@ -73,7 +73,7 @@ func (m *Manager) PlanRun(id, uri, openURL string, inspect bool) (RunPlan, error
 	if !m.Env.Available("webkit") {
 		return plan, webapp.Errorf(webapp.CodeUnsupported, "The web app window isn’t installed (package arctic-webapps).")
 	}
-	plan.Exec = HostExec(m.Env.HostBin, a.ID, openURL, inspect, notice, a.Options.Rendering, m.Environ, NVIDIA())
+	plan.Exec = HostExec(m.Env.HostBin, a.ID, openURL, inspect, notice, a.Options.Rendering, m.Environ)
 	return plan, nil
 }
 

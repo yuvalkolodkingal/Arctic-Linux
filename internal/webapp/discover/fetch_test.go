@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -132,6 +133,38 @@ func TestFetchSizesStatusAndHeaders(t *testing.T) {
 	defer cancel()
 	if _, err := f.Get(ctx, mustURL(srv.URL+"/slow"), "text/html", MaxHTML, true); errCode(err) != webapp.CodeTimeout {
 		t.Fatalf("slow body: %v", err)
+	}
+}
+
+func TestDiscoveryMetadataRejected(t *testing.T) {
+	for _, status := range []int{400, 401, 403, 405, 429, 404, 500} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			var hits atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				w.Header().Set("Content-Type", "text/html")
+				w.WriteHeader(status)
+				fmt.Fprint(w, `<title>Access denied</title><link rel=manifest href=/manifest.json>`)
+			}))
+			defer srv.Close()
+			input := srv.URL + "/messages?account=2"
+			res, err := Discover(context.Background(), input, Options{Fetcher: NewFetcher(nil), MetadataFallback: true})
+			if status == 404 || status == 500 {
+				if errCode(err) != webapp.CodeHTTP {
+					t.Fatalf("missing or failed site must stay an error: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.StartURL != input || res.MetadataStatus != status || res.NameSource != "host" || res.Name == "Access denied" || len(res.Icons) != 0 || hits.Load() != 1 {
+				t.Fatalf("fallback used error-page metadata or probed again: %+v, hits=%d", res, hits.Load())
+			}
+			if _, err := Discover(context.Background(), input, Options{Fetcher: NewFetcher(nil)}); errCode(err) != webapp.CodeHTTP {
+				t.Fatalf("metadata refresh must retain its HTTP error: %v", err)
+			}
+		})
 	}
 }
 

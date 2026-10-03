@@ -11,6 +11,8 @@ changing anything, then **install it** when you're ready. The installer asks one
 per screen, encrypts your disk by default, sets up the drivers your computer needs and only
 downloads the apps you pick.
 
+**[Watch the full installer and daily-use showcase](Showcase)** — a narrated 1080p tour with Nautilus and Fish.
+
 ## Start here
 
 | You want to… | Read |
@@ -46,9 +48,9 @@ downloads the apps you pick.
 - **Arctic Settings** (`Super + S`): appearance, windows, displays, keyboard and mouse,
   shortcuts, default apps, network, Bluetooth, sound, updates, power and startup apps, in one
   place.
-- **kitty and zsh** with an animated fox greeting in every new terminal.
+- **kitty and Fish** with an animated fox greeting in every new terminal.
 - **126 apps to pick from in the installer**, with our favourites ticked: Zen Browser, Zed,
-  kitty, zsh, yazi, Thunar, Collabora Office and VLC. Flatpak and Nix come preinstalled.
+  kitty, Fish, yazi, Nautilus, Collabora Office and VLC. Flatpak and Nix come preinstalled.
 - **Drivers found for you:** NVIDIA, Intel and AMD video acceleration and Broadcom Wi-Fi, ticked
   in the installer when your computer has the hardware, with Secure Boot handled.
 - **Automatic, signed updates**, installed when the computer restarts, with snapshots to go back.

@@ -219,9 +219,9 @@ Requires:       python3
 # arctic-themegen: colours from wallpapers
 Requires:       python3-pillow
 %{?systemd_requires}
-# kitty and zsh are the default terminal and shell, but the installer lets people pick others
+# kitty and fish are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
-Recommends:     zsh
+Recommends:     fish
 Recommends:     kitty
 Requires:       libnotify
 Requires:       procps-ng
@@ -303,7 +303,7 @@ Requires:       python3-gobject-base
 %description -n arctic-desktop-config
 The Arctic Linux desktop configuration: the Mango configuration, the Winter and Polar night
 theme files and the keyboard cheat sheet in /usr/share/arctic (new home directories link to
-them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, zsh, GTK,
+them, so updates reach everyone), the home directory defaults in /etc/skel (kitty, fish, zsh, GTK,
 waybar, fuzzel, mako), the arctic-* helper commands in /usr/bin and /etc/arctic/default-apps.
 Automatic updates: arctic-update-stage.timer downloads updates daily and
 schedules them to be installed at the next restart (dnf5 offline updates);
@@ -470,6 +470,11 @@ Summary:        Arctic Linux web apps: any website as an app with its own window
 # no symbol versions and the host is linked with -z now, so the floor is the version it was
 # built against (docs/BUILD-SPEC.md §11).
 Requires:       webkitgtk6.0%{?_isa} >= %{webkit_built}
+# WebKit plays through GStreamer. The bad-free package carries the modern VA-API and
+# NVDEC decoder plugins; a GPU driver alone doesn't make them available. Keep demuxers
+# and streaming sources installed too, even with weak dependencies disabled.
+Requires:       gstreamer1-plugins-bad-free%{?_isa}
+Requires:       gstreamer1-plugins-good%{?_isa}
 # SVG icons and letter icons → PNG
 Requires:       librsvg2-tools
 # ~/.local/share/icons/hicolor is found through hicolor's index.theme
@@ -591,8 +596,8 @@ Requires:       sddm
 # so unticking one doesn't remove this metapackage.
 Recommends:     kitty
 Recommends:     kitty-shell-integration
-Recommends:     zsh
-Recommends:     Thunar
+Recommends:     fish
+Recommends:     nautilus
 Recommends:     vlc
 Requires:       fastfetch
 # Stream 3b (notifications): the Arctic shell is its own notification server; mako is the

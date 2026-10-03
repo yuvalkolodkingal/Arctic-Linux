@@ -1,12 +1,12 @@
-# Default login shell (PLAN D11). In the live image.
+# Optional zsh login shell.
 id = "zsh"
 name = "zsh"
 summary = "Friendly shell with smart completion."
 category = "shell"
-default = true
+default = false
 tile = "zsh"
 icon = "prompt"
-in_live_image = true
+in_live_image = false
 gpu = false
 requires = []
 conflicts = []

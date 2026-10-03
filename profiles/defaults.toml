@@ -2,7 +2,7 @@
 #
 # Answers every wizard step with the same defaults a person gets by pressing Enter on each
 # screen: English (US), erase the chosen disk, LUKS2 encryption, and the default apps
-# (Zen, Zed, kitty, zsh + bash, yazi, Thunar, Collabora Office, VLC).
+# (Zen, Zed, kitty, fish + bash, yazi, Nautilus, Collabora Office, VLC).
 #
 # Profiles are for CI and automation only (PLAN D12). They reference module ids — never
 # commands. Secrets come from the environment:
@@ -42,8 +42,8 @@ autologin = false
 browser = ["zen"]
 editor = ["zed"]
 terminal = ["kitty"]
-shell = ["zsh"]
-files = ["yazi", "thunar"]
+shell = ["fish"]
+files = ["yazi", "nautilus"]
 office = ["collabora"]
 video = ["vlc"]
 extras = []

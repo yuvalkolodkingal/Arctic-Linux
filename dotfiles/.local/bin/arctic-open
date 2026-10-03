@@ -90,7 +90,7 @@ declare -A FALLBACK=(
   [terminal]="kitty|foot|alacritty"
   [browser]="gtk-launch app.zen_browser.zen|gtk-launch org.mozilla.firefox|firefox|gtk-launch com.brave.Browser|chromium-browser"
   [editor]="gtk-launch dev.zed.Zed|zeditor|zed|gtk-launch com.vscodium.codium|kitty -e nvim|foot -e nvim|alacritty -e nvim"
-  [files]="thunar|nautilus|pcmanfm-qt|kitty -e yazi|foot -e yazi|alacritty -e yazi"
+  [files]="nautilus|thunar|pcmanfm-qt|kitty -e yazi|foot -e yazi|alacritty -e yazi"
   [files-tui]="kitty -e yazi|foot -e yazi|alacritty -e yazi|kitty -e ranger"
 )
 

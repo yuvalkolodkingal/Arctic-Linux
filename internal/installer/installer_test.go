@@ -155,13 +155,13 @@ func TestGoldenDefaultUEFILUKS(t *testing.T) {
 		"$ efibootmgr --create --disk /dev/nvme0n1 --part 2 --label 'Arctic Linux' --loader '\\EFI\\fedora\\shimx64.efi'",
 		"FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak",
 		"$ chroot /mnt dnf copr enable -y lihaohong/yazi",
-		"$ useradd --root /mnt --create-home --user-group --groups wheel --shell /bin/zsh --comment 'Arctic User' --password [secret: password hash] arctic-user",
+		"$ useradd --root /mnt --create-home --user-group --groups wheel --shell /usr/bin/fish --comment 'Arctic User' --password [secret: password hash] arctic-user",
 	} {
 		if !strings.Contains(plan, want) {
 			t.Errorf("plan lacks %q", want)
 		}
 	}
-	for _, id := range []string{"zen", "zed", "kitty", "zsh", "yazi", "thunar", "collabora", "vlc"} {
+	for _, id := range []string{"zen", "zed", "kitty", "fish", "yazi", "nautilus", "collabora", "vlc"} {
 		if rep.modules[id] != protocol.ModInstalled {
 			t.Errorf("%s: %s", id, rep.modules[id])
 		}
@@ -192,7 +192,7 @@ func TestGoldenAlternativeBIOSAlongside(t *testing.T) {
 		`type=21686148-6449-6E6F-744E-656564454649, name="BIOS boot"`,
 		"$ chroot /mnt grub2-install --target=i386-pc /dev/nvme0n1",
 		"GRUB_DISABLE_OS_PROBER=false",
-		"$ chroot /mnt dnf remove -y --no-autoremove kitty kitty-shell-integration kitty-kitten zsh zsh-autosuggestions zsh-syntax-highlighting Thunar thunar-volman thunar-archive-plugin vlc vlc-gui-qt vlc-plugins-freeworld",
+		"$ chroot /mnt dnf remove -y --no-autoremove kitty kitty-shell-integration kitty-kitten vlc vlc-gui-qt vlc-plugins-freeworld",
 		"User=alt",
 		"KEYMAP=de-nodeadkeys",
 		"--shell /usr/bin/fish",

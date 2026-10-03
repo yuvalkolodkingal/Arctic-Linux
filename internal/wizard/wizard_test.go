@@ -161,7 +161,7 @@ func TestHappyPathAndSummary(t *testing.T) {
 		"Disk: Erase Samsung SSD 980 · 512 GB",
 		"Encryption: On — you’ll type your passphrase each time the computer starts",
 		"Account: Noa Levi (noa) on noa-thinkpad",
-		"Apps: Zen, Zed, kitty, zsh, yazi, Thunar, Collabora, VLC",
+		"Apps: Zen, Zed, kitty, fish, yazi, Nautilus, Collabora, VLC",
 	}
 	// Every row's Change link reaches its step.
 	for _, r := range s.Rows {

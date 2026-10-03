@@ -608,7 +608,7 @@ class Tour:
             # Leave the desktop as the next step expects it.
             try:
                 self.sh("arctic-shell-ipc launcher close; pkill -f 'quickshell.*installer-ui'; "
-                        "pkill -x kitty; pkill -x thunar; flatpak kill app.zen_browser.zen; true", check=False)
+                        "pkill -x kitty; pkill -x nautilus; pkill -x thunar; flatpak kill app.zen_browser.zen; true", check=False)
                 self.click(*self.OUTSIDE)
                 self.park()
                 self.wait_for(self.empty_desktop, "the empty desktop", 120, 3.0)
@@ -898,7 +898,7 @@ class Tour:
 
     def close_windows(self):
         """Back to the empty desktop (cleanup between pictures, not part of any of them)."""
-        self.sh("pkill -x thunar; pkill -x Thunar; pkill -x kitty; flatpak kill app.zen_browser.zen; true", check=False)
+        self.sh("pkill -x nautilus; pkill -x thunar; pkill -x Thunar; pkill -x kitty; flatpak kill app.zen_browser.zen; true", check=False)
         if not self.wait_for(self.empty_desktop, "the empty desktop", 180, 3.0):
             log("warning: the desktop is not empty again")
         self.settle("windows-closed", timeout=90, interval=3, need=2)

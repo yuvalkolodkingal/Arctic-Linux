@@ -173,7 +173,7 @@ but mixing them with Arctic's desktop isn't something we've tested.
 What you change in [Settings](Settings) goes to `~/.config/mango/settings.conf` and a few files in
 `~/.config/arctic/` (the page lists them all). Your own hand-written settings are in your home
 folder too: `~/.config/mango/user.conf` for the window manager,
-`~/.config/kitty/user.conf` for the terminal, `~/.zshrc.local` for zsh and
+`~/.config/kitty/user.conf` for the terminal, `~/.config/fish/config.local.fish` for Fish, `~/.zshrc.local` for zsh and
 `~/.config/arctic/` for the theme, wallpaper and default apps. See
 [Themes and customisation](Themes-and-Customisation#your-own-settings-files).
 

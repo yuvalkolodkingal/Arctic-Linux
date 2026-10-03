@@ -280,6 +280,7 @@ these files, which Arctic never overwrites:
 |---|---|
 | `~/.config/mango/user.conf` | Window manager settings, extra shortcuts and window rules |
 | `~/.config/kitty/user.conf` | The kitty terminal |
+| `~/.config/fish/config.local.fish` | Fish |
 | `~/.zshrc.local` | zsh |
 | `~/.config/arctic/default-apps` | Which app each shortcut opens |
 | `~/.config/arctic/shell.json` | Desktop shell settings (the screen frame; `lock_fingerprint`) |

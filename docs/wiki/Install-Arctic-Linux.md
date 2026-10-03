@@ -192,8 +192,8 @@ The first seven sections are always open, with our favourites ticked:
 | Browser | Pick one · *becomes your default browser* | Zen Browser | Firefox, Brave, Google Chrome, LibreWolf, Chromium, Vivaldi |
 | Editor | Pick any | Zed | Visual Studio Code, VSCodium, Neovim, Helix, Kate, Emacs, Text Editor |
 | Terminal | Pick one · *opens with `Super + Enter`* | kitty | Ghostty, Alacritty, foot, Konsole |
-| Shell | Pick one · *what runs inside the terminal* | zsh | fish, bash |
-| File manager | Pick any | yazi, Thunar | Files (Nautilus), Dolphin, Nemo, PCManFM-Qt |
+| Shell | Pick one · *what runs inside the terminal* | fish | zsh, bash |
+| File manager | Pick any | yazi, Files (Nautilus) | Thunar, Dolphin, Nemo, PCManFM-Qt |
 | Office | Pick one or none | Collabora Office | LibreOffice, ONLYOFFICE |
 | Video | Pick any | VLC | mpv, Celluloid, Haruna, Kodi, Jellyfin Media Player |
 
@@ -214,7 +214,7 @@ picked in it.
 
 The footer adds up how many apps (and drivers) you picked and how much will be downloaded, for
 example *"9 apps + 2 drivers · 3.2 GB download"*. Apps that are already on the USB stick (kitty,
-zsh, Thunar, VLC) are copied from it instead of downloaded; if you untick them, the installer
+Fish, Nautilus, VLC) are copied from it instead of downloaded; if you untick them, the installer
 removes them from your new system. `bash` is always installed, whatever shell you pick.
 
 Every app, section by section, and where each comes from: [Apps and software](Apps-and-Software).

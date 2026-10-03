@@ -14,7 +14,7 @@ search for LocalSend; it's on Flathub) and on your phone.
 - **Your phone (KDE Connect)**, when KDE Connect is installed.
 - **Sharing settings**.
 
-In Files (Thunar), right-click files or folders and choose **Send To → LocalSend**: LocalSend
+If you installed Thunar, right-click files or folders and choose **Send To → LocalSend**: LocalSend
 opens with them on its Send page.
 
 To receive, LocalSend needs port 53317: turn on **Settings → Sharing → LocalSend**.

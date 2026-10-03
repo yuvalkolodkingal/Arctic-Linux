@@ -1,6 +1,7 @@
 **[Arctic Linux](Home)**
 
 **Get started**
+- [Watch the showcase](Showcase)
 - [Download and create a USB](Download-and-Create-a-USB)
 - [Try Arctic Linux](Try-Arctic-Linux)
 - [Install Arctic Linux](Install-Arctic-Linux)

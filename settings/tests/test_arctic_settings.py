@@ -1035,6 +1035,7 @@ class DefaultAppsTest(Home):
             'foot': 'Name=Foot\nExec=foot\nCategories=System;TerminalEmulator;',
             'xterm': 'Name=XTerm\nExec=xterm\nCategories=System;TerminalEmulator;',
             'thunar': 'Name=Thunar\nExec=thunar %F\nCategories=System;FileManager;\nMimeType=inode/directory;',
+            'org.gnome.Nautilus': 'Name=Files (Nautilus)\nExec=nautilus %U\nCategories=System;FileManager;\nMimeType=inode/directory;',
             'nvim': 'Name=Neovim\nExec=nvim %F\nTerminal=true\nCategories=Utility;TextEditor;\nMimeType=text/plain;',
             'vlc': 'Name=VLC\nExec=vlc --started-from-file %U\nCategories=AudioVideo;Player;\nMimeType=video/mp4;video/x-matroska;audio/mpeg;',
             'hidden': 'Name=Hidden\nExec=hidden\nNoDisplay=true\nCategories=WebBrowser;',
@@ -1055,7 +1056,7 @@ class DefaultAppsTest(Home):
         terminal = self.role(data, 'terminal')
         self.assertEqual([c['id'] for c in terminal['candidates']], ['foot', 'kitty'])   # not xterm (no --hold)
         self.assertEqual(terminal['current'], 'kitty')
-        self.assertEqual(self.role(data, 'files')['current'], 'thunar')
+        self.assertEqual(self.role(data, 'files')['current'], 'org.gnome.Nautilus')
         self.assertEqual([c['id'] for c in self.role(data, 'video')['candidates']], ['vlc'])
         self.assertNotIn('pdf', [r['id'] for r in data['roles']])
 
