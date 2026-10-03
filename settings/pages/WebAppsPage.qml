@@ -72,8 +72,7 @@ Page {
             return Math.max(1, Math.round(bytes / 1e3)) + " kB";
         return (bytes / 1e6).toFixed(bytes < 1e8 ? 1 : 0) + " MB";
     }
-    // An app whose browser was uninstalled still opens (in the Arctic engine) and can switch
-    // engine; only a launcher entry or record problem leaves Remove alone.
+    // A missing browser keeps settings available so the user can choose a replacement.
     function usable(a) {
         return a !== null && (a.problem === "" || a.problem === "runtime-missing");
     }
@@ -109,7 +108,7 @@ Page {
                 id: appRow
                 required property var modelData
                 title: modelData.name
-                desc: [modelData.host, page.engineName(modelData.runtime), modelData.running ? "Open now" : "",
+                desc: [modelData.host, page.engineName(modelData.runtime), modelData.running ? "Running" : "",
                        page.size(modelData.data_bytes), page.problem(modelData.problem)].filter(s => s !== "").join(" · ")
                 resettable: false
                 Row {
@@ -122,6 +121,14 @@ Page {
                         text: "Open"
                         gapColor: Theme.surfaceRaised
                         onClicked: Backend.call(["webapp-open", appRow.modelData.id], r => {})
+                    }
+                    ArButton {
+                        visible: appRow.modelData.running
+                        variant: "ghost"
+                        size: "sm"
+                        text: "Quit"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: Backend.call(["webapp-quit", appRow.modelData.id], r => { page.refresh(); })
                     }
                     ArButton {
                         visible: page.usable(appRow.modelData) && page.selected !== appRow.modelData.id
@@ -192,6 +199,42 @@ Page {
                     gapColor: Theme.surfaceRaised
                     onClicked: page.set("icon", "site")
                 }
+            }
+        }
+        SettingRow {
+            visible: page.app !== null && page.app.runtime === "webkit"
+            searchKey: "webapps.background"
+            title: "Keep running when closed"
+            desc: "Closing hides the window. Messages and active media can continue. Use Quit to stop the app."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Keep running when closed"
+                checked: page.app !== null && page.app.keep_running === true
+                onToggled: page.set("keep-running", checked ? "on" : "off")
+            }
+        }
+        SettingRow {
+            visible: page.app !== null && page.app.runtime === "webkit"
+            searchKey: "webapps.startup"
+            title: "Start at login"
+            desc: "Opens at login, or starts hidden when Keep running is enabled."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Start at login"
+                checked: page.app !== null && page.app.start_at_login === true
+                onToggled: page.set("start-at-login", checked ? "on" : "off")
+            }
+        }
+        SettingRow {
+            visible: page.app !== null && page.app.runtime === "webkit"
+            searchKey: "webapps.downloads"
+            title: "Ask where to save downloads"
+            desc: "Choose a folder and filename for each download."
+            resettable: false
+            RowSwitch {
+                Accessible.name: "Ask where to save downloads"
+                checked: page.app !== null && page.app.ask_download === true
+                onToggled: page.set("ask-download", checked ? "on" : "off")
             }
         }
         SettingRow {

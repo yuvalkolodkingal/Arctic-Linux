@@ -19,6 +19,9 @@ func (m *Manager) render(a *webapp.App) error {
 		return err
 	}
 	icon.Remove(m.Paths, a.ID, a.IconName())
+	if err := m.Paths.WriteAutostart(a, false); err != nil {
+		return err
+	}
 	return m.Paths.WriteDesktop(a)
 }
 

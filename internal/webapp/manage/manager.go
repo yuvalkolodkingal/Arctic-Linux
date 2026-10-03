@@ -77,6 +77,7 @@ func (m *Manager) shared(fn func() error) error {
 // Info is the app as List, Get and results show it.
 func (m *Manager) Info(a *webapp.App, sizes bool) api.AppInfo {
 	info := api.AppInfo{
+		KeepRunning: a.Options.KeepRunning, StartAtLogin: m.Paths.AutostartEnabled(a.ID), AskDownload: a.Options.AskDownload,
 		ID: a.ID, Name: a.Name, URL: a.StartURL, Host: a.Host(),
 		IconName: a.IconName(), Category: a.Category, Runtime: a.Runtime,
 		RuntimeAvailable: m.Env.Available(a.Runtime),
@@ -253,6 +254,9 @@ func (m *Manager) Remove(ids []string, keepData bool) (api.RemoveResult, error) 
 					name = a.Name
 				}
 				return webapp.Errorf(webapp.CodeState, "%s is still open. Close it and try again.", name)
+			}
+			if err := m.Paths.RemoveAutostart(id); err != nil {
+				return err
 			}
 			m.removeFiles(id, a)
 			kept := false

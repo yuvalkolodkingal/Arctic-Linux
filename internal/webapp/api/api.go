@@ -203,6 +203,9 @@ type AppInfo struct {
 	Problem           string             `json:"problem"`
 	Created           string             `json:"created"`
 	Updated           string             `json:"updated"`
+	KeepRunning       bool               `json:"keep_running"`
+	StartAtLogin      bool               `json:"start_at_login"`
+	AskDownload       bool               `json:"ask_download"`
 }
 
 // KeptInfo is sign-in data left by `remove --keep-data`.
@@ -282,6 +285,9 @@ type SetIcon struct {
 
 // SetParams: only the fields present change. Pointer fields tell "absent" from "off".
 type SetParams struct {
+	KeepRunning       *bool    `json:"keep_running,omitempty"`
+	StartAtLogin      *bool    `json:"start_at_login,omitempty"`
+	AskDownload       *bool    `json:"ask_download,omitempty"`
 	ID                string   `json:"id"`
 	Name              *string  `json:"name,omitempty"`
 	Icon              *SetIcon `json:"icon,omitempty"`

@@ -15,10 +15,11 @@ var execFn = syscall.Exec
 // app is raised by the host's own single-instance handling.
 func (c *cli) cmdRun(args []string) int {
 	var u *string
-	var inspect *bool
+	var inspect, startup *bool
 	_, pos, _, ok := c.flags("run", args, func(fs *flag.FlagSet) {
 		u = fs.String("url", "", "")
 		inspect = fs.Bool("inspect", false, "")
+		startup = fs.Bool("startup", false, "")
 	})
 	if !ok {
 		return 2
@@ -34,6 +35,9 @@ func (c *cli) cmdRun(args []string) int {
 	if m == nil {
 		return code
 	}
+	if *startup && !m.Paths.AutostartEnabled(pos[0]) {
+		return 0
+	}
 	plan, err := m.PlanRun(pos[0], uri, *u, *inspect)
 	if err != nil {
 		return c.fail(false, err)
@@ -43,6 +47,15 @@ func (c *cli) cmdRun(args []string) int {
 	}
 	if plan.Focused {
 		return 0
+	}
+	if *startup && !plan.Browser {
+		a, err := m.Paths.Load(pos[0])
+		if err != nil {
+			return c.fail(false, err)
+		}
+		if a.Options.KeepRunning {
+			plan.Exec.Argv = append(plan.Exec.Argv, "--background")
+		}
 	}
 	if plan.Browser && m.Paths.RunningPid(pos[0]) == 0 {
 		// Our pid becomes the browser's after exec.

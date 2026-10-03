@@ -72,6 +72,12 @@ class WebAppCommands(unittest.TestCase):
         self.assertIn('can’t change', r['error'])
         self.assertEqual(len(self.argv()), 2)
 
+    def test_native_options_use_manager_validation(self):
+        self.answer.write_text('{"ok":true}\n')
+        for key in ('keep-running', 'start-at-login', 'ask-download'):
+            self.assertTrue(self.run_helper('webapp-set', APP, key, 'on')['ok'])
+            self.assertEqual(self.argv()[-1], 'set %s --%s=on --json' % (APP, key))
+
     def test_ids_are_checked(self):
         for bad in ('../../x', 'org.arcticlinux.WebApp.X_1; rm', '--all'):
             r = self.run_helper('webapp-clear', bad)
@@ -82,7 +88,7 @@ class WebAppCommands(unittest.TestCase):
     def test_other_commands(self):
         self.answer.write_text('{"ok":true}\n')
         for args, want in ((('webapp-forget', APP), 'forget %s --json'), (('webapp-clear', APP), 'clear-data %s --json'),
-                           (('webapp-refresh', APP), 'update %s --json'), (('webapp-open', APP), 'launch %s --json'),
+                           (('webapp-refresh', APP), 'update %s --json'), (('webapp-quit', APP), 'quit %s --json'), (('webapp-open', APP), 'launch %s --json'),
                            (('webapp-reset-permissions', APP), 'set %s --reset-permissions --json'),
                            (('webapp-remove', APP, 'delete'), 'remove %s --json')):
             self.assertTrue(self.run_helper(*args)['ok'])

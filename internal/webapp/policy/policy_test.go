@@ -169,3 +169,17 @@ func TestStateAndRestore(t *testing.T) {
 		t.Fatal("log url")
 	}
 }
+
+func TestNativePermissionRevocation(t *testing.T) {
+	p := &Permissions{Schema: 1, Origins: map[string]map[string]string{"https://example.org": {"notifications": "allow", "screen": "allow"}}}
+	if got := p.Decide("https://example.org", PermNotifications, Scope{}, "block"); got != Deny {
+		t.Fatal("stored permission bypassed block", got)
+	}
+	if got := p.Decide("https://example.org", PermScreen, Scope{}, "allow"); got != Ask {
+		t.Fatal("screen sharing reused consent", got)
+	}
+	p.Origins["https://example.org"]["screen"] = "deny"
+	if got := p.Decide("https://example.org", PermScreen, Scope{}, "allow"); got != Deny {
+		t.Fatal("screen block ignored", got)
+	}
+}

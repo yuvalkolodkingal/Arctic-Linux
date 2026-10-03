@@ -130,6 +130,7 @@ func (m *Manager) Set(ctx context.Context, p api.SetParams) (api.SetResult, erro
 		if err != nil {
 			return err
 		}
+		before := *a
 		files := false
 		if p.Name != nil {
 			a.Name, a.NameSource = webapp.CleanName(*p.Name), "user"
@@ -177,6 +178,15 @@ func (m *Manager) Set(ctx context.Context, p api.SetParams) (api.SetResult, erro
 		if p.Notifications != nil {
 			a.Options.Notifications, live = *p.Notifications, true
 		}
+		if p.KeepRunning != nil {
+			a.Options.KeepRunning, live = *p.KeepRunning, true
+		}
+		if p.AskDownload != nil {
+			a.Options.AskDownload, live = *p.AskDownload, true
+		}
+		if p.StartAtLogin != nil {
+			a.Options.StartAtLogin = *p.StartAtLogin
+		}
 		if p.Devtools != nil {
 			a.Options.Devtools, live = *p.Devtools, true
 		}
@@ -203,6 +213,12 @@ func (m *Manager) Set(ctx context.Context, p api.SetParams) (api.SetResult, erro
 		a.Updated = m.Now()
 		if err := m.Paths.Save(a); err != nil {
 			return err
+		}
+		if p.StartAtLogin != nil {
+			if err := m.Paths.WriteAutostart(a, true); err != nil {
+				m.Paths.Save(&before)
+				return err
+			}
 		}
 		if files {
 			if err := m.render(a); err != nil {

@@ -943,7 +943,7 @@ engine_version, id, copy, name, name_source, input_url, start_url, manifest_url,
 scope{site,scheme,manifest}, extra_domains, category, theme_color, icon{name,rev,source,url,sha256,purpose},
 runtime (webkit | chromium:brave|chrome|vivaldi|chromium|ungoogled), wm_class, handlers ([] |
 ["mailto"]), options{links: browser|app, notifications: allow|ask|block, devtools, rendering:
-auto|software}, tls_exceptions[{host,sha256,pem}] (private-network hosts only), user_set,
+auto|software, keep_running:bool, start_at_login:bool, ask_download:bool}, tls_exceptions[{host,sha256,pem}] (private-network hosts only), user_set,
 created, updated`. A record whose id doesn't match its directory, whose URLs aren't http(s), or
 with an unknown value is refused.
 
@@ -958,7 +958,7 @@ two fixture entries for `desktop-file-validate` in `%check`.
 
 **CLI.** `arctic-webapp inspect URL | install (URL | --preview TOKEN) [options] | list [--sizes]
 [--kept] | show ID | run ID [URI] [--url URL] | launch ID [--url URL] | update (ID… | --all) |
-set ID [options] | clear-data ID | remove ID… [--keep-data] | forget ID… | icon ID --from-file F
+set ID [options] | quit ID | clear-data ID | remove ID… [--keep-data] | forget ID… | icon ID --from-file F
 --source host-favicon | trust-certificate ID --host H --pem F | repair | runtimes | serve |
 render-sample DIR | version [--webkit]`. Exit 0 ok, 1 error, 2 usage; messages on stderr start
 `arctic-webapp: `. It refuses to run as root (CI containers set `ARCTIC_WEBAPP_ALLOW_ROOT=1`).
@@ -1027,3 +1027,35 @@ can't take back a grant; a forgotten certificate stays accepted until the window
 the proprietary driver and software rendering on request. Chromium-family runtimes run
 `--app=<url> --user-data-dir=<per-app>` (never `--no-sandbox` or `--class`); a running one is
 focused with `mmsg` instead of opening a second window.
+
+
+### Native web app integration
+
+The additive schema 1 options `keep_running`, `start_at_login`, and `ask_download` default to
+false when absent. `set` accepts their hyphenated CLI names with `on|off`; JSON uses snake_case.
+The WebKit host applies keep-running and ask-download over the existing SIGHUP reload path.
+The manager remains standard-library-only and GTK/GLib integration stays behind cgo.
+
+`~/.config/autostart/<id>.desktop` (respecting XDG_CONFIG_HOME) runs `arctic-webapp run ID
+--startup`. The host's `--background` startup is used only for a keep-running WebKit app.
+The manager preserves an external `Hidden=true` on rename/repair; explicit startup changes
+replace it. Removal always removes the autostart entry, including `--keep-data`. AppInfo
+reports effective startup state from that entry. `quit ID` uses the existing verified-PID
+stop path. Close hides only when configured; Quit/SIGTERM always stop. Normal logical window
+size is tracked separately from tiled/maximized/fullscreen allocation.
+
+GTK file dialogs complete asynchronously. Download objects are retained until chooser
+completion; row destruction cancels outstanding work and disconnects callbacks. WebKit's
+no-overwrite setting remains enabled. Upload filters and multi-selection follow the WebKit
+request. The runtime handles the underlying clipboard and drag/drop integration.
+
+`internal/webkit/media.h` exports `org.mpris.MediaPlayer2.Arctic_<app suffix>` through GLib
+GDBus only while main-page media is available. A bounded isolated-world snapshot reads
+ordinary audio/video elements, excluding srcObject call streams; no native message handler
+is exposed to websites. Supported controls are play/pause/stop and seek; next/previous are
+not advertised. Navigation resets player state and invalidates outstanding snapshots. The
+shell's existing MPRIS/playerctl selection rules remain the authority for media keys.
+
+A missing Chromium runtime is an actionable error; the manager never silently opens another
+engine's profile. Account tests, physical-device tests and the production sandbox validation
+status are recorded in [the compatibility report](WEBAPP-COMPATIBILITY.md).

@@ -204,6 +204,14 @@ func (p *Permissions) Remember(origin string, kind int, allow bool) {
 // denied; device info only for an origin that already has camera or microphone; everything else
 // asks you (an in-window banner the page can't draw over).
 func (p *Permissions) Decide(origin string, kind int, s Scope, notifications string) int {
+	// A global block overrides earlier grants. Screen sharing always requires a fresh
+	// choice; an explicit block remains respected.
+	if kind == PermNotifications && notifications == "block" {
+		return Deny
+	}
+	if kind == PermScreen && p.Origins[origin]["screen"] != "deny" {
+		return Ask
+	}
 	if name, ok := permNames[kind]; ok {
 		switch p.Origins[origin][name] {
 		case "allow":

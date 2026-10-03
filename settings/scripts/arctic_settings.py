@@ -3039,7 +3039,7 @@ TOOLS = {'mmsg': 'mmsg', 'mango': 'mango', 'wlrRandr': 'wlr-randr', 'nmcli': 'nm
 # The Web apps page runs arctic-webapp with an argv and passes its one line of --json through:
 # it already has ok and error (a sentence).
 
-WEBAPP_KEYS = {'name': '--name', 'links': '--links', 'notifications': '--notifications', 'devtools': '--devtools',
+WEBAPP_KEYS = {'keep-running': '--keep-running', 'start-at-login': '--start-at-login', 'ask-download': '--ask-download', 'name': '--name', 'links': '--links', 'notifications': '--notifications', 'devtools': '--devtools',
                'rendering': '--rendering', 'runtime': '--runtime', 'category': '--category',
                'mail-links': '--mail-links', 'add-domain': '--add-domain', 'remove-domain': '--remove-domain',
                'forget-certificate': '--forget-certificate', 'icon': '--icon'}
@@ -3095,6 +3095,10 @@ def cmd_webapp_refresh(_paths, args):
 
 def cmd_webapp_clear(_paths, args):
     return run_webapp(['clear-data', webapp_id(args)])
+
+
+def cmd_webapp_quit(_paths, args):
+    return run_webapp(['quit', webapp_id(args)])
 
 
 def cmd_webapp_open(_paths, args):
@@ -3398,7 +3402,7 @@ COMMANDS = {
 TOOLS['arcticWebapp'] = 'arctic-webapp'
 COMMANDS.update({
     'webapps': cmd_webapps, 'webapp-set': cmd_webapp_set, 'webapp-reset-permissions': cmd_webapp_reset_permissions,
-    'webapp-refresh': cmd_webapp_refresh, 'webapp-clear': cmd_webapp_clear, 'webapp-open': cmd_webapp_open,
+    'webapp-refresh': cmd_webapp_refresh, 'webapp-clear': cmd_webapp_clear, 'webapp-quit': cmd_webapp_quit, 'webapp-open': cmd_webapp_open,
     'webapp-remove': cmd_webapp_remove, 'webapp-forget': cmd_webapp_forget, 'webapp-runtimes': cmd_webapp_runtimes,
 })
 

@@ -39,7 +39,8 @@ arctic-webapp forget org.arcticlinux.WebApp.YouTubeMusic_4c1a9e              # d
 
 ## The window
 
-Each web app opens in its own window with Back, Forward and Reload in the header. Links to other
+Each web app opens in its own window with a compact Arctic header. Back appears when there
+is history; Forward and Reload are available in the app menu and through their shortcuts. Links to other
 sites open in your browser (the one you chose in **Settings → Apps**); sign-in pages that the
 site sends you to, like Google's or Microsoft's, open inside the app so signing in works. When a
 page of another site is showing, the header shows its address and **Back to _App_**.
@@ -53,7 +54,8 @@ page of another site is showing, the header shows its address and **Back to _App
 | `Ctrl + L` | Copy the page's address |
 | `Ctrl + P` | Print |
 | `F11` | Full screen |
-| `Ctrl + W` | Close the window |
+| `Ctrl + W` | Close the window (hide it when Keep running is enabled) |
+| `Ctrl + Q` | Quit the app, including background activity |
 | `F12` or `Ctrl + Shift + I` | Web inspector (when **Developer tools** is on) |
 
 The app keeps its window size and zoom, and opens where you left off when that page belongs to
@@ -65,8 +67,10 @@ A site embedded in the page that asks to use its own cookies there (a sign-in or
 frame) is named in the bar, and the answer holds for those two sites only.
 Notifications from the app's own site are allowed by default and show in Arctic's notification
 centre under the app's name and icon; **Block** in Settings stops them in the open window too.
-Downloads go to your Downloads folder and never replace a file that is already there; one that
-fails says so.
+Downloads go to your Downloads folder and never replace an existing file. Turn on **Ask where
+to save downloads** in Settings → Web apps for a native save dialog. Choose a new filename;
+existing files are protected from replacement. The menu's **Downloads** view shows progress,
+Cancel, failures, Open and Show in folder. File uploads use a native chooser too.
 
 The window follows the Arctic theme, light or dark, and changes with it.
 
@@ -88,7 +92,37 @@ preview, or later:
 arctic-webapp set org.arcticlinux.WebApp.Netflix_0a1b2c --runtime chromium:brave
 ```
 
-If that browser is removed later, the app opens in the Arctic engine again with a note saying so.
+If that browser is removed later, reinstall it or choose another engine in Settings → Web
+apps. Arctic keeps the old profile. Switching engines may require signing in again.
+
+## Background apps and media
+
+In Settings → Web apps, **Keep running when closed** lets the Arctic engine hide its window
+while keeping the page and sign-in session alive. Notifications can still arrive while hidden;
+clicking one invokes the website's own action and brings the app back. **Quit**, `Ctrl + Q`,
+or the Quit button in Settings stops the process. Background apps remain listed as Running.
+
+**Start at login** is separate. With Keep running enabled, it starts hidden; otherwise it
+opens a window. Both settings default to off, including for existing apps. The startup entry
+also appears in Settings → Startup apps. Removing an app removes its startup entry even when
+you retain sign-in data.
+
+```sh
+arctic-webapp set ID --keep-running on --start-at-login on
+arctic-webapp set ID --ask-download on
+arctic-webapp quit ID
+```
+
+Closing an app with Keep running enabled can continue audio or capture. Use Quit to stop it,
+or the header's capture button to stop its camera, microphone and screen sharing. Sharing
+requires a fresh permission decision; camera and microphone permissions are checked separately.
+Actual capture and calls depend on the runtime and desktop portal support.
+
+The Arctic engine exposes ordinary audio/video elements in the app's main page through MPRIS,
+so the desktop media panel and media keys can play/pause and seek when the media supports it.
+It excludes call streams and does not advertise next/previous track actions. Embedded players
+and sites with custom media control may not support these controls. See the
+[compatibility results](../WEBAPP-COMPATIBILITY.md) for what has been tested.
 
 ## Email links
 
@@ -134,7 +168,7 @@ agent the app uses. It never asks third-party icon services (they would learn wh
 use) and sends nothing anywhere else. Each app's cookies and data stay in
 `~/.local/share/arctic/webapps/ID/`; nothing is shared with your browser or with other web apps.
 
-## Not in 0.3
+## Remaining limitations
 
-Notifications while the window is closed, the manifest's shortcuts and file and share handlers,
+Notifications after the app has fully quit, the manifest's shortcuts and file and share handlers,
 saved passwords, and Firefox-based browsers as engines (they have no app mode).

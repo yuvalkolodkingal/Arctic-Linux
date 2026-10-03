@@ -181,6 +181,7 @@ func (c *cli) cmdSet(args []string) int {
 	var p api.SetParams
 	name, icon, iconURL, category, runtime, links, notif, rendering := &optString{}, &optString{}, &optString{}, &optString{}, &optString{}, &optString{}, &optString{}, &optString{}
 	mail, devtools := &onOff{}, &onOff{}
+	background, startup, download := &onOff{}, &onOff{}, &onOff{}
 	_, pos, j, ok := c.flags("set", args, func(fs *flag.FlagSet) {
 		fs.Var(name, "name", "")
 		fs.Var(icon, "icon", "")
@@ -193,6 +194,9 @@ func (c *cli) cmdSet(args []string) int {
 		fs.Var(notif, "notifications", "")
 		fs.Var(mail, "mail-links", "")
 		fs.Var(devtools, "devtools", "")
+		fs.Var(background, "keep-running", "")
+		fs.Var(startup, "start-at-login", "")
+		fs.Var(download, "ask-download", "")
 		fs.Var(rendering, "rendering", "")
 		fs.BoolVar(&p.ResetPermissions, "reset-permissions", false, "")
 		fs.StringVar(&p.ForgetCertificate, "forget-certificate", "", "")
@@ -203,6 +207,7 @@ func (c *cli) cmdSet(args []string) int {
 	p.ID = pos[0]
 	p.Name, p.Category, p.Runtime, p.Links, p.Notifications, p.Rendering = name.v, category.v, runtime.v, links.v, notif.v, rendering.v
 	p.MailLinks, p.Devtools = mail.v, devtools.v
+	p.KeepRunning, p.StartAtLogin, p.AskDownload = background.v, startup.v, download.v
 	switch {
 	case iconURL.v != nil:
 		p.Icon = &api.SetIcon{URL: *iconURL.v}

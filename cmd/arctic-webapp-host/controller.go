@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -23,20 +24,21 @@ import (
 // controller is the window's Go side: it answers the shim's callbacks with the pure-Go
 // policies and keeps the window state, permissions and log.
 type controller struct {
-	paths    webapp.Paths
-	app      *webapp.App
-	scope    policy.Scope
-	state    policy.State
-	perms    *policy.Permissions
-	crashes  policy.Crashes
-	palette  theme.Palette
-	openURI  string
-	explicit bool // openURI came from --url
-	inspect  bool
-	notice   string
-	log      *log.Logger
-	logFile  *os.File
-	pidDone  bool
+	paths      webapp.Paths
+	app        *webapp.App
+	scope      policy.Scope
+	state      policy.State
+	perms      *policy.Permissions
+	crashes    policy.Crashes
+	palette    theme.Palette
+	openURI    string
+	explicit   bool // openURI came from --url
+	background bool
+	inspect    bool
+	notice     string
+	log        *log.Logger
+	logFile    *os.File
+	pidDone    bool
 	// pendingCert is the certificate the trust banner offers; faviconSent stops a second
 	// favicon upgrade in one session.
 	pendingCert *pendingCert
@@ -99,6 +101,7 @@ func (c *controller) run() int {
 	}
 	c.log.Printf("start %s (WebKitGTK %s) at %s", c.app.ID, webkit.Version(), policy.LogURL(c.openURI))
 	cfg := webkit.Config{
+		KeepRunning: c.app.Options.KeepRunning, Background: c.background, AskDownload: c.app.Options.AskDownload,
 		AppID: c.app.ID, AppName: c.app.Name, IconName: c.app.IconName(),
 		StartURI: c.app.StartURL, OpenURI: c.openURI,
 		DataDir: c.paths.Profile(c.app.ID), CacheDir: c.paths.Cache(c.app.ID),
@@ -217,11 +220,14 @@ func (c *controller) ProcessTerminated(reason int) bool {
 }
 
 func (c *controller) CloseRequest(width, height int, maximized bool, zoom float64) {
-	if !maximized && width > 0 && height > 0 {
+	// The shim reports the last normal allocation, even while tiled or maximized.
+	if width > 0 && height > 0 {
 		c.state.Width, c.state.Height = width, height
 	}
 	c.state.Maximized = maximized
-	c.state.Zoom = zoom
+	if !math.IsNaN(zoom) && !math.IsInf(zoom, 0) && zoom >= 0.3 && zoom <= 5 {
+		c.state.Zoom = zoom
+	}
 	c.saveState()
 }
 
@@ -244,6 +250,7 @@ func (c *controller) Startup() {
 
 func (c *controller) Shutdown() {
 	if c.pidDone {
+		c.saveState()
 		c.paths.RemovePid(c.app.ID, os.Getpid())
 	}
 	c.log.Printf("stop %s", c.app.ID)
@@ -279,6 +286,7 @@ func (c *controller) reload() {
 	c.scope = policy.ScopeOf(a)
 	c.perms = policy.LoadPermissions(c.paths.PermissionsFile(a.ID))
 	webkit.SetDevtools(a.Options.Devtools || c.inspect)
+	webkit.SetOptions(a.Options.KeepRunning, a.Options.AskDownload)
 	c.applyCertificates()
 	c.log.Printf("options reloaded")
 }

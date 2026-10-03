@@ -2,8 +2,8 @@
 
 // GTK 4 / WebKitGTK 6.0 plumbing for arctic-webapp-host (see shim.h). One GtkApplication per
 // process; its id is the web app's id, so GTK gives the window that Wayland app_id and a
-// second start is forwarded to this process over D-Bus. Nothing here decides anything: the
-// go* functions (exports.go) do.
+// second start is forwarded over D-Bus. Go owns app policy; this shim owns native widget,
+// request and desktop-protocol lifetimes.
 #include "shim.h"
 #include "_cgo_export.h"
 
@@ -11,6 +11,7 @@
 #include <gtk/gtk.h>
 #include <libsoup/soup.h>
 #include <signal.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +30,7 @@ typedef struct {
     GtkWidget *search_bar, *search_entry;
     WebKitPermissionRequest *pending; /* the banner's permission request (ref held) */
     int pending_kind;
+    gboolean pending_microphone;
     char *pending_origin;
     int banner_action;                /* 0 permission, 1 reload, 2 trust a certificate */
     GtkWidget *audio;                 /* mute button, shown while the page plays audio */
@@ -40,9 +42,15 @@ typedef struct {
     GFileMonitor *theme_monitor;
     GHashTable *notifications;        /* tag → WebKitNotification (ref) */
     gboolean first_notice_shown;
+    gboolean quitting, held, activated;
+    int normal_width, normal_height;
+    guint scale_repair;
+    GtkWidget *downloads, *download_list, *load_progress, *capture;
+
 } Shim;
 
 static Shim S;
+#include "media.h"
 
 static char *dup_or_null(const char *s) { return s ? g_strdup(s) : NULL; }
 
@@ -82,16 +90,21 @@ void arctic_load_alternate_html(const char *html, const char *uri) {
 
 void arctic_present(void) {
     if (S.window) gtk_window_present(S.window);
+    if (S.view) gtk_widget_grab_focus(GTK_WIDGET(S.view));
+    if (S.held) { g_application_release(G_APPLICATION(S.app)); S.held = FALSE; }
 }
 
 void arctic_quit(void) {
-    /* Close the window first so it saves its size, zoom and page (close-request). */
-    if (S.window) {
-        GtkWindow *w = S.window;
-        S.window = NULL;
-        gtk_window_close(w);
-    }
+    S.quitting = TRUE;
+    if (S.held) { g_application_release(G_APPLICATION(S.app)); S.held = FALSE; }
+    if (S.window) gtk_window_close(S.window);
     if (S.app) g_application_quit(G_APPLICATION(S.app));
+}
+
+void arctic_set_options(int keep_running, int ask_download) {
+    S.cfg.keep_running = keep_running;
+    S.cfg.ask_download = ask_download;
+    if (!keep_running && S.window && !gtk_widget_get_visible(GTK_WIDGET(S.window))) arctic_quit();
 }
 
 void arctic_set_devtools(int enabled) {
@@ -161,7 +174,11 @@ static void finish_permission(gboolean allow, gboolean remember) {
         webkit_permission_request_allow(S.pending);
     else
         webkit_permission_request_deny(S.pending);
-    if (remember) goPermissionDecided(S.cfg.handle, S.pending_kind, S.pending_origin, allow ? 1 : 0);
+    if (remember) {
+        goPermissionDecided(S.cfg.handle, S.pending_kind, S.pending_origin, allow ? 1 : 0);
+        if (S.pending_microphone) goPermissionDecided(S.cfg.handle, 2, S.pending_origin, allow ? 1 : 0);
+    }
+    S.pending_microphone = FALSE;
     g_clear_object(&S.pending);
     g_clear_pointer(&S.pending_origin, g_free);
 }
@@ -281,10 +298,19 @@ static gboolean permission_cb(WebKitWebView *view, WebKitPermissionRequest *req,
     }
     char *origin = origin_of_view(view);
     int answer = goPermission(S.cfg.handle, kind, origin);
+    gboolean combined = kind == 1 && WEBKIT_IS_USER_MEDIA_PERMISSION_REQUEST(req) &&
+        webkit_user_media_permission_is_for_audio_device(WEBKIT_USER_MEDIA_PERMISSION_REQUEST(req));
+    if (combined) {
+        int microphone = goPermission(S.cfg.handle, 2, origin);
+        answer = answer == ARCTIC_DENY || microphone == ARCTIC_DENY ? ARCTIC_DENY :
+            answer == ARCTIC_ASK || microphone == ARCTIC_ASK ? ARCTIC_ASK : ARCTIC_ALLOW;
+    }
     if (answer == ARCTIC_ALLOW)
         webkit_permission_request_allow(req);
-    else if (answer == ARCTIC_ASK && view == S.view)
+    else if (answer == ARCTIC_ASK && view == S.view) {
         ask_permission(req, kind, origin, who, what);
+        if (S.pending == req) S.pending_microphone = combined;
+    }
     else
         webkit_permission_request_deny(req);
     g_free(origin);
@@ -441,7 +467,11 @@ static void notification_clicked_cb(GSimpleAction *a, GVariant *param, gpointer 
     const char *tag = g_variant_get_string(param, NULL);
     arctic_present();
     WebKitNotification *n = g_hash_table_lookup(S.notifications, tag);
-    if (n) webkit_notification_clicked(n);
+    if (n) {
+        g_object_ref(n);
+        webkit_notification_clicked(n);
+        g_object_unref(n);
+    }
 }
 
 static void init_notification_permissions_cb(WebKitWebContext *ctx, gpointer data) {
@@ -461,81 +491,13 @@ static void init_notification_permissions_cb(WebKitWebContext *ctx, gpointer dat
 
 /* ---------------------------------------------------------------- downloads */
 
-/* "finished" follows "failed" too: the mark keeps it from offering to open a file that is
- * partial, removed, or someone else's (a name that was taken). */
-static void download_failed_cb(WebKitDownload *d, GError *err, gpointer data) {
-    (void)data;
-    g_object_set_data(G_OBJECT(d), "arctic-failed", GINT_TO_POINTER(1));
-    if (g_error_matches(err, WEBKIT_DOWNLOAD_ERROR, WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER)) return;
-    const char *dest = webkit_download_get_destination(d);
-    char *name = dest ? g_path_get_basename(dest) : NULL;
-    GNotification *gn = g_notification_new("Download failed");
-    if (name) g_notification_set_body(gn, name);
-    char *tag = g_strdup_printf("download-%s", name ? name : "failed");
-    g_application_send_notification(G_APPLICATION(S.app), tag, gn);
-    g_free(tag);
-    g_object_unref(gn);
-    g_free(name);
-}
-
-static void download_finished_cb(WebKitDownload *d, gpointer data) {
-    (void)data;
-    if (g_object_get_data(G_OBJECT(d), "arctic-failed")) return;
-    const char *dest = webkit_download_get_destination(d);
-    if (!dest) return;
-    goDownloadFinished(S.cfg.handle, (char *)dest);
-    /* Never opened automatically: the notification offers Open and Show in folder. */
-    char *name = g_path_get_basename(dest);
-    GNotification *gn = g_notification_new("Download finished");
-    g_notification_set_body(gn, name);
-    g_notification_set_default_action_and_target(gn, "app.download-show", "s", dest);
-    g_notification_add_button_with_target(gn, "Open", "app.download-open", "s", dest);
-    g_notification_add_button_with_target(gn, "Show in folder", "app.download-show", "s", dest);
-    char *tag = g_strdup_printf("download-%s", name);
-    g_application_send_notification(G_APPLICATION(S.app), tag, gn);
-    g_free(tag);
-    g_object_unref(gn);
-    g_free(name);
-}
-
-static void download_action_cb(GSimpleAction *a, GVariant *param, gpointer data) {
-    (void)a;
-    GFile *f = g_file_new_for_path(g_variant_get_string(param, NULL));
-    GtkFileLauncher *l = gtk_file_launcher_new(f);
-    if (GPOINTER_TO_INT(data))
-        gtk_file_launcher_open_containing_folder(l, S.window, NULL, NULL, NULL);
-    else
-        gtk_file_launcher_launch(l, S.window, NULL, NULL, NULL);
-    g_object_unref(l);
-    g_object_unref(f);
-}
-
-static gboolean decide_destination_cb(WebKitDownload *d, const char *suggested, gpointer data) {
-    (void)data;
-    WebKitURIResponse *resp = webkit_download_get_response(d);
-    const char *mime = resp ? webkit_uri_response_get_mime_type(resp) : NULL;
-    char *path = goDownloadDestination(S.cfg.handle, (char *)(suggested ? suggested : ""), (char *)(mime ? mime : ""));
-    if (!path) {
-        webkit_download_cancel(d);
-        return TRUE;
-    }
-    webkit_download_set_allow_overwrite(d, FALSE);
-    webkit_download_set_destination(d, path);
-    free(path);
-    return TRUE;
-}
-
-static void download_started_cb(WebKitNetworkSession *s, WebKitDownload *d, gpointer data) {
-    (void)s;
-    (void)data;
-    g_signal_connect(d, "decide-destination", G_CALLBACK(decide_destination_cb), NULL);
-    g_signal_connect(d, "failed", G_CALLBACK(download_failed_cb), NULL);
-    g_signal_connect(d, "finished", G_CALLBACK(download_finished_cb), NULL);
-}
+#include "downloads.h"
+#include "files.h"
 
 /* ---------------------------------------------------------------- loading, errors, crashes */
 
 static void update_nav_buttons(void) {
+    gtk_widget_set_visible(S.back, webkit_web_view_can_go_back(S.view));
     gtk_widget_set_sensitive(S.back, webkit_web_view_can_go_back(S.view));
     gtk_widget_set_sensitive(S.forward, webkit_web_view_can_go_forward(S.view));
 }
@@ -544,7 +506,11 @@ static void title_cb(WebKitWebView *view, GParamSpec *ps, gpointer data) {
     (void)ps;
     (void)data;
     const char *t = webkit_web_view_get_title(view);
-    if (S.window) gtk_window_set_title(S.window, t && *t ? t : S.cfg.app_name);
+    if (S.window) {
+        char *title = t && *t ? g_strdup_printf("%s — %s", t, S.cfg.app_name) : g_strdup(S.cfg.app_name);
+        gtk_window_set_title(S.window, title);
+        g_free(title);
+    }
 }
 
 static void uri_cb(WebKitWebView *view, GParamSpec *ps, gpointer data) {
@@ -572,6 +538,7 @@ static void load_changed_cb(WebKitWebView *view, WebKitLoadEvent ev, gpointer da
     update_nav_buttons();
     gtk_button_set_icon_name(GTK_BUTTON(S.reload), ev == WEBKIT_LOAD_FINISHED ? "view-refresh-symbolic" : "process-stop-symbolic");
     if (ev == WEBKIT_LOAD_STARTED) {
+        M.generation++; media_reset();
         if (S.error_page_loading)
             S.error_page_loading = FALSE;
         else
@@ -659,9 +626,11 @@ static void terminated_cb(WebKitWebView *view, WebKitWebProcessTerminationReason
         arctic_banner("This page stopped working.", "Reload");
 }
 
-static void fullscreen_cb(WebKitWebView *view, gpointer data) {
+static gboolean fullscreen_cb(WebKitWebView *view, gpointer data) {
     (void)view;
-    gtk_widget_set_visible(S.header, GPOINTER_TO_INT(data) == 0);
+    if (GPOINTER_TO_INT(data)) gtk_window_fullscreen(S.window);
+    else gtk_window_unfullscreen(S.window);
+    return TRUE;
 }
 
 /* ---------------------------------------------------------------- views and the window */
@@ -739,6 +708,7 @@ static WebKitWebView *new_view(WebKitWebView *related) {
         v = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "network-session", S.session, "settings", S.settings,
                                          "user-content-manager", S.ucm, NULL));
     g_signal_connect(v, "decide-policy", G_CALLBACK(decide_policy_cb), GINT_TO_POINTER(related != NULL));
+    g_signal_connect(v, "run-file-chooser", G_CALLBACK(upload_requested_cb), NULL);
     g_signal_connect(v, "permission-request", G_CALLBACK(permission_cb), NULL);
     g_signal_connect(v, "create", G_CALLBACK(create_cb), NULL);
     g_signal_connect(v, "show-notification", G_CALLBACK(show_notification_cb), NULL);
@@ -813,13 +783,15 @@ static gboolean shortcut_cb(GtkWidget *w, GVariant *args, gpointer data) {
     } else if (!strcmp(what, "close")) {
         gtk_window_close(S.window);
     } else if (!strcmp(what, "quit")) {
-        gtk_window_close(S.window);
+        arctic_quit();
     } else if (!strcmp(what, "inspector")) {
         if (!S.cfg.devtools) return FALSE;
         webkit_web_inspector_show(webkit_web_view_get_inspector(S.view));
     } else if (!strcmp(what, "open-in-browser")) {
         const char *uri = webkit_web_view_get_uri(S.view);
         if (uri && (g_str_has_prefix(uri, "https://") || g_str_has_prefix(uri, "http://"))) arctic_open_external(uri);
+    } else if (!strcmp(what, "downloads")) {
+        gtk_revealer_set_reveal_child(GTK_REVEALER(S.downloads), !gtk_revealer_get_reveal_child(GTK_REVEALER(S.downloads)));
     } else if (!strcmp(what, "settings")) {
         /* "Web app settings…": the Settings page for web apps, detached, argv only. */
         char *argv[] = {"arctic-settings", "webapps", NULL};
@@ -872,7 +844,10 @@ static GtkWidget *build_menu(GtkWidget *window) {
         {"zoom-reset", "Actual Size", "zoom"}, {"find", "Find…", "page"},
         {"print", "Print…", "page"},           {"copy-link", "Copy Link", "page"},
         {"open-in-browser", "Open in Browser", "page"}, {"reload-hard", "Reload Without Cache", "page"},
-        {"settings", "Web App Settings…", "app"},
+        {"back", "Back", "navigation"}, {"forward", "Forward", "navigation"},
+        {"reload", "Reload", "navigation"}, {"fullscreen", "Full Screen", "navigation"},
+        {"downloads", "Downloads", "app"}, {"settings", "Web App Settings…", "app"},
+        {"close", "Close Window", "app"}, {"quit", "Quit", "app"},
     };
     GMenu *menu = g_menu_new();
     GMenu *section = NULL;
@@ -961,11 +936,62 @@ static void window_destroy_cb(GtkWidget *w, gpointer d) {
     S.view = NULL;
 }
 
+static void zoom_changed_cb(GObject *view, GParamSpec *ps, gpointer data) {
+    (void)ps; (void)data;
+    double zoom = webkit_web_view_get_zoom_level(WEBKIT_WEB_VIEW(view));
+    if (isfinite(zoom) && zoom >= 0.3 && zoom <= 5) S.cfg.zoom = zoom;
+}
+
+static gboolean restore_zoom_after_scale(gpointer data) {
+    (void)data;
+    S.scale_repair = 0;
+    if (S.view && !S.quitting) webkit_web_view_set_zoom_level(S.view, S.cfg.zoom);
+    return G_SOURCE_REMOVE;
+}
+
+static void scale_changed_cb(GObject *view, GParamSpec *ps, gpointer data) {
+    (void)view; (void)ps; (void)data;
+    /* Wait for the new surface allocation; changing zoom from its own notification
+     * can re-enter WebKit while its device scale is transiently invalid. */
+    if (!S.scale_repair) S.scale_repair = g_timeout_add(150, restore_zoom_after_scale, NULL);
+}
+
+static gboolean geometry_tick(GtkWidget *widget, GdkFrameClock *clock, gpointer data) {
+    (void)clock; (void)data;
+    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(widget));
+    if (surface && GDK_IS_TOPLEVEL(surface)) {
+        GdkToplevelState state = gdk_toplevel_get_state(GDK_TOPLEVEL(surface));
+        if (!(state & (GDK_TOPLEVEL_STATE_MAXIMIZED | GDK_TOPLEVEL_STATE_FULLSCREEN | GDK_TOPLEVEL_STATE_TILED |
+                       GDK_TOPLEVEL_STATE_TOP_TILED | GDK_TOPLEVEL_STATE_BOTTOM_TILED |
+                       GDK_TOPLEVEL_STATE_LEFT_TILED | GDK_TOPLEVEL_STATE_RIGHT_TILED))) {
+            int w = gtk_widget_get_width(widget), h = gtk_widget_get_height(widget);
+            if (w > 0 && h > 0) { S.normal_width = w; S.normal_height = h; }
+        }
+    }
+    return G_SOURCE_CONTINUE;
+}
+
 static gboolean close_request_cb(GtkWindow *w, gpointer d) {
     (void)d;
-    goCloseRequest(S.cfg.handle, gtk_widget_get_width(GTK_WIDGET(w)), gtk_widget_get_height(GTK_WIDGET(w)),
+    goCloseRequest(S.cfg.handle, S.normal_width, S.normal_height,
                    gtk_window_is_maximized(w) ? 1 : 0, webkit_web_view_get_zoom_level(S.view));
+    if (S.cfg.keep_running && !S.quitting) {
+        if (!S.held) { g_application_hold(G_APPLICATION(S.app)); S.held = TRUE; }
+        gtk_widget_set_visible(GTK_WIDGET(w), FALSE);
+        return TRUE;
+    }
     return FALSE;
+}
+
+static void progress_cb(WebKitWebView *view, GParamSpec *ps, gpointer data) {
+    (void)ps; (void)data;
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(S.load_progress), webkit_web_view_get_estimated_load_progress(view));
+    gtk_widget_set_visible(S.load_progress, webkit_web_view_is_loading(view));
+}
+
+static void fullscreen_changed_cb(GObject *window, GParamSpec *ps, gpointer data) {
+    (void)ps; (void)data;
+    gtk_widget_set_visible(S.header, !gtk_window_is_fullscreen(GTK_WINDOW(window)));
 }
 
 static GtkWidget *icon_button(const char *icon, const char *tip, GCallback cb) {
@@ -975,13 +1001,39 @@ static GtkWidget *icon_button(const char *icon, const char *tip, GCallback cb) {
     return b;
 }
 
+static void capture_changed_cb(GObject *view, GParamSpec *ps, gpointer data) {
+    (void)ps; (void)data;
+    int camera = 0, microphone = 0, display = 0;
+    g_object_get(view, "camera-capture-state", &camera, "microphone-capture-state", &microphone,
+                 "display-capture-state", &display, NULL);
+    gtk_widget_set_visible(S.capture, camera || microphone || display);
+}
+
+static void stop_capture_cb(GtkButton *button, gpointer data) {
+    (void)button; (void)data;
+    g_object_set(S.view, "camera-capture-state", WEBKIT_MEDIA_CAPTURE_STATE_NONE,
+                 "microphone-capture-state", WEBKIT_MEDIA_CAPTURE_STATE_NONE,
+                 "display-capture-state", WEBKIT_MEDIA_CAPTURE_STATE_NONE, NULL);
+}
+
 static void build_window(void) {
     GtkWidget *win = gtk_application_window_new(S.app);
     S.window = GTK_WINDOW(win);
     gtk_widget_add_css_class(win, "arctic-webapp");
     gtk_window_set_title(S.window, S.cfg.app_name);
     gtk_window_set_icon_name(S.window, S.cfg.icon_name ? S.cfg.icon_name : S.cfg.app_id);
-    gtk_window_set_default_size(S.window, S.cfg.width, S.cfg.height);
+    S.normal_width = S.cfg.width; S.normal_height = S.cfg.height;
+    GListModel *monitors = gdk_display_get_monitors(gtk_widget_get_display(win));
+    GdkMonitor *monitor = g_list_model_get_item(monitors, 0);
+    if (monitor) {
+        GdkRectangle bounds; gdk_monitor_get_geometry(monitor, &bounds);
+        S.normal_width = MIN(S.normal_width, bounds.width);
+        S.normal_height = MIN(S.normal_height, bounds.height);
+        g_object_unref(monitor);
+    }
+    gtk_window_set_default_size(S.window, S.normal_width, S.normal_height);
+    gtk_widget_add_tick_callback(win, geometry_tick, NULL, NULL);
+    g_signal_connect(win, "notify::fullscreened", G_CALLBACK(fullscreen_changed_cb), NULL);
     if (S.cfg.maximized) gtk_window_maximize(S.window);
 
     S.header = gtk_header_bar_new();
@@ -990,7 +1042,9 @@ static void build_window(void) {
     S.reload = icon_button("view-refresh-symbolic", "Reload (F5)", G_CALLBACK(reload_cb));
     gtk_header_bar_pack_start(GTK_HEADER_BAR(S.header), S.back);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(S.header), S.forward);
+    gtk_widget_set_visible(S.forward, FALSE);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(S.header), S.reload);
+    gtk_widget_set_visible(S.reload, FALSE);
     char *label = g_strdup_printf("Back to %s", S.cfg.app_name);
     S.back_to_app = gtk_button_new_with_label(label);
     g_free(label);
@@ -998,6 +1052,9 @@ static void build_window(void) {
     S.host_label = gtk_label_new("");
     gtk_widget_add_css_class(S.host_label, "arctic-host");
     gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), build_menu(win));
+    S.capture = icon_button("media-record-symbolic", "Stop camera, microphone and screen sharing", G_CALLBACK(stop_capture_cb));
+    gtk_widget_set_visible(S.capture, FALSE);
+    gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), S.capture);
     S.audio = icon_button("audio-volume-high-symbolic", "Mute", G_CALLBACK(mute_cb));
     gtk_widget_set_visible(S.audio, FALSE);
     gtk_header_bar_pack_end(GTK_HEADER_BAR(S.header), S.audio);
@@ -1008,6 +1065,17 @@ static void build_window(void) {
     gtk_window_set_titlebar(S.window, S.header);
 
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    S.load_progress = gtk_progress_bar_new();
+    gtk_widget_set_visible(S.load_progress, FALSE);
+    gtk_box_append(GTK_BOX(box), S.load_progress);
+    S.downloads = gtk_revealer_new();
+    S.download_list = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    GtkWidget *scroll_downloads = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(scroll_downloads), 180);
+    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scroll_downloads), TRUE);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll_downloads), S.download_list);
+    gtk_revealer_set_child(GTK_REVEALER(S.downloads), scroll_downloads);
+    gtk_box_append(GTK_BOX(box), S.downloads);
 
     S.search_bar = gtk_search_bar_new();
     gtk_widget_add_css_class(S.search_bar, "arctic-findbar");
@@ -1047,10 +1115,17 @@ static void build_window(void) {
     S.view = new_view(NULL);
     gtk_widget_set_vexpand(GTK_WIDGET(S.view), TRUE);
     webkit_web_view_set_zoom_level(S.view, S.cfg.zoom > 0 ? S.cfg.zoom : 1.0);
+    g_signal_connect(S.view, "notify::zoom-level", G_CALLBACK(zoom_changed_cb), NULL);
+    g_signal_connect(S.view, "notify::scale-factor", G_CALLBACK(scale_changed_cb), NULL);
+    g_signal_connect(S.view, "notify::estimated-load-progress", G_CALLBACK(progress_cb), NULL);
+    g_signal_connect(S.view, "notify::is-loading", G_CALLBACK(progress_cb), NULL);
     g_signal_connect(S.view, "notify::title", G_CALLBACK(title_cb), NULL);
     g_signal_connect(S.view, "notify::uri", G_CALLBACK(uri_cb), NULL);
     g_signal_connect(S.view, "notify::favicon", G_CALLBACK(favicon_cb), NULL);
     g_signal_connect(S.view, "notify::is-playing-audio", G_CALLBACK(audio_cb), NULL);
+    g_signal_connect(S.view, "notify::camera-capture-state", G_CALLBACK(capture_changed_cb), NULL);
+    g_signal_connect(S.view, "notify::microphone-capture-state", G_CALLBACK(capture_changed_cb), NULL);
+    g_signal_connect(S.view, "notify::display-capture-state", G_CALLBACK(capture_changed_cb), NULL);
     g_signal_connect(S.view, "notify::is-muted", G_CALLBACK(audio_cb), NULL);
     g_signal_connect(S.view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
     g_signal_connect(S.view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
@@ -1157,13 +1232,20 @@ static void startup_cb(GApplication *app, gpointer d) {
     /* Only the primary instance gets here: it owns the pid file. The session exists now, so
      * stored certificate exceptions can be applied. */
     goStartup(S.cfg.handle);
+    media_start();
 }
 
 static void activate_cb(GApplication *app, gpointer d) {
     (void)app;
     (void)d;
     if (!S.window) build_window();
-    gtk_window_present(S.window);
+    if (!S.activated && S.cfg.background) {
+        S.activated = TRUE;
+        if (!S.held) { g_application_hold(app); S.held = TRUE; }
+        return;
+    }
+    S.activated = TRUE;
+    arctic_present();
 }
 
 static void open_cb(GApplication *app, GFile **files, int n, const char *hint, gpointer d) {
@@ -1179,7 +1261,7 @@ static void open_cb(GApplication *app, GFile **files, int n, const char *hint, g
         activate_cb(app, NULL);
         return;
     }
-    gtk_window_present(S.window);
+    arctic_present();
     for (int i = 0; i < n && i < 1; i++) {
         char *uri = g_file_get_uri(files[i]);
         goOpen(S.cfg.handle, uri);
@@ -1190,6 +1272,8 @@ static void open_cb(GApplication *app, GFile **files, int n, const char *hint, g
 static void shutdown_cb(GApplication *app, gpointer d) {
     (void)app;
     (void)d;
+    if (S.scale_repair) { g_source_remove(S.scale_repair); S.scale_repair = 0; }
+    media_stop();
     goShutdown(S.cfg.handle);
 }
 
