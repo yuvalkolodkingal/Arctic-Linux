@@ -78,9 +78,9 @@ in VALIDATION.md.
 
 ## Implemented review scope
 
-- Personal shortcut edit/reset preserves packaged defaults and unrelated bindings;
-  this does not remap every built-in compositor shortcut. Taskbar supports top or
-  bottom (not vertical sidebars), size, auto-hide and workspace/clock/media/tray
+- Personal shortcut edit/reset and packaged-action remapping preserve system
+  templates and unrelated bindings, retain recovery keys and flag ambiguous
+  upgrade changes. Taskbar supports all four edges, thickness, auto-hide and workspace/clock/media/tray
   visibility. Reset preserves unrelated JSON keys. Existing appearance controls
   remain the source of truth.
 - Tor, Tailscale and NetworkManager OpenVPN are optional catalog selections.
@@ -109,7 +109,7 @@ Settings validates four positions and a 28–56 pixel thickness. Keyboard focus
 reveals the bar and scrolls focused controls into view.
 
 `settings/scripts/builtin_shortcuts.py` generates per-user copies of packaged
-`apps.conf`/`binds.conf`, changing keys only. State records stable default IDs
+`apps.conf`/`binds.conf`, changing keys only. State records stable action IDs (original-key IDs for duplicate actions)
 and generated-file hashes. It rejects conflicting keys, typing-key capture and
 unknown manual edits. Reset restores packaged symlinks. Login synchronization
 rebuilds copies from the current RPM templates; removed/changed actions appear
