@@ -21,6 +21,10 @@ on:
         description: Keep the release as a draft for reviewing boot-test results before publication
         type: boolean
         default: false
+      nix_acceptance:
+        description: Enforcing VM install, Nix GUI and update/reboot acceptance (no release)
+        type: boolean
+        default: false
       boot_test:
         description: Boot the ISO in QEMU and upload screenshots
         type: boolean
@@ -106,6 +110,32 @@ jobs:
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; kvm=--kvm; timeout=420; else kvm=; timeout=900; fi
           tools/test-iso.sh --firmware uefi --mode try --timeout "$timeout" --interval 30 $kvm
           tools/test-iso.sh --firmware bios --mode install --timeout "$timeout" --interval 30 $kvm
+
+      - name: Nix enforcing VM acceptance
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.nix_acceptance }}
+        run: |
+          test '${{ inputs.release }}' = false
+          test -c /dev/kvm
+          # Docker's root test process accesses the passed device; no host chmod or SELinux changes.
+          timeout --signal=TERM --kill-after=60s 100m tools/test-install.sh \
+            --kvm --memory 4096 --smp 2 --boot-append '' --install-timeout 2400 \
+            --guest-check tools/nix-acceptance/guest.py --out "$PWD/out/test/nix"
+          cp out/test/nix/serial-boot.log out/test/nix/serial-before-update-reboot.log
+          timeout --signal=TERM --kill-after=60s 45m tools/test-install.sh \
+            --stage boot --kvm --memory 4096 --smp 2 --boot-append '' \
+            --guest-check tools/nix-acceptance/guest.py --out "$PWD/out/test/nix"
+
+      - name: Upload Nix acceptance evidence
+        if: ${{ always() && inputs.nix_acceptance }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nix-acceptance
+          retention-days: 14
+          path: |
+            out/test/nix/
+            !out/test/nix/*.qcow2
+            !out/test/nix/*.iso
+            !out/test/nix/*.sock
 
       - name: Upload screenshots
         if: ${{ always() && (github.event_name == 'push' || inputs.boot_test) }}

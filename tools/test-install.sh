@@ -3,6 +3,7 @@
 #
 #   tools/test-install.sh                       UEFI: install, then boot the installed disk
 #   tools/test-install.sh --firmware bios       SeaBIOS instead of OVMF
+#   tools/test-install.sh --guest-check FILE   Python live/installed assertions in disposable VM
 #   tools/test-install.sh --stage install       only the install (fresh disk)
 #   tools/test-install.sh --stage boot          only boot the disk a previous run installed
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
@@ -81,6 +82,7 @@ BOOT_APPEND=auto
 INSTALLER=""
 VIA=service
 OUT=""
+GUEST_CHECK=""
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 # Test secrets only (typed into the VM and passed to the installer).
@@ -89,6 +91,7 @@ USER_PASSWORD="arctic-ci-pass"
 
 while (( $# )); do
   case "$1" in
+    --guest-check) GUEST_CHECK="$2"; shift 2 ;;
     --iso) ISO="$2"; shift 2 ;;
     --firmware) FIRMWARE="$2"; shift 2 ;;
     --stage) STAGE="$2"; shift 2 ;;
@@ -133,6 +136,7 @@ fi
 DATA="$OUT/data"
 rm -rf "$DATA"; mkdir -p "$DATA"
 cp "$PROFILE" "$DATA/profile.toml"
+if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
   cp "$INSTALLER" "$DATA/arctic-install"
@@ -201,6 +205,12 @@ fi
   nmcli general; nmcli networking connectivity check
   "\$AI" version
 } 2>&1 | tee -a "\$S"
+if [ -f "\$D/guest-check.py" ]; then
+  python3 "\$D/guest-check.py" live >> "\$S" 2>&1
+  smoke_rc=\$?
+  say "ARCTIC-LIVE-SMOKE-EXIT=\$smoke_rc"
+  if [ "\$smoke_rc" != 0 ]; then systemctl poweroff; exit "\$smoke_rc"; fi
+fi
 start=\$(date +%s)
 if [ "\$VIA" = service ]; then
   # What arcticd.service gets: a system service's SELinux domain and environment.
@@ -271,7 +281,12 @@ sec "journalctl -b -p warning"; journalctl -b -p warning --no-pager
 sec "AVC denials"; journalctl -b --no-pager -g 'avc: +denied' | tail -40
 sec "engine log (tail)"; tail -60 /var/log/arctic-install/engine.log
 echo
+if [ -f /run/t/guest-check.py ]; then
+  python3 /run/t/guest-check.py installed
+  echo "ARCTIC-INSTALLED-SMOKE-EXIT=$?"
+fi
 echo ARCTIC-COLLECT-END
+if [ -f /run/t/guest-check.py ]; then sync; systemctl poweroff; fi
 EOF
 chmod 0755 "$DATA/run.sh" "$DATA/collect.sh"
 # The launcher goes into the data CD's system area (its first 32 KiB, which ISO 9660 leaves
@@ -400,7 +415,7 @@ def stage_install():
             vm.type_text("sudo sh /dev/sr0", gap=0.3)
             vm.keys("ret")
             t = time.time()
-            while time.time() - t < 240 and vm.alive():
+            while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
                 if vmtest.serial_has(serial("install"), "ARCTIC-TEST-STARTED"):
                     started = True
                     break
@@ -552,14 +567,14 @@ def stage_boot():
         collected = False
         for attempt in (1, 2, 3):
             open_terminal(vm, f"boot-5{attempt + 1}")
-            vm.type_text("sudo sh /dev/sr0 $$", gap=0.3)
+            vm.type_text("sudo sh /dev/sr0", gap=0.3)
             vm.keys("ret")
             time.sleep(10)
             vm.shot(f"boot-5{attempt + 1}-sudo")
             vm.type_text(password, gap=0.3)
             vm.keys("ret")
             t = time.time()
-            while time.time() - t < 240 and vm.alive():
+            while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
                 if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
                     collected = True
                     break
@@ -587,8 +602,12 @@ def stage_boot():
             ok = False   # the session itself didn't work
         if not collected:
             ok = False
+        if E.get("GUEST_CHECK") and vmtest.serial_value(serial("boot"), "ARCTIC-INSTALLED-SMOKE-EXIT=") != "0":
+            ok = False
         time.sleep(5)
         vm.shot("boot-99-final")
+        if E.get("GUEST_CHECK") and not vm.wait_exit(120):
+            ok = False
         return 0 if ok else 1
     finally:
         vm.quit()
@@ -629,7 +648,7 @@ arctic_log "install test ($FIRMWARE, stage $STAGE, profile $(basename "$PROFILE"
 rc=0
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
-  -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
+  -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" \
