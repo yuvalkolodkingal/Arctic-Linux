@@ -23,22 +23,84 @@ PanelWindow {
 
     readonly property bool vertical: Session.barVertical
     anchors { top: bar.vertical || Session.barPosition === "top"; bottom: bar.vertical || Session.barPosition === "bottom"; left: !bar.vertical || Session.barPosition === "left"; right: !bar.vertical || Session.barPosition === "right" }
+    // Keep the layer surface's geometry stable. Only the exposed strip accepts input;
+    // at rest the transparent 3px screen-edge strip remains a reliable reveal target.
     property bool revealed: false
-    readonly property bool expanded: !Session.barAutoHide || revealed || focusMode || menuHere
-    implicitHeight: vertical ? 0 : expanded ? Theme.barHeight : 2
-    implicitWidth: vertical ? (expanded ? Theme.barHeight : 2) : 0
+    property bool pointerOver: false
+    readonly property bool popupHere: shell && shell.barPopovers
+        ? shell.barPopovers.some(p => p.open && p.screen === bar.screen) : menuHere
+    readonly property bool heldOpen: pointerOver || press.active || focusMode || popupHere
+    readonly property bool expanded: !Session.barAutoHide || revealed || heldOpen
+    property real reveal: expanded ? 1 : 0
+    readonly property int exposed: Math.max(3, Math.ceil(Theme.barHeight * reveal))
+    implicitHeight: vertical ? 0 : Theme.barHeight
+    implicitWidth: vertical ? Theme.barHeight : 0
     contentItem.clip: true
-    contentItem.opacity: expanded ? 1 : 0
+    color: 'transparent'
+    mask: Region {
+        x: bar.vertical && Session.barPosition === 'right' ? bar.width - bar.exposed : 0
+        y: !bar.vertical && Session.barPosition === 'bottom' ? bar.height - bar.exposed : 0
+        width: bar.vertical ? bar.exposed : bar.width
+        height: bar.vertical ? bar.height : bar.exposed
+    }
+    Behavior on reveal {
+        NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard }
+    }
+    function updateReveal() {
+        if (heldOpen) { revealed = true; conceal.stop(); }
+        else if (Session.barAutoHide) conceal.restart();
+    }
+    function resetReveal() {
+        tipPopup.dismiss();
+        pointerOver = false;
+        updateReveal();
+    }
     HoverHandler {
         id: revealHover
-        onHoveredChanged: {
-            if (hovered) { bar.revealed = true; conceal.stop(); }
-            else conceal.restart();
+        onHoveredChanged: { bar.pointerOver = hovered; bar.updateReveal(); }
+        onPointChanged: { bar.pointerOver = hovered; bar.updateReveal(); }
+    }
+    // Observe presses before Flickable/MouseArea accept them, without taking their exclusive
+    // grab. On release outside, clear the stale hover Qt can retain until another mouse move.
+    Item {
+        anchors.fill: parent
+        z: 100
+        PointHandler {
+            id: press
+            acceptedButtons: Qt.AllButtons
+            onActiveChanged: {
+                if (!active) bar.pointerOver = point.position.x >= 0 && point.position.x < bar.width
+                    && point.position.y >= 0 && point.position.y < bar.height;
+                bar.updateReveal();
+            }
         }
     }
-    Timer { id: conceal; interval: 600; onTriggered: if (!revealHover.hovered && !bar.focusMode && !bar.menuHere) bar.revealed = false }
-    color: expanded ? Theme.frost : "transparent"
-    exclusionMode: ExclusionMode.Normal
+    Timer {
+        id: conceal
+        interval: 700
+        onTriggered: if (!bar.heldOpen) { tipPopup.dismiss(); bar.revealed = false; }
+    }
+    onHeldOpenChanged: updateReveal()
+    onPopupHereChanged: {
+        if (popupHere) tipPopup.dismiss();
+        else if (focusMode) { barKeys.forceActiveFocus(); idle.restart(); }
+    }
+    Connections {
+        target: Session
+        function onBarPositionChanged() { bar.resetReveal(); }
+        function onBarAutoHideChanged() { bar.resetReveal(); }
+    }
+    onScreenChanged: resetReveal()
+    // With no reserved zone, Normal placement would inset the trigger behind the frame's
+    // reserved bands. Ignore other exclusive zones so auto-hide reaches the physical edge.
+    Binding {
+        target: bar
+        property: 'exclusionMode'
+        // exclusiveZone's setter also sets Normal. Apply the mode after that setter, on
+        // both preference and zone changes, so the physical edge stays reachable.
+        delayed: true
+        value: bar.exclusiveZone >= 0 && Session.barAutoHide ? ExclusionMode.Ignore : ExclusionMode.Normal
+    }
     // Reserve the frame's top band too, so tiled windows keep Mango's gap from the frame.
     exclusiveZone: Session.barAutoHide ? 0 : Theme.barHeight + Theme.frameWidth
     WlrLayershell.layer: WlrLayer.Top
@@ -48,7 +110,7 @@ PanelWindow {
     readonly property var menuHost: bar.shell ? bar.shell.barMenu : null
     readonly property bool menuHere: menuHost !== null && menuHost.open && menuHost.screen === bar.screen
     function menuOpen(name) { return menuHere && menuHost.panel === name; }
-    function hint(item, text) { if (!menuHere) tipPopup.request(item, text); }
+    function hint(item, text) { if (!popupHere) tipPopup.request(item, text); }
 
     // ---- keyboard mode (Super + Alt + B): Left/Right across the items, Enter opens --------
     // The bar takes the keyboard (Top layer); a menu it opens (Overlay) takes it while open and
@@ -82,13 +144,13 @@ PanelWindow {
     }
     function leaveFocusMode() {
         focusMode = false;
-        if (!revealHover.hovered) conceal.restart();
+        updateReveal();
         moveFocus(null);
         idle.stop();
     }
     function toggleFocusMode() { if (focusMode) leaveFocusMode(); else enterFocusMode(); }
     Timer { id: idle; interval: 10000; onTriggered: if (!bar.menuHere) bar.leaveFocusMode() }
-    onVisibleChanged: if (!visible && focusMode) leaveFocusMode()
+    onVisibleChanged: { if (!visible && focusMode) leaveFocusMode(); if (!visible) { conceal.stop(); pointerOver = false; revealed = false; tipPopup.dismiss(); } }
     onMenuHereChanged: {
         if (!menuHere && !revealHover.hovered) conceal.restart();
         if (menuHere) tipPopup.dismiss();
@@ -155,12 +217,23 @@ PanelWindow {
             .sort((a, b) => anchorFor(a) - anchorFor(b));
     }
 
+    // All visual content travels together toward the configured edge. The window itself
+    // does not move or resize, so changing the input region cannot lose the edge trigger.
+    Item {
+        id: slide
+        width: bar.width
+        height: bar.height
+        x: bar.vertical ? (Session.barPosition === 'left' ? -1 : 1) * width * (1 - bar.reveal) : 0
+        y: !bar.vertical ? (Session.barPosition === 'top' ? -1 : 1) * height * (1 - bar.reveal) : 0
+        Rectangle { anchors.fill: parent; color: Theme.frost }
     SystemClock { id: clock; precision: SystemClock.Minutes }
     BarTooltip { id: tipPopup; anchor.window: bar }
 
     Rectangle {
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: 1
+        x: bar.vertical && Session.barPosition === 'left' ? parent.width - 1 : 0
+        y: bar.vertical ? 0 : parent.height - 1
+        width: bar.vertical ? 1 : parent.width
+        height: bar.vertical ? parent.height : 1
         color: Theme.line
     }
 
@@ -435,4 +508,5 @@ PanelWindow {
             onHoverChanged: h => h ? bar.hint(powerItem, tooltip) : bar.unhint(powerItem)
         }
     }
+    } // slide
 }

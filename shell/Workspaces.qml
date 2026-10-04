@@ -10,14 +10,17 @@ import Quickshell.Io
 Grid {
     id: workspaces
     property bool vertical: false
+    property real verticalWidth: 26
+    property real verticalHeight: 22
+    property int labelSize: 12
     columns: vertical ? 1 : Math.max(1, entries.length)
     required property string monitorName
     property var entries: []
     property string error: ''
     readonly property string bridge: Session.scripts + '/workspaces.py'
     spacing: Theme.space1
-    leftPadding: vertical ? Math.max(0, (width - 26) / 2) : Theme.space1
-    rightPadding: vertical ? Math.max(0, (width - 26) / 2) : Theme.space1
+    leftPadding: vertical ? Math.max(0, (width - verticalWidth) / 2) : Theme.space1
+    rightPadding: vertical ? Math.max(0, (width - verticalWidth) / 2) : Theme.space1
     topPadding: vertical ? 0 : 2
     bottomPadding: vertical ? 0 : 2
     height: vertical ? implicitHeight : 26
@@ -69,9 +72,9 @@ Grid {
             readonly property bool barStop: true
             function press() { workspaces.activate(pill.modelData.id); }
             FocusRing { targetRadius: pill.radius; shown: pill.keyboardFocused }
-            width: workspaces.vertical ? 26 : active ? 30 : 22
-            height: 22
-            radius: 11
+            width: workspaces.vertical ? workspaces.verticalWidth : active ? 30 : 22
+            height: workspaces.vertical ? workspaces.verticalHeight : 22
+            radius: height / 2
             color: active ? Theme.accent : hover.containsMouse ? Theme.surfaceSunken : 'transparent'
             border.width: urgent || (occupied && !active) ? 1.5 : (active && !Theme.dark ? 1 : 0)
             border.color: urgent ? Theme.error : active ? Theme.accentEdge : Theme.lineStrong
@@ -82,7 +85,7 @@ Grid {
                 text: pill.modelData.label
                 color: pill.active ? Theme.onAccent : pill.urgent ? Theme.error : pill.occupied ? Theme.ink : Theme.inkMuted
                 font.family: Theme.fontSans
-                font.pixelSize: 12
+                font.pixelSize: workspaces.labelSize
                 font.weight: Font.DemiBold
                 font.features: { 'tnum': 1 }
             }
