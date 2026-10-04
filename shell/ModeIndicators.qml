@@ -14,6 +14,16 @@ GridLayout {
     id: row
     required property var bar
     property bool vertical: false
+    property real controlWidth: 26
+    property real controlHeight: 26
+    property int iconSize: 16
+    component Indicator: BarItem {
+        Layout.alignment: row.vertical ? Qt.AlignHCenter : Qt.AlignVCenter
+        Layout.preferredWidth: row.vertical ? row.controlWidth : -1
+        implicitHeight: row.vertical ? row.controlHeight : 26
+        horizontalPadding: row.vertical ? 2 : Theme.space2
+        iconSize: row.iconSize
+    }
     columns: vertical ? 1 : -1
     rows: vertical ? -1 : 1
     property bool urgentOnly: false
@@ -42,7 +52,7 @@ GridLayout {
 
     Repeater {
         model: row.revealed && !row.urgentOnly ? ToggleRegistry.toggles.filter(t => t.available && t.indicator && !t.indicatorShown && t.kind === 'switch') : []
-        BarItem {
+        Indicator {
             id: other
             required property var modelData
             iconName: !modelData.active && modelData.iconOff !== '' ? modelData.iconOff : modelData.icon
@@ -59,7 +69,7 @@ GridLayout {
             { key: 'camera', icon: 'camera', word: 'Camera', apps: PrivacyService.camera, what: 'Camera in use by ' },
             { key: 'sharing', icon: 'screen-share', word: 'Sharing', apps: PrivacyService.sharing, what: 'Sharing ' }
         ].filter(p => p.apps.length > 0)
-        BarItem {
+        Indicator {
             id: pill
             required property var modelData
             accentFill: false
@@ -75,7 +85,7 @@ GridLayout {
             onHoverChanged: h => h ? row.bar.hint(pill, tooltip) : row.bar.unhint(pill)
         }
     }
-    BarItem {
+    Indicator {
         id: recording
         visible: RecordService.recording
         color: Theme.errorSoft
@@ -90,7 +100,7 @@ GridLayout {
     }
     Repeater {
         model: row.urgentOnly ? [] : ToggleRegistry.toggles.filter(t => t.available && t.indicatorShown)
-        BarItem {
+        Indicator {
             id: mode
             required property var modelData
             iconName: !modelData.active && modelData.iconOff !== '' ? modelData.iconOff : modelData.icon
