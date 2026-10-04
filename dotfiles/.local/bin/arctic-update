@@ -80,6 +80,7 @@ Arctic Linux updates: downloaded in the background, installed the next time you 
   arctic-update auto [on|off|download-only]
                                            show or change automatic updates
   arctic-update metered [skip|allow]       downloads on metered connections
+  arctic-update nix                      update your Arctic Nix profile (no sudo)
   arctic-update flatpak [--notify]         update Flatpak apps now (yours and the system's)
   arctic-update firmware [--json]          firmware updates fwupd offers for this computer
   arctic-update firmware install           install them (in a terminal: fwupdmgr update)
@@ -946,6 +947,7 @@ case $cmd in
   metered)           cmd_metered "$@" ;;
   stage)             cmd_stage ;;
   after-transaction) cmd_after_transaction ;;
+  nix)               exec arctic-nix update "$@" ;;
   flatpak)           cmd_flatpak "$@" ;;
   firmware)          cmd_firmware "$@" ;;
   upgrade)           cmd_upgrade "$@" ;;

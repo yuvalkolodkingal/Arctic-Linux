@@ -43,6 +43,7 @@ FocusScope {
         : tab === 'web' ? webApps : terminalApps, field.text)
     readonly property Item inputItem: field
     signal backRequested()
+    signal openPage(string name)
 
     function back() {
         if (sheet.open) { sheet.close(); return true; }
@@ -113,7 +114,10 @@ FocusScope {
         anchors.fill: parent
         spacing: Theme.space3
 
-        PageHeader { title: 'Remove apps'; onBack: page.backRequested() }
+        PageHeader {
+            title: 'Remove apps'; onBack: page.backRequested()
+            ArcticButton { text: 'Nix packages…'; onClicked: page.openPage('nix') }
+        }
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.space3

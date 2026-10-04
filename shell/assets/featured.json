@@ -1446,6 +1446,48 @@
    }
   },
   {
+   "id": "tor-client",
+   "name": "Tor SOCKS client",
+   "summary": "Optional per-app SOCKS connection. Starts only when you request it.",
+   "category": "security",
+   "tile": "tor-browser",
+   "glyph": "globe",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "tor"
+    ]
+   }
+  },
+  {
+   "id": "tailscale",
+   "name": "Tailscale",
+   "summary": "Private device network. Sign-in and routing remain your choice.",
+   "category": "security",
+   "tile": "tor-browser",
+   "glyph": "globe",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "tailscale"
+    ]
+   }
+  },
+  {
+   "id": "vpn-tools",
+   "name": "OpenVPN support",
+   "summary": "Import provider OpenVPN files. WireGuard already uses NetworkManager.",
+   "category": "security",
+   "tile": "tor-browser",
+   "glyph": "globe",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "NetworkManager-openvpn"
+    ]
+   }
+  },
+  {
    "id": "keepassxc",
    "name": "KeePassXC",
    "summary": "Offline password manager you control.",
@@ -1537,7 +1579,7 @@
   {
    "id": "tor-browser",
    "name": "Tor Browser",
-   "summary": "Browse anonymously over Tor.",
+   "summary": "Browse through Tor. Only Tor Browser traffic uses its connection.",
    "category": "security",
    "tile": "tor-browser",
    "glyph": "eye-off",

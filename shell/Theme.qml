@@ -93,10 +93,13 @@ Singleton {
     readonly property int radiusMd: tokens.radius.radiusMd
     readonly property int radiusLg: tokens.radius.radiusLg
     readonly property int radiusXl: tokens.radius.radiusXl
-    readonly property int barHeight: tokens.size.barHeight
+    readonly property int barHeight: Session.barSize || tokens.size.barHeight
     // Where the shell's surfaces start: under the bar, or at the screen's top edge while the bar
     // is hidden (Super + Shift + Space).
-    readonly property int topInset: Session.barHidden ? 0 : barHeight
+    readonly property int topInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "top" ? 0 : barHeight
+    readonly property int bottomInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "bottom" ? 0 : barHeight
+    readonly property int leftInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "left" ? 0 : barHeight
+    readonly property int rightInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "right" ? 0 : barHeight
     readonly property int controlSm: tokens.size.controlSm
     readonly property int controlMd: tokens.size.controlMd
     readonly property int controlLg: tokens.size.controlLg

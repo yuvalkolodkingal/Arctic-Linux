@@ -367,7 +367,7 @@ Requires:       pipewire-utils
 Recommends:     ddcutil
 # Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
 Recommends:     qrencode
-Recommends:     NetworkManager-openvpn
+# NetworkManager-openvpn is installer opt-in or installed explicitly from Settings.
 # --- stream 6 (launcher, command menu): the launcher finds files with fd and converts units
 # with qalc when they are installed.
 Recommends:     fd-find
@@ -929,6 +929,10 @@ install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
+install -Dpm 0755 packaging/nix/arctic-nix-system %{buildroot}%{_libexecdir}/arctic-nix-system
+install -Dpm 0644 packaging/nix/org.arcticlinux.nix.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
+install -Dpm 0644 packaging/desktop/arctic-nix.sh %{buildroot}%{_sysconfdir}/profile.d/zz-arctic-nix.sh
+install -Dpm 0644 packaging/environment.d/60-arctic-nix.conf %{buildroot}%{_prefix}/lib/environment.d/60-arctic-nix.conf
 # Stream 5 (system): the SSH agent's socket for the session (gcr-ssh-agent), and the root helper
 # Settings uses for the firewall, remote login and snapshots (pkexec, org.arcticlinux.system).
 install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
@@ -1443,6 +1447,10 @@ fi
 %dir %{_sysconfdir}/arctic/mango
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
 %{_sysconfdir}/profile.d/arctic-graphics.sh
+%{_libexecdir}/arctic-nix-system
+%{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
+%{_sysconfdir}/profile.d/zz-arctic-nix.sh
+%{_prefix}/lib/environment.d/60-arctic-nix.conf
 %{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 %{_libexecdir}/arctic/arctic-system-helper
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy

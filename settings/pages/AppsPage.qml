@@ -5,6 +5,7 @@
 // apps" opens the shell's Get apps and Remove apps (arctic-shell-ipc apps install|remove).
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Templates as T
 import ".."
 import "../components"
 
@@ -12,9 +13,11 @@ Page {
     id: page
     title: "Default apps"
     lede: "The apps your keyboard shortcuts open, and the ones links and files open in."
+    property var gaming: ({ gpus: [], packages: [], warnings: [], blocked: "", repositories: false, secure_boot: "unknown" })
     property var roles: []
     property var shellOptions: ({})
     onShown: {
+        Backend.call(["gaming"], r => { if (r.ok) page.gaming = r; }, true);
         Backend.call(["apps"], r => { if (r.ok) page.roles = r.roles; });
         Backend.call(["shell-options"], r => { if (r.ok) page.shellOptions = r; });
     }
@@ -66,7 +69,7 @@ Page {
         SettingRow {
             searchKey: "apps.software"
             title: "Install and remove apps"
-            desc: "Flathub apps, Fedora packages, web apps and terminal apps."
+            desc: "Flathub apps, Fedora packages, Nix packages, web apps and terminal apps."
             resettable: false
             Row {
                 spacing: Theme.space2
@@ -93,6 +96,48 @@ Page {
         lh: 18
         wrapMode: Text.WordWrap
         color: Theme.inkMuted
+    }
+
+    Group {
+        title: "Gaming (optional)"
+        visible: !Backend.live
+        SettingRow {
+            searchKey: "apps.gaming"
+            title: "Steam and Proton"
+            desc: (page.gaming.gpus.length ? page.gaming.gpus.map(g => g.name + " · " + g.driver).join(", ") : "No graphics device detected")
+                + ". Secure Boot: " + page.gaming.secure_boot + ". Steam manages your account, games and Proton downloads."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArButton { text: "Review automatic setup…"; gapColor: Theme.surfaceRaised; onClicked: gamingDialog.open() }
+                ArButton { text: "Driver guide"; gapColor: Theme.surfaceRaised; onClicked: Backend.openUrl("https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Drivers") }
+            }
+        }
+        SettingRow {
+            title: "Additional Proton versions"
+            desc: "Optional ProtonPlus manages community compatibility tools. Steam's built-in Proton remains available."
+            resettable: false
+            ArButton { text: "Get ProtonPlus…"; gapColor: Theme.surfaceRaised; onClicked: Backend.launch(["arctic-shell-ipc", "apps", "search", "flatpak", "com.vysp3r.ProtonPlus"]) }
+        }
+    }
+    ArDialog {
+        id: gamingDialog
+        parent: T.Overlay.overlay
+        title: "Gaming setup for this hardware"
+        body: "Packages: " + page.gaming.packages.join(", ") + ".\n\n" + page.gaming.warnings.join("\n\n")
+            + (page.gaming.blocked ? "\n\n" + page.gaming.blocked : "")
+            + (!page.gaming.repositories ? "\n\nRPM Fusion must be enabled first. Review its repositories and signing keys before proceeding." : "")
+            + "\n\nDNF asks before installing. No Steam account, purchase or Secure Boot enrollment is performed."
+        ArButton {
+            visible: !page.gaming.repositories
+            text: "RPM Fusion setup guide"
+            onClicked: Backend.openUrl("https://rpmfusion.org/Configuration")
+        }
+        ArButton {
+            text: "Install planned packages…"
+            enabled: !page.gaming.blocked && page.gaming.repositories
+            onClicked: Backend.call(["gaming-run", "setup"], r => { if (r.ok) gamingDialog.close(); })
+        }
     }
 
     // The launcher's web search (shell.json "webSearch"): the last row of every search, and

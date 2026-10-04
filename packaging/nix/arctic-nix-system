@@ -1,0 +1,3 @@
+#!/usr/bin/bash
+# Fixed privileged entry point: never load Python or Nix configuration from a caller's home.
+exec /usr/bin/python3 -I /usr/share/arctic/shell/scripts/nix-system.py "$@"

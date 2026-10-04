@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# User-profile frontend; never privileged. Nix itself is updated by DNF.
+set -euo pipefail
+exec python3 "${ARCTIC_SHELL_DIR:-/usr/share/arctic/shell}/scripts/nixlib.py" "$@"

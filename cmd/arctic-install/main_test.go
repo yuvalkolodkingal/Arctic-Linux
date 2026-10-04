@@ -60,8 +60,8 @@ func TestCatalogJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	// drivers + 21 picker sections; 126 visible apps + 5 drivers + 6 system modules.
-	if len(doc.Categories) != 22 || len(doc.Modules) != 137 || doc.Estimate["label"] != "8 apps · 2.1 GB download" {
+	// drivers + 21 picker sections; 129 visible apps + 5 drivers + 6 system modules.
+	if len(doc.Categories) != 22 || len(doc.Modules) != 140 || doc.Estimate["label"] != "8 apps · 2.1 GB download" {
 		t.Fatalf("catalog json: %d categories, %d modules, %v", len(doc.Categories), len(doc.Modules), doc.Estimate)
 	}
 	// Drivers come first (their category leads catalog.toml), then the browsers.

@@ -1000,7 +1000,15 @@ def cmd_binds(paths, _args):
             c['shadowedBy']['sheet'] = words.get(c['shadowedBy']['label'], '')
     shadowed = [dict(label=c['label'], what=c['what'], file=os.path.basename(c['file']), shadowedBy=c['shadowedBy'])
                 for c in binds if 'shadowedBy' in c and not arctic_file(paths, c['file'])]
-    return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed)
+    import builtin_shortcuts
+    try:
+        builtins = builtin_shortcuts.listing(sys.modules[__name__], paths)
+        builtin_error = ''
+    except Failure as exc:
+        builtins = dict(bindings=[], orphaned=[])
+        builtin_error = str(exc)
+    return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed,
+                builtin=builtins['bindings'], orphaned=builtins['orphaned'], builtinError=builtin_error)
 
 
 def cmd_notices(paths, _args):
@@ -1013,6 +1021,18 @@ def cmd_notices(paths, _args):
     except (ValueError, AttributeError):
         shown = set()
     notices = []
+    import builtin_shortcuts
+    try:
+        synced = builtin_shortcuts.command(sys.modules[__name__], paths, ['sync'])
+        if synced['orphaned']:
+            notices.append(dict(id='builtin-orphaned-' + builtin_shortcuts.digest(','.join(synced['orphaned']))[:16],
+                                summary='Some customized shortcuts need review',
+                                body='Packaged actions changed or were removed. Review unmatched remaps in Settings.',
+                                action=['arctic-settings', 'shortcuts'], actionLabel='Review shortcuts'))
+    except Failure as exc:
+        notices.append(dict(id='builtin-sync-' + builtin_shortcuts.digest(str(exc))[:16],
+                            summary='Your shortcut configuration needs review', body=str(exc),
+                            action=['arctic-settings', 'shortcuts'], actionLabel='Review shortcuts'))
     if 'keys-0.3.0' not in shown:
         notices.append(dict(id='keys-0.3.0', summary='Super + B opens your browser',
                             body='It was Super + W before Arctic Linux 0.3. Super + Shift + S takes a screenshot, '
@@ -1033,6 +1053,12 @@ def cmd_notices(paths, _args):
         mine, arctic = paths.mango / 'arctic' / name, paths.share / 'mango' / name
         ident = 'copied-{}-0.3.0'.format(name)
         if ident in shown or mine.is_symlink() or not mine.is_file() or not arctic.is_file():
+            continue
+        try:
+            managed = builtin_shortcuts.state(sys.modules[__name__], paths).get('rendered', {}).get(name)
+        except Failure:
+            managed = None
+        if managed and builtin_shortcuts.digest(read_text(mine) or '') == managed:
             continue
         if read_text(mine) != read_text(arctic):
             notices.append(dict(
@@ -1091,7 +1117,33 @@ def validate_command(command, what='command'):
     return command
 
 
+def cmd_builtin_bind(paths, args):
+    import builtin_shortcuts
+    builtin_shortcuts.command(sys.modules[__name__], paths, args)
+    return cmd_binds(paths, [])
+
+
 def cmd_bind_add(paths, args):
+    return _bind_save(paths, args)
+
+
+def cmd_bind_edit(paths, args):
+    if len(args) != 4 or not args[0].isdigit():
+        raise Failure('usage: bind-edit INDEX MODS KEY COMMAND')
+    return _bind_save(paths, args[1:], int(args[0]))
+
+
+def cmd_bind_reset(paths, args):
+    if args:
+        raise Failure('usage: bind-reset')
+    model = load_settings(paths)
+    model.binds = []
+    result = save_settings(paths, model)
+    result.update(cmd_binds(paths, []))
+    return result
+
+
+def _bind_save(paths, args, index=None):
     if len(args) != 3:
         raise Failure('usage: bind-add MODS KEY COMMAND')
     mods = parse_mods(args[0])
@@ -1115,17 +1167,28 @@ def cmd_bind_add(paths, args):
     parts = command.split(',')
     if len(parts) > 5 or any(p == '' or p == '0' for p in parts[1:]):
         raise Failure('Mango can’t pass that many commas on. Put the command in a script instead.')
+    model = load_settings(paths)
+    if index is not None and not 0 <= index < len(model.binds):
+        raise Failure('That shortcut is already gone. Refresh the page.')
+    old = model.binds[index] if index is not None else None
     combo = combo_id(mods, key)
     for bind in chain_binds(paths):
+        if old and bind['mine'] and bind['args'] == old['command'] and combo_id(bind['mods'], bind['key']) == combo_id(parse_mods(old['mods']), old['key']):
+            continue
         if bind['keymode'] not in ('default', 'common') or 'r' in bind['flags']:
             continue
         if combo_id(bind['mods'], bind['key']) == combo:
             raise Failure('{} already does something: {}. Pick another key.'.format(bind['label'], bind['what']))
-    model = load_settings(paths)
-    for bind in model.binds:
+    for i, bind in enumerate(model.binds):
+        if i == index:
+            continue
         if combo_id(parse_mods(bind['mods']), bind['key']) == combo:
             raise Failure('You already have a shortcut on {}.'.format(combo_label(mods, key)))
-    model.binds.append(dict(mods=mods_text(mods), key=key, command=command))
+    entry = dict(mods=mods_text(mods), key=key, command=command)
+    if index is None:
+        model.binds.append(entry)
+    else:
+        model.binds[index] = entry
     result = save_settings(paths, model)
     result.update(cmd_binds(paths, []))
     return result
@@ -2733,6 +2796,49 @@ def cmd_shell_set(paths, args):
     return dict(ok=True, **{args[0]: data[args[0]]})
 
 
+# ---- optional Steam/graphics setup ------------------------------------------------------------
+
+def cmd_gaming(paths, _args):
+    import gaming_setup
+    return gaming_setup.status(paths)
+
+
+def cmd_gaming_run(paths, args):
+    import gaming_setup
+    if args != ['setup']:
+        raise Failure('usage: gaming-run setup')
+    if is_live(paths):
+        raise Failure('Install Arctic before setting up gaming packages here.')
+    try:
+        argv = gaming_setup.setup_argv(gaming_setup.status(paths))
+    except ValueError as exc:
+        raise Failure(str(exc)) from exc
+    subprocess.Popen(['arctic-open', 'terminal', '--hold', '-e', *argv], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return dict(ok=True, started=True)
+
+
+# ---- optional network packages (never installed or started by a status query) -------------------
+
+def cmd_optional_network(_paths, _args):
+    import optional_network
+    return optional_network.status()
+
+
+def cmd_optional_network_run(paths, args):
+    import optional_network
+    try:
+        argv = optional_network.action(args)
+    except ValueError as exc:
+        raise Failure(str(exc)) from exc
+    if is_live(paths):
+        raise Failure('Install Arctic to disk before setting up optional network services.')
+    subprocess.Popen(['arctic-open', 'terminal', '--hold', '-e', *argv],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    return dict(ok=True, started=True)
+
+
 # ---- saved networks and VPNs (the shell's network.py) --------------------------------------------
 
 def network_script(paths, args):
@@ -3157,6 +3263,10 @@ def _as_bool(value):
 SHELL_OPTIONS = {
     # key: (default, check(value) -> bool[, convert(value) -> what shell.json holds])
     'webSearch': ('duckduckgo', _web_search_ok),
+    'barPosition': ('top', lambda v: v in ('top', 'bottom', 'left', 'right')),
+    'barSize': (32, lambda v: v.isdigit() and 28 <= int(v) <= 56, int),
+    **{key: (default, lambda v: v in ('true', 'false'), _as_bool) for key, default in
+       [('barAutoHide', False), ('barWorkspaces', True), ('barClock', True), ('barMedia', True), ('barTray', True)]},
     # Weather (WeatherService.qml): off until turned on; units; the temperature on the bar.
     'weather': (False, lambda v: v in ('true', 'false'), _as_bool),
     'weatherUnits': ('auto', lambda v: v in ('auto', 'metric', 'imperial')),
@@ -3174,6 +3284,17 @@ def cmd_shell_options(paths, _args):
     out = {key: data.get(key, spec[0]) for key, spec in SHELL_OPTIONS.items()}
     out.update(ok=True, engines=[dict(id=i, name=n) for i, n in WEB_ENGINES])
     return out
+
+
+def cmd_shell_options_reset(paths, args):
+    if not args or any(key not in SHELL_OPTIONS for key in args):
+        raise Failure('Choose the shell options to restore.')
+    data = read_shell_json(paths)
+    for key in args:
+        data.pop(key, None)
+    backup(paths, paths.arctic / 'shell.json')
+    atomic_write(paths.arctic / 'shell.json', json.dumps(data, indent=2) + '\n')
+    return cmd_shell_options(paths, [])
 
 
 def cmd_shell_option_set(paths, args):
@@ -3375,7 +3496,7 @@ def cmd_contrast_set(paths, args):
 
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
-    'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove,
+    'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove, 'builtin-bind': cmd_builtin_bind, 'bind-edit': cmd_bind_edit, 'bind-reset': cmd_bind_reset,
     'notices': cmd_notices, 'clipboard': cmd_clipboard, 'clipboard-set': cmd_clipboard_set,
     'clipboard-clear': cmd_clipboard_clear,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
@@ -3391,6 +3512,8 @@ COMMANDS = {
     'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,
+    'gaming': cmd_gaming, 'gaming-run': cmd_gaming_run,
+    'optional-network': cmd_optional_network, 'optional-network-run': cmd_optional_network_run,
     'network-saved': cmd_network_saved, 'network-forget': cmd_network_forget, 'vpn': cmd_vpn,
     'network-ca-set': cmd_network_ca_set,
     'ensure-source': lambda paths, _a: dict(ok=True, source=ensure_sourced(paths)),
@@ -3409,7 +3532,7 @@ COMMANDS.update({
 
 # Commands that read, change and write back settings.conf (or another file of ours): they run
 # one at a time (settings_lock). display-revert takes the lock itself, after its wait.
-WRITERS = {'set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'startup-add',
+WRITERS = {'builtin-bind', 'notices', 'shell-options-reset','set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'bind-edit', 'bind-reset', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
            'ensure-source', 'shell-set', 'notification-set', 'notification-rule-set'}
 
@@ -3422,7 +3545,7 @@ COMMANDS.update(arctic_system.COMMANDS)
 WRITERS |= arctic_system.WRITERS
 
 # The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
-COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set,
+COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set, 'shell-options-reset': cmd_shell_options_reset,
                  'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
                  'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
                  'weather-place': cmd_weather_place, 'theme-install': cmd_theme_install,
