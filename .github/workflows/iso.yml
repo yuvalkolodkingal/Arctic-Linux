@@ -72,12 +72,15 @@ jobs:
           cat out/BUILD-INFO
 
       - name: Build ISO
-        run: tools/build-iso.sh --work /mnt/arctic/kiwi-work
+        # A live desktop must include a browser. Keep Zen even above 2 GiB;
+        # the release step already splits large images when necessary.
+        run: tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes
 
       - name: Size and split
         id: size
         run: |
           cd out/iso
+          sha256sum --check "$ISO.sha256"
           size=$(stat -c %s "$ISO")
           echo "ISO size: $size bytes ($((size / 1024 / 1024)) MiB)"
           echo "bytes=$size" >> "$GITHUB_OUTPUT"
@@ -101,6 +104,17 @@ jobs:
             out/iso/*.build-info
             out/BUILD-INFO
           compression-level: 0
+          retention-days: 14
+
+      - name: Upload image metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: arctic-iso-metadata
+          path: |
+            out/BUILD-INFO
+            out/iso/*.sha256
+            out/iso/*.build-info
+            out/iso/*.packages
           retention-days: 14
 
       - name: Boot test in QEMU (UEFI, Try mode)
