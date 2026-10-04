@@ -446,6 +446,53 @@ Page {
         }
     }
 
+    Group {
+        title: "Taskbar"
+        desc: "Per-user settings apply immediately. Super + Alt + B focuses the bar; Super + Shift + Space brings back a manually hidden bar."
+        SettingRow {
+            searchKey: "appearance.taskbar"
+            title: "Position"
+            desc: "The bar and its menus follow this screen edge."
+            resettable: false
+            ArSelect {
+                width: 180
+                model: [{ value: "top", label: "Top" }, { value: "bottom", label: "Bottom" }]
+                value: page.shellOptions.barPosition || "top"
+                onActivated: v => page.setShellOption("barPosition", v, "")
+            }
+        }
+        SettingRow {
+            title: "Bar height"
+            resettable: false
+            ArSelect {
+                width: 180
+                model: [{ value: "28", label: "Compact (28 px)" }, { value: "32", label: "Default (32 px)" }, { value: "40", label: "Comfortable (40 px)" }, { value: "48", label: "Large (48 px)" }]
+                value: String(page.shellOptions.barSize || 32)
+                onActivated: v => page.setShellOption("barSize", v, "")
+            }
+        }
+        SettingRow {
+            title: "Hide automatically"
+            desc: "Point at the edge or use the bar keyboard shortcut to reveal it. Disabled on the live installer."
+            resettable: false
+            RowSwitch { checked: page.shellOptions.barAutoHide === true; onToggled: page.setShellOption("barAutoHide", checked, "") }
+        }
+        Repeater {
+            model: [{ key: "barWorkspaces", label: "Workspaces" }, { key: "barClock", label: "Clock" }, { key: "barMedia", label: "Media title" }, { key: "barTray", label: "Tray icons" }]
+            SettingRow {
+                id: widgetRow
+                required property var modelData
+                title: modelData.label
+                resettable: false
+                RowSwitch { checked: page.shellOptions[widgetRow.modelData.key] !== false; onToggled: page.setShellOption(widgetRow.modelData.key, checked, "") }
+            }
+        }
+        ArButton {
+            text: "Reset taskbar defaults"
+            onClicked: Backend.call(["shell-options-reset", "barPosition", "barSize", "barAutoHide", "barWorkspaces", "barClock", "barMedia", "barTray"], r => { if (r.ok) page.shellOptions = r; })
+        }
+    }
+
     // Weather in the calendar (WeatherService.qml, scripts/weather.py): off until turned on.
     Group {
         title: "Weather"

@@ -75,3 +75,26 @@ Estimate after scope expansion: several additional hours for implementation and
 CI/GUI checks; hardware and enforcing-SELinux VM qualification is separately
 constrained by available execution environments. Record results, not estimates,
 in VALIDATION.md.
+
+## Implemented review scope
+
+- Personal shortcut edit/reset preserves packaged defaults and unrelated bindings;
+  this does not remap every built-in compositor shortcut. Taskbar supports top or
+  bottom (not vertical sidebars), size, auto-hide and workspace/clock/media/tray
+  visibility. Reset preserves unrelated JSON keys. Existing appearance controls
+  remain the source of truth.
+- Tor, Tailscale and NetworkManager OpenVPN are optional catalog selections.
+  Settings detects available services and offers explicit terminal transactions.
+  Presets prevent newly installed services from auto-starting at boot. Existing
+  service configuration is retained. Tor's bootstrap percentage is shown only
+  from the current default service invocation; alternate instances show unknown.
+  Local SOCKS detection never asserts Tor identity or anonymous connectivity.
+  WireGuard continues through existing NetworkManager import/connection controls.
+- Gaming setup reuses catalog NVIDIA detection and offers Steam, 32/64-bit Vulkan
+  and matching graphics packages. Existing RPM Fusion configuration is required;
+  the UI links its setup guide when absent. It does not silently trust repository
+  keys, enroll Secure Boot keys or change an existing driver generation. Steam
+  performs account login and Proton downloads.
+
+These are implemented behaviors, not claims of installed-machine or hardware
+qualification. See [VALIDATION.md](VALIDATION.md) for the remaining merge gates.

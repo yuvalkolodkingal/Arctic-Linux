@@ -45,3 +45,9 @@ enable tuned-ppd.service
 # with `sudo systemctl enable --now sshd`.
 disable sshd.service
 disable sshd.socket
+
+# Optional networking: installation alone does not enroll or connect this machine.
+disable tor.service
+disable tor-master.service
+disable tor@*.service
+disable tailscaled.service

@@ -818,11 +818,14 @@ var APPS = {
   "summary": "Free, no-logs VPN from Proton.",
   "default": false
  },
+ "tor-client": { "name": "Tor SOCKS client", "glyph": "globe", "category": "security", "default": false },
+ "tailscale": { "name": "Tailscale", "glyph": "globe", "category": "security", "default": false },
+ "vpn-tools": { "name": "OpenVPN support", "glyph": "globe", "category": "security", "default": false },
  "tor-browser": {
   "name": "Tor Browser",
   "category": "security",
   "glyph": "eye-off",
-  "summary": "Browse anonymously over Tor.",
+  "summary": "Browse through Tor. Only Tor Browser traffic uses its connection.",
   "default": false
  },
  "qbittorrent": {

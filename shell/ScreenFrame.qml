@@ -22,6 +22,7 @@ Scope {
         visible: Theme.frameWidth > 0
         anchors { top: true; bottom: true; left: true; right: true }
         margins.top: Theme.topInset
+        margins.bottom: Theme.bottomInset
         color: 'transparent'
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Bottom
@@ -87,9 +88,10 @@ Scope {
     }
     Reserve { anchors { left: true; top: true; bottom: true } }
     Reserve { anchors { right: true; top: true; bottom: true } }
-    Reserve { anchors { bottom: true; left: true; right: true } }
+    Reserve { anchors { bottom: true; left: true; right: true }
+        visible: Theme.frameWidth > 0 && Theme.bottomInset === 0 }
     Reserve {
         anchors { top: true; left: true; right: true }
-        visible: Theme.frameWidth > 0 && Session.barHidden
+        visible: Theme.frameWidth > 0 && Theme.topInset === 0
     }
 }

@@ -18,6 +18,7 @@ Rectangle {
     property string state_: 'install'              // install | installed | waiting | running | failed | removable | locked | busy
     property var percent: null
     property bool selected: false
+    property string busyText: 'Removing…'
     property string actionText: 'Install'
     property string reason: ''                     // locked rows: why
     property bool canOpen: true                    // installed rows: it has a launcher entry
@@ -113,7 +114,7 @@ Rectangle {
                 }
             }
             Text {
-                text: row.state_ === 'busy' ? 'Removing…' : row.percent !== null && row.percent !== undefined ? row.percent + '%' : 'Starting…'
+                text: row.state_ === 'busy' ? row.busyText : row.percent !== null && row.percent !== undefined ? row.percent + '%' : 'Starting…'
                 color: Theme.inkMuted
                 font.family: Theme.fontSans
                 font.pixelSize: 12

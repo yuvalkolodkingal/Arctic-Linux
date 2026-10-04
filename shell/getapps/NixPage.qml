@@ -57,8 +57,8 @@ FocusScope {
         pending = { kind: kind, item: item };
         confirm.show();
     }
-    function reopen(text, tab) { field.text = text || ''; view = 'search'; field.forceActiveFocus(); }
-    Component.onCompleted: { field.text = initialQuery; refresh(); }
+    function reopen(text, tab) { field.text = text || ''; view = 'search'; field.forceActiveFocus(); if (field.text.trim().length >= 2) search(); }
+    Component.onCompleted: { field.text = initialQuery; refresh(); if (initialQuery.trim().length >= 2) Qt.callLater(search); }
     Connections {
         target: AppsService
         function onJobFinished(job) {
@@ -125,6 +125,7 @@ FocusScope {
                 summary: page.view === 'installed' ? modelData.summary : 'Nix · ' + modelData.version + ' · ' + modelData.summary
                 state_: AppsService.busy ? 'busy' : page.view === 'installed' ? 'removable'
                         : page.installedAttrs[modelData.id] ? 'installed' : 'install'
+                busyText: 'Working…'
                 canOpen: false
                 actionText: page.view === 'installed' ? 'Remove…' : 'Install…'
                 enabled: !page.live

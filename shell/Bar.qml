@@ -21,12 +21,24 @@ PanelWindow {
     screen: modelData
     visible: !Session.barHidden
 
-    anchors { top: true; left: true; right: true }
-    implicitHeight: Theme.barHeight
-    color: Theme.frost
+    anchors { top: Session.barPosition === "top"; bottom: Session.barPosition === "bottom"; left: true; right: true }
+    property bool revealed: false
+    readonly property bool expanded: !Session.barAutoHide || revealed || focusMode || menuHere
+    implicitHeight: expanded ? Theme.barHeight : 2
+    contentItem.clip: true
+    contentItem.opacity: expanded ? 1 : 0
+    HoverHandler {
+        id: revealHover
+        onHoveredChanged: {
+            if (hovered) { bar.revealed = true; conceal.stop(); }
+            else conceal.restart();
+        }
+    }
+    Timer { id: conceal; interval: 600; onTriggered: if (!revealHover.hovered && !bar.focusMode && !bar.menuHere) bar.revealed = false }
+    color: expanded ? Theme.frost : "transparent"
     exclusionMode: ExclusionMode.Normal
     // Reserve the frame's top band too, so tiled windows keep Mango's gap from the frame.
-    exclusiveZone: Theme.barHeight + Theme.frameWidth
+    exclusiveZone: Session.barAutoHide ? 0 : Theme.barHeight + Theme.frameWidth
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: 'arctic-bar'
 
@@ -68,6 +80,7 @@ PanelWindow {
     }
     function leaveFocusMode() {
         focusMode = false;
+        if (!revealHover.hovered) conceal.restart();
         moveFocus(null);
         idle.stop();
     }
@@ -75,6 +88,7 @@ PanelWindow {
     Timer { id: idle; interval: 10000; onTriggered: if (!bar.menuHere) bar.leaveFocusMode() }
     onVisibleChanged: if (!visible && focusMode) leaveFocusMode()
     onMenuHereChanged: {
+        if (!menuHere && !revealHover.hovered) conceal.restart();
         if (menuHere) tipPopup.dismiss();
         else if (focusMode) { barKeys.forceActiveFocus(); idle.restart(); }
     }
@@ -163,6 +177,7 @@ PanelWindow {
             onHoverChanged: h => h ? bar.hint(launcherItem, tooltip) : bar.unhint(launcherItem)
         }
         Workspaces {
+            visible: Session.barWorkspaces
             monitorName: bar.screen ? bar.screen.name : ''
             onHovered: (item, text) => bar.hint(item, text)
             onUnhovered: item => bar.unhint(item)
@@ -196,6 +211,7 @@ PanelWindow {
     // ---- centre: clock (tabular figures); click for the calendar ------------------------
     BarItem {
         id: clockItem
+        visible: Session.barClock
         anchors.centerIn: parent
         text: Qt.formatDateTime(clock.date, 'ddd d MMM · hh:mm')
         textWeight: Font.DemiBold
@@ -233,7 +249,7 @@ PanelWindow {
         anchors.left: weatherItem.visible ? weatherItem.right : clockItem.right
         anchors.leftMargin: weatherItem.visible ? Theme.space1 : Theme.space2
         anchors.verticalCenter: parent.verticalCenter
-        visible: MediaService.available && MediaService.title !== ''
+        visible: Session.barMedia && MediaService.available && MediaService.title !== ''
         hasMenu: true
         active: bar.menuOpen('media')
         iconName: MediaService.playing ? 'music' : 'pause'
@@ -336,7 +352,7 @@ PanelWindow {
         Repeater {
             // nm-applet's own icon is folded into the network item below, and blueman's applet
             // (started by "More Bluetooth options…") into the Bluetooth item.
-            model: SystemTray.items.values.filter(i => i.id !== 'nm-applet' && !String(i.id).startsWith('blueman'))
+            model: Session.barTray ? SystemTray.items.values.filter(i => i.id !== 'nm-applet' && !String(i.id).startsWith('blueman')) : []
             BarItem {
                 id: trayItem
                 required property var modelData

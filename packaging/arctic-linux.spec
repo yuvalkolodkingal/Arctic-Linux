@@ -367,7 +367,7 @@ Requires:       pipewire-utils
 Recommends:     ddcutil
 # Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
 Recommends:     qrencode
-Recommends:     NetworkManager-openvpn
+# NetworkManager-openvpn is installer opt-in or installed explicitly from Settings.
 # --- stream 6 (launcher, command menu): the launcher finds files with fd and converts units
 # with qalc when they are installed.
 Recommends:     fd-find

@@ -102,6 +102,11 @@ Page {
                         }
                     }
                     ArButton {
+                        text: "Edit…"
+                        gapColor: Theme.surfaceRaised
+                        onClicked: addDialog.edit(mineRow.modelData)
+                    }
+                    ArButton {
                         variant: "ghost"
                         size: "sm"
                         iconName: "trash"
@@ -124,6 +129,24 @@ Page {
         text: "Add a shortcut"
         iconName: "plus"
         onClicked: addDialog.start()
+    }
+
+    ArButton {
+        visible: page.binds.mine.length > 0
+        text: "Restore default shortcuts…"
+        onClicked: resetDialog.open()
+    }
+    ArDialog {
+        id: resetDialog
+        parent: T.Overlay.overlay
+        title: "Restore default shortcuts?"
+        body: "Remove shortcuts added through Settings. Arctic's built-in recovery keys and hand-written user.conf remain. Settings keeps a backup for Undo."
+        ArButton {
+            text: "Restore defaults"
+            onClicked: Backend.call(["bind-reset"], r => {
+                if (r.ok) { page.binds = r; resetDialog.close(); Backend.refresh(); }
+            })
+        }
     }
 
     Repeater {
@@ -197,7 +220,8 @@ Page {
         id: addDialog
         parent: T.Overlay.overlay
         width: 480
-        title: "Add a shortcut"
+        title: editingIndex < 0 ? "Add a shortcut" : "Edit shortcut"
+        property int editingIndex: -1
         body: "Press the keys, then type the command it runs (or pick an app)."
         property var mods: []
         property string key: ""
@@ -205,6 +229,7 @@ Page {
         property string command: ""
         property string error: ""
         function start() {
+            editingIndex = -1;
             mods = [];
             key = "";
             keyLabel = "";
@@ -214,12 +239,17 @@ Page {
             open();
             capture.forceActiveFocus();
         }
+        function edit(entry) {
+            start(); editingIndex = entry.index;
+            mods = entry.mods === "NONE" ? [] : entry.mods.split("+");
+            key = entry.key; keyLabel = entry.label; commandField.text = entry.command;
+        }
         function save() {
             if (!key) {
                 error = "Press the keys first.";
                 return;
             }
-            Backend.call(["bind-add", mods.length ? mods.join("+") : "NONE", key, command], r => {
+            Backend.call((editingIndex < 0 ? ["bind-add"] : ["bind-edit", String(editingIndex)]).concat([mods.length ? mods.join("+") : "NONE", key, command]), r => {
                 if (r.ok) {
                     page.binds = r;
                     addDialog.close();

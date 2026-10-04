@@ -1,0 +1,16 @@
+id = 'vpn-tools'
+name = 'OpenVPN support'
+summary = 'Import provider OpenVPN files. WireGuard already uses NetworkManager.'
+category = "security"
+tile = "tor-browser"
+icon = "globe"
+default = false
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ['NetworkManager-openvpn']
+download_mb = 15

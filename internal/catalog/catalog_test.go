@@ -57,7 +57,7 @@ func TestDesignTiles(t *testing.T) {
 		obsidian joplin logseq appflowy standard-notes xournalpp planify
 		papers okular zathura foliate calibre pdfarranger
 		steam heroic lutris bottles prism protonplus mangohud gamemode
-		keepassxc bitwarden onepassword proton-pass authenticator protonvpn tor-browser
+		keepassxc bitwarden onepassword proton-pass authenticator protonvpn tor-browser tor-client tailscale vpn-tools
 		qbittorrent transmission syncthing nextcloud localsend
 		git lazygit meld dbeaver bruno
 		podman podman-desktop distrobox gnome-boxes virt-manager waydroid
@@ -326,7 +326,7 @@ func TestNormalize(t *testing.T) {
 func TestPicker(t *testing.T) {
 	c := load(t)
 	p := c.Picker()
-	if len(p.Categories) != 21 || len(p.Modules) != 126 {
+	if len(p.Categories) != 21 || len(p.Modules) != 129 {
 		t.Fatalf("picker has %d categories, %d modules", len(p.Categories), len(p.Modules))
 	}
 	if p.Modules[0].ID != "zen" || p.Modules[0].Source != "Flathub" || p.Categories[0].Rule != "Pick one" {
