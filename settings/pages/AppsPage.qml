@@ -66,7 +66,7 @@ Page {
         SettingRow {
             searchKey: "apps.software"
             title: "Install and remove apps"
-            desc: "Flathub apps, Fedora packages, web apps and terminal apps."
+            desc: "Flathub apps, Fedora packages, Nix packages, web apps and terminal apps."
             resettable: false
             Row {
                 spacing: Theme.space2

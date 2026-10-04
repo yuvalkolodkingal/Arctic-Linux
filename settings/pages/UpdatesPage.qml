@@ -145,6 +145,41 @@ Page {
     }
 
     Group {
+        visible: !Backend.live
+        title: "Nix packages"
+        SettingRow {
+            searchKey: "updates.nix"
+            title: "Your Nix packages"
+            desc: "Update or roll back your own profile in Get apps. Pinned inputs stay pinned. Nix itself updates with Arctic’s system packages."
+            resettable: false
+            ArButton {
+                text: "Manage Nix updates"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.launch(["arctic-shell-ipc", "apps", "open", "nix"])
+            }
+        }
+        SettingRow {
+            searchKey: "updates.nix.shared"
+            title: "Shared installer Nix packages"
+            desc: "Administrator action for installer fallbacks such as lazygit and yazi. Update replaces the installer's pin with the supported Nixpkgs release. Custom shared profiles are left for their administrator."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArButton {
+                    text: "Update shared packages…"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.launch(["arctic-open", "terminal", "--hold", "-e", "pkexec", "/usr/libexec/arctic-nix-system", "update"])
+                }
+                ArButton {
+                    text: "Roll back…"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.launch(["arctic-open", "terminal", "--hold", "-e", "pkexec", "/usr/libexec/arctic-nix-system", "rollback"])
+                }
+            }
+        }
+    }
+
+    Group {
         visible: page.more.available === true && (page.more.flatpak === true || page.more.firmware.available === true)
         title: "Apps and firmware"
         SettingRow {

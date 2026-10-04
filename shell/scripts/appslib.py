@@ -102,6 +102,13 @@ def build_job(job, protected=None, user_remotes=None):
     """The commands a GUI job runs, in order, until one fails. Never a shell; every id is
     checked. `user_remotes`: the remotes of the user installation (None: ask flatpak)."""
     kind, source = job.get('kind'), job.get('source')
+    if source == 'nix':
+        import nixlib
+        ids = job.get('ids') or []
+        if not isinstance(ids, list):
+            raise ValueError('Choose Nix packages from the list.')
+        nixlib.command(kind, ids)  # Validate before handing the job to the PTY.
+        return [['python3', str(HERE / 'nixlib.py'), kind, *ids]]
     if kind == 'install' and source == 'dnf':
         return [[*PKEXEC_DNF, 'install', '-y', *_names(job, NAME, 'package name')]]
     if kind == 'install' and source == 'flatpak':
@@ -169,6 +176,8 @@ def explain(job, code, tail, name=''):
     """The sentence for a job that ended with `code` (0: ''), from the end of its output."""
     if code == 0:
         return ''
+    if (job or {}).get('source') == 'nix':
+        return 'Nix could not complete the change. Show details has its error; refresh the profile before retrying.'
     removing = (job or {}).get('kind') == 'remove'
     label = name or ', '.join((job or {}).get('ids') or []) or 'The app'
     nothing = 'Nothing was removed.' if removing else 'Nothing was installed.'

@@ -13,3 +13,4 @@ PageHeader 1.0 PageHeader.qml
 Check 1.0 Check.qml
 WebAppPage 1.0 WebAppPage.qml
 TerminalAppPage 1.0 TerminalAppPage.qml
+NixPage 1.0 NixPage.qml

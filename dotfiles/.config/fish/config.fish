@@ -1,6 +1,6 @@
 # Arctic Linux — Fish login shell. Keep personal changes in config.local.fish.
 # Path changes also apply to the login shell that starts the desktop.
-fish_add_path --path $HOME/.local/bin $HOME/.nix-profile/bin /nix/var/nix/profiles/default/bin
+fish_add_path --path $HOME/.local/bin $HOME/.local/state/nix/profiles/arctic/bin $HOME/.local/state/nix/profile/bin $HOME/.nix-profile/bin /nix/var/nix/profiles/default/bin
 
 if not set -q EDITOR
     set -gx EDITOR nano
