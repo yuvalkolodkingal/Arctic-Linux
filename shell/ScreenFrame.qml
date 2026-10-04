@@ -23,6 +23,8 @@ Scope {
         anchors { top: true; bottom: true; left: true; right: true }
         margins.top: Theme.topInset
         margins.bottom: Theme.bottomInset
+        margins.left: Theme.leftInset
+        margins.right: Theme.rightInset
         color: 'transparent'
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Bottom
@@ -86,8 +88,10 @@ Scope {
         WlrLayershell.namespace: 'arctic-frame-reserve'
         mask: Region {}
     }
-    Reserve { anchors { left: true; top: true; bottom: true } }
-    Reserve { anchors { right: true; top: true; bottom: true } }
+    Reserve { anchors { left: true; top: true; bottom: true }
+        visible: Theme.frameWidth > 0 && Theme.leftInset === 0 }
+    Reserve { anchors { right: true; top: true; bottom: true }
+        visible: Theme.frameWidth > 0 && Theme.rightInset === 0 }
     Reserve { anchors { bottom: true; left: true; right: true }
         visible: Theme.frameWidth > 0 && Theme.bottomInset === 0 }
     Reserve {

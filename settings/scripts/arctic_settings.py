@@ -1000,7 +1000,15 @@ def cmd_binds(paths, _args):
             c['shadowedBy']['sheet'] = words.get(c['shadowedBy']['label'], '')
     shadowed = [dict(label=c['label'], what=c['what'], file=os.path.basename(c['file']), shadowedBy=c['shadowedBy'])
                 for c in binds if 'shadowedBy' in c and not arctic_file(paths, c['file'])]
-    return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed)
+    import builtin_shortcuts
+    try:
+        builtins = builtin_shortcuts.listing(sys.modules[__name__], paths)
+        builtin_error = ''
+    except Failure as exc:
+        builtins = dict(bindings=[], orphaned=[])
+        builtin_error = str(exc)
+    return dict(ok=True, sheet=sections, all=binds, mine=mine, shadowed=shadowed,
+                builtin=builtins['bindings'], orphaned=builtins['orphaned'], builtinError=builtin_error)
 
 
 def cmd_notices(paths, _args):
@@ -1013,6 +1021,13 @@ def cmd_notices(paths, _args):
     except (ValueError, AttributeError):
         shown = set()
     notices = []
+    import builtin_shortcuts
+    try:
+        builtin_shortcuts.command(sys.modules[__name__], paths, ['sync'])
+    except Failure as exc:
+        notices.append(dict(id='builtin-sync-' + builtin_shortcuts.digest(str(exc))[:16],
+                            summary='Your shortcut configuration needs review', body=str(exc),
+                            action=['arctic-settings', 'shortcuts'], actionLabel='Review shortcuts'))
     if 'keys-0.3.0' not in shown:
         notices.append(dict(id='keys-0.3.0', summary='Super + B opens your browser',
                             body='It was Super + W before Arctic Linux 0.3. Super + Shift + S takes a screenshot, '
@@ -1033,6 +1048,12 @@ def cmd_notices(paths, _args):
         mine, arctic = paths.mango / 'arctic' / name, paths.share / 'mango' / name
         ident = 'copied-{}-0.3.0'.format(name)
         if ident in shown or mine.is_symlink() or not mine.is_file() or not arctic.is_file():
+            continue
+        try:
+            managed = builtin_shortcuts.state(sys.modules[__name__], paths).get('rendered', {}).get(name)
+        except Failure:
+            managed = None
+        if managed and builtin_shortcuts.digest(read_text(mine) or '') == managed:
             continue
         if read_text(mine) != read_text(arctic):
             notices.append(dict(
@@ -1089,6 +1110,12 @@ def validate_command(command, what='command'):
     if any(ord(ch) < 32 for ch in command):
         raise Failure('That {} has control characters in it.'.format(what))
     return command
+
+
+def cmd_builtin_bind(paths, args):
+    import builtin_shortcuts
+    builtin_shortcuts.command(sys.modules[__name__], paths, args)
+    return cmd_binds(paths, [])
 
 
 def cmd_bind_add(paths, args):
@@ -3231,7 +3258,7 @@ def _as_bool(value):
 SHELL_OPTIONS = {
     # key: (default, check(value) -> bool[, convert(value) -> what shell.json holds])
     'webSearch': ('duckduckgo', _web_search_ok),
-    'barPosition': ('top', lambda v: v in ('top', 'bottom')),
+    'barPosition': ('top', lambda v: v in ('top', 'bottom', 'left', 'right')),
     'barSize': (32, lambda v: v.isdigit() and 28 <= int(v) <= 56, int),
     **{key: (default, lambda v: v in ('true', 'false'), _as_bool) for key, default in
        [('barAutoHide', False), ('barWorkspaces', True), ('barClock', True), ('barMedia', True), ('barTray', True)]},
@@ -3464,7 +3491,7 @@ def cmd_contrast_set(paths, args):
 
 COMMANDS = {
     'state': cmd_state, 'set': cmd_set, 'set-cursor': cmd_set_cursor, 'reset': cmd_reset, 'layout': cmd_layout,
-    'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove, 'bind-edit': cmd_bind_edit, 'bind-reset': cmd_bind_reset,
+    'undo': cmd_undo, 'binds': cmd_binds, 'bind-add': cmd_bind_add, 'bind-remove': cmd_bind_remove, 'builtin-bind': cmd_builtin_bind, 'bind-edit': cmd_bind_edit, 'bind-reset': cmd_bind_reset,
     'notices': cmd_notices, 'clipboard': cmd_clipboard, 'clipboard-set': cmd_clipboard_set,
     'clipboard-clear': cmd_clipboard_clear,
     'startup': cmd_startup, 'startup-add': cmd_startup_add, 'startup-remove': cmd_startup_remove,
@@ -3500,7 +3527,7 @@ COMMANDS.update({
 
 # Commands that read, change and write back settings.conf (or another file of ours): they run
 # one at a time (settings_lock). display-revert takes the lock itself, after its wait.
-WRITERS = {'shell-options-reset','set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'bind-edit', 'bind-reset', 'startup-add',
+WRITERS = {'builtin-bind', 'notices', 'shell-options-reset','set', 'set-cursor', 'reset', 'layout', 'undo', 'bind-add', 'bind-remove', 'bind-edit', 'bind-reset', 'startup-add',
            'startup-remove', 'display-try', 'display-keep', 'display-forget', 'app-set', 'idle-set',
            'ensure-source', 'shell-set', 'notification-set', 'notification-rule-set'}
 

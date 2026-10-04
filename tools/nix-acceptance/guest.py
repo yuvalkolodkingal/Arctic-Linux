@@ -134,6 +134,28 @@ def main():
     check('labels', lambda: run(['ls', '-ldZ', '/nix/store', '/nix/var/nix/daemon-socket']))
     before_avc = run(['journalctl', '-b', '--no-pager', '-o', 'cat'])
     prior = json.loads(state_file.read_text()) if state_file.exists() else None
+    settings = prefix + ['python3', '/usr/share/arctic/settings/scripts/arctic_settings.py']
+    def customization():
+        data = json.loads(run(settings + ['binds']))
+        row = next(b for b in data['builtin'] if b['action'] == 'killclient')
+        if prior:
+            must(row['modified'] and row['key'] == 'F9', 'built-in remap survived update and reboot')
+            saved = json.loads(run(settings + ['shell-options']))
+            must(saved['barPosition'] == 'right', 'side taskbar preference survived update and reboot')
+            run(settings + ['builtin-bind', 'reset-all'])
+            must((Path(user.pw_dir)/'.config/mango/arctic/binds.conf').is_symlink(), 'reset restored packaged shortcut link')
+        else:
+            run(settings + ['builtin-bind', 'set', row['id'], 'SUPER+ALT', 'F9'])
+            data = json.loads(run(settings + ['binds']))
+            must(any(b['action'] == 'reload_config' and set(b['mods']) == {'ALT','CTRL','SUPER'} for b in data['all']), 'recovery reload binding retained')
+            for position in ('left', 'bottom', 'top', 'right'):
+                run(settings + ['shell-option-set', 'barPosition', position])
+                time.sleep(1)
+        # The installed compositor parses the complete sourced configuration.
+        parsed = run(prefix + ['mango', '-c', str(Path(user.pw_dir)/'.config/mango/config.conf'), '-p'])
+        must('[ERROR]' not in parsed, parsed[-3000:])
+        return 'native Mango parser, remap/recovery and per-user taskbar persistence checks'
+    check('desktop-customization', customization)
     if prior:
         check('new-boot', lambda: must(prior['boot'] != Path('/proc/sys/kernel/random/boot_id').read_text(), 'new boot ID after update'))
         check('profile-persistence', lambda: must(str(profile.resolve()) == prior['profile'], 'personal generation survived update/reboot'))

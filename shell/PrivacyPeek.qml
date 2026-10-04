@@ -9,8 +9,9 @@ import Quickshell.Wayland
 PanelWindow {
     id: peek
     required property var modelData
+    property var bar: null
     screen: modelData
-    visible: Session.barHidden && indicators.urgent
+    visible: (Session.barHidden || (bar !== null && !bar.expanded)) && indicators.urgent
     anchors { top: true; right: true }
     margins.top: Theme.frameWidth + Theme.space2
     margins.right: Theme.frameWidth + Theme.space2

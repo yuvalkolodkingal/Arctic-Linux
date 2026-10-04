@@ -456,13 +456,13 @@ Page {
             resettable: false
             ArSelect {
                 width: 180
-                model: [{ value: "top", label: "Top" }, { value: "bottom", label: "Bottom" }]
+                model: [{ value: "top", label: "Top" }, { value: "bottom", label: "Bottom" }, { value: "left", label: "Left" }, { value: "right", label: "Right" }]
                 value: page.shellOptions.barPosition || "top"
                 onActivated: v => page.setShellOption("barPosition", v, "")
             }
         }
         SettingRow {
-            title: "Bar height"
+            title: "Bar thickness"
             resettable: false
             ArSelect {
                 width: 180

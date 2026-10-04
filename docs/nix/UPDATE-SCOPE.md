@@ -98,3 +98,27 @@ in VALIDATION.md.
 
 These are implemented behaviors, not claims of installed-machine or hardware
 qualification. See [VALIDATION.md](VALIDATION.md) for the remaining merge gates.
+
+## Four-edge taskbar and packaged shortcut implementation
+
+`VerticalBar.qml` provides upright, scrollable controls on left/right edges.
+`Bar`, `Theme`, `ScreenFrame`, `Popover`, `BarTooltip` and `Toasts` share the edge
+geometry. Privacy and recording indicators stay outside the scrolling controls;
+`PrivacyPeek` also exposes urgent indicators while auto-hide collapses the bar.
+Settings validates four positions and a 28–56 pixel thickness. Keyboard focus
+reveals the bar and scrolls focused controls into view.
+
+`settings/scripts/builtin_shortcuts.py` generates per-user copies of packaged
+`apps.conf`/`binds.conf`, changing keys only. State records stable default IDs
+and generated-file hashes. It rejects conflicting keys, typing-key capture and
+unknown manual edits. Reset restores packaged symlinks. Login synchronization
+rebuilds copies from the current RPM templates; removed/changed actions appear
+as orphaned overrides for review. No system template is edited. While remaps
+exist, Super+Ctrl+Alt+Return opens a terminal, F12 opens shortcut settings and R
+reloads Mango. These recovery combinations cannot be reassigned by this editor.
+
+Tests cover remap/reset, package template updates, conflict and manual-edit
+refusal, and all four bar positions. Headless rendering covers small sidebars,
+auto-hide keyboard reveal and inward menus; installed-VM acceptance additionally
+uses Mango's parser and checks remap/bar persistence after DNF update/reboot.
+Physical key events and multi-monitor pointer geometry remain separate checks.

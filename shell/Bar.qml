@@ -21,10 +21,12 @@ PanelWindow {
     screen: modelData
     visible: !Session.barHidden
 
-    anchors { top: Session.barPosition === "top"; bottom: Session.barPosition === "bottom"; left: true; right: true }
+    readonly property bool vertical: Session.barVertical
+    anchors { top: bar.vertical || Session.barPosition === "top"; bottom: bar.vertical || Session.barPosition === "bottom"; left: !bar.vertical || Session.barPosition === "left"; right: !bar.vertical || Session.barPosition === "right" }
     property bool revealed: false
     readonly property bool expanded: !Session.barAutoHide || revealed || focusMode || menuHere
-    implicitHeight: expanded ? Theme.barHeight : 2
+    implicitHeight: vertical ? 0 : expanded ? Theme.barHeight : 2
+    implicitWidth: vertical ? (expanded ? Theme.barHeight : 2) : 0
     contentItem.clip: true
     contentItem.opacity: expanded ? 1 : 0
     HoverHandler {
@@ -64,12 +66,12 @@ PanelWindow {
             }
         }
         walk(bar.contentItem);
-        return out.sort((a, b) => a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x);
+        return out.sort((a, b) => bar.vertical ? a.mapToItem(null, 0, 0).y - b.mapToItem(null, 0, 0).y : a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x);
     }
     function moveFocus(item) {
         if (focusedStop) focusedStop.keyboardFocused = false;
         focusedStop = item;
-        if (item) item.keyboardFocused = true;
+        if (item) { item.keyboardFocused = true; if (bar.vertical && side.item) side.item.ensureVisible(item); }
     }
     function enterFocusMode() {
         const stops = barStops();
@@ -100,8 +102,8 @@ PanelWindow {
             idle.restart();
             const stops = bar.barStops();
             const at = stops.indexOf(bar.focusedStop);
-            if (event.key === Qt.Key_Right || event.key === Qt.Key_Tab) bar.moveFocus(stops[Math.min(stops.length - 1, at + 1)] || null);
-            else if (event.key === Qt.Key_Left || event.key === Qt.Key_Backtab) bar.moveFocus(stops[Math.max(0, at - 1)] || null);
+            if (event.key === Qt.Key_Right || event.key === Qt.Key_Tab || (bar.vertical && event.key === Qt.Key_Down)) bar.moveFocus(stops[Math.min(stops.length - 1, at + 1)] || null);
+            else if (event.key === Qt.Key_Left || event.key === Qt.Key_Backtab || (bar.vertical && event.key === Qt.Key_Up)) bar.moveFocus(stops[Math.max(0, at - 1)] || null);
             else if (event.key === Qt.Key_Home) bar.moveFocus(stops[0] || null);
             else if (event.key === Qt.Key_End) bar.moveFocus(stops[stops.length - 1] || null);
             else if (event.key === Qt.Key_Escape) bar.leaveFocusMode();
@@ -118,6 +120,7 @@ PanelWindow {
     function unhint(item) { tipPopup.release(item); }
     // Where a panel's menu hangs: the centre x of the visible bar item that owns it, else null.
     function ownerOf(name) {
+        if (bar.vertical && side.item) return side.item.ownerOf(name);
         const owners = {
             network: networkItem,
             bluetooth: bluetoothItem,
@@ -134,7 +137,7 @@ PanelWindow {
     function anchorFor(name) {
         if (!bar.visible) return name in hiddenAnchors ? hiddenAnchors[name] : null;
         const item = ownerOf(name);
-        return item ? item.mapToItem(null, item.width / 2, 0).x : null;
+        return item && item.visible ? (bar.vertical ? item.mapToItem(null, 0, item.height / 2).y : item.mapToItem(null, item.width / 2, 0).x) : null;
     }
     // While the bar is hidden its menus still open by key, where they hung before it went
     // (shell.toggleBar() calls this just before hiding it).
@@ -161,8 +164,11 @@ PanelWindow {
         color: Theme.line
     }
 
+    Loader { id: side; property var hostBar: bar; anchors.fill: parent; active: bar.vertical; sourceComponent: Component { VerticalBar { bar: side.hostBar } } }
+
     // ---- left ---------------------------------------------------------------------------
     RowLayout {
+        visible: !bar.vertical
         anchors.left: parent.left
         anchors.leftMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
@@ -211,7 +217,7 @@ PanelWindow {
     // ---- centre: clock (tabular figures); click for the calendar ------------------------
     BarItem {
         id: clockItem
-        visible: Session.barClock
+        visible: !bar.vertical && Session.barClock
         anchors.centerIn: parent
         text: Qt.formatDateTime(clock.date, 'ddd d MMM · hh:mm')
         textWeight: Font.DemiBold
@@ -223,6 +229,7 @@ PanelWindow {
     }
     // Left of the clock: what records, listens or watches, and the modes that are on.
     ModeIndicators {
+        visible: !bar.vertical
         anchors.right: clockItem.left
         anchors.rightMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
@@ -236,7 +243,7 @@ PanelWindow {
         anchors.left: clockItem.right
         anchors.leftMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
-        visible: WeatherService.showInBar
+        visible: !bar.vertical && WeatherService.showInBar
         hasMenu: true
         tooltip: WeatherService.summary + '  (Super + Ctrl + T)'
         onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
@@ -249,7 +256,7 @@ PanelWindow {
         anchors.left: weatherItem.visible ? weatherItem.right : clockItem.right
         anchors.leftMargin: weatherItem.visible ? Theme.space1 : Theme.space2
         anchors.verticalCenter: parent.verticalCenter
-        visible: Session.barMedia && MediaService.available && MediaService.title !== ''
+        visible: !bar.vertical && Session.barMedia && MediaService.available && MediaService.title !== ''
         hasMenu: true
         active: bar.menuOpen('media')
         iconName: MediaService.playing ? 'music' : 'pause'
@@ -267,6 +274,7 @@ PanelWindow {
 
     // ---- right ----------------------------------------------------------------------------
     RowLayout {
+        visible: !bar.vertical
         anchors.right: parent.right
         anchors.rightMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter

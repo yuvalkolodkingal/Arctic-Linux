@@ -14,7 +14,10 @@ Page {
     title: "Shortcuts"
     lede: "Everything on this desktop has a shortcut. Add your own to open apps or run commands."
 
-    property var binds: ({ sheet: [], all: [], mine: [], shadowed: [] })
+    property var binds: ({ sheet: [], all: [], mine: [], shadowed: [], builtin: [], orphaned: [], builtinError: "" })
+    property bool showBuiltins: false
+    readonly property var builtins: binds.builtin || []
+    readonly property bool hasBuiltinChanges: builtins.some(b => b.modified)
     property string filter: ""
     property bool showAll: false
     readonly property string f: filter.trim().toLowerCase()
@@ -26,7 +29,7 @@ Page {
         return s.label + " is " + (s.sheet || s.what) + " in " + s.file;
     }
     readonly property var shadowed: binds.shadowed || []
-    onShown: Backend.call(["binds"], r => { if (r.ok) page.binds = r; })
+    onShown: Backend.call(["binds"], r => { if (r.ok) { page.binds = r; page.showBuiltins = page.hasBuiltinChanges; } })
 
     // Mango runs only the first bind for a key, and Arctic's files come before yours: when an
     // update gives one of your keys to Arctic, say so rather than let it fail silently.
@@ -149,8 +152,46 @@ Page {
         }
     }
 
+    Group {
+        title: "Built-in shortcuts"
+        desc: "Remap the keys while keeping each action. Recovery keys: Super + Ctrl + Alt + Enter opens a terminal; F12 opens Settings; R reloads Mango. Packaged updates are reapplied at login."
+        ArBanner { width: parent.width; visible: !!page.binds.builtinError; kind: "warning"; text: page.binds.builtinError || "" }
+        ArBanner { width: parent.width; visible: (page.binds.orphaned || []).length > 0; kind: "warning"; text: "Some remapped actions changed in a package update. Their old mappings are retained for review but are not applied. Reset the built-in mappings to clear them." }
+        SettingRow {
+            title: page.builtins.length ? "Packaged actions" : "Packaged shortcut templates unavailable"
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArButton { text: page.showBuiltins ? "Hide" : "Show / edit"; enabled: page.builtins.length > 0; gapColor: Theme.surfaceRaised; onClicked: page.showBuiltins = !page.showBuiltins }
+                ArButton { text: "Restore built-in keys…"; enabled: page.hasBuiltinChanges || (page.binds.orphaned || []).length > 0; gapColor: Theme.surfaceRaised; onClicked: builtinReset.open() }
+            }
+        }
+        Repeater {
+            model: page.showBuiltins ? page.builtins.filter(b => page.matches(b.label, b.what)) : []
+            SettingRow {
+                id: builtinRow
+                required property var modelData
+                title: modelData.what
+                desc: modelData.label + (modelData.modified ? " · Default: " + modelData.originalLabel : "") + (modelData.keymode !== "default" ? " · " + modelData.keymode : "")
+                resettable: false
+                Row {
+                    spacing: Theme.space2
+                    ArButton { text: "Change keys…"; gapColor: Theme.surfaceRaised; onClicked: addDialog.editBuiltin(builtinRow.modelData) }
+                    ArButton { text: "Reset"; visible: builtinRow.modelData.modified; gapColor: Theme.surfaceRaised; onClicked: Backend.call(["builtin-bind", "reset", builtinRow.modelData.id], r => { if (r.ok) page.binds = r; }) }
+                }
+            }
+        }
+    }
+    ArDialog {
+        id: builtinReset
+        parent: T.Overlay.overlay
+        title: "Restore built-in shortcut keys?"
+        body: "Restore the current packaged keys for every built-in action."
+        ArButton { text: "Restore built-in keys"; onClicked: Backend.call(["builtin-bind", "reset-all"], r => { if (r.ok) { page.binds = r; builtinReset.close(); } }) }
+    }
+
     Repeater {
-        model: page.binds.sheet
+        model: page.hasBuiltinChanges ? [] : page.binds.sheet
         Group {
             id: section
             required property var modelData
@@ -220,9 +261,10 @@ Page {
         id: addDialog
         parent: T.Overlay.overlay
         width: 480
-        title: editingIndex < 0 ? "Add a shortcut" : "Edit shortcut"
+        title: builtinId ? "Remap built-in shortcut" : editingIndex < 0 ? "Add a shortcut" : "Edit shortcut"
+        property string builtinId: ""
         property int editingIndex: -1
-        body: "Press the keys, then type the command it runs (or pick an app)."
+        body: builtinId ? "Press the new keys. The packaged action stays the same; recovery shortcuts remain available." : "Press the keys, then type the command it runs (or pick an app)."
         property var mods: []
         property string key: ""
         property string keyLabel: ""
@@ -230,6 +272,7 @@ Page {
         property string error: ""
         function start() {
             editingIndex = -1;
+            builtinId = "";
             mods = [];
             key = "";
             keyLabel = "";
@@ -244,12 +287,17 @@ Page {
             mods = entry.mods === "NONE" ? [] : entry.mods.split("+");
             key = entry.key; keyLabel = entry.label; commandField.text = entry.command;
         }
+        function editBuiltin(entry) {
+            start(); builtinId = entry.id;
+            mods = entry.mods === "NONE" ? [] : entry.mods.split("+");
+            key = entry.key; keyLabel = entry.label;
+        }
         function save() {
             if (!key) {
                 error = "Press the keys first.";
                 return;
             }
-            Backend.call((editingIndex < 0 ? ["bind-add"] : ["bind-edit", String(editingIndex)]).concat([mods.length ? mods.join("+") : "NONE", key, command]), r => {
+            Backend.call(builtinId ? ["builtin-bind", "set", builtinId, mods.length ? mods.join("+") : "NONE", key] : (editingIndex < 0 ? ["bind-add"] : ["bind-edit", String(editingIndex)]).concat([mods.length ? mods.join("+") : "NONE", key, command]), r => {
                 if (r.ok) {
                     page.binds = r;
                     addDialog.close();
@@ -333,6 +381,7 @@ Page {
         }
         ArInput {
             id: commandField
+            visible: !addDialog.builtinId
             width: parent.width
             label: "Command"
             placeholder: "For example: firefox --private-window"
@@ -343,6 +392,7 @@ Page {
             onAccepted: addDialog.save()
         }
         ArButton {
+            visible: !addDialog.builtinId
             text: "Or pick an app to open"
             variant: "ghost"
             iconName: "grid"

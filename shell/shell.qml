@@ -203,7 +203,7 @@ ShellRoot {
     // While the bar is hidden: what records, listens or watches, in the top-right corner.
     Variants {
         model: Quickshell.screens
-        PrivacyPeek {}
+        PrivacyPeek { bar: root.barOn(screen) }
     }
 
     Launcher { id: launcher; shell: root }

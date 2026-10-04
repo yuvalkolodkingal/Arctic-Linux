@@ -10,14 +10,18 @@ import QtQuick.Layouts
 // Resting the pointer on them for a moment shows the other modes too, dimmed, on the far left
 // (so nothing that was there moves); clicking one turns it on.
 // urgentOnly: just the privacy pills and the recording (PrivacyPeek, while the bar is hidden).
-RowLayout {
+GridLayout {
     id: row
     required property var bar
+    property bool vertical: false
+    columns: vertical ? 1 : -1
+    rows: vertical ? -1 : 1
     property bool urgentOnly: false
     property bool revealed: false
     // Something records, listens or watches right now.
     readonly property bool urgent: pills.count > 0 || RecordService.recording
-    spacing: Theme.space1
+    columnSpacing: Theme.space1
+    rowSpacing: Theme.space1
 
     // The recording's length: mm:ss, or h:mm:ss past the hour.
     function elapsedText(seconds) {
@@ -62,7 +66,7 @@ RowLayout {
             color: Theme.warningSoft
             iconName: modelData.icon
             iconColor: Theme.warning
-            text: modelData.word
+            text: row.vertical ? '' : modelData.word
             textColor: Theme.warning
             textWeight: Font.DemiBold
             interactive: modelData.key === 'mic'
@@ -77,10 +81,10 @@ RowLayout {
         color: Theme.errorSoft
         iconName: 'record'
         iconColor: Theme.error
-        text: 'Recording ' + row.elapsedText(RecordService.elapsed)
+        text: row.vertical ? '' : 'Recording ' + row.elapsedText(RecordService.elapsed)
         textColor: Theme.error
         textWeight: Font.DemiBold
-        tooltip: 'Recording · click to stop  (Super + Alt + R)'
+        tooltip: 'Recording ' + row.elapsedText(RecordService.elapsed) + ' · click to stop  (Super + Alt + R)'
         onClicked: RecordService.stop()
         onHoverChanged: h => h ? row.bar.hint(recording, tooltip) : row.bar.unhint(recording)
     }

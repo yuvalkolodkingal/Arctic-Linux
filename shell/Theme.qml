@@ -98,6 +98,8 @@ Singleton {
     // is hidden (Super + Shift + Space).
     readonly property int topInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "top" ? 0 : barHeight
     readonly property int bottomInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "bottom" ? 0 : barHeight
+    readonly property int leftInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "left" ? 0 : barHeight
+    readonly property int rightInset: Session.barHidden || Session.barAutoHide || Session.barPosition !== "right" ? 0 : barHeight
     readonly property int controlSm: tokens.size.controlSm
     readonly property int controlMd: tokens.size.controlMd
     readonly property int controlLg: tokens.size.controlLg

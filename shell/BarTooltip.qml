@@ -31,8 +31,8 @@ PopupWindow {
     anchor.rect.y: 0
     anchor.rect.width: target ? target.width : 1
     anchor.rect.height: target ? target.height + 6 : 1
-    anchor.edges: Session.barPosition === "bottom" ? Edges.Top : Edges.Bottom
-    anchor.gravity: Session.barPosition === "bottom" ? Edges.Top : Edges.Bottom
+    anchor.edges: Session.barPosition === "left" ? Edges.Right : Session.barPosition === "right" ? Edges.Left : Session.barPosition === "bottom" ? Edges.Top : Edges.Bottom
+    anchor.gravity: Session.barPosition === "left" ? Edges.Right : Session.barPosition === "right" ? Edges.Left : Session.barPosition === "bottom" ? Edges.Top : Edges.Bottom
     implicitWidth: label.implicitWidth + 2 * Theme.space2
     implicitHeight: label.implicitHeight + 2 * Theme.space1
     color: 'transparent'

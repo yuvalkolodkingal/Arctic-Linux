@@ -98,3 +98,5 @@ WeatherItem 1.0 WeatherItem.qml
 WifiShare 1.0 WifiShare.qml
 WhatsNew 1.0 WhatsNew.qml
 Workspaces 1.0 Workspaces.qml
+
+VerticalBar 1.0 VerticalBar.qml

@@ -38,7 +38,8 @@ Singleton {
     // so a restart of the shell or a new login brings it back. Never on the live USB, whose bar
     // holds the Install item.
     property bool barHidden: false
-    readonly property string barPosition: settings.barPosition === 'bottom' ? 'bottom' : 'top'
+    readonly property string barPosition: ['top', 'bottom', 'left', 'right'].includes(settings.barPosition) ? settings.barPosition : 'top'
+    readonly property bool barVertical: barPosition === 'left' || barPosition === 'right'
     readonly property int barSize: Number.isInteger(settings.barSize) && settings.barSize >= 28 && settings.barSize <= 56 ? settings.barSize : 0
     readonly property bool barAutoHide: !live && settings.barAutoHide === true
     readonly property bool barWorkspaces: settings.barWorkspaces !== false
