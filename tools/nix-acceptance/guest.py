@@ -191,13 +191,13 @@ ShellRoot {
         for _ in range(20):
             try:
                 last = run(prefix + probe_cmd + [method])
-                if last == expected:
+                if last == expected or (expected is None and last in ('true', 'false')):
                     return f'{method}={last}'
             except RuntimeError as exc:
                 last = str(exc)
             time.sleep(1)
         raise RuntimeError(f'{method}: expected {expected}, got {last}')
-    check('desktop-before-install', lambda: run(prefix + probe_cmd + ['seen']))  # Foot may already exist as an RPM.
+    check('desktop-before-install', lambda: probe_wait('seen', None))  # Foot may already exist as an RPM.
     check('search', lambda: must(bool(json.loads(run(nix + ['search', 'hello'], timeout=600))), 'real Nix search returned JSON'))
     check('install', lambda: run(nix + ['install', 'hello', 'foot'], timeout=1200))
     check('desktop-after-install', lambda: probe_wait('seen', 'true'))
