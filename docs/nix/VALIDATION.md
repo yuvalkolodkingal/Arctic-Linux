@@ -85,3 +85,31 @@ The VM probe now checks real desktop-entry/icon discovery and verifies that the
 launched Foot process comes from /nix/store, so an already-installed Fedora Foot
 cannot accidentally satisfy the Nix launch check. These new probes are pending
 the next exact-head acceptance run.
+
+## First enforcing installed-VM result
+
+[Run 37186553993](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37186553993)
+built and installed head `5938f6e` under QEMU/KVM with SELinux Enforcing.
+Live mutation refusal, installed daemon, encrypted persistent `/nix` mount,
+root ownership, actual search/install/CLI execution, desktop-entry/icon discovery,
+login PATH/XDG directories, two-user isolation, update/remove/rollback and retained
+trust settings passed. No matching new Nix/Foot AVC was found in that test window.
+The reported store label was `default_t`; merely recording labels is not proof of
+upstream SELinux support or confinement for every application.
+
+The run failed its graphical window checks because the probe omitted
+`MANGO_INSTANCE_SIGNATURE`; it did not reach DNF upgrade/reboot. An earlier probe
+startup race also failed before IPC was ready. These are harness failures, not
+passing graphics or update evidence. The corrected probe waits for readiness and
+obtains the instance signature from matching session children (Mango sets it after
+exec, so its original `/proc` environment lacks it). A regression checks missing,
+matching and ambiguous session environments. The next exact-head run must still
+pass the actual window and update/reboot assertions.
+
+Four-edge/taskbar and packaged-key remapping tests: Settings 209 tests (1 skipped),
+shell 287 (5 skipped); six customization tests also passed with native Mango
+0.17.3 parsing in Fedora. All Settings pages, three-display arrangement and
+valid/invalid writes passed headless smoke. Sidebars were rendered at 800×480,
+including keyboard auto-hide reveal and an urgent recording fixture remaining
+visible while collapsed. No actual recording was performed. All 26 CI checks,
+including Fedora RPM builds, passed at `6407623` before the probe correction.

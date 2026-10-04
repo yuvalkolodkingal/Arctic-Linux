@@ -6,7 +6,7 @@ published by the acceptance run.
 
 | Area | Implemented | Evidence so far | Pending / guard |
 |---|---|---|---|
-| Nix software | Distinct source; search/install/remove/update/rollback; per-user profile; fixed administrative shared fallback update; Fedora owns engine | Native Fedora daemon/two users; real transactions; GUI search; unit and RPM CI | Enforcing installed VM, launcher/session, actual engine version upgrade; acceptance workflow added |
+| Nix software | Distinct source; search/install/remove/update/rollback; per-user profile; fixed administrative shared fallback update; Fedora owns engine | Enforcing KVM fresh install, live guard, daemon/store/session, two-user transactions and desktop/icon discovery; unit and RPM CI | Window mapping and update/reboot require rerun after probe environment fix; actual newer engine version upgrade pending |
 | Shortcuts | Add/edit/remove/reset personal commands and remap packaged actions; conflict/manual-edit guards; protected recovery keys; template synchronization | 209 Settings tests (1 skipped), remap/reset/conflict/package-update tests and all-page smoke | Native Mango parser/reboot probe added; physical key presses pending |
 | Taskbar | All four edges, thickness, auto-hide, workspace/clock/media/tray visibility, scoped reset | Headless all four edges, inward menus, 800×480 sidebars and keyboard auto-hide reveal; persistence tests | Real Mango pointer/multi-monitor/scale testing pending; auto-hide disabled live |
 | Appearance | Existing themes, fonts, wallpaper and window border/gap settings retained | Existing test suites | No new theme renderer or unrelated redesign; hardware/session persistence qualification pending |
