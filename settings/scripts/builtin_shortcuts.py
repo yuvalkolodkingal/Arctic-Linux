@@ -60,6 +60,13 @@ def defaults(api, paths):
             rows.append(dict(id=ident, name=name, line=index, kind=kind, flags=kind[4:], keymode=mode,
                              mods=api.mods_text(mods), key=parts[1], action=parts[2], args=','.join(parts[3:]),
                              label=api.combo_label(mods, parts[1]), what=','.join(parts[3:]) if parts[2] in ('spawn', 'spawn_shell') else api.DISPATCHERS.get(parts[2], parts[2]) + (' ' + ','.join(parts[3:]) if parts[3:] else '')))
+    # A changed default key must not discard a remap of the same action. For
+    # ambiguous duplicate actions retain the original-key identity and require
+    # explicit review if those defaults change; never guess which one was meant.
+    identities = ['|'.join((r['name'], r['keymode'], r['kind'], r['action'], r['args'])) for r in rows]
+    for row, identity in zip(rows, identities):
+        if identities.count(identity) == 1:
+            row['id'] = digest(identity)[:24]
     return texts, rows
 
 

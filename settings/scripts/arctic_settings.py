@@ -1023,7 +1023,12 @@ def cmd_notices(paths, _args):
     notices = []
     import builtin_shortcuts
     try:
-        builtin_shortcuts.command(sys.modules[__name__], paths, ['sync'])
+        synced = builtin_shortcuts.command(sys.modules[__name__], paths, ['sync'])
+        if synced['orphaned']:
+            notices.append(dict(id='builtin-orphaned-' + builtin_shortcuts.digest(','.join(synced['orphaned']))[:16],
+                                summary='Some customized shortcuts need review',
+                                body='Packaged actions changed or were removed. Review unmatched remaps in Settings.',
+                                action=['arctic-settings', 'shortcuts'], actionLabel='Review shortcuts'))
     except Failure as exc:
         notices.append(dict(id='builtin-sync-' + builtin_shortcuts.digest(str(exc))[:16],
                             summary='Your shortcut configuration needs review', body=str(exc),

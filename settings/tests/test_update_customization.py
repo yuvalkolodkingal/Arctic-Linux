@@ -75,11 +75,12 @@ class BuiltinCustomizationTests(Home):
         row=self.entry('killclient')
         self.helper('builtin-bind','set',row['id'],'SUPER+ALT','F9')
         template=self.share/'mango/binds.conf'
-        template.write_text(template.read_text()+'\n# new package comment\nbind=SUPER+ALT,F10,spawn,true\n')
+        template.write_text(template.read_text().replace('bind=SUPER,q,killclient', 'bind=SUPER+ALT,q,killclient')+'\n# new package comment\nbind=SUPER+ALT,F10,spawn,true\n')
         self.helper('builtin-bind','sync')
         target=self.home/'.config/mango/arctic/binds.conf'
         self.assertIn('new package comment',target.read_text())
         self.assertEqual(self.entry('killclient')['key'],'F9')
+        self.assertNotEqual(self.entry('killclient')['originalLabel'],row['originalLabel'])
         target.write_text(target.read_text()+'\n# manual change\n')
         self.helper('builtin-bind','reset-all',ok=False)
         self.assertIn('manual change',target.read_text())
@@ -90,3 +91,12 @@ class BuiltinCustomizationTests(Home):
         self.helper('bind-add','SUPER+CTRL+ALT','F12','true')
         self.helper('builtin-bind','set',row['id'],'SUPER+ALT','F9',ok=False)
         self.assertTrue((self.home/'.config/mango/arctic/binds.conf').is_symlink())
+
+    def test_removed_action_is_reported_for_review_at_login(self):
+        row=self.entry('killclient')
+        self.helper('builtin-bind','set',row['id'],'SUPER+ALT','F9')
+        template=self.share/'mango/binds.conf'
+        template.write_text('\n'.join(line for line in template.read_text().splitlines() if ',killclient' not in line)+'\n')
+        notices=self.helper('notices')
+        self.assertTrue(any(n['id'].startswith('builtin-orphaned-') for n in notices['notices']))
+        self.assertIn(row['id'],self.helper('binds')['orphaned'])
