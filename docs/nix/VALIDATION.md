@@ -1,6 +1,9 @@
-# Validation record (in progress)
+# Validation record
 
-No merge or OS release has been performed. This is a draft implementation.
+The final production-code candidate `602f2a0` passed all 26 CI checks and
+[enforcing KVM acceptance](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37189777884).
+No OS release or physical-machine change was performed. Earlier checkpoints below
+are retained as history; the final qualification section defines the current boundary.
 
 Tested locally on 2026-10-04:
 
@@ -35,7 +38,7 @@ CA bundle. The existing workspace bundle was copied into the disposable containe
 and supplied explicitly; TLS verification and RPM signature checks stayed enabled.
 No host trust/security setting was changed.
 
-Outstanding material merge gates:
+Outstanding gates at the initial container-only checkpoint:
 
 - Real enforcing-SELinux installed-system VM, fresh install/reboot, relabel,
   daemon/mount failure behavior, unsigned-cache rejection and actual build
@@ -67,8 +70,8 @@ Outstanding material merge gates:
   network connections and real GPU/Proton/games remain unqualified.
 
 The final PR checks and RPM build are recorded on GitHub for the exact head.
-Passing them does not waive the enforcing-SELinux VM and native desktop/hardware
-merge gates above.
+At this checkpoint the native VM gate was still pending. Later results below
+qualify representative Nix/desktop behavior, not hardware compatibility.
 
 ## Launcher refresh regression found during VM qualification
 
@@ -113,3 +116,56 @@ valid/invalid writes passed headless smoke. Sidebars were rendered at 800×480,
 including keyboard auto-hide reveal and an urgent recording fixture remaining
 visible while collapsed. No actual recording was performed. All 26 CI checks,
 including Fedora RPM builds, passed at `6407623` before the probe correction.
+
+
+## Final representative qualification (2026-10-04)
+
+Production code: `602f2a00a737a82e0ff9b94ffb49145499038994`.
+[ISO/KVM run 37189777884](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37189777884)
+passed. Its `nix-acceptance` artifact contains serial assertions and screenshots;
+its ISO was a test artifact, not a published release. Final documentation edits
+after this SHA do not change the production code or test harness.
+
+- Fresh encrypted installation and live mutation refusal passed with SELinux
+  Enforcing, without policy or security-setting changes. `/nix` mounted its own
+  persistent Btrfs subvolume; daemon and ownership checks passed on both boots.
+- Actual search/install, Hello execution, update/remove/rollback and cross-user
+  isolation passed. Desktop-entry discovery changed from absent to present;
+  icons loaded; executing the entry created a Mango client for at least five
+  seconds, with the executable verified under `/nix/store`. Direct Foot launch
+  also passed before and after reboot. The real login PATH/XDG directories passed.
+- Native Mango parsed remapped configurations and retained recovery bindings.
+  The remap and right-side taskbar preference survived reboot; restoring built-in
+  defaults restored packaged symlinks. Headless checks separately covered all
+  four edges, small screens, inward menus and keyboard auto-hide reveal.
+- DNF loaded Fedora, Arctic and the already configured RPM Fusion repositories
+  successfully with signature verification retained. It reported **Nothing to do**.
+  A subsequent boot had a different boot ID and preserved the Nix generation,
+  binaries and graphical launch. This proves repository/update-check operation
+  and reboot persistence, **not a newer package/engine or Fedora-version migration**.
+  Nix stayed at 2.34.8; `engine-version-change` is explicitly `unrun`.
+- Trust settings remained signatures required, sandbox enabled and root-only
+  trusted users. No matching new Nix/Foot AVC was found in the journal test window.
+  These are configuration/journal checks, not adversarial signature or sandbox tests.
+- Final local suites: Settings 210 tests (1 skipped), shell 287 (5 skipped), tools
+  37 (1 skipped). Seven customization tests also passed with native Mango 0.17.3.
+  All 26 ordinary CI checks passed on the production-code candidate, including
+  Fedora RPM builds, native config parsing, Go/Python/Node checks and GUI smoke.
+
+### Remaining limits and merge assessment
+
+The representative fresh-install, enforcing-SELinux, GUI and reboot gates are
+satisfied. The engine and daemon still belong to Fedora RPMs; this change does
+not introduce a new engine installer, trust policy or OS upgrade mechanism.
+A future newer engine/Fedora-version migration remains untested, as do daemon/
+mount failure injection, disk-full/interrupted-download recovery, adversarial
+cache/sandbox scenarios, and the administrative dialog as a complete UI flow.
+The shared-profile transaction itself was tested with the native daemon in the
+Fedora container; do not describe that as an enforcing-VM shared-update test.
+
+Optional network/account connections and GPU/Proton execution are unqualified.
+Their setup remains explicit and guarded: no automatic authentication, traffic
+routing, repository trust, driver-generation replacement or Secure Boot enrollment.
+Planner fixtures and ordinary package installation paths do not certify hardware
+compatibility. These limits must remain visible; they are not invented passing
+checks or permission to perform those actions on a user's machine.

@@ -1,6 +1,7 @@
 # Nix in Arctic Linux: implementation specification
 
-Status: implementation in progress; **not yet qualified for merge**. Base: main
+Status: implemented; representative enforcing-VM qualification passed. See
+[VALIDATION.md](VALIDATION.md) for exact evidence and untested limits. Base: main
 `f78ff04`. This work is separate from release-reliability PR #12. No OS release,
 physical-machine changes, external installer, security relaxation or credentials
 are part of this change.
@@ -123,4 +124,5 @@ operation to the two known installer fallbacks, checks root ownership, serialize
 updates and refuses a changed/custom profile. It never runs legacy installation
 commands. The Polkit action authenticates an administrator; Fedora DNF continues
 to own the Nix engine. This resolves the command-semantics question in stage 6,
-not the outstanding installed-OS qualification.
+not an enforcing-VM shared-profile update or complete authentication-flow test.
+See the final validation record for the qualified installed-OS behaviors.

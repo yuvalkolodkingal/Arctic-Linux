@@ -68,8 +68,10 @@ included. The detailed Nix contract is in [IMPLEMENTATION.md](IMPLEMENTATION.md)
 - Actual Mango/Wayland gaming, anti-cheat support, GPU/driver/Proton compatibility
   and Secure Boot cannot be inferred from mocked hardware. Explain these limits
   in the UI/docs. No guarantee that every game or application will work.
-- Existing Nix VM/SELinux gates remain mandatory. Missing hardware or native VM
-  evidence is a material untested merge risk, even if all unit tests are green.
+- Existing Nix VM/SELinux gates remain mandatory; unit tests alone do not qualify
+  that integration. Hardware-dependent setup remains opt-in and guarded, with
+  compatibility unqualified until tested on actual hardware. See the final
+  validation record for the precise merge assessment.
 
 Estimate after scope expansion: several additional hours for implementation and
 CI/GUI checks; hardware and enforcing-SELinux VM qualification is separately
