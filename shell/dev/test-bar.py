@@ -1,4 +1,7 @@
 import argparse, json, pathlib, subprocess, time
+import signal, sys
+signal.signal(signal.SIGTERM,lambda *_: sys.exit(143))
+signal.signal(signal.SIGHUP,lambda *_: sys.exit(129))
 parser=argparse.ArgumentParser(description='Native Mango/Wayland acceptance checks for BarHarness.qml. Run against an isolated preview, with the installed bar hidden.')
 parser.add_argument('--preview',required=True,type=pathlib.Path)
 parser.add_argument('--pointer',required=True,type=pathlib.Path)
@@ -111,5 +114,8 @@ finally:
     try:
         ipc('reset')
     finally:
-        p.close()
-        (args.out/'runtime-results.json').write_text(json.dumps(log,indent=2))
+        try:
+            p.close()
+            (args.out/'runtime-results.json').write_text(json.dumps(log,indent=2))
+        finally:
+            subprocess.run(['quickshell','kill','-p',preview],check=False)

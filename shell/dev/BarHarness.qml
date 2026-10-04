@@ -45,8 +45,10 @@ ShellRoot {
         target: 'testbar'
         function configure(edge: string, size: int, hide: bool): void {
             menu.close(); extra.close();
-            Session.settings = Object.assign({}, Session.settings, {barPosition: edge, barSize: size, barAutoHide: hide});
+            Session.settings = Object.assign({}, Session.settings, {barPosition: edge, barSize: size, barHideMode: hide ? 'auto' : 'always', barAutoHide: hide});
         }
+        function mode(mode: string): void { Session.settings = Object.assign({}, Session.settings, {barHideMode: mode}); }
+        function geometry(): string { return JSON.stringify({ready: WindowGeometry.ready, monitors: WindowGeometry.monitors, windows: WindowGeometry.windows, error: WindowGeometry.error}); }
         function focus(name: string): void { barOn(onScreen(name)).toggleFocusMode(); }
         function key(name: string, end: bool): void {
             const b = barOn(onScreen(name)), stops = b.barStops();
@@ -70,6 +72,7 @@ ShellRoot {
                 screen: b.screen.name, edge: Session.barPosition, thickness: Theme.barHeight,
                 width: b.width, height: b.height, expanded: b.expanded, reveal: b.reveal,
                 exposed: b.exposed, heldOpen: b.heldOpen, popupHere: b.popupHere, focus: b.focusMode,
+                hideMode: Session.barHideMode, overlap: b.windowOverlap, geometryReady: WindowGeometry.ready,
                 anchors: {calendar: b.anchorFor('calendar'), sound: b.anchorFor('sound'), network: b.anchorFor('network'), quick: b.anchorFor('quick')},
                 focused: b.focusedStop ? {y: b.focusedStop.mapToItem(b.contentItem, 0, 0).y, height: b.focusedStop.height} : null,
                 stops: b.barStops().map(i => ({label: i.tooltip || i.text || 'Workspace',

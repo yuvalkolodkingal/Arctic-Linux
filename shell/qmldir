@@ -1,6 +1,7 @@
 singleton Theme 1.0 Theme.qml
 singleton Session 1.0 Session.qml
 singleton Outputs 1.0 Outputs.qml
+singleton WindowGeometry 1.0 WindowGeometry.qml
 singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml

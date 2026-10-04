@@ -225,6 +225,11 @@ if [[ -n "$NERD_VERSION" && "$ONLY" != mangowm && ! -s "$nerd_tar" ]]; then
 fi
 # --- end stream 6
 
+# Companion compositor patches live alongside the specs and are applied by %autosetup.
+if [[ -d "$SRC/packaging/patches" ]]; then
+  cp -a "$SRC/packaging/patches/." "$OUT/sources/"
+fi
+
 # ---- 3. Build in the container --------------------------------------------------------
 specs=()
 [[ "$ONLY" != arctic ]] && specs+=(mangowm)

@@ -3264,6 +3264,7 @@ SHELL_OPTIONS = {
     # key: (default, check(value) -> bool[, convert(value) -> what shell.json holds])
     'webSearch': ('duckduckgo', _web_search_ok),
     'barPosition': ('top', lambda v: v in ('top', 'bottom', 'left', 'right')),
+    'barHideMode': ('always', lambda v: v in ('always', 'auto', 'dodge')),
     'barSize': (32, lambda v: v.isdigit() and 28 <= int(v) <= 56, int),
     **{key: (default, lambda v: v in ('true', 'false'), _as_bool) for key, default in
        [('barAutoHide', False), ('barWorkspaces', True), ('barClock', True), ('barMedia', True), ('barTray', True)]},
@@ -3282,6 +3283,13 @@ def read_shell_json(paths):
 def cmd_shell_options(paths, _args):
     data = read_shell_json(paths)
     out = {key: data.get(key, spec[0]) for key, spec in SHELL_OPTIONS.items()}
+    if data.get('barHideMode') not in ('always', 'auto', 'dodge'):
+        out['barHideMode'] = 'auto' if data.get('barAutoHide') is True else 'always'
+    out['barDodgeAvailable'] = False
+    if os.environ.get('MANGO_INSTANCE_SIGNATURE'):
+        code, text, _ = run(['mmsg', 'get', 'capabilities'], timeout=2)
+        capabilities = _loads(text)
+        out['barDodgeAvailable'] = code == 0 and isinstance(capabilities, dict) and capabilities.get('client_geometry_events') is True
     out.update(ok=True, engines=[dict(id=i, name=n) for i, n in WEB_ENGINES])
     return out
 
@@ -3290,6 +3298,8 @@ def cmd_shell_options_reset(paths, args):
     if not args or any(key not in SHELL_OPTIONS for key in args):
         raise Failure('Choose the shell options to restore.')
     data = read_shell_json(paths)
+    if 'barAutoHide' in args or 'barHideMode' in args:
+        args = list(set(args) | {'barAutoHide', 'barHideMode'})
     for key in args:
         data.pop(key, None)
     backup(paths, paths.arctic / 'shell.json')
@@ -3306,6 +3316,10 @@ def cmd_shell_option_set(paths, args):
         raise Failure('That isn’t a value Arctic can use for this.')
     data = read_shell_json(paths)
     data[key] = spec[2](value) if len(spec) > 2 else value
+    if key == 'barHideMode':
+        data['barAutoHide'] = value == 'auto'  # older shells understand always/auto
+    elif key == 'barAutoHide':
+        data['barHideMode'] = 'auto' if value == 'true' else 'always'
     atomic_write(paths.arctic / 'shell.json', json.dumps(data, indent=2) + '\n')
     return cmd_shell_options(paths, [])
 
