@@ -55,6 +55,9 @@ STATE_TABLE = "offline-transaction-state"
 # arctic-update's own, with the verb dnf5 records for them.
 OUR_COMMANDS = {"dnf5 upgrade --offline -y --refresh": "upgrade",
                 "dnf5 distro-sync --offline -y --refresh": "distro-sync"}
+OUR_COMMANDS.update({command + " --setopt=arctic.skip_if_unavailable=False"
+                    " --setopt=arctic-testing.skip_if_unavailable=False": verb
+                    for command, verb in list(OUR_COMMANDS.items())})
 PENDING = ("download-complete", "ready")
 
 AUTO_MODES = ("download-and-install-on-reboot", "download-only", "off")
@@ -529,6 +532,7 @@ def build_report(status_file, settings, state, armed, rpms, channel, offline="",
         "packages": 0, "download_mb": 0.0, "staged_at": s.get("staged_at"),
         "checked_at": s.get("checked_at"), "channel": channel, "auto": settings["AUTO"],
         "metered": settings["METERED"], "message": s.get("message") or "",
+        "check_error": s.get("check_error") or "",
         "armed": False, "stored": stored and not stale, "held": None,
         "boot_failures": s.get("boot_failures") or 0, "install_error": s.get("install_error") or "",
         "install_failed_at": s.get("install_failed_at"),

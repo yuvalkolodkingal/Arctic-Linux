@@ -2664,11 +2664,16 @@ def cmd_updates(paths, _args):
     count = len(packages) if isinstance(packages, list) else int(packages or 0)
     auto = data.get('auto', data.get('auto_mode', data.get('automatic')))
     if isinstance(auto, str):
-        auto = auto.lower() in ('on', 'true', 'yes', '1', 'download', 'install')
+        auto = auto.lower() in ('on', 'true', 'yes', '1', 'download', 'install',
+                                'download-only', 'download-and-install-on-reboot')
     return dict(ok=True, available=True, state=str(data.get('state') or 'idle'), count=count,
                 packages=packages if isinstance(packages, list) else [],
                 downloadMb=data.get('download_mb') or 0, stagedAt=str(data.get('staged_at') or ''),
-                channel=str(data.get('channel') or 'stable'), auto=bool(auto), error=str(data.get('error') or ''))
+                channel=str(data.get('channel') or 'stable'), auto=bool(auto),
+                message=str(data.get('message') or ''), checkedAt=str(data.get('checked_at') or ''),
+                held=str(data.get('held') or ''),
+                error=str(data.get('check_error') or data.get('error') or
+                          (data.get('message') if data.get('state') == 'failed' else '') or ''))
 
 
 def cmd_update_run(paths, args):
@@ -2678,10 +2683,18 @@ def cmd_update_run(paths, args):
     if not which('arctic-update'):
         raise Failure('arctic-update isn’t installed.')
     if args[0] in ('now', 'apply'):
-        # These run for a while (download, or restart into the update): start and detach.
-        subprocess.Popen(['arctic-update'] + args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
-        time.sleep(0.5)
+        # Backend.call owns a separate process; Settings continues polling status. Wait
+        # for the real result, including pkexec cancellation, rather than returning stale
+        # idle state after half a second. A detached child and regular log file allow an
+        # authorized download to continue if Settings closes (no stdout pipe/SIGPIPE).
+        with tempfile.TemporaryFile() as log:
+            child = subprocess.Popen(['arctic-update'] + args, stdin=subprocess.DEVNULL,
+                                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            code = child.wait()
+            if code != 0:
+                log.seek(max(0, log.tell() - 4000))
+                detail = strip_ansi(log.read().decode('utf-8', errors='replace')).strip()
+                raise Failure((detail.splitlines() or ['The update command was cancelled or failed.'])[-1])
     else:
         code, out, err = run(['arctic-update'] + args, timeout=60)
         if code != 0:

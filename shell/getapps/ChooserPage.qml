@@ -5,9 +5,9 @@ import ".."
 import "GetApps.js" as GetAppsLogic
 
 // Get apps' home (Super + Shift + A): where should the app come from? Three large cards
-// (Flathub apps, Fedora packages, Web apps) and three small ones (Terminal apps, Remove apps,
-// Console). Cards that can't work here are hidden (no web-app engine; Remove apps on the live
-// USB), and the digit keys follow the visible order. The chooser only links to pages.
+// (Flathub apps, Fedora packages, Web apps) and three small ones (Nix, Terminal apps,
+// Console). Remove apps has its own launcher menu. Unavailable cards are hidden (no web-app
+// engine; Nix on the live USB), and digit keys follow the visible order.
 FocusScope {
     id: page
     property int current: 0

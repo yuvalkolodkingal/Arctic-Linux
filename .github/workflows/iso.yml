@@ -10,11 +10,11 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v1.1.0-build.<run number>)
+        description: Release tag (default v1.2.0-build.<run number>)
         type: string
         default: ""
       prerelease:
-        description: Mark the release as a pre-release (untick for a stable release such as v1.1.0)
+        description: Mark the release as a pre-release (untick for a stable release such as v1.2.0)
         type: boolean
         default: true
       draft:
@@ -38,7 +38,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ISO: Arctic-Linux-1.1-x86_64.iso
+  ISO: Arctic-Linux-1.2-x86_64.iso
 
 jobs:
   iso:
@@ -175,12 +175,12 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.1.0-build.$GITHUB_RUN_NUMBER"
+            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
             pre=""; [ "${{ inputs.prerelease }}" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
-            echo "Arctic Linux 1.1 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
+            echo "Arctic Linux 1.2 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
             echo
             echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
             echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."

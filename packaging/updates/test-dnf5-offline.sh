@@ -33,7 +33,7 @@ STATE=$DATADIR/offline-transaction-state.toml
 STATUS=/var/lib/arctic/update-status.json
 PKGDIR=/var/lib/dnf/offline/packages
 SRV=/srv/arctic-test
-OURS="dnf5 upgrade --offline -y --refresh"
+OURS="dnf5 upgrade --offline -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False"
 FOREIGN="dnf5 -q -y install --offline --refresh arctic-d"
 # dnf5's sentences (dnf5/commands/offline/offline.cpp); the helper's STALE_TEXT is the one
 # arctic-update depends on.
@@ -129,6 +129,7 @@ cat > /etc/yum.repos.d/arctic.repo <<EOF
 name=Arctic test (stable)
 baseurl=file://$SRV/stable
 gpgcheck=0
+skip_if_unavailable=True
 [arctic-testing]
 name=Arctic test (testing)
 baseurl=file://$SRV/testing
@@ -269,5 +270,52 @@ expect "the download from the other channel was dropped" "$(offline_status)" "$T
 linked && fail "/system-update left after switching channels"
 arctic-update channel stable </dev/null
 expect "channel" "$(arctic-update channel)" "stable: released builds (from the main branch)"
+
+step "Settings Check now finds new metadata with a warm cache and an existing queue"
+build arctic-ui 1; build arctic-ui 2; build arctic-ui 3
+publish stable arctic-ui-1-1
+dnf5 -q -y --refresh install arctic-ui >/dev/null
+dnf5 -q offline clean
+GUI="$REPO/settings/scripts/arctic_settings.py"
+publish stable arctic-ui-1-2
+python3 "$GUI" update-run now > /tmp/arctic-ui-update.json
+expect "GUI reports staged updates" "$(python3 -c 'import json;print(json.load(open("/tmp/arctic-ui-update.json"))["state"])')" ready
+[[ -e $PKGDIR/arctic-ui-1-2.noarch.rpm ]] || fail "GUI did not find the newly published package"
+publish stable arctic-ui-1-3
+python3 "$GUI" update-run now > /tmp/arctic-ui-update.json
+[[ -e $PKGDIR/arctic-ui-1-3.noarch.rpm ]] || fail "GUI did not refresh the already queued update"
+expect "new command retains ownership" "$(state_get cmd_line)" "$OURS"
+linked || fail "refreshed GUI update is not scheduled"
+
+step "Unavailable Arctic metadata is an error and preserves the queued update"
+mv "$SRV/stable/repodata" "$SRV/stable/repodata.offline"
+if python3 "$GUI" update-run now > /tmp/arctic-ui-error.json; then fail "GUI claimed success without Arctic metadata"; fi
+expect "queued update survives failure" "$(state_get status)" ready
+linked || fail "previous update was unscheduled on repository failure"
+python3 "$GUI" updates > /tmp/arctic-ui-status.json
+python3 - <<'PY'
+import json
+data=json.load(open('/tmp/arctic-ui-status.json'))
+assert data['state']=='ready' and data['error'], data
+assert 'arctic' in data['error'].lower(), data
+PY
+mv "$SRV/stable/repodata.offline" "$SRV/stable/repodata"
+
+step "Optional repositories retain their skip policy; successful retry clears the error"
+cat > /etc/yum.repos.d/optional.repo <<EOF
+[arctic-test-optional]
+name=Optional unavailable repository
+baseurl=file://$SRV/not-present
+gpgcheck=0
+skip_if_unavailable=True
+EOF
+python3 "$GUI" update-run now > /tmp/arctic-ui-update.json
+python3 - <<'PY'
+import json
+data=json.load(open('/tmp/arctic-ui-update.json'))
+assert data['state']=='ready' and not data['error'], data
+PY
+boot_execute
+expect "GUI-staged newer package installs offline" "$(rpm -q arctic-ui)" arctic-ui-1-3.noarch
 
 printf '\n\033[1;32mdnf5 offline updates: all checks passed\033[0m\n'

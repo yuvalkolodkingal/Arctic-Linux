@@ -1250,6 +1250,42 @@ class UpdatesTest(Home):
         stub(self.bin, 'arctic-update', 'echo "no such verb" >&2; exit 2\n')
         self.assertFalse(self.helper('updates')['available'])
 
+    def test_check_waits_for_completion_and_surfaces_authorization_failure(self):
+        stub(self.bin, 'arctic-update', '''
+            if [ "$1" = now ]; then
+                echo 'Authorization was cancelled' >&2
+                exit 126
+            fi
+            echo '{"state":"idle","checked_at":"2026-10-04T13:00:00Z"}'
+            ''')
+        result = self.helper('update-run', 'now', ok=False)
+        self.assertIn('Authorization was cancelled', result['error'])
+        stub(self.bin, 'arctic-update', '''
+            if [ "$1" = now ]; then
+                sleep 0.6
+                echo done > "$HOME/update-finished"
+                exit 0
+            fi
+            [ -f "$HOME/update-finished" ] || exit 2
+            echo '{"state":"ready","packages":2,"checked_at":"2026-10-04T13:00:00Z"}'
+            ''')
+        result = self.helper('update-run', 'now')
+        self.assertEqual((result['state'], result['count']), ('ready', 2))
+
+    def test_repository_failure_and_foreign_queue_are_preserved(self):
+        stub(self.bin, 'arctic-update', '''
+            echo '{"state":"ready","packages":2,"auto":"download-and-install-on-reboot","check_error":"Arctic repository unavailable","message":"Prior downloads remain ready"}'
+            ''')
+        result = self.helper('updates')
+        self.assertEqual(result['error'], 'Arctic repository unavailable')
+        self.assertTrue(result['auto'])
+        stub(self.bin, 'arctic-update', '''
+            echo '{"state":"idle","held":"dnf5 install --offline other","message":"Finish another transaction first"}'
+            ''')
+        result = self.helper('updates')
+        self.assertEqual(result['held'], 'dnf5 install --offline other')
+        self.assertEqual(result['message'], 'Finish another transaction first')
+
 
 class NetworkTest(Home):
     def test_status(self):

@@ -22,12 +22,10 @@ function cards(state) {
           desc: 'Nixpkgs packages in your own profile.', short: 'Install, remove, update and roll back' },
         { page: 'terminal', title: 'Terminal apps', big: false, glyph: 'prompt', tint: 'slate900',
           desc: 'Put a terminal program like btop in the launcher.', short: 'Terminal programs like btop in the launcher' },
-        { page: 'remove', title: 'Remove apps', big: false, glyph: 'trash', tint: 'surfaceSunken',
-          desc: 'Uninstall Flatpak apps, Fedora packages and web apps.', short: 'Flatpak, Fedora and web apps' },
         { page: 'console', title: 'Console', big: false, glyph: 'terminal', tint: 'surfaceSunken',
           desc: 'Type dnf and flatpak commands.', short: 'Type dnf and flatpak commands' },
     ];
-    return list.filter(c => !(c.page === 'web' && !s.webapp) && !(c.page === 'remove' && s.live) && !(c.page === 'nix' && s.live))
+    return list.filter(c => !(c.page === 'web' && !s.webapp) && !(c.page === 'nix' && s.live))
                .map((c, i) => Object.assign({ digit: i + 1 }, c));
 }
 
