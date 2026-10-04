@@ -41,7 +41,7 @@ STATE = textwrap.dedent('''\
     target_releasever = "44"
     cachedir = "/var/cache/libdnf5"
     status = "download-complete"
-    cmd_line = "dnf5 upgrade --offline -y --refresh"
+    cmd_line = "dnf5 upgrade --offline -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False"
     state_version = 2
 
     ''')
@@ -63,11 +63,11 @@ SIZES = {"/var/lib/dnf/offline/packages/jq-1.8.1-3.fc44.x86_64.rpm": 220681,
 OFFLINE_STATUS = {
     "none": "No offline transaction is stored.\n",
     "stored": ("An offline transaction was initiated by the following command:\n"
-               "\tdnf5 upgrade --offline -y --refresh\n"
+               "\tdnf5 upgrade --offline -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False\n"
                "Run `dnf5 offline reboot` to reboot and perform the offline transaction.\n"),
     "stale": ("The system has been modified since the offline transaction was prepared. The offline "
               "transaction initiated by the following command is no longer valid:\n"
-              "  dnf5 upgrade --offline -y --refresh\n"
+              "  dnf5 upgrade --offline -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False\n"
               "To reschedule, run the command above. To clean up, run `dnf5 offline clean`.\n"),
     "incomplete": ("An offline transaction was started, but it did not finish. Run `dnf5 offline log` "
                    "for more information. The command that initiated the transaction was:\n"
@@ -174,6 +174,8 @@ class OwnerTests(unittest.TestCase):
 
     def test_ours(self):
         self.assertEqual(helper.owner("download-complete", self.table()), "ours")
+        legacy = self.table(cmd_line="dnf5 upgrade --offline -y --refresh")
+        self.assertEqual(helper.owner("ready", legacy), "ours")
         sync = self.table(verb="distro-sync", cmd_line="dnf5 distro-sync --offline -y --refresh")
         self.assertEqual(helper.owner("ready", sync), "ours")
         self.assertFalse(helper.held("ready", sync))
@@ -181,7 +183,7 @@ class OwnerTests(unittest.TestCase):
     def test_foreign(self):
         for changes in ({"cmd_line": "dnf5 -y install --offline --refresh arctic-other", "verb": "install"},
                         {"cmd_line": "dnf upgrade --offline -y --refresh"},            # not ours, even if similar
-                        {"cmd_line": "/usr/bin/dnf5 upgrade --offline -y --refresh"},
+                        {"cmd_line": "/usr/bin/dnf5 upgrade --offline -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False"},
                         {"cmd_line": "dnf5daemon-server"},                             # GNOME Software & co.
                         {"verb": "distro-sync"},                                       # cmd_line and verb disagree
                         {"target_releasever": "45"},                                   # a release upgrade
@@ -206,7 +208,7 @@ class OwnerTests(unittest.TestCase):
             magic = os.path.join(d, "system-update")
             self.assertEqual(helper.inspect(state, magic, d),
                              {"status": "none", "owner": "none", "hold": "no", "linked": "no", "cmd_line": ""})
-            Path(state).write_text(STATE.replace("dnf5 upgrade --offline -y --refresh",
+            Path(state).write_text(STATE.replace("dnf5 upgrade --offline -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False",
                                                  "dnf5 install --offline ./a\\nb.rpm").replace('"upgrade"', '"install"'))
             os.symlink(d, magic)
             r = helper.inspect(state, magic, d)
@@ -521,7 +523,7 @@ exit 0
 }
 UPDATES = [["jq-1.8.1-3.fc44.x86_64", "Upgrade"], ["tzdata-2026c-2.fc44.noarch", "Upgrade"]]
 NEWER = [["jq-1.8.1-4.fc44.x86_64", "Upgrade"], ["tzdata-2026c-2.fc44.noarch", "Upgrade"]]
-OURS = "dnf5 upgrade --offline -y --refresh"
+OURS = "dnf5 upgrade --offline -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False"
 FOREIGN = "dnf5 -y install --offline --refresh arctic-other"
 
 
@@ -666,6 +668,18 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual((self.state()[0], self.linked(), s["state"], s["armed"]), ("ready", True, "ready", True))
         self.assertEqual(s["staged_at"], before["staged_at"])
         self.assertIn("last check failed", s["message"])
+        self.assertIn("Failed to download metadata", json.loads(self.cli("status", "--json").stdout)['check_error'])
+
+    def test_manual_failure_reports_repo_error_and_next_success_clears_it(self):
+        self.scenario(fail="Error: Failed to download metadata for repo 'arctic'")
+        self.cli('now', rc=1)
+        report = json.loads(self.cli('status', '--json').stdout)
+        self.assertEqual(report['state'], 'failed')
+        self.assertIn("repo 'arctic'", report['check_error'])
+        self.scenario(updates=UPDATES)
+        self.cli('now')
+        report = json.loads(self.cli('status', '--json').stdout)
+        self.assertEqual((report['state'], report['check_error']), ('ready', ''))
 
     def test_same_updates_are_announced_once(self):
         self.staged()

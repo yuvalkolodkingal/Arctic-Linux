@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import Quickshell.Bluetooth
 import Quickshell.Services.SystemTray
 import Quickshell.Services.UPower
+import "BarVisibility.js" as BarVisibility
 
 // The top bar (design TopBar): 34px frost with a 1px line along the bottom.
 // Left: fox mark (launcher) and workspaces 1–5, plus the "Live session" tag on the live USB.
@@ -19,7 +20,8 @@ PanelWindow {
     required property var modelData
     required property var shell
     screen: modelData
-    visible: !Session.barHidden
+    property bool refreshLayer: false
+    visible: !Session.barHidden && !refreshLayer
 
     readonly property bool vertical: Session.barVertical
     anchors { top: bar.vertical || Session.barPosition === "top"; bottom: bar.vertical || Session.barPosition === "bottom"; left: !bar.vertical || Session.barPosition === "left"; right: !bar.vertical || Session.barPosition === "right" }
@@ -30,7 +32,11 @@ PanelWindow {
     readonly property bool popupHere: shell && shell.barPopovers
         ? shell.barPopovers.some(p => p.open && p.screen === bar.screen) : menuHere
     readonly property bool heldOpen: pointerOver || press.active || focusMode || popupHere
-    readonly property bool expanded: !Session.barAutoHide || revealed || heldOpen
+    readonly property bool windowOverlap: Session.barDodgeWindows
+        && WindowGeometry.ready && BarVisibility.overlaps(WindowGeometry.monitors,
+            WindowGeometry.windows, screen ? screen.name : '', Session.barPosition, Theme.barHeight)
+    readonly property bool hideRequested: Session.barAutoHide || windowOverlap
+    readonly property bool expanded: !hideRequested || revealed || heldOpen
     property real reveal: expanded ? 1 : 0
     readonly property int exposed: Math.max(3, Math.ceil(Theme.barHeight * reveal))
     implicitHeight: vertical ? 0 : Theme.barHeight
@@ -48,7 +54,14 @@ PanelWindow {
     }
     function updateReveal() {
         if (heldOpen) { revealed = true; conceal.stop(); }
-        else if (Session.barAutoHide) conceal.restart();
+        else if (hideRequested) conceal.restart();
+        else { conceal.stop(); revealed = false; }
+    }
+    onHideRequestedChanged: {
+        // A new overlap gets the same grace period as pointer exit. A clear region reveals
+        // immediately, and reserves no space that could move windows and create a loop.
+        if (hideRequested) revealed = true;
+        updateReveal();
     }
     function resetReveal() {
         tipPopup.dismiss();
@@ -88,7 +101,15 @@ PanelWindow {
     Connections {
         target: Session
         function onBarPositionChanged() { bar.resetReveal(); }
-        function onBarAutoHideChanged() { bar.resetReveal(); }
+        function onBarHideModeChanged() { bar.resetReveal(); }
+        function onBarCanHideChanged() {
+            if (Session.barCanHide) {
+                // An occluded Top surface may receive no frame callbacks to commit a
+                // pending layer change. Remap once with Overlay as its initial layer.
+                bar.refreshLayer = true;
+                Qt.callLater(function() { bar.refreshLayer = false; });
+            }
+        }
     }
     onScreenChanged: resetReveal()
     // With no reserved zone, Normal placement would inset the trigger behind the frame's
@@ -99,11 +120,13 @@ PanelWindow {
         // exclusiveZone's setter also sets Normal. Apply the mode after that setter, on
         // both preference and zone changes, so the physical edge stays reachable.
         delayed: true
-        value: bar.exclusiveZone >= 0 && Session.barAutoHide ? ExclusionMode.Ignore : ExclusionMode.Normal
+        value: bar.exclusiveZone >= 0 && Session.barCanHide ? ExclusionMode.Ignore : ExclusionMode.Normal
     }
     // Reserve the frame's top band too, so tiled windows keep Mango's gap from the frame.
-    exclusiveZone: Session.barAutoHide ? 0 : Theme.barHeight + Theme.frameWidth
-    WlrLayershell.layer: WlrLayer.Top
+    exclusiveZone: Session.barCanHide ? 0 : Theme.barHeight + Theme.frameWidth
+    // Keep the edge trigger reachable above fullscreen windows in either hiding mode.
+    // Popovers are created after the bar on the same layer and remain above it.
+    WlrLayershell.layer: Session.barCanHide ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.namespace: 'arctic-bar'
 
     // The menu open on this bar, if any: tooltips stay quiet meanwhile.

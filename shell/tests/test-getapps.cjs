@@ -10,8 +10,8 @@ const plain = value => JSON.parse(JSON.stringify(value));
 
 // The chooser's cards and their digits.
 const pages = state => G.cards(state).map(c => c.page + c.digit).join(' ');
-assert.equal(pages({ webapp: true, flathub: true }), 'flatpak1 dnf2 web3 nix4 terminal5 remove6 console7');
-assert.equal(pages({ webapp: false }), 'flatpak1 dnf2 nix3 terminal4 remove5 console6');   // no engine: no Web apps
+assert.equal(pages({ webapp: true, flathub: true }), 'flatpak1 dnf2 web3 nix4 terminal5 console6');
+assert.equal(pages({ webapp: false }), 'flatpak1 dnf2 nix3 terminal4 console5');   // no engine: no Web apps
 assert.equal(pages({ webapp: true, live: true }), 'flatpak1 dnf2 web3 terminal4 console5');   // live USB: no Remove apps
 assert.equal(G.cards({ flathub: false })[0].status, 'Flathub isn’t set up yet');
 assert.equal(G.cards({ flathub: true })[0].status, 'No password needed');

@@ -175,6 +175,9 @@ def main():
     before_avc = run(['journalctl', '-b', '--no-pager', '-o', 'cat'])
     prior = json.loads(state_file.read_text()) if state_file.exists() else None
     settings = prefix + ['python3', '/usr/share/arctic/settings/scripts/arctic_settings.py']
+    check('mango-dodge-capability', lambda: must(
+        json.loads(run(prefix + ['mmsg', 'get', 'capabilities'])).get('client_geometry_events') is True,
+        'installed Mango advertises coalesced client geometry events'))
     def customization():
         data = json.loads(run(settings + ['binds']))
         row = next(b for b in data['builtin'] if b['action'] == 'killclient')
@@ -182,6 +185,8 @@ def main():
             must(row['modified'] and row['key'] == 'F9', 'built-in remap survived update and reboot')
             saved = json.loads(run(settings + ['shell-options']))
             must(saved['barPosition'] == 'right', 'side taskbar preference survived update and reboot')
+            must(saved['barHideMode'] == 'dodge' and saved['barDodgeAvailable'],
+                 'Dodge preference and compositor capability survived update and reboot')
             run(settings + ['builtin-bind', 'reset-all'])
             must((Path(user.pw_dir)/'.config/mango/arctic/binds.conf').is_symlink(), 'reset restored packaged shortcut link')
         else:
@@ -191,6 +196,9 @@ def main():
             for position in ('left', 'bottom', 'top', 'right'):
                 run(settings + ['shell-option-set', 'barPosition', position])
                 time.sleep(1)
+            saved = json.loads(run(settings + ['shell-option-set', 'barHideMode', 'dodge']))
+            must(saved['barHideMode'] == 'dodge' and saved['barDodgeAvailable'],
+                 'Dodge preference accepted by installed session')
         # The installed compositor parses the complete sourced configuration.
         parsed = run(prefix + ['mango', '-c', str(Path(user.pw_dir)/'.config/mango/config.conf'), '-p'])
         must('[ERROR]' not in parsed, parsed[-3000:])

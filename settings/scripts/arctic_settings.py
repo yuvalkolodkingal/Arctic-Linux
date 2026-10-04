@@ -2664,11 +2664,16 @@ def cmd_updates(paths, _args):
     count = len(packages) if isinstance(packages, list) else int(packages or 0)
     auto = data.get('auto', data.get('auto_mode', data.get('automatic')))
     if isinstance(auto, str):
-        auto = auto.lower() in ('on', 'true', 'yes', '1', 'download', 'install')
+        auto = auto.lower() in ('on', 'true', 'yes', '1', 'download', 'install',
+                                'download-only', 'download-and-install-on-reboot')
     return dict(ok=True, available=True, state=str(data.get('state') or 'idle'), count=count,
                 packages=packages if isinstance(packages, list) else [],
                 downloadMb=data.get('download_mb') or 0, stagedAt=str(data.get('staged_at') or ''),
-                channel=str(data.get('channel') or 'stable'), auto=bool(auto), error=str(data.get('error') or ''))
+                channel=str(data.get('channel') or 'stable'), auto=bool(auto),
+                message=str(data.get('message') or ''), checkedAt=str(data.get('checked_at') or ''),
+                held=str(data.get('held') or ''),
+                error=str(data.get('check_error') or data.get('error') or
+                          (data.get('message') if data.get('state') == 'failed' else '') or ''))
 
 
 def cmd_update_run(paths, args):
@@ -2678,10 +2683,18 @@ def cmd_update_run(paths, args):
     if not which('arctic-update'):
         raise Failure('arctic-update isn’t installed.')
     if args[0] in ('now', 'apply'):
-        # These run for a while (download, or restart into the update): start and detach.
-        subprocess.Popen(['arctic-update'] + args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
-        time.sleep(0.5)
+        # Backend.call owns a separate process; Settings continues polling status. Wait
+        # for the real result, including pkexec cancellation, rather than returning stale
+        # idle state after half a second. A detached child and regular log file allow an
+        # authorized download to continue if Settings closes (no stdout pipe/SIGPIPE).
+        with tempfile.TemporaryFile() as log:
+            child = subprocess.Popen(['arctic-update'] + args, stdin=subprocess.DEVNULL,
+                                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            code = child.wait()
+            if code != 0:
+                log.seek(max(0, log.tell() - 4000))
+                detail = strip_ansi(log.read().decode('utf-8', errors='replace')).strip()
+                raise Failure((detail.splitlines() or ['The update command was cancelled or failed.'])[-1])
     else:
         code, out, err = run(['arctic-update'] + args, timeout=60)
         if code != 0:
@@ -3264,6 +3277,7 @@ SHELL_OPTIONS = {
     # key: (default, check(value) -> bool[, convert(value) -> what shell.json holds])
     'webSearch': ('duckduckgo', _web_search_ok),
     'barPosition': ('top', lambda v: v in ('top', 'bottom', 'left', 'right')),
+    'barHideMode': ('always', lambda v: v in ('always', 'auto', 'dodge')),
     'barSize': (32, lambda v: v.isdigit() and 28 <= int(v) <= 56, int),
     **{key: (default, lambda v: v in ('true', 'false'), _as_bool) for key, default in
        [('barAutoHide', False), ('barWorkspaces', True), ('barClock', True), ('barMedia', True), ('barTray', True)]},
@@ -3282,6 +3296,13 @@ def read_shell_json(paths):
 def cmd_shell_options(paths, _args):
     data = read_shell_json(paths)
     out = {key: data.get(key, spec[0]) for key, spec in SHELL_OPTIONS.items()}
+    if data.get('barHideMode') not in ('always', 'auto', 'dodge'):
+        out['barHideMode'] = 'auto' if data.get('barAutoHide') is True else 'always'
+    out['barDodgeAvailable'] = False
+    if os.environ.get('MANGO_INSTANCE_SIGNATURE'):
+        code, text, _ = run(['mmsg', 'get', 'capabilities'], timeout=2)
+        capabilities = _loads(text)
+        out['barDodgeAvailable'] = code == 0 and isinstance(capabilities, dict) and capabilities.get('client_geometry_events') is True
     out.update(ok=True, engines=[dict(id=i, name=n) for i, n in WEB_ENGINES])
     return out
 
@@ -3290,6 +3311,8 @@ def cmd_shell_options_reset(paths, args):
     if not args or any(key not in SHELL_OPTIONS for key in args):
         raise Failure('Choose the shell options to restore.')
     data = read_shell_json(paths)
+    if 'barAutoHide' in args or 'barHideMode' in args:
+        args = list(set(args) | {'barAutoHide', 'barHideMode'})
     for key in args:
         data.pop(key, None)
     backup(paths, paths.arctic / 'shell.json')
@@ -3306,6 +3329,10 @@ def cmd_shell_option_set(paths, args):
         raise Failure('That isn’t a value Arctic can use for this.')
     data = read_shell_json(paths)
     data[key] = spec[2](value) if len(spec) > 2 else value
+    if key == 'barHideMode':
+        data['barAutoHide'] = value == 'auto'  # older shells understand always/auto
+    elif key == 'barAutoHide':
+        data['barHideMode'] = 'auto' if value == 'true' else 'always'
     atomic_write(paths.arctic / 'shell.json', json.dumps(data, indent=2) + '\n')
     return cmd_shell_options(paths, [])
 

@@ -30,7 +30,7 @@
 #   arctic-desktop         (metapackage)
 
 %global dist_version    44
-%global arctic_version  1.1
+%global arctic_version  1.2
 %global selinuxtype     targeted
 # Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
 %global debug_package   %{nil}
@@ -48,7 +48,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        1.1.0
+Version:        1.2.0
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -1591,6 +1591,9 @@ fi
 # metapackage: no files
 
 %changelog
+* Sun Oct 04 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.0-1
+- Nix integration, taskbar fixes, two-row Get apps and reliable update checks.
+
 * Sat Oct 03 2026 Arctic Linux <arctic@arcticlinux.org> - 1.1.0-1
 - Web-app pages follow desktop light/dark switches without a reload
 - Include Chromium for WebRTC calls; recommend it for WhatsApp and honor the
