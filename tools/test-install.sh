@@ -579,6 +579,7 @@ def stage_boot():
                     collected = True
                     break
                 time.sleep(5)
+            collected = vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END")
             vm.shot(f"boot-5{attempt + 1}-collected")
             if collected:
                 log(f"collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt {attempt})")
