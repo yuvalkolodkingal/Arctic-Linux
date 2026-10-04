@@ -48,3 +48,8 @@ class GamingTests(unittest.TestCase):
         self.assertNotIn('mesa-vulkan-drivers.i686',p['packages'])
         with self.assertRaises(ValueError): G.setup_argv(dict(repositories=False,**p))
         self.assertEqual(G.setup_argv(dict(repositories=True,**p))[:3],['pkexec','/usr/bin/dnf5','install'])
+
+    def test_existing_driver_generation_is_not_replaced(self):
+        p=G.package_plan([gpu('10de','1e02')],CAT,installed=['akmod-nvidia-580xx'],secure_boot='disabled')
+        self.assertTrue(p['blocked'])
+        with self.assertRaises(ValueError): G.setup_argv(dict(repositories=True,**p))

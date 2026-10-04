@@ -18,7 +18,7 @@ Tested locally on 2026-10-04:
   cached upstream metadata. This proves the local transaction, not fetching a
   new upstream revision.
 - Shell Python suite: 281 tests passed, 5 skipped (before later admin-helper tests).
-  Settings suite: 193 passed, 1 skipped. `go test ./...` passed.
+  Settings suite originally: 193 tests, 1 skipped. `go test ./...` passed.
 - Nix contract tests: user scope, malformed arguments/schema/JSON, timeouts,
   failed mutations, pinning, foreign links, empty-profile rollback; pass as root
   in Fedora and as an ordinary workspace user. These use mocks and do not prove
@@ -46,3 +46,26 @@ Outstanding material merge gates:
   interrupted-download recovery. Live versus installed behavior in real media.
 - Final full CI/RPM build for the eventual PR head. Earlier checks are not a
   substitute for checks on the final commit.
+
+## Expanded update validation
+
+- Go suite passed with the new optional catalog entries. Shell Python: 285 tests,
+  5 skipped. Settings Python: 205 tests, 1 skipped; the added driver-generation
+  guard also passes its six-test gaming suite. Final CI reruns the complete suites.
+- Added tests cover personal shortcut edit/conflict/reset, unknown settings
+  preservation, non-mutating network discovery, current-invocation Tor bootstrap,
+  duplicate-instance rejection and fixed command plans; hardware fixtures cover
+  AMD, Intel, current/legacy NVIDIA, hybrid, Secure Boot and existing Freeworld.
+- Real Nix GUI search rendered 29 results for hello; bottom taskbar and keyboard
+  reveal rendered in headless Sway. This is not an installed Mango/multi-monitor
+  auto-hide or graphical Nix application compatibility test.
+- Settings smoke navigation exposed undefined initial network booleans; fixed.
+  The local container also needed the CI-declared wlr-randr dependency for its
+  three-display check. No production behavior or tests were weakened.
+- No Tor/Tailscale connection, repository trust change, Secure Boot enrollment,
+  graphics-driver installation or Steam account action was executed. Native
+  network connections and real GPU/Proton/games remain unqualified.
+
+The final PR checks and RPM build are recorded on GitHub for the exact head.
+Passing them does not waive the enforcing-SELinux VM and native desktop/hardware
+merge gates above.

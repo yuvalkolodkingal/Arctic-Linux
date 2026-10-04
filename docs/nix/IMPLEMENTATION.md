@@ -54,7 +54,8 @@ need explicit coverage for existing and newly created accounts.
 5. Fedora owns Nix binaries, daemon units, build users and base configuration.
    Nix itself updates through Arctic's DNF updater, including Fedora upgrades.
    Retain root-only daemon trust, upstream signed binary-cache defaults and
-   sandboxing. Add a mount dependency for `/nix` without replacing Fedora units.
+   sandboxing. Use Fedora’s existing `RequiresMountsFor` dependencies for the store/state;
+   do not replace its units.
    Do not turn off SELinux or introduce broad allow rules. Audit existing policy
    and RPM configuration before changing anything security-sensitive.
 6. Root-owned installer fallback packages need an explicit administrative update
@@ -112,3 +113,14 @@ certification.
   is Beta; not used or mixed with Fedora RPM ownership here.
 
 Test results and any deviation from this specification belong in `VALIDATION.md`.
+
+## Implemented shared-profile update
+
+The native Fedora Nix test verified staging a complete replacement modern
+profile and selecting its store path with supported `nix-env --set`; its v3
+manifest and prior generations remain intact. `nix-system.py` restricts this
+operation to the two known installer fallbacks, checks root ownership, serializes
+updates and refuses a changed/custom profile. It never runs legacy installation
+commands. The Polkit action authenticates an administrator; Fedora DNF continues
+to own the Nix engine. This resolves the command-semantics question in stage 6,
+not the outstanding installed-OS qualification.

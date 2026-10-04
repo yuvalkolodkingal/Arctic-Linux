@@ -59,6 +59,9 @@ def package_plan(gpus, catalog, installed=(), secure_boot='unknown'):
             blocked = 'This NVIDIA device has no supported proprietary driver in Arctic’s catalog. Review the driver guide before gaming setup.'
     if len(drivers) > 1:
         blocked = 'These NVIDIA GPUs need conflicting driver generations. An administrator must choose a supported hardware configuration.'
+    existing_drivers = {name for name in ('nvidia', 'nvidia-580xx') if 'akmod-' + name in installed}
+    if existing_drivers - drivers and drivers:
+        blocked = 'An installed NVIDIA driver generation differs from the detected plan. Review the driver guide before changing generations.'
     for name in sorted(drivers):
         driver_pkgs = catalog[name].get('install', [{}])[0].get('packages', [])
         packages += driver_pkgs

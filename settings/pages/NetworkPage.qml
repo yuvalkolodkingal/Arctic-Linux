@@ -14,7 +14,7 @@ Page {
     lede: "Your connections. Join a Wi-Fi network from the network menu on the bar (Super + Ctrl + W)."
     property var net: ({ available: true, devices: [], wifi: true, hasWifi: false })
     property var saved: ({ available: false, saved: [], vpn: [] })
-    property var optional: ({ tor: { installed: false, service: {}, running_units: [], endpoints: [], browser: [], bootstrap: null }, tailscale: {}, openvpn: false })
+    property var optional: ({ tor: { installed: false, service: { running: false }, can_start: false, running_units: [], endpoints: [], browser: [], bootstrap: null }, tailscale: { present: false, running: false, state: "unknown", connection: "unknown" }, openvpn: false })
     function loadOptional() { Backend.call(["optional-network"], r => { if (r.ok) page.optional = r; }, true); }
     function askOptional(tool, verb, explanation) {
         optionalDialog.args = [tool, verb]; optionalDialog.body = explanation; optionalDialog.open();
