@@ -41,7 +41,13 @@ Singleton {
     readonly property string barPosition: ['top', 'bottom', 'left', 'right'].includes(settings.barPosition) ? settings.barPosition : 'top'
     readonly property bool barVertical: barPosition === 'left' || barPosition === 'right'
     readonly property int barSize: Number.isInteger(settings.barSize) && settings.barSize >= 28 && settings.barSize <= 56 ? settings.barSize : 0
-    readonly property bool barAutoHide: !live && settings.barAutoHide === true
+    // Old barAutoHide preferences remain readable without rewriting the user's file.
+    readonly property string barHideMode: live ? 'always'
+        : ['always', 'auto', 'dodge'].includes(settings.barHideMode) ? settings.barHideMode
+        : settings.barAutoHide === true ? 'auto' : 'always'
+    readonly property bool barAutoHide: barHideMode === 'auto'
+    readonly property bool barDodgeWindows: barHideMode === 'dodge'
+    readonly property bool barCanHide: barHideMode !== 'always'
     readonly property bool barWorkspaces: settings.barWorkspaces !== false
     readonly property bool barClock: settings.barClock !== false
     readonly property bool barMedia: settings.barMedia !== false

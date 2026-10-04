@@ -1,8 +1,37 @@
-from test_arctic_settings import Home
+from test_arctic_settings import Home, stub
 import json
 
 
 class CustomizationTests(Home):
+    def test_dodge_capability_is_reported_without_rewriting_preferences(self):
+        self.env['MANGO_INSTANCE_SIGNATURE']='test'
+        stub(self.bin,'mmsg',"echo '{\"error\":\"unknown command\"}'")
+        self.assertFalse(self.helper('shell-options')['barDodgeAvailable'])
+        stub(self.bin,'mmsg',"echo '{\"client_geometry_events\":true}'")
+        self.assertTrue(self.helper('shell-options')['barDodgeAvailable'])
+        stub(self.bin,'mmsg','exit 1')
+        self.assertFalse(self.helper('shell-options')['barDodgeAvailable'])
+
+    def test_visibility_modes_legacy_migration_and_scoped_reset(self):
+        path=self.home/'.config/arctic/shell.json'
+        original=json.dumps({'barAutoHide':True,'barPosition':'right','futureOption':42})
+        path.write_text(original)
+        self.assertEqual(self.helper('shell-options')['barHideMode'],'auto')
+        self.assertEqual(path.read_text(),original)  # reading does not rewrite preferences
+        for mode in ('always','auto','dodge'):
+            data=self.helper('shell-option-set','barHideMode',mode)
+            self.assertEqual(data['barHideMode'],mode)
+            self.assertEqual(data['barAutoHide'],mode=='auto')
+        self.helper('shell-option-set','barHideMode','sometimes',ok=False)
+        self.helper('shell-option-set','barAutoHide','true')
+        self.assertEqual(self.helper('shell-options')['barHideMode'],'auto')
+        self.helper('shell-option-set','barHideMode','dodge')
+        data=self.helper('shell-options-reset','barAutoHide')
+        self.assertEqual(data['barHideMode'],'always')
+        self.assertFalse(data['barAutoHide'])
+        self.assertEqual(data['barPosition'],'right')
+        self.assertEqual(json.loads(path.read_text())['futureOption'],42)
+
     def test_edit_shortcut_and_conflict_preserves_original(self):
         self.helper('bind-add','SUPER+ALT','F8','true')
         self.helper('bind-edit','0','SUPER+ALT','F8','echo updated')

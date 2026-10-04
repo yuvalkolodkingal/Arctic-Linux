@@ -17,6 +17,7 @@ Summary:        Lightweight, high-performance Wayland compositor built on dwl
 License:        GPL-3.0-or-later AND MIT AND X11 AND CC0-1.0
 URL:            https://github.com/mangowm/mango
 Source0:        %{url}/archive/refs/tags/%{version}.tar.gz#/mango-%{version}.tar.gz
+Patch0:         mango-client-geometry-events.patch
 
 BuildRequires:  meson
 BuildRequires:  gcc
@@ -57,7 +58,7 @@ It provides the "mango" compositor, the "mmsg" IPC client, a wayland-sessions
 entry, portal preferences and mango-session.target for systemd user units.
 
 %prep
-%autosetup -n mango-%{version}
+%autosetup -n mango-%{version} -p1
 
 %build
 %meson -Dxwayland=enabled

@@ -1,0 +1,100 @@
+diff --git a/include/mango/ipc/ipc.h b/include/mango/ipc/ipc.h
+index 5098ab8..56c4ed3 100644
+--- a/include/mango/ipc/ipc.h
++++ b/include/mango/ipc/ipc.h
+@@ -66,6 +66,7 @@ void ipc_notify_client(Client *c);
+ void ipc_notify_tags(Monitor *m);
+ void ipc_notify_all_monitors(void);
+ void ipc_notify_all_clients(void);
++void ipc_schedule_client_geometry(void);
+ void ipc_notify_all_tags(void);
+ void ipc_notify_keymode(void);
+ void ipc_notify_kb_layout(void);
+diff --git a/src/animation/client.c b/src/animation/client.c
+index 3d1ed71..c43e32f 100644
+--- a/src/animation/client.c
++++ b/src/animation/client.c
+@@ -2,6 +2,7 @@
+ #include "mango/animation/common.h"
+ #include "mango/common/server.h"
+ #include "mango/common/util.h"
++#include "mango/ipc/ipc.h"
+ #include "mango/layout/dwindle.h"
+ #include "mango/layout/layout.h"
+ #include "mango/manage/client.h"
+@@ -1518,6 +1519,10 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
+ 		c->isfloating)
+ 		client_set_size_bound(c);
+ 
++	/* Floating moves/resizes do not arrange the layout. Notify subscribed shell
++	 * clients after this burst without polling or broadcasting on every frame. */
++	ipc_schedule_client_geometry();
++
+ 	if (!c->is_pending_open_animation)
+ 		c->animation.begin_fade_in = false;
+ 
+diff --git a/src/ipc/ipc.c b/src/ipc/ipc.c
+index 8839228..a8c87ad 100644
+--- a/src/ipc/ipc.c
++++ b/src/ipc/ipc.c
+@@ -30,6 +30,31 @@
+ 
+ static struct wl_list ipc_watch_clients;
+ static int ipc_device_watch_count;
++static struct wl_event_source *ipc_geometry_timer;
++static bool ipc_geometry_pending;
++
++static int ipc_flush_client_geometry(void *data) {
++	(void)data;
++	ipc_geometry_pending = false;
++	printstatus(IPC_WATCH_ALL_CLIENTS | IPC_WATCH_CLIENT |
++				IPC_WATCH_FOCUSING_CLIENT);
++	return 0;
++}
++
++void ipc_schedule_client_geometry(void) {
++	if (!ipc_geometry_timer || ipc_geometry_pending)
++		return;
++	struct ipc_watch_client *wc;
++	wl_list_for_each(wc, &ipc_watch_clients, link) {
++		if (wc->type & (IPC_WATCH_ALL_CLIENTS | IPC_WATCH_CLIENT |
++						IPC_WATCH_FOCUSING_CLIENT)) {
++			/* A fixed deadline prevents continuous dragging from starving delivery. */
++			ipc_geometry_pending = true;
++			wl_event_source_timer_update(ipc_geometry_timer, 60);
++			return;
++		}
++	}
++}
+ 
+ const char *ipc_device_type_str(struct wlr_input_device *dev) {
+ 	if (!dev)
+@@ -520,6 +545,11 @@ static struct wl_event_source *ipc_event_source = NULL;
+ static char ipc_socket_path[256];
+ 
+ void ipc_cleanup(void) {
++	if (ipc_geometry_timer) {
++		wl_event_source_remove(ipc_geometry_timer);
++		ipc_geometry_timer = NULL;
++	}
++	ipc_geometry_pending = false;
+ 	if (ipc_event_source)
+ 		wl_event_source_remove(ipc_event_source);
+ 	if (ipc_socket_fd >= 0)
+@@ -632,6 +662,9 @@ void handle_command(int client_fd, const char *cmd_raw) {
+ 	if (strcmp(cmd, "get version") == 0) {
+ 		resp = cJSON_CreateObject();
+ 		cJSON_AddStringToObject(resp, "version", VERSION);
++	} else if (strcmp(cmd, "get capabilities") == 0) {
++		resp = cJSON_CreateObject();
++		cJSON_AddBoolToObject(resp, "client_geometry_events", ipc_geometry_timer != NULL);
+ 	} else if (strcmp(cmd, "get cursorpos") == 0) {
+ 		resp = cJSON_CreateObject();
+ 		cJSON_AddNumberToObject(resp, "x", server.cursor->x);
+@@ -1358,4 +1391,6 @@ void ipc_init(struct wl_event_loop *loop) {
+ 
+ 	ipc_event_source = wl_event_loop_add_fd(
+ 		loop, ipc_socket_fd, WL_EVENT_READABLE, ipc_handle_connection, loop);
++	ipc_geometry_timer =
++		wl_event_loop_add_timer(loop, ipc_flush_client_geometry, NULL);
+ }

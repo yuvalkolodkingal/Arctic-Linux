@@ -472,10 +472,17 @@ Page {
             }
         }
         SettingRow {
-            title: "Hide automatically"
-            desc: "Point at the edge or use the bar keyboard shortcut to reveal it. Disabled on the live installer."
+            title: "Visibility"
+            desc: page.shellOptions.barHideMode === "dodge" && page.shellOptions.barDodgeAvailable === false
+                ? "Dodge windows requires an updated Mango session. The bar stays visible until that session is running."
+                : "Dodge windows hides only when a visible window overlaps the bar. Point at the edge or use the bar keyboard shortcut to reveal it. Hiding is disabled on the live installer."
             resettable: false
-            RowSwitch { checked: page.shellOptions.barAutoHide === true; onToggled: page.setShellOption("barAutoHide", checked, "") }
+            ArSelect {
+                width: 180
+                model: [{ value: "always", label: "Always visible" }, { value: "auto", label: "Auto-hide" }, { value: "dodge", label: "Dodge windows" }]
+                value: page.shellOptions.barHideMode || (page.shellOptions.barAutoHide === true ? "auto" : "always")
+                onActivated: v => page.setShellOption("barHideMode", v, "")
+            }
         }
         Repeater {
             model: [{ key: "barWorkspaces", label: "Workspaces" }, { key: "barClock", label: "Clock" }, { key: "barMedia", label: "Media title" }, { key: "barTray", label: "Tray icons" }]
@@ -489,7 +496,7 @@ Page {
         }
         ArButton {
             text: "Reset taskbar defaults"
-            onClicked: Backend.call(["shell-options-reset", "barPosition", "barSize", "barAutoHide", "barWorkspaces", "barClock", "barMedia", "barTray"], r => { if (r.ok) page.shellOptions = r; })
+            onClicked: Backend.call(["shell-options-reset", "barPosition", "barSize", "barHideMode", "barAutoHide", "barWorkspaces", "barClock", "barMedia", "barTray"], r => { if (r.ok) page.shellOptions = r; })
         }
     }
 

@@ -6,3 +6,6 @@
 
 # Video production assets are distributed separately from the OS source RPM.
 /showcase export-ignore
+
+# Unified patches preserve upstream whitespace, including prefixed context lines.
+/packaging/patches/*.patch -whitespace
