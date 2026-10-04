@@ -120,6 +120,27 @@ class NixTests(unittest.TestCase):
             nixlib.mutate('rollback')
             self.assertIn('rollback',run.call_args.args[0])
 
+    def test_desktop_refresh_preserves_entries_and_replaces_marker_symlink(self):
+        with patch.dict(os.environ, {'XDG_DATA_HOME': str(self.home / '.local/share')}):
+            apps = self.home / '.local/share/applications'
+            apps.mkdir(parents=True)
+            entry = apps / 'personal.desktop'
+            entry.write_text('personal entry')
+            outside = self.home / 'keep.txt'
+            outside.write_text('keep')
+            (apps / '.arctic-nix-generation').symlink_to(outside)
+            nixlib.refresh_desktop()
+            self.assertEqual(entry.read_text(), 'personal entry')
+            self.assertEqual(outside.read_text(), 'keep')
+            self.assertFalse((apps / '.arctic-nix-generation').is_symlink())
+            self.assertEqual((apps / '.arctic-nix-generation').read_text().strip(), str(nixlib.profile().resolve()))
+
+    def test_desktop_refresh_rejects_data_directory_outside_home(self):
+        with tempfile.TemporaryDirectory() as other, patch.dict(os.environ, {'XDG_DATA_HOME': other}):
+            with self.assertRaises(nixlib.Error):
+                nixlib.refresh_desktop()
+            self.assertFalse((Path(other) / 'applications').exists())
+
 
 if __name__ == '__main__': unittest.main()
 

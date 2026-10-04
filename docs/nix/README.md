@@ -9,6 +9,10 @@ and Flatpak. Prefer the source that supports your application on your hardware.
 
 Your profile is `~/.local/state/nix/profiles/arctic`. An existing `.nix-profile`
 or legacy `nix-env` installation is not imported, overwritten or converted.
+After a successful profile change, Arctic notifies the desktop through its
+private `.arctic-nix-generation` marker in your XDG applications directory; it
+does not copy or replace desktop entries.
+
 Every account has its own profile; users share immutable store objects, not the
 right to edit one another's profiles. Log out and back in after the integration
 RPM first arrives so the desktop and user services receive PATH/XDG_DATA_DIRS.

@@ -656,5 +656,10 @@ rc=0
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner" || rc=$?
 
 arctic_log "result: exit $rc (serial logs, test.log and screenshots in $OUT)"
+if [[ -n "$GUEST_CHECK" ]]; then
+  # Preserve actionable evidence in workflow logs as well as downloadable artifacts.
+  grep -a 'ARCTIC-NIX-ACCEPTANCE\|ARCTIC-.*SMOKE-EXIT' "$OUT"/serial-*.log || true
+  if (( rc != 0 )); then tail -n 120 "$OUT"/serial-*.log || true; fi
+fi
 find "$OUT" -maxdepth 1 -name '*.png' | sort | sed 's,^,  ,'
 exit "$rc"

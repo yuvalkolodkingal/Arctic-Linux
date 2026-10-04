@@ -17,9 +17,12 @@ import time
 
 
 def run(argv, **kwargs):
-    return subprocess.run(argv, text=True, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, timeout=kwargs.pop('timeout', 45),
-                          check=True, **kwargs).stdout.strip()
+    result = subprocess.run(argv, text=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, timeout=kwargs.pop('timeout', 45),
+                            check=False, **kwargs)
+    if result.returncode:
+        raise RuntimeError(f'{argv}: exit {result.returncode}: {result.stdout[-8000:]}')
+    return result.stdout.strip()
 
 
 def record(stage, check, status, detail):
@@ -47,6 +50,7 @@ def desktop():
                     f'WAYLAND_DISPLAY={sockets[0].name}',
                     f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus',
                     'XDG_SESSION_TYPE=wayland',
+                    *[f'{key}={env[key]}' for key in ('PATH', 'XDG_DATA_DIRS', 'XDG_DATA_HOME') if key in env],
                     *([f'MANGO_SOCKET={env["MANGO_SOCKET"]}'] if 'MANGO_SOCKET' in env else [])]
         except (FileNotFoundError, ProcessLookupError):
             continue
@@ -120,7 +124,7 @@ def main():
     if stage == 'live':
         must('rd.live.image' in Path('/proc/cmdline').read_text(), 'booted live media')
         p = subprocess.run(nix + ['install', 'hello'], capture_output=True, text=True, timeout=30)
-        check('live-mutation-denied', lambda: must(p.returncode != 0 and 'live' in (p.stdout+p.stderr).lower(), p.stdout+p.stderr))
+        check('live-mutation-denied', lambda: must(p.returncode != 0 and 'after installing Arctic to disk' in (p.stdout+p.stderr), p.stdout+p.stderr))
         return int(failed)
 
     must('rd.live.image' not in Path('/proc/cmdline').read_text(), 'installed boot')
@@ -138,8 +142,55 @@ def main():
         check('graphical-after-reboot', lambda: app(prefix, [str(profile/'bin/foot'), '-e', 'sleep', '30'], 'foot'))
         return int(failed)
 
+    # Start a real DesktopEntries consumer BEFORE the first profile exists.
+    # The existing shell uses this same Quickshell singleton/model.
+    probe = Path('/tmp/arctic-nix-desktop-probe.qml')
+    probe.write_text("""import QtQuick
+import Quickshell
+import Quickshell.Io
+ShellRoot {
+ id: probeRoot
+ property var entry: DesktopEntries.applications.values.find(e => e.id === "foot") || null
+ property Image iconProbe: Image { source: probeRoot.entry ? Quickshell.iconPath(probeRoot.entry.icon) : "" }
+ IpcHandler {
+  target: "nixacceptance"
+  function seen(): bool { return DesktopEntries.byId("foot") !== null; }
+  function iconReady(): bool { return probeRoot.iconProbe.status === Image.Ready; }
+  function launch(): bool { const e = DesktopEntries.byId("foot"); if (!e) return false; e.execute(); return true; }
+ }
+}
+""")
+    with open('/tmp/arctic-nix-desktop-probe.log', 'w') as output:
+        subprocess.Popen(prefix + ['quickshell', '-n', '-p', str(probe)], stdout=output, stderr=output)
+    probe_cmd = ['quickshell', 'ipc', '-p', str(probe), 'call', 'nixacceptance']
+
+    def probe_wait(method, expected):
+        last = ''
+        for _ in range(20):
+            try:
+                last = run(prefix + probe_cmd + [method])
+                if last == expected:
+                    return f'{method}={last}'
+            except RuntimeError as exc:
+                last = str(exc)
+            time.sleep(1)
+        raise RuntimeError(f'{method}: expected {expected}, got {last}')
+    check('desktop-before-install', lambda: run(prefix + probe_cmd + ['seen']))  # Foot may already exist as an RPM.
     check('search', lambda: must(bool(json.loads(run(nix + ['search', 'hello'], timeout=600))), 'real Nix search returned JSON'))
     check('install', lambda: run(nix + ['install', 'hello', 'foot'], timeout=1200))
+    check('desktop-after-install', lambda: probe_wait('seen', 'true'))
+    check('desktop-icon-load', lambda: probe_wait('iconReady', 'true'))
+    check('desktop-entry-launch', lambda: app(prefix, probe_cmd + ['launch'], 'foot'))
+    def launched_from_store():
+        for proc in Path('/proc').glob('[0-9]*'):
+            try:
+                executable = str((proc/'exe').resolve())
+                if proc.stat().st_uid == user.pw_uid and executable.startswith('/nix/store/') and 'foot' in executable:
+                    return executable
+            except (FileNotFoundError, PermissionError, ProcessLookupError):
+                continue
+        raise RuntimeError('no Nix-store Foot process after desktop-entry launch')
+    check('desktop-entry-nix-executable', launched_from_store)
     check('hello', lambda: run(prefix + [str(profile/'bin/hello')]))
     check('desktop-file', lambda: must(bool(list((profile/'share/applications').glob('*.desktop'))), 'profile contains desktop entries'))
     check('icons', lambda: must((profile/'share/icons').is_dir(), 'profile contains icon data'))
@@ -189,6 +240,9 @@ def main():
         record(stage, 'engine-version-change', 'passed' if before_rpm != after_rpm else 'unrun', f'{before_rpm} -> {after_rpm}; same version is not upgrade proof')
         if not failed:
             state_file.write_text(json.dumps(dict(boot=Path('/proc/sys/kernel/random/boot_id').read_text(), profile=str(profile.resolve()))))
+    for log in ('/tmp/arctic-release-app.log', '/tmp/arctic-nix-desktop-probe.log'):
+        if Path(log).exists():
+            print(Path(log).read_text(errors='replace')[-8000:], flush=True)
     return int(failed)
 
 

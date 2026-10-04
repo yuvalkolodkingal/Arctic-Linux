@@ -69,3 +69,19 @@ Outstanding material merge gates:
 The final PR checks and RPM build are recorded on GitHub for the exact head.
 Passing them does not waive the enforcing-SELinux VM and native desktop/hardware
 merge gates above.
+
+## Launcher refresh regression found during VM qualification
+
+Fedora's installed Quickshell (0.2.1 git20260209) was tested with a desktop entry
+whose Nix-style profile appeared after startup. The entry stayed absent until
+an existing XDG applications directory changed. Login setup now creates the
+standard user applications directory before Quickshell starts. Successful Nix
+mutations atomically update a non-desktop generation marker there, causing the
+existing monitor to rescan the profile paths; no desktop entries are copied or
+overwritten. The same native reproduction changes from absent to present with
+the helper. Tests also preserve unrelated entries and reject paths outside home.
+
+The VM probe now checks real desktop-entry/icon discovery and verifies that the
+launched Foot process comes from /nix/store, so an already-installed Fedora Foot
+cannot accidentally satisfy the Nix launch check. These new probes are pending
+the next exact-head acceptance run.

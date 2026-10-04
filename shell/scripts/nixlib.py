@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 NIX = '/usr/bin/nix'
 SOURCE = 'github:NixOS/nixpkgs/nixos-26.05'
@@ -138,6 +139,30 @@ def check_profile(uid):
         raise Error('The Arctic profile points outside its managed generations.')
 
 
+def refresh_desktop():
+    # Quickshell watches existing XDG application directories. A first Nix
+    # profile appears after login, so notify that watcher without copying or
+    # altering any RPM/Flatpak desktop entry. Login setup creates this directory.
+    home = Path.home().resolve()
+    data = Path(os.environ.get('XDG_DATA_HOME') or home / '.local/share')
+    apps = data / 'applications'
+    if not apps.resolve().is_relative_to(home):
+        raise Error('Desktop refresh requires an applications directory in your home.')
+    apps.mkdir(parents=True, exist_ok=True)
+    if apps.stat().st_uid != os.geteuid():
+        raise Error('Desktop applications directory is not owned by your account.')
+    marker = apps / '.arctic-nix-generation'
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=apps, prefix='.arctic-nix-', delete=False) as f:
+            temporary = Path(f.name)
+            f.write(str(profile().resolve()) + '\n')
+        os.replace(temporary, marker)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def mutate(action, ids=(), revision=None):
     argv = command(action, ids, revision)
     if os.geteuid() == 0:
@@ -156,6 +181,10 @@ def mutate(action, ids=(), revision=None):
     result = subprocess.run(argv, check=False)
     if result.returncode:
         raise Error('Nix {} failed (exit {}). See the output above.'.format(action, result.returncode))
+    try:
+        refresh_desktop()
+    except (Error, OSError) as exc:
+        print('Nix profile changed, but desktop refresh failed: {}. Log out and back in.'.format(exc), file=sys.stderr, flush=True)
     print('Nix {} completed for your profile. Existing application data and older generations were kept.'.format(action), flush=True)
 
 
