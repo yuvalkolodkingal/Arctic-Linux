@@ -477,7 +477,7 @@ greeter's copy and vconsole.conf; non-Latin layouts as `us,<layout>` + `grp:alt_
 with a Latin console keymap),
 `/etc/arctic/default-apps`, kernel-install/dracut, grub2-mkconfig, efibootmgr/grub2-install,
 app diff (dnf remove/install in chroot, flatpak from host with FLATPAK_* into /mnt, nix via
-`nix --store /mnt profile add`; a Flatpak app the image ships — Zen when the ISO fits in 2 GiB —
+`nix --store /mnt profile add`; a Flatpak app the image ships — including Zen —
 counts as in the live image whatever the catalog says: kept when ticked, uninstalled with its
 unused runtimes when not), setfiles relabel, unmount. Drivers (internal/installer/drivers.go):
 installed in the chroot in the apps' dnf transaction with the RPM Fusion repositories; for an
@@ -527,8 +527,15 @@ closed at the end); os-prober only runs for "alongside". Every command goes thro
 kiwi-ng 11 (Fedora 44 package `kiwi-cli` + `kiwi-systemdeps-iso-media`), description in
 `iso/kiwi/` derived from fedora-kiwi-descriptions (F44). Image type iso, hybrid, UEFI (shim,
 Secure Boot) + BIOS. Packages: `arctic-desktop`, `arctic-installer`, `arctic-live`,
-livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO stays ≤ 2 GiB
-(else skipped — note it). Repos: Fedora 44 + updates + the local `out/repo`. Boot menu entries
+livesys-scripts, kernel, dracut-live. The ISO workflow requires the Firefox-based Zen Flatpak
+(`--zen yes`): missing browser installation fails the build, and images above 2 GiB retain it.
+The release path splits larger images; workflow artifacts retain the complete ISO. The local
+builder's optional `--zen auto|no` modes remain available for development. Enforcing VM
+acceptance launches Zen through its exported desktop entry as the normal desktop user in
+the live session and both installed boots, requiring a mapped window to persist five seconds.
+The workflow checks the ISO checksum before upload and publishes a separate small metadata
+artifact containing its checksum, package list and source/build identity. Repos: Fedora 44 +
+updates + the local `out/repo`. Boot menu entries
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.

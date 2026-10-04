@@ -112,6 +112,21 @@ def app(prefix, command, pattern):
                     child.wait()
 
 
+def browser(prefix):
+    """Exercise the shipped Firefox-based browser through its exported launcher."""
+    ref = 'app.zen_browser.zen'
+    entry = '/var/lib/flatpak/exports/share/applications/' + ref + '.desktop'
+    run(prefix + ['test', '-r', entry])
+    info = run(prefix + ['flatpak', 'info', '--system', ref])
+    commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', ref])
+    try:
+        window = app(prefix, ['gtk-launch', ref], r'zen')
+        return f'{info}; Flatpak commit {commit}; exported entry {entry}; {window}'
+    finally:
+        # gtk-launch detaches; close only this user's test browser before installing.
+        subprocess.run(prefix + ['flatpak', 'kill', ref], capture_output=True, timeout=15)
+
+
 def main():
     stage = sys.argv[1]
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
@@ -143,6 +158,8 @@ def main():
         if not condition:
             raise RuntimeError(detail)
         return detail
+
+    check('non-chromium-browser', lambda: browser(prefix))
 
     if stage == 'live':
         must('rd.live.image' in Path('/proc/cmdline').read_text(), 'booted live media')
