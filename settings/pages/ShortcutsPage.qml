@@ -171,8 +171,8 @@ Page {
             SettingRow {
                 id: builtinRow
                 required property var modelData
-                title: modelData.what
-                desc: modelData.label + (modelData.modified ? " · Default: " + modelData.originalLabel : "") + (modelData.keymode !== "default" ? " · " + modelData.keymode : "")
+                title: modelData.label
+                desc: modelData.what + (modelData.modified ? " · Default: " + modelData.originalLabel : "") + (modelData.keymode !== "default" ? " · " + modelData.keymode : "")
                 resettable: false
                 Row {
                     spacing: Theme.space2
@@ -302,7 +302,7 @@ Page {
                     page.binds = r;
                     addDialog.close();
                     Backend.refresh();
-                    Backend.notify("success", "Shortcut added: " + addDialog.keyLabel, true);
+                    Backend.notify("success", "Shortcut saved: " + addDialog.keyLabel, !addDialog.builtinId);
                 } else {
                     addDialog.error = r.error;
                 }
