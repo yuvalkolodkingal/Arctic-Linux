@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import pwd
 from pathlib import Path
 import shutil
 import stat
@@ -89,7 +90,7 @@ class Store:
     def target(self):
         try:
             target = os.readlink(self.root / 'current')
-            if not target.startswith('generation-') or '/' in target:
+            if not re.fullmatch(r'generation-[a-f0-9]{32}', target):
                 raise ValueError('Invalid wallpaper state pointer.')
             return target
         except FileNotFoundError:
@@ -336,6 +337,11 @@ def main(args):
     else:
         raise ValueError('Usage: arctic-login-wallpaper ' + __doc__.splitlines()[2])
     output = dict(json.loads(str(result)), ok=True, available=True)
+    if output.get('owner', -1) >= 0:
+        try:
+            output['owner_name'] = pwd.getpwuid(output['owner']).pw_name
+        except KeyError:
+            pass
     if command == 'status' and output['mode'] == 'desktop' and output['owner'] == os.getuid():
         folder = Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local/state') / 'arctic'
         try:

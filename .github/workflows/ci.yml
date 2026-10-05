@@ -296,6 +296,26 @@ jobs:
           path: shell/dev/screenshots/ci-menu-*.png
           retention-days: 7
 
+  wallpaper-integration:
+    name: Shared wallpaper (SDDM and session lock)
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install tools
+        run: |
+          dnf -y install git quickshell qt6-qtsvg qt6-qtwayland sddm sway grim swaybg \
+            python3 python3-pillow python3-dbus python3-gobject-base librsvg2-tools \
+            dbus-daemon fontconfig google-noto-sans-fonts procps-ng libcap findutils which ripgrep util-linux
+      - uses: actions/checkout@v4
+      - name: Actual greeter and secure lock on landscape and portrait outputs
+        run: shell/dev/test-shared-wallpaper.sh /tmp/shared-wallpaper-shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-wallpaper-integration
+          path: /tmp/shared-wallpaper-shots/
+          retention-days: 7
+
   specs:
     name: RPM specs parse
     runs-on: ubuntu-latest

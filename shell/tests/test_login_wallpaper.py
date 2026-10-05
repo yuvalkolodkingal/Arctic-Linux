@@ -133,6 +133,24 @@ class SharedWallpaper(unittest.TestCase):
             self.store.undo()
         self.assertEqual(self.store.status(), now)
 
+    def test_reset_reports_partial_cleanup_and_can_retry(self):
+        self.store.commit('separate', 1000, picture())
+        with patch('shutil.rmtree', side_effect=OSError('permission denied')):
+            result = self.store.commit('legacy', -1)
+        self.assertFalse(result['enabled'])
+        self.assertIn('cleanup_error', result)
+        self.assertIn('cleanup_error', self.store.status())
+        self.store.commit('legacy', -1)
+        self.assertNotIn('cleanup_error', self.store.status())
+        self.assertEqual(list(self.store.root.rglob('wallpaper.png')), [])
+
+    def test_authorized_choice_repairs_invalid_pointer(self):
+        self.store.root.mkdir()
+        (self.store.root / 'current').symlink_to('generation-invalid')
+        self.assertIn('state_error', self.store.status())
+        repaired = self.store.commit('separate', 1000, picture())
+        self.assertEqual(self.store.status(), repaired)
+
 
 if __name__ == '__main__':
     unittest.main()

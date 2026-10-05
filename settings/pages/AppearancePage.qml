@@ -31,6 +31,20 @@ Page {
     property bool importing: false
     property var loginWallpaper: ({ available: false, enabled: false, mode: "legacy" })
     property bool loginBusy: false
+    property int loginSeq: 0
+
+    function loadLoginWallpaper() {
+        const seq = ++page.loginSeq;
+        Backend.call(["login-wallpaper"], r => {
+            if (r.ok && seq === page.loginSeq && !page.loginBusy) page.loginWallpaper = r;
+        }, true);
+    }
+    Timer {
+        interval: 5000
+        repeat: true
+        running: page.visible && !page.loginBusy
+        onTriggered: page.loadLoginWallpaper()
+    }
 
     function requestLoginWallpaper(action, picture) {
         loginConfirm.action = action;
@@ -41,6 +55,7 @@ Page {
         const args = ["login-wallpaper", loginConfirm.action];
         if (loginConfirm.picture) args.push(loginConfirm.picture);
         page.loginBusy = true;
+        ++page.loginSeq;
         loginConfirm.close();
         Backend.call(args, r => {
             page.loginBusy = false;
@@ -56,7 +71,7 @@ Page {
         Backend.call(["daylight"], r => { if (r.ok) page.daylight = r; }, true);
         Backend.call(["fonts"], r => { if (r.ok) page.fonts = r; }, true);
         Backend.call(["wallpaper-rotate"], r => { if (r.ok) page.rotate = r; }, true);
-        Backend.call(["login-wallpaper"], r => { if (r.ok) page.loginWallpaper = r; }, true);
+        loadLoginWallpaper();
         Backend.call(["shell-options"], r => { if (r.ok) page.shellOptions = r; }, true);
         Backend.call(["weather-place"], r => { if (r.ok) page.weatherPlace = r; }, true);
         loadWallpapers();
@@ -621,13 +636,23 @@ Page {
                 : page.loginWallpaper.state_error ? page.loginWallpaper.state_error
                 : page.loginWallpaper.image_missing ? "The public image is missing. Choose it again or restore defaults; login and lock use their safe fallback."
                 : page.loginWallpaper.sync_error ? "The previous public image is kept. Automatic sync failed: " + page.loginWallpaper.sync_error
-                : page.loginWallpaper.mode === "desktop" ? "Follows the authorized user's desktop, including rotation and theme changes. Owner UID: " + page.loginWallpaper.owner + "."
+                : page.loginWallpaper.mode === "desktop" ? "Follows " + (page.loginWallpaper.owner_name || ("UID " + page.loginWallpaper.owner)) + "'s desktop while that account is active here, including rotation and theme changes."
                 : page.loginWallpaper.enabled ? "A separate image, kept even when your desktop changes."
                 : "Existing login and per-user lock backgrounds are preserved until you choose a shared image."
             resettable: false
             Column {
                 spacing: Theme.space2
                 enabled: page.loginWallpaper.available && !page.loginBusy
+                Image {
+                    visible: page.loginWallpaper.enabled && !page.loginWallpaper.image_missing
+                    width: 260
+                    height: visible ? 96 : 0
+                    source: /^[a-f0-9]{32}$/.test(page.loginWallpaper.revision || "")
+                        ? "file:///var/lib/arctic-login-wallpaper/generation-" + page.loginWallpaper.revision + "/wallpaper.png" : ""
+                    sourceSize: Qt.size(520, 192)
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                }
                 ArButton {
                     text: page.loginBusy ? "Authorizing…" : "Choose image…"
                     onClicked: loginFile.open()
@@ -645,12 +670,12 @@ Page {
                 }
                 ArButton {
                     visible: Boolean(page.loginWallpaper.previous)
-                    text: "Restore previous shared image…"
+                    text: "Restore previous shared choice…"
                     variant: "ghost"
                     onClicked: page.requestLoginWallpaper("undo", "")
                 }
                 ArButton {
-                    visible: page.loginWallpaper.enabled || Boolean(page.loginWallpaper.state_error)
+                    visible: page.loginWallpaper.enabled || Boolean(page.loginWallpaper.state_error) || Boolean(page.loginWallpaper.cleanup_error)
                     text: "Restore existing defaults…"
                     variant: "ghost"
                     onClicked: page.requestLoginWallpaper("reset", "")
@@ -901,8 +926,10 @@ Page {
         property string picture: ""
         body: action === "reset"
             ? "Restore existing login and lock defaults and remove saved public image copies. Administrator authorization is required."
+            : action === "undo"
+            ? "Restore the previous shared image, its sync mode and its authorized account. If that choice followed a desktop, future desktop changes will become public again. Administrator authorization is required."
             : action === "sync-desktop"
-            ? "Your current desktop image and future desktop changes will be copied to a public system folder. Everyone using this computer can see them at login and on the lock screen, even while your home is encrypted. Only your active local session will publish automatic changes. Administrator authorization is required."
+            ? "Your current desktop image and future desktop changes will be copied to a public system folder. Everyone using this computer can see them at login and on the lock screen, even while your home is encrypted. Programs running under your account can publish changes while your local desktop is active. Administrator authorization is required."
             : "This changes the login and lock image for everyone using this computer. A validated copy is publicly readable outside user homes. Administrator authorization is required."
         Image {
             visible: loginConfirm.picture !== ""

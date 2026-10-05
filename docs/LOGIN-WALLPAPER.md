@@ -9,7 +9,8 @@ it, undoing a change, or restoring defaults. Automatic sync never prompts for a 
 ## Scope and migration
 
 SDDM belongs to the computer, not to one user. One administrator-authorized account owns
-desktop sync for the whole machine, including all seats. Settings shows its numeric UID.
+desktop sync for the whole machine, including all seats. Settings resolves its UID to a
+local account name when that account still exists.
 Another administrator can explicitly choose another image or take over sync. Other users
 can read the public image but cannot write it. Processes of the authorized owner's account
 can publish automatic changes only while that account has an active, local X11 or Wayland
