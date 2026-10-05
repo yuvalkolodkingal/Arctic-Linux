@@ -177,6 +177,9 @@ for path in Path('/work/root/image').glob('*.kiwi'):
         image.set('fscreateoptions', options)
     tree.write(path, encoding='utf-8', xml_declaration=True)
     print('EROFS compressor:', image.get('erofscompression'), 'options:', options)
+    Path('/tmp/arctic-compression-info').write_text(
+        'erofs_compression=' + image.get('erofscompression', '') + '\n' +
+        'erofs_fscreateoptions=' + options + '\n')
 PY
 
 # 2. Zen Browser from Flathub, installed into the image from outside (no chroot), so "Try"
@@ -227,6 +230,7 @@ if [ "$zen" = 1 ] && [ "$ZEN" = auto ] && [ "$(stat -c %s "$iso")" -gt 214748364
   iso=$(ls /work/build/*.iso | head -n1)
 fi
 echo "zen_preinstalled=$zen" > "/out/${ISO_NAME%.iso}.build-info"
+cat /tmp/arctic-compression-info >> "/out/${ISO_NAME%.iso}.build-info"
 cp -f "$iso" "/out/$ISO_NAME"
 ( cd /out && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256" )
 cp -f /work/build/*.packages "/out/${ISO_NAME%.iso}.packages" 2>/dev/null || :
