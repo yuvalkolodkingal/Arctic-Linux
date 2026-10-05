@@ -1,7 +1,7 @@
 # CI profile: the default install (encrypted, whole disk) with no internet, as in
 # tools/test-install.sh. The apps come from the live image where the catalog has one (kitty,
-# fish, Nautilus, VLC); Zen (the browser is required) and Zed have to be downloaded, so offline
-# they fail, are retried once and are deferred to /var/lib/arctic/pending.json together with
+# fish, Nautilus, VLC, and the required preinstalled Zen browser). Zed needs a download, so
+# offline it fails, is retried once and is deferred to /var/lib/arctic/pending.json together with
 # the media codecs (arctic-firstboot installs them once the machine is online).
 # The harness passes ARCTIC_LUKS_PASSPHRASE and ARCTIC_USER_PASSWORD and types the
 # passphrase at boot.

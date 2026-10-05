@@ -68,7 +68,9 @@ releases. The EROFS payload is 1,990,148,096 bytes and the initrd remains
 Independent checksum and full EROFS content integrity verification pass;
 installed-system qualification is ongoing. The combined prepared root inventory
 has 5,734,138,869 unique regular-file logical bytes, 24,274 additional hardlink
-paths, no inventory errors, and no added/removed RPM names. This is an offline
+paths, no inventory errors, and no added/removed RPM names. All six Flatpak refs
+also match the original ISO's full 64-hex active commits, read directly from its
+EROFS symlinks. This is an offline
 prepared-root inventory, not an installed Btrfs measurement.
 
 KIWI completed image creation, but the metadata wrapper initially failed because
