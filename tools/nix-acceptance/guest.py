@@ -121,6 +121,14 @@ def browser(prefix):
     commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', ref])
     try:
         window = app(prefix, ['gtk-launch', ref], r'zen')
+        # Mapping precedes browser chrome/content painting under TCG. Keep the
+        # detached browser open for the interactive harness's screenshot review;
+        # a blank initial surface alone cannot qualify browser usability.
+        time.sleep(45)
+        if not any(re.search(r'zen', str(value.get('appid', value.get('app_id', '')))
+                             + ' ' + str(value.get('title', '')), re.I)
+                   for value in clients(prefix).values()):
+            raise RuntimeError('Zen window did not survive the visual-review interval')
         return f'{info}; Flatpak commit {commit}; exported entry {entry}; {window}'
     finally:
         # gtk-launch detaches; close only this user's test browser before installing.

@@ -214,8 +214,11 @@ so the installed version is the relevant source. The installed candidate passed 
 preference, all eight Settings pages and persistent Kitty/Nautilus/Zen windows.
 Get apps and lock/PAM still report no running Quickshell instance when using the
 shipped helper's configuration path. Preserving session identity did not resolve
-that failure. A narrow runtime-index/display diagnostic is pending; no functional
-lock or Get apps acceptance is claimed. Exact-ISO UEFI Secure Boot passed with
+that failure. A narrow runtime diagnostic confirms the main shell's live index and
+`wayland,wayland-0` connection: explicit verified PID and any-display lookup
+both succeed, while the v4 portal backend fails. Get apps opened and the lock
+request succeeded; real password unlock and normal v5 shipped-helper selection
+still require completion. No production IPC change is proposed. Exact-ISO UEFI Secure Boot passed with
 enrolled OVMF keys, the guest's `SecureBoot enabled` report, enforcing SELinux,
 complete collection markers and a visually reviewed Try desktop.
 
