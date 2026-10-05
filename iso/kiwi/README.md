@@ -3,12 +3,18 @@
 `tools/build-iso.sh` builds this description with kiwi-ng 11 in a privileged Fedora 44
 container, adding the local RPM repository from `tools/build-rpms.sh` (`out/repo`) with
 `--add-repo`. It runs `kiwi-ng system prepare` (packages + `config.sh`), installs Zen Browser
-from Flathub into the image root from outside the chroot (`--zen auto`: kept only while the ISO
-stays ≤ 2 GiB for local development), then `kiwi-ng system create` (SELinux labels, live initrd,
+from Flathub into the image root from outside the chroot (`--zen yes` by default: absence fails
+the build; `--zen auto/no` are explicit development choices), then `kiwi-ng system create` (SELinux labels, live initrd,
 erofs, ISO). The workflow explicitly uses `--zen yes`, requiring the non-Chromium browser
 even above 2 GiB; its release path already supports split downloads.
 Output: `out/iso/Arctic-Linux-1.2-x86_64.iso`, its `.sha256`, the package list and
 `.build-info` (whether Zen is in it).
+
+Candidates can use `--name Arctic-Linux-1.2-optimized-candidate-x86_64.iso` and
+`--max-bytes 1500000000` (decimal 1.5 GB, about 1.397 GiB). A missed size gate retains
+the image/checksum and exits with a clear failure; it never removes features to meet
+the budget. Explicit `--erofs-compression`, `--erofs-cluster` and `--dedupe` experiments
+must pass the functional/performance gates in `docs/OPTIMIZATION.md` before adoption.
 
 | File | What it is |
 |---|---|
