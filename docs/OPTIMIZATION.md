@@ -82,7 +82,7 @@ An actual execution in a disposable container verifies the override and metadata
 against `config.xml`; Bash syntax and ShellCheck also pass. This changes build
 tooling, not the installed system. The original candidate below is superseded.
 
-The first candidate is `out/iso-candidate/Arctic-Linux-1.2-optimized-candidate-x86_64.iso`:
+The superseded first candidate was `out/iso-candidate/Arctic-Linux-1.2-optimized-candidate-x86_64.iso`:
 **2,321,430,528 bytes**, SHA-256
 `8d40511af887361da91610dfded1e86e86df6ed6d4218909893ce2a82d2b1c69`.
 Independent checksum and userspace EROFS full-content integrity checks pass.
@@ -93,7 +93,8 @@ The Arctic RPM build records source `85162e3b0cabb390d54d0e61307260f448570d87`.
 There are no RPM names added/removed, and Flatpak refs and active commits match.
 Fedora Chromium/Chromium-common and xxhash received normal repository updates;
 therefore the small image difference cannot be attributed to the memory fix alone.
-The pending wallpaper PR is not yet in this first candidate. Its head
+Its binary has been removed to make room for qualification; checksum and evidence remain.
+The pending wallpaper PR was not in this first candidate. Its head
 `7b86c31b5bffcce55b5e985a1d317ccd7c177913` has since been merged locally into
 this branch for the next candidate; remote main and the owner branch remain untouched.
 The owner merged this exact revision to main at
@@ -171,8 +172,7 @@ installed capability probe also records `btrfs filesystem usage -b /`, including
 the filesystem containing its subvolumes, separately from the extracted image's
 logical bytes. Observer memory is included and its PID is recorded. Its own CPU percentage on one core
 is recorded separately. The preliminary full-scan sampler consumed about 26% of one
-emulated core, so future comparison uses the same `cpu-30-pss-6-v1` sampler on
-both installed systems. The current sampler is `cpu-30-pss-6-v2-awake`: it uses
+emulated core. The current sampler is `cpu-30-pss-6-v4-native-session`: it uses
 Arctic's session-only Keep awake feature during the probe and restores it afterward.
 This prevents the normal five-minute idle lock from interfering with slow emulated
 GUI launches; it does not change lock settings or system security policy. Both
@@ -191,10 +191,28 @@ a clean harness pass. Harness sources are now frozen during active VM runs.
 The first installed benchmark rendered the real desktop and collected six PSS
 and 30 CPU observations, but stopped at an incorrectly ordered Quickshell IPC
 command. Its measurements are archived as incomplete and do not establish an
-optimization result. The current `cpu-30-pss-6-v3-awake-ipc` probe uses the shipped
+optimization result. The current probe uses the shipped
 helper's `quickshell ipc -p ... call` order and resolves `arctic-shell --path`;
 baseline and candidate use identical regenerated probes. Three complete runs of
 each, application startup and functional candidate gates remain pending.
+
+A read-only diagnostic completed a default-argument encrypted graphical boot,
+login and desktop collection (harness exit 0). It proved an instrumentation error:
+the v3 probe omitted `XDG_DATA_DIRS` when the terminal added a directory, so all
+four browser/MIME queries incorrectly reported Chromium. With the actual Mango
+login environment, all four report `app.zen_browser.zen.desktop`; the installer's
+default-apps and MIME files also select Zen. Browser preferences were not changed.
+The real shell has `XDG_SESSION_ID=2`, which v3 also omitted. The v4 probe preserves
+the login's paths/session identity, obtains post-exec display/IPC from matching
+children, and clears inherited root environment with `env -i`. Three regression
+tests cover changed terminal paths, missing login data and ambiguous IPC. Actual
+Get apps/PAM acceptance still requires the corrected VM probe to pass.
+
+TCG boots with the harness's added `plymouth.use-simpledrm` argument intermittently
+went black before passphrase typing; a text recovery boot and the subsequent
+default-argument boot succeeded. This does not establish a physical boot defect
+or performance improvement. Qualification now uses the image's default kernel
+arguments explicitly and retains the failed-run diagnostics.
 
 For comparative performance acceptance, repeat at least three boots after builds
 finish, without competing compression/build jobs. Report sample counts, medians

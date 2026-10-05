@@ -96,6 +96,16 @@ def exercise(performance, prefix, wallpaper=False):
         return 'Production shell IPC request completed; visual review required'
     check('get-apps-request', get_apps)
 
+    # Functional window evidence is useful even when TCG cannot support a
+    # reliable timing comparison. Use the shipped browser choice and launchers.
+    for pattern, command in [('kitty', ['kitty']),
+                             ('org.gnome.nautilus', ['nautilus', '--new-window']),
+                             ('zen', ['arctic-open', 'browser'])]:
+        check('persistent-window-' + pattern,
+              lambda pattern=pattern, command=command: dict(
+                  mapped_for_seconds=5,
+                  diagnostic_startup_seconds=performance['startup'](prefix, command, pattern)))
+
     def lock_unlock():
         locked = lambda: run(shell + ['lock', 'isLocked']).lower() == 'true'
         require(not locked(), 'Session starts unlocked')
@@ -114,7 +124,8 @@ def exercise(performance, prefix, wallpaper=False):
 
 def main(performance, wallpaper=False):
     run = performance['run']
-    if sys.argv[1] != 'installed' or os.geteuid() != 0 or run(['systemd-detect-virt', '--vm']) != 'qemu':
+    if (Path(__file__).parent != Path('/run/t') or sys.argv[1] != 'installed' or os.geteuid() != 0
+            or run(['systemd-detect-virt', '--vm']) not in ('qemu', 'kvm')):
         raise RuntimeError('Requires the disposable installed QEMU guest')
     prefix = performance['desktop']()
     awake = json.loads(run(prefix + ['arctic-keep-awake', 'status', '--json']))

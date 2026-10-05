@@ -14,7 +14,8 @@ import sys
 def main(performance, wallpaper=False):
     run = performance['run']
     stage = sys.argv[1]
-    if os.geteuid() != 0 or run(['systemd-detect-virt', '--vm']) != 'qemu':
+    if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
+            or run(['systemd-detect-virt', '--vm']) not in ('qemu', 'kvm')):
         raise RuntimeError('Requires root in the disposable QEMU VM')
     prefix = performance['desktop']()
     failed = False

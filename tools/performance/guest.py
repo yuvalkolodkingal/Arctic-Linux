@@ -28,6 +28,49 @@ def emit(check, value):
     print('ARCTIC-PERFORMANCE ' + json.dumps(dict(stage=sys.argv[1], check=check, value=value)), flush=True)
 
 
+def session_environment(proc_root, uid, runtime, display, base):
+    """Keep login paths/session identity; obtain post-exec IPC from children.
+
+    A terminal's shell can add its own XDG_DATA_DIRS. Requiring every child to
+    agree would discard the desktop's Flatpak/Nix exports and report a false
+    default browser. Quickshell IPC also needs the actual XDG_SESSION_ID.
+    """
+    fields = ('PATH', 'XDG_CONFIG_HOME', 'XDG_CONFIG_DIRS', 'XDG_DATA_HOME',
+              'XDG_DATA_DIRS', 'XDG_CACHE_HOME', 'DISPLAY', 'XAUTHORITY',
+              'XDG_SESSION_ID', 'XDG_SEAT', 'XDG_VTNR', 'XDG_CURRENT_DESKTOP',
+              'XDG_SESSION_DESKTOP', 'DESKTOP_SESSION', 'LANG', 'GDK_BACKEND',
+              'QT_QPA_PLATFORM', 'MANGO_SOCKET')
+    inherited = {key: base[key] for key in fields if base.get(key)}
+    signatures = set()
+    children = []
+    for child in proc_root.glob('[0-9]*'):
+        try:
+            if child.stat().st_uid != uid:
+                continue
+            env = dict(item.split('=', 1) for item in
+                       (child/'environ').read_bytes().decode().split('\0') if '=' in item)
+            if (env.get('XDG_RUNTIME_DIR') == str(runtime)
+                    and env.get('WAYLAND_DISPLAY') == display
+                    and env.get('MANGO_INSTANCE_SIGNATURE')):
+                signatures.add(env['MANGO_INSTANCE_SIGNATURE'])
+                children.append(env)
+        except (OSError, UnicodeError):
+            continue
+    if len(signatures) != 1:
+        raise RuntimeError(f'Expected one Mango IPC signature, found {len(signatures)}')
+    # DISPLAY and Qt variables can be exported after Mango's exec. Never let
+    # child application paths or session identity override the login environment.
+    for key in ('DISPLAY', 'XAUTHORITY', 'GDK_BACKEND', 'QT_QPA_PLATFORM'):
+        if key not in inherited:
+            values = {env[key] for env in children if env.get(key)}
+            if len(values) == 1:
+                inherited[key] = values.pop()
+    inherited['MANGO_INSTANCE_SIGNATURE'] = signatures.pop()
+    if not all(inherited.get(key) for key in ('PATH', 'XDG_DATA_DIRS', 'XDG_SESSION_ID')):
+        raise RuntimeError('Missing actual desktop PATH, XDG_DATA_DIRS or session identity')
+    return inherited
+
+
 def desktop():
     for path in Path('/proc').glob('[0-9]*'):
         try:
@@ -38,32 +81,14 @@ def desktop():
             sockets = [p for p in runtime.glob('wayland-*') if p.is_socket()]
             if len(sockets) != 1:
                 continue
-            signatures = set()
-            session_environments = []
-            for child in Path('/proc').glob('[0-9]*'):
-                try:
-                    if child.stat().st_uid != user.pw_uid:
-                        continue
-                    env = dict(item.split('=', 1) for item in (child/'environ').read_bytes().decode().split('\0') if '=' in item)
-                    if (env.get('XDG_RUNTIME_DIR') == str(runtime) and env.get('MANGO_INSTANCE_SIGNATURE')
-                            and env.get('WAYLAND_DISPLAY') == sockets[0].name):
-                        signatures.add(env['MANGO_INSTANCE_SIGNATURE'])
-                        session_environments.append(env)
-                except (OSError, UnicodeError):
-                    continue
-            if len(sockets) != 1 or len(signatures) != 1:
-                continue
-            inherited = {}
-            for key in ('DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP', 'XDG_SESSION_DESKTOP',
-                        'DESKTOP_SESSION', 'XDG_DATA_DIRS', 'GDK_BACKEND', 'QT_QPA_PLATFORM'):
-                values = {env[key] for env in session_environments if env.get(key)}
-                if len(values) == 1:
-                    inherited[key] = values.pop()
-            return ['runuser', '-u', user.pw_name, '--', 'env',
+            base = dict(item.split('=', 1) for item in
+                        (path/'environ').read_bytes().decode().split('\0') if '=' in item)
+            inherited = session_environment(Path('/proc'), user.pw_uid, runtime, sockets[0].name, base)
+            return ['runuser', '-u', user.pw_name, '--', 'env', '-i',
                     'HOME=' + user.pw_dir, 'XDG_RUNTIME_DIR=' + str(runtime),
+                    'USER=' + user.pw_name, 'LOGNAME=' + user.pw_name,
                     'WAYLAND_DISPLAY=' + sockets[0].name, 'XDG_SESSION_TYPE=wayland',
                     'DBUS_SESSION_BUS_ADDRESS=unix:path=' + str(runtime/'bus'),
-                    'MANGO_INSTANCE_SIGNATURE=' + signatures.pop(),
                     *[key + '=' + value for key, value in inherited.items()]]
         except (OSError, UnicodeError, KeyError):
             continue
@@ -151,8 +176,8 @@ def startup(prefix, command, pattern, timeout=300):
 
 
 def measure(prefix):
-    emit('identity', dict(kernel=run(['uname', '-r']), virtualization='qemu',
-                          sampler='cpu-30-pss-6-v3-awake-ipc', cpu=run(['lscpu']),
+    emit('identity', dict(kernel=run(['uname', '-r']), virtualization=run(['systemd-detect-virt', '--vm']),
+                          sampler='cpu-30-pss-6-v4-native-session', cpu=run(['lscpu']),
                           boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
     emit('boot', dict(analyze=run(['systemd-analyze']),
                       uptime=Path('/proc/uptime').read_text().strip()))
@@ -203,13 +228,14 @@ def measure(prefix):
     # graph must not discard the actual memory/window measurements or block an offline install.
     try:
         emit('critical_chain', run(['systemd-analyze', '--no-pager', 'critical-chain'], timeout=120))
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+    except (RuntimeError, subprocess.TimeoutExpired) as error:
         emit('critical_chain_unmeasured', str(error))
     emit('done', True)
 
 
 def main():
-    if os.geteuid() != 0 or run(['systemd-detect-virt', '--vm']) != 'qemu':
+    if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
+            or run(['systemd-detect-virt', '--vm']) not in ('qemu', 'kvm')):
         raise RuntimeError('This probe requires root inside a disposable QEMU VM')
     prefix = desktop()
     awake = json.loads(run(prefix + ['arctic-keep-awake', 'status', '--json']))
