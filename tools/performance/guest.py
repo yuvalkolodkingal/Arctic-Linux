@@ -17,8 +17,11 @@ import time
 
 
 def run(argv, timeout=45):
-    return subprocess.check_output(argv, text=True, stderr=subprocess.STDOUT,
-                                   timeout=timeout).strip()
+    try:
+        return subprocess.check_output(argv, text=True, stderr=subprocess.STDOUT,
+                                       timeout=timeout).strip()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f'Command exited {error.returncode}: {argv!r}\n{error.output[-12000:]}') from error
 
 
 def emit(check, value):
@@ -149,7 +152,7 @@ def startup(prefix, command, pattern, timeout=300):
 
 def measure(prefix):
     emit('identity', dict(kernel=run(['uname', '-r']), virtualization='qemu',
-                          sampler='cpu-30-pss-6-v2-awake', cpu=run(['lscpu']),
+                          sampler='cpu-30-pss-6-v3-awake-ipc', cpu=run(['lscpu']),
                           boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
     emit('boot', dict(analyze=run(['systemd-analyze']),
                       uptime=Path('/proc/uptime').read_text().strip()))
@@ -178,8 +181,11 @@ def measure(prefix):
         memory['cpu_busy_percent'] = 100 * (1 - (idle_after - idle_before) / max(1, after - before))
         samples.append(memory)
     emit('idle_samples', samples)
+    shell_path = run(prefix + ['arctic-shell', '--path'])
+    emit('shell_path', shell_path)
+    # Match the shipped helper's CLI order and selected shell directory.
     for label, command in [('fish', ['fish', '-ic', 'exit']), ('bash', ['bash', '-ic', 'exit']),
-                           ('shell_ipc', ['quickshell', '-p', '/usr/share/arctic/shell', 'ipc', 'call', 'bar', 'hidden'])]:
+                           ('shell_ipc', ['quickshell', 'ipc', '-p', shell_path, 'call', 'bar', 'hidden'])]:
         times = []
         for _ in range(10):
             start = time.monotonic()

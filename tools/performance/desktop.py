@@ -42,7 +42,7 @@ def exercise(performance, prefix, wallpaper=False):
         raise RuntimeError(f'Expected {wanted} within {seconds}s')
 
     settings = prefix + ['python3', '/usr/share/arctic/settings/scripts/arctic_settings.py']
-    shell = prefix + ['quickshell', '-p', '/usr/share/arctic/shell', 'ipc', 'call']
+    shell = prefix + ['quickshell', 'ipc', '-p', run(prefix + ['arctic-shell', '--path']), 'call']
     check('selinux-enforcing', lambda: require(run(['getenforce']) == 'Enforcing', 'SELinux enforcing'))
     check('default-browser', lambda: require('zen' in (value := run(prefix + ['xdg-settings', 'get', 'default-web-browser'])).lower(), value))
     for feature in ('motion', 'gaming', 'optional-network'):
@@ -55,7 +55,7 @@ def exercise(performance, prefix, wallpaper=False):
     def settings_gui():
         before = set(performance['clients'](prefix))
         output = Path('/tmp/arctic-desktop-settings.log')
-        ipc = prefix + ['quickshell', '-p', '/usr/share/arctic/settings', 'ipc', 'call', 'settings']
+        ipc = prefix + ['quickshell', 'ipc', '-p', '/usr/share/arctic/settings', 'call', 'settings']
         with output.open('w') as log:
             child = subprocess.Popen(prefix + ['arctic-settings'], stdout=log, stderr=log)
             try:
