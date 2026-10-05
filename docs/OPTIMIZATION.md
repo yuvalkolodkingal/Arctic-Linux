@@ -170,7 +170,12 @@ the filesystem containing its subvolumes, separately from the extracted image's
 logical bytes. Observer memory is included and its PID is recorded. Its own CPU percentage on one core
 is recorded separately. The preliminary full-scan sampler consumed about 26% of one
 emulated core, so future comparison uses the same `cpu-30-pss-6-v1` sampler on
-both installed systems. Summary files report the actual count for every metric; no
+both installed systems. The current sampler is `cpu-30-pss-6-v2-awake`: it uses
+Arctic's session-only Keep awake feature during the probe and restores it afterward.
+This prevents the normal five-minute idle lock from interfering with slow emulated
+GUI launches; it does not change lock settings or system security policy. Both
+images use identical conditions, and these observations remain separate from the
+earlier preliminary samples. Summary files report the actual count for every metric; no
 PSS observations are duplicated to pretend there were 30 scans. Reuse the
 same tools and observer for both builds. Startup closes only newly opened test windows.
 
@@ -219,3 +224,23 @@ For constrained builders, `tools/build-iso.sh --scratch DIR` places create-stage
 intermediates and temporary files on dedicated storage while retaining the package
 root in `--work`. This reduces workspace pressure, not the shipped ISO size.
 Candidate metadata records the build-tool commit separately from the RPM source commit.
+
+Separate GUI/PAM checks can be composed with `--desktop` and run on an installed
+test disk with `tools/test-install.sh --stage boot --guest-check-interactive`.
+They request real Settings pages and Get apps, record rendered-page screenshots,
+confirm the compositor's secure session lock for at least 65 seconds, and type the
+known test password through simulated keyboard input into the normal PAM flow.
+Screenshots require visual review; an IPC success alone is not a UI acceptance pass.
+These checks run after the repeated performance measurements. Explicit
+`--online-via-proxy` testing can now provision TLS trust/proxy settings in an
+already-installed disposable guest; TLS verification stays enabled and this trust
+never enters the ISO.
+
+The local CI draft makes only artifact-only `workflow_dispatch` builds (`release=false`)
+use `.preview` RPM release suffixes. Normal signed stable updates can therefore
+replace test packages even if their source commit predates the test branch.
+Release builds retain the existing numeric version scheme. This workflow has not
+been pushed or dispatched; remote branch publication still requires approval.
+An Actions rebuild will produce different ISO bytes and requires its own checksum
+and qualification evidence. `boot_test` does not include the separate Nix/update
+acceptance flow, and its existing continue-on-error setting is not a stability gate.

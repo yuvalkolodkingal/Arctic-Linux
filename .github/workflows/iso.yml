@@ -68,7 +68,13 @@ jobs:
         run: |
           # Every build gets its own Release (1.<UTC commit time>.<UTC build time>.git<commit>):
           # the repository's builds of newer commits update the packages on the ISO.
-          tools/build-rpms.sh
+          if [ '${{ github.event_name }}' = workflow_dispatch ] && [ '${{ inputs.release }}' = false ]; then
+            # Artifact-only candidates must remain replaceable by normal signed stable
+            # updates, even when the stable source commit predates this test branch.
+            tools/build-rpms.sh --release-suffix ".preview.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.git$(git rev-parse --short HEAD)"
+          else
+            tools/build-rpms.sh
+          fi
           cat out/BUILD-INFO
 
       - name: Build ISO
