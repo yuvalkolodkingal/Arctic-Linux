@@ -3,7 +3,8 @@
 Work is local on `codex/optimize-preserve-functionality`, based on main
 `f1e3c518ae6a1d8d0fd85dcf117baa8341701703` (includes PR 18's lock-clock fix).
 No main merge, tags, package repository publication, or public release is authorized.
-The concurrent wallpaper work must be reconciled into the candidate before final acceptance.
+The approved wallpaper merge on main `cdf4960f567842e853b6b3503c542d739ff215f7`
+has been reconciled locally and is included in the combined candidate.
 
 The target is **1,500,000,000 bytes**, decimal 1.5 GB, approximately 1.397 GiB.
 GB means 1,000,000,000 bytes; GiB means 1,073,741,824 bytes. This is a target,
@@ -54,6 +55,27 @@ dependent and is distinct from the installed VM's disk usage.
 
 ## First local candidate and completed experiments
 
+The combined candidate, built after incorporating the approved wallpaper work, is
+`out/iso-candidate-2/Arctic-Linux-1.2-optimized-candidate-20261005-x86_64.iso`:
+**2,321,909,760 bytes**, SHA-256
+`f0635b87a05de6bc89b1aa9dbcd0a76db8503a691b28a18552e31a41d6b5a7ef`.
+This is only **163,840 bytes (0.0071%) smaller** than v1.2 and **821,909,760 bytes
+over the target**. It is not a meaningful size optimization or a qualified stable
+release. Its source RPM commit is `244e4dddbe3d08b1446e30d5ac813da4a8c1422d`,
+with `.preview.202610052010.git244e4dd` releases that sort below normal stable
+releases. The EROFS payload is 1,990,148,096 bytes and the initrd remains
+241,962,859 bytes. The build used the original LZMA 6 / 1 MiB settings.
+Independent checksum verification passes; installed-system qualification is ongoing.
+
+KIWI completed image creation, but the metadata wrapper initially failed because
+the prepared description is `config.xml`, while its glob only looked for `*.kiwi`.
+The completed ISO was recovered without rebuilding or changing its bytes; its
+metadata records this recovery. The wrapper now reads the prepared XML explicitly,
+requires one description, and retains metadata outside KIWI's temporary paths.
+An actual execution in a disposable container verifies the override and metadata
+against `config.xml`; Bash syntax and ShellCheck also pass. This changes build
+tooling, not the installed system. The original candidate below is superseded.
+
 The first candidate is `out/iso-candidate/Arctic-Linux-1.2-optimized-candidate-x86_64.iso`:
 **2,321,430,528 bytes**, SHA-256
 `8d40511af887361da91610dfded1e86e86df6ed6d4218909893ce2a82d2b1c69`.
@@ -92,7 +114,7 @@ Three complete userspace content-decode passes give LZMA median 54.24 s (range
 These are host readback measurements on retained cache, not boot or application
 startup benchmarks. No caches were dropped. Raw timings are
 `out/audit/compression/{lzma6-baseline,zstd6-64k}-fsck-{1,2,3}.time`.
-Smaller LZMA clusters deserve a measured follow-up if they improve this tradeoff.
+The completed smaller-cluster trial above did not improve this tradeoff.
 
 Compression trials use the same extracted baseline file contents and hardlinks;
 that audit extraction omits xattrs. They are isolated storage experiments, not
