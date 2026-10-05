@@ -33,23 +33,35 @@ def desktop():
             user = pwd.getpwuid(path.stat().st_uid)
             runtime = Path('/run/user') / str(user.pw_uid)
             sockets = [p for p in runtime.glob('wayland-*') if p.is_socket()]
+            if len(sockets) != 1:
+                continue
             signatures = set()
+            session_environments = []
             for child in Path('/proc').glob('[0-9]*'):
                 try:
                     if child.stat().st_uid != user.pw_uid:
                         continue
                     env = dict(item.split('=', 1) for item in (child/'environ').read_bytes().decode().split('\0') if '=' in item)
-                    if env.get('XDG_RUNTIME_DIR') == str(runtime) and env.get('MANGO_INSTANCE_SIGNATURE'):
+                    if (env.get('XDG_RUNTIME_DIR') == str(runtime) and env.get('MANGO_INSTANCE_SIGNATURE')
+                            and env.get('WAYLAND_DISPLAY') == sockets[0].name):
                         signatures.add(env['MANGO_INSTANCE_SIGNATURE'])
+                        session_environments.append(env)
                 except (OSError, UnicodeError):
                     continue
             if len(sockets) != 1 or len(signatures) != 1:
                 continue
+            inherited = {}
+            for key in ('DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP', 'XDG_SESSION_DESKTOP',
+                        'DESKTOP_SESSION', 'XDG_DATA_DIRS', 'GDK_BACKEND', 'QT_QPA_PLATFORM'):
+                values = {env[key] for env in session_environments if env.get(key)}
+                if len(values) == 1:
+                    inherited[key] = values.pop()
             return ['runuser', '-u', user.pw_name, '--', 'env',
                     'HOME=' + user.pw_dir, 'XDG_RUNTIME_DIR=' + str(runtime),
                     'WAYLAND_DISPLAY=' + sockets[0].name, 'XDG_SESSION_TYPE=wayland',
                     'DBUS_SESSION_BUS_ADDRESS=unix:path=' + str(runtime/'bus'),
-                    'MANGO_INSTANCE_SIGNATURE=' + signatures.pop()]
+                    'MANGO_INSTANCE_SIGNATURE=' + signatures.pop(),
+                    *[key + '=' + value for key, value in inherited.items()]]
         except (OSError, UnicodeError, KeyError):
             continue
     raise RuntimeError('No unique non-root Mango session')
@@ -93,23 +105,31 @@ def clients(prefix):
     return {str(c['id']): c for c in json.loads(run(prefix + ['mmsg', 'get', 'all-clients']))['clients']}
 
 
-def startup(prefix, command, pattern):
+def startup(prefix, command, pattern, timeout=300):
     before = set(clients(prefix))
     started = time.monotonic()
     with open('/tmp/arctic-performance-apps.log', 'a') as output:
         child = subprocess.Popen(prefix + command, stdout=output, stderr=output)
         try:
-            while time.monotonic() - started < 120:
+            while time.monotonic() - started < timeout:
                 current = clients(prefix)
                 windows = [c for key, c in current.items() if key not in before and
-                           pattern in str(c.get('appid', c.get('app_id', ''))).lower()]
+                           pattern in (str(c.get('appid', c.get('app_id', ''))) + ' ' + str(c.get('title', ''))).lower()]
                 if windows:
                     measured = time.monotonic() - started
                     time.sleep(5)
+                    if not any(str(window['id']) in clients(prefix) for window in windows):
+                        continue
+                    emit('mapped_window_' + pattern, windows)
                     emit('app_workload_' + pattern, snapshot())
                     return measured
                 time.sleep(.25)
-            raise RuntimeError(f'No mapped {pattern} window within 120 s')
+                if child.poll() not in (None, 0):
+                    break
+            emit('startup_' + pattern + '_diagnostic', dict(exit_code=child.poll(),
+                 clients=list(clients(prefix).values()),
+                 launch_output=Path('/tmp/arctic-performance-apps.log').read_text(errors='replace')[-12000:]))
+            raise RuntimeError(f'No persistent mapped {pattern} window within {timeout} s')
         finally:
             # Close the newly launched window using the compositor, not system-wide pkill.
             current = clients(prefix)
