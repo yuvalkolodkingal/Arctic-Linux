@@ -126,7 +126,6 @@ def main():
     emit('identity', dict(kernel=run(['uname', '-r']), virtualization='qemu',
                           cpu=run(['lscpu']), boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
     emit('boot', dict(analyze=run(['systemd-analyze']),
-                      critical_chain=run(['systemd-analyze', 'critical-chain']),
                       uptime=Path('/proc/uptime').read_text().strip()))
     emit('security', run(['getenforce']))
     emit('installed_bytes', run(['du', '-sx', '-B1', '--exclude=/proc', '--exclude=/sys', '--exclude=/dev',
@@ -157,6 +156,12 @@ def main():
     emit('final_idle', snapshot())
     emit('system_failed_units', run(['systemctl', '--failed', '--no-pager']))
     emit('flatpak', run(['flatpak', 'list', '--system', '--columns=ref,active,size']))
+    # Enumerating the dependency graph can be very slow under TCG. A missing supplemental
+    # graph must not discard the actual memory/window measurements or block an offline install.
+    try:
+        emit('critical_chain', run(['systemd-analyze', '--no-pager', 'critical-chain'], timeout=120))
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        emit('critical_chain_unmeasured', str(error))
     emit('done', True)
 
 
