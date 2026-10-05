@@ -133,7 +133,7 @@ relative measurements and must never be presented as physical gaming benchmarks.
 `tools/test-install.sh --iso ISO --memory 4096 --smp 2
 --guest-check tools/performance/guest.py --out RESULT_DIR` installs offline and
 boots the resulting encrypted system. The probe records boot critical chain,
-filesystem use, 30 one-second idle samples after 60 seconds settling, per-process
+filesystem use, 30 CPU/meminfo samples after 60 seconds settling, six per-process PSS scans at five-sample intervals, per-process
 PSS/private bytes, MemAvailable, Cached, SReclaimable, CPU busy percentage, shell
 launch/IPC time and time to a newly mapped Kitty, Nautilus and Zen window.
 The first launch after a fresh boot and subsequent warm launches are distinguished;
@@ -141,7 +141,11 @@ no cache dropping. The live `du -x /` value describes allocation reported by the
 writable live overlay and must not be represented as total installed size. The
 installed capability probe also records `btrfs filesystem usage -b /`, including
 the filesystem containing its subvolumes, separately from the extracted image's
-logical bytes. Observer memory is included and its PID is recorded. Reuse the
+logical bytes. Observer memory is included and its PID is recorded. Its own CPU percentage on one core
+is recorded separately. The preliminary full-scan sampler consumed about 26% of one
+emulated core, so future comparison uses the same `cpu-30-pss-6-v1` sampler on
+both installed systems. Summary files report the actual count for every metric; no
+PSS observations are duplicated to pretend there were 30 scans. Reuse the
 same tools and observer for both builds. Startup closes only newly opened test windows.
 
 For comparative performance acceptance, repeat at least three boots after builds
@@ -184,3 +188,8 @@ evidence only. The offline harness now explicitly uses QEMU `restrict=on` and
 rejects any outside HTTP response before installing. [QEMU documents isolation](https://www.qemu.org/docs/master/system/invocation.html)
 for this setting. `vm-offline` is the fresh restricted-network acceptance run.
 Neither host nor laptop networking is changed.
+
+For constrained builders, `tools/build-iso.sh --scratch DIR` places create-stage
+intermediates and temporary files on dedicated storage while retaining the package
+root in `--work`. This reduces workspace pressure, not the shipped ISO size.
+Candidate metadata records the build-tool commit separately from the RPM source commit.

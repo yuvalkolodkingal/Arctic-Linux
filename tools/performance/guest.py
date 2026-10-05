@@ -55,11 +55,16 @@ def desktop():
     raise RuntimeError('No unique non-root Mango session')
 
 
-def snapshot():
+def meminfo():
     memory = {}
     for line in Path('/proc/meminfo').read_text().splitlines():
         key, value = line.split(':', 1)
         memory[key] = int(value.split()[0]) * 1024
+    return memory
+
+
+def snapshot():
+    memory = meminfo()
     processes = []
     skipped = []
     for path in Path('/proc').glob('[0-9]*'):
@@ -125,7 +130,8 @@ def main():
         raise RuntimeError('This probe requires root inside a disposable QEMU VM')
     prefix = desktop()
     emit('identity', dict(kernel=run(['uname', '-r']), virtualization='qemu',
-                          cpu=run(['lscpu']), boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+                          sampler='cpu-30-pss-6-v1', cpu=run(['lscpu']),
+                          boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
     emit('boot', dict(analyze=run(['systemd-analyze']),
                       uptime=Path('/proc/uptime').read_text().strip()))
     emit('security', run(['getenforce']))
@@ -139,7 +145,10 @@ def main():
         usage = resource.getrusage(resource.RUSAGE_SELF)
         observer_before = usage.ru_utime + usage.ru_stime
         before, idle_before = cpu_ticks()
-        memory = snapshot()
+        # Full process PSS scans are expensive under software emulation. Sample them
+        # six times; keep all 30 CPU/meminfo observations and expose observer cost.
+        memory = snapshot() if index % 5 == 0 else dict(memory_bytes=meminfo(), observer_pid=os.getpid())
+        memory['pss_measured'] = index % 5 == 0
         time.sleep(1)
         after, idle_after = cpu_ticks()
         elapsed = time.monotonic() - started

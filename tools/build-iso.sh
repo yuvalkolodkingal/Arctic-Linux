@@ -7,6 +7,7 @@
 #   tools/build-iso.sh --work DIR       kiwi build root and scratch space (default out/kiwi-work;
 #                                       needs ~15 GB; removed afterwards unless --keep-work)
 #   tools/build-iso.sh --cache DIR      keep kiwi's dnf package cache in DIR between builds
+#   tools/build-iso.sh --scratch DIR    put create-stage intermediates and temp files on DIR
 #   tools/build-iso.sh --out DIR        output directory (default out/iso)
 #   tools/build-iso.sh --debug          kiwi --debug
 #   tools/build-iso.sh --create-only    reuse the image root kept in the work dir (--keep-work or
@@ -38,6 +39,8 @@ REPO="$ROOT/out/repo"
 WORK="$ROOT/out/kiwi-work"
 OUT="$ROOT/out/iso"
 CACHE=""
+SCRATCH=""
+BUILD_DIR=/work/build
 KEEP_WORK=0
 DEBUG=""
 ZEN=yes
@@ -54,6 +57,7 @@ while (( $# )); do
     --work)  WORK="$2"; shift 2 ;;
     --out)   OUT="$2"; shift 2 ;;
     --cache) CACHE="$2"; shift 2 ;;
+    --scratch) SCRATCH="$2"; shift 2 ;;
     --keep-work) KEEP_WORK=1; shift ;;
     --debug) DEBUG="--debug"; shift ;;
     --zen) ZEN="$2"; shift 2 ;;
@@ -86,14 +90,23 @@ mkdir -p "$WORK" "$OUT" "$ROOT/out/logs"
 REPO="$(cd "$REPO" && pwd)"; WORK="$(cd "$WORK" && pwd)"; OUT="$(cd "$OUT" && pwd)"
 LOGS="$(cd "$ROOT/out/logs" && pwd)"
 cache_args=()
+scratch_args=()
 if [[ -n "$CACHE" ]]; then
   mkdir -p "$CACHE"; CACHE="$(cd "$CACHE" && pwd)"
   cache_args=(-v "$CACHE:/var/cache/kiwi")
 fi
+if [[ -n "$SCRATCH" ]]; then
+  mkdir -p "$SCRATCH/temporary"
+  SCRATCH="$(cd "$SCRATCH" && pwd)"
+  [[ "$SCRATCH" != / && "$SCRATCH" != "$ROOT" ]] || arctic_die "--scratch needs a dedicated directory"
+  BUILD_DIR=/scratch/build
+  scratch_args=(-v "$SCRATCH:/scratch" -v "$SCRATCH/temporary:/tmp" -v "$SCRATCH/temporary:/var/tmp")
+fi
 
 avail_gb=$(( $(df -Pk "$WORK" | awk 'NR==2 {print $4}') / 1024 / 1024 ))
-arctic_log "free space for the kiwi build root ($WORK): ${avail_gb} GB"
-(( avail_gb >= 12 )) || arctic_log "warning: less than 12 GB free; the build may run out of space"
+arctic_log "free space for the kiwi build root ($WORK): ${avail_gb} GiB"
+(( avail_gb >= 12 )) || arctic_log "warning: less than 12 GiB free; the build may run out of space"
+[[ -z "$SCRATCH" ]] || arctic_log "create-stage scratch space: $SCRATCH ($(df -h "$SCRATCH" | awk 'NR==2 {print $4}') available)"
 
 arctic_ensure_engine
 engine="$(arctic_engine)"
@@ -114,9 +127,9 @@ for i in $(seq 0 7); do [ -e /dev/loop$i ] || mknod -m 0660 /dev/loop$i b 7 $i 2
 if [ "$CREATE_ONLY" = 1 ]; then
   [ -d /work/root/image ] || { echo "--create-only: no image root in the work dir" >&2; exit 1; }
 else
-  rm -rf /work/build /work/root
+  rm -rf "$BUILD_DIR" /work/root
 fi
-cleanup() { if [ "$KEEP_WORK" != 1 ]; then rm -rf /work/build /work/root; fi; }
+cleanup() { if [ "$KEEP_WORK" != 1 ]; then rm -rf "$BUILD_DIR" /work/root; fi; }
 trap cleanup EXIT
 fail() { echo "kiwi failed: $1; last lines of out/logs/$2:" >&2; tail -n 80 "/logs/$2" >&2 || :; exit 1; }
 
@@ -209,9 +222,9 @@ elif [ "$ZEN" != no ]; then
 fi
 
 create() {
-  rm -rf /work/build
+  rm -rf "$BUILD_DIR"
   kiwi-ng $KIWI_DEBUG --logfile /logs/kiwi-create.log --color-output system create \
-    --root /work/root --target-dir /work/build || {
+    --root /work/root --target-dir "$BUILD_DIR" || {
       KEEP_WORK=1
       echo "the image root stays in the work dir: retry with --create-only, or delete it" >&2
       fail create kiwi-create.log
@@ -220,27 +233,29 @@ create() {
 
 # 3. create: SELinux labels, live initrd, erofs root, ISO.
 create
-iso=$(ls /work/build/*.iso | head -n1)
+iso=$(ls "$BUILD_DIR"/*.iso | head -n1)
 if [ "$zen" = 1 ] && [ "$ZEN" = auto ] && [ "$(stat -c %s "$iso")" -gt 2147483648 ]; then
   echo "note: with Zen the ISO is $(( $(stat -c %s "$iso") / 1048576 )) MiB (> 2 GiB): rebuilding without it" >&2
   FLATPAK_SYSTEM_DIR=/work/root/var/lib/flatpak flatpak uninstall --system -y --noninteractive --all || :
   rm -rf /work/root/var/lib/flatpak/repo/objects/* /work/root/var/lib/flatpak/app /work/root/var/lib/flatpak/runtime
   zen=0
   create
-  iso=$(ls /work/build/*.iso | head -n1)
+  iso=$(ls "$BUILD_DIR"/*.iso | head -n1)
 fi
 echo "zen_preinstalled=$zen" > "/out/${ISO_NAME%.iso}.build-info"
 cat /tmp/arctic-compression-info >> "/out/${ISO_NAME%.iso}.build-info"
 cp -f "$iso" "/out/$ISO_NAME"
 ( cd /out && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256" )
-cp -f /work/build/*.packages "/out/${ISO_NAME%.iso}.packages" 2>/dev/null || :
+cp -f "$BUILD_DIR"/*.packages "/out/${ISO_NAME%.iso}.packages" 2>/dev/null || :
 chown "$HOST_UID:$HOST_GID" /out/* /logs/kiwi-*.log 2>/dev/null || :
 INNER
 )
 
 arctic_log "building the ISO with kiwi-ng in $ARCTIC_FEDORA_IMAGE ($engine, privileged)"
 start=$(date +%s)
-"$engine" run --rm --privileged "${ARCTIC_CONTAINER_ARGS[@]}" "${cache_args[@]}" \
+builder_commit="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+"$engine" run --rm --privileged "${ARCTIC_CONTAINER_ARGS[@]}" "${cache_args[@]}" "${scratch_args[@]}" \
+  -e BUILD_DIR="$BUILD_DIR" \
   -e ISO_NAME="$ISO_NAME" -e KIWI_DEBUG="$DEBUG" -e ZEN="$ZEN" -e CREATE_ONLY="$CREATE_ONLY" -e KEEP_WORK="$KEEP_WORK" \
   -e EROFS_COMPRESSION="$EROFS_COMPRESSION" -e EROFS_CLUSTER="$EROFS_CLUSTER" -e DEDUPE="$DEDUPE" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
@@ -259,6 +274,7 @@ fi
 size=$(stat -c %s "$iso")
 {
   echo "iso_bytes=$size"
+  echo "build_tool_commit=$builder_commit"
   echo "size_target_bytes=$MAX_BYTES"
   echo "erofs_compression_override=$EROFS_COMPRESSION"
   echo "erofs_cluster_override=$EROFS_CLUSTER"

@@ -24,10 +24,11 @@ def summarize(path):
                        security=values.get('security'), installed_bytes=values.get('installed_bytes'))
         if 'identity' in values:
             summary['boot_id'] = values['identity']['boot_id']
+            summary['sampler'] = values['identity'].get('sampler', 'legacy-full-pss')
         samples = values.get('idle_samples', [])
         summary['idle_sample_count'] = len(samples)
         if samples:
-            metrics = {key: [s[key] for s in samples] for key in
+            metrics = {key: [s[key] for s in samples if key in s] for key in
                        ('process_pss_bytes', 'process_private_bytes', 'cpu_busy_percent')}
             metrics.update({key + '_bytes': [s['memory_bytes'][key] for s in samples]
                             for key in ('MemAvailable', 'Cached', 'SReclaimable')})
@@ -35,9 +36,13 @@ def summarize(path):
                 if all(key in sample for sample in samples):
                     metrics[key] = [sample[key] for sample in samples]
             summary['idle'] = {key: dict(median=statistics.median(numbers), min=min(numbers),
-                                       max=max(numbers)) for key, numbers in metrics.items()}
+                                       max=max(numbers), sample_count=len(numbers)) for key, numbers in metrics.items()
+                               if numbers}
             summary['observer_pid'] = samples[0]['observer_pid']
-            summary['top_processes'] = samples[-1]['top_processes']
+            memory_samples = [sample for sample in samples if 'process_pss_bytes' in sample]
+            summary['memory_pss_sample_count'] = len(memory_samples)
+            if memory_samples:
+                summary['top_processes'] = memory_samples[-1]['top_processes']
         summary['timings_seconds'] = {key: value for key, value in values.items() if key.endswith('_seconds')}
         summary['unmeasured'] = {key: value for key, value in values.items() if key.endswith('_unmeasured')}
         summary['system_failed_units'] = values.get('system_failed_units')

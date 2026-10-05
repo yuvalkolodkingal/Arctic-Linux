@@ -29,3 +29,7 @@ rd.live.image` and `arctic.mode=try` (Install: `arctic.mode=install`; Safe graph
 live autologin to show the SDDM login screen.
 
 Test it with `tools/test-iso.sh` (QEMU, OVMF or SeaBIOS, screenshots in `out/test/`).
+
+On a constrained builder, `--scratch /path/to/dedicated/scratch` puts create-stage
+intermediates and temporary files on that storage; the prepared root stays in
+`--work`. Keep enough scratch capacity for both the root payload and ISO.
