@@ -57,6 +57,7 @@ dark the next time it starts without its dock): off lasts until you log out.
 | — | `~/.config/mango/config.conf` gets `source-optional=~/.config/mango/settings.conf` before the `user.conf` line if it lacks it | |
 | Theme, colours from the wallpaper, light/dark | through `arctic-theme set\|auto\|mode` (the older `arctic-theme winter\|polar-night` when that's all there is) | |
 | Wallpaper | through the shell's `scripts/wallpapers.py apply` → `arctic-wallpaper` | |
+| Shared SDDM/lock wallpaper, opt-in desktop sync | `arctic-login-wallpaper` → confined system D-Bus publisher; administrator authorization for explicit changes | public system copy; [scope and privacy](../docs/LOGIN-WALLPAPER.md) |
 | Reduce motion | through `arctic-motion on\|off` | |
 | Text size in GTK apps, pointer for GTK apps | `gsettings` `org.gnome.desktop.interface` `text-scaling-factor`, `cursor-theme`, `cursor-size` | |
 | Displays (arrange) | nothing: the helper's `display-arrange` works out every drag, arrow key, **Make main**, on/off and size change (displays touch edge to edge, never overlap, top-left at 0,0; the main display is the one there, where Mango starts the pointer) | |

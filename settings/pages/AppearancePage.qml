@@ -29,12 +29,49 @@ Page {
     property string busyTheme: ""
     property string busyWall: ""
     property bool importing: false
+    property var loginWallpaper: ({ available: false, enabled: false, mode: "legacy" })
+    property bool loginBusy: false
+    property int loginSeq: 0
+
+    function loadLoginWallpaper() {
+        const seq = ++page.loginSeq;
+        Backend.call(["login-wallpaper"], r => {
+            if (r.ok && seq === page.loginSeq && !page.loginBusy) page.loginWallpaper = r;
+        }, true);
+    }
+    Timer {
+        interval: 5000
+        repeat: true
+        running: page.visible && !page.loginBusy
+        onTriggered: page.loadLoginWallpaper()
+    }
+
+    function requestLoginWallpaper(action, picture) {
+        loginConfirm.action = action;
+        loginConfirm.picture = picture || "";
+        loginConfirm.open();
+    }
+    function applyLoginWallpaper() {
+        const args = ["login-wallpaper", loginConfirm.action];
+        if (loginConfirm.picture) args.push(loginConfirm.picture);
+        page.loginBusy = true;
+        ++page.loginSeq;
+        loginConfirm.close();
+        Backend.call(args, r => {
+            page.loginBusy = false;
+            if (r.ok) {
+                page.loginWallpaper = r;
+                Backend.notify(r.cleanup_error ? "info" : "success", r.cleanup_error || "Login and lock wallpaper updated", false);
+            }
+        });
+    }
 
     function load() {
         Backend.call(["theme"], r => { if (r.ok) page.theme = r; });
         Backend.call(["daylight"], r => { if (r.ok) page.daylight = r; }, true);
         Backend.call(["fonts"], r => { if (r.ok) page.fonts = r; }, true);
         Backend.call(["wallpaper-rotate"], r => { if (r.ok) page.rotate = r; }, true);
+        loadLoginWallpaper();
         Backend.call(["shell-options"], r => { if (r.ok) page.shellOptions = r; }, true);
         Backend.call(["weather-place"], r => { if (r.ok) page.weatherPlace = r; }, true);
         loadWallpapers();
@@ -589,6 +626,65 @@ Page {
     }
 
     Group {
+        title: "Login and lock wallpaper"
+        desc: "One public image for SDDM and every user's lock screen. Your desktop can have a different image. Changes require administrator authorization."
+        SettingRow {
+            searchKey: "appearance.login-wallpaper"
+            title: "Shared wallpaper"
+            desc: !page.loginWallpaper.available ? (page.loginWallpaper.error || "The publisher is unavailable.")
+                : page.loginWallpaper.cleanup_error ? page.loginWallpaper.cleanup_error
+                : page.loginWallpaper.state_error ? page.loginWallpaper.state_error
+                : page.loginWallpaper.image_missing ? "The public image is missing. Choose it again or restore defaults; login and lock use their safe fallback."
+                : page.loginWallpaper.sync_error ? "The previous public image is kept. Automatic sync failed: " + page.loginWallpaper.sync_error
+                : page.loginWallpaper.mode === "desktop" ? "Follows " + (page.loginWallpaper.owner_name || ("UID " + page.loginWallpaper.owner)) + "'s desktop while that account is active here, including rotation and theme changes."
+                : page.loginWallpaper.enabled ? "A separate image, kept even when your desktop changes."
+                : "Existing login and per-user lock backgrounds are preserved until you choose a shared image."
+            resettable: false
+            Column {
+                spacing: Theme.space2
+                enabled: page.loginWallpaper.available && !page.loginBusy
+                Image {
+                    visible: page.loginWallpaper.enabled && !page.loginWallpaper.image_missing
+                    width: 260
+                    height: visible ? 96 : 0
+                    source: /^[a-f0-9]{32}$/.test(page.loginWallpaper.revision || "")
+                        ? "file:///var/lib/arctic-login-wallpaper/generation-" + page.loginWallpaper.revision + "/wallpaper.png" : ""
+                    sourceSize: Qt.size(520, 192)
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                }
+                ArButton {
+                    text: page.loginBusy ? "Authorizing…" : "Choose image…"
+                    onClicked: loginFile.open()
+                }
+                ArButton {
+                    text: "Use desktop and follow changes…"
+                    variant: "secondary"
+                    onClicked: page.requestLoginWallpaper("sync-desktop", "")
+                }
+                ArButton {
+                    visible: page.loginWallpaper.mode === "desktop"
+                    text: "Keep this image; stop following…"
+                    variant: "ghost"
+                    onClicked: page.requestLoginWallpaper("freeze", "")
+                }
+                ArButton {
+                    visible: Boolean(page.loginWallpaper.previous)
+                    text: "Restore previous shared choice…"
+                    variant: "ghost"
+                    onClicked: page.requestLoginWallpaper("undo", "")
+                }
+                ArButton {
+                    visible: page.loginWallpaper.enabled || Boolean(page.loginWallpaper.state_error) || Boolean(page.loginWallpaper.cleanup_error)
+                    text: "Restore existing defaults…"
+                    variant: "ghost"
+                    onClicked: page.requestLoginWallpaper("reset", "")
+                }
+            }
+        }
+    }
+
+    Group {
         title: "Wallpaper"
         desc: page.walls.folder ? "Your own pictures come from " + page.tildePath(page.walls.folder) + "." : ""
         SettingRow {
@@ -814,6 +910,42 @@ Page {
     }
 
     // Add pictures: the file chooser (xdg-desktop-portal through qt6ct, Qt's own dialog otherwise).
+    FileDialog {
+        id: loginFile
+        title: "Choose the shared login and lock wallpaper"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["Static images (*.png *.jpg *.jpeg *.webp)"]
+        onAccepted: page.requestLoginWallpaper("set", String(selectedFile))
+    }
+    ArDialog {
+        id: loginConfirm
+        parent: T.Overlay.overlay
+        width: 480
+        title: "Change the public login wallpaper?"
+        property string action: ""
+        property string picture: ""
+        body: action === "reset"
+            ? "Restore existing login and lock defaults and remove saved public image copies. Administrator authorization is required."
+            : action === "undo"
+            ? "Restore the previous shared image, its sync mode and its authorized account. If that choice followed a desktop, future desktop changes will become public again. Administrator authorization is required."
+            : action === "sync-desktop"
+            ? "Your current desktop image and future desktop changes will be copied to a public system folder. Everyone using this computer can see them at login and on the lock screen, even while your home is encrypted. Programs running under your account can publish changes while your local desktop is active. Administrator authorization is required."
+            : "This changes the login and lock image for everyone using this computer. A validated copy is publicly readable outside user homes. Administrator authorization is required."
+        Image {
+            visible: loginConfirm.picture !== ""
+            width: 360
+            height: visible ? 150 : 0
+            source: loginConfirm.picture
+            sourceSize: Qt.size(720, 300)
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+        }
+        buttons: [
+            ArButton { text: "Cancel"; onClicked: loginConfirm.close() },
+            ArButton { text: "Continue"; variant: "primary"; onClicked: page.applyLoginWallpaper() }
+        ]
+    }
+
     FileDialog {
         id: fileDialog
         title: "Add pictures to your wallpapers"

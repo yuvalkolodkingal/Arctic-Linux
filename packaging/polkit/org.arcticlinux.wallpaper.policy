@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Arctic Linux</vendor>
+  <action id="org.arcticlinux.wallpaper.change">
+    <description>Change the shared login and lock wallpaper</description>
+    <message>Authorize a public wallpaper for every user of this computer</message>
+    <!-- Lets this unprivileged mechanism query authorization for its D-Bus caller;
+         this grants no client authorization and applies only to this action. -->
+    <annotate key="org.freedesktop.policykit.owner">unix-user:arctic-wallpaper</annotate>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
