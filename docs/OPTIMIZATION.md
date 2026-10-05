@@ -202,11 +202,22 @@ the v3 probe omitted `XDG_DATA_DIRS` when the terminal added a directory, so all
 four browser/MIME queries incorrectly reported Chromium. With the actual Mango
 login environment, all four report `app.zen_browser.zen.desktop`; the installer's
 default-apps and MIME files also select Zen. Browser preferences were not changed.
-The real shell has `XDG_SESSION_ID=2`, which v3 also omitted. The v4 probe preserves
-the login's paths/session identity, obtains post-exec display/IPC from matching
-children, and clears inherited root environment with `env -i`. Three regression
-tests cover changed terminal paths, missing login data and ambiguous IPC. Actual
-Get apps/PAM acceptance still requires the corrected VM probe to pass.
+The real shell has `XDG_SESSION_ID=2`, which v3 also omitted. The v4 probe preserved
+login paths/session identity but also inherited a portal-specific Qt backend,
+which can differ from the primary shell. The v5 probe obtains only Xwayland's
+post-exec display/authentication from children, preserves the login's own toolkit
+backend (including its unset state), and uses `env -i`. Four regression tests
+cover terminal path changes, missing login data, ambiguous IPC and portal backend
+leakage. The shipped [Quickshell revision's display selection](https://raw.githubusercontent.com/quickshell-mirror/quickshell/dacfa9d/src/launch/command.cpp)
+treats `wayland;xcb` differently from an unset backend; current upstream differs,
+so the installed version is the relevant source. The installed candidate passed default encrypted graphical boot, native Zen
+preference, all eight Settings pages and persistent Kitty/Nautilus/Zen windows.
+Get apps and lock/PAM still report no running Quickshell instance when using the
+shipped helper's configuration path. Preserving session identity did not resolve
+that failure. A narrow runtime-index/display diagnostic is pending; no functional
+lock or Get apps acceptance is claimed. Exact-ISO UEFI Secure Boot passed with
+enrolled OVMF keys, the guest's `SecureBoot enabled` report, enforcing SELinux,
+complete collection markers and a visually reviewed Try desktop.
 
 TCG boots with the harness's added `plymouth.use-simpledrm` argument intermittently
 went black before passphrase typing; a text recovery boot and the subsequent
@@ -266,7 +277,7 @@ They request real Settings pages and Get apps, record rendered-page screenshots,
 confirm the compositor's secure session lock for at least 65 seconds, and type the
 known test password through simulated keyboard input into the normal PAM flow.
 Screenshots require visual review; an IPC success alone is not a UI acceptance pass.
-These checks run after the repeated performance measurements. Explicit
+These checks are separate from repeated performance measurements. Explicit
 `--online-via-proxy` testing can now provision TLS trust/proxy settings in an
 already-installed disposable guest; TLS verification stays enabled and this trust
 never enters the ISO.

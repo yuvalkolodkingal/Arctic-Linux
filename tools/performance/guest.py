@@ -33,7 +33,7 @@ def session_environment(proc_root, uid, runtime, display, base):
 
     A terminal's shell can add its own XDG_DATA_DIRS. Requiring every child to
     agree would discard the desktop's Flatpak/Nix exports and report a false
-    default browser. Quickshell IPC also needs the actual XDG_SESSION_ID.
+    default browser. Keep the login's actual session identity and Qt backend.
     """
     fields = ('PATH', 'XDG_CONFIG_HOME', 'XDG_CONFIG_DIRS', 'XDG_DATA_HOME',
               'XDG_DATA_DIRS', 'XDG_CACHE_HOME', 'DISPLAY', 'XAUTHORITY',
@@ -58,9 +58,10 @@ def session_environment(proc_root, uid, runtime, display, base):
             continue
     if len(signatures) != 1:
         raise RuntimeError(f'Expected one Mango IPC signature, found {len(signatures)}')
-    # DISPLAY and Qt variables can be exported after Mango's exec. Never let
-    # child application paths or session identity override the login environment.
-    for key in ('DISPLAY', 'XAUTHORITY', 'GDK_BACKEND', 'QT_QPA_PLATFORM'):
+    # Xwayland's display can appear after Mango's exec. Portal/application Qt
+    # and GTK backend overrides are not session settings: inheriting them can
+    # change Quickshell's display identity and hide the live shell from IPC.
+    for key in ('DISPLAY', 'XAUTHORITY'):
         if key not in inherited:
             values = {env[key] for env in children if env.get(key)}
             if len(values) == 1:
@@ -177,7 +178,7 @@ def startup(prefix, command, pattern, timeout=300):
 
 def measure(prefix):
     emit('identity', dict(kernel=run(['uname', '-r']), virtualization=run(['systemd-detect-virt', '--vm']),
-                          sampler='cpu-30-pss-6-v4-native-session', cpu=run(['lscpu']),
+                          sampler='cpu-30-pss-6-v5-native-backend', cpu=run(['lscpu']),
                           boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
     emit('boot', dict(analyze=run(['systemd-analyze']),
                       uptime=Path('/proc/uptime').read_text().strip()))

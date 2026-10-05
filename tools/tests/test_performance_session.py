@@ -44,8 +44,19 @@ class NativeSessionTest(unittest.TestCase):
         self.assertEqual(env['XDG_DATA_DIRS'], self.base['XDG_DATA_DIRS'])
         self.assertEqual(env['XDG_SESSION_ID'], '2')
         self.assertEqual(env['DISPLAY'], ':0')
-        self.assertEqual(env['QT_QPA_PLATFORM'], 'wayland;xcb')
+        self.assertNotIn('QT_QPA_PLATFORM', env)
         self.assertEqual(env['MANGO_INSTANCE_SIGNATURE'], '/run/user/test/mango.sock')
+
+    def test_portal_backend_does_not_replace_unset_login_backend(self):
+        self.child(10, GDK_BACKEND='wayland,x11')
+        env = self.environment()
+        self.assertNotIn('QT_QPA_PLATFORM', env)
+        self.assertNotIn('GDK_BACKEND', env)
+        self.base['QT_QPA_PLATFORM'] = 'wayland'
+        self.base['GDK_BACKEND'] = 'wayland'
+        env = self.environment()
+        self.assertEqual(env['QT_QPA_PLATFORM'], 'wayland')
+        self.assertEqual(env['GDK_BACKEND'], 'wayland')
 
     def test_missing_or_ambiguous_ipc_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, 'found 0'):
