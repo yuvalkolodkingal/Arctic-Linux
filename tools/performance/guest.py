@@ -34,11 +34,14 @@ def desktop():
             sockets = [p for p in runtime.glob('wayland-*') if p.is_socket()]
             signatures = set()
             for child in Path('/proc').glob('[0-9]*'):
-                if child.stat().st_uid != user.pw_uid:
+                try:
+                    if child.stat().st_uid != user.pw_uid:
+                        continue
+                    env = dict(item.split('=', 1) for item in (child/'environ').read_bytes().decode().split('\0') if '=' in item)
+                    if env.get('XDG_RUNTIME_DIR') == str(runtime) and env.get('MANGO_INSTANCE_SIGNATURE'):
+                        signatures.add(env['MANGO_INSTANCE_SIGNATURE'])
+                except (OSError, UnicodeError):
                     continue
-                env = dict(item.split('=', 1) for item in (child/'environ').read_bytes().decode().split('\0') if '=' in item)
-                if env.get('XDG_RUNTIME_DIR') == str(runtime) and env.get('MANGO_INSTANCE_SIGNATURE'):
-                    signatures.add(env['MANGO_INSTANCE_SIGNATURE'])
             if len(sockets) != 1 or len(signatures) != 1:
                 continue
             return ['runuser', '-u', user.pw_name, '--', 'env',
@@ -140,7 +143,7 @@ def main():
         samples.append(memory)
     emit('idle_samples', samples)
     for label, command in [('fish', ['fish', '-ic', 'exit']), ('bash', ['bash', '-ic', 'exit']),
-                           ('shell_ipc', ['quickshell', 'ipc', 'call', 'bar', 'hidden'])]:
+                           ('shell_ipc', ['quickshell', '-p', '/usr/share/arctic/shell', 'ipc', 'call', 'bar', 'hidden'])]:
         times = []
         for _ in range(10):
             start = time.monotonic()
@@ -153,7 +156,7 @@ def main():
         emit('startup_' + pattern + '_seconds', dict(first=samples[0], warm=samples[1:]))
     emit('final_idle', snapshot())
     emit('system_failed_units', run(['systemctl', '--failed', '--no-pager']))
-    emit('flatpak', run(['flatpak', 'list', '--system', '--columns=ref,commit,size']))
+    emit('flatpak', run(['flatpak', 'list', '--system', '--columns=ref,active,size']))
     emit('done', True)
 
 
