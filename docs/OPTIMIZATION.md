@@ -271,6 +271,22 @@ These checks run after the repeated performance measurements. Explicit
 already-installed disposable guest; TLS verification stays enabled and this trust
 never enters the ISO.
 
+When software emulation makes timing inconclusive, qualify the functional/security
+flows first and retain that limitation. `tools/performance/compose-nix-probe.py`
+combines native session discovery with the Nix acceptance probe. Its explicit
+online mode uses the VM test proxy and a daemon drop-in under `/run`, without
+changing the shipped service policy or signature/sandbox settings. It exercises
+the user-owned profile, graphical launchers, two-user isolation, removal/rollback,
+then `arctic-update now --sync`. Staging must preserve the running package versions,
+arm the normal offline flow and download all installed Arctic preview packages;
+their RPM signatures are independently checked. After the offline transaction's
+intermediate reboot, verify stable versions, the cleared trigger, updater status,
+Nix/profile/settings persistence and the actual desktop. An installed preview fix
+can be replaced by the current stable repository until an approved main merge;
+post-update evidence must identify that source. Preserve a disposable VM snapshot
+before updating if later paired measurements are feasible. These are planned gates,
+not completed checks.
+
 The local CI draft makes only artifact-only `workflow_dispatch` builds (`release=false`)
 use `.preview` RPM release suffixes. Normal signed stable updates can therefore
 replace test packages even if their source commit predates the test branch.

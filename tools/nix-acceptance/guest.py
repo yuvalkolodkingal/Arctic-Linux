@@ -84,13 +84,13 @@ def clients(prefix):
     return {str(c['id']): c for c in json.loads(run(prefix + ['mmsg', 'get', 'all-clients']))['clients']}
 
 
-def app(prefix, command, pattern):
+def app(prefix, command, pattern, timeout=300):
     before = set(clients(prefix))
     # arctic-open may detach. Its exit status alone is not evidence of a window.
     with open('/tmp/arctic-release-app.log', 'a') as log:
         child = subprocess.Popen(prefix + command, stdout=log, stderr=log)
         try:
-            until = time.monotonic() + 60
+            until = time.monotonic() + timeout
             while time.monotonic() < until:
                 current = clients(prefix)
                 new = {key for key, value in current.items() if key not in before
@@ -127,7 +127,9 @@ def browser(prefix):
         subprocess.run(prefix + ['flatpak', 'kill', ref], capture_output=True, timeout=15)
 
 
-def main():
+def main(update_method='dnf'):
+    if update_method not in ('dnf', 'arctic-offline'):
+        raise ValueError('Unknown update acceptance method')
     stage = sys.argv[1]
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
             or run(['systemd-detect-virt']) not in ('qemu', 'kvm')):
@@ -168,6 +170,8 @@ def main():
         return int(failed)
 
     must('rd.live.image' not in Path('/proc/cmdline').read_text(), 'installed boot')
+    check('daemon-store-info', lambda: run(prefix + ['/usr/bin/nix', '--extra-experimental-features',
+          'nix-command', 'store', 'info', '--store', 'daemon']))
     check('daemon', lambda: run(['systemctl', 'is-active', 'nix-daemon.service']))
     check('persistent-mount', lambda: must(run(['findmnt', '-n', '-o', 'TARGET', '-T', '/nix']) == '/nix', run(['findmnt', '/nix'])))
     check('store-ownership', lambda: must(Path('/nix').stat().st_uid == 0 and not Path('/nix').stat().st_mode & 0o022, '/nix root-owned and not group/world writable'))
@@ -210,6 +214,18 @@ def main():
         check('hello-after-reboot', lambda: run(prefix + [str(profile/'bin/hello')]))
         check('nix-engine-after-update', lambda: run(['/usr/bin/nix', '--version']))
         check('graphical-after-reboot', lambda: app(prefix, [str(profile/'bin/foot'), '-e', 'sleep', '30'], 'foot'))
+        if prior.get('update_method') == 'arctic-offline':
+            def offline_update_completed():
+                data = json.loads(run(['/usr/bin/arctic-update', 'status', '--json'], timeout=180))
+                must(not data.get('install_error') and not data.get('boot_failures'), data)
+                history = json.loads(Path('/var/lib/arctic/update-status.json').read_text())
+                must(data.get('state') == 'idle' and not data.get('armed') and not data.get('stored'), data)
+                versions = run(['rpm', '-q', 'arctic-shell', 'arctic-desktop-config'])
+                must('.preview.' not in versions and versions != prior['arctic_rpms'], versions)
+                must(not Path('/system-update').is_symlink(), 'offline update link removed')
+                return dict(status=data, installed_at=history.get('installed_at'), arctic_rpms=versions,
+                            offline_log=run(['dnf5', 'offline', 'log'], timeout=180))
+            check('signed-offline-update-completed', offline_update_completed)
         return int(failed)
 
     # Start a real DesktopEntries consumer BEFORE the first profile exists.
@@ -305,11 +321,36 @@ ShellRoot {
     check('avc', lambda: must(not re.search(r'avc:\s+denied.*(?:nix|foot)', new_lines, re.I), new_lines[-6000:] if 'avc:' in new_lines else 'no matching new Nix/foot AVC'))
     if not failed:
         before_rpm = run(['rpm', '-q', 'nix', 'nix-daemon'])
-        check('dnf-update', lambda: run(['dnf5', '-y', '--refresh', 'upgrade'], timeout=1800))
+        before_arctic = run(['rpm', '-q', 'arctic-shell', 'arctic-desktop-config'])
+        if update_method == 'arctic-offline':
+            check('signed-offline-update-stage', lambda: run(
+                  ['/usr/bin/arctic-update', 'now', '--sync'], timeout=2400))
+            def staged_update():
+                data = json.loads(run(['/usr/bin/arctic-update', 'status', '--json'], timeout=180))
+                must(data.get('state') == 'ready' and data.get('armed') is True and data.get('packages', 0) > 0, data)
+                must(Path('/system-update').is_symlink(), 'offline update is armed for the next boot')
+                must(run(['rpm', '-q', 'arctic-shell', 'arctic-desktop-config']) == before_arctic,
+                     'staging does not mutate the running Arctic packages')
+                files = [str(path) for path in Path('/var/lib/dnf/offline/packages').rglob('*.rpm')
+                         if path.name.startswith(('arctic-', 'sddm-wayland-mango-'))]
+                must(bool(files), 'signed Arctic packages were actually downloaded')
+                signatures = run(['rpmkeys', '--checksig', '--verbose', *files], timeout=180)
+                must('Signature' in signatures and 'OK' in signatures, signatures)
+                expected = {line.split()[0] for line in run(['rpm', '-qa', '--qf', '%{NAME} %{RELEASE}\n']).splitlines()
+                            if '.preview.' in line and line.startswith(('arctic-', 'sddm-wayland-mango '))}
+                downloaded = set(run(['rpm', '-qp', '--qf', '%{NAME}\n', *files], timeout=180).splitlines())
+                must(bool(expected) and expected.issubset(downloaded),
+                     dict(expected=sorted(expected), downloaded=sorted(downloaded)))
+                return dict(status=data, arctic_download_count=len(files),
+                            arctic_downloaded_names=sorted(downloaded), signatures=signatures)
+            check('signed-offline-update-ready', staged_update)
+        else:
+            check('dnf-update', lambda: run(['dnf5', '-y', '--refresh', 'upgrade'], timeout=1800))
         after_rpm = run(['rpm', '-q', 'nix', 'nix-daemon'])
         record(stage, 'engine-version-change', 'passed' if before_rpm != after_rpm else 'unrun', f'{before_rpm} -> {after_rpm}; same version is not upgrade proof')
         if not failed:
-            state_file.write_text(json.dumps(dict(boot=Path('/proc/sys/kernel/random/boot_id').read_text(), profile=str(profile.resolve()))))
+            state_file.write_text(json.dumps(dict(boot=Path('/proc/sys/kernel/random/boot_id').read_text(),
+                                  profile=str(profile.resolve()), update_method=update_method, arctic_rpms=before_arctic)))
     for log in ('/tmp/arctic-release-app.log', '/tmp/arctic-nix-desktop-probe.log'):
         if Path(log).exists():
             print(Path(log).read_text(errors='replace')[-8000:], flush=True)
