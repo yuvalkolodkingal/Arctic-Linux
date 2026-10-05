@@ -269,6 +269,8 @@ jobs:
             python3-dbus python3-gobject-base librsvg2-tools dbus-daemon swaybg fontconfig google-noto-sans-fonts \
             procps-ng pipewire wireplumber pipewire-utils libcap findutils which glib2
       - uses: actions/checkout@v4
+      - name: Lock clock starts, refreshes and follows local time
+        run: python3 shell/dev/test-lock-clock.py
       - name: Every menu opens without QML errors (network from test data, both themes)
         run: |
           set -u

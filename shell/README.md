@@ -130,6 +130,7 @@ node shell/tests/test-launcher.cjs              # launcher ranking, calculator
 node shell/tests/test-update-status.cjs         # the "Restart to update" logic
 node shell/tests/test-menu-nav.cjs              # keyboard movement in the bar menus
 node shell/tests/test-calendar-grid.cjs         # the calendar's month grid and ISO weeks
+python3 shell/dev/test-lock-clock.py            # isolated lock/relock/resume, local time, minute rollover
 node shell/tests/test-icons.cjs                 # every icon name in the QML resolves
 node shell/tests/test-notification-rules.cjs    # do not disturb, per-app rules, history, grouping
 /usr/lib64/qt6/bin/qmllint -I /usr/lib64/qt6/qml shell/*.qml

@@ -192,7 +192,9 @@ Scope {
     }
     readonly property string fallbackWallpaper: '/usr/share/backgrounds/arctic/' + Theme.tokens.lockWallpaper + '.svg'
 
-    SystemClock { id: clock; precision: SystemClock.Minutes; enabled: lock.locked }
+    // Use our notifying state: this Quickshell snapshot doesn't emit locked changes when
+    // acquiring the session lock, leaving a clock bound to lock.locked stopped at startup.
+    SystemClock { id: clock; precision: SystemClock.Minutes; enabled: root.showing }
 
     // Caps Lock, from the keyboard LEDs (sysfs has no change events, so it is read twice a
     // second, only while locked).
