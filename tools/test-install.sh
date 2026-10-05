@@ -60,9 +60,9 @@
 # from the data CD (failed units, warnings, pending.json, getenforce, the user's shell …) to
 # serial-boot.log. Screenshots (PNG) of every step land in the output directory.
 #
-# The VM has user-mode networking: in this sandbox there is no internet behind it, so the
-# install runs offline and the app downloads are deferred to first boot (unless
-# --online-via-proxy).
+# The VM has restricted user-mode networking by default. QEMU blocks guest access to the
+# host and outside networks, irrespective of the host's connectivity. Only the explicit
+# --online-via-proxy test enables routing. This changes the disposable VM, never the host.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -205,6 +205,17 @@ fi
   nmcli general; nmcli networking connectivity check
   "\$AI" version
 } 2>&1 | tee -a "\$S"
+if [ "$ONLINE_PROXY" != 1 ]; then
+  # Check transport reachability, not TLS trust or an HTTP success code: any HTTP response
+  # would mean the supposedly offline guest can reach an outside server.
+  response=\$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 http://fedoraproject.org/ || true)
+  say "ARCTIC-OFFLINE-HTTP-RESPONSE=\$response"
+  if [ "\$response" != 000 ]; then
+    say 'ARCTIC-OFFLINE-GATE=failed: outside HTTP response received'
+    systemctl poweroff; exit 93
+  fi
+  say 'ARCTIC-OFFLINE-GATE=passed: restricted QEMU network, no outside HTTP response'
+fi
 if [ -f "\$D/guest-check.py" ]; then
   python3 "\$D/guest-check.py" live >> "\$S" 2>&1
   smoke_rc=\$?
@@ -337,7 +348,8 @@ def qemu_argv(name, with_iso):
          "-device", f"virtio-blk-pci,drive=disk,bootindex={1 if with_iso else 0}",
          "-drive", f"file={out}/data.iso,media=cdrom,readonly=on,if=none,id=data",
          "-device", "ide-cd,drive=data,bus=ide.0",   # sr0: `sudo sh /dev/sr0` runs its launcher
-         "-netdev", "user,id=net0", "-device", "virtio-net-pci,netdev=net0",
+         "-netdev", "user,id=net0" + (",restrict=on" if E.get("ONLINE_PROXY") != "1" else ""),
+         "-device", "virtio-net-pci,netdev=net0",
          "-device", "qemu-xhci", "-device", "usb-tablet", "-rtc", "base=utc"]
     if with_iso:
         a += ["-drive", "file=/iso,media=cdrom,readonly=on,if=none,id=cd", "-device", "ide-cd,drive=cd,bus=ide.1,bootindex=0"]
@@ -650,6 +662,7 @@ rc=0
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
   -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
+  -e ONLINE_PROXY="$ONLINE_PROXY" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" \
