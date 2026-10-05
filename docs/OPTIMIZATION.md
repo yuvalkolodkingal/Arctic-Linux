@@ -65,7 +65,11 @@ release. Its source RPM commit is `244e4dddbe3d08b1446e30d5ac813da4a8c1422d`,
 with `.preview.202610052010.git244e4dd` releases that sort below normal stable
 releases. The EROFS payload is 1,990,148,096 bytes and the initrd remains
 241,962,859 bytes. The build used the original LZMA 6 / 1 MiB settings.
-Independent checksum verification passes; installed-system qualification is ongoing.
+Independent checksum and full EROFS content integrity verification pass;
+installed-system qualification is ongoing. The combined prepared root inventory
+has 5,734,138,869 unique regular-file logical bytes, 24,274 additional hardlink
+paths, no inventory errors, and no added/removed RPM names. This is an offline
+prepared-root inventory, not an installed Btrfs measurement.
 
 KIWI completed image creation, but the metadata wrapper initially failed because
 the prepared description is `config.xml`, while its glob only looked for `*.kiwi`.
