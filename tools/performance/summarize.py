@@ -31,6 +31,9 @@ def summarize(path):
                        ('process_pss_bytes', 'process_private_bytes', 'cpu_busy_percent')}
             metrics.update({key + '_bytes': [s['memory_bytes'][key] for s in samples]
                             for key in ('MemAvailable', 'Cached', 'SReclaimable')})
+            for key in ('observer_cpu_percent_one_core', 'sample_elapsed_seconds'):
+                if all(key in sample for sample in samples):
+                    metrics[key] = [sample[key] for sample in samples]
             summary['idle'] = {key: dict(median=statistics.median(numbers), min=min(numbers),
                                        max=max(numbers)) for key, numbers in metrics.items()}
             summary['observer_pid'] = samples[0]['observer_pid']

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import pwd
+import resource
 import statistics
 import subprocess
 import sys
@@ -134,10 +135,18 @@ def main():
     time.sleep(60)
     samples = []
     for index in range(30):
+        started = time.monotonic()
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        observer_before = usage.ru_utime + usage.ru_stime
         before, idle_before = cpu_ticks()
         memory = snapshot()
         time.sleep(1)
         after, idle_after = cpu_ticks()
+        elapsed = time.monotonic() - started
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        memory['observer_cpu_percent_one_core'] = 100 * (
+            usage.ru_utime + usage.ru_stime - observer_before) / elapsed
+        memory['sample_elapsed_seconds'] = elapsed
         memory['cpu_busy_percent'] = 100 * (1 - (idle_after - idle_before) / max(1, after - before))
         samples.append(memory)
     emit('idle_samples', samples)
