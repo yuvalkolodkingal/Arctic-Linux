@@ -80,7 +80,20 @@ jobs:
       - name: Build ISO
         # A live desktop must include a browser. Keep Zen even above 2 GiB;
         # the release step already splits large images when necessary.
-        run: tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes
+        run: |
+          if [ '${{ github.event_name }}' = workflow_dispatch ] && [ '${{ inputs.release }}' = false ]; then
+            candidate="Arctic-Linux-1.2-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-x86_64.iso"
+            echo "ISO=$candidate" >> "$GITHUB_ENV"
+            if ! tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes --name "$candidate" --max-bytes 1500000000; then
+              # A missed size target is reviewable; failed image creation is not.
+              test -s "out/iso/$candidate"
+              (cd out/iso && sha256sum --check "$candidate.sha256")
+              grep -qx 'size_target_met=no' "out/iso/${candidate%.iso}.build-info"
+              echo 'Size target missed; retaining the full-feature test artifact.'
+            fi
+          else
+            tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes
+          fi
 
       - name: Size and split
         id: size
