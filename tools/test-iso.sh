@@ -182,7 +182,7 @@ args=(qemu-system-x86_64 -machine "$machine" -accel "$accel" -cpu max -smp "$SMP
       -serial "file:$OUT/serial.log" -monitor none -no-reboot
       -drive file=/iso,media=cdrom,readonly=on,if=none,id=cd -device ide-cd,drive=cd,bootindex=0
       -drive file=/tmp/target.qcow2,if=none,id=disk -device virtio-blk-pci,drive=disk,bootindex=1
-      -netdev user,id=net0 -device virtio-net-pci,netdev=net0
+      -netdev user,id=net0,restrict=on -device virtio-net-pci,netdev=net0
       -device qemu-xhci -device usb-tablet -rtc base=utc)
 if [ "$FIRMWARE" = uefi ]; then
   code=/usr/share/edk2/ovmf/OVMF_CODE.fd

@@ -4,11 +4,14 @@
 #   tools/test-install.sh                       UEFI: install, then boot the installed disk
 #   tools/test-install.sh --firmware bios       SeaBIOS instead of OVMF
 #   tools/test-install.sh --guest-check FILE   Python live/installed assertions in disposable VM
+#   tools/test-install.sh --guest-check-interactive  screenshot desktop checks and type the
+#                                               test password only after an unlock request marker
 #   tools/test-install.sh --stage install       only the install (fresh disk)
 #   tools/test-install.sh --stage boot          only boot the disk a previous run installed
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
 #                                               the default install with apps from the live
-#                                               image; Zen, Zed and the codecs are deferred)
+#                                               image; preinstalled Zen is kept offline,
+#                                               unavailable extras are deferred)
 #   tools/test-install.sh --iso PATH            default out/iso/Arctic-Linux-1.2-x86_64.iso
 #   tools/test-install.sh --install-timeout S   seconds for the install (default 7200)
 #   tools/test-install.sh --memory MiB --smp N  guest size (default 6144 MiB, 4 vCPUs)
@@ -83,6 +86,7 @@ INSTALLER=""
 VIA=service
 OUT=""
 GUEST_CHECK=""
+GUEST_CHECK_INTERACTIVE=0
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 # Test secrets only (typed into the VM and passed to the installer).
@@ -92,6 +96,7 @@ USER_PASSWORD="arctic-ci-pass"
 while (( $# )); do
   case "$1" in
     --guest-check) GUEST_CHECK="$2"; shift 2 ;;
+    --guest-check-interactive) GUEST_CHECK_INTERACTIVE=1; shift ;;
     --iso) ISO="$2"; shift 2 ;;
     --firmware) FIRMWARE="$2"; shift 2 ;;
     --stage) STAGE="$2"; shift 2 ;;
@@ -267,6 +272,15 @@ u="$(stat -c %U "/proc/$pid" 2>/dev/null || echo ci)"
 uid="$(id -u "$u")"
 sec() { echo; echo "== $*"; }
 echo ARCTIC-COLLECT-BEGIN
+if [ -f /run/t/proxy.env ]; then
+  # Explicit online testing of an already-installed disposable guest. Keep TLS
+  # verification enabled; this trust is never added to the shipped ISO.
+  . /run/t/proxy.env
+  export HTTPS_PROXY="http://10.0.2.2:$PROXY_PORT" https_proxy="http://10.0.2.2:$PROXY_PORT"
+  export no_proxy=localhost,127.0.0.1 NO_PROXY=localhost,127.0.0.1
+  cp /run/t/proxy-ca.crt /etc/pki/ca-trust/source/anchors/arctic-test-proxy.crt
+  update-ca-trust extract
+fi
 sec "terminal shell"; echo "pid $pid: $(cat "/proc/$pid/comm" 2>/dev/null) ($(readlink "/proc/$pid/exe" 2>/dev/null))"
 sec "user"; getent passwd "$u"; id "$u"
 sec "home"; findmnt /home; ls -ldnZ / /home /home/* 2>&1; stat "/home/$u" 2>&1; getfacl -p /home "/home/$u" 2>&1 | head -20
@@ -577,6 +591,7 @@ def stage_boot():
         time.sleep(30)
         vm.shot("boot-51-desktop")
         collected = False
+        lock_password_sent = False
         for attempt in (1, 2, 3):
             open_terminal(vm, f"boot-5{attempt + 1}")
             vm.type_text("sudo sh /dev/sr0", gap=0.3)
@@ -586,10 +601,22 @@ def stage_boot():
             vm.type_text(password, gap=0.3)
             vm.keys("ret")
             t = time.time()
+            last_probe_shot = t
+            probe_shots = 0
             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
                 if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
                     collected = True
                     break
+                if E.get("GUEST_CHECK_INTERACTIVE") == "1":
+                    if time.time() - last_probe_shot >= 10:
+                        probe_shots += 1
+                        vm.shot(f"boot-58-check-{attempt}-{probe_shots:03d}")
+                        last_probe_shot = time.time()
+                    if not lock_password_sent and vmtest.serial_has(serial("boot"), "ARCTIC-DESKTOP-UNLOCK-REQUESTED"):
+                        vm.shot("boot-58-locked-before-authentication")
+                        vm.type_text(password, gap=0.3)
+                        vm.keys("ret")
+                        lock_password_sent = True
                 time.sleep(5)
             collected = vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END")
             vm.shot(f"boot-5{attempt + 1}-collected")
@@ -662,6 +689,7 @@ rc=0
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
   -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
+  -e GUEST_CHECK_INTERACTIVE="$GUEST_CHECK_INTERACTIVE" \
   -e ONLINE_PROXY="$ONLINE_PROXY" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \

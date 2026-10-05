@@ -145,12 +145,9 @@ def startup(prefix, command, pattern, timeout=300):
                     child.wait()
 
 
-def main():
-    if os.geteuid() != 0 or run(['systemd-detect-virt', '--vm']) != 'qemu':
-        raise RuntimeError('This probe requires root inside a disposable QEMU VM')
-    prefix = desktop()
+def measure(prefix):
     emit('identity', dict(kernel=run(['uname', '-r']), virtualization='qemu',
-                          sampler='cpu-30-pss-6-v1', cpu=run(['lscpu']),
+                          sampler='cpu-30-pss-6-v2-awake', cpu=run(['lscpu']),
                           boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
     emit('boot', dict(analyze=run(['systemd-analyze']),
                       uptime=Path('/proc/uptime').read_text().strip()))
@@ -201,6 +198,23 @@ def main():
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         emit('critical_chain_unmeasured', str(error))
     emit('done', True)
+
+
+def main():
+    if os.geteuid() != 0 or run(['systemd-detect-virt', '--vm']) != 'qemu':
+        raise RuntimeError('This probe requires root inside a disposable QEMU VM')
+    prefix = desktop()
+    awake = json.loads(run(prefix + ['arctic-keep-awake', 'status', '--json']))
+    if awake.get('on'):
+        raise RuntimeError('Start measurement with Keep awake off for identical conditions')
+    # Slow emulated app launches can outlast the normal five-minute idle lock.
+    # Use the shipped session-only feature, then restore it even if a probe fails.
+    emit('measurement_conditions', dict(keep_awake_temporary=True, initial_keep_awake=awake))
+    run(prefix + ['arctic-keep-awake', 'on', '--quiet'])
+    try:
+        measure(prefix)
+    finally:
+        emit('keep_awake_restored', json.loads(run(prefix + ['arctic-keep-awake', 'off', '--quiet'])))
 
 
 if __name__ == '__main__':
