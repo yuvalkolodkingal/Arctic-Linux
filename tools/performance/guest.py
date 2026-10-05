@@ -129,7 +129,7 @@ def main():
                       uptime=Path('/proc/uptime').read_text().strip()))
     emit('security', run(['getenforce']))
     emit('installed_bytes', run(['du', '-sx', '-B1', '--exclude=/proc', '--exclude=/sys', '--exclude=/dev',
-                                 '--exclude=/run', '--exclude=/tmp', '/']))
+                                 '--exclude=/run', '--exclude=/tmp', '/'], timeout=300))
     # Let session initialization settle; record actual elapsed time and memory without flushing caches.
     time.sleep(60)
     samples = []
