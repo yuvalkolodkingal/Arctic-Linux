@@ -9,6 +9,7 @@ import argparse
 from collections import defaultdict
 import hashlib
 import json
+import os
 from pathlib import Path
 import stat
 
@@ -20,7 +21,11 @@ def inventory(root):
     errors = []
     largest = []
     links = 0
-    for path in root.rglob('*'):
+    paths = (Path(directory) / name
+             for directory, _, names in os.walk(root, followlinks=False,
+                 onerror=lambda error: errors.append(dict(path=error.filename, error=str(error))))
+             for name in names)
+    for path in paths:
         try:
             info = path.lstat()
             if not stat.S_ISREG(info.st_mode):
