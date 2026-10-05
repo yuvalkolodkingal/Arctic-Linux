@@ -65,7 +65,10 @@ The Arctic RPM build records source `85162e3b0cabb390d54d0e61307260f448570d87`.
 There are no RPM names added/removed, and Flatpak refs and active commits match.
 Fedora Chromium/Chromium-common and xxhash received normal repository updates;
 therefore the small image difference cannot be attributed to the memory fix alone.
-The pending wallpaper PR is not yet in this first candidate.
+The pending wallpaper PR is not yet in this first candidate. Its head
+`7b86c31b5bffcce55b5e985a1d317ccd7c177913` has since been merged locally into
+this branch for the next candidate; remote main and the owner branch remain untouched.
+The exact final owner revision must still be reconciled before acceptance.
 
 The actual Quickshell/Qt timer test passes, and a negative control removing the new
 busy handler fails with the retained-catalog symptom. No running job is cancelled.
@@ -79,6 +82,14 @@ This verifies the fix's behavior, not a numerical RAM claim. Raw evidence is
 | Flatpak `ostree prune --no-prune --refs-only` | 15,217 objects, no unreachable objects | No deletion. |
 | EROFS LZMA 6 / 1 MiB with global deduplication, one worker | At 465 s only 25,152,292 input bytes had been read; aborted incomplete. | Not adopted; no valid final size or speed measurement. |
 | EROFS Zstd 19 / 64 KiB, one worker | Still incomplete after an observed 675 s; aborted. | Not adopted; compare a lower level to completion. |
+
+Three complete userspace content-decode passes give LZMA median 54.24 s (range
+52.74–59.89 s), vs Zstd median 7.10 s (7.00–9.67 s); median user CPU times are
+50.94 s and 6.22 s. Peak process RSS is about 35,936 and 17,688 KiB, respectively.
+These are host readback measurements on retained cache, not boot or application
+startup benchmarks. No caches were dropped. Raw timings are
+`out/audit/compression/{lzma6-baseline,zstd6-64k}-fsck-{1,2,3}.time`.
+Smaller LZMA clusters deserve a measured follow-up if they improve this tradeoff.
 
 Compression trials use the same extracted baseline file contents and hardlinks;
 that audit extraction omits xattrs. They are isolated storage experiments, not
