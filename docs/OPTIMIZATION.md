@@ -68,7 +68,9 @@ therefore the small image difference cannot be attributed to the memory fix alon
 The pending wallpaper PR is not yet in this first candidate. Its head
 `7b86c31b5bffcce55b5e985a1d317ccd7c177913` has since been merged locally into
 this branch for the next candidate; remote main and the owner branch remain untouched.
-The exact final owner revision must still be reconciled before acceptance.
+The owner merged this exact revision to main at
+`cdf4960f567842e853b6b3503c542d739ff215f7`; that approved main merge is now
+reconciled locally too. Its combined ISO still needs validation.
 
 The actual Quickshell/Qt timer test passes, and a negative control removing the new
 busy handler fails with the retained-catalog symptom. No running job is cancelled.
@@ -115,6 +117,12 @@ logical data alone is much smaller than the required compressed reduction; no
 
 ## Reproducible VM protocol
 
+For full read-only capability evidence after performance measurements, generate a
+single data-CD probe with `python3 tools/performance/compose-probe.py OUTPUT.py`.
+Add `--wallpaper` for the combined candidate to require the approved publisher.
+Feed the generated script to `tools/test-install.sh --guest-check OUTPUT.py`.
+The original baseline lacks the new publisher and is measured without that gate.
+
 Use QEMU q35, 2 vCPUs, 4096 MiB, virtio GPU/disk/network, UEFI OVMF, UTC RTC,
 identical offline profile, no internet forwarding, SELinux enforcing. Also test BIOS,
 Safe graphics and UEFI Secure Boot. This cloud host exposes no `/dev/kvm`: TCG
@@ -128,7 +136,11 @@ filesystem use, 30 one-second idle samples after 60 seconds settling, per-proces
 PSS/private bytes, MemAvailable, Cached, SReclaimable, CPU busy percentage, shell
 launch/IPC time and time to a newly mapped Kitty, Nautilus and Zen window.
 The first launch after a fresh boot and subsequent warm launches are distinguished;
-no cache dropping. Observer memory is included and its PID is recorded. Reuse the
+no cache dropping. The live `du -x /` value describes allocation reported by the
+writable live overlay and must not be represented as total installed size. The
+installed capability probe also records `btrfs filesystem usage -b /`, including
+the filesystem containing its subvolumes, separately from the extracted image's
+logical bytes. Observer memory is included and its PID is recorded. Reuse the
 same tools and observer for both builds. Startup closes only newly opened test windows.
 
 For comparative performance acceptance, repeat at least three boots after builds

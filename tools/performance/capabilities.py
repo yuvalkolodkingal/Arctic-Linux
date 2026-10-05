@@ -8,7 +8,6 @@ import json
 import os
 from pathlib import Path
 import re
-import subprocess
 import sys
 
 
@@ -58,6 +57,7 @@ def main(performance, wallpaper=False):
         check('shared-wallpaper-publisher', publisher)
     if stage == 'installed':
         check('btrfs-root', lambda: require(run(['findmnt', '-n', '-o', 'FSTYPE', '/']) == 'btrfs', 'Root is Btrfs'))
+        check('installed-filesystem-usage-bytes', lambda: run(['btrfs', 'filesystem', 'usage', '-b', '/'], timeout=180))
         check('encryption', lambda: require(any('luks' in line.lower() and not line.startswith('#')
               for line in Path('/etc/crypttab').read_text().splitlines()), Path('/etc/crypttab').read_text()))
         check('snapshot-configs', lambda: run(['snapper', 'list-configs']))
