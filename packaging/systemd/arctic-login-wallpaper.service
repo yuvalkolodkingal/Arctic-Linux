@@ -1,0 +1,28 @@
+[Unit]
+Description=Arctic shared login and lock wallpaper publisher
+
+[Service]
+Type=dbus
+BusName=org.arcticlinux.Wallpaper
+User=arctic-wallpaper
+Group=arctic-wallpaper
+ExecStart=/usr/bin/arctic-login-wallpaper serve
+StateDirectory=arctic-login-wallpaper
+StateDirectoryMode=0755
+UMask=0022
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=768M
+TasksMax=16
+CPUQuota=50%
+Restart=on-failure

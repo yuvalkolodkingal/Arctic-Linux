@@ -103,10 +103,10 @@ design_name() {   # design_name PICTURE: the Arctic wallpaper a rotated picture 
 # whatever is left in a service's cgroup when the service ends: swaybg would go with it.
 detach() {
   if command -v systemd-run >/dev/null 2>&1 \
-      && systemd-run --user --scope --quiet --collect -- setsid -f "$@" >/dev/null 2>&1; then
+      && systemd-run --user --scope --quiet --collect -- setsid -f "$@" 9>&- >/dev/null 2>&1; then
     return 0
   fi
-  setsid -f "$@" >/dev/null 2>&1
+  setsid -f "$@" 9>&- >/dev/null 2>&1
 }
 
 # ---- rotation (stream 6) ----
@@ -230,6 +230,12 @@ print("", file=open(sys.argv[1] + ".tmp", "a"))' "$ROTATE" "$every" "$folder" "$
 }
 
 img=""
+# Serialize choices, theme redraws and timer ticks. Detached programs close fd 9 so
+# swaybg and wallpaper hooks cannot retain this lock after the command finishes.
+case "${1:-}" in
+  render|current|rotate|-h|--help) ;;
+  *) mkdir -p "$CACHE_DIR"; exec 9>"$CACHE_DIR/wallpaper-apply.lock"; flock 9; load_theme ;;
+esac
 case "${1:-}" in
   render)
     for d in "${DIRS[@]}"; do
@@ -296,8 +302,6 @@ if [[ -z "$img" ]]; then
 fi
 img="$(render "$img")"
 mkdir -p "$CACHE_DIR"
-printf '%s\n' "$img" > "$CACHE_DIR/wallpaper-current"
-
 command -v swaybg >/dev/null 2>&1 || { echo "arctic-wallpaper: swaybg is not installed" >&2; exit 1; }
 # Replace the running swaybg without a flash: start the new one, then stop the old.
 old="$(pgrep -u "$UID" -x swaybg || true)"
@@ -306,6 +310,13 @@ sleep 0.3
 if [[ -n "$old" ]]; then
   # shellcheck disable=SC2086
   kill $old 2>/dev/null || true
+fi
+printf '%s\n' "$img" > "$CACHE_DIR/wallpaper-current.new"
+mv "$CACHE_DIR/wallpaper-current.new" "$CACHE_DIR/wallpaper-current"
+# Publishing is opt-in. The broker checks the authorized owner and active local session.
+# A failed publication retains the previous public copy and never blocks the desktop.
+if command -v arctic-login-wallpaper >/dev/null 2>&1; then
+  detach arctic-login-wallpaper follow || true
 fi
 # A new choice (not a redraw): your wallpaper hooks (arctic-hook), in the background.
 if [[ -n "${chosen:-}${hook:-}" ]] && command -v arctic-hook >/dev/null 2>&1; then

@@ -218,6 +218,10 @@ Requires:       bash
 Requires:       python3
 # arctic-themegen: colours from wallpapers
 Requires:       python3-pillow
+# The unprivileged, D-Bus-activated shared login wallpaper publisher.
+Requires:       python3-dbus
+Requires:       python3-gobject-base
+Requires:       polkit
 %{?systemd_requires}
 # kitty and fish are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
@@ -937,6 +941,11 @@ install -Dpm 0644 packaging/environment.d/60-arctic-nix.conf %{buildroot}%{_pref
 # Settings uses for the firewall, remote login and snapshots (pkexec, org.arcticlinux.system).
 install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 install -Dpm 0755 packaging/system/arctic-system-helper %{buildroot}%{_libexecdir}/arctic/arctic-system-helper
+install -Dpm 0644 packaging/systemd/arctic-login-wallpaper.service %{buildroot}%{_unitdir}/arctic-login-wallpaper.service
+install -Dpm 0644 packaging/system/arctic-wallpaper.sysusers %{buildroot}%{_sysusersdir}/arctic-wallpaper.conf
+install -Dpm 0644 packaging/system/org.arcticlinux.Wallpaper.service %{buildroot}%{_datadir}/dbus-1/system-services/org.arcticlinux.Wallpaper.service
+install -Dpm 0644 packaging/system/org.arcticlinux.Wallpaper.conf %{buildroot}%{_datadir}/dbus-1/system.d/org.arcticlinux.Wallpaper.conf
+install -Dpm 0644 packaging/polkit/org.arcticlinux.wallpaper.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.wallpaper.policy
 install -Dpm 0644 packaging/polkit/org.arcticlinux.system.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 # Reading the firewall's rules (Settings > Sharing) without a password in the active session.
@@ -1277,10 +1286,13 @@ for f in .zshrc .zprofile; do \
 done
 
 %post -n arctic-desktop-config
+systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
+%systemd_post arctic-login-wallpaper.service
 %systemd_post arctic-firstboot.service arctic-update-stage.timer
 %systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
+%systemd_preun arctic-login-wallpaper.service
 %systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
 %systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
@@ -1312,6 +1324,7 @@ if [ ! -e %{_bindir}/neofetch ] && [ ! -L %{_bindir}/neofetch ]; then
 fi
 
 %postun -n arctic-desktop-config
+%systemd_postun_with_restart arctic-login-wallpaper.service
 if [ "$1" -eq 0 ] && [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
 
 %triggerin -n arctic-desktop-config -- zsh
@@ -1453,6 +1466,11 @@ fi
 %{_prefix}/lib/environment.d/60-arctic-nix.conf
 %{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 %{_libexecdir}/arctic/arctic-system-helper
+%{_unitdir}/arctic-login-wallpaper.service
+%{_sysusersdir}/arctic-wallpaper.conf
+%{_datadir}/dbus-1/system-services/org.arcticlinux.Wallpaper.service
+%{_datadir}/dbus-1/system.d/org.arcticlinux.Wallpaper.conf
+%{_datadir}/polkit-1/actions/org.arcticlinux.wallpaper.policy
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 %{_datadir}/polkit-1/rules.d/50-arctic-firewalld-read.rules
 %{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop

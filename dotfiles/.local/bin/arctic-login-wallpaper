@@ -1,0 +1,366 @@
+#!/usr/bin/python3
+"""Publish a shared login/lock wallpaper without giving SDDM access to user homes.
+
+status | set IMAGE | sync-desktop | freeze | reset | undo | follow | current
+All explicit changes use administrator authorization. follow is noninteractive and only
+updates the authorized owner's active local graphical session. serve is the system service.
+"""
+import fcntl
+import io
+import json
+import os
+import re
+import pwd
+from pathlib import Path
+import shutil
+import stat
+import sys
+import tempfile
+import time
+import uuid
+import warnings
+
+NAME = 'org.arcticlinux.Wallpaper'
+OBJECT = '/org/arcticlinux/Wallpaper'
+STATE = Path('/var/lib/arctic-login-wallpaper')
+MAX_BYTES = 32 * 1024 * 1024
+MAX_PIXELS = 32_000_000
+MODES = {'separate', 'desktop'}
+
+
+def normalize(data):
+    """Decode static raster images, strip metadata, orient, and bound the published PNG.
+    This always runs unprivileged, including inside the confined system service.
+    """
+    from PIL import Image, ImageOps
+    if not data or len(data) > MAX_BYTES:
+        raise ValueError('Choose an image smaller than 32 MiB.')
+    Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', Image.DecompressionBombWarning)
+        with Image.open(io.BytesIO(data)) as image:
+            if image.format not in {'PNG', 'JPEG', 'WEBP'} or getattr(image, 'n_frames', 1) != 1:
+                raise ValueError('Choose a static PNG, JPEG or WebP image.')
+            if max(image.size) > 16384 or image.width * image.height > MAX_PIXELS:
+                raise ValueError('Choose an image with at most 32 million pixels.')
+            image.load()
+            image = ImageOps.exif_transpose(image).convert('RGB')
+            image.thumbnail((3840, 2160), Image.Resampling.LANCZOS)
+            image.info.clear()
+            result = io.BytesIO()
+            image.save(result, format='PNG')
+            output = result.getvalue()
+            if len(output) > MAX_BYTES:
+                raise ValueError('The normalized image is too large.')
+            return output
+
+
+def read_image(value):
+    path = Path(value)
+    if not path.is_absolute() or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ValueError('Choose an absolute local image path.')
+    if path.resolve(strict=True) != path or path.parts[1] in {'proc', 'sys', 'dev', 'run'}:
+        raise ValueError('Choose a regular image file, without symbolic links.')
+    # Walk directory descriptors too: a parent swapped to a symlink between checking
+    # and opening cannot redirect the read. This still uses only the caller's access.
+    parent = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in path.parts[1:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+            os.close(parent)
+            parent = child
+        fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+    finally:
+        os.close(parent)
+    with os.fdopen(fd, 'rb') as handle:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
+            raise ValueError('Choose a regular image smaller than 32 MiB.')
+        return normalize(handle.read(MAX_BYTES + 1))
+
+
+class Store:
+    """A generation contains both image and settings; one atomic pointer commits both.
+    A failed write leaves the old generation intact. Three generations bound disk usage.
+    No user paths, names, EXIF, or source files are stored here.
+    """
+    def __init__(self, root=STATE):
+        self.root = root
+
+    def target(self):
+        try:
+            target = os.readlink(self.root / 'current')
+            if not re.fullmatch(r'generation-[a-f0-9]{32}', target):
+                raise ValueError('Invalid wallpaper state pointer.')
+            return target
+        except FileNotFoundError:
+            return None
+
+    def status(self):
+        default = dict(enabled=False, mode='legacy', revision='', owner=-1)
+        try:
+            target = self.target()
+            if target is None:
+                return default
+            data = self.read_generation(target)
+            if data['enabled'] and not (self.root / target / 'wallpaper.png').is_file():
+                data['image_missing'] = True
+            if not data['enabled'] and any(self.root.glob('generation-*/wallpaper.png')):
+                data['cleanup_error'] = 'Defaults are restored, but a saved public image could not be removed. Ask an administrator to check the publisher state directory.'
+            return data
+        except (OSError, ValueError, KeyError, TypeError):
+            return dict(default, state_error='The saved shared wallpaper state is unreadable. Choose an image or restore defaults.')
+
+    def read_generation(self, target):
+        data = json.loads((self.root / target / 'state.json').read_text())
+        if (not isinstance(data, dict) or type(data.get('enabled')) is not bool
+                or data.get('mode') not in MODES | {'legacy'}
+                or type(data.get('owner')) is not int
+                or not re.fullmatch(r'[a-f0-9]{32}', str(data.get('revision', '')))
+                or target != 'generation-' + data['revision']
+                or data['enabled'] != (data['mode'] != 'legacy')
+                or (data['enabled'] and data['owner'] < 0)
+                or not re.fullmatch(r'(generation-[a-f0-9]{32})?', str(data.get('previous', '')))):
+            raise ValueError('Invalid saved wallpaper policy.')
+        return data
+
+    def commit(self, mode, owner, data=None):
+        if mode not in MODES | {'legacy'}:
+            raise ValueError('Unknown wallpaper mode.')
+        # Validate before creating state, and never let callers select a destination path.
+        image = normalize(data) if data is not None else None
+        if mode != 'legacy' and image is None:
+            raise ValueError('An image is required.')
+        self.root.mkdir(mode=0o755, parents=True, exist_ok=True)
+        revision = uuid.uuid4().hex
+        folder = self.root / ('generation-' + revision)
+        folder.mkdir(mode=0o755)
+        try:
+            previous = self.target() if mode != 'legacy' else None
+        except ValueError:
+            previous = None  # An explicitly authorized choice can repair a corrupt pointer.
+        settings = dict(enabled=mode != 'legacy', mode=mode, owner=int(owner), revision=revision,
+                        previous=previous or '')
+        try:
+            for name, content in [('state.json', (json.dumps(settings) + '\n').encode()),
+                                  ('wallpaper.png', image)]:
+                if content is None:
+                    continue
+                with open(folder / name, 'xb') as handle:
+                    os.chmod(folder / name, 0o644)
+                    handle.write(content)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            self.switch(folder.name)
+        except Exception:
+            shutil.rmtree(folder)
+            raise
+        # Cleanup cannot turn a committed update into an apparent failure.
+        keep = {folder.name, previous}
+        if previous:
+            try:
+                keep.add(self.read_generation(previous).get('previous'))
+            except (OSError, ValueError, TypeError, KeyError):
+                pass
+        for old in self.root.glob('generation-*'):
+            if old.name not in keep:
+                try:
+                    shutil.rmtree(old)
+                except OSError:
+                    settings['cleanup_error'] = 'The wallpaper changed, but an old public image could not be removed.'
+        return settings
+
+    def switch(self, target):
+        temp = self.root / ('.current-' + uuid.uuid4().hex)
+        try:
+            os.symlink(target, temp)
+            os.replace(temp, self.root / 'current')
+        finally:
+            temp.unlink(missing_ok=True)
+        # Atomic rename is the commit boundary. Do not report failure after it.
+        try:
+            fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
+
+    def undo(self):
+        previous = self.status().get('previous')
+        if not previous or not (self.root / previous / 'state.json').is_file():
+            raise ValueError('There is no previous shared wallpaper to restore.')
+        old = self.read_generation(previous)
+        image = (self.root / previous / 'wallpaper.png').read_bytes() if old['enabled'] else None
+        # A new revision also prevents an in-flight pre-undo request from becoming current.
+        return self.commit(old['mode'], old['owner'], image)
+
+
+def serve(session=False, root=STATE):
+    import dbus
+    import dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+    DBusGMainLoop(set_as_default=True)
+    bus = dbus.SessionBus() if session else dbus.SystemBus()
+    store = Store(root)
+
+    class Service(dbus.service.Object):
+        def uid(self, sender):
+            return int(bus.get_unix_user(sender))
+
+        def authorize(self, sender):
+            if session:  # Isolated test bus only; never available on the system bus.
+                return
+            authority = dbus.Interface(bus.get_object('org.freedesktop.PolicyKit1',
+                                       '/org/freedesktop/PolicyKit1/Authority'),
+                                       'org.freedesktop.PolicyKit1.Authority')
+            subject = ('system-bus-name', {'name': dbus.String(sender, variant_level=1)})
+            allowed, _challenge, _details = authority.CheckAuthorization(
+                subject, 'org.arcticlinux.wallpaper.change', {}, 1, '', timeout=120)
+            if not allowed:
+                raise ValueError('Administrator authorization was cancelled or denied.')
+
+        def active(self, uid):
+            if session:
+                return True
+            manager = dbus.Interface(bus.get_object('org.freedesktop.login1',
+                                     '/org/freedesktop/login1'), 'org.freedesktop.login1.Manager')
+            for _id, user, _name, _seat, path in manager.ListSessions():
+                if int(user) == uid:
+                    props = dbus.Interface(bus.get_object('org.freedesktop.login1', path),
+                                           'org.freedesktop.DBus.Properties').GetAll('org.freedesktop.login1.Session')
+                    if props['Active'] and not props['Remote'] and props['Type'] in ('wayland', 'x11'):
+                        return True
+            return False
+
+        @dbus.service.method(NAME, in_signature='', out_signature='s')
+        def Status(self):
+            return json.dumps(store.status())
+
+        @dbus.service.method(NAME, in_signature='say', out_signature='s', sender_keyword='sender', byte_arrays=True)
+        def Set(self, mode, data, sender=None):
+            if mode not in MODES or len(data) > MAX_BYTES:
+                raise ValueError('Invalid wallpaper request.')
+            self.authorize(sender)
+            return json.dumps(store.commit(str(mode), self.uid(sender), bytes(data)))
+
+        @dbus.service.method(NAME, in_signature='say', out_signature='s', sender_keyword='sender', byte_arrays=True)
+        def Follow(self, revision, data, sender=None):
+            current = store.status()
+            uid = self.uid(sender)
+            if (current['mode'] != 'desktop' or current['owner'] != uid
+                    or current['revision'] != revision or not self.active(uid)):
+                raise ValueError('Desktop sync is not authorized for this active session.')
+            image = normalize(bytes(data))
+            if not current.get('image_missing') and image == (store.root / 'current/wallpaper.png').read_bytes():
+                return json.dumps(current)
+            return json.dumps(store.commit('desktop', uid, image))
+
+        @dbus.service.method(NAME, in_signature='s', out_signature='s', sender_keyword='sender')
+        def Change(self, action, sender=None):
+            if action not in {'reset', 'freeze', 'undo'}:
+                raise ValueError('Unknown wallpaper action.')
+            self.authorize(sender)
+            if action == 'undo':
+                return json.dumps(store.undo())
+            if action == 'reset':
+                return json.dumps(store.commit('legacy', -1))
+            return json.dumps(store.commit('separate', self.uid(sender),
+                             (store.root / 'current/wallpaper.png').read_bytes()))
+
+    name = dbus.service.BusName(NAME, bus=bus)
+    service = Service(name, OBJECT)
+    GLib.MainLoop().run()
+
+
+def desktop_image():
+    cache = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'arctic'
+    return (cache / 'wallpaper-current').read_text().strip()
+
+
+def sync_record(error=''):
+    """Local diagnostics, never exposed to SDDM or saved in the public system state."""
+    folder = Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local/state') / 'arctic'
+    folder.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(prefix='.login-sync-', dir=folder)
+    try:
+        with os.fdopen(fd, 'w') as handle:
+            json.dump(dict(error=error, checked_at=int(time.time())), handle)
+        os.replace(temp, folder / 'login-wallpaper-sync.json')
+    finally:
+        Path(temp).unlink(missing_ok=True)
+
+
+def main(args):
+    import dbus
+    command = args[0] if args else 'status'
+    if command == 'serve':
+        if args[1:] and args[1] == '--session' and len(args) == 3:
+            serve(True, Path(args[2]))
+        elif len(args) == 1:
+            serve()
+        else:
+            raise ValueError('Invalid service arguments.')
+        return None
+    if command == 'current':
+        state = Store().status()
+        print(STATE / 'current/wallpaper.png' if state['enabled'] else '')
+        return None
+    bus = dbus.SessionBus() if os.environ.get('ARCTIC_WALLPAPER_TEST_BUS') == 'session' else dbus.SystemBus()
+    remote = dbus.Interface(bus.get_object(NAME, OBJECT), NAME)
+    if command == 'status':
+        result = remote.Status(timeout=10)
+    elif command == 'set' and len(args) == 2:
+        result = remote.Set('separate', dbus.ByteArray(read_image(args[1])), timeout=150)
+    elif command == 'sync-desktop' and len(args) == 1:
+        result = remote.Set('desktop', dbus.ByteArray(read_image(desktop_image())), timeout=150)
+    elif command in {'reset', 'freeze', 'undo'} and len(args) == 1:
+        result = remote.Change(command, timeout=150)
+    elif command == 'follow' and len(args) == 1:
+        # Serialize followers and re-read the desktop after waiting, coalescing rapid changes.
+        cache = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'arctic'
+        cache.mkdir(parents=True, exist_ok=True)
+        with open(cache / 'login-wallpaper-sync.lock', 'a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            state = json.loads(remote.Status(timeout=10))
+            if state['mode'] != 'desktop' or state['owner'] != os.getuid():
+                return dict(ok=True, skipped=True)
+            result = remote.Follow(state['revision'], dbus.ByteArray(read_image(desktop_image())), timeout=20)
+            sync_record()
+    else:
+        raise ValueError('Usage: arctic-login-wallpaper ' + __doc__.splitlines()[2])
+    output = dict(json.loads(str(result)), ok=True, available=True)
+    if output.get('owner', -1) >= 0:
+        try:
+            output['owner_name'] = pwd.getpwuid(output['owner']).pw_name
+        except KeyError:
+            pass
+    if command == 'status' and output['mode'] == 'desktop' and output['owner'] == os.getuid():
+        folder = Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local/state') / 'arctic'
+        try:
+            output['sync_error'] = json.loads((folder / 'login-wallpaper-sync.json').read_text()).get('error', '')
+        except (OSError, ValueError):
+            pass
+    return output
+
+
+if __name__ == '__main__':
+    try:
+        output = main(sys.argv[1:])
+        if output is not None:
+            print(json.dumps(output))
+    except Exception as error:
+        if sys.argv[1:] == ['follow']:
+            try:
+                sync_record(str(error))
+            except OSError:
+                pass
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)
