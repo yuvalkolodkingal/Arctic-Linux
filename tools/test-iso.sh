@@ -153,11 +153,15 @@ if collect and vm.alive():
     time.sleep(5)
     shot("98-terminal")
     type_text("sudo sh -c '(echo ARCTIC-COLLECT-BEGIN; cat ~liveuser/.local/share/sddm/*.log; "
+              "cat /proc/cmdline; mokutil --sb-state; "
               "systemctl --failed --no-pager; journalctl -b -p warning --no-pager; getenforce; flatpak list; "
               "echo ARCTIC-COLLECT-END) >/dev/ttyS0 2>&1'", gap=0.2)
     keys("ret")
     time.sleep(30)
-    log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
+    if vmtest.serial_has(f"{out}/serial.log", "ARCTIC-COLLECT-END"):
+        log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
+    else:
+        log("session collection did not complete; inspect the terminal screenshot and serial log")
 
 if vm.alive():
     shot("99-final")
@@ -166,6 +170,9 @@ if vm.alive():
 else:
     log(f"qemu exited early with code {vm.proc.returncode}")
 vm.quit()
+if collect and not (vmtest.serial_has(f"{out}/serial.log", "ARCTIC-COLLECT-BEGIN")
+                    and vmtest.serial_has(f"{out}/serial.log", "ARCTIC-COLLECT-END")):
+    sys.exit(1)
 PY
 
 inner=$(cat <<'INNER'
