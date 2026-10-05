@@ -1,0 +1,113 @@
+name: Publish verified Arctic 1.2 ISO
+
+# One-time promotion of already qualified bytes; no image build and no main-branch changes.
+on:
+  push:
+    branches: [codex/publish-verified-iso-v1.2.0]
+    paths: [.github/workflows/promote-verified-iso.yml, .github/release/v1.2.0-promotion.md]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-verified-arctic-v1.2.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: yuvalkolodkingal/Arctic-Linux
+      SOURCE: d13da6c907460136fc22017314112ce351592a3f
+      TAG: v1.2.0
+      ISO: Arctic-Linux-1.2-x86_64.iso
+      EXPECTED: 054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify qualification and absence of an existing release or tag
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/actions/runs/37218930813" > qualified-run.json
+          gh api "repos/$REPO/actions/artifacts/11309983157" > artifact.json
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          run = json.load(open('qualified-run.json'))
+          artifact = json.load(open('artifact.json'))
+          assert run['head_sha'] == os.environ['SOURCE'] and run['conclusion'] == 'success'
+          assert artifact['workflow_run']['id'] == 37218930813
+          assert artifact['workflow_run']['head_sha'] == os.environ['SOURCE']
+          assert artifact['name'] == 'arctic-linux-iso' and not artifact['expired']
+          for suffix in ('releases/tags/v1.2.0', 'git/ref/tags/v1.2.0'):
+              request = urllib.request.Request('https://api.github.com/repos/' + os.environ['REPO'] + '/' + suffix,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              try:
+                  urllib.request.urlopen(request).close()
+              except urllib.error.HTTPError as error:
+                  if error.code != 404:
+                      raise
+              else:
+                  raise SystemExit('Existing release/tag: refusing to overwrite ' + suffix)
+          PY
+      - name: Download original artifact and verify exact ISO bytes
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/actions/artifacts/11309983157/zip" > original-artifact.zip
+          echo '5f73162d040c1bea4e0372d3fd4bc54948149ab7628e0a3063c01c0df9904deb  original-artifact.zip' | sha256sum -c -
+          unzip -q original-artifact.zip -d original
+          rm original-artifact.zip
+          mapfile -t images < <(find original -type f -name "$ISO")
+          test "${#images[@]}" -eq 1
+          mkdir -p assets
+          mv "${images[0]}" "assets/$ISO"
+          cd assets
+          echo "$EXPECTED  $ISO" > "$ISO.sha256"
+          sha256sum -c "$ISO.sha256"
+          test "$(stat -c %s "$ISO")" = 2322073600
+          split -b 1900M -d -a 2 "$ISO" "$ISO.part"
+          test -f "$ISO.part00" && test -f "$ISO.part01" && test ! -e "$ISO.part02"
+          sha256sum "$ISO.part00" "$ISO.part01" > "$ISO.parts.sha256"
+          cat "$ISO.part00" "$ISO.part01" | sha256sum | grep -Fx "$EXPECTED  -"
+          rm "$ISO"
+      - name: Create and publish the release without rebuilding
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --repo "$REPO" --target "$SOURCE" --draft \
+            --title 'Arctic Linux 1.2.0' --notes-file .github/release/v1.2.0-promotion.md \
+            "assets/$ISO.part00" "assets/$ISO.part01" "assets/$ISO.sha256" "assets/$ISO.parts.sha256"
+          # GITHUB_TOKEN-created tags do not trigger the tag-push ISO rebuild workflow.
+          gh release edit "$TAG" --repo "$REPO" --draft=false --latest
+          gh api "repos/$REPO/git/ref/tags/$TAG" --jq '.object.sha' | grep -Fx "$SOURCE"
+      - name: Verify anonymous public downloads and reconstructed ISO checksum
+        run: |
+          set -euo pipefail
+          mkdir verified
+          cd verified
+          base="https://github.com/$REPO/releases/download/$TAG"
+          for name in "$ISO.part00" "$ISO.part01" "$ISO.sha256" "$ISO.parts.sha256"; do
+            # curl receives no Authorization header: these must be public downloads.
+            curl --fail --location --retry 5 --retry-all-errors "$base/$name" -o "$name"
+          done
+          cmp "$ISO.sha256" "../assets/$ISO.sha256"
+          cmp "$ISO.parts.sha256" "../assets/$ISO.parts.sha256"
+          sha256sum -c "$ISO.parts.sha256"
+          cat "$ISO.part00" "$ISO.part01" | sha256sum | grep -Fx "$EXPECTED  -"
+          test "$(cat "$ISO.part00" "$ISO.part01" | wc -c)" = 2322073600
+          curl --fail --location --retry 5 "https://github.com/$REPO/releases/tag/$TAG" -o release.html
+          gh api "repos/$REPO/releases/tags/$TAG" > release.json
+          printf 'Verified anonymous downloads: both parts, checksum files, release page; reconstructed ISO SHA256 %s\n' "$EXPECTED" | tee verification.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arctic-1.2-release-verification
+          path: |
+            qualified-run.json
+            artifact.json
+            assets/*.sha256
+            verified/*.sha256
+            verified/release.json
+            verified/verification.txt
+          retention-days: 30
