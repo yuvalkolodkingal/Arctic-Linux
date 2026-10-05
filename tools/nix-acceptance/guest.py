@@ -127,9 +127,11 @@ def browser(prefix):
         subprocess.run(prefix + ['flatpak', 'kill', ref], capture_output=True, timeout=15)
 
 
-def main(update_method='dnf'):
+def main(update_method='dnf', expected_stable_source=None):
     if update_method not in ('dnf', 'arctic-offline'):
         raise ValueError('Unknown update acceptance method')
+    if expected_stable_source is not None and not re.fullmatch('[0-9a-f]{40}', expected_stable_source):
+        raise ValueError('Expected stable source must be a full Git SHA')
     stage = sys.argv[1]
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
             or run(['systemd-detect-virt']) not in ('qemu', 'kvm')):
@@ -222,6 +224,9 @@ def main(update_method='dnf'):
                 must(data.get('state') == 'idle' and not data.get('armed') and not data.get('stored'), data)
                 versions = run(['rpm', '-q', 'arctic-shell', 'arctic-desktop-config'])
                 must('.preview.' not in versions and versions != prior['arctic_rpms'], versions)
+                expected = prior.get('expected_stable_source')
+                if expected:
+                    must(all('git'+expected[:7] in line for line in versions.splitlines()), versions)
                 must(not Path('/system-update').is_symlink(), 'offline update link removed')
                 return dict(status=data, installed_at=history.get('installed_at'), arctic_rpms=versions,
                             offline_log=run(['dnf5', 'offline', 'log'], timeout=180))
@@ -341,6 +346,10 @@ ShellRoot {
                 downloaded = set(run(['rpm', '-qp', '--qf', '%{NAME}\n', *files], timeout=180).splitlines())
                 must(bool(expected) and expected.issubset(downloaded),
                      dict(expected=sorted(expected), downloaded=sorted(downloaded)))
+                if expected_stable_source:
+                    releases = run(['rpm', '-qp', '--qf', '%{NAME} %{RELEASE}\n', *files], timeout=180).splitlines()
+                    must(all('git'+expected_stable_source[:7] in line for line in releases
+                             if line.split()[0] in expected), releases)
                 return dict(status=data, arctic_download_count=len(files),
                             arctic_downloaded_names=sorted(downloaded), signatures=signatures)
             check('signed-offline-update-ready', staged_update)
@@ -350,7 +359,8 @@ ShellRoot {
         record(stage, 'engine-version-change', 'passed' if before_rpm != after_rpm else 'unrun', f'{before_rpm} -> {after_rpm}; same version is not upgrade proof')
         if not failed:
             state_file.write_text(json.dumps(dict(boot=Path('/proc/sys/kernel/random/boot_id').read_text(),
-                                  profile=str(profile.resolve()), update_method=update_method, arctic_rpms=before_arctic)))
+                                  profile=str(profile.resolve()), update_method=update_method, arctic_rpms=before_arctic,
+                                  expected_stable_source=expected_stable_source)))
     for log in ('/tmp/arctic-release-app.log', '/tmp/arctic-nix-desktop-probe.log'):
         if Path(log).exists():
             print(Path(log).read_text(errors='replace')[-8000:], flush=True)

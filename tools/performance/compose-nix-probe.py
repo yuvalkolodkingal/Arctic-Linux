@@ -2,12 +2,16 @@
 """Embed native desktop discovery and real Nix/offline updater acceptance."""
 import argparse
 from pathlib import Path
+import re
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('output', type=Path)
 parser.add_argument('--online-proxy', action='store_true',
                     help='Require the explicit VM test proxy; configure the daemon only in /run')
+parser.add_argument('--expected-stable-source', help='Require downloaded/installed Arctic packages from this full Git SHA')
 args = parser.parse_args()
+if args.expected_stable_source and not re.fullmatch('[0-9a-f]{40}', args.expected_stable_source):
+    parser.error('--expected-stable-source must be a full Git SHA')
 root = Path(__file__).resolve().parent
 performance = (root/'guest.py').read_text()
 nix = (root.parent/'nix-acceptance/guest.py').read_text()
@@ -50,7 +54,7 @@ awake = json.loads(measurement['run'](prefix+['arctic-keep-awake', 'status', '--
 if not awake.get('on'):
     measurement['run'](prefix+['arctic-keep-awake', 'on', '--quiet'])
 try:
-    result = nix_acceptance['main'](update_method='arctic-offline')
+    result = nix_acceptance['main'](update_method='arctic-offline', expected_stable_source=EXPECTED_STABLE_SOURCE)
 finally:
     if not awake.get('on'):
         measurement['run'](prefix+['arctic-keep-awake', 'off', '--quiet'])
@@ -63,4 +67,5 @@ args.output.write_text(
     f'exec(compile({performance!r}, __file__, "exec"), measurement)\n'
     'nix_acceptance = {"__name__": "arctic_nix_acceptance", "__file__": __file__}\n'
     f'exec(compile({nix!r}, __file__, "exec"), nix_acceptance)\n'
-    f'ONLINE_PROXY = {args.online_proxy!r}\n' + setup)
+    f'ONLINE_PROXY = {args.online_proxy!r}\n'
+    f'EXPECTED_STABLE_SOURCE = {args.expected_stable_source!r}\n' + setup)
