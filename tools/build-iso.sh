@@ -175,7 +175,12 @@ python3 - <<'PY'
 import os
 from pathlib import Path
 import xml.etree.ElementTree as ET
-for path in Path('/work/root/image').glob('*.kiwi'):
+prepared = Path('/work/root/image')
+# KIWI stores the expanded description as config.xml after prepare.
+descriptions = [prepared / 'config.xml'] if (prepared / 'config.xml').is_file() else list(prepared.glob('*.kiwi'))
+if len(descriptions) != 1:
+    raise SystemExit('Expected one prepared image description')
+for path in descriptions:
     tree = ET.parse(path)
     image = tree.find('./preferences/type[@image="iso"]')
     if image is None:
@@ -190,7 +195,8 @@ for path in Path('/work/root/image').glob('*.kiwi'):
         image.set('fscreateoptions', options)
     tree.write(path, encoding='utf-8', xml_declaration=True)
     print('EROFS compressor:', image.get('erofscompression'), 'options:', options)
-    Path('/tmp/arctic-compression-info').write_text(
+    # KIWI owns its temporary directories and may clean them during create.
+    Path('/arctic-compression-info').write_text(
         'erofs_compression=' + image.get('erofscompression', '') + '\n' +
         'erofs_fscreateoptions=' + options + '\n')
 PY
@@ -243,7 +249,7 @@ if [ "$zen" = 1 ] && [ "$ZEN" = auto ] && [ "$(stat -c %s "$iso")" -gt 214748364
   iso=$(ls "$BUILD_DIR"/*.iso | head -n1)
 fi
 echo "zen_preinstalled=$zen" > "/out/${ISO_NAME%.iso}.build-info"
-cat /tmp/arctic-compression-info >> "/out/${ISO_NAME%.iso}.build-info"
+cat /arctic-compression-info >> "/out/${ISO_NAME%.iso}.build-info"
 cp -f "$iso" "/out/$ISO_NAME"
 ( cd /out && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256" )
 cp -f "$BUILD_DIR"/*.packages "/out/${ISO_NAME%.iso}.packages" 2>/dev/null || :
