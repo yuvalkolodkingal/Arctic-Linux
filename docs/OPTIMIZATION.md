@@ -75,6 +75,7 @@ This verifies the fix's behavior, not a numerical RAM claim. Raw evidence is
 | Completed experiment | Measured result | Decision |
 |---|---|---|
 | Initrd main frame, same decoded contents, Zstd 19 | 241,656,683 → 236,808,843 bytes; 4,847,840 bytes saved. Encoder 113.21 s, peak RSS 432,604 KiB. Decoder window 4 → 8 MiB. | Retain baseline; small image gain adds memory cost. |
+| EROFS Zstd 6 / 64 KiB, two workers, full baseline contents | 2,417,672,192 bytes vs 1,990,950,912-byte baseline payload (+426,721,280, +21.43%). Encoder 350.02 s, 691.10 user CPU s, peak RSS 1,655,344 KiB. Integrity/decode passes. | Retain smaller LZMA profile; the alternative moves farther from the size target. |
 | Flatpak `ostree prune --no-prune --refs-only` | 15,217 objects, no unreachable objects | No deletion. |
 | EROFS LZMA 6 / 1 MiB with global deduplication, one worker | At 465 s only 25,152,292 input bytes had been read; aborted incomplete. | Not adopted; no valid final size or speed measurement. |
 | EROFS Zstd 19 / 64 KiB, one worker | Still incomplete after an observed 675 s; aborted. | Not adopted; compare a lower level to completion. |
