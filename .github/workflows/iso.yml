@@ -141,8 +141,8 @@ jobs:
         continue-on-error: true
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; kvm=--kvm; timeout=420; else kvm=; timeout=900; fi
-          tools/test-iso.sh --firmware uefi --mode try --timeout "$timeout" --interval 30 $kvm
-          tools/test-iso.sh --firmware bios --mode install --timeout "$timeout" --interval 30 $kvm
+          tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode try --timeout "$timeout" --interval 30 $kvm
+          tools/test-iso.sh --iso "out/iso/$ISO" --firmware bios --mode install --timeout "$timeout" --interval 30 $kvm
 
       - name: Nix enforcing VM acceptance
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.nix_acceptance }}
@@ -150,7 +150,7 @@ jobs:
           test '${{ inputs.release }}' = false
           test -c /dev/kvm
           # Docker's root test process accesses the passed device; no host chmod or SELinux changes.
-          timeout --signal=TERM --kill-after=60s 100m tools/test-install.sh \
+          timeout --signal=TERM --kill-after=60s 100m tools/test-install.sh --iso "out/iso/$ISO" \
             --kvm --memory 4096 --smp 2 --boot-append '' --install-timeout 2400 \
             --guest-check tools/nix-acceptance/guest.py --out "$PWD/out/test/nix"
           cp out/test/nix/serial-boot.log out/test/nix/serial-before-update-reboot.log

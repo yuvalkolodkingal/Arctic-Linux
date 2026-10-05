@@ -181,6 +181,21 @@ earlier preliminary samples. Summary files report the actual count for every met
 PSS observations are duplicated to pretend there were 30 scans. Reuse the
 same tools and observer for both builds. Startup closes only newly opened test windows.
 
+The original v1.2 ISO completed a restricted-network encrypted installation with
+SELinux enforcing: installer exit 0, 3,571 seconds under TCG. Zen, terminal,
+fish, Nautilus and VLC were installed offline; Zed was deferred. Normal and rescue
+initrds were generated. The wrapper failed after the successful installer because
+its Bash source was edited while running; this is an instrumentation error, not
+a clean harness pass. Harness sources are now frozen during active VM runs.
+
+The first installed benchmark rendered the real desktop and collected six PSS
+and 30 CPU observations, but stopped at an incorrectly ordered Quickshell IPC
+command. Its measurements are archived as incomplete and do not establish an
+optimization result. The current `cpu-30-pss-6-v3-awake-ipc` probe uses the shipped
+helper's `quickshell ipc -p ... call` order and resolves `arctic-shell --path`;
+baseline and candidate use identical regenerated probes. Three complete runs of
+each, application startup and functional candidate gates remain pending.
+
 For comparative performance acceptance, repeat at least three boots after builds
 finish, without competing compression/build jobs. Report sample counts, medians
 and range/p95 where meaningful; retain raw serial logs and screenshots. Measurements
