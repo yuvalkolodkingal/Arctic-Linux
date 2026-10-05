@@ -71,7 +71,9 @@ def meminfo():
     memory = {}
     for line in Path('/proc/meminfo').read_text().splitlines():
         key, value = line.split(':', 1)
-        memory[key] = int(value.split()[0]) * 1024
+        parts = value.split()
+        if len(parts) == 2 and parts[1] == 'kB':
+            memory[key] = int(parts[0]) * 1024
     return memory
 
 
