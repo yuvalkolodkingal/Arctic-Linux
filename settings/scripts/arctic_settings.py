@@ -2601,6 +2601,35 @@ def cmd_wallpaper_set(paths, args):
     return dict(ok=True, current=args[0])
 
 
+def cmd_login_wallpaper(paths, args):
+    """The system publisher owns the public image; Settings never runs as root."""
+    if not which('arctic-login-wallpaper'):
+        return dict(ok=True, available=False, enabled=False, mode='legacy',
+                    error='Update Arctic desktop packages to edit the login wallpaper.')
+    action = args[0] if args else 'status'
+    if action not in {'status', 'set', 'sync-desktop', 'freeze', 'reset', 'undo'}:
+        raise Failure('Unknown login wallpaper action.')
+    if (action == 'set' and len(args) != 2) or (action != 'set' and len(args) > 1):
+        raise Failure('Choose one local login wallpaper image.')
+    argv = [action]
+    if action == 'set':
+        value = args[1]
+        if value.startswith('file:'):
+            url = urllib.parse.urlparse(value)
+            if url.netloc not in ('', 'localhost'):
+                raise Failure('Choose an image from this computer.')
+            value = urllib.parse.unquote(url.path)
+        argv.append(value)
+    code, out, _err = run(['arctic-login-wallpaper'] + argv, timeout=160)
+    data = _loads(out) or {}
+    if code != 0 or not data.get('ok'):
+        if action == 'status':
+            return dict(ok=True, available=False, enabled=False, mode='legacy',
+                        error=data.get('error') or 'The login wallpaper publisher is unavailable.')
+        raise Failure(data.get('error') or 'The login wallpaper could not be changed; the previous image is kept.')
+    return data
+
+
 def _wallpaper_files(paths, argv, what):
     script = shell_script(paths, 'wallpapers.py')
     if not script:
@@ -3572,7 +3601,8 @@ COMMANDS.update(arctic_system.COMMANDS)
 WRITERS |= arctic_system.WRITERS
 
 # The shell's options, the light/dark schedule, fonts and accessibility (0.3 "experience").
-COMMANDS.update({'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set, 'shell-options-reset': cmd_shell_options_reset,
+COMMANDS.update({'login-wallpaper': cmd_login_wallpaper,
+                 'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set, 'shell-options-reset': cmd_shell_options_reset,
                  'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
                  'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
                  'weather-place': cmd_weather_place, 'theme-install': cmd_theme_install,

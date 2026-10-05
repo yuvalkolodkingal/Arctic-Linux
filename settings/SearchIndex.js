@@ -55,6 +55,7 @@ var ENTRIES = [
     ["appearance", "appearance.gallery", "More themes", "nord catppuccin gruvbox tokyo night rose pine everforest palette colour scheme gallery"],
     ["appearance", "appearance.schedule", "Switch light and dark by itself", "automatic dark mode sunset sunrise night schedule"],
     ["appearance", "appearance.wallpaper", "Wallpaper", "background picture desktop image add upload drop rename delete my own pictures"],
+    ["appearance", "appearance.login-wallpaper", "Login and lock wallpaper", "SDDM login lock screen background shared sync desktop automatic rotation public"],
     ["appearance", "appearance.themeinstall", "Add a theme from the web", "install theme github omarchy url download colours"],
     ["apps", "apps.gaming", "Gaming setup", "steam proton nvidia amd intel vulkan drivers"],
     ["appearance", "appearance.taskbar", "Taskbar", "bar top bottom position size auto-hide widgets reset"],
