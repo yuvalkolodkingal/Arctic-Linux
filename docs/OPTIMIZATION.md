@@ -52,6 +52,39 @@ Raw evidence: `out/audit/baseline/{iso-layout.txt,payload.json,packages.tsv,dire
 same-sized files to identify exact duplicates. Extraction allocation is filesystem-
 dependent and is distinct from the installed VM's disk usage.
 
+## First local candidate and completed experiments
+
+The first candidate is `out/iso-candidate/Arctic-Linux-1.2-optimized-candidate-x86_64.iso`:
+**2,321,430,528 bytes**, SHA-256
+`8d40511af887361da91610dfded1e86e86df6ed6d4218909893ce2a82d2b1c69`.
+Independent checksum and userspace EROFS full-content integrity checks pass.
+This is 643,072 bytes smaller than the release (0.0277%), and **821,430,528 bytes
+above the requested target**. It is a test candidate, not a stable release. Its
+EROFS is 1,990,307,840 bytes; the initrd is unchanged at 241,962,859 bytes.
+The Arctic RPM build records source `85162e3b0cabb390d54d0e61307260f448570d87`.
+There are no RPM names added/removed, and Flatpak refs and active commits match.
+Fedora Chromium/Chromium-common and xxhash received normal repository updates;
+therefore the small image difference cannot be attributed to the memory fix alone.
+The pending wallpaper PR is not yet in this first candidate.
+
+The actual Quickshell/Qt timer test passes, and a negative control removing the new
+busy handler fails with the retained-catalog symptom. No running job is cancelled.
+This verifies the fix's behavior, not a numerical RAM claim. Raw evidence is
+`out/audit/catalog-eviction-{test,negative-control-result}.log`.
+
+| Completed experiment | Measured result | Decision |
+|---|---|---|
+| Initrd main frame, same decoded contents, Zstd 19 | 241,656,683 → 236,808,843 bytes; 4,847,840 bytes saved. Encoder 113.21 s, peak RSS 432,604 KiB. Decoder window 4 → 8 MiB. | Retain baseline; small image gain adds memory cost. |
+| Flatpak `ostree prune --no-prune --refs-only` | 15,217 objects, no unreachable objects | No deletion. |
+| EROFS LZMA 6 / 1 MiB with global deduplication, one worker | At 465 s only 25,152,292 input bytes had been read; aborted incomplete. | Not adopted; no valid final size or speed measurement. |
+| EROFS Zstd 19 / 64 KiB, one worker | Still incomplete after an observed 675 s; aborted. | Not adopted; compare a lower level to completion. |
+
+Compression trials use the same extracted baseline file contents and hardlinks;
+that audit extraction omits xattrs. They are isolated storage experiments, not
+production boot results or substitutes for the exact candidate's security checks.
+The original LZMA non-deduplication control was interrupted for workspace pressure;
+its partial size is not a measurement. All aborts are recorded explicitly.
+
 ## Prioritized work and rollback
 
 | Priority | Change / experiment | Why / expected scope | Rollback |
