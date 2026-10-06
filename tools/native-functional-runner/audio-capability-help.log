@@ -1,0 +1,12 @@
+qemu-system-x86-core-10.2.2-1.fc44.x86_64
+QEMU emulator version 10.2.2 (qemu-10.2.2-1.fc44)
+Copyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers
+Available audio drivers:
+none
+wav
+hda-output options:
+  audiodev=<str>         - ID of an audiodev to use as a backend
+  cad=<uint32>           -  (default: 4294967295)
+  debug=<uint32>         -  (default: 0)
+  mixer=<bool>           - on/off (default: on)
+  use-timer=<bool>       - on/off (default: on)

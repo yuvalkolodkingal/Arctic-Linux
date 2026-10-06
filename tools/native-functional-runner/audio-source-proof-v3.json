@@ -1,0 +1,27 @@
+{
+  "actual_existing_fedora44_help_only": {
+    "hda_output": true,
+    "intel_hda": true,
+    "no_installs": true,
+    "no_vm_started": true,
+    "qemu": "10.2.2-1.fc44",
+    "wav": true
+  },
+  "actual_source_status": "",
+  "audio_switch_default_off": true,
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "default_live_installed_typed_commands_unchanged": true,
+  "default_qemu_argv_control_passed": true,
+  "driver_python_compile": true,
+  "execution_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
+  "harness_bash_syntax": true,
+  "help_sha256": "37aca64057a7c0e84a6fdb178d1a913c80df35a15123a89850452775920fc09b",
+  "native_launcher_sha256": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
+  "native_source_sha256": "2bf89d4771baad6c948c15d38379393c8c57488ff497a2c68e398f360b2d0489",
+  "original_harness_sha256": "a3a0a11d41d184bec817d98b90a96d87309d253882d3113e6a32c1ab48d5008e",
+  "owned_launcher_gone_pidfd_control_passed": true,
+  "primary_spec_sha256": "572f5ab237395faf72fd95f331aa338d80da12c80d816d5bc6d1ce7b0d16f74b",
+  "proposed_harness_sha256": "28fdb96c6643549faf19ead278bc1cf85c824401fd17f87b852126ef61e34f71",
+  "qualification_worktree_status": "",
+  "review_sha256": "8f4738796615750ceaa6ee60688f1a9cbc0d781fdf9abdcf2cba0777ca3a7988"
+}

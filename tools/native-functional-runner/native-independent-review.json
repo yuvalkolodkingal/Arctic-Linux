@@ -1,0 +1,308 @@
+{
+  "actions": {
+    "active_runs_modified": false,
+    "artifact_download": false,
+    "build_or_dispatch": false,
+    "frozen_v1_modified": false,
+    "guest_gui_executed": false,
+    "network_package_service_policy_changed": false,
+    "owner_bundle_edited_by_reviewer": false,
+    "tracked_source_changed": false,
+    "user_machine_modified": false,
+    "vm_started": false
+  },
+  "blocking_source_findings": [],
+  "checker": {
+    "bytes": 40198,
+    "path": "out/audit/live-app-selection/functional-smoke/native_smoke.py",
+    "sha256": "2bf89d4771baad6c948c15d38379393c8c57488ff497a2c68e398f360b2d0489"
+  },
+  "controls": {
+    "actual_local_unix_ipc_credentials_and_response_id_exercised": true,
+    "helper_evidence_is_not_candidate_runtime": true,
+    "independent_all_passed": true,
+    "independent_test_methods": 11,
+    "owner_complementary_unique_controls": 15,
+    "owner_existing_fedora_helper_controls": {
+      "attempted": 15,
+      "log_sha256": "1683edf6742c5dc988f9f7141fa38ad89477b528def3b6a54f1ce4bb354a2fbd",
+      "no_package_installs": true,
+      "passed": 14,
+      "skipped": 1,
+      "skipped_tests": [
+        "ffmpeg"
+      ]
+    },
+    "resource_warning_as_error": true,
+    "reviewer_host_owner_controls_attempted": 15,
+    "reviewer_host_owner_controls_passed": 13,
+    "reviewer_host_owner_controls_skipped": [
+      "7zip",
+      "cpio"
+    ]
+  },
+  "dependencies": {
+    "bytes": 2636,
+    "path": "out/audit/live-app-selection/functional-smoke/dependencies.json",
+    "sha256": "fd85255a053264d0e6aff46e2f9e97cec1f2f1783bb952d5353e5db7ea503751"
+  },
+  "limits_and_remaining_gates": [
+    "This is source/host-control qualification only. Actual same-ISO live/fresh-installed GUI/media/security execution and byte verification are unrun.",
+    "Dedicated future runner/adapter must preserve failed/early-exception/nonzero cleanup status, require fresh source/ISO/checker evidence, and run before Nix Foot in a separate job from performance. It has not been reviewed by this checker report.",
+    "Frozen recovery v1 and current recovery 37520174911 / original 37507582946 runs remain untouched. No current run is rerun, cancelled or reclassified.",
+    "GUI archive create/extract/edit/password UX, actual portal returned-file roundtrip, per-app accessible trees, keyboard/screen-reader workflows, perceived video/audio and other codecs remain separate acceptance gates.",
+    "Unavailable real guest audio output/portal collectors must be diagnosed without silent skip, invented production cause or policy/service/package weakening.",
+    "Screenshots require human content review; mapped-visible flags and sample decoder bytes cannot establish displayed pixels or audible output.",
+    "Pre-existing disabled auditing limits complete AVC observation. The report records this limitation and does not claim lossless audit coverage.",
+    "No release, physical hardware/gaming, whole-OS performance, recovery or Secure Boot acceptance follows from this limited checker."
+  ],
+  "manifest": {
+    "bytes": 7703,
+    "path": "out/audit/live-app-selection/functional-smoke/manifest.json",
+    "sha256": "ee488d7eaab28e5ff4c70ef25e7e9c8fb6d40971680c80d1ccf83490e6007413"
+  },
+  "own_evidence": {
+    "independent-controls.log": {
+      "bytes": 1792,
+      "path": "out/audit/native-functional-review/independent-controls.log",
+      "sha256": "f8ff965270627db6ce66526f883a4db5d04753b0a4bba1a1cf1ead79a9eb960e"
+    },
+    "independent_controls.py": {
+      "bytes": 10734,
+      "path": "out/audit/native-functional-review/independent_controls.py",
+      "sha256": "907ce14e09c7f79cc2761a27c14d5c1e00ba5919dc9b2cf69351b298999ca4c8"
+    },
+    "owner-host-controls.log": {
+      "bytes": 2296,
+      "path": "out/audit/native-functional-review/owner-host-controls.log",
+      "sha256": "04d7115025a55c9b9846a8a190d5457336c84061a31c192edf3228f62b1517ff"
+    },
+    "write_report.py": {
+      "bytes": 8080,
+      "path": "out/audit/native-functional-review/write_report.py",
+      "sha256": "be7093fbc94675e03d7e940443d4f31840ad4f64e26ecfdfbd5ff81825edc5f1"
+    }
+  },
+  "recorded_at_utc": "2026-10-06T19:48:52.616225+00:00",
+  "resolved_finding": {
+    "correction": "Every named directory and file has an explicit type; file bytes/SHA remain exact. Only the implicit extraction root is omitted; named wrappers are not normalized away.",
+    "defect": "File-only archive oracle accepted extra/missing empty directory members despite documented full-tree claim.",
+    "independently_retested": true,
+    "initial_checker_sha256": "6733626e7c94066c0e50aba5480392465eca9cb2186d8a23888af18cea14b2a5",
+    "reproduction": {
+      "bytes": 304,
+      "path": "out/audit/native-functional-review/archive-empty-directory-before.log",
+      "sha256": "85224b3d5dc40d967c7401ed7868c08d8398d89ce00da8b6e5a6e2ef1528b586"
+    }
+  },
+  "reviewed_bundle_files": [
+    {
+      "bytes": 12886,
+      "path": "out/audit/live-app-selection/functional-smoke/README.md",
+      "sha256": "20664a48bd33ea024263d874213410f094a576167f3e7eb85e4b1550b6cadceb"
+    },
+    {
+      "bytes": 2636,
+      "path": "out/audit/live-app-selection/functional-smoke/dependencies.json",
+      "sha256": "fd85255a053264d0e6aff46e2f9e97cec1f2f1783bb952d5353e5db7ea503751"
+    },
+    {
+      "bytes": 2245,
+      "path": "out/audit/live-app-selection/functional-smoke/helper-controls.log",
+      "sha256": "1683edf6742c5dc988f9f7141fa38ad89477b528def3b6a54f1ce4bb354a2fbd"
+    },
+    {
+      "bytes": 10011,
+      "path": "out/audit/live-app-selection/functional-smoke/helpers-packaging-proof.txt",
+      "sha256": "3c52c3b815f1918f6b657c763b9e4a8f90165f5399ce4c9f8b86e99b599b4049"
+    },
+    {
+      "bytes": 2296,
+      "path": "out/audit/live-app-selection/functional-smoke/host-controls.log",
+      "sha256": "a490c7962cc7a0fd44e95f303c34c4160aeac60f8286fe39df802ea6551dfcd7"
+    },
+    {
+      "bytes": 304,
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/archive-empty-directory-before.log",
+      "sha256": "85224b3d5dc40d967c7401ed7868c08d8398d89ce00da8b6e5a6e2ef1528b586"
+    },
+    {
+      "bytes": 2990,
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/independent-controls.log",
+      "sha256": "14c2bcee1f0823ae324df3cae6e33c20248040e33b0f44cb31549b693f371ba5"
+    },
+    {
+      "bytes": 10734,
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/independent_controls.py",
+      "sha256": "ef4ea98079c164038f6f34bbd2ed5d04798267a4a49c8407fdac79fd7d211111"
+    },
+    {
+      "bytes": 2296,
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/owner-host-controls.log",
+      "sha256": "04d7115025a55c9b9846a8a190d5457336c84061a31c192edf3228f62b1517ff"
+    },
+    {
+      "bytes": 7860,
+      "path": "out/audit/live-app-selection/functional-smoke/input-provenance.json",
+      "sha256": "8f2ac75544d60fbb10317db04da039c57dcc9412132f2bada76668eade598890"
+    },
+    {
+      "bytes": 40198,
+      "path": "out/audit/live-app-selection/functional-smoke/native_smoke.py",
+      "sha256": "2bf89d4771baad6c948c15d38379393c8c57488ff497a2c68e398f360b2d0489"
+    },
+    {
+      "bytes": 11541,
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/README.md",
+      "sha256": "6525f490af8f1e9543e19acd49cd11549257a2bd9cd3d97bbe719aed18261434"
+    },
+    {
+      "bytes": 1935,
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/helper-controls.log",
+      "sha256": "4f3e13872ae98fb8aa48bf8fc15171c6ae3807ff4a9bd5e5e48f932b5ae07655"
+    },
+    {
+      "bytes": 1986,
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/host-controls.log",
+      "sha256": "7baf507aa02e2b91e894d253f2980951d574586f759ea397b10e7d131798ea9d"
+    },
+    {
+      "bytes": 5130,
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/manifest.json",
+      "sha256": "9bd8232f879bc141d5bcab892c7c05fab834bcc6d27260fd9aa0fb5379b82792"
+    },
+    {
+      "bytes": 39760,
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/native_smoke.py",
+      "sha256": "6733626e7c94066c0e50aba5480392465eca9cb2186d8a23888af18cea14b2a5"
+    },
+    {
+      "bytes": 2210,
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/summary.json",
+      "sha256": "dddefcb66cc5291bea1ba2efdd3dc7f9bc47a0e41ee7085dc9295d2a0ad5fbfa"
+    },
+    {
+      "bytes": 9923,
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/test_native_smoke.py",
+      "sha256": "ba9b004de7d75df5ced68b721b381d863fb1735b64f4928c403fc8620c6b20c9"
+    },
+    {
+      "bytes": 4368,
+      "path": "out/audit/live-app-selection/functional-smoke/summary.json",
+      "sha256": "5f42ef2e31218df6574aef5de1734e483e8a98c8ab7fee20352b44ac8abfc29b"
+    },
+    {
+      "bytes": 11818,
+      "path": "out/audit/live-app-selection/functional-smoke/test_native_smoke.py",
+      "sha256": "1de3a553502ce0449373aef510bf3cf809fe762321400ff1d23845496af383e3"
+    },
+    {
+      "bytes": 31021,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/atspi-bus-launcher.c",
+      "sha256": "c187c194d0b1b8c2fe72e71daf765836ddcc46d7ad5d70e9a294fa64e0698484"
+    },
+    {
+      "bytes": 47817,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/atspi-registry.c",
+      "sha256": "9834236d423d3bc45721a1f8de7749569c1fe6b68007d24ea780b12e5d5ab6df"
+    },
+    {
+      "bytes": 14276,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/celluloid-application.c",
+      "sha256": "42b6528cbe8d3ff2e18f62a582fbdc03b188cc9a7def9e42094fb091a594d7f6"
+    },
+    {
+      "bytes": 23138,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/celluloid-mpv.c",
+      "sha256": "b41406dac8d356f3a15cdce7374998156fdcfa8a48005299d854387c6dd110cc"
+    },
+    {
+      "bytes": 22107,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/featherpad-help",
+      "sha256": "77ec36d3d1d037f546bcccbc4826dbc18a7813722d3535b16bdac346ab233e2b"
+    },
+    {
+      "bytes": 4694,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/featherpad-main.cpp",
+      "sha256": "c802cb4b593e37eec14745a7f37e18c8add4d23cda313c2234b028d518d76265"
+    },
+    {
+      "bytes": 46711,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/featherpad-tree.json",
+      "sha256": "c8fd3b28902e43683077f9a822cb8e50a9c038ca467e08a3a10dbccbd5db2fed"
+    },
+    {
+      "bytes": 4685,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/manifest.json",
+      "sha256": "655b2ecb158e8bf94e81ccd9e2ce35711220e9ca598a33aed2015bd11f30db19"
+    },
+    {
+      "bytes": 85973,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-client-api.h",
+      "sha256": "3c073236a09cb456c6e80587d5523c8771c32fb22ca014e0f99cc3d43905b75c"
+    },
+    {
+      "bytes": 69031,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-client.c",
+      "sha256": "7d3c4b6ed1c614169277c7faad9e7fa21e5bf4694d7a3961986defdebcaa60eb"
+    },
+    {
+      "bytes": 277714,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-core-command.c",
+      "sha256": "c0932fe7950b92a3021f31ae96b13900a5393d2100e6703df59adc7f1bd8e62f"
+    },
+    {
+      "bytes": 11423,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-ipc-unix.c",
+      "sha256": "a377bae0e3abc3f9b4172eeede04cb7400ae7fd62cb3be7208198b5c8ec90a4d"
+    },
+    {
+      "bytes": 72798,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-loadfile.c",
+      "sha256": "08ba89fce329fe22f2226f53af92300be9bb5073c6a4526b646f029cbab26e2e"
+    },
+    {
+      "bytes": 14401,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-main.c",
+      "sha256": "c3bfca8c73543fc7beed2ce1f6856d0d2bfd5f0178af3149d592c7395788ff3e"
+    },
+    {
+      "bytes": 16322,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/pcmanfm-main-win-ui.c",
+      "sha256": "7ec5e0f078ad25d9ad1a917ff12ab847bc914ac4317b48d0104658fcd0d72f17"
+    },
+    {
+      "bytes": 97405,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/pcmanfm-main-win.c",
+      "sha256": "d2e420220dd878c2af0971d456fc166efb511f950d51aaaae85acb332c69cb58"
+    },
+    {
+      "bytes": 1147,
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/wtype-README.md",
+      "sha256": "cdcc10eac97d63c11772b66bab1e0e0b086657cea54ff29d0abbe2adc12b6237"
+    }
+  ],
+  "reviewer": "/root/precision_review",
+  "schema_version": 2,
+  "source_findings": [
+    "Import is inert. Standalone execution requires exact /run/t location, explicit disposable flag, root, QEMU/KVM, Enforcing and matching live/installed cmdline. Imported run_checks retains guest guards; future adapter needs separate review.",
+    "Fresh approved role choices and actual/isolated MIME declarations are preconditions, never substitutes for GUI operations. Different user choices or pre-existing app state are refused rather than changed.",
+    "New GUI proof requires actual UID, numeric PID/start, exact /usr/bin role ELF and a new compositor client with visible geometry. Foot/FeatherPad/Celluloid require native Wayland; PCManFM/XArchiver record either observed Wayland or Xwayland.",
+    "Session discovery uses actual non-root Mango user/session and post-exec matching children to obtain IPC and DISPLAY/XAUTHORITY. Each synthetic keyboard action requires the proven client to be actually focused.",
+    "Pinned Mango source emits the queried PID/visible/geometry/protocol/focus fields. Pinned PCManFM source implements F4 current-folder terminal and Ctrl+L directory navigation with deferred folder-view focus; it does not invent a path-bar file-opening action.",
+    "Actual terminal marker binds UID/nonce; F4 marker binds UID/current folder/nonce. PCManFM activates a uniquely owned text fixture and proven FeatherPad must save exact requested UTF-8 bytes. Config values and window titles alone cannot satisfy the save/content oracle.",
+    "Archive helpers operate on owned nested binary/Unicode/empty-directory fixtures; full typed-tree and file SHA/length comparison detect extra/missing/type-changed members. Encrypted 7z has actual wrong-password returncode and nonempty-plaintext negative controls.",
+    "FFV1/PCM source sizes and decoded byte SHA comparisons are real command content oracles. Their distinct passing evidence survives later GUI player failure without clearing that failed gate.",
+    "Visible fresh Celluloid, exact local Unix IPC peer PID/UID, right fixture path, GUI libmpv renderer, nonnull audio output, audio/video params, finite changing fixture clock and mapped libmpv are required. This proves player state only after real guest execution; screenshots and sound need human review.",
+    "Portal FileChooser/OpenURI versions, current AT-SPI enabled reply, Unix bus address and registry query are explicitly bounded read-only reachability diagnostics, not chooser/application-tree/screen-reader acceptance.",
+    "Security interval requires Enforcing before/after, journal cursor, available audit-file interval, no audit-mode/loss-counter change and no observed new AVC. Missing collector data, rotation/truncation and collector failure remain failures. Pre-existing audit enabled=0 is recorded as telemetry-limited and is never enabled to pass.",
+    "Cleanup pins PID with pidfd before checking the full identity; recycled/unproved replacement is not signalled. Original copied preference hashes are rechecked. Cleanup or another gate failure remains in overall failed status; no direct fallback changes app/network/package/service policy.",
+    "Exact candidate inventory hash and every dependency NEVRA/architecture were independently compared. Required audit-rules/wtype/grim/glib2/ffmpeg-free names are present; retained header proof assigns auditctl to audit-rules and gdbus to glib2. These are inventory/header proofs, not guest PATH/interface execution."
+  ],
+  "status": "AUDIT CHECKER SOURCE AND HOST CONTROL REVIEW PASS; CANDIDATE GUI VM UNRUN",
+  "summary": {
+    "bytes": 4368,
+    "path": "out/audit/live-app-selection/functional-smoke/summary.json",
+    "sha256": "5f42ef2e31218df6574aef5de1734e483e8a98c8ab7fee20352b44ac8abfc29b"
+  }
+}

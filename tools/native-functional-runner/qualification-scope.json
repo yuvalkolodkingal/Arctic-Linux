@@ -1,0 +1,13 @@
+{
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
+  "existing_authorization": "Parent-authorized recoverable test-only qualification fixes and actual same-image checks; branch/push/artifact-only dispatch authority already used forv2",
+  "original_iso_builds_added": 0,
+  "paired_performance_reruns_added": 0,
+  "publications": false,
+  "same_iso_recovery_runs_edited": false,
+  "candidate_product_source_edited": false,
+  "firm_size_ceiling_bytes": 1999999999,
+  "preferred_size_ceiling_bytes": 1599999999,
+  "readme_original_1_5GB_target": "Historical; superseded by approved firm2GB/preferred1.6GB, sourcefreeze unchanged"
+}

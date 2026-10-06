@@ -1,0 +1,115 @@
+{
+  "actions": {
+    "current_runs_changed": false,
+    "host_audio_security_service_changes": false,
+    "iso_download_export_build": false,
+    "owner_native_changed": false,
+    "push_dispatch_release": false,
+    "tracked_edits": false,
+    "v1_v2_changed": false,
+    "vm": false
+  },
+  "candidate": {
+    "actual_iso_bytes_accessed_here": false,
+    "artifact": 11434226349,
+    "iso_bytes": 1880244224,
+    "iso_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "run": 37507582946,
+    "source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1"
+  },
+  "controls": {
+    "actual_wav_fixture_and_adapter_export": true,
+    "audio_capability_help_only_no_vm": true,
+    "default_live_installed_commands_unchanged": true,
+    "default_qemu_argv_unchanged": true,
+    "host_only_methods": 28,
+    "native_function_ast_and_bytes_preserved": true,
+    "owned_launcher_natural_exit_pidfd_barrier": true,
+    "passed": true
+  },
+  "files": {
+    "README-v3.md": {
+      "bytes": 12186,
+      "sha256": "c52748f87b49c0a48ae0719009bc3652f0f2258136fdadfda5c5e3755026605d"
+    },
+    "adapter-parity-v3.json": {
+      "bytes": 2483,
+      "sha256": "3023d4f10db9bc704f159d3666630e04c306e076965c35d5779b229aeb610b49"
+    },
+    "audio-capability-help.log": {
+      "bytes": 470,
+      "sha256": "37aca64057a7c0e84a6fdb178d1a913c80df35a15123a89850452775920fc09b"
+    },
+    "audio-source-proof-v3.json": {
+      "bytes": 1297,
+      "sha256": "d36566c146207715d3251e67cddb8f65861e2060f5c897c6f8c5f5d5389f13bd"
+    },
+    "execution-pins-v3.json": {
+      "bytes": 2381,
+      "sha256": "3ff75fe8d37550f7cae8d3e774d6c4af5366df7e539368ceabf414df7f6b3bab"
+    },
+    "fedora44-qemu.spec": {
+      "bytes": 107473,
+      "sha256": "572f5ab237395faf72fd95f331aa338d80da12c80d816d5bc6d1ce7b0d16f74b"
+    },
+    "frozen-v2-pins-v3.json": {
+      "bytes": 2151,
+      "sha256": "4c19408ca3a5a69796df54ccd88a655414dc21c8e4fd571beac5febb99f08c25"
+    },
+    "guest-check-native-v3.py": {
+      "bytes": 46859,
+      "sha256": "901b5ec41f37b5f62958492930f158f386fe63772f2800ba6ab3b1e50a5ac5b6"
+    },
+    "native-independent-review.json": {
+      "bytes": 16365,
+      "sha256": "8f4738796615750ceaa6ee60688f1a9cbc0d781fdf9abdcf2cba0777ca3a7988"
+    },
+    "native-launcher-v3.py": {
+      "bytes": 7827,
+      "sha256": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c"
+    },
+    "native-manifest.json": {
+      "bytes": 7703,
+      "sha256": "ee488d7eaab28e5ff4c70ef25e7e9c8fb6d40971680c80d1ccf83490e6007413"
+    },
+    "native-runner-controls-v3.log": {
+      "bytes": 3902,
+      "sha256": "bc7c8be714213a244d4f8030f8b705dbd55337a3f590a9cd72facbd978ab220f"
+    },
+    "native-runner-v3.py": {
+      "bytes": 27326,
+      "sha256": "71d951221e0bd22d8bdffd96f10057b429aca1291beb2f2ccdc8bc20080efcb4"
+    },
+    "native_smoke.py": {
+      "bytes": 40198,
+      "sha256": "2bf89d4771baad6c948c15d38379393c8c57488ff497a2c68e398f360b2d0489"
+    },
+    "prepare-adapter-v3.py": {
+      "bytes": 9376,
+      "sha256": "6e54e246af0d516036764353850084c87eda8ee6e826d354ab32c9aea8d8d9f7"
+    },
+    "registered-iso-native-v3.yml": {
+      "bytes": 26722,
+      "sha256": "f240a31aba493048ab25d161026566819043deedc391615ab6b8160685c518f0"
+    },
+    "test-install-native-audio-v3.patch": {
+      "bytes": 6143,
+      "sha256": "63d8413024cbddf23dfa1b447ab2239480f6839cd925330c289ad36ea5512073"
+    },
+    "test_native_runner_v3.py": {
+      "bytes": 28184,
+      "sha256": "a0310e979642237cc8b28ce6469877a9ada510858f01e6d421a578ba83a0e39c"
+    }
+  },
+  "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
+  "remaining": [
+    "Independent runner review",
+    "Approved separate branch promotion/push/dispatch",
+    "Actual supported-CI ISO byte verification and native VM run",
+    "Actual native screenshots/virtual audio review",
+    "Broad release/media/accessibility/portal/mount/security recovery/performance acceptance stays separate"
+  ],
+  "replaces_preliminary_ready_sha256": "353eb6fefb91dad5ce715af880e5fe35af98d403e15a820dd568165763ec3fe1",
+  "schema": 3,
+  "status": "REVISED READY FOR INDEPENDENT NATIVE RUNNER SOURCE/HOST REVIEW; PRE-LAUNCHER PIN HISTORICAL; VM UNRUN"
+}

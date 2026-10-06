@@ -1,0 +1,113 @@
+--- a/tools/test-install.sh
++++ b/tools/test-install.sh
+@@ -87,6 +87,9 @@
+ ISO="$ROOT/out/iso/Arctic-Linux-1.2-x86_64.iso"
+ FIRMWARE=uefi
+ STAGE=all
++# Optional test-only virtual audio; no host sound devices or user configuration.
++NATIVE_AUDIO_FIXTURE="${ARCTIC_NATIVE_AUDIO_FIXTURE:-0}"
++case "$NATIVE_AUDIO_FIXTURE" in 0|1) ;; *) arctic_die "invalid native audio fixture switch" ;; esac
+ PROFILE="$ROOT/profiles/ci/offline.toml"
+ INSTALL_TIMEOUT=7200
+ MEMORY=6144
+@@ -174,6 +177,10 @@
+ cp "$PROFILE" "$DATA/profile.toml"
+ if [[ -n "$PERFORMANCE_CONTEXT" ]]; then cp "$PERFORMANCE_CONTEXT" "$DATA/performance-context.json"; fi
+ if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
++if [[ -n "${ARCTIC_NATIVE_LAUNCHER:-}" ]]; then
++  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && "$COLLECT_VIA" == terminal && -f "$ARCTIC_NATIVE_LAUNCHER" ]] || arctic_die "native launcher requires explicit audio/checker/terminal fixture"
++  cp "$ARCTIC_NATIVE_LAUNCHER" "$DATA/native-launcher.py"
++fi
+ if [[ -n "$INSTALLER" ]]; then
+   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
+   cp "$INSTALLER" "$DATA/arctic-install"
+@@ -198,6 +205,8 @@
+ # the unattended install, everything teed to the serial port, then power off.
+ S=/dev/ttyS0
+ D="\$(dirname "\$(readlink -f "\$0")")"
++if [ -f "\$D/native-launcher.py" ]; then exec >/dev/null; fi
++# The live harness already tees its output to serial; avoid duplicate serial markers.
+ say() { printf '%s\n' "\$*" | tee -a "\$S"; }
+ exec 9>/run/arctic-test.lock
+ if ! flock -n 9 || [ -e /run/arctic-test.started ]; then echo "run.sh already ran"; exit 0; fi
+@@ -382,6 +391,7 @@
+ # tools/test-install.sh: first bytes of the test data CD, run as `sudo sh /dev/sr0 [PID]`.
+ mkdir -p /run/t
+ mountpoint -q /run/t || mount -o ro /dev/disk/by-label/ARCTICTEST /run/t || exit 1
++if [ -f /run/t/native-launcher.py ]; then exec python3 /run/t/native-launcher.py; fi
+ if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
+ exit 1
+ EOF
+@@ -426,6 +436,11 @@
+          "-netdev", "user,id=net0" + ("" if online else ",restrict=on"),
+          "-device", "virtio-net-pci,netdev=net0",
+          "-device", "qemu-xhci", "-device", "usb-tablet", "-rtc", "base=utc"]
++    if E.get("NATIVE_AUDIO_FIXTURE") == "1":
++        # File-only backend plus output-only HDA codec; default VM argv is unchanged.
++        audio_path = f"{out}/native-audio-{name}.wav".replace(",", ",,")
++        a += ["-audiodev", f"wav,id=native_audio,path={audio_path},out.frequency=48000,out.channels=2,out.format=s16",
++              "-device", "intel-hda", "-device", "hda-output,audiodev=native_audio"]
+     if with_iso:
+         a += ["-drive", "file=/iso,media=cdrom,readonly=on,if=none,id=cd", "-device", "ide-cd,drive=cd,bus=ide.1,bootindex=0"]
+     if fw == "uefi":
+@@ -499,10 +514,14 @@
+         started = False
+         for attempt in (1, 2, 3):
+             open_terminal(vm, f"install-2{attempt}")
+-            vm.type_text("sudo sh /dev/sr0", gap=0.3)
++            command = "sudo sh /dev/sr0; exit" if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" else "sudo sh /dev/sr0"
++            vm.type_text(command, gap=0.3)
+             vm.keys("ret")
+             t = time.time()
+             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
++                if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("install"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
++                    log("owned native launcher failed; no retry")
++                    return 1
+                 if vmtest.serial_has(serial("install"), "ARCTIC-TEST-STARTED"):
+                     started = True
+                     break
+@@ -671,7 +690,8 @@
+                 time.sleep(5)
+             else:
+                 open_terminal(vm, f"boot-5{attempt + 1}")
+-            vm.type_text("sudo sh /dev/sr0", gap=0.3)
++            command = "sudo sh /dev/sr0; exit" if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" else "sudo sh /dev/sr0"
++            vm.type_text(command, gap=0.3)
+             vm.keys("ret")
+             time.sleep(10)
+             vm.shot(f"boot-5{attempt + 1}-sudo")
+@@ -681,6 +701,9 @@
+             last_probe_shot = t
+             probe_shots = 0
+             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
++                if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("boot"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
++                    log("owned native launcher failed; no retry")
++                    return 1
+                 if vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END"):
+                     collected = True
+                     break
+@@ -755,6 +778,15 @@
+   qemu-system-x86_64 --version
+   sha256sum /usr/share/edk2/ovmf/*.fd /usr/share/seabios/*.bin
+ } > "$OUT/vm-toolchain.txt"
++if [[ "$NATIVE_AUDIO_FIXTURE" == 1 ]]; then
++  # Capability queries exit without starting QEMU/VMs. No backend fallback.
++  audio_help="$(qemu-system-x86_64 -audiodev help)"
++  device_help="$(qemu-system-x86_64 -device help)"
++  grep -qx wav <<< "$audio_help"
++  grep -q 'name "intel-hda"' <<< "$device_help"
++  grep -q 'name "hda-output"' <<< "$device_help"
++  { printf '%s\n' "$audio_help" "$device_help"; qemu-system-x86_64 -device hda-output,help; } > "$OUT/native-audio-capabilities.txt"
++fi
+ xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
+ if [ "$STAGE" != boot ]; then
+   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
+@@ -788,6 +820,8 @@
+   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
+ fi
+ "$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
++  -e NATIVE_LAUNCHER_FIXTURE="$([[ -f "$DATA/native-launcher.py" ]] && echo 1 || echo 0)" \
++  -e NATIVE_AUDIO_FIXTURE="$NATIVE_AUDIO_FIXTURE" \
+   -e VM_TOOLS_PREPARED="${ARCTIC_VM_TOOLS_PREPARED:-0}" \
+   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
+   -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \

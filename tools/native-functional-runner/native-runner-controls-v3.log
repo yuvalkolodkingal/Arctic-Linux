@@ -1,0 +1,33 @@
+test_actual_adapter_export_on_pass_and_failed_native_gate (__main__.AdapterControls.test_actual_adapter_export_on_pass_and_failed_native_gate) ... ok
+test_native_top_level_bytes_and_ast_retained (__main__.AdapterControls.test_native_top_level_bytes_and_ast_retained) ... ok
+test_wrong_location_or_stage_emits_failed_completion (__main__.AdapterControls.test_wrong_location_or_stage_emits_failed_completion) ... ok
+test_actual_large_wav_preserves_valid_bounded_excerpts (__main__.AudioControls.test_actual_large_wav_preserves_valid_bounded_excerpts) ... ok
+test_actual_pcm_nonzero_and_silence_failure_preserved (__main__.AudioControls.test_actual_pcm_nonzero_and_silence_failure_preserved) ... ok
+test_corrupt_wav_fails_and_retains_bounded_prefix (__main__.AudioControls.test_corrupt_wav_fails_and_retains_bounded_prefix) ... ok
+test_default_qemu_argv_unchanged_and_audio_opt_in (__main__.AudioControls.test_default_qemu_argv_unchanged_and_audio_opt_in) ... ok
+test_actual_default_typed_commands_remain_and_only_native_exits (__main__.LauncherControls.test_actual_default_typed_commands_remain_and_only_native_exits) ... ok
+test_actual_pidfd_barrier_after_both_owned_processes_exit (__main__.LauncherControls.test_actual_pidfd_barrier_after_both_owned_processes_exit) ... ok
+test_ancestor_selection_fish_safe_and_owned_only (__main__.LauncherControls.test_ancestor_selection_fish_safe_and_owned_only) ... ok
+test_fixture_shell_exit_only_opt_in_and_no_signal_or_tty_switch (__main__.LauncherControls.test_fixture_shell_exit_only_opt_in_and_no_signal_or_tty_switch) ... ok
+test_live_identity_cannot_pass_and_pid_reuse_not_same_process (__main__.LauncherControls.test_live_identity_cannot_pass_and_pid_reuse_not_same_process) ... ok
+test_missing_wrong_owned_launcher_or_marker_cannot_pass (__main__.LauncherControls.test_missing_wrong_owned_launcher_or_marker_cannot_pass) ... ok
+test_harness_failure_preserves_live_guest_and_audio (__main__.LifecycleControls.test_harness_failure_preserves_live_guest_and_audio) ... ok
+test_single_fresh_live_install_first_boot_success (__main__.LifecycleControls.test_single_fresh_live_install_first_boot_success) ... ok
+test_changed_chunk_or_missing_report_cannot_pass (__main__.ProtocolControls.test_changed_chunk_or_missing_report_cannot_pass) ... ok
+test_failed_cleanup_retains_guest_files_and_fails (__main__.ProtocolControls.test_failed_cleanup_retains_guest_files_and_fails) ... ok
+test_installed_root_luks_required (__main__.ProtocolControls.test_installed_root_luks_required) ... ok
+test_missing_second_log_still_extracts_live (__main__.ProtocolControls.test_missing_second_log_still_extracts_live) ... ok
+test_native_outside_installed_collect_cannot_pass (__main__.ProtocolControls.test_native_outside_installed_collect_cannot_pass) ... ok
+test_offline_or_install_failure_cannot_pass (__main__.ProtocolControls.test_offline_or_install_failure_cannot_pass) ... ok
+test_roundtrip_both_stages (__main__.ProtocolControls.test_roundtrip_both_stages) ... ok
+test_stage_identity_gate_and_completion_negatives (__main__.ProtocolControls.test_stage_identity_gate_and_completion_negatives) ... ok
+test_successful_encrypted_offline_live_first_boot (__main__.ProtocolControls.test_successful_encrypted_offline_live_first_boot) ... ok
+test_unsafe_or_reserved_path_rejected (__main__.ProtocolControls.test_unsafe_or_reserved_path_rejected) ... ok
+test_mode_engine_release_and_run_negative_controls (__main__.WorkflowControls.test_mode_engine_release_and_run_negative_controls) ... ok
+test_native_only_mode_omits_build_updates_recovery_and_performance (__main__.WorkflowControls.test_native_only_mode_omits_build_updates_recovery_and_performance) ... ok
+test_no_vm_after_input_verification_failure (__main__.WorkflowControls.test_no_vm_after_input_verification_failure) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 0.897s
+
+OK

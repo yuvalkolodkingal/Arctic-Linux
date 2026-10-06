@@ -1,0 +1,25 @@
+{
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "files": {
+    ".github/workflows/iso.yml": "f240a31aba493048ab25d161026566819043deedc391615ab6b8160685c518f0",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+    "tools/native-functional-runner/README-v3.md": "c52748f87b49c0a48ae0719009bc3652f0f2258136fdadfda5c5e3755026605d",
+    "tools/native-functional-runner/adapter-parity-v3.json": "3023d4f10db9bc704f159d3666630e04c306e076965c35d5779b229aeb610b49",
+    "tools/native-functional-runner/frozen-v2-pins-v3.json": "4c19408ca3a5a69796df54ccd88a655414dc21c8e4fd571beac5febb99f08c25",
+    "tools/native-functional-runner/guest-check-native-v3.py": "901b5ec41f37b5f62958492930f158f386fe63772f2800ba6ab3b1e50a5ac5b6",
+    "tools/native-functional-runner/native-independent-review.json": "8f4738796615750ceaa6ee60688f1a9cbc0d781fdf9abdcf2cba0777ca3a7988",
+    "tools/native-functional-runner/native-launcher-v3.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
+    "tools/native-functional-runner/native-manifest.json": "ee488d7eaab28e5ff4c70ef25e7e9c8fb6d40971680c80d1ccf83490e6007413",
+    "tools/native-functional-runner/native-runner-v3.py": "71d951221e0bd22d8bdffd96f10057b429aca1291beb2f2ccdc8bc20080efcb4",
+    "tools/native-functional-runner/native_smoke.py": "2bf89d4771baad6c948c15d38379393c8c57488ff497a2c68e398f360b2d0489",
+    "tools/native-functional-runner/prepare-adapter-v3.py": "6e54e246af0d516036764353850084c87eda8ee6e826d354ab32c9aea8d8d9f7",
+    "tools/native-functional-runner/test-install-native-audio-v3.patch": "63d8413024cbddf23dfa1b447ab2239480f6839cd925330c289ad36ea5512073",
+    "tools/native-functional-runner/test_native_runner_v3.py": "a0310e979642237cc8b28ce6469877a9ada510858f01e6d421a578ba83a0e39c",
+    "tools/test-install.sh": "28fdb96c6643549faf19ead278bc1cf85c824401fd17f87b852126ef61e34f71",
+    "tools/test-iso.sh": "9beb039d69dad07176e00a8e890c7e099631ff68175235a83be8b6394f63434f"
+  },
+  "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
+  "schema": 3,
+  "scope": "Separate native live/offline encrypted install/first-installed smoke with declared owned-Foot launcher lifecycle and test-only WAV/HDA; frozen v2 manifest unchanged."
+}

@@ -1,0 +1,236 @@
+{
+  "actions": {
+    "api_or_artifact_download_access": false,
+    "candidate_or_frozen_v2_changed": false,
+    "host_audio_forwarding": false,
+    "package_service_security_network_changes": false,
+    "push_dispatch_cancel_or_release": false,
+    "tracked_source_edits": false,
+    "vm_or_qemu_started": false,
+    "writes": "Reviewer-owned out/audit/native-runner-review and bounded temporary source-control fixtures only."
+  },
+  "assessed_guards": [
+    "Native mode is explicit and exclusive; release and recovery selections fail preflight. Build/publication job is skipped, native job contents/actions permissions are read only, existing active runs are not cancelled.",
+    "Fixed original run/artifact/source metadata and actual unsplit ISO bytes/SHA/metadata are verified before any VM through pinned unchanged common v2 primitives. Candidate source, ae55 base, actual new execution head and schema-3 runtime manifest remain distinct.",
+    "Inherited workflow YAML is equal to ae55 after removing only the new native input/job and three native-routing guards. Frozen v2 files/manifest are unchanged; its old route intentionally cannot qualify the changed workflow.",
+    "Native checker source/manifest/independent review remain exact. Adapter replay replaces only main; every other source byte/top-level function/class AST is preserved. Guard or cleanup failure stays failed.",
+    "Optional test-only audio uses output-only emulated HDA and file-only WAV with no host sound device, microphone or audio-server forwarding. Capability failure has no backend fallback.",
+    "Fresh owned VM and extraction paths prevent overwrite. Transport file/count/byte/chunk/zlib/hash limits fail closed. Required screenshots are transported and hash-matched, never interpreted as a visual pass.",
+    "Live and installed boot IDs are canonical and distinct; corresponding cmdline, exact offline/install/probe markers, installed collector boundary, mapped LUKS2 root and all eight native gates are mandatory.",
+    "Detached root worker waits at most 30 seconds for exact owned shell/Foot PID-fd readiness and identity disappearance; exclusive same-boot proof and ready/gone order are checked. Unrelated existing native apps continue to fail unchanged setup.",
+    "Inherited owned Docker/process-group timeout cleanup is reused without engine ambiguity, global cleanup, host permission changes or service/security/network changes. Failed harness/stage/audio evidence stays visible.",
+    "WAV requires finalized 48kHz stereo S16 PCM, matching frames and some nonzero PCM; silence/corruption/truncation fail. Large files yield bounded labeled excerpts, not a claim of player attribution or perceived sound."
+  ],
+  "candidate": {
+    "actual_iso_bytes_accessed_here": false,
+    "artifact": 11434226349,
+    "iso_bytes": 1880244224,
+    "iso_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "run": 37507582946,
+    "source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1"
+  },
+  "controls": {
+    "additional_independent_methods": 17,
+    "additional_source_mutation_file_set_negative_cases": 42,
+    "candidate_git_source_files_verified": 7,
+    "execution_payload_files_verified": 17,
+    "frozen_v2_files_verified_unchanged_from_ae55": 17,
+    "owner_host_methods_independently_replayed": 28,
+    "ready_files_verified": 18,
+    "real_process_controls": "Only newly owned /usr/bin/sleep children, natural exit and retained-process pidfd timeout. No signal, desktop process, Docker, QEMU or VM was started.",
+    "real_wav_controls": "Local synthetic PCM files exercised silence, nonzero content, truncation, corrupt header, full-copy and bounded-excerpt paths. No host audio forwarding.",
+    "resource_warning_policy": "ResourceWarning treated as error in final replays",
+    "runtime_source_gate_fixture": "Actual isolated pinned files/hash checks; git head/cleanliness/ancestry responses stubbed. Real clean execution head is a future CI gate.",
+    "serial_controls": "Synthetic live/installed serial evidence; malformed paths/chunks/hashes/gates/provenance/root encryption/launcher/screenshot records fail closed, first-stage evidence survives missing second stage."
+  },
+  "execution_manifest_sha256": "3ff75fe8d37550f7cae8d3e774d6c4af5366df7e539368ceabf414df7f6b3bab",
+  "findings_closed": [
+    {
+      "evidence": [
+        "draft-boot-uuid-before.log",
+        "draft-boot-uuid-after.log",
+        "revised-independent-controls.log"
+      ],
+      "finding": "Draft accepted an all-hyphen 36-character boot ID.",
+      "resolution": "Canonical lowercase 8-4-4-4-12 hex UUID guard; original reproduction now rejects it and canonical valid records pass."
+    },
+    {
+      "evidence": [
+        "revised-owner-controls-independent-replay.log",
+        "revised-independent-controls.log",
+        "pins-and-source-controls.json"
+      ],
+      "finding": "Preliminary integration retained the harness Foot terminal, conflicting with the unchanged fresh-native-app setup gate. Owner/root identified the conflict; preliminary pin was held and superseded.",
+      "resolution": "Opt-in bounded detached launcher discovers the actual nearest nonroot shell and /usr/bin/foot ancestor, holds PID-fds and waits for their natural exit without sending signals. Checker requires same-boot root0600 proof, exact pinned helper, vanished PID/start identities, root-probe ancestry, matching desktop UID and active Wayland session. Default live/installed typed commands and default QEMU argv remain equal."
+    }
+  ],
+  "frozen_files": {
+    "README-v3.md": {
+      "bytes": 12186,
+      "sha256": "c52748f87b49c0a48ae0719009bc3652f0f2258136fdadfda5c5e3755026605d"
+    },
+    "adapter-parity-v3.json": {
+      "bytes": 2483,
+      "sha256": "3023d4f10db9bc704f159d3666630e04c306e076965c35d5779b229aeb610b49"
+    },
+    "audio-capability-help.log": {
+      "bytes": 470,
+      "sha256": "37aca64057a7c0e84a6fdb178d1a913c80df35a15123a89850452775920fc09b"
+    },
+    "audio-source-proof-v3.json": {
+      "bytes": 1297,
+      "sha256": "d36566c146207715d3251e67cddb8f65861e2060f5c897c6f8c5f5d5389f13bd"
+    },
+    "execution-pins-v3.json": {
+      "bytes": 2381,
+      "sha256": "3ff75fe8d37550f7cae8d3e774d6c4af5366df7e539368ceabf414df7f6b3bab"
+    },
+    "fedora44-qemu.spec": {
+      "bytes": 107473,
+      "sha256": "572f5ab237395faf72fd95f331aa338d80da12c80d816d5bc6d1ce7b0d16f74b"
+    },
+    "frozen-v2-pins-v3.json": {
+      "bytes": 2151,
+      "sha256": "4c19408ca3a5a69796df54ccd88a655414dc21c8e4fd571beac5febb99f08c25"
+    },
+    "guest-check-native-v3.py": {
+      "bytes": 46859,
+      "sha256": "901b5ec41f37b5f62958492930f158f386fe63772f2800ba6ab3b1e50a5ac5b6"
+    },
+    "native-independent-review.json": {
+      "bytes": 16365,
+      "sha256": "8f4738796615750ceaa6ee60688f1a9cbc0d781fdf9abdcf2cba0777ca3a7988"
+    },
+    "native-launcher-v3.py": {
+      "bytes": 7827,
+      "sha256": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c"
+    },
+    "native-manifest.json": {
+      "bytes": 7703,
+      "sha256": "ee488d7eaab28e5ff4c70ef25e7e9c8fb6d40971680c80d1ccf83490e6007413"
+    },
+    "native-runner-controls-v3.log": {
+      "bytes": 3902,
+      "sha256": "bc7c8be714213a244d4f8030f8b705dbd55337a3f590a9cd72facbd978ab220f"
+    },
+    "native-runner-v3.py": {
+      "bytes": 27326,
+      "sha256": "71d951221e0bd22d8bdffd96f10057b429aca1291beb2f2ccdc8bc20080efcb4"
+    },
+    "native_smoke.py": {
+      "bytes": 40198,
+      "sha256": "2bf89d4771baad6c948c15d38379393c8c57488ff497a2c68e398f360b2d0489"
+    },
+    "prepare-adapter-v3.py": {
+      "bytes": 9376,
+      "sha256": "6e54e246af0d516036764353850084c87eda8ee6e826d354ab32c9aea8d8d9f7"
+    },
+    "registered-iso-native-v3.yml": {
+      "bytes": 26722,
+      "sha256": "f240a31aba493048ab25d161026566819043deedc391615ab6b8160685c518f0"
+    },
+    "test-install-native-audio-v3.patch": {
+      "bytes": 6143,
+      "sha256": "63d8413024cbddf23dfa1b447ab2239480f6839cd925330c289ad36ea5512073"
+    },
+    "test_native_runner_v3.py": {
+      "bytes": 28184,
+      "sha256": "a0310e979642237cc8b28ce6469877a9ada510858f01e6d421a578ba83a0e39c"
+    }
+  },
+  "owner": "/root/kvm_precision",
+  "promoted_tree_observation": {
+    "files_needing_refresh_at_last_observation": [
+      "tools/native-functional-runner/README-v3.md",
+      "tools/native-functional-runner/adapter-parity-v3.json",
+      "tools/native-functional-runner/guest-check-native-v3.py",
+      "tools/native-functional-runner/native-launcher-v3.py",
+      "tools/native-functional-runner/native-runner-v3.py",
+      "tools/native-functional-runner/prepare-adapter-v3.py",
+      "tools/native-functional-runner/test-install-native-audio-v3.patch",
+      "tools/native-functional-runner/test_native_runner_v3.py",
+      "tools/test-install.sh"
+    ],
+    "head_at_last_pin_control": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
+    "note": "Parent owns promotion. Final frozen payload was independently reconstructed and every runtime hash verified. Preliminary uncommitted worktree must be refreshed and reverified before its new execution commit; this review does not certify a future commit hash.",
+    "observation_is_precommit": true,
+    "path": "/workspace/arctic-native-qualification",
+    "revised_manifest_matches_at_last_observation": false
+  },
+  "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
+  "ready_sha256": "94e4ae8949c9e605db3c818ff5c256fd40aed81edddfb833923474529e552dc8",
+  "recorded_at_utc": "2026-10-06T20:17:49.693774+00:00",
+  "remaining": [
+    "Parent refreshes revised frozen payload in its separate qualification branch, verifies schema-3 pins, and supplies the distinct clean execution head before any authorized push/dispatch.",
+    "Actual supported-CI metadata/ISO-byte checks and native live/offline encrypted install/first-installed VM execution remain unrun by this review.",
+    "Actual Foot/fish/sudo detached launcher, native GUI actions and cleanup must qualify in that VM; host component controls do not prove complete guest integration.",
+    "Actual screenshots and emulated WAV require content review. Nonzero PCM alone cannot prove exclusive media-player attribution, audible quality or physical hardware.",
+    "Portal/AT-SPI coverage remains read-only reachability; no returned-file chooser, application accessibility tree or screen-reader acceptance is inferred. Pre-existing disabled kernel auditing stays an explicit telemetry limit.",
+    "Broad release/media/codecs/mount/accessibility/recovery/Secure Boot/update/Nix/performance gates remain separate. Original Nix failure, historical Kitty regression and both active runs retain their original outcomes."
+  ],
+  "reviewer": "/root/precision_review",
+  "schema": "arctic-native-runner-independent-source-review-v3",
+  "status": "PASS: revised frozen native runner source and bounded host controls; actual VM qualification remains unrun",
+  "supporting_evidence": {
+    "draft-boot-uuid-after.log": {
+      "bytes": 236,
+      "sha256": "cc0bbb3199387a2612c5179806b3014020c534326443cee1aab046bc537ea024"
+    },
+    "draft-boot-uuid-before.log": {
+      "bytes": 223,
+      "sha256": "8d7375ec5a557281c449aab0837b72946766a1ba2ec1432d2c7d232501d62e75"
+    },
+    "draft_boot_uuid_control.py": {
+      "bytes": 2343,
+      "sha256": "836b4183e31fcda736033179f3f68753a14708e81a74e42972d8de7a891d377b"
+    },
+    "independent-controls.log": {
+      "bytes": 2055,
+      "sha256": "23f61d57c02ad7885581be58ac10b87e4adb7304b79df9a6fa1b8802eaaf01d1"
+    },
+    "independent_controls.py": {
+      "bytes": 24236,
+      "sha256": "49bc6e5efd6f80d5b7a482e2e87fd2480608ca18f59e9e43ca81e4dffc9c896a"
+    },
+    "owner-controls-independent-replay.log": {
+      "bytes": 2986,
+      "sha256": "efa5fbd9e5d54f4fd7f9b9deae81119338ba810663f1c388dcb981210c5aaf86"
+    },
+    "pin-controls.log": {
+      "bytes": 295,
+      "sha256": "c57ddb93c3eb7f6f54698702bdab06e46360a72e2e75c582db2847e69f957147"
+    },
+    "pin_controls.py": {
+      "bytes": 8390,
+      "sha256": "fafad01e62c2121543bc9223b5d8c423edc61e0c096abc7222eb9d13002b0d36"
+    },
+    "pins-and-source-controls.json": {
+      "bytes": 10860,
+      "sha256": "95444d6bb94f952355dcd039a59c5c50f9ec0607598c73fd64b669e8d7f90e81"
+    },
+    "pre-launcher-pin-controls.log": {
+      "bytes": 295,
+      "sha256": "fc7812d7482a9426b4edd8684b2013ea989d52beb57f34c51f93fa391b989039"
+    },
+    "pre-launcher-pins-and-source-controls.json": {
+      "bytes": 9860,
+      "sha256": "46ec3e7ee6fcf6920b2113c31d78940a26024fd56ad7f4306b602b9ad897012d"
+    },
+    "revised-independent-controls-draft.log": {
+      "bytes": 2573,
+      "sha256": "262c8171bfd55e0ddbf6134ae049ae1c8faf5fadcb3b0a1cfbbbc713152e4acc"
+    },
+    "revised-independent-controls.log": {
+      "bytes": 2751,
+      "sha256": "2aa393c2a9e0fd201c83e15fdd2318fdc904f7471692bb6ec6766d41627c4b46"
+    },
+    "revised-owner-controls-independent-replay.log": {
+      "bytes": 3902,
+      "sha256": "76ccd3510bc5cac6bd8aaf7e396e89f4fafde1c1c09b8dd260903a928bd02e35"
+    },
+    "write_report.py": {
+      "bytes": 9420,
+      "sha256": "9873daa4717c79b6f895384382ea8787a8e30a2207770cbcd5f5e935e13d75ec"
+    }
+  }
+}
