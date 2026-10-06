@@ -53,6 +53,7 @@ def archive(path, top, files, links=()):
 class InstallTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.fixture_commands = []
         cls.share_tmp = tempfile.TemporaryDirectory()
         cls.share = os.path.join(cls.share_tmp.name, "share", "arctic")
         for name in ("winter", "polar-night"):
@@ -61,7 +62,7 @@ class InstallTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.share_tmp.cleanup()
+        base.ArcticThemeTests.tearDownClass.__func__(cls)
 
     def setUp(self):
         base.ArcticThemeTests.setUp(self)
