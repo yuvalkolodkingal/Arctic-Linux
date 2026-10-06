@@ -20,12 +20,15 @@ import time
 from contextlib import contextmanager
 
 
-MAPPING_OBSERVER = 'mango-socket-worker-v1'
+MAPPING_OBSERVER = 'mango-socket-worker-v2-worker-clock'
 MAPPING_POLL_SECONDS = .001
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
 ROLE_SAMPLER = 'cpu-30-pss-6-v7-declared-role-first-use'
 ROLE_POLL_SECONDS = .00025
 ROLE_ORDER = ('terminal', 'files', 'browser')
+# Native ELF payload identity independently verified from the fixed candidate's
+# signed Fedora epiphany-runtime RPM; no executable bytes are read before launch.
+EPIPHANY_EXPECTED_NATIVE_ELF_SHA256 = '1c91ba76182612fa4f6b9a768510d818d8b901888ee3f31bbb1452ad308b3b4d'
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
 ROLE_APPS = {
@@ -60,6 +63,7 @@ for command in sys.stdin:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
         peer.settimeout(2)
         peer.connect(path)
+        sent_ns = time.monotonic_ns()
         peer.sendall(b'get all-clients\n')
         chunks, size = [], 0
         while True:
@@ -70,11 +74,13 @@ for command in sys.stdin:
             if size > 4 * 1024 * 1024:
                 raise RuntimeError('Unbounded Mango response')
             chunks.append(chunk)
+        received_ns = time.monotonic_ns()
     value = json.loads(b''.join(chunks))
     if not isinstance(value, dict) or not isinstance(value.get('clients'), list):
         raise RuntimeError('Invalid Mango client response')
     print(json.dumps(dict(payload=value, uid=os.getuid(),
-        query_seconds=(time.monotonic_ns()-started)/1e9)), flush=True)
+        query_seconds=(received_ns-started)/1e9, query_started_ns=started,
+        query_sent_ns=sent_ns, query_received_ns=received_ns)), flush=True)
 '''
 
 
@@ -85,6 +91,9 @@ class NativeClientQuery:
         self.process = None
         self.buffer = b''
         self.roundtrips = []
+        self.bound_prefix = tuple(prefix)
+        self.expected_uid = pwd.getpwnam(prefix[2]).pw_uid if prefix[:2] == ['runuser','-u'] else os.getuid()
+        self.last_query_bounds = None
 
     def __enter__(self):
         self.process = subprocess.Popen(self.prefix + ['python3', '-u', '-c', CLIENT_QUERY_WORKER],
@@ -92,7 +101,10 @@ class NativeClientQuery:
         return self
 
     def query(self):
-        started = time.monotonic()
+        if tuple(self.prefix) != self.bound_prefix:
+            raise RuntimeError('Native observer desktop user prefix changed')
+        parent_started_ns = time.monotonic_ns()
+        started = parent_started_ns / 1e9
         self.process.stdin.write(b'get\n')
         until = started + 3
         while b'\n' not in self.buffer:
@@ -110,16 +122,24 @@ class NativeClientQuery:
         line, self.buffer = self.buffer.split(b'\n', 1)
         if self.buffer:
             raise RuntimeError('Unsolicited native observer response')
+        parent_received_ns = time.monotonic_ns()
         value = json.loads(line)
-        if self.prefix[:2] == ['runuser', '-u'] and value['uid'] != pwd.getpwnam(self.prefix[2]).pw_uid:
+        if type(value['uid']) is not int or value['uid'] != self.expected_uid:
             raise RuntimeError('Native observer did not use the desktop user')
+        times = [value.get(key) for key in ('query_started_ns','query_sent_ns','query_received_ns')]
+        if (any(type(stamp) is not int for stamp in times)
+                or not parent_started_ns <= times[0] <= times[1] <= times[2] <= parent_received_ns):
+            raise RuntimeError('Worker monotonic timestamps are outside the parent request envelope')
+        self.last_query_bounds = dict(parent_started_ns=parent_started_ns,parent_received_ns=parent_received_ns,
+                                      worker_started_ns=times[0],worker_sent_ns=times[1],worker_received_ns=times[2],uid=value['uid'])
         result = {}
         for client in value['payload']['clients']:
             if not isinstance(client, dict) or 'id' not in client or str(client['id']) in result:
                 raise RuntimeError('Invalid or duplicate Mango client identity')
             result[str(client['id'])] = client
         self.roundtrips.append(dict(parent_seconds=time.monotonic()-started,
-                                    socket_seconds=value['query_seconds'], uid=value['uid']))
+                                    socket_seconds=value['query_seconds'], uid=value['uid'],
+                                    monotonic_envelope=self.last_query_bounds))
         return result
 
     def __exit__(self, *args):
@@ -141,6 +161,10 @@ class NativeClientQuery:
         finally:
             self.process.stdout.close()
             self.process.stderr.close()
+        # A meaningful query/body failure already prevents completion; retain
+        # it. A failed worker cleanup after successful work must also fail closed.
+        if self.process.returncode != 0 and not (args and args[0] is not None):
+            raise RuntimeError('Native observer cleanup exited ' + str(self.process.returncode))
 
 
 def run(argv, timeout=45):
@@ -320,6 +344,90 @@ print(json.dumps(dict(configured=configured,sources=sources,programs=programs,
 '''
 
 
+def executable_file_identity(info):
+    return dict(device=info.st_dev,inode=info.st_ino,size=info.st_size,
+                mtime_ns=info.st_mtime_ns,ctime_ns=info.st_ctime_ns)
+
+
+def epiphany_file_identity(program_path):
+    path = Path(program_path)
+    if (program_path != '/usr/bin/epiphany' or path.is_symlink() or not path.is_file()
+            or str(path.resolve(strict=True)) != program_path):
+        raise RuntimeError('GNOME Web executable path or symlink differs')
+    return executable_file_identity(path.stat())
+
+
+def epiphany_family_ownership(program_path, frontend, owner, inventory):
+    """Only GNOME Web's signed Fedora frontend/runtime split is recognized."""
+    runtime = [value for value in inventory['nevra'] if re.match(r'epiphany-runtime-[0-9]+:', value)]
+    if len(runtime) != 1 or not frontend.startswith('epiphany-'):
+        raise RuntimeError('Missing or ambiguous GNOME Web runtime RPM')
+    if frontend[len('epiphany-'):] != runtime[0][len('epiphany-runtime-'):] or owner != runtime[0]:
+        raise RuntimeError('GNOME Web frontend/runtime EVR, architecture or binary owner differs')
+    path = Path(program_path)
+    before = epiphany_file_identity(program_path)
+    # Metadata only: even a four-byte magic read can cause kernel readahead.
+    # Actual ELF magic and whole-file digest are mandatory after first GUI use.
+    headers = run(['rpm','-qf','--qf','[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILELINKTOS}\n]',program_path])
+    records = [line.split('\t') for line in headers.splitlines() if line.startswith(program_path+'\t')]
+    if (len(records) != 1 or len(records[0]) != 3
+            or records[0][1] != EPIPHANY_EXPECTED_NATIVE_ELF_SHA256 or records[0][2] != ''):
+        raise RuntimeError('GNOME Web installed RPM executable header is invalid')
+    return dict(runtime_nevra=runtime[0], ownership_model='epiphany-frontend-runtime-v1',
+                executable_path=program_path, rpm_header_sha256=records[0][1],
+                payload_integrity_model='full-hash-after-first-gui-v1',
+                prelaunch_file_identity=before, prelaunch_content_bytes_read=0,elf_magic_checked_bytes=0)
+
+
+def verify_role_payload_after_first_gui(app, bound, returned_ns, declared):
+    package = app['package']
+    path = app['program_path']
+    expected = package['prelaunch_file_identity']
+    before = epiphany_file_identity(path)
+    if before != expected:
+        raise RuntimeError('GNOME Web executable changed before post-first-GUI verification')
+    started = time.monotonic_ns()
+    checksum = hashlib.sha256()
+    with Path(path).open('rb') as binary:
+        if executable_file_identity(os.fstat(binary.fileno())) != expected:
+            raise RuntimeError('GNOME Web opened a different executable during post-first-GUI verification')
+        magic = binary.read(4)
+        if magic != b'\x7fELF':
+            raise RuntimeError('GNOME Web post-first-GUI payload is not native ELF')
+        checksum.update(magic)
+        for block in iter(lambda:binary.read(128*1024),b''):
+            checksum.update(block)
+        if executable_file_identity(os.fstat(binary.fileno())) != expected:
+            raise RuntimeError('GNOME Web executable changed while its payload was hashed')
+    after = epiphany_file_identity(path)
+    finished = time.monotonic_ns()
+    actual = checksum.hexdigest()
+    if after != expected or actual != package['rpm_header_sha256']:
+        raise RuntimeError('GNOME Web actual ELF payload or file identity differs after first GUI')
+    proof = dict(status='verified',role=app['role'],app_id=app['id'],path=path,
+        boot_id=run(['cat','/proc/sys/kernel/random/boot_id']),image=declared['image'],
+        boot=declared['boot_context']['boot'],desktop_uid=declared['pristine_state']['uid'],
+        phase='immediately_after_first_gui_before_any_preconditioning',
+        executable_sha256=actual,rpm_header_sha256=package['rpm_header_sha256'],
+        declaration_identity=expected,before_hash_identity=before,after_hash_identity=after,
+        first_gui_launch_ns=bound['launch_started_monotonic_ns'],
+        first_gui_map_upper_ns=bound['first_present_query']['worker_received_ns'],
+        measurement_returned_ns=returned_ns,hash_started_ns=started,hash_finished_ns=finished)
+    if not (proof['first_gui_launch_ns'] <= proof['first_gui_map_upper_ns'] <= returned_ns <= started <= finished):
+        raise RuntimeError('GNOME Web full payload verification did not follow its first GUI measurement')
+    package['post_first_gui_integrity'] = proof
+    emit('role_payload_integrity',proof)
+
+
+def require_role_payload_integrity(declared):
+    for app in declared['roles'].values():
+        if app['id'] == 'gnome-web':
+            proof = app['package'].get('post_first_gui_integrity',{})
+            if (proof.get('status') != 'verified'
+                    or proof.get('executable_sha256') != app['package']['rpm_header_sha256']):
+                raise RuntimeError('Missing final GNOME Web actual payload verification')
+
+
 def declare_roles(prefix, context, inventory):
     image = context.get('image')
     if (image not in EXPECTED_ROLES or context.get('fresh_installed_overlay') is not True
@@ -357,7 +465,9 @@ def declare_roles(prefix, context, inventory):
             package = dict(kind='rpm', nevra=packages[0])
             owner = run(['rpm', '-qf', '--qf', '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}',
                          state['programs'][app['program']]])
-            if owner != packages[0]:
+            if ident == 'gnome-web':
+                package.update(epiphany_family_ownership(state['programs'][app['program']],packages[0],owner,inventory))
+            elif owner != packages[0]:
                 raise RuntimeError('Configured program is not owned by the declared role RPM: ' + ident)
             package['binary_owner'] = owner
         else:
@@ -512,6 +622,7 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
         started_ns = time.monotonic_ns()
         started = started_ns / 1e9
         last_absent_start = started
+        last_absent_proof = None
         child = subprocess.Popen(prefix + command, stdout=output, stderr=output)
         observed_window_ids = set()
         try:
@@ -523,7 +634,8 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                     if isinstance(pattern, str) else str(c.get('appid', c.get('app_id', ''))).lower() in pattern)]
                 if windows:
                     observed_window_ids.update(str(window['id']) for window in windows)
-                    measured = time.monotonic() - started
+                    present_proof = dict(observer.last_query_bounds)
+                    measured = (present_proof['worker_received_ns'] - started_ns) / 1e9
                     time.sleep(hold_seconds)
                     if not any(str(window['id']) in observer.query() for window in windows):
                         continue
@@ -532,12 +644,16 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                                                  upper_seconds=measured,
                                                  interval_seconds=measured - (last_absent_start - started),
                                                  launch_started_monotonic_ns=started_ns,
+                                                 bound_basis='worker-sent-to-received',
+                                                 last_absent_query=last_absent_proof,
+                                                 first_present_query=present_proof,
                                                  observer=MAPPING_OBSERVER,
                                                  query_roundtrips=observer.roundtrips))
                     emit('mapped_window_' + label, windows)
                     emit('app_workload_' + label, snapshot())
                     return measured
-                last_absent_start = query_started
+                last_absent_proof = dict(observer.last_query_bounds)
+                last_absent_start = last_absent_proof['worker_sent_ns'] / 1e9
                 time.sleep(poll_seconds)
                 if child.poll() not in (None, 0):
                     break
@@ -637,6 +753,8 @@ def measure(prefix, declared=None, workload=None, order=None, complete=True):
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         emit('critical_chain_unmeasured', str(error))
     if complete:
+        if declared:
+            require_role_payload_integrity(declared)
         emit('done', True)
 
 
@@ -648,8 +766,13 @@ def first_use_and_precondition(prefix, declared, workload):
     for role in ROLE_ORDER:
         app = declared['roles'][role]
         bounds = []
+        if app['id'] == 'gnome-web' and epiphany_file_identity(app['program_path']) != app['package']['prelaunch_file_identity']:
+            raise RuntimeError('GNOME Web executable changed before its first GUI launch')
         seconds = startup(prefix, role_command(app, workload), app['appids'], observations=bounds,
                           poll_seconds=ROLE_POLL_SECONDS, label='role_'+role)
+        returned_ns = time.monotonic_ns()
+        if app['id'] == 'gnome-web':
+            verify_role_payload_after_first_gui(app,bounds[0],returned_ns,declared)
         emit('startup_role_' + role + '_cold_seconds', dict(first=seconds, observation_bounds=bounds,
              poll_sleep_seconds=ROLE_POLL_SECONDS, observer=MAPPING_OBSERVER, app_id=app['id'],
              phase='first_gui_role_execution_from_pristine_install',
@@ -657,10 +780,12 @@ def first_use_and_precondition(prefix, declared, workload):
         order.append('cold:'+role)
     for role in ROLE_ORDER:
         app = declared['roles'][role]
+        bounds = []
         seconds = startup(prefix, role_command(app, workload), app['appids'], hold_seconds=45,
-                          poll_seconds=ROLE_POLL_SECONDS, label='role_'+role)
+                          observations=bounds,poll_seconds=ROLE_POLL_SECONDS, label='role_'+role)
         emit('precondition_role_' + role, dict(mapped_after_seconds=seconds, persistent_hold_seconds=45,
-             app_id=app['id'], meaning='Cache/profile normalization; later launches are warmed'))
+             app_id=app['id'],launch_started_monotonic_ns=bounds[0]['launch_started_monotonic_ns'],
+             meaning='Cache/profile normalization; later launches are warmed'))
         order.append('precondition:'+role)
     return order
 
@@ -713,6 +838,8 @@ def main(preconditioned=False):
         if restored.get('on') is not False:
             raise RuntimeError('Keep awake did not restore its initial off state')
     # Completion requires all workload lifecycle and session-state cleanup.
+    if declared:
+        require_role_payload_integrity(declared)
     emit('done', True)
 
 

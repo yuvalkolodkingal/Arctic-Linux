@@ -33,7 +33,7 @@ def role_run(image, number):
     result = legacy.run(image + str(number))
     result['identity']['sampler'] = comparison.ROLE_SAMPLER
     records = sorted(['kitty-0:1-1.x86_64', 'nautilus-0:1-1.x86_64'] if image == 'baseline'
-                     else ['foot-0:1-1.x86_64', 'pcmanfm-0:1-1.x86_64', 'epiphany-0:1-1.x86_64'])
+                     else ['foot-0:1-1.x86_64', 'pcmanfm-0:1-1.x86_64', 'epiphany-0:1-1.x86_64', 'epiphany-runtime-0:1-1.x86_64'])
     result['rpm_inventory'] = dict(nevra=records,
         sha256=hashlib.sha256(('\n'.join(records)+'\n').encode()).hexdigest())
     roles, configured, programs = {}, {}, {}
@@ -45,6 +45,9 @@ def role_run(image, number):
                    dict(kind='rpm', nevra=next(value for value in records if value.startswith(app['rpm']+'-'))))
         if package['kind'] == 'rpm':
             package['binary_owner'] = package['nevra']
+            if ident=='gnome-web':
+                runtime='epiphany-runtime-0:1-1.x86_64'
+                package.update(binary_owner=runtime,runtime_nevra=runtime,ownership_model='epiphany-frontend-runtime-v1',executable_path='/usr/bin/epiphany',rpm_header_sha256=comparison.EPIPHANY_EXPECTED_NATIVE_ELF_SHA256,prelaunch_content_bytes_read=0,elf_magic_checked_bytes=0,payload_integrity_model='full-hash-after-first-gui-v1',prelaunch_file_identity=dict(device=1,inode=2,size=4096,mtime_ns=3,ctime_ns=4))
         roles[role] = dict(id=ident, role=role, configured_command=configured[role],
             legacy_system_mime_fallback=False, program_path=programs[app['program']],
             appids=list(app['appids']), package=package)
@@ -57,7 +60,7 @@ def role_run(image, number):
                 observer=guest.MAPPING_OBSERVER, poll_sleep_seconds=guest.ROLE_POLL_SECONDS,
                 app_id=ident, phase=('first_gui_role_execution_from_pristine_install' if phase == 'cold'
                                     else 'after_45_second_preconditioning'))
-        result['precondition_role_'+role] = dict(persistent_hold_seconds=45, app_id=ident)
+        result['precondition_role_'+role] = dict(persistent_hold_seconds=45, app_id=ident,launch_started_monotonic_ns=1_002_000_000_000)
     result['app_roles'] = dict(image=image, roles=roles,
         configuration_sources=[dict(path='/etc/arctic/default-apps', sha256='c'*64)],
         default_browser_desktop=guest.ROLE_APPS[guest.EXPECTED_ROLES[image]['browser']]['desktop'],
@@ -81,12 +84,26 @@ def role_run(image, number):
         sample.update(cpu_clock_ticks_per_second=100, sample_elapsed_seconds=1,
                       benchmark_worker_cpu=dict(pid=4242,uid=1000,start_ticks=100,ticks_delta=1,
                                                 percent_one_core=1,resolution_percent_one_core=1))
+    for role in guest.ROLE_ORDER:
+        for phase in ('cold','warm'):
+            for bound in result['startup_role_'+role+'_'+phase+'_seconds']['observation_bounds']:legacy.worker_proof(bound)
+    if image=='candidate':
+        package=roles['browser']['package'];bound=result['startup_role_browser_cold_seconds']['observation_bounds'][0]
+        result['role_payload_integrity']=dict(status='verified',boot_id=result['identity']['boot_id'],image=image,boot=number,desktop_uid=1000,role='browser',app_id='gnome-web',path='/usr/bin/epiphany',
+            phase='immediately_after_first_gui_before_any_preconditioning',executable_sha256=package['rpm_header_sha256'],
+            rpm_header_sha256=package['rpm_header_sha256'],declaration_identity=package['prelaunch_file_identity'],
+            before_hash_identity=copy.deepcopy(package['prelaunch_file_identity']),after_hash_identity=copy.deepcopy(package['prelaunch_file_identity']),
+            first_gui_launch_ns=bound['launch_started_monotonic_ns'],first_gui_map_upper_ns=bound['first_present_query']['worker_received_ns'],
+            measurement_returned_ns=1_000_100_000_000,hash_started_ns=1_000_100_000_001,hash_finished_ns=1_000_100_000_002)
     return result
 
 
 def paired_roles():
     return {image: [role_run(image, number) for number in (1, 2, 3)] for image in ('baseline', 'candidate')}
 
+
+def qualified_compare(runs):
+    return comparison.compare(legacy.with_worker_proofs(runs))
 
 class RoleQualificationTest(unittest.TestCase):
     def test_normalized_private_samples_cannot_be_dropped_or_moved(self):
@@ -96,7 +113,7 @@ class RoleQualificationTest(unittest.TestCase):
                 if fault=='drop':
                     for sample in samples[5::5]:sample.pop('process_private_bytes')
                 else:samples[1]['process_private_bytes']=samples[0].pop('process_private_bytes')
-                with self.subTest(image=image,fault=fault),self.assertRaises(ValueError):comparison.compare(runs)
+                with self.subTest(image=image,fault=fault),self.assertRaises(ValueError):qualified_compare(runs)
 
     def test_explicit_failed_probe_marker_cannot_be_hidden_by_a_done_record(self):
         fixture=role_run('candidate',1)
@@ -118,7 +135,7 @@ class RoleQualificationTest(unittest.TestCase):
                     for sample in run[phase]:
                         if name=='MemAvailable':sample['memory_bytes'][name]=True
                         elif name in sample:sample[name]=True
-                with self.subTest(phase=phase,name=name),self.assertRaises(ValueError):comparison.compare(runs)
+                with self.subTest(phase=phase,name=name),self.assertRaises(ValueError):qualified_compare(runs)
 
     def test_pristine_idle_has_distinct_memory_gate_and_raw_cpu_accounting(self):
         for factor, expected in ((1.05, 'regression_gate_passed'), (1.05001, 'regression_gate_failed')):
@@ -126,7 +143,7 @@ class RoleQualificationTest(unittest.TestCase):
             for run in runs['candidate']:
                 for sample in run['pristine_idle_samples'][::5]:
                     sample['process_pss_bytes'] = int(sample['process_pss_bytes'] * factor)
-            result = comparison.compare(runs)
+            result = qualified_compare(runs)
             self.assertEqual(result['status'], expected)
             metric = next(row for row in result['metrics'] if row['metric']=='pristine_process_pss_bytes')
             self.assertEqual(metric['regression_threshold_percent'], 5)
@@ -151,10 +168,10 @@ class RoleQualificationTest(unittest.TestCase):
             elif fault=='forged_percent': run['idle_samples'][0]['benchmark_worker_cpu']['percent_one_core'] = 0
             elif fault=='bad_resolution': run['idle_samples'][0]['benchmark_worker_cpu']['resolution_percent_one_core'] = 0
             else: run['pristine_idle_samples'][0].update(cpu_ticks_delta=0,cpu_idle_ticks_delta=0)
-            with self.subTest(fault=fault), self.assertRaises(ValueError): comparison.compare(runs)
+            with self.subTest(fault=fault), self.assertRaises(ValueError): qualified_compare(runs)
 
     def test_declared_different_applications_have_distinct_cold_and_warm_metrics(self):
-        result = comparison.compare(paired_roles())
+        result = qualified_compare(paired_roles())
         self.assertEqual(result['status'], 'regression_gate_passed')
         metrics = {metric['metric']: metric for metric in result['metrics']}
         self.assertEqual(metrics['terminal_first_gui_role_mapped']['application_identity'],
@@ -184,7 +201,7 @@ class RoleQualificationTest(unittest.TestCase):
             elif fault == 'mixed_legacy': run.pop('app_roles')
             else: runs['baseline'][0]['app_roles']['roles']['browser']['package']['commit'] = ''
             with self.subTest(fault=fault), self.assertRaises(ValueError):
-                comparison.compare(runs)
+                qualified_compare(runs)
 
     def test_reused_profiles_preconditioned_cold_and_changed_source_are_rejected(self):
         for fault in ('running', 'profile', 'dirty', 'terminal_collector', 'order', 'cold_label',
@@ -204,7 +221,7 @@ class RoleQualificationTest(unittest.TestCase):
             elif fault == 'historical_profile': runs['baseline'][0]['app_roles']['boot_context']['install_profile_sha256'] = '9'*64
             else: run['role_workload']['url'] = 'https://example.com/'
             with self.subTest(fault=fault), self.assertRaises(ValueError):
-                comparison.compare(runs)
+                qualified_compare(runs)
 
     def test_cold_and_warm_regressions_and_fast_precision_are_independent(self):
         for phase in ('cold', 'warm'):
@@ -216,14 +233,14 @@ class RoleQualificationTest(unittest.TestCase):
                 if phase == 'warm': timing['warm'] = values[1:]
                 timing['observation_bounds'] = [dict(lower_seconds=value-.00025, upper_seconds=value,
                     interval_seconds=.00025, observer=guest.MAPPING_OBSERVER) for value in values]
-            result = comparison.compare(runs)
+            result = qualified_compare(runs)
             self.assertEqual(result['status'], 'regression_gate_failed')
             suffix = 'first_gui_role_mapped' if phase == 'cold' else 'subsequent_mapped'
             self.assertTrue(next(row for row in result['metrics'] if row['metric']=='terminal_'+suffix)['regression'])
         runs = paired_roles()
         bound = runs['candidate'][0]['startup_role_terminal_cold_seconds']['observation_bounds'][0]
         bound.update(lower_seconds=.0389, interval_seconds=.0011)
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         self.assertEqual(result['status'], 'measurement_precision_gate_failed')
         self.assertFalse(result['measurement_precision']['valid'])
         self.assertFalse(any(row['regression'] for row in result['metrics']))
@@ -236,7 +253,7 @@ class RoleQualificationTest(unittest.TestCase):
                 timing = run['startup_role_terminal_cold_seconds']
                 timing.update(first=upper, observation_bounds=[dict(lower_seconds=lower, upper_seconds=upper,
                     interval_seconds=upper-lower, observer=guest.MAPPING_OBSERVER)])
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         self.assertEqual(result['status'], 'measurement_precision_gate_failed')
         self.assertTrue(result['measurement_precision']['valid'])
         self.assertFalse(result['measurement_precision']['threshold_enclosure_valid'])
@@ -270,6 +287,7 @@ class RoleDeclarationTest(unittest.TestCase):
             if fault=='cleanup':raise RuntimeError('Injected workload cleanup error')
         def cold(*args):
             events.append('cold_and_precondition')
+            if fault!='integrity':args[1]['roles']['browser']['package']['post_first_gui_integrity']=fixture['role_payload_integrity']
             return [phase+':'+role for phase in ('cold','precondition') for role in guest.ROLE_ORDER]
         def measure(prefix,declared,worker,order,complete=True):
             self.assertFalse(complete)
@@ -298,7 +316,7 @@ class RoleDeclarationTest(unittest.TestCase):
         self.assertTrue(emissions['done'])
 
     def test_final_completion_is_absent_after_measure_worker_or_session_restore_failure(self):
-        for fault in ('measure','cleanup','awake'):
+        for fault in ('measure','cleanup','awake','integrity'):
             events,emissions,error,_=self.main_fixture(fault)
             self.assertIsInstance(error,RuntimeError)
             self.assertNotIn('done',emissions)
@@ -336,10 +354,13 @@ class RoleDeclarationTest(unittest.TestCase):
             if 'flatpak' in argv: return 'a'*64
             if argv[:2] == ['rpm', '-qf']:
                 program = Path(argv[-1]).name
+                if program=='epiphany':
+                    if '[' in argv[3]:return '/usr/bin/epiphany\t'+hashlib.sha256(b'\x7fELFfixture').hexdigest()+'\t\n'
+                    return 'epiphany-runtime-0:1-1.x86_64'
                 return next(value for value in fixture['rpm_inventory']['nevra'] if value.startswith(program+'-'))
             raise AssertionError('Unexpected command: '+repr(argv))
         with patch.object(guest, 'run', side_effect=run), \
-                patch.object(guest.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_uid=1000)):
+                patch.object(guest,'EPIPHANY_EXPECTED_NATIVE_ELF_SHA256',hashlib.sha256(b'\x7fELFfixture').hexdigest()),patch.object(guest.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_uid=1000)), patch.object(guest,'epiphany_file_identity',return_value=dict(device=1,inode=2,size=4096,mtime_ns=3,ctime_ns=4)), patch.object(guest,'Path',side_effect=lambda value:types.SimpleNamespace(is_symlink=lambda:False,is_file=lambda:True,resolve=lambda strict:Path('/usr/bin/epiphany'),open=lambda mode:__import__('io').BytesIO(b'\x7fELFfixture'),read_bytes=lambda:b'\x7fELFfixture') if str(value)=='/usr/bin/epiphany' else Path(value)):
             result = guest.declare_roles(['runuser', '-u', 'ci', '--', 'env'],
                                          fixture['app_roles']['boot_context'], fixture['rpm_inventory'])
         return result, calls
@@ -369,9 +390,9 @@ class RoleDeclarationTest(unittest.TestCase):
         calls, emitted = [], {}
         def start(prefix, command, appids, **kwargs):
             calls.append((command, kwargs.get('hold_seconds', 5)))
-            if 'observations' in kwargs: kwargs['observations'].append(dict(lower_seconds=.03975, upper_seconds=.04))
+            if 'observations' in kwargs: kwargs['observations'].append(dict(lower_seconds=.03975,upper_seconds=.04,launch_started_monotonic_ns=1_000_000_000,first_present_query=dict(worker_received_ns=1_040_000_000)))
             return .04
-        with patch.object(guest, 'startup', side_effect=start), \
+        with patch.object(guest,'epiphany_file_identity',return_value=declared['roles']['browser']['package']['prelaunch_file_identity']),patch.object(guest,'verify_role_payload_after_first_gui'),patch.object(guest, 'startup', side_effect=start), \
                 patch.object(guest, 'emit', side_effect=lambda key,value: emitted.update({key:value})):
             order = guest.first_use_and_precondition(['actual-user'], declared, workload)
         self.assertEqual([hold for _,hold in calls], [5,5,5,45,45,45])

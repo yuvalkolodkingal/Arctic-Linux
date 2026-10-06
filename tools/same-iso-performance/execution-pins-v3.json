@@ -1,0 +1,29 @@
+{
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "files": {
+    ".github/workflows/iso.yml": "0d8efba9277227fde5fc9a0d2d8f2336c06ca760fb67785ec0d17db93b696fd7",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+    "tools/performance/compare.py": "6565ebac71dd8f32fd08c0fdae3bdfe95677d6f487294fe7269a812bac4a87e3",
+    "tools/performance/compose-paired-probe.py": "175455edc69fa7fd912641b3bf43566ea1340a595ead4607b454aabad98ecdf4",
+    "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
+    "tools/performance/guest.py": "767ce65341ca1a2ddac397f9a8d04fe9804e424e21a519a6b076e24f4e97cf3b",
+    "tools/performance/prepare-vm-tools.sh": "be178c9666d59c246e3ca1d6b805eb3e9286e17c3d306b17bb703d2f1561edfe",
+    "tools/performance/run-paired.py": "aa174072f30dc28dddef06980aea6d2c5dd057a4518e7cebcb4cb0b9bfcebec7",
+    "tools/same-iso-performance/README-v3.md": "ed51eb5ee0204ebe6da97b4b0282d9a0f9245ee21d391ba3a640743a50032594",
+    "tools/same-iso-performance/epiphany-ownership-evidence.json": "1e274cb7f49b4d93e76108a3f500b843db76a3c8f85ae6c4183d59b3b9ba7f7f",
+    "tools/same-iso-performance/frozen-v2-pins-v3.json": "4c19408ca3a5a69796df54ccd88a655414dc21c8e4fd571beac5febb99f08c25",
+    "tools/same-iso-performance/performance-runner-v3.py": "a4ea07951870cc01a66616e1d088382baa0443aa608baae9e81c49d816fac3a7",
+    "tools/same-iso-performance/test_performance_runner_v3.py": "8c9ce9cb1619532bdf0070429ff6e067c4e44bd093f4d9f36f0146870b4373f3",
+    "tools/test-install.sh": "a3a0a11d41d184bec817d98b90a96d87309d253882d3113e6a32c1ab48d5008e",
+    "tools/tests/test_performance_compare.py": "d9c75f0c52db8a5b62fa849f77eea66d2258cc4b742b1104b5c74aab46be7167",
+    "tools/tests/test_performance_harness.py": "76436a949ab92ea369a236ad0111ab826f91ff078d6a1e209a8fa7ab30a94af6",
+    "tools/tests/test_performance_observer.py": "adf2b16d55b3dbb95abc9c6d9e100fea97a279817a5db6b230df4eb0395a21fb",
+    "tools/tests/test_performance_recovery.py": "23051b8bcccab89988f1eedb6532f1024e2f8f9f2247e90fc997bb2a20440658",
+    "tools/tests/test_performance_roles.py": "1b91c9fc9f0baf9baa96766c62bd1e3ed5e012b0e35a8c2255efa2a61ce322f4",
+    "tools/tests/test_performance_session.py": "fe9620e2cf744eeeb88c2c232864dba0b090545f1053e4e481b66140ffbea248"
+  },
+  "mode": "same-iso-performance",
+  "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
+  "schema": 3
+}

@@ -5,6 +5,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -32,12 +33,27 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def candidate_source_identity(source):
+    source = source.resolve()
+    commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()
+    if not re.fullmatch('[0-9a-f]{40}',commit) or subprocess.check_output(
+            ['git','status','--porcelain'],cwd=source,text=True).strip():
+        raise RuntimeError('Candidate image source checkout is not clean/pinned')
+    return dict(commit=commit, short_commit=subprocess.check_output(
+        ['git','rev-parse','--short','HEAD'],cwd=source,text=True).strip(),
+        catalog_sha256=sha256(source/'shell/AppsService.qml'),
+        battery_sha256=sha256(source/'shell/BatteryService.qml'))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baseline', type=Path, required=True)
     parser.add_argument('--candidate', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--candidate-source-root', type=Path, default=ROOT,
+                        help='Clean image source checkout, separate from the execution checker checkout')
     args = parser.parse_args()
+    candidate_identity = candidate_source_identity(args.candidate_source_root)
     if not Path('/dev/kvm').is_char_device():
         raise RuntimeError('Native KVM required; no silent TCG fallback')
     if args.baseline.stat().st_size != 2322073600 or sha256(args.baseline) != BASELINE_SHA256:
@@ -49,7 +65,9 @@ def main():
     probe = args.out / 'frozen-observer.py'
     subprocess.run([sys.executable, str(ROOT / 'tools/performance/compose-paired-probe.py'), str(probe)], check=True)
     images = {'baseline': args.baseline.resolve(), 'candidate': args.candidate.resolve()}
-    state = dict(acceleration='kvm', memory_mib=4096, vcpus=2, restricted_network=True,
+    state = dict(candidate_image_source=candidate_identity,
+                 execution_checker_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+                 acceleration='kvm', memory_mib=4096, vcpus=2, restricted_network=True,
                  observer_sha256=sha256(probe), images={n: dict(path=str(p), bytes=p.stat().st_size,
                  sha256=sha256(p)) for n, p in images.items()}, runs=[],
                  planned_boot_order=[dict(image=name, boot=number) for number, name in paired_boot_order()])
@@ -127,7 +145,7 @@ def main():
     common = [str(ROOT / 'tools/test-install.sh'), '--kvm', '--memory', '4096', '--smp', '2',
               '--boot-append', '', '--collect-via', 'console']
     profiles = dict(baseline=ROOT/'tools/performance/fixtures/v1.2-offline.toml',
-                    candidate=ROOT/'profiles/ci/offline.toml')
+                    candidate=args.candidate_source_root/'profiles/ci/offline.toml')
     if sha256(profiles['baseline']) != BASELINE_PROFILE_SHA256:
         raise RuntimeError('Original baseline install profile changed')
     state['profiles'] = {name: dict(path=str(path), sha256=sha256(path)) for name, path in profiles.items()}
@@ -179,9 +197,9 @@ def main():
             if {file: sha256(args.out/name/file) for file in expected} != expected:
                 raise RuntimeError('Pristine installed source changed during measurement: '+name)
         argv = [sys.executable, str(ROOT / 'tools/performance/compare.py'),
-                '--candidate-commit', subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=ROOT, text=True).strip(),
-                '--candidate-catalog-sha256', sha256(ROOT / 'shell/AppsService.qml'),
-                '--candidate-battery-sha256', sha256(ROOT / 'shell/BatteryService.qml'), '--out', str(args.out / 'comparison.json')]
+                '--candidate-commit', candidate_identity['short_commit'],
+                '--candidate-catalog-sha256', candidate_identity['catalog_sha256'],
+                '--candidate-battery-sha256', candidate_identity['battery_sha256'], '--out', str(args.out / 'comparison.json')]
         for name in images:
             for number in range(1, 4):
                 argv += ['--' + name + '-log', str(args.out / 'runs' / name / str(number) / 'serial-boot.log')]

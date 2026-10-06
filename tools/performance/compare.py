@@ -9,10 +9,11 @@ import re
 import statistics
 
 
-MAPPING_OBSERVER = 'mango-socket-worker-v1'
+MAPPING_OBSERVER = 'mango-socket-worker-v2-worker-clock'
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
 ROLE_SAMPLER = 'cpu-30-pss-6-v7-declared-role-first-use'
 ROLE_ORDER = ('terminal', 'files', 'browser')
+EPIPHANY_EXPECTED_NATIVE_ELF_SHA256 = '1c91ba76182612fa4f6b9a768510d818d8b901888ee3f31bbb1452ad308b3b4d'
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
 ROLE_COMMANDS = {'kitty': ('kitty',), 'foot': ('foot',), 'nautilus': ('nautilus',),
@@ -25,6 +26,51 @@ ROLE_APPIDS = dict(kitty=['kitty'], foot=['foot'], nautilus=['org.gnome.nautilus
 BASELINE_ISO_SHA256 = '054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f'
 BASELINE_PROFILE_SHA256 = 'e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d'
 WORKLOAD_PAGE_SHA256 = hashlib.sha256(b'<!doctype html><meta charset="utf-8"><title>Arctic startup fixture</title><h1>Arctic offline browser</h1><p>Local page, no remote resources.</p>').hexdigest()
+
+
+def deferred_payload_evidence(run, app):
+    package = app['package']
+    expected = package.get('prelaunch_file_identity')
+    fields = ('device','inode','size','mtime_ns','ctime_ns')
+    if (not isinstance(expected,dict) or set(expected) != set(fields)
+            or any(type(expected.get(key)) is not int or expected[key] < 0 for key in fields)
+            or expected['inode'] <= 0 or expected['size'] < 4
+            or package.get('payload_integrity_model') != 'full-hash-after-first-gui-v1'
+            or type(package.get('prelaunch_content_bytes_read')) is not int or package['prelaunch_content_bytes_read'] != 0
+            or type(package.get('elf_magic_checked_bytes')) is not int or package['elf_magic_checked_bytes'] != 0
+            or package.get('rpm_header_sha256') != EPIPHANY_EXPECTED_NATIVE_ELF_SHA256
+            or 'executable_sha256' in package or 'post_first_gui_integrity' in package):
+        raise ValueError('Missing or pre-warmed declared GNOME Web file identity')
+    proof = run.get('role_payload_integrity',{})
+    bounds = run.get('startup_role_browser_cold_seconds',{}).get('observation_bounds')
+    if not isinstance(bounds,list) or len(bounds) != 1 or not isinstance(bounds[0],dict):
+        raise ValueError('Missing first-GUI browser bound for deferred payload proof')
+    bound = bounds[0]
+    def same_identity(value):
+        return (isinstance(value,dict) and set(value) == set(fields)
+                and all(type(value[key]) is int for key in fields) and value == expected)
+    keys = ('first_gui_launch_ns','first_gui_map_upper_ns','measurement_returned_ns','hash_started_ns','hash_finished_ns')
+    if (not isinstance(proof,dict) or proof.get('status') != 'verified'
+            or proof.get('role') != 'browser' or proof.get('app_id') != 'gnome-web'
+            or proof.get('boot_id') != run['identity']['boot_id']
+            or proof.get('image') != run['app_roles']['image']
+            or type(proof.get('boot')) is not int or proof['boot'] != run['app_roles']['boot_context']['boot']
+            or type(proof.get('desktop_uid')) is not int or proof['desktop_uid'] != run['app_roles']['pristine_state']['uid']
+            or proof.get('path') != app['program_path']
+            or proof.get('phase') != 'immediately_after_first_gui_before_any_preconditioning'
+            or proof.get('executable_sha256') != package.get('rpm_header_sha256')
+            or proof.get('rpm_header_sha256') != package.get('rpm_header_sha256')
+            or any(not same_identity(proof.get(key)) for key in ('declaration_identity','before_hash_identity','after_hash_identity'))
+            or any(type(proof.get(key)) is not int or proof[key] <= 0 for key in keys)
+            or [proof[key] for key in keys] != sorted(proof[key] for key in keys)
+            or proof['first_gui_launch_ns'] != bound.get('launch_started_monotonic_ns')
+            or proof['first_gui_map_upper_ns'] != bound.get('first_present_query',{}).get('worker_received_ns')):
+        raise ValueError('Missing/invalid post-first-GUI GNOME Web actual payload proof')
+    preconditioning = [run.get('precondition_role_'+role,{}).get('launch_started_monotonic_ns') for role in ROLE_ORDER]
+    if (any(type(value) is not int or value <= 0 for value in preconditioning)
+            or proof['hash_finished_ns'] > min(preconditioning)):
+        raise ValueError('GNOME Web payload proof did not precede all role preconditioning')
+    return proof
 
 
 def role_evidence(runs):
@@ -87,7 +133,19 @@ def role_evidence(runs):
                 else:
                     rpm = 'epiphany' if ident == 'gnome-web' else ident
                     nevra = package.get('nevra', '')
-                    if (package.get('kind') != 'rpm' or package.get('binary_owner') != nevra
+                    if ident == 'gnome-web':
+                        runtime = package.get('runtime_nevra', '')
+                        if (package.get('kind') != 'rpm' or package.get('binary_owner') != runtime
+                                or not re.match(r'epiphany-[0-9]+:',nevra)
+                                or not re.match(r'epiphany-runtime-[0-9]+:',runtime)
+                                or nevra[len('epiphany-'):] != runtime[len('epiphany-runtime-'):]
+                                or nevra not in run['rpm_inventory']['nevra'] or runtime not in run['rpm_inventory']['nevra']
+                                or package.get('ownership_model') != 'epiphany-frontend-runtime-v1'
+                                or package.get('executable_path') != app['program_path'] or app['program_path'] != '/usr/bin/epiphany'
+                                or not re.fullmatch('[0-9a-f]{64}',package.get('rpm_header_sha256',''))):
+                            raise ValueError('Declared GNOME Web frontend/runtime or actual ELF ownership differs')
+                        deferred_payload_evidence(run,app)
+                    elif (package.get('kind') != 'rpm' or package.get('binary_owner') != nevra
                             or not re.match(re.escape(rpm) + r'-[0-9]+:', nevra)
                             or nevra not in run['rpm_inventory']['nevra']):
                         raise ValueError('Declared application RPM is absent or does not own the executable: ' + role)
@@ -234,6 +292,32 @@ def idle_sample_layout(samples):
         raise ValueError('Missing or unpaired CPU/PSS/private samples')
 
 
+def worker_mapping_proof(bound, expected_uid=None):
+    launch = bound.get('launch_started_monotonic_ns')
+    if type(launch) is not int or launch <= 0 or bound.get('bound_basis') != 'worker-sent-to-received':
+        raise ValueError('Missing worker-clock launch/bound provenance')
+    positive = bound.get('first_present_query')
+    negative = bound.get('last_absent_query')
+    for proof in (positive,negative) if negative is not None else (positive,):
+        keys=('parent_started_ns','worker_started_ns','worker_sent_ns','worker_received_ns','parent_received_ns')
+        if not isinstance(proof,dict) or any(type(proof.get(k)) is not int or proof[k] <= 0 for k in keys):
+            raise ValueError('Malformed worker-clock query envelope')
+        if [proof[k] for k in keys] != sorted(proof[k] for k in keys) or type(proof.get('uid')) is not int or proof['uid'] <= 0:
+            raise ValueError('Worker-clock query envelope/UID differs')
+    if expected_uid is not None and positive['uid'] != expected_uid:
+        raise ValueError('Worker-clock query did not use the declared desktop UID')
+    if negative is not None and (negative['uid'] != positive['uid']
+            or negative['parent_received_ns'] > positive['parent_started_ns']):
+        raise ValueError('Worker-clock negative/present query order or UID differs')
+    lower_ns = negative['worker_sent_ns'] if negative is not None else launch
+    upper_ns = positive['worker_received_ns']
+    if not launch <= lower_ns <= upper_ns:
+        raise ValueError('Worker-clock map bounds precede the launch')
+    if not all(math.isclose(bound[key],(stamp-launch)/1e9,rel_tol=1e-9,abs_tol=1e-9)
+               for key,stamp in (('lower_seconds',lower_ns),('upper_seconds',upper_ns))):
+        raise ValueError('Worker-clock raw timestamps and relative map bounds differ')
+
+
 def mapping_precision(run):
     """Sampling uncertainty is a separate fail-closed gate, never an exemption.
 
@@ -262,6 +346,8 @@ def mapping_precision(run):
                                 and timing.get('observer') == MAPPING_OBSERVER
                                 and bound.get('observer') == MAPPING_OBSERVER
                                 and timing.get('poll_sleep_seconds') == poll)
+            if current_observer:
+                worker_mapping_proof(bound,run.get('app_roles',{}).get('pristine_state',{}).get('uid'))
             result.append(dict(app=app, launch=index, lower_seconds=lower, upper_seconds=upper,
                                interval_seconds=width, maximum_interval_seconds=limit,
                                current_observer=current_observer,

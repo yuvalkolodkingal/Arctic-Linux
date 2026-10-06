@@ -5,6 +5,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      same_iso_performance:
+        description: Reuse fixed candidate 37507582946 for six fresh paired performance boots only
+        type: boolean
+        default: false
       same_iso_recovery:
         description: Reuse fixed candidate 37507582946 for VM qualification only (requires confirmed original Nix failure)
         type: boolean
@@ -51,7 +55,7 @@ env:
 
 jobs:
   iso:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.same_iso_recovery }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (!inputs.same_iso_recovery && !inputs.same_iso_performance) }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -338,7 +342,7 @@ jobs:
             --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre $draft
 
   same-iso-installs:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_performance }}
     runs-on: ubuntu-24.04
     timeout-minutes: 230
     permissions:
@@ -410,7 +414,7 @@ jobs:
           retention-days: 14
 
   same-iso-boot-evidence:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_performance }}
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     permissions:
@@ -480,3 +484,92 @@ jobs:
           path: ${{ env.RECOVERY_ROOT }}/evidence/
           if-no-files-found: warn
           retention-days: 14
+
+  same-iso-performance:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_performance }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 230
+    permissions:
+      contents: read
+      actions: read
+    env:
+      CONTAINER_ENGINE: docker
+      PERFORMANCE_MODE: "true"
+      RECOVERY_MODE: ${{ inputs.same_iso_recovery && 'true' || 'false' }}
+      RELEASE_REQUESTED: ${{ inputs.release && 'true' || 'false' }}
+    steps:
+      - name: Checkout immutable candidate image source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fe4742c8b9414c45f0bcbb0a4191f116383c60d1
+          path: candidate-source
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            profiles/ci
+            shell
+      - name: Checkout separate reviewed execution checker
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: qualification-source
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            .github/workflows
+      - name: Declare unused same-image paired evidence paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          performance_root="$RUNNER_TEMP/arctic-same-iso-performance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$performance_root"
+          mkdir "$performance_root"
+          echo "PERFORMANCE_ROOT=$performance_root" >> "$GITHUB_ENV"
+      - name: Require original failed comparison and exact frozen inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 qualification-source/tools/same-iso-performance/performance-runner-v3.py preflight \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-performance" \
+            --inputs "$PERFORMANCE_ROOT/inputs" --evidence "$PERFORMANCE_ROOT/evidence"
+      - name: Download exact candidate artifact only for supported VM tests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          repository: yuvalkolodkingal/Arctic-Linux
+          run-id: 37507582946
+          artifact-ids: 11434226349
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ env.PERFORMANCE_ROOT }}/inputs
+      - name: Verify image bytes and source identity before any VM
+        run: |
+          python3 qualification-source/tools/same-iso-performance/performance-runner-v3.py verify \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-performance" \
+            --inputs "$PERFORMANCE_ROOT/inputs" --evidence "$PERFORMANCE_ROOT/evidence"
+      - name: Replay host ownership, timing and acceptance controls
+        run: |
+          python3 -W error::ResourceWarning -m unittest discover \
+            -s qualification-source/tools/tests -p 'test_performance*.py' -v
+          python3 -W error::ResourceWarning qualification-source/tools/same-iso-performance/test_performance_runner_v3.py -v
+      - name: Six fresh paired boots of unchanged images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 qualification-source/tools/same-iso-performance/performance-runner-v3.py run \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-performance" \
+            --inputs "$PERFORMANCE_ROOT/inputs" --evidence "$PERFORMANCE_ROOT/evidence"
+      - name: Preserve separate actual measurements including failures
+        if: ${{ always() && env.PERFORMANCE_ROOT != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: same-iso-performance-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PERFORMANCE_ROOT }}/evidence/
+            !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.qcow2
+            !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.iso
+            !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.sock
+          retention-days: 14
+          if-no-files-found: warn

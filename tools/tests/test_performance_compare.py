@@ -12,6 +12,33 @@ comparison = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(comparison)
 
 
+
+def worker_proof(bound):
+    launch=1_000_000_000_000;lo=launch+round(bound['lower_seconds']*1e9);hi=launch+round(bound['upper_seconds']*1e9)
+    def proof(point):return dict(parent_started_ns=point-2,worker_started_ns=point-1,worker_sent_ns=point,worker_received_ns=point+1,parent_received_ns=point+2,uid=1000)
+    negative=proof(lo);positive=proof(hi-1)
+    bound.update(launch_started_monotonic_ns=launch,bound_basis='worker-sent-to-received',last_absent_query=negative,first_present_query=positive)
+    return bound
+
+
+def with_worker_proofs(runs):
+    # Add clock provenance to the pre-existing synthetic threshold fixtures only.
+    # Their point values, brackets, expected 5%/10% results and assertions stay intact.
+    import math
+    for group in runs.values():
+        for record in group:
+            for key,timing in record.items():
+                if key.startswith('startup_') and isinstance(timing,dict):
+                    for bound in timing.get('observation_bounds',[]):
+                        values=[bound.get(k) for k in ('lower_seconds','upper_seconds')]
+                        if all(type(v) in (int,float) and math.isfinite(v) for v in values):worker_proof(bound)
+    return runs
+
+
+def qualified_compare(runs):
+    return comparison.compare(with_worker_proofs(runs))
+
+
 def run(boot_id, kitty=2.63):
     samples = [dict(cpu_busy_percent=1.5, cpu_ticks_delta=200, cpu_idle_ticks_delta=197,
                     memory_bytes={'MemAvailable': 2_800_000_000}) for _ in range(30)]
@@ -37,6 +64,8 @@ def run(boot_id, kitty=2.63):
             observer=comparison.MAPPING_OBSERVER, poll_sleep_seconds=.001,
             observation_bounds=[dict(lower_seconds=value-.001, upper_seconds=value,
                 interval_seconds=.001, observer=comparison.MAPPING_OBSERVER) for value in [first, *warm]])
+    for app in ('kitty','org.gnome.nautilus','zen'):
+        for bound in result['startup_'+app+'_seconds']['observation_bounds']:worker_proof(bound)
     return result
 
 
@@ -44,7 +73,7 @@ class QualificationTest(unittest.TestCase):
     def test_legacy_memory_samples_must_remain_complete_and_paired(self):
         runs={'baseline':[run('b'+str(n)) for n in range(3)],'candidate':[run('c'+str(n)) for n in range(3)]}
         for sample in runs['candidate'][0]['idle_samples'][5::5]:sample.pop('process_private_bytes')
-        with self.assertRaises(ValueError):comparison.compare(runs)
+        with self.assertRaises(ValueError):qualified_compare(runs)
 
     def test_raw_memory_boolean_and_malformed_bytes_cannot_become_false_savings(self):
         for name in ('process_pss_bytes','process_private_bytes','MemAvailable'):
@@ -55,7 +84,7 @@ class QualificationTest(unittest.TestCase):
                     for sample in record['idle_samples']:
                         if name=='MemAvailable':sample['memory_bytes'][name]=value
                         elif name in sample:sample[name]=value
-                with self.subTest(name=name,value=value),self.assertRaises(ValueError):comparison.compare(runs)
+                with self.subTest(name=name,value=value),self.assertRaises(ValueError):qualified_compare(runs)
 
     def test_exact_boundaries_pass_and_just_over_fails(self):
         baseline = [run('b' + str(n)) for n in range(3)]
@@ -63,18 +92,18 @@ class QualificationTest(unittest.TestCase):
             candidate = [run('c' + str(n)) for n in range(3)]
             for value in candidate:
                 value['fish_seconds']['median'] = baseline[0]['fish_seconds']['median'] * factor
-            self.assertEqual(comparison.compare(dict(baseline=baseline, candidate=candidate))['status'], expected)
+            self.assertEqual(qualified_compare(dict(baseline=baseline, candidate=candidate))['status'], expected)
         for factor, expected in ((1.05, 'regression_gate_passed'), (1.05001, 'regression_gate_failed')):
             candidate = [run('c' + str(n)) for n in range(3)]
             for value in candidate:
                 for sample in value['idle_samples'][::5]:
                     sample['process_pss_bytes'] = int(sample['process_pss_bytes'] * factor)
-            self.assertEqual(comparison.compare(dict(baseline=baseline, candidate=candidate))['status'], expected)
+            self.assertEqual(qualified_compare(dict(baseline=baseline, candidate=candidate))['status'], expected)
 
     def test_kitty_regression_is_retained_without_fabricated_speedup(self):
         runs = {'baseline': [run('b' + str(n), k) for n, k in enumerate((2.59, 2.63, 2.87))],
                 'candidate': [run('c' + str(n), k) for n, k in enumerate((3.147, 3.183, 3.29))]}
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         self.assertEqual(result['status'], 'regression_gate_failed')
         kitty = next(row for row in result['metrics'] if row['metric'] == 'kitty_first_mapped_after_preconditioning')
         self.assertTrue(kitty['regression'])
@@ -95,8 +124,8 @@ class QualificationTest(unittest.TestCase):
             else:
                 runs['candidate'][0]['fish_seconds']['median'] = float('nan')
             with self.subTest(fault=fault), self.assertRaises(ValueError):
-                comparison.compare(runs)
-        self.assertEqual(comparison.compare(valid)['status'], 'regression_gate_passed')
+                qualified_compare(runs)
+        self.assertEqual(qualified_compare(valid)['status'], 'regression_gate_passed')
 
     def test_coarse_or_legacy_observer_cannot_qualify_even_without_regression(self):
         for fault in ('coarse', 'legacy', 'too_large_relative_to_fast_app'):
@@ -111,7 +140,7 @@ class QualificationTest(unittest.TestCase):
                 timing = runs['candidate'][0]['startup_kitty_seconds']
                 timing['warm'][0] = .05
                 observation.update(lower_seconds=.048, upper_seconds=.05, interval_seconds=.002)
-            result = comparison.compare(runs)
+            result = qualified_compare(runs)
             with self.subTest(fault=fault):
                 self.assertEqual(result['status'], 'measurement_precision_gate_failed')
                 self.assertFalse(result['measurement_precision']['valid'])
@@ -120,7 +149,7 @@ class QualificationTest(unittest.TestCase):
         runs = {'baseline': [run('b' + str(n)) for n in range(3)],
                 'candidate': [run('c' + str(n), 3.5) for n in range(3)]}
         runs['candidate'][0]['identity']['sampler'] = 'legacy'
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         self.assertEqual(result['status'], 'regression_gate_failed')
         self.assertFalse(result['measurement_precision']['valid'])
         self.assertTrue(next(r for r in result['metrics'] if r['metric'] == 'kitty_first_mapped_after_preconditioning')['regression'])
@@ -142,7 +171,7 @@ class QualificationTest(unittest.TestCase):
             else:
                 observation['interval_seconds'] += .1
             with self.subTest(fault=fault), self.assertRaises(ValueError):
-                comparison.compare(runs)
+                qualified_compare(runs)
 
     def test_rpm_inventory_changes_and_invalid_digests_fail_closed(self):
         for fault in ('missing', 'digest', 'sort', 'within_image_update'):
@@ -159,7 +188,7 @@ class QualificationTest(unittest.TestCase):
                 inventory['nevra'][1] = 'mesa-libEGL-0:26.2.2-1.fc44.x86_64'
                 inventory['sha256'] = hashlib.sha256(('\n'.join(inventory['nevra'])+'\n').encode()).hexdigest()
             with self.subTest(fault=fault), self.assertRaises(ValueError):
-                comparison.compare(runs)
+                qualified_compare(runs)
 
     def test_between_image_versions_are_reported_without_causal_claim_or_gate_exemption(self):
         runs = {'baseline': [run('b' + str(n)) for n in range(3)],
@@ -168,7 +197,7 @@ class QualificationTest(unittest.TestCase):
             inventory = run_['rpm_inventory']
             inventory['nevra'][1] = 'mesa-libEGL-0:26.2.2-1.fc44.x86_64'
             inventory['sha256'] = hashlib.sha256(('\n'.join(inventory['nevra'])+'\n').encode()).hexdigest()
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         self.assertEqual(result['status'], 'regression_gate_failed')
         self.assertEqual(result['package_attribution']['baseline_only'], ['mesa-libEGL-0:26.2.1-1.fc44.x86_64'])
         self.assertEqual(result['package_attribution']['candidate_only'], ['mesa-libEGL-0:26.2.2-1.fc44.x86_64'])
@@ -180,7 +209,7 @@ class QualificationTest(unittest.TestCase):
             for run_ in group:
                 for sample in run_['idle_samples'][1:]:
                     sample.update(cpu_busy_percent=0, cpu_idle_ticks_delta=200)
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         metric = next(row for row in result['metrics'] if row['metric'] == 'cpu_busy_percent')
         self.assertEqual(metric['median'], dict(baseline=0, candidate=0))
         self.assertEqual(result['idle_cpu_validity']['baseline'][0]['busy_ticks'], 3)
@@ -210,7 +239,7 @@ class QualificationTest(unittest.TestCase):
                 timing.update(first=upper, warm=[upper, upper], observation_bounds=[
                     dict(lower_seconds=lower, upper_seconds=upper, interval_seconds=upper-lower,
                          observer=comparison.MAPPING_OBSERVER) for _ in range(3)])
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         self.assertEqual(result['status'], 'measurement_precision_gate_failed')
         self.assertTrue(result['measurement_precision']['valid'])
         self.assertFalse(result['measurement_precision']['threshold_enclosure_valid'])
@@ -235,11 +264,11 @@ class QualificationTest(unittest.TestCase):
                     dict(lower_seconds=upper-.001, upper_seconds=upper, interval_seconds=.001,
                          observer=comparison.MAPPING_OBSERVER) for _ in range(3)])
             with self.subTest(extra=extra):
-                self.assertEqual(comparison.compare(runs)['status'], expected)
+                self.assertEqual(qualified_compare(runs)['status'], expected)
         for run_ in runs['baseline']:
             for observation in run_['startup_kitty_seconds']['observation_bounds']:
                 observation.update(lower_seconds=0, interval_seconds=observation['upper_seconds'])
-        result = comparison.compare(runs)
+        result = qualified_compare(runs)
         self.assertEqual(result['status'], 'measurement_precision_gate_failed')
         metric = next(r for r in result['metrics'] if r['metric'] == 'kitty_subsequent_mapped')
         self.assertIsNone(metric['observation_enclosure']['possible_percent_difference_upper'])

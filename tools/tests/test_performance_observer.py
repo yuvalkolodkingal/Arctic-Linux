@@ -1,4 +1,5 @@
 """Independent Unix-socket fixture checks actual worker transport and timing bounds."""
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
@@ -69,6 +70,15 @@ class MangoFixture:
             raise RuntimeError('Fixture did not stop')
 
 
+@contextmanager
+def expect_failed_worker_cleanup():
+    try:
+        yield
+    except RuntimeError as error:
+        if not str(error).startswith('Native observer cleanup exited '):
+            raise
+
+
 class NativeObserverTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -102,7 +112,7 @@ class NativeObserverTest(unittest.TestCase):
             with self.subTest(response=response), tempfile.TemporaryDirectory() as tmp:
                 fixture = MangoFixture(tmp, lambda: response)
                 try:
-                    with guest.NativeClientQuery(['env', 'MANGO_INSTANCE_SIGNATURE='+fixture.path]) as observer:
+                    with expect_failed_worker_cleanup(), guest.NativeClientQuery(['env', 'MANGO_INSTANCE_SIGNATURE='+fixture.path]) as observer:
                         with patch.object(guest, 'run', side_effect=AssertionError('CLI fallback forbidden')):
                             with self.assertRaises((RuntimeError, ValueError, KeyError)):
                                 observer.query()
@@ -113,7 +123,7 @@ class NativeObserverTest(unittest.TestCase):
 
     def test_absent_socket_fails_without_creating_or_changing_it(self):
         path = str(Path(self.directory.name)/'absent.sock')
-        with guest.NativeClientQuery(['env', 'MANGO_INSTANCE_SIGNATURE='+path]) as observer:
+        with expect_failed_worker_cleanup(), guest.NativeClientQuery(['env', 'MANGO_INSTANCE_SIGNATURE='+path]) as observer:
             with self.assertRaisesRegex(RuntimeError, 'disconnected'):
                 observer.query()
         self.assertFalse(Path(path).exists())
@@ -134,7 +144,7 @@ class NativeObserverTest(unittest.TestCase):
             with self.subTest(size=None if response is None else len(response)), tempfile.TemporaryDirectory() as tmp:
                 fixture = MangoFixture(tmp, lambda: response)
                 try:
-                    with guest.NativeClientQuery(['env', 'MANGO_INSTANCE_SIGNATURE='+fixture.path]) as observer:
+                    with expect_failed_worker_cleanup(), guest.NativeClientQuery(['env', 'MANGO_INSTANCE_SIGNATURE='+fixture.path]) as observer:
                         started = time.monotonic()
                         with self.assertRaisesRegex(RuntimeError, 'disconnected'):
                             observer.query()
@@ -143,19 +153,23 @@ class NativeObserverTest(unittest.TestCase):
                     fixture.close()
 
     def test_independent_transition_timestamp_is_inside_observation_bracket(self):
-        state = Path(self.directory.name)/'mapped.json'
+        state = Path(self.directory.name)/'mapped.marker'
+        transition_clock = {'mapped_ns': None}
 
         def current():
             if not state.exists():
                 return {}
-            value = json.loads(state.read_text())
+            # The server owns the synthetic mapped-client state. Timestamp its
+            # first present snapshot, not a child timestamp preceding file write:
+            # that earlier timestamp can precede a correctly negative snapshot.
+            if transition_clock['mapped_ns'] is None:
+                transition_clock['mapped_ns'] = time.monotonic_ns()
             return {'9': dict(id=9, appid='kitty', title='fixture')}
 
         fixture, prefix = self.server(lambda: json.dumps(dict(clients=list(current().values()))).encode()+b'\n')
-        program = ('import pathlib,json,time; time.sleep(.04); '
+        program = ('import pathlib,time; time.sleep(.04); '
                    f'path=pathlib.Path({str(state)!r}); '
-                   'now=time.monotonic_ns(); path.write_text(json.dumps(dict(mapped_ns=now))); '
-                   'time.sleep(10)')
+                   'path.write_text("mapped"); time.sleep(10)')
         bounds = []
         with patch.object(guest, 'clients', side_effect=lambda _: current()), \
                 patch.object(guest, 'emit'), patch.object(guest, 'snapshot', return_value={}), \
@@ -164,7 +178,7 @@ class NativeObserverTest(unittest.TestCase):
                                      timeout=3, hold_seconds=.02, observations=bounds)
         self.assertEqual(len(bounds), 1)
         observation = bounds[0]
-        transition = (json.loads(state.read_text())['mapped_ns']-
+        transition = (transition_clock['mapped_ns']-
                       observation['launch_started_monotonic_ns'])/1e9
         self.assertLessEqual(observation['lower_seconds'], transition)
         self.assertGreaterEqual(observation['upper_seconds'], transition)

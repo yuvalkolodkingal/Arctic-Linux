@@ -1,0 +1,22 @@
+{
+  "files": {
+    "tools/same-iso-recovery/README-v1.md": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f",
+    "tools/same-iso-recovery/README-v2.md": "b55709f691af42b86f76aa9f9d6ca76ca8e00555e08652ea8d04181bd83a90b3",
+    "tools/same-iso-recovery/boot-evidence-v2.py": "e6858b0b8c0a39b7617c33fc55762f570af2eac046b16ad2adccb72d27259bc5",
+    "tools/same-iso-recovery/collector-command-v2.txt": "4561437c4776342f667a1567a86c6e91af66abd775fab7b53c82f275b1cfe186",
+    "tools/same-iso-recovery/execution-pins-v2.json": "3363c4fc2a4ca1bb9b29532a90a88108ab0dae2b1a23e54722d6ebea8b315aeb",
+    "tools/same-iso-recovery/guest-check-dnf-v1.py": "472c159452adad998f8833b1d03815ba5572ebf0394215ab146490c45fdbedb9",
+    "tools/same-iso-recovery/guest-check-offline-v1.py": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576",
+    "tools/same-iso-recovery/independent-review-v1.json": "4e513bc75ae82eff7367d711b7f7a71a032eb50ee8ecb1caa5c2d0700fdf23fa",
+    "tools/same-iso-recovery/independent-review-v2.json": "e70490047588c4e3b38d3d57cf7e8a343cf3e59d4f8f510e8109642d0a3b0e16",
+    "tools/same-iso-recovery/qualification-scope.json": "0a62c82b046841965e668fc4220e5a96d3e0eb6983c991202f11d80574e5ef83",
+    "tools/same-iso-recovery/registered-iso-recovery-v2.yml": "5b0c1493333288acb43d7baaecb19ae40c662189d9ff0a591ce183a04871d2dd",
+    "tools/same-iso-recovery/review-ready-v1.json": "0120117d1a0eedea033bfe9d239151ee0461c2f58efa2dc060141d2454554692",
+    "tools/same-iso-recovery/review-ready-v2.json": "38f51fa9584ea5e74de7a5b90259345a5a25c197ddc1014ba56a58fc8de5c112",
+    "tools/same-iso-recovery/test-iso-collector-v2.patch": "273273d6102b909936e76ae085127712925ece4fb0ae801b95deaf237c45467f",
+    "tools/same-iso-recovery/test_vm_only_v2.py": "af09cfe5f07c16b99336ad3a12cfa27c60580ef55b65b199b72d16751ab735cf",
+    "tools/same-iso-recovery/v2-controls.log": "fa87e424214be95d59ab73ebf1076151674878643a8983a5f2bb655a8cb77f8e",
+    "tools/same-iso-recovery/vm-only-recovery-v2.py": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+  },
+  "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb"
+}
