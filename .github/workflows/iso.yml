@@ -514,9 +514,12 @@ jobs:
           ref: ${{ github.sha }}
           path: qualification-source
           persist-credentials: false
+          # The unchanged verifier proves ae55 is an ancestor of this execution.
+          fetch-depth: 0
           sparse-checkout: |
             tools
             .github/workflows
+            profiles/ci
       - name: Declare unused same-image paired evidence paths
         shell: bash
         run: |
@@ -525,6 +528,20 @@ jobs:
           test ! -e "$performance_root"
           mkdir "$performance_root"
           echo "PERFORMANCE_ROOT=$performance_root" >> "$GITHUB_ENV"
+      - name: Prepare disk space on the fresh hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee "$PERFORMANCE_ROOT/runner-disk-preparation.log") 2>&1
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          df -B1 / "$RUNNER_TEMP"
+          # Fixed unused SDK paths from the existing ISO job; no Docker pruning,
+          # dynamic tool-cache deletion, workspace cleanup or guest changes.
+          sudo rm -rf -- /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+                        /usr/local/share/boost /usr/local/share/powershell /usr/share/swift
+          df -B1 / "$RUNNER_TEMP"
       - name: Require original failed comparison and exact frozen inputs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -568,6 +585,7 @@ jobs:
           name: same-iso-performance-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ env.PERFORMANCE_ROOT }}/evidence/
+            ${{ env.PERFORMANCE_ROOT }}/runner-disk-preparation.log
             !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.qcow2
             !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.iso
             !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.sock

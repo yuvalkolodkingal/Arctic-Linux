@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,16 @@ controller_spec = importlib.util.spec_from_file_location('performance_controller
     HERE/'tools/performance/run-paired.py' if (HERE/'tools').exists()
     else HERE.parents[1]/'tools/performance/run-paired.py')
 C = importlib.util.module_from_spec(controller_spec); controller_spec.loader.exec_module(C)
+
+
+def workflow_text():
+    return (HERE/'iso-performance-v3.yml').read_text() if (HERE/'iso-performance-v3.yml').exists() else (
+        HERE.parents[1]/'.github/workflows/iso.yml').read_text()
+
+
+def workflow_step(text, name):
+    block = text.split('  same-iso-performance:\n', 1)[1]
+    return block.split('      - name: '+name+'\n', 1)[1].split('      - name: ', 1)[0]
 
 
 def ci():
@@ -123,8 +134,7 @@ class PerformanceRunnerTest(unittest.TestCase):
                         listing.assert_not_called()
 
     def test_workflow_skips_build_and_both_recovery_jobs_when_only_performance(self):
-        text=(HERE/'iso-performance-v3.yml').read_text() if (HERE/'iso-performance-v3.yml').exists() else (
-            HERE.parents[1]/'.github/workflows/iso.yml').read_text()
+        text=workflow_text()
         self.assertIn('!inputs.same_iso_recovery && !inputs.same_iso_performance',text)
         self.assertEqual(text.count("inputs.same_iso_recovery && !inputs.same_iso_performance }}"),2)
         block=text.split('  same-iso-performance:\n',1)[1]
@@ -134,6 +144,101 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertNotIn('build-iso',block);self.assertNotIn('test-iso.sh',block)
         self.assertIn('timeout-minutes: 230',block)
         self.assertIn('!${{ env.PERFORMANCE_ROOT }}/evidence/**/*.qcow2',block)
+
+    def test_registered_execution_checkout_has_profile_and_full_ancestor_history(self):
+        def guards(text):
+            step=workflow_step(text,'Checkout separate reviewed execution checker')
+            self.assertRegex(step,r'(?m)^          fetch-depth: 0$')
+            sparse=step.split('          sparse-checkout: |\n',1)[1]
+            self.assertIn('            profiles/ci\n',sparse)
+            self.assertIn('            tools\n',sparse)
+            self.assertIn('            .github/workflows\n',sparse)
+        text=workflow_text();guards(text)
+        for changed in (text.replace('          fetch-depth: 0\n','',1),
+                        text.replace('          fetch-depth: 0\n','          fetch-depth: 1\n',1),
+                        text.replace('            .github/workflows\n            profiles/ci\n',
+                                     '            .github/workflows\n',1)):
+            with self.subTest(change=changed[-200:]),self.assertRaises(AssertionError):guards(changed)
+
+    def test_actual_missing_sparse_profile_fails_harness_before_container(self):
+        tools=HERE/'tools' if (HERE/'tools').exists() else HERE.parents[1]/'tools'
+        spec=importlib.util.spec_from_file_location('actual_sparse_harness',tools/'tests/test_performance_harness.py')
+        harness=importlib.util.module_from_spec(spec);spec.loader.exec_module(harness)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'tools/lib').mkdir(parents=True)
+            for relative in ('test-install.sh','lib/container.sh','performance/guest.py'):
+                destination=root/'tools'/relative;destination.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copy2(tools/relative,destination)
+            case=harness.PerformanceHarnessTest()
+            with patch.object(harness,'ROOT',root):
+                result,call,_,_=case.capture()
+                self.assertNotEqual(result.returncode,0);self.assertIsNone(call)
+                self.assertIn('no profile at '+str(root/'profiles/ci/offline.toml'),result.stderr)
+                (root/'profiles/ci').mkdir(parents=True)
+                profile=(HERE/'profiles/ci/offline.toml' if (HERE/'profiles').exists()
+                         else HERE.parents[1]/'profiles/ci/offline.toml')
+                shutil.copy2(profile,root/'profiles/ci/offline.toml')
+                result,call,values,_=case.capture()
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertIsNotNone(call);self.assertEqual(values['COLLECT_VIA'],'console')
+
+    def test_actual_shallow_history_cannot_prove_existing_ancestor_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);origin=root/'origin'
+            def git(*args,cwd=None):
+                return subprocess.run(['git',*args],cwd=cwd,check=True,capture_output=True,text=True,timeout=20)
+            git('init','--quiet',str(origin))
+            git('config','user.name','Synthetic history control',cwd=origin)
+            git('config','user.email','history-control@example.invalid',cwd=origin)
+            for value in ('base','middle','execution'):
+                (origin/'fixture').write_text(value);git('add','fixture',cwd=origin)
+                git('commit','--quiet','-m',value,cwd=origin)
+                if value=='base':ancestor=git('rev-parse','HEAD',cwd=origin).stdout.strip()
+            head=git('rev-parse','HEAD',cwd=origin).stdout.strip()
+            for depth in (1,0):
+                checkout=root/('depth-'+str(depth))
+                git('clone','--quiet',*(['--depth','1'] if depth else []),origin.as_uri(),str(checkout))
+                result=subprocess.run(['git','-C',str(checkout),'merge-base','--is-ancestor',ancestor,head],
+                    capture_output=True,text=True,timeout=20)
+                self.assertEqual(result.returncode,128 if depth else 0,result.stderr)
+
+    def test_actual_disk_preparation_has_fixed_hosted_scope_and_preserves_space_gate(self):
+        text=workflow_text();step=workflow_step(text,'Prepare disk space on the fresh hosted runner')
+        script='\n'.join(line[10:] for line in step.split('        run: |\n',1)[1].splitlines())
+        subprocess.run(['bash','-n'],input=script,text=True,check=True,capture_output=True)
+        self.assertLess(text.index('Prepare disk space on the fresh hosted runner'),
+                        text.index('Require original failed comparison and exact frozen inputs'))
+        self.assertIn('${{ env.PERFORMANCE_ROOT }}/runner-disk-preparation.log',text)
+        self.assertIn('shutil.disk_usage(args.evidence).free >= 40_000_000_000',
+                      (HERE/'performance-runner-v3.py').read_text())
+        fixed=['/usr/share/dotnet','/usr/local/lib/android','/opt/ghc','/opt/hostedtoolcache/CodeQL',
+               '/usr/local/share/boost','/usr/local/share/powershell','/usr/share/swift']
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);fake=root/'bin';fake.mkdir();calls=root/'calls.jsonl'
+            program='''#!/usr/bin/env python3
+import json,os,sys
+with open(os.environ['PREPARATION_CALLS'],'a') as output:
+    output.write(json.dumps([os.path.basename(sys.argv[0]),*sys.argv[1:]])+'\\n')
+'''
+            for name in ('sudo','df'):
+                path=fake/name;path.write_text(program);path.chmod(0o755)
+            for fault in (None,'GITHUB_ACTIONS','RUNNER_ENVIRONMENT','RUNNER_OS'):
+                folder=root/str(fault);folder.mkdir();calls.unlink(missing_ok=True)
+                env=dict(os.environ,PATH=str(fake)+os.pathsep+os.environ['PATH'],
+                    PREPARATION_CALLS=str(calls),PERFORMANCE_ROOT=str(folder),RUNNER_TEMP=str(root),
+                    GITHUB_ACTIONS='true',RUNNER_ENVIRONMENT='github-hosted',RUNNER_OS='Linux',
+                    AGENT_TOOLSDIRECTORY='/must-not-remove-dynamic-cache')
+                if fault:env[fault]='unsupported'
+                result=subprocess.run(['bash','-c',script],env=env,capture_output=True,text=True,timeout=10)
+                if fault:
+                    self.assertNotEqual(result.returncode,0);self.assertFalse(calls.exists())
+                else:
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    actual=[json.loads(row) for row in calls.read_text().splitlines()]
+                    self.assertEqual(actual,[['df','-B1','/',str(root)],
+                                            ['sudo','rm','-rf','--',*fixed],
+                                            ['df','-B1','/',str(root)]])
+                    self.assertTrue((folder/'runner-disk-preparation.log').is_file())
 
 
 if __name__=='__main__':unittest.main()

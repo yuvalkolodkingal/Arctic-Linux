@@ -137,6 +137,28 @@ released baseline is downloaded only inside supported CI for the actual VM tests
 reassembled by exact part names and independently byte/hash verified. ISO/qcow/socket
 files are excluded from output artifacts; original results remain untouched.
 
+The registered performance job fetches full execution history so the unchanged
+`merge-base --is-ancestor ae55fbc...` guard can prove its actual ancestry. Its sparse
+execution checkout includes `profiles/ci`: the unmodified harness resolves the
+default offline profile even in host controls that use a fake container engine.
+The earlier reviewed ready `da7316b7` and manifest `45c64601`, plus the independent
+cache-bias PASS report, are preserved byte for byte in
+`historical-before-workflow-checkout-fix/`. They were promoted as execution commit
+`c19a83a4246adb6f005e85d58efeb123019953d4`, but no ISO qualification was dispatched
+before the parent caught those two workflow setup gaps. The subsequent commit must
+retain that published history; this revision does not amend it.
+
+Before the unchanged 40,000,000,000-byte free-space preflight, a fresh GitHub-hosted
+Linux runner removes seven fixed unused SDK paths already named in the normal ISO
+job. It records actual byte-space values before and after cleanup as an output
+artifact. It deletes no dynamic tool cache, workspace, image or container; there
+is no Docker pruning or guest/service/security change. Cleanup makes no promise
+that the space gate will pass. Host controls execute the exact preparation shell
+using fake `sudo`/`df`, verify its fixed argv, and reject non-hosted/non-Linux or
+non-Actions environments before deletion. Additional controls reproduce missing
+profile rejection in the actual harness and the actual shallow-history ancestry
+failure, then demonstrate the corrected inputs pass.
+
 The controller has a 180-minute total cap inside a 230-minute job. Each install,
 boot and provisioning command retains its bounded timeout and unique container.
 SIGTERM gets up to 100 seconds for controller cleanup before forced child reaping.
