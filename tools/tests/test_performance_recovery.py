@@ -235,6 +235,31 @@ class DeferredPayloadTest(unittest.TestCase):
 
 
 class WorkerClockRecoveryTest(unittest.TestCase):
+    def assert_actual_uid_then_clock_fixture(self, bound, actual_uid):
+        # The host/container socket worker really uses this caller's UID. Root
+        # is valid for this host transport fixture, but never for VM acceptance.
+        self.assertIs(type(actual_uid), int)
+        self.assertGreaterEqual(actual_uid, 0)
+        for key in ('first_present_query', 'last_absent_query'):
+            proof = bound.get(key)
+            if proof is not None:
+                self.assertIs(type(proof['uid']), int)
+                self.assertEqual(proof['uid'], actual_uid)
+        if actual_uid == 0:
+            with self.assertRaisesRegex(ValueError, 'UID'):
+                comparison.worker_mapping_proof(bound, expected_uid=0)
+            # This separately declared synthetic non-root copy exercises only
+            # the timing oracle. Preserve the actual root proof unchanged; do
+            # not serialize or present the copied UID as an actual guest UID.
+            timing_only = copy.deepcopy(bound)
+            for key in ('first_present_query', 'last_absent_query'):
+                if timing_only.get(key) is not None:
+                    timing_only[key]['uid'] = 1000
+            comparison.worker_mapping_proof(timing_only, expected_uid=1000)
+            return timing_only
+        comparison.worker_mapping_proof(bound, expected_uid=actual_uid)
+        return bound
+
     def test_actual_socket_timestamps_exclude_parent_normalization_delay(self):
         with tempfile.TemporaryDirectory() as tmp:
             fixture=transport.MangoFixture(tmp,lambda:b'{"clients":[]}\n')
@@ -274,9 +299,45 @@ class WorkerClockRecoveryTest(unittest.TestCase):
                 bound=bounds[0];actual=(state['mapped_ns']-bound['launch_started_monotonic_ns'])/1e9
                 self.assertLessEqual(bound['lower_seconds'],actual)
                 self.assertGreaterEqual(bound['upper_seconds'],actual)
-                comparison.worker_mapping_proof(bound)
+                self.assert_actual_uid_then_clock_fixture(bound, os.getuid())
                 self.assertGreater(bound['interval_seconds'],.005)
             finally:fixture.close()
+
+    def test_root_and_nonroot_fixture_logic_preserves_actual_clock_and_uid_proof(self):
+        for actual_uid in (0, 1000, 65534):
+            bound = roles.legacy.worker_proof(dict(lower_seconds=.04, upper_seconds=.05,
+                interval_seconds=.01, observer=guest.MAPPING_OBSERVER))
+            for key in ('first_present_query', 'last_absent_query'):
+                bound[key]['uid'] = actual_uid
+            original = copy.deepcopy(bound)
+            with self.subTest(actual_uid=actual_uid):
+                timing = self.assert_actual_uid_then_clock_fixture(bound, actual_uid)
+                self.assertEqual(bound, original)
+                if actual_uid == 0:
+                    self.assertIsNot(timing, bound)
+                    for key in ('first_present_query', 'last_absent_query'):
+                        self.assertEqual(timing[key]['uid'], 1000)
+                        self.assertEqual({k:v for k,v in timing[key].items() if k!='uid'},
+                                         {k:v for k,v in bound[key].items() if k!='uid'})
+                    self.assertEqual(timing['lower_seconds'], bound['lower_seconds'])
+                    self.assertEqual(timing['upper_seconds'], bound['upper_seconds'])
+                else:
+                    self.assertIs(timing, bound)
+
+    def test_fixture_and_acceptance_both_reject_foreign_boolean_and_negative_uids(self):
+        original = roles.legacy.worker_proof(dict(lower_seconds=.04, upper_seconds=.05,
+            interval_seconds=.01, observer=guest.MAPPING_OBSERVER))
+        for key in ('first_present_query', 'last_absent_query'):
+            for invalid in (True, -1, 1001):
+                bound = copy.deepcopy(original);bound[key]['uid'] = invalid
+                with self.subTest(key=key, invalid=invalid):
+                    with self.assertRaises(AssertionError):
+                        self.assert_actual_uid_then_clock_fixture(bound, 1000)
+                    with self.assertRaises(ValueError):
+                        comparison.worker_mapping_proof(bound, expected_uid=1000)
+        for actual_uid in (True, -1):
+            with self.subTest(actual_uid=actual_uid), self.assertRaises(AssertionError):
+                self.assert_actual_uid_then_clock_fixture(original, actual_uid)
 
     def test_actual_worker_forged_clock_envelopes_fail_without_fallback(self):
         for fault in ('boolean','reversed','future','old','uid'):
