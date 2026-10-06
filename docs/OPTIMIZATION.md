@@ -490,3 +490,35 @@ Safe session qualification remains open. The original control overlapped
 preparation of the cloud test-runtime cache, but no other VM. No timing or
 hardware-performance inference is drawn from it. The exact comparison is
 `out/audit/candidate/safe-graphics-baseline-comparison.json`.
+
+
+### Actual update reboot and history-selector diagnosis (2026-10-06 02:45 UTC)
+
+The restricted armed offline guest exited 0 after 180.959 seconds. The following
+default boot passed ten recorded checks, including the exact saved own Nix
+profile generation, Right/Dodge/bar-size/modified-shortcut preferences, hello
+and a persistent mapped Foot window, persistent Nix mount and daemon, rescue
+initrd, failed-unit check and AVC check. Its update check failed at
+`dnf5 offline log --number=-1`. The original failed check remains recorded.
+The frozen function reached that lookup after asserting idle/unarmed/unstored
+status, no update errors, trigger removal, changed stable-CDF versions and
+retained names of all 17 Arctic packages. Those assertions therefore passed by
+control flow, but their actual version rows were not emitted; a full update
+acceptance pass is still withheld.
+
+The [exact DNF 5.4.6.0 source](https://raw.githubusercontent.com/rpm-software-management/dnf5/5.4.6.0/dnf5/commands/offline/offline.cpp)
+lists positive 1..N indexes and converts supplied numbers with an unsigned
+conversion. Thus its negative `-1` selector fails regardless of available
+entries. The canonical observer now selects the latest actually listed positive
+index, fails on absent history or command failure, and records version/status
+and history as separate checks so a late history failure cannot hide earlier
+evidence. Three meaningful history regressions and four existing environment/
+signature regressions pass. This changes only test tooling; active frozen probes
+and candidate ISO bytes remain unchanged.
+
+The updated disk and firmware snapshot are retained as
+`candidate-after-update-attempt` / `OVMF_VARS.after-update-attempt.fd`. The
+performance controller restored the pre-online candidate and is running six
+interleaved original/candidate boots. Read-only inspection of the saved updated
+state will follow that quiet sequence without restaging or key imports. No
+performance improvement or full Nix/Safe/update qualification is claimed.

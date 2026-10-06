@@ -51,3 +51,29 @@ class RpmSignatureTest(unittest.TestCase):
             with self.subTest(result=result), patch.object(guest, 'run', return_value=output):
                 with self.assertRaisesRegex(RuntimeError, 'No valid signature'):
                     guest.verified_rpm_signatures(['/packages/arctic.rpm'])
+
+
+class OfflineHistoryTest(unittest.TestCase):
+    def test_selects_latest_listed_positive_index(self):
+        first = 'a' * 32
+        latest = 'b' * 32
+        listing = ('The following boots appear to contain offline transaction logs:\n'
+                   f'1 / {first}: 2026-10-06 00:00:00 44→44\n'
+                   f'2 / {latest}: 2026-10-06 02:00:00 44→44')
+        with patch.object(guest, 'run', side_effect=[listing, 'actual journal']) as run:
+            self.assertEqual(guest.latest_offline_history(),
+                             dict(listing=listing, number=2, boot_id=latest, log='actual journal'))
+        self.assertEqual(run.call_args_list[-1].args[0],
+                         ['dnf5', 'offline', 'log', '--number=2'])
+
+    def test_absent_history_is_rejected(self):
+        with patch.object(guest, 'run', return_value='No logs were found.') as run:
+            with self.assertRaisesRegex(RuntimeError, 'No listed offline transaction boot'):
+                guest.latest_offline_history()
+        self.assertEqual(run.call_count, 1)
+
+    def test_latest_history_command_failure_is_retained(self):
+        listing = '1 / ' + 'c' * 32 + ': 2026-10-06 02:00:00 44→44'
+        with patch.object(guest, 'run', side_effect=[listing, RuntimeError('journal missing')]):
+            with self.assertRaisesRegex(RuntimeError, 'journal missing'):
+                guest.latest_offline_history()

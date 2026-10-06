@@ -55,6 +55,22 @@ def verified_rpm_signatures(files):
     return output
 
 
+def latest_offline_history():
+    """Select the latest positive index listed by the installed DNF version.
+
+    DNF 5.4.6 converts --number with stoul and cannot resolve the documented
+    negative index. Require a real listed boot; an empty history is a failure.
+    """
+    listing = run(['dnf5', 'offline', 'log'], timeout=180)
+    entries = re.findall(r'^\s*([1-9][0-9]*)\s*/\s*([0-9a-f]{32}):',
+                         listing, flags=re.M | re.I)
+    if not entries:
+        raise RuntimeError(f'No listed offline transaction boot: {listing}')
+    number, boot_id = max(entries, key=lambda entry: int(entry[0]))
+    history = run(['dnf5', 'offline', 'log', '--number=' + number], timeout=180)
+    return dict(listing=listing, number=int(number), boot_id=boot_id, log=history)
+
+
 def session_signature(proc_root, uid, runtime, display, env):
     # Mango exports IPC after exec; its children, not /proc/<mango>/environ,
     # expose the new value. Only accept this user's matching Wayland session.
@@ -261,9 +277,9 @@ def main(update_method='dnf', expected_stable_source=None):
                 if expected:
                     must(all('git'+expected[:7] in line for line in versions.splitlines()), versions)
                 must(not Path('/system-update').is_symlink(), 'offline update link removed')
-                return dict(status=data, installed_at=history.get('installed_at'), arctic_rpms=versions,
-                            offline_log=run(['dnf5', 'offline', 'log'], timeout=180))
+                return dict(status=data, installed_at=history.get('installed_at'), arctic_rpms=versions)
             check('signed-offline-update-completed', offline_update_completed)
+            check('signed-offline-update-history', latest_offline_history)
         return int(failed)
 
     # Start a real DesktopEntries consumer BEFORE the first profile exists.
