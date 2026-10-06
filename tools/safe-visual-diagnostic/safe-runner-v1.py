@@ -22,7 +22,8 @@ BASE = 'ae55fbc9d48cec5ecc786cf61994ed986296d1bb'
 COMMON_SHA = '0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633'
 SCHEMA = 'arctic-safe-execution-v1'
 BUNDLE_FILES = {'safe-runner-v1.py', 'safe-driver-v1.py', 'guest-safe-collector-v1.py',
-                'bootstrap-safe-v1.sh', 'prepare-safe-v1.py', 'test_safe_v1.py', 'README-v1.md'}
+                'bootstrap-safe-v1.sh', 'prepare-safe-v1.py', 'test_safe_v1.py', 'README-v1.md',
+                'render-driver-v1.py', 'guest-render-collector-v1.py', 'fixed-rows-v1.py', 'test_render_v1.py'}
 EXECUTION_FILES = {'.github/workflows/iso.yml', 'tools/test-iso.sh', 'tools/lib/container.sh',
                    'tools/lib/vmtest.py', *('tools/safe-visual-diagnostic/' + p for p in BUNDLE_FILES)}
 CHANGED_FILES = EXECUTION_FILES - {'tools/lib/container.sh', 'tools/lib/vmtest.py'} | {
@@ -83,6 +84,7 @@ def proof(args, R):
     return dict(schema=SCHEMA, candidate_source=R.SOURCE, qualification_base=BASE,
                 execution_checker_head=os.environ['GITHUB_SHA'], common_v2_sha256=COMMON_SHA,
                 collector_sha256=R.digest(args.bundle / 'guest-safe-collector-v1.py'),
+                render_collector_sha256=R.digest(args.bundle / 'guest-render-collector-v1.py'),
                 execution_manifest_sha256=R.digest(args.bundle / 'execution-pins-safe-v1.json'),
                 original_result_unchanged=True, release_acceptance=False, safe_visual_gate='open')
 
@@ -273,6 +275,15 @@ def run(args, R):
                                  args.evidence / 'guest-telemetry', R.digest(args.bundle / 'guest-safe-collector-v1.py'))
         state['events'] = validate_events(args.evidence / 'boot/safe-events.log')
         require(all(name in state['evidence'] for name in state['events']['capture_names']), 'Recorded capture lacks actual preserved image')
+        render_spec = importlib.util.spec_from_file_location('safe_render_parser_v1', args.bundle / 'render-driver-v1.py')
+        render = importlib.util.module_from_spec(render_spec); render_spec.loader.exec_module(render)
+        state['render_guest'] = render.extract((args.evidence / 'boot/serial.log').read_text(errors='replace'),
+                                              args.evidence / 'render-telemetry', R.digest(args.bundle / 'guest-render-collector-v1.py'))
+        state['render_events'] = render.validate_events(args.evidence / 'boot/render-events.log', args.evidence / 'boot/safe-events.log')
+        require(all(name in state['evidence'] for name in state['render_events']['capture_names']), 'Added capture lacks preserved pixels')
+        require(sum(v['bytes'] for phase in ('guest', 'render_guest') for v in state[phase]['files'].values()) <= MAX_TOTAL
+                and sum(len(state[phase]['files']) for phase in ('guest', 'render_guest')) <= 128, 'Combined telemetry exceeds original bounds')
+        require(state['render_guest']['report']['boot_id'] == state['guest']['report']['boot_id'], 'Added collector boot differs')
         state['status'] = 'diagnostic_collected_visual_gate_open'; save()
     except BaseException as exc:
         state['status'] = 'failed_or_unrun'; state['error'] = str(exc); save(); raise

@@ -530,6 +530,10 @@ jobs:
           sparse-checkout: |
             tools
             .github/workflows
+      - name: Run original and additional host adverse controls before any VM
+        run: |
+          python3 safe-execution-source/tools/safe-visual-diagnostic/test_safe_v1.py
+          python3 safe-execution-source/tools/safe-visual-diagnostic/test_render_v1.py
       - name: Declare unused isolated diagnostic paths
         shell: bash
         run: |

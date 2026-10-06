@@ -38,6 +38,9 @@ def run(vm, out, qemu_origin, entry_origin, menu_seen, clock=time.monotonic, sle
 
     def record(event, **values):
         now = clock()
+        if event == 'input-complete':
+            # Completion timestamp and elapsed duration share this one sample.
+            values['call_elapsed_seconds'] = now - values['input_origin_monotonic_seconds']
         item = dict(event=event, monotonic_seconds=now,
                     qemu_elapsed_seconds=now-qemu_origin['monotonic_estimate_seconds'],
                     entry_elapsed_seconds=now-entry_origin, **values)
@@ -90,20 +93,17 @@ def run(vm, out, qemu_origin, entry_origin, menu_seen, clock=time.monotonic, sle
         {'type': 'abs', 'data': {'axis': 'x', 'value': 3000}},
         {'type': 'abs', 'data': {'axis': 'y', 'value': 3000}}])
     require('error' not in response, 'QMP pointer-only input failed; no fallback input permitted')
-    record('input-complete', phase='pointer-only', input_origin_monotonic_seconds=started,
-           call_elapsed_seconds=clock()-started)
+    record('input-complete', phase='pointer-only', input_origin_monotonic_seconds=started)
     for elapsed in (1, 5):
         wait_until(started + elapsed); capture('safe-11-pointer-%02ds' % elapsed)
     started = record('super-enter')['monotonic_seconds']
     vm.keys('meta_l-ret')
-    record('input-complete', phase='super-enter', input_origin_monotonic_seconds=started,
-           call_elapsed_seconds=clock()-started)
+    record('input-complete', phase='super-enter', input_origin_monotonic_seconds=started)
     for elapsed in (1, 5, 60):
         wait_until(started + elapsed); capture('safe-20-super-enter-%02ds' % elapsed)
     started = record('return-only')['monotonic_seconds']
     vm.keys('ret')
-    record('input-complete', phase='return-only', input_origin_monotonic_seconds=started,
-           call_elapsed_seconds=clock()-started)
+    record('input-complete', phase='return-only', input_origin_monotonic_seconds=started)
     for elapsed in (1, 5):
         wait_until(started + elapsed); capture('safe-30-return-%02ds' % elapsed)
     record('collector-command', scope='post-separated-input read-only telemetry', command=COLLECTOR_COMMAND)

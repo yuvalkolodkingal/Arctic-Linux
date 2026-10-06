@@ -56,6 +56,10 @@ SAFE_JOB = r'''
           sparse-checkout: |
             tools
             .github/workflows
+      - name: Run original and additional host adverse controls before any VM
+        run: |
+          python3 safe-execution-source/tools/safe-visual-diagnostic/test_safe_v1.py
+          python3 safe-execution-source/tools/safe-visual-diagnostic/test_render_v1.py
       - name: Declare unused isolated diagnostic paths
         shell: bash
         run: |
@@ -122,6 +126,7 @@ def harness(base):
      && "$TIMEOUT" == 600 && "$INTERVAL" == 60 && "$MEMORY" == 4096 && "$SMP" == 2 && "$VGA" == virtio ]] \\
     || arctic_die "Safe diagnostic requires the fixed isolated Safe/KVM/600s/2CPU/4GiB settings"
   [[ -c /dev/kvm && -f "$SAFE_DIAGNOSTIC/guest-safe-collector-v1.py" && -f "$SAFE_DIAGNOSTIC/safe-driver-v1.py"
+     && -f "$SAFE_DIAGNOSTIC/guest-render-collector-v1.py" && -f "$SAFE_DIAGNOSTIC/render-driver-v1.py" && -f "$SAFE_DIAGNOSTIC/fixed-rows-v1.py"
      && -f "$SAFE_DIAGNOSTIC/bootstrap-safe-v1.sh" ]] || arctic_die "Safe diagnostic prerequisites absent"
   [[ "$APPEND" == " console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1" ]] \\
     || arctic_die "Safe diagnostic requires the exact debug arguments"
@@ -148,6 +153,10 @@ fi''')
     try:
         safe_driver_v1.run(vm, out, safe_driver_v1.qemu_process_origin(vm.proc.pid),
                            safe_entry_origin if menu_seen else None, menu_seen)
+        render_spec = importlib.util.spec_from_file_location('safe_render_driver_v1', '/safe-diagnostic/render-driver-v1.py')
+        render_driver_v1 = importlib.util.module_from_spec(render_spec)
+        render_spec.loader.exec_module(render_driver_v1)
+        render_driver_v1.run(vm, out)
     finally:
         vm.quit()
     sys.exit(0)
@@ -157,7 +166,7 @@ fi''')
                    'if [ "$SAFE_DIAGNOSTIC" = 1 ]; then pkgs+=(xorriso); fi\ndnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"')
     text = replace(text, 'python3 -c "$DRIVER" "${args[@]}"', '''if [ "$SAFE_DIAGNOSTIC" = 1 ]; then
   mkdir /tmp/safe-data
-  cp /safe-diagnostic/guest-safe-collector-v1.py /tmp/safe-data/
+  cp /safe-diagnostic/{guest-safe-collector-v1.py,guest-render-collector-v1.py,fixed-rows-v1.py} /tmp/safe-data/
   xorriso -as mkisofs -quiet -V ARCTICSAFE -J -R -G /safe-diagnostic/bootstrap-safe-v1.sh \\
     -o /tmp/safe-data.iso /tmp/safe-data
   args+=(-drive file=/tmp/safe-data.iso,media=cdrom,readonly=on,if=none,id=safedata -device ide-cd,drive=safedata,bus=ide.1,unit=0)
@@ -165,7 +174,7 @@ fi''')
     qemu-system-x86_64 --version
     rpm -q "${pkgs[@]}"
     sha256sum "$(command -v qemu-system-x86_64)" "$code" "$vars" /tmp/safe-data.iso \\
-      /safe-diagnostic/guest-safe-collector-v1.py /safe-diagnostic/safe-driver-v1.py
+      /safe-diagnostic/{guest-safe-collector-v1.py,safe-driver-v1.py,guest-render-collector-v1.py,render-driver-v1.py,fixed-rows-v1.py}
     printf '%s\\n' 'Additional read-only diagnostic data CD; actual new tool hashes, not baseline parity proof.'
   } > "$OUT/safe-toolchain.txt"
 fi

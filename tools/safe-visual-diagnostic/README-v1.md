@@ -216,3 +216,31 @@ exact pre-collector stderr was unavailable. Label selection addresses the unsafe
 device-number assumption; a new reviewed run must prove actual label resolution,
 read-only mounting, collector start/end and telemetry. Neither host fixtures nor
 telemetry alone closes the still-open Safe visual gate.
+
+
+The later render diagnostic arm is test-only and starts after the original driver
+has completed and retained all 34 images. The original 1 microsecond validator is
+unchanged; only completion bookkeeping uses one clock sample. Its separate
+render-events.log and ARCTIC-RENDER protocol retain nine additional QMP images,
+validated read-only fb0 getter/pread snapshots when available, one new fixed-row
+Foot client, and one explicitly labelled later Grim crossover. New displayed
+collector commands and that client are intentional post-original stimuli.
+Framebuffer snapshots remain active-scanout-unproven. Missing getter access stays
+unavailable with its exact error and no invented PNG. Collection never means a
+visual pass or a root-cause finding. The original v1-v3 failures remain intact.
+
+No startup log switch is applied: the normal shipped session remains unchanged,
+so compositor GL_RENDERER and Qt render loop remain unobserved. Mango -d would
+need a separately reviewed perturbed startup arm. No backend, damage, animation,
+opacity, scanout, settings, permission or SELinux override belongs in this arm.
+
+The added phase is bounded to 180 seconds within the existing 35-minute host
+harness timeout. Only the PID/UID/start-tick-proved owned Foot is signalled;
+cleanup failures and leftover owned groups remain failures. Existing normal
+framebuffer permissions and GET_VSCREENINFO/GET_FSCREENINFO getter ioctls are
+used; there are no device writes. Guest AVC/audit/config/boot-ID gates run again.
+The two telemetry transports together must fit the original 16 MiB/128-file
+bounds. Run test_safe_v1.py and test_render_v1.py without a VM before promotion.
+Requested Foot sample labels are minimum 1/5/60-second observations, with actual
+guest framebuffer intervals and host QMP timestamps; they are not first-paint
+benchmarks. The unchanged source/ISO, CI mode and owned-Docker guards still apply.
