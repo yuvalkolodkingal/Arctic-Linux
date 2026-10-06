@@ -136,25 +136,32 @@ def clients(prefix):
     return {str(c['id']): c for c in json.loads(run(prefix + ['mmsg', 'get', 'all-clients']))['clients']}
 
 
-def startup(prefix, command, pattern, timeout=300):
+def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=None):
     before = set(clients(prefix))
     started = time.monotonic()
+    last_absent_start = started
     with open('/tmp/arctic-performance-apps.log', 'a') as output:
         child = subprocess.Popen(prefix + command, stdout=output, stderr=output)
         try:
             while time.monotonic() - started < timeout:
+                query_started = time.monotonic()
                 current = clients(prefix)
                 windows = [c for key, c in current.items() if key not in before and
                            pattern in (str(c.get('appid', c.get('app_id', ''))) + ' ' + str(c.get('title', ''))).lower()]
                 if windows:
                     measured = time.monotonic() - started
-                    time.sleep(5)
+                    time.sleep(hold_seconds)
                     if not any(str(window['id']) in clients(prefix) for window in windows):
                         continue
+                    if observations is not None:
+                        observations.append(dict(lower_seconds=last_absent_start - started,
+                                                 upper_seconds=measured,
+                                                 interval_seconds=measured - (last_absent_start - started)))
                     emit('mapped_window_' + pattern, windows)
                     emit('app_workload_' + pattern, snapshot())
                     return measured
-                time.sleep(.25)
+                last_absent_start = query_started
+                time.sleep(.01)
                 if child.poll() not in (None, 0):
                     break
             emit('startup_' + pattern + '_diagnostic', dict(exit_code=child.poll(),
@@ -185,6 +192,17 @@ def measure(prefix):
     emit('security', run(['getenforce']))
     emit('installed_bytes', run(['du', '-sx', '-B1', '--exclude=/proc', '--exclude=/sys', '--exclude=/dev',
                                  '--exclude=/run', '--exclude=/tmp', '/'], timeout=300))
+    emit('installed_allocation_scope', 'Root filesystem only (du -x); separate mounted trees excluded')
+    allocations, devices = [], set()
+    for path in ('/', '/boot', '/boot/efi', '/home', '/nix', '/var/log'):
+        if not Path(path).is_dir() or (device := os.stat(path).st_dev) in devices:
+            continue
+        devices.add(device)
+        allocations.append(dict(path=path, device=device, du_bytes=int(run([
+            'du', '-sx', '-B1', '--exclude=/proc', '--exclude=/sys', '--exclude=/dev',
+            '--exclude=/run', '--exclude=/tmp', path], timeout=300).split()[0])))
+    emit('installed_mount_allocations', allocations)
+    emit('installed_btrfs_usage', run(['btrfs', 'filesystem', 'usage', '--raw', '/'], timeout=120))
     # Let session initialization settle; record actual elapsed time and memory without flushing caches.
     time.sleep(60)
     samples = []
@@ -220,8 +238,10 @@ def measure(prefix):
         emit(label + '_seconds', dict(samples=times, median=statistics.median(times), max=max(times)))
     for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
                              ('zen', ['flatpak', 'run', 'app.zen_browser.zen', 'about:blank'])]:
-        samples = [startup(prefix, command, pattern) for _ in range(3)]
-        emit('startup_' + pattern + '_seconds', dict(first=samples[0], warm=samples[1:]))
+        bounds = []
+        samples = [startup(prefix, command, pattern, observations=bounds) for _ in range(3)]
+        emit('startup_' + pattern + '_seconds', dict(first=samples[0], warm=samples[1:],
+             observation_bounds=bounds, poll_sleep_seconds=.01))
     emit('final_idle', snapshot())
     emit('system_failed_units', run(['systemctl', '--failed', '--no-pager']))
     emit('flatpak', run(['flatpak', 'list', '--system', '--columns=ref,active,size']))
@@ -234,7 +254,7 @@ def measure(prefix):
     emit('done', True)
 
 
-def main():
+def main(preconditioned=False):
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
             or run(['systemd-detect-virt', '--vm']) not in ('qemu', 'kvm')):
         raise RuntimeError('This probe requires root inside a disposable QEMU VM')
@@ -247,6 +267,21 @@ def main():
     emit('measurement_conditions', dict(keep_awake_temporary=True, initial_keep_awake=awake))
     run(prefix + ['arctic-keep-awake', 'on', '--quiet'])
     try:
+        if preconditioned:
+            # Identical cache/profile preparation for both images. No cache
+            # flushing, package/service tuning or preference changes.
+            for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
+                                     ('zen', ['flatpak', 'run', 'app.zen_browser.zen', 'about:blank'])]:
+                seconds = startup(prefix, command, pattern, hold_seconds=45)
+                emit('precondition_' + pattern, dict(mapped_after_seconds=seconds, persistent_hold_seconds=45,
+                     meaning='Cache/profile normalization only; not a cold startup benchmark'))
+        emit('measured_payload', dict(
+            arctic_shell=run(['rpm', '-q', 'arctic-shell']),
+            catalog_sha256=run(['sha256sum', '/usr/share/arctic/shell/AppsService.qml']),
+            battery_sha256=run(['sha256sum', '/usr/share/arctic/shell/BatteryService.qml']),
+            mangowm=run(['rpm', '-q', 'mangowm']),
+            quickshell=run(['rpm', '-q', 'quickshell']),
+            kitty=run(['rpm', '-q', 'kitty'])))
         measure(prefix)
     finally:
         emit('keep_awake_restored', json.loads(run(prefix + ['arctic-keep-awake', 'off', '--quiet'])))

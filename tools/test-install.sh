@@ -668,7 +668,16 @@ PY
 inner=$(cat <<'INNER'
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow xorriso
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
-dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
+if [[ "$VM_TOOLS_PREPARED" == 1 ]]; then
+  rpm -q "${pkgs[@]}" >/dev/null
+else
+  dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
+fi
+{
+  rpm -q "${pkgs[@]}" | sort
+  qemu-system-x86_64 --version
+  sha256sum /usr/share/edk2/ovmf/*.fd /usr/share/seabios/*.bin
+} > "$OUT/vm-toolchain.txt"
 xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
 if [ "$STAGE" != boot ]; then
   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
@@ -686,7 +695,13 @@ INNER
 
 arctic_log "install test ($FIRMWARE, stage $STAGE, profile $(basename "$PROFILE")) → $OUT"
 rc=0
-"$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+name_args=()
+if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
+  [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
+  name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
+fi
+"$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+  -e VM_TOOLS_PREPARED="${ARCTIC_VM_TOOLS_PREPARED:-0}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
   -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e GUEST_CHECK_INTERACTIVE="$GUEST_CHECK_INTERACTIVE" \

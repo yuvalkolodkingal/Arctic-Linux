@@ -6,7 +6,8 @@
 #                                       tools/build-rpms.sh)
 #   tools/build-iso.sh --work DIR       kiwi build root and scratch space (default out/kiwi-work;
 #                                       needs ~15 GB; removed afterwards unless --keep-work)
-#   tools/build-iso.sh --cache DIR      keep kiwi's dnf package cache in DIR between builds
+#   tools/build-iso.sh --cache DIR      build-only DNF cache (default out/cache/iso)
+#   tools/build-iso.sh --no-cache       use a fresh package cache
 #   tools/build-iso.sh --scratch DIR    put create-stage intermediates and temp files on DIR
 #   tools/build-iso.sh --out DIR        output directory (default out/iso)
 #   tools/build-iso.sh --debug          kiwi --debug
@@ -16,6 +17,7 @@
 #                                       requires it; auto/no are explicit development choices
 #   tools/build-iso.sh --name NAME.iso   distinct candidate filename (no directory components)
 #   tools/build-iso.sh --max-bytes N     report a size gate; retain an oversized artifact, exit 1
+#   tools/build-iso.sh --preferred-max-bytes N  report a softer size preference
 #   tools/build-iso.sh --erofs-compression SPEC  compressor for an explicit measured experiment
 #   tools/build-iso.sh --erofs-cluster N  compression cluster bytes, power of 2, 4096..1048576
 #   tools/build-iso.sh --dedupe          EROFS storage deduplication, single compression worker
@@ -38,7 +40,7 @@ ROOT="$(arctic_repo_root)"
 REPO="$ROOT/out/repo"
 WORK="$ROOT/out/kiwi-work"
 OUT="$ROOT/out/iso"
-CACHE=""
+CACHE="$ROOT/out/cache/iso"
 SCRATCH=""
 BUILD_DIR=/work/build
 KEEP_WORK=0
@@ -47,6 +49,7 @@ ZEN=yes
 CREATE_ONLY=0
 ISO_NAME="Arctic-Linux-1.2-x86_64.iso"
 MAX_BYTES=0
+PREFERRED_MAX_BYTES=0
 EROFS_COMPRESSION=""
 EROFS_CLUSTER=""
 DEDUPE=0
@@ -57,6 +60,7 @@ while (( $# )); do
     --work)  WORK="$2"; shift 2 ;;
     --out)   OUT="$2"; shift 2 ;;
     --cache) CACHE="$2"; shift 2 ;;
+    --no-cache) CACHE=""; shift ;;
     --scratch) SCRATCH="$2"; shift 2 ;;
     --keep-work) KEEP_WORK=1; shift ;;
     --debug) DEBUG="--debug"; shift ;;
@@ -64,6 +68,7 @@ while (( $# )); do
     --create-only) CREATE_ONLY=1; shift ;;
     --name) ISO_NAME="$2"; shift 2 ;;
     --max-bytes) MAX_BYTES="$2"; shift 2 ;;
+    --preferred-max-bytes) PREFERRED_MAX_BYTES="$2"; shift 2 ;;
     --erofs-compression) EROFS_COMPRESSION="$2"; shift 2 ;;
     --erofs-cluster) EROFS_CLUSTER="$2"; shift 2 ;;
     --dedupe) DEDUPE=1; shift ;;
@@ -75,6 +80,7 @@ done
 case "$ZEN" in auto|yes|no) ;; *) arctic_die "--zen takes auto, yes or no" ;; esac
 [[ "$ISO_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.iso$ ]] || arctic_die "--name must be a plain .iso filename"
 [[ "$MAX_BYTES" =~ ^(0|[1-9][0-9]{0,15})$ ]] || arctic_die "--max-bytes must be a nonnegative byte count"
+[[ "$PREFERRED_MAX_BYTES" =~ ^(0|[1-9][0-9]{0,15})$ ]] || arctic_die "--preferred-max-bytes must be a nonnegative byte count"
 [[ -z "$EROFS_COMPRESSION" || "$EROFS_COMPRESSION" =~ ^(lzma|zstd|lz4|lz4hc|deflate|libdeflate)(,level=[0-9]{1,3})?$ ]] \
   || arctic_die "--erofs-compression must name a supported compressor and optional ,level=N"
 if [[ -n "$EROFS_CLUSTER" ]]; then
@@ -93,6 +99,8 @@ cache_args=()
 scratch_args=()
 if [[ -n "$CACHE" ]]; then
   mkdir -p "$CACHE"; CACHE="$(cd "$CACHE" && pwd)"
+  [[ "$CACHE" != / && "$CACHE" != "$ROOT" && "$CACHE" != "$WORK" && "$CACHE" != "$OUT" ]] \
+    || arctic_die "--cache needs a dedicated build-cache directory"
   cache_args=(-v "$CACHE:/var/cache/kiwi")
 fi
 if [[ -n "$SCRATCH" ]]; then
@@ -111,11 +119,19 @@ arctic_log "free space for the kiwi build root ($WORK): ${avail_gb} GiB"
 arctic_ensure_engine
 engine="$(arctic_engine)"
 arctic_container_args
+BUILD_IMAGE_ID="$(arctic_resolve_image "$engine" "$ARCTIC_FEDORA_IMAGE")"
 
 inner=$(cat <<'INNER'
-dnf -y install kiwi-cli kiwi-systemdeps-iso-media kiwi-systemdeps-filesystems \
-  distribution-gpg-keys erofs-utils flatpak >/dev/null 2>&1 || \
-  dnf -y install kiwi-cli kiwi-systemdeps-iso-media kiwi-systemdeps-filesystems distribution-gpg-keys erofs-utils flatpak
+dnf_args=()
+if [[ "$BUILD_CACHE_ENABLED" == 1 ]]; then
+  mkdir -p /var/cache/kiwi/build-tools
+  dnf_args=(--setopt=system_cachedir=/var/cache/kiwi/build-tools --setopt=keepcache=True)
+fi
+if ! dnf "${dnf_args[@]}" -y install kiwi-cli kiwi-systemdeps-iso-media kiwi-systemdeps-filesystems \
+  distribution-gpg-keys erofs-utils flatpak > /logs/kiwi-tools-install.log 2>&1; then
+  tail -n 80 /logs/kiwi-tools-install.log
+  exit 1
+fi
 kiwi-ng --version || :
 # kiwi 11.0.2 (Fedora 44): `system create` reads command_args['help'], which its typer CLI
 # never sets (KeyError: 'help'). Harmless to patch; a fixed kiwi already has .get().
@@ -135,6 +151,12 @@ fail() { echo "kiwi failed: $1; last lines of out/logs/$2:" >&2; tail -n 80 "/lo
 
 # 1. prepare: install the packages into /work/root and run config.sh.
 if [ "$CREATE_ONLY" != 1 ]; then
+# A cached local repository must never supply an older build from the same URL.
+# Remote signed Fedora payloads keep their normal metadata-expiry policy.
+if [[ "$BUILD_CACHE_ENABLED" == 1 && -d /var/cache/kiwi/dnf/cache ]]; then
+  find /var/cache/kiwi/dnf/cache -mindepth 1 -maxdepth 1 -name 'arctic-local*' \
+    -exec rm -rf -- {} +
+fi
 description=/desc
 if [ "${ARCTIC_EXTRA_CA:-}" = 1 ]; then
   # DNF's second phase is chrooted, so build-host proxy trust alone is insufficient.
@@ -261,12 +283,12 @@ arctic_log "building the ISO with kiwi-ng in $ARCTIC_FEDORA_IMAGE ($engine, priv
 start=$(date +%s)
 builder_commit="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
 "$engine" run --rm --privileged "${ARCTIC_CONTAINER_ARGS[@]}" "${cache_args[@]}" "${scratch_args[@]}" \
-  -e BUILD_DIR="$BUILD_DIR" \
+  -e BUILD_DIR="$BUILD_DIR" -e BUILD_CACHE_ENABLED="$([[ -n "$CACHE" ]] && echo 1 || echo 0)" \
   -e ISO_NAME="$ISO_NAME" -e KIWI_DEBUG="$DEBUG" -e ZEN="$ZEN" -e CREATE_ONLY="$CREATE_ONLY" -e KEEP_WORK="$KEEP_WORK" \
   -e EROFS_COMPRESSION="$EROFS_COMPRESSION" -e EROFS_CLUSTER="$EROFS_CLUSTER" -e DEDUPE="$DEDUPE" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ROOT/iso/kiwi:/desc:ro" -v "$REPO:/repo:ro" -v "$WORK:/work" -v "$OUT:/out" -v "$LOGS:/logs" \
-  "$ARCTIC_FEDORA_IMAGE" bash ${ARCTIC_TRACE:+-x} -c "$ARCTIC_CONTAINER_PROLOGUE$inner"
+  "$BUILD_IMAGE_ID" bash ${ARCTIC_TRACE:+-x} -c "$ARCTIC_CONTAINER_PROLOGUE$inner"
 [[ $KEEP_WORK == 1 ]] || rmdir "$WORK" 2>/dev/null || true
 
 iso="$OUT/$ISO_NAME"
@@ -281,13 +303,19 @@ size=$(stat -c %s "$iso")
 {
   echo "iso_bytes=$size"
   echo "build_tool_commit=$builder_commit"
+  echo "build_image_id=$BUILD_IMAGE_ID"
+  echo "build_cache_enabled=$([[ -n "$CACHE" ]] && echo 1 || echo 0)"
   echo "size_target_bytes=$MAX_BYTES"
+  echo "preferred_size_target_bytes=$PREFERRED_MAX_BYTES"
   echo "erofs_compression_override=$EROFS_COMPRESSION"
   echo "erofs_cluster_override=$EROFS_CLUSTER"
   echo "erofs_dedupe_requested=$DEDUPE"
   if (( MAX_BYTES == 0 )); then echo "size_target_met=not-requested"
   elif (( size <= MAX_BYTES )); then echo "size_target_met=yes"
   else echo "size_target_met=no"; fi
+  if (( PREFERRED_MAX_BYTES == 0 )); then echo "preferred_size_target_met=not-requested"
+  elif (( size <= PREFERRED_MAX_BYTES )); then echo "preferred_size_target_met=yes"
+  else echo "preferred_size_target_met=no"; fi
 } >> "$OUT/${ISO_NAME%.iso}.build-info"
 arctic_log "built $iso: $(( size / 1024 / 1024 )) MiB in $(( ($(date +%s) - start) / 60 )) min"
 if (( size > 2147483648 )); then

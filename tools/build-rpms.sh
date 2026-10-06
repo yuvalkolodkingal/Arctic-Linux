@@ -8,6 +8,8 @@
 #                                       with placeholder files, or another commit checked
 #                                       out there); DIR need not be a git repo
 #   tools/build-rpms.sh --out DIR       output directory (default: <repo>/out)
+#   tools/build-rpms.sh --cache DIR     build-only DNF/Go cache (default: <out>/cache/build)
+#   tools/build-rpms.sh --no-cache      use fresh caches for a measured cold build
 #   tools/build-rpms.sh --release-suffix auto|none|SUFFIX
 #                                       what follows "1" in the Release of both specs
 #                                       (Release: 1%{?arctic_snapshot}%{?dist}). auto (the
@@ -57,6 +59,8 @@ ROOT="$(arctic_repo_root)"
 SRC="$ROOT"
 OUT="$ROOT/out"
 ONLY=""
+CACHE=""
+CACHE_ENABLED=1
 SUFFIX_MODE="${ARCTIC_RELEASE_SUFFIX:-auto}"
 KEY_FILE=""
 REQUIRE_KEY="${ARCTIC_REQUIRE_GPG_KEY:-0}"
@@ -69,6 +73,8 @@ while (( $# )); do
     --only) ONLY="$2"; shift 2 ;;
     --src)  SRC="$(cd "$2" && pwd)"; shift 2 ;;
     --out)  mkdir -p "$2"; OUT="$(cd "$2" && pwd)"; shift 2 ;;
+    --cache) CACHE="$2"; CACHE_ENABLED=1; shift 2 ;;
+    --no-cache) CACHE_ENABLED=0; shift ;;
     --release-suffix) SUFFIX_MODE="$2"; shift 2 ;;
     --gpg-public-key) KEY_FILE="$2"; shift 2 ;;
     --require-gpg-key) REQUIRE_KEY=1; shift ;;
@@ -98,6 +104,14 @@ NERD_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_VERS
 # --- end stream 6
 
 mkdir -p "$OUT/sources" "$OUT/repo" "$OUT/srpms" "$OUT/logs"
+cache_args=()
+if [[ "$CACHE_ENABLED" == 1 ]]; then
+  CACHE="${CACHE:-$OUT/cache/build}"
+  mkdir -p "$CACHE"; CACHE="$(cd "$CACHE" && pwd)"
+  [[ "$CACHE" != / && "$CACHE" != "$ROOT" && "$CACHE" != "$SRC" && "$CACHE" != "$OUT" ]] \
+    || arctic_die "--cache needs a dedicated build-cache directory"
+  cache_args=(-v "$CACHE:/cache")
+fi
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
@@ -238,12 +252,24 @@ specs=()
 arctic_ensure_engine
 engine="$(arctic_engine)"
 arctic_container_args
+BUILD_IMAGE_ID="$(arctic_resolve_image "$engine" "$ARCTIC_FEDORA_IMAGE")"
 key_args=()
 [[ -n "$effective_key" ]] && key_args=(-v "$effective_key:/gpgkey:ro")
 
 # The spec files always come from $SRC/packaging (they are also inside Source0).
 inner=$(cat <<'INNER'
-dnf -y install rpm-build rpmdevtools createrepo_c 'dnf5-command(builddep)' cpio >/dev/null 2>&1
+printf 'phase\telapsed_seconds\n' > /out/logs/build-timings.tsv
+phase_started=$SECONDS
+dnf_args=()
+if [[ "$BUILD_CACHE_ENABLED" == 1 ]]; then
+  mkdir -p /cache/dnf /cache/go-build
+  dnf_args=(--setopt=system_cachedir=/cache/dnf --setopt=keepcache=True)
+fi
+if ! dnf "${dnf_args[@]}" -y install rpm-build rpmdevtools createrepo_c 'dnf5-command(builddep)' cpio > /out/logs/build-tools-install.log 2>&1; then
+  tail -n 80 /out/logs/build-tools-install.log
+  exit 1
+fi
+printf 'build_tools_install\t%s\n' "$((SECONDS - phase_started))" >> /out/logs/build-timings.tsv
 mkdir -p /root/rpmbuild/{SOURCES,SPECS,BUILD,RPMS,SRPMS}
 cp -a /out/sources/. /root/rpmbuild/SOURCES/
 define=()
@@ -253,18 +279,31 @@ define=()
 install_mango() {
   local rpm
   rpm="$(ls -t "$1"/mangowm-[0-9]*.x86_64.rpm 2>/dev/null | head -n1 || true)"
-  if [[ -n "$rpm" ]]; then dnf -y install "$rpm" >/dev/null 2>&1 || echo "note: could not install $rpm for %check"; fi
+  if [[ -n "$rpm" ]]; then dnf "${dnf_args[@]}" -y install "$rpm" >/dev/null 2>&1 || echo "note: could not install $rpm for %check"; fi
 }
 [[ " $SPECS " == *" mangowm "* ]] || install_mango /out/repo
 for spec in $SPECS; do
   echo "==> $spec: installing build dependencies"
-  dnf -y builddep "/src/packaging/$spec.spec" >/dev/null 2>&1 || dnf -y builddep "/src/packaging/$spec.spec"
+  phase_started=$SECONDS
+  if ! dnf "${dnf_args[@]}" -y builddep "/src/packaging/$spec.spec" > "/out/logs/builddep-$spec.log" 2>&1; then
+    tail -n 80 "/out/logs/builddep-$spec.log"
+    exit 1
+  fi
+  printf '%s_builddep\t%s\n' "$spec" "$((SECONDS - phase_started))" >> /out/logs/build-timings.tsv
+  if [[ "$BUILD_CACHE_ENABLED" == 1 && "$spec" == arctic-linux ]]; then
+    native_key=$(rpm -qa --qf '%{NAME}\t%{NEVRA}\n' | python3 /arctic-build-cache.py \
+      --image-id "$BUILD_IMAGE_ID" --manifest /out/logs/go-cache-inputs.json)
+    export ARCTIC_GOCACHE="/cache/go-build/$native_key"
+    echo "==> Go compiler cache: $native_key (native dependencies and builder verified)"
+  fi
   echo "==> $spec: rpmbuild -ba ${define[*]}"
+  phase_started=$SECONDS
   if ! rpmbuild -ba "${define[@]}" "/src/packaging/$spec.spec" > "/out/logs/rpmbuild-$spec.log" 2>&1; then
     tail -n 60 "/out/logs/rpmbuild-$spec.log"
     echo "rpmbuild failed for $spec (full log: out/logs/rpmbuild-$spec.log)" >&2
     exit 1
   fi
+  printf '%s_rpmbuild\t%s\n' "$spec" "$((SECONDS - phase_started))" >> /out/logs/build-timings.tsv
   grep -E '^(Wrote|warning):' "/out/logs/rpmbuild-$spec.log" | sed 's,^,  ,' || true
   [[ "$spec" == mangowm ]] && install_mango /root/rpmbuild/RPMS/x86_64
 done
@@ -315,11 +354,15 @@ fi
   echo "specs=$SPECS"
   echo "gpg_key=$fpr"
   echo "arctic_repos=$repos"
+  echo "builder_image_id=$BUILD_IMAGE_ID"
+  echo "build_cache_enabled=$BUILD_CACHE_ENABLED"
+  echo "go_cache_key=${native_key:-}"
   find /root/rpmbuild/RPMS -name '*.rpm' ! -name '*-debuginfo-*' ! -name '*-debugsource-*' -print0 |
     xargs -0 -r rpm -qp --nosignature --qf 'rpm=%{NEVRA}\n' | sort
   rpm -qp --nosignature --qf 'srpm=%{NAME}-%{EVR}.src\n' /root/rpmbuild/SRPMS/*.src.rpm | sort
 } > /out/BUILD-INFO
 chown -R "$HOST_UID:$HOST_GID" /out/repo /out/srpms /out/logs /out/sources /out/debug /out/BUILD-INFO
+if [[ "$BUILD_CACHE_ENABLED" == 1 ]]; then chown -R "$HOST_UID:$HOST_GID" /cache/dnf /cache/go-build; fi
 echo "==> packages in out/repo:"
 ls -1 /out/repo/*.rpm | sed 's,.*/,  ,'
 if [[ "$repos" == disabled ]]; then
@@ -329,11 +372,13 @@ INNER
 )
 
 arctic_log "building ${specs[*]} in $ARCTIC_FEDORA_IMAGE ($engine)"
-"$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${key_args[@]}" \
+"$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${key_args[@]}" "${cache_args[@]}" \
+  -e BUILD_CACHE_ENABLED="$CACHE_ENABLED" -e BUILD_IMAGE_ID="$BUILD_IMAGE_ID" \
   -e SPECS="${specs[*]}" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -e RELEASE_SUFFIX="$SUFFIX" -e VERSION="$VERSION" -e BUILD_TIME="$BUILD_TIME" -e COMMIT_TIME="$COMMIT_TIME" \
   -e GIT_COMMIT="$GIT_COMMIT" -e GIT_DIRTY="$GIT_DIRTY" \
+  -v "$HERE/build-cache.py:/arctic-build-cache.py:ro" \
   -v "$SRC:/src:ro" -v "$OUT:/out" \
-  "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner"
+  "$BUILD_IMAGE_ID" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner"
 
 arctic_log "done: $OUT/repo (build info: $OUT/BUILD-INFO)"

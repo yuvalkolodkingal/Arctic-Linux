@@ -727,7 +727,9 @@ if [ -f go.mod ]; then
   export GOTOOLCHAIN=local CGO_ENABLED=0 GOPROXY=off GOFLAGS="-buildmode=pie -trimpath"
   if [ -d vendor ]; then GOFLAGS="$GOFLAGS -mod=vendor"; fi
   export GOFLAGS
-  export GOCACHE="$PWD/_build/gocache" GOPATH="$PWD/_build/gopath"
+  # The container wrapper supplies a builder/native-library-qualified cache.
+  # Direct rpmbuild keeps its isolated default; no build cache enters the RPM.
+  export GOCACHE="${ARCTIC_GOCACHE:-$PWD/_build/gocache}" GOPATH="$PWD/_build/gopath"
   mkdir -p _build/bin
   for cmd in arcticd arctic-install arctic-webapp; do
     go build -ldflags "-B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"

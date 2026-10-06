@@ -91,7 +91,7 @@ jobs:
       - name: shellcheck
         run: |
           files=()
-          for f in dotfiles/.local/bin/* tools/*.sh tools/lib/*.sh live/* iso/kiwi/config.sh \
+          for f in dotfiles/.local/bin/* tools/*.sh tools/lib/*.sh tools/performance/*.sh live/* iso/kiwi/config.sh \
                    packaging/sddm-wayland-mango/sddm-compositor-mango packaging/desktop/*.sh packaging/desktop/arctic-share-picker \
                    packaging/updates/*.sh packaging/theme-hooks.d/* dotfiles/.bashrc.d/*.sh settings/dev/*.sh \
                    cmd/arctic-webapp-host/dev/*.sh; do

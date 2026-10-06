@@ -38,12 +38,14 @@
 	</preferences>
 
 	<!-- Fedora 44 + updates (as fedora-kiwi-descriptions repositories/core.xml). -->
-	<repository type="rpm-md" alias="fedora" sourcetype="metalink">
+	<!-- Validate downloaded and cached Fedora RPMs. The explicitly added local
+	     build repository remains the only unsigned package exception. -->
+	<repository type="rpm-md" alias="fedora" sourcetype="metalink" package_gpgcheck="true">
 		<source path="https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&amp;arch=$basearch">
 			<signing key="file:///usr/share/distribution-gpg-keys/fedora/RPM-GPG-KEY-fedora-$releasever-primary"/>
 		</source>
 	</repository>
-	<repository type="rpm-md" alias="updates" sourcetype="metalink">
+	<repository type="rpm-md" alias="updates" sourcetype="metalink" package_gpgcheck="true">
 		<source path="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f$releasever&amp;arch=$basearch">
 			<signing key="file:///usr/share/distribution-gpg-keys/fedora/RPM-GPG-KEY-fedora-$releasever-primary"/>
 		</source>

@@ -25,6 +25,10 @@ on:
         description: Enforcing VM install, Nix GUI and update/reboot acceptance (no release)
         type: boolean
         default: false
+      performance_acceptance:
+        description: Three paired KVM boots versus immutable v1.2 (artifact only)
+        type: boolean
+        default: false
       boot_test:
         description: Boot the ISO in QEMU and upload screenshots
         type: boolean
@@ -43,7 +47,7 @@ env:
 jobs:
   iso:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +60,21 @@ jobs:
           sudo docker image prune --all --force || true
           sudo mkdir -p /mnt/arctic && sudo chown "$(id -u):$(id -g)" /mnt/arctic
           df -h / /mnt
+
+      - name: Reuse trusted branch build downloads and compiler objects
+        id: build-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/cache/build
+            out/cache/iso
+            out/sources
+          # Keep preview branches/tags isolated. Go additionally checks the actual
+          # builder/native RPM identity; fresh RPM assembly and checks still run.
+          key: arctic-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.ref }}-${{ hashFiles('packaging/*.spec', 'iso/kiwi/config.kiwi') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            arctic-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.ref }}-${{ hashFiles('packaging/*.spec', 'iso/kiwi/config.kiwi') }}-
+            arctic-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.ref }}-
 
       - name: Build RPMs
         env:
@@ -84,7 +103,8 @@ jobs:
           if [ '${{ github.event_name }}' = workflow_dispatch ] && [ '${{ inputs.release }}' = false ]; then
             candidate="Arctic-Linux-1.2-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-x86_64.iso"
             echo "ISO=$candidate" >> "$GITHUB_ENV"
-            if ! tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes --name "$candidate" --max-bytes 1500000000; then
+            if ! tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes --name "$candidate" \
+              --max-bytes 1999999999 --preferred-max-bytes 1599999999; then
               # A missed size target is reviewable; failed image creation is not.
               test -s "out/iso/$candidate"
               (cd out/iso && sha256sum --check "$candidate.sha256")
@@ -94,6 +114,15 @@ jobs:
           else
             tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes
           fi
+
+      - name: Save verified build downloads and compiler objects
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            out/cache/build
+            out/cache/iso
+            out/sources
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
       - name: Size and split
         id: size
@@ -137,12 +166,12 @@ jobs:
           retention-days: 14
 
       - name: Boot test in QEMU (UEFI, Try mode)
-        if: ${{ github.event_name == 'push' || inputs.boot_test }}
-        continue-on-error: true
+        if: ${{ github.event_name == 'push' || inputs.release || inputs.boot_test }}
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; kvm=--kvm; timeout=420; else kvm=; timeout=900; fi
           tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode try --timeout "$timeout" --interval 30 $kvm
           tools/test-iso.sh --iso "out/iso/$ISO" --firmware bios --mode install --timeout "$timeout" --interval 30 $kvm
+          tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode safe --timeout "$timeout" --interval 30 $kvm
 
       - name: Nix enforcing VM acceptance
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.nix_acceptance }}
@@ -170,14 +199,54 @@ jobs:
             !out/test/nix/*.iso
             !out/test/nix/*.sock
 
+      - name: Paired KVM performance acceptance
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.performance_acceptance }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test '${{ inputs.release }}' = false
+          test -s "out/iso/$ISO"
+          test -c /dev/kvm
+          baseline=/mnt/arctic/baseline
+          mkdir -p "$baseline"
+          gh release download v1.2.0 --repo yuvalkolodkingal/Arctic-Linux --dir "$baseline" \
+            --pattern 'Arctic-Linux-1.2-x86_64.iso.part00' --pattern 'Arctic-Linux-1.2-x86_64.iso.part01'
+          cat "$baseline/Arctic-Linux-1.2-x86_64.iso.part00" "$baseline/Arctic-Linux-1.2-x86_64.iso.part01" \
+            > "$baseline/Arctic-Linux-1.2-x86_64.iso"
+          rm "$baseline/Arctic-Linux-1.2-x86_64.iso.part00" "$baseline/Arctic-Linux-1.2-x86_64.iso.part01"
+          timeout --signal=TERM --kill-after=60s 120m python3 tools/performance/run-paired.py \
+            --baseline "$baseline/Arctic-Linux-1.2-x86_64.iso" --candidate "out/iso/$ISO" --out "$PWD/out/test/performance"
+
+      - name: Upload paired performance evidence
+        if: ${{ always() && inputs.performance_acceptance }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: paired-performance
+          retention-days: 14
+          path: |
+            out/test/performance/
+            !out/test/performance/**/*.qcow2
+            !out/test/performance/**/*.iso
+            !out/test/performance/**/*.sock
+
       - name: Upload screenshots
-        if: ${{ always() && (github.event_name == 'push' || inputs.boot_test) }}
+        if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
         uses: actions/upload-artifact@v4
         with:
           name: boot-test
-          path: out/test/
+          path: |
+            out/test/
+            !out/test/**/*.qcow2
+            !out/test/**/*.iso
+            !out/test/**/*.sock
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Required optimized ISO size
+        run: |
+          bytes=$(stat -c %s "out/iso/$ISO")
+          echo "Required: strictly below 2000000000 decimal bytes; preferred: below 1600000000. Actual: $bytes"
+          test "$bytes" -lt 2000000000
 
       - name: Publish release
         if: ${{ github.event_name == 'push' || inputs.release }}

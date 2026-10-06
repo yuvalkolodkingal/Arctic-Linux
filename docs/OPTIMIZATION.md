@@ -2,11 +2,11 @@
 
 Work is local on `codex/optimize-preserve-functionality`, based on main
 `f1e3c518ae6a1d8d0fd85dcf117baa8341701703` (includes PR 18's lock-clock fix).
-No main merge, tags, package repository publication, or public release is authorized.
+The user now authorizes the combined draft PR, exact-head Actions candidate and merge after all gates pass. Existing v1.2.0 tags/assets remain immutable; no stable ISO replacement has been performed.
 The approved wallpaper merge on main `cdf4960f567842e853b6b3503c542d739ff215f7`
 has been reconciled locally and is included in the combined candidate.
 
-The target is **1,500,000,000 bytes**, decimal 1.5 GB, approximately 1.397 GiB.
+The current firm ceiling is **strictly below 2,000,000,000 bytes**, decimal 2 GB, approximately 1.863 GiB. The preference is **strictly below 1,600,000,000 bytes**, decimal 1.6 GB, approximately 1.490 GiB. The original 1.5 GB request in historical trials is superseded.
 GB means 1,000,000,000 bytes; GiB means 1,073,741,824 bytes. This is a target,
 not permission to remove functionality or move offline features to network downloads.
 Priority order: stability and feature parity, responsive desktop and low memory,
@@ -21,7 +21,7 @@ The public v1.2.0 ISO has been downloaded and independently verified:
 |---|---:|
 | ISO bytes | 2,322,073,600 |
 | SHA-256 | `054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f` |
-| Reduction needed for target | 822,073,600 bytes (35.40%) |
+| Reduction needed for current firm ceiling | At least 322,073,601 bytes (13.87%) |
 | EROFS payload | 1,990,950,912 bytes |
 | Live initrd | 241,962,859 bytes |
 | ISO kernel | 19,011,944 bytes |
@@ -60,7 +60,7 @@ The combined candidate, built after incorporating the approved wallpaper work, i
 **2,321,909,760 bytes**, SHA-256
 `f0635b87a05de6bc89b1aa9dbcd0a76db8503a691b28a18552e31a41d6b5a7ef`.
 This is only **163,840 bytes (0.0071%) smaller** than v1.2 and **821,909,760 bytes
-over the target**. It is not a meaningful size optimization or a qualified stable
+over the original 1.5 GB target** (the current firm ceiling still requires at least 321,909,761 bytes of reduction). It is not a meaningful size optimization or a qualified stable
 release. Its source RPM commit is `244e4dddbe3d08b1446e30d5ac813da4a8c1422d`,
 with `.preview.202610052010.git244e4dd` releases that sort below normal stable
 releases. The EROFS payload is 1,990,148,096 bytes and the initrd remains
@@ -522,3 +522,127 @@ performance controller restored the pre-online candidate and is running six
 interleaved original/candidate boots. Read-only inspection of the saved updated
 state will follow that quiet sequence without restaging or key imports. No
 performance improvement or full Nix/Safe/update qualification is claimed.
+
+## Expanded download/build/runtime execution, 6 October
+
+The user's clarification expands this task to download, build, software and OS performance, with all functionality, security and stability preserved. A minimal network installer is outside scope. The latest firm<2GB/preferred<1.6GB thresholds replace the earlier1.5GB target. Branch pushes, the combined draft PR and exact-head candidate Actions runs are now authorized; merge remains conditional on actual gates passing.
+
+All six sequential 2-vCPU/4096-MiB TCG runs finished with harness exit 0 and complete observer records. Original and candidate checksums were reverified after the queue. The three-boot medians below retain all runs; the detailed ranges and paired differences are in `out/audit/candidate/performance-comparison.json/.csv/.md`, with graphical-target context in `performance-context.json`.
+
+| Observation | Original | Candidate | Interpretation |
+|---|---:|---:|---|
+| Kernel+initrd+graphical target | 100.211 s | 101.487 s | No demonstrated boot gain |
+| Process PSS | 1,001,745,408 B | 1,016,568,320 B | +1.48%; no RAM saving demonstrated |
+| Private process allocation | 831,877,120 B | 845,547,520 B | +1.64% |
+| Idle sampled CPU | 1.970% | 1.485% | Ranges overlap; baseline boot 2 had 6.292%; no causal gain claim |
+| Fish launch | 0.333 s | 0.342 s | Ranges overlap |
+| Shell IPC command round trip | 0.475 s | 0.509 s | Ranges overlap |
+| Kitty first mapped window after preconditioning | 2.630 s | 3.183 s | +21.03%; investigate gate OPEN |
+| Kitty subsequent mapped windows | 3.243 s | 3.685 s | +13.64%; investigate gate OPEN |
+| Nautilus first mapped window | 16.947 s | 17.902 s | Ranges overlap |
+| Zen first mapped window | 29.794 s | 28.824 s | Ranges overlap |
+
+Kitty's three-boot ranges do not overlap. Its RPM version and fish's RPM version are identical in both images. The full comparison includes approved clock/wallpaper work, Mango rebuilds and normal Fedora updates, so it cannot isolate the catalog fix as the cause. Read-only inspection of both inactive benchmark disks confirms the same shell settings (`{"frame": true}`) and no personal Arctic Nix-profile link in the measured state; later update-acceptance customizations were on a different saved state. The observer includes its own allocation/CPU cost, uses identical 45-second mapped-window preconditioning, and measures mapped windows rather than full paint/readiness. TCG timings cannot establish physical or gaming performance. This candidate does not pass the overall performance acceptance gate.
+
+The saved `candidate-after-update-attempt` snapshot was converted without altering the source and inspected through read-only libguestfs/LUKS/Btrfs mounts, without another installed-OS boot or key import. All 17 Arctic package names are retained and their versions changed from preview to the signed stable CDF build. Actual positive DNF history index 1 selects boot `5b2deaecd84b4b62bb357c7c4218977c`, whose journal records `Transaction complete! Cleaning up and rebooting...`. The offline trigger is absent and the exact personal profile target is retained. These corrected version/history checks supplement the ten already passed default postboot checks; the original wrapper exit 1 and negative-index failure remain archived. The cached on-disk status file still says ready until the next privileged staging check, as documented by the updater; the default postboot status API asserted idle/unarmed/unstored before the late history-selector failure. A fresh persisted `installed_at` is not claimed. Full Nix-search and Safe-graphics portal qualification remain open.
+
+The actual updated `AppsService.qml` hashes to `32dad68507ae29e2e6eec74251cbeb609fae206c57b9f53573da5bd9bad079b8`, matching current public CDF rather than the candidate's `3d5c34c6a79fd5c24c1f733792ef56816089f38678a187337a13f2964c92116e`. Normal stable updates therefore replace this unpublished optimization. Persistence requires an approved merge and signed optimized-package publication; raising preview versions or disabling updates is not an acceptable workaround.
+
+The download/build audit found repeated work outside the shipped image: the RPM container had no persistent DNF package cache, and the spec placed GOCACHE inside each disposable build tree. KIWI's installed DNF5 implementation already uses `system_cachedir` and `keepcache=1`; its `/var/cache/kiwi` cache was only persistent when callers supplied `--cache`, and the ISO workflow did not. This is a missing persistent mount/default, not a KIWI DNF option bug. HTTP and HTTPS build proxy choices also need independent propagation; adding an explicit caller's HTTP proxy avoids the observed HTTP-mirror failure without changing user networking or TLS verification.
+
+The local implementation now provides build-only DNF/Go caches with `--no-cache` rollback. Go reuse is fenced by immutable builder-image identity and native RPM inventory because Go does not automatically detect C-library changes. Go still validates sources, compiler and flags. RPM assembly, native-library dependency resolution, `%check`, payload conflict checks and signing behavior continue to execute. Cache misses and metadata expiry use normal signed repository downloads; no `--cacheonly`, signature bypass or stale metadata policy is introduced. Dedicated cache directories are never installed into the ISO. One full cold/warm pair completed: 253.598 → 229.746 seconds (9.405% lower elapsed time), with all checks passing and identical emitted payload digests. DNF reported 27 + 219 MiB of inbound RPM payload downloads on cold versus 0 B on warm; 227 cached package records were reused. The compiler/native inventory key was identical. Only docs/OPTIMIZATION.md changed between source archives; compiled inputs and emitted payloads were identical. The dedicated cache allocated 583,417,856 bytes. This is one pair, without a confidence interval, and source tarballs were already cached in both. CI restoration/save is now implemented with per-branch/tag cache isolation; its archive/upload overhead and end-to-end gain remain unmeasured. The local KIWI repository cache is invalidated each prepare to prevent an older cached preview RPM from replacing the current build.
+
+The latest size instruction supersedes the previous target: **strictly fewer than 2,000,000,000 decimal bytes**, preferably **strictly fewer than 1,600,000,000 bytes**. The maximum accepted integer sizes are therefore 1,999,999,999 and 1,599,999,999 bytes. The current candidate needs at least 321,909,761 bytes of further reduction for the firm ceiling. Neither threshold is achieved. Battery-indicator repair is now included. The user explicitly authorized publishing the combined branch/draft PR, candidate Actions artifacts and a merge after all actual checks pass; existing v1.2.0 assets remain immutable and the combined merge remains blocked by unresolved gates.
+
+
+## Battery fix and current independent review
+
+The generic battery artwork used a fixed 9-unit fill in a 12.4-unit interior,
+about 72.6%, even when the real charge was 100%. Charging had no live level. The
+new optional Icon battery percentage preserves the outline and bolt, fills the
+usable interior at 100%, keeps a charge-limited 80% at 80%, and displays unknown
+readings explicitly. Quickshell 0.2.1 exposes charge as a fraction; health remains
+in its original 0..100 units. UPower's weighted display-device aggregate is
+preserved. No charge-limit, hardware, power, network or security policy changes
+are involved.
+
+All three exact-source DPI runs (1×/1.5×/2×) pass 14 private-UPower mapping/state
+cases and 73 render cases each: 219 rendered cases total, including three
+negative controls that reproduce the old partial fill. Actual horizontal/vertical
+widgets, charging contrast, accessible text, near-full rounding, charge limits,
+unknown values, hot removal/reinsertion and multiple-battery aggregation are
+covered. Root independently reviewed the battery source, fixture, matching
+source hashes and rendered evidence. These are fixture tests, not physical
+laptop or whole-ISO qualification. Raw results and preserved observer failures
+are in `out/audit/battery/`; CI now runs the same three scales.
+
+Independent pipeline review found and corrected a mutable builder-tag race.
+Both builders now execute the immutable image ID they recorded, with Docker
+and Podman forms covered by real host-orchestration tests. The review also
+identified a preexisting KIWI gap: remote Fedora RPM signature checking was
+disabled in the previous image build. New descriptions explicitly enable
+`package_gpgcheck` for Fedora and updates, with their existing distribution keys;
+the local unsigned build repository remains the scoped exception. Exact KIWI
+11.0.2 source confirms key import before bootstrap and system installs and the
+attribute-to-DNF `gpgcheck=1` path. Actual new-image signature validation remains
+a gate; the earlier candidate is not retroactively claimed to have had those
+checks. See the [KIWI repository schema](https://osinside.github.io/kiwi/image_description/elements.html#repository).
+
+The Actions candidate workflow has an explicit paired KVM acceptance option:
+one immutable test-only QEMU/firmware toolchain, two fresh restricted-network encrypted installs, followed by three interleaved
+boots of each image at 2 vCPUs/4096 MiB. It verifies the original v1.2 bytes and
+SHA256, freezes one observer, uses identical 45-second mapped-app preparation,
+retains terminal failures, verifies candidate catalog/RPM source, and reports
+all per-boot values and ranges. Gates reject incomplete/inconsistent evidence,
+more than 5% median PSS/private-RAM growth or more than 10% median boot/app/CLI
+regression. Passing means no measured regression under this protocol, not a
+substantial speedup, cold-app gain or physical gaming result. The existing TCG
+Kitty regression remains open until actual new evidence resolves it.
+
+Release requests now always run boot checks; opting out is limited to artifact
+builds. Oversized artifacts remain downloadable for review, but the strict
+2,000,000,000-byte gate fails the job before publication. VM disk/data images
+are excluded from screenshot/performance artifacts. No stable ISO asset has
+been replaced, and combined merge remains pending all gates.
+
+
+The completed full-root SquashFS trial (XZ, 1 MiB blocks, x86 BCJ, three workers,
+default duplicate-file elimination) produced **2,000,814,080 bytes**, compared
+with the original EROFS root's **1,990,950,912 bytes**: **9,863,168 bytes larger**.
+Encoder elapsed time was **697.76 s**, user CPU **2,344.22 s**, system CPU **5.51 s**,
+peak RSS **808,444 KiB**. Image SHA256 is
+`790233f13d15b927a6de914866805c550c2f34e0185ed1470f101b068efe11be`.
+The same original root's file contents and 24,274 additional hardlinks were used.
+The first ACL-preserving extraction failed because the cloud tmpfs does not
+support a POSIX default ACL; that failure is preserved. A fresh normalized
+extraction without xattrs completed successfully. This is a size experiment,
+not a production image/security qualification. No files were deleted from the
+source and the trial is not adopted. Replacing only the original root extent
+would project 2,331,936,768 bytes; that is a projection, not an ISO artifact.
+Raw commands, tool help, failure logs and timing are in
+`out/audit/candidate/squashfs-trial/`. Existing EROFS LZMA 6 / 1 MiB remains the
+smallest completed full-feature root profile tested. These trials do not prove
+a mathematical lower bound; they have not established a feature-preserving way
+to meet the firm 2 GB ceiling.
+
+The KVM observer now samples mapping with 10 ms sleeps and records each
+observation's lower/upper timing bounds including IPC cost. Its root-only
+`du -x` allocation is labeled explicitly; separate persistent mounted-tree
+allocations and Btrfs physical usage are recorded separately. Exact 5%/10%
+threshold controls pass, just-over controls fail, and invalid/NaN measurements
+fail closed. Timeout/interruption records are preserved; the controller manages
+process groups and removes only uniquely named task containers before archiving.
+Every VM stage verifies the same QEMU/package/OVMF/SeaBIOS inventory. Actual
+KVM/CI results remain pending, and none of these tooling changes clear the
+existing runtime regression by themselves.
+
+
+A cache-corruption control changed one byte in a private copied Fedora RPM.
+RPM reported bad payload digests and DNF refused that target with cache-only
+mode. The original RPM validated. A normal DNF reinstall then re-downloaded
+94.4 KiB, verified it and restored the exact original SHA256. The first
+cache-only positive attempt lacked other dependencies in this minimal helper;
+that observer limitation is preserved, and the subsequent normal dependency
+and poisoned-cache recovery runs passed. The production cache was unchanged.
+Cache-only is used solely by this control, never by the production builders.
+Evidence: `out/audit/candidate/cache-corruption-control/`.
