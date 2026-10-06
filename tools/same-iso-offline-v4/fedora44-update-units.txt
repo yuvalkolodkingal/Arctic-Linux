@@ -1,0 +1,38 @@
+dnf5-5.4.6.0-1.fc44.x86_64
+systemd-259.9-1.fc44.x86_64
+[Unit]
+Description=Offline upgrades/transactions using DNF 5
+Documentation=https://www.freedesktop.org/wiki/Software/systemd/SystemUpdates
+
+DefaultDependencies=no
+Requires=sysinit.target dbus.socket
+After=sysinit.target systemd-journald.socket system-update-pre.target
+Before=poweroff.target reboot.target shutdown.target system-update.target
+OnFailure=dnf5-offline-transaction-cleanup.service
+
+[Service]
+# We are done when the script exits, not before
+Type=oneshot
+# Upgrade output goes to journal and on-screen.
+StandardOutput=journal+console
+ExecStart=/usr/bin/dnf5 offline _execute
+
+[Install]
+WantedBy=system-update.target
+#  SPDX-License-Identifier: LGPL-2.1-or-later
+#
+#  This file is part of systemd.
+#
+#  systemd is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 2.1 of the License, or
+#  (at your option) any later version.
+
+[Unit]
+Description=Offline System Update
+Documentation=man:systemd.offline-updates(7)
+Documentation=man:systemd.special(7) man:systemd-system-update-generator(8)
+Requires=sysinit.target
+After=sysinit.target system-update-pre.target
+AllowIsolate=yes
+Wants=system-update-cleanup.service

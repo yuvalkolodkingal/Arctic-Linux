@@ -1,0 +1,115 @@
+{
+  "actual_branch_created": false,
+  "diagnosis": "Harness phase mismatch supported; actual failed update completion and guest reset cause remain unknown",
+  "dispatched": false,
+  "exact_old_stable_scope": "2d5ac68847a5feb541177aeaa5a9a00d5ad44815 compatibility only; future canonical new stable not qualified",
+  "execution_manifest_sha256": "edc699e148b51c16e88621efd3420369eede648e0ab0001a9f58bbc2e6bb457d",
+  "files": {
+    "README-v1.md": {
+      "bytes": 4918,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/README-v1.md",
+      "sha256": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f"
+    },
+    "README-v4.md": {
+      "bytes": 8646,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/README-v4.md",
+      "sha256": "f9e813fe1ae703a27335604115f0c00e54d9f38439361c1b71fb6562fa24937a"
+    },
+    "controls-v4.log": {
+      "bytes": 2822,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/controls-v4.log",
+      "sha256": "00036c4f9494d4bdc339d21cac20c8474d9c3091fc07bd5a8afc246de9475ea2"
+    },
+    "diagnosis-v4.json": {
+      "bytes": 5181,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/diagnosis-v4.json",
+      "sha256": "e280243b030ac1c32498dc84d55b0b137ec77f993fc7737ad9a37aa345aa6f3a"
+    },
+    "dnf5-5.4.6.0-offline.cpp": {
+      "bytes": 31664,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/dnf5-5.4.6.0-offline.cpp",
+      "sha256": "781dcdf984c0bfdb4dc6048e22e0f473b1da6b14332a5c0437b1199f1ed10726"
+    },
+    "execution-pins-v4.json": {
+      "bytes": 1990,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/execution-pins-v4.json",
+      "sha256": "edc699e148b51c16e88621efd3420369eede648e0ab0001a9f58bbc2e6bb457d"
+    },
+    "fedora44-update-units.txt": {
+      "bytes": 1307,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/fedora44-update-units.txt",
+      "sha256": "639b5822205d6e8c22a3427f217a7feba5e3931c1934a6bbea52f6c9aab033c4"
+    },
+    "guest-check-offline-v1.py": {
+      "bytes": 65115,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/guest-check-offline-v1.py",
+      "sha256": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576"
+    },
+    "independent-review-v1.json": {
+      "bytes": 8432,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/independent-review-v1.json",
+      "sha256": "4e513bc75ae82eff7367d711b7f7a71a032eb50ee8ecb1caa5c2d0700fdf23fa"
+    },
+    "offline-only-recovery-v4.py": {
+      "bytes": 16838,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/offline-only-recovery-v4.py",
+      "sha256": "b789f6b8b983b04db5d80412e3e4cde7c8e42dd036618acaaaae6d6b81b02df9"
+    },
+    "offline-update-cycle-v4.py": {
+      "bytes": 8767,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/offline-update-cycle-v4.py",
+      "sha256": "5e7b09e1e26367ec412283ca3c6434f9d681dddd599cf08c9f9f12010ede639b"
+    },
+    "registered-iso-offline-cycle-v4.yml": {
+      "bytes": 26657,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/registered-iso-offline-cycle-v4.yml",
+      "sha256": "c941527c3e19b8f3d2c94ce4cf079966203156dc7c6c782025488374a10f7d60"
+    },
+    "review-ready-v1.json": {
+      "bytes": 6022,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/review-ready-v1.json",
+      "sha256": "0120117d1a0eedea033bfe9d239151ee0461c2f58efa2dc060141d2454554692"
+    },
+    "test_offline_cycle_v4.py": {
+      "bytes": 17587,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/test_offline_cycle_v4.py",
+      "sha256": "a2ba6fc4befc946a6584ad81f8e68e1431f14b090bbe21f3427229c2604b0aa0"
+    },
+    "validation-v4.json": {
+      "bytes": 796,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/validation-v4.json",
+      "sha256": "280b13460b21a5052bac5484024adf5bba36f6d40cbc292043660f4bbcbf2aac"
+    },
+    "vm-only-recovery-v2.py": {
+      "bytes": 21301,
+      "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/vm-only-recovery-v2.py",
+      "sha256": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+    }
+  },
+  "independent_review_required": true,
+  "new_stable_bundle_unchanged_sha256": "03d8b77fafb08839421bd02115a5d622d0ee581f1686161843f1351a6d3063fe",
+  "original_results_unchanged": true,
+  "owner_controls": {
+    "actual_VM": false,
+    "commands_intercepted": true,
+    "result": "PASS",
+    "tests": 17
+  },
+  "proposed_execution_branch": "test/offline-cycle-same-iso-37507582946-v4",
+  "pushed": false,
+  "remaining": [
+    "Independent exact-v4 source/control review",
+    "Explicit authorized separate-branch deployment/dispatch",
+    "Actual same-ISO three-phase KVM qualification with retained disk and raw completion/history evidence"
+  ],
+  "required_phases": [
+    "fresh-install-and-first-pass-signed-staging",
+    "bounded-restricted-network-offline-cycle-observation",
+    "mandatory-third-default-boot-completion-history-Nix-browser-AVC"
+  ],
+  "schema": 4,
+  "source_head": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "status": "FROZEN_AUDIT_ONLY_OFFLINE_V4_READY_FOR_INDEPENDENT_REVIEW",
+  "tracked_status": "",
+  "vm_run": false
+}

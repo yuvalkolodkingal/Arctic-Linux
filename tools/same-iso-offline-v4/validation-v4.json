@@ -1,0 +1,20 @@
+{
+  "actual_new_v4_three_phase_qualification": "UNRUN",
+  "actual_update_completion_of_failed_run": "UNKNOWN",
+  "all_owner_controls_passed": true,
+  "execution_file_count": 12,
+  "failed_runs_not_reclassified": [
+    37507582946,
+    37520174911
+  ],
+  "frozen_checker_sha256": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576",
+  "frozen_primitive_module_sha256": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633",
+  "independent_review": "PENDING; no independent-review-v4.json fabricated",
+  "owner_control_tests": 17,
+  "production_monkeypatch": false,
+  "source_changes_by_this_task": false,
+  "status": "SOURCE_AND_OWNER_HOST_CONTROLS_PASS_VM_UNRUN",
+  "vm_started": false,
+  "workflow_dispatched": false,
+  "yaml_syntax_and_four_job_gates_valid": true
+}

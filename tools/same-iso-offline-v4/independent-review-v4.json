@@ -1,0 +1,117 @@
+{
+  "acceptance_limit": "Source and bounded controls only. Expected shutdown is not update success, and original37520174911 failure remains recorded.",
+  "actual_failed_run": 37520174911,
+  "all_controls_passed": true,
+  "blocking_source_findings": [],
+  "candidate_iso": {
+    "bytes": 1880244224,
+    "iso_rehashed_by_this_reviewer": false,
+    "meaning": "Identity verified by the reviewed future byte/metadata gates and saved actual execution proof; no new ISO access/build/download in this review",
+    "run": 37507582946,
+    "sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718"
+  },
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "canonical_new_stable_qualification": false,
+  "controls": {
+    "actual_failure_diagnosis": {
+      "bytes": 3669,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/actual-evidence.json",
+      "sha256": "fe673f3f69ec394f60d2757e11da3122c4a573f8493340b7c8dd09bf4b55ef93"
+    },
+    "final_author_v4": {
+      "log": {
+        "bytes": 2822,
+        "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/final-author-controls.log",
+        "sha256": "78092102e8acba844e7d8c796b64f93b9de604b9a2805405960a52f7a3a06075"
+      },
+      "resource_warning_as_error": true,
+      "result": "PASS",
+      "tests": 17
+    },
+    "frozen_v1": {
+      "log": {
+        "bytes": 3579,
+        "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/frozen-v1-controls.log",
+        "sha256": "7c9e166bffda75bc208d8ec72d60aeea0d6fabd469b584f7ce28a8a7931c960c"
+      },
+      "result": "PASS",
+      "tests": 20
+    },
+    "independent_v4": {
+      "log": {
+        "bytes": 1372,
+        "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/final-independent-controls.log",
+        "sha256": "61f39b85ebf575753962b4feed87f6d3a1ae051e022917e50d29bf8b36a88e3f"
+      },
+      "meaning": "Actual saved first/failure log fixtures; guest event/path/network negatives; tiny synthetic deployment tests reject unreviewed/wrong review binding, missing/wrong layout/schema/branch/source, changed checker and dirty checkout. All Git/process/VM routes mocked where applicable.",
+      "resource_warning_as_error": true,
+      "result": "PASS",
+      "script": {
+        "bytes": 8163,
+        "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/independent-bounded-controls.py",
+        "sha256": "e4cc3844e9c4e01ee6a75f4fc505792f70e0e39801c6cfcb725ca47e7fa64c7f"
+      },
+      "tests": 9
+    },
+    "source_integrity": {
+      "bytes": 1780,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/final-source-integrity.json",
+      "sha256": "276ddd8213fd6b5382c14c6708306ce9c2b676f08cf46a21312f43d12a44a867"
+    }
+  },
+  "deployment_branch": "test/offline-cycle-same-iso-37507582946-v4",
+  "exact_old_stable_scope": "2d5ac68847a5feb541177aeaa5a9a00d5ad44815 compatibility only",
+  "execution_manifest": {
+    "bytes": 1990,
+    "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/execution-pins-v4.json",
+    "sha256": "edc699e148b51c16e88621efd3420369eede648e0ab0001a9f58bbc2e6bb457d"
+  },
+  "execution_manifest_sha256": "edc699e148b51c16e88621efd3420369eede648e0ab0001a9f58bbc2e6bb457d",
+  "method": "arctic-offline",
+  "no_artifact_download": true,
+  "no_ci_or_api_call": true,
+  "no_iso_build_or_mutation": true,
+  "no_push_dispatch_merge_or_publication": true,
+  "no_tracked_or_frozen_file_edit": true,
+  "no_vm_run": true,
+  "original_outcomes_unchanged": true,
+  "recorded_at_utc": "2026-10-06T20:25:07.892895+00:00",
+  "remaining_blockers": [
+    "Future deployment/dispatch requires separate explicit parent authorization and exact reviewed files/review on the clean proposed branch.",
+    "Actual same-ISO three-phase KVM qualification remains UNRUN; no successful offline history/completion proof exists for the failed run.",
+    "This old-stable compatibility recovery does not qualify future canonical optimized-stable migration, all browser/app configurations, physical hardware/gaming or performance."
+  ],
+  "resolved_review_findings": [
+    {
+      "finding": "Live evidence accepted any nonempty all-passed row list",
+      "resolution": "Required exact mandatory 11-name subset and duplicate rejection; verified negative fixtures with zero exit."
+    },
+    {
+      "finding": "First VM followed up to20-minute provisioning after ISO verification",
+      "resolution": "Actual ISO and metadata rehash added after provisioning; injected recheck failure stops before any first VM."
+    },
+    {
+      "finding": "Both recovery flags could skip every job",
+      "resolution": "Explicit offline flag always routes v4 job; combined mode is rejected by preflight before artifact/VM."
+    }
+  ],
+  "review_ready": {
+    "bytes": 5447,
+    "path": "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/review-ready-v4.json",
+    "sha256": "a33a7483cbb65792ac856c222712f6957a4fed631f6bf2b32446345667ea46f7"
+  },
+  "reviewed_behavior": [
+    "Fresh byte-verified fixed ISO and immutable candidate harness source; reviewed execution checkout is separate, exact and clean.",
+    "All 11 required live gates, complete first candidate Nix/browser/trust/AVC/signed staging checks and unique zero exit are required; actual ISO is rehashed after provisioning immediately before the first VM.",
+    "Separate KVM update-cycle VM uses only owned disk/vars and unused evidence; Docker network none plus QEMU restrict=on, readonly helper mounts, observed menu/LUKS, no blind login/guest-command fallback.",
+    "Cycle exit requires zero exit plus one guest-reset/guest-shutdown QMP event and rejects missing/duplicate/host/error/panic/watchdog/timeout/unlock failures; it records third-boot-required, never update completion.",
+    "Mandatory third default boot uses byte-identical v1 checker and requires real offline history, exact stable opener/RPM provenance, idle/unarmed/unstored/no-error status, distinct boot, Nix/browser/persistence/security gates.",
+    "Each phase preserves separate hashed evidence; any phase exception/failure blocks final acceptance. Cleanup targets unique owned containers and newly prepared image only.",
+    "Workflow defaults retain original build inputs/steps; explicit offline flag prevents builds/releases/other recovery jobs. Combined mode reaches and fails preflight. Recovery permissions are read-only."
+  ],
+  "reviewer_task": "/root/combined_image_measure",
+  "schema": 4,
+  "status": "SOURCE_AND_HOST_CONTROLS_PASS_VM_UNRUN",
+  "tracked_head_at_review": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "tracked_status_at_review": ""
+}

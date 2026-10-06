@@ -1,0 +1,22 @@
+test_cycle_argv_is_kvm_restricted_network_no_cd_or_security_bypass (__main__.CycleControls.test_cycle_argv_is_kvm_restricted_network_no_cd_or_security_bypass) ... ok
+test_event_capture_subclass_preserves_original_class_and_actual_event_stream (__main__.CycleControls.test_event_capture_subclass_preserves_original_class_and_actual_event_stream) ... ok
+test_exit_before_unlock_timeout_nonzero_and_boolean_exit_fail (__main__.CycleControls.test_exit_before_unlock_timeout_nonzero_and_boolean_exit_fail) ... ok
+test_guest_reset_or_shutdown_only_requires_third_boot (__main__.CycleControls.test_guest_reset_or_shutdown_only_requires_third_boot) ... ok
+test_observation_requires_menu_and_luks_never_blind_types_login (__main__.CycleControls.test_observation_requires_menu_and_luks_never_blind_types_login) ... ok
+test_only_exact_fresh_disposable_unlinked_paths_allowed (__main__.CycleControls.test_only_exact_fresh_disposable_unlinked_paths_allowed) ... ok
+test_qmp_exception_is_not_expected_guest_cycle_success (__main__.CycleControls.test_qmp_exception_is_not_expected_guest_cycle_success) ... ok
+test_zero_exit_without_shutdown_host_error_panic_watchdog_duplicate_fail (__main__.CycleControls.test_zero_exit_without_shutdown_host_error_panic_watchdog_duplicate_fail) ... ok
+test_actual_cycle_log_argv_and_raw_events_must_match (__main__.DriverControls.test_actual_cycle_log_argv_and_raw_events_must_match) ... ok
+test_actual_preserved_first_pass_is_valid_but_no_third_boot_claim (__main__.DriverControls.test_actual_preserved_first_pass_is_valid_but_no_third_boot_claim) ... ok
+test_all_three_phases_and_first_cycle_third_failures_stop_qualification (__main__.DriverControls.test_all_three_phases_and_first_cycle_third_failures_stop_qualification) ... ok
+test_both_original_jobs_and_build_skip_selected_offline_cycle (__main__.DriverControls.test_both_original_jobs_and_build_skip_selected_offline_cycle) ... ok
+test_cycle_container_is_network_none_and_only_owned_rw_disk_mount (__main__.DriverControls.test_cycle_container_is_network_none_and_only_owned_rw_disk_mount) ... ok
+test_exclusive_offline_branch_and_release_mode_fail_closed (__main__.DriverControls.test_exclusive_offline_branch_and_release_mode_fail_closed) ... ok
+test_iso_recheck_failure_after_provisioning_never_starts_first_vm (__main__.DriverControls.test_iso_recheck_failure_after_provisioning_never_starts_first_vm) ... ok
+test_missing_or_duplicate_live_gates_and_failed_staging_reject_zero_exit (__main__.DriverControls.test_missing_or_duplicate_live_gates_and_failed_staging_reject_zero_exit) ... ok
+test_original_primitives_and_frozen_checker_bytes_unchanged (__main__.DriverControls.test_original_primitives_and_frozen_checker_bytes_unchanged) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.046s
+
+OK

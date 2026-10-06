@@ -1,0 +1,8 @@
+{
+  "existing_execution_authorization": "Parentauthorizessourcebranchpush/artifact-onlyCIandrecoverabletestfixes/actualsame-imagequalifications; no extra approvalneededfor reviewedv4 testonly sameISOrecovery",
+  "oldstable_scope_only": true,
+  "new_iso_builds": 0,
+  "new_performance_runs": 0,
+  "publications": false,
+  "candidate_or_active_branches_changed": false
+}

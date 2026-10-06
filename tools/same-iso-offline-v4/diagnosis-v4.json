@@ -1,0 +1,109 @@
+{
+  "failed_run": 37520174911,
+  "inputs": {
+    "dotfiles/.local/bin/arctic-update": {
+      "bytes": 42157,
+      "sha256": "5128d4bea4e9f242a5cad123ccdb2ef9de71fa6331798a9a842119b0cde350c9"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/dnf5-5.4.6.0-offline.cpp": {
+      "bytes": 31664,
+      "sha256": "781dcdf984c0bfdb4dc6048e22e0f473b1da6b14332a5c0437b1199f1ed10726"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v4/fedora44-update-units.txt": {
+      "bytes": 1307,
+      "sha256": "639b5822205d6e8c22a3427f217a7feba5e3931c1934a6bbea52f6c9aab033c4"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/results-37520174911/arctic-offline/after-update-reboot-harness.log": {
+      "bytes": 20615,
+      "sha256": "aac354128de18f6259b9a87ff49f2316233ebc1d22b0ebab86959ec05bf18f9b"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/results-37520174911/arctic-offline/after-update-reboot/qemu-boot.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/results-37520174911/arctic-offline/after-update-reboot/serial-boot.log": {
+      "bytes": 380,
+      "sha256": "80e3439ccf6e489788bc2c530c3a62c3d075cf7940f096dbf7704442e5ea1d07"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/results-37520174911/arctic-offline/after-update-reboot/test.log": {
+      "bytes": 1232,
+      "sha256": "9ecbf46e059cda2a1aeadab7d05c4c897695cf2d99b2b684f3953c272aa292d0"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/results-37520174911/arctic-offline/blocked-run.json": {
+      "bytes": 295,
+      "sha256": "ebd5d9768d6bf3f6aabfd461ffe968daa5c22d4ee32c7a2bab0c946806d37fca"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/results-37520174911/arctic-offline/execution.json": {
+      "bytes": 8781,
+      "sha256": "3bc604301a171a627cf685742455200406eb6e4a5d7cfa73f589f57855160c22"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/results-37520174911/arctic-offline/first-boot/serial-boot.log": {
+      "bytes": 119241,
+      "sha256": "e02d56464396374a5955afb640f820fab2a4e62aadb58d770912bf95c78ee56e"
+    },
+    "packaging/updates/arctic-update-helper": {
+      "bytes": 36978,
+      "sha256": "6af8dac6d848c64cae0c67dcc74da18dc53644bbb13ac463d5e953dd0cc80fab"
+    },
+    "tools/test-install.sh": {
+      "bytes": 40157,
+      "sha256": "a3a0a11d41d184bec817d98b90a96d87309d253882d3113e6a32c1ab48d5008e"
+    }
+  },
+  "interpretation": "Normal offline update requires a dedicated cycle boot and a subsequent normal boot. This fits the observed pre-SDDM exit but does not prove that the actual failed run completed or why QEMU exited. Harness-tail powerdown lines are replayed prior serial-install.log, not update-boot proof.",
+  "method": "arctic-offline",
+  "new_stable_canonical_qualification": false,
+  "no_dispatch": true,
+  "no_production_edits": true,
+  "no_vm_run": true,
+  "observed": {
+    "actual_completed_history_captured": false,
+    "broken_pipe_at_seconds": 36,
+    "first_installed_records": 44,
+    "first_installed_statuses": {
+      "passed": 43,
+      "unrun": 1
+    },
+    "qemu_boot_stderr_bytes": 0,
+    "staged_status": {
+      "apps": null,
+      "armed": true,
+      "auto": "download-and-install-on-reboot",
+      "boot_failures": 0,
+      "channel": "stable",
+      "check_error": "",
+      "checked_at": "2026-10-06T20:05:49+00:00",
+      "download_mb": 43.6,
+      "held": null,
+      "install_error": "",
+      "install_failed_at": null,
+      "message": "73 updates will be installed the next time you restart.",
+      "metered": "skip",
+      "packages": 73,
+      "staged_at": "2026-10-06T20:05:49+00:00",
+      "state": "ready",
+      "stored": true
+    },
+    "staging_and_signature_gate": "passed",
+    "update_boot_exit_code_captured": false,
+    "update_boot_qmp_shutdown_reason_captured": false,
+    "update_boot_serial_bytes": 380
+  },
+  "official_sources": [
+    "https://raw.githubusercontent.com/rpm-software-management/dnf5/5.4.6.0/dnf5/commands/offline/offline.cpp",
+    "https://www.qemu.org/docs/master/system/invocation.html#hxtool-6",
+    "https://www.qemu.org/docs/master/interop/qemu-qmp-ref.html#event-shutdown"
+  ],
+  "original_iso_run": 37507582946,
+  "original_outcomes_unchanged": true,
+  "proposed_recovery": "Fresh same exact byte-verified ISO; unchanged v1 install/first-pass/stage, dedicated bounded offline restricted-network unlock/cycle exit observation, mandatory third default boot with exact unchanged v1 history/completion/Nix/browser/AVC gates.",
+  "source_supported": {
+    "arctic_helper_arm_only_changes_ready_status": true,
+    "dnf5_offline_execute_requests_reboot_after_success_unless_poweroff_after_true": true,
+    "dnf5_version": "5.4.6.0-1.fc44",
+    "qemu_no_reboot_means_exit_on_guest_reboot": true,
+    "system_update_target_runs_offline_service_before_normal_desktop": true,
+    "systemd_version": "259.9-1.fc44"
+  },
+  "status": "HARNESS_PHASE_MISMATCH_SUPPORTED; ACTUAL_UPDATE_TRANSACTION_COMPLETION_UNKNOWN"
+}
