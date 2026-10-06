@@ -216,9 +216,9 @@ Get apps and lock/PAM still report no running Quickshell instance when using the
 shipped helper's configuration path. Preserving session identity did not resolve
 that failure. A narrow runtime diagnostic confirms the main shell's live index and
 `wayland,wayland-0` connection: explicit verified PID and any-display lookup
-both succeed, while the v4 portal backend fails. Get apps opened and the lock
-request succeeded; real password unlock and normal v5 shipped-helper selection
-still require completion. No production IPC change is proposed. Exact-ISO UEFI Secure Boot passed with
+both succeed, while the v4 portal backend fails. Get apps chooser passed visual review; the lock stayed secure for at least
+65 seconds and unlocked through real password/PAM input without AVC entries.
+Normal v5 shipped-helper selection still requires completion. No production IPC change is proposed. Exact-ISO UEFI Secure Boot passed with
 enrolled OVMF keys, the guest's `SecureBoot enabled` report, enforcing SELinux,
 complete collection markers and a visually reviewed Try desktop.
 
@@ -299,7 +299,14 @@ Nix/profile/settings persistence and the actual desktop. An installed preview fi
 can be replaced by the current stable repository until an approved main merge;
 post-update evidence must identify that source. Preserve a disposable VM snapshot
 before updating if later paired measurements are feasible. These are planned gates,
-not completed checks.
+not completed checks. The intermediate update boot uses
+`tools/performance/offline-update-boot.py` inside the Fedora QEMU tools container.
+It accepts only disposable qcow2/OVMF files under the repo's `out/`, unlocks the
+existing encrypted disk, retains restricted networking, and waits for the normal
+transaction's reboot without attempting desktop interaction. QEMU exit alone is
+an observation; the following native-session probe must establish real installed
+versions, cleared offline state and profile/settings persistence. Python syntax
+and the physical-device rejection guard pass; the actual transaction is pending.
 
 The local CI draft makes only artifact-only `workflow_dispatch` builds (`release=false`)
 use `.preview` RPM release suffixes. Normal signed stable updates can therefore
