@@ -167,6 +167,13 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/Wallpapers/
+            !/v2-walls/
+            !/showcase/
 
       - name: Check out the sources to build
         if: steps.plan.outputs.src == 'src'
@@ -174,6 +181,12 @@ jobs:
         with:
           ref: ${{ steps.plan.outputs.ref }}
           path: src
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/Wallpapers/
+            !/v2-walls/
+            !/showcase/
 
       - name: Build RPMs
         env:

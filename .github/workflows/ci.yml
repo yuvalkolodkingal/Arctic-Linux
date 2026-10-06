@@ -349,6 +349,13 @@ jobs:
     needs: [specs]
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/Wallpapers/
+            !/v2-walls/
+            !/showcase/
       - name: Build
         env:
           # Empty in forks and pull requests from them: arctic-release then ships the Arctic

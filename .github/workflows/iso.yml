@@ -50,6 +50,15 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
+        with:
+          # These collections are already export-ignored from the RPM source.
+          # build-rpms also avoids archive prefetching their omitted blobs.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/Wallpapers/
+            !/v2-walls/
+            !/showcase/
 
       - name: Free disk space
         run: |

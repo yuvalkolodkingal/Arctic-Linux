@@ -195,6 +195,26 @@ if [[ "$ONLY" != mangowm ]]; then
       GIT_INDEX_FILE="$tmpidx" git -C "$SRC" update-index --add --cacheinfo "100644,$blob,$KEY_PATH_IN_TREE"
     fi
     tree="$(GIT_INDEX_FILE="$tmpidx" git -C "$SRC" write-tree)"
+    # git archive prefetches every blob in a partial clone, even export-ignored
+    # artwork. Prune those roots from this temporary archive index first. The
+    # working tree and its real index stay intact; Source0 has the same payload.
+    git -C "$SRC" ls-tree --name-only -z "$tree" > "$tmpdir/archive-roots"
+    GIT_INDEX_FILE="$tmpidx" git -C "$SRC" check-attr --cached -z export-ignore --stdin \
+      < "$tmpdir/archive-roots" > "$tmpdir/archive-attributes"
+    archive_ignored=()
+    while IFS= read -r -d '' archive_path && IFS= read -r -d '' archive_attribute \
+        && IFS= read -r -d '' archive_value; do
+      if [[ "$archive_attribute" == export-ignore && "$archive_value" == set && "$archive_path" != .gitattributes ]]; then
+        archive_ignored+=("$archive_path")
+      fi
+    done < "$tmpdir/archive-attributes"
+    if (( ${#archive_ignored[@]} )); then
+      GIT_INDEX_FILE="$tmpidx" git --literal-pathspecs -C "$SRC" ls-files -z -- "${archive_ignored[@]}" \
+        > "$tmpdir/archive-ignored-files"
+      GIT_INDEX_FILE="$tmpidx" git -C "$SRC" update-index --force-remove -z --stdin \
+        < "$tmpdir/archive-ignored-files"
+      tree="$(GIT_INDEX_FILE="$tmpidx" git -C "$SRC" write-tree)"
+    fi
     git -C "$SRC" archive --format=tar.gz --prefix="arctic-linux-$VERSION/" -o "$tarball" "$tree"
   else
     arctic_log "archiving $SRC (not a git checkout: plain tar, out/ and .git excluded)"
