@@ -1,12 +1,13 @@
 {
   "atspi-snapshot.py": "e79d4627676c6e3c38571a2324ef719e7b12ffa832e96d8e9b17a90020c4c2dd",
   "bootstrap-diagnostic.sh": "36f33d776957d1a0a030d1f02a63d390242cd8a70f80e0bddc1425a50ea32a87",
-  "bounded-launch.py": "304c7533c2e8942084cbd9a81bebeef2e0bca1890ee6009aaba3600cad3c95d8",
+  "bounded-launch.py": "52bfeb009cd3338d6188b5a27c974fc96f7d0c8bb808f862b1b468463ab8f8ee",
   "codec-fixture-manifest.json": "a6f9ee0b420a3e6eef7f18ecdec4bbf66e38b58879d39d82c2e1e6f7dee4349c",
-  "gtk-entry-control.py": "78bd3c6eb0327c48e00e7e17d3f593bbf9aeb8977474151a08c954e6d2587185",
-  "guest-check.py": "5120de21add083e59d614ded311b7ec155de1681384940d8e8c82c954d93161d",
+  "gtk-entry-control.py": "af2b0902d7cc8074aece746cde2e7584f4f924b7538d3ff2d8ab43d802baae96",
+  "guest-check.py": "3e5fc77712577346d0f348e499b5b2331358c26837b2556499f040c8c2591754",
   "native-launcher.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
   "native_smoke.py": "ed382ab80a4918118370253c383b0fefde116ba34d55e977bcd34607ad2632d0",
   "original-h264-aac-1s.mp4": "24fcb595e3c63e836a9ebae43c05c902b88b954aea73abde35de8c6fc86497b8",
-  "run.sh": "b53ac107c74085dd67a3bef0b3ca410e21f05137a2f599156f94d5e667ba0a2e"
+  "run.sh": "b53ac107c74085dd67a3bef0b3ca410e21f05137a2f599156f94d5e667ba0a2e",
+  "security-collector.py": "0384cea315112d7cab56129ef43fd5aa92966e25b0e3e35f54f795628ee08527"
 }

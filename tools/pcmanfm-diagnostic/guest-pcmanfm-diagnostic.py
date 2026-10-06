@@ -21,6 +21,7 @@ import zlib
 
 NATIVE_SHA = 'ed382ab80a4918118370253c383b0fefde116ba34d55e977bcd34607ad2632d0'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
+SECURITY_SHA = '0384cea315112d7cab56129ef43fd5aa92966e25b0e3e35f54f795628ee08527'
 HERE = Path(__file__).resolve().parent
 MAX_FILE, MAX_TOTAL = 4*1024*1024, 16*1024*1024
 
@@ -38,6 +39,59 @@ def load(name, path, expected):
 
 
 N = load('frozen_native_smoke_v4', HERE/'native_smoke.py', NATIVE_SHA)
+S = load('explicit_diagnostic_security', HERE/'security-collector.py', SECURITY_SHA)
+
+
+def direct_launch_proof(smoke, proof):
+    path = smoke.root/'pcmanfm-owned-launch.json'
+    require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 65536,
+            'direct owned role launch record unavailable')
+    launch = json.loads(path.read_text())
+    process, role = launch['process'], launch['role']
+    require(all(type(process[k]) is int and process[k]>0 for k in ('pid','start_ticks'))
+            and all(process[k] == proof[k] for k in ('pid','start_ticks','executable','executable_sha256'))
+            and type(process['uid']) is int and process['uid'] == smoke.uid
+            and role['configured'] == 'pcmanfm' and role['direct_argv'] == ['/usr/bin/pcmanfm']
+            and role['helper_exec_args'] == role['helper_id_args'] == role['helper_app_args'] == []
+            and role['rpm_verification'] == dict(exit_status=0,stdout='',stderr='')
+            and role['helper_sha256'] == 'e44586b3b3d738888a6e12f58c6cf7cc6bbf980412d80c79d7cecaff539b1b75'
+            and role['helper_rpm_owner']=='arctic-desktop-config|1.2.0|1.preview.37507582946.1.gitfe4742c.fc44|noarch|0',
+            'direct child identity/selected native role arguments differ')
+    before = smoke.alive(proof)
+    require(before['is_xwayland'] is False and before['appid'] == 'pcmanfm', 'native role client differs')
+    environment = (Path('/proc')/str(proof['pid'])/'environ').read_bytes().split(b'\x00')
+    require(environment.count(b'WAYLAND_DEBUG=client') == 1, 'actual owned debug environment differs')
+    after = smoke.alive(proof)
+    stable_client(before,after,proof)
+    return launch
+
+
+def direct_capture(smoke):
+    paths = [smoke.root/'pcmanfm-stdout.log', smoke.root/'pcmanfm-wayland-stderr.log']
+    require(all(p.is_file() and not p.is_symlink() for p in paths), 'required native debug streams unavailable')
+    require(sum(p.stat().st_size for p in paths) <= 2*1024*1024, 'native raw stream bound exceeded')
+    completion_path=smoke.root/'pcmanfm-owned-completion.json'
+    require(completion_path.is_file() and not completion_path.is_symlink(), 'direct native producer completion unavailable')
+    completion=json.loads(completion_path.read_text())
+    require(completion['complete'] is True and completion['error'] is None
+            and completion['only_owned_direct_child_reaped'] is True
+            and type(completion['bytes_observed']) is int
+            and completion['bytes_observed']==sum(p.stat().st_size for p in paths)
+            and completion['combined_limit_bytes']==2*1024*1024,
+            'direct native stream producer did not complete within its bound')
+    for name,path in zip(('stdout','stderr'),paths):
+        require(completion['streams'][name]==dict(bytes=path.stat().st_size,sha256=N.digest(path)),
+                'direct stream bytes/hash differ from owned producer')
+    data = paths[1].read_bytes()
+    require(data and data.endswith(b'\n'), 'required Wayland stderr empty or partial final line')
+    text = data.decode('utf-8', errors='strict')
+    require('wl_display' in text and 'wl_keyboard' in text and '.keymap(' in text,
+            'required owned Wayland keyboard initialization telemetry missing')
+    keys = [line for line in text.splitlines() if 'wl_keyboard' in line and '.key(' in line]
+    return dict(complete=True, received_keyboard_key_lines=len(keys),
+                producer=completion,
+                streams={p.name:dict(bytes=p.stat().st_size,sha256=N.digest(p)) for p in paths},
+                scope='raw owned native stderr protocol evidence; key count may be zero and never proves GTK activation')
 
 
 def stable_client(before, after, proof):
@@ -103,6 +157,7 @@ def scenario(smoke, observed):
     if observed:
         files = smoke.fresh_window(lambda:smoke.launch(['python3','/run/t/bounded-launch.py',str(smoke.root)]),
                                    'pcmanfm',r'^pcmanfm$',native=True)
+        smoke.direct_launch = direct_launch_proof(smoke,files)
     else:
         files = smoke.fresh_window(lambda:smoke.cmd(['/usr/bin/arctic-open','files']),
                                    'pcmanfm',r'^pcmanfm$',native=True)
@@ -240,10 +295,12 @@ def gtk_control(smoke, warmup):
     appid='org.arctic.Diagnostic.Entry.a'+uuid.uuid4().hex[:16]
     proof=smoke.fresh_window(lambda:smoke.launch(['python3','/run/t/gtk-entry-control.py',str(smoke.root),appid]),
                              'python3',re.escape(appid),native=True)
+    validate_gtk_identity(smoke,proof,appid)
     text='Arctic isolated GTK3 entry'
     smoke.diagnostic('gtk-before-input')
     for index,argv in enumerate((['-M','ctrl','-k','a','-m','ctrl'],[text],['-k','Return'])):
         control_keys(smoke,proof,argv,warmup)
+        validate_gtk_identity(smoke,proof,appid)
         smoke.diagnostic('gtk-after-turn-'+str(index))
     log=smoke.root/'gtk-events.log'
     def activated():
@@ -262,6 +319,21 @@ def gtk_control(smoke, warmup):
     smoke.diagnostic('gtk-final')
     return dict(status=status,warmup=warmup,process=proof,activation=value,
                 scope='only own simple Gtk3 entry; no libfm/completion or PCManFM qualification')
+
+
+def validate_gtk_identity(smoke,proof,appid):
+    client=smoke.alive(proof)
+    require(client['appid']==appid and client['title']=='Arctic Gtk3 diagnostic '+appid
+            and client['is_xwayland'] is False, 'actual nonce Gtk3 program/window identity differs')
+    path=smoke.root/'gtk-events.log'
+    require(path.is_file() and not path.is_symlink() and path.stat().st_size<=2*1024*1024,
+            'own Gtk3 event evidence unavailable')
+    mapped=[json.loads(row) for row in path.read_text().splitlines() if json.loads(row).get('event')=='mapped']
+    require(len(mapped)==1 and all(type(mapped[0][k]) is int and mapped[0][k]>0 for k in ('pid','start_ticks'))
+            and type(mapped[0]['uid']) is int and mapped[0]['pid']==proof['pid'] and mapped[0]['uid']==smoke.uid
+            and mapped[0]['start_ticks']==proof['start_ticks'] and mapped[0]['appid']==appid
+            and mapped[0]['program_name']==appid and mapped[0]['backend']=='GdkWaylandDisplay',
+            'fresh owned Gtk3 mapped-event identity differs')
 
 
 def copy_evidence(smoke, aggregate, name):
@@ -360,8 +432,9 @@ def bounded_journals(prefix,aggregate):
 
 
 def run_diagnosis(prefix, aggregate):
-    arms=[]; security=N.SecurityInterval(); results=[]; errors=[]
+    arms=[]; security=None; results=[]; errors=[]
     try:
+        security=S.SecurityInterval(N,aggregate/'security-interval')
         strict_security(security.before)
         for name, observed in (('original-route',False),('observed-route',True)):
             smoke=N.Smoke(prefix,'live');arms.append((name,smoke))
@@ -374,11 +447,15 @@ def run_diagnosis(prefix, aggregate):
                               role_lifecycle=role_lifecycle(smoke,roles),terminal_fixture_lifetime_seconds=180 if observed else 60,
                               observation='AT-SPI/native Wayland logging' if observed else 'unchanged frozen navigate/keys; no entry instrumentation')
                 if observed:
+                    result['direct_native_launch']=direct_launch_proof(smoke,proof)
                     result['physical']=physical(smoke,proof,directory,result)
                 results.append(result)
             finally:
                 cleanup=smoke.cleanup()
                 require(not (smoke.root/'pcmanfm-wayland-error.json').exists(),'bounded Wayland output/child lifecycle failed')
+                if observed:
+                    capture=direct_capture(smoke)
+                    smoke.write('direct-native-capture.json',(json.dumps(capture,indent=2)+'\n').encode())
                 write_arm_report(smoke,name,cleanup)
                 copy_evidence(smoke,aggregate,name)
                 require_complete_trace(smoke)
@@ -408,8 +485,11 @@ def run_diagnosis(prefix, aggregate):
                 require_complete_trace(smoke)
             except BaseException as exc:errors.append('cleanup/preservation '+name+': '+str(exc))
         try:
+            require(security is not None,'security collector initialization failed; see independently preserved command/state evidence')
             security_value=security.finish();strict_security(security_value)
-        except BaseException as exc:security_value=dict(error=str(exc));errors.append('security: '+str(exc))
+        except BaseException as exc:
+            security_value=security.failed(str(exc)) if security is not None else dict(complete=False,error=str(exc))
+            errors.append('security: '+str(exc))
         try: journals=bounded_journals(prefix,aggregate)
         except BaseException as exc:errors.append('bounded journals: '+str(exc))
     return dict(schema='arctic-pcmanfm-diagnostic-v1',status='diagnostic-collected' if not errors else 'failed',
@@ -450,7 +530,7 @@ def main():
         N.guest_guard('live',True)
         runtime=json.loads((HERE/'runtime-pins.json').read_text())
         require(set(runtime)=={'guest-check.py','native_smoke.py','native-launcher.py','atspi-snapshot.py','gtk-entry-control.py','bounded-launch.py',
-                              'bootstrap-diagnostic.sh','run.sh','original-h264-aac-1s.mp4','codec-fixture-manifest.json'},
+                              'bootstrap-diagnostic.sh','run.sh','original-h264-aac-1s.mp4','codec-fixture-manifest.json','security-collector.py'},
                 'runtime file set differs')
         for name,digest in runtime.items():require(N.digest(HERE/name)==digest,'runtime dependency hash differs: '+name)
         launcher=load('owned_native_launcher',HERE/'native-launcher.py',LAUNCHER_SHA)

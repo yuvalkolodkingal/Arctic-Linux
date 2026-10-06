@@ -264,7 +264,7 @@ fi
 if [ "$PCMANFM_DIAGNOSTIC" = 1 ]; then
   mkdir /tmp/diagnostic-data
   cp /pcmanfm-diagnostic/guest-pcmanfm-diagnostic.py /tmp/diagnostic-data/guest-check.py
-  for f in native_smoke.py native-launcher.py atspi-snapshot.py gtk-entry-control.py bounded-launch.py runtime-pins.json bootstrap-diagnostic.sh original-h264-aac-1s.mp4 codec-fixture-manifest.json; do
+  for f in native_smoke.py native-launcher.py atspi-snapshot.py gtk-entry-control.py bounded-launch.py security-collector.py runtime-pins.json bootstrap-diagnostic.sh original-h264-aac-1s.mp4 codec-fixture-manifest.json; do
     cp "/pcmanfm-diagnostic/$f" /tmp/diagnostic-data/
   done
   printf '%s\n' '#!/bin/bash' 'set -euo pipefail' 'exec python3 /run/t/guest-check.py' > /tmp/diagnostic-data/run.sh

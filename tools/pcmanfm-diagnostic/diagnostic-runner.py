@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Explicit single fixed-ISO diagnostic, with unchanged v2 execution primitives."""
 import argparse
+import base64
 import datetime
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -15,14 +17,14 @@ import sys
 import uuid
 
 sys.dont_write_bytecode=True
-BASE='085fb11617a3d27960481d4dcb6f16631b723bd4'
+BASE='84fa7410c728e355a507054d7e7a944c51e76753'
 RECOVERY_BASE='ae55fbc9d48cec5ecc786cf61994ed986296d1bb'
 COMMON_SHA='0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633'
 V4_LIBRARY_SHA='eb75ee7a0eded71b99f1742940e1ccbf5546f7203ccd62c57e2447c8dbd9a4ac'
 BUNDLE_FILES={'diagnostic-runner.py','pcmanfm-controller.py','guest-pcmanfm-diagnostic.py','atspi-snapshot.py',
               'gtk-entry-control.py','bounded-launch.py','native_smoke.py','native-launcher.py','runtime-pins.json',
               'bootstrap-diagnostic.sh','prepare-diagnostic.py','test_diagnostic.py','README.md','frozen-base-pins.json',
-              'original-h264-aac-1s.mp4','codec-fixture-manifest.json'}
+              'original-h264-aac-1s.mp4','codec-fixture-manifest.json','security-collector.py','test_security_collector.py'}
 EXECUTION_FILES={'.github/workflows/iso.yml','tools/test-iso.sh','tools/lib/container.sh','tools/lib/vmtest.py',
                  'tools/native-functional-v4/native-runner-v4.py','tools/same-iso-recovery/vm-only-recovery-v2.py',
                  *('tools/pcmanfm-diagnostic/'+name for name in BUNDLE_FILES)}
@@ -52,7 +54,7 @@ def validate_ci(env,R):
     require(env.get('PCMANFM_DIAGNOSTIC_MODE')=='true' and all(env.get(name)=='false' for name in
             ('RECOVERY_MODE','NATIVE_SMOKE_MODE','NIX_REQUESTED','PERFORMANCE_REQUESTED','BOOT_TEST_REQUESTED')),
             'diagnostic must be selected alone')
-    require(env['GITHUB_SHA']!=BASE and env['GITHUB_RUN_ID'] not in ('37525639962','37535425230'),
+    require(env['GITHUB_SHA']!=BASE and env['GITHUB_RUN_ID'] not in ('37525639962','37535425230','37543716623'),
             'separate reviewed diagnostic head/run required')
 
 
@@ -74,6 +76,11 @@ def verify_sources(args,R):
     for relative,digest in manifest['files'].items():
         require(not Path(relative).is_absolute() and '..' not in Path(relative).parts,'unsafe execution pin path')
         R.pinned_file(execution/relative,digest)
+    require(set(manifest.get('modes',{}))==EXECUTION_FILES,'exact execution file modes absent')
+    for relative,mode in manifest['modes'].items():
+        expected='100755' if relative=='tools/test-iso.sh' else '100644'
+        require(mode==expected and subprocess.check_output(['git','-C',str(execution),'ls-tree',head,relative],text=True).split()[0]==mode,
+                'actual Git execution mode differs: '+relative)
     frozen=json.loads((args.bundle/'frozen-base-pins.json').read_text())
     require(frozen['base']==BASE and frozen['allowed_changed_existing']==['.github/workflows/iso.yml','tools/test-iso.sh'],
             'frozen predecessor scope differs')
@@ -125,6 +132,129 @@ def verify_before_vm(args,R,V):
                 source_pins=len(manifest['files']),release_acceptance=False)
 
 
+def checked_security(target, value, boot):
+    """Pair mandatory transported raw proofs with the successful guest summary."""
+    spec=importlib.util.spec_from_file_location('security_evidence_parser',Path(__file__).parent/'security-collector.py')
+    S=importlib.util.module_from_spec(spec);spec.loader.exec_module(S)
+    root=target/'security-interval'
+    require(root.is_dir() and S.strict_json((root/'security-report.json').read_bytes())==value,
+            'raw security summary missing/different')
+    def unsigned(item,limit):return type(item) is int and 0<=item<=limit
+    framing=(root/'small-commands.log').read_bytes()
+    require(len(framing)<=S.SMALL_COMMAND_BYTES and framing.endswith(b'\n'), 'small security raw framing bound/EOF differs')
+    small={}
+    names={*(('state-%02d-%s'%(i,k)) for i in range(6) for k in ('selinux','audit')),'start-cursor','end-cursor'}
+    for line in framing[:-1].split(b'\n'):
+        row=S.strict_json(line)
+        require(isinstance(row,dict) and set(row)=={'name','command','stdout_base64','stderr_base64'}
+                and row['name'] in names and row['name'] not in small, 'small security raw name/duplicate/schema differs')
+        data={}
+        for stream in ('stdout','stderr'):
+            encoded=row[stream+'_base64']
+            require(isinstance(encoded,str), 'small security raw byte encoding differs')
+            decoded=base64.b64decode(encoded,validate=True)
+            require(base64.b64encode(decoded).decode()==encoded and len(decoded)<=65536,'small security raw encoding/bound differs')
+            data[stream]=decoded
+        small[row['name']]=(row['command'],data)
+    require(set(small)==names, 'mandatory raw small security command absent')
+    def command(name,argv,limit,timeout,raw=True):
+        if raw:
+            record,streams=small[name]
+        else:
+            record=S.strict_json((root/(name+'.json')).read_bytes())
+            streams={'stderr':(root/(name+'.stderr.log')).read_bytes()}
+        require(record['argv']==argv and record['complete'] is True and record['error'] is None
+                and record['timed_out'] is False and type(record['exit_status']) is int and record['exit_status']==0
+                and record['only_owned_child_reaped'] is True
+                and record['stdout_bound_bytes']==limit and record['stderr_bound_bytes']==65536
+                and record['timeout_seconds']==timeout
+                and type(record.get('child_pid')) is int and record['child_pid']>1
+                and all(type(record.get(k)) in (int,float) and math.isfinite(record[k]) for k in
+                        ('monotonic_start_seconds','monotonic_end_seconds'))
+                and 0<=record['monotonic_start_seconds']<=record['monotonic_end_seconds']
+                and unsigned(record['stdout_observed_bytes'],limit)
+                and type(record['stderr_observed_bytes']) is int and record['stderr_observed_bytes']==0
+                and type(record['stderr_retained_bytes']) is int and record['stderr_retained_bytes']==0
+                and re.fullmatch('[0-9a-f]{64}',record['stdout_observed_sha256'])
+                and record['stderr_observed_sha256']==hashlib.sha256(b'').hexdigest()
+                and streams['stderr']==b'', 'raw security command incomplete: '+name)
+        if raw:
+            data=streams['stdout']
+            require(len(data)==record['stdout_observed_bytes'] and hashlib.sha256(data).hexdigest()==record['stdout_observed_sha256'],
+                    'raw security command bytes/hash differ: '+name)
+            return record,data
+        return record,None
+    states=S.strict_json((root/'states.json').read_bytes())
+    require(states==value['states'] and len(states)==6,'all six initial/inter-arm/final raw security states absent')
+    for index,state in enumerate(states):
+        first,enforcing=command('state-%02d-selinux'%index,['getenforce'],65536,15)
+        second,audit=command('state-%02d-audit'%index,['auditctl','-s'],65536,15)
+        fields=re.findall(r'^(enabled|lost)\s+([0-9]+)\s*$',audit.decode('utf-8',errors='strict'),re.M)
+        require(len(fields)==2 and dict(fields)=={'enabled':'1','lost':'0'}
+                and enforcing==b'Enforcing\n' and state['commands']==[first,second]
+                and state['selinux']=='Enforcing' and state['audit']=={'enabled':1,'lost':0}
+                and all(type(state['audit'][k]) is int for k in ('enabled','lost')),
+                'raw Enforcing/audit state differs')
+    cursors={}
+    for name in ('start','end'):
+        _,data=command(name+'-cursor',['journalctl','-b','--no-pager','--all','-n','1','-o','json'],65536,15)
+        require(data.endswith(b'\n') and data.count(b'\n')==1,'raw security cursor framing differs')
+        row=S.strict_json(data[:-1]);require(row['_BOOT_ID']==boot.replace('-','') and isinstance(row['__CURSOR'],str) and row['__CURSOR'],
+                                             'raw cursor/current boot differs')
+        cursors[name]=row['__CURSOR']
+    scan=value['journal'];limits=dict(scan_bytes=S.SCAN_BYTES,records=S.SCAN_RECORDS,newline_record_bytes=S.RECORD_BYTES,
+                                    retained_trusted_or_denial_bytes=S.PRESERVE_BYTES,chunk_bytes=S.CHUNK_BYTES)
+    require(scan['complete'] is True and scan['limits']==limits and scan['start_cursor']==cursors['start']
+            and scan['end_cursor']==cursors['end'] and unsigned(scan['observed_records'],8192)
+            and unsigned(scan['trusted_kernel_audit_records'],scan['observed_records'])
+            and type(scan['matching_denial_records']) is int and scan['matching_denial_records']==0
+            and type(scan['unfinished_record_bytes']) is int and scan['unfinished_record_bytes']==0
+            and unsigned(scan['retained_bytes'],S.PRESERVE_BYTES)
+            and (scan['fixed_end_cursor_seen'] is True or
+                 (scan['no_new_records'] is True and scan['observed_records']==0 and cursors['start']==cursors['end'])),
+            'complete current-boot journal/cursor counters differ')
+    whole,_=command('whole-interval-command',['journalctl','-b','--no-pager','--all','--after-cursor',cursors['start'],'-o','json'],S.SCAN_BYTES,60,raw=False)
+    require(scan['retained_bytes']<=whole['stdout_observed_bytes']
+            and ((scan['observed_records']==0 and whole['stdout_observed_bytes']==0
+                  and whole['stdout_observed_sha256']==hashlib.sha256(b'').hexdigest())
+                 or (scan['observed_records']>0 and whole['stdout_observed_bytes']>=scan['observed_records'])),
+            'whole stream byte/hash counters do not agree with parsed records')
+    total=trusted=0
+    seen=set()
+    require(isinstance(scan['parts'],list) and len(scan['parts'])<=11,'required security chunk count differs')
+    for index,part in enumerate(scan['parts']):
+        require(part['path']=='trusted-or-denial-%02d.log'%index and unsigned(part['bytes'],S.CHUNK_BYTES),'unsafe security chunk/count')
+        data=(root/part['path']).read_bytes();require(len(data)==part['bytes'] and hashlib.sha256(data).hexdigest()==part['sha256']
+                                                   and data.endswith(b'\n'),'security raw chunk hash/framing differs')
+        total+=len(data)
+        for line in data[:-1].split(b'\n'):
+            require(len(line)+1<=S.RECORD_BYTES,'raw security newline record bound differs')
+            row=S.strict_json(line);messages=S.message_values(row.get('MESSAGE'))
+            require(row['_BOOT_ID']==boot.replace('-','') and row['_TRANSPORT'] in ('audit','kernel')
+                    and isinstance(row.get('__CURSOR'),str) and row['__CURSOR'] and row['__CURSOR']!=cursors['start']
+                    and row['__CURSOR'] not in seen and not any(S.AVC.search(message) for message in messages),
+                    'raw trusted security record/denial differs')
+            seen.add(row['__CURSOR'])
+            trusted+=1
+    require(total==scan['retained_bytes'] and trusted==scan['trusted_kernel_audit_records'],'required trusted raw record preservation counters differ')
+    audit=S.strict_json((root/'audit-interval.json').read_bytes())
+    require(audit['complete'] is True and audit['limit_bytes']==S.AUDIT_BYTES and unsigned(audit['bytes'],S.AUDIT_BYTES)
+            and type(audit['observed_matching_denials']) is int and audit['observed_matching_denials']==0,
+            'complete audit-file interval metadata differs')
+    if audit['after'] is None:
+        require(audit['before'] is None and audit['bytes']==0,'audit-file disappearance differs')
+    else:
+        after=audit['after'];before=audit['before'];offset=before['offset'] if before else 0
+        require(all(type(after[k]) is int and after[k]>=0 for k in ('device','inode','offset'))
+                and (before is None or ((before['device'],before['inode'])==(after['device'],after['inode'])
+                     and all(type(before[k]) is int and before[k]>=0 for k in ('device','inode','offset'))))
+                and after['offset']-offset==audit['bytes'],'audit inode/device/offset continuity differs')
+        data=(root/'audit-interval.log').read_bytes()
+        require(len(data)==audit['bytes'] and hashlib.sha256(data).hexdigest()==audit['sha256']
+                and (not data or data.endswith(b'\n')) and not S.AVC.search(data.decode(errors='replace')),
+                'complete raw audit interval differs/contains denial')
+
+
 def checked_report(serial,target,events,expected,R,V,expected_runtime):
     rows=serial.splitlines()
     def marked(prefix):return [(index,json.loads(line[len(prefix):])) for index,line in enumerate(rows) if line.startswith(prefix)]
@@ -165,9 +295,13 @@ def checked_report(serial,target,events,expected,R,V,expected_runtime):
     require(report['schema']=='arctic-pcmanfm-diagnostic-v1' and report['original_run']==37535425230
             and report['original_status']=='failed-7-of-8-live' and report['release_acceptance'] is False,
             'diagnostic changed original acceptance claim')
-    require(report['security']['selinux']=='Enforcing' and report['security']['audit']=={'enabled':1,'lost':0}
+    security=report.get('security')
+    require(isinstance(security,dict) and security.get('complete') is True and security.get('error') is None,
+            'guest security interval incomplete: '+str(security)+'; primary guest errors: '+str(report.get('errors')))
+    require(security.get('selinux')=='Enforcing' and security.get('audit')=={'enabled':1,'lost':0}
             and all(type(report['security']['audit'][k]) is int for k in ('enabled','lost'))
             and type(report['security']['observed_new_avcs']) is int and report['security']['observed_new_avcs']==0,'security evidence differs')
+    checked_security(target,security,provenance['boot_id'])
     root=Path(report['evidence_root'])
     require(root.parent==Path('/tmp') and root.name.startswith('arctic-pcmanfm-diagnostic-')
             and json.loads((target/'transport-manifest.json').read_text())['evidence_root']==str(root),

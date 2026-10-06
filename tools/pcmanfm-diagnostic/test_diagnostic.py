@@ -303,7 +303,7 @@ class FinalPreservationControls(unittest.TestCase):
                 state=lambda:{'selinux':'Enforcing','audit':{'enabled':1,'lost':0}},
                 finish=lambda:{'selinux':'Enforcing','audit':{'enabled':1,'lost':0},'observed_new_avcs':0})
             def scenario(smoke,observed):return smoke.root/'files with spaces',PROOF,{}
-            with patch.object(G.N,'Smoke',SyntheticSmoke),patch.object(G.N,'SecurityInterval',return_value=security),\
+            with patch.object(G.N,'Smoke',SyntheticSmoke),patch.object(G.S,'SecurityInterval',return_value=security),\
                  patch.object(G,'scenario',side_effect=scenario),patch.object(G,'target_environment',return_value={}),\
                  patch.object(G,'navigation_result',return_value={'status':'matched-directory'}),\
                  patch.object(G,'role_lifecycle',return_value={}),patch.object(G,'bounded_journals',return_value={}),\
@@ -488,6 +488,47 @@ class OwnedSubprocessControls(unittest.TestCase):
 
 
 
+def synthetic_security_fixture(root, nonempty=False):
+    """Complete raw preservation fixture; all journal/boot/state authority synthetic."""
+    S=G.S
+    folder=root/'security-interval';folder.mkdir()
+    framed=[]
+    def command(name,argv,stdout,limit=65536,timeout=15,small=True):
+        record=dict(argv=argv,complete=True,error=None,timed_out=False,exit_status=0,
+            only_owned_child_reaped=True,stdout_bound_bytes=limit,stderr_bound_bytes=65536,timeout_seconds=timeout,
+            stdout_observed_bytes=len(stdout),stderr_observed_bytes=0,stderr_retained_bytes=0,
+            stdout_observed_sha256=hashlib.sha256(stdout).hexdigest(),stderr_observed_sha256=hashlib.sha256(b'').hexdigest(),
+            child_pid=300+len(framed),monotonic_start_seconds=1.,monotonic_end_seconds=2.)
+        if small:
+            framed.append(dict(name=name,command=record,stdout_base64=base64.b64encode(stdout).decode(),stderr_base64=''))
+        else:
+            (folder/(name+'.json')).write_text(json.dumps(record));(folder/(name+'.stderr.log')).write_bytes(b'')
+        return record
+    states=[]
+    for i in range(6):
+        first=command('state-%02d-selinux'%i,['getenforce'],b'Enforcing\n')
+        second=command('state-%02d-audit'%i,['auditctl','-s'],b'enabled 1\nlost 0\n')
+        states.append(dict(selinux='Enforcing',audit=dict(enabled=1,lost=0),commands=[first,second],monotonic_seconds=2.))
+    for name in ('start','end'):
+        cursor=(json.dumps(dict(_BOOT_ID=BOOT.replace('-',''),__CURSOR=name if nonempty else 'same'))+'\n').encode()
+        command(name+'-cursor',['journalctl','-b','--no-pager','--all','-n','1','-o','json'],cursor)
+    (folder/'small-commands.log').write_bytes(b''.join((json.dumps(row)+'\n').encode() for row in framed))
+    (folder/'states.json').write_text(json.dumps(states))
+    data=b''.join((json.dumps(dict(_BOOT_ID=BOOT.replace('-',''),__CURSOR=cursor,_TRANSPORT=transport,MESSAGE='ordinary fixture'))+'\n').encode()
+                  for cursor,transport in [('middle','kernel'),('end','syslog')]) if nonempty else b''
+    command('whole-interval-command',['journalctl','-b','--no-pager','--all','--after-cursor','start' if nonempty else 'same','-o','json'],data,S.SCAN_BYTES,60,False)
+    scan=S.JournalScan(folder,BOOT.replace('-',''),'end' if nonempty else 'same','start' if nonempty else 'same')
+    scan.feed(data);scan.finish(no_new_records=not nonempty)
+    value=dict(complete=True,selinux='Enforcing',audit=dict(enabled=1,lost=0),observed_new_avcs=0,states=states,journal=scan.report())
+    audit=dict(complete=True,before=None,after=None,bytes=0,limit_bytes=S.AUDIT_BYTES,observed_matching_denials=0)
+    if nonempty:
+        raw=b'next\n';(folder/'audit-interval.log').write_bytes(raw)
+        audit.update(before=dict(device=1,inode=2,offset=9),after=dict(device=1,inode=2,offset=14),bytes=5,sha256=hashlib.sha256(raw).hexdigest())
+    (folder/'audit-interval.json').write_text(json.dumps(audit))
+    (folder/'security-report.json').write_text(json.dumps(value))
+    return value
+
+
 def transport_fixture(physical=False, mutate=None):
     temp=tempfile.TemporaryDirectory(prefix='arctic-pcmanfm-diagnostic-')
     root=Path(temp.name)
@@ -502,7 +543,7 @@ def transport_fixture(physical=False, mutate=None):
                     cmdline='rd.live.image',boot_id=BOOT,desktop_uid=1000,launcher=launcher,runtime_pins=copy.deepcopy(runtime))
     report=dict(schema='arctic-pcmanfm-diagnostic-v1',status='diagnostic-collected',release_acceptance=False,
                 original_run=37535425230,original_status='failed-7-of-8-live',errors=[],evidence_root=str(root),
-                security={'selinux':'Enforcing','audit':{'enabled':1,'lost':0},'observed_new_avcs':0},
+                security=synthetic_security_fixture(root),
                 arms=[dict(name=n) for n in ('original-route','observed-route','gtk-warmup','gtk-no-warmup')])
     report['arms'][1]['physical']=dict(status='unrun')
     events=[];req=None
@@ -547,6 +588,83 @@ class TransportControls(unittest.TestCase):
         serial,events,runtime,report=self.fixture()
         value=self.check(serial,events,runtime)
         self.assertEqual(value['report'],report);self.assertEqual(value['physical_host_delivery'],'unrun')
+    def test_raw_trusted_chunks_and_audit_continuity_positive_and_adverse(self):
+        for case in ('positive','missing-part','part-hash','wrong-boot','raw-denial','duplicate-cursor','audit-hash','audit-inode','audit-partial'):
+            with tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);value=synthetic_security_fixture(root,nonempty=True);folder=root/'security-interval'
+                part=folder/value['journal']['parts'][0]['path']
+                if case=='missing-part':part.unlink()
+                elif case=='part-hash':part.write_bytes(part.read_bytes()+b' ')
+                elif case in ('wrong-boot','raw-denial','duplicate-cursor'):
+                    row=json.loads(part.read_bytes())
+                    if case=='wrong-boot':row['_BOOT_ID']='0'*32
+                    elif case=='raw-denial':row['MESSAGE']=list(b'avc: denied')
+                    data=(json.dumps(row)+'\n').encode()
+                    if case=='duplicate-cursor':data*=2
+                    part.write_bytes(data);value['journal']['parts'][0].update(bytes=len(data),sha256=hashlib.sha256(data).hexdigest())
+                    value['journal']['retained_bytes']=len(data)
+                    if case=='duplicate-cursor':value['journal']['trusted_kernel_audit_records']=2
+                    (folder/'security-report.json').write_text(json.dumps(value))
+                elif case.startswith('audit-'):
+                    raw=folder/'audit-interval.log';meta=folder/'audit-interval.json'
+                    audit=json.loads(meta.read_text())
+                    if case=='audit-hash':raw.write_bytes(b'fake\n')
+                    elif case=='audit-inode':audit['after']['inode']=3
+                    else:
+                        raw.write_bytes(b'next!');audit['sha256']=hashlib.sha256(raw.read_bytes()).hexdigest()
+                    meta.write_text(json.dumps(audit))
+                if case=='positive':R.checked_security(root,value,BOOT)
+                else:
+                    with self.subTest(case=case),self.assertRaises((RuntimeError,FileNotFoundError)):
+                        R.checked_security(root,value,BOOT)
+    def test_missing_malformed_raw_security_proofs_never_accept_summary(self):
+        cases=('missing','duplicate','truncated','noncanonical','rawhash','rawstate','cursor','counter','command','audit','extra','raw-summary')
+        def mutation(case):
+            def change(root,report,*_):
+                folder=root/'security-interval';path=folder/'small-commands.log'
+                rows=[json.loads(line) for line in path.read_text().splitlines()]
+                if case=='missing':rows.pop()
+                elif case=='duplicate':rows.append(rows[0])
+                elif case=='truncated':path.write_bytes(path.read_bytes()[:-1]);return
+                elif case=='noncanonical':rows[0]['stdout_base64']+='='
+                elif case=='rawhash':rows[0]['command']['stdout_observed_sha256']='0'*64
+                elif case=='rawstate':rows[0]['stdout_base64']=base64.b64encode(b'Permissive\n').decode()
+                elif case=='cursor':rows[-1]['stdout_base64']=base64.b64encode(b'{"_BOOT_ID":"bad","__CURSOR":"same"}\n').decode()
+                elif case=='extra':rows.append(dict(rows[0],name='unrecognized'))
+                elif case in ('counter','command'):
+                    p=folder/'whole-interval-command.json';v=json.loads(p.read_text())
+                    v['stdout_observed_bytes' if case=='counter' else 'complete']=1 if case=='counter' else False
+                    p.write_text(json.dumps(v))
+                elif case=='audit':(folder/'audit-interval.json').unlink()
+                elif case=='raw-summary':(folder/'security-report.json').write_text('{}')
+                path.write_bytes(b''.join((json.dumps(row)+'\n').encode() for row in rows))
+            return change
+        for case in cases:
+            serial,events,runtime,_=self.fixture(mutate=mutation(case))
+            with self.subTest(case=case),self.assertRaises((RuntimeError,ValueError,FileNotFoundError)):
+                self.check(serial,events,runtime)
+    def test_failed_security_preserves_primary_error_instead_of_secondary_keyerror(self):
+        def mutation(root,report,*_):
+            report['errors']=['primary collector overflow'];report['security']={'complete':False,'error':'whole scan overflow'}
+        serial,events,runtime,_=self.fixture(mutate=mutation)
+        with self.assertRaisesRegex(RuntimeError,'whole scan overflow.*primary collector overflow'):
+            self.check(serial,events,runtime)
+    def test_raw_command_pid_and_finite_ordered_time_are_mandatory(self):
+        for case in ('missing-pid','bool-pid','pid-one','missing-time','reversed','string-time','bool-time','infinite-time'):
+            def mutation(root,*_,case=case):
+                path=root/'security-interval/small-commands.log'
+                rows=[json.loads(line) for line in path.read_text().splitlines()];cmd=rows[0]['command']
+                if case=='missing-pid':cmd.pop('child_pid')
+                elif case=='bool-pid':cmd['child_pid']=True
+                elif case=='pid-one':cmd['child_pid']=1
+                elif case=='missing-time':cmd.pop('monotonic_start_seconds')
+                elif case=='reversed':cmd['monotonic_end_seconds']=0.
+                elif case=='string-time':cmd['monotonic_start_seconds']='1'
+                elif case=='bool-time':cmd['monotonic_start_seconds']=True
+                else:cmd['monotonic_start_seconds']=float('inf')
+                path.write_bytes(b''.join((json.dumps(row)+'\n').encode() for row in rows))
+            serial,events,runtime,_=self.fixture(mutate=mutation)
+            with self.subTest(case=case),self.assertRaises(RuntimeError):self.check(serial,events,runtime)
     def test_actual_paired_host_delivery_never_mutates_guest_report(self):
         serial,events,runtime,report=self.fixture(True)
         value=self.check(serial,events,runtime)
@@ -690,9 +808,11 @@ class SourceControls(unittest.TestCase):
         manifest=json.loads((HERE/'execution-pins.json').read_text())
         root=HERE/'execution-tree' if (HERE/'execution-tree').exists() else HERE.parents[1]
         self.assertEqual(set(manifest['files']),R.EXECUTION_FILES)
+        self.assertEqual(manifest['modes'],{p:('100755' if p=='tools/test-iso.sh' else '100644') for p in R.EXECUTION_FILES})
+        self.assertEqual(stat.S_IMODE((root/'tools/test-iso.sh').stat().st_mode),0o755)
         for path,expected in manifest['files'].items():
             self.assertEqual(hashlib.sha256((root/path).read_bytes()).hexdigest(),expected,path)
-        runtime=json.loads((HERE/'runtime-pins.json').read_text());self.assertEqual(len(runtime),10)
+        runtime=json.loads((HERE/'runtime-pins.json').read_text());self.assertEqual(len(runtime),11)
         for name,expected in runtime.items():
             data=b'#!/bin/bash\nset -euo pipefail\nexec python3 /run/t/guest-check.py\n' if name=='run.sh' else (HERE/('guest-pcmanfm-diagnostic.py' if name=='guest-check.py' else name)).read_bytes()
             self.assertEqual(hashlib.sha256(data).hexdigest(),expected,name)

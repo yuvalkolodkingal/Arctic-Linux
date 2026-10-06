@@ -17,14 +17,20 @@ def main():
         raise RuntimeError('invalid owned control output/application identity')
     import gi
     gi.require_version('Gtk', '3.0')
+    # Gtk3 Wayland initializes the actual app ID from g_get_prgname, not merely
+    # Gtk.Application.application_id. Set our diagnostic nonce before GTK init.
+    from gi.repository import GLib
+    GLib.set_prgname(appid)
     from gi.repository import Gtk, Gdk, Gio, GLib
     path = root/'gtk-events.log'
+    raw_stat = Path('/proc/self/stat').read_text()
+    start_ticks = int(raw_stat[raw_stat.rindex(')') + 2:].split()[19])
     if path.exists():
         raise RuntimeError('control evidence must be unused')
     count, byte_count = 0, 0
     def log(event, **fields):
         nonlocal byte_count
-        record = dict(event=event, monotonic_ns=time.monotonic_ns(), pid=os.getpid(), uid=os.getuid(), **fields)
+        record = dict(event=event, monotonic_ns=time.monotonic_ns(), pid=os.getpid(), uid=os.getuid(), start_ticks=start_ticks, **fields)
         row = (json.dumps(record,sort_keys=True)+'\n').encode()
         byte_count += len(row)
         if byte_count > 2*1024*1024:
@@ -60,7 +66,7 @@ def main():
         window.connect('destroy', lambda *_: application.quit())
         window.show_all()
         GLib.idle_add(lambda: (entry.grab_focus() or False))
-        log('mapped', appid=appid, gtk_version=[Gtk.get_major_version(),Gtk.get_minor_version(),Gtk.get_micro_version()],
+        log('mapped', appid=appid, program_name=GLib.get_prgname(), gtk_version=[Gtk.get_major_version(),Gtk.get_minor_version(),Gtk.get_micro_version()],
             backend=type(Gdk.Display.get_default()).__name__)
     app.connect('activate', activated)
     return app.run([])

@@ -6,10 +6,11 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 
-BASE='085fb11617a3d27960481d4dcb6f16631b723bd4'
+BASE='84fa7410c728e355a507054d7e7a944c51e76753'
 HERE=Path(__file__).resolve().parent
 
 
@@ -18,7 +19,7 @@ def replace(value,before,after):
     return value.replace(before,after)
 
 
-def harness(base):
+def initial_harness(base):
     value=replace(base,'COLLECT=0\n','COLLECT=0\nPCMANFM_DIAGNOSTIC=""\n')
     value=replace(value,'    --collect) COLLECT=1; shift ;;',
                   '    --collect) COLLECT=1; shift ;;\n    --pcmanfm-diagnostic) PCMANFM_DIAGNOSTIC="$2"; shift 2 ;;')
@@ -106,7 +107,7 @@ fi
     return value
 
 
-def workflow(base):
+def initial_workflow(base):
     value=replace(base,'    inputs:\n','''    inputs:
       same_iso_pcmanfm_diagnostic:
         description: One bounded fixed-image native PCManFM input diagnostic only (no build/install/release)
@@ -214,6 +215,23 @@ def workflow(base):
     return value+job
 
 
+def harness(base):
+    # All existing/default-off mode bytes remain from the actual failed 84fa run.
+    return replace(base, 'gtk-entry-control.py bounded-launch.py runtime-pins.json',
+                   'gtk-entry-control.py bounded-launch.py security-collector.py runtime-pins.json')
+
+
+def workflow(base):
+    value=replace(base, 'One bounded fixed-image native PCManFM input diagnostic only (no build/install/release)',
+                  'One bounded native PCManFM successor diagnostic only (same image; no build/install/release)')
+    value=replace(value, 'One fresh live-only bounded PCManFM diagnostic VM',
+                  'One fresh live-only reviewed PCManFM successor diagnostic VM')
+    value=value.replace('arctic-pcmanfm-diagnostic-${{ github.run_id }}', 'arctic-pcmanfm-diagnostic-v2-${{ github.run_id }}')
+    value=replace(value, 'name: pcmanfm-diagnostic-37507582946-${{ github.run_id }}',
+                  'name: pcmanfm-diagnostic-v2-37507582946-${{ github.run_id }}')
+    return value
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--repository',type=Path,required=True)
     args=parser.parse_args()
@@ -221,6 +239,8 @@ def main():
     base_iso=gitfile('tools/test-iso.sh').decode();base_workflow=gitfile('.github/workflows/iso.yml').decode()
     if (HERE/'base-test-iso.sh').read_text()!=base_iso or (HERE/'base-iso.yml').read_text()!=base_workflow:
         raise RuntimeError('base snapshots differ from immutable Git objects')
+    guest=HERE/'guest-pcmanfm-diagnostic.py'
+    guest.write_text(re.sub(r"SECURITY_SHA = '[^']+'", "SECURITY_SHA = '"+hashlib.sha256((HERE/'security-collector.py').read_bytes()).hexdigest()+"'", guest.read_text()))
     tree=HERE/'execution-tree'
     if tree.exists():shutil.rmtree(tree) # Only this generator's own directory, never caller paths or a Git checkout.
     (tree/'tools/pcmanfm-diagnostic').mkdir(parents=True)
@@ -238,7 +258,7 @@ def main():
              [('guest-check.py','guest-pcmanfm-diagnostic.py'),('native_smoke.py','native_smoke.py'),('native-launcher.py','native-launcher.py'),
               ('atspi-snapshot.py','atspi-snapshot.py'),('gtk-entry-control.py','gtk-entry-control.py'),('bounded-launch.py','bounded-launch.py'),
               ('bootstrap-diagnostic.sh','bootstrap-diagnostic.sh'),('original-h264-aac-1s.mp4','original-h264-aac-1s.mp4'),
-              ('codec-fixture-manifest.json','codec-fixture-manifest.json')]}
+              ('codec-fixture-manifest.json','codec-fixture-manifest.json'),('security-collector.py','security-collector.py')]}
     runsh=b'#!/bin/bash\nset -euo pipefail\nexec python3 /run/t/guest-check.py\n'
     runtime['run.sh']=hashlib.sha256(runsh).hexdigest()
     (HERE/'runtime-pins.json').write_text(json.dumps(runtime,indent=2,sort_keys=True)+'\n')
@@ -246,6 +266,7 @@ def main():
     (HERE/'registered-iso-diagnostic.yml').write_text(registered)
     for path,value in [('tools/test-iso.sh',iso),('.github/workflows/iso.yml',registered)]:
         target=tree/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(value)
+        if path=='tools/test-iso.sh':target.chmod(0o755)
         (HERE/(Path(path).name+'.patch')).write_text(''.join(difflib.unified_diff(
             (base_iso if path=='tools/test-iso.sh' else base_workflow).splitlines(True),value.splitlines(True),
             fromfile='a/'+path,tofile='b/'+path)))
@@ -255,6 +276,7 @@ def main():
     files={path:hashlib.sha256((tree/path).read_bytes()).hexdigest() for path in sorted(R.EXECUTION_FILES)}
     manifest=dict(schema='arctic-pcmanfm-execution-v1',execution_base=BASE,recovery_base=R.RECOVERY_BASE,
                   candidate_source='fe4742c8b9414c45f0bcbb0a4191f116383c60d1',files=files,
+                  modes={path:('100755' if path=='tools/test-iso.sh' else '100644') for path in files},
                   self_excluded='tools/pcmanfm-diagnostic/execution-pins.json')
     (HERE/'execution-pins.json').write_text(json.dumps(manifest,indent=2)+'\n')
     shutil.copyfile(HERE/'execution-pins.json',tree/'tools/pcmanfm-diagnostic/execution-pins.json')
