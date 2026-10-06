@@ -301,7 +301,18 @@ Nix/profile/settings persistence and the actual desktop. An installed preview fi
 can be replaced by the current stable repository until an approved main merge;
 post-update evidence must identify that source. Preserve a disposable VM snapshot
 before updating if later paired measurements are feasible. These are planned gates,
-not completed checks. The intermediate update boot uses
+not all completed checks. The first installed Nix run completed 27 checks and
+failed one: cold `arctic-nix search hello` hit the shipped 180-second timeout under
+TCG. Actual hello/Foot installation, live desktop entry/icon/launch from the Nix
+store, session exports, two-user isolation, update/remove/rollback, signature and
+sandbox/root-only trust checks, and relevant AVC checks passed. Zen's browser
+chrome also passed visual review after a longer painting interval. The cold search
+failure is retained; successful installation is not a cold-search/performance pass.
+The combined probe correctly skipped signed staging after this failure. A separate
+updater probe reuses its signed-ready validator, retries only search with the new
+warm cache as a diagnostic, and runs normal staging/reboot/persistence checks
+independently. It does not repeat completed profile operations or fabricate full
+Nix acceptance. The intermediate update boot uses
 `tools/performance/offline-update-boot.py` inside the Fedora QEMU tools container.
 It accepts only disposable qcow2/OVMF files under the repo's `out/`, unlocks the
 existing encrypted disk, retains restricted networking, and waits for the normal
