@@ -15,6 +15,10 @@ import "GetApps.js" as GetAppsLogic
 // belongs to AppsService, so leaving a page never stops an install.
 FocusScope {
     id: router
+    // The launcher also exists while closed and showing its home view. Create the
+    // Get apps page on first use; keep it thereafter so drafts and callbacks live
+    // as before. Jobs are owned by AppsService and never depend on this loader.
+    property bool initialized: false
     property string page: 'choose'
     property string removeTab: ''                 // remove/<tab>, or dnf/all|apps
     property string query: ''
@@ -37,6 +41,7 @@ FocusScope {
         } else {
             page = next;
         }
+        initialized = true;
         Qt.callLater(focusPage);
     }
     function focusPage() { if (inputItem) inputItem.forceActiveFocus(); }
@@ -51,6 +56,7 @@ FocusScope {
 
     Loader {
         id: loader
+        active: router.initialized
         anchors.fill: parent
         focus: true
         sourceComponent: router.page === 'flatpak' || router.page === 'dnf' ? sourcePage
@@ -116,4 +122,3 @@ FocusScope {
         }
     }
 }
-
