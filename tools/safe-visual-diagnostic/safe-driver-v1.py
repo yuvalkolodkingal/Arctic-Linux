@@ -6,6 +6,8 @@ from pathlib import Path
 import time
 
 
+COLLECTOR_COMMAND = "sudo sh -c 'exec >/dev/ttyS0 2>&1; exec sh /dev/disk/by-label/ARCTICSAFE'"
+
 def require(value, message):
     if not value:
         raise RuntimeError(message)
@@ -104,17 +106,26 @@ def run(vm, out, qemu_origin, entry_origin, menu_seen, clock=time.monotonic, sle
            call_elapsed_seconds=clock()-started)
     for elapsed in (1, 5):
         wait_until(started + elapsed); capture('safe-30-return-%02ds' % elapsed)
-    record('collector-command', scope='post-separated-input read-only telemetry')
-    vm.type_text('sudo sh /dev/sr1', gap=.2)
+    record('collector-command', scope='post-separated-input read-only telemetry', command=COLLECTOR_COMMAND)
+    vm.type_text(COLLECTOR_COMMAND, gap=.2)
     vm.keys('ret')
-    ready = await_marker('GRIM-READY', 120)
-    require(ready.get('wait_seconds') == 20 and not serial_records('ARCTIC-SAFE-GRIM-BEGIN '), 'Guest screencopy began before host pre-capture')
-    capture('safe-40-qmp-before-grim')
-    require(not serial_records('ARCTIC-SAFE-GRIM-BEGIN '), 'Guest screencopy overlapped host pre-capture; cannot qualify pair')
-    await_marker('GRIM-DONE', 60)
-    capture('safe-41-qmp-after-grim')
-    end = await_marker('END', 120)
-    capture('safe-99-final')
-    require(end.get('status') == 'collected' and end.get('error') is None and end.get('release_acceptance') is False,
-            'Guest telemetry/security collector failed; original Safe visual gate stays open')
-    record('diagnostic-complete', release_acceptance=False, safe_visual_gate='open')
+    try:
+        ready = await_marker('GRIM-READY', 120)
+        require(ready.get('wait_seconds') == 20 and not serial_records('ARCTIC-SAFE-GRIM-BEGIN '), 'Guest screencopy began before host pre-capture')
+        capture('safe-40-qmp-before-grim')
+        require(not serial_records('ARCTIC-SAFE-GRIM-BEGIN '), 'Guest screencopy overlapped host pre-capture; cannot qualify pair')
+        await_marker('GRIM-DONE', 60)
+        capture('safe-41-qmp-after-grim')
+        end = await_marker('END', 120)
+        capture('safe-99-final')
+        require(end.get('status') == 'collected' and end.get('error') is None and end.get('release_acceptance') is False,
+                'Guest telemetry/security collector failed; original Safe visual gate stays open')
+        record('diagnostic-complete', release_acceptance=False, safe_visual_gate='open')
+    except BaseException as exc:
+        record('diagnostic-failure', error=type(exc).__name__ + ': ' + str(exc))
+        if vm.alive():
+            try:
+                capture('safe-98-collector-failure')
+            except BaseException as capture_error:
+                record('failure-capture-error', error=type(capture_error).__name__ + ': ' + str(capture_error))
+        raise

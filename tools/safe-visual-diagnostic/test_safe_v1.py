@@ -363,5 +363,90 @@ python3() {
                     self.assertFalse(any('safedata' in value for value in prepared_argv))
 
 
+class CollectorBootstrapControls(unittest.TestCase):
+    def test_collector_label_and_early_serial_error_transport(self):
+        import shlex
+        command = shlex.split(D.COLLECTOR_COMMAND)
+        self.assertEqual(command[:3], ['sudo', 'sh', '-c'])
+        self.assertEqual(len(command), 4)
+        self.assertEqual(command[3], 'exec >/dev/ttyS0 2>&1; exec sh /dev/disk/by-label/ARCTICSAFE')
+        self.assertNotIn('/dev/sr1', D.COLLECTOR_COMMAND)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); shim = root/'sh'
+            shim.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >"$MOCK_ARGS"\nprintf "%s\\n" "fixture-label-open-error" >&2\nexit 17\n')
+            shim.chmod(0o755)
+            env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'], MOCK_ARGS=str(root/'argv.txt'))
+            fragment = command[3].replace('/dev/ttyS0', str(root/'serial.log'))
+            result = subprocess.run(['/bin/sh', '-c', fragment], env=env, capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 17)
+            self.assertEqual((root/'argv.txt').read_text().splitlines(), ['/dev/disk/by-label/ARCTICSAFE'])
+            self.assertEqual((root/'serial.log').read_text(), 'fixture-label-open-error\n')
+            self.assertEqual(result.stderr, '')
+
+    def test_bootstrap_mount_selection_and_fail_closed_errors(self):
+        source = (HERE/'bootstrap-safe-v1.sh').read_text()
+        self.assertNotIn('/dev/sr1', source)
+        self.assertIn('mount -o ro /dev/disk/by-label/ARCTICSAFE /run/arctic-safe', source)
+        functions = r'''
+test() {
+  case "$1" in
+    -b) [ "$MOCK_LABEL" = 1 ] ;;
+    '!') [ "$MOCK_EXISTS" = 0 ] ;;
+    *) [ "$1" = 0 ] ;;
+  esac
+}
+id() { printf '%s\n' "$MOCK_UID"; }
+readlink() { printf '%s\n' "$MOCK_RESOLVED"; }
+mkdir() { printf 'mkdir %s\n' "$*" >>"$MOCK_TRACE"; }
+mount() { printf 'mount %s\n' "$*" >>"$MOCK_TRACE"; return "$MOCK_MOUNT_EXIT"; }
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); shim = root/'python3'
+            shim.write_text('#!/bin/sh\nprintf "python %s\\n" "$*" >>"$MOCK_TRACE"\nprintf "%s\\n" "FIXTURE-COLLECTOR-BEGIN" "FIXTURE-COLLECTOR-END"\n')
+            shim.chmod(0o755)
+            for label, uid, exists, mount_exit, resolved, expected in (
+                ('1', '0', '0', '0', '/dev/sr0', 0),
+                ('1', '0', '0', '0', '/dev/sr1', 0),
+                ('0', '0', '0', '0', '/dev/sr0', 1),
+                ('1', '1000', '0', '0', '/dev/sr0', 1),
+                ('1', '0', '1', '0', '/dev/sr0', 1),
+                ('1', '0', '0', '32', '/dev/sr0', 32)):
+                with self.subTest(label=label, uid=uid, exists=exists, mount=mount_exit, resolved=resolved):
+                    serial = root/'serial.log'; trace = root/'trace.txt'
+                    if trace.exists(): trace.unlink()
+                    env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'],
+                               MOCK_LABEL=label, MOCK_UID=uid, MOCK_EXISTS=exists,
+                               MOCK_MOUNT_EXIT=mount_exit, MOCK_RESOLVED=resolved, MOCK_TRACE=str(trace))
+                    fixture_source = source.replace('/dev/ttyS0', str(serial))
+                    result = subprocess.run(['/bin/sh', '-c', functions+fixture_source], env=env,
+                                            capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, expected)
+                    actual = serial.read_text()
+                    self.assertIn('ARCTIC-SAFE-BOOTSTRAP-BEGIN', actual)
+                    if expected == 0:
+                        self.assertIn('ARCTIC-SAFE-BOOTSTRAP-DEVICE='+resolved, actual)
+                        self.assertEqual(trace.read_text().splitlines(), [
+                            'mkdir -m 0700 /run/arctic-safe',
+                            'mount -o ro /dev/disk/by-label/ARCTICSAFE /run/arctic-safe',
+                            'python /run/arctic-safe/guest-safe-collector-v1.py'])
+                        self.assertIn('FIXTURE-COLLECTOR-BEGIN\nFIXTURE-COLLECTOR-END', actual)
+                    else:
+                        self.assertIn('ARCTIC-SAFE-BOOTSTRAP-EXIT='+str(expected), actual)
+                        self.assertNotIn('FIXTURE-COLLECTOR-BEGIN', actual)
+                        if trace.exists(): self.assertNotIn('python ', trace.read_text())
+
+    def test_collector_timeout_retains_failure_screenshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(RuntimeError, 'Guest marker timeout: END'):
+                run_fake(root, 'missing-end')
+            self.assertTrue((root/'safe-98-collector-failure.png').is_file())
+            events = [json.loads(v) for v in (root/'safe-events.log').read_text().splitlines()]
+            failure = [v for v in events if v['event'] == 'diagnostic-failure']
+            self.assertEqual(len(failure), 1)
+            self.assertIn('Guest marker timeout: END', failure[0]['error'])
+            self.assertFalse(any(v['event'] == 'diagnostic-complete' for v in events))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

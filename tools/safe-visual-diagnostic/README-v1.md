@@ -76,9 +76,10 @@ network device choices retain the v2 harness settings.
 
 The diagnosis **adds one read-only data CD** containing only its collector and
 bootstrap. xorriso builds this small diagnostic transport inside the owned host
-container; it does not rebuild or alter the candidate ISO. `sudo sh /dev/sr1`
-mounts the second CD read-only at a fresh `/run/arctic-safe` after all separated
-inputs and runs the exact pinned collector. This added device is a diagnostic
+container; it does not rebuild or alter the candidate ISO. The root shell redirects
+errors to serial before opening `/dev/disk/by-label/ARCTICSAFE`; its bootstrap
+mounts that label read-only at a fresh `/run/arctic-safe` after all separated inputs
+and runs the exact pinned collector. This added device is a diagnostic
 qualification, so this run is not claimed to have every device identical to old
 v2. No arbitrary guest packages/downloads/network access are used. Only disposable
 collector evidence and its read-only mount point are created.
@@ -199,3 +200,19 @@ fix and rollback and test it in a separately approved candidate; no animation,
 wallpaper, clock or feature preference is disabled here. This bundle neither
 changes nor qualifies recovery boot, Secure Boot, native-app functionality,
 performance, hardware or existing PC behavior.
+
+
+Collector transport correction after preserved run37531695459
+----------------------------------------------------------
+The original CD boots on AHCI port5 while the helper uses port1. Linux CD device
+numbers are not a stable helper identity. The test-only driver now selects the
+unique ARCTICSAFE filesystem label, redirects errors to serial before opening the
+raw bootstrap, and preserves a failure screenshot if the collector marker sequence
+fails. Bootstrap mounts that same label read-only and records its resolved device,
+start, mount completion, and pre-exec exit status. Collector guards, before/after
+security checks, 34 required success captures and all original inputs remain.
+The previous run supplied31 phase captures but no collector BEGIN/READY/END; its
+exact pre-collector stderr was unavailable. Label selection addresses the unsafe
+device-number assumption; a new reviewed run must prove actual label resolution,
+read-only mounting, collector start/end and telemetry. Neither host fixtures nor
+telemetry alone closes the still-open Safe visual gate.
