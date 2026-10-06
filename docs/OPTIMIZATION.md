@@ -409,3 +409,36 @@ been pushed or dispatched; remote branch publication still requires approval.
 An Actions rebuild will produce different ISO bytes and requires its own checksum
 and qualification evidence. `boot_test` does not include the separate Nix/update
 acceptance flow, and its existing continue-on-error setting is not a stability gate.
+
+
+### Offline update diagnosis and direct retry (2026-10-06 01:46 UTC)
+
+The read-only actual service journal now identifies the rejected transaction:
+`dnf5-offline-transaction.service` exited 1 because the system had been modified
+since staging. `dnf5 offline status` confirms the stale RPM-database cookie; no
+completed DNF transaction log exists. The disk is still mounted at the normal
+`/@` subvolume and Snapper lists only the current root, so the observations do
+not show a snapshot rollback. All failed installed-version checks remain archived.
+
+The firstboot journal records `rpm --import` for the RPM Fusion key during an
+intermediate graphical diagnostic boot after staging. A separate Fedora 44/RPM 6
+tools-container control showed unchanged cookie after a read-only `rpm -qa`,
+but changed cookies after each repeated import of an already trusted key. The
+first control forgot to open the RPM database and returned null; it is retained
+as inconclusive, not evidence. The corrected control is
+`out/audit/candidate/rpm-key-import-cookie-control-opened.json`, with versions
+recorded beside it. This establishes that the intervening key import can
+invalidate staging; the complete timeline supports that explanation without
+asserting that no other database writer existed. No stale-cookie check is bypassed.
+
+One targeted normal restaging attempt is queued after BIOS/Safe graphics. It
+checks the actual ready/armed/non-stale state again after all signature and
+package queries, records genuine preferences/profile/package versions, then
+boots directly into the default offline transaction and verifies the actual
+installed versions and latest transaction log on the next default boot. There
+is no intermediate graphical diagnostic boot. No firstboot service is removed
+or disabled, no repository key/signature/TLS/SELinux policy is weakened, and no
+additional candidate Nix search is run. Performance's waiting controller was
+paused and replaced with an identical observer queue after this direct attempt;
+no advancing VM was stopped. The update gate remains failed until real version
+change and post-update persistence pass.
