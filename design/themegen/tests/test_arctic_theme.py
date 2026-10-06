@@ -1,10 +1,12 @@
 """arctic-theme and arctic-wallpaper (dotfiles/.local/bin) against the engine, in a throwaway
-home with fake gsettings / pkill / makoctl / mmsg / arctic-shell-ipc that log their calls.
+home with fake desktop interfaces that log their calls. A dedicated child owns
+the real CLI subtree and proves natural completion before deleting either home.
 
 Run: python3 -m unittest discover -s design/themegen/tests
 """
 import json
 import os
+import selectors
 import shutil
 import stat
 import subprocess
@@ -28,12 +30,146 @@ except ImportError:  # pragma: no cover
 FAKES = {
     "gsettings": 'echo "gsettings $*" >> "$ARCTIC_TEST_LOG"; [ "$1" = get ] && echo "\'adw-gtk3-dark\'"; exit 0',
     "pkill": 'echo "pkill $*" >> "$ARCTIC_TEST_LOG"; exit 1',
+    # This fresh fixture has no previous swaybg. Never discover a real host
+    # wallpaper PID for the product's shell-builtin kill path.
+    "pgrep": 'echo "pgrep $*" >> "$ARCTIC_TEST_LOG"; exit 1',
     "makoctl": 'echo "makoctl $*" >> "$ARCTIC_TEST_LOG"',
     "mmsg": 'echo "mmsg $*" >> "$ARCTIC_TEST_LOG"; echo \'{"success":true}\'',
     "arctic-shell-ipc": 'echo "arctic-shell-ipc $*" >> "$ARCTIC_TEST_LOG"',
     "swaybg": 'exit 0',
+    # Pin the real setsid fallback used by container CI; never contact a host
+    # user manager that could launch processes outside the owned child subtree.
+    "systemd-run": 'echo "systemd-run $*" >> "$ARCTIC_TEST_LOG"; exit 1',
+    # Broker/security integration has separate tests; this fixture records its
+    # actual dispatch without contacting the host login-wallpaper broker.
+    "arctic-login-wallpaper": 'echo "arctic-login-wallpaper $*" >> "$ARCTIC_TEST_LOG"',
 }
 REDRAW_STUB = 'echo "arctic-wallpaper $*" >> "$ARCTIC_TEST_LOG"'
+
+
+FIXTURE_SUPERVISOR = r'''
+import ctypes, errno, json, os, subprocess, sys, time
+libc = ctypes.CDLL(None, use_errno=True)
+if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER, this child only
+    raise OSError(ctypes.get_errno(), 'Cannot own detached fixture descendants')
+def quiesce(seconds):
+    deadline = time.monotonic() + seconds
+    reaped = []
+    while True:
+        try:
+            pid, status = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError as error:
+            if error.errno != errno.ECHILD:
+                raise
+            # ECHILD: no live or unreaped owned descendants.
+            return dict(quiescent=True, reaped=reaped, kernel_no_children=True)
+        if pid:
+            reaped.append([pid, status])
+        elif time.monotonic() >= deadline:
+            raise TimeoutError('Owned fixture descendants have not finished')
+        else:
+            time.sleep(.005)
+print(json.dumps(dict(ready=True, pid=os.getpid())), flush=True)
+for line in sys.stdin:
+    request = json.loads(line)
+    try:
+        if request['op'] == 'run':
+            r = subprocess.run(request['argv'], env=request['env'], stdin=subprocess.DEVNULL,
+                capture_output=True, text=True, timeout=request['timeout'])
+            result = dict(returncode=r.returncode, stdout=r.stdout, stderr=r.stderr)
+        elif request['op'] == 'quiesce':
+            result = quiesce(request['seconds'])
+        else:
+            raise ValueError('Unknown owned fixture operation')
+        print(json.dumps(dict(result=result)), flush=True)
+    except Exception as error:
+        print(json.dumps(dict(error=type(error).__name__+': '+str(error))), flush=True)
+# EOF keeps ownership until every child has naturally exited and been reaped.
+# The parent has a bounded wait and retains fixture roots if this cannot finish.
+while True:
+    try:
+        os.waitpid(-1, 0)
+    except ChildProcessError as error:
+        if error.errno != errno.ECHILD:
+            raise
+        break
+'''
+
+
+class OwnedFixtureCommands:
+    """One dedicated test child owns and naturally reaps its entire CLI subtree."""
+    def __init__(self):
+        self.eof_quiescent = False
+        self.process = subprocess.Popen([sys.executable, '-u', '-c', FIXTURE_SUPERVISOR],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        try:
+            ready = self.receive(5)
+            if ready != dict(ready=True, pid=self.process.pid):
+                raise RuntimeError('Owned fixture supervisor did not start')
+        except BaseException:
+            self.process.stdin.close()
+            self.process.wait(timeout=40)
+            self.process.stdout.close()
+            raise
+
+    def receive(self, seconds):
+        with selectors.DefaultSelector() as selector:
+            selector.register(self.process.stdout, selectors.EVENT_READ)
+            if not selector.select(seconds):
+                raise TimeoutError('Owned fixture supervisor response timed out')
+        line = self.process.stdout.readline()
+        if not line:
+            raise RuntimeError('Owned fixture supervisor exited before its response')
+        response = json.loads(line)
+        if 'error' in response:
+            raise RuntimeError(response['error'])
+        return response
+
+    def request(self, **request):
+        self.process.stdin.write(json.dumps(request)+'\n')
+        self.process.stdin.flush()
+        return self.receive(request.get('timeout', request.get('seconds', 0))+5)['result']
+
+    def run(self, argv, env, timeout=60):
+        result = self.request(op='run', argv=argv, env=env, timeout=timeout)
+        return subprocess.CompletedProcess(argv, result['returncode'], result['stdout'], result['stderr'])
+
+    def quiesce(self, seconds=35):
+        proof = self.request(op='quiesce', seconds=seconds)
+        if proof.get('quiescent') is not True or proof.get('kernel_no_children') is not True:
+            raise RuntimeError('Missing kernel child-ownership completion proof')
+        return proof
+
+    def finish(self, seconds=35):
+        proof = None
+        primary = None
+        try:
+            proof = self.quiesce(seconds)
+        except BaseException as error:
+            primary = error
+        finally:
+            try:
+                self.process.stdin.close()
+            except BaseException as error:
+                if primary is None:
+                    primary = error
+        try:
+            code = self.process.wait(timeout=40)
+            self.eof_quiescent = code == 0
+            if code != 0:
+                raise RuntimeError('Owned fixture supervisor cleanup failed: '+str(code))
+        except BaseException as error:
+            if primary is None:
+                primary = error
+        finally:
+            try:
+                self.process.stdout.close()
+            except BaseException as error:
+                if primary is None:
+                    primary = error
+        if primary is not None:
+            raise primary
+        return proof
 
 
 def write_exec(path, body, shebang="#!/bin/sh"):
@@ -47,6 +183,7 @@ def write_exec(path, body, shebang="#!/bin/sh"):
 class ArcticThemeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.fixture_commands = []
         # The packaged static themes, rendered once.
         cls.share_tmp = tempfile.TemporaryDirectory()
         cls.share = os.path.join(cls.share_tmp.name, "share", "arctic")
@@ -56,6 +193,10 @@ class ArcticThemeTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if any(command.eof_quiescent is not True or command.process.poll() is None
+               for command in cls.fixture_commands):
+            cls.share_tmp._finalizer.detach()
+            raise RuntimeError('Shared fixture retained: owned descendants are not proven quiescent')
         cls.share_tmp.cleanup()
 
     def setUp(self):
@@ -100,14 +241,23 @@ class ArcticThemeTests(unittest.TestCase):
         os.symlink(os.path.join(self.share, "themes", "polar-night"), os.path.join(self.config, "current"))
         with open(os.path.join(self.config, "theme"), "w") as f:
             f.write("polar-night\n")
+        self.commands = OwnedFixtureCommands()
+        type(self).fixture_commands.append(self.commands)
 
     def tearDown(self):
+        try:
+            self.commands.finish()
+        except BaseException:
+            # Preserve the temporary home for diagnosis; a live owned writer
+            # must never race either explicit cleanup or the GC finalizer.
+            self.tmp._finalizer.detach()
+            raise
         self.tmp.cleanup()
 
     # -- helpers --
     def theme(self, *args, ok=True):
-        r = subprocess.run([os.path.join(BIN, "arctic-theme")] + list(args), env=self.env,
-                           capture_output=True, text=True, timeout=60)
+        r = self.commands.run([os.path.join(BIN, "arctic-theme")] + list(args), env=self.env,
+                              timeout=60)
         if ok:
             self.assertEqual(r.returncode, 0, "arctic-theme {}: {}".format(" ".join(args), r.stderr))
         return r
@@ -129,6 +279,71 @@ class ArcticThemeTests(unittest.TestCase):
     def choose(self, wallpaper):
         with open(os.path.join(self.config, "wallpaper"), "w") as f:
             f.write(wallpaper + "\n")
+
+    def delayed_owned_writer(self, finite_delay=None):
+        """Actual double-fork descendant waits for a test-owned release barrier."""
+        pid_file = os.path.join(self.root, 'owned-descendant.pid')
+        release = os.path.join(self.root, 'release-owned-descendant')
+        directory = os.path.join(self.root, 'delayed-owned-home')
+        actor = '''import os,sys,time
+pid_file, release, directory, finite_delay = sys.argv[1:]
+with open(pid_file,'w') as f: f.write(str(os.getpid()))
+deadline=time.monotonic()+5
+ready=time.monotonic()
+while not os.path.exists(release):
+ if finite_delay and time.monotonic()-ready >= float(finite_delay): break
+ if time.monotonic()>deadline: raise SystemExit(4)
+ time.sleep(.005)
+os.makedirs(directory,exist_ok=True)
+with open(os.path.join(directory,'finished'),'w') as f: f.write('owned actor finished')
+'''
+        kwargs = 'stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True'
+        intermediate = 'import subprocess\nsubprocess.Popen({!r}, {})'.format(
+            [sys.executable, '-c', actor, pid_file, release, directory,
+             '' if finite_delay is None else str(finite_delay)], kwargs)
+        frontend = 'import subprocess\nsubprocess.Popen({!r}, {})'.format(
+            [sys.executable, '-c', intermediate], kwargs)
+        result = self.commands.run([sys.executable, '-c', frontend], env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        deadline = time.monotonic()+5
+        while not os.path.isfile(pid_file):
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Owned descendant did not reach its actual release barrier')
+            time.sleep(.005)
+        with open(pid_file) as f:
+            pid = int(f.read())
+        return pid, release, directory
+
+    def test_owned_double_fork_writer_is_reaped_before_temporary_home_cleanup(self):
+        pid, release, directory = self.delayed_owned_writer()
+        os.makedirs(directory)
+        os.rmdir(directory)  # reproduce a directory recreated by a late owned actor
+        with open(release, 'w') as f:
+            f.write('release')
+        proof = self.commands.quiesce(seconds=5)
+        self.assertEqual(dict(proof['reaped'])[pid], 0)
+        with open(os.path.join(directory, 'finished')) as f:
+            self.assertEqual(f.read(), 'owned actor finished')
+        shutil.rmtree(directory)  # only after the actual actor was adopted/reaped
+
+    def test_owned_writer_timeout_refuses_cleanup_and_retains_the_temporary_home(self):
+        pid, release, directory = self.delayed_owned_writer(finite_delay=.2)
+        original = self.commands.finish
+        self.commands.finish = lambda: original(seconds=.03)
+        with self.assertRaisesRegex(RuntimeError, 'descendants have not finished'):
+            self.tearDown()
+        self.assertTrue(os.path.isdir(self.root))
+        self.assertFalse(self.tmp._finalizer.alive)
+        self.assertEqual(self.commands.process.returncode, 0)
+        self.assertTrue(self.commands.eof_quiescent)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)  # lookup only; the actor naturally exited and was reaped
+        self.assertTrue(os.path.isfile(os.path.join(directory, 'finished')))
+        # The intentionally failed teardown above preserved the home. The
+        # ordinary unittest teardown may remove it only after a fresh helper
+        # also completes; the old helper's EOF/ECHILD proof remains registered.
+        self.commands = OwnedFixtureCommands()
+        type(self).fixture_commands.append(self.commands)
 
     # -- tests --
     def test_defaults(self):
@@ -370,8 +585,8 @@ class ArcticThemeTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("setsid"), "arctic-wallpaper needs setsid (util-linux)")
     def test_arctic_wallpaper_switches_the_colours(self):
         env = dict(self.env, PATH=os.pathsep.join([self.fakes, BIN, "/usr/bin", "/bin"]))
-        run = lambda *a: subprocess.run([os.path.join(BIN, "arctic-wallpaper")] + list(a), env=env,  # noqa: E731
-                                        capture_output=True, text=True, timeout=60)
+        run = lambda *a: self.commands.run([os.path.join(BIN, "arctic-wallpaper")] + list(a), env=env,  # noqa: E731
+                                          timeout=60)
         r = run(self.dunes)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.theme().stdout, "wallpaper\n")
@@ -389,6 +604,11 @@ class ArcticThemeTests(unittest.TestCase):
         r = run(self.sea)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.theme().stdout, "winter\n")
+        self.commands.quiesce()
+        self.assertIn("arctic-login-wallpaper follow", self.calls())
+        self.assertIn("pgrep -u {} -x swaybg".format(os.getuid()), self.calls())
+        self.assertTrue(any(call.startswith("systemd-run --user --scope --quiet --collect -- setsid -f swaybg ")
+                            for call in self.calls()))
 
 
 if __name__ == "__main__":
