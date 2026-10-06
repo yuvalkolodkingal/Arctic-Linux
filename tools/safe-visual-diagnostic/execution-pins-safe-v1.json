@@ -10,12 +10,13 @@
     "tools/safe-visual-diagnostic/guest-render-collector-v1.py": "7bb9ccb1ba51bf802db7b5aa8120c55616678b47395c3f4765f9a52745afc84b",
     "tools/safe-visual-diagnostic/guest-safe-collector-v1.py": "e1da6bb2f07cb7014486e0f59c36973600e5dcd9a8063c684f461e099d3fc5e9",
     "tools/safe-visual-diagnostic/prepare-safe-v1.py": "9e6921d23907856a15c358b8c49b8a23c0dddd35fa56834b617a35182011ee18",
-    "tools/safe-visual-diagnostic/render-driver-v1.py": "39e12d361afaf3001a098b5e3afceb22d9f3e7b2b9fb1a02bf9d50e48f0f911e",
+    "tools/safe-visual-diagnostic/render-driver-v1.py": "f6a3504b0a633879603bac974480dfbb17746a95ea253e31128dd593635d39b3",
     "tools/safe-visual-diagnostic/safe-driver-v1.py": "f48dd72c5cc61174614127bf9a62b7affa0c036300273321554938b466209999",
-    "tools/safe-visual-diagnostic/safe-runner-v1.py": "9f2ca7b6bab279b8db59c46b3c670c3391519cbcb393e511289e69051354a9fc",
-    "tools/safe-visual-diagnostic/test_render_v1.py": "7947233d0a56c41df5c5dd0f1577882e1b05604f4c21d5085ec9852c58aebedd",
-    "tools/safe-visual-diagnostic/test_safe_v1.py": "190b91c74f3f767e6d6f94fff5dbb8922bf0e6f50a64484e2c2deeeb1907f3f3",
-    "tools/test-iso.sh": "978b2454e13434947b9245cfe21bc8f1c80e8f00c22857c284d228e9cf45bbbe"
+    "tools/safe-visual-diagnostic/safe-runner-v1.py": "a28cb7a2322e071add61953d3a24d1129ec75e48cf122c086a57d99968426869",
+    "tools/safe-visual-diagnostic/test_render_v1.py": "2298fff830f41b262c6260e9747da7b1d3d5bdd00a2d3e91fa62a30e534ea1eb",
+    "tools/safe-visual-diagnostic/test_safe_v1.py": "b7a5890f9e0abe3a72dad57dfadc83c03d19edec5ceaf06808c58d9e9732570b",
+    "tools/test-iso.sh": "978b2454e13434947b9245cfe21bc8f1c80e8f00c22857c284d228e9cf45bbbe",
+    "tools/tests/test_performance_observer.py": "2c91f921438d312b3462517ffede7d5854b77f3df208a3a5f10eb719428e33d2"
   },
   "git_modes": {
     ".github/workflows/iso.yml": "100644",
@@ -32,7 +33,8 @@
     "tools/safe-visual-diagnostic/safe-runner-v1.py": "100644",
     "tools/safe-visual-diagnostic/test_render_v1.py": "100644",
     "tools/safe-visual-diagnostic/test_safe_v1.py": "100644",
-    "tools/test-iso.sh": "100755"
+    "tools/test-iso.sh": "100755",
+    "tools/tests/test_performance_observer.py": "100644"
   },
   "modes": {
     ".github/workflows/iso.yml": 420,
@@ -49,7 +51,8 @@
     "tools/safe-visual-diagnostic/safe-runner-v1.py": 420,
     "tools/safe-visual-diagnostic/test_render_v1.py": 420,
     "tools/safe-visual-diagnostic/test_safe_v1.py": 420,
-    "tools/test-iso.sh": 493
+    "tools/test-iso.sh": 493,
+    "tools/tests/test_performance_observer.py": 420
   },
   "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
   "schema": "arctic-safe-execution-v1"

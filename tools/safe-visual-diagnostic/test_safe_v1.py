@@ -260,7 +260,7 @@ class SourceSecurityControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             root = Path(t); bundle = root/'tools/safe-visual-diagnostic'; bundle.mkdir(parents=True)
             manifest = dict(schema=H.SCHEMA, candidate_source=R.SOURCE, qualification_base=H.BASE,
-                            files={p:'a'*64 for p in H.EXECUTION_FILES})
+                            files={p:H.SOURCE_CI_INPUTS.get(p, 'a'*64) for p in H.EXECUTION_FILES})
             (bundle/'execution-pins-safe-v1.json').write_text(json.dumps(manifest))
             args = types.SimpleNamespace(bundle=bundle, source=Path('/fixture/candidate'), recovery_bundle=Path('/fixture/frozen/tools/same-iso-recovery'))
             fake = types.SimpleNamespace(SOURCE=R.SOURCE)
@@ -276,6 +276,33 @@ class SourceSecurityControls(unittest.TestCase):
                         H.verify_sources(args, fake)
             poisoned = root/'frozen'; poisoned.mkdir(); (poisoned/'vm-only-recovery-v2.py').write_text('raise AssertionError("imported before hash guard")')
             with self.assertRaises(RuntimeError): H.recovery(types.SimpleNamespace(recovery_bundle=poisoned))
+
+
+    def test_reviewed_source_ci_input_hash_and_scope_are_exact(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t); bundle = root/'tools/safe-visual-diagnostic'; bundle.mkdir(parents=True)
+            files = {p:H.SOURCE_CI_INPUTS.get(p, 'a'*64) for p in H.EXECUTION_FILES}
+            ci_path, ci_hash = next(iter(H.SOURCE_CI_INPUTS.items()))
+            args = types.SimpleNamespace(bundle=bundle, source=Path('/fixture/candidate'), recovery_bundle=Path('/fixture/frozen/tools/same-iso-recovery'))
+            fake = types.SimpleNamespace(SOURCE=R.SOURCE, verify_sources=unittest.mock.Mock(), pinned_file=unittest.mock.Mock())
+            changed = '.github/workflows/iso.yml\ntools/test-iso.sh\n' + ci_path + '\n'
+            for case in ('valid', 'wrong-hash', 'missing', 'extra-file', 'unreviewed-diff'):
+                with self.subTest(case=case):
+                    pins = dict(files)
+                    if case == 'wrong-hash': pins[ci_path] = 'c'*64
+                    elif case == 'missing': del pins[ci_path]
+                    elif case == 'extra-file': pins['tools/tests/unreviewed.py'] = 'c'*64
+                    diff = changed + ('tools/tests/unreviewed.py\n' if case == 'unreviewed-diff' else '')
+                    manifest = dict(schema=H.SCHEMA, candidate_source=R.SOURCE, qualification_base=H.BASE, files=pins)
+                    (bundle/'execution-pins-safe-v1.json').write_text(json.dumps(manifest))
+                    fake.pinned_file.reset_mock()
+                    with patch.dict(os.environ, GITHUB_SHA='b'*40), patch.object(H.subprocess, 'run'), patch.object(H.subprocess, 'check_output', side_effect=['b'*40+'\n', '', diff]):
+                        if case == 'valid':
+                            H.verify_sources(args, fake)
+                            fake.pinned_file.assert_any_call(root/ci_path, ci_hash)
+                        else:
+                            with self.assertRaises(RuntimeError): H.verify_sources(args, fake)
+                            fake.pinned_file.assert_not_called()
 
 
 class DiagnosticCDControls(unittest.TestCase):

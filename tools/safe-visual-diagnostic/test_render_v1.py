@@ -66,9 +66,9 @@ class RenderVM:
         elapsed = self.clock.time() - self.start
         markers = [('BEGIN', 0, dict(release_acceptance=False)), ('FB-READY', 0, dict(wait_seconds=10)), ('FB-DONE', 10, {}), ('FOOT-START', 15, {})]
         markers += [('FOOT-FB', 15 + s, dict(label='foot-%02ds' % s, seconds_after_owned_launch=s)) for s in (1, 5, 60)]
-        markers += [('GRIM-READY', 77, dict(wait_seconds=10)), ('GRIM-BEGIN', 87, {}), ('GRIM-DONE', 88, {}), ('END', 95, dict(status='collected-inconclusive', error=None, release_acceptance=False))]
+        markers += [('GRIM-READY', 77, dict(wait_seconds=10)), ('GRIM-BEGIN', 87, {}), ('GRIM-DONE', 88, {}), ('REPORT', 94, {}), ('MANIFEST', 94, {}), ('END', 95, dict(status='collected-inconclusive', error=None, release_acceptance=False))]
         if self.failure in ('early-foot',): markers[3] = ('FOOT-START', 10, {})
-        if self.failure == 'early-grim': markers[-3] = ('GRIM-BEGIN', 77, {})
+        if self.failure == 'early-grim': markers[next(index for index, value in enumerate(markers) if value[0] == 'GRIM-BEGIN')] = ('GRIM-BEGIN', 77, {})
         if self.failure in ('failed-end', 'failure-screenshot'): markers[-1][2]['status'] = 'failed'; markers[-1][2]['error'] = 'fixture preserved original failure'
         if self.failure == 'timeout': markers = markers[:-1]
         text = self.oldserial
@@ -106,10 +106,18 @@ def transport(report_change=None, file_change=None, message='host fixture only',
     for name, data in files.items():
         packed = zlib.compress(data); manifest['files'].append(dict(path=name, bytes=len(data), sha256=G.sha(data), compressed_bytes=len(packed), chunks=1))
         chunks.append(('CHUNK', dict(path=name, index=0, data=base64.b64encode(packed).decode())))
-    return [('BEGIN', dict(collector_sha256='a' * 64, release_acceptance=False)), ('REPORT', report), ('MANIFEST', manifest), *chunks, ('END', dict(status='collected-inconclusive', error=None, release_acceptance=False))]
+    phases = [('BEGIN', dict(collector_sha256='a' * 64, release_acceptance=False)),
+              ('FB-READY', dict(wait_seconds=10)), ('FB-DONE', frames[0]), ('FOOT-START', report['owned_launch'])]
+    phases += [('FOOT-FB', value) for value in frames[1:4]]
+    phases += [('GRIM-READY', dict(wait_seconds=10)), ('GRIM-BEGIN', {}), ('GRIM-DONE', report['grim'])]
+    return [*phases, ('REPORT', report), ('MANIFEST', manifest), *chunks, ('END', dict(status='collected-inconclusive', error=None, release_acceptance=False))]
 
 
-def serial(protocol): return '\n'.join('ARCTIC-RENDER-' + name + ' ' + json.dumps(value) for name, value in protocol)
+def serial(protocol): return '\n'.join('ARCTIC-RENDER-' + name + ' ' + json.dumps(value) for name, value in protocol) + '\n'
+
+
+def stream_prefix():
+    return serial([('BEGIN', dict(release_acceptance=False)), ('FB-READY', dict(wait_seconds=10)), ('FB-DONE', {})])
 
 
 class GeometryTests(unittest.TestCase):
@@ -214,6 +222,172 @@ class DriverTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError): R.validate_events(p / 'render-events.log', p / 'safe-events.log')
 
 
+class SerialStreamingTests(unittest.TestCase):
+    def test_every_byte_split_waits_for_newline(self):
+        payload = dict(argv=['/usr/bin/foot', '--app-id=host-fixture'], metadata='x' * 2048)
+        line = 'ARCTIC-RENDER-FOOT-START ' + json.dumps(payload) + '\n'
+        for split in range(len(line)):
+            with self.subTest(split=split):
+                self.assertEqual(R.records(stream_prefix() + line[:split], 'FOOT-START', live=True), [])
+                self.assertEqual(R.records(stream_prefix() + line[:split] + line[split:], 'FOOT-START', live=True), [payload])
+        self.assertEqual(R.records('unrelated journal\n' + stream_prefix() + line + 'unfinished unrelated', 'FOOT-START'), [payload])
+        self.assertEqual(R.records((stream_prefix() + line).replace('\n', '\r\n'), 'FOOT-START', live=True), [payload])
+
+    def test_real_owned_chunk_writer_and_eof(self):
+        import select, subprocess, warnings
+        payload = dict(argv=['/usr/bin/foot', 'host-only fixture'], metadata='x' * 2048)
+        line = 'ARCTIC-RENDER-FOOT-START ' + json.dumps(payload)
+        for terminated in (True, False):
+            with self.subTest(terminated=terminated), tempfile.TemporaryDirectory() as temp, warnings.catch_warnings():
+                warnings.simplefilter('error', ResourceWarning)
+                path = Path(temp) / 'owned-stream.log'
+                chunks = ['owned unrelated journal\n' + stream_prefix() + line[:1195], line[1195:]] + (['\n'] if terminated else [])
+                writer = 'import json,sys;from pathlib import Path\np=Path(sys.argv[1])\nwith p.open("a") as stream:\n for i,chunk in enumerate(json.loads(sys.argv[2])):\n  stream.write(chunk);stream.flush();print(i,flush=True)\n  if sys.stdin.readline() != "continue\\n":raise SystemExit(2)\n'
+                with subprocess.Popen([sys.executable, '-c', writer, str(path), json.dumps(chunks)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True) as child:
+                    try:
+                        for index in range(len(chunks)):
+                            ready, _, _ = select.select([child.stdout], [], [], 3)
+                            self.assertTrue(ready, 'Owned writer handshake timed out')
+                            self.assertEqual(child.stdout.readline(), str(index) + '\n')
+                            expected = [payload] if terminated and index == len(chunks)-1 else []
+                            self.assertEqual(R.records(path.read_text(), 'FOOT-START', live=True), expected)
+                            if not expected:
+                                with self.assertRaisesRegex(RuntimeError, 'Unterminated render protocol'):
+                                    R.records(path.read_text(), 'FOOT-START')
+                            child.stdin.write('continue\n'); child.stdin.flush()
+                        stdout, stderr = child.communicate(timeout=3)
+                        self.assertEqual((child.returncode, stdout, stderr), (0, '', ''))
+                        if terminated:
+                            self.assertEqual(R.records(path.read_text(), 'FOOT-START'), [payload])
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, 'Unterminated render protocol'):
+                                R.records(path.read_text(), 'FOOT-START')
+                    finally:
+                        if child.poll() is None:
+                            child.terminate()
+                            try: child.wait(timeout=3)
+                            except subprocess.TimeoutExpired: child.kill(); child.wait(timeout=3)
+
+    def test_completed_malformed_and_interleaved_lines_are_fatal(self):
+        for text in ('ARCTIC-RENDER-FOOT-START {"argv":\n',
+                     'ARCTIC-RENDER-FOOT-START {"argv": [\ninterleaved journal\n]}\n',
+                     'ARCTIC-RENDER-FOOT-START {"argv": [\r\n'):
+            with self.subTest(text=text), self.assertRaises(json.JSONDecodeError):
+                R.records(text, 'FOOT-START', live=True)
+        self.assertEqual(R.records('unrelated journal\n' + stream_prefix() + 'ARCTIC-RENDER-FOOT-START {}\nother journal\n', 'FOOT-START', live=True), [{}])
+
+    def test_final_unterminated_transport_and_partial_forbidden_markers_fail(self):
+        for tail in ('ARCTIC-RENDER-FOOT-START {}', 'ARCTIC-RENDER-UNKNOWN {}', 'ARCTIC-RENDER-FO'):
+            with self.subTest(tail=tail):
+                with self.assertRaisesRegex(RuntimeError, 'Unterminated render protocol'):
+                    R.records(tail, 'FOOT-START')
+        for text in (serial(transport())[:-1], serial(transport()) + 'ARCTIC-RENDER-FOOT-START {}'):
+            with self.subTest(tail=text[-80:]), tempfile.TemporaryDirectory() as temp:
+                with self.assertRaisesRegex(RuntimeError, 'Unterminated render protocol'):
+                    R.extract(text, Path(temp)/'out', 'a'*64)
+
+    def test_full_driver_waits_for_partial_record_and_preserves_original(self):
+        class ChunkVM(RenderVM):
+            partial_polls = 0
+            def update(self):
+                super().update()
+                if self.start is not None and 15 <= self.clock.time()-self.start < 15.4:
+                    path = self.root/'serial.log'; text = path.read_text(); prefix = 'ARCTIC-RENDER-FOOT-START '
+                    if prefix in text:
+                        self.partial_polls += 1; text = text[:text.index(prefix)] + prefix + '{"pending":'
+                        path.write_text(text)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); clock = original(root); before = (root/'safe-events.log').read_bytes(); vm = ChunkVM(root, clock)
+            def sleep(seconds): clock.sleep(seconds); vm.update()
+            R.run(vm, root, clock.time, sleep)
+            self.assertGreaterEqual(vm.partial_polls, 3)
+            self.assertEqual((root/'safe-events.log').read_bytes(), before)
+            H.validate_events(root/'safe-events.log'); R.validate_events(root/'render-events.log', root/'safe-events.log')
+
+    def test_full_driver_eof_deadline_and_dead_vm_never_pass(self):
+        for mode in ('foot-eof', 'end-eof', 'dead-while-partial', 'bool-begin'):
+            class BrokenVM(RenderVM):
+                def alive(self): return not (mode == 'dead-while-partial' and self.start is not None and self.clock.time()-self.start >= 20)
+                def update(self):
+                    super().update()
+                    if self.start is None: return
+                    path = self.root/'serial.log'; text = path.read_text()
+                    if mode == 'bool-begin':
+                        text = text.replace('ARCTIC-RENDER-BEGIN {"release_acceptance": false}', 'ARCTIC-RENDER-BEGIN false')
+                    else:
+                        prefix = 'ARCTIC-RENDER-END ' if mode == 'end-eof' else 'ARCTIC-RENDER-FOOT-START '
+                        if prefix in text: text = text[:text.index(prefix)] + prefix + '{}'
+                    path.write_text(text)
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp); clock = original(root); before = (root/'safe-events.log').read_bytes(); vm = BrokenVM(root, clock)
+                def sleep(seconds): clock.sleep(seconds); vm.update()
+                with self.assertRaises((RuntimeError, AttributeError)): R.run(vm, root, clock.time, sleep)
+                self.assertEqual((root/'safe-events.log').read_bytes(), before)
+                H.validate_events(root/'safe-events.log')
+                rows = [json.loads(line) for line in (root/'render-events.log').read_text().splitlines()]
+                self.assertTrue(any(v['event'] == 'arm-failure' for v in rows)); self.assertFalse(any(v['event'] == 'arm-complete' for v in rows))
+                self.assertLessEqual(rows[-1]['arm_elapsed_seconds'], 180)
+                if 'eof' in mode: self.assertIn('marker timeout', next(v['error'] for v in rows if v['event']=='arm-failure'))
+
+    def test_late_duplicate_completing_after_poll_advance_is_fatal(self):
+        class DelayedDuplicateVM(RenderVM):
+            def update(self):
+                super().update()
+                if self.start is None: return
+                elapsed = self.clock.time()-self.start
+                if elapsed >= 15:
+                    path = self.root/'serial.log'; text = path.read_text(); prefix = 'ARCTIC-RENDER-FOOT-START '
+                    if prefix in text:
+                        begin = text.index(prefix); end = text.index('\n', begin)+1
+                        duplicate = prefix+'{"pending":' if elapsed < 16 else prefix+'{}\n'
+                        path.write_text(text[:end] + duplicate + text[end:])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); clock = original(root); before = (root/'safe-events.log').read_bytes(); vm = DelayedDuplicateVM(root, clock)
+            def sleep(seconds): clock.sleep(seconds); vm.update()
+            with self.assertRaisesRegex(RuntimeError, 'missing/duplicate/reordered'):
+                R.run(vm, root, clock.time, sleep)
+            self.assertEqual((root/'safe-events.log').read_bytes(), before); H.validate_events(root/'safe-events.log')
+            rows = [json.loads(line) for line in (root/'render-events.log').read_text().splitlines()]
+            self.assertTrue(any(v['event']=='arm-failure' for v in rows)); self.assertFalse(any(v['event']=='arm-complete' for v in rows))
+
+    def test_final_whole_phase_duplicate_order_object_and_missing_controls(self):
+        for mode in ('duplicate-foot', 'reordered-phase', 'primitive-phase', 'missing-phase', 'unexpected', 'duplicate-end'):
+            values = transport()
+            if mode == 'duplicate-foot': values.insert(4, values[3])
+            elif mode == 'reordered-phase': values[2], values[3] = values[3], values[2]
+            elif mode == 'primitive-phase': values[3] = ('FOOT-START', False)
+            elif mode == 'missing-phase': values.pop(2)
+            elif mode == 'unexpected': values.insert(4, ('UNEXPECTED', {}))
+            else: values.append(values[-1])
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temp:
+                with self.assertRaises(RuntimeError): R.extract(serial(values), Path(temp)/'out', 'a'*64)
+                self.assertFalse((Path(temp)/'out').exists(), 'Completed phase proof must fail before output writes')
+
+    def test_every_incomplete_end_cut_and_unexpected_malformed_record_fails(self):
+        values = transport(); prefix = serial(values[:-1]); end = serial(values[-1:])
+        for cut in range(len(end)):
+            with self.subTest(cut=cut), tempfile.TemporaryDirectory() as temp:
+                with self.assertRaises(RuntimeError): R.extract(prefix + end[:cut], Path(temp)/'out', 'a'*64)
+        for malformed in ('ARCTIC-RENDER-UNEXPECTED {\n', 'ARCTIC-RENDER-FOOT-START {\n'):
+            with self.subTest(malformed=malformed), self.assertRaises(json.JSONDecodeError):
+                R.records(stream_prefix() + malformed, 'END', live=True)
+
+    def test_final_raw_phase_report_consistency_is_required(self):
+        for index in (2, 3, 4, 5, 6, 9):
+            values = transport(); name, value = values[index]
+            values[index] = (name, dict(value, unexpected='disagrees with retained report'))
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as temp:
+                with self.assertRaisesRegex(RuntimeError, 'raw phases disagree'):
+                    R.extract(serial(values), Path(temp)/'out', 'a'*64)
+                self.assertFalse((Path(temp)/'out').exists())
+        for field, bad in (('framebuffers', False), ('owned_launch', []), ('grim', 0)):
+            values = transport(); next(v for n, v in values if n == 'REPORT')[field] = bad
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temp:
+                with self.assertRaisesRegex(RuntimeError, 'report fields are missing/invalid'):
+                    R.extract(serial(values), Path(temp)/'out', 'a'*64)
+                self.assertFalse((Path(temp)/'out').exists())
+
+
 class TransportTests(unittest.TestCase):
     def test_strict_uid_pid_time_and_elapsed_types(self):
         cases = [('bool-root', lambda r: r['owned_launch']['wrapper'].update(uid=False)), ('float-user', lambda r: r['owned_launch']['foot'].update(uid=1000.0)), ('float-child', lambda r: r['owned_launch']['rows'].update(uid=1000.0)), ('negative-interval', lambda r: r['framebuffers'][0].update(guest_begin_ns=-2, guest_end_ns=-1)), ('bool-interval', lambda r: r['framebuffers'][0].update(guest_begin_ns=True)), ('overlapping-child', lambda r: r['owned_launch']['rows'].update(pid=r['owned_launch']['foot']['pid'])), ('overlapping-wrapper', lambda r: r['owned_launch']['wrapper'].update(pid=r['owned_launch']['foot']['pid'])), ('bool-group', lambda r: r['owned_launch'].update(foot_process_group=True)), ('nan-sample', lambda r: r['framebuffers'][1].update(seconds_after_owned_launch=math.nan)), ('infinite-sample', lambda r: r['framebuffers'][1].update(seconds_after_owned_launch=math.inf))]
@@ -246,12 +420,13 @@ class TransportTests(unittest.TestCase):
         for mode in ('duplicate', 'order', 'path', 'reserved', 'chunks', 'sha', 'bound', 'missing-pixels', 'end-error'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temp:
                 values = transport()
+                manifest = next(value for name, value in values if name == 'MANIFEST')
                 if mode == 'duplicate': values.insert(0, values[0])
                 elif mode == 'order': values[1], values[2] = values[2], values[1]
-                elif mode in ('path', 'reserved'): values[2][1]['files'][0]['path'] = '../bad.json' if mode == 'path' else 'serial-report.json'
+                elif mode in ('path', 'reserved'): manifest['files'][0]['path'] = '../bad.json' if mode == 'path' else 'serial-report.json'
                 elif mode == 'chunks': values.insert(-1, next(v for v in values if v[0] == 'CHUNK'))
-                elif mode == 'sha': values[2][1]['files'][0]['sha256'] = 'b' * 64
-                elif mode == 'bound': values[2][1]['files'][0]['bytes'] = R.MAX_FILE + 1
+                elif mode == 'sha': manifest['files'][0]['sha256'] = 'b' * 64
+                elif mode == 'bound': manifest['files'][0]['bytes'] = R.MAX_FILE + 1
                 elif mode == 'missing-pixels': values = transport(file_change=lambda f: f.pop('render-grim.png'))
                 else: values[-1][1]['error'] = 'actual preserved fixture error'
                 with self.assertRaises(RuntimeError): R.extract(serial(values), Path(temp) / 'output', 'a' * 64)

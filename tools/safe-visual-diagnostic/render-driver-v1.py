@@ -31,9 +31,46 @@ def load_original_validator():
     return module
 
 
-def records(serial, name):
-    prefix = 'ARCTIC-RENDER-' + name + ' '
-    return [json.loads(line[len(prefix):]) for line in serial.splitlines() if line.startswith(prefix)]
+def render_protocol(serial, *, live=False, final=False):
+    # A live serial file can end inside a single guest write. JSON framing is
+    # newline-delimited: wait for that delimiter rather than parsing its tail.
+    # Final extraction and forbidden-phase checks remain strict; even a valid
+    # JSON object without its newline is an incomplete protocol record.
+    lines = serial.split('\n')
+    require(live or not lines[-1].startswith('ARCTIC-RENDER-'), 'Unterminated render protocol record')
+    phases = ('BEGIN', 'FB-READY', 'FB-DONE', 'FOOT-START', 'FOOT-FB', 'FOOT-FB', 'FOOT-FB',
+              'GRIM-READY', 'GRIM-BEGIN', 'GRIM-DONE', 'REPORT', 'MANIFEST')
+    values = []; position = 0; ended = False
+    for line in lines[:-1]:
+        if not line.startswith('ARCTIC-RENDER-'):
+            continue
+        parts = line[len('ARCTIC-RENDER-'):].split(' ', 1)
+        require(len(parts) == 2, 'Malformed completed render protocol header')
+        name, payload = parts
+        value = json.loads(payload)
+        require(type(value) is dict, 'Completed render protocol record must be an object')
+        if position < len(phases):
+            require(name == phases[position], 'Completed render phase missing/duplicate/reordered: ' + name)
+            position += 1
+        else:
+            require(not ended and name in ('CHUNK', 'END'), 'Unexpected/duplicate completed render transport record: ' + name)
+            ended = name == 'END'
+        values.append((name, value))
+    require(not final or position == len(phases) and ended, 'Final completed render phase/END proof is missing')
+    if final:
+        report = values[10][1]
+        frames = report.get('framebuffers')
+        require(type(frames) is list and len(frames) == 5 and all(type(v) is dict for v in frames)
+                and type(report.get('owned_launch')) is dict and type(report.get('grim')) is dict,
+                'Final phase report fields are missing/invalid')
+        require(values[2][1] == frames[0] and values[3][1] == report['owned_launch']
+                and [v for n, v in values[4:7]] == frames[1:4] and values[9][1] == report['grim'],
+                'Final raw phases disagree with the report')
+    return values
+
+
+def records(serial, name, *, live=False):
+    return [value for marker, value in render_protocol(serial, live=live) if marker == name]
 
 
 def validate_framebuffer_metadata(meta, image):
@@ -90,7 +127,7 @@ def run(vm, out, clock=time.monotonic, sleep=time.sleep):
     def marker(name, index=0, count=1, timeout=30):
         end = clock() + timeout
         while clock() < end:
-            live(); values = records(serial(), name)
+            live(); values = records(serial(), name, live=True)
             require(len(values) <= count, 'Duplicate render guest marker: ' + name)
             if len(values) > index:
                 value = values[index]
@@ -177,6 +214,7 @@ def validate_events(path, original):
 
 def extract(serial, target, collector_sha):
     """Bounded separate protocol; original extract is called unchanged first."""
+    render_protocol(serial, final=True)
     target = Path(target); require(not target.exists(), 'Render target must be unused'); target.mkdir()
     names = ('BEGIN', 'REPORT', 'MANIFEST', 'END')
     values = {n: records(serial, n) for n in names}

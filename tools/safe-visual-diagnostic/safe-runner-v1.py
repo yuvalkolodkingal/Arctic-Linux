@@ -24,8 +24,10 @@ SCHEMA = 'arctic-safe-execution-v1'
 BUNDLE_FILES = {'safe-runner-v1.py', 'safe-driver-v1.py', 'guest-safe-collector-v1.py',
                 'bootstrap-safe-v1.sh', 'prepare-safe-v1.py', 'test_safe_v1.py', 'README-v1.md',
                 'render-driver-v1.py', 'guest-render-collector-v1.py', 'fixed-rows-v1.py', 'test_render_v1.py'}
+# Exact source-only CI correction; this path is not copied into the guest.
+SOURCE_CI_INPUTS = {'tools/tests/test_performance_observer.py': '2c91f921438d312b3462517ffede7d5854b77f3df208a3a5f10eb719428e33d2'}
 EXECUTION_FILES = {'.github/workflows/iso.yml', 'tools/test-iso.sh', 'tools/lib/container.sh',
-                   'tools/lib/vmtest.py', *('tools/safe-visual-diagnostic/' + p for p in BUNDLE_FILES)}
+                   'tools/lib/vmtest.py', *SOURCE_CI_INPUTS, *('tools/safe-visual-diagnostic/' + p for p in BUNDLE_FILES)}
 CHANGED_FILES = EXECUTION_FILES - {'tools/lib/container.sh', 'tools/lib/vmtest.py'} | {
     'tools/safe-visual-diagnostic/execution-pins-safe-v1.json'}
 MAX_FILE = 4 * 1024 * 1024
@@ -74,6 +76,9 @@ def verify_sources(args, R):
     require(manifest['schema'] == SCHEMA and manifest['candidate_source'] == R.SOURCE
             and manifest['qualification_base'] == BASE and set(manifest['files']) == EXECUTION_FILES,
             'Safe execution manifest identity/file set differs')
+    require(all(manifest['files'].get(relative) == expected
+                for relative, expected in SOURCE_CI_INPUTS.items()),
+            'Reviewed source-CI input identity differs')
     for relative, expected in manifest['files'].items():
         require(not Path(relative).is_absolute() and '..' not in Path(relative).parts, 'Unsafe Safe manifest path')
         R.pinned_file(execution / relative, expected)

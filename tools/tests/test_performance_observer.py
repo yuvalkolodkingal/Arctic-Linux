@@ -142,36 +142,109 @@ class NativeObserverTest(unittest.TestCase):
                 finally:
                     fixture.close()
 
-    def test_independent_transition_timestamp_is_inside_observation_bracket(self):
-        state = Path(self.directory.name)/'mapped.json'
+    def assert_publication_bounds_overlap(self, observation, publication):
+        # Atomic rename has a visibility instant between these independent
+        # child clocks. Neither clock is claimed to be that exact instant.
+        before, after = publication['before_ns'], publication['after_ns']
+        self.assertIs(type(before), int)
+        self.assertIs(type(after), int)
+        self.assertGreater(before, 0)
+        self.assertGreaterEqual(after, before)
+        start = observation['launch_started_monotonic_ns']
+        self.assertGreaterEqual(before, start)
+        self.assertLessEqual(observation['lower_seconds'], observation['upper_seconds'])
+        self.assertLessEqual(observation['lower_seconds'], (after-start)/1e9)
+        self.assertGreaterEqual(observation['upper_seconds'], (before-start)/1e9)
+
+    def publication_program(self, state, clock, before_signal, release, delayed):
+        # Prepare privately, publish atomically, then record the enclosing
+        # clocks. The fixture never parses a concurrently partial state file.
+        program = """import json, os, pathlib, sys, time
+state, clock, signal, release = map(pathlib.Path, sys.argv[1:5])
+pending = state.with_suffix('.pending')
+pending.write_text('mapped')
+before = time.monotonic_ns()
+if sys.argv[5] == 'delayed':
+    signal.write_text('ready')
+    deadline = time.monotonic() + 2
+    while not release.exists():
+        if time.monotonic() >= deadline:
+            raise RuntimeError('Fixture publication release missing')
+        time.sleep(.0005)
+os.replace(pending, state)
+after = time.monotonic_ns()
+clock.write_text(json.dumps(dict(before_ns=before, after_ns=after)))
+"""
+        return [sys.executable, '-c', program, str(state), str(clock),
+                str(before_signal), str(release), 'delayed' if delayed else 'normal']
+
+    def observe_publication(self, delayed):
+        state = Path(self.directory.name)/'mapped.marker'
+        clock = Path(self.directory.name)/'publication.json'
+        before_signal = Path(self.directory.name)/'before-publication'
+        release = Path(self.directory.name)/'release-publication'
+        delayed_negative_snapshots = []
 
         def current():
             if not state.exists():
+                if delayed and before_signal.exists():
+                    delayed_negative_snapshots.append(time.monotonic_ns())
+                    # The first negative response proves the next query send
+                    # is after the child's before clock. Release only at the
+                    # second still-negative snapshot, without a sleep guess.
+                    if len(delayed_negative_snapshots) == 2:
+                        release.write_text('publish')
                 return {}
-            value = json.loads(state.read_text())
             return {'9': dict(id=9, appid='kitty', title='fixture')}
 
         fixture, prefix = self.server(lambda: json.dumps(dict(clients=list(current().values()))).encode()+b'\n')
-        program = ('import pathlib,json,time; time.sleep(.04); '
-                   f'path=pathlib.Path({str(state)!r}); '
-                   'now=time.monotonic_ns(); path.write_text(json.dumps(dict(mapped_ns=now))); '
-                   'time.sleep(10)')
         bounds = []
         with patch.object(guest, 'clients', side_effect=lambda _: current()), \
                 patch.object(guest, 'emit'), patch.object(guest, 'snapshot', return_value={}), \
                 patch.object(guest.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)):
-            measured = guest.startup(prefix, [sys.executable, '-c', program], 'kitty',
-                                     timeout=3, hold_seconds=.02, observations=bounds)
+            measured = guest.startup(prefix, self.publication_program(
+                state, clock, before_signal, release, delayed), 'kitty',
+                timeout=3, hold_seconds=.02, observations=bounds)
         self.assertEqual(len(bounds), 1)
         observation = bounds[0]
-        transition = (json.loads(state.read_text())['mapped_ns']-
-                      observation['launch_started_monotonic_ns'])/1e9
-        self.assertLessEqual(observation['lower_seconds'], transition)
-        self.assertGreaterEqual(observation['upper_seconds'], transition)
+        publication = json.loads(clock.read_text())
+        self.assert_publication_bounds_overlap(observation, publication)
         self.assertEqual(measured, observation['upper_seconds'])
         self.assertEqual(observation['observer'], guest.MAPPING_OBSERVER)
         self.assertGreater(len(observation['query_roundtrips']), 2)
         self.assertTrue(all(command == b'get all-clients\n' for command in fixture.commands))
+        return observation, publication, delayed_negative_snapshots
+
+    def test_independent_publication_interval_overlaps_observation_bracket(self):
+        self.observe_publication(delayed=False)
+
+    def test_negative_snapshot_after_before_clock_does_not_make_it_a_map_instant(self):
+        observation, publication, negatives = self.observe_publication(delayed=True)
+        self.assertGreaterEqual(len(negatives), 2)
+        self.assertLess(publication['before_ns'], negatives[0])
+        self.assertLess(negatives[1], publication['after_ns'])
+        before_seconds = (publication['before_ns']-observation['launch_started_monotonic_ns'])/1e9
+        # Deliberately reproduce why the original point oracle is invalid:
+        # a correct last-negative lower bound can follow the before clock.
+        self.assertGreater(observation['lower_seconds'], before_seconds)
+        self.assert_publication_bounds_overlap(observation, publication)
+
+    def test_publication_interval_oracle_rejects_disjoint_and_reversed_bounds(self):
+        start = 1_000_000_000
+        publication = dict(before_ns=start+10_000_000, after_ns=start+30_000_000)
+        # A before timestamp outside the bracket is allowed only while the
+        # independently bounded publication interval still overlaps it.
+        self.assert_publication_bounds_overlap(dict(launch_started_monotonic_ns=start,
+            lower_seconds=.02, upper_seconds=.04), publication)
+        for lower, upper in ((.04,.05), (.001,.005), (.04,.02)):
+            with self.subTest(lower=lower, upper=upper), self.assertRaises(AssertionError):
+                self.assert_publication_bounds_overlap(dict(launch_started_monotonic_ns=start,
+                    lower_seconds=lower, upper_seconds=upper), publication)
+        for before, after in ((start+30_000_000,start+10_000_000), (True,start+30_000_000),
+                              (start+10_000_000,False), (-1,start+30_000_000)):
+            with self.subTest(before=before, after=after), self.assertRaises(AssertionError):
+                self.assert_publication_bounds_overlap(dict(launch_started_monotonic_ns=start,
+                    lower_seconds=.02, upper_seconds=.04), dict(before_ns=before, after_ns=after))
 
     def test_initial_cli_native_disagreement_does_not_launch_app(self):
         _, prefix = self.server(lambda: b'{"clients":[{"id":99}]}\n')
