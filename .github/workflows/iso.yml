@@ -5,6 +5,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      safe_visual_diagnostic:
+        description: Diagnose fixed candidate Safe graphics only; no build, install, release or acceptance pass
+        type: boolean
+        default: false
       same_iso_recovery:
         description: Reuse fixed candidate 37507582946 for VM qualification only (requires confirmed original Nix failure)
         type: boolean
@@ -51,7 +55,7 @@ env:
 
 jobs:
   iso:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.same_iso_recovery }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (!inputs.same_iso_recovery && !inputs.safe_visual_diagnostic) }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -338,7 +342,7 @@ jobs:
             --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre $draft
 
   same-iso-installs:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.safe_visual_diagnostic }}
     runs-on: ubuntu-24.04
     timeout-minutes: 230
     permissions:
@@ -410,7 +414,7 @@ jobs:
           retention-days: 14
 
   same-iso-boot-evidence:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.safe_visual_diagnostic }}
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     permissions:
@@ -478,5 +482,99 @@ jobs:
         with:
           name: same-iso-37507582946-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.method }}
           path: ${{ env.RECOVERY_ROOT }}/evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  safe-visual-diagnostic:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.safe_visual_diagnostic }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      actions: read
+    env:
+      SAFE_DIAGNOSTIC_MODE: ${{ inputs.safe_visual_diagnostic && 'true' || 'false' }}
+      RECOVERY_MODE: ${{ inputs.same_iso_recovery && 'true' || 'false' }}
+      RELEASE_REQUESTED: ${{ inputs.release && 'true' || 'false' }}
+      NATIVE_SMOKE_MODE: 'false'
+      NIX_REQUESTED: ${{ inputs.nix_acceptance && 'true' || 'false' }}
+      PERFORMANCE_REQUESTED: ${{ inputs.performance_acceptance && 'true' || 'false' }}
+      BOOT_TEST_REQUESTED: ${{ inputs.boot_test && 'true' || 'false' }}
+    steps:
+      - name: Checkout immutable candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fe4742c8b9414c45f0bcbb0a4191f116383c60d1
+          path: candidate-source
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            profiles/ci
+      - name: Checkout unchanged frozen v2 verification source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ae55fbc9d48cec5ecc786cf61994ed986296d1bb
+          path: frozen-recovery-source
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            .github/workflows
+      - name: Checkout separately reviewed Safe execution source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: safe-execution-source
+          persist-credentials: false
+          # The fail-closed source guard verifies ae55 ancestry locally.
+          fetch-depth: 0
+          sparse-checkout: |
+            tools
+            .github/workflows
+      - name: Declare unused isolated diagnostic paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          safe_root="$RUNNER_TEMP/arctic-safe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$safe_root"
+          mkdir "$safe_root"
+          echo "SAFE_ROOT=$safe_root" >> "$GITHUB_ENV"
+      - name: Fail closed on mode, original result, frozen source and artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 safe-execution-source/tools/safe-visual-diagnostic/safe-runner-v1.py preflight \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --recovery-bundle "$GITHUB_WORKSPACE/frozen-recovery-source/tools/same-iso-recovery" \
+            --bundle "$GITHUB_WORKSPACE/safe-execution-source/tools/safe-visual-diagnostic" \
+            --inputs "$SAFE_ROOT/inputs" --evidence "$SAFE_ROOT/evidence"
+      - name: Download exact existing candidate artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          repository: yuvalkolodkingal/Arctic-Linux
+          run-id: 37507582946
+          artifact-ids: 11434226349
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ env.SAFE_ROOT }}/inputs
+      - name: Verify actual immutable ISO bytes before any VM
+        run: |
+          python3 safe-execution-source/tools/safe-visual-diagnostic/safe-runner-v1.py verify \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --recovery-bundle "$GITHUB_WORKSPACE/frozen-recovery-source/tools/same-iso-recovery" \
+            --bundle "$GITHUB_WORKSPACE/safe-execution-source/tools/safe-visual-diagnostic" \
+            --inputs "$SAFE_ROOT/inputs" --evidence "$SAFE_ROOT/evidence"
+      - name: One fresh passive and separated-input Safe diagnosis
+        run: |
+          python3 safe-execution-source/tools/safe-visual-diagnostic/safe-runner-v1.py run \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --recovery-bundle "$GITHUB_WORKSPACE/frozen-recovery-source/tools/same-iso-recovery" \
+            --bundle "$GITHUB_WORKSPACE/safe-execution-source/tools/safe-visual-diagnostic" \
+            --inputs "$SAFE_ROOT/inputs" --evidence "$SAFE_ROOT/evidence"
+      - name: Preserve new diagnostic evidence including failure
+        if: ${{ always() && env.SAFE_ROOT != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: safe-diagnostic-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.SAFE_ROOT }}/evidence/
           if-no-files-found: warn
           retention-days: 14
