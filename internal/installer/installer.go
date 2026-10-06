@@ -1219,9 +1219,9 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 }
 
 // inLiveImage reports whether the copy already brought the module: in_live_image in the
-// catalog, or a Flatpak app the live image happens to ship. tools/build-iso.sh preinstalls
-// Zen only while the ISO stays under 2 GiB (BUILD-SPEC §7), so the copied
-// /var/lib/flatpak decides, not the catalog.
+// catalog, or an optional Flatpak app explicitly preloaded by tools/build-iso.sh
+// (BUILD-SPEC §7). The copied /var/lib/flatpak decides whether that optional
+// download is already available; a size miss never strips apps.
 func (in *Installer) inLiveImage(m *catalog.Module) bool {
 	if m.InLiveImage {
 		return true
@@ -1650,7 +1650,7 @@ func (in *Installer) installedApps() []*catalog.Module {
 
 func (in *Installer) defaultApps() string {
 	apps := in.installedApps()
-	terminal := "kitty"
+	terminal := "foot"
 	for _, m := range apps {
 		if m.Defaults.Role == "terminal" && in.Job.Data.Apps.Selection.Contains(m.ID) {
 			terminal = in.command(m)

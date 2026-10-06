@@ -2,7 +2,8 @@
 #
 # Answers every wizard step with the same defaults a person gets by pressing Enter on each
 # screen: English (US), erase the chosen disk, LUKS2 encryption, and the default apps
-# (Zen, Zed, kitty, fish + bash, yazi, Nautilus, Collabora Office, VLC).
+# (GNOME Web, FeatherPad, Foot, fish + bash, PCManFM + XArchiver, Celluloid).
+# Office suites, code editors and other app choices remain optional in the picker.
 #
 # Profiles are for CI and automation only (PLAN D12). They reference module ids — never
 # commands. Secrets come from the environment:
@@ -39,11 +40,11 @@ hostname = ""      # empty = {username}-{model} from DMI
 autologin = false
 
 [apps]
-browser = ["zen"]
-editor = ["zed"]
-terminal = ["kitty"]
+browser = ["gnome-web"]
+editor = ["featherpad"]
+terminal = ["foot"]
 shell = ["fish"]
-files = ["yazi", "nautilus"]
-office = ["collabora"]
-video = ["vlc"]
+files = ["pcmanfm"]
+office = []
+video = ["celluloid"]
 extras = []

@@ -37,8 +37,12 @@ func TestFailTarget(t *testing.T) {
 	}
 	b := New(Options{})
 	sel := c.DefaultSelection()
+	if got := b.failTarget(c, c.Apps(sel)); got != "" {
+		t.Errorf("preloaded defaults must not simulate an app download failure: %q", got)
+	}
+	sel["office"] = []string{"collabora"}
 	if got := b.failTarget(c, c.Apps(sel)); got != "collabora" {
-		t.Errorf("default selection: %q, want the last flatpak (collabora)", got)
+		t.Errorf("optional office selection: %q, want the last flatpak (collabora)", got)
 	}
 	sel["gaming"] = []string{"steam"}
 	sel["graphics"] = []string{"gimp"}

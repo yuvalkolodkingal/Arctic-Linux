@@ -106,13 +106,13 @@ jobs:
           cat out/BUILD-INFO
 
       - name: Build ISO
-        # A live desktop must include a browser. Keep Zen even above 2 GiB;
-        # the release step already splits large images when necessary.
+        # Native GNOME Web and the approved default apps are mandatory in config.kiwi.
+        # A missed size target retains the artifact and never triggers feature removal.
         run: |
           if [ '${{ github.event_name }}' = workflow_dispatch ] && [ '${{ inputs.release }}' = false ]; then
             candidate="Arctic-Linux-1.2-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-x86_64.iso"
             echo "ISO=$candidate" >> "$GITHUB_ENV"
-            if ! tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes --name "$candidate" \
+            if ! tools/build-iso.sh --work /mnt/arctic/kiwi-work --name "$candidate" \
               --max-bytes 1999999999 --preferred-max-bytes 1599999999; then
               # A missed size target is reviewable; failed image creation is not.
               test -s "out/iso/$candidate"
@@ -121,7 +121,7 @@ jobs:
               echo 'Size target missed; retaining the full-feature test artifact.'
             fi
           else
-            tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes
+            tools/build-iso.sh --work /mnt/arctic/kiwi-work
           fi
 
       - name: Save verified build downloads and compiler objects
@@ -159,6 +159,8 @@ jobs:
             out/iso/${{ env.ISO }}.sha256
             out/iso/*.packages
             out/iso/*.build-info
+            out/iso/*.rpm-inventory.tsv
+            out/iso/*.flatpak-refs.txt
             out/BUILD-INFO
           compression-level: 0
           retention-days: 14
@@ -172,6 +174,8 @@ jobs:
             out/iso/*.sha256
             out/iso/*.build-info
             out/iso/*.packages
+            out/iso/*.rpm-inventory.tsv
+            out/iso/*.flatpak-refs.txt
           retention-days: 14
 
       - name: Boot test in QEMU (UEFI, Try mode)
@@ -283,6 +287,8 @@ jobs:
             echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
             echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."
             echo "The boot menu offers **Try Arctic Linux** and **Install Arctic Linux**."
+            echo "GNOME Web, Foot, PCManFM, XArchiver, Celluloid and FeatherPad are preinstalled."
+            echo "Zen, Firefox and richer alternatives remain available through Get apps."
             if grep -q 'zen_preinstalled=1' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
               echo "Zen Browser is preinstalled in the live session."
             fi

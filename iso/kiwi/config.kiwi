@@ -77,16 +77,42 @@
 		<package name="arctic-webapps"/>
 		<!-- Default apps the installer treats as already in the live image (in_live_image in
 		     modules/): listed explicitly because arctic-desktop only recommends them. -->
-		<package name="kitty"/>
-		<package name="kitty-shell-integration"/>
+		<package name="epiphany"/>
+		<package name="foot"/>
 		<package name="fish"/>
-		<package name="nautilus"/>
-		<package name="vlc"/>
+		<package name="pcmanfm"/>
+		<package name="xarchiver"/>
+		<!-- Explicit tools for the advertised offline archive create/extract formats;
+		     XArchiver's weak dependencies do not include the ZIP creation helper. -->
+		<package name="7zip"/>
+		<package name="zip"/>
+		<package name="unzip"/>
+		<package name="tar"/>
+		<package name="xz"/>
+		<package name="bzip2"/>
+		<package name="zstd"/>
+		<package name="cpio"/>
+		<package name="celluloid"/>
+		<package name="featherpad"/>
+		<!-- Preserve useful shared facilities even when their former app is optional:
+		     GVfs mounts/trash/SMB, portals, sandboxed image loaders and thumbnails. -->
+		<package name="gvfs-fuse"/>
+		<package name="libportal-gtk4"/>
+		<package name="glycin-gtk4-libs"/>
+		<package name="glycin-thumbnailer"/>
+		<package name="gst-thumbnailers"/>
+		<package name="ripgrep"/>
 		<!-- stream 6: more themes and the terminal's Nerd Font symbols (arctic-shell recommends them). -->
 		<package name="arctic-themes-extra"/>
 		<package name="arctic-fonts-symbols"/>
+		<!-- Keep the existing fallback families when Kitty/Nautilus are optional;
+		     dependency orphaning must not silently reduce text/language coverage. -->
+		<package name="gnu-free-fonts-common"/>
+		<package name="gnu-free-sans-fonts"/>
+		<package name="google-noto-sans-mono-vf-fonts"/>
+		<package name="google-noto-serif-vf-fonts"/>
 		<!-- App theming (docs/BUILD-SPEC.md "App theming"; arctic-desktop-config requires them):
-		     adw-gtk3 for GTK 3 apps, qt5ct/qt6ct for Qt 5 (VLC) and Qt 6 apps, btop (recommended
+		     adw-gtk3 for GTK 3 apps, qt5ct/qt6ct for optional Qt 5 and Qt 6 apps, btop (recommended
 		     by arctic-desktop). Fedora builds qt5ct/qt6ct with KDE colour-scheme support, which
 		     pulls KDE Frameworks 5/6 libraries, Breeze icons and plasma-breeze-common. -->
 		<package name="adw-gtk3-theme"/>
@@ -120,7 +146,7 @@
 		<package name="plymouth"/>
 		<!-- LiveInstall: what the installer needs from the live system -->
 		<!-- Locales for the installer's languages (internal/wizard/locale.go), not all 227 MB of
-		     glibc-all-langpacks: keeps room for Zen under the 2 GiB release-asset limit. Add the
+		     glibc-all-langpacks. Add the
 		     langpack here when the installer gains a language. -->
 		<package name="glibc-langpack-en"/>
 		<package name="glibc-langpack-he"/>
@@ -187,6 +213,13 @@
 		<ignore name="gfs2-utils"/>
 		<ignore name="reiserfs-utils"/>
 		<ignore name="qemu-user-static"/>
+		<!-- The live image uses the approved lightweight defaults. These exclusions apply
+		     only to this build's dependency solver; installed DNF policy and optional apps
+		     stay available. Do not disable all weak dependencies or remove hardware support. -->
+		<ignore name="kitty"/>
+		<ignore name="kitty-shell-integration"/>
+		<ignore name="nautilus"/>
+		<ignore name="vlc"/>
 		<!-- Weak dependencies nothing here uses: cpp for xrdb. (Stream 5: ghostscript is
 		     no longer ignored, printing needs it: cups-filters → libcupsfilters.) -->
 		<ignore name="cpp"/>

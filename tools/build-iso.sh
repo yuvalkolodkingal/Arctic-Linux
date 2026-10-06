@@ -13,8 +13,9 @@
 #   tools/build-iso.sh --debug          kiwi --debug
 #   tools/build-iso.sh --create-only    reuse the image root kept in the work dir (--keep-work or
 #                                       a failed create) and only run the create step
-#   tools/build-iso.sh --zen yes|auto|no  preinstall Zen Browser (Flathub): yes (default)
-#                                       requires it; auto/no are explicit development choices
+#   tools/build-iso.sh --zen yes|auto|no  additionally preload optional Zen from Flathub
+#                                       no (default); auto tolerates download failure
+#                                       GNOME Web is always supplied by the native image
 #   tools/build-iso.sh --name NAME.iso   distinct candidate filename (no directory components)
 #   tools/build-iso.sh --max-bytes N     report a size gate; retain an oversized artifact, exit 1
 #   tools/build-iso.sh --preferred-max-bytes N  report a softer size preference
@@ -45,7 +46,7 @@ SCRATCH=""
 BUILD_DIR=/work/build
 KEEP_WORK=0
 DEBUG=""
-ZEN=yes
+ZEN=no
 CREATE_ONLY=0
 ISO_NAME="Arctic-Linux-1.2-x86_64.iso"
 MAX_BYTES=0
@@ -223,8 +224,12 @@ for path in descriptions:
         'erofs_fscreateoptions=' + options + '\n')
 PY
 
-# 2. Zen Browser from Flathub, installed into the image from outside (no chroot), so "Try"
-#    has its default browser. Required by default; auto/no are development-only opt-outs.
+# 2. The native default browser is mandatory. Optional Zen can be preloaded explicitly;
+#    it never replaces the approved default and is never stripped after a size miss.
+chroot /work/root rpm -q epiphany foot pcmanfm xarchiver celluloid featherpad fish nano
+chroot /work/root rpm -q 7zip zip unzip tar xz bzip2 zstd cpio
+test -x /work/root/usr/bin/epiphany
+test -f /work/root/usr/share/applications/org.gnome.Epiphany.desktop
 zen=0
 if [ "$CREATE_ONLY" = 1 ] && [ -d /work/root/var/lib/flatpak/app/app.zen_browser.zen ]; then
   zen=1
@@ -262,15 +267,16 @@ create() {
 # 3. create: SELinux labels, live initrd, erofs root, ISO.
 create
 iso=$(ls "$BUILD_DIR"/*.iso | head -n1)
-if [ "$zen" = 1 ] && [ "$ZEN" = auto ] && [ "$(stat -c %s "$iso")" -gt 2147483648 ]; then
-  echo "note: with Zen the ISO is $(( $(stat -c %s "$iso") / 1048576 )) MiB (> 2 GiB): rebuilding without it" >&2
-  FLATPAK_SYSTEM_DIR=/work/root/var/lib/flatpak flatpak uninstall --system -y --noninteractive --all || :
-  rm -rf /work/root/var/lib/flatpak/repo/objects/* /work/root/var/lib/flatpak/app /work/root/var/lib/flatpak/runtime
-  zen=0
-  create
-  iso=$(ls "$BUILD_DIR"/*.iso | head -n1)
-fi
-echo "zen_preinstalled=$zen" > "/out/${ISO_NAME%.iso}.build-info"
+{
+  echo 'default_browser=gnome-web'
+  echo 'preloaded_apps=epiphany,foot,fish,pcmanfm,xarchiver,celluloid,featherpad,nano'
+  echo "zen_preinstalled=$zen"
+} > "/out/${ISO_NAME%.iso}.build-info"
+# Preserve the actual resolver result, including weak dependencies and browser engine.
+chroot /work/root rpm -qa --qf '%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}\t%{ARCH}\n' \
+  | LC_ALL=C sort > "/out/${ISO_NAME%.iso}.rpm-inventory.tsv"
+FLATPAK_SYSTEM_DIR=/work/root/var/lib/flatpak flatpak list --system --columns=ref \
+  | LC_ALL=C sort > "/out/${ISO_NAME%.iso}.flatpak-refs.txt"
 cat /arctic-compression-info >> "/out/${ISO_NAME%.iso}.build-info"
 cp -f "$iso" "/out/$ISO_NAME"
 ( cd /out && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256" )

@@ -1,10 +1,10 @@
-# Default browser (PLAN D11). Not preinstalled in the v0.1 live ISO, so it is downloaded.
+# Optional browser; the optimized live image uses native GNOME Web.
 id = "zen"
 name = "Zen Browser"
 short = "Zen"
 summary = "Calm, privacy-first browser with vertical tabs."
 category = "browser"
-default = true
+default = false
 tile = "zen"
 icon = "compass"
 in_live_image = false

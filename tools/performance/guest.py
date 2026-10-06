@@ -5,15 +5,142 @@ Use with tools/test-install.sh --guest-check tools/performance/guest.py.
 Never drops caches, changes services, removes packages, or alters kernel knobs.
 The observer's allocations are included and identified in process snapshots.
 """
+import hashlib
 import json
 import os
 from pathlib import Path
 import pwd
 import resource
+import re
+import select
 import statistics
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
+
+
+MAPPING_OBSERVER = 'mango-socket-worker-v1'
+MAPPING_POLL_SECONDS = .001
+SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
+ROLE_SAMPLER = 'cpu-30-pss-6-v7-declared-role-first-use'
+ROLE_POLL_SECONDS = .00025
+ROLE_ORDER = ('terminal', 'files', 'browser')
+EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
+                  'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
+ROLE_APPS = {
+    'kitty': dict(role='terminal', configured=('kitty',), program='kitty', rpm='kitty',
+                  appids=('kitty',), cold_paths=('cache/kitty',)),
+    'foot': dict(role='terminal', configured=('foot',), program='foot', rpm='foot',
+                 appids=('foot',), cold_paths=('cache/foot',)),
+    'nautilus': dict(role='files', configured=('nautilus',), program='nautilus', rpm='nautilus',
+                     appids=('org.gnome.nautilus',), cold_paths=('cache/nautilus', 'data/nautilus')),
+    'pcmanfm': dict(role='files', configured=('pcmanfm',), program='pcmanfm', rpm='pcmanfm',
+                    appids=('pcmanfm',), cold_paths=('cache/pcmanfm', 'data/pcmanfm')),
+    'zen': dict(role='browser', configured=('gtk-launch app.zen_browser.zen',), program='flatpak',
+               flatpak='app.zen_browser.zen', desktop='app.zen_browser.zen.desktop',
+               appids=('zen', 'app.zen_browser.zen'), cold_paths=('home/.var/app/app.zen_browser.zen',)),
+    'gnome-web': dict(role='browser', configured=('epiphany', 'gtk-launch org.gnome.Epiphany'),
+                     program='epiphany', rpm='epiphany', desktop='org.gnome.Epiphany.desktop',
+                     appids=('org.gnome.epiphany', 'epiphany'),
+                     cold_paths=('cache/epiphany', 'data/epiphany', 'config/epiphany')),
+}
+
+# One worker enters the actual desktop user/environment before timing begins.
+# Mango 0.17.3's mmsg uses this same newline-delimited Unix-socket protocol.
+# A fresh socket is required for each get: Mango closes one-shot connections.
+# A watch arrival has no server timestamp and is not an exact map timestamp.
+CLIENT_QUERY_WORKER = r'''
+import json, os, socket, sys, time
+path = os.environ['MANGO_INSTANCE_SIGNATURE']
+for command in sys.stdin:
+    if command != 'get\n':
+        raise RuntimeError('Unexpected observer command')
+    started = time.monotonic_ns()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(path)
+        peer.sendall(b'get all-clients\n')
+        chunks, size = [], 0
+        while True:
+            chunk = peer.recv(65536)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > 4 * 1024 * 1024:
+                raise RuntimeError('Unbounded Mango response')
+            chunks.append(chunk)
+    value = json.loads(b''.join(chunks))
+    if not isinstance(value, dict) or not isinstance(value.get('clients'), list):
+        raise RuntimeError('Invalid Mango client response')
+    print(json.dumps(dict(payload=value, uid=os.getuid(),
+        query_seconds=(time.monotonic_ns()-started)/1e9)), flush=True)
+'''
+
+
+class NativeClientQuery:
+    """Bounded read-only queries with no per-poll process launch or root IPC."""
+    def __init__(self, prefix):
+        self.prefix = prefix
+        self.process = None
+        self.buffer = b''
+        self.roundtrips = []
+
+    def __enter__(self):
+        self.process = subprocess.Popen(self.prefix + ['python3', '-u', '-c', CLIENT_QUERY_WORKER],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+        return self
+
+    def query(self):
+        started = time.monotonic()
+        self.process.stdin.write(b'get\n')
+        until = started + 3
+        while b'\n' not in self.buffer:
+            remaining = until - time.monotonic()
+            if remaining <= 0 or not select.select([self.process.stdout], [], [], remaining)[0]:
+                raise RuntimeError('Native Mango observer timed out; no CLI fallback')
+            chunk = os.read(self.process.stdout.fileno(), 65536)
+            if not chunk:
+                self.process.wait(timeout=1)
+                raise RuntimeError('Native Mango observer disconnected: ' +
+                    self.process.stderr.read(12000).decode(errors='replace'))
+            self.buffer += chunk
+            if len(self.buffer) > 4 * 1024 * 1024:
+                raise RuntimeError('Unbounded native observer response')
+        line, self.buffer = self.buffer.split(b'\n', 1)
+        if self.buffer:
+            raise RuntimeError('Unsolicited native observer response')
+        value = json.loads(line)
+        if self.prefix[:2] == ['runuser', '-u'] and value['uid'] != pwd.getpwnam(self.prefix[2]).pw_uid:
+            raise RuntimeError('Native observer did not use the desktop user')
+        result = {}
+        for client in value['payload']['clients']:
+            if not isinstance(client, dict) or 'id' not in client or str(client['id']) in result:
+                raise RuntimeError('Invalid or duplicate Mango client identity')
+            result[str(client['id'])] = client
+        self.roundtrips.append(dict(parent_seconds=time.monotonic()-started,
+                                    socket_seconds=value['query_seconds'], uid=value['uid']))
+        return result
+
+    def __exit__(self, *args):
+        if self.process is None:
+            return
+        self.process.stdin.close()
+        try:
+            # Let runuser reap the worker after natural stdin EOF. Immediately
+            # terminating the wrapper can orphan a worker zombie in containers.
+            try:
+                self.process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait(timeout=3)
+        finally:
+            self.process.stdout.close()
+            self.process.stderr.close()
 
 
 def run(argv, timeout=45):
@@ -132,60 +259,325 @@ def cpu_ticks():
     return sum(values), values[3] + values[4]
 
 
+def cpu_interval(before, idle_before, after, idle_after):
+    total, idle = after-before, idle_after-idle_before
+    if total <= 0 or not 0 <= idle <= total:
+        raise RuntimeError(f'Invalid /proc/stat tick interval: total={total}, idle={idle}')
+    return dict(cpu_ticks_delta=total, cpu_idle_ticks_delta=idle,
+                cpu_busy_percent=100 * (total-idle) / total,
+                cpu_resolution_percent=100 / total,
+                cpu_clock_ticks_per_second=os.sysconf('SC_CLK_TCK'))
+
+
 def clients(prefix):
     return {str(c['id']): c for c in json.loads(run(prefix + ['mmsg', 'get', 'all-clients']))['clients']}
 
 
-def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=None):
-    before = set(clients(prefix))
-    started = time.monotonic()
-    last_absent_start = started
-    with open('/tmp/arctic-performance-apps.log', 'a') as output:
+def rpm_inventory():
+    """Package-version attribution only; never alter packages or warm all files."""
+    records = sorted(run(['rpm', '-qa', '--qf',
+                          '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n']).splitlines())
+    if not records or any(not record.strip() for record in records):
+        raise RuntimeError('Missing RPM inventory')
+    text = '\n'.join(records) + '\n'
+    relevant = re.compile(r'^(?:mesa|libdrm|wayland|wlroots|gtk[234]|qt6|pango|cairo|harfbuzz|'
+                          r'freetype|fontconfig|pixman|vte|libadwaita|glib2|glibc|libstdc\+\+|'
+                          r'libepoxy|libxcb|xorg-x11-server-Xwayland|quickshell|mangowm|kitty|'
+                          r'foot|epiphany|webkitgtk|pcmanfm|libfm|lxqt|celluloid|mpv|featherpad)')
+    return dict(nevra=records, sha256=hashlib.sha256(text.encode()).hexdigest(),
+                graphics_text_and_apps=[record for record in records if relevant.match(record)],
+                scope='Sorted RPM NEVRA metadata (explicit epoch); not an RPM payload-content digest')
+
+
+ROLE_STATE_READER = r'''
+import hashlib,json,os,pathlib,shutil
+home=pathlib.Path.home()
+roots=dict(home=home,config=pathlib.Path(os.environ.get('XDG_CONFIG_HOME',home/'.config')),
+    data=pathlib.Path(os.environ.get('XDG_DATA_HOME',home/'.local/share')),
+    cache=pathlib.Path(os.environ.get('XDG_CACHE_HOME',home/'.cache')))
+sources=[];configured={}
+for path in (pathlib.Path('/etc/arctic/default-apps'),roots['config']/'arctic/default-apps'):
+    if not path.exists():continue
+    raw=path.read_bytes();sources.append(dict(path=str(path),sha256=hashlib.sha256(raw).hexdigest()))
+    for line in raw.decode().splitlines():
+        if '=' in line and line.split('=',1)[0] in ('terminal','files','browser'):
+            key,value=line.split('=',1);configured[key]=value
+programs={name:shutil.which(name) for name in ('kitty','foot','nautilus','pcmanfm','epiphany','flatpak')}
+paths=json.loads(__import__('sys').argv[1]);present=[]
+for relative in paths:
+    root,rest=relative.split('/',1);path=roots[root]/rest
+    if path.exists():present.append(str(path))
+running=[]
+for path in pathlib.Path('/proc').glob('[0-9]*'):
+    try:
+        if path.stat().st_uid!=os.getuid():continue
+        name=path.joinpath('comm').read_text().strip().lower()
+        if name in ('kitty','foot','nautilus','pcmanfm','epiphany','zen','zen-bin'):
+            running.append(dict(pid=int(path.name),name=name))
+    except OSError:pass
+print(json.dumps(dict(configured=configured,sources=sources,programs=programs,
+    prior_role_state_paths=present,running_role_apps=running,uid=os.getuid())))
+'''
+
+
+def declare_roles(prefix, context, inventory):
+    image = context.get('image')
+    if (image not in EXPECTED_ROLES or context.get('fresh_installed_overlay') is not True
+            or context.get('collector') != 'console' or type(context.get('boot')) is not int
+            or context.get('boot') not in (1, 2, 3)):
+        raise RuntimeError('First-use role measurements require a pristine overlay and console collector')
+    expected = EXPECTED_ROLES[image]
+    paths = [path for app in expected.values() for path in ROLE_APPS[app]['cold_paths']]
+    state = json.loads(run(prefix + ['python3', '-c', ROLE_STATE_READER, json.dumps(paths)]))
+    if state['uid'] != pwd.getpwnam(prefix[2]).pw_uid:
+        raise RuntimeError('Role declaration did not use the actual desktop user')
+    if state['prior_role_state_paths'] or state['running_role_apps']:
+        raise RuntimeError('First GUI-role execution is not pristine: ' + json.dumps(state))
+    browser = run(prefix + ['xdg-settings', 'get', 'default-web-browser'])
+    roles = {}
+    for role in ROLE_ORDER:
+        ident = expected[role]
+        app = ROLE_APPS[ident]
+        configured = state['configured'].get(role, '')
+        # Original v1.2's offline installer can defer Zen's module while the
+        # prebundled app remains the system MIME/fallback browser. Declare that
+        # exact legacy case; never substitute an arbitrary installed browser.
+        legacy_zen_fallback = image == 'baseline' and ident == 'zen' and not configured
+        if configured not in app['configured'] and not legacy_zen_fallback:
+            raise RuntimeError(f'Declared {role} differs from installed configuration: {configured!r}')
+        if not state['programs'].get(app['program']):
+            raise RuntimeError(f'Declared {role} program is missing: {app["program"]}')
+        if role == 'browser' and browser != app['desktop']:
+            raise RuntimeError('Declared browser differs from actual MIME default: ' + browser)
+        if 'rpm' in app:
+            packages = [value for value in inventory['nevra']
+                        if re.match(re.escape(app['rpm'])+r'-[0-9]+:', value)]
+            if len(packages) != 1:
+                raise RuntimeError('Missing or ambiguous role RPM: ' + ident)
+            package = dict(kind='rpm', nevra=packages[0])
+            owner = run(['rpm', '-qf', '--qf', '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}',
+                         state['programs'][app['program']]])
+            if owner != packages[0]:
+                raise RuntimeError('Configured program is not owned by the declared role RPM: ' + ident)
+            package['binary_owner'] = owner
+        else:
+            commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', app['flatpak']])
+            if not re.fullmatch('[0-9a-f]{64}', commit):
+                raise RuntimeError('Missing installed role Flatpak identity')
+            package = dict(kind='flatpak', ref=app['flatpak'], commit=commit)
+        roles[role] = dict(id=ident, role=role, configured_command=configured,
+                          legacy_system_mime_fallback=legacy_zen_fallback, program_path=state['programs'][app['program']],
+                          appids=list(app['appids']), package=package)
+    return dict(image=image, roles=roles, configuration_sources=state['sources'],
+                default_browser_desktop=browser, pristine_state=state, boot_context=context,
+                meaning='First GUI-role execution from a pristine installed profile after normal desktop login; shared OS libraries and host disk caches may already be warm')
+
+
+WORKLOAD_PAGE = '<!doctype html><meta charset="utf-8"><title>Arctic startup fixture</title><h1>Arctic offline browser</h1><p>Local page, no remote resources.</p>'
+WORKLOAD_WORKER = r'''
+import hashlib,http.server,json,os,pathlib,shutil,sys,tempfile,threading
+page=sys.argv[1].encode();root=pathlib.Path(tempfile.mkdtemp(prefix='arctic-performance-files-'))
+for number in range(16):(root/('file-%02d.txt'%number)).write_text('Arctic file fixture\n')
+(root/'Folder').mkdir()
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path!='/benchmark.html':self.send_error(404);return
+        self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8')
+        self.send_header('Content-Length',str(len(page)));self.end_headers();self.wfile.write(page)
+    def log_message(self,*args):pass
+server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
+thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+print(json.dumps(dict(files=str(root),url='http://127.0.0.1:%d/benchmark.html'%server.server_port,
+    page_sha256=hashlib.sha256(page).hexdigest(),file_count=16,
+    file_payload_sha256=hashlib.sha256(b'Arctic file fixture\n').hexdigest(),uid=os.getuid(),pid=os.getpid(),
+    start_ticks=int(pathlib.Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()[19]))),flush=True)
+try:
+    for line in sys.stdin:pass
+finally:
+    server.shutdown();server.server_close();thread.join();shutil.rmtree(root)
+'''
+
+
+@contextmanager
+def role_workload(prefix):
+    process = subprocess.Popen(prefix+['python3', '-u', '-c', WORKLOAD_WORKER, WORKLOAD_PAGE],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+    try:
+        response, deadline = b'', time.monotonic() + 5
+        while b'\n' not in response:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([process.stdout], [], [], remaining)[0]:
+                raise RuntimeError('Offline role workload did not become ready')
+            chunk = os.read(process.stdout.fileno(), 4096)
+            if not chunk or len(response) + len(chunk) > 4096:
+                raise RuntimeError('Invalid offline role workload response')
+            response += chunk
+        data = json.loads(response)
+        if (not re.fullmatch(r'http://127\.0\.0\.1:[0-9]+/benchmark\.html', data['url'])
+                or not data['files'].startswith('/tmp/arctic-performance-files-')
+                or data['page_sha256'] != hashlib.sha256(WORKLOAD_PAGE.encode()).hexdigest()
+                or data['file_count'] != 16
+                or data['file_payload_sha256'] != hashlib.sha256(b'Arctic file fixture\n').hexdigest()
+                or type(data.get('pid')) is not int or data['pid'] <= 0
+                or type(data.get('start_ticks')) is not int or data['start_ticks'] <= 0
+                or data['uid'] != pwd.getpwnam(prefix[2]).pw_uid):
+            raise RuntimeError('Invalid offline role workload identity')
+        worker_cpu_ticks(data)
+        yield data
+    finally:
+        process.stdin.close()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
+        finally:
+            process.stdout.close(); process.stderr.close()
+        if process.returncode != 0:
+            raise RuntimeError('Temporary offline workload cleanup failed: exit ' + str(process.returncode))
+
+
+def role_command(app, workload):
+    ident = app['id']
+    if ident in ('kitty', 'foot'):
+        return [ident]
+    if ident == 'nautilus':
+        return ['nautilus', '--new-window', workload['files']]
+    if ident == 'pcmanfm':
+        return ['pcmanfm', '--new-win', workload['files']]
+    if ident == 'zen':
+        return ['flatpak', 'run', 'app.zen_browser.zen', '--new-window', workload['url']]
+    if ident == 'gnome-web':
+        return ['epiphany', '--new-window', workload['url']]
+    raise RuntimeError('Unsupported declared role application: ' + ident)
+
+
+def worker_cpu_ticks(worker, proc_root=Path('/proc')):
+    """Read the known helper's whole-process CPU ticks, including its threads."""
+    path = proc_root/str(worker['pid'])
+    values = (path/'stat').read_text().rsplit(')', 1)[1].split()
+    if (path.stat().st_uid != worker['uid'] or values[0] in ('Z', 'X')
+            or int(values[19]) != worker['start_ticks']):
+        raise RuntimeError('Temporary workload worker identity changed or exited')
+    return int(values[11]) + int(values[12])
+
+
+def collect_idle(worker=None):
+    samples = []
+    for index in range(30):
+        started = time.monotonic()
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        observer_before = usage.ru_utime + usage.ru_stime
+        before, idle_before = cpu_ticks()
+        helper_before = worker_cpu_ticks(worker) if worker else None
+        # Six full PSS scans, all 30 raw CPU/memory samples. The parent collector
+        # is present in both phases; only normalized idle has the known worker.
+        memory = snapshot() if index % 5 == 0 else dict(memory_bytes=meminfo(), observer_pid=os.getpid())
+        memory['pss_measured'] = index % 5 == 0
+        time.sleep(1)
+        helper_after = worker_cpu_ticks(worker) if worker else None
+        after, idle_after = cpu_ticks()
+        elapsed = time.monotonic() - started
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        memory['observer_cpu_percent_one_core'] = 100 * (
+            usage.ru_utime + usage.ru_stime - observer_before) / elapsed
+        memory['sample_elapsed_seconds'] = elapsed
+        memory.update(cpu_interval(before, idle_before, after, idle_after))
+        if worker:
+            ticks = helper_after-helper_before
+            if ticks < 0:
+                raise RuntimeError('Temporary workload worker CPU counter moved backwards')
+            memory['benchmark_worker_cpu'] = dict(pid=worker['pid'], uid=worker['uid'],
+                start_ticks=worker['start_ticks'], ticks_delta=ticks,
+                percent_one_core=100 * ticks / memory['cpu_clock_ticks_per_second'] / elapsed,
+                resolution_percent_one_core=100 / memory['cpu_clock_ticks_per_second'] / elapsed)
+        samples.append(memory)
+    return samples
+
+
+def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=None,
+            poll_seconds=MAPPING_POLL_SECONDS, label=None):
+    label = label or (pattern if isinstance(pattern, str) else pattern[0])
+    with NativeClientQuery(prefix) as observer, open('/tmp/arctic-performance-apps.log', 'a') as output:
+        # Check the production CLI and native query agree before launching. No
+        # altered compositor, application preference or service is involved.
+        before = set(clients(prefix))
+        native_before = observer.query()
+        if before != set(native_before):
+            raise RuntimeError('Mango CLI/native observer initial client identities differ')
+        started_ns = time.monotonic_ns()
+        started = started_ns / 1e9
+        last_absent_start = started
         child = subprocess.Popen(prefix + command, stdout=output, stderr=output)
+        observed_window_ids = set()
         try:
             while time.monotonic() - started < timeout:
                 query_started = time.monotonic()
-                current = clients(prefix)
-                windows = [c for key, c in current.items() if key not in before and
-                           pattern in (str(c.get('appid', c.get('app_id', ''))) + ' ' + str(c.get('title', ''))).lower()]
+                current = observer.query()
+                windows = [c for key, c in current.items() if key not in before and (
+                    pattern in (str(c.get('appid', c.get('app_id', ''))) + ' ' + str(c.get('title', ''))).lower()
+                    if isinstance(pattern, str) else str(c.get('appid', c.get('app_id', ''))).lower() in pattern)]
                 if windows:
+                    observed_window_ids.update(str(window['id']) for window in windows)
                     measured = time.monotonic() - started
                     time.sleep(hold_seconds)
-                    if not any(str(window['id']) in clients(prefix) for window in windows):
+                    if not any(str(window['id']) in observer.query() for window in windows):
                         continue
                     if observations is not None:
                         observations.append(dict(lower_seconds=last_absent_start - started,
                                                  upper_seconds=measured,
-                                                 interval_seconds=measured - (last_absent_start - started)))
-                    emit('mapped_window_' + pattern, windows)
-                    emit('app_workload_' + pattern, snapshot())
+                                                 interval_seconds=measured - (last_absent_start - started),
+                                                 launch_started_monotonic_ns=started_ns,
+                                                 observer=MAPPING_OBSERVER,
+                                                 query_roundtrips=observer.roundtrips))
+                    emit('mapped_window_' + label, windows)
+                    emit('app_workload_' + label, snapshot())
                     return measured
                 last_absent_start = query_started
-                time.sleep(.01)
+                time.sleep(poll_seconds)
                 if child.poll() not in (None, 0):
                     break
-            emit('startup_' + pattern + '_diagnostic', dict(exit_code=child.poll(),
+            emit('startup_' + label + '_diagnostic', dict(exit_code=child.poll(),
                  clients=list(clients(prefix).values()),
                  launch_output=Path('/tmp/arctic-performance-apps.log').read_text(errors='replace')[-12000:]))
             raise RuntimeError(f'No persistent mapped {pattern} window within {timeout} s')
         finally:
             # Close the newly launched window using the compositor, not system-wide pkill.
-            current = clients(prefix)
-            for key in set(current) - before:
-                subprocess.run(prefix + ['mmsg', 'dispatch', 'killclient', 'client,' + key],
-                               capture_output=True, timeout=15)
-            if child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(5)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait()
+            try:
+                current = clients(prefix)
+                for key in (set(current) - before) & observed_window_ids:
+                    subprocess.run(prefix + ['mmsg', 'dispatch', 'killclient', 'client,' + key],
+                                   capture_output=True, timeout=15)
+            finally:
+                # A disconnected compositor must fail the run and still reap
+                # the process this probe launched. Only matching windows seen
+                # during observation can be closed; later unrelated arrivals stay.
+                if child.poll() is None:
+                    try:
+                        # A compositor close normally ends the app. Give its
+                        # runuser wrapper time to reap it before sending signals.
+                        child.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        child.terminate()
+                        try:
+                            child.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            child.kill()
+                            child.wait(timeout=5)
 
 
-def measure(prefix):
+def measure(prefix, declared=None, workload=None, order=None, complete=True):
+    emit('idle_measurement_scope', dict(
+        guest_counters='Whole guest, including the collector and temporary benchmark processes',
+        parent_observer_cpu='RUSAGE_SELF of this Python collector only; helper CPU is included in guest counters',
+        temporary_loopback_worker_present=declared is not None,
+        meaning='Normalized idle after app workloads; does not establish pristine idle utilization'))
     emit('identity', dict(kernel=run(['uname', '-r']), virtualization=run(['systemd-detect-virt', '--vm']),
-                          sampler='cpu-30-pss-6-v5-native-backend', cpu=run(['lscpu']),
+                          sampler=ROLE_SAMPLER if declared else SAMPLER, cpu=run(['lscpu']),
                           boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
     emit('boot', dict(analyze=run(['systemd-analyze']),
                       uptime=Path('/proc/uptime').read_text().strip()))
@@ -205,26 +597,7 @@ def measure(prefix):
     emit('installed_btrfs_usage', run(['btrfs', 'filesystem', 'usage', '--raw', '/'], timeout=120))
     # Let session initialization settle; record actual elapsed time and memory without flushing caches.
     time.sleep(60)
-    samples = []
-    for index in range(30):
-        started = time.monotonic()
-        usage = resource.getrusage(resource.RUSAGE_SELF)
-        observer_before = usage.ru_utime + usage.ru_stime
-        before, idle_before = cpu_ticks()
-        # Full process PSS scans are expensive under software emulation. Sample them
-        # six times; keep all 30 CPU/meminfo observations and expose observer cost.
-        memory = snapshot() if index % 5 == 0 else dict(memory_bytes=meminfo(), observer_pid=os.getpid())
-        memory['pss_measured'] = index % 5 == 0
-        time.sleep(1)
-        after, idle_after = cpu_ticks()
-        elapsed = time.monotonic() - started
-        usage = resource.getrusage(resource.RUSAGE_SELF)
-        memory['observer_cpu_percent_one_core'] = 100 * (
-            usage.ru_utime + usage.ru_stime - observer_before) / elapsed
-        memory['sample_elapsed_seconds'] = elapsed
-        memory['cpu_busy_percent'] = 100 * (1 - (idle_after - idle_before) / max(1, after - before))
-        samples.append(memory)
-    emit('idle_samples', samples)
+    emit('idle_samples', collect_idle(workload if declared else None))
     shell_path = run(prefix + ['arctic-shell', '--path'])
     emit('shell_path', shell_path)
     # Match the shipped helper's CLI order and selected shell directory.
@@ -236,12 +609,24 @@ def measure(prefix):
             run(prefix + command)
             times.append(time.monotonic() - start)
         emit(label + '_seconds', dict(samples=times, median=statistics.median(times), max=max(times)))
-    for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
-                             ('zen', ['flatpak', 'run', 'app.zen_browser.zen', 'about:blank'])]:
-        bounds = []
-        samples = [startup(prefix, command, pattern, observations=bounds) for _ in range(3)]
-        emit('startup_' + pattern + '_seconds', dict(first=samples[0], warm=samples[1:],
-             observation_bounds=bounds, poll_sleep_seconds=.01))
+    if declared:
+        for role in ROLE_ORDER:
+            app = declared['roles'][role]
+            bounds = []
+            samples = [startup(prefix, role_command(app, workload), app['appids'], observations=bounds,
+                               poll_seconds=ROLE_POLL_SECONDS, label='role_'+role) for _ in range(3)]
+            emit('startup_role_' + role + '_warm_seconds', dict(first=samples[0], warm=samples[1:],
+                 observation_bounds=bounds, poll_sleep_seconds=ROLE_POLL_SECONDS,
+                 observer=MAPPING_OBSERVER, app_id=app['id'], phase='after_45_second_preconditioning'))
+            order.append('warm:'+role)
+    else:
+        for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
+                                 ('zen', ['flatpak', 'run', 'app.zen_browser.zen', 'about:blank'])]:
+            bounds = []
+            samples = [startup(prefix, command, pattern, observations=bounds) for _ in range(3)]
+            emit('startup_' + pattern + '_seconds', dict(first=samples[0], warm=samples[1:],
+                 observation_bounds=bounds, poll_sleep_seconds=MAPPING_POLL_SECONDS,
+                 observer=MAPPING_OBSERVER))
     emit('final_idle', snapshot())
     emit('system_failed_units', run(['systemctl', '--failed', '--no-pager']))
     emit('flatpak', run(['flatpak', 'list', '--system', '--columns=ref,active,size']))
@@ -251,7 +636,33 @@ def measure(prefix):
         emit('critical_chain', run(['systemd-analyze', '--no-pager', 'critical-chain'], timeout=120))
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         emit('critical_chain_unmeasured', str(error))
-    emit('done', True)
+    if complete:
+        emit('done', True)
+
+
+def first_use_and_precondition(prefix, declared, workload):
+    order = []
+    # All three first GUI-role executions precede every 45-second preparation.
+    # Guest/host shared libraries may be cached: this is a pristine-profile
+    # first-use observation, never a claim that all storage/cache layers are cold.
+    for role in ROLE_ORDER:
+        app = declared['roles'][role]
+        bounds = []
+        seconds = startup(prefix, role_command(app, workload), app['appids'], observations=bounds,
+                          poll_seconds=ROLE_POLL_SECONDS, label='role_'+role)
+        emit('startup_role_' + role + '_cold_seconds', dict(first=seconds, observation_bounds=bounds,
+             poll_sleep_seconds=ROLE_POLL_SECONDS, observer=MAPPING_OBSERVER, app_id=app['id'],
+             phase='first_gui_role_execution_from_pristine_install',
+             meaning='Before any role preconditioning, from pristine user state on this boot; shared OS libraries/host caches may be warm'))
+        order.append('cold:'+role)
+    for role in ROLE_ORDER:
+        app = declared['roles'][role]
+        seconds = startup(prefix, role_command(app, workload), app['appids'], hold_seconds=45,
+                          poll_seconds=ROLE_POLL_SECONDS, label='role_'+role)
+        emit('precondition_role_' + role, dict(mapped_after_seconds=seconds, persistent_hold_seconds=45,
+             app_id=app['id'], meaning='Cache/profile normalization; later launches are warmed'))
+        order.append('precondition:'+role)
+    return order
 
 
 def main(preconditioned=False):
@@ -267,24 +678,42 @@ def main(preconditioned=False):
     emit('measurement_conditions', dict(keep_awake_temporary=True, initial_keep_awake=awake))
     run(prefix + ['arctic-keep-awake', 'on', '--quiet'])
     try:
+        inventory = rpm_inventory()
+        emit('rpm_inventory', inventory)
+        declared = None
         if preconditioned:
-            # Identical cache/profile preparation for both images. No cache
-            # flushing, package/service tuning or preference changes.
-            for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
-                                     ('zen', ['flatpak', 'run', 'app.zen_browser.zen', 'about:blank'])]:
-                seconds = startup(prefix, command, pattern, hold_seconds=45)
-                emit('precondition_' + pattern, dict(mapped_after_seconds=seconds, persistent_hold_seconds=45,
-                     meaning='Cache/profile normalization only; not a cold startup benchmark'))
+            context = json.loads(Path('/run/t/performance-context.json').read_text())
+            declared = declare_roles(prefix, context, inventory)
+            emit('app_roles', declared)
         emit('measured_payload', dict(
             arctic_shell=run(['rpm', '-q', 'arctic-shell']),
             catalog_sha256=run(['sha256sum', '/usr/share/arctic/shell/AppsService.qml']),
             battery_sha256=run(['sha256sum', '/usr/share/arctic/shell/BatteryService.qml']),
             mangowm=run(['rpm', '-q', 'mangowm']),
             quickshell=run(['rpm', '-q', 'quickshell']),
-            kitty=run(['rpm', '-q', 'kitty'])))
-        measure(prefix)
+            role_packages={role: app['package'] for role, app in declared['roles'].items()} if declared
+                          else dict(kitty=run(['rpm', '-q', 'kitty']))))
+        if declared:
+            emit('pristine_idle_measurement_scope', dict(
+                phase='before_any_gui_role_or_workload_worker',
+                collector_present=True, workload_worker_present=False,
+                meaning='Settled logged-in desktop before GUI-role execution; whole-guest counters/PSS include the frozen root collector and normal authenticated console/session processes'))
+            emit('pristine_idle_samples', collect_idle())
+            with role_workload(prefix) as workload:
+                emit('role_workload', workload)
+                order = first_use_and_precondition(prefix, declared, workload)
+                order.insert(0, 'pristine_idle')
+                measure(prefix, declared, workload, order, complete=False)
+                emit('role_measurement_order', order)
+        else:
+            measure(prefix, complete=False)
     finally:
-        emit('keep_awake_restored', json.loads(run(prefix + ['arctic-keep-awake', 'off', '--quiet'])))
+        restored = json.loads(run(prefix + ['arctic-keep-awake', 'off', '--quiet']))
+        emit('keep_awake_restored', restored)
+        if restored.get('on') is not False:
+            raise RuntimeError('Keep awake did not restore its initial off state')
+    # Completion requires all workload lifecycle and session-state cleanup.
+    emit('done', True)
 
 
 if __name__ == '__main__':

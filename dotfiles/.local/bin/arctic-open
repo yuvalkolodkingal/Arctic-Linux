@@ -2,6 +2,7 @@
 # arctic-open — open the app you picked for a role.
 #
 #   arctic-open terminal | browser | editor | files | files-tui
+#   arctic-open browser [URL…]     open one or more URLs in your browser
 #   arctic-open terminal [--hold] -e COMMAND [ARGUMENTS…]
 #                        run a command in your terminal (--hold: keep it open afterwards);
 #                        the launcher uses this for terminal apps, Fetch and "> command"
@@ -23,6 +24,7 @@ set -uo pipefail
 
 usage() {
   echo "usage: arctic-open terminal|browser|editor|files|files-tui" >&2
+  echo "       arctic-open browser [URL…]" >&2
   echo "       arctic-open terminal [--hold] [--app-id ID] [-e COMMAND [ARGUMENTS…]]" >&2
   echo "       arctic-open --focus DESKTOP-ID" >&2
   exit 2
@@ -60,7 +62,13 @@ fi
 
 # Running a command in the terminal: [--hold] [--app-id ID] [-e COMMAND…]
 exec_args=()
+app_args=()
 app_id=""
+if [[ "$role" == browser ]]; then
+  for url in "$@"; do [[ "$url" != -* ]] || usage; done
+  app_args=("$@")
+  set --
+fi
 if (( $# )); then
   [[ "$role" == terminal ]] || usage
   hold=0 run=0
@@ -88,9 +96,9 @@ id_args() {   # id_args <terminal command line> — how that terminal sets its w
 
 declare -A FALLBACK=(
   [terminal]="kitty|foot|alacritty"
-  [browser]="gtk-launch app.zen_browser.zen|gtk-launch org.mozilla.firefox|firefox|gtk-launch com.brave.Browser|chromium-browser"
-  [editor]="gtk-launch dev.zed.Zed|zeditor|zed|gtk-launch com.vscodium.codium|kitty -e nvim|foot -e nvim|alacritty -e nvim"
-  [files]="nautilus|thunar|pcmanfm-qt|kitty -e yazi|foot -e yazi|alacritty -e yazi"
+  [browser]="gtk-launch app.zen_browser.zen|gtk-launch org.mozilla.firefox|firefox|gtk-launch com.brave.Browser|chromium-browser|gtk-launch org.gnome.Epiphany|epiphany"
+  [editor]="gtk-launch dev.zed.Zed|zeditor|zed|gtk-launch com.vscodium.codium|featherpad|kitty -e nvim|foot -e nvim|alacritty -e nvim"
+  [files]="nautilus|thunar|pcmanfm-qt|pcmanfm|kitty -e yazi|foot -e yazi|alacritty -e yazi"
   [files-tui]="kitty -e yazi|foot -e yazi|alacritty -e yazi|kitty -e ranger"
 )
 
@@ -112,6 +120,21 @@ available() {   # available <command line> — is its program (or desktop entry)
     for d in "${ds[@]}"; do [[ -f "$d/applications/$id.desktop" ]] && return 0; done
     return 1
   fi
+  # A terminal alone does not make an optional editor or file manager available. Parse
+  # quoting without executing the configured command; the eventual launch keeps its argv.
+  case "${prog##*/}" in
+    kitty|foot|alacritty|ghostty)
+      if [[ "$cmd" == *" -e "* ]]; then
+        local target
+        target="$(python3 -c '
+import shlex, sys
+words = shlex.split(sys.argv[1])
+index = words.index("-e")
+print(words[index + 1] if index + 1 < len(words) else "")' "$cmd" 2>/dev/null)" || return 1
+        [[ -n "$target" ]] && command -v "$target" >/dev/null 2>&1 || return 1
+      fi
+      ;;
+  esac
   command -v "$prog" >/dev/null 2>&1
 }
 
@@ -126,7 +149,7 @@ for c in "${candidates[@]}"; do
     [[ -n "$app_id" && ${#ids[@]} -eq 0 ]] && continue
     # Detach so the app outlives the keybinding's process. The role's command line is a
     # command line (word-split by sh); the command to run is passed as separate arguments.
-    setsid -f sh -c "exec $c \"\$@\"" arctic-open "${ids[@]}" "${exec_args[@]}" >/dev/null 2>&1
+    setsid -f sh -c "exec $c \"\$@\"" arctic-open "${ids[@]}" "${exec_args[@]}" "${app_args[@]}" >/dev/null 2>&1
     exit 0
   fi
 done

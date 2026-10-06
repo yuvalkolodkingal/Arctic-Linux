@@ -1,7 +1,8 @@
 # Arctic Linux optimization candidate
 
-Work is local on `codex/optimize-preserve-functionality`, based on main
-`f1e3c518ae6a1d8d0fd85dcf117baa8341701703` (includes PR 18's lock-clock fix).
+Work is on `codex/optimize-preserve-functionality`, reconciled with main
+`2d5ac68847a5feb541177aeaa5a9a00d5ad44815` (includes PR 18's lock-clock fix and
+the separately approved battery/native-symbol fixes).
 The user now authorizes the combined draft PR, exact-head Actions candidate and merge after all gates pass. Existing v1.2.0 tags/assets remain immutable; no stable ISO replacement has been performed.
 The approved wallpaper merge on main `cdf4960f567842e853b6b3503c542d739ff215f7`
 has been reconciled locally and is included in the combined candidate.
@@ -14,6 +15,50 @@ then image size. "As fast as possible" and "as small as possible" have competing
 compression costs; measurements decide the compromise.
 
 ## Research and execution update, 6 October
+
+The user approved the native GNOME Web tradeoff and full proposed app set at
+17:02 UTC on 6 October. Fresh live/install defaults now select GNOME Web, Foot,
+Fish, GTK3 PCManFM with XArchiver, Celluloid and FeatherPad. Nano and Bash remain
+recovery tools. Zen/Firefox, Kitty, Nautilus, VLC, Zed and the other catalog
+choices remain optional. Existing-PC role files remain config-preserved; the
+image build applies separate fresh-media defaults. Selective build-only solver
+exclusions prevent old recommended apps being pulled back into the live image;
+DNF weak-dependency policy on installed computers is unchanged. The desktop RPM recommends
+the new defaults so future signed updates do not repull the old app set; it does not
+uninstall old apps or replace existing users’ role files.
+
+The initial dependency-inclusive combined signed-RPM subset removes 137,265,296 logical
+bytes and adds 74,819,450, a **62,445,846-byte logical reduction**. With the fixed
+EROFS format, that subset shrinks from 33,423,360 to 20,344,832 bytes, saving
+**13,078,528 bytes**. These numbers exclude the separately removed preloaded Zen
+Flatpak/runtime payload and do not predict full-image marginal savings. The explicit
+ZIP helper adds 714,761 logical bytes; the combined ZIP-inclusive subset is
+20,570,112 bytes, a **12,853,248-byte compressed reduction** against the same old
+subset. Do not add its standalone compressed size to a combined trial. GVfs,
+portals, image/video thumbnailers, Ripgrep, fonts, hardware support, security,
+recovery, Nix and DNF/Flatpak remain available. A consolidated resolver/build must
+confirm the actual inventory and bytes before any size promise.
+
+GNOME Web shares WebKitGTK 6.0 with required Arctic web apps. Its mandatory web
+process sandbox remains enabled. The approved tradeoff removes the Flatpak outer
+UI sandbox and Zen workspace/Firefox-extension compatibility; paid DRM streaming
+is unqualified. Browser containment, offline roles/file/archive/media operation,
+encrypted installation, updates/recovery and exact-image performance remain gates.
+
+The user's supplied results for run 37450977544 identify one failed comparison:
+Kitty subsequent mapped startup **+20.87065%**, beyond the unchanged 10% gate.
+The outer timer did not expire. Its observation brackets (51–85 ms) exceed the
+29.30 ms median difference, so no actual startup cause can be assigned from those
+results. A persistent actual-user socket observer, conservative timing enclosure,
+raw CPU-counter controls, package inventories and counterbalanced boot order have
+passed independent source review. The final role/cold/idle harness passed 55
+focused tests and additional independent controls. It measures pristine idle
+before GUI workloads separately from normalized post-workload idle, records the
+observer's own CPU cost, and compares the actual old/new default app roles. The
+first GUI launch is measured before preconditioning on a fresh installed overlay;
+shared OS libraries and host disk caches may already be warm. The original failed
+result remains failed. All new measurements require fresh image/KVM qualification;
+zero CPU medians prove no whole-system CPU gain.
 
 The corrected artifact-only workflow [37440736427](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37440736427)
 on exact source `83c2984a794d7036319f012f3400cedbbb4aeed3` completed Nix VM

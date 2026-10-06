@@ -12,6 +12,12 @@
 #                                               installed boot (default: offline). The live
 #                                               installer remains isolated; use this for
 #                                               installed Nix fetch/update acceptance.
+#   --collect-via console                     authenticate on tty3 and restore the actual
+#                                             desktop VT before probing; never launches the
+#                                             default GUI terminal (performance first-use).
+#   --fresh-boot-from DIR                      boot a fresh QCOW2 overlay of DIR's clean
+#                                             installed disk and copied UEFI variables.
+#   --performance-context FILE                copy declared paired-run provenance to data CD.
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
 #                                               the default install with apps from the live
 #                                               image; preinstalled Zen is kept offline,
@@ -95,6 +101,9 @@ GUEST_CHECK_INTERACTIVE=0
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 BOOT_NETWORK=offline
+COLLECT_VIA=terminal
+FRESH_BOOT_FROM=""
+PERFORMANCE_CONTEXT=""
 # Test secrets only (typed into the VM and passed to the installer).
 LUKS_PASSPHRASE="glacier lantern frost harbor"
 USER_PASSWORD="arctic-ci-pass"
@@ -118,12 +127,22 @@ while (( $# )); do
     --test-hardware) TEST_HARDWARE="$2"; shift 2 ;;
     --online-via-proxy) ONLINE_PROXY=1; shift ;;
     --boot-network) BOOT_NETWORK="$2"; shift 2 ;;
+    --collect-via) COLLECT_VIA="$2"; shift 2 ;;
+    --fresh-boot-from) FRESH_BOOT_FROM="$2"; shift 2 ;;
+    --performance-context) PERFORMANCE_CONTEXT="$2"; shift 2 ;;
     -h|--help) sed -n '2,58p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$STAGE" in all|install|boot) ;; *) arctic_die "--stage takes all, install or boot" ;; esac
+case "$COLLECT_VIA" in terminal|console) ;; *) arctic_die "--collect-via takes terminal or console" ;; esac
+if [[ -n "$FRESH_BOOT_FROM$PERFORMANCE_CONTEXT" ]]; then
+  [[ "$STAGE" == boot && "$COLLECT_VIA" == console && -n "$GUEST_CHECK" && -n "$FRESH_BOOT_FROM" && -r "$PERFORMANCE_CONTEXT" ]] ||
+    arctic_die "fresh performance boots need --stage boot, console, guest check, clean source and context"
+  [[ -r "$FRESH_BOOT_FROM/target.qcow2" && -r "$FRESH_BOOT_FROM/OVMF_VARS.fd" ]] || arctic_die "no pristine installed disk/UEFI variables"
+  FRESH_BOOT_FROM="$(cd "$FRESH_BOOT_FROM" && pwd)"
+fi
 case "$BOOT_NETWORK" in offline|online) ;; *) arctic_die "--boot-network takes offline or online" ;; esac
 [[ -f "$PROFILE" ]] || arctic_die "no profile at $PROFILE"
 if [[ "$STAGE" != boot ]]; then
@@ -135,7 +154,11 @@ mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
 if [[ "$STAGE" == boot ]]; then
-  [[ -f "$OUT/target.qcow2" ]] || arctic_die "no installed disk at $OUT/target.qcow2 (run --stage install first)"
+  if [[ -n "$FRESH_BOOT_FROM" ]]; then
+    [[ "$OUT" != "$FRESH_BOOT_FROM" && ! -e "$OUT/target.qcow2" ]] || arctic_die "fresh boot needs a separate unused overlay directory"
+  else
+    [[ -f "$OUT/target.qcow2" ]] || arctic_die "no installed disk at $OUT/target.qcow2 (run --stage install first)"
+  fi
   rm -f "$OUT"/boot-*.png "$OUT/serial-boot.log" "$OUT/qemu-boot.log"
   # Keep the log of the run that installed the disk; test.log starts afresh.
   if [[ -f "$OUT/test.log" ]] && grep -q 'install stage' "$OUT/test.log"; then mv "$OUT/test.log" "$OUT/test-install-stage.log"; fi
@@ -149,6 +172,7 @@ fi
 DATA="$OUT/data"
 rm -rf "$DATA"; mkdir -p "$DATA"
 cp "$PROFILE" "$DATA/profile.toml"
+if [[ -n "$PERFORMANCE_CONTEXT" ]]; then cp "$PERFORMANCE_CONTEXT" "$DATA/performance-context.json"; fi
 if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
@@ -275,6 +299,33 @@ cat > "$DATA/collect.sh" <<'EOF'
 # tools/test-install.sh: runs as root in the installed system's first session (typed into a
 # terminal as `sudo bash collect.sh $$`, so $1 is the terminal's shell) → serial port.
 exec >/dev/ttyS0 2>&1
+if [ -f /run/t/performance-context.json ]; then
+  # Standard console authentication leaves default GUI roles unexecuted. Return
+  # to the actual SDDM desktop VT before observing them; no boot/security hooks.
+  python3 - <<'PY' || exit 1
+from pathlib import Path
+import subprocess,time
+sessions=[]
+for path in Path('/proc').glob('[0-9]*'):
+    try:
+        if path.stat().st_uid==0 or (path/'comm').read_text().strip()!='mango':continue
+        env=dict(item.split('=',1) for item in (path/'environ').read_bytes().decode().split('\0') if '=' in item)
+        sessions.append(env['XDG_SESSION_ID'])
+    except (OSError,KeyError,UnicodeError):continue
+if len(set(sessions))!=1:raise RuntimeError('No unique actual desktop session for console restoration')
+session=sessions[0]
+kind=subprocess.check_output(['loginctl','show-session',session,'-p','Type','--value'],text=True).strip()
+vt=subprocess.check_output(['loginctl','show-session',session,'-p','VTNr','--value'],text=True).strip()
+if kind!='wayland' or not vt.isdecimal() or int(vt)<=0:raise RuntimeError('Invalid actual desktop VT')
+subprocess.run(['chvt',vt],check=True,timeout=10)
+for _ in range(50):
+    active=subprocess.check_output(['loginctl','show-session',session,'-p','Active','--value'],text=True).strip()
+    if active=='yes':break
+    time.sleep(.1)
+else:raise RuntimeError('Desktop VT did not become active')
+print('ARCTIC-PERFORMANCE-CONSOLE-RESTORED session='+session+' vt='+vt,flush=True)
+PY
+fi
 pid="${1:-}"
 u="$(stat -c %U "/proc/$pid" 2>/dev/null || echo ci)"
 uid="$(id -u "$u")"
@@ -483,6 +534,12 @@ def stage_install():
         if not vm.wait_exit(600):
             vm.shot("install-48-no-poweroff")
             log("the live system did not power off")
+            if E.get("COLLECT_VIA") == "console":
+                return 93  # performance cannot clone a disk stopped by vm.quit()
+        elif E.get("COLLECT_VIA") == "console":
+            if vm.proc.returncode != 0:
+                return 94
+            log("ARCTIC-PRISTINE-INSTALL-POWEROFF=clean")
         return int(rc) if rc.isdigit() else 92
     finally:
         vm.quit()
@@ -602,8 +659,18 @@ def stage_boot():
         vm.shot("boot-51-desktop")
         collected = False
         lock_password_sent = False
-        for attempt in (1, 2, 3):
-            open_terminal(vm, f"boot-5{attempt + 1}")
+        for attempt in ((1,) if E.get("COLLECT_VIA") == "console" else (1, 2, 3)):
+            if E.get("COLLECT_VIA") == "console":
+                vm.keys("ctrl-alt-f3")
+                time.sleep(5)
+                vm.type_text(E["PROFILE_USER"], gap=.3)
+                vm.keys("ret")
+                time.sleep(3)
+                vm.type_text(password, gap=.3)
+                vm.keys("ret")
+                time.sleep(5)
+            else:
+                open_terminal(vm, f"boot-5{attempt + 1}")
             vm.type_text("sudo sh /dev/sr0", gap=0.3)
             vm.keys("ret")
             time.sleep(10)
@@ -692,7 +759,15 @@ xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -G "$OUT/sysarea.sh" -o "$OUT/dat
 if [ "$STAGE" != boot ]; then
   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
   [ "$FIRMWARE" = uefi ] && cp /usr/share/edk2/ovmf/OVMF_VARS.fd "$OUT/OVMF_VARS.fd"
+elif [ -n "$FRESH_BOOT_FROM" ]; then
+  [ ! -e "$OUT/target.qcow2" ] || { echo "fresh overlay already exists" >&2; exit 1; }
+  qemu-img check -q "$FRESH_BOOT_FROM/target.qcow2"
+  qemu-img create -q -f qcow2 -F qcow2 -b "$FRESH_BOOT_FROM/target.qcow2" "$OUT/target.qcow2"
+  cp "$FRESH_BOOT_FROM/OVMF_VARS.fd" "$OUT/OVMF_VARS.fd"
 fi
+PROFILE_USER="$(python3 -c 'import pathlib,tomllib,sys; print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())["account"]["username"])' "$OUT/data/profile.toml")"
+[[ "$PROFILE_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || exit 1
+export PROFILE_USER
 ACCEL="tcg,thread=multi"
 [ -e /dev/kvm ] && ACCEL=kvm
 export ACCEL
@@ -706,6 +781,8 @@ INNER
 arctic_log "install test ($FIRMWARE, stage $STAGE, profile $(basename "$PROFILE")) → $OUT"
 rc=0
 name_args=()
+base_args=()
+if [[ -n "$FRESH_BOOT_FROM" ]]; then base_args=(-v "$FRESH_BOOT_FROM:$FRESH_BOOT_FROM:ro"); fi
 if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
   [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
@@ -716,9 +793,10 @@ fi
   -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e GUEST_CHECK_INTERACTIVE="$GUEST_CHECK_INTERACTIVE" \
   -e ONLINE_PROXY="$ONLINE_PROXY" -e BOOT_NETWORK="$BOOT_NETWORK" \
+  -e COLLECT_VIA="$COLLECT_VIA" -e FRESH_BOOT_FROM="$FRESH_BOOT_FROM" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" \
+  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" "${base_args[@]}" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner" || rc=$?
 
 arctic_log "result: exit $rc (serial logs, test.log and screenshots in $OUT)"

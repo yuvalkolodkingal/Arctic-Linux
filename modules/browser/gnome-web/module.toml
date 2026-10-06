@@ -1,0 +1,29 @@
+# Native, maintained WebKitGTK browser sharing the image's web-app engine.
+id = "gnome-web"
+name = "GNOME Web"
+short = "Web"
+summary = "A simple browser with a sandboxed WebKit web process."
+category = "browser"
+default = true
+tile = "gnome-web"
+icon = "globe"
+in_live_image = true
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ["epiphany"]
+download_mb = 5
+
+[defaults]
+desktop_id = "org.gnome.Epiphany.desktop"
+role = "browser"
+command = "epiphany"
+mime = [
+  "x-scheme-handler/http",
+  "x-scheme-handler/https",
+  "text/html",
+  "application/xhtml+xml",
+]

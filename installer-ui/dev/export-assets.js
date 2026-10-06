@@ -8,6 +8,7 @@
 //   assets/mark-dark.svg / mark-light.svg   the fox mark with amber eyes
 //   assets/Icons.js                  QML JS library: icon bodies + tile/app data, so
 //                                    Icon.qml can recolour icons at runtime
+//   ../../settings/assets/Icons.js   identical generated library shared with Settings
 // The app catalog (modules/) has grown past the design's 28 app tiles: every visible module
 // gets a tile drawn the design's way (category tint + one generic line glyph, never a vendor
 // logo) from its module.toml (category, tile, icon), with the extra glyphs below.
@@ -44,7 +45,7 @@ const SNOW100 = '#f3f6f8';
 // colour, so neither is reused. Dark tiles (slate-900) carry snow ink.
 const APP_TINT = {
   browser: 'info-soft', editor: 'surface-sunken', terminal: 'slate-900', shell: 'warm-soft', files: 'accent-soft',
-  office: 'success-soft', video: 'warning-soft', extras: 'surface-sunken', system: 'surface-sunken',
+  office: 'success-soft', video: 'warning-soft', extras: 'surface-sunken', system: 'surface-sunken', drivers: 'surface-sunken',
   music: 'warning-soft', photos: 'warm-soft', graphics: 'warm-soft', recording: 'warning-soft', chat: 'info-soft',
   email: 'info-soft', notes: 'success-soft', reading: 'success-soft', gaming: 'slate-900', security: 'surface-sunken',
   sync: 'info-soft', dev: 'surface-sunken', containers: 'surface-sunken',
@@ -70,14 +71,14 @@ for (const [name, body] of Object.entries(EXTRA_ICONS)) {
 }
 
 // The catalog, read with a line parser that is enough for the catalog's own house style
-// (top-level `key = "string" | true | false`, `[[category]]` blocks, `modules = [...]`).
+// (top-level strings, booleans, `[[category]]` blocks, `modules = [...]`).
 const modulesDir = path.resolve(__dirname, '..', '..', 'modules');
 function tomlTop(text) {
   const o = {};
   for (const line of text.split('\n')) {
     if (/^\s*\[/.test(line)) break;
-    const m = /^([a-z_]+) = ("(?:[^"\\]|\\.)*"|true|false)\s*$/.exec(line);
-    if (m) o[m[1]] = JSON.parse(m[2]);
+    const m = /^([a-z_]+) = ("(?:[^"\\]|\\.)*"|'[^']*'|true|false)\s*$/.exec(line);
+    if (m) o[m[1]] = m[2][0] === "'" ? m[2].slice(1, -1) : JSON.parse(m[2]);
   }
   return o;
 }
@@ -87,10 +88,14 @@ const categories = fs.readFileSync(path.join(modulesDir, 'catalog.toml'), 'utf8'
   return c;
 });
 const catalogApps = {};
+const catalogTiles = {};
 for (const cat of categories) {
   for (const id of cat.modules) {
     const m = tomlTop(fs.readFileSync(path.join(modulesDir, cat.id, id, 'module.toml'), 'utf8'));
-    catalogApps[m.tile || id] = [m.name, m.category, m.icon, m.summary, !!m.default];
+    const app = [m.name, m.category, m.icon, m.summary, !!m.default];
+    // Metadata belongs to the module ID even when several modules share artwork.
+    catalogApps[id] = app;
+    catalogTiles[m.tile || id] = app;
   }
 }
 
@@ -106,8 +111,9 @@ for (const name of Object.keys(ICONS)) {
 // Design tiles (installer, settings, …) plus every catalog app; the catalog decides the
 // category (and so the tint) of apps the design also draws.
 const APPS = Object.assign({}, A.APPS, catalogApps);
+const TILES = Object.assign({}, A.APPS, catalogTiles);
 function tileSVG(id, theme) {
-  const a = APPS[id];
+  const a = TILES[id];
   if (!APP_TINT[a[1]]) throw new Error('no tint for category ' + a[1] + ' (' + id + ')');
   if (!ICONS[a[2]]) throw new Error('no glyph ' + a[2] + ' (' + id + ')');
   const tint = TINT[theme][APP_TINT[a[1]]];
@@ -118,11 +124,11 @@ function tileSVG(id, theme) {
     ICONS[a[2]].replace(/currentColor/g, ink) + '</g></svg>\n';
 }
 let t = 0;
-for (const id of Object.keys(APPS)) {
+for (const id of Object.keys(TILES)) {
   const light = tileSVG(id, 'light');
   // Sanity: where the design draws the same tile, ours must equal its own appTileSVG output.
   const d = A.APPS[id];
-  if (d && d[1] === APPS[id][1] && d[2] === APPS[id][2] && light.trim() !== A.appTileSVG(id, 64).trim()) {
+  if (d && d[1] === TILES[id][1] && d[2] === TILES[id][2] && light.trim() !== A.appTileSVG(id, 64).trim()) {
     throw new Error('tile mismatch for ' + id);
   }
   fs.writeFileSync(path.join(out, 'tiles', id + '-light.svg'), light);
@@ -156,4 +162,7 @@ const js = '.pragma library\n' +
   '    return "data:image/svg+xml;utf8," + encodeURIComponent(s);\n' +
   '}\n';
 fs.writeFileSync(path.join(out, 'Icons.js'), js);
-console.log('icons: ' + n + ', tiles: ' + t + ' x2 themes, marks: 2, Icons.js written to ' + out);
+const settingsAssets = path.resolve(__dirname, '..', '..', 'settings', 'assets');
+fs.mkdirSync(settingsAssets, { recursive: true });
+fs.copyFileSync(path.join(out, 'Icons.js'), path.join(settingsAssets, 'Icons.js'));
+console.log('icons: ' + n + ', tiles: ' + t + ' x2 themes, marks: 2, Icons.js written to ' + out + ' and mirrored to ' + settingsAssets);

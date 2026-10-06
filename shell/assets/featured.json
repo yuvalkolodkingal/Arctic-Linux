@@ -2,6 +2,20 @@
  "schema": 1,
  "apps": [
   {
+   "id": "gnome-web",
+   "name": "GNOME Web",
+   "summary": "A simple browser with a sandboxed WebKit web process.",
+   "category": "browser",
+   "tile": "gnome-web",
+   "glyph": "globe",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "epiphany"
+    ]
+   }
+  },
+  {
    "id": "zen",
    "name": "Zen Browser",
    "summary": "Calm, privacy-first browser with vertical tabs.",
@@ -107,6 +121,20 @@
     "remote": "flathub",
     "ref": "com.vivaldi.Vivaldi",
     "verified": false
+   }
+  },
+  {
+   "id": "featherpad",
+   "name": "FeatherPad",
+   "summary": "Lightweight text editor with tabs, search and highlighting.",
+   "category": "editor",
+   "tile": "featherpad",
+   "glyph": "file",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "featherpad"
+    ]
    }
   },
   {
@@ -237,6 +265,20 @@
    }
   },
   {
+   "id": "foot",
+   "name": "foot",
+   "summary": "Lightweight Wayland terminal.",
+   "category": "terminal",
+   "tile": "foot",
+   "glyph": "terminal",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "foot"
+    ]
+   }
+  },
+  {
    "id": "kitty",
    "name": "kitty",
    "summary": "Fast, GPU-drawn terminal.",
@@ -262,20 +304,6 @@
    "dnf": {
     "packages": [
      "alacritty"
-    ]
-   }
-  },
-  {
-   "id": "foot",
-   "name": "foot",
-   "summary": "Lightweight Wayland terminal.",
-   "category": "terminal",
-   "tile": "foot",
-   "glyph": "terminal",
-   "proprietary": false,
-   "dnf": {
-    "packages": [
-     "foot"
     ]
    }
   },
@@ -318,6 +346,29 @@
    "dnf": {
     "packages": [
      "fish"
+    ]
+   }
+  },
+  {
+   "id": "pcmanfm",
+   "name": "PCManFM",
+   "summary": "Simple folders, tabs and graphical archive tools.",
+   "category": "files",
+   "tile": "pcmanfm",
+   "glyph": "folder",
+   "proprietary": false,
+   "dnf": {
+    "packages": [
+     "pcmanfm",
+     "xarchiver",
+     "7zip",
+     "zip",
+     "unzip",
+     "tar",
+     "xz",
+     "bzip2",
+     "zstd",
+     "cpio"
     ]
    }
   },
@@ -441,25 +492,6 @@
    }
   },
   {
-   "id": "mpv",
-   "name": "mpv",
-   "summary": "Minimal, keyboard-driven player.",
-   "category": "video",
-   "tile": "mpv",
-   "glyph": "play",
-   "proprietary": false,
-   "flatpak": {
-    "remote": "flathub",
-    "ref": "io.mpv.Mpv",
-    "verified": false
-   },
-   "dnf": {
-    "packages": [
-     "mpv"
-    ]
-   }
-  },
-  {
    "id": "celluloid",
    "name": "Celluloid",
    "summary": "Simple player built on mpv.",
@@ -475,6 +507,25 @@
    "dnf": {
     "packages": [
      "celluloid"
+    ]
+   }
+  },
+  {
+   "id": "mpv",
+   "name": "mpv",
+   "summary": "Minimal, keyboard-driven player.",
+   "category": "video",
+   "tile": "mpv",
+   "glyph": "play",
+   "proprietary": false,
+   "flatpak": {
+    "remote": "flathub",
+    "ref": "io.mpv.Mpv",
+    "verified": false
+   },
+   "dnf": {
+    "packages": [
+     "mpv"
     ]
    }
   },

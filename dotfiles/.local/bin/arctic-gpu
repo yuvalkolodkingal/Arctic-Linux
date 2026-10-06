@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""arctic-gpu — run an app on the discrete graphics chip of a laptop with two (hybrid graphics).
+"""arctic-gpu — run an app on the offload graphics chip selected by switcheroo-control.
 
-    arctic-gpu status [--json]     the graphics chips switcheroo-control knows, whether this is a
-                                   hybrid machine, and the apps that ask for the discrete chip
+    arctic-gpu status [--json]     the graphics chips switcheroo-control knows, whether another
+                                   chip is available for offload, and the apps that ask for it
                                    (PrefersNonDefaultGPU=true in their desktop entry)
-    arctic-gpu run COMMAND…        run COMMAND on the discrete chip (switcherooctl launch sets
+    arctic-gpu run COMMAND…        run COMMAND on the offload chip (switcherooctl launch sets
                                    the variables that chip's driver needs, e.g. NVIDIA's PRIME ones)
 
-The launcher can use it for Shift + Enter, and for apps whose entry prefers the discrete chip.
+The launcher can use it for Shift + Enter, and for apps whose entry prefers the other chip.
 Each status prints one JSON line; failures print {"ok": false, "error": "…"} and exit 1.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -22,28 +23,73 @@ class Failure(Exception):
     """A sentence for the person."""
 
 
+def launch_environment(value):
+    """Recognize opaque NAME=value metadata, without applying or interpreting its values."""
+    assignments = value.split()
+    names = set()
+    for assignment in assignments:
+        name, separator, content = assignment.partition('=')
+        if not separator or not content or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name) or name in names:
+            return False
+        names.add(name)
+    return bool(assignments)
+
+
 def gpus():
-    """`switcherooctl list` → [{index, name, default, discrete}] ([] without the service)."""
+    """`switcherooctl list` → [{index, name, default, discrete, offload}] ([] without the service).
+
+    Discrete is the provider's hardware flag. Older versions omit it; their non-default
+    GPU with launch metadata is an offload target, without claiming it is physically discrete.
+    """
     if not shutil.which('switcherooctl'):
         return []
     try:
-        out = subprocess.run(['switcherooctl', 'list'], capture_output=True, text=True, timeout=10,
-                             env=dict(os.environ, LC_ALL='C')).stdout
+        result = subprocess.run(['switcherooctl', 'list'], capture_output=True, text=True, timeout=10,
+                                env=dict(os.environ, LC_ALL='C'))
     except (OSError, subprocess.SubprocessError):
         return []
+    if result.returncode:
+        return []
     found = []
-    for line in out.splitlines():
-        key, _, value = line.strip().partition(':')
+    current = None
+    for line in result.stdout.splitlines():
+        key, separator, value = line.strip().partition(':')
+        field = key.split(None, 1)[0] if key else ''
         value = value.strip()
-        if key == 'Device':
-            found.append(dict(index=int(value) if value.isdigit() else len(found), name='', default=False,
-                              discrete=False))
-        elif found and key == 'Name':
-            found[-1]['name'] = value
-        elif found and key == 'Default':
-            found[-1]['default'] = value.lower() == 'yes'
-        elif found and key == 'Discrete':
-            found[-1]['discrete'] = value.lower() == 'yes'
+        if field == 'Device':
+            # Never invent an ID for a malformed record or attach its fields to the previous GPU.
+            current = None
+            if key == 'Device' and separator and re.fullmatch(r'[0-9]{1,10}', value) and int(value) < 2**31:
+                current = dict(index=int(value), name='', default=False, discrete=False,
+                               _default=None, _discrete=None, _environment=False, _seen=set(), _valid=True)
+                found.append(current)
+        elif current is not None and field in ('Name', 'Default', 'Discrete', 'Environment'):
+            if field in current['_seen'] or key != field or not separator:
+                current['_valid'] = False
+            current['_seen'].add(field)
+            if field == 'Name':
+                current['name'] = value
+            elif field == 'Default':
+                current['_default'] = value.lower() if value.lower() in ('yes', 'no') else None
+                current['default'] = current['_default'] == 'yes'
+            elif field == 'Discrete':
+                # A present but invalid flag must not enable the older-format fallback.
+                current['_discrete'] = value.lower()
+                current['discrete'] = current['_discrete'] == 'yes'
+            elif field == 'Environment':
+                current['_environment'] = launch_environment(value)
+    counts = {}
+    for gpu in found:
+        counts[gpu['index']] = counts.get(gpu['index'], 0) + 1
+    found = [gpu for gpu in found if counts[gpu['index']] == 1]
+    declared_default = sum(gpu['_default'] == 'yes' for gpu in found) == 1
+    declared_default = declared_default and all(gpu['_valid'] and gpu['_default'] is not None for gpu in found)
+    for gpu in found:
+        if not gpu['_valid']:
+            gpu['discrete'] = False
+        gpu['offload'] = bool(declared_default and gpu['_default'] == 'no' and gpu['name'] and (
+            gpu['_discrete'] == 'yes' or (gpu['_discrete'] is None and gpu['_environment'])))
+        del gpu['_default'], gpu['_discrete'], gpu['_environment'], gpu['_seen'], gpu['_valid']
     return found
 
 
@@ -56,7 +102,7 @@ def data_dirs():
 
 
 def prefers():
-    """Desktop ids whose entry asks for the discrete chip."""
+    """Desktop ids whose entry asks for the other chip."""
     out = []
     seen = set()
     for folder in data_dirs():
@@ -91,11 +137,12 @@ def main(argv):
         return 0
     if verb == 'status':
         found = gpus()
-        hybrid = len(found) > 1 and any(g['discrete'] for g in found)
+        hybrid = len(found) > 1 and any(g['offload'] for g in found)
         discrete = next((g['name'] for g in found if g['discrete'] and not g['default']), '')
         result = dict(ok=True, hybrid=hybrid, discrete=discrete, gpus=found, prefers=prefers() if hybrid else [])
         if '--json' not in argv[1:]:
-            print('Hybrid graphics: {}'.format('yes, the discrete chip is ' + discrete if hybrid else 'no'))
+            alternate = next((g['name'] for g in found if g['offload']), '')
+            print('Hybrid graphics: {}'.format('yes, the offload chip is ' + alternate if hybrid else 'no'))
             return 0
         print(json.dumps(result))
         return 0

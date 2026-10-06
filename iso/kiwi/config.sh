@@ -10,6 +10,16 @@ test -f /.profile && . /.profile
 
 echo "Configure image: [${kiwi_iname:-Arctic-Linux}]"
 
+# Fresh live media uses the approved native apps. The installer replaces these with
+# each new user's selections. Keep the generic RPM's existing-PC config untouched.
+install -Dm 0644 /usr/share/arctic/live-default-apps /etc/arctic/default-apps
+install -Dm 0644 /usr/share/arctic/live-mimeapps.list /etc/xdg/mimeapps.list
+# libfm reads terminal definitions from its system list, not user config. Keep
+# existing terminals and add Foot's invocation/hold mapping only for fresh media.
+if ! grep -q '^\[foot\]$' /usr/share/libfm/terminals.list; then
+	cat /etc/skel/.config/libfm/terminals.list >> /usr/share/libfm/terminals.list
+fi
+
 #======================================
 # SELinux booleans (as Fedora)
 #--------------------------------------

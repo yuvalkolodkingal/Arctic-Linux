@@ -76,17 +76,17 @@ func TestMarkDetectedHybridLaptop(t *testing.T) {
 	}
 	// Drivers are listed first in the picker, with the device, and not counted as apps.
 	p := c.Picker()
-	if p.Categories[0].ID != "drivers" || !p.Categories[0].Hardware || p.Modules[0].ID != "nvidia" || len(p.Modules) != 131 {
+	if p.Categories[0].ID != "drivers" || !p.Categories[0].Hardware || p.Modules[0].ID != "nvidia" || len(p.Modules) != 134 {
 		t.Fatalf("picker %+v / %d modules, first %+v", p.Categories[0], len(p.Modules), p.Modules[0])
 	}
 	if p.Modules[0].Device != nv.Device || !strings.Contains(p.Modules[0].Summary, "your NVIDIA GeForce RTX 4060") || !p.Modules[0].Default {
 		t.Errorf("nvidia tile %+v", p.Modules[0])
 	}
 	est := c.EstimateDownload(sel)
-	if est.Apps != 8 || est.Drivers != 2 || !strings.HasPrefix(est.Label, "8 apps + 2 drivers · ") {
+	if est.Apps != 6 || est.Drivers != 2 || !strings.HasPrefix(est.Label, "6 apps + 2 drivers · ") {
 		t.Errorf("estimate %+v", est)
 	}
-	if len(c.Apps(sel)) != 8 || len(c.Drivers(sel)) != 2 {
+	if len(c.Apps(sel)) != 6 || len(c.Drivers(sel)) != 2 {
 		t.Errorf("apps %d drivers %d", len(c.Apps(sel)), len(c.Drivers(sel)))
 	}
 	// The build tools are counted once for two akmod drivers.

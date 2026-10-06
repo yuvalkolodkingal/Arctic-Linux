@@ -14,6 +14,14 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_SHA256 = '054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f'
+BASELINE_PROFILE_SHA256 = 'e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d'
+
+
+def paired_boot_order():
+    # Counterbalance whether an image runs first without adding or discarding
+    # boots. Three pairs still provide only a small descriptive distribution.
+    return [(number, name) for number in range(1, 4)
+            for name in (('baseline', 'candidate') if number % 2 else ('candidate', 'baseline'))]
 
 
 def sha256(path):
@@ -43,7 +51,8 @@ def main():
     images = {'baseline': args.baseline.resolve(), 'candidate': args.candidate.resolve()}
     state = dict(acceleration='kvm', memory_mib=4096, vcpus=2, restricted_network=True,
                  observer_sha256=sha256(probe), images={n: dict(path=str(p), bytes=p.stat().st_size,
-                 sha256=sha256(p)) for n, p in images.items()}, runs=[])
+                 sha256=sha256(p)) for n, p in images.items()}, runs=[],
+                 planned_boot_order=[dict(image=name, boot=number) for number, name in paired_boot_order()])
 
     def save(phase):
         state['phase'] = phase
@@ -115,7 +124,14 @@ def main():
         toolchain_sha = current
         state['vm_toolchain_sha256'] = current
 
-    common = [str(ROOT / 'tools/test-install.sh'), '--kvm', '--memory', '4096', '--smp', '2', '--boot-append', '']
+    common = [str(ROOT / 'tools/test-install.sh'), '--kvm', '--memory', '4096', '--smp', '2',
+              '--boot-append', '', '--collect-via', 'console']
+    profiles = dict(baseline=ROOT/'tools/performance/fixtures/v1.2-offline.toml',
+                    candidate=ROOT/'profiles/ci/offline.toml')
+    if sha256(profiles['baseline']) != BASELINE_PROFILE_SHA256:
+        raise RuntimeError('Original baseline install profile changed')
+    state['profiles'] = {name: dict(path=str(path), sha256=sha256(path)) for name, path in profiles.items()}
+    pristine = {}
     try:
         save('prepare_immutable_vm_tools')
         execute(['bash', str(ROOT / 'tools/performance/prepare-vm-tools.sh'), str(args.out)],
@@ -126,26 +142,42 @@ def main():
             require_idle_vm_host()
             save('offline_install_' + name)
             execute(common + ['--stage', 'install', '--iso', str(image), '--install-timeout', '2400',
+                              '--profile', str(profiles[name]),
                               '--out', str(args.out / name)], args.out / (name + '-install-harness.log'), 3600, vm=True)
             verify_toolchain(args.out / name)
-        for number in range(1, 4):
-            for name in images:
-                require_idle_vm_host()
-                save(f'{name}_boot_{number}')
-                folder = args.out / name
-                archive = args.out / 'runs' / name / str(number)
-                archive.mkdir(parents=True, exist_ok=True)
-                try:
-                    execute(common + ['--stage', 'boot', '--guest-check', str(probe), '--out', str(folder)],
-                            archive / 'harness.log', 2400, vm=True)
-                    verify_toolchain(folder)
-                finally:
-                    # Keep terminal evidence even when the harness fails. Disk
-                    # images and sockets stay local and are excluded from uploads.
-                    for path in folder.iterdir():
-                        if path.is_file() and path.suffix in ('.log', '.json', '.png', '.txt'):
-                            shutil.copy2(path, archive / path.name)
-                state['runs'].append(dict(image=name, boot=number, archive=str(archive), harness_exit=0))
+            if 'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean' not in (args.out/(name+'-install-harness.log')).read_text():
+                raise RuntimeError('Installed source did not cleanly power off; first-use snapshot refused')
+            pristine[name] = {file: sha256(args.out/name/file) for file in ('target.qcow2', 'OVMF_VARS.fd')}
+        state['pristine_installed_sources'] = pristine
+        for number, name in paired_boot_order():
+            require_idle_vm_host()
+            save(f'{name}_boot_{number}')
+            archive = args.out / 'runs' / name / str(number)
+            archive.mkdir(parents=True, exist_ok=True)
+            context = dict(image=name, boot=number, fresh_installed_overlay=True, collector='console',
+                           installed_base_sha256=pristine[name]['target.qcow2'],
+                           firmware_variables_sha256=pristine[name]['OVMF_VARS.fd'],
+                           install_profile_sha256=state['profiles'][name]['sha256'],
+                           iso_sha256=state['images'][name]['sha256'])
+            context_path = archive/'performance-context.json'
+            context_path.write_text(json.dumps(context, indent=2)+'\n')
+            try:
+                execute(common + ['--stage', 'boot', '--guest-check', str(probe),
+                        '--profile', str(profiles[name]), '--fresh-boot-from', str(args.out/name),
+                        '--performance-context', str(context_path), '--out', str(archive)],
+                        archive / 'harness.log', 2400, vm=True)
+                verify_toolchain(archive)
+                if not 'ARCTIC-PERFORMANCE-CONSOLE-RESTORED' in (archive/'serial-boot.log').read_text(errors='replace'):
+                    raise RuntimeError('No console-to-desktop VT restoration evidence')
+            finally:
+                # Per-boot output is already independent. Keep logs on failure,
+                # but discard only this fresh overlay/data CD to bound disk use.
+                for file in ('target.qcow2', 'data.iso'):
+                    (archive/file).unlink(missing_ok=True)
+            state['runs'].append(dict(image=name, boot=number, archive=str(archive), harness_exit=0))
+        for name, expected in pristine.items():
+            if {file: sha256(args.out/name/file) for file in expected} != expected:
+                raise RuntimeError('Pristine installed source changed during measurement: '+name)
         argv = [sys.executable, str(ROOT / 'tools/performance/compare.py'),
                 '--candidate-commit', subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=ROOT, text=True).strip(),
                 '--candidate-catalog-sha256', sha256(ROOT / 'shell/AppsService.qml'),

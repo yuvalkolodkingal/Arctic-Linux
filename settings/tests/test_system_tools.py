@@ -511,6 +511,35 @@ class ScreenSaverTest(Tools):
 
 
 class GpuAndShareTest(Tools):
+    # Default/Environment-only format in NVIDIA's official Optimus guide. Fedora44's
+    # signed switcheroo-control-3.0-5.fc44 RPM also prints Discrete (added below).
+    GPU_DEFAULT = textwrap.dedent('''\
+        Device: 0
+          Name:        Intel Corporation Raptor Lake-P [Iris Xe Graphics]
+          Default:     yes
+          Environment: DRI_PRIME=pci-0000_00_02_0
+        ''')
+    GPU_OTHER = textwrap.dedent('''\
+        Device: 1
+          Name:        NVIDIA Corporation AD104GLM [RTX 3500 Ada Generation Laptop GPU]
+          Default:     no
+          Environment: __GLX_VENDOR_LIBRARY_NAME=nvidia __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only
+        ''')
+
+    def gpu_status(self, output, rc=0):
+        # Read opaque fixture data, so shell syntax in Environment is never executed by the stub.
+        fixture = self.tmp / 'gpus.txt'
+        fixture.write_text(output)
+        stub(self.bin, 'switcherooctl', 'cat "{}"\nexit {}\n'.format(fixture, rc))
+        result = subprocess.run([str(BIN / 'arctic-gpu'), 'status', '--json'], env=self.env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def gpu_preferred_app(self):
+        (self.data_dirs / 'applications/steam.desktop').write_text(
+            '[Desktop Entry]\nName=Steam\nExec=steam\nPrefersNonDefaultGPU=true\n')
+
     def test_gpu(self):
         stub(self.bin, 'switcherooctl', textwrap.dedent('''\
             echo "Device: 0"
@@ -533,6 +562,153 @@ class GpuAndShareTest(Tools):
         data = json.loads(subprocess.run([str(BIN / 'arctic-gpu'), 'status', '--json'], env=self.env,
                                          capture_output=True, text=True).stdout)
         self.assertEqual((data['hybrid'], data['prefers']), (False, []))
+
+    def test_gpu_current_fedora_format(self):
+        self.gpu_preferred_app()
+        output = self.GPU_DEFAULT.replace('  Environment:', '  Discrete:    no\n  Environment:')
+        output += '\n' + self.GPU_OTHER.replace('  Environment:', '  Discrete:    yes\n  Environment:')
+        data = self.gpu_status(output)
+        self.assertEqual((data['hybrid'], data['prefers']), (True, ['steam']))
+        self.assertIn('RTX 3500', data['discrete'])
+        self.assertEqual([(gpu['index'], gpu['default'], gpu['discrete'], gpu['offload']) for gpu in data['gpus']],
+                         [(0, True, False, False), (1, False, True, True)])
+
+    def test_gpu_documented_environment_only_formats(self):
+        self.gpu_preferred_app()
+        for environment in ('DRI_PRIME=pci-0000_01_00_0',
+                            '__GLX_VENDOR_LIBRARY_NAME=nvidia __NV_PRIME_RENDER_OFFLOAD=1 '
+                            '__VK_LAYER_NV_optimus=NVIDIA_only'):
+            with self.subTest(environment=environment):
+                other = self.GPU_OTHER.split('  Environment:')[0] + '  Environment: ' + environment + '\n'
+                data = self.gpu_status(self.GPU_DEFAULT + '\n' + other)
+                self.assertEqual((data['hybrid'], data['prefers']), (True, ['steam']))
+                self.assertEqual(data['discrete'], '')  # offload availability does not classify physical hardware
+                self.assertFalse(any(gpu['discrete'] for gpu in data['gpus']))
+                self.assertTrue(data['gpus'][1]['offload'])
+                self.assertNotIn('Environment', json.dumps(data))
+        other = self.GPU_OTHER.replace('NVIDIA Corporation AD104GLM [RTX 3500 Ada Generation Laptop GPU]',
+                                       'Second integrated GPU')
+        data = self.gpu_status(self.GPU_DEFAULT + '\n' + other)
+        self.assertTrue(data['hybrid'])
+        self.assertEqual(data['discrete'], '')
+        result = subprocess.run([str(BIN / 'arctic-gpu'), 'status'], env=self.env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertIn('offload chip is Second integrated GPU', result.stdout)
+        self.assertNotIn('discrete', result.stdout)
+
+    def test_gpu_explicit_discrete_flag_is_authoritative(self):
+        self.gpu_preferred_app()
+        for value in ('no', '', 'unknown', 'true', '1'):
+            with self.subTest(discrete=value):
+                other = self.GPU_OTHER.replace('  Default:     no', '  Default:     no\n  Discrete: ' + value)
+                data = self.gpu_status(self.GPU_DEFAULT + '\n' + other)
+                self.assertEqual((data['hybrid'], data['prefers']), (False, []))
+                self.assertFalse(data['gpus'][1]['offload'])
+        # Existing Discrete-only providers need no Environment field to keep working.
+        other = self.GPU_OTHER.split('  Environment:')[0] + '  Discrete: yes\n'
+        self.assertTrue(self.gpu_status(self.GPU_DEFAULT + '\n' + other)['hybrid'])
+
+    def test_gpu_invalid_or_missing_ids(self):
+        self.gpu_preferred_app()
+        for header in ('Device:', 'Device: -1', 'Device: x', 'Device: 1.0', 'Device: +1',
+                       'Device: ١', 'Device: 2147483648', 'Device: ' + '1' * 5000,
+                       'Device', 'Device 1', 'Device 2: bad', 'Device: 0'):
+            with self.subTest(header=header[:30]):
+                data = self.gpu_status(self.GPU_DEFAULT + '\n' + self.GPU_OTHER.replace('Device: 1', header))
+                self.assertEqual((data['hybrid'], data['prefers']), (False, []))
+                self.assertFalse(any(gpu['offload'] for gpu in data['gpus']))
+                if header != 'Device: 0':
+                    self.assertEqual([gpu['name'] for gpu in data['gpus']],
+                                     ['Intel Corporation Raptor Lake-P [Iris Xe Graphics]'])
+        # Orphan fields before a Device header cannot create another GPU.
+        data = self.gpu_status(self.GPU_OTHER.split('\n', 1)[1] + self.GPU_DEFAULT)
+        self.assertEqual([gpu['index'] for gpu in data['gpus']], [0])
+        self.assertFalse(data['hybrid'])
+        partial = self.GPU_OTHER.replace(
+            '  Name:        NVIDIA Corporation AD104GLM [RTX 3500 Ada Generation Laptop GPU]\n', '')
+        data = self.gpu_status(self.GPU_DEFAULT + partial + 'Device 2: bad\n  Name: malformed record\n')
+        self.assertFalse(data['hybrid'])
+        self.assertEqual(data['gpus'][1]['name'], '')
+
+    def test_gpu_invalid_or_missing_defaults(self):
+        self.gpu_preferred_app()
+        for output in (self.GPU_DEFAULT.replace('  Default:     yes\n', '') + self.GPU_OTHER,
+                       self.GPU_DEFAULT + self.GPU_OTHER.replace('  Default:     no\n', ''),
+                       self.GPU_DEFAULT.replace('Default:     yes', 'Default: maybe') + self.GPU_OTHER,
+                       self.GPU_DEFAULT + self.GPU_OTHER.replace('Default:     no', 'Default: maybe'),
+                       self.GPU_DEFAULT + self.GPU_OTHER.replace('Default:     no', 'Default: yes'),
+                       self.GPU_DEFAULT.replace('Default:     yes', 'Default: no') + self.GPU_OTHER):
+            with self.subTest(output=output):
+                data = self.gpu_status(output)
+                self.assertEqual((data['hybrid'], data['prefers']), (False, []))
+                self.assertEqual(len(data['gpus']), 2)  # hardware names/IDs remain available
+
+    def test_gpu_invalid_or_missing_environment(self):
+        self.gpu_preferred_app()
+        for environment in (None, '', 'DRI_PRIME', '=1', 'DRI_PRIME=', '1INVALID=1',
+                            'DRI-PRIME=1', 'DRI_PRIME=1 stray', 'DRI_PRIME=1 DRI_PRIME=2'):
+            with self.subTest(environment=environment):
+                other = self.GPU_OTHER.split('  Environment:')[0]
+                if environment is not None:
+                    other += '  Environment: ' + environment + '\n'
+                data = self.gpu_status(self.GPU_DEFAULT + '\n' + other)
+                self.assertEqual((data['hybrid'], data['prefers']), (False, []))
+                self.assertFalse(data['gpus'][1]['offload'])
+        data = self.gpu_status(self.GPU_DEFAULT + self.GPU_OTHER.replace(
+            '  Name:        NVIDIA Corporation AD104GLM [RTX 3500 Ada Generation Laptop GPU]\n', ''))
+        self.assertFalse(data['hybrid'])
+
+    def test_gpu_ambiguous_metadata_and_multiple_targets(self):
+        for field in ('Name: duplicate', 'Default: no', 'Environment: DRI_PRIME=2',
+                      'Default', 'Discrete', 'Discrete yes', 'Environment'):
+            with self.subTest(field=field):
+                data = self.gpu_status(self.GPU_DEFAULT + self.GPU_OTHER + '  ' + field + '\n')
+                self.assertFalse(data['hybrid'])
+        for first, second in (('yes', 'no'), ('no', 'yes')):
+            with self.subTest(first=first, second=second):
+                data = self.gpu_status(self.GPU_DEFAULT + self.GPU_OTHER +
+                                       '  Discrete: ' + first + '\n  Discrete: ' + second + '\n')
+                self.assertFalse(data['hybrid'])
+                self.assertFalse(data['gpus'][1]['discrete'])
+                self.assertEqual(data['discrete'], '')
+        data = self.gpu_status(self.GPU_DEFAULT + self.GPU_OTHER +
+                               self.GPU_OTHER.replace('Device: 1', 'Device: 7'))
+        self.assertTrue(data['hybrid'])
+        self.assertEqual([(gpu['index'], gpu['offload']) for gpu in data['gpus']],
+                         [(0, False), (1, True), (7, True)])
+
+    def test_gpu_single_gpu_and_service_failure(self):
+        for output in ('', self.GPU_DEFAULT, self.GPU_OTHER,
+                       self.GPU_DEFAULT.replace('  Environment:', '  Discrete: yes\n  Environment:')):
+            with self.subTest(output=output):
+                self.assertFalse(self.gpu_status(output)['hybrid'])
+        data = self.gpu_status(self.GPU_DEFAULT + self.GPU_OTHER, rc=1)
+        self.assertEqual((data['gpus'], data['hybrid'], data['prefers']), ([], False, []))
+        from unittest.mock import patch
+        gpu = load_helper('arctic-gpu')
+        with patch.object(gpu.shutil, 'which', return_value=None):
+            self.assertEqual(gpu.gpus(), [])
+            with self.assertRaises(gpu.Failure):
+                gpu.main(['run', 'game'])
+        for failure in (OSError('unavailable'), subprocess.TimeoutExpired('switcherooctl', 10)):
+            with patch.object(gpu.shutil, 'which', return_value='/mock/switcherooctl'), \
+                    patch.object(gpu.subprocess, 'run', side_effect=failure):
+                self.assertEqual(gpu.gpus(), [])
+
+    def test_gpu_environment_is_opaque_and_manual_launch_is_unchanged(self):
+        sentinel = self.tmp / 'must-not-exist'
+        other = self.GPU_OTHER.split('  Environment:')[0] + '  Environment: DRI_PRIME=$(touch${IFS}' + str(sentinel) + ')\n'
+        self.assertTrue(self.gpu_status(self.GPU_DEFAULT + other)['hybrid'])
+        self.assertFalse(sentinel.exists())
+        # No discovery, shell expansion or argument splitting for an explicitly requested launch.
+        arguments = self.tmp / 'launch-args.txt'
+        stub(self.bin, 'switcherooctl', 'printf "%s\\n" "$@" > "{}"\nexit 7\n'.format(arguments))
+        argv = ['game with spaces', '--flag', '$(touch {})'.format(sentinel), ';exit 9']
+        result = subprocess.run([str(BIN / 'arctic-gpu'), 'run'] + argv, env=self.env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 7)  # preserve the provider's exit status
+        self.assertEqual(arguments.read_text().splitlines(), ['launch'] + argv)
+        self.assertFalse(sentinel.exists())
 
     def test_share(self):
         stub(self.bin, 'flatpak', 'exit 1\n')

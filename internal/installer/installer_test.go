@@ -154,21 +154,74 @@ func TestGoldenDefaultUEFILUKS(t *testing.T) {
 		"$ cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --label arctic-root --key-file - /dev/nvme0n1p4 < [secret: disk passphrase]",
 		"$ efibootmgr --create --disk /dev/nvme0n1 --part 2 --label 'Arctic Linux' --loader '\\EFI\\fedora\\shimx64.efi'",
 		"FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak",
-		"$ chroot /mnt dnf copr enable -y lihaohong/yazi",
+		"browser=epiphany",
+		"editor=featherpad",
+		"terminal=foot",
+		"files=pcmanfm",
 		"$ useradd --root /mnt --create-home --user-group --groups wheel --shell /usr/bin/fish --comment 'Arctic User' --password [secret: password hash] arctic-user",
 	} {
 		if !strings.Contains(plan, want) {
 			t.Errorf("plan lacks %q", want)
 		}
 	}
-	for _, id := range []string{"zen", "zed", "kitty", "fish", "yazi", "nautilus", "collabora", "vlc"} {
+	for _, id := range []string{"gnome-web", "featherpad", "foot", "fish", "pcmanfm", "celluloid"} {
 		if rep.modules[id] != protocol.ModInstalled {
 			t.Errorf("%s: %s", id, rep.modules[id])
 		}
 	}
 	last := rep.progress[len(rep.progress)-1]
-	if last.Percent != 100 || last.AppsDone != 8 || rep.modules["bash"] != "" {
+	if last.Percent != 100 || last.AppsDone != 6 || rep.modules["bash"] != "" {
 		t.Errorf("last progress %+v", last)
+	}
+}
+
+// Fresh defaults come from the image copy. Failed online package checks must
+// still leave usable app roles, while genuinely downloaded codecs/themes defer.
+func TestFreshDefaultsCompleteOffline(t *testing.T) {
+	for _, profileName := range []string{"defaults.toml", "ci/offline.toml"} {
+		t.Run(profileName, func(t *testing.T) {
+			job := loadJob(t, profileName, "uefi")
+			job.Offline = true
+			rec := &Recorder{Respond: func(c Cmd) (string, error) {
+				if c.Name == "flatpak" && len(c.Args) > 0 && (c.Args[0] == "install" || c.Args[0] == "remote-add") {
+					return "", errors.New("network is unreachable")
+				}
+				if c.Name == "chroot" && len(c.Args) > 2 && c.Args[1] == "dnf" && (c.Args[2] == "install" || c.Args[2] == "swap") {
+					return "", errors.New("network is unreachable")
+				}
+				return DefaultRespond(c)
+			}}
+			rep := newReporter()
+			rep.decide = func(string, int) backend.Decision { return backend.Defer }
+			if err := runPlan(t, job, rec, rep); err != nil {
+				t.Fatal(err)
+			}
+			plan := rec.Plan()
+			for _, id := range []string{"gnome-web", "featherpad", "foot", "fish", "pcmanfm", "celluloid"} {
+				if !job.Catalog.Modules[id].InLiveImage || rep.modules[id] != protocol.ModInstalled {
+					t.Errorf("%s: not preserved as a preloaded app (%s)", id, rep.modules[id])
+				}
+				if strings.Contains(plan, `"id": "`+id+`"`) {
+					t.Errorf("preloaded app %s was deferred", id)
+				}
+			}
+			for _, want := range []string{
+				"browser=epiphany", "editor=featherpad", "terminal=foot", "files=pcmanfm",
+				"x-scheme-handler/https=org.gnome.Epiphany.desktop", "inode/directory=pcmanfm.desktop",
+				"video/mp4=io.github.celluloid_player.Celluloid.desktop",
+				`"id": "codecs"`, `"id": "adw-gtk3-flatpak"`, `"id": "adw-gtk3-dark-flatpak"`,
+				"write /mnt/var/lib/arctic/pending.json", "$ usermod --root /mnt --lock root",
+			} {
+				if !strings.Contains(plan, want) {
+					t.Errorf("offline plan lacks %q", want)
+				}
+			}
+			last := rep.progress[len(rep.progress)-1]
+			if last.Percent != 100 || last.AppsDone != 6 {
+				t.Errorf("offline install did not complete: %+v", last)
+			}
+			checkNoSecrets(t, plan)
+		})
 	}
 }
 
@@ -192,7 +245,7 @@ func TestGoldenAlternativeBIOSAlongside(t *testing.T) {
 		`type=21686148-6449-6E6F-744E-656564454649, name="BIOS boot"`,
 		"$ chroot /mnt grub2-install --target=i386-pc /dev/nvme0n1",
 		"GRUB_DISABLE_OS_PROBER=false",
-		"$ chroot /mnt dnf remove -y --no-autoremove kitty kitty-shell-integration kitty-kitten vlc vlc-gui-qt vlc-plugins-freeworld",
+		"$ chroot /mnt dnf remove -y --no-autoremove epiphany featherpad pcmanfm xarchiver celluloid",
 		"User=alt",
 		"KEYMAP=de-nodeadkeys",
 		"--shell /usr/bin/fish",
@@ -206,6 +259,19 @@ func TestGoldenAlternativeBIOSAlongside(t *testing.T) {
 			t.Errorf("alongside/no-LUKS plan must not run %s", not)
 		}
 	}
+	// Removing the unselected file manager must keep shared archive/recovery tools.
+	for _, command := range rec.Commands() {
+		if !strings.Contains(command, "dnf remove") {
+			continue
+		}
+		for _, field := range strings.Fields(command) {
+			for _, helper := range []string{"7zip", "zip", "unzip", "tar", "xz", "bzip2", "zstd", "cpio"} {
+				if field == helper {
+					t.Errorf("fresh target removes shared archive tool %s: %s", helper, command)
+				}
+			}
+		}
+	}
 }
 
 func TestOptionalFailureSkipAndDefer(t *testing.T) {
@@ -217,6 +283,7 @@ func TestOptionalFailureSkipAndDefer(t *testing.T) {
 	}
 	// Skip.
 	job := loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["editor"] = []string{"zed"} // old editor remains selectable
 	rec := &Recorder{Respond: failZed}
 	rep := newReporter()
 	if err := runPlan(t, job, rec, rep); err != nil {
@@ -230,6 +297,7 @@ func TestOptionalFailureSkipAndDefer(t *testing.T) {
 	}
 	// Retry once, then defer (the unattended policy) → pending.json.
 	job = loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["editor"] = []string{"zed"}
 	rec = &Recorder{Respond: failZed}
 	rep = newReporter()
 	rep.decide = func(id string, n int) backend.Decision {
@@ -252,6 +320,7 @@ func TestOptionalFailureSkipAndDefer(t *testing.T) {
 func TestFallbackMethod(t *testing.T) {
 	// The yazi COPR is down: the batch fails, then yazi falls back to Nix.
 	job := loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["files"] = []string{"pcmanfm", "yazi"} // optional TUI retains Nix fallback
 	rec := &Recorder{Respond: func(c Cmd) (string, error) {
 		if strings.Contains(c.String(), "copr enable") {
 			return "", errors.New("copr unreachable")
@@ -593,14 +662,15 @@ func TestQuote(t *testing.T) {
 	}
 }
 
-// The ISO may ship Zen as a Flatpak (tools/build-iso.sh, only under 2 GiB) although the catalog
-// can't say so: the copied /var/lib/flatpak decides.
+// Older images may ship Zen as a Flatpak: preserve detection and selection of a
+// copied optional browser even though fresh images default to GNOME Web.
 func TestPreinstalledFlatpakFromTheImage(t *testing.T) {
 	zenInImage := func(p string) bool {
 		return DefaultExists(p) || p == "/mnt/var/lib/flatpak/app/app.zen_browser.zen"
 	}
 	// Ticked: kept from the copy, never downloaded, reported installed.
 	job := loadJob(t, "ci/default.toml", "uefi")
+	job.Data.Apps.Selection["browser"] = []string{"zen"}
 	rec := &Recorder{ExistsFn: zenInImage}
 	rep := newReporter()
 	if err := runPlan(t, job, rec, rep); err != nil {

@@ -224,10 +224,10 @@ Requires:       python3-dbus
 Requires:       python3-gobject-base
 Requires:       polkit
 %{?systemd_requires}
-# kitty and fish are the default terminal and shell, but the installer lets people pick others
+# Foot and fish are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
 Recommends:     fish
-Recommends:     kitty
+Recommends:     foot
 Requires:       libnotify
 Requires:       procps-ng
 Requires:       util-linux
@@ -602,11 +602,13 @@ Requires:       mangowm >= 0.17.3
 Requires:       sddm
 # Swappable in the installer's app picker (terminal, shell, file manager, video): weak deps,
 # so unticking one doesn't remove this metapackage.
-Recommends:     kitty
-Recommends:     kitty-shell-integration
+Recommends:     epiphany
+Recommends:     foot
 Recommends:     fish
-Recommends:     nautilus
-Recommends:     vlc
+Recommends:     pcmanfm
+Recommends:     xarchiver
+Recommends:     celluloid
+Recommends:     featherpad
 Requires:       fastfetch
 # Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
 # waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
@@ -934,6 +936,10 @@ install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 # compile from source (and fail to write __pycache__ into /usr/share).
 %py_byte_compile %{python3} %{buildroot}%{_datadir}/arctic/themegen
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
+# Image-only defaults: config.sh applies these while building fresh live media.
+# Updating this RPM does not replace an existing computer's chosen role/MIME defaults.
+install -Dpm 0644 packaging/desktop/live-default-apps %{buildroot}%{_datadir}/arctic/live-default-apps
+install -Dpm 0644 packaging/desktop/live-mimeapps.list %{buildroot}%{_datadir}/arctic/live-mimeapps.list
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
 install -Dpm 0755 packaging/nix/arctic-nix-system %{buildroot}%{_libexecdir}/arctic-nix-system
@@ -1462,6 +1468,8 @@ fi
 %dir %{_sysconfdir}/arctic
 %dir %{_sysconfdir}/arctic/mango
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
+%{_datadir}/arctic/live-default-apps
+%{_datadir}/arctic/live-mimeapps.list
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %{_libexecdir}/arctic-nix-system
 %{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy

@@ -41,11 +41,11 @@ func TestDesignTiles(t *testing.T) {
 	c := load(t)
 	// The design's app tiles (bundle.js APPS minus "installer" and "settings") and the curated
 	// catalog that grew from them (docs/PLAN.md §4.2).
-	want := strings.Fields(`zen firefox brave chrome librewolf chromium vivaldi
-		zed vscode vscodium neovim helix kate emacs text-editor
+	want := strings.Fields(`gnome-web zen firefox brave chrome librewolf chromium vivaldi
+		featherpad zed vscode vscodium neovim helix kate emacs text-editor
 		kitty ghostty alacritty foot konsole
 		zsh fish bash
-		yazi thunar nautilus dolphin nemo pcmanfm-qt
+		pcmanfm yazi thunar nautilus dolphin nemo pcmanfm-qt
 		collabora libreoffice onlyoffice
 		vlc mpv celluloid haruna kodi jellyfin
 		spotify strawberry tauon amberol rhythmbox shortwave easyeffects
@@ -169,8 +169,8 @@ func TestDefaults(t *testing.T) {
 	c := load(t)
 	sel := c.DefaultSelection()
 	want := Selection{
-		"browser": {"zen"}, "editor": {"zed"}, "terminal": {"kitty"}, "shell": {"fish"},
-		"files": {"yazi", "nautilus"}, "office": {"collabora"}, "video": {"vlc"},
+		"browser": {"gnome-web"}, "editor": {"featherpad"}, "terminal": {"foot"}, "shell": {"fish"},
+		"files": {"pcmanfm"}, "office": {}, "video": {"celluloid"},
 		"music": {}, "photos": {}, "graphics": {}, "recording": {}, "chat": {}, "email": {}, "notes": {},
 		"reading": {}, "gaming": {}, "security": {}, "sync": {}, "dev": {}, "containers": {}, "extras": {},
 		"drivers": {}, // nothing detected
@@ -185,7 +185,7 @@ func TestDefaults(t *testing.T) {
 	for _, m := range c.Resolve(sel) {
 		ids = append(ids, m.ID)
 	}
-	if strings.Join(ids, " ") != "zen zed kitty fish bash yazi nautilus collabora vlc adw-gtk3-dark-flatpak adw-gtk3-flatpak codecs desktop-base flatpak nix" {
+	if strings.Join(ids, " ") != "gnome-web featherpad foot fish bash pcmanfm celluloid adw-gtk3-dark-flatpak adw-gtk3-flatpak codecs desktop-base flatpak nix" {
 		t.Fatalf("resolve = %v", ids)
 	}
 }
@@ -198,12 +198,12 @@ func TestLiveImageFlags(t *testing.T) {
 			live[id] = true
 		}
 	}
-	for _, id := range []string{"kitty", "fish", "bash", "nautilus", "vlc", "desktop-base", "flatpak", "nix"} {
+	for _, id := range []string{"gnome-web", "featherpad", "foot", "fish", "bash", "pcmanfm", "celluloid", "desktop-base", "flatpak", "nix"} {
 		if !live[id] {
 			t.Errorf("%s should be in the live image", id)
 		}
 	}
-	for _, id := range []string{"zsh", "thunar", "zen", "zed", "collabora", "yazi", "codecs", "adw-gtk3-flatpak", "adw-gtk3-dark-flatpak"} {
+	for _, id := range []string{"kitty", "nautilus", "vlc", "zsh", "thunar", "zen", "zed", "collabora", "yazi", "codecs", "adw-gtk3-flatpak", "adw-gtk3-dark-flatpak"} {
 		if live[id] {
 			t.Errorf("%s should be downloaded", id)
 		}
@@ -213,23 +213,23 @@ func TestLiveImageFlags(t *testing.T) {
 func TestEstimateDownload(t *testing.T) {
 	c := load(t)
 	est := c.EstimateDownload(c.DefaultSelection())
-	// zen 160 + Platform 25.08 259 + zed 132 + Sdk 26.08 656 + yazi 45 + collabora 454 + KDE 6.10 392 + codecs 40
-	// + the adw-gtk3 themes for Flatpak apps 2 × 0.5
-	if est.Apps != 8 {
-		t.Errorf("apps = %d, want 8 (the ticked defaults; bash is installed but not counted)", est.Apps)
+	// Default apps are preloaded. Only optional codecs 40 MB and the two
+	// Flatpak GTK themes 2 × 0.5 MB require downloads.
+	if est.Apps != 6 {
+		t.Errorf("apps = %d, want 6 (the ticked defaults; bash is installed but not counted)", est.Apps)
 	}
-	if est.Bytes != 2139*1000*1000 {
+	if est.Bytes != 41*1000*1000 {
 		t.Errorf("bytes = %d", est.Bytes)
 	}
-	if est.Label != "8 apps · 2.1 GB download" {
+	if est.Label != "6 apps · 41 MB download" {
 		t.Errorf("label = %q", est.Label)
 	}
 
 	// Shared runtimes count once: Firefox (dnf) + two Platform 25.08 flatpaks.
 	sel := Selection{"browser": {"firefox"}, "terminal": {"kitty"}, "shell": {"zsh"}, "recording": {"obs"}, "office": {"libreoffice"}}
 	est = c.EstimateDownload(sel)
-	// firefox 109 + zsh 4 + obs 199 + libreoffice 327 + Platform 25.08 259 (once) + codecs 40
-	if est.Bytes != 939*1000*1000 || est.Label != "5 apps · 939 MB download" {
+	// firefox 109 + kitty 5 + zsh 4 + obs 199 + libreoffice 327 + Platform 25.08 259 (once) + codecs 40 + GTK themes 1
+	if est.Bytes != 944*1000*1000 || est.Label != "5 apps · 944 MB download" {
 		t.Errorf("got %+v", est)
 	}
 
@@ -240,15 +240,18 @@ func TestEstimateDownload(t *testing.T) {
 	sel["graphics"] = []string{"pinta"}
 	sel["recording"] = []string{"kooha"}
 	est = c.EstimateDownload(sel)
-	if est.Apps != 11 || est.Bytes != (2139+6+57+1+420)*1000*1000 {
+	if est.Apps != 9 || est.Bytes != (41+6+57+1+420)*1000*1000 {
 		t.Errorf("got %+v", est)
 	}
 
 	// Only live-image apps: nothing but codecs and the Flatpak themes to download.
-	sel = Selection{"browser": {"zen"}, "terminal": {"kitty"}, "shell": {"bash"}}
+	sel = Selection{"browser": {"gnome-web"}, "terminal": {"foot"}, "shell": {"bash"}}
 	est = c.EstimateDownload(sel)
 	if est.Apps != 3 {
 		t.Errorf("apps = %d", est.Apps)
+	}
+	if est.Bytes != 41*1000*1000 {
+		t.Errorf("preloaded apps unexpectedly add a download: %+v", est)
 	}
 }
 
@@ -326,10 +329,10 @@ func TestNormalize(t *testing.T) {
 func TestPicker(t *testing.T) {
 	c := load(t)
 	p := c.Picker()
-	if len(p.Categories) != 21 || len(p.Modules) != 129 {
+	if len(p.Categories) != 21 || len(p.Modules) != 132 {
 		t.Fatalf("picker has %d categories, %d modules", len(p.Categories), len(p.Modules))
 	}
-	if p.Modules[0].ID != "zen" || p.Modules[0].Source != "Flathub" || p.Categories[0].Rule != "Pick one" {
+	if p.Modules[0].ID != "gnome-web" || p.Modules[0].Source != "Fedora" || p.Categories[0].Rule != "Pick one" {
 		t.Fatalf("first module %+v", p.Modules[0])
 	}
 	for _, m := range p.Modules {
@@ -429,13 +432,15 @@ func TestMarkPreinstalled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := c.EstimateDownload(c.DefaultSelection()).Bytes
+	sel := c.DefaultSelection()
+	sel["browser"] = []string{"zen"} // retained optional browser, preinstalled on an older image
+	before := c.EstimateDownload(sel).Bytes
 	ids := c.MarkPreinstalled(func(ref string) bool { return ref == "app.zen_browser.zen" || ref == "org.mozilla.firefox" })
 	// Firefox's primary method is dnf, so only Zen counts.
 	if len(ids) != 1 || ids[0] != "zen" || !c.Modules["zen"].InLiveImage || c.Modules["firefox"].InLiveImage {
 		t.Fatalf("marked %v", ids)
 	}
-	if after := c.EstimateDownload(c.DefaultSelection()).Bytes; after >= before {
+	if after := c.EstimateDownload(sel).Bytes; after >= before {
 		t.Errorf("estimate %d → %d: Zen's download should no longer count", before, after)
 	}
 }

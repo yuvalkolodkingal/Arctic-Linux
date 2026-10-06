@@ -29,11 +29,11 @@ hostname = "arctic-ci"
 autologin = false
 
 [apps]
-browser = ["zen"]
-editor = ["zed"]
-terminal = ["kitty"]
+browser = ["gnome-web"]
+editor = ["featherpad"]
+terminal = ["foot"]
 shell = ["fish"]
-files = ["yazi", "nautilus"]
-office = ["collabora"]
-video = ["vlc"]
+files = ["pcmanfm"]
+office = []
+video = ["celluloid"]
 extras = []

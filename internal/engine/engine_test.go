@@ -232,7 +232,7 @@ func fullWizard(t *testing.T, c *client) {
 	apps := c.ok("GetStep", map[string]any{"id": "apps"})
 	// The mock is an NVIDIA hybrid laptop: NVIDIA's and Intel's drivers are offered first,
 	// ticked, and counted apart from the apps.
-	if apps["note"] != "8 apps + 2 drivers · 3 GB download" {
+	if apps["note"] != "6 apps + 2 drivers · 889 MB download" {
 		t.Fatalf("apps footer %v", apps["note"])
 	}
 	opts := apps["options"].(map[string]any)
@@ -242,7 +242,11 @@ func fullWizard(t *testing.T, c *client) {
 	if m0 := opts["modules"].([]any)[0].(map[string]any); m0["id"] != "nvidia" || m0["device"] != "NVIDIA GeForce RTX 4060 Max-Q / Mobile" || m0["default"] != true {
 		t.Fatalf("first module %v", m0)
 	}
-	c.ok("SetStep", map[string]any{"id": "apps", "data": map[string]any{"selection": map[string]any{"gaming": []string{"steam"}}}})
+	// Keep this session as an explicit legacy-app/retry scenario after checking
+	// the new preloaded defaults above; those apps remain selectable.
+	c.ok("SetStep", map[string]any{"id": "apps", "data": map[string]any{"selection": map[string]any{
+		"browser": []string{"zen"}, "editor": []string{"zed"}, "terminal": []string{"kitty"}, "shell": []string{"fish"},
+		"files": []string{"yazi", "nautilus"}, "office": []string{"collabora"}, "video": []string{"vlc"}, "gaming": []string{"steam"}}}})
 	est := c.ok("EstimateDownload", map[string]any{"selection": map[string]any{
 		"browser": []string{"zen"}, "editor": []string{"zed"}, "terminal": []string{"kitty"}, "shell": []string{"zsh"},
 		"files": []string{"yazi", "thunar"}, "office": []string{"collabora"}, "video": []string{"vlc"}, "gaming": []string{"steam"}}})

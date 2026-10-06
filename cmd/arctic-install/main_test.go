@@ -60,16 +60,26 @@ func TestCatalogJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	// drivers + 21 picker sections; 129 visible apps + 5 drivers + 6 system modules.
-	if len(doc.Categories) != 22 || len(doc.Modules) != 140 || doc.Estimate["label"] != "8 apps · 2.1 GB download" {
+	// drivers + 21 picker sections; 132 visible apps + 5 drivers + 6 system modules.
+	if len(doc.Categories) != 22 || len(doc.Modules) != 143 || doc.Estimate["label"] != "6 apps · 41 MB download" ||
+		doc.Estimate["apps"] != float64(6) || doc.Estimate["bytes"] != float64(41_000_000) {
 		t.Fatalf("catalog json: %d categories, %d modules, %v", len(doc.Categories), len(doc.Modules), doc.Estimate)
 	}
 	// Drivers come first (their category leads catalog.toml), then the browsers.
 	if doc.Modules[0]["id"] != "nvidia" || doc.Modules[0]["detect"] == nil {
 		t.Errorf("first module %v", doc.Modules[0])
 	}
-	if doc.Modules[5]["id"] != "zen" || doc.Modules[5]["install"].([]any)[0].(map[string]any)["ref"] != "app.zen_browser.zen" {
+	app := doc.Modules[5]
+	method := app["install"].([]any)[0].(map[string]any)
+	if app["id"] != "gnome-web" || app["default"] != true || app["in_live_image"] != true ||
+		method["method"] != "dnf" || method["packages"].([]any)[0] != "epiphany" {
 		t.Errorf("first app %v", doc.Modules[5])
+	}
+	// The former default remains an explicit, downloadable browser choice.
+	zen := doc.Modules[6]
+	if zen["id"] != "zen" || zen["default"] != false || zen["in_live_image"] != false ||
+		zen["install"].([]any)[0].(map[string]any)["ref"] != "app.zen_browser.zen" {
+		t.Errorf("optional Zen %v", zen)
 	}
 }
 

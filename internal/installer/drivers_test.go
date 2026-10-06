@@ -110,12 +110,12 @@ func TestGoldenNVIDIASecureBootUEFI(t *testing.T) {
 	if job.Outcome.MOK != backend.MOKRequested {
 		t.Errorf("MOK %q", job.Outcome.MOK)
 	}
-	// Drivers aren't apps: 8 apps, no module events for drivers.
+	// Drivers aren't apps: 6 preloaded default apps, no module events for drivers.
 	if _, ok := rep.modules["nvidia"]; ok {
 		t.Error("module event for a driver")
 	}
 	last := rep.progress[len(rep.progress)-1]
-	if last.AppsDone != 8 || last.AppsTotal != 8 {
+	if last.AppsDone != 6 || last.AppsTotal != 6 {
 		t.Errorf("last progress %+v", last)
 	}
 }

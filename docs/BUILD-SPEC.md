@@ -527,14 +527,22 @@ closed at the end); os-prober only runs for "alongside". Every command goes thro
 kiwi-ng 11 (Fedora 44 package `kiwi-cli` + `kiwi-systemdeps-iso-media`), description in
 `iso/kiwi/` derived from fedora-kiwi-descriptions (F44). Image type iso, hybrid, UEFI (shim,
 Secure Boot) + BIOS. Packages: `arctic-desktop`, `arctic-installer`, `arctic-live`,
-livesys-scripts, kernel, dracut-live. The ISO workflow requires the Firefox-based Zen Flatpak
-(`--zen yes`): missing browser installation fails the build, and images above 2 GiB retain it.
-The release path splits larger images; workflow artifacts retain the complete ISO. The local
-builder's optional `--zen auto|no` modes remain available for development. Enforcing VM
-acceptance launches Zen through its exported desktop entry as the normal desktop user in
-the live session and both installed boots, requiring a mapped window to persist five seconds.
+livesys-scripts, kernel, dracut-live. The approved fresh-media defaults are native GNOME Web
+(Epiphany), Foot, fish, PCManFM with XArchiver, Celluloid and FeatherPad; Nano and Bash remain
+available for recovery. The builder fails if a required default app is absent. Zen, Firefox
+and the previous richer apps remain optional catalog choices. `--zen yes` additionally
+preloads Zen; `--zen auto` tolerates its download failure, and neither mode removes an app
+after a size miss. The default is `--zen no`; GNOME Web is always included.
+The native browser shares required WebKitGTK 6.0 with Arctic web apps. Its web-process
+sandbox is mandatory; it does not have the Flatpak outer UI sandbox or full Firefox
+extension/Zen workspace compatibility, and paid DRM streaming has not been qualified.
+The release path can split larger images; workflow artifacts retain the complete ISO.
+Enforcing VM acceptance launches the configured browser as the desktop user in the live
+session and both installed boots, requiring a mapped window to persist five seconds and
+checking the native WebKit process's containment.
 The workflow checks the ISO checksum before upload and publishes a separate small metadata
-artifact containing its checksum, package list and source/build identity. Repos: Fedora 44 +
+artifact containing its checksum, full RPM inventory, actual Flatpak refs and source/build
+identity. Repos: Fedora 44 +
 updates + the local `out/repo`. Boot menu entries
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
