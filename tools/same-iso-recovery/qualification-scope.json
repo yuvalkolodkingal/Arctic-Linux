@@ -1,0 +1,13 @@
+{
+  "at_utc": "2026-10-06T19:35:06.247437+00:00",
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "candidate_iso_run": 37507582946,
+  "purpose": "Additional exact existing image qualification and recoverable original acceptance failure diagnosis; no ISO rebuild or publication",
+  "authorization": "Existing session authorization for reviewable branch push and artifact-only CI; Oct6 17:02 all steps/plans/apps approval and parent Oct6 19:29 continuation of actual update-path qualification after verified failure. No main/public release approval inferred.",
+  "original_nix_result": "FAILED: only post-older-stable browser URI gate; preserved unchanged",
+  "original_kvm_result": "active, continues unchanged",
+  "coverage_limit": "Old-stable helper supported noarg/MIME path with exact native rendered JS fixture/sandbox remains separate from future source/version-bound final new-stable URI/no-repull qualification",
+  "independent_review_sha256": "e70490047588c4e3b38d3d57cf7e8a343cf3e59d4f8f510e8109642d0a3b0e16",
+  "publication": false,
+  "iso_rebuild": false
+}

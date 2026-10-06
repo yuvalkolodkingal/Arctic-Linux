@@ -1,0 +1,77 @@
+{
+  "actions": {
+    "artifact_download": false,
+    "build_started": false,
+    "dispatch": false,
+    "frozen_v1_modified": false,
+    "push": false,
+    "release": false,
+    "tracked_edits": false,
+    "vm_started": false
+  },
+  "candidate": {
+    "actual_bytes_verified_here": false,
+    "artifact": 11434226349,
+    "iso_bytes": 1880244224,
+    "iso_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "run": 37507582946,
+    "source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1"
+  },
+  "controls": {
+    "bash_syntax": true,
+    "focused_host_only_tests": 20,
+    "passed": true,
+    "patch_applies_to_pinned_base": true,
+    "real_shell_fake_commands_only": true,
+    "synthetic_artifact_files_only": true
+  },
+  "files": {
+    "README-v2.md": {
+      "bytes": 8835,
+      "sha256": "b55709f691af42b86f76aa9f9d6ca76ca8e00555e08652ea8d04181bd83a90b3"
+    },
+    "boot-evidence-v2.py": {
+      "bytes": 7880,
+      "sha256": "e6858b0b8c0a39b7617c33fc55762f570af2eac046b16ad2adccb72d27259bc5"
+    },
+    "collector-command-v2.txt": {
+      "bytes": 775,
+      "sha256": "4561437c4776342f667a1567a86c6e91af66abd775fab7b53c82f275b1cfe186"
+    },
+    "execution-pins-v2.json": {
+      "bytes": 1346,
+      "sha256": "3363c4fc2a4ca1bb9b29532a90a88108ab0dae2b1a23e54722d6ebea8b315aeb"
+    },
+    "registered-iso-recovery-v2.yml": {
+      "bytes": 22757,
+      "sha256": "5b0c1493333288acb43d7baaecb19ae40c662189d9ff0a591ce183a04871d2dd"
+    },
+    "test-iso-collector-v2.patch": {
+      "bytes": 2675,
+      "sha256": "273273d6102b909936e76ae085127712925ece4fb0ae801b95deaf237c45467f"
+    },
+    "test_vm_only_v2.py": {
+      "bytes": 16392,
+      "sha256": "af09cfe5f07c16b99336ad3a12cfa27c60580ef55b65b199b72d16751ab735cf"
+    },
+    "v2-controls.log": {
+      "bytes": 2390,
+      "sha256": "fa87e424214be95d59ab73ebf1076151674878643a8983a5f2bb655a8cb77f8e"
+    },
+    "vm-only-recovery-v2.py": {
+      "bytes": 21301,
+      "sha256": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+    }
+  },
+  "original_failure": "Parent confirmed original Nix post-stable-update URI-mapping failure; original/current results remain unchanged.",
+  "remaining": [
+    "Independent v2 review",
+    "Parent approval for qualification branch push/dispatch",
+    "Registered workflow branch dispatch support",
+    "Supported CI actual-byte verification, fresh VM execution and screenshot review"
+  ],
+  "review_fix": "Independent review engine/cleanup mismatch closed: only unset/empty/docker accepted, Docker CLI+daemon required before VM, explicitly selected in all owned environments.",
+  "source_head": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "status": "READY FOR INDEPENDENT SOURCE/FIXTURE REVIEW; NO VM EXECUTION",
+  "tracked_status": ""
+}

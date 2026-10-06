@@ -1,0 +1,25 @@
+test_real_shell_pipeline_handles_no_denials_and_low_priority_denial (__main__.ActualCollectorShellControls.test_real_shell_pipeline_handles_no_denials_and_low_priority_denial) ... ok
+test_all_three_positive_modes_still_need_visual_review (__main__.BootParserControls.test_all_three_positive_modes_still_need_visual_review) ... ok
+test_duplicate_and_nested_sections (__main__.BootParserControls.test_duplicate_and_nested_sections) ... ok
+test_failed_units_retained_and_fail_qualification (__main__.BootParserControls.test_failed_units_retained_and_fail_qualification) ... ok
+test_filter_status_consistency (__main__.BootParserControls.test_filter_status_consistency) ... ok
+test_missing_safe_flag (__main__.BootParserControls.test_missing_safe_flag) ... ok
+test_new_denial_captured_and_fails (__main__.BootParserControls.test_new_denial_captured_and_fails) ... ok
+test_scoped_security_negative_controls (__main__.BootParserControls.test_scoped_security_negative_controls) ... ok
+test_duplicate_or_failure_exit_rejected (__main__.LifecycleControls.test_duplicate_or_failure_exit_rejected) ... ok
+test_first_and_second_success (__main__.LifecycleControls.test_first_and_second_success) ... ok
+test_first_boot_preserved_and_second_failure_retained (__main__.LifecycleControls.test_first_boot_preserved_and_second_failure_retained) ... ok
+test_first_failure_prevents_second_boot (__main__.LifecycleControls.test_first_failure_prevents_second_boot) ... ok
+test_no_vm_after_bad_iso (__main__.LifecycleControls.test_no_vm_after_bad_iso) ... ok
+test_actual_bytes_not_metadata_label (__main__.MetadataControls.test_actual_bytes_not_metadata_label) ... ok
+test_ci_negative_controls (__main__.MetadataControls.test_ci_negative_controls) ... ok
+test_docker_contract_fail_closed (__main__.MetadataControls.test_docker_contract_fail_closed) ... ok
+test_fixed_identity_success (__main__.MetadataControls.test_fixed_identity_success) ... ok
+test_original_and_artifact_negative_controls (__main__.MetadataControls.test_original_and_artifact_negative_controls) ... ok
+test_pinned_checker_changed (__main__.MetadataControls.test_pinned_checker_changed) ... ok
+test_registered_workflow_build_skip_and_least_permissions (__main__.WorkflowControls.test_registered_workflow_build_skip_and_least_permissions) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.051s
+
+OK

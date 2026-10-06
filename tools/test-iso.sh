@@ -152,9 +152,33 @@ if collect and vm.alive():
     keys("ret")          # skips the fetch animation (any key does) and gives a fresh prompt
     time.sleep(5)
     shot("98-terminal")
-    type_text("sudo sh -c '(echo ARCTIC-COLLECT-BEGIN; cat ~liveuser/.local/share/sddm/*.log; "
-              "cat /proc/cmdline; mokutil --sb-state; "
-              "systemctl --failed --no-pager; journalctl -b -p warning --no-pager; getenforce; flatpak list; "
+    type_text("sudo sh -c '(echo ARCTIC-COLLECT-BEGIN; "
+              'cat ~liveuser/.local/share/sddm/*.log; '
+              'echo ARCTIC-CMDLINE-BEGIN; '
+              'cat /proc/cmdline; '
+              'echo ARCTIC-CMDLINE-END; '
+              'echo ARCTIC-SECUREBOOT-BEGIN; '
+              'mokutil --sb-state; '
+              'echo ARCTIC-SECUREBOOT-END; '
+              'echo ARCTIC-FAILED-UNITS-BEGIN; '
+              'systemctl --failed --no-pager; '
+              'echo ARCTIC-FAILED-UNITS-EXIT=$?; '
+              'echo ARCTIC-FAILED-UNITS-END; '
+              'echo ARCTIC-WARNINGS-BEGIN; '
+              'journalctl -b -p warning --no-pager; '
+              'echo ARCTIC-WARNINGS-END; '
+              'echo ARCTIC-SELINUX-BEGIN; '
+              'getenforce; '
+              'echo ARCTIC-SELINUX-END; '
+              'echo ARCTIC-AVC-BEGIN; '
+              'j=$(mktemp); '
+              'journalctl -b --no-pager -o cat >"$j" 2>&1; '
+              'echo ARCTIC-AVC-JOURNAL-EXIT=$?; '
+              'grep -Ei "avc:.*denied" "$j"; '
+              'echo ARCTIC-AVC-FILTER-EXIT=$?; '
+              'rm -f "$j"; '
+              'echo ARCTIC-AVC-END; '
+              'flatpak list; '
               "echo ARCTIC-COLLECT-END) >/dev/ttyS0 2>&1'", gap=0.2)
     keys("ret")
     time.sleep(30)
@@ -210,7 +234,13 @@ INNER
 )
 
 arctic_log "booting $(basename "$ISO") ($FIRMWARE, mode $MODE, ${TIMEOUT}s) → $OUT"
-"$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+# Optional, bounded ownership for timeout cleanup in test-only callers.
+name_args=()
+if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
+  [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
+  name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
+fi
+"$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
   -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \

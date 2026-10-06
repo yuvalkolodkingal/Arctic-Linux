@@ -1,0 +1,177 @@
+{
+  "blocking_source_findings": [],
+  "evidence": {
+    "independent-controls.log": {
+      "bytes": 1793,
+      "path": "out/audit/same-iso-runner-review/independent-controls.log",
+      "sha256": "6b67464a7d58a1938843bfdb32729f2afc10c709e8ec6aa7ff238828644847d7"
+    },
+    "independent_controls.py": {
+      "bytes": 14790,
+      "path": "out/audit/same-iso-runner-review/independent_controls.py",
+      "sha256": "5d28f624f41e23a879ef5c9a046e6e0ebc8dadbb63950fcaecd7adae71fe85f1"
+    },
+    "owner-controls.log": {
+      "bytes": 2390,
+      "path": "out/audit/same-iso-runner-review/owner-controls.log",
+      "sha256": "4e7ed243d6a233726b1b9846b9003bf0a5f19420464a7e731a04b6394e6cb6fc"
+    },
+    "write_report.py": {
+      "bytes": 8174,
+      "path": "out/audit/same-iso-runner-review/write_report.py",
+      "sha256": "11e9d0db0529a2bc0a986e46394b3e324f3c6ecce3c2ba65e786f35520a1e282"
+    }
+  },
+  "execution_manifest": {
+    "bytes": 1346,
+    "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/execution-pins-v2.json",
+    "sha256": "3363c4fc2a4ca1bb9b29532a90a88108ab0dae2b1a23e54722d6ebea8b315aeb"
+  },
+  "fixed_finding": {
+    "independently_retested": true,
+    "initial_ready_sha256": "28c17033e4f6ed92968db7c0150fb00194365603ef05aca73b17e3d218a68d1e",
+    "problem": "Harness allowed arbitrary/non-Docker CONTAINER_ENGINE while recovery cleanup unconditionally invoked Docker.",
+    "reproduction": {
+      "bytes": 303,
+      "path": "out/audit/same-iso-runner-review/engine-finding-before.log",
+      "sha256": "b9e97daddcb30a2184be19a7b62c59a82c18dd0bb97331687220c96aac7fe075"
+    },
+    "resolution": "Reject non-Docker overrides, require Docker CLI plus read-only daemon availability before owned execution, explicitly set Docker for provision/install/boot envs."
+  },
+  "fixed_iso": {
+    "actual_bytes_verified_in_review": false,
+    "artifact_id": 11434226349,
+    "attempt": 1,
+    "bytes": 1880244224,
+    "name": "Arctic-Linux-1.2-candidate-37507582946-1-x86_64.iso",
+    "run": 37507582946,
+    "sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1"
+  },
+  "limits_and_remaining_gates": [
+    "Source review is complete; branch promotion/push and workflow dispatch remain parent-owned separately authorized actions. This review grants no merge/release/publication approval.",
+    "Promote only exact pinned files on a separate clean qualification branch based on fe, retain immutable candidate checkout, and record/recheck the actual full execution commit plus manifest before dispatch.",
+    "The workflow draft retains the ordinary build/release route when recovery is false. Explicit same_iso_recovery=true and release=false are mandatory; confirm branch dispatch/input availability for existing registered iso.yml before starting.",
+    "Actual fixed artifact/ISO bytes were not accessed, downloaded or verified by reviewer. Authorized CI must perform the implemented metadata and actual-byte gates.",
+    "Run fresh ordinary DNF and explicit offline acceptance separately. Original Nix failure and currently active paired-performance outcomes remain independently recorded; do not cancel or reinterpret them.",
+    "Actual first/reboot Nix/browser/update/security behavior plus all three boot collections and real screenshot review remain unrun.",
+    "Abrupt runner destruction/cancellation can interrupt cleanup/final evidence preservation; bounded process/container cleanup handles ordinary failure/timeouts/signals but is not a promise against runner loss.",
+    "No physical hardware, gaming, pristine boot-time, media/accessibility or performance result is established by these host fixtures."
+  ],
+  "preserved_v1_review": {
+    "bytes": 8432,
+    "path": "out/audit/same-iso-recovery-review/review.json",
+    "sha256": "4e513bc75ae82eff7367d711b7f7a71a032eb50ee8ecb1caa5c2d0700fdf23fa"
+  },
+  "recorded_at_utc": "2026-10-06T19:34:01.781073+00:00",
+  "review_ready": {
+    "bytes": 2783,
+    "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/review-ready-v2.json",
+    "sha256": "38f51fa9584ea5e74de7a5b90259345a5a25c197ddc1014ba56a58fc8de5c112"
+  },
+  "reviewed_deployed_execution_pins": {
+    "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+    "files": {
+      ".github/workflows/iso.yml": "5b0c1493333288acb43d7baaecb19ae40c662189d9ff0a591ce183a04871d2dd",
+      "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+      "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+      "tools/same-iso-recovery/README-v2.md": "b55709f691af42b86f76aa9f9d6ca76ca8e00555e08652ea8d04181bd83a90b3",
+      "tools/same-iso-recovery/boot-evidence-v2.py": "e6858b0b8c0a39b7617c33fc55762f570af2eac046b16ad2adccb72d27259bc5",
+      "tools/same-iso-recovery/collector-command-v2.txt": "4561437c4776342f667a1567a86c6e91af66abd775fab7b53c82f275b1cfe186",
+      "tools/same-iso-recovery/test-iso-collector-v2.patch": "273273d6102b909936e76ae085127712925ece4fb0ae801b95deaf237c45467f",
+      "tools/same-iso-recovery/test_vm_only_v2.py": "af09cfe5f07c16b99336ad3a12cfa27c60580ef55b65b199b72d16751ab735cf",
+      "tools/same-iso-recovery/vm-only-recovery-v2.py": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633",
+      "tools/test-iso.sh": "9beb039d69dad07176e00a8e890c7e099631ff68175235a83be8b6394f63434f"
+    },
+    "meaning": "Hash manifest of future deployed execution files; clean Git execution head separately recorded, candidate ISO stays fe.",
+    "schema": 2
+  },
+  "reviewed_guards": [
+    "same_iso_recovery=true skips the entire original ISO build/publication job; recovery jobs override permissions to contents:read and actions:read; concurrency cancel-in-progress remains false.",
+    "No recovery step invokes build, release, paired-performance rerun, host chmod/security/network tuning, or arbitrary artifact selection. Five methods run independently on new runners.",
+    "Fixed original repository/run/attempt/source/name and exact completed failed Nix step are required. Active unrelated original work may continue; completed original runs must conclude failure. Metadata is not represented as proof of failure cause.",
+    "Fixed ISO artifact ID 11434226349 and name, ZIP metadata size/digest, original run/source and expiration gate precede download. This is distinct from the original Nix evidence artifact.",
+    "Exact unsplit ISO actual length and SHA256 plus exact six metadata-file hashes and source/repository/preview provenance are required before any VM; incorrect size, same-size changed bytes, metadata mismatch, missing/extra files or symlinks fail.",
+    "Candidate harness source remains fe4742c8b9414c45f0bcbb0a4191f116383c60d1; execution checkout must be clean and a distinct full Git head. Actual reviewed execution file set/hashes, fixed v1 checkers and independent v1 report are checked; evidence separately records both heads and manifest digest.",
+    "Unused method-specific inputs/evidence/VM output prevents original-results overwrite. DNF and offline installs use separate new disks. Same frozen checker and immutable tool image serve each pair of boots.",
+    "First installed smoke exit must be uniquely zero; first failure prevents second boot. Every available first-boot log/screenshot/text is preserved with hash/length manifest before second harness invocation; reboot failure preserves both phases. VM toolchain hashes must match.",
+    "Transparent test-only collector patch applies without fuzz to the pinned original harness; revised harness hash equals execution manifest; Bash and embedded Python syntax pass; AST-extracted typed command exactly matches the real-shell fake-command collector control.",
+    "SecureBoot Try requires collected SecureBoot enabled; Safe requires actual nomodeset; every boot requires actual rd.live.image and Enforcing within unique complete nonnested collector sections. Firmware/mode invocation is pinned to three explicit harness argv sets.",
+    "Full current-boot AVC journal query is independent of warning severity. Query/filter exit/output consistency is mandatory; any denial or failed unit blocks qualification while retained raw sections remain evidence. Missing, duplicate or malformed scoped markers fail.",
+    "Boot semantic success remains pending actual visual review; screenshot existence is not a visual pass. Debug/collector instrumentation, warnings, hardware/performance limits and time budgets are disclosed.",
+    "Owned containers use explicit Docker. Bounded timeout sends TERM then KILL to the owned process group and attempts only uniquely named task container cleanup. Independent actual local helper timeout confirms child reap; no real Docker/VM was launched by reviewer."
+  ],
+  "reviewed_runtime_files": {
+    "README-v2.md": {
+      "bytes": 8835,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/README-v2.md",
+      "sha256": "b55709f691af42b86f76aa9f9d6ca76ca8e00555e08652ea8d04181bd83a90b3"
+    },
+    "boot-evidence-v2.py": {
+      "bytes": 7880,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/boot-evidence-v2.py",
+      "sha256": "e6858b0b8c0a39b7617c33fc55762f570af2eac046b16ad2adccb72d27259bc5"
+    },
+    "collector-command-v2.txt": {
+      "bytes": 775,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/collector-command-v2.txt",
+      "sha256": "4561437c4776342f667a1567a86c6e91af66abd775fab7b53c82f275b1cfe186"
+    },
+    "execution-pins-v2.json": {
+      "bytes": 1346,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/execution-pins-v2.json",
+      "sha256": "3363c4fc2a4ca1bb9b29532a90a88108ab0dae2b1a23e54722d6ebea8b315aeb"
+    },
+    "registered-iso-recovery-v2.yml": {
+      "bytes": 22757,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/registered-iso-recovery-v2.yml",
+      "sha256": "5b0c1493333288acb43d7baaecb19ae40c662189d9ff0a591ce183a04871d2dd"
+    },
+    "test-iso-collector-v2.patch": {
+      "bytes": 2675,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/test-iso-collector-v2.patch",
+      "sha256": "273273d6102b909936e76ae085127712925ece4fb0ae801b95deaf237c45467f"
+    },
+    "test_vm_only_v2.py": {
+      "bytes": 16392,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/test_vm_only_v2.py",
+      "sha256": "af09cfe5f07c16b99336ad3a12cfa27c60580ef55b65b199b72d16751ab735cf"
+    },
+    "v2-controls.log": {
+      "bytes": 2390,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/v2-controls.log",
+      "sha256": "fa87e424214be95d59ab73ebf1076151674878643a8983a5f2bb655a8cb77f8e"
+    },
+    "vm-only-recovery-v2.py": {
+      "bytes": 21301,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/vm-only-recovery-v2.py",
+      "sha256": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+    }
+  },
+  "reviewer": "/root/precision_review",
+  "reviewer_actions": {
+    "api_metadata_accessed": false,
+    "artifact_or_log_download": false,
+    "build_started": false,
+    "original_outcome_modified": false,
+    "owner_frozen_bundle_modified": false,
+    "push": false,
+    "real_docker_execution": false,
+    "tracked_source_modified": false,
+    "user_machine_modified": false,
+    "vm_started": false,
+    "workflow_dispatched": false
+  },
+  "schema_version": 2,
+  "status": "SOURCE AND HOST FIXTURE REVIEW PASS; VM QUALIFICATION UNRUN",
+  "tests": {
+    "actual_bounded_process_group_timeout_reap": true,
+    "all_passed": true,
+    "cleanup_command_was_isolated_fake_docker": true,
+    "independent_original_metadata_negative_cases": 10,
+    "independent_scoped_parser_negative_cases": 89,
+    "independent_test_methods": 10,
+    "owner_host_only_controls": 20,
+    "resource_warning_as_error": true
+  }
+}

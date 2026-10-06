@@ -1,0 +1,17 @@
+{
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "files": {
+    ".github/workflows/iso.yml": "5b0c1493333288acb43d7baaecb19ae40c662189d9ff0a591ce183a04871d2dd",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+    "tools/same-iso-recovery/README-v2.md": "b55709f691af42b86f76aa9f9d6ca76ca8e00555e08652ea8d04181bd83a90b3",
+    "tools/same-iso-recovery/boot-evidence-v2.py": "e6858b0b8c0a39b7617c33fc55762f570af2eac046b16ad2adccb72d27259bc5",
+    "tools/same-iso-recovery/collector-command-v2.txt": "4561437c4776342f667a1567a86c6e91af66abd775fab7b53c82f275b1cfe186",
+    "tools/same-iso-recovery/test-iso-collector-v2.patch": "273273d6102b909936e76ae085127712925ece4fb0ae801b95deaf237c45467f",
+    "tools/same-iso-recovery/test_vm_only_v2.py": "af09cfe5f07c16b99336ad3a12cfa27c60580ef55b65b199b72d16751ab735cf",
+    "tools/same-iso-recovery/vm-only-recovery-v2.py": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633",
+    "tools/test-iso.sh": "9beb039d69dad07176e00a8e890c7e099631ff68175235a83be8b6394f63434f"
+  },
+  "meaning": "Hash manifest of future deployed execution files; clean Git execution head separately recorded, candidate ISO stays fe.",
+  "schema": 2
+}
