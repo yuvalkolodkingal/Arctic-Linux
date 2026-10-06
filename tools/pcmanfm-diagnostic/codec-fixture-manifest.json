@@ -1,0 +1,102 @@
+{
+  "created_at_utc": "2026-10-06T22:27:40.815422+00:00",
+  "origin": "Original generated FFmpeg lavfi testsrc2/sine; no external media",
+  "file": "original-h264-aac-1s.mp4",
+  "bytes": 14443,
+  "sha256": "24fcb595e3c63e836a9ebae43c05c902b88b954aea73abde35de8c6fc86497b8",
+  "encoder_argv": [
+    "ffmpeg",
+    "-nostdin",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=duration=1:size=64x48:rate=10",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:sample_rate=48000:duration=1",
+    "-map",
+    "0:v:0",
+    "-map",
+    "1:a:0",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-g",
+    "10",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "64k",
+    "-ac",
+    "2",
+    "-movflags",
+    "+faststart",
+    "/workspace/Arctic-Linux/out/audit/native-codec-parity/original-h264-aac-1s.mp4"
+  ],
+  "host_version_sha256": "b241942a091ee91966e5b04017a34f1f2a3bcfb1cf80a195e274db03874459d9",
+  "ffprobe_sha256": "0209f385fa04bacb002a5094feaff9cc36b0a9e2657e33b37fe5543abc6c918e",
+  "fixture_streams": [
+    {
+      "index": 0,
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 64,
+      "height": 48,
+      "duration": "1.000000",
+      "nb_read_frames": "10"
+    },
+    {
+      "index": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "sample_rate": "48000",
+      "channels": 2,
+      "duration": "1.000000",
+      "nb_read_frames": "47"
+    }
+  ],
+  "host_decode_controls": {
+    "video": {
+      "host_decoded_bytes": 46080,
+      "host_decoded_sha256": "d7e3d3c595f03b262283829a64e438f0021f4323d0916f93a6dc006b6f4f3c55",
+      "host_decoder_argv_options": [
+        "-map",
+        "0:v:0",
+        "-an",
+        "-sn",
+        "-dn",
+        "-pix_fmt",
+        "yuv420p",
+        "-f",
+        "rawvideo"
+      ]
+    },
+    "audio": {
+      "host_decoded_bytes": 192512,
+      "host_decoded_sha256": "a016e727d2a503f79234556741970bbab8f105ab057fea083426c184061b8413",
+      "host_decoder_argv_options": [
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-acodec",
+        "pcm_s16le",
+        "-f",
+        "s16le"
+      ]
+    }
+  },
+  "actual_candidate_decode": "UNRUN",
+  "limits": "decode streams separately; max1MiB decoded output,15s each; failures explicit, no package/network changes",
+  "acceptance": "Diagnostic codec compatibility only; no displayed video/audio/physical/performance claim"
+}

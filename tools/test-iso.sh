@@ -46,6 +46,7 @@ SECUREBOOT=0
 VGA=virtio
 APPEND=""
 COLLECT=0
+PCMANFM_DIAGNOSTIC=""
 OUTBASE="$ROOT/out/test"
 
 while (( $# )); do
@@ -61,6 +62,7 @@ while (( $# )); do
     --vga) VGA="$2"; shift 2 ;;
     --append) APPEND="$APPEND $2"; shift 2 ;;
     --collect) COLLECT=1; shift ;;
+    --pcmanfm-diagnostic) PCMANFM_DIAGNOSTIC="$2"; shift 2 ;;
     --debug) APPEND="$APPEND console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"; shift ;;
     --secureboot) SECUREBOOT=1; FIRMWARE=uefi; shift ;;
     --out) OUTBASE="$2"; shift 2 ;;
@@ -70,12 +72,27 @@ while (( $# )); do
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$MODE" in try|install|safe|check|disk) ;; *) arctic_die "--mode takes try, install, safe, check or disk" ;; esac
+if [[ -n "$PCMANFM_DIAGNOSTIC" ]]; then
+  [[ "$FIRMWARE" == uefi && "$MODE" == try && "$KVM" == 1 && "$SECUREBOOT" == 0 && "$COLLECT" == 0 \
+     && "$MEMORY" == 4096 && "$SMP" == 2 && "$VGA" == virtio && "$TIMEOUT" == 900 && -c /dev/kvm \
+     && "${ARCTIC_VM_TOOLS_PREPARED:-0}" == 1 ]] || arctic_die "invalid explicit diagnostic VM mode/tools"
+  [[ "$APPEND" == " console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1" ]] \
+    || arctic_die "diagnostic requires exact native serial arguments"
+  PCMANFM_DIAGNOSTIC="$(cd "$PCMANFM_DIAGNOSTIC" && pwd)"
+  [[ -f "$PCMANFM_DIAGNOSTIC/pcmanfm-controller.py" && -f "$PCMANFM_DIAGNOSTIC/runtime-pins.json" \
+     && -f "$PCMANFM_DIAGNOSTIC/bootstrap-diagnostic.sh" ]] || arctic_die "diagnostic source packet absent"
+fi
 [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
 ISO="$(cd "$(dirname "$ISO")" && pwd)/$(basename "$ISO")"
 
 sb=""; if [[ $SECUREBOOT == 1 ]]; then sb="-sb"; fi
 OUT="$OUTBASE/$FIRMWARE$sb-$MODE"
-rm -rf "$OUT"; mkdir -p "$OUT"
+if [[ -n "$PCMANFM_DIAGNOSTIC" ]]; then
+  [[ ! -e "$OUT" ]] || arctic_die "diagnostic output must be unused"
+  mkdir -p "$OUT"
+else
+  rm -rf "$OUT"; mkdir -p "$OUT"
+fi
 OUT="$(cd "$OUT" && pwd)"
 
 arctic_ensure_engine
@@ -134,6 +151,16 @@ else:
     else:
         keys("ret")
         log(f"selected the '{mode}' entry")
+
+if os.environ.get("PCMANFM_DIAGNOSTIC") == "1":
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('pcmanfm_controller', '/pcmanfm-diagnostic/pcmanfm-controller.py')
+    controller = importlib.util.module_from_spec(spec); spec.loader.exec_module(controller)
+    try:
+        controller.run(vm, out, menu_seen, os.environ['PCMANFM_CHECKER_SHA'])
+    finally:
+        vm.quit()
+    sys.exit(0)
 
 # 2. Splash and boot: every 10 s for the first 2 minutes, then every --interval seconds.
 start = time.time()
@@ -202,8 +229,15 @@ PY
 inner=$(cat <<'INNER'
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
-dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
-qemu-img create -q -f qcow2 /tmp/target.qcow2 64G
+if [ "$PCMANFM_DIAGNOSTIC" = 1 ]; then
+  pkgs+=(xorriso)
+  rpm -q "${pkgs[@]}" >/dev/null
+else
+  dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
+fi
+disk_size=64G
+[ "$PCMANFM_DIAGNOSTIC" != 1 ] || disk_size=40G
+qemu-img create -q -f qcow2 /tmp/target.qcow2 "$disk_size"
 accel="tcg,thread=multi"
 [ -e /dev/kvm ] && accel=kvm
 machine=q35
@@ -227,6 +261,35 @@ if [ "$FIRMWARE" = uefi ]; then
   cp "$vars" /tmp/vars.fd
   args+=(-drive "if=pflash,format=raw,unit=0,readonly=on,file=$code" -drive "if=pflash,format=raw,unit=1,file=/tmp/vars.fd")
 fi
+if [ "$PCMANFM_DIAGNOSTIC" = 1 ]; then
+  mkdir /tmp/diagnostic-data
+  cp /pcmanfm-diagnostic/guest-pcmanfm-diagnostic.py /tmp/diagnostic-data/guest-check.py
+  for f in native_smoke.py native-launcher.py atspi-snapshot.py gtk-entry-control.py bounded-launch.py runtime-pins.json bootstrap-diagnostic.sh original-h264-aac-1s.mp4 codec-fixture-manifest.json; do
+    cp "/pcmanfm-diagnostic/$f" /tmp/diagnostic-data/
+  done
+  printf '%s\n' '#!/bin/bash' 'set -euo pipefail' 'exec python3 /run/t/guest-check.py' > /tmp/diagnostic-data/run.sh
+  xorriso -as mkisofs -quiet -V ARCTICDIAG -J -R -G /pcmanfm-diagnostic/bootstrap-diagnostic.sh \
+    -o /tmp/diagnostic-data.iso /tmp/diagnostic-data
+  # Match the frozen native v4 device choices; only task paths/data payload differ.
+  args=(qemu-system-x86_64 -machine q35 -accel kvm -cpu max -smp "$SMP" -m "$MEMORY"
+        -display none -vga virtio -qmp "unix:$OUT/qmp.sock,server=on,wait=off"
+        -serial "file:$OUT/serial.log" -monitor none -no-reboot
+        -drive file=/tmp/target.qcow2,if=none,id=disk,discard=unmap -device virtio-blk-pci,drive=disk,bootindex=1
+        -drive file=/tmp/diagnostic-data.iso,media=cdrom,readonly=on,if=none,id=data -device ide-cd,drive=data,bus=ide.0
+        -netdev user,id=net0,restrict=on -device virtio-net-pci,netdev=net0
+        -device qemu-xhci -device usb-tablet -rtc base=utc
+        -audiodev "wav,id=native_audio,path=$OUT/diagnostic-audio.wav,out.frequency=48000,out.channels=2,out.format=s16"
+        -device intel-hda -device hda-output,audiodev=native_audio
+        -drive file=/iso,media=cdrom,readonly=on,if=none,id=cd -device ide-cd,drive=cd,bus=ide.1,bootindex=0
+        -drive "if=pflash,format=raw,unit=0,readonly=on,file=$code" -drive "if=pflash,format=raw,unit=1,file=/tmp/vars.fd")
+  {
+    qemu-system-x86_64 --version
+    rpm -q "${pkgs[@]}"
+    sha256sum "$(command -v qemu-system-x86_64)" "$code" "$vars" /tmp/diagnostic-data.iso /pcmanfm-diagnostic/*.py
+    printf '%q ' "${args[@]}"; printf '\n'
+    printf '%s\n' 'Actual new tools/data payload; no earlier tool byte parity or audio acceptance claim.'
+  } > "$OUT/pcmanfm-toolchain.txt"
+fi
 python3 -c "$DRIVER" "${args[@]}"
 rm -f "$OUT/qmp.sock"
 chown -R "$HOST_UID:$HOST_GID" "$OUT"
@@ -240,8 +303,17 @@ if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
   [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
 fi
-"$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
-  -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
+diagnostic_args=()
+diagnostic_enabled=0
+checker_sha=""
+if [[ -n "$PCMANFM_DIAGNOSTIC" ]]; then
+  diagnostic_enabled=1
+  diagnostic_args=(-v "$PCMANFM_DIAGNOSTIC:/pcmanfm-diagnostic:ro")
+  checker_sha="$(sha256sum "$PCMANFM_DIAGNOSTIC/guest-pcmanfm-diagnostic.py")"
+  checker_sha="${checker_sha%% *}"
+fi
+"$engine" run --rm "${diagnostic_args[@]}" "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+  -e PCMANFM_DIAGNOSTIC="$diagnostic_enabled" -e PCMANFM_CHECKER_SHA="$checker_sha" -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
   -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ISO:/iso:ro" -v "$OUT:/out" -v "$HERE/lib:/arctic-lib:ro" \
