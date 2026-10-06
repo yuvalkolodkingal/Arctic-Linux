@@ -1,0 +1,155 @@
+{
+  "verified_at_utc": "2026-10-06T04:20:06.392635+00:00",
+  "release": "https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/v1.2.0",
+  "release_id": 403366368,
+  "iso_source_commit": "d13da6c907460136fc22017314112ce351592a3f",
+  "iso": {
+    "name": "Arctic-Linux-1.2-x86_64.iso",
+    "bytes": 2322073600,
+    "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f"
+  },
+  "source_assets_verified": [
+    {
+      "file": "Arctic-Linux-1.2-x86_64.iso.part00",
+      "bytes": 1992294400,
+      "sha256": "325e2538a0ff18e235fabc12e191933114042c9fccc2983233a4d36307edc4d7",
+      "release_asset_id": 611480575
+    },
+    {
+      "file": "Arctic-Linux-1.2-x86_64.iso.part01",
+      "bytes": 329779200,
+      "sha256": "d8c6ac234f5962a18c131314e5b666211c00aaad36bc4244d3eabb3d4fbfe18a",
+      "release_asset_id": 611480574
+    },
+    {
+      "file": "Arctic-Linux-1.2-x86_64.iso.parts.sha256",
+      "bytes": 202,
+      "sha256": "2d332128ee04a64bb05dbc47bfb0f669b544718df92428c5b0f71b833fc02f16",
+      "release_asset_id": 611480572
+    },
+    {
+      "file": "Arctic-Linux-1.2-x86_64.iso.sha256",
+      "bytes": 94,
+      "sha256": "19f0cc0e16c1997cb77ca0d741250fabfc01d92db589969b85df34fbe490c49e",
+      "release_asset_id": 611480571
+    }
+  ],
+  "torrent": {
+    "file": "Arctic-Linux-1.2-x86_64.iso.parts.torrent",
+    "torrent_sha256": "aef47ed0278212a9dfe6758d9665750915e00687961c7e0542087ced06f146c5",
+    "torrent_bytes": 44991,
+    "infohash_v1": "3751d7869ff5cdf50124568e93fe050b02fee559",
+    "name": "v1.2.0",
+    "payload_bytes": 2322073600,
+    "piece_length": 1048576,
+    "pieces": 2215,
+    "last_piece_bytes": 526336,
+    "files": [
+      {
+        "path": "v1.2.0/Arctic-Linux-1.2-x86_64.iso.part00",
+        "bytes": 1992294400
+      },
+      {
+        "path": "v1.2.0/Arctic-Linux-1.2-x86_64.iso.part01",
+        "bytes": 329779200
+      }
+    ],
+    "web_seeds": [
+      "https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/"
+    ],
+    "trackers": [
+      "udp://tracker.opentrackr.org:1337/announce"
+    ],
+    "libtorrent_version": "2.1.1.0",
+    "independent_piece_hashes_verified": 2215
+  },
+  "offline_client_recheck": {
+    "mode": "recheck",
+    "file": "Arctic-Linux-1.2-x86_64.iso.parts.torrent",
+    "infohash_v1": "3751d7869ff5cdf50124568e93fe050b02fee559",
+    "libtorrent_version": "2.1.1.0",
+    "elapsed_seconds": 2.01,
+    "verified_bytes": 2322073600,
+    "verified_pieces": 2215,
+    "payload_downloaded": 0,
+    "total_uploaded": 0,
+    "protocol_upload_bytes": 0,
+    "complete": true,
+    "alerts": {
+      "torrent_paused_alert": 1,
+      "torrent_removed_alert": 1,
+      "torrent_added_alert": 1,
+      "add_torrent_alert": 1,
+      "state_changed_alert": 3,
+      "torrent_finished_alert": 1,
+      "torrent_checked_alert": 1
+    },
+    "source_errors": [],
+    "tracker_announcements": 0,
+    "incoming_listeners": 0,
+    "dht": false,
+    "pex": false,
+    "lsd": false,
+    "upnp": false,
+    "natpmp": false,
+    "file_hashes": [
+      {
+        "path": "v1.2.0/Arctic-Linux-1.2-x86_64.iso.part00",
+        "bytes": 1992294400,
+        "sha256": "325e2538a0ff18e235fabc12e191933114042c9fccc2983233a4d36307edc4d7"
+      },
+      {
+        "path": "v1.2.0/Arctic-Linux-1.2-x86_64.iso.part01",
+        "bytes": 329779200,
+        "sha256": "d8c6ac234f5962a18c131314e5b666211c00aaad36bc4244d3eabb3d4fbfe18a"
+      }
+    ]
+  },
+  "fresh_webseed_download": {
+    "mode": "webseed",
+    "file": "Arctic-Linux-1.2-x86_64.iso.parts.torrent",
+    "infohash_v1": "3751d7869ff5cdf50124568e93fe050b02fee559",
+    "libtorrent_version": "2.1.1.0",
+    "elapsed_seconds": 87.37,
+    "verified_bytes": 2322073600,
+    "verified_pieces": 2215,
+    "payload_downloaded": 2322073600,
+    "total_uploaded": 0,
+    "protocol_upload_bytes": 176748,
+    "complete": true,
+    "alerts": {
+      "listen_succeeded_alert": 1,
+      "torrent_added_alert": 1,
+      "add_torrent_alert": 1,
+      "state_changed_alert": 3,
+      "torrent_checked_alert": 1,
+      "torrent_finished_alert": 1
+    },
+    "source_errors": [],
+    "tracker_announcements": 0,
+    "incoming_listeners": 0,
+    "dht": false,
+    "pex": false,
+    "lsd": false,
+    "upnp": false,
+    "natpmp": false,
+    "file_hashes": [
+      {
+        "path": "v1.2.0/Arctic-Linux-1.2-x86_64.iso.part00",
+        "bytes": 1992294400,
+        "sha256": "325e2538a0ff18e235fabc12e191933114042c9fccc2983233a4d36307edc4d7"
+      },
+      {
+        "path": "v1.2.0/Arctic-Linux-1.2-x86_64.iso.part01",
+        "bytes": 329779200,
+        "sha256": "d8c6ac234f5962a18c131314e5b666211c00aaad36bc4244d3eabb3d4fbfe18a"
+      }
+    ],
+    "downloaded_parts_concatenated_iso": {
+      "bytes": 2322073600,
+      "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f"
+    }
+  },
+  "public_peer_seed_verified": false,
+  "new_persistent_seeding_service_created": false
+}
