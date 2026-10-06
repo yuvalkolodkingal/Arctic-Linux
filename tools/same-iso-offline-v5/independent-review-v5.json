@@ -1,0 +1,201 @@
+{
+  "actual_runtime": {
+    "canonical_new_stable_qualification": false,
+    "offline_history_review": "Actual selected DNF5 offline journal must show completed transaction; any history row or clean cycle exit alone is insufficient",
+    "original_failures_unchanged": [
+      37507582946,
+      37520174911,
+      37527394624
+    ],
+    "raw_UUID_evidence_limits": "Current v4 cycle boot UUID is observed; no raw post-update installed UUID pair exists. Frozen v1 third-boot checker must execute actual saved-state comparison.",
+    "scope": "Signed old stable2d5ac68847a5feb541177aeaa5a9a00d5ad44815 arctic-offline only; ordinary DNF/new canonical optimized stable/media/accessibility/full-site/physical performance not qualified",
+    "status": "FAILURE before unlock;900s image wait, serial prompt real, no passphrase submitted, no accepted guest cycle",
+    "v4_run": 37527394624,
+    "v4_transaction_and_third_boot": "UNRUN; host-qmp-quit cleanup is not completion",
+    "v5_guest_input_route": "UNRUN",
+    "v5_three_phase_VM_acceptance": "UNRUN"
+  },
+  "all_controls_passed": true,
+  "blocking_source_findings": [],
+  "candidate_iso": {
+    "artifact_id": 11434226349,
+    "bytes": 1880244224,
+    "run": 37507582946,
+    "sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718"
+  },
+  "candidate_iso_reopened_or_downloaded_by_reviewer": false,
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "candidate_source_tracked_status": "",
+  "controls": {
+    "actual_mapped_independent_controls": 8,
+    "actual_mapped_owner_controls_independently_rerun": 32,
+    "bytecode_writes_disabled": true,
+    "distinct_controls_passed": 60,
+    "frozen_v1_controls_passed": 20,
+    "independent_additional_controls": 8,
+    "local_small_fixtures_only": "Process/Git/Docker actions mocked; real temporary UNIX credentials exercise only local sockets",
+    "logs": {
+      "final-v5-frozen-v1-controls.log": {
+        "bytes": 3579,
+        "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/final-v5-frozen-v1-controls.log",
+        "sha256": "92555d05c23f858d8bd3b2494d8f992f86216fa55359607795d505495f906540"
+      },
+      "replacement-v5-author-controls.log": {
+        "bytes": 5346,
+        "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/replacement-v5-author-controls.log",
+        "sha256": "e10685e89019f510c558f3711662664334d81dfa13e5dfec788099ebd10095a7"
+      },
+      "replacement-v5-independent-controls.log": {
+        "bytes": 1546,
+        "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/replacement-v5-independent-controls.log",
+        "sha256": "eaab52ab953ffbda8914e873359f8eba86d98442bb4df43273c697cc9e7c8a96"
+      },
+      "replacement-v5-mapped-author-controls.log": {
+        "bytes": 5346,
+        "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/replacement-v5-mapped-author-controls.log",
+        "sha256": "664afc6fc0ce515ebb2fcec59f2895b94fb377377057a698f64ee13a6cbb7982"
+      },
+      "replacement-v5-mapped-independent-controls.log": {
+        "bytes": 1546,
+        "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/replacement-v5-mapped-independent-controls.log",
+        "sha256": "bbfbe4eab3502b90ec3bb08b3eaea1cda141d3d720af7824520fa286f6dfb80b"
+      }
+    },
+    "no_VM_Docker_network_or_Git_mutations": true,
+    "owner_controls_independently_rerun": 32,
+    "resource_warnings_are_errors": true
+  },
+  "evidence_pins": {
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/README-v5.md": {
+      "bytes": 10856,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/README-v5.md",
+      "sha256": "082de67771742b5a8b551b3e3fd1e175750e8cd8eac0e0269ac4ed4c9c63b6db"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/diagnosis-v5.json": {
+      "bytes": 3309,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/diagnosis-v5.json",
+      "sha256": "3feae3724e743b42d160dbe8a278d836cb1afa4af2cc9dc2f4c30439117fb237"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/execution-pins-v5.json": {
+      "bytes": 1990,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/execution-pins-v5.json",
+      "sha256": "d2440e8e7865287512f3ac30f78f9ee2ce2db9d62ac615be1b6fdab9b08d2d2f"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/guest-check-offline-v1.py": {
+      "bytes": 65115,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/guest-check-offline-v1.py",
+      "sha256": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/initial-proposal-20261006T214719Z/preservation.json": {
+      "bytes": 2619,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/initial-proposal-20261006T214719Z/preservation.json",
+      "sha256": "8136657259bad7dceb1d91bb22242010c2532b1c267cac555906813123ccd048"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/offline-only-recovery-v5.py": {
+      "bytes": 18979,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/offline-only-recovery-v5.py",
+      "sha256": "3a46a49724c841c5cb2bec2abbf41b818a790f7bf449f26c068f505172086b02"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/offline-update-cycle-v5.py": {
+      "bytes": 22250,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/offline-update-cycle-v5.py",
+      "sha256": "33a7ff07b1665ede1b694c2dc1fa4a6513f30021de428791c706a2782d65d569"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/registered-iso-offline-cycle-v5.yml": {
+      "bytes": 26657,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/registered-iso-offline-cycle-v5.yml",
+      "sha256": "bb94a3e0d00284b094e7fdf24cde4d4e1ef37f8b5ab20012bffc2e7df113607f"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/review-ready-v5.json": {
+      "bytes": 7508,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/review-ready-v5.json",
+      "sha256": "b4f6c286e3203fc60150a84319b20dd4de5fc619165dc52d31ccd62bcd64b28b"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/test_offline_cycle_v5.py": {
+      "bytes": 38941,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/test_offline_cycle_v5.py",
+      "sha256": "b22f55ec8e730b067caad4643fb6768389d9c60183a796172596dd532bbea523"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/validation-v5.json": {
+      "bytes": 2188,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/validation-v5.json",
+      "sha256": "00d927c057b12d5e35130f8626c21d1f87835f03193fad1a76892eb97f80529b"
+    },
+    "out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/vm-only-recovery-v2.py": {
+      "bytes": 21301,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/offline-cycle-recovery-v5/vm-only-recovery-v2.py",
+      "sha256": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/actual-run-37527394624.json": {
+      "bytes": 14417,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/actual-run-37527394624.json",
+      "sha256": "5b31c920bde372f3549529f0e0f0c49238dc4f93302d03f34f0eb62efe3cf0d2"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/independent-v5-controls.py": {
+      "bytes": 15235,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/independent-v5-controls.py",
+      "sha256": "d28511e74a0c486878139e1d9a402eb4a8af6c35f73fb39e9a8a97fb0e2671e7"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/v5-source-blocker-first-freeze.json": {
+      "bytes": 4674,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/v5-source-blocker-first-freeze.json",
+      "sha256": "281dedbbb9f53e2c60c2962b1e96a4da7a1d1de53e4f7ffa89baca8cd0e75da1"
+    },
+    "out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/v5-source-blocker-ownership-and-layout.json": {
+      "bytes": 2526,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/same-iso-recovery/offline-cycle-independent-review/v5-source-blocker-ownership-and-layout.json",
+      "sha256": "8b3222b0d703f16e9ee75de857c039674e0380a1cf3b8a30a0a04d3e105a1536"
+    },
+    "tools/test-install.sh": {
+      "bytes": 40157,
+      "path": "/workspace/Arctic-Linux/tools/test-install.sh",
+      "sha256": "a3a0a11d41d184bec817d98b90a96d87309d253882d3113e6a32c1ab48d5008e"
+    }
+  },
+  "execution_manifest_sha256": "d2440e8e7865287512f3ac30f78f9ee2ce2db9d62ac615be1b6fdab9b08d2d2f",
+  "proposed_execution_branch": "test/offline-cycle-same-iso-37507582946-v5",
+  "remaining": [
+    "Parent-authorized exact separate-branch promotion/clean-checkout verification; no merge or public release authorized",
+    "Actual same-ISO fresh install + signed staging + restricted serial cycle + mandatory normal third boot",
+    "Independent actual phase/log/transaction completion/history/signed target/browser/Nix/security review after verified small-artifact extraction"
+  ],
+  "resolved_initial_blockers": [
+    {
+      "finding": "Unrelated default action tags changed v4\u2192v5",
+      "resolution": "All8 restored and default prefix/job/top-level equality independently verified"
+    },
+    {
+      "finding": "Audit-only workflow filename unavailable in actual mapped execution",
+      "resolution": "Explicit audit/deployed selection; actual mapped32+8 controls and adverse selected-path checks pass"
+    },
+    {
+      "finding": "Container-root disk owner requirement conflicts with first-phase host-writer chown",
+      "resolution": "Host disk UID/GID separately bound; container QEMU identity retained; stat/source/command controls pass without chown/user/privilege changes"
+    }
+  ],
+  "reviewer_actions": "Read local source/evidence and wrote only owned ignored reports/logs/temporary fixtures; no API/artifact download/VM/build/source/worktree edit/commit/push/dispatch/publication",
+  "schema": 5,
+  "source_review": {
+    "VM_policy": "Explicit KVM/no-reboot, restricted QEMU user network, Docker network none, exact owned RW disk only and RO candidate/helper source mounts, no guest CD/login/service/security modifications",
+    "actual_mapped_files_and_manifest_byte_identical_to_reviewed_owner_bundle": true,
+    "actual_mapped_worktree": "/workspace/arctic-offline-serial-qualification",
+    "cycle_gate": "Complete safe received serial bytes+EOF, no echo, exact proof/raw hash/size/first-root reparsed by driver, QEMU0 and one actual guest-reset/guest-shutdown; host/error/panic/watchdog/timeouts reject",
+    "cycle_label": "guest_cycle_exit_observed_third_boot_required; update qualification UNRUN until mandatory third boot",
+    "default_jobs_inputs_permissions_action_versions_YAML_identical": true,
+    "default_workflow_prefix_byte_identical_to_v4": true,
+    "disk_identity": "Explicit driver host UID/GID; fixed owned disk/vars; no group/other write; container snapshots UID/GID/mode/device/inode and compares after observation; driver rechecks retained ownership/modes",
+    "exact_execution_files_rehashed": 12,
+    "first_install_stat_identity_source": "Immutable tools/test-install.sh supplies HOST_UID/HOST_GID and chowns output to that host identity",
+    "five_frozen_v1_v2_files_byte_identical": true,
+    "initial_proposal": "Full16-file source/initial-ready snapshot independently rehashed and preserved with blocked reports",
+    "input_gate": "One bounded serial write; attempt marked before write; no retry/login/blind input; post-input bytes checked for echo before handling/persistence and no post-input screenshots",
+    "installed_success_and_preserve_cycle_AST_unchanged": true,
+    "mandatory_final_gate": "Fresh normal third boot, unchanged exact signed old-stable NEVRA/helper/RPM and real offline history/status, unarmed/idle/new installed boot ID, Nix/profile/preferences, real HTML MIME+JS/WebKit sandbox, SELinux/AVC; all3 phases and fixed first/third toolchain required",
+    "mapped_tree_state": "Parent uncommitted preparation only; runtime Git HEAD/clean/source checks remain required after authorized exact-branch promotion",
+    "owner_ready_files_rehashed": 21,
+    "prompt_gate": "Current serial boot\u2192dracut command\u2192one root request; exact fresh install log SHA/root UUID and unchanged console route; reject stale/reordered/duplicate/wrong-root/login/error before input",
+    "selected_workflow_controls": "Audit/deployed file selected once; missing/malformed/directory/linked selected files reject without error-path fallback",
+    "serial_peer_identity": "Separate actual container QEMU PID/start/UID/executable and SO_PEERCRED; same fresh private0700 nonlinked socket path/inode checked before input"
+  },
+  "status": "SOURCE_AND_HOST_CONTROLS_PASS_VM_UNRUN"
+}

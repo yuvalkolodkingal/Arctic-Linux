@@ -485,7 +485,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  same-iso-offline-cycle-v4:
+  same-iso-offline-cycle-v5:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.offline_cycle_recovery }}
     runs-on: ubuntu-24.04
     timeout-minutes: 300
@@ -520,7 +520,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cycle_root="$RUNNER_TEMP/arctic-offline-cycle-v4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cycle_root="$RUNNER_TEMP/arctic-offline-cycle-v5-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           test ! -e "$cycle_root"
           mkdir "$cycle_root"
           echo "CYCLE_ROOT=$cycle_root" >> "$GITHUB_ENV"
@@ -528,9 +528,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 qualification-source/tools/same-iso-offline-v4/offline-only-recovery-v4.py preflight \
+          python3 qualification-source/tools/same-iso-offline-v5/offline-only-recovery-v5.py preflight \
             --source "$GITHUB_WORKSPACE/candidate-source" \
-            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-offline-v4" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-offline-v5" \
             --inputs "$CYCLE_ROOT/inputs" --evidence "$CYCLE_ROOT/evidence"
       - name: Download only the exact existing candidate ISO artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -543,21 +543,21 @@ jobs:
           path: ${{ env.CYCLE_ROOT }}/inputs
       - name: Verify actual candidate bytes before VM qualification
         run: |
-          python3 qualification-source/tools/same-iso-offline-v4/offline-only-recovery-v4.py verify \
+          python3 qualification-source/tools/same-iso-offline-v5/offline-only-recovery-v5.py verify \
             --source "$GITHUB_WORKSPACE/candidate-source" \
-            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-offline-v4" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-offline-v5" \
             --inputs "$CYCLE_ROOT/inputs" --evidence "$CYCLE_ROOT/evidence"
       - name: Fresh install and staging, restricted update cycle, mandatory third boot
         run: |
-          python3 qualification-source/tools/same-iso-offline-v4/offline-only-recovery-v4.py run \
+          python3 qualification-source/tools/same-iso-offline-v5/offline-only-recovery-v5.py run \
             --source "$GITHUB_WORKSPACE/candidate-source" \
-            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-offline-v4" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/same-iso-offline-v5" \
             --inputs "$CYCLE_ROOT/inputs" --evidence "$CYCLE_ROOT/evidence"
       - name: Preserve actual phase evidence including failure
         if: ${{ always() && env.CYCLE_ROOT != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: same-iso-offline-cycle-v4-${{ github.run_id }}-${{ github.run_attempt }}
+          name: same-iso-offline-cycle-v5-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.CYCLE_ROOT }}/evidence/
           if-no-files-found: warn
           retention-days: 14
