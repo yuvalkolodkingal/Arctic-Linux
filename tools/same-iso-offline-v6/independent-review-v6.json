@@ -1,0 +1,130 @@
+{
+  "API_download": false,
+  "VM_run": false,
+  "actual_v5_replay_boundary": "Constructed fixture only; original write offset absent, no retroactive acceptance",
+  "actual_v6_VM": "UNRUN",
+  "additional_independent_methods": 6,
+  "all_controls_passed": true,
+  "authorized_added_ambiguity_handler_and_final_guard_only": true,
+  "blocker_reports": {
+    "v6-initial-freeze-source-blocker.json": "645fbaf3337826cef420f661472c3681637de4bf305e870f725addfd4613fe9e",
+    "v6-secret-filter-source-blocker.json": "b5e55cfc3660fd537fc6a2fb67abaea0c286fc9e216393a261df101b5703314b"
+  },
+  "blocking_source_findings": [],
+  "canonical_new_stable_qualification": false,
+  "corrected_findings": [
+    "ANSI-obscured explicit errors/new/empty/changed-root challenge now fail without widening exact raw masked-redraw acceptance",
+    "raw OSC-hidden errors remain rejected in union with canonical errors",
+    "shared incoming and persistence echo guard catches fragmented full/first-eight-byte simple ESC7/ESC8/CSI/OSC forms",
+    "final unresolved/malformed ANSI withholds post-input bytes, records ambiguity/echo unknown distinctly and cannot qualify"
+  ],
+  "distinct_control_methods": 81,
+  "execution_manifest_sha256": "60825d2ba0587a1fa9f8cb31f4e0f0ef58fed8d2957720d5057c01aea32fe4cd",
+  "execution_pins_verified": 12,
+  "frozen_v1_v2_bytes": {
+    "README-v1.md": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f",
+    "guest-check-offline-v1.py": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576",
+    "independent-review-v1.json": "4e513bc75ae82eff7367d711b7f7a71a032eb50ee8ecb1caa5c2d0700fdf23fa",
+    "review-ready-v1.json": "0120117d1a0eedea033bfe9d239151ee0461c2f58efa2dc060141d2454554692",
+    "vm-only-recovery-v2.py": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+  },
+  "historical_freezes": {
+    "echo-review-freeze-898c7fca": {
+      "ready_sha256": "898c7fcaed388b619aba961bfe476667533927fd2e105d2877380eba579e1cb3",
+      "verified_files": 19
+    },
+    "initial-freeze-1fe624af": {
+      "ready_sha256": "1fe624af20f75fb3ddc5dae6b5fdd2e3ab4c362d9dccaa89188074827899c264",
+      "verified_files": 19
+    },
+    "intermediate-freeze-9ca53813": {
+      "ready_sha256": "9ca53813009446367acc854c9fa1c5757edcc5688c38b5dfe5eb1b9a8514574a",
+      "verified_files": 19
+    }
+  },
+  "host_controls": {
+    "v6-frozen-v1-correct-path-reviewed.log": {
+      "methods": 20,
+      "sha256": "3ea3177a0f706ce6f925e620cd6f288b0f6e527751049605434a4349351f9f70",
+      "status": "PASS"
+    },
+    "v6-shared-echo-final-independent-controls.log": {
+      "methods": 6,
+      "sha256": "87362852c0292fe305eb6ee04486d6a61337e9ee603057c85b5310ec151fb7ed",
+      "status": "PASS"
+    },
+    "v6-shared-echo-final-mapped-controls.log": {
+      "methods": 55,
+      "sha256": "532137590a1ef2546f7796a7e383b81af6d2fffe210f4620cb8140dce133eb50",
+      "status": "PASS"
+    },
+    "v6-shared-echo-final-owner-controls.log": {
+      "methods": 55,
+      "sha256": "92a81e1120587bf84d3bdc1c98a01bc190d39668a4d38d9137b37903e4c3d758",
+      "status": "PASS"
+    }
+  },
+  "independent_route_evidence": [
+    "actual observe under synthetic authority sends exactly one unchanged input and makes no post-input screenshot on simple-ESC echo",
+    "actual pump and failure-persistence methods reject one-byte fragmented echo without writing any post-input bytes",
+    "original four blocker fixtures independently rejected",
+    "pending fragment cannot advance even with synthetic real guest-reset event",
+    "safe unrelated ANSI and exact same-root masked output can persist but never claim unlock or authorize input"
+  ],
+  "input_write_bytes_count_unchanged": true,
+  "installed_success_byte_AST_unchanged": true,
+  "ordinary_DNF_qualification": false,
+  "original_cycle_requires_retained": 7,
+  "original_echo_require_retained": true,
+  "original_v5_actual_report_sha256": "42ed6cae6234f185326ab5031d0457cfa581486cb1c735c13b373ea7e85a652a",
+  "original_v5_outcome": "FAILURE; unlock unproven; transaction/third boot UNRUN; no actual echo observed",
+  "original_workflow_default_permissions_actions_unchanged_except_versioned_execution_tokens": true,
+  "push_dispatch_publication": false,
+  "ready_pins_verified": 18,
+  "ready_sha256": "247545bc4753683e33994f66f4615681d76b8336e62afea6a82637be695a4ee8",
+  "recorded_at_utc": "2026-10-06T23:02:42.816990+00:00",
+  "release_acceptance": false,
+  "required_runtime_gates": [
+    "parent reviewed exact clean mapped head/source checks",
+    "actual fresh first-install and mandatory checks/signed staging",
+    "same owned disk/current-root single serial submission and verified peer",
+    "actual bounded complete safe serial EOF plus exactly one guest=true clean reset/shutdown, no host/error/panic/watchdog/timeout",
+    "mandatory unchanged-v1 third default boot with new boot/history/completion/unarmed state/signed target/browser/Nix/prefs/security gates"
+  ],
+  "schema": "arctic-independent-offline-cycle-review-v6",
+  "scope": "arctic-offline against signed old stable 2d5 only",
+  "source_mutated": false,
+  "status": "SOURCE_AND_HOST_CONTROLS_PASS_VM_UNRUN",
+  "third_boot": "UNRUN",
+  "transaction": "UNRUN",
+  "unchanged_driver_ASTs": [
+    "validate_ci",
+    "preflight",
+    "verify",
+    "acceptance_records",
+    "installed_success",
+    "preserve_cycle",
+    "cycle_command",
+    "run",
+    "main"
+  ],
+  "unchanged_helper_ASTs": [
+    "require",
+    "input_identity",
+    "validate_paths",
+    "qemu_argv",
+    "serial_bindings",
+    "observed_vm_type",
+    "first_install_root",
+    "qemu_identity",
+    "validate_peer",
+    "serial_prompt"
+  ],
+  "unchanged_serial_ASTs": [
+    "__init__",
+    "verify_peer",
+    "pump",
+    "close"
+  ],
+  "unlock": "UNPROVEN"
+}

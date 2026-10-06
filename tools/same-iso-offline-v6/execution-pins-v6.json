@@ -1,0 +1,35 @@
+{
+  "candidate_iso": {
+    "artifact_id": 11434226349,
+    "bytes": 1880244224,
+    "run": 37507582946,
+    "sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718"
+  },
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "canonical_new_stable_qualification": false,
+  "deployment_branch": "test/offline-cycle-same-iso-37507582946-v6",
+  "execution_base_head": "b0f2da01e99133a9bef1c482b095b80372310b96",
+  "files": {
+    ".github/workflows/iso.yml": "f4fe7fcc61ebe4cdcef0ad1b82e3a48acdee8b29c010f5b8d5bd96d8bba2c78f",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+    "tools/same-iso-offline-v6/README-v1.md": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f",
+    "tools/same-iso-offline-v6/README-v6.md": "5f68675992b3848113a7d52279ae5e81a4305ee54b65d266413fa319fb76a0ca",
+    "tools/same-iso-offline-v6/guest-check-offline-v1.py": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576",
+    "tools/same-iso-offline-v6/independent-review-v1.json": "4e513bc75ae82eff7367d711b7f7a71a032eb50ee8ecb1caa5c2d0700fdf23fa",
+    "tools/same-iso-offline-v6/offline-only-recovery-v6.py": "ffb26233b811da3420e9882301545344561ee0e64203dee3fc7621d637a4d204",
+    "tools/same-iso-offline-v6/offline-update-cycle-v6.py": "5afb0c26a8ff8df8a814524a07e6176a73c85a6ebc82e8f4fcb822d0f6a34d74",
+    "tools/same-iso-offline-v6/review-ready-v1.json": "0120117d1a0eedea033bfe9d239151ee0461c2f58efa2dc060141d2454554692",
+    "tools/same-iso-offline-v6/test_offline_cycle_v6.py": "2932e87b36cc985a658376c78383855a571ee4685ee63694d744ac441a61e1c6",
+    "tools/same-iso-offline-v6/vm-only-recovery-v2.py": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+  },
+  "final_ambiguous_output_withheld_without_echo_claim": true,
+  "frozen_checker_unchanged": true,
+  "input_write_bytes_unchanged": true,
+  "masked_redraw_never_proves_unlock": true,
+  "method": "arctic-offline",
+  "original_outcomes_unchanged": true,
+  "requires_independent_review_and_parent_execution_authorization": true,
+  "schema": 6,
+  "shared_simple_ESC_echo_filter": true
+}

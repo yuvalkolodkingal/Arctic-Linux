@@ -1,0 +1,131 @@
+{
+  "actions": {
+    "new_iso_built": false,
+    "production_helper_restored_or_replaced": false,
+    "tracked_source_modified": false,
+    "user_machine_modified": false,
+    "vm_started": false,
+    "workflow_dispatched": false
+  },
+  "base": {
+    "checker_sha256": "717402f5437d0560c5c2b127bbb904b1b2c62d3a6f4e5c431b107406b3816f1e",
+    "source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+    "tests_sha256": "47b84f19a1d87afb94b344bbebfeaea681ff47b8bca346cfbbc7d7ce88d75670"
+  },
+  "compatibility_rules": {
+    "actual_html_mime_route_and_same_ui_js_title_mandatory": true,
+    "all_existing_nix_signature_avc_update_and_recovery_gates_retained": true,
+    "different_boot_mandatory": true,
+    "exact_stable_owner_nevra_epoch_source_hash_mandatory": true,
+    "fresh_candidate_uri_gate_mandatory": true,
+    "fresh_same_iso_installation_only": true,
+    "legacy_state_rejected": true,
+    "no_argument_configured_opener_new_native_window_mandatory": true,
+    "no_failure_driven_fallback": true,
+    "state_binds_revised_checker_bytes": true,
+    "successful_complete_first_candidate_and_update_attestation_mandatory": true,
+    "unchanged_webkit_sandbox_unknown_as_failure": true
+  },
+  "coverage": {
+    "guest-check-dnf-v1.py": "ordinary dnf5 upgrade and reboot; does not qualify offline staging/history",
+    "guest-check-offline-v1.py": "explicit arctic-update now --sync, signed offline staging and reboot/history; separate fresh disk"
+  },
+  "files": {
+    "README-v1.md": {
+      "bytes": 4918,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/README-v1.md",
+      "sha256": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f"
+    },
+    "existing-regressions-v1.log": {
+      "bytes": 6390,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/existing-regressions-v1.log",
+      "sha256": "e0ffab8e97c1c9605cfd517fbb4099da42c791460a8b9d49e01c9b209a728634"
+    },
+    "guest-check-dnf-v1.py": {
+      "bytes": 65104,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/guest-check-dnf-v1.py",
+      "sha256": "472c159452adad998f8833b1d03815ba5572ebf0394215ab146490c45fdbedb9"
+    },
+    "guest-check-offline-v1.py": {
+      "bytes": 65115,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/guest-check-offline-v1.py",
+      "sha256": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576"
+    },
+    "parity-v1.json": {
+      "bytes": 15199,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/parity-v1.json",
+      "sha256": "ea9777204e76d515ed1ac3e97d0b4cbc25a91f8b06e36dcfd3fda75af1b81267"
+    },
+    "prepare-v1.py": {
+      "bytes": 6439,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/prepare-v1.py",
+      "sha256": "6a8391e62c0f0f67be0b54d5e333d2b7b608ac3b94fbccf956fc7a37d135eb4f"
+    },
+    "recovery-controls-v1.log": {
+      "bytes": 3579,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/recovery-controls-v1.log",
+      "sha256": "90ff128ea2004a73b66056ab0a1c7eb8954afee95a049b94d525a070a353549e"
+    },
+    "recovery-extension-v1.py": {
+      "bytes": 14717,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/recovery-extension-v1.py",
+      "sha256": "cb8f66eb233b5e3caa220bb8c894e40d3e40e0df1523da1d9a1e4fe3565d29e2"
+    },
+    "run-existing-tests-v1.py": {
+      "bytes": 651,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/run-existing-tests-v1.py",
+      "sha256": "7bdc59c54a99dc43e5c15f0653b5ad8a986c5ae6248210585f742a4277df1196"
+    },
+    "test_recovery_v1.py": {
+      "bytes": 20053,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/test_recovery_v1.py",
+      "sha256": "468cfc3700e405bfb58ae874e28e53fe69c80f0a4d7dc0977f700ba0e1f86a3b"
+    }
+  },
+  "iso": {
+    "build_reported_bytes": 1880244224,
+    "build_reported_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "guest_constant_is_not_byte_verification": true,
+    "host_byte_verification_required_before_use": true,
+    "name": "Arctic-Linux-1.2-candidate-37507582946-1-x86_64.iso",
+    "run": 37507582946,
+    "source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1"
+  },
+  "recorded_at_utc": "2026-10-06T18:56:39.634229+00:00",
+  "remaining_blockers": [
+    "Independent source/control review required before use",
+    "Original run outcome must remain recorded",
+    "Same ISO actual bytes must be verified on authorized executor",
+    "No actual VM qualification was performed for this prototype"
+  ],
+  "schema_version": 1,
+  "source_prerequisites": {
+    "candidate_nevra": "arctic-desktop-config-1.2.0-1.preview.37507582946.1.gitfe4742c.fc44.noarch",
+    "candidate_opener_normalized_sha256": "e44586b3b3d738888a6e12f58c6cf7cc6bbf980412d80c79d7cecaff539b1b75",
+    "rpm_epoch": "0",
+    "rpm_owner": "arctic-desktop-config",
+    "stable_nevra": "arctic-desktop-config-1.2.0-1.20261006120311.202610061204.git2d5ac68.fc44.noarch",
+    "stable_opener_sha256": "e74890ad948341acc1d8fddaaec056f5dc02451f7e701b8cd9e37e52bb30c0f3",
+    "stable_rpm_sha256": "e3faac839c467030f3dd587fd8474fe3a619987cb0808b5c1977b58048945f63",
+    "stable_source": "2d5ac68847a5feb541177aeaa5a9a00d5ad44815"
+  },
+  "status": "FROZEN PROTOTYPE FOR INDEPENDENT REVIEW; VM qualification unrun",
+  "unchanged_original_run": {
+    "original_current_outcome_not_reclassified": true,
+    "results_altered": false,
+    "run": 37507582946
+  },
+  "validation": {
+    "all_passed": true,
+    "both_avc_check_occurrences_ast_equal": true,
+    "dnf_offline_copies_differ_only_in_entrypoint": true,
+    "exact_original_regressions": 36,
+    "original_nested_update_and_trust_functions_ast_equal": true,
+    "original_non_browser_check_names_ast_equal": 50,
+    "original_non_browser_check_occurrences_ast_equal": 51,
+    "original_top_level_functions_byte_and_ast_equal": 31,
+    "recovery_control_tests": 20,
+    "syntax_passed": true,
+    "tracked_source_clean": true
+  }
+}
