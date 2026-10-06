@@ -355,6 +355,19 @@ active generation number from the recorded successful rollback from 2 to 1;
 the full prior store-target hash and numeric barSize were not recorded and are
 not claimed equal. No synthetic pre-state file is written, the stale-state guard
 is preserved, and no third candidate Nix search or repeated install is performed.
+That reconciliation reached a terminal failure: all 17 installed Arctic/SDDM
+packages still had the candidate's preview releases. Therefore the attempted
+offline update is not qualified, despite an idle/unarmed report and an absent
+trigger. Native Nix daemon/mount, active generation 1, hello/Foot, rescue initrd,
+enforcing SELinux, no failed units and no AVCs passed after this attempt. The
+additional modifier comparison had an observer type error: the built-in binding
+API returned `SUPER+ALT` as a string. Its recorded F9 binding matches the request;
+Right/Dodge requirements had already passed before the modifier assertion. This
+control-flow inference and corrected string/list normalization are recorded in
+`modifier-type-diagnosis.json`; the failed probe and record remain preserved.
+Actual DNF offline logs and service journals are being collected read-only before
+any further transaction. No successful update or post-update persistence claim
+is substituted for these observations.
 The intermediate update boot uses
 `tools/performance/offline-update-boot.py` inside the Fedora QEMU tools container.
 It accepts only disposable qcow2/OVMF files under the repo's `out/`, unlocks the
@@ -373,11 +386,20 @@ Kitty, Nautilus and Zen the same 45-second mapped-window preconditioning to
 normalize user profiles and app caches. First measured launches therefore mean
 new processes after that preconditioning, not first-ever or cold-profile launches.
 No caches are dropped. Guest observer costs and host conditions are recorded;
-one failed sample stops the queue for diagnosis. A single original-ISO Nix search
-runtime control is queued after those offline measurements, preserving an empty
-baseline Nix store until installed-size/RAM measurements are complete. It retains
-the 180-second inner search limit and records the Nix process's CPU/memory state.
-These queues are prepared/running prerequisites, not completed measurements.
+one failed sample stops the queue for diagnosis. At the parent's request, the
+single original-ISO Nix runtime control was moved ahead of BIOS/Safe graphics and
+performance checks. It saved the baseline disk and OVMF state, ran once with an
+empty Nix store, retained a diagnostic snapshot, and restored the baseline before
+offline measurements. It failed the same unchanged 180-second inner search limit:
+exit 1 after 182.316 seconds including wrapper/observer overhead. Its 87 samples
+showed 124.81 seconds of Nix client CPU time, a maximum 420,909,056-byte client RSS,
+and later waiting. A source-metadata diagnostic also timed out after 45 seconds.
+TLS-verified Nix-cache and GitHub-branch endpoint checks returned 200. This
+reproduces the symptom before this optimization branch in the TCG/proxy test
+environment; it does not identify a sole cause or qualify full search. The exact
+comparison is `out/audit/candidate/nix-search-baseline-comparison.json`. BIOS/Safe
+graphics and performance follow the candidate's actual-log diagnosis without
+overlapping VMs. Those remaining queues are not completed measurements.
 
 The local CI draft makes only artifact-only `workflow_dispatch` builds (`release=false`)
 use `.preview` RPM release suffixes. Normal signed stable updates can therefore
