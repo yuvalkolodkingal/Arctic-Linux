@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
 import sys
 import types
 import unittest
@@ -275,6 +276,91 @@ class SourceSecurityControls(unittest.TestCase):
                         H.verify_sources(args, fake)
             poisoned = root/'frozen'; poisoned.mkdir(); (poisoned/'vm-only-recovery-v2.py').write_text('raise AssertionError("imported before hash guard")')
             with self.assertRaises(RuntimeError): H.recovery(types.SimpleNamespace(recovery_bundle=poisoned))
+
+
+class DiagnosticCDControls(unittest.TestCase):
+    """Execute the real inner Bash with inert command functions; never start QEMU."""
+    @staticmethod
+    def capture(source, out, safe, firmware='uefi', secureboot='0'):
+        start = "inner=$(cat <<'INNER'\n"
+        assert source.count(start) == 1
+        inner = source.split(start, 1)[1].split('\nINNER\n', 1)[0]
+        capture = out / 'qemu-argv.json'
+        functions = r'''
+dnf() { :; }
+qemu-img() { :; }
+cp() { :; }
+mkdir() { :; }
+xorriso() { :; }
+rpm() { :; }
+sha256sum() { :; }
+qemu-system-x86_64() { printf '%s\n' 'mock QEMU version'; }
+rm() { :; }
+chown() { :; }
+python3() {
+  "$ARGV_PYTHON" -c 'import json,os,sys; open(os.environ["ARGV_CAPTURE"],"w").write(json.dumps(sys.argv[1:]))' "${@:3}"
+}
+'''
+        env = dict(os.environ, ARGV_PYTHON=sys.executable, ARGV_CAPTURE=str(capture),
+                   OUT=str(out), SAFE_DIAGNOSTIC=str(safe), FIRMWARE=firmware,
+                   SECUREBOOT=secureboot, SMP='2', MEMORY='4096', VGA='virtio',
+                   DRIVER='not executed', HOST_UID='0', HOST_GID='0')
+        subprocess.run(['bash', '-euo', 'pipefail', '-c', functions + inner],
+                       env=env, check=True, timeout=10, capture_output=True, text=True)
+        return json.loads(capture.read_text())
+
+    @staticmethod
+    def require_separate_readonly_cd(argv):
+        def values(flag):
+            return [argv[i + 1] for i, value in enumerate(argv[:-1]) if value == flag]
+        assert argv[0] == 'qemu-system-x86_64'
+        assert values('-machine') == ['q35']
+        assert values('-drive') == [
+            'file=/iso,media=cdrom,readonly=on,if=none,id=cd',
+            'file=/tmp/target.qcow2,if=none,id=disk',
+            'if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd',
+            'if=pflash,format=raw,unit=1,file=/tmp/vars.fd',
+            'file=/tmp/safe-data.iso,media=cdrom,readonly=on,if=none,id=safedata']
+        assert values('-device') == [
+            'ide-cd,drive=cd,bootindex=0', 'virtio-blk-pci,drive=disk,bootindex=1',
+            'virtio-net-pci,netdev=net0', 'qemu-xhci', 'usb-tablet',
+            'ide-cd,drive=safedata,bus=ide.1,unit=0']
+        assert values('-netdev') == ['user,id=net0,restrict=on']
+
+    def test_readonly_diagnostic_cd_uses_separate_q35_port(self):
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t) / 'output with spaces'; out.mkdir()
+            argv = self.capture(P.harness(P.base_sources()[0]), out, 1)
+            self.require_separate_readonly_cd(argv)
+            self.assertEqual(argv[argv.index('-qmp') + 1],
+                             'unix:' + str(out) + '/qmp.sock,server=on,wait=off')
+
+    def test_previous_and_invalid_cd_assignments_are_rejected(self):
+        fixed = P.harness(P.base_sources()[0])
+        selector = 'ide-cd,drive=safedata,bus=ide.1,unit=0'
+        self.assertEqual(fixed.count(selector), 1)
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t)
+            for bad in ('ide-cd,drive=safedata',
+                        'ide-cd,drive=safedata,bus=ide.0,unit=0',
+                        'ide-cd,drive=safedata,bus=ide.1,unit=1'):
+                with self.subTest(selector=bad):
+                    argv = self.capture(fixed.replace(selector, bad, 1), out, 1)
+                    with self.assertRaises(AssertionError):
+                        self.require_separate_readonly_cd(argv)
+                    # The recorded failure used the first old selector exactly.
+                    self.assertIn(bad, argv)
+
+    def test_default_qemu_arguments_unchanged(self):
+        original = P.base_sources()[0]; prepared = P.harness(original)
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t)
+            for firmware, secureboot in (('bios', '0'), ('uefi', '0'), ('uefi', '1')):
+                with self.subTest(firmware=firmware, secureboot=secureboot):
+                    original_argv = self.capture(original, out, 0, firmware, secureboot)
+                    prepared_argv = self.capture(prepared, out, 0, firmware, secureboot)
+                    self.assertEqual(original_argv, prepared_argv)
+                    self.assertFalse(any('safedata' in value for value in prepared_argv))
 
 
 if __name__ == '__main__':

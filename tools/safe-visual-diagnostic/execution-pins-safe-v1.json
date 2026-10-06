@@ -7,11 +7,11 @@
     "tools/safe-visual-diagnostic/README-v1.md": "2372561de5a78c82c78ee901b5abc0b297586a53984864d8a2870b55c6ee932a",
     "tools/safe-visual-diagnostic/bootstrap-safe-v1.sh": "770d50b7a49c72f395816b6ff0071ff20f4ffbd92fe78779443df3d90a9fcbec",
     "tools/safe-visual-diagnostic/guest-safe-collector-v1.py": "e1da6bb2f07cb7014486e0f59c36973600e5dcd9a8063c684f461e099d3fc5e9",
-    "tools/safe-visual-diagnostic/prepare-safe-v1.py": "86658b528692d96383cf721225c4635d901883fe75ae717a00fee80a3e11ac69",
+    "tools/safe-visual-diagnostic/prepare-safe-v1.py": "53be4910fa52c6572450011fec3226e8db112404b40dd69bb04a6ef75eed4cb4",
     "tools/safe-visual-diagnostic/safe-driver-v1.py": "98553f12dc448e15a7978e05f0897d1d48fb6ea91178cd1146db4f67c6197f2b",
     "tools/safe-visual-diagnostic/safe-runner-v1.py": "f3279932fe4520586055b626194176124170e23bd195bb9d582be6d8e220ff13",
-    "tools/safe-visual-diagnostic/test_safe_v1.py": "2c074b08160c047076e3c217f739b8e5bd036a6c013a61a960d10b02ad9cbb60",
-    "tools/test-iso.sh": "c67f6648da0cee1c90dab2b0c23815570bf0fa456ba0044344903091d071f10c"
+    "tools/safe-visual-diagnostic/test_safe_v1.py": "bcfef2b0703584c2c16029c94c856ad1b187bf1439682c94bb57537ff61f4a88",
+    "tools/test-iso.sh": "1152e2d607f3ec936aa941d4fa2ad72db197a09531e11ffeaa5ca2d03aebb383"
   },
   "qualification_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb",
   "schema": "arctic-safe-execution-v1"

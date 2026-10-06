@@ -160,7 +160,7 @@ fi''')
   cp /safe-diagnostic/guest-safe-collector-v1.py /tmp/safe-data/
   xorriso -as mkisofs -quiet -V ARCTICSAFE -J -R -G /safe-diagnostic/bootstrap-safe-v1.sh \\
     -o /tmp/safe-data.iso /tmp/safe-data
-  args+=(-drive file=/tmp/safe-data.iso,media=cdrom,readonly=on,if=none,id=safedata -device ide-cd,drive=safedata)
+  args+=(-drive file=/tmp/safe-data.iso,media=cdrom,readonly=on,if=none,id=safedata -device ide-cd,drive=safedata,bus=ide.1,unit=0)
   {
     qemu-system-x86_64 --version
     rpm -q "${pkgs[@]}"
