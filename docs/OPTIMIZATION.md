@@ -442,3 +442,17 @@ additional candidate Nix search is run. Performance's waiting controller was
 paused and replaced with an identical observer queue after this direct attempt;
 no advancing VM was stopped. The update gate remains failed until real version
 change and post-update persistence pass.
+
+
+### BIOS and Safe graphics checks (2026-10-06 02:03 UTC)
+
+BIOS Try passed the complete collector, enforcing SELinux, no recorded AVCs,
+and visual review of the live bar/welcome/installer entry and working terminal.
+UEFI Safe graphics also passed those boot checks; its actual kernel command line
+contains `nomodeset`, and the fallback display rendered the live shell and
+installer entry. Its journal additionally records `xdg-desktop-portal.service`
+startup timeout. Current portal status was not collected, so this is an unresolved
+session issue, not a fully qualified Safe graphics result. One identical original
+ISO Safe graphics control is queued after the direct update cycle and before
+paired measurements. No advancing VM or service is stopped; only the waiting
+performance controller was replaced to preserve the sequential order.
