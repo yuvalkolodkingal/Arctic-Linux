@@ -1,0 +1,138 @@
+{
+  "actions": {
+    "build_started": false,
+    "original_ci_evidence_modified": false,
+    "owner_bundle_modified": false,
+    "packages_changed": false,
+    "tracked_source_modified": false,
+    "user_machine_modified": false,
+    "vm_started": false,
+    "workflow_dispatched": false
+  },
+  "blocking_source_findings": [],
+  "entry": {
+    "bytes": 6022,
+    "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/review-ready-v1.json",
+    "sha256": "0120117d1a0eedea033bfe9d239151ee0461c2f58efa2dc060141d2454554692"
+  },
+  "iso": {
+    "build_reported_bytes": 1880244224,
+    "build_reported_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "bytes_verified_in_this_review": false,
+    "guest_constant_is_identity_label_only": true,
+    "name": "Arctic-Linux-1.2-candidate-37507582946-1-x86_64.iso",
+    "run": 37507582946
+  },
+  "limits_and_remaining_gates": [
+    "This source/fixture review grants no build, dispatch, merge or publication approval.",
+    "Authorized executor must verify actual same-ISO bytes/checksum before any fresh run; this review did not access or download CI artifacts/logs or the ISO.",
+    "Stable whole-RPM expected checksum is a saved identity label; actual helper/package identity is checked in guest. This review independently verified pinned Git helper sources, not the complete external RPM bytes.",
+    "Run both copies on separate fresh same-ISO installations with the same pinned checker on both boots; retain first-boot evidence before harness overwrites output.",
+    "Actual GUI rendering, successful DNF/offline transactions, persistent Nix desktop/rollback evidence, and Enforcing/AVC results still require fresh VM execution.",
+    "Original CI 37507582946 outcome and evidence must remain recorded separately; passing this revised prototype cannot reclassify the original check.",
+    "Compatibility coverage does not qualify URI forwarding by the old stable helper, media formats, accessibility, physical hardware or performance."
+  ],
+  "own_evidence": {
+    "independent-controls.log": {
+      "bytes": 1896,
+      "path": "out/audit/same-iso-recovery-review/independent-controls.log",
+      "sha256": "81055aa554a08d26f47fbed299fdb0042c516ea366ae897616a0b5eece84f4c0"
+    },
+    "independent_controls.py": {
+      "bytes": 16712,
+      "path": "out/audit/same-iso-recovery-review/independent_controls.py",
+      "sha256": "50af71f3dc6f86570b01b1217fbeca2061f626f14d10b634db26ae89a52b5633"
+    },
+    "original-regressions.log": {
+      "bytes": 6390,
+      "path": "out/audit/same-iso-recovery-review/original-regressions.log",
+      "sha256": "d1e377a410c56c13c8b7d54f33d73a93b88ef2a08ce7c92b27b1fcf6e1271ba0"
+    },
+    "recovery-tests.log": {
+      "bytes": 3579,
+      "path": "out/audit/same-iso-recovery-review/recovery-tests.log",
+      "sha256": "93cac5cd205de3a450a362024d04b61776b25de650a2764663f0ae6ab7b80660"
+    },
+    "write_report.py": {
+      "bytes": 6453,
+      "path": "out/audit/same-iso-recovery-review/write_report.py",
+      "sha256": "5b5501dbbcf29b29b82ba0e3435060abb8009031e54fb64c1e21b2d56b5736d6"
+    }
+  },
+  "pinned_identity": {
+    "candidate_nevra": "arctic-desktop-config-1.2.0-1.preview.37507582946.1.gitfe4742c.fc44.noarch",
+    "candidate_opener_sha256": "e44586b3b3d738888a6e12f58c6cf7cc6bbf980412d80c79d7cecaff539b1b75",
+    "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+    "original_checker_sha256": "717402f5437d0560c5c2b127bbb904b1b2c62d3a6f4e5c431b107406b3816f1e",
+    "stable_nevra": "arctic-desktop-config-1.2.0-1.20261006120311.202610061204.git2d5ac68.fc44.noarch",
+    "stable_opener_sha256": "e74890ad948341acc1d8fddaaec056f5dc02451f7e701b8cd9e37e52bb30c0f3",
+    "stable_rpm_expected_sha256_label": "e3faac839c467030f3dd587fd8474fe3a619987cb0808b5c1977b58048945f63",
+    "stable_source": "2d5ac68847a5feb541177aeaa5a9a00d5ad44815"
+  },
+  "recorded_at_utc": "2026-10-06T19:04:56.382121+00:00",
+  "reviewed_files": {
+    "README-v1.md": {
+      "bytes": 4918,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/README-v1.md",
+      "sha256": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f"
+    },
+    "guest-check-dnf-v1.py": {
+      "bytes": 65104,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/guest-check-dnf-v1.py",
+      "sha256": "472c159452adad998f8833b1d03815ba5572ebf0394215ab146490c45fdbedb9"
+    },
+    "guest-check-offline-v1.py": {
+      "bytes": 65115,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/guest-check-offline-v1.py",
+      "sha256": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576"
+    },
+    "parity-v1.json": {
+      "bytes": 15199,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/parity-v1.json",
+      "sha256": "ea9777204e76d515ed1ac3e97d0b4cbc25a91f8b06e36dcfd3fda75af1b81267"
+    },
+    "prepare-v1.py": {
+      "bytes": 6439,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/prepare-v1.py",
+      "sha256": "6a8391e62c0f0f67be0b54d5e333d2b7b608ac3b94fbccf956fc7a37d135eb4f"
+    },
+    "recovery-extension-v1.py": {
+      "bytes": 14717,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/recovery-extension-v1.py",
+      "sha256": "cb8f66eb233b5e3caa220bb8c894e40d3e40e0df1523da1d9a1e4fe3565d29e2"
+    },
+    "run-existing-tests-v1.py": {
+      "bytes": 651,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/run-existing-tests-v1.py",
+      "sha256": "7bdc59c54a99dc43e5c15f0653b5ad8a986c5ae6248210585f742a4277df1196"
+    },
+    "test_recovery_v1.py": {
+      "bytes": 20053,
+      "path": "out/audit/consolidated-iso-37507582946/same-iso-recovery/test_recovery_v1.py",
+      "sha256": "468cfc3700e405bfb58ae874e28e53fe69c80f0a4d7dc0977f700ba0e1f86a3b"
+    }
+  },
+  "reviewer": "/root/precision_review",
+  "schema_version": 1,
+  "source_and_scope_findings": [
+    "Pre-invocation phase selection: fresh live/installed candidate keeps the original required URI gate; its failure does not retry in compatibility mode.",
+    "Saved state requires successful complete first candidate and chosen update checks, exact actual checker SHA, exact candidate source/helper/package, ISO identity label, expected stable source/package label, and a distinct well-formed boot UUID. Legacy, failed, incomplete, cross-checker and cross-method states fail.",
+    "Actual stable helper must be a regular mode-0755 file with exact RPM owner arctic-desktop-config, NEVRA, epoch 0 and SHA; both candidate and stable normalized helper hashes match their full pinned Git sources independently.",
+    "Older-stable route requires configured Epiphany plus successful no-argument arctic-open, one fresh visible native Wayland UI/window and five-second identity persistence before literal xdg-open of the actual HTML fixture.",
+    "All four HTML/HTTP/HTTPS MIME defaults remain checked. Unique JavaScript-ready title must appear in the same UI/window and persist 45 seconds with PID/start/executable identity before and after original WebKitGTK6 sandbox inspection.",
+    "Unknown/failing sandbox evidence, stale/recycled/wrong UI executable, another window supplying the title, opener failure and MIME failure cannot trigger a direct-browser fallback.",
+    "Independent original-source comparison confirms 31 original top-level functions byte/AST equal, 50 distinct non-browser check names / 51 occurrences AST equal, both AVC occurrences retained, and original nested update/trust/customization/profile functions AST equal.",
+    "Deterministic prepare script replay produces exactly the frozen guests and parity JSON; every write was intercepted rather than changing owner files. DNF and offline guests differ only by explicit entrypoint method.",
+    "Ordinary DNF evidence qualifies ordinary successful upgrade/current stable payload only. Explicit offline variant retains signed staging, armed update, actual listed offline history and completed-status gates; separate fresh installations are required."
+  ],
+  "status": "SOURCE AND FIXTURE REVIEW PASS; ACTUAL VM QUALIFICATION UNRUN",
+  "tests": {
+    "all_passed": true,
+    "exact_original_regressions": 36,
+    "independent_browser_negative_cases": 8,
+    "independent_state_negative_cases": 370,
+    "independent_test_methods": 11,
+    "recovery_tests": 20,
+    "resource_warning_as_error": true
+  }
+}

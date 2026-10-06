@@ -1,0 +1,38 @@
+{
+  "all_complete_current_boot_IDs_must_match": true,
+  "candidate_iso": {
+    "artifact_id": 11434226349,
+    "bytes": 1880244224,
+    "run": 37507582946,
+    "sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718"
+  },
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "canonical_new_stable_qualification": false,
+  "deployment_branch": "test/offline-cycle-same-iso-37507582946-v7",
+  "execution_base_head": "fc9145cce268ec37a75330504de675037899b393",
+  "files": {
+    ".github/workflows/iso.yml": "f51a5915cb59e3ed4ab3c068054a013ffbb735c421a9f56fa09a6d0f9ea92761",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+    "tools/same-iso-offline-v7/README-v1.md": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f",
+    "tools/same-iso-offline-v7/README-v7.md": "e65e01822602962e21cf23e0512b9f18eff6badda1b5a96d3a9ae72e79684c39",
+    "tools/same-iso-offline-v7/guest-check-offline-v1.py": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576",
+    "tools/same-iso-offline-v7/independent-review-v1.json": "4e513bc75ae82eff7367d711b7f7a71a032eb50ee8ecb1caa5c2d0700fdf23fa",
+    "tools/same-iso-offline-v7/offline-only-recovery-v7.py": "3e8a26b3d6ffb752efc048c50312728cdfc73a5d09bfaa06d4c42bb74f925d71",
+    "tools/same-iso-offline-v7/offline-update-cycle-v7.py": "f482170cc8d4f0746aa8f2a0efa375263e2bcfa76134b579d55d4ced85afb885",
+    "tools/same-iso-offline-v7/review-ready-v1.json": "0120117d1a0eedea033bfe9d239151ee0461c2f58efa2dc060141d2454554692",
+    "tools/same-iso-offline-v7/test_offline_cycle_v7.py": "8b74c7d4f538012c2d6e76e4ed372f9b0d2664418a094d9fda623357b889757b",
+    "tools/same-iso-offline-v7/vm-only-recovery-v2.py": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+  },
+  "final_ambiguous_output_withheld_without_echo_claim": true,
+  "finite_stream_bound_unchanged": true,
+  "frozen_checker_unchanged": true,
+  "input_write_bytes_unchanged": true,
+  "masked_redraw_never_proves_unlock": true,
+  "method": "arctic-offline",
+  "original_outcomes_unchanged": true,
+  "repeated_same_boot_contexts_are_observation_only": true,
+  "requires_independent_review_and_parent_execution_authorization": true,
+  "schema": 7,
+  "shared_simple_ESC_echo_filter": true
+}

@@ -1,0 +1,160 @@
+{
+  "API_download": false,
+  "VM_run": false,
+  "actual_v6_replay": {
+    "actual_write_boundary": {
+      "bytes": 5926,
+      "sha256": "5e979e99d5c43a5ccc2a0117a43abab8b2effb8792eba8edddebb925a248822b"
+    },
+    "contexts": 3,
+    "matching_IDs": 1,
+    "original_cycle_still_rejected": "Guest exit before verified unlock submission is not an expected cycle",
+    "post_input_observation": {
+      "accepted_unlock": false,
+      "additional_input_allowed": false,
+      "complete_masked_redraws": 28,
+      "initial_prompt_evidence": {
+        "boot_id": "7a4b2e0410014327a51d005f4ce3d330",
+        "console_sequence": [
+          "tty0",
+          "ttyS0,115200"
+        ],
+        "luks_uuid": "29742149-ec81-42d6-a000-2a25d1a61d6e",
+        "transport": "owned bidirectional ttyS0 serial",
+        "unique_current_prompt": true
+      },
+      "mask_lengths": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ],
+      "meaning": "Redraw observation only; one input write remains final; third-boot history mandatory",
+      "pending_fragment": null
+    },
+    "prior_failure_unchanged": true,
+    "report_sha256": "c5caf460189b5b07620c4b3e29e0f7f526163901849602e74cedf7fffe311e21",
+    "second_third_OSC_bytes_identical": true,
+    "serial_sha256": "a7290a4cf646028a691709ec8db36bee80ef873c80d19afccd291d712c0a378f",
+    "third_boot": "UNRUN",
+    "transaction_completion": "UNPROVEN"
+  },
+  "actual_v7_VM": "UNRUN",
+  "all_controls_passed": true,
+  "all_driver_ASTs_version_schema_only": true,
+  "blocking_source_findings": [],
+  "bounded_same_ID_occurrences": {
+    "distinct_malformed_ID_rejected": true,
+    "fresh_kernel_marker_rejected": true,
+    "no_new_input": true,
+    "partial_identity_final_rejected": true,
+    "same_complete_ID_required": true,
+    "serial_bytes": 67108864
+  },
+  "canonical_new_stable_qualification": false,
+  "distinct_control_methods": 86,
+  "execution_manifest_sha256": "8b9719ca236441fa09ad876c6af1ef7e455f5fdbd3d177f3b373fb0274ac68b5",
+  "execution_pins_verified": 12,
+  "frozen_v1_v2_bytes": {
+    "README-v1.md": "530b210387da1f293590c9bd650900eb6286bbf0c367a84a7bcd0730e928de7f",
+    "guest-check-offline-v1.py": "967883e8467fb8bb5b5c6159707f8c9fd78d8d2850280344953c375df7ee3576",
+    "independent-review-v1.json": "4e513bc75ae82eff7367d711b7f7a71a032eb50ee8ecb1caa5c2d0700fdf23fa",
+    "review-ready-v1.json": "0120117d1a0eedea033bfe9d239151ee0461c2f58efa2dc060141d2454554692",
+    "vm-only-recovery-v2.py": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+  },
+  "host_controls": {
+    "v7-audit-host-controls.log": {
+      "bytes": 11005,
+      "methods": 66,
+      "sha256": "c077b94edd7e85dd1512719c200b17e1001fde1cb718cf70bb6a1477d67cc3d5",
+      "status": "PASS"
+    },
+    "v7-frozen-v1-host-controls.log": {
+      "bytes": 3579,
+      "methods": 20,
+      "sha256": "2a0157c21ea60b543327b58ebe7b70339a0dad3cef929136deed9abdff55d6e4",
+      "status": "PASS"
+    },
+    "v7-mapped-host-controls.log": {
+      "bytes": 11005,
+      "methods": 66,
+      "sha256": "a2450b6f9d3f0a593db5955585e99f78430e99afac6191196ee9b9d06646cdf9",
+      "status": "PASS"
+    }
+  },
+  "initial_preserved_ready_pins_verified": 22,
+  "input_one_write_bytes_order_shared_secret_filter_transport_peer_and_persistence_AST_identical": true,
+  "installed_success_byte_AST_unchanged": true,
+  "ordinary_DNF_qualification": false,
+  "original_cycle_requires_retained": 8,
+  "original_default_workflow_permissions_actions_unchanged_except_versioned_tokens": true,
+  "original_serial_requires_unchanged_except_same_ID_occurrence_cap": 12,
+  "primary_semantics": {
+    "limit": "upstream v259 family docs establish protocol semantics; no Fedora259.9 patch byte attestation or exact duplicate-console producer claim",
+    "protocol": "bootid is running kernel ID; repeated context start updates existing context",
+    "provenance_sha256": "379e7a457b661982ba8fa4b6a6f4af5b459a7a81842085f874adfd55d8eb674e",
+    "records": "systemd OSC3008 terminal context records, not kernel audit lines"
+  },
+  "prior_v6_ready_pins_verified": 18,
+  "push_dispatch_publication": false,
+  "ready_pins_verified": 22,
+  "ready_sha256": "0b6ca592a38cac023e40f033eb8610f8f2e38f4fd3635936cdfa4392847c0f97",
+  "recorded_at_utc": "2026-10-06T23:52:41.179832+00:00",
+  "release_acceptance": false,
+  "required_runtime_gates": [
+    "parent exact clean reviewed mapped head/source CI",
+    "actual fresh first-install plus frozen checker and signed old-stable staging",
+    "same retained disk/current root/owned serial peer, exactly one submission and safe complete output",
+    "real serial EOF plus zero QEMU exit and exactly one clean guest=true reset/shutdown without host/error/timeout/panic/watchdog",
+    "mandatory unchanged-v1 third default boot with new ID, completed real offline history/unarmed state/signed target/exact helper/browser JS+WebKit/Nix/prefs/SELinux/AVC gates"
+  ],
+  "schema": "arctic-independent-offline-cycle-review-v7",
+  "scope": "arctic-offline against old signed stable2d5 only",
+  "source_mutated": false,
+  "status": "SOURCE_AND_HOST_CONTROLS_PASS_VM_UNRUN",
+  "third_boot": "UNRUN",
+  "transaction": "UNRUN",
+  "unchanged_helper_ASTs": [
+    "require",
+    "input_identity",
+    "validate_paths",
+    "qemu_argv",
+    "serial_bindings",
+    "observed_vm_type",
+    "validate_cycle",
+    "first_install_root",
+    "qemu_identity",
+    "validate_peer",
+    "serial_prompt",
+    "SerialOutputAmbiguous",
+    "assert_no_echo",
+    "ansi_rejection_view",
+    "SerialChannel",
+    "observe",
+    "main"
+  ]
+}
