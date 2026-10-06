@@ -188,12 +188,13 @@ jobs:
           test '${{ inputs.release }}' = false
           test -c /dev/kvm
           # Docker's root test process accesses the passed device; no host chmod or SELinux changes.
+          # Live install stays restricted/offline; installed Nix fetch/update checks explicitly use NAT.
           timeout --signal=TERM --kill-after=60s 100m tools/test-install.sh --iso "out/iso/$ISO" \
-            --kvm --memory 4096 --smp 2 --boot-append '' --install-timeout 2400 \
+            --kvm --memory 4096 --smp 2 --boot-append '' --install-timeout 2400 --boot-network online \
             --guest-check tools/nix-acceptance/guest.py --out "$PWD/out/test/nix"
           cp out/test/nix/serial-boot.log out/test/nix/serial-before-update-reboot.log
           timeout --signal=TERM --kill-after=60s 45m tools/test-install.sh \
-            --stage boot --kvm --memory 4096 --smp 2 --boot-append '' \
+            --stage boot --kvm --memory 4096 --smp 2 --boot-append '' --boot-network online \
             --guest-check tools/nix-acceptance/guest.py --out "$PWD/out/test/nix"
 
       - name: Upload Nix acceptance evidence

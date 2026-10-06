@@ -27,7 +27,52 @@ class SessionEnvironmentTest(unittest.TestCase):
             self.assertEqual(guest.session_signature(root, os.getuid(), runtime, 'wayland-0', {}), '/run/user/test/mango.sock')
             child(12, 'wayland-0', '/run/user/test/ambiguous.sock')
             with self.assertRaisesRegex(RuntimeError, 'found 2'):
-                guest.session_signature(root, os.getuid(), runtime, 'wayland-0', {})
+                    guest.session_signature(root, os.getuid(), runtime, 'wayland-0', {})
+
+
+class OnlinePreflightTest(unittest.TestCase):
+    prefix = ['runuser', '-u', 'ci', '--', 'env', 'HOME=/home/ci']
+
+    def test_direct_dns_and_https_use_the_guest_user_and_bounded_verified_requests(self):
+        with patch.dict(os.environ, {}, clear=True), patch.object(
+                guest, 'run', side_effect=['1.2.3.4 STREAM', '5.6.7.8 STREAM', '200', '200']) as run:
+            result = guest.online_preflight(self.prefix)
+        self.assertEqual(result['dns_mode'], 'direct')
+        self.assertEqual(result['dns_hosts'], ['api.github.com', 'cache.nixos.org'])
+        for call in run.call_args_list:
+            self.assertEqual(call.args[0][:len(self.prefix)], self.prefix)
+        for call in run.call_args_list[2:]:
+            args = call.args[0]
+            self.assertIn('--fail', args)
+            self.assertNotIn('--insecure', args)
+            self.assertEqual(args[args.index('--max-time') + 1], '30')
+            self.assertEqual(call.kwargs['timeout'], 40)
+
+    def test_dns_failure_stops_before_https_and_empty_dns_is_rejected(self):
+        for outcome in (RuntimeError('Could not resolve host'), ''):
+            with self.subTest(outcome=outcome), patch.dict(os.environ, {}, clear=True), \
+                    patch.object(guest, 'run', side_effect=[outcome]) as run:
+                with self.assertRaisesRegex(RuntimeError, 'resolve|DNS'):
+                    guest.online_preflight(self.prefix)
+                self.assertEqual(run.call_count, 1)
+
+    def test_tls_or_http_failure_is_not_accepted_as_connectivity(self):
+        for outcome in (RuntimeError('TLS verification failed'), '403'):
+            with self.subTest(outcome=outcome), patch.dict(os.environ, {}, clear=True), \
+                    patch.object(guest, 'run', side_effect=['address', 'address', outcome]) as run:
+                with self.assertRaisesRegex(RuntimeError, 'TLS|HTTP'):
+                    guest.online_preflight(self.prefix)
+                self.assertEqual(run.call_count, 3)
+
+    def test_supported_proxy_checks_proxy_dns_and_keeps_upstream_tls_verification(self):
+        with patch.dict(os.environ, {'HTTPS_PROXY': 'http://10.0.2.2:18080'}, clear=True), \
+                patch.object(guest, 'run', side_effect=['10.0.2.2 STREAM', '200', '200']) as run:
+            result = guest.online_preflight(self.prefix)
+        self.assertEqual(result['dns_mode'], 'proxy')
+        self.assertEqual(result['dns_hosts'], ['10.0.2.2'])
+        self.assertEqual(run.call_args_list[0].args[0], self.prefix + ['getent', 'ahosts', '10.0.2.2'])
+        self.assertEqual(result['verified_https'],
+                         ['https://api.github.com/', 'https://cache.nixos.org/nix-cache-info'])
 
 
 class RpmSignatureTest(unittest.TestCase):

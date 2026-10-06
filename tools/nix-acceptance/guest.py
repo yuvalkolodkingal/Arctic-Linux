@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import time
+from urllib.parse import urlsplit
 
 
 def run(argv, **kwargs):
@@ -28,6 +29,32 @@ def run(argv, **kwargs):
 def record(stage, check, status, detail):
     print('ARCTIC-NIX-ACCEPTANCE ' + json.dumps(dict(stage=stage, check=check,
           status=status, detail=str(detail))), flush=True)
+
+
+def online_preflight(prefix):
+    """Bounded DNS and verified HTTPS checks before network-dependent acceptance.
+
+    The optional existing test proxy resolves upstream names itself. Check its
+    address in that mode; a direct online boot must resolve both upstream hosts.
+    """
+    proxy = os.environ.get('https_proxy') or os.environ.get('HTTPS_PROXY')
+    hosts = ['api.github.com', 'cache.nixos.org']
+    if proxy:
+        host = urlsplit(proxy).hostname
+        if not host:
+            raise RuntimeError('Test HTTPS proxy has no hostname')
+        hosts = [host]
+    for host in hosts:
+        if not run(prefix + ['getent', 'ahosts', host], timeout=15):
+            raise RuntimeError(f'DNS returned no addresses for {host}')
+    urls = ['https://api.github.com/', 'https://cache.nixos.org/nix-cache-info']
+    for url in urls:
+        status = run(prefix + ['curl', '--fail', '--silent', '--show-error', '--location',
+                     '--connect-timeout', '10', '--max-time', '30', '--output', '/dev/null',
+                     '--write-out', '%{http_code}', url], timeout=40)
+        if status != '200':
+            raise RuntimeError(f'HTTPS preflight for {url} returned HTTP {status}')
+    return dict(dns_hosts=hosts, dns_mode='proxy' if proxy else 'direct', verified_https=urls)
 
 
 def verified_rpm_signatures(files):
@@ -281,6 +308,11 @@ def main(update_method='dnf', expected_stable_source=None):
             check('signed-offline-update-completed', offline_update_completed)
             check('signed-offline-update-history', latest_offline_history)
         return int(failed)
+
+    if check('online-network-preflight', lambda: online_preflight(prefix)) is None:
+        record(stage, 'network-dependent-acceptance', 'unrun',
+               'DNS/HTTPS preflight failed; Nix fetch/update acceptance requires an online installed boot')
+        return 1
 
     # Start a real DesktopEntries consumer BEFORE the first profile exists.
     # The existing shell uses this same Quickshell singleton/model.

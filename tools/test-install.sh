@@ -8,6 +8,10 @@
 #                                               test password only after an unlock request marker
 #   tools/test-install.sh --stage install       only the install (fresh disk)
 #   tools/test-install.sh --stage boot          only boot the disk a previous run installed
+#   tools/test-install.sh --boot-network online allow outbound user-mode NAT only for the
+#                                               installed boot (default: offline). The live
+#                                               installer remains isolated; use this for
+#                                               installed Nix fetch/update acceptance.
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
 #                                               the default install with apps from the live
 #                                               image; preinstalled Zen is kept offline,
@@ -65,7 +69,8 @@
 #
 # The VM has restricted user-mode networking by default. QEMU blocks guest access to the
 # host and outside networks, irrespective of the host's connectivity. Only the explicit
-# --online-via-proxy test enables routing. This changes the disposable VM, never the host.
+# --online-via-proxy test enables routing for both phases; --boot-network online enables
+# it only after installation. Neither adds host forwards or changes the host's networking.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -89,6 +94,7 @@ GUEST_CHECK=""
 GUEST_CHECK_INTERACTIVE=0
 TEST_HARDWARE=""
 ONLINE_PROXY=0
+BOOT_NETWORK=offline
 # Test secrets only (typed into the VM and passed to the installer).
 LUKS_PASSPHRASE="glacier lantern frost harbor"
 USER_PASSWORD="arctic-ci-pass"
@@ -111,12 +117,14 @@ while (( $# )); do
     --out) OUT="$2"; shift 2 ;;
     --test-hardware) TEST_HARDWARE="$2"; shift 2 ;;
     --online-via-proxy) ONLINE_PROXY=1; shift ;;
+    --boot-network) BOOT_NETWORK="$2"; shift 2 ;;
     -h|--help) sed -n '2,58p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) arctic_die "unknown option: $1" ;;
   esac
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$STAGE" in all|install|boot) ;; *) arctic_die "--stage takes all, install or boot" ;; esac
+case "$BOOT_NETWORK" in offline|online) ;; *) arctic_die "--boot-network takes offline or online" ;; esac
 [[ -f "$PROFILE" ]] || arctic_die "no profile at $PROFILE"
 if [[ "$STAGE" != boot ]]; then
   [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
@@ -355,6 +363,8 @@ boot_append = E.get("BOOT_APPEND", "").strip()
 LIVE_APPEND = "console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"
 
 def qemu_argv(name, with_iso):
+    # Explicit boot-only connectivity must never make an offline install online.
+    online = E.get("ONLINE_PROXY") == "1" or (not with_iso and E.get("BOOT_NETWORK") == "online")
     a = ["qemu-system-x86_64", "-machine", "q35", "-accel", accel, "-cpu", "max", "-smp", smp, "-m", mem,
          "-display", "none", "-vga", "virtio", "-qmp", f"unix:/tmp/qmp-{name}.sock,server=on,wait=off",
          "-serial", f"file:{out}/serial-{name}.log", "-monitor", "none", "-no-reboot",
@@ -362,7 +372,7 @@ def qemu_argv(name, with_iso):
          "-device", f"virtio-blk-pci,drive=disk,bootindex={1 if with_iso else 0}",
          "-drive", f"file={out}/data.iso,media=cdrom,readonly=on,if=none,id=data",
          "-device", "ide-cd,drive=data,bus=ide.0",   # sr0: `sudo sh /dev/sr0` runs its launcher
-         "-netdev", "user,id=net0" + (",restrict=on" if E.get("ONLINE_PROXY") != "1" else ""),
+         "-netdev", "user,id=net0" + ("" if online else ",restrict=on"),
          "-device", "virtio-net-pci,netdev=net0",
          "-device", "qemu-xhci", "-device", "usb-tablet", "-rtc", "base=utc"]
     if with_iso:
@@ -705,7 +715,7 @@ fi
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
   -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e GUEST_CHECK_INTERACTIVE="$GUEST_CHECK_INTERACTIVE" \
-  -e ONLINE_PROXY="$ONLINE_PROXY" \
+  -e ONLINE_PROXY="$ONLINE_PROXY" -e BOOT_NETWORK="$BOOT_NETWORK" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" \

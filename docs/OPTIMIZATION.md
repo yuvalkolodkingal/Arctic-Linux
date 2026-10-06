@@ -714,3 +714,36 @@ that observer limitation is preserved, and the subsequent normal dependency
 and poisoned-cache recovery runs passed. The production cache was unchanged.
 Cache-only is used solely by this control, never by the production builders.
 Evidence: `out/audit/candidate/cache-corruption-control/`.
+
+## Nix acceptance network correction (2026-10-06)
+
+Artifact-only ISO run `37419332624` finished with failed Nix and paired KVM
+acceptance; the required size and publication steps were skipped. The supplied
+Nix log shows the offline install completed with exit 0 after 1,110 seconds,
+followed by a successful encrypted boot/login. Both QEMU phases used
+`user,id=net0,restrict=on`. Installed Nix fetches then failed DNS resolution for
+`api.github.com`; repository/mirror DNS and later profile checks failed too.
+Live checks and installed SELinux, Zen, daemon/store, customization, session-path,
+trust-configuration and AVC checks passed. The installed check exited 1 and the
+guest powered off normally. These results identify an acceptance harness
+network-phase error; Nix fetch/update functionality still requires a successful
+rerun. The separate paired KVM failure cause and measurements remain unavailable.
+
+`tools/test-install.sh --boot-network online` now explicitly enables user-mode
+NAT for installed boots while preserving the live install's restricted network
+and offline reachability assertion. The default remains restricted in both
+phases, including paired performance tests. The existing explicit online proxy
+mode retains its behavior. The Nix workflow opts in on both installed boots;
+the guest checks DNS and verified HTTPS with bounded timeouts before fetching.
+A failed preflight exits acceptance with failure and marks dependent operations
+unrun. Security, signatures, isolation and functional assertions remain required.
+This changes the disposable test VM; it does not configure the user's system.
+
+Local tools regression suite: 69 tests run, one skipped (`python3-rpm` absent).
+Coverage executes the actual shell harness and generated QEMU network arguments
+for default isolation, boot-only NAT, legacy proxy and invalid input, plus DNS,
+TLS/HTTP failure and proxy preflight controls. Bash syntax, workflow YAML and
+whitespace checks pass. Independent review and exact-head CI/VM acceptance are
+required before this correction qualifies the candidate. Relay evidence and
+source-message references are retained in `out/audit/nix-network-diagnosis.json`;
+the original failed run metadata and access-denial records are preserved.
