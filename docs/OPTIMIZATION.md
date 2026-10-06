@@ -15,14 +15,52 @@ compression costs; measurements decide the compromise.
 
 ## Research and execution update, 6 October
 
-The existing artifact-only workflow [37419332624](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37419332624)
-uses exact source `19b501d615a6c4ca32ba959fd284616823d067dc`. Its image build and
-upload succeeded, Nix VM acceptance failed at 07:00:31 UTC, and the paired KVM
-comparison started at 07:00:32 UTC. The failure reason and exact ISO bytes/SHA
-await the terminal job logs. Screenshot helper exit status does not establish
-guest security or visual correctness: the workflow's three observation runs
-did not request collection. No merge or release is qualified. The changes below
-were made afterward and are **not in that image**.
+The corrected artifact-only workflow [37440736427](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37440736427)
+on exact source `83c2984a794d7036319f012f3400cedbbb4aeed3` completed Nix VM
+acceptance successfully. Both offline installation plus installed acceptance and
+the reboot acceptance invocation passed. Its required ISO size gate failed;
+paired KVM acceptance was disabled and therefore skipped. The metadata artifact
+download returned HTTP Forbidden, so exact ISO bytes/SHA and individual Nix
+records remain unverified. Artifact archive bytes/digests are not ISO values.
+The separate controlled [KVM run 37450977544](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37450977544)
+started only after Nix completed and uses the same source, with release disabled.
+It is a separate build; immutable image identities must be compared before
+combining evidence. No merge or release is qualified. Screenshot helper exit
+status does not establish guest security or visual correctness when collection
+was not requested. The native command stripping below is a later packaging
+change and is **not in either of these images**.
+
+### Native command symbol tables
+
+The three shipped pure Go Arctic executables already contain no DWARF debug
+sections. Their remaining native symbol/string tables can be omitted by Go's
+documented [`-s -w` linker flags](https://pkg.go.dev/cmd/link), while retaining
+Go runtime stack metadata and `-B gobuildid`. A same-source Fedora Go 1.26.8
+control, including the current RPM debug-strip stage, had 28,250,584 logical
+bytes across `arctic-install`, `arcticd` and `arctic-webapp`; the stripped build
+had 26,362,762, saving **1,887,822 bytes**. A fixed EROFS LZMA 6 / 1 MiB subset
+fell from 7,954,432 to 7,655,424 bytes, saving **299,008 bytes**. This is a
+three-file subset result, not a full ISO marginal or a route below the ceiling.
+Running Fedora's actual `brp-strip` and `brp-strip-comment-note` scripts on
+separate copies adjusted alignment: final logical saving was **1,890,936 bytes**,
+and the subset fell to 7,647,232 bytes, saving **307,200 bytes**. Original
+experiment files remain unchanged. Other RPM hooks and the full ISO still need
+exact-head qualification.
+
+Implemented only for these pure Go commands; the cgo WebKit host's Fedora flags
+remain intact. PIE, GNU RELRO, non-executable stack, GNU build IDs and Go
+`.gopclntab` are present in both variants. Actual offline installer plans,
+catalog JSON and web-app render fixtures match, and version/help commands run.
+The existing Go suite passed with these flags. Independent review confirmed
+all six original artifact hashes, ELF hardening, fixture parity and actual
+SIGQUIT traces containing named Go functions and source lines.
+Native symbol names are unavailable to ELF debuggers; the shipped binaries
+already lacked DWARF, and Go runtime traceback metadata is retained. No runtime
+speed or RAM improvement is claimed. Revert this spec linker flag change for
+rollback. Exact-head RPM and VM checks remain required before merge.
+Evidence: `out/audit/candidate/native-elf-debug-audit.json` and
+`out/audit/candidate/go-strip-research.json`, `go-rpm-postprocessing.json`,
+and `out/audit/native-strip-review.json`.
 
 | Priority | Finding and measured result | Action, rollback and acceptance |
 | --- | --- | --- |
