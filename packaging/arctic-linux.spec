@@ -32,7 +32,8 @@
 %global dist_version    44
 %global arctic_version  1.2
 %global selinuxtype     targeted
-# Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
+# Pure Go commands omit native symbol/debug tables; Go runtime stack metadata and
+# the GNU build ID remain. The cgo host keeps Fedora's external-link flags below.
 %global debug_package   %{nil}
 # ---- stream 1 (web apps): arctic-webapp-host is cgo, linked externally with Fedora's flags;
 # brp-strip strips it too. Its WebKitGTK floor is the version it was built against (it links
@@ -730,7 +731,7 @@ if [ -f go.mod ]; then
   export GOCACHE="$PWD/_build/gocache" GOPATH="$PWD/_build/gopath"
   mkdir -p _build/bin
   for cmd in arcticd arctic-install arctic-webapp; do
-    go build -ldflags "-B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
+    go build -ldflags "-s -w -B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
   done
   # ---- stream 1 (web apps): the window (docs/BUILD-SPEC.md §11), cgo against WebKitGTK 6.0
   # and GTK 4. Go reads CGO_CFLAGS/CGO_LDFLAGS, not the CFLAGS/LDFLAGS rpm exports; -tags
