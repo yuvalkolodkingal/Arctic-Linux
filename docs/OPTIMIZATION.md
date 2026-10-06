@@ -13,6 +13,74 @@ Priority order: stability and feature parity, responsive desktop and low memory,
 then image size. "As fast as possible" and "as small as possible" have competing
 compression costs; measurements decide the compromise.
 
+## Research and execution update, 6 October
+
+The existing artifact-only workflow [37419332624](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37419332624)
+uses exact source `19b501d615a6c4ca32ba959fd284616823d067dc`. Its image build and
+upload succeeded, Nix VM acceptance failed at 07:00:31 UTC, and the paired KVM
+comparison started at 07:00:32 UTC. The failure reason and exact ISO bytes/SHA
+await the terminal job logs. Screenshot helper exit status does not establish
+guest security or visual correctness: the workflow's three observation runs
+did not request collection. No merge or release is qualified. The changes below
+were made afterward and are **not in that image**.
+
+| Priority | Finding and measured result | Action, rollback and acceptance |
+| --- | --- | --- |
+| 1 | Kitty startup regressed in the completed six TCG samples: first opening +21.03%, subsequent +13.64%. Composition includes approved clock/wallpaper work, a Mango rebuild and package updates, so this cannot be attributed solely to catalog eviction. | Keep the combined merge blocked. The active interleaved KVM comparison must resolve the regression before claiming OS gains. Preserve both raw datasets and exact image/tool identities. |
+| 2 | Get apps constructs its chooser at shell startup, even while the launcher shows its home view. Three runs of the exact implemented QML change reduced isolated component PSS median from 88,355,840 to 75,924,480 bytes (12,431,360 saved); its visual tree fell from 146 to 2 items before first opening. | Implemented first-use loading. Pages remain instantiated afterward, preserving drafts and callbacks; AppsService still owns jobs. First opening added about 32.8 ms in this probe. Actual route and repeated hide/show controls passed. Revert the GetApps.qml diff to roll back. Require real desktop/keyboard/Get apps and exact-candidate CI gates. These are component measurements, not a full OS RAM or startup improvement claim. |
+| 3 | Source artwork is already export-ignored, but a full shallow checkout still stores 372,297,384 bytes of Git pack data and materializes 390,599,547 bytes. Simple sparse checkout loses its download saving when git archive prefetches all omitted blobs. | Implemented sparse checkout only in OS build jobs plus removal of export-ignored roots from the temporary Source0 index. A cold filtered clone through source archiving took 4.47 s and retained 15,705,100 pack bytes, saving 356,592,284 stored pack bytes. All 2,374 archive members matched original paths, modes, types, links and content hashes. Dirty/untracked sources, public-key blob injection, nested exclusions and the real index were preserved. Roll back the workflow and build-script diffs together. Require exact-head RPM builds; this does not shrink the ISO. |
+| 4 | Nix daemon PSS is about 19.5 MB in existing installed VM samples. Upstream supplies socket activation, but Arctic explicitly keeps the service enabled until enforcing socket startup is proven free of AVC denials. | No policy change adopted. One disposable enforcing activation/install/update/rollback test would be necessary before changing presets, the installer module and image setup together. Preserve the current security behavior until that passes. |
+| 5 | Same-content XZ level 6 / CRC32 live-initrd trial saved 6,607,627 bytes (241,962,859 to 235,355,232), with the 306,176-byte early microcode prefix unchanged. All three decoded CPIO hashes matched `09a6075578897f78af22c5daae673b60479bbee2d247165ca4e2073ea52b063d`. | Rejected for the current speed priority: cached host userspace decode median rose from 0.44 to 1.97 s. Encoding took 153.32 s, maximum RSS 97,620 KiB. It has no Secure Boot, BIOS, encryption or low-RAM boot qualification. Keep current Zstd; no root-owned package payload was changed. |
+| 6 | The largest 20 duplicate groups account for 104,476,731 logically repeated bytes, but all already share complete EROFS data mappings. Flatpak objects/deployments also share existing hardlinks; no unreachable objects, DNF downloads or populated Nix store were found. | No generic cleanup, cross-package hardlink replacement or feature deletion. Packed-fragment accounting gives all Flatpak storage coverage 477,196,288 bytes, including shared clusters; it is not a removable-byte estimate. Browser packaging remains a material containment/update choice requiring explicit approval and one actual candidate trial. |
+
+The first-use QML probe used actual production GetApps and its pages in a Qt
+software offscreen Window. Both variants suppressed the same package/network
+setup call to isolate visual work. It preserves the original behavior after
+first use and does not unload hidden pages. Ten additional direct-first-route
+cases checked DNF/all and Flatpak queries, console, a web URL and chooser, with
+three hide/show cycles per case. An independent source review found no blocking
+lifecycle, archive parity or signing-path issue. More aggressive unloading requires
+separating visual lifetime from draft state and asynchronous callbacks. Releasing
+clipboard/emoji/wallpaper arrays alone is not yet a measured high-impact change;
+clipboard previews already disable Qt image caching and wallpaper thumbnails
+already bound their decoded width to 480 pixels. No blanket image-cache removal
+was adopted.
+
+The checkout tests count **stored pack bytes**, not wire telemetry. One sequential
+cold full clone took 38.22 s; the filtered/pruned clone plus source archive took
+4.47 s. Network/server variation prevents a general CI speed promise. Bare-tree
+tar timestamps retain the build's existing wall-clock behavior, so archive
+parity is established by member content/metadata rather than identical tar hashes.
+Temporary-index pruning was necessary: both ordinary sparse and explicit-path
+archive controls fetched approximately 372 MB of packs. The actual working tree
+and real index remain unchanged by source archiving.
+
+Primary references informing these choices: Qt recommends measuring before
+optimizing, event-driven work and [lazy creation](https://doc.qt.io/qt-6/qtquick-performance.html);
+[Loader.active](https://doc.qt.io/qt-6/qml-qtquick-loader.html) controls object creation;
+[checkout v4](https://github.com/actions/checkout/blob/v4/README.md) supports sparse
+patterns and non-cone mode. EROFS documents fragments, deduplication and
+[cluster-size/random-access costs](https://erofs.docs.kernel.org/en/latest/mkfs.html).
+Flatpak documents [OSTree deployment hardlinks](https://docs.flatpak.org/en/latest/under-the-hood.html),
+DNF5 documents [download-cache behavior](https://dnf5.readthedocs.io/en/latest/dnf5.conf.5.html),
+and Nix documents [GC reachability](https://nix.dev/manual/nix/2.34/command-ref/nix-store/gc)
+and supplies a [daemon socket unit](https://raw.githubusercontent.com/NixOS/nix/2.34.8/misc/systemd/nix-daemon.socket.in).
+[Dracut](https://dracut-ng.github.io/dracut/man/dracut.conf.5.html) accepts explicit
+compression arguments; the [kernel's XZ documentation](https://docs.kernel.org/staging/xz.html)
+requires CRC32 or no integrity check for its decoder. These support the bounded
+same-content experiment, not a boot qualification for its output.
+Fedora's online systemd guide returned an access challenge; no claim is based on
+its unavailable body. Arctic's actual RPM/service/process inventories and source
+presets take precedence over generic service-removal advice.
+
+Evidence: `out/audit/getapps-lifecycle-summary.json`,
+`getapps-lifecycle-research/exact/result.json`,
+`checkout-research/{comparison,explicit-archive-comparison,pruned-archive-comparison}.json`,
+`checkout-research/guards/result.json`, `compression/initrd-xz6-summary.json`,
+`getapps-lifecycle-research/direct-first-route/result.json`, `research-source-review.json`,
+and the original inventory/runtime datasets. The separate battery commit remains
+`98f663d972ebb3dfcd64cf3793604f6f9400c280` and is independently applicable to approved main.
+
 ## Baseline evidence
 
 The public v1.2.0 ISO has been downloaded and independently verified:
