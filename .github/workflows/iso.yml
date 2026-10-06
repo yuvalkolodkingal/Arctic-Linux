@@ -497,6 +497,9 @@ jobs:
       RECOVERY_MODE: ${{ inputs.same_iso_recovery && 'true' || 'false' }}
       RELEASE_REQUESTED: ${{ inputs.release && 'true' || 'false' }}
       CONTAINER_ENGINE: docker
+      NIX_REQUESTED: ${{ inputs.nix_acceptance && 'true' || 'false' }}
+      PERFORMANCE_REQUESTED: ${{ inputs.performance_acceptance && 'true' || 'false' }}
+      BOOT_TEST_REQUESTED: ${{ inputs.boot_test && 'true' || 'false' }}
     steps:
       - name: Checkout immutable candidate source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -521,7 +524,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          native_root="$RUNNER_TEMP/arctic-native-functional-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          native_root="$RUNNER_TEMP/arctic-native-functional-v4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           test ! -e "$native_root"
           mkdir "$native_root"
           echo "NATIVE_ROOT=$native_root" >> "$GITHUB_ENV"
@@ -529,9 +532,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 native-qualification-source/tools/native-functional-runner/native-runner-v3.py preflight \
+          python3 native-qualification-source/tools/native-functional-v4/native-runner-v4.py preflight \
             --source "$GITHUB_WORKSPACE/candidate-source" \
-            --bundle "$GITHUB_WORKSPACE/native-qualification-source/tools/native-functional-runner" \
+            --bundle "$GITHUB_WORKSPACE/native-qualification-source/tools/native-functional-v4" \
             --inputs "$NATIVE_ROOT/inputs" --evidence "$NATIVE_ROOT/evidence"
       - name: Download fixed original ISO for actual native VM tests
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -544,21 +547,21 @@ jobs:
           path: ${{ env.NATIVE_ROOT }}/inputs
       - name: Verify exact ISO bytes before any VM
         run: |
-          python3 native-qualification-source/tools/native-functional-runner/native-runner-v3.py verify \
+          python3 native-qualification-source/tools/native-functional-v4/native-runner-v4.py verify \
             --source "$GITHUB_WORKSPACE/candidate-source" \
-            --bundle "$GITHUB_WORKSPACE/native-qualification-source/tools/native-functional-runner" \
+            --bundle "$GITHUB_WORKSPACE/native-qualification-source/tools/native-functional-v4" \
             --inputs "$NATIVE_ROOT/inputs" --evidence "$NATIVE_ROOT/evidence"
       - name: Fresh native live, offline encrypted install, and first-installed smoke
         run: |
-          python3 native-qualification-source/tools/native-functional-runner/native-runner-v3.py run \
+          python3 native-qualification-source/tools/native-functional-v4/native-runner-v4.py run \
             --source "$GITHUB_WORKSPACE/candidate-source" \
-            --bundle "$GITHUB_WORKSPACE/native-qualification-source/tools/native-functional-runner" \
+            --bundle "$GITHUB_WORKSPACE/native-qualification-source/tools/native-functional-v4" \
             --inputs "$NATIVE_ROOT/inputs" --evidence "$NATIVE_ROOT/evidence"
       - name: Preserve new native evidence, including failures
         if: ${{ always() && env.NATIVE_ROOT != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: native-functional-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
+          name: native-functional-v4-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.NATIVE_ROOT }}/evidence/
           if-no-files-found: warn
           retention-days: 14

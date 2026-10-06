@@ -1,0 +1,89 @@
+{
+  "adapter_sha256": "a76bdacf9d465e6d0938ce4b096bc7a0da339e94704120c923886720d65ce229",
+  "all_other_source_bytes_equal": true,
+  "all_other_top_level_bytes_and_ast_equal": true,
+  "native_source_sha256": "ed382ab80a4918118370253c383b0fefde116ba34d55e977bcd34607ad2632d0",
+  "retained": [
+    {
+      "name": "require",
+      "sha256": "38ad9d5b50be85439928ad1d2e69734961c31e0ac4840c0eff7f80003b4cebb5"
+    },
+    {
+      "name": "execute",
+      "sha256": "3cc044b919f7e01995ee785370da9d798134331f79ed04fbaad294ebf46b8b82"
+    },
+    {
+      "name": "digest",
+      "sha256": "0848a403b8dbbb9957de74cda997a83543dea1e54cccff26c382813cf43383d1"
+    },
+    {
+      "name": "tree_hashes",
+      "sha256": "2168b8be108e2d23ad89fd98b1e4e603616851db4653b8dc7ea4da219881f151"
+    },
+    {
+      "name": "verify_tree",
+      "sha256": "c88312738b2588278b8ae6e3fb3f8ec28bb78149bef32cfdeff7076a0f25a8f1"
+    },
+    {
+      "name": "identity",
+      "sha256": "3e6d810c3b7a5ab50be2832b9747d8b308089e5692339b0d7a4b1efc3d2c3167"
+    },
+    {
+      "name": "process_snapshot",
+      "sha256": "14335a4d68d3c48004418e17fca26b6f83bcaba3cd61d513a91b220d1c3a61d2"
+    },
+    {
+      "name": "window_proof",
+      "sha256": "999af0a0ec525ae2696722b6d42c15af1dea972229036eb22f07e951a85fb517"
+    },
+    {
+      "name": "parse_audit_status",
+      "sha256": "3b013f73994a6edc6385177841652469cd74e7d33dde1df3f52301233e7b42ed"
+    },
+    {
+      "name": "verify_security",
+      "sha256": "7692c85a86c80cb2caf55da5e782df872bd3a9788eb4f6703b5b496b146dc614"
+    },
+    {
+      "name": "SecurityInterval",
+      "sha256": "758146e5c438fa54cd3ead6f14dbc0c4e4355df5f7ee343f47f873b49ab14e8f"
+    },
+    {
+      "name": "discover_desktop",
+      "sha256": "31f494b3a4c2388fe1c33ecd6cf38a689c35239d602df3f631d140f4660a69d1"
+    },
+    {
+      "name": "guest_guard",
+      "sha256": "93ad96259dfcece98446936ccd061e5f3d75838cbdd220471a1678ad2a2e7395"
+    },
+    {
+      "name": "visual_reference_frame",
+      "sha256": "245998e87d13a1343a752a9bc96c61e06e8de11d597680a5eec0ee961c10e464"
+    },
+    {
+      "name": "visual_capture_geometry",
+      "sha256": "107f90dedd79a213b5e7c8e65b851e0bb84408527a9ead9e4cbdb400cb1e07ca"
+    },
+    {
+      "name": "evaluate_reference_rgb",
+      "sha256": "8a76c1d840f56bbdf520117f7a1b3c825b322b915ed97ef547eee7369f50ed84"
+    },
+    {
+      "name": "Smoke",
+      "sha256": "87a759e324a719702ad92341a59a24eefa68df27fdc10805689adf64cb725d7d"
+    },
+    {
+      "name": "mpv_property",
+      "sha256": "fedb6890c75dd285d36ae394ae934952efe0f5b13bdd3800c3cefb03a7aeea00"
+    },
+    {
+      "name": "validate_player_samples",
+      "sha256": "c5f08296489639a91437a630c6beac9754b015f3d098377156298e5dcfcefd12"
+    },
+    {
+      "name": "run_checks",
+      "sha256": "2d63198d69781a9d82cf7b05f0437cf0b9680e49b4437f2f8684b5035644e317"
+    }
+  ],
+  "sole_changed_top_level_function": "main"
+}
