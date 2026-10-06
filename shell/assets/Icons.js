@@ -28,11 +28,30 @@ function body(name) {
 }
 
 // A 24-grid line icon: 1.75 stroke, round caps and joins (brand book "Iconography").
-function icon(name, color, stroke) {
+function icon(name, color, stroke, batteryPercent) {
     const ink = hex(color);
-    const glyph = body(name).replace(/currentColor/g, ink);
+    const glyph = ((name === 'battery' || name === 'battery-charging') && typeof batteryPercent === 'number' && !isNaN(batteryPercent)
+        ? batteryBody(name === 'battery-charging', batteryPercent) : body(name)).replace(/currentColor/g, ink);
     return url('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="'
         + ink + '" stroke-width="' + (stroke || 1.75) + '" stroke-linecap="round" stroke-linejoin="round">' + glyph + '</svg>');
+}
+
+// The same design outline and charging bolt, with a live level inside its inset.
+// The former generic artwork's fixed width=9 looked partly filled even at 100%.
+function batteryBody(charging, percent) {
+    const outline = '<rect x="2.5" y="7.5" width="17" height="9" rx="2.5"/><path d="M21.5 10.5v3"/>';
+    const bolt = '<path d="M11.5 9.5l-2.5 3h4l-2.5 3"/>';
+    if (!isFinite(percent) || percent < 0) {
+        return outline + '<path d="M9.8 10.3c0-1.8 3.4-1.8 3.4 0 0 1.3-1.7 1.2-1.7 2.4"/><circle cx="11.5" cy="14.4" r="0.7" fill="currentColor" stroke="none"/>';
+    }
+    const width = 12.4 * Math.max(0, Math.min(100, percent)) / 100;
+    // A transparent halo keeps the original bolt readable over the solid fill
+    // in either theme, without substituting a background colour or fading it.
+    const mask = charging ? '<defs><mask id="battery-bolt" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect width="24" height="24" fill="#fff" stroke="none"/>'
+        + '<path d="M11.5 9.5l-2.5 3h4l-2.5 3" fill="none" stroke="#000" stroke-width="3.75"/></mask></defs>' : '';
+    const fill = width > 0 ? '<rect x="4.8" y="9.8" width="' + width + '" height="4.4" rx="' + Math.min(1, width / 2)
+        + '" fill="currentColor" stroke="none"' + (charging ? ' mask="url(#battery-bolt)"' : '') + '/>' : '';
+    return mask + outline + fill + (charging ? bolt : '');
 }
 
 // The fox mark on its 48-unit grid (design bundle mark()). At 20px and below the -16 drawing

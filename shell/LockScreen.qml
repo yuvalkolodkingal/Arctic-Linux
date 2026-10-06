@@ -487,12 +487,13 @@ Scope {
                         Icon {
                             visible: statusPill.hasBattery
                             name: BatteryService.charging ? 'battery-charging' : 'battery'
+                            batteryPercent: BatteryService.percent
                             size: 16
                             color: Theme.ink
                         }
                         Text {
                             visible: statusPill.hasBattery
-                            text: statusPill.hasBattery ? BatteryService.percent + '%' : ''
+                            text: statusPill.hasBattery ? BatteryService.percentText : ''
                             color: Theme.ink
                             font.family: Theme.fontSans
                             font.pixelSize: 12

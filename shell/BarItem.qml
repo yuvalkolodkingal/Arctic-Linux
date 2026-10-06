@@ -12,6 +12,7 @@ Rectangle {
     property color textColor: Theme.ink
     property int textWeight: Font.Medium
     property int iconSize: 16
+    property real batteryPercent: NaN
     property int textSize: 13
     property int textAlignment: Text.AlignLeft
     property real horizontalPadding: Theme.space2
@@ -53,6 +54,7 @@ Rectangle {
             name: item.iconName
             size: item.iconSize
             color: item.iconColor
+            batteryPercent: item.batteryPercent
         }
         Text {
             visible: item.text !== ''

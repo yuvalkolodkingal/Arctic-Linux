@@ -201,7 +201,9 @@ Item {
             Button {
                 id: battery
                 visible: BatteryService.present; iconName: BatteryService.charging ? 'battery-charging' : 'battery'
-                tooltip: BatteryService.percent + '% · ' + BatteryService.timeText; hasMenu: true
+                batteryPercent: BatteryService.percent
+                iconColor: BatteryService.present && !BatteryService.charging && BatteryService.chargeKnown && BatteryService.percent <= 10 ? Theme.error : Theme.ink
+                tooltip: 'Battery · ' + BatteryService.percentText + (BatteryService.timeText ? ' · ' + BatteryService.timeText : ''); hasMenu: true
                 active: root.bar.menuOpen('battery')
                 onClicked: root.open('battery', battery)
             }

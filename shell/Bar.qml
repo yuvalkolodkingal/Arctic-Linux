@@ -516,9 +516,10 @@ PanelWindow {
             hasMenu: true
             active: bar.menuOpen('battery')
             iconName: b.charging ? 'battery-charging' : 'battery'
-            iconColor: b.present && !b.charging && b.percent <= 10 ? Theme.error : Theme.ink
-            text: b.percent + '%' + (b.low ? ' · Low' : '')
-            tooltip: (b.full ? 'Fully charged' : b.percent + '%' + (b.timeText ? ' · ' + b.timeText : ''))
+            batteryPercent: b.percent
+            iconColor: b.present && b.chargeKnown && !b.charging && b.percent <= 10 ? Theme.error : Theme.ink
+            text: b.percentText + (b.low ? ' · Low' : '')
+            tooltip: 'Battery · ' + b.percentText + (b.timeText ? ' · ' + b.timeText : '')
                      + (PowerService.available && PowerService.current ? ' · ' + PowerService.current.label : '') + '  (Super + Ctrl + P)'
             onClicked: bar.shell.togglePanel('battery', bar.screen, batteryItem.mapToItem(null, batteryItem.width / 2, 0).x)
             onHoverChanged: h => h ? bar.hint(batteryItem, tooltip) : bar.unhint(batteryItem)
