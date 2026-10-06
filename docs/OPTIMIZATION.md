@@ -340,7 +340,15 @@ retained. A one-time `systemd.unit=graphical.target` diagnostic boot validates t
 already-armed transaction and captures exact pre-update persistence state without
 re-downloading or repeating Nix search. It is not a default-boot qualification.
 The following transaction and persistence boots use default arguments. The
-intermediate update boot uses
+diagnostic instead found the trigger cleared and the report idle/unarmed. Arctic
+RPM versions still matched the exact candidate, and deferred first-boot DNF work
+had run and failed during startup. That is a possible source of invalidation,
+not proof that packages changed. This failed diagnostic is retained; the stale
+transaction is not counted as ready. A corrected normal staging probe now captures
+the persistence state in the same boot, validates signatures and readiness, then
+goes directly to the default offline boot. It preserves the updater's stale-state
+guard. No third candidate Nix search or repeated profile install is performed.
+The intermediate update boot uses
 `tools/performance/offline-update-boot.py` inside the Fedora QEMU tools container.
 It accepts only disposable qcow2/OVMF files under the repo's `out/`, unlocks the
 existing encrypted disk, retains restricted networking, and waits for the normal
@@ -348,6 +356,21 @@ transaction's reboot without attempting desktop interaction. QEMU exit alone is
 an observation; the following native-session probe must establish real installed
 versions, cleared offline state and profile/settings persistence. Python syntax
 and the physical-device rejection guard pass; the actual transaction is pending.
+
+The performance queue is sequential and waits for the update flow and the two
+remaining live boot checks to finish. It retains update evidence and a stable VM
+snapshot, restores the candidate's pre-online snapshot and matching OVMF state,
+then interleaves three original/candidate boots with one frozen v5 observer,
+2 vCPUs, 4 GiB and restricted guest networking. Before each measurement it gives
+Kitty, Nautilus and Zen the same 45-second mapped-window preconditioning to
+normalize user profiles and app caches. First measured launches therefore mean
+new processes after that preconditioning, not first-ever or cold-profile launches.
+No caches are dropped. Guest observer costs and host conditions are recorded;
+one failed sample stops the queue for diagnosis. A single original-ISO Nix search
+runtime control is queued after those offline measurements, preserving an empty
+baseline Nix store until installed-size/RAM measurements are complete. It retains
+the 180-second inner search limit and records the Nix process's CPU/memory state.
+These queues are prepared/running prerequisites, not completed measurements.
 
 The local CI draft makes only artifact-only `workflow_dispatch` builds (`release=false`)
 use `.preview` RPM release suffixes. Normal signed stable updates can therefore
