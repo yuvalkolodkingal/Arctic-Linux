@@ -218,7 +218,9 @@ that failure. A narrow runtime diagnostic confirms the main shell's live index a
 `wayland,wayland-0` connection: explicit verified PID and any-display lookup
 both succeed, while the v4 portal backend fails. Get apps chooser passed visual review; the lock stayed secure for at least
 65 seconds and unlocked through real password/PAM input without AVC entries.
-Normal v5 shipped-helper selection still requires completion. No production IPC change is proposed. Exact-ISO UEFI Secure Boot passed with
+Normal v5 shipped-helper selection now passes: bar visibility and lock-state
+queries succeed without any-display or PID selectors. Nix/update acceptance
+remains in progress. No production IPC change is proposed. Exact-ISO UEFI Secure Boot passed with
 enrolled OVMF keys, the guest's `SecureBoot enabled` report, enforcing SELinux,
 complete collection markers and a visually reviewed Try desktop.
 
