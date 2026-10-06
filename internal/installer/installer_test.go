@@ -464,6 +464,43 @@ func TestLateFailureRemovesBootEntry(t *testing.T) {
 	}
 }
 
+func TestNixSocketFailureStopsBeforeServiceDisable(t *testing.T) {
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.String() == "systemctl --root=/mnt enable nix-daemon.socket" {
+			return "", errors.New("nix-daemon.socket is missing")
+		}
+		return DefaultRespond(c)
+	}}
+	err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, newReporter())
+	if err == nil || !strings.HasPrefix(err.Error(), "configure: ") || !strings.Contains(err.Error(), "nix-daemon.socket") {
+		t.Fatalf("required Nix socket failure must abort configuration, got %v", err)
+	}
+	plan := rec.Plan()
+	if strings.Contains(plan, "$ systemctl --root=/mnt disable nix-daemon.service") ||
+		strings.Contains(plan, "$ systemctl --root=/mnt set-default graphical.target") {
+		t.Errorf("handed off a partially configured Nix service:\n%s", plan)
+	}
+}
+
+func TestNixServiceDisableFailureRetainsSocket(t *testing.T) {
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.String() == "systemctl --root=/mnt disable nix-daemon.service" {
+			return "", errors.New("cannot disable eager daemon startup")
+		}
+		return DefaultRespond(c)
+	}}
+	if err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, newReporter()); err != nil {
+		t.Fatalf("a disable failure must retain functional Nix and finish installation: %v", err)
+	}
+	plan := rec.Plan()
+	enable := strings.Index(plan, "$ systemctl --root=/mnt enable nix-daemon.socket")
+	disable := strings.Index(plan, "$ systemctl --root=/mnt disable nix-daemon.service")
+	handoff := strings.Index(plan, "$ systemctl --root=/mnt set-default graphical.target")
+	if enable < 0 || !(enable < disable && disable < handoff) {
+		t.Errorf("socket enable must precede service disable and handoff:\n%s", plan)
+	}
+}
+
 // Non-Latin layouts get "us" first plus a switch, and a Latin console keymap for the disk
 // passphrase at boot; empty values are never written (mango rejects "key=").
 func TestKeyboardFiles(t *testing.T) {

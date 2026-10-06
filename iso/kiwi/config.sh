@@ -59,7 +59,9 @@ echo 'livesys_session="arctic"' > /etc/sysconfig/livesys
 systemctl enable sddm.service
 systemctl enable livesys.service livesys-late.service
 systemctl enable arcticd.socket
-systemctl enable nix-daemon.service || :
+# Require the socket before disabling eager startup: Nix is a core feature.
+systemctl enable nix-daemon.socket
+systemctl disable nix-daemon.service || :
 # Updates and snapshot cleanup for the installed system (both skip the live session: the timer
 # checks the kernel command line, and snapper has no configuration until the installer's).
 systemctl enable arctic-update-stage.timer || :

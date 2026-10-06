@@ -30,6 +30,37 @@ class SessionEnvironmentTest(unittest.TestCase):
                     guest.session_signature(root, os.getuid(), runtime, 'wayland-0', {})
 
 
+class NixSocketDefaultsTest(unittest.TestCase):
+    def test_socket_must_be_enabled_and_active_with_eager_service_disabled(self):
+        with patch.object(guest, 'run', side_effect=['enabled', 'disabled', 'active']) as run:
+            self.assertIn('eager service disabled', guest.nix_socket_defaults())
+        self.assertEqual(run.call_count, 3)
+        for states in (['disabled', 'disabled'], ['enabled', 'enabled'],
+                       ['enabled', 'disabled', 'inactive'],
+                       ['enabled', 'disabled', RuntimeError('inactive')]):
+            with self.subTest(states=states), patch.object(guest, 'run', side_effect=states):
+                with self.assertRaises(RuntimeError):
+                    guest.nix_socket_defaults()
+
+
+class NixAVCIntervalTest(unittest.TestCase):
+    def test_historical_denials_are_excluded_but_new_nix_and_foot_denials_fail(self):
+        before = 'old avc: denied comm="nix-daemon"\n'
+        with patch.object(guest, 'run', return_value=before + 'normal activity\n'):
+            self.assertIn('no matching new', guest.no_new_nix_avc(before))
+        for denial in ('avc: denied { connectto } comm="nix"',
+                       'AVC: DENIED { execute } comm="Foot"'):
+            with self.subTest(denial=denial), patch.object(guest, 'run', return_value=before + denial):
+                with self.assertRaisesRegex(RuntimeError, 'New Nix/Foot AVC'):
+                    guest.no_new_nix_avc(before)
+
+    def test_changed_journal_prefix_is_checked_conservatively_and_read_errors_fail(self):
+        for outcome in ('avc: denied comm="nix-daemon"', RuntimeError('journal unavailable')):
+            with self.subTest(outcome=outcome), patch.object(guest, 'run', side_effect=[outcome]):
+                with self.assertRaises(RuntimeError):
+                    guest.no_new_nix_avc('prior journal\n')
+
+
 class OnlinePreflightTest(unittest.TestCase):
     prefix = ['runuser', '-u', 'ci', '--', 'env', 'HOME=/home/ci']
 

@@ -57,6 +57,26 @@ def online_preflight(prefix):
     return dict(dns_hosts=hosts, dns_mode='proxy' if proxy else 'direct', verified_https=urls)
 
 
+def nix_socket_defaults():
+    """Require candidate socket defaults, then separately probe real user activation."""
+    socket = run(['systemctl', 'show', 'nix-daemon.socket', '-p', 'UnitFileState', '--value'])
+    service = run(['systemctl', 'show', 'nix-daemon.service', '-p', 'UnitFileState', '--value'])
+    if socket != 'enabled' or service != 'disabled':
+        raise RuntimeError(f'Expected enabled Nix socket and disabled eager service; socket={socket}, service={service}')
+    active = run(['systemctl', 'is-active', 'nix-daemon.socket'])
+    if active != 'active':
+        raise RuntimeError(f'Nix socket is not active: {active}')
+    return 'enabled active socket; eager service disabled; user store request follows'
+
+
+def no_new_nix_avc(before):
+    after = run(['journalctl', '-b', '--no-pager', '-o', 'cat'])
+    new_lines = after[len(before):] if after.startswith(before) else after
+    if re.search(r'avc:\s+denied.*(?:nix|foot)', new_lines, re.I):
+        raise RuntimeError('New Nix/Foot AVC: ' + new_lines[-6000:])
+    return 'no matching new Nix/Foot AVC'
+
+
 def verified_rpm_signatures(files):
     """Require a successful cryptographic signature for every downloaded RPM.
 
@@ -248,13 +268,15 @@ def main(update_method='dnf', expected_stable_source=None):
         return int(failed)
 
     must('rd.live.image' not in Path('/proc/cmdline').read_text(), 'installed boot')
+    # Include the first user store request/socket activation in the AVC interval.
+    before_avc = run(['journalctl', '-b', '--no-pager', '-o', 'cat'])
+    check('daemon-socket-defaults', nix_socket_defaults)
     check('daemon-store-info', lambda: run(prefix + ['/usr/bin/nix', '--extra-experimental-features',
           'nix-command', 'store', 'info', '--store', 'daemon']))
     check('daemon', lambda: run(['systemctl', 'is-active', 'nix-daemon.service']))
     check('persistent-mount', lambda: must(run(['findmnt', '-n', '-o', 'TARGET', '-T', '/nix']) == '/nix', run(['findmnt', '/nix'])))
     check('store-ownership', lambda: must(Path('/nix').stat().st_uid == 0 and not Path('/nix').stat().st_mode & 0o022, '/nix root-owned and not group/world writable'))
     check('labels', lambda: run(['ls', '-ldZ', '/nix/store', '/nix/var/nix/daemon-socket']))
-    before_avc = run(['journalctl', '-b', '--no-pager', '-o', 'cat'])
     prior = json.loads(state_file.read_text()) if state_file.exists() else None
     settings = prefix + ['python3', '/usr/share/arctic/settings/scripts/arctic_settings.py']
     check('mango-dodge-capability', lambda: must(
@@ -307,6 +329,7 @@ def main(update_method='dnf', expected_stable_source=None):
                 return dict(status=data, installed_at=history.get('installed_at'), arctic_rpms=versions)
             check('signed-offline-update-completed', offline_update_completed)
             check('signed-offline-update-history', latest_offline_history)
+        check('avc', lambda: no_new_nix_avc(before_avc))
         return int(failed)
 
     if check('online-network-preflight', lambda: online_preflight(prefix)) is None:
@@ -402,9 +425,7 @@ ShellRoot {
             must(data[key]['value'] == wanted, f'{key}: {data[key]["value"]}')
         return 'signature, sandbox and root-only trust settings preserved (configuration check)'
     check('trust-config', trust)
-    after_avc = run(['journalctl', '-b', '--no-pager', '-o', 'cat'])
-    new_lines = after_avc[len(before_avc):] if after_avc.startswith(before_avc) else after_avc
-    check('avc', lambda: must(not re.search(r'avc:\s+denied.*(?:nix|foot)', new_lines, re.I), new_lines[-6000:] if 'avc:' in new_lines else 'no matching new Nix/foot AVC'))
+    check('avc', lambda: no_new_nix_avc(before_avc))
     if not failed:
         before_rpm = run(['rpm', '-q', 'nix', 'nix-daemon'])
         before_arctic = run(['rpm', '-q', 'arctic-shell', 'arctic-desktop-config'])

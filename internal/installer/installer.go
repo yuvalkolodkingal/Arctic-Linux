@@ -855,15 +855,20 @@ func (in *Installer) configurePhase(ctx context.Context) error {
 	if !d.Timezone.AutoTime {
 		timeAction = "disable"
 	}
-	// One unit per call: a unit missing from the image is logged, not fatal.
+	// Enable the Nix socket before disabling eager startup. Its enable failure is
+	// fatal: handing off an installed system without core Nix access is unsafe.
+	// Other unavailable units are logged individually as before.
 	type unitAction struct{ action, unit string }
 	var actions []unitAction
 	for _, u := range units {
 		actions = append(actions, unitAction{"enable", u})
+		if u == "nix-daemon.socket" {
+			actions = append(actions, unitAction{"disable", "nix-daemon.service"})
+		}
 	}
 	actions = append(actions, unitAction{timeAction, "chronyd.service"})
 	for _, a := range actions {
-		res, err := in.R.Run(ctx, Cmd{Name: "systemctl", Args: []string{"--root=" + in.Opt.Target, a.action, a.unit}, AllowFail: true})
+		res, err := in.R.Run(ctx, Cmd{Name: "systemctl", Args: []string{"--root=" + in.Opt.Target, a.action, a.unit}, AllowFail: a.unit != "nix-daemon.socket"})
 		if err != nil {
 			return err
 		}

@@ -79,7 +79,8 @@ write /mnt/etc/sddm.conf.d/50-arctic-autologin.conf (0644)
     | Session=mango.desktop
 $ systemctl --root=/mnt enable sddm.service
 $ systemctl --root=/mnt enable NetworkManager.service
-$ systemctl --root=/mnt enable nix-daemon.service
+$ systemctl --root=/mnt enable nix-daemon.socket
+$ systemctl --root=/mnt disable nix-daemon.service
 $ systemctl --root=/mnt disable chronyd.service
 $ systemctl --root=/mnt set-default graphical.target
 $ rsync -a /etc/NetworkManager/system-connections/ /mnt/etc/NetworkManager/system-connections/

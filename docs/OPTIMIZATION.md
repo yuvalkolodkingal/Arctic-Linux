@@ -62,12 +62,48 @@ Evidence: `out/audit/candidate/native-elf-debug-audit.json` and
 `out/audit/candidate/go-strip-research.json`, `go-rpm-postprocessing.json`,
 and `out/audit/native-strip-review.json`.
 
+### Nix socket activation
+
+An eager Nix daemon in the installed candidate had **19,692,544 bytes PSS** in
+one process sample. Upstream socket activation left no Nix daemon process before
+use, including after an offline encrypted reboot and desktop login. An untrusted
+user's store request then activated the daemon under SELinux enforcing. The
+real Foot closure was fetched with the shipped `arctic-nix` command; subsequent
+offline profile add, remove and rollback passed, and its native Wayland window
+mapped. The profile and window launch survived the restricted-network reboot.
+There were no matching new Nix/Foot AVC denials in either successful phase.
+No SELinux rules changed. The initial observer's JSON assumption failed on a
+warning-prefixed successful store response; that failure and its valid eager
+daemon sample remain archived separately from the corrected successful runs.
+
+The candidate now enables `nix-daemon.socket` and disables eager startup in the
+release preset, installer module and KIWI setup. Enabling the socket is required
+before disabling the service. Installer regression controls reject a missing
+socket before service disable/handoff and permit a failed disable to retain
+functional Nix. Acceptance checks require the active enabled socket, disabled
+eager unit and an actual user store request. Existing installed-user choices
+are not migrated. Independent review found that the existing post-update/reboot
+branch returned before its AVC gate. A shared denial gate now runs in both
+installed passes, starting before the first store request; injected Nix/Foot
+denials and journal-read errors fail its controls. Focused installer/catalog Go
+checks and 18 Nix/network Python tests passed. Revert these four configuration
+paths and installer controls together to restore eager defaults.
+
+This is a single disposable TCG trial on source `244e4dd`, using a copy-on-write
+overlay with its original installed disk mounted read-only. Fedora Nix version
+2.34.8-1.fc44 and Arctic's Nix policy/session files match the current branch.
+It proves the exercised functionality, **not** a net whole-system RAM or boot
+gain: socket/PID1 overhead is unmeasured, and the daemon remains resident after
+activation. First-request latency, exact-new-image install/update/reboot, Safe
+graphics and other production gates remain required before merge. Evidence:
+`out/audit/nix-socket-research/` (separate activation and offline-reboot records).
+
 | Priority | Finding and measured result | Action, rollback and acceptance |
 | --- | --- | --- |
 | 1 | Kitty startup regressed in the completed six TCG samples: first opening +21.03%, subsequent +13.64%. Composition includes approved clock/wallpaper work, a Mango rebuild and package updates, so this cannot be attributed solely to catalog eviction. | Keep the combined merge blocked. The active interleaved KVM comparison must resolve the regression before claiming OS gains. Preserve both raw datasets and exact image/tool identities. |
 | 2 | Get apps constructs its chooser at shell startup, even while the launcher shows its home view. Three runs of the exact implemented QML change reduced isolated component PSS median from 88,355,840 to 75,924,480 bytes (12,431,360 saved); its visual tree fell from 146 to 2 items before first opening. | Implemented first-use loading. Pages remain instantiated afterward, preserving drafts and callbacks; AppsService still owns jobs. First opening added about 32.8 ms in this probe. Actual route and repeated hide/show controls passed. Revert the GetApps.qml diff to roll back. Require real desktop/keyboard/Get apps and exact-candidate CI gates. These are component measurements, not a full OS RAM or startup improvement claim. |
 | 3 | Source artwork is already export-ignored, but a full shallow checkout still stores 372,297,384 bytes of Git pack data and materializes 390,599,547 bytes. Simple sparse checkout loses its download saving when git archive prefetches all omitted blobs. | Implemented sparse checkout only in OS build jobs plus removal of export-ignored roots from the temporary Source0 index. A cold filtered clone through source archiving took 4.47 s and retained 15,705,100 pack bytes, saving 356,592,284 stored pack bytes. All 2,374 archive members matched original paths, modes, types, links and content hashes. Dirty/untracked sources, public-key blob injection, nested exclusions and the real index were preserved. Roll back the workflow and build-script diffs together. Require exact-head RPM builds; this does not shrink the ISO. |
-| 4 | Nix daemon PSS is about 19.5 MB in existing installed VM samples. Upstream supplies socket activation, but Arctic explicitly keeps the service enabled until enforcing socket startup is proven free of AVC denials. | No policy change adopted. One disposable enforcing activation/install/update/rollback test would be necessary before changing presets, the installer module and image setup together. Preserve the current security behavior until that passes. |
+| 4 | One eager Nix daemon sample had 19,692,544 bytes PSS. A disposable enforcing socket/profile/GUI trial and offline reboot left no daemon before first use; actual untrusted-user activation and persistent Foot/profile rollback passed. | Candidate defaults now use the upstream socket, with mandatory socket enable before eager-service disable and no policy change or existing-user migration. Revert preset, module, KIWI and installer changes together. Exact-image enforcing acceptance remains a merge gate; no whole-OS RAM or boot gain is claimed. |
 | 5 | Same-content XZ level 6 / CRC32 live-initrd trial saved 6,607,627 bytes (241,962,859 to 235,355,232), with the 306,176-byte early microcode prefix unchanged. All three decoded CPIO hashes matched `09a6075578897f78af22c5daae673b60479bbee2d247165ca4e2073ea52b063d`. | Rejected for the current speed priority: cached host userspace decode median rose from 0.44 to 1.97 s. Encoding took 153.32 s, maximum RSS 97,620 KiB. It has no Secure Boot, BIOS, encryption or low-RAM boot qualification. Keep current Zstd; no root-owned package payload was changed. |
 | 6 | The largest 20 duplicate groups account for 104,476,731 logically repeated bytes, but all already share complete EROFS data mappings. Flatpak objects/deployments also share existing hardlinks; no unreachable objects, DNF downloads or populated Nix store were found. | No generic cleanup, cross-package hardlink replacement or feature deletion. Packed-fragment accounting gives all Flatpak storage coverage 477,196,288 bytes, including shared clusters; it is not a removable-byte estimate. Browser packaging remains a material containment/update choice requiring explicit approval and one actual candidate trial. |
 
