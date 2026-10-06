@@ -456,3 +456,37 @@ session issue, not a fully qualified Safe graphics result. One identical origina
 ISO Safe graphics control is queued after the direct update cycle and before
 paired measurements. No advancing VM or service is stopped; only the waiting
 performance controller was replaced to preserve the sequential order.
+
+
+### Direct staging and offline test-runtime correction (2026-10-06 02:24 UTC)
+
+Fresh normal signed staging passed all nine recorded checks and its wrapper
+(exit 0): current Arctic packages stayed unchanged, all 19 RPM signatures were
+reported valid, and actual ready/armed/stored state remained non-stale after
+every observer query. Genuine pre-state includes the exact own Nix profile
+`/nix/store/1jhnhjcvbkhmrkg86m7s9q9qh1lzp1vq-profile`, Right/Dodge bar position
+and hide mode, bar size 32, and modified F9 with SUPER+ALT. The firstboot process
+had already exited and was awaiting its normal retry before staging began.
+
+The separate offline QEMU process then failed before starting the guest:
+`Virtio VGA not available`. The regular harness installs three QEMU display
+module packages at startup, whereas the standalone helper used the base tools
+image without that preparation. This is retained as a test-runtime failure, not
+a guest transaction failure or an update pass. The helper now records startup
+failures and checks for `virtio-vga` before opening a VM. A cached cloud-only
+runtime contains the same QEMU 10.2.2 display/core versions as the regular
+harness; actual device-list parity and its image ID are recorded in
+`out/audit/candidate/qemu-offline-runtime-parity.json`. No ISO bytes or guest
+packages changed. The already verified staged transaction resumes directly
+with restricted networking; there is no new staging or intervening guest boot.
+Its subsequent default boot must still prove actual installed versions and
+exact pre-state persistence.
+
+The original ISO Safe graphics control also passed boot/rendering/security
+checks and reproduced the portal startup timeout. The current portal unit state
+was not collected in either run, and no sole cause is claimed. This symptom is
+therefore observed before the optimization branch in this environment; full
+Safe session qualification remains open. The original control overlapped
+preparation of the cloud test-runtime cache, but no other VM. No timing or
+hardware-performance inference is drawn from it. The exact comparison is
+`out/audit/candidate/safe-graphics-baseline-comparison.json`.

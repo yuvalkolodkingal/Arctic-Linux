@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import time
 
@@ -55,10 +56,17 @@ def save(**changes):
     result.update(changes)
     report.write_text(json.dumps(result, indent=2)+'\n')
 
-vm = vmtest.VM(argv, qmp, 'offline-update')
+vm = None
 start = time.monotonic()
 try:
     save()
+    devices = subprocess.check_output(['qemu-system-x86_64', '-device', 'help'],
+                                      text=True, stderr=subprocess.STDOUT)
+    if 'name "virtio-vga"' not in devices:
+        raise RuntimeError('QEMU runtime is missing virtio-vga; install the same '
+                           'qemu-device-display-virtio-{vga,gpu,gpu-pci} packages '
+                           'used by tools/test-install.sh before running offline')
+    vm = vmtest.VM(argv, qmp, 'offline-update')
     time.sleep(6)
     vm.shot('01-default-boot-menu')
     vm.keys('ret')
@@ -91,8 +99,9 @@ try:
     save(status='guest_exited_subsequent_boot_required',
          elapsed_seconds=time.monotonic()-start, qemu_exit_code=vm.proc.returncode)
     vmtest.log('Guest exited with -no-reboot; verify the transaction on the subsequent boot')
-except Exception as error:
+except (Exception, SystemExit) as error:
     save(status='failed', reason=str(error), elapsed_seconds=time.monotonic()-start)
     raise
 finally:
-    vm.quit()
+    if vm is not None:
+        vm.quit()
