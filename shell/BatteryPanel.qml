@@ -29,7 +29,7 @@ FocusScope {
 
         MenuHeader {
             title: panel.b.present ? 'Battery' : 'Power'
-            trailingText: panel.b.present ? panel.b.percent + ' %' : ''
+            trailingText: panel.b.present ? panel.b.percentText : ''
             detail: panel.b.present ? (panel.b.timeText + (panel.b.info.threshold_enabled && !panel.b.charging && !panel.b.full && !panel.b.onBattery
                                                            ? ' (limit ' + panel.b.info.threshold_end + ' %)' : '')) : ''
         }
@@ -95,7 +95,7 @@ FocusScope {
                 icon: BatteryService.kindOf(modelData).icon
                 label: modelData.model || BatteryService.kindOf(modelData).name
                 trailing: 'text'
-                trailingText: Math.round(modelData.percentage > 1 ? modelData.percentage : modelData.percentage * 100) + ' %'
+                trailingText: BatteryService.percentTextOf(modelData)
             }
         }
         MenuSeparator {}

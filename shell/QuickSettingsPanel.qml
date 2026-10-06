@@ -50,12 +50,13 @@ FocusScope {
             Icon {
                 visible: BatteryService.present
                 name: BatteryService.charging ? 'battery-charging' : 'battery'
+                batteryPercent: BatteryService.percent
                 size: 18
                 color: BatteryService.low ? Theme.error : Theme.ink
             }
             Text {
                 Layout.fillWidth: true
-                text: BatteryService.present ? BatteryService.percent + ' %' + (BatteryService.timeText ? ' · ' + BatteryService.timeText : '') : ''
+                text: BatteryService.present ? BatteryService.percentText + (BatteryService.timeText ? ' · ' + BatteryService.timeText : '') : ''
                 elide: Text.ElideRight
                 color: Theme.ink
                 font.family: Theme.fontSans

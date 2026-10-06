@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.UPower
+import "BatteryModel.js" as BatteryModel
 
 // The laptop battery for the bar item, the battery menu and the lock screen (UPower through
 // Quickshell), what UPower has beyond that (scripts/battery.py: charge limit, warning levels,
@@ -14,17 +15,21 @@ import Quickshell.Services.UPower
 // warning shows or not.
 Singleton {
     id: battery
+    // UPower's aggregate includes all laptop batteries, weighted by capacity.
     readonly property var device: UPower.displayDevice
-    readonly property bool present: device !== null && device.ready && device.isLaptopBattery
-    readonly property int percent: present ? Math.round(device.percentage > 1 ? device.percentage : device.percentage * 100) : 0
+    readonly property bool present: device !== null && device.ready && device.isLaptopBattery && device.isPresent
+    readonly property int percent: present ? BatteryModel.percentage(device.percentage) : -1
+    readonly property bool chargeKnown: percent >= 0
+    readonly property string percentText: BatteryModel.percentageText(percent)
     readonly property bool charging: present && (device.state === UPowerDeviceState.Charging || device.state === UPowerDeviceState.PendingCharge)
     readonly property bool full: present && device.state === UPowerDeviceState.FullyCharged
     readonly property bool onBattery: UPower.onBattery
     readonly property bool health: present && device.healthSupported
     readonly property int healthPercent: health ? Math.round(device.healthPercentage) : 0
-    readonly property bool low: present && !charging && !full && percent <= info.percentage_low
+    readonly property bool low: present && chargeKnown && !charging && !full && percent <= info.percentage_low
     readonly property string timeText: full ? 'Fully charged'
         : charging ? (device.timeToFull > 0 ? 'Charging · full in ' + duration(device.timeToFull) : 'Charging')
+        : present && device.state === UPowerDeviceState.Unknown ? 'Status unavailable'
         : present && device.timeToEmpty > 0 ? duration(device.timeToEmpty) + ' left'
         : present && !onBattery ? 'Plugged in, not charging' : ''
     // Mice, keyboards, headsets, phones: UPower devices that report a charge.
@@ -53,6 +58,8 @@ Singleton {
         return { icon: 'battery', name: 'Device' };
     }
     function refresh() { if (!query.running) query.running = true; }
+    function percentOf(d) { return BatteryModel.percentage(d.percentage); }
+    function percentTextOf(d) { return BatteryModel.percentageText(percentOf(d)); }
     function setLimit(on, callback) {
         limit.callback = callback || null;
         limit.command = ['python3', Session.scripts + '/battery.py', 'limit', on ? 'on' : 'off'];
@@ -63,6 +70,7 @@ Singleton {
     function check() {
         if (!present) return;
         if (charging || full || !onBattery) { warnedLow = false; warnedCritical = false; hookedLow = false; return; }
+        if (!chargeKnown) return;
         if (percent <= info.percentage_low && !hookedLow) {
             hookedLow = true;
             Quickshell.execDetached(['sh', '-c', 'command -v arctic-hook >/dev/null 2>&1 && exec arctic-hook battery-low "$1"', 'sh', String(percent)]);
@@ -85,7 +93,8 @@ Singleton {
         const seen = Object.assign({}, warnedDevices);
         peripherals.forEach(d => {
             const key = d.nativePath || d.model;
-            const p = Math.round(d.percentage > 1 ? d.percentage : d.percentage * 100);
+            const p = percentOf(d);
+            if (p < 0) return;
             if (p > 15) { seen[key] = false; return; }
             if (p <= 10 && !seen[key]) {
                 seen[key] = true;
