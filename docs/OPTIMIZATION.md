@@ -340,14 +340,21 @@ retained. A one-time `systemd.unit=graphical.target` diagnostic boot validates t
 already-armed transaction and captures exact pre-update persistence state without
 re-downloading or repeating Nix search. It is not a default-boot qualification.
 The following transaction and persistence boots use default arguments. The
-diagnostic instead found the trigger cleared and the report idle/unarmed. Arctic
-RPM versions still matched the exact candidate, and deferred first-boot DNF work
-had run and failed during startup. That is a possible source of invalidation,
-not proof that packages changed. This failed diagnostic is retained; the stale
-transaction is not counted as ready. A corrected normal staging probe now captures
-the persistence state in the same boot, validates signatures and readiness, then
-goes directly to the default offline boot. It preserves the updater's stale-state
-guard. No third candidate Nix search or repeated profile install is performed.
+diagnostic instead found the updater's report idle/unarmed. Its readiness check
+returned before directly checking the trigger; that report alone does not prove
+the trigger had been deleted. Arctic RPM versions still matched the exact
+candidate, and deferred first-boot DNF work had run and failed during startup.
+Possible transaction invalidation is not proof that packages changed. This failed
+diagnostic is retained. The next default boot, intended to run the corrected
+staging probe, exited about 100 seconds after QEMU started, before login or the
+probe. This may be the offline updater's intermediate reboot; a broken-pipe
+desktop-observer failure alone cannot establish its outcome. A new default
+postboot reconciliation reads actual package versions, updater state/history,
+DNF logs, the real trigger and persistent profile/settings. It derives the prior
+active generation number from the recorded successful rollback from 2 to 1;
+the full prior store-target hash and numeric barSize were not recorded and are
+not claimed equal. No synthetic pre-state file is written, the stale-state guard
+is preserved, and no third candidate Nix search or repeated install is performed.
 The intermediate update boot uses
 `tools/performance/offline-update-boot.py` inside the Fedora QEMU tools container.
 It accepts only disposable qcow2/OVMF files under the repo's `out/`, unlocks the
