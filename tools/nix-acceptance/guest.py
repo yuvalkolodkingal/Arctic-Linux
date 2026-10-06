@@ -30,6 +30,31 @@ def record(stage, check, status, detail):
           status=status, detail=str(detail))), flush=True)
 
 
+def verified_rpm_signatures(files):
+    """Require a successful cryptographic signature for every downloaded RPM.
+
+    RPM 6 prints lowercase ``signature``. A digest-only unsigned RPM can also
+    exit successfully, so neither capitalization nor one global ``OK`` is a gate.
+    """
+    if not files:
+        raise RuntimeError('No RPM files to verify')
+    output = run(['rpmkeys', '--checksig', '--verbose', *files], timeout=180)
+    blocks = {}
+    current = None
+    for line in output.splitlines():
+        if line.endswith(':') and line[:-1] in files:
+            current = line[:-1]
+            blocks[current] = []
+        elif current is not None:
+            blocks[current].append(line.strip())
+    for filename in files:
+        lines = blocks.get(filename, [])
+        signatures = [line for line in lines if re.search(r'\bsignature\b', line, re.I)]
+        if not signatures or any(not line.endswith(': OK') for line in signatures):
+            raise RuntimeError(f'No valid signature for {filename}: {lines!r}')
+    return output
+
+
 def session_signature(proc_root, uid, runtime, display, env):
     # Mango exports IPC after exec; its children, not /proc/<mango>/environ,
     # expose the new value. Only accept this user's matching Wayland session.
@@ -347,8 +372,7 @@ ShellRoot {
                 files = [str(path) for path in Path('/var/lib/dnf/offline/packages').rglob('*.rpm')
                          if path.name.startswith(('arctic-', 'sddm-wayland-mango-'))]
                 must(bool(files), 'signed Arctic packages were actually downloaded')
-                signatures = run(['rpmkeys', '--checksig', '--verbose', *files], timeout=180)
-                must('Signature' in signatures and 'OK' in signatures, signatures)
+                signatures = verified_rpm_signatures(files)
                 expected = {line.split()[0] for line in run(['rpm', '-qa', '--qf', '%{NAME} %{RELEASE}\n']).splitlines()
                             if '.preview.' in line and line.startswith(('arctic-', 'sddm-wayland-mango '))}
                 downloaded = set(run(['rpm', '-qp', '--qf', '%{NAME}\n', *files], timeout=180).splitlines())

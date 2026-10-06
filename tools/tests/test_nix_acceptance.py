@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('nix_guest', Path(__file__).parents[1]/'nix-acceptance/guest.py')
 guest = importlib.util.module_from_spec(spec)
@@ -27,3 +28,26 @@ class SessionEnvironmentTest(unittest.TestCase):
             child(12, 'wayland-0', '/run/user/test/ambiguous.sock')
             with self.assertRaisesRegex(RuntimeError, 'found 2'):
                 guest.session_signature(root, os.getuid(), runtime, 'wayland-0', {})
+
+
+class RpmSignatureTest(unittest.TestCase):
+    def test_rpm6_lowercase_signature_is_accepted_for_every_file(self):
+        files = ['/packages/arctic.rpm', '/packages/fedora.rpm']
+        output = '\n'.join(filename + ':\n    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: abc: OK\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK' for filename in files)
+        with patch.object(guest, 'run', return_value=output):
+            self.assertEqual(guest.verified_rpm_signatures(files), output)
+
+    def test_unsigned_or_missing_second_rpm_is_rejected_despite_digest_ok(self):
+        files = ['/packages/arctic.rpm', '/packages/unsigned.rpm']
+        good = files[0] + ':\n    Header OpenPGP V4 RSA/SHA256 signature: OK\n'
+        for output in (good, good + files[1] + ':\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK'):
+            with self.subTest(output=output), patch.object(guest, 'run', return_value=output):
+                with self.assertRaisesRegex(RuntimeError, 'No valid signature'):
+                    guest.verified_rpm_signatures(files)
+
+    def test_untrusted_or_bad_signature_is_rejected(self):
+        for result in ('NOKEY', 'BAD', 'NOT OK'):
+            output = '/packages/arctic.rpm:\n    Header OpenPGP V4 RSA/SHA256 Signature: ' + result
+            with self.subTest(result=result), patch.object(guest, 'run', return_value=output):
+                with self.assertRaisesRegex(RuntimeError, 'No valid signature'):
+                    guest.verified_rpm_signatures(['/packages/arctic.rpm'])

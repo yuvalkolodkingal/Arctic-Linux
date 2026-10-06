@@ -308,11 +308,39 @@ store, session exports, two-user isolation, update/remove/rollback, signature an
 sandbox/root-only trust checks, and relevant AVC checks passed. Zen's browser
 chrome also passed visual review after a longer painting interval. The cold search
 failure is retained; successful installation is not a cold-search/performance pass.
-The combined probe correctly skipped signed staging after this failure. A separate
-updater probe reuses its signed-ready validator, retries only search with the new
-warm cache as a diagnostic, and runs normal staging/reboot/persistence checks
-independently. It does not repeat completed profile operations or fabricate full
-Nix acceptance. The intermediate update boot uses
+The combined probe correctly skipped signed staging after this failure. One warm
+search diagnostic after successful installation also hit the unchanged 180-second
+limit; a third search has not been queued. Reading both exact ISOs proves that
+`/usr/bin/arctic-nix` and `shell/scripts/nixlib.py` are byte-identical, and both
+have Nix/daemon/libraries version `2.34.8-1.fc44`. Thus this branch did not change
+the search implementation. TLS-verified reads of the Nix cache and GitHub branch
+API return 200, and real cached-package installation passes. Those observations
+establish basic connectivity, not a complete search qualification. The Nix
+[search manual](https://nix.dev/manual/nix/2.34/command-ref/new-cli/nix3-search)
+describes searching evaluated package names/descriptions across package attributes.
+Full evaluation under software emulation is a plausible cost, but a controlled
+baseline comparison is needed before attributing the timeout to TCG or the proxy.
+Neither the timeout nor trust policy has been weakened. Exact source hashes are
+in `out/audit/candidate/nix-search-iso-source-parity.json`.
+
+A separate updater probe reuses the signed-ready validator and runs normal
+staging/reboot/persistence checks independently. It does not repeat completed
+profile operations or fabricate full Nix acceptance. Its first staging attempt
+correctly failed unarmed at Cisco's HTTP OpenH264 download: the isolated test
+environment exported only the HTTPS proxy. The exact HTTP package route returns
+200 with both protocol proxy variables. A targeted retry sets both only inside
+the disposable guest, checks all downloaded RPM signatures independently, and
+preserves TLS/signature validation. That retry completed normal staging and
+cryptographic checks for all 19 downloaded RPMs, but the ready-state probe falsely
+rejected RPM 6's lowercase `signature` text. The corrected observer requires a
+valid signature for every RPM, accepts either capitalization, and rejects
+digest-only unsigned/missing RPMs and bad or untrusted signatures; regression
+tests and the real archived 19-RPM output pass. The failed observer record is
+retained. A one-time `systemd.unit=graphical.target` diagnostic boot validates the
+already-armed transaction and captures exact pre-update persistence state without
+re-downloading or repeating Nix search. It is not a default-boot qualification.
+The following transaction and persistence boots use default arguments. The
+intermediate update boot uses
 `tools/performance/offline-update-boot.py` inside the Fedora QEMU tools container.
 It accepts only disposable qcow2/OVMF files under the repo's `out/`, unlocks the
 existing encrypted disk, retains restricted networking, and waits for the normal
