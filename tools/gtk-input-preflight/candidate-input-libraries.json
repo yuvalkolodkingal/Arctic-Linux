@@ -1,0 +1,71 @@
+{
+  "schema": "arctic-candidate-input-elf-v1",
+  "candidate_iso_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "files": {
+    "/usr/lib64/libc.so.6": {
+      "sha256": "a5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8",
+      "rpm_nevra": "glibc-2.43-9.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "glibc"
+    },
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+      "sha256": "4e5d39355699e90fa29313d3100e82af4a23290028c58c364d6a249ef6a78e5e",
+      "rpm_nevra": "glibc-2.43-9.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "glibc"
+    },
+    "/usr/lib64/libgtk-3.so.0.2420.32": {
+      "sha256": "9dea09c0282f06e62a056580cfc175b100725a44f026005f3a460d3e18d740f9",
+      "rpm_nevra": "gtk3-3.24.52-2.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "gtk3"
+    },
+    "/usr/lib64/libgdk-3.so.0.2420.32": {
+      "sha256": "f4eb11980847c0802407bc266c11e80c8b72c2adc678480030962a8949beb91b",
+      "rpm_nevra": "gtk3-3.24.52-2.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "gtk3"
+    },
+    "/usr/lib64/libffi.so.8.2.0": {
+      "sha256": "05bf4048cc0fd016140d7d880c4a4ec402096732f60463c8fb87b98d877d3628",
+      "rpm_nevra": "libffi-3.5.2-2.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "libffi"
+    },
+    "/usr/lib64/libwayland-client.so.0.26.0": {
+      "sha256": "cb517c02f6e808257932a4b3f1a4bd1232ce415cdd8e41a854ff0f0e918b51c9",
+      "rpm_nevra": "libwayland-client-1.26.0-1.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "libwayland-client"
+    },
+    "/usr/lib64/libxkbcommon.so.0.13.1": {
+      "sha256": "4ca0a8544873c3b7feafe4b0086ddf74e389e3a739da1e3a940a2aa15a441819",
+      "rpm_nevra": "libxkbcommon-1.13.1-2.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "libxkbcommon"
+    },
+    "/usr/bin/wtype": {
+      "sha256": "7ea6142fb0a314ef2ff4736206e93541047e6d1b8f9245570bd117e6159b332e",
+      "rpm_nevra": "wtype-0.4-11.fc44.x86_64",
+      "epoch": 0,
+      "mode": 493,
+      "header_digest_algorithm": "SHA256",
+      "package": "wtype"
+    }
+  }
+}

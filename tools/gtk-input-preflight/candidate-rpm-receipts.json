@@ -1,0 +1,296 @@
+{
+  "glibc": {
+    "path": "/tmp/arctic-gtk-preflight-candidate-rpms/glibc-2.43-9.fc44.x86_64.rpm",
+    "bytes": 2486629,
+    "sha256": "594ef5114f0713bdba2a819b70e662e67321755889247ffec2bed31ad6ca4d9f",
+    "signature": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpmkeys",
+        "--checksig",
+        "--verbose",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/glibc-2.43-9.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/scratch/arctic-gtk-preflight-candidate-rpms/glibc-2.43-9.fc44.x86_64.rpm:\n    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: 36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6: OK\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK\n",
+      "stderr": ""
+    },
+    "identity": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{FILEDIGESTALGO}\n",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/glibc-2.43-9.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "glibc\t0\t2.43-9.fc44\tx86_64\t8\n",
+      "stderr": ""
+    },
+    "file_header": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\t%{FILEUSERNAME}\t%{FILEGROUPNAME}\t%{FILELINKTOS}\n]",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/glibc-2.43-9.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/etc/gai.conf\t\t33188\troot\troot\t\n/etc/ld.so.cache\t\t33188\troot\troot\t\n/etc/ld.so.conf\t239c865e4c0746a01f82b03d38d620853bab2a2ba8e81d6f5606c503e0ea379f\t33188\troot\troot\t\n/etc/ld.so.conf.d\t\t16877\troot\troot\t\n/etc/rpc\t3b24a975dcde688434258566813a83ce256a4c73efd7a8a9c3998327b0b4de68\t33188\troot\troot\t\n/usr/bin/iconvconfig\t69f39abde50d4d77292cb8b72d587aa9fa83d237e8833d139a788a11b651b3b0\t33261\troot\troot\t\n/usr/bin/ldconfig\t42daccf1b6522f4d0f3c761dec200865769476d921bf188944ce7e148903b9b5\t33261\troot\troot\t\n/usr/lib/.build-id\t\t16877\troot\troot\t\n/usr/lib/.build-id/03\t\t16877\troot\troot\t\n/usr/lib/.build-id/03/8f27dc4721d0fe6999129aedfacd77817d44df\t\t41471\troot\troot\t../../../../usr/lib64/libresolv.so.2\n/usr/lib/.build-id/09\t\t16877\troot\troot\t\n/usr/lib/.build-id/09/8d5b1d203f2cda4b8482dccec5415706499100\t\t41471\troot\troot\t../../../../usr/lib64/libm.so.6\n/usr/lib/.build-id/0f\t\t16877\troot\troot\t\n/usr/lib/.build-id/0f/435c676992d1bc046e0978b9bf9e442d086e78\t\t41471\troot\troot\t../../../../usr/lib64/librt.so.1\n/usr/lib/.build-id/29\t\t16877\troot\troot\t\n/usr/lib/.build-id/29/a2b26b796db6a912205d5e6b6311210be687a7\t\t41471\troot\troot\t../../../../usr/lib64/gconv/UTF-7.so\n/usr/lib/.build-id/3a\t\t16877\troot\troot\t\n/usr/lib/.build-id/3a/4ef08abc32381cccacf13a33a9a0ace7cf85f1\t\t41471\troot\troot\t../../../../usr/lib64/gconv/ISO8859-15.so\n/usr/lib/.build-id/3d\t\t16877\troot\troot\t\n/usr/lib/.build-id/3d/2ac9dfb249dca3a0188b565aaa0de58d18e12f\t\t41471\troot\troot\t../../../../usr/lib64/libnss_compat.so.2\n/usr/lib/.build-id/46\t\t16877\troot\troot\t\n/usr/lib/.build-id/46/52f86ecd59b0e112d0fcca39a862d02e432b70\t\t41471\troot\troot\t../../../../usr/lib64/libnss_dns.so.2\n/usr/lib/.build-id/5b\t\t16877\troot\troot\t\n/usr/lib/.build-id/5b/abcc16025055e51a43bfb5c814c824d36ef508\t\t41471\troot\troot\t../../../../usr/lib64/gconv/CP1252.so\n/usr/lib/.build-id/60\t\t16877\troot\troot\t\n/usr/lib/.build-id/60/e9f3b0d2dab2794b50333c803853829de12721\t\t41471\troot\troot\t../../../../usr/lib64/gconv/UTF-16.so\n/usr/lib/.build-id/63\t\t16877\troot\troot\t\n/usr/lib/.build-id/63/68eb65699d71e410f260ff2ad8fb06805f42cf\t\t41471\troot\troot\t../../../../usr/lib64/gconv/UTF-32.so\n/usr/lib/.build-id/65\t\t16877\troot\troot\t\n/usr/lib/.build-id/65/47e30f030d7016531a64260f5aec66e0c4739b\t\t41471\troot\troot\t../../../../usr/lib64/libanl.so.1\n/usr/lib/.build-id/74\t\t16877\troot\troot\t\n/usr/lib/.build-id/74/1d7161940492aca5cc1c8fa2b33018d69009ad\t\t41471\troot\troot\t../../../../usr/lib64/libdl.so.2\n/usr/lib/.build-id/79\t\t16877\troot\troot\t\n/usr/lib/.build-id/79/2939e0f7628468c236a65e349cc72c131c1284\t\t41471\troot\troot\t../../../../usr/lib64/gconv/ISO8859-1.so\n/usr/lib/.build-id/82\t\t16877\troot\troot\t\n/usr/lib/.build-id/82/e197d7b96f3feb4296710f758893f6e4d91bd9\t\t41471\troot\troot\t../../../../usr/lib64/libmvec.so.1\n/usr/lib/.build-id/85\t\t16877\troot\troot\t\n/usr/lib/.build-id/85/075e2ae2e13352a1413d41c327dacf6461526c\t\t41471\troot\troot\t../../../../usr/lib64/libc.so.6\n/usr/lib/.build-id/98\t\t16877\troot\troot\t\n/usr/lib/.build-id/98/7828becd777ab3b9d866d80f6c36573d16a481\t\t41471\troot\troot\t../../../../usr/lib64/gconv/UNICODE.so\n/usr/lib/.build-id/99\t\t16877\troot\troot\t\n/usr/lib/.build-id/99/665d6b690b22df3159bb511d3347b9663bf2de\t\t41471\troot\troot\t../../../../usr/lib64/libpcprofile.so\n/usr/lib/.build-id/9d\t\t16877\troot\troot\t\n/usr/lib/.build-id/9d/934ddc4eabedd26958f19178ef36cbe8baee2b\t\t41471\troot\troot\t../../../../usr/bin/ldconfig\n/usr/lib/.build-id/ae\t\t16877\troot\troot\t\n/usr/lib/.build-id/ae/a5aa8771effbf4d7f8a07d5da2ed73cbd844fc\t\t41471\troot\troot\t../../../../usr/lib64/ld-linux-x86-64.so.2\n/usr/lib/.build-id/bd\t\t16877\troot\troot\t\n/usr/lib/.build-id/bd/22e5a42df139f32beef083fd56c1766a3f7d72\t\t41471\troot\troot\t../../../../usr/lib64/libutil.so.1\n/usr/lib/.build-id/be\t\t16877\troot\troot\t\n/usr/lib/.build-id/be/bcd46ac2f88a182004a3704e714b9a83550440\t\t41471\troot\troot\t../../../../usr/libexec/getconf/POSIX_V7_LP64_OFF64\n/usr/lib/.build-id/be/bcd46ac2f88a182004a3704e714b9a83550440.1\t\t41471\troot\troot\t../../../../usr/libexec/getconf/POSIX_V6_LP64_OFF64\n/usr/lib/.build-id/be/bcd46ac2f88a182004a3704e714b9a83550440.2\t\t41471\troot\troot\t../../../../usr/libexec/getconf/XBS5_LP64_OFF64\n/usr/lib/.build-id/c3\t\t16877\troot\troot\t\n/usr/lib/.build-id/c3/506839685d72da9326c0be02b304289787620c\t\t41471\troot\troot\t../../../../usr/lib64/audit/sotruss-lib.so\n/usr/lib/.build-id/c4\t\t16877\troot\troot\t\n/usr/lib/.build-id/c4/89b3beddbdea9ab6b5dee3abb779b468d4eb7c\t\t41471\troot\troot\t../../../../usr/bin/iconvconfig\n/usr/lib/.build-id/dd\t\t16877\troot\troot\t\n/usr/lib/.build-id/dd/2ad37ce6ea9c8f052928fb7942d9365696754f\t\t41471\troot\troot\t../../../../usr/lib64/libBrokenLocale.so.1\n/usr/lib/.build-id/e8\t\t16877\troot\troot\t\n/usr/lib/.build-id/e8/2bf7eb3acaf227825c7de7d4e8d1a5ce15b3d9\t\t41471\troot\troot\t../../../../usr/lib64/libnss_files.so.2\n/usr/lib/.build-id/ef\t\t16877\troot\troot\t\n/usr/lib/.build-id/ef/f385c00be81f664bd792155e24177a706d251e\t\t41471\troot\troot\t../../../../usr/lib64/libpthread.so.0\n/usr/lib/.build-id/ff\t\t16877\troot\troot\t\n/usr/lib/.build-id/ff/1fa189bdcae63b3a4eb6ea22c19e7a4a450a28\t\t41471\troot\troot\t../../../../usr/lib64/libthread_db.so.1\n/usr/lib64/audit\t\t16877\troot\troot\t\n/usr/lib64/audit/sotruss-lib.so\t74369f52493a6a05b64d679aaef1c61159c4fa76c6b4074509fb4b96a507ddd3\t33261\troot\troot\t\n/usr/lib64/gconv\t\t16877\troot\troot\t\n/usr/lib64/gconv/CP1252.so\t41d3fb5e43ecad0b40df8956573d8439c55063e778703879357ab62686e7060f\t33261\troot\troot\t\n/usr/lib64/gconv/ISO8859-1.so\t88f1a2b0eff85efc80de5ad2477c9b9a868a02ab93719281865323a7b7d6975e\t33261\troot\troot\t\n/usr/lib64/gconv/ISO8859-15.so\t1c9e9af477d436825041a313090f41130347f79c7d6dc35827b527dfa0aef966\t33261\troot\troot\t\n/usr/lib64/gconv/UNICODE.so\t9320dd79fae4f8234b757bf30a101216bcfd7e2067270331da35a6e959fee589\t33261\troot\troot\t\n/usr/lib64/gconv/UTF-16.so\t6e3f95c036300a10f570c1b94a8d20e98503eb8748754d585c2b1989ba2d355d\t33261\troot\troot\t\n/usr/lib64/gconv/UTF-32.so\tce037184c7dc888965cb7174a89c66c444ab1112c29f8bf162a6e2762a6a179e\t33261\troot\troot\t\n/usr/lib64/gconv/UTF-7.so\taa33a7a1f86fbf6219230cd9080ac8c0b4d885b8925c662dccafd9d2eb7f204c\t33261\troot\troot\t\n/usr/lib64/gconv/gconv-modules\tc5b3ea3d8138394c288f05074ebb4b09ca14c34583ac40349599c3bfa6f9afab\t33188\troot\troot\t\n/usr/lib64/gconv/gconv-modules.cache\te3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\t33188\troot\troot\t\n/usr/lib64/gconv/gconv-modules.d\t\t16877\troot\troot\t\n/usr/lib64/ld-linux-x86-64.so.2\t4e5d39355699e90fa29313d3100e82af4a23290028c58c364d6a249ef6a78e5e\t33261\troot\troot\t\n/usr/lib64/libBrokenLocale.so.1\t7f381307e922cefbe2dc996899d1f7c0ea6ad65a1c7cef545ef1c7eadac09012\t33261\troot\troot\t\n/usr/lib64/libanl.so.1\tf7099cf5ecee327ca5cc32f6ea2b68e3bb9055f4bcbae38e42a4a9ec8ab64940\t33261\troot\troot\t\n/usr/lib64/libc.so.6\ta5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8\t33261\troot\troot\t\n/usr/lib64/libdl.so.2\t54d56c0f10466a05cc92685f8062ee6a2eaf59c62fb6f724217e984fcfbb5031\t33261\troot\troot\t\n/usr/lib64/libm.so.6\t16a03ce6d24c8a46742206d4a9c1d35bb6577ae2384f153dc6ef4a4b62b5357f\t33261\troot\troot\t\n/usr/lib64/libmvec.so.1\t82ddf7efbb88b2eaf5570fa6c0ec41565d9c32a2dbd095200ceead862af0f3dc\t33261\troot\troot\t\n/usr/lib64/libnss_compat.so.2\tf1e29c89296d92bf6f468e03cf8ea6f2d499df4eed980661edc1b0ef4daa0ed9\t33261\troot\troot\t\n/usr/lib64/libnss_dns.so.2\t20e2adebcad87ffc10404383d4b35b7925f498c02f076207b7b76c8bc2010a7a\t33261\troot\troot\t\n/usr/lib64/libnss_files.so.2\t84895f62adfe93deaa7add8dc1f83fd3ed39386dc61e16ec9cb9aac5eb9ff698\t33261\troot\troot\t\n/usr/lib64/libpcprofile.so\tec3e314123e9183f0ace708317c8dee9bf4e8dcade82c34a6db36255911171d2\t33261\troot\troot\t\n/usr/lib64/libpthread.so.0\t41cad1a2bda56ff226e0b08db7edfaf4ec47d876ab1414a979fd157467b6c39d\t33261\troot\troot\t\n/usr/lib64/libresolv.so.2\t7aba4bc66547667af661384fd84c79008445ff5456b27476fe5a6c2f1038233f\t33261\troot\troot\t\n/usr/lib64/librt.so.1\t3a23e51370381b0ab993932341fd69643ade24869936e471e1dde2e62398d9f7\t33261\troot\troot\t\n/usr/lib64/libthread_db.so.1\tf10666f3e62c91dd59086a6df26b49a7c6eb8b4e2140327d11337f200672951f\t33261\troot\troot\t\n/usr/lib64/libutil.so.1\t026b643368272ad0d795244548711ecd734b44cff55737005beac3b4dd178ece\t33261\troot\troot\t\n/usr/libexec/getconf\t\t16877\troot\troot\t\n/usr/libexec/getconf/POSIX_V6_LP64_OFF64\t175663dda225ba720a06741669be376d1d0dd127298aaf2b9b4c595891afb897\t33261\troot\troot\t\n/usr/libexec/getconf/POSIX_V7_LP64_OFF64\t175663dda225ba720a06741669be376d1d0dd127298aaf2b9b4c595891afb897\t33261\troot\troot\t\n/usr/libexec/getconf/XBS5_LP64_OFF64\t175663dda225ba720a06741669be376d1d0dd127298aaf2b9b4c595891afb897\t33261\troot\troot\t\n/usr/share/licenses/glibc\t\t16877\troot\troot\t\n/usr/share/licenses/glibc/COPYING.LESSERv2\t20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95\t33188\troot\troot\t\n/usr/share/licenses/glibc/COPYING.LIB\t\t41471\troot\troot\tCOPYING.LESSERv2\n/usr/share/licenses/glibc/COPYINGv2\tedaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6\t33188\troot\troot\t\n/usr/share/licenses/glibc/COPYINGv3\t3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986\t33188\troot\troot\t\n/usr/share/licenses/glibc/LICENSES\tb22a69aa3f80a5201818c66cb0df0f25f9fa13cf5861b0093a058dbd12d50dce\t33188\troot\troot\t\n/var/cache/ldconfig\t\t16832\troot\troot\t\n/var/cache/ldconfig/aux-cache\t\t33152\troot\troot\t\n",
+      "stderr": ""
+    }
+  },
+  "gtk3": {
+    "path": "/tmp/arctic-gtk-preflight-candidate-rpms/gtk3-3.24.52-2.fc44.x86_64.rpm",
+    "bytes": 6357077,
+    "sha256": "a79d5e9e687459c9a10d08ac125fc02dab882f9b95e5f95fa8ec638bd8ee228e",
+    "signature": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpmkeys",
+        "--checksig",
+        "--verbose",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/gtk3-3.24.52-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/scratch/arctic-gtk-preflight-candidate-rpms/gtk3-3.24.52-2.fc44.x86_64.rpm:\n    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: 36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6: OK\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK\n",
+      "stderr": ""
+    },
+    "identity": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{FILEDIGESTALGO}\n",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/gtk3-3.24.52-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "gtk3\t0\t3.24.52-2.fc44\tx86_64\t8\n",
+      "stderr": ""
+    },
+    "file_header": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\t%{FILEUSERNAME}\t%{FILEGROUPNAME}\t%{FILELINKTOS}\n]",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/gtk3-3.24.52-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/usr/bin/broadwayd\tf87069ae20c730ba5b5bddafea1b3effd1e0a252900ece7422315e3552d412ca\t33261\troot\troot\t\n/usr/bin/gtk-launch\t936e94fb107756cb6efdc04dc8975b78394bec579d1ddfd27f35f42b335f44d9\t33261\troot\troot\t\n/usr/bin/gtk-query-immodules-3.0-64\tad82313d984e6690e8f426da687f04a659f49eb4e9163e872ba358a95a4c95ae\t33261\troot\troot\t\n/usr/lib/.build-id\t\t16877\troot\troot\t\n/usr/lib/.build-id/3f\t\t16877\troot\troot\t\n/usr/lib/.build-id/3f/c3bb3822c81e802782003c90ea9c1e6943e7fa\t\t41471\troot\troot\t../../../../usr/lib64/libgtk-3.so.0.2420.32\n/usr/lib/.build-id/4f\t\t16877\troot\troot\t\n/usr/lib/.build-id/4f/53635e756acf628cc4a52287e730e31d3f7392\t\t41471\troot\troot\t../../../../usr/lib64/gtk-3.0/3.0.0/printbackends/libprintbackend-lpr.so\n/usr/lib/.build-id/7a\t\t16877\troot\troot\t\n/usr/lib/.build-id/7a/1425ebf12fa38b9bcf666fa2a10a880b58d4c7\t\t41471\troot\troot\t../../../../usr/bin/broadwayd\n/usr/lib/.build-id/9d\t\t16877\troot\troot\t\n/usr/lib/.build-id/9d/1e56b08337f9073534fba9e16f7b31c58cc9aa\t\t41471\troot\troot\t../../../../usr/lib64/libgailutil-3.so.0.0.0\n/usr/lib/.build-id/a0\t\t16877\troot\troot\t\n/usr/lib/.build-id/a0/70011af1931313b1e002fb92e166541ad78afb\t\t41471\troot\troot\t../../../../usr/lib64/gtk-3.0/3.0.0/printbackends/libprintbackend-cups.so\n/usr/lib/.build-id/c0\t\t16877\troot\troot\t\n/usr/lib/.build-id/c0/f0723e7549f3efde60925a919e3027bfde8e98\t\t41471\troot\troot\t../../../../usr/lib64/gtk-3.0/3.0.0/printbackends/libprintbackend-file.so\n/usr/lib/.build-id/eb\t\t16877\troot\troot\t\n/usr/lib/.build-id/eb/6007d44e9f5401290df35c590ce7ce13d16348\t\t41471\troot\troot\t../../../../usr/bin/gtk-query-immodules-3.0-64\n/usr/lib/.build-id/ed\t\t16877\troot\troot\t\n/usr/lib/.build-id/ed/61f3027522085a4be3241f0470d95a2693a80c\t\t41471\troot\troot\t../../../../usr/lib64/libgdk-3.so.0.2420.32\n/usr/lib/.build-id/f2\t\t16877\troot\troot\t\n/usr/lib/.build-id/f2/f0e2e052d2aabc9afdf9901ce2ce5d6f71b088\t\t41471\troot\troot\t../../../../usr/bin/gtk-launch\n/usr/lib64/girepository-1.0\t\t16877\troot\troot\t\n/usr/lib64/girepository-1.0/Gdk-3.0.typelib\td5492509eb5dcf4c6e61e9963aae7eff878758d38d7c7f7e226577318759c43a\t33188\troot\troot\t\n/usr/lib64/girepository-1.0/GdkX11-3.0.typelib\t903efec0bfe5268cc82aebc6a99c0e3ebfed4af63138c1bdc581766cdaf91bc9\t33188\troot\troot\t\n/usr/lib64/girepository-1.0/Gtk-3.0.typelib\t02c07aa34dcfa3cb275dc84d548d051f48e9f8dc1cbd4c8d31afe245bdda5e28\t33188\troot\troot\t\n/usr/lib64/gtk-3.0\t\t16877\troot\troot\t\n/usr/lib64/gtk-3.0/3.0.0\t\t16877\troot\troot\t\n/usr/lib64/gtk-3.0/3.0.0/immodules\t\t16877\troot\troot\t\n/usr/lib64/gtk-3.0/3.0.0/immodules.cache\t\t33188\troot\troot\t\n/usr/lib64/gtk-3.0/3.0.0/printbackends\t\t16877\troot\troot\t\n/usr/lib64/gtk-3.0/3.0.0/printbackends/libprintbackend-cups.so\t3f246c9c9d8c9f3b8f358c407488b55fb618ce56ce0ce9bf8073cbe377c67358\t33261\troot\troot\t\n/usr/lib64/gtk-3.0/3.0.0/printbackends/libprintbackend-file.so\tf75e3cf0dd110a09835ff23abdf662d124ad409e31130730c2b3bae0ea919e4f\t33261\troot\troot\t\n/usr/lib64/gtk-3.0/3.0.0/printbackends/libprintbackend-lpr.so\td034d42c9ea29cf150d3270c16310f32dbb80d20af9a1c59e7220305f4874230\t33261\troot\troot\t\n/usr/lib64/gtk-3.0/immodules\t\t16877\troot\troot\t\n/usr/lib64/gtk-3.0/modules\t\t16877\troot\troot\t\n/usr/lib64/libgailutil-3.so.0\t\t41471\troot\troot\tlibgailutil-3.so.0.0.0\n/usr/lib64/libgailutil-3.so.0.0.0\tc6a2f8ef4664c11f239e8c91a84dcbb78b227e1c8ffc25495f2347315f64860b\t33261\troot\troot\t\n/usr/lib64/libgdk-3.so.0\t\t41471\troot\troot\tlibgdk-3.so.0.2420.32\n/usr/lib64/libgdk-3.so.0.2420.32\tf4eb11980847c0802407bc266c11e80c8b72c2adc678480030962a8949beb91b\t33261\troot\troot\t\n/usr/lib64/libgtk-3.so.0\t\t41471\troot\troot\tlibgtk-3.so.0.2420.32\n/usr/lib64/libgtk-3.so.0.2420.32\t9dea09c0282f06e62a056580cfc175b100725a44f026005f3a460d3e18d740f9\t33261\troot\troot\t\n/usr/share/doc/gtk3\t\t16877\troot\troot\t\n/usr/share/doc/gtk3/NEWS\t31c26cd44f4c194e25091fe4a059a75ea441dafc7ffbdeb8059f05ec6aec1a09\t33188\troot\troot\t\n/usr/share/doc/gtk3/README.md\t940bb48999d6db8245ceb403ddd5fcded3bf1042719bb25e689e5a175e36bf45\t33188\troot\troot\t\n/usr/share/glib-2.0/schemas/org.gtk.Settings.ColorChooser.gschema.xml\te476913ef61e6719ff56c2e4c5b8b276af3020bfb0d007263c2a241835730882\t33188\troot\troot\t\n/usr/share/glib-2.0/schemas/org.gtk.Settings.Debug.gschema.xml\tde0685fdc2f6e890e32445a79aa938e5566b8dd406dd71d6c6a66c69e3f941e3\t33188\troot\troot\t\n/usr/share/glib-2.0/schemas/org.gtk.Settings.EmojiChooser.gschema.xml\t22aba28a5a78745d87eeded88f1b86f7ddea24b1b90771151ef494c660a1b591\t33188\troot\troot\t\n/usr/share/glib-2.0/schemas/org.gtk.Settings.FileChooser.gschema.xml\tc7089f41d22b3854c05fe4996ff271949b40148a40b9c6f0ae0349792dc94b77\t33188\troot\troot\t\n/usr/share/glib-2.0/schemas/org.gtk.exampleapp.gschema.xml\t0d9746cf7ab1afee3599587aaa0c39929a410fc650c6f1ff1e103c8fd5c9e14b\t33188\troot\troot\t\n/usr/share/gtk-3.0\t\t16877\troot\troot\t\n/usr/share/gtk-3.0/emoji\t\t16877\troot\troot\t\n/usr/share/gtk-3.0/emoji/bn.gresource\t48ac6108d586f6e5719eb757beb92877a7d419d9693bba67cf767a5bcfe8cad8\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/da.gresource\t1cc94ba8c1fd8caeab1e75ebbc8a583fff60db810afc4dad07d9421f14a75e9a\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/de.gresource\te19c03eb2d8dabe6e3c0ea76e5fb5ad2befd29a04a62c794ab06fc1822d5e530\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/es.gresource\tce5297727505732e589f3cf7e7792c03236a8c12e9c1632eb89fd4c93f86f6ff\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/et.gresource\td0031587acf7da5ce13b71e6365ec14db8371c7893f0d2893f68f4e5093ba5d4\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/fi.gresource\tf8300e0d469ddec4cdcc3e258fdf331af7e760fe804aa9a4b86d7030f4ec5121\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/fr.gresource\t3ffe22c568ad3c84b8c48afa4ff6508530e45bc12b063b259fdb69820b5223e6\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/hi.gresource\ta9724efea03ba3cea46c1eacf7cf5f11916fff7d612e51873ba455ff49ac26fe\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/hu.gresource\t69509432123b46a1bfc7272c282e8941e143c47907061b4d34cae092f0828823\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/it.gresource\t1fd0776cb81d251addb3d36c83096c5b48c8c48d049e145a3941cd025d11c4f9\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/ja.gresource\t2b6a4e6165d48799331ce924f286cb55618a46d92bf962c3e0a8ce52af0c1d81\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/ko.gresource\t856dea004b37c5208bda68013393228dd39b3f18557b443f6138d98ce2b36854\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/lt.gresource\t71a37e711a5c31e8002e230948e3266154e73fd1f485af317b2b192976121681\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/ms.gresource\t15c9a75db3c56ae284d642646f1dbc674e5ff7d9bdaf0513262e4fa7a5e5fc8d\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/nb.gresource\t6c32b8ef387f13ab86033c30dc9e05fb229e6c4692b9f33e704f7d411c597422\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/nl.gresource\t2cfab0e943b2155ffa0b10be1ff621f491cfd9b1cf2dad10f36f25fe3cfe211b\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/pl.gresource\t862ad24ad32dd7974e9f11159d8a83cfdd6d90c94d6ad7ca4dc6c0514d639307\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/pt.gresource\t35cfae7e6022ad5efdbe517ba574347847016eb1a6eab1a24abdf8b0daa514a9\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/ru.gresource\t81a69e15b70cf1440c7aa054db8d326995ea7a881715dd7597a5af6959984688\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/sv.gresource\tc11405b3533714ed487ee9a1486977efe2445a3d6455b3ed31e8cff0da899696\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/th.gresource\t17a5b012debfb577cb56cc46e2bedbd06c679a130c46be60aceb8359dd9841a9\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/uk.gresource\tb6c61579af27d674d61f7b9c1690b22eb2ef8f225320bf63466d6e5dff1aa11d\t33188\troot\troot\t\n/usr/share/gtk-3.0/emoji/zh.gresource\tc774141acbc9005d9a1b7a62dd5b5daa0f4bf2e8f804699587147aaf0daf4e25\t33188\troot\troot\t\n/usr/share/licenses/gtk3\t\t16877\troot\troot\t\n/usr/share/licenses/gtk3/COPYING\tb7993225104d90ddd8024fd838faf300bea5e83d91203eab98e29512acebd69c\t33188\troot\troot\t\n/usr/share/locale/ab/LC_MESSAGES/gtk30.mo\te75987b76626b6669db347ed020aa9249a8e707554fd7b54bfbd42f48b88ef52\t33188\troot\troot\t\n/usr/share/locale/af/LC_MESSAGES/gtk30.mo\td03d76f56cc4ce833dbebd18b3c3e6013b0b7659b108e6a0c69016ad1c77810f\t33188\troot\troot\t\n/usr/share/locale/am/LC_MESSAGES/gtk30.mo\t6c6c075a90486a1f3470c82aa51690b7fe67d8c7440978757e5332bb395253f5\t33188\troot\troot\t\n/usr/share/locale/an/LC_MESSAGES/gtk30.mo\t780b4f1a0f523870be0514915663ef90197ed68d9be3a5a287a528af5c73e09f\t33188\troot\troot\t\n/usr/share/locale/ang/LC_MESSAGES/gtk30.mo\t2f77799ac3b767543e1d19378e38e3f9b1391a5c5977d6e76b9beac446da3ba5\t33188\troot\troot\t\n/usr/share/locale/ar/LC_MESSAGES/gtk30.mo\tac97bbde176b66c28045038f1b048a868ce4156d4f5d8a908ba0c88904af2f01\t33188\troot\troot\t\n/usr/share/locale/as/LC_MESSAGES/gtk30.mo\t13a5de0fa3d3ab4c1fc8e64dff90ef6b22f746a0cc33f776ad0a37b04cc17e38\t33188\troot\troot\t\n/usr/share/locale/ast/LC_MESSAGES/gtk30.mo\tcee97e37017d8b3494e4675a42475db36ec7189ce9abeffe554383e3fabe9bac\t33188\troot\troot\t\n/usr/share/locale/az/LC_MESSAGES/gtk30.mo\t56146293af5c3a7871664e45a187926a3609d6dad66bd13d7f341972adc8886d\t33188\troot\troot\t\n/usr/share/locale/az_IR/LC_MESSAGES/gtk30.mo\t139274df1c59ae8e8aaf91e07c0c77adc67cd1e2d781d6133ef383951a15a684\t33188\troot\troot\t\n/usr/share/locale/be/LC_MESSAGES/gtk30.mo\t27938075393eb98ccbaddd0cbdae23abe5d021030976911bbd7cce9031ea1cdc\t33188\troot\troot\t\n/usr/share/locale/be@latin/LC_MESSAGES/gtk30.mo\t1d2c30b9340e275bfdcebb3b212add8b9fd2d9b2e6b5eef548c39c259a5acdcb\t33188\troot\troot\t\n/usr/share/locale/bg/LC_MESSAGES/gtk30.mo\t93fe1da7d59df5f4347f581e9f91f4446fed648b32354222fa779b2050996656\t33188\troot\troot\t\n/usr/share/locale/bn/LC_MESSAGES/gtk30.mo\t8737b3c730d94aefbe61c6272d3137c6420963bec237d98329b96ea8f951d66b\t33188\troot\troot\t\n/usr/share/locale/bn_IN/LC_MESSAGES/gtk30.mo\t9449a157480b970529f030365a344c3ba1021d74f7b3fa2428880cad3124f7e4\t33188\troot\troot\t\n/usr/share/locale/br/LC_MESSAGES/gtk30.mo\t4f663a9943eb29f1c61bd4b8fa383d6a91ed13c234a67fae9024410d772efab6\t33188\troot\troot\t\n/usr/share/locale/bs/LC_MESSAGES/gtk30.mo\t1a69107e5ce676bb6ff7850611ec951db2d192f44260a81d5e82544c24c645fd\t33188\troot\troot\t\n/usr/share/locale/ca/LC_MESSAGES/gtk30.mo\t4b2cb2f579a78fc8ba3dc6814b6efcf74239ec09c1c5c89ffe467ac1b0d4b68c\t33188\troot\troot\t\n/usr/share/locale/ca@valencia/LC_MESSAGES/gtk30.mo\tdf559f0690c52753fe20650b51b40b8c10b48259e74bd3d3c8a53e54881c9d16\t33188\troot\troot\t\n/usr/share/locale/ckb/LC_MESSAGES/gtk30.mo\t6f3e9ff211494cea523ceda660392475606208198b11626a95a29c95ef27f0bd\t33188\troot\troot\t\n/usr/share/locale/crh/LC_MESSAGES/gtk30.mo\tbdd8bc62cb849648ec26a7c44580f114ec8a81232c10f2ffeba9d846343b5ac9\t33188\troot\troot\t\n/usr/share/locale/cs/LC_MESSAGES/gtk30.mo\tc123b27af61e75d5102b40f7487525c52db1a0f9ce0e81b9c24ed4367343eba2\t33188\troot\troot\t\n/usr/share/locale/cy/LC_MESSAGES/gtk30.mo\t1825889229d587ba4d1e8875a2021161b312b47589ae18cc3cd214004cc98fae\t33188\troot\troot\t\n/usr/share/locale/da/LC_MESSAGES/gtk30.mo\t2f119ed221634282172b2ee89717c07fb24dd2b578cf672a40bee3ae9996828d\t33188\troot\troot\t\n/usr/share/locale/de/LC_MESSAGES/gtk30.mo\tf350a66e4faa873899da1a8f0ba62b754bf41c1ccfd4c05123d4127514a351df\t33188\troot\troot\t\n/usr/share/locale/dz/LC_MESSAGES/gtk30.mo\t52dc5a9fe1946e7be9bdb1b99ab867fff837ad3655cf749e8545fdd7eab6f8a0\t33188\troot\troot\t\n/usr/share/locale/el/LC_MESSAGES/gtk30.mo\t63f77bf2c0a37b119d47a36c909d6d0220e81ad319a7118ef746cdfc13bb3976\t33188\troot\troot\t\n/usr/share/locale/en/LC_MESSAGES/gtk30.mo\tecdba7fc840f679a8da5e1d66306740fb5efc5ca292a3f67250e15e7544e85cf\t33188\troot\troot\t\n/usr/share/locale/en@shaw/LC_MESSAGES/gtk30.mo\tf9eaa8f01f39afffff9c38c49db03425fb44b2d60a657e64ea91838d0844a463\t33188\troot\troot\t\n/usr/share/locale/en_CA/LC_MESSAGES/gtk30.mo\tfb7b67d32bda2f43167ee85cce8750f77fda74507b32333035b96267c37b364a\t33188\troot\troot\t\n/usr/share/locale/en_GB/LC_MESSAGES/gtk30.mo\t9419ebd70da19866d41b8abe701826aa2b427d9dd7352e29be14707416f20b34\t33188\troot\troot\t\n/usr/share/locale/eo/LC_MESSAGES/gtk30.mo\t86e1161ac54dd5781e9f04c015f1d8924b2393b02294834a262114637d641c60\t33188\troot\troot\t\n/usr/share/locale/es/LC_MESSAGES/gtk30.mo\t28f6f78f379d0fa3303dcb8479327e634d3c7cfd59acebfe41e12783485857dd\t33188\troot\troot\t\n/usr/share/locale/et/LC_MESSAGES/gtk30.mo\tb5098d29c1b20df285f4e57643a15f511143dd8542d0e394369cb938552cc77f\t33188\troot\troot\t\n/usr/share/locale/eu/LC_MESSAGES/gtk30.mo\tc0cca43b33b41d569c8a7aab75081477e310d048e1b486e7d2b4fb7b20aa7c5e\t33188\troot\troot\t\n/usr/share/locale/fa/LC_MESSAGES/gtk30.mo\t2e2d37248c75f304fb799598aa0c20e5c0e4751c69e4c573f834c5f08cb1f773\t33188\troot\troot\t\n/usr/share/locale/fi/LC_MESSAGES/gtk30.mo\t6e6e9b6dbe326904a0017a387661e223b3573fc5ccb6bac4407eccff978e4e8a\t33188\troot\troot\t\n/usr/share/locale/fr/LC_MESSAGES/gtk30.mo\tb1881e469f668fc735151417b5859ca6174a600e753771033323873307bf9d7b\t33188\troot\troot\t\n/usr/share/locale/fur/LC_MESSAGES/gtk30.mo\t19ec70f8a06b6bfb3adf68873405cf18061c2d3b20911c5f5fd7f88264afa204\t33188\troot\troot\t\n/usr/share/locale/ga/LC_MESSAGES/gtk30.mo\tb6cdb6fdea97a8fdbc0503642bfb626c40bd265cb114e675efaab5aa5bb7256f\t33188\troot\troot\t\n/usr/share/locale/gd/LC_MESSAGES/gtk30.mo\t60ea6eb1b22a5119496198cb7bb2af63ca2aad3aad9f359e187583015f785628\t33188\troot\troot\t\n/usr/share/locale/gl/LC_MESSAGES/gtk30.mo\tafc284441a78e2b4ae4bf31a7b1f92c9eefb47be5a8a08e691c3983f43945cf6\t33188\troot\troot\t\n/usr/share/locale/gu/LC_MESSAGES/gtk30.mo\t1650ee35ae5a335d7af5dc640a63e19dcf3c0f7872c8ec9149ce1f8c35c2b38b\t33188\troot\troot\t\n/usr/share/locale/he/LC_MESSAGES/gtk30.mo\tdea1d5c97547458ee08662990bb5cd370a6fab8ae7b678afa8ad7e76c3cfaf3e\t33188\troot\troot\t\n/usr/share/locale/hi/LC_MESSAGES/gtk30.mo\t5d581e3baddd5cd6c675da86a3544addac2107dcb6e6eb3b498ea992a2efd4ce\t33188\troot\troot\t\n/usr/share/locale/hr/LC_MESSAGES/gtk30.mo\t6f8516ca82628b2fca56c71d0449789024ecff75e8cb4ff1354f80c8858d26da\t33188\troot\troot\t\n/usr/share/locale/hu/LC_MESSAGES/gtk30.mo\t0514e7ccf7fc72de4a467b302ebd242c9652db04e801b8fb0b7584b58e4b4a6b\t33188\troot\troot\t\n/usr/share/locale/hy/LC_MESSAGES/gtk30.mo\t598988f222ddb01413ac44d544bda8fa56d95c94c2896ba5b01f26971ae999b4\t33188\troot\troot\t\n/usr/share/locale/ia/LC_MESSAGES/gtk30.mo\tc36c5ec53a4b4d2426786074dc56d90cdff8597e44ab7cc879c05c6452c201a3\t33188\troot\troot\t\n/usr/share/locale/id/LC_MESSAGES/gtk30.mo\teea5b12cb3b75b118398e8f539b461e7873c0928f1bca17629e382a2802019ec\t33188\troot\troot\t\n/usr/share/locale/ie/LC_MESSAGES/gtk30.mo\ta29adee1539fac30cb09b6333d5b6fbfce3467ad1f11f6dff1ec5df9874871f4\t33188\troot\troot\t\n/usr/share/locale/io/LC_MESSAGES/gtk30.mo\tc1b0077aa23c68c4ef8a3d771de0cb6bd55bad0cb37d8c87873eb44efa7ddd66\t33188\troot\troot\t\n/usr/share/locale/is/LC_MESSAGES/gtk30.mo\t2e11c8b5ef06de3c299501203d68e3fabc3d2e1ef9ea03c4612a16eac3080e0b\t33188\troot\troot\t\n/usr/share/locale/it/LC_MESSAGES/gtk30.mo\tafe85d0b807530759ce8612c7d7bb5c5581e458d962b2d22f7669487a3c41de5\t33188\troot\troot\t\n/usr/share/locale/ja/LC_MESSAGES/gtk30.mo\t4749ddb1cd44b556f12bbf296de251b80122a06d58f4a0dd712da17406b25eab\t33188\troot\troot\t\n/usr/share/locale/ka/LC_MESSAGES/gtk30.mo\te4c166d3ba4eace71160d7356778fca6aaa7334c099e3ba121ecd69141192fdb\t33188\troot\troot\t\n/usr/share/locale/kab/LC_MESSAGES/gtk30.mo\t9edf02e593cdc277858020b27c5914d5a068bd80bd07f5f5df595304fe25f6da\t33188\troot\troot\t\n/usr/share/locale/kg/LC_MESSAGES/gtk30.mo\t4591c1989fbbb3932a5b0b01c11e7f0418c4e6c4357cf3f1fcfc73fa8957994d\t33188\troot\troot\t\n/usr/share/locale/kk/LC_MESSAGES/gtk30.mo\t7b1bf602855a6f728a846f30e4a3aa2a1eabd81dd3293b99dd179ed961200245\t33188\troot\troot\t\n/usr/share/locale/km/LC_MESSAGES/gtk30.mo\t72cfa06031c8736eaf951236b3a06d6d585dace506fe055f148174c9035c9e18\t33188\troot\troot\t\n/usr/share/locale/kn/LC_MESSAGES/gtk30.mo\t0b975981b65cf888290ab9848f5cb0bea2c444c24e0f69caaad264c15904d111\t33188\troot\troot\t\n/usr/share/locale/ko/LC_MESSAGES/gtk30.mo\t14e77a50a5f78b846ff21bd2f246354a85225ddf28f8c7130873d136a2635b95\t33188\troot\troot\t\n/usr/share/locale/ku/LC_MESSAGES/gtk30.mo\t3a0c80c3c7e8414efdffd947fbd29b538f1a76d8ada74ad318c4af48b9941f65\t33188\troot\troot\t\n/usr/share/locale/ky/LC_MESSAGES/gtk30.mo\tbdb70ae5f173a86056013cc06018d06d8c3ffcb00391fba82e2d4eeb5ba2baca\t33188\troot\troot\t\n/usr/share/locale/lg/LC_MESSAGES/gtk30.mo\tcfcc5d1edfa1f2c501b48c072008ba6f29e50de4bc0b2fe9d50e385a16a75e4c\t33188\troot\troot\t\n/usr/share/locale/li/LC_MESSAGES/gtk30.mo\t843fa1353feeef3fd49f59e5847e5be4a619288a9debd2ee26515646d1bad334\t33188\troot\troot\t\n/usr/share/locale/lt/LC_MESSAGES/gtk30.mo\ta966d8432710ac3f34c327b13933a06eee6d26972725b7b7059e80b57f7e2538\t33188\troot\troot\t\n/usr/share/locale/lv/LC_MESSAGES/gtk30.mo\t17ff029ac69805d585a6fca7bb02a26f864822fcdd8c0e095d221d083f9da8c7\t33188\troot\troot\t\n/usr/share/locale/mai/LC_MESSAGES/gtk30.mo\tc86752cd5e76dde6fa228d3803f30126ac616903bfbc9fac588125d333f0f256\t33188\troot\troot\t\n/usr/share/locale/mi/LC_MESSAGES/gtk30.mo\t3af0ab51d0b8842fff4b1f7ef75ac828cd96d74a2ccfeced12dcced6c5eca427\t33188\troot\troot\t\n/usr/share/locale/mk/LC_MESSAGES/gtk30.mo\t14f3ce12bcf740460da1a635910232ca186f3b73b065a81412e8abff832ca724\t33188\troot\troot\t\n/usr/share/locale/ml/LC_MESSAGES/gtk30.mo\tf578187604e9a58f14e0ea14b8d4c229620061fbb81e7e649fb26199d0fea7b3\t33188\troot\troot\t\n/usr/share/locale/mn/LC_MESSAGES/gtk30.mo\t9657d85a10189a7438bbff1b7c674fc533c65c65b788f472444ee01c077a45a2\t33188\troot\troot\t\n/usr/share/locale/mr/LC_MESSAGES/gtk30.mo\tb3b48c496e16b437e67fcfabcf6c5591b3b4ebcf6ed3efe8822aeb84a56b3c65\t33188\troot\troot\t\n/usr/share/locale/ms/LC_MESSAGES/gtk30.mo\t3656abb0bf19bb49642c388a547fbdf67a7384dc16889cc0b623bb213ad87d85\t33188\troot\troot\t\n/usr/share/locale/my/LC_MESSAGES/gtk30.mo\t415d0d42b0dbbe71fc57f3a28aaefcace6cef45b0154485e34ec021e3bd4344b\t33188\troot\troot\t\n/usr/share/locale/nb/LC_MESSAGES/gtk30.mo\t3a39379ac61d44c1e23181d8ae6fe7ab21103c0d7f00163613122f932350e775\t33188\troot\troot\t\n/usr/share/locale/nds/LC_MESSAGES/gtk30.mo\t0ee3bb39c72e88f4872188705b3e3dc8409b47acfa6db27be44c780dc75a7e82\t33188\troot\troot\t\n/usr/share/locale/ne/LC_MESSAGES/gtk30.mo\t3ca7ddf2fa594097f279515430aa79d9a1fbac16a62ba939832fa56fae038f27\t33188\troot\troot\t\n/usr/share/locale/nl/LC_MESSAGES/gtk30.mo\t4f4e7c1e44c6b68513b723d84c64c3e50c4b8236cf6b9f8880f59001a619051f\t33188\troot\troot\t\n/usr/share/locale/nn/LC_MESSAGES/gtk30.mo\t6fbf57f702b4579d7ca60314904d408058738c96a37e68cec1bb08fa92368036\t33188\troot\troot\t\n/usr/share/locale/nso/LC_MESSAGES/gtk30.mo\t5bb6f383831c4d3d988512abb3f11a4eb088319444f1d5f2d7c29bcefa99c837\t33188\troot\troot\t\n/usr/share/locale/oc/LC_MESSAGES/gtk30.mo\ta06bcfe747336ede31568d36fa747c231a57a866260e5d9aa78591b961b14b49\t33188\troot\troot\t\n/usr/share/locale/or/LC_MESSAGES/gtk30.mo\tfb21ee2da9e7993e3e63c9e65f6a359dd6049f7e136cdb3be20b15b3402e970f\t33188\troot\troot\t\n/usr/share/locale/pa/LC_MESSAGES/gtk30.mo\tca69d421510cc651cadb569c7a5efd12ad7530aae707420e645e2ce620c9e5ac\t33188\troot\troot\t\n/usr/share/locale/pl/LC_MESSAGES/gtk30.mo\t09d22fdfaa6bf147ce384cf44a7c8c14537807fac2bbfb221ac411ee1ca52508\t33188\troot\troot\t\n/usr/share/locale/ps/LC_MESSAGES/gtk30.mo\t72a687a23abed830d25256a834f0e53e87c6503ebbdb211d49b6f09eff155101\t33188\troot\troot\t\n/usr/share/locale/pt/LC_MESSAGES/gtk30.mo\tdbea6591d8ae9a2c3dfd8648167522fcdc03ea94179bf451133b38186455dd61\t33188\troot\troot\t\n/usr/share/locale/pt_BR/LC_MESSAGES/gtk30.mo\tb5ae9a4b86eed9197da39c15bab7305e8dbf484ff5b6ca3f0f403957db8df491\t33188\troot\troot\t\n/usr/share/locale/ro/LC_MESSAGES/gtk30.mo\te7f7ad861ccb585c3cd6871623e9ff674f7d9452a9d12e2e3b8e09e65b1acd4a\t33188\troot\troot\t\n/usr/share/locale/ru/LC_MESSAGES/gtk30.mo\tb3e9ef1ca040de6640b6cfdee6f02cec56a9cf9b39e0c6701787c816bffc76ac\t33188\troot\troot\t\n/usr/share/locale/rw/LC_MESSAGES/gtk30.mo\t25447e48a264f64e09b073b92e4a0f60310223a71c870fec5cfb81836c752f3a\t33188\troot\troot\t\n/usr/share/locale/si/LC_MESSAGES/gtk30.mo\tc90326d3c9200f99a11664fbc365ef077b88c504e5c5d51cc00ae97579f6ebd3\t33188\troot\troot\t\n/usr/share/locale/sk/LC_MESSAGES/gtk30.mo\t6885d099bea5f04b3665adf4db1955c9263e38930f0ec6738ed12bab4219be3d\t33188\troot\troot\t\n/usr/share/locale/sl/LC_MESSAGES/gtk30.mo\t81cf23b8f8902988bf8b7e91e154d952bcaa0326dc52039981640d41f7418192\t33188\troot\troot\t\n/usr/share/locale/sq/LC_MESSAGES/gtk30.mo\t36a93e1c642d16c3a00e2130f867302a70f529abd1b6e06284ed5ffb31377ef4\t33188\troot\troot\t\n/usr/share/locale/sr/LC_MESSAGES/gtk30.mo\tdbd6c35cd0bb297708e641697015107261e41d922694abde4e6cfad0d42a69ff\t33188\troot\troot\t\n/usr/share/locale/sr@ije/LC_MESSAGES/gtk30.mo\te5a2c594c3ead4383fd86d65d629cb96bf670f84a60211338df590b9e88e3198\t33188\troot\troot\t\n/usr/share/locale/sr@latin/LC_MESSAGES/gtk30.mo\t989a86068296efe3008f32c6e904ce80e1b6218bf352379a49add387d547e8b2\t33188\troot\troot\t\n/usr/share/locale/sv/LC_MESSAGES/gtk30.mo\t8e1c5f5598d3e0e01a80d6062a95d511f58c2692013985b323cf737cba06f72f\t33188\troot\troot\t\n/usr/share/locale/ta/LC_MESSAGES/gtk30.mo\t72caec8dbc81852c73f440e445b59007266922ca49f0cd7b7beb370d44313c13\t33188\troot\troot\t\n/usr/share/locale/te/LC_MESSAGES/gtk30.mo\t4ceb618a1b4d2d55d12280b0a3a4b28cea5dd8c155e2dfc96e940776f81af75b\t33188\troot\troot\t\n/usr/share/locale/tg/LC_MESSAGES/gtk30.mo\t5601de8c506445132da7c2a0d83db8d7087dd4f816a858a6dd08f7fb3f4bf608\t33188\troot\troot\t\n/usr/share/locale/th/LC_MESSAGES/gtk30.mo\t3f8568b05c83a6fff6fdd25935c054d9ca701fc88df4ba0d01ab37389d72b3f7\t33188\troot\troot\t\n/usr/share/locale/tk/LC_MESSAGES/gtk30.mo\ta3aae1e0d5f990eff8ef67622c74e05ed4b32c8f4ceddd7357dd1a1717ba0c4a\t33188\troot\troot\t\n/usr/share/locale/tr/LC_MESSAGES/gtk30.mo\t7b6d5f7d69220efd426c7b29a52bea5892515c2e1225dabeb5be8c3c2c5087e9\t33188\troot\troot\t\n/usr/share/locale/tt/LC_MESSAGES/gtk30.mo\tbeeb8ef02cfcfb29b9283b170f9f6af61c16fe0646f9bb318415a6bc35dce5db\t33188\troot\troot\t\n/usr/share/locale/ug/LC_MESSAGES/gtk30.mo\tfbc75c85794f3448974d71d30417fba416e550c09fc0feea1113232fd7803673\t33188\troot\troot\t\n/usr/share/locale/uk/LC_MESSAGES/gtk30.mo\td9e412472eb3d18d14639da1eb3d284568f8456cf93595f699bfc628dcd446a2\t33188\troot\troot\t\n/usr/share/locale/ur/LC_MESSAGES/gtk30.mo\tc310a5f7ce8813658e0f99d6f53fc7064d78aceeb6bea8da0c104ea0339e0303\t33188\troot\troot\t\n/usr/share/locale/uz/LC_MESSAGES/gtk30.mo\te2ac1f8389144c3167941135d0f89f2d1b2433ed015ec463b0e39a43677d9827\t33188\troot\troot\t\n/usr/share/locale/uz@cyrillic/LC_MESSAGES/gtk30.mo\t621c723e030b4a1ad1415b5b4617e88aa84786d28656ab79bf1e22abb6c3bc0a\t33188\troot\troot\t\n/usr/share/locale/vi/LC_MESSAGES/gtk30.mo\t9cdd58e76db6ea17da57c8fa318bd248dd8f81e82d4c54b2343462ebffc37f31\t33188\troot\troot\t\n/usr/share/locale/wa/LC_MESSAGES/gtk30.mo\t4f3e3d6f2db8d8e3c74acccaf210c86ea7c0d68e0e0f92753c670c085c78e416\t33188\troot\troot\t\n/usr/share/locale/xh/LC_MESSAGES/gtk30.mo\tefec657d9437f0ae7bc4f95c1438481387ca13e6c0c6820a020880454e1abd2a\t33188\troot\troot\t\n/usr/share/locale/yi/LC_MESSAGES/gtk30.mo\t74ec1dbfa71511136765281d9344e3d5d451264759602e45796cbf679e6a8b62\t33188\troot\troot\t\n/usr/share/locale/zh_CN/LC_MESSAGES/gtk30.mo\t1fd58c89e87fd22e0d9ad39a924a158ecfb205f301d92615e9bd178442f1321f\t33188\troot\troot\t\n/usr/share/locale/zh_HK/LC_MESSAGES/gtk30.mo\t91ed3de43c4c9994dfe844fe940ae3588610d95ec8053f754869cd7b55c574c3\t33188\troot\troot\t\n/usr/share/locale/zh_TW/LC_MESSAGES/gtk30.mo\t1a26f3d3ac1deafc264c0eeaf2d2cc120bb91a0cc5904f488f71b522027a60e2\t33188\troot\troot\t\n/usr/share/man/man1/broadwayd.1.gz\td79ef70f2035802359544d39f155cd20d634735fc72d12de3397f82cf4da08ee\t33188\troot\troot\t\n/usr/share/man/man1/gtk-launch.1.gz\tbc785d487ad900244f74bddb6af9891179901be92fbc03763cab6848f429ed75\t33188\troot\troot\t\n/usr/share/man/man1/gtk-query-immodules-3.0-64.1.gz\t405feb4738d269871c504d8e3b7927352a52806320a6ce57bc65aa8f104a1c6a\t33188\troot\troot\t\n/usr/share/man/man1/gtk-query-immodules-3.0.1.gz\tea9e721d26e79c8a03467aa6366c93e32d8f1d51e9c0c74eb4445a5f1bae851b\t33188\troot\troot\t\n/usr/share/themes/Default\t\t16877\troot\troot\t\n/usr/share/themes/Default/gtk-3.0\t\t16877\troot\troot\t\n/usr/share/themes/Default/gtk-3.0/gtk-keys.css\t1ae44e6bf1cd1b80ca9c773c2d38e49421f8bea579f0d944baed506df7ab76a6\t33188\troot\troot\t\n/usr/share/themes/Emacs\t\t16877\troot\troot\t\n/usr/share/themes/Emacs/gtk-3.0\t\t16877\troot\troot\t\n/usr/share/themes/Emacs/gtk-3.0/gtk-keys.css\ta75d778acbcef9b2824ba7cf6e01bb3b42d5c0153e2bfef69a11cfa739d91c1f\t33188\troot\troot\t\n",
+      "stderr": ""
+    }
+  },
+  "libffi": {
+    "path": "/tmp/arctic-gtk-preflight-candidate-rpms/libffi-3.5.2-2.fc44.x86_64.rpm",
+    "bytes": 43388,
+    "sha256": "a7dae96d30d007140c7dab605df40e55f90ef16f04392dd8ded32fa230c10dd6",
+    "signature": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpmkeys",
+        "--checksig",
+        "--verbose",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libffi-3.5.2-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/scratch/arctic-gtk-preflight-candidate-rpms/libffi-3.5.2-2.fc44.x86_64.rpm:\n    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: 36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6: OK\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK\n",
+      "stderr": ""
+    },
+    "identity": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{FILEDIGESTALGO}\n",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libffi-3.5.2-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "libffi\t0\t3.5.2-2.fc44\tx86_64\t8\n",
+      "stderr": ""
+    },
+    "file_header": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\t%{FILEUSERNAME}\t%{FILEGROUPNAME}\t%{FILELINKTOS}\n]",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libffi-3.5.2-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/usr/lib/.build-id\t\t16877\troot\troot\t\n/usr/lib/.build-id/c1\t\t16877\troot\troot\t\n/usr/lib/.build-id/c1/7e44bb51b65d6fa34cab1e98c1549941838e4a\t\t41471\troot\troot\t../../../../usr/lib64/libffi.so.8.2.0\n/usr/lib64/libffi.so.8\t\t41471\troot\troot\tlibffi.so.8.2.0\n/usr/lib64/libffi.so.8.2.0\t05bf4048cc0fd016140d7d880c4a4ec402096732f60463c8fb87b98d877d3628\t33261\troot\troot\t\n/usr/share/doc/libffi\t\t16877\troot\troot\t\n/usr/share/doc/libffi/README.md\t313a170f48c302c85e51e5ecfe4eabd912a5ddf0c5caee4df19a446a72f8754e\t33188\troot\troot\t\n/usr/share/licenses/libffi\t\t16877\troot\troot\t\n/usr/share/licenses/libffi/LICENSE\td5699fa516968e3a1550e6c902b7441c78856f2603d61bedd0b0662a26655366\t33188\troot\troot\t\n",
+      "stderr": ""
+    }
+  },
+  "libwayland-client": {
+    "path": "/tmp/arctic-gtk-preflight-candidate-rpms/libwayland-client-1.26.0-1.fc44.x86_64.rpm",
+    "bytes": 36340,
+    "sha256": "0f2b24f04061c1c053a02085f4edb89243e2d4f0284775f164d2c7e77785e7e7",
+    "signature": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpmkeys",
+        "--checksig",
+        "--verbose",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libwayland-client-1.26.0-1.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/scratch/arctic-gtk-preflight-candidate-rpms/libwayland-client-1.26.0-1.fc44.x86_64.rpm:\n    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: 36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6: OK\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK\n",
+      "stderr": ""
+    },
+    "identity": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{FILEDIGESTALGO}\n",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libwayland-client-1.26.0-1.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "libwayland-client\t0\t1.26.0-1.fc44\tx86_64\t8\n",
+      "stderr": ""
+    },
+    "file_header": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\t%{FILEUSERNAME}\t%{FILEGROUPNAME}\t%{FILELINKTOS}\n]",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libwayland-client-1.26.0-1.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/usr/lib/.build-id\t\t16877\troot\troot\t\n/usr/lib/.build-id/27\t\t16877\troot\troot\t\n/usr/lib/.build-id/27/02ca98304d32a5b10dc2a9206340401cace09c\t\t41471\troot\troot\t../../../../usr/lib64/libwayland-client.so.0.26.0\n/usr/lib64/libwayland-client.so.0\t\t41471\troot\troot\tlibwayland-client.so.0.26.0\n/usr/lib64/libwayland-client.so.0.26.0\tcb517c02f6e808257932a4b3f1a4bd1232ce415cdd8e41a854ff0f0e918b51c9\t33261\troot\troot\t\n/usr/share/licenses/libwayland-client\t\t16877\troot\troot\t\n/usr/share/licenses/libwayland-client/COPYING\t6eefcb023622a463168a5c20add95fd24a38c7482622a9254a23b99b7c153061\t33188\troot\troot\t\n",
+      "stderr": ""
+    }
+  },
+  "libxkbcommon": {
+    "path": "/tmp/arctic-gtk-preflight-candidate-rpms/libxkbcommon-1.13.1-2.fc44.x86_64.rpm",
+    "bytes": 190238,
+    "sha256": "9c24e901d5daffbd0b78c06af4e63a00fcfec104fea05917314d781d0d439677",
+    "signature": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpmkeys",
+        "--checksig",
+        "--verbose",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libxkbcommon-1.13.1-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/scratch/arctic-gtk-preflight-candidate-rpms/libxkbcommon-1.13.1-2.fc44.x86_64.rpm:\n    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: 36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6: OK\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK\n",
+      "stderr": ""
+    },
+    "identity": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{FILEDIGESTALGO}\n",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libxkbcommon-1.13.1-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "libxkbcommon\t0\t1.13.1-2.fc44\tx86_64\t8\n",
+      "stderr": ""
+    },
+    "file_header": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\t%{FILEUSERNAME}\t%{FILEGROUPNAME}\t%{FILELINKTOS}\n]",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/libxkbcommon-1.13.1-2.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/usr/lib/.build-id\t\t16877\troot\troot\t\n/usr/lib/.build-id/01\t\t16877\troot\troot\t\n/usr/lib/.build-id/01/2e55c2e5f5aac20c682e2f28fde407c9d705a0\t\t41471\troot\troot\t../../../../usr/lib64/libxkbregistry.so.0.13.1\n/usr/lib/.build-id/39\t\t16877\troot\troot\t\n/usr/lib/.build-id/39/a50be4c344f3e9a8aa33c4a27f906b9aec2f78\t\t41471\troot\troot\t../../../../usr/lib64/libxkbcommon.so.0.13.1\n/usr/lib64/libxkbcommon.so.0\t\t41471\troot\troot\tlibxkbcommon.so.0.13.1\n/usr/lib64/libxkbcommon.so.0.13.1\t4ca0a8544873c3b7feafe4b0086ddf74e389e3a739da1e3a940a2aa15a441819\t33261\troot\troot\t\n/usr/lib64/libxkbregistry.so.0\t\t41471\troot\troot\tlibxkbregistry.so.0.13.1\n/usr/lib64/libxkbregistry.so.0.13.1\t9d25e222ecad31f413f65a7d17c1ab21dd90238077d634e6462ee4129e75c930\t33261\troot\troot\t\n/usr/share/licenses/libxkbcommon\t\t16877\troot\troot\t\n/usr/share/licenses/libxkbcommon/LICENSE\t967e97b28658f0037bbe164a237bdfb0c3ec790e67f6c29372ea5b09306f61f3\t33188\troot\troot\t\n",
+      "stderr": ""
+    }
+  },
+  "wtype": {
+    "path": "/tmp/arctic-gtk-preflight-candidate-rpms/wtype-0.4-11.fc44.x86_64.rpm",
+    "bytes": 19400,
+    "sha256": "97646d188ca009d47297227d8832657d052c19c2670d976e1619a13ecfcac348",
+    "signature": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpmkeys",
+        "--checksig",
+        "--verbose",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/wtype-0.4-11.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/scratch/arctic-gtk-preflight-candidate-rpms/wtype-0.4-11.fc44.x86_64.rpm:\n    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: 36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6: OK\n    Header SHA256 digest: OK\n    Payload SHA256 digest: OK\n",
+      "stderr": ""
+    },
+    "identity": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{FILEDIGESTALGO}\n",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/wtype-0.4-11.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "wtype\t0\t0.4-11.fc44\tx86_64\t8\n",
+      "stderr": ""
+    },
+    "file_header": {
+      "argv": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "rpm",
+        "-qp",
+        "--qf",
+        "[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\t%{FILEUSERNAME}\t%{FILEGROUPNAME}\t%{FILELINKTOS}\n]",
+        "/scratch/arctic-gtk-preflight-candidate-rpms/wtype-0.4-11.fc44.x86_64.rpm"
+      ],
+      "exit_status": 0,
+      "stdout": "/usr/bin/wtype\t7ea6142fb0a314ef2ff4736206e93541047e6d1b8f9245570bd117e6159b332e\t33261\troot\troot\t\n/usr/lib/.build-id\t\t16877\troot\troot\t\n/usr/lib/.build-id/24\t\t16877\troot\troot\t\n/usr/lib/.build-id/24/86937673f763654866f597d24eaa70f8660959\t\t41471\troot\troot\t../../../../usr/bin/wtype\n/usr/share/doc/wtype\t\t16877\troot\troot\t\n/usr/share/doc/wtype/README.md\tcdcc10eac97d63c11772b66bab1e0e0b086657cea54ff29d0abbe2adc12b6237\t33188\troot\troot\t\n/usr/share/licenses/wtype\t\t16877\troot\troot\t\n/usr/share/licenses/wtype/LICENSE\te8bd6bac1b3ba6253625830bceb30c5340f74f4bc898d1bd5450596cbd8224f0\t33188\troot\troot\t\n/usr/share/man/man1/wtype.1.gz\t2e1d143c69f25a2cf4481d22e9c35a2793298332dbb54303fb92157dfac95b3c\t33188\troot\troot\t\n",
+      "stderr": ""
+    }
+  }
+}

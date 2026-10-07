@@ -1,0 +1,36 @@
+{
+  "core_ready_sha256": "d917dfed562add51547d7f3df9cd3a0932e5690c407a6d8ff76b05687bb9f578",
+  "core_independent_review_sha256": "9a03f5bb49d95ebd29b6d90daca5a458863f81b621edbc732578522d2b3e1c44",
+  "unchanged_core_functions": [
+    "require",
+    "load",
+    "rows",
+    "gtk_identity",
+    "run",
+    "main"
+  ],
+  "integration_adaptations": [
+    "library_proof: signed exact candidate ELF/hash/NEVRA/epoch allowlist",
+    "mapping_proof: separate bounded locale mapping origin, no signed-content assertion",
+    "turn: per-process WAYLAND_DEBUG=client and exact raw wire pairing; same literal args/order/sleeps",
+    "arm: explicit bounded evidence formats plus inventory of excluded copied config/cache; original activation30s and cleanup unchanged",
+    "gtk_runtime: retained raw maps paired with fresh/current native main process/stat/hash/current RPM metadata, no additional signed Python claim",
+    "arm: exact original desktop plus four isolated HOME/XDG assignments recorded; fixed wire args unchanged"
+  ],
+  "scope": "source-core freeze retained unchanged; this separate integration and actual VM remain unreviewed/unrun",
+  "unchanged_function_ast_sha256": {
+    "require": "9da730f7c58f95f6e23f25fa0cd76f28059d4e75b4a62253116be61938546a17",
+    "load": "b048638508addd7b5019b00910acf9d1f3aacb3c5b7e06261bd7b7217743a3eb",
+    "rows": "01d91468305cae9446a7b4d197905f017e3a7cbaa4e0fe5ba92572ed14433ee3",
+    "gtk_identity": "6eff17c659a89730a9b6dcca2bf1c65a9fd0d39198938f17119e3e84cd330e14",
+    "run": "4913fe7f374a20808e28cd734d32b062358aa5bb888bcab8f07c637f771df9fb",
+    "main": "38de200a56ad65c698ed213f838e6628788c9ac1a8297bc278a37c317bb9d496"
+  },
+  "integration_changed_function_ast_sha256": {
+    "library_proof": "84c703385d5c48db69cbb04a36c5a3b4390ab26292a694e35224c2790b90c451",
+    "mapping_proof": "ff07b33d0be5c75a8553747ff080af1419d00fbec6d603e8207d056fdcb7480b",
+    "gtk_runtime": "c61b9d264055029ab2b675f587e0a700c4df9cff8d154dafa1d10232993a196b",
+    "turn": "19c9315ca52eeff08fdff933b0b22f76771154989debb7c5cab98ff214457d2b",
+    "arm": "d4c633ae9e479512a985277e977a059aa41a789e848c3e6a0d42cdbe0c6f77a1"
+  }
+}

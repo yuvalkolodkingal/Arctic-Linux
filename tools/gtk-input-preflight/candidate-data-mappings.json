@@ -1,0 +1,29 @@
+{
+  "candidate_iso_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+  "files": {
+    "/usr/lib/locale/C.utf8/LC_CTYPE": {
+      "epoch": 0,
+      "max_bytes": 1048576,
+      "mode": 420,
+      "rpm_nevra": "glibc-common-2.43-9.fc44.x86_64",
+      "signed_content_allowlist": true,
+      "signed_header": "/usr/lib/locale/C.utf8/LC_CTYPE\t40680545df4f92443c15e7c6f51a7fdc9154ebedd9eff1ed5c48437039add365\t33188\troot\troot\t0\t4294967295\t369120",
+      "signed_payload_bytes": 369120,
+      "signed_payload_sha256": "40680545df4f92443c15e7c6f51a7fdc9154ebedd9eff1ed5c48437039add365",
+      "source": "exact official Fedora44 RPM RSA/SHA256 full fingerprint36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6"
+    },
+    "/usr/lib64/gconv/gconv-modules.cache": {
+      "epoch": 0,
+      "max_bytes": 1048576,
+      "mode": 420,
+      "rpm_nevra": "glibc-2.43-9.fc44.x86_64",
+      "signed_content_allowlist": false,
+      "signed_header": "/usr/lib64/gconv/gconv-modules.cache\te3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\t33188\troot\troot\t0\t4294967260\t0",
+      "signed_payload_bytes": 0,
+      "signed_payload_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "exact official Fedora44 RPM RSA/SHA256 full fingerprint36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6"
+    }
+  },
+  "schema": "arctic-candidate-input-data-v1",
+  "scope": "Exact two read-only non-executable mappings only; gconv cache is runtime-generated and has no signed runtime-content allowlist."
+}
