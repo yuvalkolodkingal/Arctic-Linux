@@ -1,0 +1,22 @@
+{
+  "adapter_contract_sha256": "696feff9fd040f0b186e0c9c415da96f6ef3d820710616b968c505925662ccf7",
+  "files": {
+    "README.md": "9517026396ba6821bcf5c47a5d35082722d11a326688fb7d5bd3be08c7a06b5c",
+    "candidate-wayland-session.fixture": "a7a41d9996fd912af2b8b2dc0b5c33ca6d4530e8c45122f3e35f321bb620abfd",
+    "controller.py": "45c118d8e9e1cf35b37f5badd94db182e3f8e14a74e1612afc12f2b4166b1755",
+    "credential-units.py": "238e3c56286dc56ee5b37c3ac3cff43adb8ebb5581dd98eeaa415ff6957e07e5",
+    "native-handoff": "3c9586685044cfa78072e79148267d69678b527321fe284bc691833850affee9",
+    "native-handoff.c": "0a86ac966f919f8a199924da845e76a530426615d7dbaaee8bf28b322e941534",
+    "owned-log.py": "024b33d202607e3056398e2a02897c342ce51c0828a79b32e3563d7374c02876",
+    "owned-logger.py": "f4bdcd91efa76485b04ce4d0c447857350f67a4b49f0be185455bce79c2c5c5f",
+    "prepare.py": "ae07d515feecf6bddd72c3dd2c4db73ddebd62c4eb1b2306ad1d87fb17ad121b",
+    "request-stop.py": "7160eddc74fc985732b34b843321356eba6b00a25453301fb0dfbb7c10e1d314",
+    "runtime-pins.json": "cad22ede4cee4b06483577d3ddd33539e7aa5a49e598132afd976ccbd6bd095e",
+    "sealed_environment.py": "aff9882e5cf954879d9e70f6d4cd78ed579bb076aee5f35d31e1a9febdae7f38",
+    "test_trace_core.py": "d4d3517b91229e8b0b6ddab53b3d3acd2cd78abcb725b8a01d437165eaed8608",
+    "test_trace_setup.py": "529615b778c3f6d24b0c823cdf67bc7a18925530acb13523c8c01fc0afc8fd9f",
+    "test_trace_transport.py": "41b1780658efbf85d876b2b56cc73637d34b9840ed05320103284745f9879606",
+    "transport.py": "b4561953e46e6f69e5132ddc88caa2d9b02a313c2cfcbed049d76ccdce3adf32"
+  },
+  "ready_sha256": "e66c81f3778c75a91fa688cbdac8a5b091127e46a621ec05ce511f937cc75c8c"
+}

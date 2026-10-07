@@ -46,8 +46,6 @@ SECUREBOOT=0
 VGA=virtio
 APPEND=""
 COLLECT=0
-SAFE_DIAGNOSTIC=""  # default-off, no product setting change
-MANGO_STARTUP_TRACE=0  # explicit CLI only; inherited environment cannot select it
 OUTBASE="$ROOT/out/test"
 
 while (( $# )); do
@@ -63,8 +61,6 @@ while (( $# )); do
     --vga) VGA="$2"; shift 2 ;;
     --append) APPEND="$APPEND $2"; shift 2 ;;
     --collect) COLLECT=1; shift ;;
-    --safe-diagnostic) SAFE_DIAGNOSTIC="$2"; shift 2 ;;
-    --mango-startup-trace) MANGO_STARTUP_TRACE=1; shift ;;
     --debug) APPEND="$APPEND console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"; shift ;;
     --secureboot) SECUREBOOT=1; FIRMWARE=uefi; shift ;;
     --out) OUTBASE="$2"; shift 2 ;;
@@ -72,32 +68,14 @@ while (( $# )); do
     *) arctic_die "unknown option: $1" ;;
   esac
 done
-if (( MANGO_STARTUP_TRACE )); then
-  [[ -n "$SAFE_DIAGNOSTIC" && -f "$HERE/mango-startup-trace-v1/stage.py" && -f "$HERE/mango-startup-trace-v1/stop-driver.py" ]] || arctic_die "Trace requires separate reviewed Safe bundle and adapter"
-fi
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$MODE" in try|install|safe|check|disk) ;; *) arctic_die "--mode takes try, install, safe, check or disk" ;; esac
-if [[ -n "$SAFE_DIAGNOSTIC" ]]; then
-  [[ "$FIRMWARE" == uefi && "$MODE" == safe && "$KVM" == 1 && "$SECUREBOOT" == 0 && "$COLLECT" == 0
-     && "$TIMEOUT" == 600 && "$INTERVAL" == 60 && "$MEMORY" == 4096 && "$SMP" == 2 && "$VGA" == virtio ]] \
-    || arctic_die "Safe diagnostic requires the fixed isolated Safe/KVM/600s/2CPU/4GiB settings"
-  [[ -c /dev/kvm && -f "$SAFE_DIAGNOSTIC/guest-safe-collector-v1.py" && -f "$SAFE_DIAGNOSTIC/safe-driver-v1.py"
-     && -f "$SAFE_DIAGNOSTIC/guest-render-collector-v1.py" && -f "$SAFE_DIAGNOSTIC/render-driver-v1.py" && -f "$SAFE_DIAGNOSTIC/fixed-rows-v1.py"
-     && -f "$SAFE_DIAGNOSTIC/bootstrap-safe-v1.sh" ]] || arctic_die "Safe diagnostic prerequisites absent"
-  [[ "$APPEND" == " console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1" ]] \
-    || arctic_die "Safe diagnostic requires the exact debug arguments"
-fi
 [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
 ISO="$(cd "$(dirname "$ISO")" && pwd)/$(basename "$ISO")"
 
 sb=""; if [[ $SECUREBOOT == 1 ]]; then sb="-sb"; fi
 OUT="$OUTBASE/$FIRMWARE$sb-$MODE"
-if [[ -n "$SAFE_DIAGNOSTIC" ]]; then
-  [[ ! -e "$OUT" ]] || arctic_die "Safe diagnostic output must be unused"
-  mkdir -p "$OUT"
-else
-  rm -rf "$OUT"; mkdir -p "$OUT"
-fi
+rm -rf "$OUT"; mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
 arctic_ensure_engine
@@ -116,7 +94,6 @@ from vmtest import log, looks_like_boot_menu
 out, mode, timeout, interval = os.environ["OUT"], os.environ["MODE"], int(os.environ["TIMEOUT"]), int(os.environ["INTERVAL"])
 append = os.environ.get("APPEND", "").strip()
 collect = os.environ.get("COLLECT") == "1"
-safe_diagnostic = os.environ.get("SAFE_DIAGNOSTIC") == "1"
 t0 = vmtest.T0
 vm = vmtest.VM(sys.argv[1:], f"{out}/qmp.sock", "iso", qemu_log=f"{out}/qemu.log")
 shot, keys, type_text = vm.shot, vm.keys, vm.type_text
@@ -152,36 +129,11 @@ else:
         type_text(" " + append, gap=0.2)
         time.sleep(0.5)
         shot("03-boot-entry-edited")
-        if safe_diagnostic: safe_entry_origin = time.monotonic()
         keys("ctrl-x")
         log(f"selected the '{mode}' entry with extra kernel arguments: {append}")
     else:
-        if safe_diagnostic: safe_entry_origin = time.monotonic()
         keys("ret")
         log(f"selected the '{mode}' entry")
-
-if safe_diagnostic:
-    sys.path.insert(0, "/safe-diagnostic")
-    import importlib.util
-    spec = importlib.util.spec_from_file_location('safe_driver_v1', '/safe-diagnostic/safe-driver-v1.py')
-    safe_driver_v1 = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(safe_driver_v1)
-    try:
-        safe_driver_v1.run(vm, out, safe_driver_v1.qemu_process_origin(vm.proc.pid),
-                           safe_entry_origin if menu_seen else None, menu_seen)
-        if os.environ.get('ARCTIC_MANGO_STARTUP_TRACE') == '1':
-            trace_spec = importlib.util.spec_from_file_location('one_mango_stop', '/mango-trace/stop-driver.py')
-            trace_driver = importlib.util.module_from_spec(trace_spec)
-            trace_spec.loader.exec_module(trace_driver)
-            trace_driver.run(vm, out)
-        else:
-            render_spec = importlib.util.spec_from_file_location('safe_render_driver_v1', '/safe-diagnostic/render-driver-v1.py')
-            render_driver_v1 = importlib.util.module_from_spec(render_spec)
-            render_spec.loader.exec_module(render_driver_v1)
-            render_driver_v1.run(vm, out)
-    finally:
-        vm.quit()
-    sys.exit(0)
 
 # 2. Splash and boot: every 10 s for the first 2 minutes, then every --interval seconds.
 start = time.time()
@@ -250,7 +202,6 @@ PY
 inner=$(cat <<'INNER'
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
-if [ "$SAFE_DIAGNOSTIC" = 1 ]; then pkgs+=(xorriso); fi
 dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
 qemu-img create -q -f qcow2 /tmp/target.qcow2 64G
 accel="tcg,thread=multi"
@@ -276,27 +227,6 @@ if [ "$FIRMWARE" = uefi ]; then
   cp "$vars" /tmp/vars.fd
   args+=(-drive "if=pflash,format=raw,unit=0,readonly=on,file=$code" -drive "if=pflash,format=raw,unit=1,file=/tmp/vars.fd")
 fi
-if [ "$SAFE_DIAGNOSTIC" = 1 ]; then
-  if [ "$ARCTIC_MANGO_STARTUP_TRACE" = 1 ]; then
-    python3 -B /mango-trace/stage.py /safe-diagnostic /mango-trace /tmp/safe-data /tmp/safe-data.iso /tmp/trace-CD-readback "$OUT/mango-CD-receipt.json" > /tmp/trace-credentials.json
-    mapfile -d '' -t trace_credentials < <(python3 -c 'import json,sys;v=json.load(open("/tmp/trace-credentials.json"));sys.stdout.buffer.write(b"\0".join(x.encode() for x in v)+b"\0")')
-    [ "${#trace_credentials[@]}" -eq 4 ] && [ "${trace_credentials[0]}" = -smbios ] && [ "${trace_credentials[2]}" = -smbios ]
-    args+=("${trace_credentials[@]}")
-  else
-    mkdir /tmp/safe-data
-    cp /safe-diagnostic/{guest-safe-collector-v1.py,guest-render-collector-v1.py,fixed-rows-v1.py} /tmp/safe-data/
-    xorriso -as mkisofs -quiet -V ARCTICSAFE -J -R -G /safe-diagnostic/bootstrap-safe-v1.sh \
-      -o /tmp/safe-data.iso /tmp/safe-data
-  fi
-  args+=(-drive file=/tmp/safe-data.iso,media=cdrom,readonly=on,if=none,id=safedata -device ide-cd,drive=safedata,bus=ide.1,unit=0)
-  {
-    qemu-system-x86_64 --version
-    rpm -q "${pkgs[@]}"
-    sha256sum "$(command -v qemu-system-x86_64)" "$code" "$vars" /tmp/safe-data.iso \
-      /safe-diagnostic/{guest-safe-collector-v1.py,safe-driver-v1.py,guest-render-collector-v1.py,render-driver-v1.py,fixed-rows-v1.py}
-    printf '%s\n' 'Additional read-only diagnostic data CD; actual new tool hashes, not baseline parity proof.'
-  } > "$OUT/safe-toolchain.txt"
-fi
 python3 -c "$DRIVER" "${args[@]}"
 rm -f "$OUT/qmp.sock"
 chown -R "$HOST_UID:$HOST_GID" "$OUT"
@@ -310,15 +240,8 @@ if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
   [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
 fi
-safe_args=()
-safe_enabled=0
-if [[ -n "$SAFE_DIAGNOSTIC" ]]; then
-  safe_enabled=1
-  safe_args=(-v "$SAFE_DIAGNOSTIC:/safe-diagnostic:ro")
-  if (( MANGO_STARTUP_TRACE )); then safe_args+=(-v "$HERE/mango-startup-trace-v1:/mango-trace:ro"); fi
-fi
-"$engine" run --rm "${safe_args[@]}" "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
-  -e ARCTIC_MANGO_STARTUP_TRACE="$MANGO_STARTUP_TRACE" -e SAFE_DIAGNOSTIC="$safe_enabled" -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
+"$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+  -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
   -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ISO:/iso:ro" -v "$OUT:/out" -v "$HERE/lib:/arctic-lib:ro" \

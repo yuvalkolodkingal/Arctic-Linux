@@ -1,0 +1,238 @@
+{
+  "adapter_READY_sha256": "61c1424a84770eb2f927ab5ac6996bfee326a699fd9b9d7501b55f45260c69c6",
+  "adapter_audit_entries": 81,
+  "all_controls_passed": true,
+  "blocking_source_findings": [],
+  "closed_previous_findings": [
+    "Final security/export failures now retain all8 wire bodies byte-exact, primary failure+FAILED END remains fatal, cleanup/security once, no deleted-file reread or process rediscovery.",
+    "TERM-resistant/handler fixture waits for actual INITIAL bytes after child handler install;10lifecycle controls warning-clean PASS.",
+    "Selected workflow runs unchanged original25+32 assertions in exact pinned normal5a30/ae55/R0193 snapshot, then actual trace adapter controls; no assertion skipped/rewritten."
+  ],
+  "core_READY_sha256": "e66c81f3778c75a91fa688cbdac8a5b091127e46a621ec05ce511f937cc75c8c",
+  "core_audit_entries": 42,
+  "core_external_entries": 74,
+  "execution_entries": 48,
+  "execution_manifest_sha256": "c5ada6d0434318cf46acd0d4fa5917ae1816e3bc03d11ae71d8fe64d2b3f218e",
+  "independent_controls": {
+    "actual_adapter": {
+      "explicit_skip": 1,
+      "methods": 16,
+      "passed": 15,
+      "skip_reason": "xorriso absent on reviewer host; exact owner existing-helper16/16 and real generatedCD13 source-bound receipt independently inspected, not duplicated"
+    },
+    "additional_independent_late_failure_cases": {
+      "cases": 2,
+      "passed": 2,
+      "real_private_files_and_exact_controller": true,
+      "security_authority_mocked": true
+    },
+    "lifecycle": {
+      "actual_uid": 1000,
+      "methods": 10,
+      "passed": 10
+    },
+    "normal_original_snapshot": {
+      "methods": 57,
+      "original_suite_counts": [
+        25,
+        32
+      ],
+      "passed": 57
+    },
+    "setup_rollback_and_failure_retention": {
+      "actual_uid": 0,
+      "methods": 12,
+      "passed": 12,
+      "scope": "Parent-authorized existing helper private-root fixture only; own16file copied hashes verified and fixture removed"
+    },
+    "transport": {
+      "actual_uid": 1000,
+      "methods": 6,
+      "passed": 6
+    },
+    "warning_policy": "ResourceWarning and SyntaxWarning errors for reviewer commands; no warnings observed"
+  },
+  "inputs": [
+    {
+      "bytes": 780,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v2/review-ready-v2.json",
+      "sha256": "e66c81f3778c75a91fa688cbdac8a5b091127e46a621ec05ce511f937cc75c8c"
+    },
+    {
+      "bytes": 6827,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v2/audit-manifest-v2.json",
+      "sha256": "8dcbf2d9b79acafd32e7e8b9daf17c0f9991bc609b9c12f93669a744890631bf"
+    },
+    {
+      "bytes": 17678,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v2/external-pins.json",
+      "sha256": "da6192663b81241f328db6b6cfa33fc1a738c5518efc256ec506aac84e905043"
+    },
+    {
+      "bytes": 9968,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v2/adapter-contract.json",
+      "sha256": "696feff9fd040f0b186e0c9c415da96f6ef3d820710616b968c505925662ccf7"
+    },
+    {
+      "bytes": 6834,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v2/runtime-pins.json",
+      "sha256": "cad22ede4cee4b06483577d3ddd33539e7aa5a49e598132afd976ccbd6bd095e"
+    },
+    {
+      "bytes": 4573,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v2/execution-map.json",
+      "sha256": "8c12ac9b818ef70b0da7a049a866a52021fc5c47f0ac4b1816001034c0633346"
+    },
+    {
+      "bytes": 1865,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v2/narrow-delta.json",
+      "sha256": "70f38e761965c70b38cf2db27dfab1799f153af75fc992606c1d349c22294e41"
+    },
+    {
+      "bytes": 1089,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/READY.json",
+      "sha256": "61c1424a84770eb2f927ab5ac6996bfee326a699fd9b9d7501b55f45260c69c6"
+    },
+    {
+      "bytes": 15215,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/audit-manifest.json",
+      "sha256": "9dca0a65396ba286a1a90a0919ea8e70161949b6fa9706ecab4b8cfa3d89031e"
+    },
+    {
+      "bytes": 3506,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/handoff-v2.json",
+      "sha256": "bde994ef1309eb2bf6b07f16ffb8873d0cdee4d663c95371d7d581e721f90d67"
+    },
+    {
+      "bytes": 9168,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/execution-tree/tools/mango-startup-trace-v1/execution-pins-trace-v1.json",
+      "sha256": "c5ada6d0434318cf46acd0d4fa5917ae1816e3bc03d11ae71d8fe64d2b3f218e"
+    },
+    {
+      "bytes": 3166,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/actual-CD13-receipt-v2.json",
+      "sha256": "a8c464581524a5c94a7ae9c30190c66b4db79112f7df9149672cedfb327d7d1d"
+    },
+    {
+      "bytes": 4293,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/adapter-container-controls-final.log",
+      "sha256": "bed1821c88f14f3e3891edd2625b679ee9a9e7183904128a4aec71dea02fb0cf"
+    },
+    {
+      "bytes": 1644,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/controls-summary-v2.json",
+      "sha256": "5a774aaf77442bb4b64c52d8f2659af1c5b5be9bb3eedcb3f01ee588df92110d"
+    },
+    {
+      "bytes": 2376,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v2/prior-v1.json",
+      "sha256": "eab280609185c182d621a9faca131cda85f8a8e1017d2493d6b8bdee1c6f7f2b"
+    },
+    {
+      "bytes": 712,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-source-v1/review-ready-v1.json",
+      "sha256": "2e6c99a60d6d90d212b9ae35370a5c7e9879ab59241484e881686a90b14911eb"
+    },
+    {
+      "bytes": 1021,
+      "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/safe-mango-trace-adapter-v1/READY.json",
+      "sha256": "7dd70c0356da68c6da964e6d2d7f9e51041a28354eebf46466239d2bc71084dc"
+    },
+    {
+      "bytes": 9340,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v1/review.json",
+      "sha256": "9abafcf8842b6f31463da96dd39d913f44275b2b8c04184e58b2041536d431f3"
+    }
+  ],
+  "review_scope": "Exact corrected corev2 + adapterv2 essential one-target startup-perturbed Mango-d trace, source/owned-host controls only",
+  "scope_limits": [
+    "No VM, actual Mango, guest CLI, service/hook/config/security/package/network/download/API or mutable Git actions by reviewer. Only authorized exact private root setup fixtures in existing Docker helper.",
+    "Root clean committed source/mode/ancestry/independent-report guard and actual generated13-member CD readback remain promotion/runtime gates.",
+    "This instrumented selected final-boundary Mango-d/logger/socket/copy-path/environment handoff is deliberately different from normal startup. Earlier profiles/history/dynamic-chain and original Bash fidelity are unqualified.",
+    "Actual SDDM credential import/config/selected helper/native identity, SELinux allowances, renderer strings/authenticated provenance and owned cleanup require actual VM evidence.",
+    "Safe visual gate remains OPEN. Active scanout pixels unavailable; no performance/physical GPU/normal-session/release acceptance claim. Removing owned disk objects does not restore PID1/SDDM caches; no daemon reload/normal replacement/inherited-app signals.",
+    "Prior original Safe corruption, incomplete-stream actual failure, source-only blockedv1 controls and performance failures remain unchanged."
+  ],
+  "setup_history": [
+    "Initial v2 verifier read guessed review-ready-v1 filename; actual review-ready-v2 then read. Later old receipt/final-log names were inspected before actual-CD13-receipt-v2 and controls-summary-v2 confirmed corrected binding. No frozen writes."
+  ],
+  "shared_Git_metadata_unchanged": true,
+  "status": "SOURCE_AND_HOST_CONTROLS_PASS_VM_UNRUN",
+  "supports": [
+    {
+      "bytes": 1138,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/adapter-host-controls.json",
+      "sha256": "88af994def3c4444b754fed42f8deda5a4cca1f40e63339ce5a1ff67b30026ea"
+    },
+    {
+      "bytes": 209,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/core-host-controls.json",
+      "sha256": "d6c5ba2797bc388ea50772557711e6732f46ff4834e391cd63cc3a86f6903cd1"
+    },
+    {
+      "bytes": 11795,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/finalize_pass.py",
+      "sha256": "bbc53efa62a4e50981ba14f48ae867ee2b6058f2d5f460f73224d25581522a9a"
+    },
+    {
+      "bytes": 8117,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/normal-controls.py.log",
+      "sha256": "7a7e0520bb7ad6c46470ea8ad617d3dec920c1a6cab9b73aab96f2f1f69da401"
+    },
+    {
+      "bytes": 4968,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/replay_retained_failure.py",
+      "sha256": "c0d8074687b5e94b6c12be5eda3b8c280bf4cddf3cbb360a6d8ca4ec8f58d412"
+    },
+    {
+      "bytes": 1499,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/retained-failure-controls.json",
+      "sha256": "142cb9dcd2893aca0d4839e8f5533522069971f7d141d4487b249b2bd83bd030"
+    },
+    {
+      "bytes": 441,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/root-after.json",
+      "sha256": "4b7258a7d37547ff35e7505e5b1820df461bfddc8d4b76b4d8cb146a355823c3"
+    },
+    {
+      "bytes": 441,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/root-before.json",
+      "sha256": "053c2835b6161595f116b7b65f9aa08ec069719df204a31016d54625f47b97b6"
+    },
+    {
+      "bytes": 9005,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/root-setup-controls.json",
+      "sha256": "921c268f5fbbd9f98a70d4338eba3dcdcb93d8f6aa9b986532ba65955fec1d91"
+    },
+    {
+      "bytes": 111,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/root-setup-controls.log",
+      "sha256": "d26765b14513aa017d7225eec227ccf9bf6a0901bafd2867e932d6b9a055315d"
+    },
+    {
+      "bytes": 208,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/syntax.json",
+      "sha256": "7bb160f49c5f0e932e54aec1b36c4f8f624ab982eb5b0409c70a5fbbf59f078b"
+    },
+    {
+      "bytes": 1724,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/test_adapter.py.log",
+      "sha256": "8632494be2c3eb45baa0b150e1f1a5954260323f24e694f17c682862351b7a75"
+    },
+    {
+      "bytes": 109,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/test_trace_core.py.log",
+      "sha256": "b7b98fefdabb1d93f69987f5a3919e17a7429db96fe611200a806ac87c8c5e73"
+    },
+    {
+      "bytes": 104,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/test_trace_transport.py.log",
+      "sha256": "8f2c3cf5d3bf9284b6f5a737141442af9cd5313f865e0a157807be3354be9b86"
+    },
+    {
+      "bytes": 1182,
+      "path": "/workspace/Arctic-Linux/out/audit/safe-mango-trace-whole-independent-review-v2/whole-source-parity-and-pins.json",
+      "sha256": "a07f4afd0fe91d0d6b815dee9fe2de479870557a3ced581df31a7145d6b08dce"
+    }
+  ]
+}

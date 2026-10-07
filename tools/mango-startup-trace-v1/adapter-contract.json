@@ -1,0 +1,252 @@
+{
+  "CD_block_multiple": 2048,
+  "CD_bytes_limit": 16777216,
+  "CD_exact_member_count": 13,
+  "CD_label": "ARCTICSAFE",
+  "credentials": {
+    "builder": "credential-units.py:qemu_args(actual_CD_sha256,actual_CD_bytes)",
+    "content_is_dynamic_only_in": "validated exact generated CD digest/bytes; not guessed/fake startup source",
+    "expected_generator": "/run/systemd/generator.early",
+    "generated_paths": [
+      "sddm.service.d/90-arctic-mango-trace.conf",
+      "arctic-mango-trace-collector.service"
+    ],
+    "names": [
+      "systemd.unit-dropin.sddm.service~90-arctic-mango-trace",
+      "systemd.extra-unit.arctic-mango-trace-collector.service"
+    ],
+    "qemu_argv": "[-smbios,type=11,value=io.systemd.credential.binary:<name>=<base64_exact_unit_bytes>] per name",
+    "secrets": false
+  },
+  "flag_contract": {
+    "CLI_flag": "--mango-startup-trace",
+    "default": false,
+    "environment": "ARCTIC_MANGO_STARTUP_TRACE=1 only selected flag path",
+    "new_branch_guard": "Separate exact trace source/mode map and ancestry/clean committed-head/input guard; original normal safe-runner map/body remains unchanged",
+    "normal_flag_false_path": "Must remain byte/source equivalent to original Safe v6 path",
+    "one_existing_ISO_VM_only": true,
+    "requires": "safe_visual_diagnostic=true and all build/release/recovery/Nix/performance/normal boot/update modes=false",
+    "workflow_input": "mango_startup_trace"
+  },
+  "guest_entry": {
+    "config": "One fresh /etc/sddm.conf.d/99-arctic-mango-trace.conf [Wayland] SessionCommand=/run/arctic-mango-trace/session-wrapper",
+    "environment": "Sealed raw byte mapping from the new final boundary, SHELL=/bin/bash, BASH_ENV absent; not earlier/normal semantics",
+    "native_accepted_argv": [
+      "mango"
+    ],
+    "native_final_boundary": "Copied exact /etc/sddm/wayland-session with only final exec $@ replaced by exec /run/arctic-mango-trace/native-handoff $@",
+    "native_owned_argv": [
+      "mango",
+      "-d"
+    ],
+    "other_config_or_driver_changes": false,
+    "root_pre": "/usr/bin/python3.14 -I -S /run/arctic-mango-trace-cd/prepare.py <actual_cd_sha256> <actual_cd_bytes> <underlying_mount_dev:ino:uid:gid:mode>",
+    "root_terminal": "/usr/bin/python3.14 -I -S /run/arctic-mango-trace/controller.py"
+  },
+  "held_requirements": [
+    "Independent core+adapter review",
+    "Actual committed clean source/mode/ancestry/flag guard",
+    "Execute actual generated CD staging and real xorriso readback, exact13members/hashes/modes before VM",
+    "Actual generated credential/config/provider/selected native proof and security gates; source alone does not qualify actual startup",
+    "No renderer or active framebuffer inference until independently authenticated actual logs; Safe visual gate stays OPEN"
+  ],
+  "host_sequence": [
+    "Original Safe driver run and all strict34 events/decoder unchanged",
+    "Only after diagnostic-complete/34th capture, separately labelled trace stop step",
+    "Type fixed sudo /usr/bin/python3.14 -I -S /run/arctic-mango-trace-cd/request-stop.py into the already owned Foot prompt, then Return",
+    "Await one completed ARCTIC-RENDER-END within180s using complete newline records only; unfinished/malformed/duplicates/order/types fail",
+    "Decode transport.py then validate_evidence exact bytes into owned output; no fallback, no visual PASS",
+    "Root unit retains full source bodies, reaps only direct owned Mango through logger, removes exact-owned fresh disk files/read-only mount; PID1/SDDM caches deliberately not restored",
+    "Owned host VM quit/preserve terminal status and evidence regardless failure"
+  ],
+  "normal_base": {
+    "ISO_bytes": 1880244224,
+    "ISO_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+    "head": "5a30dd419bc7478c951ce11bb9f9227e59c18b16",
+    "path": "/workspace/arctic-safe-stream-qualification",
+    "recovery_base": "ae55fbc9d48cec5ecc786cf61994ed986296d1bb"
+  },
+  "normal_cd_files": [
+    {
+      "bytes": 18029,
+      "cd_name": "guest-safe-collector-v1.py",
+      "mode": 420,
+      "sha256": "e1da6bb2f07cb7014486e0f59c36973600e5dcd9a8063c684f461e099d3fc5e9",
+      "source": "/workspace/arctic-safe-stream-qualification/tools/safe-visual-diagnostic/guest-safe-collector-v1.py"
+    },
+    {
+      "bytes": 29618,
+      "cd_name": "guest-render-collector-v1.py",
+      "mode": 420,
+      "sha256": "7bb9ccb1ba51bf802db7b5aa8120c55616678b47395c3f4765f9a52745afc84b",
+      "source": "/workspace/arctic-safe-stream-qualification/tools/safe-visual-diagnostic/guest-render-collector-v1.py"
+    },
+    {
+      "bytes": 257,
+      "cd_name": "fixed-rows-v1.py",
+      "mode": 420,
+      "sha256": "68acaeb7f64e64648dbee0da2fddc7efce40b96495719850e017ca09d61c2582",
+      "source": "/workspace/arctic-safe-stream-qualification/tools/safe-visual-diagnostic/fixed-rows-v1.py"
+    }
+  ],
+  "normal_files": {
+    ".github/workflows/iso.yml": {
+      "bytes": 27878,
+      "mode": 420,
+      "sha256": "e4a78f10f7faccfecbb93d07e26f8e47cd19f0bd2bf45ba5ee1d9e6eba2d5326"
+    },
+    "tools/lib/container.sh": {
+      "bytes": 4012,
+      "mode": 420,
+      "sha256": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42"
+    },
+    "tools/safe-visual-diagnostic/bootstrap-safe-v1.sh": {
+      "bytes": 534,
+      "mode": 420,
+      "sha256": "083980566afcc5213cb8b93a737e3fc779ea58201a34a895068879b5dc166d53"
+    },
+    "tools/safe-visual-diagnostic/execution-pins-safe-v1.json": {
+      "bytes": 3885,
+      "mode": 420,
+      "sha256": "05df64446730e3c14a5aa2aff9079a5238f336ac6471276cb7af57f77548b2a9"
+    },
+    "tools/safe-visual-diagnostic/guest-safe-collector-v1.py": {
+      "bytes": 18029,
+      "mode": 420,
+      "sha256": "e1da6bb2f07cb7014486e0f59c36973600e5dcd9a8063c684f461e099d3fc5e9"
+    },
+    "tools/safe-visual-diagnostic/safe-driver-v1.py": {
+      "bytes": 6517,
+      "mode": 420,
+      "sha256": "f48dd72c5cc61174614127bf9a62b7affa0c036300273321554938b466209999"
+    },
+    "tools/safe-visual-diagnostic/safe-runner-v1.py": {
+      "bytes": 21703,
+      "mode": 420,
+      "sha256": "a28cb7a2322e071add61953d3a24d1129ec75e48cf122c086a57d99968426869"
+    },
+    "tools/test-iso.sh": {
+      "bytes": 14537,
+      "mode": 493,
+      "sha256": "978b2454e13434947b9245cfe21bc8f1c80e8f00c22857c284d228e9cf45bbbe"
+    }
+  },
+  "schema": "arctic-one-mango-adapter-v1",
+  "source_target_directory": "tools/mango-startup-trace-v1",
+  "terminal_lifecycle": {
+    "future_inherited_writer_tail_qualified": false,
+    "max_own_files": 16,
+    "native_TERM_seconds": 1,
+    "native_attempts": 1,
+    "native_capture_seconds": 1200,
+    "native_termination_drain_seconds": 3,
+    "normal_target_replacement": false,
+    "post_native_inherited_writer_quiet_seconds": 0.2,
+    "preparation_seconds": 30,
+    "root_unit_seconds": 1300,
+    "unowned_writer_signal": false,
+    "whole_VM_seconds": 2100
+  },
+  "trace_cd_files": [
+    {
+      "bytes": 5536,
+      "cd_name": "native-handoff",
+      "mode": 493,
+      "sha256": "3c9586685044cfa78072e79148267d69678b527321fe284bc691833850affee9",
+      "source": "native-handoff"
+    },
+    {
+      "bytes": 7964,
+      "cd_name": "owned-logger.py",
+      "mode": 420,
+      "sha256": "f4bdcd91efa76485b04ce4d0c447857350f67a4b49f0be185455bce79c2c5c5f",
+      "source": "owned-logger.py"
+    },
+    {
+      "bytes": 22647,
+      "cd_name": "owned-log.py",
+      "mode": 420,
+      "sha256": "024b33d202607e3056398e2a02897c342ce51c0828a79b32e3563d7374c02876",
+      "source": "owned-log.py"
+    },
+    {
+      "bytes": 2493,
+      "cd_name": "sealed_environment.py",
+      "mode": 420,
+      "sha256": "aff9882e5cf954879d9e70f6d4cd78ed579bb076aee5f35d31e1a9febdae7f38",
+      "source": "sealed_environment.py"
+    },
+    {
+      "bytes": 16567,
+      "cd_name": "controller.py",
+      "mode": 420,
+      "sha256": "45c118d8e9e1cf35b37f5badd94db182e3f8e14a74e1612afc12f2b4166b1755",
+      "source": "controller.py"
+    },
+    {
+      "bytes": 13794,
+      "cd_name": "prepare.py",
+      "mode": 420,
+      "sha256": "ae07d515feecf6bddd72c3dd2c4db73ddebd62c4eb1b2306ad1d87fb17ad121b",
+      "source": "prepare.py"
+    },
+    {
+      "bytes": 14786,
+      "cd_name": "transport.py",
+      "mode": 420,
+      "sha256": "b4561953e46e6f69e5132ddc88caa2d9b02a313c2cfcbed049d76ccdce3adf32",
+      "source": "transport.py"
+    },
+    {
+      "bytes": 3906,
+      "cd_name": "credential-units.py",
+      "mode": 420,
+      "sha256": "238e3c56286dc56ee5b37c3ac3cff43adb8ebb5581dd98eeaa415ff6957e07e5",
+      "source": "credential-units.py"
+    },
+    {
+      "bytes": 395,
+      "cd_name": "request-stop.py",
+      "mode": 420,
+      "sha256": "7160eddc74fc985732b34b843321356eba6b00a25453301fb0dfbb7c10e1d314",
+      "source": "request-stop.py"
+    },
+    {
+      "bytes": 6834,
+      "cd_name": "runtime-pins.json",
+      "mode": 420,
+      "sha256": "cad22ede4cee4b06483577d3ddd33539e7aa5a49e598132afd976ccbd6bd095e",
+      "source": "runtime-pins.json"
+    }
+  ],
+  "transport": {
+    "chunk_compressed_bytes": 49152,
+    "failed_END": "status=failed always fails qualification and retains raw/full bounded bodies; no rewritten prior failure",
+    "file_bytes": 4194304,
+    "full_sender_raw_rows": "Full body hashes/bytes referenced; never trimmed or embedded beyond existing marker cap",
+    "marker_bytes": 262144,
+    "max_files": 12,
+    "ordered": [
+      "BEGIN",
+      "REPORT",
+      "MANIFEST",
+      "CHUNK*",
+      "END"
+    ],
+    "prefix": "ARCTIC-RENDER-",
+    "semantic_body_set": [
+      "report.json",
+      "terminal.json",
+      "log-report.json",
+      "stderr.raw",
+      "line-proofs.json",
+      "owned-state.json",
+      "journal-before.log",
+      "journal-after.log"
+    ],
+    "serial_bytes": 33554432,
+    "successful_END": "status=collected but Safe visual OPEN, release_acceptance=false",
+    "total_bytes": 12582912
+  }
+}

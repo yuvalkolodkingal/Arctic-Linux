@@ -1,0 +1,240 @@
+{
+  "candidate_boundary": {
+    "actual_prerequisite_review": "1f8eef9f3e96c714d30315f005235959e2396dc7f930c6c3bfe3679f61d43b3c",
+    "compiled_loader_scope": "Official signed exact SDDM package/source association and captured executable; not reproducible source build",
+    "complete_chain": false,
+    "directories": [
+      {
+        "children": [
+          "90-arctic-live.conf"
+        ],
+        "ctime_ns": 1791340199297000000,
+        "device": 34,
+        "gid": 0,
+        "inode": 395,
+        "mode": 493,
+        "mtime_ns": 1791340199297000000,
+        "path": "/etc/sddm.conf.d",
+        "status": "listed",
+        "uid": 0
+      },
+      {
+        "children": [
+          "10-arctic.conf"
+        ],
+        "ctime_ns": 1771286400000000000,
+        "device": 34,
+        "gid": 0,
+        "inode": 511,
+        "mode": 493,
+        "mtime_ns": 1771286400000000000,
+        "path": "/usr/lib/sddm/sddm.conf.d",
+        "status": "listed",
+        "uid": 0
+      }
+    ],
+    "files": [
+      {
+        "bytes": 2749,
+        "device": 37,
+        "gid": 0,
+        "inode": 652157,
+        "mode": 420,
+        "path": "/etc/sddm.conf",
+        "sha256": "a0331fa4aacb433c77e0f7515485fb2d905266e52754de64d55c2e6428d3eb67",
+        "status": "read-raw",
+        "uid": 0
+      },
+      {
+        "bytes": 107,
+        "device": 35,
+        "gid": 0,
+        "inode": 2038,
+        "mode": 420,
+        "path": "/etc/sddm.conf.d/90-arctic-live.conf",
+        "sha256": "a27bc66a049eab66a674a31db26b9ea80290d42815a30f55b8a1ed0f61b77922",
+        "status": "read-raw",
+        "uid": 0
+      },
+      {
+        "bytes": 1570,
+        "device": 37,
+        "gid": 0,
+        "inode": 659451,
+        "mode": 493,
+        "path": "/etc/sddm/wayland-session",
+        "sha256": "a7a41d9996fd912af2b8b2dc0b5c33ca6d4530e8c45122f3e35f321bb620abfd",
+        "status": "read-raw",
+        "uid": 0
+      },
+      {
+        "bytes": 575,
+        "device": 37,
+        "gid": 0,
+        "inode": 6595371,
+        "mode": 420,
+        "path": "/usr/lib/sddm/sddm.conf.d/10-arctic.conf",
+        "sha256": "7d2a5590fc3ee401214d3f914de76bfb81ce1faaf8cb66e2c68d714c19623efd",
+        "status": "read-raw",
+        "uid": 0
+      },
+      {
+        "bytes": 125,
+        "device": 37,
+        "gid": 0,
+        "inode": 21122807,
+        "mode": 420,
+        "path": "/usr/share/wayland-sessions/mango.desktop",
+        "sha256": "fb36727a2a18e8fa93736fb39268723a7ccf879c1fe5f07cef983703c2057ba8",
+        "status": "read-raw",
+        "uid": 0
+      }
+    ],
+    "providers": [
+      {
+        "bytes": 530792,
+        "gid": 0,
+        "mode": 493,
+        "path": "/usr/bin/mango",
+        "sha256": "ce11ee5cfd24b0393c933e22f7365910d498772e186bb078b9d63a2b42313866",
+        "uid": 0
+      },
+      {
+        "bytes": 643856,
+        "gid": 0,
+        "mode": 493,
+        "path": "/usr/bin/sddm",
+        "sha256": "5f38ac555b2dc8291938d8dd3630aecfc1391d3cb53d782b0cefd0abf1a80972",
+        "uid": 0
+      },
+      {
+        "bytes": 147840,
+        "gid": 0,
+        "mode": 493,
+        "path": "/usr/lib/systemd/systemd",
+        "sha256": "4ee013054fa214655dd2f83f396548b37897186b944b3325c864f04004389c9b",
+        "uid": 0
+      },
+      {
+        "bytes": 24416,
+        "gid": 0,
+        "mode": 493,
+        "path": "/usr/lib/systemd/system-generators/systemd-debug-generator",
+        "sha256": "d76cf242aeab6f94c220e02bdf533b73fff408d800b3e49102cd94fbb418d5dc",
+        "uid": 0
+      },
+      {
+        "bytes": 1551104,
+        "gid": 0,
+        "mode": 493,
+        "path": "/usr/bin/bash",
+        "sha256": "379c1bfc53d08815975c647ad7da5d19d8e8a8566ce8097c50231c8b116e5e7b",
+        "uid": 0
+      },
+      {
+        "bytes": 11544,
+        "gid": 0,
+        "mode": 493,
+        "path": "/usr/bin/python3.14",
+        "sha256": "0d64bd6d66d68dac91cdadafc46e22d4f09f22bdc997aaae870f42865b024a3e",
+        "uid": 0
+      },
+      {
+        "bytes": 275088,
+        "gid": 0,
+        "mode": 493,
+        "path": "/usr/libexec/sddm-helper",
+        "sha256": "93ab003b0453179eb1f0e6a7a51a20ee322af4992300d095403c5f728b7a68e4",
+        "uid": 0
+      }
+    ],
+    "unit_files": [
+      {
+        "bytes": 204,
+        "device": 37,
+        "gid": 0,
+        "inode": 660127,
+        "mode": 420,
+        "path": "/etc/sysconfig/sddm",
+        "sha256": "b57aa76fc978650a589f68e486d9d1a25835480fa328ca076b0db4a8bbbe9469",
+        "status": "read-raw",
+        "uid": 0
+      },
+      {
+        "bytes": 418,
+        "device": 37,
+        "gid": 0,
+        "inode": 7141636,
+        "mode": 420,
+        "path": "/usr/lib/systemd/system/sddm.service",
+        "sha256": "6d81f43911a6d19436d4b56da13f9c12ba538ff192938d63e83b383a161aea04",
+        "status": "read-raw",
+        "uid": 0
+      },
+      {
+        "bytes": 596,
+        "device": 37,
+        "gid": 0,
+        "inode": 7142436,
+        "mode": 420,
+        "path": "/usr/lib/systemd/system/service.d/10-timeout-abort.conf",
+        "sha256": "ae6b234f92bc22f1201a7572b59b454c9809f33c80d13f361b9674e1801acc37",
+        "status": "read-raw",
+        "uid": 0
+      }
+    ]
+  },
+  "complete_chain": false,
+  "normal_fidelity": false,
+  "release_acceptance": false,
+  "runtime": {
+    "controller.py": {
+      "bytes": 16567,
+      "mode": 420,
+      "sha256": "45c118d8e9e1cf35b37f5badd94db182e3f8e14a74e1612afc12f2b4166b1755"
+    },
+    "credential-units.py": {
+      "bytes": 3906,
+      "mode": 420,
+      "sha256": "238e3c56286dc56ee5b37c3ac3cff43adb8ebb5581dd98eeaa415ff6957e07e5"
+    },
+    "native-handoff": {
+      "bytes": 5536,
+      "mode": 493,
+      "sha256": "3c9586685044cfa78072e79148267d69678b527321fe284bc691833850affee9"
+    },
+    "owned-log.py": {
+      "bytes": 22647,
+      "mode": 420,
+      "sha256": "024b33d202607e3056398e2a02897c342ce51c0828a79b32e3563d7374c02876"
+    },
+    "owned-logger.py": {
+      "bytes": 7964,
+      "mode": 420,
+      "sha256": "f4bdcd91efa76485b04ce4d0c447857350f67a4b49f0be185455bce79c2c5c5f"
+    },
+    "prepare.py": {
+      "bytes": 13794,
+      "mode": 420,
+      "sha256": "ae07d515feecf6bddd72c3dd2c4db73ddebd62c4eb1b2306ad1d87fb17ad121b"
+    },
+    "request-stop.py": {
+      "bytes": 395,
+      "mode": 420,
+      "sha256": "7160eddc74fc985732b34b843321356eba6b00a25453301fb0dfbb7c10e1d314"
+    },
+    "sealed_environment.py": {
+      "bytes": 2493,
+      "mode": 420,
+      "sha256": "aff9882e5cf954879d9e70f6d4cd78ed579bb076aee5f35d31e1a9febdae7f38"
+    },
+    "transport.py": {
+      "bytes": 14786,
+      "mode": 420,
+      "sha256": "b4561953e46e6f69e5132ddc88caa2d9b02a313c2cfcbed049d76ccdce3adf32"
+    }
+  },
+  "safe_visual_gate": "OPEN",
+  "schema": "arctic-one-mango-runtime-pins-v1",
+  "unchanged_security_helper_sha256": "e1da6bb2f07cb7014486e0f59c36973600e5dcd9a8063c684f461e099d3fc5e9"
+}

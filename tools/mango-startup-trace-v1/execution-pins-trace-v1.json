@@ -1,0 +1,247 @@
+{
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "files": {
+    ".github/workflows/iso.yml": {
+      "bytes": 30402,
+      "mode": 420,
+      "sha256": "d01b6f51d38c3b4434fae89184956749b3ae1d1b82cb5f768ff1e83b100c3606"
+    },
+    "tools/lib/container.sh": {
+      "bytes": 4012,
+      "mode": 420,
+      "sha256": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42"
+    },
+    "tools/lib/vmtest.py": {
+      "bytes": 9527,
+      "mode": 420,
+      "sha256": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717"
+    },
+    "tools/mango-startup-trace-v1/ADAPTER.md": {
+      "bytes": 2980,
+      "mode": 420,
+      "sha256": "135cd1025f5798c5358a206a96cdeebe438bfbc89bf93da4e0ce2d09c82c7879"
+    },
+    "tools/mango-startup-trace-v1/README.md": {
+      "bytes": 3038,
+      "mode": 420,
+      "sha256": "9517026396ba6821bcf5c47a5d35082722d11a326688fb7d5bd3be08c7a06b5c"
+    },
+    "tools/mango-startup-trace-v1/adapter-contract.json": {
+      "bytes": 9968,
+      "mode": 420,
+      "sha256": "696feff9fd040f0b186e0c9c415da96f6ef3d820710616b968c505925662ccf7"
+    },
+    "tools/mango-startup-trace-v1/candidate-boundary-pins.json": {
+      "bytes": 4755,
+      "mode": 420,
+      "sha256": "5b23ed1b30645645de57e75a472e704cf9923317382b351deaf06a2e5280a6ce"
+    },
+    "tools/mango-startup-trace-v1/candidate-wayland-session.fixture": {
+      "bytes": 1570,
+      "mode": 420,
+      "sha256": "a7a41d9996fd912af2b8b2dc0b5c33ca6d4530e8c45122f3e35f321bb620abfd"
+    },
+    "tools/mango-startup-trace-v1/controller.py": {
+      "bytes": 16567,
+      "mode": 420,
+      "sha256": "45c118d8e9e1cf35b37f5badd94db182e3f8e14a74e1612afc12f2b4166b1755"
+    },
+    "tools/mango-startup-trace-v1/core-authority.json": {
+      "bytes": 1685,
+      "mode": 420,
+      "sha256": "3cc95c2ab7e1aa1ad12d345ec7f4b582d9745c3eec67e6be79cb070cb2c7ff09"
+    },
+    "tools/mango-startup-trace-v1/credential-units.py": {
+      "bytes": 3906,
+      "mode": 420,
+      "sha256": "238e3c56286dc56ee5b37c3ac3cff43adb8ebb5581dd98eeaa415ff6957e07e5"
+    },
+    "tools/mango-startup-trace-v1/native-handoff": {
+      "bytes": 5536,
+      "mode": 493,
+      "sha256": "3c9586685044cfa78072e79148267d69678b527321fe284bc691833850affee9"
+    },
+    "tools/mango-startup-trace-v1/native-handoff.c": {
+      "bytes": 2305,
+      "mode": 420,
+      "sha256": "0a86ac966f919f8a199924da845e76a530426615d7dbaaee8bf28b322e941534"
+    },
+    "tools/mango-startup-trace-v1/normal-base-pins.json": {
+      "bytes": 1964,
+      "mode": 420,
+      "sha256": "37a775762d1f16490a360c5d8364ff5b5824ea32ee0a4054d11d83562a1675e5"
+    },
+    "tools/mango-startup-trace-v1/normal-control-sources/base-iso.yml": {
+      "bytes": 22757,
+      "mode": 420,
+      "sha256": "5b0c1493333288acb43d7baaecb19ae40c662189d9ff0a591ce183a04871d2dd"
+    },
+    "tools/mango-startup-trace-v1/normal-control-sources/base-test-iso.sh": {
+      "bytes": 11283,
+      "mode": 420,
+      "sha256": "9beb039d69dad07176e00a8e890c7e099631ff68175235a83be8b6394f63434f"
+    },
+    "tools/mango-startup-trace-v1/normal-control-sources/normal-iso.yml": {
+      "bytes": 27878,
+      "mode": 420,
+      "sha256": "e4a78f10f7faccfecbb93d07e26f8e47cd19f0bd2bf45ba5ee1d9e6eba2d5326"
+    },
+    "tools/mango-startup-trace-v1/normal-control-sources/normal-test-iso.sh": {
+      "bytes": 14537,
+      "mode": 420,
+      "sha256": "978b2454e13434947b9245cfe21bc8f1c80e8f00c22857c284d228e9cf45bbbe"
+    },
+    "tools/mango-startup-trace-v1/normal-control-sources/vm-only-recovery-v2.py": {
+      "bytes": 21301,
+      "mode": 420,
+      "sha256": "0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633"
+    },
+    "tools/mango-startup-trace-v1/normal-controls.py": {
+      "bytes": 2735,
+      "mode": 420,
+      "sha256": "12e8ac0e0e4480265929efbf2949b19dc92762c27a974e2626d10073e138baf2"
+    },
+    "tools/mango-startup-trace-v1/owned-log.py": {
+      "bytes": 22647,
+      "mode": 420,
+      "sha256": "024b33d202607e3056398e2a02897c342ce51c0828a79b32e3563d7374c02876"
+    },
+    "tools/mango-startup-trace-v1/owned-logger.py": {
+      "bytes": 7964,
+      "mode": 420,
+      "sha256": "f4bdcd91efa76485b04ce4d0c447857350f67a4b49f0be185455bce79c2c5c5f"
+    },
+    "tools/mango-startup-trace-v1/prepare.py": {
+      "bytes": 13794,
+      "mode": 420,
+      "sha256": "ae07d515feecf6bddd72c3dd2c4db73ddebd62c4eb1b2306ad1d87fb17ad121b"
+    },
+    "tools/mango-startup-trace-v1/request-stop.py": {
+      "bytes": 395,
+      "mode": 420,
+      "sha256": "7160eddc74fc985732b34b843321356eba6b00a25453301fb0dfbb7c10e1d314"
+    },
+    "tools/mango-startup-trace-v1/runtime-pins.json": {
+      "bytes": 6834,
+      "mode": 420,
+      "sha256": "cad22ede4cee4b06483577d3ddd33539e7aa5a49e598132afd976ccbd6bd095e"
+    },
+    "tools/mango-startup-trace-v1/sealed_environment.py": {
+      "bytes": 2493,
+      "mode": 420,
+      "sha256": "aff9882e5cf954879d9e70f6d4cd78ed579bb076aee5f35d31e1a9febdae7f38"
+    },
+    "tools/mango-startup-trace-v1/stage.py": {
+      "bytes": 3299,
+      "mode": 420,
+      "sha256": "3a765e7f59a36d324250bd57384c637cb65ab3adf6ae3d637bda61eb7c0ba1f8"
+    },
+    "tools/mango-startup-trace-v1/stop-driver.py": {
+      "bytes": 2890,
+      "mode": 420,
+      "sha256": "5dcd46186ec73cf84592955c4aa33b1d6dd2ec080b4d26e558e1381d497b1e23"
+    },
+    "tools/mango-startup-trace-v1/test_adapter.py": {
+      "bytes": 10295,
+      "mode": 420,
+      "sha256": "c1e429b5417bc32d6866627b021b88287f4d3ff59322b2350c58a124ceac3d70"
+    },
+    "tools/mango-startup-trace-v1/test_trace_core.py": {
+      "bytes": 7081,
+      "mode": 420,
+      "sha256": "d4d3517b91229e8b0b6ddab53b3d3acd2cd78abcb725b8a01d437165eaed8608"
+    },
+    "tools/mango-startup-trace-v1/test_trace_setup.py": {
+      "bytes": 11420,
+      "mode": 420,
+      "sha256": "529615b778c3f6d24b0c823cdf67bc7a18925530acb13523c8c01fc0afc8fd9f"
+    },
+    "tools/mango-startup-trace-v1/test_trace_transport.py": {
+      "bytes": 6935,
+      "mode": 420,
+      "sha256": "41b1780658efbf85d876b2b56cc73637d34b9840ed05320103284745f9879606"
+    },
+    "tools/mango-startup-trace-v1/trace-runner.py": {
+      "bytes": 11325,
+      "mode": 420,
+      "sha256": "ce48a713dfd76bbaf25677b2a71bab2f7e7edfebf4d0019ec4c85153c8d1785c"
+    },
+    "tools/mango-startup-trace-v1/transport.py": {
+      "bytes": 14786,
+      "mode": 420,
+      "sha256": "b4561953e46e6f69e5132ddc88caa2d9b02a313c2cfcbed049d76ccdce3adf32"
+    },
+    "tools/safe-visual-diagnostic/README-v1.md": {
+      "bytes": 15906,
+      "mode": 420,
+      "sha256": "4d941419f4667a9f770ae5c19c7bd03a55f857ec94441a65f7984679b4f17d76"
+    },
+    "tools/safe-visual-diagnostic/bootstrap-safe-v1.sh": {
+      "bytes": 534,
+      "mode": 420,
+      "sha256": "083980566afcc5213cb8b93a737e3fc779ea58201a34a895068879b5dc166d53"
+    },
+    "tools/safe-visual-diagnostic/execution-pins-safe-v1.json": {
+      "bytes": 3885,
+      "mode": 420,
+      "sha256": "05df64446730e3c14a5aa2aff9079a5238f336ac6471276cb7af57f77548b2a9"
+    },
+    "tools/safe-visual-diagnostic/fixed-rows-v1.py": {
+      "bytes": 257,
+      "mode": 420,
+      "sha256": "68acaeb7f64e64648dbee0da2fddc7efce40b96495719850e017ca09d61c2582"
+    },
+    "tools/safe-visual-diagnostic/guest-render-collector-v1.py": {
+      "bytes": 29618,
+      "mode": 420,
+      "sha256": "7bb9ccb1ba51bf802db7b5aa8120c55616678b47395c3f4765f9a52745afc84b"
+    },
+    "tools/safe-visual-diagnostic/guest-safe-collector-v1.py": {
+      "bytes": 18029,
+      "mode": 420,
+      "sha256": "e1da6bb2f07cb7014486e0f59c36973600e5dcd9a8063c684f461e099d3fc5e9"
+    },
+    "tools/safe-visual-diagnostic/prepare-safe-v1.py": {
+      "bytes": 12338,
+      "mode": 420,
+      "sha256": "9e6921d23907856a15c358b8c49b8a23c0dddd35fa56834b617a35182011ee18"
+    },
+    "tools/safe-visual-diagnostic/render-driver-v1.py": {
+      "bytes": 22948,
+      "mode": 420,
+      "sha256": "f6a3504b0a633879603bac974480dfbb17746a95ea253e31128dd593635d39b3"
+    },
+    "tools/safe-visual-diagnostic/safe-driver-v1.py": {
+      "bytes": 6517,
+      "mode": 420,
+      "sha256": "f48dd72c5cc61174614127bf9a62b7affa0c036300273321554938b466209999"
+    },
+    "tools/safe-visual-diagnostic/safe-runner-v1.py": {
+      "bytes": 21703,
+      "mode": 420,
+      "sha256": "a28cb7a2322e071add61953d3a24d1129ec75e48cf122c086a57d99968426869"
+    },
+    "tools/safe-visual-diagnostic/test_render_v1.py": {
+      "bytes": 41785,
+      "mode": 420,
+      "sha256": "2298fff830f41b262c6260e9747da7b1d3d5bdd00a2d3e91fa62a30e534ea1eb"
+    },
+    "tools/safe-visual-diagnostic/test_safe_v1.py": {
+      "bytes": 30267,
+      "mode": 420,
+      "sha256": "b7a5890f9e0abe3a72dad57dfadc83c03d19edec5ceaf06808c58d9e9732570b"
+    },
+    "tools/test-iso.sh": {
+      "bytes": 16051,
+      "mode": 493,
+      "sha256": "dbd5fdba747fbc49d7df6e692d4a77b3fc1d3b192704bddb24a772d3327ca03b"
+    },
+    "tools/tests/test_performance_observer.py": {
+      "bytes": 15887,
+      "mode": 420,
+      "sha256": "2c91f921438d312b3462517ffede7d5854b77f3df208a3a5f10eb719428e33d2"
+    }
+  },
+  "normal_base": "5a30dd419bc7478c951ce11bb9f9227e59c18b16",
+  "schema": "arctic-mango-trace-execution-v1"
+}
