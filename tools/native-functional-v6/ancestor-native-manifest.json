@@ -1,0 +1,189 @@
+{
+  "files": [
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/README.md",
+      "bytes": 12886,
+      "sha256": "20664a48bd33ea024263d874213410f094a576167f3e7eb85e4b1550b6cadceb"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/dependencies.json",
+      "bytes": 2636,
+      "sha256": "fd85255a053264d0e6aff46e2f9e97cec1f2f1783bb952d5353e5db7ea503751"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/helper-controls.log",
+      "bytes": 2245,
+      "sha256": "1683edf6742c5dc988f9f7141fa38ad89477b528def3b6a54f1ce4bb354a2fbd"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/helpers-packaging-proof.txt",
+      "bytes": 10011,
+      "sha256": "3c52c3b815f1918f6b657c763b9e4a8f90165f5399ce4c9f8b86e99b599b4049"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/host-controls.log",
+      "bytes": 2296,
+      "sha256": "a490c7962cc7a0fd44e95f303c34c4160aeac60f8286fe39df802ea6551dfcd7"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/archive-empty-directory-before.log",
+      "bytes": 304,
+      "sha256": "85224b3d5dc40d967c7401ed7868c08d8398d89ce00da8b6e5a6e2ef1528b586"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/independent-controls.log",
+      "bytes": 2990,
+      "sha256": "14c2bcee1f0823ae324df3cae6e33c20248040e33b0f44cb31549b693f371ba5"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/independent_controls.py",
+      "bytes": 10734,
+      "sha256": "ef4ea98079c164038f6f34bbd2ed5d04798267a4a49c8407fdac79fd7d211111"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/independent-source-review/owner-host-controls.log",
+      "bytes": 2296,
+      "sha256": "04d7115025a55c9b9846a8a190d5457336c84061a31c192edf3228f62b1517ff"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/input-provenance.json",
+      "bytes": 7860,
+      "sha256": "8f2ac75544d60fbb10317db04da039c57dcc9412132f2bada76668eade598890"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/native_smoke.py",
+      "bytes": 40198,
+      "sha256": "2bf89d4771baad6c948c15d38379393c8c57488ff497a2c68e398f360b2d0489"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/README.md",
+      "bytes": 11541,
+      "sha256": "6525f490af8f1e9543e19acd49cd11549257a2bd9cd3d97bbe719aed18261434"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/helper-controls.log",
+      "bytes": 1935,
+      "sha256": "4f3e13872ae98fb8aa48bf8fc15171c6ae3807ff4a9bd5e5e48f932b5ae07655"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/host-controls.log",
+      "bytes": 1986,
+      "sha256": "7baf507aa02e2b91e894d253f2980951d574586f759ea397b10e7d131798ea9d"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/manifest.json",
+      "bytes": 5130,
+      "sha256": "9bd8232f879bc141d5bcab892c7c05fab834bcc6d27260fd9aa0fb5379b82792"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/native_smoke.py",
+      "bytes": 39760,
+      "sha256": "6733626e7c94066c0e50aba5480392465eca9cb2186d8a23888af18cea14b2a5"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/summary.json",
+      "bytes": 2210,
+      "sha256": "dddefcb66cc5291bea1ba2efdd3dc7f9bc47a0e41ee7085dc9295d2a0ad5fbfa"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/prior-v1/test_native_smoke.py",
+      "bytes": 9923,
+      "sha256": "ba9b004de7d75df5ced68b721b381d863fb1735b64f4928c403fc8620c6b20c9"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/summary.json",
+      "bytes": 4368,
+      "sha256": "5f42ef2e31218df6574aef5de1734e483e8a98c8ab7fee20352b44ac8abfc29b"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/test_native_smoke.py",
+      "bytes": 11818,
+      "sha256": "1de3a553502ce0449373aef510bf3cf809fe762321400ff1d23845496af383e3"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/atspi-bus-launcher.c",
+      "bytes": 31021,
+      "sha256": "c187c194d0b1b8c2fe72e71daf765836ddcc46d7ad5d70e9a294fa64e0698484"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/atspi-registry.c",
+      "bytes": 47817,
+      "sha256": "9834236d423d3bc45721a1f8de7749569c1fe6b68007d24ea780b12e5d5ab6df"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/celluloid-application.c",
+      "bytes": 14276,
+      "sha256": "42b6528cbe8d3ff2e18f62a582fbdc03b188cc9a7def9e42094fb091a594d7f6"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/celluloid-mpv.c",
+      "bytes": 23138,
+      "sha256": "b41406dac8d356f3a15cdce7374998156fdcfa8a48005299d854387c6dd110cc"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/featherpad-help",
+      "bytes": 22107,
+      "sha256": "77ec36d3d1d037f546bcccbc4826dbc18a7813722d3535b16bdac346ab233e2b"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/featherpad-main.cpp",
+      "bytes": 4694,
+      "sha256": "c802cb4b593e37eec14745a7f37e18c8add4d23cda313c2234b028d518d76265"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/featherpad-tree.json",
+      "bytes": 46711,
+      "sha256": "c8fd3b28902e43683077f9a822cb8e50a9c038ca467e08a3a10dbccbd5db2fed"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/manifest.json",
+      "bytes": 4685,
+      "sha256": "655b2ecb158e8bf94e81ccd9e2ce35711220e9ca598a33aed2015bd11f30db19"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-client-api.h",
+      "bytes": 85973,
+      "sha256": "3c073236a09cb456c6e80587d5523c8771c32fb22ca014e0f99cc3d43905b75c"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-client.c",
+      "bytes": 69031,
+      "sha256": "7d3c4b6ed1c614169277c7faad9e7fa21e5bf4694d7a3961986defdebcaa60eb"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-core-command.c",
+      "bytes": 277714,
+      "sha256": "c0932fe7950b92a3021f31ae96b13900a5393d2100e6703df59adc7f1bd8e62f"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-ipc-unix.c",
+      "bytes": 11423,
+      "sha256": "a377bae0e3abc3f9b4172eeede04cb7400ae7fd62cb3be7208198b5c8ec90a4d"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-loadfile.c",
+      "bytes": 72798,
+      "sha256": "08ba89fce329fe22f2226f53af92300be9bb5073c6a4526b646f029cbab26e2e"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/mpv-main.c",
+      "bytes": 14401,
+      "sha256": "c3bfca8c73543fc7beed2ce1f6856d0d2bfd5f0178af3149d592c7395788ff3e"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/pcmanfm-main-win-ui.c",
+      "bytes": 16322,
+      "sha256": "7ec5e0f078ad25d9ad1a917ff12ab847bc914ac4317b48d0104658fcd0d72f17"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/pcmanfm-main-win.c",
+      "bytes": 97405,
+      "sha256": "d2e420220dd878c2af0971d456fc166efb511f950d51aaaae85acb332c69cb58"
+    },
+    {
+      "path": "out/audit/live-app-selection/functional-smoke/upstream/wtype-README.md",
+      "bytes": 1147,
+      "sha256": "cdcc10eac97d63c11772b66bab1e0e0b086657cea54ff29d0abbe2adc12b6237"
+    }
+  ]
+}

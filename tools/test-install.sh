@@ -90,6 +90,8 @@ STAGE=all
 # Optional test-only virtual audio; no host sound devices or user configuration.
 NATIVE_AUDIO_FIXTURE="${ARCTIC_NATIVE_AUDIO_FIXTURE:-0}"
 NATIVE_PHYSICAL_CONTROLLER="${ARCTIC_NATIVE_PHYSICAL_CONTROLLER:-}"
+NATIVE_EDITOR_SAVE_FIXTURE="${ARCTIC_NATIVE_EDITOR_SAVE_FIXTURE:-0}"
+case "$NATIVE_EDITOR_SAVE_FIXTURE" in 0|1) ;; *) arctic_die "invalid native editor save switch" ;; esac
 physical_args=()
 case "$NATIVE_AUDIO_FIXTURE" in 0|1) ;; *) arctic_die "invalid native audio fixture switch" ;; esac
 PROFILE="$ROOT/profiles/ci/offline.toml"
@@ -464,6 +466,12 @@ def physical_poll(vm,name):
         physical_controllers[name]=physical_module.Controller(vm,out,"live" if name=="install" else "installed",
             E["NATIVE_PHYSICAL_CHECKER_SHA"],chord_for=vmtest.chord_for)
     physical_controllers[name].poll(raw)
+    if E.get("NATIVE_EDITOR_SAVE_FIXTURE") == "1":
+        key=name+"-editor-save"
+        if key not in physical_controllers:
+            physical_controllers[key]=physical_module.EditorSaveController(vm,out,"live" if name=="install" else "installed",
+                E["NATIVE_PHYSICAL_CHECKER_SHA"],chord_for=vmtest.chord_for)
+        physical_controllers[key].poll(raw)
     return "ARCTIC-NATIVE-RUNNER-END " not in raw
 
 
@@ -870,6 +878,7 @@ fi
   -e NATIVE_LAUNCHER_FIXTURE="$([[ -f "$DATA/native-launcher.py" ]] && echo 1 || echo 0)" \
   -e NATIVE_AUDIO_FIXTURE="$NATIVE_AUDIO_FIXTURE" \
   -e NATIVE_PHYSICAL_FIXTURE="$([[ -n "$NATIVE_PHYSICAL_CONTROLLER" ]] && echo 1 || echo 0)" \
+  -e NATIVE_EDITOR_SAVE_FIXTURE="$NATIVE_EDITOR_SAVE_FIXTURE" \
   -e NATIVE_PHYSICAL_SHA="${ARCTIC_NATIVE_PHYSICAL_SHA:-}" \
   -e NATIVE_PHYSICAL_CHECKER_SHA="${ARCTIC_NATIVE_PHYSICAL_CHECKER_SHA:-}" \
   -e VM_TOOLS_PREPARED="${ARCTIC_VM_TOOLS_PREPARED:-0}" \
