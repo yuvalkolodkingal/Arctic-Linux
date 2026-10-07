@@ -1,0 +1,13 @@
+{
+  "codec_tools_discovery": true,
+  "codec_tools_source_sha": "d680cd153247f94d9bc2722f926974ff7a8a94c9",
+  "same_iso_pcmanfm_diagnostic": false,
+  "same_iso_native_smoke": false,
+  "same_iso_recovery": false,
+  "release": false,
+  "prerelease": true,
+  "draft": false,
+  "nix_acceptance": false,
+  "performance_acceptance": false,
+  "boot_test": false
+}

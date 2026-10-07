@@ -1,0 +1,22 @@
+{
+  "actual_new_discovery": "UNRUN",
+  "actual_v3_failure_source_and_evidence_preserved": {
+    "actual11_inputs_json_sha256": "b0844bba5fc4d5b89664ce29c81ab04dbd417e0e1415dba6d39f2a008be8f922",
+    "actual_failed_source": "d680cd153247f94d9bc2722f926974ff7a8a94c9",
+    "actual_run": 37573011277,
+    "artifact": 11460803341,
+    "artifact_ZIP_sha256": "38855f8a161e5a6d49789fadd5cd0fad58be128f0dbe97e288b5b2465febfc51",
+    "independent_actual_log_context_supplement_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
+    "independent_original_artifact_only_unknown_cause_sha256": "7183b631dbea7891e910b870d81cb73b7ccbfeeef2d0d927c6b11f990c12534e",
+    "job": 112635639413,
+    "meaning": "Observed optional empty tag absent; omission mechanism unclaimed; all actual work remainedUNRUN.",
+    "official_decoded_job_log_sha256": "ab80e60db024971bd04beaba6d827bb3616b13a3695ea51bc0e83dbe66637fa4",
+    "owner_context_supplement_sha256": "61d930780e83cc81f033095afa665eeab65f5a4de41c693e06b5b17f308a386f"
+  },
+  "all57_v3_ready_pins_match": true,
+  "only_runtime_delta": "registered_discovery_inputs admits absent optionaltag as its exact declared empty default; required/unknown/explicit invalid guards unchanged.",
+  "schema": "arctic-codec-discovery-v4-predecessor-preserved",
+  "v3_independent_source_review_sha256": "371f22b165e3c9a949713c77a75e9cc889e3acc9e3457773299318a44b5ac23a",
+  "v3_manifest_sha256": "eb2312110aa2d4be7fb652b8402e39ff0b1e9e03fb0bd560905d4d85b2959521",
+  "v3_ready_sha256": "d59320f86a9b2dbce76e4dfc7d323f89897bf5f3adcb312fd5ccac1ea092b2c0"
+}

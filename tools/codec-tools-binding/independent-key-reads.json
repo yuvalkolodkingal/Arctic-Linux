@@ -1,0 +1,44 @@
+{
+  "fedora.gpg": {
+    "exit": 0,
+    "fingerprints": [
+      "C6E7F081CF80E13146676E88829B606631645531",
+      "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+      "4F50A6114CD5C6976A7F1179655A4B02F577861E",
+      "D924B10D3E810DABDD8B56B596E7E91491211FCE"
+    ],
+    "uids": [
+      "Fedora (43) <fedora-43-primary@fedoraproject.org>",
+      "Fedora (44) <fedora-44-primary@fedoraproject.org>",
+      "Fedora (45) <fedora-45-primary@fedoraproject.org>",
+      "Fedora (46) <fedora-46-primary@fedoraproject.org>"
+    ]
+  },
+  "fusion-free-2020-download.asc": {
+    "exit": 0,
+    "fingerprints": [
+      "E9A491A3DE247814E7E067EAE06F8ECDD651FF2E"
+    ],
+    "uids": [
+      "RPM Fusion free repository for Fedora (2020) <rpmfusion-buildsys@lists.rpmfusion.org>"
+    ]
+  },
+  "fusion-free-2020-repository.asc": {
+    "exit": 0,
+    "fingerprints": [
+      "E9A491A3DE247814E7E067EAE06F8ECDD651FF2E"
+    ],
+    "uids": [
+      "RPM Fusion free repository for Fedora (2020) <rpmfusion-buildsys@lists.rpmfusion.org>"
+    ]
+  },
+  "fusion-free-2020-collection.asc": {
+    "exit": 0,
+    "fingerprints": [
+      "E9A491A3DE247814E7E067EAE06F8ECDD651FF2E"
+    ],
+    "uids": [
+      "RPM Fusion free repository for Fedora (2020) <rpmfusion-buildsys@lists.rpmfusion.org>"
+    ]
+  }
+}

@@ -1,0 +1,342 @@
+{
+  "actual_context_review_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
+  "actual_failed_predecessor_source": "d680cd153247f94d9bc2722f926974ff7a8a94c9",
+  "actual_preparation": "UNRUN",
+  "files": {
+    ".github/workflows/iso.yml": {
+      "audit_source": "registered-iso-codec-tools-discovery-v3.yml",
+      "bytes": 34360,
+      "git_mode": "100644",
+      "sha256": "6a8ed7d61c31aadf64265409c3b212119389ce1ed73dc2fc1105917d8321ab69"
+    },
+    "tools/codec-tools-binding/README.md": {
+      "audit_source": "README.md",
+      "bytes": 7562,
+      "git_mode": "100644",
+      "sha256": "2e66fe97e7f0ec446899db20661b57076985459ab6e1b122f57bd96484f80339"
+    },
+    "tools/codec-tools-binding/additional-primary-source-reads.json": {
+      "audit_source": "additional-primary-source-reads.json",
+      "bytes": 3943,
+      "git_mode": "100644",
+      "sha256": "3fda649a33615e4529f199055d7ff0dfacbd7d7d87702c06bcbf05692160e5c3"
+    },
+    "tools/codec-tools-binding/contract.py": {
+      "audit_source": "contract.py",
+      "bytes": 15518,
+      "git_mode": "100644",
+      "sha256": "fc2dc00a9aba0f40d965434e41dbf2b13e2bad8869b2dc87265668546df929d0"
+    },
+    "tools/codec-tools-binding/fedora.gpg.fingerprints.log": {
+      "audit_source": "fedora.gpg.fingerprints.log",
+      "bytes": 980,
+      "git_mode": "100644",
+      "sha256": "0bd9ac35b8a538e263148503c54ef79714d6e650f3d84b17d2a2c48da9e22fce"
+    },
+    "tools/codec-tools-binding/fedora.gpg.fingerprints.stderr": {
+      "audit_source": "fedora.gpg.fingerprints.stderr",
+      "bytes": 282,
+      "git_mode": "100644",
+      "sha256": "f43c3e6827102865f536d621e78e33a2c4e6a7189cd1a2bb053d0547fdaf4bed"
+    },
+    "tools/codec-tools-binding/independent-key-reads.json": {
+      "audit_source": "independent-key-reads.json",
+      "bytes": 1275,
+      "git_mode": "100644",
+      "sha256": "bb750fe95d819562e2cbfcd10b01156ef4469791e3edb1d38a83c9f6bc2d6197"
+    },
+    "tools/codec-tools-binding/independent-source-review.json": {
+      "audit_source": "independent-source-review.json",
+      "bytes": 6801,
+      "git_mode": "100644",
+      "sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476"
+    },
+    "tools/codec-tools-binding/predecessor-preserved.json": {
+      "audit_source": "predecessor-preserved.json",
+      "bytes": 1596,
+      "git_mode": "100644",
+      "sha256": "c5805892df7f54b59f00f40b69593c259e7dfec55df059c7ad4b5201e27e0e25"
+    },
+    "tools/codec-tools-binding/prepare.py": {
+      "audit_source": "prepare.py",
+      "bytes": 39950,
+      "git_mode": "100755",
+      "sha256": "9ce4281893378b5be0ec871bedef7f16211e7f33d313a007b4bd636298654607"
+    },
+    "tools/codec-tools-binding/promotion-handoff.json": {
+      "audit_source": "promotion-handoff.json",
+      "bytes": 4595,
+      "git_mode": "100644",
+      "sha256": "de952893a2eaa533775821e8c1d46d72f928b27f09f766f6a17b79f52fe9c3e8"
+    },
+    "tools/codec-tools-binding/proposal-preserved.json": {
+      "audit_source": "proposal-preserved.json",
+      "bytes": 5489,
+      "git_mode": "100644",
+      "sha256": "0d165db45e6035472af0d7f489eb46846c1a5a924dc9802c257975f468dbaeab"
+    },
+    "tools/codec-tools-binding/runtime-binding.json": {
+      "audit_source": "runtime-binding.json",
+      "bytes": 3864,
+      "git_mode": "100644",
+      "sha256": "1283765ce7713064da9bd9e938cb681b3c8f605b25d6c7763744dd179fb0bda2"
+    },
+    "tools/codec-tools-binding/sources/actual-inputs-37573011277.json": {
+      "audit_source": "sources/actual-inputs-37573011277.json",
+      "bytes": 356,
+      "git_mode": "100644",
+      "sha256": "b0844bba5fc4d5b89664ce29c81ab04dbd417e0e1415dba6d39f2a008be8f922"
+    },
+    "tools/codec-tools-binding/sources/actual-inputs-provenance-37573011277.json": {
+      "audit_source": "sources/actual-inputs-provenance-37573011277.json",
+      "bytes": 920,
+      "git_mode": "100644",
+      "sha256": "c88318e152215291fe71e606be32e5ac567cb360765c8c164ab2ffa6570cc27c"
+    },
+    "tools/codec-tools-binding/sources/dnf5-5.4.6.0-base.cpp": {
+      "audit_source": "sources/dnf5-5.4.6.0-base.cpp",
+      "bytes": 21310,
+      "git_mode": "100644",
+      "sha256": "329ea869597fbe9ffde9091ac797556b60ce336312f51aac1f12d26dc741fc4b"
+    },
+    "tools/codec-tools-binding/sources/dnf5-5.4.6.0-config-main.hpp": {
+      "audit_source": "sources/dnf5-5.4.6.0-config-main.hpp",
+      "bytes": 19134,
+      "git_mode": "100644",
+      "sha256": "9abb2b17bfe52e2601c91db1f9322c0bc27119d407c5e03a9c21893eb5373efb"
+    },
+    "tools/codec-tools-binding/sources/dnf5-5.4.6.0-context.cpp": {
+      "audit_source": "sources/dnf5-5.4.6.0-context.cpp",
+      "bytes": 53190,
+      "git_mode": "100644",
+      "sha256": "cbdd6aa56406e5bdcad7fef2d65df4d574c1f85483ac4e9f3424a2813547de40"
+    },
+    "tools/codec-tools-binding/sources/dnf5-5.4.6.0-do.cpp": {
+      "audit_source": "sources/dnf5-5.4.6.0-do.cpp",
+      "bytes": 14304,
+      "git_mode": "100644",
+      "sha256": "8fc6e4e86f24857749f32a993b85453c0ffcc5c4e08fd28b8b114991b953bd54"
+    },
+    "tools/codec-tools-binding/sources/dnf5-5.4.6.0-option-path.hpp": {
+      "audit_source": "sources/dnf5-5.4.6.0-option-path.hpp",
+      "bytes": 3741,
+      "git_mode": "100644",
+      "sha256": "5f501474e6be77b1e8403b563b180564d1bc0f1ea858bf69decf57af53237483"
+    },
+    "tools/codec-tools-binding/sources/dnf5-5.4.6.0-option.hpp": {
+      "audit_source": "sources/dnf5-5.4.6.0-option.hpp",
+      "bytes": 3978,
+      "git_mode": "100644",
+      "sha256": "54f1f1b0875f66159366677d6e4839122135fc2e682f118f2f1788662ec82ae0"
+    },
+    "tools/codec-tools-binding/sources/dnf5-5.4.6.0-transaction.cpp": {
+      "audit_source": "sources/dnf5-5.4.6.0-transaction.cpp",
+      "bytes": 79795,
+      "git_mode": "100644",
+      "sha256": "0fe945408ede879a52fab8eee47518691ac0e5f24cc1e2d450534de4e844bc94"
+    },
+    "tools/codec-tools-binding/sources/dnf5-config-main.cpp": {
+      "audit_source": "sources/dnf5-config-main.cpp",
+      "bytes": 58348,
+      "git_mode": "100644",
+      "sha256": "9ba140cc8a76c2faa4c86524dc662b2ded2b0deae6caeb627ee13e9aced3d426"
+    },
+    "tools/codec-tools-binding/sources/dnf5-item-reason.cpp": {
+      "audit_source": "sources/dnf5-item-reason.cpp",
+      "bytes": 4748,
+      "git_mode": "100644",
+      "sha256": "5f3a446d125cb1226c6a2a35b8a3820ba797abea0878454b6e357531e7291f47"
+    },
+    "tools/codec-tools-binding/sources/dnf5-main.cpp": {
+      "audit_source": "sources/dnf5-main.cpp",
+      "bytes": 87515,
+      "git_mode": "100644",
+      "sha256": "3734590bfdecfa1205bbdf5a825be0becceda3f8ed66ed320971657861e85ad7"
+    },
+    "tools/codec-tools-binding/sources/dnf5-transaction-sr.cpp": {
+      "audit_source": "sources/dnf5-transaction-sr.cpp",
+      "bytes": 17192,
+      "git_mode": "100644",
+      "sha256": "979b8219cc7e8e9be3cac9d61ac455e8f72eb7a881499f62df82c86e1204e611"
+    },
+    "tools/codec-tools-binding/sources/erofs-1.9.4-fsck-main.c": {
+      "audit_source": "sources/erofs-1.9.4-fsck-main.c",
+      "bytes": 32637,
+      "git_mode": "100644",
+      "sha256": "e5a543497f7a90654c9a905eed60baabf8d88ae732925a1a1b087ea219afe40e"
+    },
+    "tools/codec-tools-binding/sources/erofs-1.9.4-mkfs-main.c": {
+      "audit_source": "sources/erofs-1.9.4-mkfs-main.c",
+      "bytes": 57660,
+      "git_mode": "100644",
+      "sha256": "b2486cc278c69878462e32bec33ceca5435bdf13ee2a33184f5a04cb88d38a9a"
+    },
+    "tools/codec-tools-binding/sources/fedora-release-repomd.xml": {
+      "audit_source": "sources/fedora-release-repomd.xml",
+      "bytes": 5966,
+      "git_mode": "100644",
+      "sha256": "da3845427d188097f6fd71b417a039bdfb8efefc4f38ca44b5cbb94f95a18991"
+    },
+    "tools/codec-tools-binding/sources/fedora-updates-repomd.xml": {
+      "audit_source": "sources/fedora-updates-repomd.xml",
+      "bytes": 7055,
+      "git_mode": "100644",
+      "sha256": "03374ebf88b2871ed8cd3560053ca6398435d9eaf5fe7cb7bf88f212eb23af54"
+    },
+    "tools/codec-tools-binding/sources/fedora.gpg": {
+      "audit_source": "sources/fedora.gpg",
+      "bytes": 4704,
+      "git_mode": "100644",
+      "sha256": "3b8a3660cca4851a67f67f56819e37e2f6b37ac8e905cb571b25d2127d1b7618"
+    },
+    "tools/codec-tools-binding/sources/registered-iso-baseline-aee90aea.yml": {
+      "audit_source": "sources/registered-iso-baseline-aee90aea.yml",
+      "bytes": 31807,
+      "git_mode": "100644",
+      "sha256": "7219eb4dc1c82b1c017627494821677765e6ad1914a85eb18fab128db737ac82"
+    },
+    "tools/codec-tools-binding/sources/rpm-formats.cc": {
+      "audit_source": "sources/rpm-formats.cc",
+      "bytes": 16122,
+      "git_mode": "100644",
+      "sha256": "706e994200075d41d461fa241ff0e0ee611dcc1ae74b7680b53dd9a637e215c4"
+    },
+    "tools/codec-tools-binding/sources/rpm-poptALL.cc": {
+      "audit_source": "sources/rpm-poptALL.cc",
+      "bytes": 9525,
+      "git_mode": "100644",
+      "sha256": "bb7da1211971f5f95bc3caa29a29968c5d0d53876f97094e1632fe98ba17602c"
+    },
+    "tools/codec-tools-binding/sources/rpm-poptI.c": {
+      "audit_source": "sources/rpm-poptI.c",
+      "bytes": 10783,
+      "git_mode": "100644",
+      "sha256": "14169470145729ce71b15fa4f663854c55b3abdc1992598c1e82a5abb2edbfca"
+    },
+    "tools/codec-tools-binding/sources/rpm-query.cc": {
+      "audit_source": "sources/rpm-query.cc",
+      "bytes": 15151,
+      "git_mode": "100644",
+      "sha256": "2daee573bfd02d2f6427b2c57e22fed8b7f557031c662b86b92e2829fd332062"
+    },
+    "tools/codec-tools-binding/sources/rpm-rpmcli.h": {
+      "audit_source": "sources/rpm-rpmcli.h",
+      "bytes": 12861,
+      "git_mode": "100644",
+      "sha256": "87f2779468d8ff302a6f9b9a36b2b1478c98ba6c537414cdf4045a288a449a59"
+    },
+    "tools/codec-tools-binding/sources/rpm-rpmtriggers.cc": {
+      "audit_source": "sources/rpm-rpmtriggers.cc",
+      "bytes": 19381,
+      "git_mode": "100644",
+      "sha256": "d1273fe80fc63993b9f468ca858acc2a663eceea4e3819d86bdf0b9e266dc547"
+    },
+    "tools/codec-tools-binding/sources/rpm-rpmts.h": {
+      "audit_source": "sources/rpm-rpmts.h",
+      "bytes": 23111,
+      "git_mode": "100644",
+      "sha256": "a42dfa1bf78b1b1a518188c998c3568f1ace0104c8315ab02112878066557f18"
+    },
+    "tools/codec-tools-binding/sources/rpm-transaction.cc": {
+      "audit_source": "sources/rpm-transaction.cc",
+      "bytes": 52973,
+      "git_mode": "100644",
+      "sha256": "def34d276baa1b87170f2fa054109b259834bf63405fc937da2fd4a04d75f8bc"
+    },
+    "tools/codec-tools-binding/sources/tools-base-amd64-config.json": {
+      "audit_source": "sources/tools-base-amd64-config.json",
+      "bytes": 819,
+      "git_mode": "100644",
+      "sha256": "bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8"
+    },
+    "tools/codec-tools-binding/sources/tools-base-amd64-manifest.json": {
+      "audit_source": "sources/tools-base-amd64-manifest.json",
+      "bytes": 572,
+      "git_mode": "100644",
+      "sha256": "86289176d4a4af5c9b9c9df225eed4489f075bb67549411da2e0d4c121854491"
+    },
+    "tools/codec-tools-binding/sources/tools-base-official-manifest.json": {
+      "audit_source": "sources/tools-base-official-manifest.json",
+      "bytes": 1413,
+      "git_mode": "100644",
+      "sha256": "7011f51bd8089d345be42d41f0aa3190d258823528852a5e7ec976fe2fd20f53"
+    },
+    "tools/codec-tools-binding/test_tools.py": {
+      "audit_source": "test_tools.py",
+      "bytes": 56199,
+      "git_mode": "100644",
+      "sha256": "dea14315016f7d4695308fee024326c5e77a741773b6c8da3a28fbe0a2db976c"
+    },
+    "tools/codec-tools-binding/tool_checks.py": {
+      "audit_source": "tool_checks.py",
+      "bytes": 10981,
+      "git_mode": "100644",
+      "sha256": "c3103690ee8d3c1df4faebbf96a46750ebd9e1cf0d86cb1a3d19ca32b2c93c92"
+    },
+    "tools/codec-tools-binding/tools-base-local-inspect.json": {
+      "audit_source": "tools-base-local-inspect.json",
+      "bytes": 1050,
+      "git_mode": "100644",
+      "sha256": "44f79cd236bf8861d836f72dfbb0686c495c15b0a505adb62f96e90ec7e7799b"
+    },
+    "tools/codec-tools-binding/tools-base-official-read.json": {
+      "audit_source": "tools-base-official-read.json",
+      "bytes": 480,
+      "git_mode": "100644",
+      "sha256": "56fa02d5f2c6c962d39c43e896854d75654ac93d8d470f2cd8de972458bf4e9d"
+    },
+    "tools/codec-tools-binding/tools-base-platform-read.json": {
+      "audit_source": "tools-base-platform-read.json",
+      "bytes": 737,
+      "git_mode": "100644",
+      "sha256": "a1cc372c7f550582094951ab5a06712ecd393c539958127234a9262035cc07d3"
+    },
+    "tools/codec-tools-binding/vendor/cli.py": {
+      "audit_source": "vendor/cli.py",
+      "bytes": 15443,
+      "git_mode": "100644",
+      "sha256": "827098c2fdcc9c2c6edf58a0690421c3c2a8887b9f6d838a4c35e7d9a55dea9a"
+    },
+    "tools/codec-tools-binding/vendor/core.py": {
+      "audit_source": "vendor/core.py",
+      "bytes": 21369,
+      "git_mode": "100644",
+      "sha256": "49f068867c828a8ecd52cc4b7863a825e8502f5596ade9806ca4aee72391a577"
+    },
+    "tools/codec-tools-binding/vendor/cpio.py": {
+      "audit_source": "vendor/cpio.py",
+      "bytes": 5143,
+      "git_mode": "100644",
+      "sha256": "c5c4a0658a8ac491f7c24a6cea5266c42c40d621ec309a5355efea629a81fa69"
+    },
+    "tools/codec-tools-binding/vendor/solver.py": {
+      "audit_source": "vendor/solver.py",
+      "bytes": 3943,
+      "git_mode": "100644",
+      "sha256": "2b7e717eee262e7a270ac1c74b8d5a844bb54a4b4653555e785908baad2af479"
+    },
+    "tools/codec-tools-binding/vendor/worker.py": {
+      "audit_source": "vendor/worker.py",
+      "bytes": 32364,
+      "git_mode": "100644",
+      "sha256": "e2a16cd35ef4f134e4d451aa1d6410b5e3ee2c7add5254d06448f1e116821956"
+    }
+  },
+  "predecessor_integration_review_sha256": "371f22b165e3c9a949713c77a75e9cc889e3acc9e3457773299318a44b5ac23a",
+  "predecessor_ready_sha256": "d59320f86a9b2dbce76e4dfc7d323f89897bf5f3adcb312fd5ccac1ea092b2c0",
+  "predecessor_source_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
+  "product_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "proposal_independent_review_sha256": "31e162066299999ad5d15b8afe2ec418f5c776bd2d25dea4b9af7ea14347d54d",
+  "proposal_ready_sha256": "da03900edc2ffe4aa789d203d1e6b242d3b24c050b5dce5b134cc88719c376ad",
+  "schema": "arctic-codec-tools-preparation-execution-v1",
+  "self_manifest_git_mode": "100644",
+  "self_manifest_target": "tools/codec-tools-binding/execution-pins.json",
+  "status": "SOURCE_ONLY_DISCOVERY_BINDING_BOUND_ORCHESTRATION_INDEPENDENT_REVIEW_PENDING;BOOTSTRAP_CLOSURE_MEMBER_NULL",
+  "worker_v3_independent_review_sha256": "248674ec912a4aac4392b4e70ab119bc423568a0e80b193133f6ba7a69939c09",
+  "workflow_baseline": {
+    "only_existing_job_changes": "selection guards; steps/action pins/defaults preserved",
+    "path": ".github/workflows/iso.yml",
+    "private_base_commit": "aee90aea1c8f6cb827f2044f62a6b47eff475145",
+    "sha256": "7219eb4dc1c82b1c017627494821677765e6ad1914a85eb18fab128db737ac82"
+  }
+}

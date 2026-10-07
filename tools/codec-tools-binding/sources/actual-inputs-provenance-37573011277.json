@@ -1,0 +1,13 @@
+{
+  "actual11_inputs_json_sha256": "b0844bba5fc4d5b89664ce29c81ab04dbd417e0e1415dba6d39f2a008be8f922",
+  "actual_failed_source": "d680cd153247f94d9bc2722f926974ff7a8a94c9",
+  "actual_run": 37573011277,
+  "artifact": 11460803341,
+  "artifact_ZIP_sha256": "38855f8a161e5a6d49789fadd5cd0fad58be128f0dbe97e288b5b2465febfc51",
+  "independent_actual_log_context_supplement_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
+  "independent_original_artifact_only_unknown_cause_sha256": "7183b631dbea7891e910b870d81cb73b7ccbfeeef2d0d927c6b11f990c12534e",
+  "job": 112635639413,
+  "meaning": "Observed optional empty tag absent; omission mechanism unclaimed; all actual work remainedUNRUN.",
+  "official_decoded_job_log_sha256": "ab80e60db024971bd04beaba6d827bb3616b13a3695ea51bc0e83dbe66637fa4",
+  "owner_context_supplement_sha256": "61d930780e83cc81f033095afa665eeab65f5a4de41c693e06b5b17f308a386f"
+}

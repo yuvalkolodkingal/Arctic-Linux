@@ -1,0 +1,181 @@
+{
+  "actual_preparation": "UNRUN",
+  "blocker_closures": [
+    {
+      "closed": true,
+      "evidence": "Same privately bound exact parser control accepts unrelated i686 presence and excludes it from eligible catalog; selected unsupported architecture remains rejected",
+      "id": "irrelevant-catalog-arch"
+    },
+    {
+      "closed": true,
+      "evidence": "Actual handoff calls produce explicit0644 under0077 in owned private scratch; source output uses same helper; no reliance on ambientumask or DAC-capability exemption",
+      "id": "UID-handoff-file-modes"
+    },
+    {
+      "closed": true,
+      "evidence": "Same post-create reporting-failure path now retains provisional ownership and calls exact inspect then one owned remove; only real reviewer-owned finite Python child is used and naturally reaped, Docker remains mocked",
+      "id": "post-create-owned-cleanup"
+    }
+  ],
+  "candidate_RPMdb_solver_payload_ISO_playback_compression_or_adoption_claim": false,
+  "created_utc": "2026-10-07T04:26:52.167855+00:00",
+  "current_null_runtime_binding": "UNBOUND_NOT_EXECUTABLE",
+  "narrow_delta": {
+    "all55_preexisting_method_ASTs_identical": true,
+    "all_original51_v1pins_and_blocked_report_exact": true,
+    "all_vendor_and_default_workflow_and_runtime_nulls_byte_exact": true,
+    "changed_runtime_functions": {
+      "contract.py": [
+        "readable_json",
+        "stored_goal"
+      ],
+      "prepare.py": [
+        "Session.create",
+        "cache_catalog",
+        "image",
+        "run"
+      ],
+      "tool_checks.py": [
+        "main"
+      ]
+    },
+    "new_controls": 9,
+    "shared_metadata_after_all_controls_equal_before": true
+  },
+  "no_reviewer_Git_VM_Docker_RPM_DNF_network_or_package_workload": true,
+  "packet": {
+    "all48mapping_plus_manifest49_exact": true,
+    "all54ready_hashes_bytes_exact": true,
+    "all_declared_mapping_modes_verified": true,
+    "execution_manifest_sha256": "a0fcbc24defb6185253c2cef1189a8602e088887fd5abb8ab6a13e5d24062a3d",
+    "path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-preparation-source-v2",
+    "ready_sha256": "6caed699a1f855759007b03e2f66aefb212700ed58d980092a196afa35446675"
+  },
+  "predecessor_controls": {
+    "irrelevant_multilib_catalog": {
+      "supported_positive": {
+        "identities": [
+          "unrelated-1-1.fc44.x86_64"
+        ],
+        "status": "accepted"
+      },
+      "unselected_i686": {
+        "identities": [],
+        "status": "accepted"
+      }
+    },
+    "post_create_acquisition": {
+      "cleanup_calls": [
+        "cleanup:arctic-tools-synthetic-owned-1-discovery",
+        "cleanup:arctic-tools-synthetic-owned-1-discovery"
+      ],
+      "created_flag": true,
+      "mocked_Docker_operations": true,
+      "owned_child_still_live_before_review_cleanup": true,
+      "primary": "phase cleanup failed; cleanup: OSError: synthetic post-create phase evidence write failure",
+      "real_owned_Python_child": true,
+      "reviewer_child_naturally_reaped": true
+    },
+    "restrictive_umask_handoff": {
+      "DAC_read_denial": "Derived from actual UID/GID/mode versus declared capless0:0 identity, no root/container syscall qualification claimed",
+      "Docker_execution": false,
+      "actual_file_creation": [
+        {
+          "capless_B_uid0_can_DAC_read": true,
+          "gid": 1000,
+          "mode": "0o644",
+          "name": "approved-closure-report.json",
+          "uid": 1000
+        },
+        {
+          "capless_B_uid0_can_DAC_read": true,
+          "gid": 1000,
+          "mode": "0o644",
+          "name": "approved-payload-manifest.json",
+          "uid": 1000
+        },
+        {
+          "capless_B_uid0_can_DAC_read": true,
+          "gid": 1000,
+          "mode": "0o644",
+          "name": "host-context.json",
+          "uid": 1000
+        }
+      ],
+      "image_arm_stopped_at_known_mocked_transaction_failure": [
+        "synthetic single transaction failure",
+        1,
+        1,
+        1
+      ],
+      "source_policy": {
+        "B_user": "0:0",
+        "cap_drop": [
+          "ALL"
+        ]
+      }
+    }
+  },
+  "required_actual_followups": [
+    "Exact root private committed source/map/mode guard and independent source review bytes must be bound before any phase",
+    "Discovery actual immutable-base versions/executable/API/cache-layout/zstd evidence and independent review STOP",
+    "Exact signed no-runner tools transaction/normal weak-dependency/removal/header/source/license/CPIO-body closure and independent official artifact review STOP",
+    "Actual scriptless single tools transaction, tools executable/API/crypto/EROFS controls and producedimage/config/file manifest, then exact original ISO-member read and independent review STOP",
+    "No runtime flags/scripts/removal/unsigned signer/architecture fallback after failure; preserve all actual failed or unavailable evidence"
+  ],
+  "schema": "arctic-codec-tools-preparation-independent-source-review-v2",
+  "shared_product_source_clean_fe_unchanged": true,
+  "status": "PASS_SOURCE_HOST_ONLY_ACTUAL_BINDINGS_UNBOUND",
+  "support_pins": {
+    "close-initial-method-count.py": {
+      "bytes": 6163,
+      "sha256": "11f33f5309cee7f970634a1e5de4b0e78f9f6d4ae5f3a33726a433a66710eb60"
+    },
+    "close.py": {
+      "bytes": 6209,
+      "sha256": "d87629de764d1094c1cc12c6dbe0726f05b8195d16e5f5d09abe00baa291bcda"
+    },
+    "edge-controls.json": {
+      "bytes": 1751,
+      "sha256": "a252ca6af5d13905fe509d30132c6227f97981051883c9055abd139f327a92df"
+    },
+    "edge_controls.py": {
+      "bytes": 7669,
+      "sha256": "868b82ea75794407d975e32ec5427a057d53133828ecca5a9f883b4967e14138"
+    },
+    "initial-method-count-setup-failure.json": {
+      "bytes": 242,
+      "sha256": "b6bb5082c4334b25430c647f345f1e016536d909223c591fce75fc4580b73da6"
+    },
+    "mapped-controls.log": {
+      "bytes": 9755,
+      "sha256": "26ccf7350ec17dc24f223fe0145faa2873f4693d220591ad60e25be4bd2123ed"
+    },
+    "mapping.json": {
+      "bytes": 12336,
+      "sha256": "2cd9867e2ef394a9f1b32ae9617a55df8b45d2ac1ba28462aee762706a003914"
+    },
+    "metadata-after.json": {
+      "bytes": 3376,
+      "sha256": "0aeff9a973fd362e60068d7f10b1c23bdfe2a5caf73d0742869072c54af0b640"
+    },
+    "metadata-before.json": {
+      "bytes": 3376,
+      "sha256": "0aeff9a973fd362e60068d7f10b1c23bdfe2a5caf73d0742869072c54af0b640"
+    },
+    "parity-and-final-guard.json": {
+      "bytes": 517,
+      "sha256": "c3581f4bd6b42c1d0ff2f4b09174e4e31a0b2900bb7a206c5f041fffba97a193"
+    },
+    "setup.py": {
+      "bytes": 3183,
+      "sha256": "57f950c4208715ec7bf0f19de0fa62adc193c60adda28278fc21d495dc1f734c"
+    }
+  },
+  "tests": {
+    "ResourceWarning_error": true,
+    "SyntaxWarning_error": true,
+    "all_pass": true,
+    "exact_private_mapped_methods": 64
+  }
+}

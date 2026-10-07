@@ -1,0 +1,83 @@
+{
+  "amendment": "Separate discovery with external review STOP; closure with external signed-input review STOP; image/API/signatures then fixed-ISO archived member read only. Original A35/B30min caps unchanged; no automatic null identity discovery into solve or image.",
+  "base": {
+    "image_id": "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+    "index_sha256": "7011f51bd8089d345be42d41f0aa3190d258823528852a5e7ec976fe2fd20f53",
+    "platform": "linux/amd64",
+    "platform_manifest_sha256": "86289176d4a4af5c9b9c9df225eed4489f075bb67549411da2e0d4c121854491",
+    "registry": "registry.fedoraproject.org/fedora"
+  },
+  "bootstrap": null,
+  "candidate": {
+    "archived_member_path": null,
+    "archived_member_sha256": null,
+    "artifact_id": 11434226349,
+    "bytes": 1880244224,
+    "run_id": 37507582946,
+    "sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+    "source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1"
+  },
+  "closure": null,
+  "execution_review_file": "independent-source-review.json",
+  "execution_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
+  "keys": {
+    "fedora": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+    "fusion_preserved_not_enabled": "E9A491A3DE247814E7E067EAE06F8ECDD651FF2E"
+  },
+  "repositories": {
+    "fedora": {
+      "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/",
+      "metadata": {
+        "filelists": {
+          "bytes": 46935343,
+          "href": "repodata/326f2b47a15d5750b2bd3387831a9335731033b031cf2d5a9ffd26106d48648b-filelists.xml.zst",
+          "open_bytes": 829071915,
+          "open_sha256": "a5ab0ea30e259dad18c283d00711196cbed9c2fef039f99463f7e69ec77147ef",
+          "sha256": "326f2b47a15d5750b2bd3387831a9335731033b031cf2d5a9ffd26106d48648b"
+        },
+        "primary": {
+          "bytes": 15678154,
+          "href": "repodata/c48e47563bbf65b996c95caf4a608223f982c314cab637e6ab87dd1df67b9d26-primary.xml.zst",
+          "open_bytes": 185300395,
+          "open_sha256": "0818500b9143c2e3b251ebe9fd6027b74c0f09fbf47ef1e79681f2dd859c67e2",
+          "sha256": "c48e47563bbf65b996c95caf4a608223f982c314cab637e6ab87dd1df67b9d26"
+        }
+      },
+      "repomd_bytes": 5966,
+      "repomd_sha256": "da3845427d188097f6fd71b417a039bdfb8efefc4f38ca44b5cbb94f95a18991"
+    },
+    "updates": {
+      "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/",
+      "metadata": {
+        "filelists": {
+          "bytes": 23705449,
+          "href": "repodata/ebe262951947a42f2d301f713648f9db518bb86676344fbd2e461803e230639d-filelists.xml.zst",
+          "open_bytes": 445919319,
+          "open_sha256": "a99c771de1b1b3ff3d9f24955378149edd7b6ad1f4718bce35c011ec72836bf9",
+          "sha256": "ebe262951947a42f2d301f713648f9db518bb86676344fbd2e461803e230639d"
+        },
+        "primary": {
+          "bytes": 6659079,
+          "href": "repodata/1454767a8a05162146694708f9cdc6124c9fb008a7f610905ae8765e2191a857-primary.xml.zst",
+          "open_bytes": 89112464,
+          "open_sha256": "451c1d0373bf8eced96ef99071f16bf78adb23912e1042f4ccf217fe500c3a56",
+          "sha256": "1454767a8a05162146694708f9cdc6124c9fb008a7f610905ae8765e2191a857"
+        }
+      },
+      "repomd_bytes": 7055,
+      "repomd_sha256": "03374ebf88b2871ed8cd3560053ca6398435d9eaf5fe7cb7bf88f212eb23af54"
+    }
+  },
+  "schema": "arctic-codec-tools-preparation-runtime-v1",
+  "status": "SOURCE_REVIEW_BOUND",
+  "tool_root_goals": {
+    "dnf5": "5.4.6.0-1.fc44.x86_64",
+    "erofs-utils": "1.9.4-1.fc44.x86_64",
+    "gnupg2": "2.4.9-16.fc44.x86_64",
+    "python3-libdnf5": "5.4.6.0-1.fc44.x86_64",
+    "python3-rpm": "6.0.2-1.fc44.x86_64",
+    "rpm": "6.0.2-1.fc44.x86_64",
+    "xorriso": "1.5.8-2.fc44.x86_64",
+    "zstd": "1.5.7-5.fc44.x86_64"
+  }
+}
