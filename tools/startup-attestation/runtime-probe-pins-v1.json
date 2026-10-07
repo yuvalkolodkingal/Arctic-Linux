@@ -1,0 +1,37 @@
+{
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "files": {
+    "argv-native-v1": "ca6890c8a2c98d1c6a91b44a97bfd8d4e63e6e15e9207bd15cbcd74a064b8a8d",
+    "argv-probe.c": "f446cdae52935cb3c15c6d800e3a94732776f986af607d3ba486805f76527b4f",
+    "attest-startup-v1.py": "6afa100f618802f10131618f96b28e0456193c10d4d679fb8fc42a2387d4fd1f",
+    "bootstrap-attest-v1.sh": "96b6acc5f62d1765e6cb6a9d6385aae16c11c5cb52367f0f29c9a3e643ddb8a3",
+    "env-native-v1": "cc7eaa62f0bc44a8151b72921246e08884ab30ba26fe64ba9efeefe7bfa9505c",
+    "env-probe.c": "2e59457b9a66fa2195fefea610e9d37e77c59813a77210d6e721848e043bfb48",
+    "env-seal-native-v1": "beb77aef6eac7d6e599d990f6fc3dd302e92d6a09a06d05cec14e88493a1ba2a",
+    "env-seal-static-probe.c": "19399b2778385ab7b63975dc56b3233dd93e2fc1b1324ff186c0bc684185e7b1",
+    "guest-credential-primitive.py": "e4322915e1669b9d2b3e29d46799761d13ce883724ab47249edcdc9deababd1d",
+    "guest-safe-collector-v1.py": "e1da6bb2f07cb7014486e0f59c36973600e5dcd9a8063c684f461e099d3fc5e9",
+    "runtime-fixtures-v1.py": "41253dd2edfaba9026bdbab65ccdc3618003e3db49974627813b23c8aad1370d",
+    "sealed_environment.py": "aff9882e5cf954879d9e70f6d4cd78ed579bb076aee5f35d31e1a9febdae7f38",
+    "synthetic-handoff-observer.py": "35cb4ab08b34790925945936f4cacf6d6bd1703ac067f7dcc047bec408412926",
+    "toolkit.py": "da811b92debeaee381f24950a7831b39881f37b824344b70c183cb62e714cfff"
+  },
+  "intended_iso_sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718",
+  "modes": {
+    "argv-native-v1": 365,
+    "argv-probe.c": 420,
+    "attest-startup-v1.py": 420,
+    "bootstrap-attest-v1.sh": 420,
+    "env-native-v1": 365,
+    "env-probe.c": 420,
+    "env-seal-native-v1": 365,
+    "env-seal-static-probe.c": 420,
+    "guest-credential-primitive.py": 420,
+    "guest-safe-collector-v1.py": 420,
+    "runtime-fixtures-v1.py": 420,
+    "sealed_environment.py": 420,
+    "synthetic-handoff-observer.py": 420,
+    "toolkit.py": 420
+  },
+  "schema": "arctic-runtime-prerequisite-CD-v1"
+}

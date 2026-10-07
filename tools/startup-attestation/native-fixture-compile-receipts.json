@@ -1,0 +1,84 @@
+{
+  "compiler": "gcc (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "files": [
+    {
+      "ELF_report_sha256": "2511b3679507d5c0114b8c2b9252e457389f331287f99a0b0bbc74a0933f169b",
+      "binary": "env-native-v1",
+      "binary_bytes": 12640,
+      "binary_sha256": "cc7eaa62f0bc44a8151b72921246e08884ab30ba26fe64ba9efeefe7bfa9505c",
+      "command": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "gcc",
+        "-O2",
+        "-fPIE",
+        "-pie",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-z,relro,-z,now,-z,noexecstack",
+        "-o",
+        "/scratch/arctic-runtime-prerequisite-fixtures-20261007-0410/env-native-v1",
+        "/src/out/audit/consolidated-iso-37507582946/safe-startup-runtime-prerequisite-execution-v1/env-probe.c"
+      ],
+      "compile_exit": 0,
+      "source": "env-probe.c",
+      "source_sha256": "2e59457b9a66fa2195fefea610e9d37e77c59813a77210d6e721848e043bfb48"
+    },
+    {
+      "ELF_report_sha256": "5bbf243e5fc03ac824398e80382cfed7761b8d93cff3dd9a50ee3261d3cd6f99",
+      "binary": "argv-native-v1",
+      "binary_bytes": 12584,
+      "binary_sha256": "ca6890c8a2c98d1c6a91b44a97bfd8d4e63e6e15e9207bd15cbcd74a064b8a8d",
+      "command": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "gcc",
+        "-O2",
+        "-fPIE",
+        "-pie",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-z,relro,-z,now,-z,noexecstack",
+        "-o",
+        "/scratch/arctic-runtime-prerequisite-fixtures-20261007-0410/argv-native-v1",
+        "/src/out/audit/consolidated-iso-37507582946/safe-startup-runtime-prerequisite-execution-v1/argv-probe.c"
+      ],
+      "compile_exit": 0,
+      "source": "argv-probe.c",
+      "source_sha256": "f446cdae52935cb3c15c6d800e3a94732776f986af607d3ba486805f76527b4f"
+    },
+    {
+      "ELF_report_sha256": "7147f503e28eeac8e4174265ec7c991ddc873e50026727c4cb28e5424a8b3729",
+      "binary": "env-seal-native-v1",
+      "binary_bytes": 9920,
+      "binary_sha256": "beb77aef6eac7d6e599d990f6fc3dd302e92d6a09a06d05cec14e88493a1ba2a",
+      "command": [
+        "docker",
+        "exec",
+        "arctic-compression-tools",
+        "gcc",
+        "-O0",
+        "-nostdlib",
+        "-static-pie",
+        "-fPIE",
+        "-fno-stack-protector",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-z,relro,-z,now,-z,noexecstack",
+        "-o",
+        "/scratch/arctic-runtime-prerequisite-fixtures-20261007-0410/env-seal-native-v1",
+        "/src/out/audit/consolidated-iso-37507582946/safe-startup-runtime-prerequisite-execution-v1/env-seal-static-probe.c"
+      ],
+      "compile_exit": 0,
+      "source": "env-seal-static-probe.c",
+      "source_sha256": "19399b2778385ab7b63975dc56b3233dd93e2fc1b1324ff186c0bc684185e7b1"
+    }
+  ],
+  "scope": "Owned Fedora helper source compilation only; testCDproviders, not candidate packages or actual guest ABI"
+}

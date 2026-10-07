@@ -1,0 +1,29 @@
+{
+  "BASH_ENV": "absent never-source within that directory",
+  "actual_profiles_or_Mango_invoked": false,
+  "actual_startup_argument_or_environment_qualified": false,
+  "argument_pairs": 1,
+  "attempts_ceiling": 12,
+  "bash_argv": [
+    "/usr/bin/bash",
+    "--noprofile",
+    "--norc",
+    "-c",
+    "exec \"$@\"",
+    "owned-final-exec-fixture",
+    "FIXED-NATIVE-PROVIDER",
+    "KNOWN-SYNTHETIC-ARGV-ONLY"
+  ],
+  "captured_original_final_line": "exec $@",
+  "cwd_HOME_PWD": "one fresh owned temporary directory",
+  "declared_difference": "quoted synthetic boundary is not an actual startup handoff equivalence proof",
+  "each_seconds": 5,
+  "environment_pairs": 4,
+  "fixture_attempts": 11,
+  "fixture_processes": 16,
+  "prior_amendment_SHA": "19f4dd0f894ccec676b076970445d461d68440dbe68b329a36f73231806ef8a5",
+  "prior_unquoted_owner_data_historical_only": true,
+  "processes_ceiling": 24,
+  "schema": "arctic-quoted-synthetic-contract-v2",
+  "total_seconds": 60
+}
