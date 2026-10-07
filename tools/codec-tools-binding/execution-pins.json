@@ -1,8 +1,9 @@
 {
   "actual_context_review_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
   "actual_discovery_review_sha256": "55b4fa69c4c30dbe0a97f555f2eb29325457187ce30c7e64ee7879c4353c6b47",
-  "actual_failed_predecessor_source": "d680cd153247f94d9bc2722f926974ff7a8a94c9",
-  "actual_preparation": "METADATA_UNRUN",
+  "actual_failed_metadata_review_sha256": "1743582aaf445ab147c7fdf1ba8b72e661bcda5b3ab250b79f5af7ead3b42e9c",
+  "actual_failed_predecessor_source": "a06cb7cff82f91756f8f2eecba47ae9a4fcc1960",
+  "actual_preparation": "V2_METADATA_UNRUN",
   "files": {
     ".github/workflows/iso.yml": {
       "audit_source": "registered-iso-codec-tools-discovery-v3.yml",
@@ -12,9 +13,9 @@
     },
     "tools/codec-tools-binding/README.md": {
       "audit_source": "README.md",
-      "bytes": 5585,
+      "bytes": 7457,
       "git_mode": "100644",
-      "sha256": "de111c1211e4b6ae02056791d501974d611807b29c4af5be528b88923655b1f2"
+      "sha256": "890faace4372a7d0e095150cb025eac1b6fda549d9376c7d3aebf9c42cce33cc"
     },
     "tools/codec-tools-binding/additional-primary-source-reads.json": {
       "audit_source": "additional-primary-source-reads.json",
@@ -66,9 +67,9 @@
     },
     "tools/codec-tools-binding/metadata-predecessor-preserved.json": {
       "audit_source": "metadata-predecessor-preserved.json",
-      "bytes": 752,
+      "bytes": 936,
       "git_mode": "100644",
-      "sha256": "86f4ab493b83722a0fe31d0e8bea31c9058790ae3ad9f7f40e513ee663e2ac1c"
+      "sha256": "581e81efb4332d83608c311e8876cf09b2b98b7c8046d2cc927513c0eeea2491"
     },
     "tools/codec-tools-binding/predecessor-preserved.json": {
       "audit_source": "predecessor-preserved.json",
@@ -78,15 +79,15 @@
     },
     "tools/codec-tools-binding/prepare.py": {
       "audit_source": "prepare.py",
-      "bytes": 49268,
+      "bytes": 49951,
       "git_mode": "100755",
-      "sha256": "9f655a22718a7fc14532232d9f2a0185bc682392f2b53e31e61b2da3238027a0"
+      "sha256": "0d280fccf2b7961cf989cd1b99725519c7e43ee50224cd1b19088f56d5f8addf"
     },
     "tools/codec-tools-binding/promotion-handoff.json": {
       "audit_source": "promotion-handoff.json",
-      "bytes": 2465,
+      "bytes": 3111,
       "git_mode": "100644",
-      "sha256": "ed185695df34550804f131096a7a2d7070a79f95ca73c1e440a9ae49bad98148"
+      "sha256": "88b9f0de2aedfa8a40bbc6b717a01cae46bddde7ba9669d7a92db754511a76eb"
     },
     "tools/codec-tools-binding/proposal-preserved.json": {
       "audit_source": "proposal-preserved.json",
@@ -102,9 +103,9 @@
     },
     "tools/codec-tools-binding/source-parity.json": {
       "audit_source": "source-parity.json",
-      "bytes": 10290,
+      "bytes": 10199,
       "git_mode": "100644",
-      "sha256": "6831aa3d53bc0644bdbafb1431173f2625122c52284a1bf94ba22f34059cefc4"
+      "sha256": "c608add88e61f1a20568cc5112ea5b62f098194e8e584fdd20296d0e576c66c7"
     },
     "tools/codec-tools-binding/sources/actual-inputs-37573011277.json": {
       "audit_source": "sources/actual-inputs-37573011277.json",
@@ -294,9 +295,9 @@
     },
     "tools/codec-tools-binding/test_tools.py": {
       "audit_source": "test_tools.py",
-      "bytes": 74183,
+      "bytes": 74282,
       "git_mode": "100644",
-      "sha256": "894c54ca64dc4d7631f7e26bc70f90432d1c0e7b706ba2400ee5bd5dd324d6e2"
+      "sha256": "521b328b163bfe4046a56fd8fd214a08af5f79aed06d6a4a5edb9a28003fa0da"
     },
     "tools/codec-tools-binding/tool_checks.py": {
       "audit_source": "tool_checks.py",
@@ -353,8 +354,8 @@
       "sha256": "e2a16cd35ef4f134e4d451aa1d6410b5e3ee2c7add5254d06448f1e116821956"
     }
   },
-  "predecessor_integration_review_sha256": "bf5d78f78317e0eb2c9fc829875edf33c95bd337b35e27cf94cec8cedf5b67af",
-  "predecessor_ready_sha256": "5ea198b2c6fc6fda33172091868be64faff6fcaa904296e177746e0b29bd9cb8",
+  "predecessor_integration_review_sha256": "814c1ebcf50f399cb5da0cc51b4b9eaff3946a33f815f44ce9469c4419513b60",
+  "predecessor_ready_sha256": "94d7ccb950368d2476064a801ddfd773866104feacbfd90e710746d9b22fc12a",
   "predecessor_source_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
   "product_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
   "proposal_independent_review_sha256": "31e162066299999ad5d15b8afe2ec418f5c776bd2d25dea4b9af7ea14347d54d",
@@ -362,7 +363,7 @@
   "schema": "arctic-codec-tools-preparation-execution-v1",
   "self_manifest_git_mode": "100644",
   "self_manifest_target": "tools/codec-tools-binding/execution-pins.json",
-  "status": "METADATA_PREREQUISITE_SOURCE_ONLY_PENDING_INDEPENDENT_REVIEW",
+  "status": "OS_RELEASE_ALIAS_COPY_SUCCESSOR_SOURCE_ONLY_PENDING_REVIEW",
   "worker_v3_independent_review_sha256": "248674ec912a4aac4392b4e70ab119bc423568a0e80b193133f6ba7a69939c09",
   "workflow_baseline": {
     "only_existing_job_changes": "selection guards; steps/action pins/defaults preserved",

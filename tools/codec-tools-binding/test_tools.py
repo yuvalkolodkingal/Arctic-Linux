@@ -871,6 +871,7 @@ class MetadataPrerequisiteControls(TestCase):
                     destination.mkdir();(destination/'fixture-state').write_bytes(state[inside.lstrip('/')])
                 else:destination.write_bytes(b'synthetic system identity')
             session.copy=copy
+            session.copy_os_release=lambda destination,tag:copy('/etc/os-release',destination,tag)
             def body(relative,destination,tag):
                 destination.write_bytes((b'wrong body' if change=='body' and relative=='usr/bin/dnf5' else bodies.get(relative,b'synthetic zstd')))
             session.copy_binary=body

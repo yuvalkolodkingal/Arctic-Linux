@@ -22,11 +22,20 @@
     "closure": null
   },
   "permitted_network_reads": "Only existing exact hash/size-bound Fedora repodata through makecache; no RPM payload or additional endpoint.",
-  "private_base_commit": "b16900d78114cfcf8df2aebcaf3802472be706b1",
-  "private_base_repository": "/workspace/arctic-codec-tools-discovery-v4-qualification",
+  "preserved_actual_failure": {
+    "ZIP_sha256": "79416ae7e6e20a6ebd43f76348c2da7553d644a09c12ce8c2598ff5a542ffe88",
+    "head": "a06cb7cff82f91756f8f2eecba47ae9a4fcc1960",
+    "independent_sha256": "1743582aaf445ab147c7fdf1ba8b72e661bcda5b3ab250b79f5af7ead3b42e9c",
+    "official_artifact_id": 11463582396,
+    "owner_sha256": "d0afff0d584a28908c1bb0ea14f92013771f733094216690703ee207a384db78",
+    "root_verification_file": "root-codec-metadata-actual-verification-37578494773.json",
+    "run": 37578494773
+  },
+  "private_base_commit": "a06cb7cff82f91756f8f2eecba47ae9a4fcc1960",
+  "private_base_repository": "/workspace/arctic-codec-tools-metadata-qualification",
   "private_base_workflow_sha256": "6a8ed7d61c31aadf64265409c3b212119389ce1ed73dc2fc1105917d8321ab69",
-  "proposed_private_worktree": "/workspace/arctic-codec-tools-metadata-qualification",
-  "proposed_test_branch": "test/codec-tools-metadata-37507582946-v1",
+  "proposed_private_worktree": "/workspace/arctic-codec-tools-metadata-v2-qualification",
+  "proposed_test_branch": "test/codec-tools-metadata-37507582946-v2",
   "provenance": [
     "Prior tools source review458 exact remains immutable executable-source predecessor binding; current metadata source needs its own external independent review/root guard.",
     "Prior actual discovery55b4 exact is an independent runtime identity input, not permission for future signed tools resolution.",
@@ -46,7 +55,8 @@
     "pids": 512,
     "scratch_bytes": 16000000000
   },
-  "schema": "arctic-codec-tools-metadata-prerequisite-handoff-v1",
+  "schema": "arctic-codec-tools-metadata-prerequisite-handoff-v2",
+  "source_delta": "Only fixed OS-release copy resolves the immutable-base alias; all other copies/state/metadata gates unchanged.",
   "status": "SOURCE_ONLY_VM_DOCKER_METADATA_UNRUN",
   "workflow_target": ".github/workflows/iso.yml"
 }

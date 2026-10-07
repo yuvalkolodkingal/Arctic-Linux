@@ -236,6 +236,13 @@ class Session:
     def copy(self,inside,destination,tag):
         require(not destination.exists() and not destination.is_symlink(),'stale copied base path')
         self.inspect();self.call(['docker','cp',self.name+':'+inside,str(destination)],tag,60)
+    def copy_os_release(self,destination,tag):
+        # This one immutable-base identity is a Fedora relative alias. Only
+        # its fixed source is resolved; state trees and other copies retain
+        # their original type-preserving route and manifest checks.
+        require(not destination.exists() and not destination.is_symlink(),'stale copied OS release path')
+        self.inspect();self.call(['docker','cp','-L',self.name+':/etc/os-release',str(destination)],tag,60)
+        require(destination.is_file() and not destination.is_symlink(),'resolved OS release is not a regular file')
     def copy_binary(self,relative,destination,tag):
         require(relative in (*c.BOOTSTRAP_TOOLS,'usr/bin/zstd'),'unapproved immutable-base executable data path')
         require(not destination.exists() and not destination.is_symlink(),'stale executable data path')
@@ -405,7 +412,8 @@ def prepare_root(session):
         safe_tree(dest,1000000000)
     for rel in ('etc/os-release','etc/passwd','etc/group'):
         dest=target/rel;dest.parent.mkdir(parents=True,exist_ok=True)
-        session.copy('/'+rel,dest,'copy-'+Path(rel).name)
+        if rel=='etc/os-release':session.copy_os_release(dest,'copy-os-release')
+        else:session.copy('/'+rel,dest,'copy-'+Path(rel).name)
     for rel in ('config/repos','config/empty-plugins','config/empty-vars','home','cache','logs','keys','goal'):
         (work/rel).mkdir(mode=0o755,parents=True,exist_ok=True)
     config={'installroot':'/work/installroot','use_host_config':'false','plugins':'false',

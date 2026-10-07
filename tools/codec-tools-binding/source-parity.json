@@ -1,13 +1,10 @@
 {
   "contract.py": {
-    "changed": [
-      "binding_for",
-      "owned_container",
-      "registered_discovery_inputs"
-    ],
+    "changed": [],
     "new": [],
     "removed": [],
     "unchanged": [
+      "binding_for",
       "config_dump_verify",
       "file_table",
       "hash64",
@@ -15,21 +12,19 @@
       "iso_identity",
       "iso_member_listing",
       "nevra",
+      "owned_container",
       "readable_json",
+      "registered_discovery_inputs",
       "rows",
       "stored_goal"
     ]
   },
   "prepare.py": {
     "changed": [
-      "Session.create",
-      "preflight",
-      "run"
+      "prepare_root"
     ],
     "new": [
-      "metadata",
-      "metadata_cache_receipts",
-      "metadata_identity_guard"
+      "Session.copy_os_release"
     ],
     "removed": [],
     "unchanged": [
@@ -39,6 +34,7 @@
       "Session.cleanup",
       "Session.copy",
       "Session.copy_binary",
+      "Session.create",
       "Session.docker",
       "Session.exec",
       "Session.inspect",
@@ -54,7 +50,11 @@
       "image",
       "invoke",
       "main",
-      "prepare_root",
+      "metadata",
+      "metadata_cache_receipts",
+      "metadata_identity_guard",
+      "preflight",
+      "run",
       "safe_tree",
       "signed_files",
       "source_guard"
@@ -62,30 +62,9 @@
   },
   "test_tools.py": {
     "changed": [
-      "IsolationAndPhaseControls.fixture",
-      "LifecycleStopControls.run_case",
-      "RegisteredDiscoveryControls.test_all_old_workflow_steps_inputs_and_default_behavior_are_preserved",
-      "RegisteredDiscoveryControls.test_discovery_job_cannot_download_fixed_ISO_or_run_later_stages",
-      "bound",
-      "registered_inputs"
+      "MetadataPrerequisiteControls.chain"
     ],
-    "new": [
-      "MetadataPrerequisiteControls.chain",
-      "MetadataPrerequisiteControls.fixture_cache",
-      "MetadataPrerequisiteControls.selected",
-      "MetadataPrerequisiteControls.test_actual_metadata_preflight_has_no_Docker_or_metadata_side_effect",
-      "MetadataPrerequisiteControls.test_actual_optional_tag_defaults_and_metadata_route_are_literal",
-      "MetadataPrerequisiteControls.test_body_plugin_config_failures_occur_before_any_metadata_access",
-      "MetadataPrerequisiteControls.test_cache_missing_corrupt_duplicate_snapshot_link_and_expired_deadline_fail_or_remain_unmatched",
-      "MetadataPrerequisiteControls.test_cache_receipts_match_exact_compressed_and_plain_bytes_separately",
-      "MetadataPrerequisiteControls.test_complete_actual_function_chain_stops_without_goal_package_or_later_phase",
-      "MetadataPrerequisiteControls.test_generated_metadata_job_is_default_off_exclusive_artifact_only_and_uses_actual_preflight",
-      "MetadataPrerequisiteControls.test_metadata_binding_admits_only_reviewed_discovery_and_no_later_permission",
-      "MetadataPrerequisiteControls.test_metadata_create_sets_preparse_paths_and_only_owned_alias_overlays",
-      "MetadataPrerequisiteControls.test_metadata_inspection_rejects_nonempty_writable_wrong_alias_or_duplicate_environment",
-      "MetadataPrerequisiteControls.test_metadata_selectors_missing_required_unknown_and_mixed_fail",
-      "MetadataPrerequisiteControls.test_snapshot_private_state_goal_alias_or_after_config_failure_never_yields_STOP_pass"
-    ],
+    "new": [],
     "removed": [],
     "unchanged": [
       "GoalControls.test_duplicate_full_and_duplicate_name_different_arch_fail",
@@ -103,6 +82,7 @@
       "ImageInputAndAttemptControls.test_stale_attempt_never_submits_again",
       "ImageInputAndAttemptControls.test_wrong_bound_report_or_extra_RPM_fail_before_transaction",
       "ImageInputAndAttemptControls.test_wrong_payload_bytes_fail_before_any_signature_or_transaction",
+      "IsolationAndPhaseControls.fixture",
       "IsolationAndPhaseControls.test_cleanup_uses_reserved_global_deadline_and_exact_labels",
       "IsolationAndPhaseControls.test_exact_three_modes_host_ancestor_and_mount_boundaries",
       "IsolationAndPhaseControls.test_foreign_host_secret_cache_or_writable_source_mount_fail",
@@ -111,6 +91,7 @@
       "IsolationAndPhaseControls.test_mixed_discovery_preflight_has_no_metadata_Docker_read",
       "IsolationAndPhaseControls.test_network_policy_identity_resource_or_secret_change_fail",
       "IsolationAndPhaseControls.test_nonprivate_parent_and_linked_scratch_fail",
+      "LifecycleStopControls.run_case",
       "LifecycleStopControls.test_cleanup_error_cannot_create_qualified_pass",
       "LifecycleStopControls.test_each_explicit_phase_stops_without_automatic_chain",
       "LifecycleStopControls.test_failed_selected_phase_does_not_run_later_phase",
@@ -126,6 +107,20 @@
       "MemberAndRuntimeControls.test_scratch_links_special_or_byte_overflow_fail",
       "MemberAndRuntimeControls.test_workflow_default_off_registered_discovery_job_only",
       "MemberAndRuntimeControls.test_wrong_small_ISO_fails_actual_bytes_gate",
+      "MetadataPrerequisiteControls.fixture_cache",
+      "MetadataPrerequisiteControls.selected",
+      "MetadataPrerequisiteControls.test_actual_metadata_preflight_has_no_Docker_or_metadata_side_effect",
+      "MetadataPrerequisiteControls.test_actual_optional_tag_defaults_and_metadata_route_are_literal",
+      "MetadataPrerequisiteControls.test_body_plugin_config_failures_occur_before_any_metadata_access",
+      "MetadataPrerequisiteControls.test_cache_missing_corrupt_duplicate_snapshot_link_and_expired_deadline_fail_or_remain_unmatched",
+      "MetadataPrerequisiteControls.test_cache_receipts_match_exact_compressed_and_plain_bytes_separately",
+      "MetadataPrerequisiteControls.test_complete_actual_function_chain_stops_without_goal_package_or_later_phase",
+      "MetadataPrerequisiteControls.test_generated_metadata_job_is_default_off_exclusive_artifact_only_and_uses_actual_preflight",
+      "MetadataPrerequisiteControls.test_metadata_binding_admits_only_reviewed_discovery_and_no_later_permission",
+      "MetadataPrerequisiteControls.test_metadata_create_sets_preparse_paths_and_only_owned_alias_overlays",
+      "MetadataPrerequisiteControls.test_metadata_inspection_rejects_nonempty_writable_wrong_alias_or_duplicate_environment",
+      "MetadataPrerequisiteControls.test_metadata_selectors_missing_required_unknown_and_mixed_fail",
+      "MetadataPrerequisiteControls.test_snapshot_private_state_goal_alias_or_after_config_failure_never_yields_STOP_pass",
       "ObservedOptionalTagControls.actual",
       "ObservedOptionalTagControls.test_actual_context_reaches_only_preflight_with_real_prior_review_bytes",
       "ObservedOptionalTagControls.test_every_missing_required_field_unknown_key_and_selected_mode_still_fails",
@@ -137,7 +132,9 @@
       "OwnedHostControls.test_real_owned_binary_bytes_do_not_decode_as_text",
       "OwnedHostControls.test_real_owned_python_success_and_monitor",
       "OwnedHostControls.test_real_owned_python_timeout_finite_records_primary",
+      "RegisteredDiscoveryControls.test_all_old_workflow_steps_inputs_and_default_behavior_are_preserved",
       "RegisteredDiscoveryControls.test_changed_bound_review_fails_before_any_Docker_or_metadata_read",
+      "RegisteredDiscoveryControls.test_discovery_job_cannot_download_fixed_ISO_or_run_later_stages",
       "RegisteredDiscoveryControls.test_exact_prior_review_binding_and_later_nulls_are_preserved",
       "RegisteredDiscoveryControls.test_malformed_source_tag_bool_or_missing_input_fails",
       "RegisteredDiscoveryControls.test_only_exact_registered_discovery_inputs_are_admitted",
@@ -165,7 +162,9 @@
       "SuccessorBoundaryControls.test_shared_json_has_exact_readable_mode_under_restrictive_umask",
       "SuccessorBoundaryControls.test_shared_json_rejects_stale_link_or_failed_permission_change",
       "SuccessorBoundaryControls.test_successful_side_effect_then_phase_report_failure_still_exactly_cleans",
+      "bound",
       "goal_fixture",
+      "registered_inputs",
       "workflow"
     ]
   },
@@ -180,9 +179,10 @@
       "reader_and_crypto_controls"
     ]
   },
-  "workflow": {
-    "delta": "One default-false selector, one artifact-only metadata job, six metadata exclusion guards; all existing steps/actions/input defaults remain byte-identical.",
-    "old_reconstructed_bytes_equal": true,
-    "old_source_sha256": "6a8ed7d61c31aadf64265409c3b212119389ce1ed73dc2fc1105917d8321ab69"
+  "workflow_runtime_binding_vendor": {
+    "all87_test_method_ASTs_unchanged": true,
+    "all_vendor_bytes_unchanged": true,
+    "runtime_binding_bytes_unchanged": true,
+    "workflow_bytes_unchanged": true
   }
 }
