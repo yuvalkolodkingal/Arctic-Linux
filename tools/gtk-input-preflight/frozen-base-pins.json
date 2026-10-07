@@ -1,0 +1,29 @@
+{
+  "base": "aee90aea1c8f6cb827f2044f62a6b47eff475145",
+  "allowed_changed_existing": [
+    ".github/workflows/iso.yml",
+    "tools/test-iso.sh"
+  ],
+  "files": {
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+    "tools/native-functional-v4/README-v4.md": "8d215cd3fa8a19cc3455bb063899af854712309729d5b0ee392541ad0e2dec9f",
+    "tools/native-functional-v4/adapter-parity-v4.json": "4edff04dddfe43324fdeed0f79dd4d7a90fc0019e3324fbf91cb36a09dc86dd6",
+    "tools/native-functional-v4/ancestor-native-independent-review.json": "8f4738796615750ceaa6ee60688f1a9cbc0d781fdf9abdcf2cba0777ca3a7988",
+    "tools/native-functional-v4/ancestor-native-manifest.json": "ee488d7eaab28e5ff4c70ef25e7e9c8fb6d40971680c80d1ccf83490e6007413",
+    "tools/native-functional-v4/frozen-v2-pins-v4.json": "4c19408ca3a5a69796df54ccd88a655414dc21c8e4fd571beac5febb99f08c25",
+    "tools/native-functional-v4/guest-check-native-v4.py": "a76bdacf9d465e6d0938ce4b096bc7a0da339e94704120c923886720d65ce229",
+    "tools/native-functional-v4/native-launcher-v4.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
+    "tools/native-functional-v4/native-runner-v4.py": "eb75ee7a0eded71b99f1742940e1ccbf5546f7203ccd62c57e2447c8dbd9a4ac",
+    "tools/native-functional-v4/native_smoke.py": "ed382ab80a4918118370253c383b0fefde116ba34d55e977bcd34607ad2632d0",
+    "tools/native-functional-v4/prepare-adapter-v4.py": "37c4c68bb7b74d5a2aa76ff5bfbb58bb257e1a003a6c9e51e9498ed892420016",
+    "tools/native-functional-v4/source-provenance-v4.json": "74087d8d748e7b204c138cdc8ae8778775350a8ceaadb0e6d7c0c8b2bee044ab",
+    "tools/native-functional-v4/test-install-native-audio-v4.patch": "63d8413024cbddf23dfa1b447ab2239480f6839cd925330c289ad36ea5512073",
+    "tools/native-functional-v4/test_native_runner_v4.py": "1b981ecb619e67a908a1942b11cebf35a68aafc864af78033de507061d8beb48",
+    "tools/native-functional-v4/test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
+    "tools/native-functional-v4/test_native_v4.py": "041fdcc51f950270cdbabb7b1491fe1bf42941ff287f94108f0b0274725b335e",
+    "tools/test-install.sh": "28fdb96c6643549faf19ead278bc1cf85c824401fd17f87b852126ef61e34f71",
+    "tools/tests/test_performance_harness.py": "5a9b35e0dea7ba476f013376c8da301f32ac44788743e50cc3cf3804d43faca3",
+    "tools/pcmanfm-diagnostic/diagnostic-runner.py": "bd7766788f918946d5ec88fa1b0cbfc20ba1df6cf7168ac4c19fb4f973cc0836"
+  }
+}

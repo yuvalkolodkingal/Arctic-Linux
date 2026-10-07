@@ -47,7 +47,6 @@ VGA=virtio
 APPEND=""
 COLLECT=0
 PCMANFM_DIAGNOSTIC=""
-GTK_INPUT_PREFLIGHT=""
 OUTBASE="$ROOT/out/test"
 
 while (( $# )); do
@@ -64,7 +63,6 @@ while (( $# )); do
     --append) APPEND="$APPEND $2"; shift 2 ;;
     --collect) COLLECT=1; shift ;;
     --pcmanfm-diagnostic) PCMANFM_DIAGNOSTIC="$2"; shift 2 ;;
-    --gtk-input-preflight) GTK_INPUT_PREFLIGHT="$2"; shift 2 ;;
     --debug) APPEND="$APPEND console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"; shift ;;
     --secureboot) SECUREBOOT=1; FIRMWARE=uefi; shift ;;
     --out) OUTBASE="$2"; shift 2 ;;
@@ -74,18 +72,6 @@ while (( $# )); do
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$MODE" in try|install|safe|check|disk) ;; *) arctic_die "--mode takes try, install, safe, check or disk" ;; esac
-if [[ -n "$GTK_INPUT_PREFLIGHT" ]]; then
-  [[ -z "$PCMANFM_DIAGNOSTIC" ]] || arctic_die "mixed diagnostic modes forbidden"
-  [[ "$FIRMWARE" == uefi && "$MODE" == try && "$KVM" == 1 && "$SECUREBOOT" == 0 && "$COLLECT" == 0 \
-     && "$MEMORY" == 4096 && "$SMP" == 2 && "$VGA" == virtio && "$TIMEOUT" == 900 && -c /dev/kvm \
-     && "${ARCTIC_VM_TOOLS_PREPARED:-0}" == 1 ]] || arctic_die "invalid explicit diagnostic VM mode/tools"
-  [[ "$APPEND" == " console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1" ]] \
-    || arctic_die "diagnostic requires exact native serial arguments"
-  GTK_INPUT_PREFLIGHT="$(cd "$GTK_INPUT_PREFLIGHT" && pwd)"
-  [[ -f "$GTK_INPUT_PREFLIGHT/preflight-controller.py" && -f "$GTK_INPUT_PREFLIGHT/runtime-pins.json" \
-     && -f "$GTK_INPUT_PREFLIGHT/bootstrap-diagnostic.sh" ]] || arctic_die "diagnostic source packet absent"
-fi
-
 if [[ -n "$PCMANFM_DIAGNOSTIC" ]]; then
   [[ "$FIRMWARE" == uefi && "$MODE" == try && "$KVM" == 1 && "$SECUREBOOT" == 0 && "$COLLECT" == 0 \
      && "$MEMORY" == 4096 && "$SMP" == 2 && "$VGA" == virtio && "$TIMEOUT" == 900 && -c /dev/kvm \
@@ -101,7 +87,7 @@ ISO="$(cd "$(dirname "$ISO")" && pwd)/$(basename "$ISO")"
 
 sb=""; if [[ $SECUREBOOT == 1 ]]; then sb="-sb"; fi
 OUT="$OUTBASE/$FIRMWARE$sb-$MODE"
-if [[ -n "$PCMANFM_DIAGNOSTIC" || -n "$GTK_INPUT_PREFLIGHT" ]]; then
+if [[ -n "$PCMANFM_DIAGNOSTIC" ]]; then
   [[ ! -e "$OUT" ]] || arctic_die "diagnostic output must be unused"
   mkdir -p "$OUT"
 else
@@ -165,22 +151,6 @@ else:
     else:
         keys("ret")
         log(f"selected the '{mode}' entry")
-
-if os.environ.get("GTK_INPUT_PREFLIGHT") == "1":
-    import importlib.util
-    spec = importlib.util.spec_from_file_location('pcmanfm_controller', '/gtk-input-preflight/preflight-controller.py')
-    bulk_owns_cleanup = False
-    try:
-        controller = importlib.util.module_from_spec(spec); spec.loader.exec_module(controller)
-        bspec = importlib.util.spec_from_file_location('diagnostic_bulk_channel', '/gtk-input-preflight/bulk-channel.py')
-        bulk_module = importlib.util.module_from_spec(bspec); bspec.loader.exec_module(bulk_module)
-        bulk_owns_cleanup = True # Only a successful import transfers cleanup ownership.
-        bulk_module.run_owned(vm, out,
-            lambda bulk: controller.run_v3(vm, out, menu_seen, os.environ['GTK_CHECKER_SHA'], bulk),
-            max(0, min(900, vmtest.T0+timeout-time.time())))
-    finally:
-        if not bulk_owns_cleanup: vm.quit()
-    sys.exit(0)
 
 if os.environ.get("PCMANFM_DIAGNOSTIC") == "1":
     import importlib.util
@@ -265,7 +235,7 @@ PY
 inner=$(cat <<'INNER'
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
-if [ "$PCMANFM_DIAGNOSTIC" = 1 ] || [ "$GTK_INPUT_PREFLIGHT" = 1 ]; then
+if [ "$PCMANFM_DIAGNOSTIC" = 1 ]; then
   pkgs+=(xorriso)
   rpm -q "${pkgs[@]}" >/dev/null
 else
@@ -273,7 +243,6 @@ else
 fi
 disk_size=64G
 [ "$PCMANFM_DIAGNOSTIC" != 1 ] || disk_size=40G
-[ "$GTK_INPUT_PREFLIGHT" != 1 ] || disk_size=40G
 qemu-img create -q -f qcow2 /tmp/target.qcow2 "$disk_size"
 accel="tcg,thread=multi"
 [ -e /dev/kvm ] && accel=kvm
@@ -330,38 +299,6 @@ if [ "$PCMANFM_DIAGNOSTIC" = 1 ]; then
     printf '%s\n' 'Actual new tools/data payload; no earlier tool byte parity or audio acceptance claim.'
   } > "$OUT/pcmanfm-toolchain.txt"
 fi
-if [ "$GTK_INPUT_PREFLIGHT" = 1 ]; then
-  mkdir /tmp/diagnostic-data
-  cp /gtk-input-preflight/guest-preflight.py /tmp/diagnostic-data/guest-check.py
-  for f in native_smoke.py native-launcher.py gtk-entry-control.py security-collector.py bulk-channel.py runtime-pins.json bootstrap-diagnostic.sh preflight-core.py preflight-proof.py arctic-wtype-sentinel build-payload-pins.json candidate-input-libraries.json input-collector.py wire-input.py; do
-    cp "/gtk-input-preflight/$f" /tmp/diagnostic-data/
-  done
-  printf '%s\n' '#!/bin/bash' 'set -euo pipefail' 'exec python3 /run/t/guest-check.py' > /tmp/diagnostic-data/run.sh
-  xorriso -as mkisofs -quiet -V ARCTICDIAG -J -R -G /gtk-input-preflight/bootstrap-diagnostic.sh \
-    -o /tmp/diagnostic-data.iso /tmp/diagnostic-data
-  # Match the frozen native v4 device choices; only task paths/data payload differ.
-  args=(qemu-system-x86_64 -machine q35 -accel kvm -cpu max -smp "$SMP" -m "$MEMORY"
-        -display none -vga virtio -qmp "unix:$OUT/qmp.sock,server=on,wait=off"
-        -serial "file:$OUT/serial.log" -monitor none -no-reboot
-        -chardev "socket,id=arctic_bulk,path=$OUT/bulk.sock,server=on,wait=off"
-        -device virtio-serial-pci,id=arctic_bulk_bus
-        -device virtserialport,bus=arctic_bulk_bus.0,chardev=arctic_bulk,name=org.arctic.diagnostic.bulk
-        -drive file=/tmp/target.qcow2,if=none,id=disk,discard=unmap -device virtio-blk-pci,drive=disk,bootindex=1
-        -drive file=/tmp/diagnostic-data.iso,media=cdrom,readonly=on,if=none,id=data -device ide-cd,drive=data,bus=ide.0
-        -netdev user,id=net0,restrict=on -device virtio-net-pci,netdev=net0
-        -device qemu-xhci -device usb-tablet -rtc base=utc
-        -audiodev "wav,id=native_audio,path=$OUT/diagnostic-audio.wav,out.frequency=48000,out.channels=2,out.format=s16"
-        -device intel-hda -device hda-output,audiodev=native_audio
-        -drive file=/iso,media=cdrom,readonly=on,if=none,id=cd -device ide-cd,drive=cd,bus=ide.1,bootindex=0
-        -drive "if=pflash,format=raw,unit=0,readonly=on,file=$code" -drive "if=pflash,format=raw,unit=1,file=/tmp/vars.fd")
-  {
-    qemu-system-x86_64 --version
-    rpm -q "${pkgs[@]}"
-    sha256sum "$(command -v qemu-system-x86_64)" "$code" "$vars" /tmp/diagnostic-data.iso /gtk-input-preflight/*.py
-    printf '%q ' "${args[@]}"; printf '\n'
-    printf '%s\n' 'Actual new tools/data payload; no earlier tool byte parity or audio acceptance claim.'
-  } > "$OUT/gtk-preflight-toolchain.txt"
-fi
 python3 -c "$DRIVER" "${args[@]}"
 rm -f "$OUT/qmp.sock"
 chown -R "$HOST_UID:$HOST_GID" "$OUT"
@@ -375,15 +312,6 @@ if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
   [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
 fi
-gtk_enabled=0
-gtk_checker_sha=""
-gtk_args=()
-if [[ -n "$GTK_INPUT_PREFLIGHT" ]]; then
-  gtk_enabled=1
-  gtk_args=(-v "$GTK_INPUT_PREFLIGHT:/gtk-input-preflight:ro")
-  gtk_checker_sha="$(sha256sum "$GTK_INPUT_PREFLIGHT/guest-preflight.py")"
-  gtk_checker_sha="${gtk_checker_sha%% *}"
-fi
 diagnostic_args=()
 diagnostic_enabled=0
 checker_sha=""
@@ -393,8 +321,8 @@ if [[ -n "$PCMANFM_DIAGNOSTIC" ]]; then
   checker_sha="$(sha256sum "$PCMANFM_DIAGNOSTIC/guest-pcmanfm-diagnostic.py")"
   checker_sha="${checker_sha%% *}"
 fi
-"$engine" run --rm "${gtk_args[@]}" "${diagnostic_args[@]}" "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
-  -e GTK_INPUT_PREFLIGHT="$gtk_enabled" -e GTK_CHECKER_SHA="$gtk_checker_sha" -e PCMANFM_DIAGNOSTIC="$diagnostic_enabled" -e PCMANFM_CHECKER_SHA="$checker_sha" -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
+"$engine" run --rm "${diagnostic_args[@]}" "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+  -e PCMANFM_DIAGNOSTIC="$diagnostic_enabled" -e PCMANFM_CHECKER_SHA="$checker_sha" -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
   -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ISO:/iso:ro" -v "$OUT:/out" -v "$HERE/lib:/arctic-lib:ro" \
