@@ -23,7 +23,7 @@
   },
   "modes": {
     ".github/workflows/iso.yml": 420,
-    "tools/lib/container.sh": 493,
+    "tools/lib/container.sh": 420,
     "tools/lib/vmtest.py": 420,
     "tools/startup-attestation/README.md": 420,
     "tools/startup-attestation/attest-host-v1.py": 420,
