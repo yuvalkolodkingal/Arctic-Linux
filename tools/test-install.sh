@@ -89,6 +89,8 @@ FIRMWARE=uefi
 STAGE=all
 # Optional test-only virtual audio; no host sound devices or user configuration.
 NATIVE_AUDIO_FIXTURE="${ARCTIC_NATIVE_AUDIO_FIXTURE:-0}"
+NATIVE_PHYSICAL_CONTROLLER="${ARCTIC_NATIVE_PHYSICAL_CONTROLLER:-}"
+physical_args=()
 case "$NATIVE_AUDIO_FIXTURE" in 0|1) ;; *) arctic_die "invalid native audio fixture switch" ;; esac
 PROFILE="$ROOT/profiles/ci/offline.toml"
 INSTALL_TIMEOUT=7200
@@ -396,6 +398,17 @@ if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/c
 exit 1
 EOF
 
+if [[ -n "$NATIVE_PHYSICAL_CONTROLLER" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && "$COLLECT_VIA" == terminal ]] || arctic_die "physical fixture requires native launcher/checker/audio"
+  python3 - "$NATIVE_PHYSICAL_CONTROLLER" "${ARCTIC_NATIVE_PHYSICAL_SHA:-}" "${ARCTIC_NATIVE_PHYSICAL_CHECKER_SHA:-}" "$GUEST_CHECK" <<'PHYSICAL'
+import hashlib,pathlib,re,sys
+path=pathlib.Path(sys.argv[1]);expected=sys.argv[2];checker=sys.argv[3]
+assert path.is_file() and not path.is_symlink() and path.stat().st_size<=65536
+assert re.fullmatch('[0-9a-f]{64}',expected) and hashlib.sha256(path.read_bytes()).hexdigest()==expected
+assert re.fullmatch('[0-9a-f]{64}',checker) and hashlib.sha256(pathlib.Path(sys.argv[4]).read_bytes()).hexdigest()==checker
+PHYSICAL
+  physical_args=(-v "$NATIVE_PHYSICAL_CONTROLLER:/arctic-native-physical.py:ro")
+fi
 arctic_ensure_engine
 engine="$(arctic_engine)"
 arctic_container_args
@@ -422,6 +435,37 @@ install_timeout = int(E["INSTALL_TIMEOUT"])
 luks, password = E["LUKS_PASSPHRASE"], E["USER_PASSWORD"]
 boot_append = E.get("BOOT_APPEND", "").strip()
 LIVE_APPEND = "console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"
+
+# Default-off physical native input; no device, focus retry or guest acknowledgement channel.
+physical_module = None
+physical_controllers = {}
+if E.get("NATIVE_PHYSICAL_FIXTURE") == "1":
+    import hashlib, importlib.util
+    path = "/arctic-native-physical.py"
+    with open(path,"rb") as stream: data=stream.read(65537)
+    if len(data)>65536 or hashlib.sha256(data).hexdigest()!=E["NATIVE_PHYSICAL_SHA"]:
+        raise RuntimeError("physical controller source differs")
+    spec=importlib.util.spec_from_file_location("native_physical",path)
+    physical_module=importlib.util.module_from_spec(spec);spec.loader.exec_module(physical_module)
+
+def physical_poll(vm,name):
+    if physical_module is None:return False
+    path=serial(name)
+    if not os.path.isfile(path):return False
+    with open(path,"rb") as stream:data=stream.read(128*1024*1024+1)
+    if len(data)>128*1024*1024:raise RuntimeError("physical serial bound exceeded")
+    # Only a complete newline-framed prefix is eligible for transient polling.
+    # Raw serial is unchanged and the final host reader remains strict over ALL bytes.
+    complete,separator,pending=data.rpartition(b"\n")
+    if len(pending)>65536:raise RuntimeError("physical unfinished line bound exceeded")
+    raw=(complete+b"\n" if separator else b"").decode("utf-8",errors="strict")
+    if "ARCTIC-NATIVE-RUNNER-BEGIN " not in raw:return True
+    if name not in physical_controllers:
+        physical_controllers[name]=physical_module.Controller(vm,out,"live" if name=="install" else "installed",
+            E["NATIVE_PHYSICAL_CHECKER_SHA"],chord_for=vmtest.chord_for)
+    physical_controllers[name].poll(raw)
+    return "ARCTIC-NATIVE-RUNNER-END " not in raw
+
 
 def qemu_argv(name, with_iso):
     # Explicit boot-only connectivity must never make an offline install online.
@@ -519,13 +563,14 @@ def stage_install():
             vm.keys("ret")
             t = time.time()
             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
+                physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"install")
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("install"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
                     log("owned native launcher failed; no retry")
                     return 1
                 if vmtest.serial_has(serial("install"), "ARCTIC-TEST-STARTED"):
                     started = True
                     break
-                time.sleep(5)
+                time.sleep(.1 if physical_active else 5)
             vm.shot(f"install-2{attempt}-command-typed")
             if started:
                 log(f"run.sh started (attempt {attempt})")
@@ -537,13 +582,14 @@ def stage_install():
         t = time.time()
         k = 0
         while time.time() - t < install_timeout and vm.alive():
-            if k % 10 == 0:
+            physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"install")
+            if k % 10 == 0 and not physical_active:
                 vm.shot(f"install-30-{int((time.time() - t) / 60):03d}min")
             k += 1
             if vmtest.serial_has(serial("install"), "ARCTIC-INSTALL-EXIT="):
                 vm.shot("install-40-finished")
                 break
-            time.sleep(30)
+            time.sleep(.1 if physical_active else 30)
         rc = vmtest.serial_value(serial("install"), "ARCTIC-INSTALL-EXIT=")
         log(f"install finished after {time.time() - t:.0f}s: exit {rc}")
         if rc is None:
@@ -701,6 +747,7 @@ def stage_boot():
             last_probe_shot = t
             probe_shots = 0
             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
+                physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"boot")
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("boot"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
                     log("owned native launcher failed; no retry")
                     return 1
@@ -717,7 +764,7 @@ def stage_boot():
                         vm.type_text(password, gap=0.3)
                         vm.keys("ret")
                         lock_password_sent = True
-                time.sleep(5)
+                time.sleep(.1 if physical_active else 5)
             collected = vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END")
             vm.shot(f"boot-5{attempt + 1}-collected")
             if collected:
@@ -822,6 +869,9 @@ fi
 "$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e NATIVE_LAUNCHER_FIXTURE="$([[ -f "$DATA/native-launcher.py" ]] && echo 1 || echo 0)" \
   -e NATIVE_AUDIO_FIXTURE="$NATIVE_AUDIO_FIXTURE" \
+  -e NATIVE_PHYSICAL_FIXTURE="$([[ -n "$NATIVE_PHYSICAL_CONTROLLER" ]] && echo 1 || echo 0)" \
+  -e NATIVE_PHYSICAL_SHA="${ARCTIC_NATIVE_PHYSICAL_SHA:-}" \
+  -e NATIVE_PHYSICAL_CHECKER_SHA="${ARCTIC_NATIVE_PHYSICAL_CHECKER_SHA:-}" \
   -e VM_TOOLS_PREPARED="${ARCTIC_VM_TOOLS_PREPARED:-0}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
   -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
@@ -830,7 +880,7 @@ fi
   -e COLLECT_VIA="$COLLECT_VIA" -e FRESH_BOOT_FROM="$FRESH_BOOT_FROM" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" "${base_args[@]}" \
+  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" "${base_args[@]}" "${physical_args[@]}" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner" || rc=$?
 
 arctic_log "result: exit $rc (serial logs, test.log and screenshots in $OUT)"
