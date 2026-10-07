@@ -103,7 +103,11 @@ def preflight(root, source):
         review=HERE/binding['execution_review_file']
         require(review.is_file() and not review.is_symlink() and sha_file(review)==binding['execution_review_sha256'],'execution review bytes missing')
         # Cross-phase reports are actual files in reviewed source, not caller inputs.
-        if stage!='discovery':
+        if stage=='metadata':
+            actual=binding['metadata_prerequisite']
+            for field,key in (('report_file','report_sha256'),('review_file','review_sha256')):
+                require(sha_file(HERE/actual[field])==actual[key], 'actual discovery report/review bytes differ')
+        if stage in ('closure','image'):
             for filename,key in (('bootstrap-review.json','review_sha256'),('bootstrap-report.json','report_sha256')):
                 require(sha_file(HERE/filename)==binding['bootstrap'][key],'bootstrap report/review source differs')
         if stage=='image':
@@ -175,7 +179,7 @@ class Session:
             '0:0' if stage=='image' else str(os.getuid())+':'+str(os.getgid()),
             '--label','arctic.tools.source='+self.ctx['source'],'--label','arctic.tools.context='+sha_file(self.root/'context.json'),
             '--cap-drop=ALL','--security-opt=no-new-privileges:true','--pids-limit=512',
-            '--memory=8000000000','--memory-swap=8000000000','--cpus=4','--ipc=private','--network','bridge' if stage=='closure' else 'none',
+            '--memory=8000000000','--memory-swap=8000000000','--cpus=4','--ipc=private','--network','bridge' if stage in ('metadata','closure') else 'none',
             '--env','HOME=/work/home','--env','XDG_CONFIG_HOME=/work/config','--env','LANG=C.UTF-8',
             '--tmpfs','/tmp:rw,nosuid,nodev,noexec,size=268435456',
             '--mount','type=bind,src='+str(HERE)+',dst=/source,readonly',
@@ -183,6 +187,13 @@ class Session:
             '--mount','type=bind,src='+str(self.root/'inputs')+',dst=/input,readonly',
             '--entrypoint','/usr/bin/sleep']
         if stage!='image':argv+=['--read-only']
+        if stage=='metadata':
+            aliases=self.root/'inputs/empty-aliases';aliases.mkdir(mode=0o755)
+            for relative in ('config/empty-cli-plugins','config/dnf5/aliases.d'):
+                (self.root/'work'/relative).mkdir(mode=0o755,parents=True)
+            argv+=['--env','DNF5_PLUGINS_DIR=/work/config/empty-cli-plugins']
+            for target in ('/usr/share/dnf5/aliases.d','/etc/dnf/dnf5-aliases.d'):
+                argv+=['--mount','type=bind,src='+str(aliases)+',dst='+target+',readonly']
         argv += [c.BASE_ID,str(c.MODE[stage][0])]
         # A successful daemon side effect can precede a phase-log failure.
         # Track the attempted acquisition first; cleanup may remove only a
@@ -264,6 +275,111 @@ def discovery(session):
         'base_image_id':c.BASE_ID,'headers':installed,'versions':versions,'file_identities':hashes,
         'resolve_download_transaction':False,'member_work':'UNRUN','observed_only':True})
     # No bootstrap identity is automatically written into runtime binding.
+
+
+def metadata_identity_guard(session):
+    bound=session.binding['metadata_prerequisite']
+    for field,key in (('report_file','report_sha256'),('review_file','review_sha256')):
+        path=HERE/bound[field]
+        require(path.is_file() and not path.is_symlink() and sha_file(path)==bound[key], 'reviewed discovery bytes differ')
+    report=json.loads((HERE/bound['report_file']).read_text())
+    review=json.loads((HERE/bound['review_file']).read_text())
+    require(report['status']=='DISCOVERY_ONLY_EXTERNAL_REVIEW_STOP' and report['observed_only'] is True and
+        report['resolve_download_transaction'] is False and report['member_work']=='UNRUN' and
+        report['base_image_id']==c.BASE_ID, 'actual discovery STOP scope differs')
+    require(review['status']=='PASS_ACTUAL_DISCOVERY_OBSERVATIONS_EXTERNAL_REVIEW_STOP' and
+        review['run_id']==bound['run_id'] and review['source']==bound['source'], 'independent actual review scope differs')
+    require({name:row['sha256'] for name,row in report['file_identities'].items()}==bound['file_hashes'], 'actual body receipt binding differs')
+    for relative,digest in bound['file_hashes'].items():
+        path=session.root/'work'/('metadata-guard-'+Path(relative).name)
+        session.copy_binary(relative,path,'metadata-base-body-'+Path(relative).name)
+        require(sha_file(path)==digest and path.stat().st_size==report['file_identities'][relative]['bytes'], 'actual base body changed')
+    dnf_body=(session.root/'work/metadata-guard-dnf5').read_bytes()
+    require(all(path.encode()+b'\x00' in dnf_body for path in ('/usr/share/dnf5/aliases.d','/etc/dnf/dnf5-aliases.d')),
+        'actual DNF body alias-route literals unsupported; no metadata permission')
+    require(header_rows(session)==[tuple(row) for row in report['headers']], 'reviewed base ordinary headers changed')
+    return report
+
+
+def metadata_cache_receipts(work, repositories, deadline, monitor):
+    # This observes exact private cache representations without installing or
+    # solving. Plain XML and compressed bytes have separately pinned hashes.
+    cache=work/'cache';entries=[];total=0
+    require(cache.is_dir() and not cache.is_symlink(), 'private metadata cache missing/linked')
+    for index,path in enumerate(cache.rglob('*')):
+        require(index<5000, 'private cache member bound')
+        deadline.remaining(30);monitor();st=path.lstat()
+        require(not stat.S_ISLNK(st.st_mode) and (stat.S_ISREG(st.st_mode) or stat.S_ISDIR(st.st_mode)), 'special/linked private cache entry')
+        if stat.S_ISREG(st.st_mode):
+            total+=st.st_size
+            require(st.st_size<=1000000000 and total<=4000000000 and len(entries)<1000, 'metadata cache receipt bound')
+            entries.append({'path':path.relative_to(work).as_posix(),'bytes':st.st_size,'sha256':sha_file(path)})
+            deadline.remaining(30);monitor()
+    entries.sort(key=lambda row:row['path'])
+    matches={}
+    for repo,expected in repositories.items():
+        matches[repo]={}
+        for kind in ('repomd','primary','filelists'):
+            identities=[('repomd-XML',expected['repomd_bytes'],expected['repomd_sha256'])] if kind=='repomd' else [
+                ('compressed',expected['metadata'][kind]['bytes'],expected['metadata'][kind]['sha256']),
+                ('plain-XML',expected['metadata'][kind]['open_bytes'],expected['metadata'][kind]['open_sha256'])]
+            matches[repo][kind]=[{**row,'representation':representation} for row in entries
+                for representation,size,digest in identities if row['bytes']==size and row['sha256']==digest]
+    return {'private_cache_entries':entries,'matching_snapshot_files':matches,'total_bytes':total,
+        'source_of_trust':'Exact already reviewed HTTPS Fedora repomd/compressed/open XML hash and size snapshots; metadata signatures not claimed.'}
+
+
+def metadata(session):
+    report=metadata_identity_guard(session)
+    before,config=prepare_root(session)
+    # All three alias routes are empty before the first DNF process. The two
+    # compiled system routes are exact read-only bind overlays in inspect().
+    routes=[]
+    for relative in ('inputs/empty-aliases','work/config/empty-cli-plugins','work/config/dnf5/aliases.d'):
+        path=session.root/relative
+        require(path.is_dir() and not path.is_symlink() and not any(path.iterdir()), 'CLI plugin/alias route is not empty')
+        st=path.stat();routes.append({'private_relative_path':relative,'uid':st.st_uid,'gid':st.st_gid,
+            'mode':oct(stat.S_IMODE(st.st_mode)),'empty':True})
+    isolated=session.exec(['/usr/bin/dnf5','--no-plugins','--version'],'isolated-CLI-version',30)
+    expected='dnf5 version 5.4.6.0\ndnf5 plugin API version 2.0\nlibdnf5 version 5.4.6.0\nlibdnf5 plugin API version 2.2\n'
+    require(isolated==expected, 'isolated version/plugin observation differs; no metadata permission')
+    effective=session.exec(dnf_args('--dump-main-config'),'isolated-private-config-before-metadata',30)
+    effective_rows=c.config_dump_verify(effective,config)
+    require(effective_rows.get('config_file_path')=='/work/config/dnf.conf', 'effective explicit config file differs')
+    zstd=session.root/'work/metadata-zstd-body'
+    session.copy_binary('usr/bin/zstd',zstd,'metadata-zstd-body')
+    zstd_receipt={'sha256':sha_file(zstd),'bytes':zstd.stat().st_size}
+    require(0<zstd_receipt['bytes']<=100000000, 'zstd body empty/overbound')
+    installed=header_rows(session,'/work/installroot')
+    require(installed==[tuple(row) for row in report['headers']], 'copied private RPM headers differ')
+    # Metadata-only network work. No do/store/goal/package or key import route.
+    session.exec(dnf_args('makecache',cacheonly='none'),'fixed-Fedora-metadata-only-cache',600)
+    proof=metadata_cache_receipts(session.root/'work',session.binding['repositories'],session.deadline,session.limits)
+    write_json(session.root/'evidence/metadata-cache-receipts.json',proof)
+    for repo,kinds in proof['matching_snapshot_files'].items():
+        for kind,rows in kinds.items():
+            require(rows and len({row['representation'] for row in rows})==len(rows),
+                'fixed snapshot missing/ambiguous in actual cache:'+repo+'/'+kind)
+    final_config=session.exec(dnf_args('--dump-main-config'),'isolated-private-config-after-metadata',30)
+    require(final_config==effective, 'effective private config changed during metadata-only work')
+    require(header_rows(session,'/work/installroot')==installed, 'metadata-only work changed private RPM headers')
+    for relative,digest in before.items():
+        require(manifest_digest(tree_manifest(session.root/'work/installroot'/relative))==digest, 'metadata-only work changed copied state')
+    require(not (session.root/'work/goal/packages').exists() and not (session.root/'work/goal/transaction.json').exists(), 'unexpected package/goal output')
+    for relative in ('inputs/empty-aliases','work/config/empty-cli-plugins','work/config/dnf5/aliases.d'):
+        require(not any((session.root/relative).iterdir()), 'plugin/alias route changed during metadata-only work')
+    write_json(session.root/'outputs/metadata-report.json',{'status':'METADATA_CONFIG_EXTERNAL_REVIEW_STOP',
+        'actual_discovery_report_sha256':session.binding['metadata_prerequisite']['report_sha256'],
+        'actual_discovery_review_sha256':session.binding['metadata_prerequisite']['review_sha256'],
+        'base_image_id':c.BASE_ID,'zstd_executable_body_receipt':zstd_receipt,'isolated_CLI_version':isolated,
+        'CLI_plugin_and_alias_routes_before_after_empty':routes,
+        'effective_private_config':effective,'effective_private_config_rows':effective_rows,'metadata_cache':proof,
+        'private_state_before_and_after_equal':before,'before_headers':installed,'only_network_reads':'fixed Fedora metadata',
+        'RPM_payload_downloads':False,'solve_store_transaction_scripts':False,'ISO_member_work':'UNRUN',
+        'Python_libdnf5_API_controls':'UNRUN_until_separately_reviewed_signed_tools_image',
+        'body_receipt_limit':'Source-calculated inert zstd receipt; body not exported. No package-signature or ELF-format claim.',
+        'system_alias_route_binding':'Both expected compiled route literals present in unchanged copied DNF body; pinned upstream calls plus exact empty read-only overlays. No Fedora build reproduction claim.',
+        'later_bootstrap_closure_bindings_automatically_written':False})
 
 
 def bootstrap_guard(session):
@@ -543,7 +659,7 @@ def run(root):
                 require(not p.is_symlink() and (p.is_file() or p.is_dir()),'linked/special downloaded input')
                 p.chmod(0o755 if p.is_dir() else 0o644)
         session.create()
-        {'discovery':discovery,'closure':closure,'image':image}[ctx['stage']](session)
+        {'discovery':discovery,'metadata':metadata,'closure':closure,'image':image}[ctx['stage']](session)
         safe_tree(root/'outputs',(2000000000 if ctx['stage']=='image' else 1000000000 if ctx['stage']=='closure' else 0)+20000000)
         passed=True
     except BaseException as error:primary=error

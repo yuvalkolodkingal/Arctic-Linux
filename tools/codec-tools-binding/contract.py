@@ -11,7 +11,7 @@ from core import (require, GuardError, Deadline, sha_file, write_json, private_d
     relative_member, tree_manifest, manifest_digest, image_member, failure_detail)
 
 HERE = Path(__file__).resolve().parent
-STAGES = ('discovery', 'closure', 'image')
+STAGES = ('discovery', 'metadata', 'closure', 'image')
 FEDORA = '36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6'
 FUSION = 'E9A491A3DE247814E7E067EAE06F8ECDD651FF2E'
 BASE_ID = 'sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8'
@@ -22,7 +22,7 @@ ISO_SHA = '84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718'
 BOOTSTRAP_TOOLS = ('usr/bin/rpm', 'usr/bin/rpmkeys', 'usr/bin/rpm2cpio', 'usr/bin/dnf5')
 IDENTITY_QF = '%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\t%{LICENSE}\n'
 FILE_QF = '[%{FILENAMES:json}\t%{FILEMODES:json}\t%{FILEDIGESTS:json}\t%{FILELINKTOS:json}\t%{FILEFLAGS:json}\t%{FILEUSERNAME:json}\t%{FILEGROUPNAME:json}\n]'
-MODE = {'discovery': (2100, 24000000000, 16000000000),
+MODE = {'discovery': (2100, 24000000000, 16000000000), 'metadata': (2100, 24000000000, 16000000000),
     'closure': (2100, 24000000000, 16000000000), 'image': (1800, 16000000000, 12000000000)}
 
 
@@ -54,18 +54,20 @@ def registered_discovery_inputs(obj, source_sha):
     # are intentionally null and cannot be supplied through workflow inputs.
     denied=('same_iso_pcmanfm_diagnostic','same_iso_native_smoke','same_iso_recovery',
         'release','draft','nix_acceptance','performance_acceptance','boot_test')
-    expected=set(denied)|{'tag','prerelease','codec_tools_discovery','codec_tools_source_sha'}
-    require(type(obj) is dict and expected-{'tag'}<=set(obj)<=expected,
+    expected=set(denied)|{'tag','prerelease','codec_tools_discovery','codec_tools_metadata_check','codec_tools_source_sha'}
+    require(type(obj) is dict and expected-{'tag','codec_tools_metadata_check'}<=set(obj)<=expected,
         'unknown/missing/mixed registered workflow inputs')
-    require(obj['codec_tools_discovery'] is True and all(obj[k] is False for k in denied),
-        'explicit discovery only; build/release/VM modes must be disabled')
+    metadata=obj.get('codec_tools_metadata_check',False)
+    require(type(metadata) is bool and type(obj['codec_tools_discovery']) is bool and
+        metadata != obj['codec_tools_discovery'] and all(obj[k] is False for k in denied),
+        'explicit discovery only or metadata only; build/release/VM modes must be disabled')
     # The observed workflow inputs context can omit its declared empty-string
     # optional tag. Absence has that one fixed default; explicit invalid
     # values and missing required selectors/source are still rejected.
     require(obj.get('tag','')=='' and type(obj['prerelease']) is bool, 'tag/metadata inputs differ')
     require(obj['codec_tools_source_sha']==source_sha and re.fullmatch('[0-9a-f]{40}',source_sha),
         'explicit registered discovery source differs')
-    return 'discovery'
+    return 'metadata' if metadata else 'discovery'
 
 
 def binding_for(stage, binding):
@@ -80,7 +82,17 @@ def binding_for(stage, binding):
         'BLOCKED: executable source review not bound')
     # Discovery has no version/API/closure permission. Its report must be reviewed
     # and explicitly copied into a successor binding before any other stage.
-    if stage != 'discovery':
+    if stage == 'metadata':
+        actual=binding.get('metadata_prerequisite')
+        require(type(actual) is dict and actual.get('scope')=='DISCOVERY_ONLY_EXTERNAL_REVIEW_STOP' and
+            actual.get('report_file')=='discovery-report.json' and actual.get('review_file')=='discovery-review.json' and
+            hash64(actual.get('report_sha256')) and hash64(actual.get('review_sha256')), 'BLOCKED: reviewed actual discovery missing')
+        require(actual.get('base_image_id')==BASE_ID and actual.get('rpm_version')=='6.0.2' and
+            actual.get('dnf5_version')=='5.4.6.0' and set(actual.get('file_hashes',{}))==set(BOOTSTRAP_TOOLS) and
+            all(hash64(value) for value in actual['file_hashes'].values()), 'actual discovery tools differ')
+        require(binding.get('bootstrap') is None and binding.get('closure') is None,
+            'metadata prerequisite cannot carry solve/image permission')
+    if stage in ('closure','image'):
         bootstrap = binding.get('bootstrap')
         require(type(bootstrap) is dict and hash64(bootstrap.get('review_sha256')) and
             hash64(bootstrap.get('report_sha256')), 'BLOCKED: bootstrap external-review STOP')
@@ -212,15 +224,23 @@ def owned_container(inspect, name, source, context_sha, base_id, writable, root,
     require(obj['Name']=='/'+name and obj['Image']==base_id and
         config['Labels'].get('arctic.tools.source')==source and config['Labels'].get('arctic.tools.context')==context_sha,
         'owned container source/context/image differs')
-    require(host['NetworkMode']==('bridge' if writable=='closure' else 'none') and
+    require(host['NetworkMode']==('bridge' if writable in ('metadata','closure') else 'none') and
         host['Privileged'] is False and host['PidMode']=='' and host['IpcMode']=='private' and
         host['CapDrop']==['ALL'] and host['ReadonlyRootfs'] is (writable!='image') and
         host['PidsLimit']==512 and host['Memory']==8000000000 and host['MemorySwap']==8000000000 and host['NanoCpus']==4000000000,
         'container network/isolation/resource flags differ')
     require('no-new-privileges:true' in host['SecurityOpt'] and config['User']==('0:0' if writable=='image' else str(os.getuid())+':'+str(os.getgid())), 'container policy/user differs')
     expected={'/source':(str(source_dir),False),'/work':(str(root/'work'),True),'/input':(str(root/'inputs'),False)}
+    if writable=='metadata':
+        aliases=root/'inputs/empty-aliases'
+        require(aliases.is_dir() and not aliases.is_symlink() and aliases.stat().st_uid==os.getuid() and
+            not aliases.stat().st_mode & 0o022 and not any(aliases.iterdir()), 'alias overlay is not fresh empty data')
+        expected.update({path:(str(aliases),False) for path in ('/usr/share/dnf5/aliases.d','/etc/dnf/dnf5-aliases.d')})
+        environment=dict(arg.split('=',1) for arg in config['Env'] if '=' in arg)
+        require(len(environment)==len(config['Env']) and environment.get('DNF5_PLUGINS_DIR')=='/work/config/empty-cli-plugins' and
+            environment.get('XDG_CONFIG_HOME')=='/work/config', 'pre-parser CLI environment differs')
     actual={m['Destination']:(m['Source'],m['RW']) for m in obj['Mounts'] if m['Type']=='bind'}
-    require(actual==expected and len([m for m in obj['Mounts'] if m['Type']=='bind'])==3 and
+    require(actual==expected and len([m for m in obj['Mounts'] if m['Type']=='bind'])==len(expected) and
         all(m['Type'] in ('bind','tmpfs') for m in obj['Mounts']), 'unsupported host mount/source/writability')
     require(root.stat().st_uid==os.getuid() and stat.S_IMODE(root.stat().st_mode)==0o700 and
         stat.S_IMODE((root/'work').stat().st_mode)==(0o777 if writable=='image' else 0o700) and not (root/'work').is_symlink(),

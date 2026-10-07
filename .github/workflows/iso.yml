@@ -5,6 +5,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      codec_tools_metadata_check:
+        description: Private DNF plugin/alias/config/cache metadata identities only; external review STOP (no RPM download or solve)
+        type: boolean
+        default: false
       codec_tools_discovery:
         description: Read immutable tools base identity only; artifact-only external review STOP
         type: boolean
@@ -67,7 +71,7 @@ env:
 
 jobs:
   iso:
-    if: ${{ (github.event_name != 'workflow_dispatch' || (!inputs.same_iso_recovery && !inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic)) && !inputs.codec_tools_discovery }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || (!inputs.same_iso_recovery && !inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic)) && !inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -354,7 +358,7 @@ jobs:
             --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre $draft
 
   same-iso-installs:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}
     runs-on: ubuntu-24.04
     timeout-minutes: 230
     permissions:
@@ -426,7 +430,7 @@ jobs:
           retention-days: 14
 
   same-iso-boot-evidence:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     permissions:
@@ -498,7 +502,7 @@ jobs:
           retention-days: 14
 
   same-iso-native-functional:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_native_smoke && !inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
@@ -579,7 +583,7 @@ jobs:
           retention-days: 14
 
   same-iso-pcmanfm-diagnostic:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_pcmanfm_diagnostic) && !inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -670,7 +674,7 @@ jobs:
           retention-days: 14
 
   codec-tools-discovery:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.codec_tools_discovery }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}
     permissions:
       contents: read
       actions: read
@@ -712,6 +716,53 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: "codec-tools-discovery-output-${{ github.run_id }}"
+          path: "${{ env.TOOLS_ROOT }}/outputs"
+          if-no-files-found: error
+          retention-days: 7
+
+  codec-tools-metadata:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.codec_tools_metadata_check }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.codec_tools_source_sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/Wallpapers/
+            !/v2-walls/
+            !/showcase/
+      - name: Bound reviewed discovery and metadata-only preflight
+        env:
+          TOOLS_ALL_INPUTS: ${{ toJSON(inputs) }}
+          GH_TOKEN: ${{ github.token }}
+          TOOLS_SOURCE_SHA: ${{ inputs.codec_tools_source_sha }}
+        run: python3 -B tools/codec-tools-binding/prepare.py preflight --root "$RUNNER_TEMP/arctic-codec-tools-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --source "$TOOLS_SOURCE_SHA"
+      - name: Verify isolated private config and fixed metadata cache then stop
+        env:
+          TOOLS_SOURCE_SHA: ${{ inputs.codec_tools_source_sha }}
+        run: python3 -B tools/codec-tools-binding/prepare.py run --root "$TOOLS_ROOT" --source "$TOOLS_SOURCE_SHA"
+      - name: Preserve small metadata-only evidence
+        timeout-minutes: 1
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "codec-tools-metadata-evidence-${{ github.run_id }}"
+          path: "${{ runner.temp }}/arctic-codec-tools-${{ github.run_id }}-${{ github.run_attempt }}/evidence"
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve metadata identities only for external review
+        timeout-minutes: 4
+        if: ${{ success() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "codec-tools-metadata-output-${{ github.run_id }}"
           path: "${{ env.TOOLS_ROOT }}/outputs"
           if-no-files-found: error
           retention-days: 7

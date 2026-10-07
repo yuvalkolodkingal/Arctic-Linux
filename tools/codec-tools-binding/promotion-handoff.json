@@ -1,27 +1,9 @@
 {
-  "candidate_ISO_or_VM_reads_in_discovery": false,
-  "candidate_product_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
-  "deployed_modes": {
-    "all_other_mapped_files_and_manifest": "100644",
-    "prepare.py": "100755"
-  },
-  "execution_commit": null,
-  "failed_v3_discovery_preserved": {
-    "actual11_inputs_json_sha256": "b0844bba5fc4d5b89664ce29c81ab04dbd417e0e1415dba6d39f2a008be8f922",
-    "actual_failed_source": "d680cd153247f94d9bc2722f926974ff7a8a94c9",
-    "actual_run": 37573011277,
-    "artifact": 11460803341,
-    "artifact_ZIP_sha256": "38855f8a161e5a6d49789fadd5cd0fad58be128f0dbe97e288b5b2465febfc51",
-    "independent_actual_log_context_supplement_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
-    "independent_original_artifact_only_unknown_cause_sha256": "7183b631dbea7891e910b870d81cb73b7ccbfeeef2d0d927c6b11f990c12534e",
-    "job": 112635639413,
-    "meaning": "Observed optional empty tag absent; omission mechanism unclaimed; all actual work remainedUNRUN.",
-    "official_decoded_job_log_sha256": "ab80e60db024971bd04beaba6d827bb3616b13a3695ea51bc0e83dbe66637fa4",
-    "owner_context_supplement_sha256": "61d930780e83cc81f033095afa665eeab65f5a4de41c693e06b5b17f308a386f"
-  },
-  "first_dispatch_inputs": {
+  "actual_result_required_STOP": "METADATA_CONFIG_EXTERNAL_REVIEW_STOP; signed closure/image/member remain null, no automatic continuation.",
+  "dispatch_inputs": {
     "boot_test": false,
-    "codec_tools_discovery": true,
+    "codec_tools_discovery": false,
+    "codec_tools_metadata_check": true,
     "codec_tools_source_sha": null,
     "draft": false,
     "nix_acceptance": false,
@@ -33,52 +15,38 @@
     "same_iso_recovery": false,
     "tag": ""
   },
-  "first_result_required_STOP": "DISCOVERY_ONLY_EXTERNAL_REVIEW_STOP; exact actual versions, installed headers and bootstrap ELF bodies/hashes; no solve/download closure/transaction/member work.",
-  "future_steps": "Any bootstrap/closure/image/member binding requires separately reviewed source/evidence; current nulls reject.",
-  "new_standalone_workflow": "NOT_DEPLOYED_NOT_DISPATCHABLE_ASSUMED",
-  "no_hash_cycles": [
-    "Execution manifest hashes runtime-binding and prior v2 review; prior v2 review references immutable predecessor manifest only.",
-    "Self-manifest has logical path/mode only; external READY pins its complete bytes.",
-    "New v3 independent report is reviewed externally before promotion; it is not inserted into the manifest it reviews.",
-    "No new HEAD/self/source SHA inside committed binding; expected actual HEAD is supplied at root guard and dispatch."
-  ],
-  "post_commit_guard": {
-    "actual_guard_invocation": "UNRUN_PENDING_ROOT_PROMOTION",
-    "commands": [
-      "git status --porcelain --untracked-files=no",
-      "git rev-parse HEAD",
-      "python3 -B -c 'import sys;sys.path.insert(0,\"tools/codec-tools-binding\");import prepare;prepare.source_guard(sys.argv[1])' \"$task_source_sha\""
-    ],
-    "cwd": "/workspace/arctic-codec-tools-discovery-v4-qualification",
-    "expected_commit": "ROOT_CREATES_AND_PINS_AFTER_EXACT_MAP_COMMIT; never guessed or written into its own source",
-    "required_external_checks": [
-      "exact frozen map+self hashes and canonical Git modes",
-      "new v3 independent source report status/pins",
-      "exact prior review458 bytes and binding-only delta",
-      "base workflow old jobs/steps/action bytes/default behavior unchanged except selection guards",
-      "clean actual committed SHA equals dispatch ref head, input source and GITHUB_SHA"
-    ]
-  },
-  "private_base_commit": "d680cd153247f94d9bc2722f926974ff7a8a94c9",
-  "private_base_repository": "/workspace/arctic-codec-tools-discovery-qualification",
-  "private_base_workflow_sha256": "7219eb4dc1c82b1c017627494821677765e6ad1914a85eb18fab128db737ac82",
-  "proposed_private_worktree": "/workspace/arctic-codec-tools-discovery-v4-qualification",
-  "proposed_test_branch": "test/codec-tools-discovery-37507582946-v4",
-  "review_binding": {
-    "archived_member_path": null,
-    "archived_member_sha256": null,
+  "execution_commit": null,
+  "later_bindings": {
+    "archived_member": null,
     "bootstrap": null,
-    "closure": null,
-    "exact_delta_fields": [
-      "status",
-      "execution_review_sha256"
-    ],
-    "execution_review_file": "independent-source-review.json",
-    "execution_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
-    "status": "SOURCE_REVIEW_BOUND",
-    "v3_independent_review": "EXTERNAL_SUCCESSOR_ROOT_GUARD_REQUIRED_NOT_EMBEDDED_IN_ITS_OWN_MANIFEST"
+    "closure": null
   },
-  "schema": "arctic-codec-tools-discovery-v4-promotion-handoff",
-  "status": "SOURCE_PREPARATION_ONLY_NOT_PROMOTED_OR_DISPATCHED",
+  "permitted_network_reads": "Only existing exact hash/size-bound Fedora repodata through makecache; no RPM payload or additional endpoint.",
+  "private_base_commit": "b16900d78114cfcf8df2aebcaf3802472be706b1",
+  "private_base_repository": "/workspace/arctic-codec-tools-discovery-v4-qualification",
+  "private_base_workflow_sha256": "6a8ed7d61c31aadf64265409c3b212119389ce1ed73dc2fc1105917d8321ab69",
+  "proposed_private_worktree": "/workspace/arctic-codec-tools-metadata-qualification",
+  "proposed_test_branch": "test/codec-tools-metadata-37507582946-v1",
+  "provenance": [
+    "Prior tools source review458 exact remains immutable executable-source predecessor binding; current metadata source needs its own external independent review/root guard.",
+    "Prior actual discovery55b4 exact is an independent runtime identity input, not permission for future signed tools resolution.",
+    "Map/self-manifest external READY pins avoid HEAD/self-hash review cycles."
+  ],
+  "root_guards": [
+    "Exact external independent current source report plus READY/filemap/modes before promotion; current source cannot self-approve itself.",
+    "New exact clean committed HEAD/source_guard and dispatch SHA equality; no main/release/publication.",
+    "Actual earlier discovery report/review bytes copied and hash-bound; observed four-body limitations retained."
+  ],
+  "runtime_caps_unchanged": {
+    "cleanup_evidence_reserve_seconds": 360,
+    "cpu": 4,
+    "initial_free_bytes": 24000000000,
+    "memory_bytes": 8000000000,
+    "overall_seconds": 2100,
+    "pids": 512,
+    "scratch_bytes": 16000000000
+  },
+  "schema": "arctic-codec-tools-metadata-prerequisite-handoff-v1",
+  "status": "SOURCE_ONLY_VM_DOCKER_METADATA_UNRUN",
   "workflow_target": ".github/workflows/iso.yml"
 }

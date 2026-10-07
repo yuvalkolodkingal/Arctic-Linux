@@ -1,0 +1,10 @@
+{
+  "actual_discovery_output_sha256": "c0292bb4a6c72685d6fdd539e5f035eb0e4fe13bc2cd67e3cddf9c93d39150f4",
+  "actual_discovery_review_sha256": "55b4fa69c4c30dbe0a97f555f2eb29325457187ce30c7e64ee7879c4353c6b47",
+  "all59_predecessor_frozen_source_pins_unchanged": true,
+  "original_failed_v3_artifact_scope_sha256": "7183b631dbea7891e910b870d81cb73b7ccbfeeef2d0d927c6b11f990c12534e",
+  "original_v3_failure_context_supplement_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
+  "owner_actual_STOP_sha256": "d93eafdec5352ec54861d21b055feab997d4b594fff409c0f6d1ad99c9a9cac9",
+  "preceding_READY_sha256": "5ea198b2c6fc6fda33172091868be64faff6fcaa904296e177746e0b29bd9cb8",
+  "source": "b16900d78114cfcf8df2aebcaf3802472be706b1"
+}

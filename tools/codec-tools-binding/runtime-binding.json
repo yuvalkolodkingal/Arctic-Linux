@@ -24,6 +24,26 @@
     "fedora": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
     "fusion_preserved_not_enabled": "E9A491A3DE247814E7E067EAE06F8ECDD651FF2E"
   },
+  "metadata_prerequisite": {
+    "API_cache_zstd_controls": "UNRUN",
+    "base_image_id": "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+    "dnf5_version": "5.4.6.0",
+    "file_hashes": {
+      "usr/bin/dnf5": "26a536039737adc654e9f6bc644fe0268158f20725b5846dce655c0375e20929",
+      "usr/bin/rpm": "d0dabe0d323e943e6366a7b09d391dfbe50659a5df80a5c7a1885e5026aa2362",
+      "usr/bin/rpm2cpio": "58b870d2a5a378ff1631984ee67d2965728fcc2533898d15e77b248ef58129f5",
+      "usr/bin/rpmkeys": "ef52ba068d003889106de2ba3075bea1caef8ef467a02642d510b0892dcd5009"
+    },
+    "report_file": "discovery-report.json",
+    "report_sha256": "c0292bb4a6c72685d6fdd539e5f035eb0e4fe13bc2cd67e3cddf9c93d39150f4",
+    "review_file": "discovery-review.json",
+    "review_sha256": "55b4fa69c4c30dbe0a97f555f2eb29325457187ce30c7e64ee7879c4353c6b47",
+    "rpm_version": "6.0.2",
+    "run_id": 37574659610,
+    "scope": "DISCOVERY_ONLY_EXTERNAL_REVIEW_STOP",
+    "signed_tools_resolve": "BLOCKED",
+    "source": "b16900d78114cfcf8df2aebcaf3802472be706b1"
+  },
   "repositories": {
     "fedora": {
       "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/",

@@ -1,0 +1,175 @@
+{
+  "actual_replay_checks": 299,
+  "artifacts": [
+    {
+      "ZIP_bytes": 40491,
+      "ZIP_sha256": "e11806ddd22ec579ada3fcef97a4f76f30def6c34b242b575b5799ba6f917361",
+      "files": 45,
+      "id": 11462585094,
+      "inflated_bytes": 124342,
+      "name": "evidence"
+    },
+    {
+      "ZIP_bytes": 4438,
+      "ZIP_sha256": "31ea47aec81d411c51028e1b52f7fb80fc5fae2f026b959d50562868ff3aac11",
+      "files": 1,
+      "id": 11461254582,
+      "inflated_bytes": 28774,
+      "name": "output"
+    }
+  ],
+  "body_hash_receipt_limit": "Copied executable bodies were hashed by the exact reviewed source but are not exported as artifact members; reviewer verifies source/argv/success and reported hashes, not an independent rehash of those transient bodies or signed file-header attestation.",
+  "execution_manifest_sha256": "475c3ba4110ac914121abdd619ac245ac89d09b582169c533ffe57cdc57a02ec",
+  "input_support": {
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-results-37574659610/artifact-verification.json": {
+      "bytes": 11061,
+      "sha256": "e5eaf8d9155fee4ef30f651f178e4b299fcbdcdda0668952c9fa4ae6ceb337e9"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-results-37574659610/download-receipts.json": {
+      "bytes": 457,
+      "sha256": "6954974f993ee29cca46d91a61c86b22199797d0422f9f5ac3d7ea35d373c870"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-results-37574659610/evidence/final-observed-status.json": {
+      "bytes": 247,
+      "sha256": "b07846310e5057fb6a55492bbdc79be8e6e75fb92b2759681cef5dd5e5164c7a"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-results-37574659610/official-artifacts.json": {
+      "bytes": 1988,
+      "sha256": "60ddfb87659644bdc3030f5754a638a15f139583cf704d59b5e38de7fe725df4"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-results-37574659610/official-jobs.json": {
+      "bytes": 3023,
+      "sha256": "4c9e66b7ce0e55c1d25578f771ecd54c9a6d98e9c115dd3cf7e3c977a92e25a3"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-results-37574659610/output/bootstrap-report.json": {
+      "bytes": 28774,
+      "sha256": "c0292bb4a6c72685d6fdd539e5f035eb0e4fe13bc2cd67e3cddf9c93d39150f4"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-v4-independent-review/review.json": {
+      "bytes": 4568,
+      "sha256": "bf5d78f78317e0eb2c9fc829875edf33c95bd337b35e27cf94cec8cedf5b67af"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-v4-root-promotion/committed-source-guard.json": {
+      "bytes": 1010,
+      "sha256": "799ddec2825df51049a0a678717f9c1545ef1b19dfea8363e66978a6f0a24082"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-discovery-v4-root-promotion/workflow-dispatch-request.json": {
+      "bytes": 1278,
+      "sha256": "7c3ff957ba2b8fad8fb394f1c1345001a7ed7e794ff2f1bab80d982a0dcc9249"
+    }
+  },
+  "no_reviewer_API_download_network_Docker_VM_package_Git_or_product_mutation": true,
+  "observations": {
+    "DNF5_version": "5.4.6.0",
+    "RPM_version": "6.0.2",
+    "actual_observed_executable_body_hash_receipts": {
+      "usr/bin/dnf5": {
+        "bytes": 1729384,
+        "sha256": "26a536039737adc654e9f6bc644fe0268158f20725b5846dce655c0375e20929"
+      },
+      "usr/bin/rpm": {
+        "bytes": 20280,
+        "sha256": "d0dabe0d323e943e6366a7b09d391dfbe50659a5df80a5c7a1885e5026aa2362"
+      },
+      "usr/bin/rpm2cpio": {
+        "bytes": 24112,
+        "sha256": "58b870d2a5a378ff1631984ee67d2965728fcc2533898d15e77b248ef58129f5"
+      },
+      "usr/bin/rpmkeys": {
+        "bytes": 16520,
+        "sha256": "ef52ba068d003889106de2ba3075bea1caef8ef467a02642d510b0892dcd5009"
+      }
+    },
+    "base_config_layers_matches_frozen_source": true,
+    "base_image_id": "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+    "cleanup": "Exact owned identity inspected; rm-f exited0 with matching named response. No post-removal inspect exported, so lasting absence is not independently observed.",
+    "container_configuration": "Network none; readonly root; nonroot1001:1001; cap-drop ALL; nnp; private IPC;8GB memory/swap;4CPU;512pids; bounded noexec tmpfs;exact three mounts and same ID/source/context throughout.",
+    "installed_header_rows": 146,
+    "libdnf5_version": "5.4.6.0",
+    "raw_header_report_pairing": true,
+    "version_stdout_report_exact": true
+  },
+  "official_discovery_job_success_other_five_skipped": true,
+  "plugin_qualification": {
+    "actual_argv": "/usr/bin/dnf5 --no-plugins --version",
+    "actual_names": [
+      "builddep",
+      "changelog",
+      "config-manager",
+      "copr",
+      "needs_restarting",
+      "repoclosure",
+      "repomanage",
+      "reposync"
+    ],
+    "actual_output_label": "Loaded dnf5 plugins",
+    "verdict": "Suppression, load/init side effects, libdnf5 API/cache behavior and tagged-source/Fedora-ELF equivalence are UNPROVED. No later phase or plugin-suppression acceptance granted."
+  },
+  "preservation": "Prior d680 failed discovery and prior bf5d source closure remain unchanged; no retroactive pass.",
+  "root_after": {
+    "git_files": 1298,
+    "git_sha256": "14f784eb0f58935d15ea6b661125212002c572e03c91306216350ebd25a8ca9a",
+    "head": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+    "status": ""
+  },
+  "root_before": {
+    "git_files": 1298,
+    "git_sha256": "14f784eb0f58935d15ea6b661125212002c572e03c91306216350ebd25a8ca9a",
+    "head": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+    "status": ""
+  },
+  "root_metadata_unchanged": true,
+  "run_id": 37574659610,
+  "runtime_and_resource_proof_limits": "phase_end_monotonic records command allowance end, not observed completion; no runtime-performance or quantitative initial-free-space claim.",
+  "schema": "arctic-codec-tools-discovery-v4-independent-actual-review",
+  "source": "b16900d78114cfcf8df2aebcaf3802472be706b1",
+  "source_files_and_canonical_modes": 53,
+  "source_self_manifest_verified": true,
+  "status": "PASS_ACTUAL_DISCOVERY_OBSERVATIONS_EXTERNAL_REVIEW_STOP",
+  "stop": {
+    "actual_final_passed": true,
+    "archived_member_path": null,
+    "archived_member_sha256": null,
+    "automatic_binding_rewrite": false,
+    "bootstrap_binding": null,
+    "closure_binding": null,
+    "external_review_STOP": true,
+    "no_permission_for_next_phase_from_this_report": true
+  },
+  "supporting_files": {
+    "finalize-actual.py": {
+      "bytes": 5433,
+      "sha256": "936d97c6707545160887ecc62a1de92af770dec68410dc86db8927e755fcabae"
+    },
+    "official-and-command-pairing.json": {
+      "bytes": 1163,
+      "sha256": "fabb2351796d4e3515644e335d8539ee8aa4aa744dcbdd86bfd0ee8d198d4413"
+    },
+    "replay.json": {
+      "bytes": 30305,
+      "sha256": "40efdaec151e166f502499f3fc577adede7f4ff0d496270bcff6fb027770e9aa"
+    },
+    "review-actual.py": {
+      "bytes": 13075,
+      "sha256": "a9a5864089c13ce979977f3f7a83169b4a126f4d939254fa02c249baa8b34515"
+    },
+    "root-after.json": {
+      "bytes": 178,
+      "sha256": "7ec59b32f505368f63937e87cc8600b23fa5eb1b9ec267cbab8282ca746602ed"
+    },
+    "root-before.json": {
+      "bytes": 178,
+      "sha256": "7ec59b32f505368f63937e87cc8600b23fa5eb1b9ec267cbab8282ca746602ed"
+    }
+  },
+  "unrun": [
+    "RPM payload/signature/signed-header-to-body verification",
+    "private config/cache/libdnf5 API controls",
+    "solver/goal",
+    "package payload download or transaction",
+    "tool-root image build/adoption",
+    "candidate ISO access/build",
+    "codec/media/playback",
+    "compression or size measurement"
+  ]
+}

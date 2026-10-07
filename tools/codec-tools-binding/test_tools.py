@@ -27,13 +27,13 @@ def workflow():
 def registered_inputs(source='1'*40):
     return {'same_iso_pcmanfm_diagnostic':False,'same_iso_native_smoke':False,'same_iso_recovery':False,
         'release':False,'draft':False,'nix_acceptance':False,'performance_acceptance':False,'boot_test':False,
-        'tag':'','prerelease':True,'codec_tools_discovery':True,'codec_tools_source_sha':source}
+        'tag':'','prerelease':True,'codec_tools_discovery':True,'codec_tools_metadata_check':False,'codec_tools_source_sha':source}
 
 
 def bound(stage='discovery'):
     data=json.loads((HERE/'runtime-binding.json').read_text())
     data.update(status='SOURCE_REVIEW_BOUND',execution_review_sha256='1'*64)
-    if stage!='discovery':
+    if stage in ('closure','image'):
         data['bootstrap']={'review_sha256':'2'*64,'report_sha256':'3'*64,'base_image_id':c.BASE_ID,
             'rpm_version':'6.0.2','dnf5_version':'5.4.6.0','file_hashes':{k:'4'*64 for k in c.BOOTSTRAP_TOOLS},
             'metadata_cache_mode':'cacheonly-metadata-verified-layout-v1','API_controls_sha256':'5'*64,
@@ -272,12 +272,18 @@ class OwnedHostControls(TestCase):
 class IsolationAndPhaseControls(TestCase):
     def fixture(self,root,stage='discovery'):
         (root/'work').mkdir();(root/'work').chmod(0o777 if stage=='image' else 0o700);(root/'inputs').mkdir();(root/'inputs').chmod(0o755);root.chmod(0o700)
-        return [{'Name':'/owned','Image':c.BASE_ID,'HostConfig':{'NetworkMode':'bridge' if stage=='closure' else 'none',
+        data=[{'Name':'/owned','Image':c.BASE_ID,'HostConfig':{'NetworkMode':'bridge' if stage in ('metadata','closure') else 'none',
             'Privileged':False,'PidMode':'','IpcMode':'private','CapDrop':['ALL'],'ReadonlyRootfs':stage!='image',
             'PidsLimit':512,'Memory':8000000000,'MemorySwap':8000000000,'NanoCpus':4000000000,'SecurityOpt':['no-new-privileges:true']},
             'Config':{'Labels':{'arctic.tools.source':'1'*40,'arctic.tools.context':'2'*64},'User':'0:0' if stage=='image' else str(os.getuid())+':'+str(os.getgid()),'Env':['PATH=/usr/bin']},
             'Mounts':[{'Type':'bind','Source':str(src),'Destination':dst,'RW':rw} for src,dst,rw in
                 ((HERE,'/source',False),(root/'work','/work',True),(root/'inputs','/input',False))]}]
+        if stage=='metadata':
+            aliases=root/'inputs/empty-aliases';aliases.mkdir()
+            data[0]['Config']['Env']+=['DNF5_PLUGINS_DIR=/work/config/empty-cli-plugins','XDG_CONFIG_HOME=/work/config']
+            data[0]['Mounts'] += [{'Type':'bind','Source':str(aliases),'Destination':target,'RW':False}
+                for target in ('/usr/share/dnf5/aliases.d','/etc/dnf/dnf5-aliases.d')]
+        return data
     def test_exact_three_modes_host_ancestor_and_mount_boundaries(self):
         for stage in c.STAGES:
             with tempfile.TemporaryDirectory() as t:
@@ -349,7 +355,7 @@ class LifecycleStopControls(TestCase):
             phases={name:mock.Mock(side_effect=error if name==stage else None) for name in c.STAGES}
             with mock.patch.object(prepare,'context',return_value=(root,ctx)),mock.patch.object(c,'binding_for'), \
                     mock.patch.object(prepare,'Session',return_value=fake), \
-                    mock.patch.object(prepare,'discovery',phases['discovery']),mock.patch.object(prepare,'closure',phases['closure']),mock.patch.object(prepare,'image',phases['image']):
+                    mock.patch.object(prepare,'discovery',phases['discovery']),mock.patch.object(prepare,'metadata',phases['metadata']),mock.patch.object(prepare,'closure',phases['closure']),mock.patch.object(prepare,'image',phases['image']):
                 caught=None
                 try:prepare.run(root)
                 except c.GuardError as exception:caught=exception
@@ -599,17 +605,21 @@ class RegisteredDiscoveryControls(TestCase):
         old_inputs=old.get('on',old.get(True))['workflow_dispatch']['inputs']
         new_inputs=new.get('on',new.get(True))['workflow_dispatch']['inputs']
         self.assertEqual({k:new_inputs[k] for k in old_inputs},old_inputs)
-        self.assertEqual(set(new_inputs)-set(old_inputs),{'codec_tools_discovery','codec_tools_source_sha'})
-        self.assertEqual(len(new['jobs']),len(old['jobs'])+1)
+        self.assertEqual(set(new_inputs)-set(old_inputs),{'codec_tools_discovery','codec_tools_source_sha','codec_tools_metadata_check'})
+        self.assertEqual(len(new['jobs']),len(old['jobs'])+2)
         reconstructed=selected.split('\n  codec-tools-discovery:\n',1)[0]
         for name,before in old['jobs'].items():
             after=copy.deepcopy(new['jobs'][name]);old_if=before['if']
             expression=old_if.removeprefix('${{').removesuffix('}}').strip()
-            expected='${{ ('+expression+') && !inputs.codec_tools_discovery }}'
+            expected='${{ ('+expression+') && !inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}'
             self.assertEqual(after.pop('if'),expected);expected_before=copy.deepcopy(before);expected_before.pop('if')
             self.assertEqual(after,expected_before)
             reconstructed=reconstructed.replace('    if: '+expected,'    if: '+old_if,1)
-        addition='''      codec_tools_discovery:
+        addition='''      codec_tools_metadata_check:
+        description: Private DNF plugin/alias/config/cache metadata identities only; external review STOP (no RPM download or solve)
+        type: boolean
+        default: false
+      codec_tools_discovery:
         description: Read immutable tools base identity only; artifact-only external review STOP
         type: boolean
         default: false
@@ -624,7 +634,7 @@ class RegisteredDiscoveryControls(TestCase):
             if key not in ('jobs','on',True):self.assertEqual(new[key],old[key])
     def test_discovery_job_cannot_download_fixed_ISO_or_run_later_stages(self):
         job=yaml.safe_load(workflow())['jobs']['codec-tools-discovery']
-        self.assertEqual(job['if'],"${{ github.event_name == 'workflow_dispatch' && inputs.codec_tools_discovery }}")
+        self.assertEqual(job['if'],"${{ github.event_name == 'workflow_dispatch' && inputs.codec_tools_discovery && !inputs.codec_tools_metadata_check }}")
         self.assertEqual(job['timeout-minutes'],35)
         self.assertFalse(any('download-artifact@' in step.get('uses','') for step in job['steps']))
         for step in job['steps']:
@@ -723,5 +733,205 @@ class ObservedOptionalTagControls(TestCase):
             self.assertTrue(observed['passed']);self.assertEqual(observed['actual_work'],'UNRUN')
             context=json.loads((Path(t)/'owned/context.json').read_text());self.assertEqual(context['stage'],'discovery')
             self.assertIn('TOOLS_ROOT=',envfile.read_text());self.assertNotIn('TOOLS_CLOSURE',envfile.read_text())
+
+class MetadataPrerequisiteControls(TestCase):
+    def selected(self):
+        return {**registered_inputs(),'codec_tools_discovery':False,'codec_tools_metadata_check':True}
+    def test_actual_optional_tag_defaults_and_metadata_route_are_literal(self):
+        data=self.selected();self.assertEqual(c.registered_discovery_inputs(data,'1'*40),'metadata')
+        data.pop('tag');self.assertEqual(c.registered_discovery_inputs(data,'1'*40),'metadata')
+        for value in (None,False,0,[],{},'v1',' ','\x00'):
+            with self.subTest(tag=value),self.assertRaises(c.GuardError):
+                c.registered_discovery_inputs({**data,'tag':value},'1'*40)
+        actual=json.loads((HERE/'sources/actual-inputs-37573011277.json').read_text())
+        self.assertEqual(c.registered_discovery_inputs(actual,actual['codec_tools_source_sha']),'discovery')
+    def test_metadata_selectors_missing_required_unknown_and_mixed_fail(self):
+        original=self.selected()
+        for key in original:
+            if key=='tag':continue
+            data={k:v for k,v in original.items() if k!=key}
+            with self.subTest(missing=key),self.assertRaises(c.GuardError):c.registered_discovery_inputs(data,'1'*40)
+        for key,value in (('codec_tools_discovery',True),('codec_tools_metadata_check',False),('codec_tools_metadata_check','true'),
+                ('codec_tools_metadata_check',None),('codec_tools_metadata_check',1),('release',True),('boot_test',True),
+                ('same_iso_recovery',True),('same_iso_native_smoke',True),('same_iso_pcmanfm_diagnostic',True),
+                ('draft',True),('performance_acceptance',True),('nix_acceptance',True),('codec_tools_source_sha','2'*40)):
+            with self.subTest(key=key,value=value),self.assertRaises(c.GuardError):c.registered_discovery_inputs({**original,key:value},'1'*40)
+        for key in ('offline_cycle_recovery','safe_visual_diagnostic','codec_evaluation','preparation','bootstrap'):
+            with self.assertRaises(c.GuardError):c.registered_discovery_inputs({**original,key:False},'1'*40)
+    def test_metadata_binding_admits_only_reviewed_discovery_and_no_later_permission(self):
+        data=json.loads((HERE/'runtime-binding.json').read_text());c.binding_for('metadata',data)
+        for key,value in (('scope','SIGNED_CLOSURE'),('report_sha256',None),('review_sha256','bad'),
+                ('report_file','../report.json'),('rpm_version','6.0.1'),('dnf5_version','5.3'),('file_hashes',{})):
+            changed=copy.deepcopy(data);changed['metadata_prerequisite'][key]=value
+            with self.subTest(key=key),self.assertRaises(c.GuardError):c.binding_for('metadata',changed)
+        for key in ('bootstrap','closure'):
+            changed=copy.deepcopy(data);changed[key]={}
+            with self.assertRaises(c.GuardError):c.binding_for('metadata',changed)
+        for stage in ('closure','image'):
+            with self.assertRaisesRegex(c.GuardError,'STOP'):c.binding_for(stage,data)
+    def test_actual_metadata_preflight_has_no_Docker_or_metadata_side_effect(self):
+        with tempfile.TemporaryDirectory() as t:
+            env={'RUNNER_TEMP':t,'TOOLS_ALL_INPUTS':json.dumps(self.selected()),'GITHUB_EVENT_NAME':'workflow_dispatch',
+                'GITHUB_SHA':'1'*40,'GITHUB_RUN_ID':'metadata-fixture','GITHUB_RUN_ATTEMPT':'1','GITHUB_ENV':str(Path(t)/'env'),
+                **{k:'' for k in ('DOCKER_HOST','DOCKER_CONTEXT','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH','DOCKER_CONFIG')}}
+            with mock.patch.dict(os.environ,env),mock.patch.object(prepare,'source_guard'), \
+                    mock.patch.object(prepare.shutil,'disk_usage',return_value=SimpleNamespace(free=24000000000)), \
+                    mock.patch.object(prepare,'official_metadata') as network,mock.patch.object(prepare.subprocess,'Popen') as process:
+                prepare.preflight(Path(t)/'fresh','1'*40)
+            process.assert_not_called();network.assert_not_called()
+            root=Path(t)/'fresh';self.assertEqual(json.loads((root/'context.json').read_text())['stage'],'metadata')
+            self.assertTrue(json.loads((root/'evidence/preflight.json').read_text())['passed'])
+    def test_metadata_create_sets_preparse_paths_and_only_owned_alias_overlays(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t)
+            for relative in ('work','inputs'):(root/relative).mkdir()
+            session=prepare.Session(root,{'run':'finite','attempt':'1','stage':'metadata','source':'1'*40,'started':time.monotonic()},bound('metadata'))
+            (root/'context.json').write_text('{}');calls=[]
+            def call(argv,tag,timeout):
+                calls.append((argv,tag))
+                if tag=='immutable-base-inspect':return json.dumps([{'Id':c.BASE_ID,'Architecture':'amd64','Os':'linux',
+                    'RootFS':{'Layers':json.loads((HERE/'sources/tools-base-amd64-config.json').read_text())['rootfs']['diff_ids']}}])
+                return ''
+            session.call=call;session.inspect=mock.Mock();session.create()
+            argv=next(argv for argv,tag in calls if tag=='create')
+            self.assertIn('DNF5_PLUGINS_DIR=/work/config/empty-cli-plugins',argv)
+            self.assertEqual(argv[argv.index('--network')+1],'bridge');self.assertIn('--read-only',argv)
+            for target in ('/usr/share/dnf5/aliases.d','/etc/dnf/dnf5-aliases.d'):
+                self.assertIn('type=bind,src='+str(root/'inputs/empty-aliases')+',dst='+target+',readonly',argv)
+            self.assertFalse(any((root/'inputs/empty-aliases').iterdir()))
+    def test_metadata_inspection_rejects_nonempty_writable_wrong_alias_or_duplicate_environment(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);obj=IsolationAndPhaseControls().fixture(root,'metadata')
+            for change in ('nonempty','writable','wrong-target','missing','duplicate-env','wrong-plugin-dir'):
+                row=copy.deepcopy(obj)
+                if change=='nonempty':(root/'inputs/empty-aliases/untrusted').write_text('synthetic')
+                if change=='writable':row[0]['Mounts'][-1]['RW']=True
+                if change=='wrong-target':row[0]['Mounts'][-1]['Destination']='/other'
+                if change=='missing':row[0]['Mounts'].pop()
+                if change=='duplicate-env':row[0]['Config']['Env'].append('DNF5_PLUGINS_DIR=/work/config/empty-cli-plugins')
+                if change=='wrong-plugin-dir':row[0]['Config']['Env'][-2]='DNF5_PLUGINS_DIR=/usr/lib64/dnf5/plugins'
+                with self.subTest(change=change),self.assertRaises(c.GuardError):c.owned_container(row,'owned','1'*40,'2'*64,c.BASE_ID,'metadata',root,HERE)
+                if change=='nonempty':(root/'inputs/empty-aliases/untrusted').unlink()
+    def fixture_cache(self,work):
+        repositories={}
+        for repo in ('fedora','updates'):
+            cache=work/'cache'/repo;cache.mkdir(parents=True)
+            plain={kind:('<'+kind+'>'+repo+'</'+kind+'>').encode() for kind in ('primary','filelists')}
+            compressed={kind:('synthetic compressed '+repo+' '+kind).encode() for kind in plain}
+            repomd=('<repomd>'+repo+'</repomd>').encode();(cache/'repomd.xml').write_bytes(repomd)
+            for kind,body in compressed.items():(cache/(kind+'.zst')).write_bytes(body)
+            (cache/'primary.xml').write_bytes(plain['primary'])
+            digest=lambda value:hashlib.sha256(value).hexdigest()
+            repositories[repo]={'repomd_bytes':len(repomd),'repomd_sha256':digest(repomd),'metadata':{kind:{
+                'bytes':len(compressed[kind]),'sha256':digest(compressed[kind]),'open_bytes':len(plain[kind]),
+                'open_sha256':digest(plain[kind])} for kind in plain}}
+        return repositories
+    def test_cache_receipts_match_exact_compressed_and_plain_bytes_separately(self):
+        with tempfile.TemporaryDirectory() as t:
+            work=Path(t);repos=self.fixture_cache(work)
+            proof=prepare.metadata_cache_receipts(work,repos,c.Deadline(time.monotonic(),10),mock.Mock())
+            self.assertEqual(len(proof['private_cache_entries']),8)
+            for repo in repos:
+                self.assertEqual({row['representation'] for row in proof['matching_snapshot_files'][repo]['primary']},{'compressed','plain-XML'})
+                self.assertEqual(proof['matching_snapshot_files'][repo]['filelists'][0]['representation'],'compressed')
+                self.assertEqual(proof['matching_snapshot_files'][repo]['repomd'][0]['representation'],'repomd-XML')
+    def test_cache_missing_corrupt_duplicate_snapshot_link_and_expired_deadline_fail_or_remain_unmatched(self):
+        with tempfile.TemporaryDirectory() as t:
+            work=Path(t);repos=self.fixture_cache(work)
+            (work/'cache/fedora/filelists.zst').write_bytes(b'corrupt')
+            proof=prepare.metadata_cache_receipts(work,repos,c.Deadline(time.monotonic(),10),mock.Mock())
+            self.assertEqual(proof['matching_snapshot_files']['fedora']['filelists'],[])
+            (work/'cache/linked').symlink_to(work/'cache/fedora/repomd.xml')
+            with self.assertRaises(c.GuardError):prepare.metadata_cache_receipts(work,repos,c.Deadline(time.monotonic(),10),mock.Mock())
+            (work/'cache/linked').unlink()
+            with self.assertRaises(c.GuardError):prepare.metadata_cache_receipts(work,repos,c.Deadline(time.monotonic()-10,1),mock.Mock())
+    def chain(self,change=None):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);here=root/'source';here.mkdir()
+            for relative in ('outputs','evidence','inputs/empty-aliases','work/config/empty-cli-plugins','work/config/dnf5/aliases.d'):
+                (root/relative).mkdir(parents=True,exist_ok=True)
+            bodies={name:('synthetic inert '+name).encode() for name in c.BOOTSTRAP_TOOLS}
+            if change!='alias-literals':bodies['usr/bin/dnf5']+=b'/usr/share/dnf5/aliases.d\x00/etc/dnf/dnf5-aliases.d\x00'
+            headers=[['fixture','0:1-1.fc44','noarch','fixture.src.rpm','MIT']]
+            report={'status':'DISCOVERY_ONLY_EXTERNAL_REVIEW_STOP','observed_only':True,'resolve_download_transaction':False,
+                'member_work':'UNRUN','base_image_id':c.BASE_ID,'headers':headers,'file_identities':{
+                name:{'sha256':hashlib.sha256(body).hexdigest(),'bytes':len(body)} for name,body in bodies.items()}}
+            review={'status':'PASS_ACTUAL_DISCOVERY_OBSERVATIONS_EXTERNAL_REVIEW_STOP','run_id':123,'source':'2'*40}
+            if change=='review-source':review['source']='3'*40
+            if change=='review-status':review['status']='UNREVIEWED'
+            if change=='review-run':review['run_id']=124
+            for name,data in (('discovery-report.json',report),('discovery-review.json',review)):(here/name).write_text(json.dumps(data))
+            binding=bound('metadata');binding['metadata_prerequisite'].update(report_sha256=c.sha_file(here/'discovery-report.json'),
+                review_sha256=c.sha_file(here/'discovery-review.json'),file_hashes={name:row['sha256'] for name,row in report['file_identities'].items()},
+                run_id=123,source='2'*40)
+            state={'usr/lib/sysimage/rpm':b'private rpm state','usr/lib/sysimage/libdnf5':b'private dnf state'}
+            calls=[];session=SimpleNamespace(root=root,binding=binding,deadline=c.Deadline(time.monotonic(),10),limits=mock.Mock())
+            def copy(inside,destination,tag):
+                if inside.lstrip('/') in state:
+                    destination.mkdir();(destination/'fixture-state').write_bytes(state[inside.lstrip('/')])
+                else:destination.write_bytes(b'synthetic system identity')
+            session.copy=copy
+            def body(relative,destination,tag):
+                destination.write_bytes((b'wrong body' if change=='body' and relative=='usr/bin/dnf5' else bodies.get(relative,b'synthetic zstd')))
+            session.copy_binary=body
+            def execute(argv,tag,timeout=120):
+                calls.append((argv,tag))
+                if argv[0]=='/usr/bin/rpm':return '\n'.join('\t'.join(row) for row in headers)+'\n'
+                if tag=='isolated-CLI-version':
+                    return 'dnf5 version 5.4.6.0\ndnf5 plugin API version 2.0\nlibdnf5 version 5.4.6.0\nlibdnf5 plugin API version 2.2\n'+('Loaded dnf5 plugins:\n' if change=='plugins' else '')
+                if 'config' in tag:
+                    parser=prepare.configparser.ConfigParser();parser.read(root/'work/config/dnf.conf');values=dict(parser['main']);values['config_file_path']='/work/config/dnf.conf'
+                    if change=='config':values['plugins']='true'
+                    if change=='after-config' and tag.endswith('after-metadata'):values['best']='false'
+                    return ''.join(key+' = '+value+'\n' for key,value in values.items())
+                self.assertEqual(tag,'fixed-Fedora-metadata-only-cache')
+                binding['repositories']=self.fixture_cache(root/'work')
+                if change=='cache':(root/'work/cache/fedora/filelists.zst').write_bytes(b'corrupt')
+                if change=='duplicate':(root/'work/cache/fedora/duplicate.zst').write_bytes((root/'work/cache/fedora/filelists.zst').read_bytes())
+                if change=='state':(root/'work/installroot/usr/lib/sysimage/rpm/fixture-state').write_bytes(b'changed state')
+                if change=='goal':(root/'work/goal/packages').mkdir()
+                if change=='aliases':(root/'inputs/empty-aliases/untrusted').write_bytes(b'changed alias')
+                return 'metadata cached\n'
+            session.exec=execute
+            caught=None
+            with mock.patch.object(prepare,'HERE',here):
+                try:prepare.metadata(session)
+                except c.GuardError as error:caught=error
+            outputs=list((root/'outputs').iterdir());result=json.loads(outputs[0].read_text()) if outputs else None
+            return caught,result,calls
+    def test_complete_actual_function_chain_stops_without_goal_package_or_later_phase(self):
+        caught,result,calls=self.chain();self.assertIsNone(caught)
+        self.assertEqual(result['status'],'METADATA_CONFIG_EXTERNAL_REVIEW_STOP')
+        self.assertFalse(result['RPM_payload_downloads']);self.assertFalse(result['solve_store_transaction_scripts'])
+        self.assertFalse(result['later_bootstrap_closure_bindings_automatically_written'])
+        self.assertEqual(result['Python_libdnf5_API_controls'],'UNRUN_until_separately_reviewed_signed_tools_image')
+        self.assertEqual(len([tag for argv,tag in calls if tag=='fixed-Fedora-metadata-only-cache']),1)
+        for argv,tag in calls:
+            self.assertNotIn('do',argv);self.assertFalse(any('--store=' in arg or arg=='--import' for arg in argv))
+    def test_body_plugin_config_failures_occur_before_any_metadata_access(self):
+        for change in ('body','alias-literals','review-source','review-status','review-run','plugins','config'):
+            with self.subTest(change=change):
+                caught,result,calls=self.chain(change);self.assertIsNotNone(caught);self.assertIsNone(result)
+                self.assertFalse(any(tag=='fixed-Fedora-metadata-only-cache' for argv,tag in calls))
+    def test_snapshot_private_state_goal_alias_or_after_config_failure_never_yields_STOP_pass(self):
+        for change in ('cache','duplicate','state','goal','aliases','after-config'):
+            with self.subTest(change=change):
+                caught,result,calls=self.chain(change);self.assertIsNotNone(caught);self.assertIsNone(result)
+    def test_generated_metadata_job_is_default_off_exclusive_artifact_only_and_uses_actual_preflight(self):
+        obj=yaml.safe_load(workflow());inputs=obj.get('on',obj.get(True))['workflow_dispatch']['inputs']
+        self.assertFalse(inputs['codec_tools_metadata_check']['default'])
+        job=obj['jobs']['codec-tools-metadata']
+        self.assertEqual(job['if'],"${{ github.event_name == 'workflow_dispatch' && inputs.codec_tools_metadata_check }}")
+        self.assertEqual(job['timeout-minutes'],35);self.assertEqual(job['permissions'],{'contents':'read','actions':'read'})
+        for name,old in obj['jobs'].items():
+            if name not in ('codec-tools-metadata','codec-tools-discovery'):self.assertIn('!inputs.codec_tools_metadata_check',old['if'])
+        self.assertIn('!inputs.codec_tools_metadata_check',obj['jobs']['codec-tools-discovery']['if'])
+        self.assertEqual(job['steps'][1]['env']['TOOLS_ALL_INPUTS'],'${{ toJSON(inputs) }}')
+        for step in job['steps']:
+            self.assertNotIn('download-artifact@',step.get('uses',''))
+            if 'run' in step:self.assertIn('tools/codec-tools-binding/prepare.py',step['run'])
+        text=ast.get_source_segment(Path(prepare.__file__).read_text(),next(node for node in ast.parse(Path(prepare.__file__).read_text()).body if isinstance(node,ast.FunctionDef) and node.name=='metadata'))
+        for forbidden in ('closure(session)','image(session)','--store=','do\'',"'--import'",'official_metadata'):
+            self.assertNotIn(forbidden,text)
 
 if __name__=='__main__':unittest.main()
