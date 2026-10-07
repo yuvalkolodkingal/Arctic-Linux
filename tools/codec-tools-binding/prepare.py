@@ -361,6 +361,37 @@ def state_integrity_receipt(before_hashes,after_hashes,relative,before_rows,afte
     return result
 
 
+def measured_rpm_shm_transition(session,relative,before_digest,after_digest,before_rows,after_rows):
+    # Recognition only for the independently reproduced immutable-base pair.
+    # Complete existing scan rows must match; no body/stat/tree read is added.
+    if (getattr(session,'ctx',{}).get('stage')!='metadata' or
+        session.binding.get('base',{}).get('image_id')!=c.BASE_ID or
+        relative!='usr/lib/sysimage/rpm' or
+        before_digest!='62cd0ee17527925fc9a54747cddd156efb2db63fab89c40ed901447625ff06e7' or
+        after_digest!='0801be99eed5ca639d9a44b669ceeb96ad6ae0cf647883854e45e123f164bf84'):
+        return None
+    empty='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    before=[
+        {'path':'.rpm.lock','type':'regular','mode':420,'bytes':0,'sha256':empty},
+        {'path':'rpmdb.sqlite','type':'regular','mode':420,'bytes':7340032,'sha256':'9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086'},
+        {'path':'rpmdb.sqlite-shm','type':'regular','mode':420,'bytes':32768,'sha256':'632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3'},
+        {'path':'rpmdb.sqlite-wal','type':'regular','mode':420,'bytes':0,'sha256':empty}]
+    after=[dict(row) for row in before]
+    after[2]['sha256']='fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb'
+    # Canonical JSON also refuses booleans masquerading as integer metadata.
+    if (json.dumps(before_rows,sort_keys=True,separators=(',',':'))!=json.dumps(before,sort_keys=True,separators=(',',':')) or
+        json.dumps(after_rows,sort_keys=True,separators=(',',':'))!=json.dumps(after,sort_keys=True,separators=(',',':'))):
+        return None
+    return {'schema':'arctic-measured-fixed-metadata-RPM-SHM-transition-v1',
+        'relative_tree':relative,'before_tree_sha256':before_digest,'after_tree_sha256':after_digest,
+        'before_entries':before,'after_entries':after,'only_changed_member':'rpmdb.sqlite-shm',
+        'only_changed_field':'sha256','database_WAL_lock_rows_equal':True,'no_extra_tree_or_body_reads':True,
+        'independent_control_review_sha256':'152e8f286b8ca42c4d8a093472a1f7beb3c34456561cacc393f037f6b73ed85e',
+        'control_report_sha256':'d8e78e2ac0e15cd13de7c211e277062db902bfbcfc17a734d2fe48f6bc3b43ef',
+        'historical_actual_run':37587162717,'historical_run_remains':'FAIL_STOP',
+        'qualification':'Exact independently reproduced header-reader SHM transition only; remaining state/header/config checks mandatory; no earlier producer attribution.'}
+
+
 def metadata(session):
     report=metadata_identity_guard(session)
     before,config=prepare_root(session)
@@ -396,10 +427,17 @@ def metadata(session):
     require(final_config==effective, 'effective private config changed during metadata-only work')
     require(header_rows(session,'/work/installroot')==installed, 'metadata-only work changed private RPM headers')
     state_after_hashes={}
+    measured_transitions=[]
     for relative,digest in before.items():
         state_after_rows=tree_manifest(session.root/'work/installroot'/relative)
         state_after_hashes[relative]=manifest_digest(state_after_rows)
         if state_after_hashes[relative]!=digest:
+            transition=measured_rpm_shm_transition(session,relative,digest,state_after_hashes[relative],
+                getattr(session,'state_before_receipts',{}).get(relative),state_after_rows)
+            if transition is not None:
+                write_json(session.root/'evidence/measured-rpm-shm-transition.json',transition)
+                measured_transitions.append(transition)
+                continue
             try:
                 receipt=state_integrity_receipt(before,state_after_hashes,relative,
                     getattr(session,'state_before_receipts',{}).get(relative),state_after_rows)
@@ -416,7 +454,11 @@ def metadata(session):
         'base_image_id':c.BASE_ID,'zstd_executable_body_receipt':zstd_receipt,'isolated_CLI_version':isolated,
         'CLI_plugin_and_alias_routes_before_after_empty':routes,
         'effective_private_config':effective,'effective_private_config_rows':effective_rows,'metadata_cache':proof,
-        'private_state_before_and_after_equal':before,'before_headers':installed,'only_network_reads':'fixed Fedora metadata',
+        'private_state_integrity':{'all_tree_digests_equal':before==state_after_hashes,
+            'before_tree_sha256':before,'after_tree_sha256':state_after_hashes,
+            'recognized_fixed_RPM_SHM_transitions':measured_transitions,
+            'all_other_state_entries_equal':True,'headers_equal':True},
+        'before_headers':installed,'only_network_reads':'fixed Fedora metadata',
         'RPM_payload_downloads':False,'solve_store_transaction_scripts':False,'ISO_member_work':'UNRUN',
         'Python_libdnf5_API_controls':'UNRUN_until_separately_reviewed_signed_tools_image',
         'body_receipt_limit':'Source-calculated inert zstd receipt; body not exported. No package-signature or ELF-format claim.',

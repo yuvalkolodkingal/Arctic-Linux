@@ -1,0 +1,93 @@
+{
+  "after_entries": [
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": ".rpm.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    },
+    {
+      "bytes": 7340032,
+      "mode": 420,
+      "path": "rpmdb.sqlite",
+      "sha256": "9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086",
+      "type": "regular"
+    },
+    {
+      "bytes": 32768,
+      "mode": 420,
+      "path": "rpmdb.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "type": "regular"
+    },
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": "rpmdb.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    }
+  ],
+  "after_entries_complete": true,
+  "after_trees_not_read": [
+    "usr/lib/sysimage/libdnf5"
+  ],
+  "before_entries": [
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": ".rpm.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    },
+    {
+      "bytes": 7340032,
+      "mode": 420,
+      "path": "rpmdb.sqlite",
+      "sha256": "9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086",
+      "type": "regular"
+    },
+    {
+      "bytes": 32768,
+      "mode": 420,
+      "path": "rpmdb.sqlite-shm",
+      "sha256": "632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3",
+      "type": "regular"
+    },
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": "rpmdb.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    }
+  ],
+  "before_entries_complete": true,
+  "before_tree_sha256": {
+    "usr/lib/sysimage/libdnf5": "114e040eea40596afae3f5189644f19015985f40e7a9c5a4ea0c90f58a85d4c0",
+    "usr/lib/sysimage/rpm": "62cd0ee17527925fc9a54747cddd156efb2db63fab89c40ed901447625ff06e7"
+  },
+  "diff_complete": true,
+  "failing_relative_tree": "usr/lib/sysimage/rpm",
+  "guard": "metadata-only work changed copied state",
+  "guard_diff": {
+    "added": [],
+    "changed": [
+      {
+        "fields": [
+          "sha256"
+        ],
+        "path": "rpmdb.sqlite-shm"
+      }
+    ],
+    "removed": []
+  },
+  "guard_waiver": false,
+  "no_extra_tree_or_body_reads": true,
+  "observed_after_tree_sha256": {
+    "usr/lib/sysimage/rpm": "0801be99eed5ca639d9a44b669ceeb96ad6ae0cf647883854e45e123f164bf84"
+  },
+  "passed": false,
+  "schema": "arctic-private-state-integrity-failure-v1"
+}

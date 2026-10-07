@@ -1,9 +1,9 @@
 {
   "actual_context_review_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
   "actual_discovery_review_sha256": "55b4fa69c4c30dbe0a97f555f2eb29325457187ce30c7e64ee7879c4353c6b47",
-  "actual_failed_metadata_review_sha256": "c23f9e55afe191f381b83f7459d761f854ab41d3ca33476d4e2cc39bf37df7bb",
-  "actual_failed_predecessor_source": "648a259817089ef398e8498a8a7d09d9a02d0a32",
-  "actual_preparation": "V4_METADATA_UNRUN",
+  "actual_failed_metadata_review_sha256": "37e011261e761af5ea52eda2b677b40c94ae71f1517cc8e924fbb91b3faa9614",
+  "actual_failed_predecessor_source": "9bc9ca51cc078c34995246ab1d2d32474bb7ea51",
+  "actual_preparation": "V5_METADATA_UNRUN",
   "files": {
     ".github/workflows/iso.yml": {
       "audit_source": "registered-iso-codec-tools-discovery-v3.yml",
@@ -13,9 +13,9 @@
     },
     "tools/codec-tools-binding/README.md": {
       "audit_source": "README.md",
-      "bytes": 3328,
+      "bytes": 3394,
       "git_mode": "100644",
-      "sha256": "4e4493abe327d60cfdf0ef84ca34a498847734189a848f725bfdde3c8c770515"
+      "sha256": "6ca3db548b0a3565964540390173818fa37fb82ca48f1a5d1485ee6b2dabdafc"
     },
     "tools/codec-tools-binding/additional-primary-source-reads.json": {
       "audit_source": "additional-primary-source-reads.json",
@@ -65,11 +65,29 @@
       "git_mode": "100644",
       "sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476"
     },
+    "tools/codec-tools-binding/measured-transition-proposal.json": {
+      "audit_source": "measured-transition-proposal.json",
+      "bytes": 4541,
+      "git_mode": "100644",
+      "sha256": "aa470d610f36c26b1b1be18b9c55598f5bc2d052387d930fb3962cacf8e442ed"
+    },
     "tools/codec-tools-binding/metadata-predecessor-preserved.json": {
       "audit_source": "metadata-predecessor-preserved.json",
       "bytes": 1460,
       "git_mode": "100644",
       "sha256": "ea5ff9182b596b4fcd9994a6a51c57a3068842c68be533fe18c520beb9733b1c"
+    },
+    "tools/codec-tools-binding/metadata-v4-actual-independent-review.json": {
+      "audit_source": "metadata-v4-actual-independent-review.json",
+      "bytes": 8350,
+      "git_mode": "100644",
+      "sha256": "37e011261e761af5ea52eda2b677b40c94ae71f1517cc8e924fbb91b3faa9614"
+    },
+    "tools/codec-tools-binding/metadata-v4-state-integrity-failure.json": {
+      "audit_source": "metadata-v4-state-integrity-failure.json",
+      "bytes": 2534,
+      "git_mode": "100644",
+      "sha256": "ab8e8bcc6fa802c9a6258bbc9da53ffee4c11382c046342f06c91849bdd241f3"
     },
     "tools/codec-tools-binding/predecessor-preserved.json": {
       "audit_source": "predecessor-preserved.json",
@@ -79,21 +97,33 @@
     },
     "tools/codec-tools-binding/prepare.py": {
       "audit_source": "prepare.py",
-      "bytes": 53212,
+      "bytes": 56460,
       "git_mode": "100755",
-      "sha256": "a7aa487747f2fd598525b9f02b7923f6f08688fe4a56a012aaea667179ad116f"
+      "sha256": "0fbe07efd97ee65820b61e338b78a76ce5747cf40b4e2bd6af79a3edd6505668"
     },
     "tools/codec-tools-binding/promotion-handoff.json": {
       "audit_source": "promotion-handoff.json",
-      "bytes": 3695,
+      "bytes": 3216,
       "git_mode": "100644",
-      "sha256": "fe82913721d4b006759866db1b62eb94df97f74255e9793b3ad1fcf3d6131da7"
+      "sha256": "92833d93a37cfc7cbc9a09f8fe9728d66ca471381c47ff649d6f74a608f5c9cf"
     },
     "tools/codec-tools-binding/proposal-preserved.json": {
       "audit_source": "proposal-preserved.json",
       "bytes": 5489,
       "git_mode": "100644",
       "sha256": "0d165db45e6035472af0d7f489eb46846c1a5a924dc9802c257975f468dbaeab"
+    },
+    "tools/codec-tools-binding/rpm-header-control-independent-review.json": {
+      "audit_source": "rpm-header-control-independent-review.json",
+      "bytes": 6526,
+      "git_mode": "100644",
+      "sha256": "152e8f286b8ca42c4d8a093472a1f7beb3c34456561cacc393f037f6b73ed85e"
+    },
+    "tools/codec-tools-binding/rpm-header-control-report.json": {
+      "audit_source": "rpm-header-control-report.json",
+      "bytes": 19037,
+      "git_mode": "100644",
+      "sha256": "d8e78e2ac0e15cd13de7c211e277062db902bfbcfc17a734d2fe48f6bc3b43ef"
     },
     "tools/codec-tools-binding/runtime-binding.json": {
       "audit_source": "runtime-binding.json",
@@ -103,9 +133,9 @@
     },
     "tools/codec-tools-binding/source-parity.json": {
       "audit_source": "source-parity.json",
-      "bytes": 10643,
+      "bytes": 1314,
       "git_mode": "100644",
-      "sha256": "93b27bc4590e50ef67638f9ee1acdd9a4e19d803dbbb1f9ec6c23f6a357c854b"
+      "sha256": "5c2dc9eab560f4bdb6d1b27a8bacdfa16f1b9f3509a3a58922fb4250627f6071"
     },
     "tools/codec-tools-binding/sources/actual-inputs-37573011277.json": {
       "audit_source": "sources/actual-inputs-37573011277.json",
@@ -293,6 +323,12 @@
       "git_mode": "100644",
       "sha256": "7011f51bd8089d345be42d41f0aa3190d258823528852a5e7ec976fe2fd20f53"
     },
+    "tools/codec-tools-binding/test_measured_shm.py": {
+      "audit_source": "test_measured_shm.py",
+      "bytes": 10344,
+      "git_mode": "100644",
+      "sha256": "4e24fe6ac25ccbb7d018a19186a806e220a88df0a07d0ed776de8c525b5f8851"
+    },
     "tools/codec-tools-binding/test_tools.py": {
       "audit_source": "test_tools.py",
       "bytes": 74282,
@@ -354,16 +390,17 @@
       "sha256": "e2a16cd35ef4f134e4d451aa1d6410b5e3ee2c7add5254d06448f1e116821956"
     }
   },
-  "predecessor_integration_review_sha256": "f11629bd08b01071541ae7d7bb950be0eadf54493211571e6b2eeccc39c4254e",
-  "predecessor_ready_sha256": "fc81a409f13e3ff51f0a153e7578ff4bc2ade14894113632bdd64b8369823dcf",
+  "predecessor_integration_review_sha256": "dd0462dc3b6a1c409a7ff2821dafdcd1ebbe55726656a3c64ac0665ad57fea8f",
+  "predecessor_ready_sha256": "ba9527c96e375102ac568771097e9ce57d070a067d02e8367e14d94a03ccefe8",
   "predecessor_source_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
   "product_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
   "proposal_independent_review_sha256": "31e162066299999ad5d15b8afe2ec418f5c776bd2d25dea4b9af7ea14347d54d",
   "proposal_ready_sha256": "da03900edc2ffe4aa789d203d1e6b242d3b24c050b5dce5b134cc88719c376ad",
+  "rpm_header_control_independent_review_sha256": "152e8f286b8ca42c4d8a093472a1f7beb3c34456561cacc393f037f6b73ed85e",
   "schema": "arctic-codec-tools-preparation-execution-v1",
   "self_manifest_git_mode": "100644",
   "self_manifest_target": "tools/codec-tools-binding/execution-pins.json",
-  "status": "STATE_FAILURE_RECEIPT_SUCCESSOR_SOURCE_ONLY_PENDING_REVIEW",
+  "status": "EXACT_MEASURED_SHM_PAIR_SUCCESSOR_SOURCE_ONLY_PENDING_REVIEW",
   "worker_v3_independent_review_sha256": "248674ec912a4aac4392b4e70ab119bc423568a0e80b193133f6ba7a69939c09",
   "workflow_baseline": {
     "only_existing_job_changes": "selection guards; steps/action pins/defaults preserved",

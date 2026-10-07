@@ -1,0 +1,112 @@
+{
+  "acceptance_predicate": "Actual selected stage metadata, exact immutable base identity, both exact whole-tree digests and complete four-row canonical JSON equality to measured before/after rows. All other trees retain original equality guard. Header/config guards precede classification.",
+  "after_entries": [
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": ".rpm.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    },
+    {
+      "bytes": 7340032,
+      "mode": 420,
+      "path": "rpmdb.sqlite",
+      "sha256": "9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086",
+      "type": "regular"
+    },
+    {
+      "bytes": 32768,
+      "mode": 420,
+      "path": "rpmdb.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "type": "regular"
+    },
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": "rpmdb.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    }
+  ],
+  "after_tree_sha256": "0801be99eed5ca639d9a44b669ceeb96ad6ae0cf647883854e45e123f164bf84",
+  "attribution_limit": "Does not establish which earlier operation produced the actual-v4 difference. Actual-v4 bodies unexported; existing tree schema excludes ownership/time/root metadata/atomicity. Original failed run remains failed.",
+  "base_image_id": "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+  "before_entries": [
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": ".rpm.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    },
+    {
+      "bytes": 7340032,
+      "mode": 420,
+      "path": "rpmdb.sqlite",
+      "sha256": "9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086",
+      "type": "regular"
+    },
+    {
+      "bytes": 32768,
+      "mode": 420,
+      "path": "rpmdb.sqlite-shm",
+      "sha256": "632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3",
+      "type": "regular"
+    },
+    {
+      "bytes": 0,
+      "mode": 420,
+      "path": "rpmdb.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "type": "regular"
+    }
+  ],
+  "before_tree_sha256": "62cd0ee17527925fc9a54747cddd156efb2db63fab89c40ed901447625ff06e7",
+  "control_report": {
+    "bytes": 19037,
+    "sha256": "d8e78e2ac0e15cd13de7c211e277062db902bfbcfc17a734d2fe48f6bc3b43ef"
+  },
+  "documentation_context": [
+    "https://www.sqlite.org/wal.html",
+    "https://www.sqlite.org/walformat.html"
+  ],
+  "documentation_scope": "Parent supplied primary SQLite WAL-index/shared-memory context. The exact acceptable pair is measured by the independently reviewed saved control, not inferred from SQLite semantics.",
+  "independent_actual_failure_review": {
+    "bytes": 8350,
+    "sha256": "37e011261e761af5ea52eda2b677b40c94ae71f1517cc8e924fbb91b3faa9614"
+  },
+  "independent_control_review": {
+    "bytes": 6526,
+    "sha256": "152e8f286b8ca42c4d8a093472a1f7beb3c34456561cacc393f037f6b73ed85e"
+  },
+  "measured_conclusion": "First existing private RPM header query suffices in the isolated copied-RPMdb control to reproduce the same exact SHM pair; second query causes no additional recorded change. Durable DB/WAL/lock inert bytes and raw headers equal.",
+  "negative_controls": [
+    "wrong SHA before or after even with fixed declared digests",
+    "SHM size/path/mode/type",
+    "database/WAL/lock bytes or digest/mode/type",
+    "added/removed/duplicate/reordered tree",
+    "wrong stage/base/relative tree/missing before rows",
+    "integer/boolean metadata mismatch",
+    "changed actual header chain",
+    "changed actual libdnf5 chain",
+    "config/goal/alias/write failures"
+  ],
+  "relative_tree": "usr/lib/sysimage/rpm",
+  "schema": "arctic-fixed-metadata-SHM-pair-source-proposal-v1",
+  "scope": "Fixed immutable-base metadata stage only; no generalized SHM exclusion",
+  "status": "SOURCE_ONLY_ACTUAL_V5_UNRUN",
+  "unchanged": [
+    "workflow/default selectors/action pins",
+    "every vendor and original87 test bytes",
+    "all durable RPM DB/WAL/lock row fields",
+    "all other RPM tree entries",
+    "all private header/config checks",
+    "libdnf5 equality",
+    "caps/keys/plugins/aliases/normal weak deps",
+    "bootstrap/closure/member nulls",
+    "external METADATA_CONFIG_EXTERNAL_REVIEW_STOP",
+    "no solver/download/RPM transaction/scripts/tools image/ISO continuation"
+  ]
+}

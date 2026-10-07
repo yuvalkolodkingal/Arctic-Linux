@@ -1,0 +1,50 @@
+name: Private metadata v5 dispatch once
+
+on:
+  push:
+    branches: [test/codec-tools-metadata-37507582946-v5]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/test/codec-tools-metadata-37507582946-v5' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Dispatch the exact reviewed metadata prerequisite once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF_NAME'] == 'test/codec-tools-metadata-37507582946-v5'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          source = os.environ['GITHUB_SHA']
+          assert re.fullmatch('[0-9a-f]{40}', source)
+          inputs = {'boot_test': False, 'codec_tools_discovery': False, 'codec_tools_metadata_check': True,
+                    'codec_tools_source_sha': source, 'draft': False, 'nix_acceptance': False,
+                    'performance_acceptance': False, 'prerelease': True, 'release': False,
+                    'same_iso_native_smoke': False, 'same_iso_pcmanfm_diagnostic': False,
+                    'same_iso_recovery': False, 'tag': ''}
+          request = {'ref': os.environ['GITHUB_REF_NAME'], 'inputs': inputs}
+          path = Path(os.environ['RUNNER_TEMP']) / 'metadata-v5-dispatch-once.json'
+          with path.open('x') as output:
+              json.dump(request, output, indent=2)
+              output.write('\n')
+          PY
+          gh api --method POST repos/yuvalkolodkingal/Arctic-Linux/actions/workflows/iso.yml/dispatches --input "$RUNNER_TEMP/metadata-v5-dispatch-once.json"
+      - name: Preserve the exact request
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "private-metadata-v5-dispatch-${{ github.run_id }}"
+          path: "${{ runner.temp }}/metadata-v5-dispatch-once.json"
+          if-no-files-found: error
+          retention-days: 7

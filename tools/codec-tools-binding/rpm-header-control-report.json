@@ -1,0 +1,515 @@
+{
+  "actual_base": {
+    "Architecture": "amd64",
+    "Author": "Fedora Project Contributors <devel@lists.fedoraproject.org>",
+    "Comment": "",
+    "Config": {
+      "Cmd": [
+        "/bin/bash"
+      ],
+      "Entrypoint": null,
+      "Env": [
+        "PATH=/usr/local/bin:/usr/bin",
+        "container=oci"
+      ],
+      "Labels": {
+        "io.buildah.version": "1.43.4",
+        "org.opencontainers.image.licenses": "MIT",
+        "org.opencontainers.image.title": "fedora",
+        "org.opencontainers.image.url": "https://fedoraproject.org/",
+        "org.opencontainers.image.vendor": "Fedora Project",
+        "org.opencontainers.image.version": "44"
+      },
+      "OnBuild": null,
+      "User": "",
+      "Volumes": null,
+      "WorkingDir": "/"
+    },
+    "Created": "2026-10-02T06:47:49.369080568Z",
+    "DockerVersion": "",
+    "GraphDriver": {
+      "Data": null,
+      "Name": "vfs"
+    },
+    "Id": "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+    "Metadata": {
+      "LastTagTime": "0001-01-01T00:00:00Z"
+    },
+    "Os": "linux",
+    "Parent": "",
+    "RepoDigests": [
+      "registry.fedoraproject.org/fedora@sha256:7011f51bd8089d345be42d41f0aa3190d258823528852a5e7ec976fe2fd20f53"
+    ],
+    "RepoTags": [
+      "registry.fedoraproject.org/fedora:44"
+    ],
+    "RootFS": {
+      "Layers": [
+        "sha256:c3160321f2f414de6598e612cabd38bbe0abecd611bc97ef8624d74cb7f33c80"
+      ],
+      "Type": "layers"
+    },
+    "Size": 185276592
+  },
+  "attribution_limit": "Only this isolated cached-base private-copy control can attribute a change to its sole two RPM query commands. It does not identify which earlier v4 operation produced the actual v4 change; no acceptance policy or canonical codec proof follows.",
+  "automatic_next_stage": false,
+  "candidate_RPMdb_or_user_system": "UNTOUCHED",
+  "cleanup_failures": [],
+  "commands": [
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "image",
+        "inspect",
+        "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/001-cached-image-inspect.log",
+      "log_sha256": "7460f4eaed87f8ecf39f1ef109c481b390fe3a6773e7745c3f40ad67a5140644",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/001-cached-image-inspect.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "create",
+        "--pull=never",
+        "--name",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b",
+        "--user",
+        "1000:1000",
+        "--label",
+        "arctic.rpm.control=8c3c8349f2a84ce1a2973a1b8a340c1b",
+        "--label",
+        "arctic.rpm.source=241107b5051bf67c3822ad3467571d5ab262a601c9b097da8f5503df5564f8b6",
+        "--read-only",
+        "--network",
+        "none",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges:true",
+        "--pids-limit=32",
+        "--memory=268435456",
+        "--memory-swap=268435456",
+        "--cpus=1",
+        "--ipc=private",
+        "--env",
+        "LANG=C.UTF-8",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,noexec,size=16777216",
+        "--mount",
+        "type=bind,src=/tmp/arctic-rpm-header-control-bacds0zl/work,dst=/work",
+        "--entrypoint",
+        "/usr/bin/sleep",
+        "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+        "150"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/002-create.log",
+      "log_sha256": "d58fc85d7c794b507df3ad1007981ab4534a66005a3b25789f676e5f6b520b48",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/002-create.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "inspect",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/003-owned-inspect.log",
+      "log_sha256": "dbe811556c861d1212ac88da32dceacb126ab3696d703e1d8e31cd52b476174a",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/003-owned-inspect.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "start",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/004-start.log",
+      "log_sha256": "340ee4883d396b94237c4f6a80aa3c5141cfb692ef6aa1c65f022af14962e070",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/004-start.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "inspect",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/005-owned-inspect.log",
+      "log_sha256": "789ba4f77a8f9ab13782fabe46d834cbc3d871e70c2db7ac11d979273d79010a",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/005-owned-inspect.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "cp",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b:/usr/lib/sysimage/rpm",
+        "/tmp/arctic-rpm-header-control-bacds0zl/work/installroot/usr/lib/sysimage/rpm"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/006-copy-private-rpmdb.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/006-copy-private-rpmdb.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "inspect",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/007-owned-inspect.log",
+      "log_sha256": "789ba4f77a8f9ab13782fabe46d834cbc3d871e70c2db7ac11d979273d79010a",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/007-owned-inspect.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "exec",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b",
+        "/usr/bin/rpm",
+        "--noplugins",
+        "--root",
+        "/work/installroot",
+        "--define",
+        "_dbpath /usr/lib/sysimage/rpm",
+        "-qa",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\t%{LICENSE}\n"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/008-header-query-1.log",
+      "log_sha256": "ecc106a1125b44f97b9121d6bcd84c8ad92f4d26d844b63969cd228482ff03c5",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/008-header-query-1.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "inspect",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/009-owned-inspect.log",
+      "log_sha256": "789ba4f77a8f9ab13782fabe46d834cbc3d871e70c2db7ac11d979273d79010a",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/009-owned-inspect.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "exec",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b",
+        "/usr/bin/rpm",
+        "--noplugins",
+        "--root",
+        "/work/installroot",
+        "--define",
+        "_dbpath /usr/lib/sysimage/rpm",
+        "-qa",
+        "--qf",
+        "%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\t%{LICENSE}\n"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/010-header-query-2.log",
+      "log_sha256": "ecc106a1125b44f97b9121d6bcd84c8ad92f4d26d844b63969cd228482ff03c5",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/010-header-query-2.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "inspect",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/011-owned-inspect.log",
+      "log_sha256": "789ba4f77a8f9ab13782fabe46d834cbc3d871e70c2db7ac11d979273d79010a",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/011-owned-inspect.log.phase.json"
+    },
+    {
+      "argv": [
+        "/usr/local/bin/docker",
+        "--config",
+        "/tmp/arctic-rpm-header-control-bacds0zl/docker-config",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "rm",
+        "-f",
+        "arctic-rpm-header-control-8c3c8349f2a84ce1a2973a1b8a340c1b"
+      ],
+      "exit": 0,
+      "log": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/012-cleanup-exact-owned.log",
+      "log_sha256": "340ee4883d396b94237c4f6a80aa3c5141cfb692ef6aa1c65f022af14962e070",
+      "phase": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/logs/012-cleanup-exact-owned.log.phase.json"
+    }
+  ],
+  "deadline_seconds": 150,
+  "durable_DB_WAL_lock_rows_unchanged": true,
+  "exact_owned_cleanup": true,
+  "guard_policy_changed": false,
+  "image": "sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+  "isolated_header_queries_sufficient_for_SHM_only_change": true,
+  "metadata_package_solver_transaction": "UNRUN",
+  "observations_diffs": [
+    {
+      "after": "after-query-1",
+      "changed_paths": [
+        "rpmdb.sqlite-shm"
+      ],
+      "sha_after": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "sha_before": "632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3"
+    },
+    {
+      "after": "after-query-2",
+      "changed_paths": [
+        "rpmdb.sqlite-shm"
+      ],
+      "sha_after": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "sha_before": "632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3"
+    }
+  ],
+  "observations_unmounted": "/tmp/arctic-rpm-header-control-bacds0zl/observations",
+  "ordinary_header_rows_each": 146,
+  "parent_covering_direction": "ONE actual corrected control explicitly authorized after first pure probe failed before either RPM query.",
+  "passed": true,
+  "primary_failure": null,
+  "prior_failed_attempt_preserved": {
+    "READY_path": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control/review-ready.json",
+    "READY_sha256": "17c88b17a8e5e97015c3904b67117879f9498574c82676c326d3e1c095496c06",
+    "RPM_queries": 0
+  },
+  "query_argv": [
+    "/usr/bin/rpm",
+    "--noplugins",
+    "--root",
+    "/work/installroot",
+    "--define",
+    "_dbpath /usr/lib/sysimage/rpm",
+    "-qa",
+    "--qf",
+    "%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\t%{LICENSE}\n"
+  ],
+  "retained_private_evidence": "/tmp/arctic-rpm-header-control-bacds0zl",
+  "reviewed_prepare_sha256": "a7aa487747f2fd598525b9f02b7923f6f08688fe4a56a012aaea667179ad116f",
+  "root": "/tmp/arctic-rpm-header-control-bacds0zl",
+  "same_starting_child_rows_as_actual_v4": true,
+  "schema": "arctic-cached-offline-private-RPM-query-control-v1",
+  "scope": "ONE cached immutable-base container, read-only root/capless/networkNONE; two exact ordinary noplugins RPM header queries on fresh owned copied RPMdb only.",
+  "script_sha256": "241107b5051bf67c3822ad3467571d5ab262a601c9b097da8f5503df5564f8b6",
+  "snapshots": {
+    "after-query-1": {
+      "inert_copies": "/tmp/arctic-rpm-header-control-bacds0zl/observations/after-query-1",
+      "ownership": [
+        {
+          "gid": 1000,
+          "path": ".rpm.lock",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite-shm",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite-wal",
+          "uid": 1000
+        }
+      ],
+      "rows": [
+        {
+          "bytes": 0,
+          "mode": 420,
+          "path": ".rpm.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "type": "regular"
+        },
+        {
+          "bytes": 7340032,
+          "mode": 420,
+          "path": "rpmdb.sqlite",
+          "sha256": "9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086",
+          "type": "regular"
+        },
+        {
+          "bytes": 32768,
+          "mode": 420,
+          "path": "rpmdb.sqlite-shm",
+          "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+          "type": "regular"
+        },
+        {
+          "bytes": 0,
+          "mode": 420,
+          "path": "rpmdb.sqlite-wal",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "type": "regular"
+        }
+      ],
+      "tree_sha256": "0801be99eed5ca639d9a44b669ceeb96ad6ae0cf647883854e45e123f164bf84"
+    },
+    "after-query-2": {
+      "inert_copies": "/tmp/arctic-rpm-header-control-bacds0zl/observations/after-query-2",
+      "ownership": [
+        {
+          "gid": 1000,
+          "path": ".rpm.lock",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite-shm",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite-wal",
+          "uid": 1000
+        }
+      ],
+      "rows": [
+        {
+          "bytes": 0,
+          "mode": 420,
+          "path": ".rpm.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "type": "regular"
+        },
+        {
+          "bytes": 7340032,
+          "mode": 420,
+          "path": "rpmdb.sqlite",
+          "sha256": "9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086",
+          "type": "regular"
+        },
+        {
+          "bytes": 32768,
+          "mode": 420,
+          "path": "rpmdb.sqlite-shm",
+          "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+          "type": "regular"
+        },
+        {
+          "bytes": 0,
+          "mode": 420,
+          "path": "rpmdb.sqlite-wal",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "type": "regular"
+        }
+      ],
+      "tree_sha256": "0801be99eed5ca639d9a44b669ceeb96ad6ae0cf647883854e45e123f164bf84"
+    },
+    "before-query": {
+      "inert_copies": "/tmp/arctic-rpm-header-control-bacds0zl/observations/before-query",
+      "ownership": [
+        {
+          "gid": 1000,
+          "path": ".rpm.lock",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite-shm",
+          "uid": 1000
+        },
+        {
+          "gid": 1000,
+          "path": "rpmdb.sqlite-wal",
+          "uid": 1000
+        }
+      ],
+      "rows": [
+        {
+          "bytes": 0,
+          "mode": 420,
+          "path": ".rpm.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "type": "regular"
+        },
+        {
+          "bytes": 7340032,
+          "mode": 420,
+          "path": "rpmdb.sqlite",
+          "sha256": "9829002343d8232719498d47e590366efc8cdd55fa6115753ede25badeb23086",
+          "type": "regular"
+        },
+        {
+          "bytes": 32768,
+          "mode": 420,
+          "path": "rpmdb.sqlite-shm",
+          "sha256": "632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3",
+          "type": "regular"
+        },
+        {
+          "bytes": 0,
+          "mode": 420,
+          "path": "rpmdb.sqlite-wal",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "type": "regular"
+        }
+      ],
+      "tree_sha256": "62cd0ee17527925fc9a54747cddd156efb2db63fab89c40ed901447625ff06e7"
+    }
+  },
+  "source_header_query_argv_exact": true,
+  "total_elapsed_seconds": 3.3789858300006017,
+  "two_header_views_equal": true
+}

@@ -1,5 +1,5 @@
 {
-  "actual_result_required_STOP": "METADATA_CONFIG_EXTERNAL_REVIEW_STOP only if all unchanged guards pass; receipt is evidence of failure only. Bootstrap/closure/member remain null.",
+  "actual_result_required_STOP": "All original remaining checks plus exact fixed transition qualification; METADATA_CONFIG_EXTERNAL_REVIEW_STOP only. No automatic later binding/stage.",
   "dispatch_inputs": {
     "boot_test": false,
     "codec_tools_discovery": false,
@@ -23,22 +23,18 @@
   },
   "permitted_network_reads": "Only existing exact hash/size-bound Fedora repodata through makecache; no RPM payload or additional endpoint.",
   "preserved_actual_failure": {
-    "ZIP_sha256": "83dc73edf313289f6c9e5d4f5edda182191e7dc266a466dabb35c0166cc11f68",
-    "changed_member_and_before_after_digests": "UNEXPORTED_UNKNOWN",
-    "head": "648a259817089ef398e8498a8a7d09d9a02d0a32",
-    "independent_sha256": "c23f9e55afe191f381b83f7459d761f854ab41d3ca33476d4e2cc39bf37df7bb",
-    "official_artifact_id": 11465226799,
-    "owner_sha256": "5c13c963984f7f517fc7e0218557e3ff2e5df155267387775dfa9bf7ed2fe87c",
-    "run": 37583428577,
-    "source_CI": "37583331813 completed14of14SUCCESS; separate from failed metadata stage",
-    "source_CI_supplement_sha256": "24dd04849f159f1ce78136fa04928bfeb76f5f00422cfcdde63f551d1f14d15b",
-    "status": "FAILURE_METADATA_ONLY_WORK_CHANGED_COPIED_STATE"
+    "changed_member": "rpmdb.sqlite-shm",
+    "earlier_producer": "UNPROVEN",
+    "head": "9bc9ca51cc078c34995246ab1d2d32474bb7ea51",
+    "independent_review_sha256": "37e011261e761af5ea52eda2b677b40c94ae71f1517cc8e924fbb91b3faa9614",
+    "run": 37587162717,
+    "status": "FAIL_STOP_PRESERVED"
   },
-  "private_base_commit": "648a259817089ef398e8498a8a7d09d9a02d0a32",
-  "private_base_repository": "/workspace/arctic-codec-tools-metadata-v3-qualification",
+  "private_base_commit": "9bc9ca51cc078c34995246ab1d2d32474bb7ea51",
+  "private_base_repository": "/tmp/arctic-codec-tools-metadata-v4-qualification",
   "private_base_workflow_sha256": "b2bac8d7c8397584bdee3db10de02c665b329a2237f8723900e411dcb2fffed9",
-  "proposed_private_worktree": "/tmp/arctic-codec-tools-metadata-v4-qualification",
-  "proposed_test_branch": "test/codec-tools-metadata-37507582946-v4",
+  "proposed_private_worktree": "/tmp/arctic-codec-tools-metadata-v5-qualification",
+  "proposed_test_branch": "test/codec-tools-metadata-37507582946-v5",
   "provenance": [
     "Prior tools source review458 exact remains immutable executable-source predecessor binding; current metadata source needs its own external independent review/root guard.",
     "Prior actual discovery55b4 exact is an independent runtime identity input, not permission for future signed tools resolution.",
@@ -59,8 +55,8 @@
     "pids": 512,
     "scratch_bytes": 16000000000
   },
-  "schema": "arctic-codec-tools-metadata-prerequisite-handoff-v4",
-  "source_delta": "Failure-only bounded receipt of existing copied-state scans; original digest equality guard remains mandatory. No additional tree/body read, mutation whitelist, endpoint or execution phase.",
-  "status": "SOURCE_ONLY_METADATA_V4_UNRUN",
+  "schema": "arctic-codec-tools-metadata-prerequisite-handoff-v5",
+  "source_delta": "Exact independently reproduced fixed metadata RPM SHM pair only; all other original state/header/config/libdnf5 checks remain enforced.",
+  "status": "SOURCE_ONLY_METADATA_V5_UNRUN",
   "workflow_target": ".github/workflows/iso.yml"
 }

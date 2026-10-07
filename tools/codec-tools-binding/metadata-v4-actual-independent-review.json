@@ -1,0 +1,170 @@
+{
+  "actual_guard": {
+    "after_body_receipt_SHA": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "after_tree_SHA": "0801be99eed5ca639d9a44b669ceeb96ad6ae0cf647883854e45e123f164bf84",
+    "before_body_receipt_SHA": "632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3",
+    "before_tree_SHA": "62cd0ee17527925fc9a54747cddd156efb2db63fab89c40ed901447625ff06e7",
+    "bytes_before_after": 32768,
+    "changed_member": "rpmdb.sqlite-shm",
+    "database7340032B_and_lock_WAL0B_same_recorded_SHA": true,
+    "fields": [
+      "sha256"
+    ],
+    "libdnf5_after": "UNREAD_AFTER_FIRST_MISMATCH",
+    "message": "metadata-only work changed copied state",
+    "no_waiver_or_continuation": true,
+    "outcome": "FAIL_STOP",
+    "producer_or_cause": "UNPROVEN",
+    "tree": "usr/lib/sysimage/rpm",
+    "type": "GuardError",
+    "type_mode_unchanged": true
+  },
+  "actual_metadata_passed": false,
+  "artifact": 11467076473,
+  "findings": [],
+  "guard_policy_changed": false,
+  "inputs": {
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-independent-review-v4/review.json": {
+      "bytes": 10583,
+      "mode": 384,
+      "sha256": "dd0462dc3b6a1c409a7ff2821dafdcd1ebbe55726656a3c64ac0665ad57fea8f"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/artifact-verification.json": {
+      "bytes": 17123,
+      "mode": 384,
+      "sha256": "2e1320d54e2bd3d9203834dbe737e0b24c43624177b481335e7ed8fa30afda5f"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/evidence/final-observed-status.json": {
+      "bytes": 331,
+      "mode": 384,
+      "sha256": "824dfb99be0ffa21a0e8a431a8ce448bba9c7a5b249a585ac43ad251bf1e2b34"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/evidence/state-integrity-failure.json": {
+      "bytes": 2534,
+      "mode": 384,
+      "sha256": "ab8e8bcc6fa802c9a6258bbc9da53ffee4c11382c046342f06c91849bdd241f3"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/official-jobs.json": {
+      "bytes": 2911,
+      "mode": 384,
+      "sha256": "a67e3af3ca82fb94a3ebfa7725fe56f8c1a568c7e26201b3b540291023c4c575"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/official-source-ci-jobs-next.json": {
+      "bytes": 23201,
+      "mode": 384,
+      "sha256": "8992b4ca26268fac0768936d0fb1d65ea7bdbcd99b544954867d6e1a23f5bcc6"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/owner-actual-failure.json": {
+      "bytes": 85713,
+      "mode": 384,
+      "sha256": "fbfdd8c8b34067feb42a0802c1214661c65670588d6fde56e1934e63ab8ece54"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/owner-review-ready.json": {
+      "bytes": 16017,
+      "mode": 384,
+      "sha256": "a861fcd3dd51c488e84a10b6a1dead488a2029255461b84d86fa8f591be3cc7c"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/owner-source-ci-supplement.json": {
+      "bytes": 665,
+      "mode": 384,
+      "sha256": "3bb28f4de3eb0d14d84eb7fc8b57485a65a1bdfd720205d4e504d884028d76f7"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-source-v4/execution-pins.json": {
+      "bytes": 16426,
+      "mode": 384,
+      "sha256": "a4b072858f1cd4a34216cb1a9cbe0dfbd83de477b4c1ef999e1d5a37f7f1a0f6"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-source-v4/review-ready.json": {
+      "bytes": 13945,
+      "mode": 384,
+      "sha256": "ba9527c96e375102ac568771097e9ce57d070a067d02e8367e14d94a03ccefe8"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-v4-root-promotion/promotion.json": {
+      "bytes": 1038,
+      "mode": 384,
+      "sha256": "4246a9f2bd3eafba71b1efec3172875c5de1c5296e8be3b8d77c46facaefc470"
+    }
+  },
+  "job": 112679881227,
+  "no_network_download_Docker_DNF_RPM_VM_package_source_product_or_Git_mutation": true,
+  "remaining_blockers": [
+    "Original private-state integrity guard failed; no metadata acceptance, codec adoption or policy waiver.",
+    "SHM writer/cause remains unproven; the separately authorized header-query-only control was not run or duplicated by this review."
+  ],
+  "run": 37587162717,
+  "schema": "arctic-codec-metadata-v4-independent-actual-review-v1",
+  "scope_limits": [
+    "Recomputed digest of exported child-row metadata and exact changed fields; database/SHM/ELF/zstd/cache bodies are not exported for independent body rehash.",
+    "Tree schema captures child path/type/mode/bytes/hash/link relations, not UID/GID/times/root-directory identity or an atomic snapshot.",
+    "41 successful command phases and exact source order support reached checks; do not establish no producer or no logical transaction from SHM changes.",
+    "Actual source preflight and isolated metadata collection inspected no candidate ISO. ISO/source/size pins here are declarative binding only.",
+    "Final no-goal/empty-private-alias assertions and qualified metadata report were not reached after original state failure.",
+    "Owned rm returned success; separate post-rm absence inspection is not exported.",
+    "Prior v3 failure, unknown-state limitation, owner wrong-path preparation error, source initial12/2 and later14PASS supplement remain immutable."
+  ],
+  "source": "9bc9ca51cc078c34995246ab1d2d32474bb7ea51",
+  "status": "CLOSED_PASS_LIMITED_EVIDENCE_REPLAY_ACTUAL_RUN_FAILURE_PRESERVED",
+  "support": {
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-actual-independent-review-37587162717/actual-derived-adverse-controls.json": {
+      "bytes": 950,
+      "mode": 384,
+      "sha256": "bfd6efc6c49afe2248a9c521b1ee09daa1be2e863577c0128829b498c620a673"
+    },
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-actual-independent-review-37587162717/byte-replay.json": {
+      "bytes": 15524,
+      "mode": 384,
+      "sha256": "84bf34555be7aa1339f6545789eb1f8ada8ca91ffbaaceebb38003aa1d6a428f"
+    },
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-actual-independent-review-37587162717/receipt-and-official-replay.json": {
+      "bytes": 5308,
+      "mode": 384,
+      "sha256": "a4ddbe0f365daab4a28ec18a7ce94852ba9a6d0218401c8f59bb6925baf50e07"
+    },
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-actual-independent-review-37587162717/receipt-replay.py": {
+      "bytes": 10625,
+      "mode": 384,
+      "sha256": "a918b57d8210061660cf3c2ebc1d6187a8ea5e35bc4c26bac26b2a358ad7ef53"
+    },
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-actual-independent-review-37587162717/replay.py": {
+      "bytes": 10660,
+      "mode": 384,
+      "sha256": "2957e3c3f56a6d5bf3102d310e2c89a6e81d139f75fee7bd7a7a3a7deb296d3b"
+    },
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-actual-independent-review-37587162717/source-and-observations.json": {
+      "bytes": 32060,
+      "mode": 384,
+      "sha256": "36dcb8d8ff686776f8bb5732165d1651e69815a916f955250c959ae9e507b314"
+    }
+  },
+  "verified": {
+    "actual_derived_adverse_controls_rejected": 6,
+    "cache_entries": 10,
+    "cleanup_failures": [],
+    "cleanup_rm_exit0": true,
+    "config_unchanged_expected_keys": 24,
+    "exact_committed_Git_blobs_and_modes": 59,
+    "fixed_cache_identity_receipt_matches": 6,
+    "official_ZIP": {
+      "CRC_paths_types_unique_local_bytes": true,
+      "bytes": 91770,
+      "expanded_bytes": 314830,
+      "files": 87,
+      "sha256": "91859ad1ef29d3c2e03a147377031a2c8adc6264e89a1b22047ed23439372cf4"
+    },
+    "ordinary_RPM_headers": {
+      "equal": true,
+      "headers": 146,
+      "views": 3
+    },
+    "owner_READY_files": 99,
+    "process_phases_exit0": 41,
+    "receipt_four_rows_canonical_digests_recomputed": true,
+    "same_owned_container_isolation_records": 19,
+    "source_CI37586898073": {
+      "initial12_success2_active_preserved": true,
+      "later14_completed_success": true
+    },
+    "source_READY_files": 89,
+    "unrelated_jobs_skipped": 6
+  }
+}

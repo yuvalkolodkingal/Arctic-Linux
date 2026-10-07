@@ -1,0 +1,126 @@
+{
+  "actual_observation": {
+    "before_SHA": "632579b7337ba7752a06e75520cf9e4190e663f1bd0c5a3b57a45771abbc95f3",
+    "before_rows_match_v4": true,
+    "bytes": 32768,
+    "first_and_second_after_SHA": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "first_query_after_rows_match_v4": true,
+    "full_database7340032B_WAL0B_lock0B_actual_inert_bytes_equal": true,
+    "only_changed_child": "rpmdb.sqlite-shm",
+    "recorded_source_type_mode_size_unchanged": true,
+    "second_query_no_additional_recorded_change": true
+  },
+  "codec_metadata_solver_transaction_adoption": "UNRUN",
+  "conclusion": "First ordinary private-root RPM header query is sufficient in this isolated copied-RPMdb control to reproduce the exact same SHM-only hash pair observed by actual metadata-v4.",
+  "findings": [],
+  "guard_policy_changed": false,
+  "inputs": {
+    "/workspace/Arctic-Linux/out/audit/codec-tools-metadata-actual-independent-review-37587162717/review.json": {
+      "bytes": 8350,
+      "mode": 384,
+      "sha256": "37e011261e761af5ea52eda2b677b40c94ae71f1517cc8e924fbb91b3faa9614"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/control-report.json": {
+      "bytes": 19037,
+      "mode": 384,
+      "sha256": "d8e78e2ac0e15cd13de7c211e277062db902bfbcfc17a734d2fe48f6bc3b43ef"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/one-header-query-control.py": {
+      "bytes": 13094,
+      "mode": 384,
+      "sha256": "241107b5051bf67c3822ad3467571d5ab262a601c9b097da8f5503df5564f8b6"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/predecessor-failure-pins.json": {
+      "bytes": 439,
+      "mode": 384,
+      "sha256": "dac57339a8a65357a4eb196467ee975317ded58b0a22711bcfcdf2894e67278d"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/pure-preflight.json": {
+      "bytes": 454,
+      "mode": 384,
+      "sha256": "96eca6e0aacffb7dcd1c7423d5393d145f54467aa2be754a95a1191529eb2f18"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control-v2/review-ready.json": {
+      "bytes": 8359,
+      "mode": 384,
+      "sha256": "ba021c3c0f0d112aeaa873f8ff4dea97802f17b09a9edf411409711531b97c5c"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control/control-report.json": {
+      "bytes": 10808,
+      "mode": 384,
+      "sha256": "204bedf48cee398f362acb24230f983f9ab9de54985a2d39fb16ba1d2674b4a7"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-rpm-header-state-control/review-ready.json": {
+      "bytes": 4202,
+      "mode": 384,
+      "sha256": "17c88b17a8e5e97015c3904b67117879f9498574c82676c326d3e1c095496c06"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/evidence/final-observed-status.json": {
+      "bytes": 331,
+      "mode": 384,
+      "sha256": "824dfb99be0ffa21a0e8a431a8ce448bba9c7a5b249a585ac43ad251bf1e2b34"
+    },
+    "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-results-37587162717/evidence/state-integrity-failure.json": {
+      "bytes": 2534,
+      "mode": 384,
+      "sha256": "ab8e8bcc6fa802c9a6258bbc9da53ffee4c11382c046342f06c91849bdd241f3"
+    }
+  },
+  "limits": [
+    "Does not identify which particular earlier v4 operation caused its change; original actual37587162717 FAIL/STOP and guard remain unchanged.",
+    "Rehashed all12 retained inert unmounted control-body snapshots; actual-v4 database/SHM bodies remain unexported.",
+    "Host cached RepoDigests differs from CI receipt; same exact immutable image configuration ID and rootfs layer content identity verified. No new registry-manifest verification or pull claim.",
+    "Recorded source-tree mode420 differs intentionally from inert snapshot copy mode600; body proof validates bytes, not retroactive source-tree ownership/atomicity.",
+    "No complete startup/state/transaction/codec acceptance claim; no guard-policy whitelist, waiver or continuation.",
+    "Saved owned rm exit0; no new runtime post-cleanup inspection performed.",
+    "Reviewer initial raw-header parser omitted original gpg-pubkey exclusion; setup error preserved separately and corrected without control/source/evidence mutation."
+  ],
+  "no_Docker_RPM_network_query_control_rerun_VM_source_product_Git_mutation": true,
+  "original_metadata_run": "FAIL_STOP_PRESERVED",
+  "schema": "arctic-isolated-private-RPM-header-control-independent-review-v2",
+  "status": "CLOSED_PASS_LIMITED_SOURCE_AND_SAVED_CONTROL_EVIDENCE",
+  "support": {
+    "/workspace/Arctic-Linux/out/audit/codec-rpm-header-control-independent-review-v2/initial-reviewer-header-parser-error.json": {
+      "bytes": 322,
+      "mode": 384,
+      "sha256": "92eb3797a25e543c5fd6414d6aac2f5a38b324f24bdb0bc6ea8d0b56c1fe02f4"
+    },
+    "/workspace/Arctic-Linux/out/audit/codec-rpm-header-control-independent-review-v2/observation-replay.json": {
+      "bytes": 7075,
+      "mode": 384,
+      "sha256": "565757fb079f0a1a3b9e7d48899c79d7a39a997b5853abc0aff2bffc76d7abef"
+    },
+    "/workspace/Arctic-Linux/out/audit/codec-rpm-header-control-independent-review-v2/replay.py": {
+      "bytes": 12316,
+      "mode": 384,
+      "sha256": "f0e24feeba6022b202df1c5c2c61215b7fdb56122cea7a8f0a61fc2a920ffe0c"
+    }
+  },
+  "verified": {
+    "additional_excluded_public_key_rows_each": 1,
+    "byte_equal_header_output": true,
+    "cached_image_configID_rootfs_layers": true,
+    "cleanup_failures": [],
+    "elapsed_seconds": 3.3789858300006017,
+    "exact_original_header_query_argv": true,
+    "exact_owned_container_rm_exit0": true,
+    "five_same_owned_isolation_inspections": true,
+    "frozen_source_report_log_pins": 30,
+    "only_two_RPM_query_execs": true,
+    "ordinary_header_rows_each": 146,
+    "original_failed_probe_RPM_queries": 0,
+    "original_failed_probe_commands": 8,
+    "original_failed_probe_pins_bodies_preserved": true,
+    "read_only_capless_network_NONE_host_user1000": true,
+    "resources": {
+      "CPU": 1,
+      "deadline_seconds": 150,
+      "memory_bytes": 268435456,
+      "pids": 32
+    },
+    "retained_unmounted_bodies_independently_rehashed": 12,
+    "saved_command_phases_exit0": 12,
+    "sole_private_work_bind": true,
+    "three_snapshot_canonical_row_digests": true
+  }
+}
