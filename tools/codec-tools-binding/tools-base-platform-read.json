@@ -1,0 +1,20 @@
+[
+  {
+    "name": "tools-base-amd64-manifest.json",
+    "url": "https://registry.fedoraproject.org/v2/fedora/manifests/sha256:86289176d4a4af5c9b9c9df225eed4489f075bb67549411da2e0d4c121854491",
+    "attempts": 1,
+    "payload_download": false,
+    "status": "READ_OK",
+    "bytes": 572,
+    "sha256": "86289176d4a4af5c9b9c9df225eed4489f075bb67549411da2e0d4c121854491"
+  },
+  {
+    "name": "tools-base-amd64-config.json",
+    "url": "https://registry.fedoraproject.org/v2/fedora/blobs/sha256:bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8",
+    "attempts": 1,
+    "payload_download": false,
+    "status": "READ_OK",
+    "bytes": 819,
+    "sha256": "bdc8554ed5c9fc8b772c1f6756918e83672745c76512e38efdffce366effdff8"
+  }
+]

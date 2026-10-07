@@ -1,0 +1,71 @@
+{
+  "candidate_ISO_or_VM_reads_in_discovery": false,
+  "candidate_product_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "deployed_modes": {
+    "all_other_mapped_files_and_manifest": "100644",
+    "prepare.py": "100755"
+  },
+  "execution_commit": null,
+  "first_dispatch_inputs": {
+    "boot_test": false,
+    "codec_tools_discovery": true,
+    "codec_tools_source_sha": null,
+    "draft": false,
+    "nix_acceptance": false,
+    "performance_acceptance": false,
+    "prerelease": true,
+    "release": false,
+    "same_iso_native_smoke": false,
+    "same_iso_pcmanfm_diagnostic": false,
+    "same_iso_recovery": false,
+    "tag": ""
+  },
+  "first_result_required_STOP": "DISCOVERY_ONLY_EXTERNAL_REVIEW_STOP; exact actual versions, installed headers and bootstrap ELF bodies/hashes; no solve/download closure/transaction/member work.",
+  "future_steps": "Any bootstrap/closure/image/member binding requires separately reviewed source/evidence; current nulls reject.",
+  "new_standalone_workflow": "NOT_DEPLOYED_NOT_DISPATCHABLE_ASSUMED",
+  "no_hash_cycles": [
+    "Execution manifest hashes runtime-binding and prior v2 review; prior v2 review references immutable predecessor manifest only.",
+    "Self-manifest has logical path/mode only; external READY pins its complete bytes.",
+    "New v3 independent report is reviewed externally before promotion; it is not inserted into the manifest it reviews.",
+    "No new HEAD/self/source SHA inside committed binding; expected actual HEAD is supplied at root guard and dispatch."
+  ],
+  "post_commit_guard": {
+    "actual_guard_invocation": "UNRUN_PENDING_ROOT_PROMOTION",
+    "commands": [
+      "git status --porcelain --untracked-files=no",
+      "git rev-parse HEAD",
+      "python3 -B -c 'import sys;sys.path.insert(0,\"tools/codec-tools-binding\");import prepare;prepare.source_guard(sys.argv[1])' \"$task_source_sha\""
+    ],
+    "cwd": "/workspace/arctic-codec-tools-discovery-qualification",
+    "expected_commit": "ROOT_CREATES_AND_PINS_AFTER_EXACT_MAP_COMMIT; never guessed or written into its own source",
+    "required_external_checks": [
+      "exact frozen map+self hashes and canonical Git modes",
+      "new v3 independent source report status/pins",
+      "exact prior review458 bytes and binding-only delta",
+      "base workflow old jobs/steps/action bytes/default behavior unchanged except selection guards",
+      "clean actual committed SHA equals dispatch ref head, input source and GITHUB_SHA"
+    ]
+  },
+  "private_base_commit": "aee90aea1c8f6cb827f2044f62a6b47eff475145",
+  "private_base_repository": "/workspace/arctic-pcmanfm-v3-qualification",
+  "private_base_workflow_sha256": "7219eb4dc1c82b1c017627494821677765e6ad1914a85eb18fab128db737ac82",
+  "proposed_private_worktree": "/workspace/arctic-codec-tools-discovery-qualification",
+  "proposed_test_branch": "test/codec-tools-discovery-37507582946-v3",
+  "review_binding": {
+    "archived_member_path": null,
+    "archived_member_sha256": null,
+    "bootstrap": null,
+    "closure": null,
+    "exact_delta_fields": [
+      "status",
+      "execution_review_sha256"
+    ],
+    "execution_review_file": "independent-source-review.json",
+    "execution_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
+    "status": "SOURCE_REVIEW_BOUND",
+    "v3_independent_review": "EXTERNAL_ROOT_GUARD_REQUIRED_NOT_EMBEDDED_IN_ITS_OWN_MANIFEST"
+  },
+  "schema": "arctic-codec-tools-discovery-v3-promotion-handoff",
+  "status": "SOURCE_PREPARATION_ONLY_NOT_PROMOTED_OR_DISPATCHED",
+  "workflow_target": ".github/workflows/iso.yml"
+}

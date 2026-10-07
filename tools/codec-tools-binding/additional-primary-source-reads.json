@@ -1,0 +1,91 @@
+[
+  {
+    "attempts": 1,
+    "error": "HTTPError: HTTP Error 404: Not Found",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/dnf5/1b2de4bdc2f25a6de2884fb2cf81f80a8ce2a567/libdnf5/transaction/transaction_replay.cpp"
+  },
+  {
+    "bytes": 10783,
+    "path": "sources/rpm-poptI.c",
+    "sha256": "14169470145729ce71b15fa4f663854c55b3abdc1992598c1e82a5abb2edbfca",
+    "status": "read",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/lib/poptI.cc"
+  },
+  {
+    "bytes": 12861,
+    "path": "sources/rpm-rpmcli.h",
+    "sha256": "87f2779468d8ff302a6f9b9a36b2b1478c98ba6c537414cdf4045a288a449a59",
+    "status": "read",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/include/rpm/rpmcli.h"
+  },
+  {
+    "attempts": 1,
+    "bytes": 17192,
+    "path": "sources/dnf5-transaction-sr.cpp",
+    "sha256": "979b8219cc7e8e9be3cac9d61ac455e8f72eb7a881499f62df82c86e1204e611",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/dnf5/1b2de4bdc2f25a6de2884fb2cf81f80a8ce2a567/libdnf5/transaction/transaction_sr.cpp"
+  },
+  {
+    "attempts": 1,
+    "bytes": 16122,
+    "path": "sources/rpm-formats.cc",
+    "sha256": "706e994200075d41d461fa241ff0e0ee611dcc1ae74b7680b53dd9a637e215c4",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/lib/formats.cc"
+  },
+  {
+    "attempts": 1,
+    "bytes": 15151,
+    "path": "sources/rpm-query.cc",
+    "sha256": "2daee573bfd02d2f6427b2c57e22fed8b7f557031c662b86b92e2829fd332062",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/lib/query.cc"
+  },
+  {
+    "attempts": 1,
+    "bytes": 9525,
+    "path": "sources/rpm-poptALL.cc",
+    "sha256": "bb7da1211971f5f95bc3caa29a29968c5d0d53876f97094e1632fe98ba17602c",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/lib/poptALL.cc"
+  },
+  {
+    "attempts": 1,
+    "bytes": 58348,
+    "path": "sources/dnf5-config-main.cpp",
+    "sha256": "9ba140cc8a76c2faa4c86524dc662b2ded2b0deae6caeb627ee13e9aced3d426",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/dnf5/1b2de4bdc2f25a6de2884fb2cf81f80a8ce2a567/libdnf5/conf/config_main.cpp"
+  },
+  {
+    "attempts": 1,
+    "bytes": 4748,
+    "path": "sources/dnf5-item-reason.cpp",
+    "sha256": "5f3a446d125cb1226c6a2a35b8a3820ba797abea0878454b6e357531e7291f47",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/dnf5/1b2de4bdc2f25a6de2884fb2cf81f80a8ce2a567/libdnf5/transaction/transaction_item_reason.cpp"
+  },
+  {
+    "attempts": 1,
+    "bytes": 87515,
+    "path": "sources/dnf5-main.cpp",
+    "sha256": "3734590bfdecfa1205bbdf5a825be0becceda3f8ed66ed320971657861e85ad7",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/dnf5/1b2de4bdc2f25a6de2884fb2cf81f80a8ce2a567/dnf5/main.cpp"
+  },
+  {
+    "attempts": 1,
+    "bytes": 23111,
+    "path": "sources/rpm-rpmts.h",
+    "sha256": "a42dfa1bf78b1b1a518188c998c3568f1ace0104c8315ab02112878066557f18",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/include/rpm/rpmts.h"
+  },
+  {
+    "attempts": 1,
+    "bytes": 19381,
+    "path": "sources/rpm-rpmtriggers.cc",
+    "sha256": "d1273fe80fc63993b9f468ca858acc2a663eceea4e3819d86bdf0b9e266dc547",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/lib/rpmtriggers.cc"
+  },
+  {
+    "attempts": 1,
+    "bytes": 52973,
+    "path": "sources/rpm-transaction.cc",
+    "sha256": "def34d276baa1b87170f2fa054109b259834bf63405fc937da2fd4a04d75f8bc",
+    "url": "https://raw.githubusercontent.com/rpm-software-management/rpm/a7f89afb57a98f6419d0eff35ca792198293b682/lib/transaction.cc"
+  }
+]

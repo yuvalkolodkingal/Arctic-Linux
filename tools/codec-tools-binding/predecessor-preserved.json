@@ -1,0 +1,19 @@
+{
+  "actual_work": "UNRUN",
+  "all54_v2_pins_match": true,
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "default_branch_or_main_write": false,
+  "independent_source_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
+  "new_execution_commit": "UNCREATED",
+  "private_base_commit": "aee90aea1c8f6cb827f2044f62a6b47eff475145",
+  "private_base_repository": "/workspace/arctic-pcmanfm-v3-qualification",
+  "runtime_changes": [
+    "discovery-only registered input adapter",
+    "existing registered iso.yml selection guards/job only",
+    "source_guard expects existing iso.yml map",
+    "status + exact v2 review SHA; bootstrap/closure/member remain null"
+  ],
+  "schema": "arctic-codec-tools-discovery-v3-predecessor",
+  "tools_v2_READY_sha256": "6caed699a1f855759007b03e2f66aefb212700ed58d980092a196afa35446675",
+  "tools_v2_manifest_sha256": "a0fcbc24defb6185253c2cef1189a8602e088887fd5abb8ab6a13e5d24062a3d"
+}

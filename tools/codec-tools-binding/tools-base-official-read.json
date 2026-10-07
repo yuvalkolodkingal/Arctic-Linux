@@ -1,0 +1,10 @@
+{
+  "url": "https://registry.fedoraproject.org/v2/fedora/manifests/sha256:7011f51bd8089d345be42d41f0aa3190d258823528852a5e7ec976fe2fd20f53",
+  "attempts": 1,
+  "payload_download": false,
+  "status": "READ_OK",
+  "bytes": 1413,
+  "sha256": "7011f51bd8089d345be42d41f0aa3190d258823528852a5e7ec976fe2fd20f53",
+  "final_url": "https://registry.fedoraproject.org/v2/fedora/manifests/sha256:7011f51bd8089d345be42d41f0aa3190d258823528852a5e7ec976fe2fd20f53",
+  "official_digest": null
+}
