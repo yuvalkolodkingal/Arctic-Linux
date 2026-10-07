@@ -1,16 +1,11 @@
 {
-  "actual_discovery55b4_binding_unchanged": true,
-  "actual_failure": {
-    "ZIP_sha256": "79416ae7e6e20a6ebd43f76348c2da7553d644a09c12ce8c2598ff5a542ffe88",
-    "head": "a06cb7cff82f91756f8f2eecba47ae9a4fcc1960",
-    "independent_sha256": "1743582aaf445ab147c7fdf1ba8b72e661bcda5b3ab250b79f5af7ead3b42e9c",
-    "official_artifact_id": 11463582396,
-    "owner_sha256": "d0afff0d584a28908c1bb0ea14f92013771f733094216690703ee207a384db78",
-    "root_verification_file": "root-codec-metadata-actual-verification-37578494773.json",
-    "run": 37578494773
-  },
-  "metadata_v1_READY_sha256": "94d7ccb950368d2476064a801ddfd773866104feacbfd90e710746d9b22fc12a",
-  "metadata_v1_all66_source_pins_unchanged": true,
-  "metadata_v1_source_review_sha256": "814c1ebcf50f399cb5da0cc51b4b9eaff3946a33f815f44ce9469c4419513b60",
-  "source_CI37578218517_all14_success": "Root and owner official jobs snapshot verified; separate from metadata failure."
+  "READY_sha256": "5e907440b9c1097115fd2e99f4c55e1b87b80619f0cb24710730598862a1f0bc",
+  "actual_failed_run_unchanged": 37580657522,
+  "actual_failure_review5a236_sha256": "5a2365f34c2083a39244e4cb6b1f63fdbbc5d96702dfa449c14ef66b42b5267d",
+  "actual_source_review_b3fb_sha256": "b3fb0b0192852fc6370f8c9b2307d04fd1b664fc5bcd9654674ce28e23ade73a",
+  "all74_READY_files_verified": true,
+  "execution_manifest_sha256": "cf3aa3a013c95bed493cd3d5f77684d45b43db2d78168f849c7ed9a8bbcb7a41",
+  "prior_actual_v1_failure_preserved": 37578494773,
+  "schema": "arctic-metadata-v2-exact-predecessor-preserved",
+  "source_unchanged": true
 }

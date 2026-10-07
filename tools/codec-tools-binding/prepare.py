@@ -441,8 +441,10 @@ def dnf_args(command, *args, cacheonly='metadata'):
         'install_weak_deps':'true','clean_requirements_on_remove':'false','best':'true','pkg_gpgcheck':'true',
         'optional_metadata_types':'filelists','zchunk':'false','retries':'1','max_parallel_downloads':'1',
         'cacheonly':cacheonly,'skip_if_unavailable':'false'}
+    setopts=['--setopt='+k+'='+v for k,v in options.items()]
+    setopts.insert(setopts.index('--setopt=optional_metadata_types=filelists'),'--setopt=optional_metadata_types=')
     return ['/usr/bin/dnf5','--no-plugins','--config=/work/config/dnf.conf','--installroot=/work/installroot',
-        '--releasever=44',*['--setopt='+k+'='+v for k,v in options.items()],'--assumeyes',command,*args]
+        '--releasever=44',*setopts,'--assumeyes',command,*args]
 
 
 def cache_catalog(session):
