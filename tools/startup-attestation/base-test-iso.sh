@@ -46,7 +46,6 @@ SECUREBOOT=0
 VGA=virtio
 APPEND=""
 COLLECT=0
-STARTUP_ATTESTATION=""  # default-off, no product setting change
 OUTBASE="$ROOT/out/test"
 
 while (( $# )); do
@@ -62,7 +61,6 @@ while (( $# )); do
     --vga) VGA="$2"; shift 2 ;;
     --append) APPEND="$APPEND $2"; shift 2 ;;
     --collect) COLLECT=1; shift ;;
-    --startup-attestation) STARTUP_ATTESTATION="$2"; shift 2 ;;
     --debug) APPEND="$APPEND console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"; shift ;;
     --secureboot) SECUREBOOT=1; FIRMWARE=uefi; shift ;;
     --out) OUTBASE="$2"; shift 2 ;;
@@ -72,27 +70,12 @@ while (( $# )); do
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$MODE" in try|install|safe|check|disk) ;; *) arctic_die "--mode takes try, install, safe, check or disk" ;; esac
-if [[ -n "$STARTUP_ATTESTATION" ]]; then
-  [[ "$FIRMWARE" == uefi && "$MODE" == safe && "$KVM" == 1 && "$SECUREBOOT" == 0 && "$COLLECT" == 0
-     && "$TIMEOUT" == 600 && "$INTERVAL" == 60 && "$MEMORY" == 4096 && "$SMP" == 2 && "$VGA" == virtio ]] \
-    || arctic_die "Startup attestation requires the fixed isolated Safe/KVM/600s/2CPU/4GiB settings"
-  [[ -c /dev/kvm && -f "$STARTUP_ATTESTATION/guest-safe-collector-v1.py" && -f "$STARTUP_ATTESTATION/attest-startup-v1.py"
-     && -f "$STARTUP_ATTESTATION/attest-host-v1.py" && -f "$STARTUP_ATTESTATION/attestation-driver-v1.py"
-     && -f "$STARTUP_ATTESTATION/original-safe-driver-v1.py" && -f "$STARTUP_ATTESTATION/bootstrap-attest-v1.sh" ]] || arctic_die "Startup attestation prerequisites absent"
-  [[ "$APPEND" == " console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1" ]] \
-    || arctic_die "Startup attestation requires the exact debug arguments"
-fi
 [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
 ISO="$(cd "$(dirname "$ISO")" && pwd)/$(basename "$ISO")"
 
 sb=""; if [[ $SECUREBOOT == 1 ]]; then sb="-sb"; fi
 OUT="$OUTBASE/$FIRMWARE$sb-$MODE"
-if [[ -n "$STARTUP_ATTESTATION" ]]; then
-  [[ ! -e "$OUT" ]] || arctic_die "Startup attestation output must be unused"
-  mkdir -p "$OUT"
-else
-  rm -rf "$OUT"; mkdir -p "$OUT"
-fi
+rm -rf "$OUT"; mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
 arctic_ensure_engine
@@ -111,7 +94,6 @@ from vmtest import log, looks_like_boot_menu
 out, mode, timeout, interval = os.environ["OUT"], os.environ["MODE"], int(os.environ["TIMEOUT"]), int(os.environ["INTERVAL"])
 append = os.environ.get("APPEND", "").strip()
 collect = os.environ.get("COLLECT") == "1"
-startup_attestation = os.environ.get("STARTUP_ATTESTATION") == "1"
 t0 = vmtest.T0
 vm = vmtest.VM(sys.argv[1:], f"{out}/qmp.sock", "iso", qemu_log=f"{out}/qemu.log")
 shot, keys, type_text = vm.shot, vm.keys, vm.type_text
@@ -147,27 +129,11 @@ else:
         type_text(" " + append, gap=0.2)
         time.sleep(0.5)
         shot("03-boot-entry-edited")
-        if startup_attestation: startup_entry_origin = time.monotonic()
         keys("ctrl-x")
         log(f"selected the '{mode}' entry with extra kernel arguments: {append}")
     else:
-        if startup_attestation: startup_entry_origin = time.monotonic()
         keys("ret")
         log(f"selected the '{mode}' entry")
-
-if startup_attestation:
-    sys.path.insert(0, "/startup-attestation")
-    import importlib.util
-    spec = importlib.util.spec_from_file_location('startup_attestation_driver', '/startup-attestation/attestation-driver-v1.py')
-    driver = importlib.util.module_from_spec(spec); spec.loader.exec_module(driver)
-    spec = importlib.util.spec_from_file_location('original_qemu_clock', '/startup-attestation/original-safe-driver-v1.py')
-    origin = importlib.util.module_from_spec(spec); spec.loader.exec_module(origin)
-    try:
-        driver.run(vm, out, origin.qemu_process_origin(vm.proc.pid),
-                   startup_entry_origin if menu_seen else None, menu_seen)
-    finally:
-        vm.quit()
-    sys.exit(0)
 
 # 2. Splash and boot: every 10 s for the first 2 minutes, then every --interval seconds.
 start = time.time()
@@ -236,7 +202,6 @@ PY
 inner=$(cat <<'INNER'
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
-if [ "$STARTUP_ATTESTATION" = 1 ]; then pkgs+=(xorriso); fi
 dnf -y install "${pkgs[@]}" >/dev/null 2>&1 || dnf -y install "${pkgs[@]}"
 qemu-img create -q -f qcow2 /tmp/target.qcow2 64G
 accel="tcg,thread=multi"
@@ -262,20 +227,6 @@ if [ "$FIRMWARE" = uefi ]; then
   cp "$vars" /tmp/vars.fd
   args+=(-drive "if=pflash,format=raw,unit=0,readonly=on,file=$code" -drive "if=pflash,format=raw,unit=1,file=/tmp/vars.fd")
 fi
-if [ "$STARTUP_ATTESTATION" = 1 ]; then
-  mkdir /tmp/startup-data
-  cp /startup-attestation/{guest-safe-collector-v1.py,attest-startup-v1.py,bootstrap-attest-v1.sh} /tmp/startup-data/
-  xorriso -as mkisofs -quiet -V ARCTICATTEST -J -R -G /startup-attestation/bootstrap-attest-v1.sh \
-    -o /tmp/startup-data.iso /tmp/startup-data
-  args+=(-drive file=/tmp/startup-data.iso,media=cdrom,readonly=on,if=none,id=safedata -device ide-cd,drive=safedata,bus=ide.1,unit=0)
-  {
-    qemu-system-x86_64 --version
-    rpm -q "${pkgs[@]}"
-    sha256sum "$(command -v qemu-system-x86_64)" "$code" "$vars" /tmp/startup-data.iso \
-      /startup-attestation/{guest-safe-collector-v1.py,attest-startup-v1.py,attest-host-v1.py,attestation-driver-v1.py,bootstrap-attest-v1.sh}
-    printf '%s\n' 'Additional read-only diagnostic data CD; actual new tool hashes, not baseline parity proof.'
-  } > "$OUT/attestation-toolchain.txt"
-fi
 python3 -c "$DRIVER" "${args[@]}"
 rm -f "$OUT/qmp.sock"
 chown -R "$HOST_UID:$HOST_GID" "$OUT"
@@ -289,14 +240,8 @@ if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
   [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
 fi
-safe_args=()
-safe_enabled=0
-if [[ -n "$STARTUP_ATTESTATION" ]]; then
-  safe_enabled=1
-  safe_args=(-v "$STARTUP_ATTESTATION:/startup-attestation:ro")
-fi
-"$engine" run --rm "${safe_args[@]}" "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
-  -e STARTUP_ATTESTATION="$safe_enabled" -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
+"$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+  -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
   -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ISO:/iso:ro" -v "$OUT:/out" -v "$HERE/lib:/arctic-lib:ro" \
