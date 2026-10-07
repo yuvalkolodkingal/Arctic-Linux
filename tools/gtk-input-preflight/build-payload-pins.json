@@ -1,0 +1,97 @@
+{
+  "source_pair_sha256": "60da6591cf8cee5fa3f161ac7e35bf8389ac0a337920831ab252a8ad300aec49",
+  "files": {
+    "wayland-devel-1.26.0-1.fc44.x86_64.rpm": {
+      "bytes": 162921,
+      "sha256": "3b51e0fe13dbe9543b33ac8ad6464ce1babec92fa189b8126bbc57e2524659d5"
+    },
+    "wayland-devel-1.26.0-1.fc44.i686.rpm": {
+      "bytes": 163755,
+      "sha256": "ee59d043d1c6064984afd983b80f97e832681bf5980f45c5aa9b98a7b69ade8a"
+    },
+    "libxkbcommon-devel-1.13.1-2.fc44.x86_64.rpm": {
+      "bytes": 76587,
+      "sha256": "94e265b4470543cca5e3728fe8ca06beb28dc73bbf1b02266bad35d8db1bce02"
+    },
+    "libxkbcommon-devel-1.13.1-2.fc44.i686.rpm": {
+      "bytes": 76524,
+      "sha256": "a688a29fceeb4f14c1ccfb165a7dbe193c745a49cf667c203cc2e020f1ef0660"
+    },
+    "headers/usr/include/wayland-version.h": {
+      "bytes": 1354,
+      "sha256": "35578b408ab6a91bea914a1b6e462c5b85018ee1c4f83ce89ddc5b36d4ad74ed"
+    },
+    "headers/usr/include/wayland-util.h": {
+      "bytes": 24520,
+      "sha256": "f336a00a03fcf442a59dc9e5fcce3fc94b2cbfcbcf0befba018be3657b7ea381"
+    },
+    "headers/usr/include/wayland-server.h": {
+      "bytes": 3237,
+      "sha256": "b57f978e9c28c3f73f92362cc9b741d0b8f00824fb0afe66eaaac47f979cda28"
+    },
+    "headers/usr/include/wayland-server-protocol.h": {
+      "bytes": 190930,
+      "sha256": "7ed8e780f7f1c2183ade2542d7fbf7ca8aa536ce893021928497a99f4c4f113d"
+    },
+    "headers/usr/include/wayland-server-core.h": {
+      "bytes": 20944,
+      "sha256": "f5ef7113e406057c41404a15b19307afaac7adb445f72269e30eca072bf928cd"
+    },
+    "headers/usr/include/wayland-egl.h": {
+      "bytes": 1313,
+      "sha256": "e33be2aa8a700a508d175106c12ea5713faf1c9d9f189d6f8af951849a504abd"
+    },
+    "headers/usr/include/wayland-egl-core.h": {
+      "bytes": 1788,
+      "sha256": "07cd540e327a028066da1dc79dc25126641509857a4478560471540cf1b35c42"
+    },
+    "headers/usr/include/wayland-egl-backend.h": {
+      "bytes": 1877,
+      "sha256": "67c2d417bed6020ce80ddc1c0e76eaf8f1f0e13b2103e9549188034324104824"
+    },
+    "headers/usr/include/wayland-cursor.h": {
+      "bytes": 2656,
+      "sha256": "0d9db66fab24f906e72b3640132ba0d90ca6a6b8c39e7bf2b9cfdc25cc15df38"
+    },
+    "headers/usr/include/wayland-client.h": {
+      "bytes": 1573,
+      "sha256": "e9dd1fb014aa6ad848cb7d241cc223b1a70fc0b17fed5997262024e4c05532f7"
+    },
+    "headers/usr/include/wayland-client-protocol.h": {
+      "bytes": 221262,
+      "sha256": "09d49cd7a692a122a76d0bf5cc1dabd5b5f84c2af634353ffbe67d4ee23fb0e4"
+    },
+    "headers/usr/include/wayland-client-core.h": {
+      "bytes": 10233,
+      "sha256": "936e6d191144358aec15edf1271781ea333a15da96e81bb9c99d137292a8403b"
+    },
+    "headers/usr/include/xkbcommon/xkbregistry.h": {
+      "bytes": 24630,
+      "sha256": "134aa629801850e4bd03c4997c8636ce7e4512865506d5f1052c7c0a5d8b7191"
+    },
+    "headers/usr/include/xkbcommon/xkbcommon.h": {
+      "bytes": 87725,
+      "sha256": "3908279181755dc53eac20c2eb0b8750c1e128753d655056985094a78e48b9a0"
+    },
+    "headers/usr/include/xkbcommon/xkbcommon-names.h": {
+      "bytes": 3906,
+      "sha256": "a5b0ed01c8b1816da8b5ed29cf776eb2ad1f707cf03ff74e62e36a5ca9009f61"
+    },
+    "headers/usr/include/xkbcommon/xkbcommon-keysyms.h": {
+      "bytes": 263283,
+      "sha256": "fdfd7b5cfec048b651e8b8134bfb673facb6fa624395dee7314cfc5be149962f"
+    },
+    "headers/usr/include/xkbcommon/xkbcommon-compose.h": {
+      "bytes": 19358,
+      "sha256": "6e2d985b3653c3674df87731931b98a68e4dcb72d5ff90e457708e8e16ce818d"
+    },
+    "headers/usr/include/xkbcommon/xkbcommon-compat.h": {
+      "bytes": 3217,
+      "sha256": "fb0384a704897c0dcfcc49f021ad38fadbbedc3307d5390f4f0d1019e3d1a4d9"
+    }
+  },
+  "binary": {
+    "bytes": 33768,
+    "sha256": "b3a8183648724759e3a9aed36d9d40944cc933ceff02d31699c66233155182a9"
+  }
+}
