@@ -1,5 +1,5 @@
 {
-  "actual_result_required_STOP": "METADATA_CONFIG_EXTERNAL_REVIEW_STOP; signed closure/image/member remain null, no automatic continuation.",
+  "actual_result_required_STOP": "METADATA_CONFIG_EXTERNAL_REVIEW_STOP only if all unchanged guards pass; receipt is evidence of failure only. Bootstrap/closure/member remain null.",
   "dispatch_inputs": {
     "boot_test": false,
     "codec_tools_discovery": false,
@@ -23,23 +23,27 @@
   },
   "permitted_network_reads": "Only existing exact hash/size-bound Fedora repodata through makecache; no RPM payload or additional endpoint.",
   "preserved_actual_failure": {
-    "ZIP_sha256": "1997f83b8acbe39476d6ee7470fae6ce905121fc7ffb984fab3e45602e45aa87",
-    "head": "f12f30e013178aae383ab8912f5ab62d6d29ad47",
-    "independent_sha256": "5a2365f34c2083a39244e4cb6b1f63fdbbc5d96702dfa449c14ef66b42b5267d",
-    "official_artifact_id": 11463947946,
-    "owner_sha256": "663571261addc760b7c0e988e182dc46c1cdc6ef126f783b5898fb36ea3eeace",
-    "root_verification_file": "root-codec-metadata-actual-verification-37580657522.json",
-    "run": 37580657522
+    "ZIP_sha256": "83dc73edf313289f6c9e5d4f5edda182191e7dc266a466dabb35c0166cc11f68",
+    "changed_member_and_before_after_digests": "UNEXPORTED_UNKNOWN",
+    "head": "648a259817089ef398e8498a8a7d09d9a02d0a32",
+    "independent_sha256": "c23f9e55afe191f381b83f7459d761f854ab41d3ca33476d4e2cc39bf37df7bb",
+    "official_artifact_id": 11465226799,
+    "owner_sha256": "5c13c963984f7f517fc7e0218557e3ff2e5df155267387775dfa9bf7ed2fe87c",
+    "run": 37583428577,
+    "source_CI": "37583331813 completed14of14SUCCESS; separate from failed metadata stage",
+    "source_CI_supplement_sha256": "24dd04849f159f1ce78136fa04928bfeb76f5f00422cfcdde63f551d1f14d15b",
+    "status": "FAILURE_METADATA_ONLY_WORK_CHANGED_COPIED_STATE"
   },
-  "private_base_commit": "f12f30e013178aae383ab8912f5ab62d6d29ad47",
-  "private_base_repository": "/workspace/arctic-codec-tools-metadata-v2-qualification",
+  "private_base_commit": "648a259817089ef398e8498a8a7d09d9a02d0a32",
+  "private_base_repository": "/workspace/arctic-codec-tools-metadata-v3-qualification",
   "private_base_workflow_sha256": "b2bac8d7c8397584bdee3db10de02c665b329a2237f8723900e411dcb2fffed9",
-  "proposed_private_worktree": "/workspace/arctic-codec-tools-metadata-v3-qualification",
-  "proposed_test_branch": "test/codec-tools-metadata-37507582946-v3",
+  "proposed_private_worktree": "/tmp/arctic-codec-tools-metadata-v4-qualification",
+  "proposed_test_branch": "test/codec-tools-metadata-37507582946-v4",
   "provenance": [
     "Prior tools source review458 exact remains immutable executable-source predecessor binding; current metadata source needs its own external independent review/root guard.",
     "Prior actual discovery55b4 exact is an independent runtime identity input, not permission for future signed tools resolution.",
-    "Map/self-manifest external READY pins avoid HEAD/self-hash review cycles."
+    "Map/self-manifest external READY pins avoid HEAD/self-hash review cycles.",
+    "Use actual648a private parent and actual b2bac8 workflow; earlier failure and final14CI supplement are separately pinned. /tmp private clone uses the existing allowed writable filesystem, with receipts in owned audit directory."
   ],
   "root_guards": [
     "Exact external independent current source report plus READY/filemap/modes before promotion; current source cannot self-approve itself.",
@@ -55,8 +59,8 @@
     "pids": 512,
     "scratch_bytes": 16000000000
   },
-  "schema": "arctic-codec-tools-metadata-prerequisite-handoff-v3",
-  "source_delta": "Only explicit empty append-set reset immediately before existing filelists assignment; exact required24-field config guard remains unchanged.",
-  "status": "SOURCE_ONLY_VM_DOCKER_METADATA_UNRUN",
+  "schema": "arctic-codec-tools-metadata-prerequisite-handoff-v4",
+  "source_delta": "Failure-only bounded receipt of existing copied-state scans; original digest equality guard remains mandatory. No additional tree/body read, mutation whitelist, endpoint or execution phase.",
+  "status": "SOURCE_ONLY_METADATA_V4_UNRUN",
   "workflow_target": ".github/workflows/iso.yml"
 }

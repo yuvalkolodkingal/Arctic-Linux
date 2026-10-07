@@ -336,6 +336,31 @@ def metadata_cache_receipts(work, repositories, deadline, monitor):
         'source_of_trust':'Exact already reviewed HTTPS Fedora repomd/compressed/open XML hash and size snapshots; metadata signatures not claimed.'}
 
 
+def state_integrity_receipt(before_hashes,after_hashes,relative,before_rows,after_rows):
+    # Data already returned by existing guarded tree scans. No file reads.
+    result={'schema':'arctic-private-state-integrity-failure-v1','passed':False,
+        'guard':'metadata-only work changed copied state','failing_relative_tree':relative,
+        'before_tree_sha256':dict(before_hashes),'observed_after_tree_sha256':dict(after_hashes),
+        'after_trees_not_read':[path for path in before_hashes if path not in after_hashes],
+        'no_extra_tree_or_body_reads':True,'guard_waiver':False}
+    limit=512
+    before_ok=before_rows is not None and len(before_rows)<=limit and len(json.dumps(before_rows,sort_keys=True).encode())<=200000
+    after_ok=len(after_rows)<=limit and len(json.dumps(after_rows,sort_keys=True).encode())<=200000
+    result.update(before_entries=before_rows if before_ok else [],after_entries=after_rows if after_ok else [],
+        before_entries_complete=before_ok,after_entries_complete=after_ok,diff_complete=before_ok and after_ok)
+    if before_ok and after_ok:
+        left={row['path']:row for row in before_rows};right={row['path']:row for row in after_rows}
+        result['guard_diff']={'added':sorted(right.keys()-left.keys()),'removed':sorted(left.keys()-right.keys()),
+            'changed':[{'path':path,'fields':sorted(key for key in left[path].keys()|right[path].keys()
+                if left[path].get(key)!=right[path].get(key))} for path in sorted(left.keys()&right.keys()) if left[path]!=right[path]]}
+    else:result['guard_diff']={'unavailable':'missing or bounded-out before/after entry metadata; digest failure retained'}
+    if len(json.dumps(result,indent=2,sort_keys=True).encode())>1000000:
+        result.update(before_entries=[],after_entries=[],before_entries_complete=False,after_entries_complete=False,diff_complete=False,
+            guard_diff={'unavailable':'failure receipt byte cap; digest failure retained'})
+    require(len(json.dumps(result,indent=2,sort_keys=True).encode())<=1000000,'bounded state failure receipt')
+    return result
+
+
 def metadata(session):
     report=metadata_identity_guard(session)
     before,config=prepare_root(session)
@@ -370,8 +395,18 @@ def metadata(session):
     final_config=session.exec(dnf_args('--dump-main-config'),'isolated-private-config-after-metadata',30)
     require(final_config==effective, 'effective private config changed during metadata-only work')
     require(header_rows(session,'/work/installroot')==installed, 'metadata-only work changed private RPM headers')
+    state_after_hashes={}
     for relative,digest in before.items():
-        require(manifest_digest(tree_manifest(session.root/'work/installroot'/relative))==digest, 'metadata-only work changed copied state')
+        state_after_rows=tree_manifest(session.root/'work/installroot'/relative)
+        state_after_hashes[relative]=manifest_digest(state_after_rows)
+        if state_after_hashes[relative]!=digest:
+            try:
+                receipt=state_integrity_receipt(before,state_after_hashes,relative,
+                    getattr(session,'state_before_receipts',{}).get(relative),state_after_rows)
+                write_json(session.root/'evidence/state-integrity-failure.json',receipt)
+            except Exception as error:
+                raise PhaseFailure(c.GuardError('metadata-only work changed copied state'),[c.failure_detail(error)]) from error
+        require(state_after_hashes[relative]==digest, 'metadata-only work changed copied state')
     require(not (session.root/'work/goal/packages').exists() and not (session.root/'work/goal/transaction.json').exists(), 'unexpected package/goal output')
     for relative in ('inputs/empty-aliases','work/config/empty-cli-plugins','work/config/dnf5/aliases.d'):
         require(not any((session.root/relative).iterdir()), 'plugin/alias route changed during metadata-only work')
@@ -405,10 +440,15 @@ def bootstrap_guard(session):
 def prepare_root(session):
     work=session.root/'work';target=work/'installroot';target.mkdir(mode=0o755)
     before={}
+    metadata_receipts=getattr(session,'ctx',{}).get('stage')=='metadata'
+    if metadata_receipts:session.state_before_receipts={}
     for rel in ('usr/lib/sysimage/rpm','usr/lib/sysimage/libdnf5'):
         dest=target/rel;dest.parent.mkdir(parents=True,exist_ok=True)
         session.copy('/'+rel,dest,'copy-state-'+Path(rel).name)
-        before[rel]=manifest_digest(tree_manifest(dest))
+        state_before_rows=tree_manifest(dest)
+        before[rel]=manifest_digest(state_before_rows)
+        if metadata_receipts:
+            session.state_before_receipts[rel]=state_before_rows if len(state_before_rows)<=512 and len(json.dumps(state_before_rows,sort_keys=True).encode())<=200000 else None
         safe_tree(dest,1000000000)
     for rel in ('etc/os-release','etc/passwd','etc/group'):
         dest=target/rel;dest.parent.mkdir(parents=True,exist_ok=True)

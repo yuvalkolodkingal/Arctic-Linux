@@ -1,11 +1,31 @@
 {
-  "READY_sha256": "5e907440b9c1097115fd2e99f4c55e1b87b80619f0cb24710730598862a1f0bc",
-  "actual_failed_run_unchanged": 37580657522,
-  "actual_failure_review5a236_sha256": "5a2365f34c2083a39244e4cb6b1f63fdbbc5d96702dfa449c14ef66b42b5267d",
-  "actual_source_review_b3fb_sha256": "b3fb0b0192852fc6370f8c9b2307d04fd1b664fc5bcd9654674ce28e23ade73a",
-  "all74_READY_files_verified": true,
-  "execution_manifest_sha256": "cf3aa3a013c95bed493cd3d5f77684d45b43db2d78168f849c7ed9a8bbcb7a41",
-  "prior_actual_v1_failure_preserved": 37578494773,
-  "schema": "arctic-metadata-v2-exact-predecessor-preserved",
-  "source_unchanged": true
+  "actual_failure": {
+    "ZIP_sha256": "83dc73edf313289f6c9e5d4f5edda182191e7dc266a466dabb35c0166cc11f68",
+    "changed_member_and_before_after_digests": "UNEXPORTED_UNKNOWN",
+    "head": "648a259817089ef398e8498a8a7d09d9a02d0a32",
+    "independent_sha256": "c23f9e55afe191f381b83f7459d761f854ab41d3ca33476d4e2cc39bf37df7bb",
+    "official_artifact_id": 11465226799,
+    "owner_sha256": "5c13c963984f7f517fc7e0218557e3ff2e5df155267387775dfa9bf7ed2fe87c",
+    "run": 37583428577,
+    "source_CI": "37583331813 completed14of14SUCCESS; separate from failed metadata stage",
+    "source_CI_supplement_sha256": "24dd04849f159f1ce78136fa04928bfeb76f5f00422cfcdde63f551d1f14d15b",
+    "status": "FAILURE_METADATA_ONLY_WORK_CHANGED_COPIED_STATE"
+  },
+  "all81_predecessor_READY_files_verified": true,
+  "manifest": {
+    "bytes": 16429,
+    "sha256": "cac7393dcc4fec174e535362372ff11754595c0324efb27642f38e25ef85ace6"
+  },
+  "owner": {
+    "bytes": 2185,
+    "sha256": "bf88ac0e20e45706293dd2557e95c591c64ea5a8cb89735a4b350bc73fb0f317"
+  },
+  "predecessor_directory": "/workspace/Arctic-Linux/out/audit/consolidated-iso-37507582946/codec-tools-metadata-source-v3",
+  "ready": {
+    "bytes": 12736,
+    "sha256": "fc81a409f13e3ff51f0a153e7578ff4bc2ade14894113632bdd64b8369823dcf"
+  },
+  "schema": "arctic-codec-metadata-v4-predecessor-preservation",
+  "source_review_sha256": "f11629bd08b01071541ae7d7bb950be0eadf54493211571e6b2eeccc39c4254e",
+  "unchanged": true
 }

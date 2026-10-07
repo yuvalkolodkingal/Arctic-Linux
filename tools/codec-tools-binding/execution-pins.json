@@ -1,9 +1,9 @@
 {
   "actual_context_review_sha256": "575b70dc8bb0703f51fa6f1a7bc37d54e5974a65315e006bfddd08415b404526",
   "actual_discovery_review_sha256": "55b4fa69c4c30dbe0a97f555f2eb29325457187ce30c7e64ee7879c4353c6b47",
-  "actual_failed_metadata_review_sha256": "5a2365f34c2083a39244e4cb6b1f63fdbbc5d96702dfa449c14ef66b42b5267d",
-  "actual_failed_predecessor_source": "f12f30e013178aae383ab8912f5ab62d6d29ad47",
-  "actual_preparation": "V3_METADATA_UNRUN",
+  "actual_failed_metadata_review_sha256": "c23f9e55afe191f381b83f7459d761f854ab41d3ca33476d4e2cc39bf37df7bb",
+  "actual_failed_predecessor_source": "648a259817089ef398e8498a8a7d09d9a02d0a32",
+  "actual_preparation": "V4_METADATA_UNRUN",
   "files": {
     ".github/workflows/iso.yml": {
       "audit_source": "registered-iso-codec-tools-discovery-v3.yml",
@@ -13,9 +13,9 @@
     },
     "tools/codec-tools-binding/README.md": {
       "audit_source": "README.md",
-      "bytes": 2767,
+      "bytes": 3328,
       "git_mode": "100644",
-      "sha256": "522c336db8953e9b285c812b9b3015a9dbbc7cb32cec63da80a9a95467e02188"
+      "sha256": "4e4493abe327d60cfdf0ef84ca34a498847734189a848f725bfdde3c8c770515"
     },
     "tools/codec-tools-binding/additional-primary-source-reads.json": {
       "audit_source": "additional-primary-source-reads.json",
@@ -67,9 +67,9 @@
     },
     "tools/codec-tools-binding/metadata-predecessor-preserved.json": {
       "audit_source": "metadata-predecessor-preserved.json",
-      "bytes": 627,
+      "bytes": 1460,
       "git_mode": "100644",
-      "sha256": "546518ee1b61dffa8b0ae63d199cb475a27f47c6c4707335620e95ef71f86f11"
+      "sha256": "ea5ff9182b596b4fcd9994a6a51c57a3068842c68be533fe18c520beb9733b1c"
     },
     "tools/codec-tools-binding/predecessor-preserved.json": {
       "audit_source": "predecessor-preserved.json",
@@ -79,15 +79,15 @@
     },
     "tools/codec-tools-binding/prepare.py": {
       "audit_source": "prepare.py",
-      "bytes": 50087,
+      "bytes": 53212,
       "git_mode": "100755",
-      "sha256": "a96a957bf89f3159761f86411c31797759ff5a3737d83e8d2056190e81a0a15b"
+      "sha256": "a7aa487747f2fd598525b9f02b7923f6f08688fe4a56a012aaea667179ad116f"
     },
     "tools/codec-tools-binding/promotion-handoff.json": {
       "audit_source": "promotion-handoff.json",
-      "bytes": 3145,
+      "bytes": 3695,
       "git_mode": "100644",
-      "sha256": "ac469d7320c4302812025370761ec304b5e30c1a7867ec7108f564e8c50160fe"
+      "sha256": "fe82913721d4b006759866db1b62eb94df97f74255e9793b3ad1fcf3d6131da7"
     },
     "tools/codec-tools-binding/proposal-preserved.json": {
       "audit_source": "proposal-preserved.json",
@@ -103,9 +103,9 @@
     },
     "tools/codec-tools-binding/source-parity.json": {
       "audit_source": "source-parity.json",
-      "bytes": 11039,
+      "bytes": 10643,
       "git_mode": "100644",
-      "sha256": "4a25b8e97614ca5c9366e5f489e7879c6d9a52bf0afbf9bb29ccb45ef240920e"
+      "sha256": "93b27bc4590e50ef67638f9ee1acdd9a4e19d803dbbb1f9ec6c23f6a357c854b"
     },
     "tools/codec-tools-binding/sources/actual-inputs-37573011277.json": {
       "audit_source": "sources/actual-inputs-37573011277.json",
@@ -354,8 +354,8 @@
       "sha256": "e2a16cd35ef4f134e4d451aa1d6410b5e3ee2c7add5254d06448f1e116821956"
     }
   },
-  "predecessor_integration_review_sha256": "b3fb0b0192852fc6370f8c9b2307d04fd1b664fc5bcd9654674ce28e23ade73a",
-  "predecessor_ready_sha256": "5e907440b9c1097115fd2e99f4c55e1b87b80619f0cb24710730598862a1f0bc",
+  "predecessor_integration_review_sha256": "f11629bd08b01071541ae7d7bb950be0eadf54493211571e6b2eeccc39c4254e",
+  "predecessor_ready_sha256": "fc81a409f13e3ff51f0a153e7578ff4bc2ade14894113632bdd64b8369823dcf",
   "predecessor_source_review_sha256": "458e4d0e1256b3a8e0d5dbb4d74c7cb862f18c9c8c3337b1cdf249d7a726b476",
   "product_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
   "proposal_independent_review_sha256": "31e162066299999ad5d15b8afe2ec418f5c776bd2d25dea4b9af7ea14347d54d",
@@ -363,7 +363,7 @@
   "schema": "arctic-codec-tools-preparation-execution-v1",
   "self_manifest_git_mode": "100644",
   "self_manifest_target": "tools/codec-tools-binding/execution-pins.json",
-  "status": "EXPLICIT_APPEND_SET_RESET_SUCCESSOR_SOURCE_ONLY_PENDING_REVIEW",
+  "status": "STATE_FAILURE_RECEIPT_SUCCESSOR_SOURCE_ONLY_PENDING_REVIEW",
   "worker_v3_independent_review_sha256": "248674ec912a4aac4392b4e70ab119bc423568a0e80b193133f6ba7a69939c09",
   "workflow_baseline": {
     "only_existing_job_changes": "selection guards; steps/action pins/defaults preserved",
