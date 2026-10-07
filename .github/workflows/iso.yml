@@ -5,6 +5,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      same_iso_precision_feasibility:
+        description: Fixed-image observer feasibility only; two fresh boots and24 unfiltered startup observations
+        type: boolean
+        default: false
       same_iso_performance:
         description: Reuse fixed candidate 37507582946 for six fresh paired performance boots only
         type: boolean
@@ -55,7 +59,7 @@ env:
 
 jobs:
   iso:
-    if: ${{ github.event_name != 'workflow_dispatch' || (!inputs.same_iso_recovery && !inputs.same_iso_performance) }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || (!inputs.same_iso_recovery && !inputs.same_iso_performance)) && !inputs.same_iso_precision_feasibility }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -342,7 +346,7 @@ jobs:
             --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre $draft
 
   same-iso-installs:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_performance }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_performance) && !inputs.same_iso_precision_feasibility }}
     runs-on: ubuntu-24.04
     timeout-minutes: 230
     permissions:
@@ -414,7 +418,7 @@ jobs:
           retention-days: 14
 
   same-iso-boot-evidence:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_performance }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_recovery && !inputs.same_iso_performance) && !inputs.same_iso_precision_feasibility }}
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     permissions:
@@ -486,7 +490,7 @@ jobs:
           retention-days: 14
 
   same-iso-performance:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_performance }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.same_iso_performance) && !inputs.same_iso_precision_feasibility }}
     runs-on: ubuntu-24.04
     timeout-minutes: 230
     permissions:
@@ -589,5 +593,115 @@ jobs:
             !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.qcow2
             !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.iso
             !${{ env.PERFORMANCE_ROOT }}/evidence/**/*.sock
+          retention-days: 14
+          if-no-files-found: warn
+
+  same-iso-precision-feasibility:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.same_iso_precision_feasibility }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 200
+    permissions:
+      contents: read
+      actions: read
+    env:
+      CONTAINER_ENGINE: docker
+      PRECISION_FEASIBILITY_MODE: "true"
+      RECOVERY_MODE: ${{ inputs.same_iso_recovery && 'true' || 'false' }}
+      PERFORMANCE_MODE: ${{ inputs.same_iso_performance && 'true' || 'false' }}
+      NIX_ACCEPTANCE: ${{ inputs.nix_acceptance && 'true' || 'false' }}
+      PERFORMANCE_ACCEPTANCE: ${{ inputs.performance_acceptance && 'true' || 'false' }}
+      RELEASE_REQUESTED: ${{ inputs.release && 'true' || 'false' }}
+    steps:
+      - name: Checkout immutable candidate image source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fe4742c8b9414c45f0bcbb0a4191f116383c60d1
+          path: candidate-source
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            profiles/ci
+            shell
+      - name: Checkout separate reviewed diagnostic execution
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: qualification-source
+          persist-credentials: false
+          fetch-depth: 0
+          sparse-checkout: |
+            tools
+            .github/workflows
+            profiles/ci
+      - name: Declare unused diagnostic paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          feasibility_root="$RUNNER_TEMP/arctic-precision-feasibility-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$feasibility_root"
+          mkdir "$feasibility_root"
+          echo "FEASIBILITY_ROOT=$feasibility_root" >> "$GITHUB_ENV"
+      - name: Prepare disk space on the fresh hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee "$FEASIBILITY_ROOT/runner-disk-preparation.log") 2>&1
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          df -B1 / "$RUNNER_TEMP"
+          sudo rm -rf -- /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+                        /usr/local/share/boost /usr/local/share/powershell /usr/share/swift
+          df -B1 / "$RUNNER_TEMP"
+      - name: Verify preserved failure and diagnostic source before download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 qualification-source/tools/precision-feasibility/feasibility-runner.py preflight \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/precision-feasibility" \
+            --inputs "$FEASIBILITY_ROOT/inputs" --evidence "$FEASIBILITY_ROOT/evidence"
+      - name: Download the exact candidate artifact only for supported VM tests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          repository: yuvalkolodkingal/Arctic-Linux
+          run-id: 37507582946
+          artifact-ids: 11434226349
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ env.FEASIBILITY_ROOT }}/inputs
+      - name: Verify actual image bytes before any VM
+        run: |
+          python3 qualification-source/tools/precision-feasibility/feasibility-runner.py verify \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/precision-feasibility" \
+            --inputs "$FEASIBILITY_ROOT/inputs" --evidence "$FEASIBILITY_ROOT/evidence"
+      - name: Replay unchanged and new host controls
+        run: |
+          python3 -W error::ResourceWarning -m unittest discover \
+            -s qualification-source/tools/tests -p 'test_performance*.py' -v
+          python3 -W error::ResourceWarning qualification-source/tools/precision-feasibility/test_feasibility_runner.py --unchanged-runner-controls -v
+          python3 -W error::ResourceWarning qualification-source/tools/precision-feasibility/test_dual_observer.py -v
+          python3 -W error::ResourceWarning qualification-source/tools/precision-feasibility/test_feasibility_check.py -v
+          python3 -W error::ResourceWarning qualification-source/tools/precision-feasibility/test_feasibility_runner.py -v
+      - name: One fresh boot per fixed image with24 unfiltered startup observations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 qualification-source/tools/precision-feasibility/feasibility-runner.py run \
+            --source "$GITHUB_WORKSPACE/candidate-source" \
+            --bundle "$GITHUB_WORKSPACE/qualification-source/tools/precision-feasibility" \
+            --inputs "$FEASIBILITY_ROOT/inputs" --evidence "$FEASIBILITY_ROOT/evidence"
+      - name: Preserve separate diagnostic evidence including failures
+        if: ${{ always() && env.FEASIBILITY_ROOT != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: precision-feasibility-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.FEASIBILITY_ROOT }}/evidence/
+            ${{ env.FEASIBILITY_ROOT }}/runner-disk-preparation.log
+            !${{ env.FEASIBILITY_ROOT }}/evidence/**/*.qcow2
+            !${{ env.FEASIBILITY_ROOT }}/evidence/**/*.iso
+            !${{ env.FEASIBILITY_ROOT }}/evidence/**/*.sock
           retention-days: 14
           if-no-files-found: warn
