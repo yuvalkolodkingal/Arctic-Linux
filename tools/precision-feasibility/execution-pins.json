@@ -1,0 +1,20 @@
+{
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "execution_base": "adb4e1e693badf0d072215bc4f50e7bea159c769",
+  "files": {
+    ".github/workflows/iso.yml": "cc92bbc2b77b879545b40c3140342cab5e0e5af79fda4ce3cf06970b836ed9e5",
+    "tools/precision-feasibility/README.md": "9bd50e9781b1c527339bbf87d0403823a804b181f0e5ee4d0aaa6963dcd896f9",
+    "tools/precision-feasibility/compose-feasibility.py": "9586d5b32b5cd5a9c9ac563747604b68c08c3f26441437bfb863712c8240af7a",
+    "tools/precision-feasibility/dual-observer.py": "5e5278fc7c7db683c875e5b177807af236892df81077c8063b70235d66e188f5",
+    "tools/precision-feasibility/feasibility-check.py": "9f2cc5d352bcc0583be844dd7ada0a8ce739cbd3e00aa0f2b89a8fce2db36394",
+    "tools/precision-feasibility/feasibility-runner.py": "a1efd0fe7081597b3d669f1ee81234706689491e42b9c2408eadf9906e7fbbf4",
+    "tools/precision-feasibility/provenance.json": "04178c0b2dcd0280744352fdd483ee1cb209cfdc31bcb7c868498135149e49db",
+    "tools/precision-feasibility/run-feasibility.py": "e69a01c074fc51a0c18773ea85f1f21c8c177295a7618e12b658154c6772be82",
+    "tools/precision-feasibility/runtime-pins.json": "a4a3404653629b1a17a363fdd2c4a4a907ad2a1e84baa07e66755b301634998e",
+    "tools/precision-feasibility/test_dual_observer.py": "840c0ba818c0128b92071ad1bb22792123a90567b905a8cf14a28285717e7d91",
+    "tools/precision-feasibility/test_feasibility_check.py": "6e1605bfdf24eae954666b7eb000d527ff62d84e5f0853b48420af4355d90bf6",
+    "tools/precision-feasibility/test_feasibility_runner.py": "339064fb95b956dafe29c4403fc94635483cb71917232e8737c86c889c2ce647"
+  },
+  "mode": "same-iso-precision-feasibility",
+  "schema": 1
+}

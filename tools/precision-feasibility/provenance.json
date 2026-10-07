@@ -1,0 +1,45 @@
+{
+  "baseline": {
+    "bytes": 2322073600,
+    "release": "v1.2.0",
+    "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f"
+  },
+  "candidate": {
+    "artifact": 11434226349,
+    "bytes": 1880244224,
+    "run": 37507582946,
+    "sha256": "84c9c88ebcbcaf69dbabf56509a9ceb2db58e5dc41d7bae12093edba12f60718"
+  },
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "execution_base": "adb4e1e693badf0d072215bc4f50e7bea159c769",
+  "external_evidence": {
+    "out/audit/consolidated-iso-37507582946/precision-feasibility-implementation-v1/READY.json": "e0586e615d2be12b9e7386579b86627a7a42fff396ccd69fec6ea3cc1f34dcb2",
+    "out/audit/consolidated-iso-37507582946/precision-feasibility-proposal-v1/READY.json": "c298f087bc0991a8554b369735046cc61dd193be70f6dceb1f9cf929ba8d6382",
+    "out/audit/consolidated-iso-37507582946/precision-feasibility-proposal-v1/source-evidence.json": "f8e066d211680c54047675a0226077f55af5c8172db6841b4fe1eda76483b392",
+    "out/audit/consolidated-iso-37507582946/qualification-monitor/performance-37534194076/artifact-11451121982/verification.json": "0e954a2a24dc942173755514a86d447b14914ae8781f047b8aed45f57b84ead2",
+    "out/audit/consolidated-iso-37507582946/qualification-monitor/performance-37534194076/owner-replay/comparison.json": "a49418c8aa225b82e941940dd86e6617811aadd2ce3a8150ef2f660732bcbb86",
+    "out/audit/consolidated-iso-37507582946/qualification-monitor/performance-37534194076/owner-replay/raw-six-boot-evidence.json": "28381f0aa92082d076b02b292490093a0bea11d3fc0473024bb3c52dd8e37817",
+    "out/audit/consolidated-iso-37507582946/qualification-monitor/performance-37534194076/root-worker-bracket-decomposition.json": "5e66719d7fe4172322f70dd487fd62b4881fd9141f861e69c5cda6f50129727f",
+    "out/audit/performance-actual-review-37534194076/review.json": "4b5744f06275ddf865d92fc63601f88246202e680f2a65e25d9c87f39d99a997",
+    "out/audit/performance-recovery-review/deferred-integrity/review.json": "5736129ed46291317f8b8ebb2b9f69632d870f9cb14686b6fb7056ffac6df45f",
+    "out/audit/performance-source-ci-uid-review/review.json": "2fee2db9d1922d02a1f3256f7b41c49c9b0ad4916ebeb3daa1aaf5c467d10413",
+    "out/audit/precision-feasibility-implementation-review/review-v1-blocked.json": "bb97ef8f36f4de32c10e0f5f12ecb1d20cebef8d4c7a727e62f8b2724e393b20",
+    "out/audit/precision-feasibility-review/review.json": "3fb0da000283365b758de43b12d5aabc9b746bf3c696597da9362be79a5f7505",
+    "out/audit/theme-composition-review/review.json": "846b846529435d1a6fa583a6a0d5e504408112269506e276bf8ce588ebd389f8"
+  },
+  "historical_result_preserved": "30/72 precision failures, including12/12 candidate Foot",
+  "planned_boot_order": [
+    {
+      "boot": 1,
+      "image": "baseline"
+    },
+    {
+      "boot": 1,
+      "image": "candidate"
+    }
+  ],
+  "planned_startup_observations": 24,
+  "prior_runtime_head": "d7414d4c170feb9302f762e1812c9dca71a7af54",
+  "schema": 1,
+  "scope": "Isolated source preparation; no actual observer preflight or full performance acceptance"
+}
