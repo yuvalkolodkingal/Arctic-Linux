@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       same_iso_pcmanfm_diagnostic:
-        description: One bounded native PCManFM successor diagnostic only (same image; no build/install/release)
+        description: One finite GTK/keymap and separate virtio-data diagnostic only (same image; no build/install/release)
         type: boolean
         default: false
       same_iso_native_smoke:
@@ -646,7 +646,7 @@ jobs:
             --source "$GITHUB_WORKSPACE/candidate-source" --bundle "$GITHUB_WORKSPACE/diagnostic-source/tools/pcmanfm-diagnostic" \
             --recovery-bundle "$GITHUB_WORKSPACE/recovery-source/tools/same-iso-recovery" \
             --inputs "$DIAGNOSTIC_ROOT/inputs" --evidence "$DIAGNOSTIC_ROOT/evidence"
-      - name: One fresh live-only reviewed PCManFM successor diagnostic VM
+      - name: One fresh live-only reviewed GTK keymap and bounded virtio-data diagnostic VM
         run: |
           python3 diagnostic-source/tools/pcmanfm-diagnostic/diagnostic-runner.py run \
             --source "$GITHUB_WORKSPACE/candidate-source" --bundle "$GITHUB_WORKSPACE/diagnostic-source/tools/pcmanfm-diagnostic" \
@@ -656,7 +656,7 @@ jobs:
         if: ${{ always() && env.DIAGNOSTIC_ROOT != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: pcmanfm-diagnostic-v2-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
+          name: pcmanfm-diagnostic-v3-37507582946-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.DIAGNOSTIC_ROOT }}/evidence/
           if-no-files-found: warn
           retention-days: 14

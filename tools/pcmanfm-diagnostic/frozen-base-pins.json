@@ -1,5 +1,5 @@
 {
-  "base": "84fa7410c728e355a507054d7e7a944c51e76753",
+  "base": "92aa52c0ef324a2cb5ad4af9f0c47c5e8b273bec",
   "allowed_changed_existing": [
     ".github/workflows/iso.yml",
     "tools/test-iso.sh"

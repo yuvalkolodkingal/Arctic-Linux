@@ -17,14 +17,14 @@ import sys
 import uuid
 
 sys.dont_write_bytecode=True
-BASE='84fa7410c728e355a507054d7e7a944c51e76753'
+BASE='92aa52c0ef324a2cb5ad4af9f0c47c5e8b273bec'
 RECOVERY_BASE='ae55fbc9d48cec5ecc786cf61994ed986296d1bb'
 COMMON_SHA='0193c13bb9e17ac24bbf10681581262a2d3f2ec7512cab10a4ce92ac897d0633'
 V4_LIBRARY_SHA='eb75ee7a0eded71b99f1742940e1ccbf5546f7203ccd62c57e2447c8dbd9a4ac'
 BUNDLE_FILES={'diagnostic-runner.py','pcmanfm-controller.py','guest-pcmanfm-diagnostic.py','atspi-snapshot.py',
               'gtk-entry-control.py','bounded-launch.py','native_smoke.py','native-launcher.py','runtime-pins.json',
               'bootstrap-diagnostic.sh','prepare-diagnostic.py','test_diagnostic.py','README.md','frozen-base-pins.json',
-              'original-h264-aac-1s.mp4','codec-fixture-manifest.json','security-collector.py','test_security_collector.py'}
+              'original-h264-aac-1s.mp4','codec-fixture-manifest.json','security-collector.py','test_security_collector.py','bulk-channel.py','gtk-physical.py','test_v3.py'}
 EXECUTION_FILES={'.github/workflows/iso.yml','tools/test-iso.sh','tools/lib/container.sh','tools/lib/vmtest.py',
                  'tools/native-functional-v4/native-runner-v4.py','tools/same-iso-recovery/vm-only-recovery-v2.py',
                  *('tools/pcmanfm-diagnostic/'+name for name in BUNDLE_FILES)}
@@ -54,7 +54,7 @@ def validate_ci(env,R):
     require(env.get('PCMANFM_DIAGNOSTIC_MODE')=='true' and all(env.get(name)=='false' for name in
             ('RECOVERY_MODE','NATIVE_SMOKE_MODE','NIX_REQUESTED','PERFORMANCE_REQUESTED','BOOT_TEST_REQUESTED')),
             'diagnostic must be selected alone')
-    require(env['GITHUB_SHA']!=BASE and env['GITHUB_RUN_ID'] not in ('37525639962','37535425230','37543716623'),
+    require(env['GITHUB_SHA']!=BASE and env['GITHUB_RUN_ID'] not in ('37525639962','37535425230','37543716623','37548983381'),
             'separate reviewed diagnostic head/run required')
 
 
@@ -359,6 +359,188 @@ def checked_report(serial,target,events,expected,R,V,expected_runtime):
                 scope='diagnosis only; original GUI/release gates remain open')
 
 
+def checked_bulk_report(serial,console,target,events,expected,R,V,expected_runtime):
+    spec=importlib.util.spec_from_file_location('strict_bulk_record_parser',Path(__file__).parent/'bulk-channel.py')
+    B=importlib.util.module_from_spec(spec);spec.loader.exec_module(B)
+    rows=serial.splitlines()
+    def marked(prefix):return [(index,B.strict_json(line[len(prefix):])) for index,line in enumerate(rows) if line.startswith(prefix)]
+    begin,=marked('ARCTIC-PCMANFM-DIAG-BEGIN ');end,=marked('ARCTIC-PCMANFM-DIAG-END ')
+    reports=marked('ARCTIC-PCMANFM-DIAG-REPORT ')
+    require(begin[0]<end[0] and begin[1]['checker_sha256']==expected and begin[1]['release_acceptance'] is False,
+            'diagnostic source/marker order differs')
+    block=rows[begin[0]+1:end[0]]
+    chunks=[i for i,row in enumerate(rows) if row.startswith('ARCTIC-NATIVE-EVIDENCE-CHUNK ')]
+    manifests=marked('ARCTIC-NATIVE-EVIDENCE-MANIFEST ')
+    require(len(manifests)==1 and all(begin[0]<i<manifests[0][0]<end[0] for i in chunks)
+            and len(reports)==1 and begin[0]<reports[0][0]<manifests[0][0]<end[0],
+            'transport/report order or unknown outer chunks differ')
+    copied=V.extract_evidence(block,'live',target) # Unchanged reviewed zlib/hash/path/bounds implementation.
+    report=reports[0][1]
+    require(B.strict_json((target/'report.json').read_text())==report,'transported/serial report differs')
+    provenance=B.strict_json((target/'provenance.json').read_text())
+    require(provenance['checker_sha256']==expected and provenance['native_source_sha256']==V.NATIVE_SOURCE_SHA
+            and provenance['release_acceptance'] is False and 'rd.live.image' in provenance['cmdline'].split()
+            and provenance['runtime_pins']==expected_runtime
+            and type(provenance['desktop_uid']) is int and provenance['desktop_uid']>0
+            and re.fullmatch('[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',provenance['boot_id']),
+            'actual live checker/source provenance differs')
+    port=provenance.get('bulk_port',{})
+    require(type(port) is dict and port.get('name')==port.get('sysfs_name')=='org.arctic.diagnostic.bulk'
+            and port.get('named_path')=='/dev/virtio-ports/org.arctic.diagnostic.bulk'
+            and isinstance(port.get('resolved_device'),str) and re.fullmatch(r'/dev/vport[0-9]+p[0-9]+',port['resolved_device'])
+            and port.get('kind')=='character-device' and type(port.get('device_major')) is int and port['device_major']>0
+            and type(port.get('device_minor')) is int and port['device_minor']>=0,
+            'actual guest named bulk device provenance differs')
+    launcher=provenance['launcher']
+    console_rows=console.splitlines()
+    gone,=[(i,B.strict_json(row[len('ARCTIC-NATIVE-LAUNCHER-GONE '):])) for i,row in enumerate(console_rows)
+           if row.startswith('ARCTIC-NATIVE-LAUNCHER-GONE ')]
+    # Raw console and bulk stream have separate origins; no synthetic merged serial.
+    require(launcher==gone[1] and launcher['owned_launcher_gone'] is True
+            and launcher['launcher_sha256']==V.LAUNCHER_SHA and launcher['boot_id']==provenance['boot_id']
+            and launcher['foot']['uid']==launcher['shell']['uid']==provenance['desktop_uid']>0
+            and launcher['foot']['executable']=='/usr/bin/foot' and launcher['probe']['uid']==0,
+            'owned native launcher same-boot/UID disappearance differs')
+    require(launcher['schema']=='arctic-native-launcher-v1' and launcher['stage']=='live','launcher schema/stage differs')
+    for name in ('shell','foot','probe'):
+        item=launcher[name]
+        require(all(type(item[k]) is int and item[k]>0 for k in ('pid','start_ticks'))
+                and type(item['uid']) is int and item['uid']>=0
+                and re.fullmatch('[0-9a-f]{64}',item['executable_sha256']),'launcher actual process identity differs')
+    require(Path(launcher['shell']['executable']).name in {'bash','fish','zsh','dash','sh'},'launcher shell differs')
+    require(report['schema']=='arctic-pcmanfm-diagnostic-v1' and report['original_run']==37535425230
+            and report['original_status']=='failed-7-of-8-live' and report['release_acceptance'] is False,
+            'diagnostic changed original acceptance claim')
+    security=report.get('security')
+    require(isinstance(security,dict) and security.get('complete') is True and security.get('error') is None,
+            'guest security interval incomplete: '+str(security)+'; primary guest errors: '+str(report.get('errors')))
+    require(security.get('selinux')=='Enforcing' and security.get('audit')=={'enabled':1,'lost':0}
+            and all(type(report['security']['audit'][k]) is int for k in ('enabled','lost'))
+            and type(report['security']['observed_new_avcs']) is int and report['security']['observed_new_avcs']==0,'security evidence differs')
+    checked_security(target,security,provenance['boot_id'])
+    root=Path(report['evidence_root'])
+    require(root.parent==Path('/tmp') and root.name.startswith('arctic-pcmanfm-diagnostic-')
+            and B.strict_json((target/'transport-manifest.json').read_text())['evidence_root']==str(root),
+            'diagnostic report/transport temp root differs')
+    require([arm['name'] for arm in report['arms']]==['original-route','observed-route','gtk-warmup','gtk-no-warmup'],
+            'bounded diagnostic arm order/completeness differs')
+    for name in ('original-route','observed-route','gtk-warmup','gtk-no-warmup'):
+        arm=B.strict_json((target/name/'arm-report.json').read_text())
+        require(arm['name']==name and arm['cleanup']['only_proved_new_processes_signalled'] is True
+                and arm['cleanup']['original_copied_configs_unchanged'] is True
+                and arm['preservation_phase']=='final-cleanup-preservation'
+                and type(arm['trace']['omitted_records']) is int and arm['trace']['omitted_records']==0
+                and type(arm['trace']['bytes']) is int and 0<=arm['trace']['bytes']<=2*1024*1024,
+                'arm owned cleanup/config/mandatory trace proof differs')
+        trace=B.strict_json((target/name/'gui-trace-summary.json').read_text())
+        require(trace['omitted_records']==arm['trace']['omitted_records']==0 and trace['bytes']==arm['trace']['bytes']
+                and type(trace['omitted_records']) is int and type(trace['bytes']) is int
+                and (target/name/'gui-trace.log').stat().st_size==trace['bytes'],
+                'arm transported final trace counters differ')
+    requests=[(i,B.strict_json(row[len('ARCTIC-PCMANFM-PHYSICAL-REQUEST '):])) for i,row in enumerate(console_rows)
+              if row.startswith('ARCTIC-PCMANFM-PHYSICAL-REQUEST ')]
+    acks=[e for e in events if e.get('event')=='physical-host-ack']
+    physical=report['arms'][1]['physical']
+    require(len(requests)==len(acks)<=1,'physical request/host acknowledgement unmatched/duplicate')
+    if requests:
+        request=requests[0][1];ack=acks[0]
+        from_path=Path(__file__).parent/'pcmanfm-controller.py'
+        spec=importlib.util.spec_from_file_location('diagnostic_physical_validator',from_path)
+        C=importlib.util.module_from_spec(spec);spec.loader.exec_module(C)
+        C.physical_request(request)
+        require(gone[0]<requests[0][0] and request==physical['request']
+                and ack['nonce']==request['nonce'] and ack['boot_id']==request['boot_id']==provenance['boot_id']
+                and ack['process']==request['process'] and ack['request_sha256']==C.canonical(request)
+                and ack['exactly_one_press_release'] is True and ack['release_acceptance'] is False
+                and ack['input_start_monotonic_seconds']>=ack['receipt_monotonic_seconds']
+                and ack['input_start_monotonic_seconds']-ack['receipt_monotonic_seconds']<=2,
+                'strict one-use physical host delivery proof differs')
+        C.qmp_return(ack['response'])
+        source=target/'observed-route/entry-09-physical-immediate-precondition.json'
+        require(R.digest(source)==request['entry_evidence_sha256'],'physical immediate snapshot pin differs')
+        entry_record=B.strict_json(source.read_text())
+        require(entry_record['process']==request['process'] and entry_record['after']==request['client']
+                and entry_record['snapshot']['entry']==request['entry']
+                and entry_record['snapshot']['process']==request['process']
+                and entry_record['snapshot']['status']=='observed'
+                and len(entry_record['snapshot']['frames'])==1
+                and entry_record['snapshot']['frames'][0] in request['entry']['ancestors'],
+                'transported immediate entry/client/frame binding differs')
+        physical_delivery='observed one-use strict QMP host delivery, separately paired; never virtual-route acceptance'
+    else:require(physical['status']=='unrun','physical route lacks request/host proof')
+    gtk_requests=[B.strict_json(row[len('ARCTIC-GTK-PHYSICAL-REQUEST '):]) for row in console_rows
+                  if row.startswith('ARCTIC-GTK-PHYSICAL-REQUEST ')]
+    gtk_acks=[e for e in events if e.get('event')=='gtk-physical-host-ack']
+    require(len(gtk_requests)==len(gtk_acks)<=1,'GTK physical host delivery unmatched/duplicate')
+    gtk=report['arms'][3].get('physical')
+    require(type(gtk) is dict,'cold GTK separately labelled physical outcome missing')
+    if gtk_requests:
+        spec=importlib.util.spec_from_file_location('gtk_physical_proof',Path(__file__).parent/'gtk-physical.py')
+        K=importlib.util.module_from_spec(spec);spec.loader.exec_module(K)
+        request=K.validate(gtk_requests[0]);ack=gtk_acks[0]
+        require(request==gtk['request'] and report['arms'][3]['status']=='own-entry-not-activated'
+                and report['arms'][3].get('process')==request['process']
+                and ack['nonce']==request['nonce'] and ack['boot_id']==request['boot_id']==provenance['boot_id']
+                and ack['process']==request['process'] and ack['request_sha256']==K.canonical(request)
+                and ack['exactly_one_press_release'] is True and ack['release_acceptance'] is False
+                and all(type(ack.get(k)) in (int,float) and math.isfinite(ack[k]) for k in
+                    ('input_start_monotonic_seconds','input_end_monotonic_seconds','receipt_monotonic_seconds'))
+                and 0<=ack['input_start_monotonic_seconds']-ack['receipt_monotonic_seconds']<=2
+                and ack['input_end_monotonic_seconds']>=ack['input_start_monotonic_seconds'],
+                'GTK physical host nonce/boot/owned/timing proof differs')
+        spec=importlib.util.spec_from_file_location('gtk_qmp_result',Path(__file__).parent/'pcmanfm-controller.py')
+        C=importlib.util.module_from_spec(spec);spec.loader.exec_module(C);C.qmp_return(ack['response'])
+        source=target/'gtk-no-warmup/gtk-immediate-proof.json'
+        require(R.digest(source)==request['widget_evidence_sha256'],'GTK physical immediate proof hash differs')
+        raw=B.strict_json(source.read_text())
+        require(raw['process']==request['process'] and raw['after']==request['client'] and raw['widget']==request['widget']
+                and raw['before'].get('is_focused') is True and raw['before'].get('is_visible') is True
+                and all(raw['before'].get(k)==raw['after'].get(k) for k in
+                    ('id','pid','foreign_toplevel_id','appid','x','y','width','height','monitor','is_xwayland'))
+                and request['widget']['uid']==provenance['desktop_uid'], 'GTK immediate transported ownership/widget differs')
+        widget_file=target/'gtk-no-warmup/gtk-widget-snapshot.json'
+        event_file=target/'gtk-no-warmup/gtk-events.log'
+        require(B.strict_json(widget_file.read_text())==request['widget'], 'transported own widget snapshot differs')
+        require(event_file.is_file() and event_file.stat().st_size<=2*1024*1024, 'required owned GTK events absent/unbounded')
+        event_rows=[B.strict_json(row) for row in event_file.read_text().splitlines()]
+        mapped=[row for row in event_rows if row.get('event')=='mapped']
+        snapshots=[row for row in event_rows if row.get('event')=='owned-widget-snapshot']
+        require(len(mapped)==1 and len(snapshots)==1
+                and all(type(mapped[0].get(k)) is int and mapped[0][k]==request['widget'][k] for k in ('pid','start_ticks','uid'))
+                and mapped[0].get('appid')==mapped[0].get('program_name')==request['appid']
+                and mapped[0].get('backend')=='GdkWaylandDisplay'
+                and snapshots[0].get('snapshot')==request['widget'], 'raw mapped GTK/widget owner proof differs')
+        gtk_delivery='one strict separately labelled GTK QMP Return; never PCManFM or native acceptance'
+    else:
+        require(gtk.get('status')=='unrun','GTK physical outcome lacks actual host request')
+    require(report['status']=='diagnostic-collected' and report['errors']==[]
+            and end[1]['status']=='diagnostic-collected' and end[1]['error'] is None
+            and end[1]['evidence_export_complete'] is True and end[1]['release_acceptance'] is False,
+            'actual diagnostic collector/cleanup/preservation failed')
+    return dict(report=report,provenance=provenance,files=copied,physical_host_delivery=locals().get('physical_delivery','unrun'),
+                gtk_physical_host_delivery=locals().get('gtk_delivery','unrun'),
+                scope='diagnosis only; original GUI/release gates remain open; added virtio data device perturbation')
+
+
+
+def console_observations(data):
+    """Keep raw kernel-looking anomaly offsets; never attest trusted provenance here."""
+    require(type(data) is bytes and len(data)<=128*1024*1024,'raw console byte bound differs')
+    pattern=re.compile(rb'watchdog: BUG: soft lockup|hardIRQ|softIRQ|BUG:')
+    matches=[]
+    for item in pattern.finditer(data):
+        require(len(matches)<256,'raw console anomaly observation bound exceeded')
+        left=data.rfind(b'\n',0,item.start())+1;right=data.find(b'\n',item.end())
+        if right<0:right=len(data)
+        raw=data[left:right]
+        matches.append(dict(pattern=item.group().decode(),byte_offset=item.start(),line_start_byte=left,
+            line_bytes=len(raw),line_sha256=hashlib.sha256(raw).hexdigest(),
+            bounded_excerpt=raw[max(0,item.start()-left-120):min(len(raw),item.end()-left+400)].decode(errors='replace')))
+    return dict(bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),matches=matches,
+                raw_console_unchanged=True,release_acceptance=False,
+                scope='raw console pattern observations only; not IRQ ownership, causality, trusted AVC absence or post-export security qualification')
+
+
 def run(args,R,V):
     verify(args,R,V);R.require_docker();require(Path('/dev/kvm').is_char_device(),'KVM disappeared')
     base=args.evidence.parent/'diagnostic-vm';require(not base.exists(),'VM output must be unused')
@@ -388,7 +570,23 @@ def run(args,R,V):
         finally:state['harness']=R.preserve_phase(base/'uefi-try',args.evidence,'boot');save()
         try:
             events=[json.loads(row) for row in (args.evidence/'boot/pcmanfm-host-events.log').read_text().splitlines()]
-            state['diagnostic']=checked_report((args.evidence/'boot/serial.log').read_text(errors='replace'),
+            console_raw=(args.evidence/'boot/serial.log').read_bytes()
+            state['console_observations']=console_observations(console_raw);save()
+            console=console_raw.decode(errors='replace')
+            # Preserve the old strict decoder's result on the untouched console; never repair/filter it.
+            try:
+                checked_report(console,args.evidence/'old-console-strict',events,R.digest(args.bundle/'guest-pcmanfm-diagnostic.py'),R,V,
+                    json.loads((args.bundle/'runtime-pins.json').read_text()))
+                state['console_strict_decode']=dict(status='unexpectedly-accepted',release_acceptance=False)
+            except BaseException as exc:
+                state['console_strict_decode']=dict(status='rejected',error=type(exc).__name__+': '+str(exc),
+                    scope='unchanged console; payload intentionally uses separate bulk channel; no repaired serial')
+            spec=importlib.util.spec_from_file_location('bulk_raw_validator',args.bundle/'bulk-channel.py')
+            B=importlib.util.module_from_spec(spec);spec.loader.exec_module(B)
+            data=(args.evidence/'boot/bulk-evidence.log').read_bytes()
+            channel=B.strict_json((args.evidence/'boot/bulk-channel.txt').read_bytes());B.validate(data,channel)
+            state['bulk_channel']=channel
+            state['diagnostic']=checked_bulk_report(data.decode('utf-8',errors='strict'),console,
                 args.evidence/'guest',events,R.digest(args.bundle/'guest-pcmanfm-diagnostic.py'),R,V,
                 json.loads((args.bundle/'runtime-pins.json').read_text()))
         except BaseException as exc:errors.append('evidence: '+str(exc))

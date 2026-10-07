@@ -10,7 +10,7 @@ import re
 import shutil
 import subprocess
 
-BASE='84fa7410c728e355a507054d7e7a944c51e76753'
+BASE='92aa52c0ef324a2cb5ad4af9f0c47c5e8b273bec'
 HERE=Path(__file__).resolve().parent
 
 
@@ -216,19 +216,34 @@ def initial_workflow(base):
 
 
 def harness(base):
-    # All existing/default-off mode bytes remain from the actual failed 84fa run.
-    return replace(base, 'gtk-entry-control.py bounded-launch.py runtime-pins.json',
-                   'gtk-entry-control.py bounded-launch.py security-collector.py runtime-pins.json')
+    value=replace(base,'security-collector.py runtime-pins.json','security-collector.py bulk-channel.py gtk-physical.py runtime-pins.json')
+    value=replace(value,"    controller = importlib.util.module_from_spec(spec); spec.loader.exec_module(controller)\n    try:\n        controller.run(vm, out, menu_seen, os.environ['PCMANFM_CHECKER_SHA'])\n    finally:\n        vm.quit()", """    bulk_owns_cleanup = False
+    try:
+        controller = importlib.util.module_from_spec(spec); spec.loader.exec_module(controller)
+        bspec = importlib.util.spec_from_file_location('diagnostic_bulk_channel', '/pcmanfm-diagnostic/bulk-channel.py')
+        bulk_module = importlib.util.module_from_spec(bspec); bspec.loader.exec_module(bulk_module)
+        bulk_owns_cleanup = True # Only a successful import transfers cleanup ownership.
+        bulk_module.run_owned(vm, out,
+            lambda bulk: controller.run_v3(vm, out, menu_seen, os.environ['PCMANFM_CHECKER_SHA'], bulk),
+            max(0, min(900, vmtest.T0+timeout-time.time())))
+    finally:
+        if not bulk_owns_cleanup: vm.quit()""")
+    value=replace(value,'-serial "file:$OUT/serial.log" -monitor none -no-reboot\n        -drive file=/tmp/target.qcow2',
+        '-serial "file:$OUT/serial.log" -monitor none -no-reboot\n'
+        '        -chardev "socket,id=arctic_bulk,path=$OUT/bulk.sock,server=on,wait=off"\n'
+        '        -device virtio-serial-pci,id=arctic_bulk_bus\n'
+        '        -device virtserialport,bus=arctic_bulk_bus.0,chardev=arctic_bulk,name=org.arctic.diagnostic.bulk\n'
+        '        -drive file=/tmp/target.qcow2')
+    return value
 
 
 def workflow(base):
-    value=replace(base, 'One bounded fixed-image native PCManFM input diagnostic only (no build/install/release)',
-                  'One bounded native PCManFM successor diagnostic only (same image; no build/install/release)')
-    value=replace(value, 'One fresh live-only bounded PCManFM diagnostic VM',
-                  'One fresh live-only reviewed PCManFM successor diagnostic VM')
-    value=value.replace('arctic-pcmanfm-diagnostic-${{ github.run_id }}', 'arctic-pcmanfm-diagnostic-v2-${{ github.run_id }}')
-    value=replace(value, 'name: pcmanfm-diagnostic-37507582946-${{ github.run_id }}',
-                  'name: pcmanfm-diagnostic-v2-37507582946-${{ github.run_id }}')
+    value=replace(base,'One bounded native PCManFM successor diagnostic only (same image; no build/install/release)',
+        'One finite GTK/keymap and separate virtio-data diagnostic only (same image; no build/install/release)')
+    value=replace(value,'One fresh live-only reviewed PCManFM successor diagnostic VM',
+        'One fresh live-only reviewed GTK keymap and bounded virtio-data diagnostic VM')
+    value=replace(value,'name: pcmanfm-diagnostic-v2-37507582946-${{ github.run_id }}',
+        'name: pcmanfm-diagnostic-v3-37507582946-${{ github.run_id }}')
     return value
 
 
@@ -241,7 +256,10 @@ def main():
         raise RuntimeError('base snapshots differ from immutable Git objects')
     guest=HERE/'guest-pcmanfm-diagnostic.py'
     guest.write_text(re.sub(r"SECURITY_SHA = '[^']+'", "SECURITY_SHA = '"+hashlib.sha256((HERE/'security-collector.py').read_bytes()).hexdigest()+"'", guest.read_text()))
-    tree=HERE/'execution-tree'
+    for constant,name in [('BULK_SHA','bulk-channel.py'),('GTK_PHYSICAL_SHA','gtk-physical.py')]:
+        value=hashlib.sha256((HERE/name).read_bytes()).hexdigest()
+        guest.write_text(re.sub(constant+r" = '[^']+'",constant+" = '"+value+"'",guest.read_text()))
+    tree=HERE/'execution-tree' 
     if tree.exists():shutil.rmtree(tree) # Only this generator's own directory, never caller paths or a Git checkout.
     (tree/'tools/pcmanfm-diagnostic').mkdir(parents=True)
     for name in ('tools/lib/container.sh','tools/lib/vmtest.py','tools/native-functional-v4/native-runner-v4.py',
@@ -258,7 +276,8 @@ def main():
              [('guest-check.py','guest-pcmanfm-diagnostic.py'),('native_smoke.py','native_smoke.py'),('native-launcher.py','native-launcher.py'),
               ('atspi-snapshot.py','atspi-snapshot.py'),('gtk-entry-control.py','gtk-entry-control.py'),('bounded-launch.py','bounded-launch.py'),
               ('bootstrap-diagnostic.sh','bootstrap-diagnostic.sh'),('original-h264-aac-1s.mp4','original-h264-aac-1s.mp4'),
-              ('codec-fixture-manifest.json','codec-fixture-manifest.json'),('security-collector.py','security-collector.py')]}
+              ('codec-fixture-manifest.json','codec-fixture-manifest.json'),('security-collector.py','security-collector.py'),
+              ('bulk-channel.py','bulk-channel.py'),('gtk-physical.py','gtk-physical.py')]}
     runsh=b'#!/bin/bash\nset -euo pipefail\nexec python3 /run/t/guest-check.py\n'
     runtime['run.sh']=hashlib.sha256(runsh).hexdigest()
     (HERE/'runtime-pins.json').write_text(json.dumps(runtime,indent=2,sort_keys=True)+'\n')

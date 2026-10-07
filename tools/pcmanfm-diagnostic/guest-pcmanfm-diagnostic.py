@@ -22,6 +22,8 @@ import zlib
 NATIVE_SHA = 'ed382ab80a4918118370253c383b0fefde116ba34d55e977bcd34607ad2632d0'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
 SECURITY_SHA = '0384cea315112d7cab56129ef43fd5aa92966e25b0e3e35f54f795628ee08527'
+BULK_SHA = '5131e3ed5d50d285508d4dc74d8dc8c7e412da17fd0f7072e81e70c3dde36bda'
+GTK_PHYSICAL_SHA = '24afee8bcf9d9edd96b9d0460e53ef0bbfb0247ae0fb2034bbda5e6a99a678a0'
 HERE = Path(__file__).resolve().parent
 MAX_FILE, MAX_TOTAL = 4*1024*1024, 16*1024*1024
 
@@ -40,6 +42,15 @@ def load(name, path, expected):
 
 N = load('frozen_native_smoke_v4', HERE/'native_smoke.py', NATIVE_SHA)
 S = load('explicit_diagnostic_security', HERE/'security-collector.py', SECURITY_SHA)
+B = load('explicit_bulk_channel', HERE/'bulk-channel.py', BULK_SHA)
+K = load('explicit_gtk_physical', HERE/'gtk-physical.py', GTK_PHYSICAL_SHA)
+BULK = None
+
+def emit(prefix,value,console=True):
+    if console: print(prefix+json.dumps(value,sort_keys=True),flush=True)
+    require(BULK is not None,'explicit bulk writer absent; no console fallback')
+    BULK.write(prefix,value)
+
 
 
 def direct_launch_proof(smoke, proof):
@@ -286,6 +297,56 @@ def control_keys(smoke, proof, argv, warmup):
     smoke.trace('control-input-after',proof=proof,argv=argv,warmup=False,client=smoke.alive(proof))
 
 
+def gtk_physical(smoke,proof,appid,status):
+    if status!='own-entry-not-activated':
+        return dict(status='unrun',reason='original virtual GTK entry already activated; no extra input')
+    before=smoke.alive(proof)
+    if before.get('is_focused') is not True:
+        return dict(status='unrun',reason='owned GTK client no longer focused; no focus repair')
+    validate_gtk_identity(smoke,proof,appid)
+    nonce=uuid.uuid4().hex
+    request_file=smoke.root/'gtk-snapshot-request.json'
+    with request_file.open('x') as stream: stream.write(json.dumps(dict(nonce=nonce,appid=appid))+'\n')
+    os.chown(request_file,smoke.uid,pwd.getpwuid(smoke.uid).pw_gid)
+    snapshot_file=smoke.root/'gtk-widget-snapshot.json'
+    smoke.wait(lambda:snapshot_file.is_file(),3,label='fresh own GTK widget snapshot')
+    require(not snapshot_file.is_symlink() and snapshot_file.stat().st_uid==smoke.uid
+            and snapshot_file.stat().st_size<=65536,'own GTK widget snapshot ownership/bound differs')
+    widget=B.strict_json(snapshot_file.read_bytes())
+    after=smoke.alive(proof);stable_client(before,after,proof)
+    validate_gtk_identity(smoke,proof,appid)
+    current=N.identity(proof['pid'],smoke.uid)
+    require(all(current[k]==proof[k] for k in ('pid','start_ticks','executable'))
+            and N.digest(Path(current['executable']))==proof['executable_sha256'], 'GTK physical process changed')
+    record=dict(process=proof,before=before,after=after,widget=widget)
+    path=smoke.write('gtk-immediate-proof.json',(json.dumps(record,indent=2)+'\n').encode())
+    request=dict(schema='arctic-gtk-physical-request-v1',arm='gtk-no-warmup',nonce=nonce,appid=appid,
+        boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),process=proof,client=after,widget=widget,
+        widget_evidence_sha256=N.digest(path),virtual_status=status,monotonic_ns=time.monotonic_ns(),release_acceptance=False)
+    K.validate(request)
+    print('ARCTIC-GTK-PHYSICAL-REQUEST '+json.dumps(request,sort_keys=True),flush=True)
+    smoke.trace('gtk-physical-request',request=request,scope='one separate GTK-only physical Return; original virtual failure retained')
+    def activated():
+        smoke.alive(proof)
+        require(not (smoke.root/'gtk-control-error.json').exists(),'owned GTK telemetry failed')
+        rows=[B.strict_json(row) for row in (smoke.root/'gtk-events.log').read_bytes().splitlines()]
+        require((smoke.root/'gtk-events.log').stat().st_size<=2*1024*1024,'GTK event bound exceeded')
+        return next((row for row in rows if row.get('event')=='activate' and row.get('text')==K.TEXT
+            and row.get('pid')==proof['pid'] and row.get('start_ticks')==proof['start_ticks']
+            and row.get('uid')==smoke.uid and row.get('has_focus') is True
+            and type(row.get('monotonic_ns')) is int and row['monotonic_ns']>=request['monotonic_ns']),None)
+    try:
+        activation=smoke.wait(activated,30,label='separate physical GTK-only entry activation')
+        outcome='own-entry-activated-after-request'
+    except RuntimeError as exc:
+        require(str(exc)=='bounded functional gate timed out: separate physical GTK-only entry activation','GTK physical collector failure: '+str(exc))
+        activation=None;outcome='own-entry-not-activated-after-request'
+    smoke.diagnostic('gtk-after-separate-physical')
+    return dict(status=outcome,request=request,activation=activation,
+        delivery='unproven until strict one-use host QMP acknowledgement independently paired',
+        scope='own simple GTK entry only; never original virtual-input or PCManFM acceptance')
+
+
 def gtk_control(smoke, warmup):
     probe=smoke.cmd(['python3','-c',"import gi;gi.require_version('Gtk','3.0');from gi.repository import Gtk;print(Gtk.get_major_version())"],
                     original=True,timeout=10,allow_failure=True)
@@ -317,7 +378,8 @@ def gtk_control(smoke, warmup):
         require(str(exc)=='bounded functional gate timed out: isolated Gtk3 entry activation','Gtk3 control failure: '+str(exc))
         value=None;status='own-entry-not-activated'
     smoke.diagnostic('gtk-final')
-    return dict(status=status,warmup=warmup,process=proof,activation=value,
+    separate=gtk_physical(smoke,proof,appid,status) if not warmup else dict(status='unrun',reason='only cold GTK arm eligible')
+    return dict(status=status,warmup=warmup,process=proof,activation=value,physical=separate,
                 scope='only own simple Gtk3 entry; no libfm/completion or PCManFM qualification')
 
 
@@ -519,18 +581,40 @@ def export(root):
           files=entries,bytes=total,evidence_root=str(root)),sort_keys=True),flush=True)
 
 
+def export_bulk(root):
+    entries=[];encoded=[];total=0
+    for path in sorted(root.rglob('*')):
+        require(not path.is_symlink(),'diagnostic evidence symlink refused')
+        if not path.is_file():continue
+        require(path.suffix.lower() in ('.json','.png','.log','.txt','.tsv') and len(entries)<128
+                and path.stat().st_size<=MAX_FILE,'diagnostic export type/count/file bound failed')
+        data=path.read_bytes();total+=len(data);require(total<=MAX_TOTAL,'diagnostic total evidence bound exceeded')
+        compressed=zlib.compress(data,9);chunks=[compressed[i:i+24576] for i in range(0,len(compressed),24576)]
+        entry=dict(path=path.relative_to(root).as_posix(),bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),
+                   compressed_bytes=len(compressed),chunks=len(chunks),encoding='zlib+base64')
+        entries.append(entry);encoded.append((entry,chunks))
+    for entry,chunks in encoded:
+        for index,chunk in enumerate(chunks):
+            emit('ARCTIC-NATIVE-EVIDENCE-CHUNK ',dict(path=entry['path'],index=index,data=base64.b64encode(chunk).decode()),console=False)
+    emit('ARCTIC-NATIVE-EVIDENCE-MANIFEST ',dict(schema='arctic-native-evidence-v1',stage='live',
+          files=entries,bytes=total,evidence_root=str(root)),console=False)
+
+
 def main():
+    global BULK
     error=None;report=None;aggregate=None;export_complete=False
     begin=dict(schema='arctic-pcmanfm-diagnostic-begin-v1',checker_sha256=N.digest(Path(__file__)),
                native_source_sha256=NATIVE_SHA,release_acceptance=False)
-    print('ARCTIC-PCMANFM-DIAG-BEGIN '+json.dumps(begin,sort_keys=True),flush=True)
     try:
         require(Path(__file__).resolve()==Path('/run/t/guest-check.py') and len(sys.argv)==1,
                 'requires exact reviewed read-only guest-check location and no arguments')
         N.guest_guard('live',True)
+        # Explicit added device/channel; native launcher and kernel ttyS0 remain unchanged.
+        BULK=B.Writer()
+        emit('ARCTIC-PCMANFM-DIAG-BEGIN ',begin)
         runtime=json.loads((HERE/'runtime-pins.json').read_text())
         require(set(runtime)=={'guest-check.py','native_smoke.py','native-launcher.py','atspi-snapshot.py','gtk-entry-control.py','bounded-launch.py',
-                              'bootstrap-diagnostic.sh','run.sh','original-h264-aac-1s.mp4','codec-fixture-manifest.json','security-collector.py'},
+                              'bootstrap-diagnostic.sh','run.sh','original-h264-aac-1s.mp4','codec-fixture-manifest.json','security-collector.py','bulk-channel.py','gtk-physical.py'},
                 'runtime file set differs')
         for name,digest in runtime.items():require(N.digest(HERE/name)==digest,'runtime dependency hash differs: '+name)
         launcher=load('owned_native_launcher',HERE/'native-launcher.py',LAUNCHER_SHA)
@@ -539,23 +623,28 @@ def main():
         require(launch['foot']['uid']==uid,'launcher/desktop UID mismatch')
         aggregate=Path(tempfile.mkdtemp(prefix='arctic-pcmanfm-diagnostic-',dir='/tmp'));os.chown(aggregate,uid,pwd.getpwnam(prefix[2]).pw_gid)
         begin.update(boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),desktop_uid=uid,
-                     cmdline=Path('/proc/cmdline').read_text().strip(),launcher=launch,runtime_pins=runtime)
+                     cmdline=Path('/proc/cmdline').read_text().strip(),launcher=launch,runtime_pins=runtime,bulk_port=BULK.identity)
         (aggregate/'provenance.json').write_text(json.dumps(begin,indent=2)+'\n')
         signal.signal(signal.SIGALRM,lambda *_: (_ for _ in ()).throw(TimeoutError('guest 600-second diagnostic deadline')))
         signal.setitimer(signal.ITIMER_REAL,600)
         report=run_diagnosis(prefix,aggregate)
         (aggregate/'report.json').write_text(json.dumps(report,indent=2)+'\n')
-        print('ARCTIC-PCMANFM-DIAG-REPORT '+json.dumps(report,sort_keys=True),flush=True)
+        BULK.start_export()
+        emit('ARCTIC-PCMANFM-DIAG-REPORT ',report)
         require(report['status']=='diagnostic-collected','diagnostic collector/security/cleanup failed')
     except BaseException as exc:
         error=type(exc).__name__+': '+str(exc);traceback.print_exc()
     finally:
         signal.setitimer(signal.ITIMER_REAL,0)
         try:
-            if aggregate is not None:export(aggregate);export_complete=True
+            if BULK is not None and BULK.export_deadline is None:BULK.start_export()
+            if aggregate is not None:export_bulk(aggregate);export_complete=True
         except BaseException as exc:error=(error+'; ' if error else '')+'export: '+str(exc);traceback.print_exc()
-        print('ARCTIC-PCMANFM-DIAG-END '+json.dumps(dict(status='diagnostic-collected' if error is None and export_complete else 'failed',
-              error=error,evidence_export_complete=export_complete,release_acceptance=False),sort_keys=True),flush=True)
+        try:
+            emit('ARCTIC-PCMANFM-DIAG-END ',dict(status='diagnostic-collected' if error is None and export_complete else 'failed',
+                error=error,evidence_export_complete=export_complete,release_acceptance=False))
+        finally:
+            if BULK is not None: BULK.close()
     return 0 if error is None and export_complete else 1
 
 

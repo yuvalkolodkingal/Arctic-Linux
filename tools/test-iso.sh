@@ -155,11 +155,17 @@ else:
 if os.environ.get("PCMANFM_DIAGNOSTIC") == "1":
     import importlib.util
     spec = importlib.util.spec_from_file_location('pcmanfm_controller', '/pcmanfm-diagnostic/pcmanfm-controller.py')
-    controller = importlib.util.module_from_spec(spec); spec.loader.exec_module(controller)
+    bulk_owns_cleanup = False
     try:
-        controller.run(vm, out, menu_seen, os.environ['PCMANFM_CHECKER_SHA'])
+        controller = importlib.util.module_from_spec(spec); spec.loader.exec_module(controller)
+        bspec = importlib.util.spec_from_file_location('diagnostic_bulk_channel', '/pcmanfm-diagnostic/bulk-channel.py')
+        bulk_module = importlib.util.module_from_spec(bspec); bspec.loader.exec_module(bulk_module)
+        bulk_owns_cleanup = True # Only a successful import transfers cleanup ownership.
+        bulk_module.run_owned(vm, out,
+            lambda bulk: controller.run_v3(vm, out, menu_seen, os.environ['PCMANFM_CHECKER_SHA'], bulk),
+            max(0, min(900, vmtest.T0+timeout-time.time())))
     finally:
-        vm.quit()
+        if not bulk_owns_cleanup: vm.quit()
     sys.exit(0)
 
 # 2. Splash and boot: every 10 s for the first 2 minutes, then every --interval seconds.
@@ -264,7 +270,7 @@ fi
 if [ "$PCMANFM_DIAGNOSTIC" = 1 ]; then
   mkdir /tmp/diagnostic-data
   cp /pcmanfm-diagnostic/guest-pcmanfm-diagnostic.py /tmp/diagnostic-data/guest-check.py
-  for f in native_smoke.py native-launcher.py atspi-snapshot.py gtk-entry-control.py bounded-launch.py security-collector.py runtime-pins.json bootstrap-diagnostic.sh original-h264-aac-1s.mp4 codec-fixture-manifest.json; do
+  for f in native_smoke.py native-launcher.py atspi-snapshot.py gtk-entry-control.py bounded-launch.py security-collector.py bulk-channel.py gtk-physical.py runtime-pins.json bootstrap-diagnostic.sh original-h264-aac-1s.mp4 codec-fixture-manifest.json; do
     cp "/pcmanfm-diagnostic/$f" /tmp/diagnostic-data/
   done
   printf '%s\n' '#!/bin/bash' 'set -euo pipefail' 'exec python3 /run/t/guest-check.py' > /tmp/diagnostic-data/run.sh
@@ -274,6 +280,9 @@ if [ "$PCMANFM_DIAGNOSTIC" = 1 ]; then
   args=(qemu-system-x86_64 -machine q35 -accel kvm -cpu max -smp "$SMP" -m "$MEMORY"
         -display none -vga virtio -qmp "unix:$OUT/qmp.sock,server=on,wait=off"
         -serial "file:$OUT/serial.log" -monitor none -no-reboot
+        -chardev "socket,id=arctic_bulk,path=$OUT/bulk.sock,server=on,wait=off"
+        -device virtio-serial-pci,id=arctic_bulk_bus
+        -device virtserialport,bus=arctic_bulk_bus.0,chardev=arctic_bulk,name=org.arctic.diagnostic.bulk
         -drive file=/tmp/target.qcow2,if=none,id=disk,discard=unmap -device virtio-blk-pci,drive=disk,bootindex=1
         -drive file=/tmp/diagnostic-data.iso,media=cdrom,readonly=on,if=none,id=data -device ide-cd,drive=data,bus=ide.0
         -netdev user,id=net0,restrict=on -device virtio-net-pci,netdev=net0

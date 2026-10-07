@@ -812,7 +812,7 @@ class SourceControls(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((root/'tools/test-iso.sh').stat().st_mode),0o755)
         for path,expected in manifest['files'].items():
             self.assertEqual(hashlib.sha256((root/path).read_bytes()).hexdigest(),expected,path)
-        runtime=json.loads((HERE/'runtime-pins.json').read_text());self.assertEqual(len(runtime),11)
+        runtime=json.loads((HERE/'runtime-pins.json').read_text());self.assertEqual(len(runtime),13)
         for name,expected in runtime.items():
             data=b'#!/bin/bash\nset -euo pipefail\nexec python3 /run/t/guest-check.py\n' if name=='run.sh' else (HERE/('guest-pcmanfm-diagnostic.py' if name=='guest-check.py' else name)).read_bytes()
             self.assertEqual(hashlib.sha256(data).hexdigest(),expected,name)
