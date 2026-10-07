@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "mode": "browser-native-argv-diagnostic",
+  "candidate_source": "fe4742c8b9414c45f0bcbb0a4191f116383c60d1",
+  "execution_base": "d0a69f881b38eeead7c9131e4dacaded4440b058",
+  "files": {
+    ".github/workflows/iso.yml": "b6946d8adadb3d39e7b2a37e973dd9115893cd897b88e45c32f77cedffee1784",
+    "tools/browser-route/browser-route-addon.py": "546c8352075c02ddf82c1a0d6d6296a39a35db6896a1ad01ec1604546db81941",
+    "tools/browser-route/compose-browser-route.py": "290133d21a3dd97144a7a14f8568bc4e47909f371bb8b68ab9ac9f9f744d9ba4",
+    "tools/browser-route/check-browser-route.py": "a10e16601a264c2626b3d48721461be93f5456f5651732ce8adee09a2cf89c7b",
+    "tools/browser-route/run-browser-route.py": "0fec7a820bf48f8b4b192ae8c05ca2e1ba12404322f90e502ce12989f6901fd0",
+    "tools/browser-route/browser-route-runner.py": "5c1468079131c1a0c77c6e63959097cd44084059251cdf017151a47aba6765ae",
+    "tools/browser-route/test_browser_route.py": "bbc24d455809c2f9e3212c8c0718fde792aef7d99c01e1a60506c1b06dbd220f",
+    "tools/browser-route/README.md": "45627ee0300860a8736a83be19cbf5208b8f5da8348df3eb32d6c459e0da5bdf",
+    "tools/browser-route/frozen-runtime-pins.json": "7898869351a7e2deb87432561deec1c93f060e095e866da8672a0e2b99376612",
+    "tools/browser-route/historical-evidence.json": "e75667a960c5f6191ca0ca8b54b7cfb8e6d3659a2824591154435b3dc1ca474a"
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "prior_actual": {
+    "status": "VERIFIED_FINITE_DIAGNOSTIC_GATE_FAILURE",
+    "run": 37563885487,
+    "attempt": 1,
+    "execution_head": "d0a69f881b38eeead7c9131e4dacaded4440b058",
+    "artifact_id": 11460610239,
+    "zip_bytes": 6863384,
+    "zip_sha256": "7d6ceb69f11575d9b00be23af54567b4a8614a9380a50fdc42d5c9a8562d742b",
+    "verification_sha256": "cd1c70b4a5584062f86f9c4e0abae5e906b74d7d409db0199fdb50bdbd2889c5",
+    "source_replay_proof_sha256": "27824ab194e47f545c87f013d043c4a445659a4154a27cd297b5e7329cc8a377",
+    "job_elapsed_seconds": 4371.0,
+    "diagnostic_step_elapsed_seconds": 4163.0,
+    "controller_phase": "complete_feasibility_gates_failed",
+    "both_installs_and_measured_boots_complete": true,
+    "measured_boots": 2,
+    "complete_raw_invocations": 30,
+    "selected_observations": 24,
+    "precision_failed": 8,
+    "precision_failures_per_image": {
+      "baseline": 2,
+      "candidate": 6
+    },
+    "first_failed_observation": {
+      "image": "baseline",
+      "role": "terminal",
+      "phase": "cold",
+      "invocation": 1,
+      "upper_seconds": 0.184347297,
+      "interval_seconds": 0.009414832,
+      "maximum_interval_seconds": 0.004608682425,
+      "valid": false,
+      "selected_stream": "watch"
+    },
+    "all_selected_streams": [
+      "watch"
+    ],
+    "failed_point_latency_gates": {
+      "browser_first_mapped_after_preconditioning": {
+        "values": {
+          "baseline": 1.080069319,
+          "candidate": 1.333186902
+        },
+        "regression_threshold_percent": 10,
+        "regression": true,
+        "delta_percent": 23.435309062788036
+      },
+      "browser_subsequent_mapped": {
+        "values": {
+          "baseline": 1.052382682,
+          "candidate": 1.2044779965
+        },
+        "regression_threshold_percent": 10,
+        "regression": true,
+        "delta_percent": 14.45247219490069
+      }
+    },
+    "failed_median_enclosures": [
+      "browser_first_mapped_after_preconditioning",
+      "browser_subsequent_mapped"
+    ],
+    "finite_memory_gates_valid": true,
+    "cpu_raw_samples": 120,
+    "pss_raw_samples": 24,
+    "historical_failures_preserved": [
+      "37534194076:30/72precision",
+      "37556740921:0/24discovery",
+      "originalKitty:20.870652%point regression"
+    ],
+    "limits": [
+      "One fresh boot per fixed image; not three-pair acceptance",
+      "First GUI with pristine app profile; not filesystem-cache cold",
+      "Kernel peer/watch/GET/EOF/hold proofs qualify only this executed diagnostic",
+      "Root du excludes separate mounts",
+      "Idle includes declared collector and fixture-worker overhead",
+      "No causal speed/gain or physical gaming claim"
+    ],
+    "full_six_boot_performance_acceptance": false,
+    "release_acceptance": false,
+    "rerun_dispatch_vm_source_changes": false
+  },
+  "owner_report_sha256": "b985b2eaf68d787b4ad538a91253ae3f01327831a1b09c88b4a325e81785dd6b",
+  "independent_actual_review_sha256": "bf0174adb7395503187f22bfd42b76d7a94ab24e9adb2aeadcdf51b61ec3f5e2",
+  "proposal_ready_sha256": "6ff6958ff0a6be44de3a94815ba43d58031b9fa869c3e5b445b1364b431d0a2c",
+  "proposal_independent_review_sha256": "80a32bc2d842a7cf3cb76f81606f70f87bde12615db709a0df176384ea9a2651",
+  "historical_failures_cleared": false
+}
