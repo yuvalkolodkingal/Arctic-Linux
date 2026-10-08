@@ -29,6 +29,9 @@ container=$(docker create -v "$REPO:/arctic:ro" registry.fedoraproject.org/fedor
 docker start -a "$container"
 docker export "$container" > "$WORK/guest.tar"
 sudo tar -xf "$WORK/guest.tar" -C "$WORK/root"
+# QEMU runs as the runner. Passthrough exports must be accessible to that user,
+# including the fixture's /root; this tree is rendering-only, not an OS install.
+sudo chown -R "$(id -u):$(id -g)" "$WORK/root"
 kernel=$(cat "$WORK/root/frame-kernel")
 cp "$WORK/root/lib/modules/$kernel/vmlinuz" "$WORK/vmlinuz"
 cp /bin/busybox "$WORK/initrd/bin/busybox"
