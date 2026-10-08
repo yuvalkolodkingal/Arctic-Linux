@@ -1,0 +1,79 @@
+name: Inspect original issue 23 attachments
+
+on:
+  push:
+    branches: [codex/inspect-issue23-20261008]
+    paths: [.github/workflows/inspect-issue23-20261008.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Install bounded image inspection tools in this disposable runner
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg tesseract-ocr python3-pil
+      - name: Inspect only the original public issue attachment identities
+        run: |
+          python3 -B - <<'PY'
+          import base64, hashlib, json, os, re, subprocess, tempfile
+          from pathlib import Path
+          from PIL import Image
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-issue23-20261008'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          sensitive = re.compile(r'(?i)(?:gh[pousr]_|github_pat_)[a-z0-9_]+|'
+                                 r'AKIA[A-Z0-9]{16}|[\w.+-]+@[\w.-]+|'
+                                 r'(?:password|token|secret|authorization)\s*[:=]\s*\S+')
+          with tempfile.TemporaryDirectory(prefix='arctic-original-issue-') as temporary:
+              root = Path(temporary)
+              assets = [('image', '7aa31856-add6-4023-8554-a3dbf78207bd'),
+                        ('video', 'da2c2b80-c82d-4bbe-b069-ca20d79351e8')]
+              for kind, identity in assets:
+                  original = root / kind
+                  subprocess.run(['curl', '--fail', '--silent', '--show-error', '--location',
+                                  '--proto', '=https', '--proto-redir', '=https', '--max-redirs', '3',
+                                  '--max-filesize', '100000000', '--max-time', '120',
+                                  'https://github.com/user-attachments/assets/' + identity,
+                                  '--output', str(original)], check=True, timeout=130)
+                  assert 0 < original.stat().st_size <= 100000000
+                  print('ARCTIC-ISSUE-ASSET', kind, identity, original.stat().st_size,
+                        hashlib.sha256(original.read_bytes()).hexdigest(), flush=True)
+                  if kind == 'image':
+                      with Image.open(original) as source:
+                          assert source.size == (1918, 29), source.size
+                          frame = root / 'original-strip.png'
+                          source.convert('RGB').save(frame)
+                      frames = [frame]
+                  else:
+                      metadata = json.loads(subprocess.check_output(['ffprobe', '-v', 'error',
+                          '-show_entries', 'format=duration:stream=codec_type,width,height',
+                          '-of', 'json', str(original)], timeout=30))
+                      duration = float(metadata['format']['duration'])
+                      assert 0 < duration <= 300
+                      videos = [s for s in metadata['streams'] if s['codec_type'] == 'video']
+                      assert len(videos) == 1 and videos[0]['width'] <= 4096 and videos[0]['height'] <= 4096
+                      print('ARCTIC-ISSUE-VIDEO', json.dumps(metadata), flush=True)
+                      frames = []
+                      for index, fraction in enumerate((0, .25, .5, .75)):
+                          frame = root / ('original-video-' + str(index) + '.png')
+                          subprocess.run(['ffmpeg', '-v', 'error', '-ss', str(duration * fraction),
+                                          '-i', str(original), '-frames:v', '1', str(frame)], check=True, timeout=45)
+                          frames.append(frame)
+                  for frame in frames:
+                      assert frame.stat().st_size < 8_000_000
+                      ocr = subprocess.check_output(['tesseract', str(frame), 'stdout'],
+                                                    stderr=subprocess.DEVNULL, text=True, timeout=45)
+                      if sensitive.search(ocr):
+                          print('ARCTIC-ISSUE-FRAME-WITHHELD', frame.name, 'text screening matched; original stays at its public issue URL')
+                          continue
+                      content = frame.read_bytes()
+                      encoded = base64.b64encode(content).decode('ascii')
+                      print('ARCTIC-ISSUE-PNG-BEGIN', frame.name, hashlib.sha256(content).hexdigest())
+                      for offset in range(0, len(encoded), 1024):
+                          print('ARCTIC-ISSUE-PNG-DATA', encoded[offset:offset + 1024])
+                      print('ARCTIC-ISSUE-PNG-END', frame.name)
+          PY
