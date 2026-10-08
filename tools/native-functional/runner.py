@@ -110,7 +110,9 @@ def verify(args):
     for name, expected in manifest['execution_files'].items():
         R.require(not Path(name).is_absolute() and '..' not in Path(name).parts, 'Unsafe execution source path')
         R.pinned_file(execution / name, expected)
-    R.require(set(manifest['execution_files']) == {'tools/test-install.sh', 'tools/lib/vmtest.py',
+    R.require(set(manifest['execution_files']) == {'.github/workflows/native-candidate-20261008.yml',
+              'tools/test-install.sh', 'tools/lib/vmtest.py', 'tools/lib/container.sh',
+              'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
               'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
               'tools/native-functional/source-provenance.json'}, 'Execution pin set differs')
     R.verify_iso(args.inputs)
