@@ -37,9 +37,13 @@ def main(performance, wallpaper=False):
         return value
 
     check('selinux', lambda: require(run(['getenforce']) == 'Enforcing', 'SELinux enforcing'))
-    check('browser-ref', lambda: run(prefix + ['flatpak', 'info', '--system', '--show-commit', 'app.zen_browser.zen']))
-    check('browser-desktop-entry', lambda: run(prefix + ['test', '-r',
-          '/var/lib/flatpak/exports/share/applications/app.zen_browser.zen.desktop']))
+    roles = performance['functional_roles'](prefix)
+    check('browser-ref', lambda: roles['roles']['browser']['package'])
+    browser = roles['roles']['browser']
+    app = performance['ROLE_APPS'][browser['id']]
+    entry = ('/var/lib/flatpak/exports/share/applications/' if 'flatpak' in app
+             else '/usr/share/applications/') + app['desktop']
+    check('browser-desktop-entry', lambda: run(prefix + ['test', '-r', entry]))
     check('package-managers', lambda: run(['rpm', '-q', 'dnf5', 'flatpak', 'nix', 'nix-daemon']))
     check('update-repository-key', lambda: require(
           'BEGIN PGP PUBLIC KEY BLOCK' in Path('/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic').read_text(),

@@ -373,6 +373,46 @@ def declare_roles(prefix, context, inventory):
                 meaning='First GUI-role execution from a pristine installed profile after normal desktop login; shared OS libraries and host disk caches may already be warm')
 
 
+def functional_roles(prefix, inventory=None):
+    """Verify installed roles without claiming pristine first-use measurements."""
+    inventory = rpm_inventory() if inventory is None else inventory
+    state = json.loads(run(prefix + ['python3', '-c', ROLE_STATE_READER, '[]']))
+    if state['uid'] != pwd.getpwnam(prefix[2]).pw_uid:
+        raise RuntimeError('Role declaration did not use the actual desktop user')
+    browser = run(prefix + ['xdg-settings', 'get', 'default-web-browser'])
+    matches = [(image, expected) for image, expected in EXPECTED_ROLES.items()
+               if ROLE_APPS[expected['browser']]['desktop'] == browser
+               and all(state['configured'].get(role) in ROLE_APPS[ident]['configured']
+                       or (image == 'baseline' and ident == 'zen' and not state['configured'].get(role))
+                       for role, ident in expected.items())]
+    if len(matches) != 1:
+        raise RuntimeError('Missing, mixed or unsupported installed default roles')
+    image, expected = matches[0]
+    roles = {}
+    for role, ident in expected.items():
+        app = ROLE_APPS[ident]
+        path = state['programs'].get(app['program'])
+        if not path:
+            raise RuntimeError('Missing installed role program: ' + ident)
+        if 'rpm' in app:
+            packages = [value for value in inventory['nevra']
+                        if re.match(re.escape(app['rpm']) + r'-[0-9]+:', value)]
+            owner = run(['rpm', '-qf', '--qf', '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}', path])
+            if len(packages) != 1 or owner != packages[0]:
+                raise RuntimeError('Role RPM identity or binary owner differs: ' + ident)
+            package = dict(kind='rpm', nevra=owner, binary_owner=owner)
+        else:
+            commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', app['flatpak']])
+            if not re.fullmatch('[0-9a-f]{64}', commit):
+                raise RuntimeError('Missing installed role Flatpak identity')
+            package = dict(kind='flatpak', ref=app['flatpak'], commit=commit)
+        roles[role] = dict(id=ident, role=role, program_path=path,
+                          configured_command=state['configured'].get(role, ''),
+                          appids=list(app['appids']), package=package)
+    return dict(image=image, roles=roles, default_browser_desktop=browser,
+                configuration_sources=state['sources'], first_use_measurement=False)
+
+
 WORKLOAD_PAGE = '<!doctype html><meta charset="utf-8"><title>Arctic startup fixture</title><h1>Arctic offline browser</h1><p>Local page, no remote resources.</p>'
 WORKLOAD_WORKER = r'''
 import hashlib,http.server,json,os,pathlib,shutil,sys,tempfile,threading
@@ -570,7 +610,7 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                             child.wait(timeout=5)
 
 
-def measure(prefix, declared=None, workload=None, order=None, complete=True):
+def measure(prefix, declared=None, workload=None, order=None, complete=True, preconditioned=True):
     emit('idle_measurement_scope', dict(
         guest_counters='Whole guest, including the collector and temporary benchmark processes',
         parent_observer_cpu='RUSAGE_SELF of this Python collector only; helper CPU is included in guest counters',
@@ -617,7 +657,8 @@ def measure(prefix, declared=None, workload=None, order=None, complete=True):
                                poll_seconds=ROLE_POLL_SECONDS, label='role_'+role) for _ in range(3)]
             emit('startup_role_' + role + '_warm_seconds', dict(first=samples[0], warm=samples[1:],
                  observation_bounds=bounds, poll_sleep_seconds=ROLE_POLL_SECONDS,
-                 observer=MAPPING_OBSERVER, app_id=app['id'], phase='after_45_second_preconditioning'))
+                 observer=MAPPING_OBSERVER, app_id=app['id'],
+                 phase='after_45_second_preconditioning' if preconditioned else 'functional_probe_repeated_launch'))
             order.append('warm:'+role)
     else:
         for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
@@ -665,7 +706,7 @@ def first_use_and_precondition(prefix, declared, workload):
     return order
 
 
-def main(preconditioned=False):
+def main(preconditioned=False, functional=False):
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
             or run(['systemd-detect-virt', '--vm']) not in ('qemu', 'kvm')):
         raise RuntimeError('This probe requires root inside a disposable QEMU VM')
@@ -685,6 +726,9 @@ def main(preconditioned=False):
             context = json.loads(Path('/run/t/performance-context.json').read_text())
             declared = declare_roles(prefix, context, inventory)
             emit('app_roles', declared)
+        elif functional:
+            declared = functional_roles(prefix, inventory)
+            emit('functional_app_roles', declared)
         emit('measured_payload', dict(
             arctic_shell=run(['rpm', '-q', 'arctic-shell']),
             catalog_sha256=run(['sha256sum', '/usr/share/arctic/shell/AppsService.qml']),
@@ -693,7 +737,7 @@ def main(preconditioned=False):
             quickshell=run(['rpm', '-q', 'quickshell']),
             role_packages={role: app['package'] for role, app in declared['roles'].items()} if declared
                           else dict(kitty=run(['rpm', '-q', 'kitty']))))
-        if declared:
+        if preconditioned:
             emit('pristine_idle_measurement_scope', dict(
                 phase='before_any_gui_role_or_workload_worker',
                 collector_present=True, workload_worker_present=False,
@@ -705,6 +749,9 @@ def main(preconditioned=False):
                 order.insert(0, 'pristine_idle')
                 measure(prefix, declared, workload, order, complete=False)
                 emit('role_measurement_order', order)
+        elif functional:
+            with role_workload(prefix) as workload:
+                measure(prefix, declared, workload, [], complete=False, preconditioned=False)
         else:
             measure(prefix, complete=False)
     finally:

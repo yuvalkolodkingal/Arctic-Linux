@@ -12,7 +12,7 @@ args = parser.parse_args()
 root = Path(__file__).resolve().parent
 sources = {name: (root/name).read_text() for name in ('guest.py', 'capabilities.py')}
 args.output.parent.mkdir(parents=True, exist_ok=True)
-entry = 'measurement["main"]()\n'
+entry = 'measurement["main"](functional=True)\n'
 if args.desktop:
     source = (root/'desktop.py').read_text()
     entry = ('desktop = {"__name__": "arctic_desktop", "__file__": __file__}\n'
