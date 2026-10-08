@@ -108,6 +108,41 @@ def verified_rpm_signatures(files):
     return output
 
 
+def higher_downloaded_evr(files, expected):
+    """Use RPM's comparison rules, including epochs, for every preview replacement."""
+    query = '%{NAME}\t%{EPOCHNUM}\t%{VERSION}\t%{RELEASE}\n'
+    downloaded = {}
+    for row in run(['rpm', '-qp', '--qf', query, *files], timeout=180).splitlines():
+        name, epoch, version, release = row.split('\t')
+        if name in downloaded:
+            raise RuntimeError('Multiple downloaded versions of ' + name)
+        downloaded[name] = (int(epoch), version, release)
+    proof = {}
+    for name in sorted(expected):
+        if name not in downloaded:
+            raise RuntimeError('Missing downloaded replacement: ' + name)
+        rows = run(['rpm', '-q', '--qf', query, name]).splitlines()
+        if len(rows) != 1:
+            raise RuntimeError('Ambiguous installed version: ' + name)
+        actual, epoch, version, release = rows[0].split('\t')
+        if actual != name:
+            raise RuntimeError('Installed name differs: ' + name)
+        before, after = (int(epoch), version, release), downloaded[name]
+        order = (after[0] > before[0]) - (after[0] < before[0])
+        for index in (1, 2):
+            if order:
+                break
+            # JSON quoting is also valid for these RPM version/release Lua strings.
+            lua = 'print(rpm.vercmp(' + json.dumps(after[index]) + ',' + json.dumps(before[index]) + '))'
+            order = int(run(['rpm', '--eval', '%{lua:' + lua + '}']))
+        if order <= 0:
+            raise RuntimeError(f'Replacement is not higher EVR: {name}: {before} -> {after}')
+        proof[name] = dict(installed=list(before), downloaded=list(after), rpm_order=order)
+    if not proof:
+        raise RuntimeError('No preview package EVRs were compared')
+    return proof
+
+
 def latest_offline_history():
     """Select the latest positive index listed by the installed DNF version.
 
@@ -872,12 +907,14 @@ ShellRoot {
                 downloaded = set(run(['rpm', '-qp', '--qf', '%{NAME}\n', *files], timeout=180).splitlines())
                 must(bool(expected) and expected.issubset(downloaded),
                      dict(expected=sorted(expected), downloaded=sorted(downloaded)))
+                evr = higher_downloaded_evr(files, expected)
                 if expected_stable_source:
                     releases = run(['rpm', '-qp', '--qf', '%{NAME} %{RELEASE}\n', *files], timeout=180).splitlines()
                     must(all('git'+expected_stable_source[:7] in line for line in releases
                              if line.split()[0] in expected), releases)
                 return dict(status=data, arctic_download_count=len(files),
-                            arctic_downloaded_names=sorted(downloaded), signatures=signatures)
+                            arctic_downloaded_names=sorted(downloaded), signatures=signatures,
+                            higher_evr=evr)
             check('signed-offline-update-ready', staged_update)
         else:
             check('dnf-update', lambda: run(['dnf5', '-y', '--refresh', 'upgrade'], timeout=1800))
