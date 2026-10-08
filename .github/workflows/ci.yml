@@ -328,6 +328,36 @@ jobs:
           path: /tmp/shared-wallpaper-shots/
           retention-days: 7
 
+  frame-integration:
+    name: Screen frame (covered mode transitions)
+    runs-on: ubuntu-latest
+    needs: [rpms]
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpms
+          path: out/frame-rpms
+      - name: Prepare the private software compositor allocator
+        run: |
+          # Boot the test kernel inside QEMU; the Azure host has no udmabuf driver.
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 busybox-static cpio kmod xz-utils zstd
+          git fetch --depth 1 origin 2d5ac68847a5feb541177aeaa5a9a00d5ad44815
+      - name: Replay original and repaired frame on Mango and sway
+        run: bash shell/dev/test-screen-frame-vm.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screen-frame-regression
+          path: |
+            out/test/frame/
+            out/test/frame-vm/serial.log
+          retention-days: 14
+
   specs:
     name: RPM specs parse
     runs-on: ubuntu-latest
