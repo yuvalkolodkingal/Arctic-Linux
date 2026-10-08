@@ -51,6 +51,11 @@ while IFS= read -r file; do
     *) cp "$file" "$target" ;;
   esac
 done < "$WORK/modules"
+for metadata in modules.order modules.builtin modules.builtin.modinfo; do
+  if [[ -f "$WORK/root/lib/modules/$kernel/$metadata" ]]; then
+    cp "$WORK/root/lib/modules/$kernel/$metadata" "$WORK/initrd/lib/modules/$kernel/"
+  fi
+done
 depmod --basedir "$WORK/initrd" "$kernel"
 cat > "$WORK/initrd/init" <<'INIT'
 #!/bin/busybox sh
@@ -73,8 +78,15 @@ INIT
 chmod 755 "$WORK/initrd/init"
 (cd "$WORK/initrd" && find . -print0 | cpio --null -o -H newc | gzip -1) > "$WORK/initrd.gz"
 kvm=()
-[[ ! -c /dev/kvm ]] || kvm=(-enable-kvm -cpu host)
-timeout --signal=TERM --kill-after=15s 35m qemu-system-x86_64 "${kvm[@]}" \
+qemu=(qemu-system-x86_64)
+if [[ -c /dev/kvm ]]; then
+  # Keep QEMU's runner UID, with only the existing device's kvm group. Do not
+  # change host device modes, install host modules, or run the emulator as root.
+  [[ "$(stat -c %G /dev/kvm)" == kvm ]]
+  qemu=(sudo -u "$(id -un)" -g kvm -- qemu-system-x86_64)
+  kvm=(-enable-kvm -cpu host)
+fi
+timeout --signal=TERM --kill-after=15s 35m "${qemu[@]}" "${kvm[@]}" \
   -m 4096 -smp 2 -nodefaults -no-reboot -display none -serial stdio \
   -kernel "$WORK/vmlinuz" -initrd "$WORK/initrd.gz" \
   -append 'console=ttyS0 rdinit=/init panic=-1 selinux=0 arctic.frame-test=1' \
