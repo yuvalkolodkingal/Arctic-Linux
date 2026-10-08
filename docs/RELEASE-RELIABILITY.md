@@ -82,9 +82,11 @@ kitty, Nautilus, Zen, Zed and VLC. For an optimized candidate, pass
 `--reliability-app-profile lightweight` and `--app-profile lightweight` to the harness and report
 respectively. This lane expects Foot, PCManFM, Epiphany, FeatherPad and Celluloid, including the
 live editor. The workflow has the same explicit `app_profile` choice. These options select pinned
-installer profiles (`profiles/ci/reliability-{legacy,lightweight}.toml`) so future default-app
+installer test fixtures (`tools/reliability/profiles/{legacy,lightweight}.toml`) so future default-app
 changes do not silently alter previous-release installation. An explicit `--profile` override
 must match the selected expectations. Upgrades retain the legacy lane's existing choices.
+The lightweight fixture targets an ISO containing the optimized catalog; it is not a bundled
+installer profile in the older main catalog.
 
 Both lanes use main's single `guest-check.py` hook and one set of serial exit markers/shutdown
 rules. `--reliability-version` cannot be combined with `--guest-check`. Reports require the

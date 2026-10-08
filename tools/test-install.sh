@@ -130,7 +130,7 @@ if [[ -n "$RELIABILITY_VERSION" ]]; then
   [[ "$RELIABILITY_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || arctic_die "invalid reliability version"
   [[ -z "$GUEST_CHECK" ]] || arctic_die "--reliability-version and --guest-check are mutually exclusive"
   GUEST_CHECK="$HERE/reliability/guest.py"
-  if ! (( PROFILE_EXPLICIT )); then PROFILE="$ROOT/profiles/ci/reliability-$RELIABILITY_APP_PROFILE.toml"; fi
+  if ! (( PROFILE_EXPLICIT )); then PROFILE="$HERE/reliability/profiles/$RELIABILITY_APP_PROFILE.toml"; fi
 fi
 [[ -f "$PROFILE" ]] || arctic_die "no profile at $PROFILE"
 if [[ "$STAGE" != boot ]]; then
