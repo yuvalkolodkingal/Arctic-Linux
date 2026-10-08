@@ -32,13 +32,14 @@ sudo tar -xf "$WORK/guest.tar" -C "$WORK/root"
 kernel=$(cat "$WORK/root/frame-kernel")
 cp "$WORK/root/lib/modules/$kernel/vmlinuz" "$WORK/vmlinuz"
 cp /bin/busybox "$WORK/initrd/bin/busybox"
-ldd "$WORK/initrd/bin/busybox" 2>&1 | grep -Eq 'not a dynamic executable|statically linked'
+(ldd "$WORK/initrd/bin/busybox" 2>&1 || true) | grep -Eq 'not a dynamic executable|statically linked'
+sudo cp /bin/busybox "$WORK/root/frame-busybox"
 for module in virtio_pci 9pnet_virtio 9p; do
   sudo modprobe --show-depends --dirname "$WORK/root" --set-version "$kernel" "$module"
 done | awk '$1 == "insmod" {print $2}' | sort -u > "$WORK/modules"
 while IFS= read -r file; do
-  relative="${file#"$WORK/root"}"
-  target="$WORK/initrd${relative%.xz}"
+  relative=$(basename "$file")
+  target="$WORK/initrd/lib/modules/$kernel/kernel/${relative%.xz}"
   target="${target%.zst}"
   mkdir -p "$(dirname "$target")"
   case "$file" in
@@ -73,7 +74,7 @@ kvm=()
 timeout --signal=TERM --kill-after=15s 35m qemu-system-x86_64 "${kvm[@]}" \
   -m 4096 -smp 2 -nodefaults -no-reboot -display none -serial stdio \
   -kernel "$WORK/vmlinuz" -initrd "$WORK/initrd.gz" \
-  -append 'console=ttyS0 rdinit=/init panic=-1 selinux=0' \
+  -append 'console=ttyS0 rdinit=/init panic=-1 selinux=0 arctic.frame-test=1' \
   -virtfs "local,path=$WORK/root,mount_tag=arctic-root,security_model=none" \
   -virtfs "local,path=$REPO,mount_tag=arctic-source,security_model=none" \
   2>&1 | tee "$WORK/serial.log"
