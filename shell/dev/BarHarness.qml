@@ -2,6 +2,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import ".."
 
 // Copy this entry point into a throwaway copy of shell/ before launching it. It exercises the
@@ -12,6 +13,7 @@ ShellRoot {
     readonly property var barMenu: menu
     readonly property var barPopovers: [menu, extra]
     readonly property bool modalOpen: false
+    property bool coverOutputs: false
     function onScreen(name) {
         return Quickshell.screens.find(s => s.name === name) || Quickshell.screens[0];
     }
@@ -35,6 +37,34 @@ ShellRoot {
     function toggleKeyboardMenu(screen, coordinate) { popup(screen, coordinate); }
     function cyclePanel(screen, dir) {}
     Variants { id: bars; model: Quickshell.screens; Bar { shell: preview.root } }
+    Variants { id: frames; model: Quickshell.screens; ScreenFrame {} }
+    // Only the private frame regression runner enables these synthetic surfaces.
+    property bool frameBackdrop: false
+    Variants {
+        model: preview.frameBackdrop ? Quickshell.screens : []
+        PanelWindow {
+            required property var modelData
+            screen: modelData
+            anchors { top: true; bottom: true; left: true; right: true }
+            exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.layer: WlrLayer.Background
+            color: '#21834f'
+            mask: Region {}
+        }
+    }
+    Variants {
+        model: preview.frameBackdrop ? Quickshell.screens : []
+        PanelWindow {
+            required property var modelData
+            screen: modelData
+            visible: preview.coverOutputs
+            anchors { top: true; bottom: true; left: true; right: true }
+            exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.layer: WlrLayer.Overlay
+            color: '#41678d'
+            mask: Region {}
+        }
+    }
     BarMenu { id: menu; shell: preview.root }
     Popover {
         id: extra
@@ -48,6 +78,13 @@ ShellRoot {
             Session.settings = Object.assign({}, Session.settings, {barPosition: edge, barSize: size, barHideMode: hide ? 'auto' : 'always', barAutoHide: hide});
         }
         function mode(mode: string): void { Session.settings = Object.assign({}, Session.settings, {barHideMode: mode}); }
+        function cover(enabled: bool): void { preview.frameBackdrop = true; preview.coverOutputs = enabled; }
+        function frameState(): string {
+            return JSON.stringify({ground: Theme.ground.toString(), frameWidth: Theme.frameWidth,
+                insets: {top: Theme.topInset, bottom: Theme.bottomInset, left: Theme.leftInset, right: Theme.rightInset},
+                surfaces: frames.instances.map(f => ({screen: f.modelData.name,
+                    width: f.surface.width, height: f.surface.height}))});
+        }
         function geometry(): string { return JSON.stringify({ready: WindowGeometry.ready, monitors: WindowGeometry.monitors, windows: WindowGeometry.windows, error: WindowGeometry.error}); }
         function focus(name: string): void { barOn(onScreen(name)).toggleFocusMode(); }
         function key(name: string, end: bool): void {

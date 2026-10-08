@@ -15,16 +15,17 @@ import Quickshell.Wayland
 Scope {
     id: root
     required property var modelData
+    readonly property var surface: frame
 
     PanelWindow {
         id: frame
         screen: root.modelData
         visible: Theme.frameWidth > 0
         anchors { top: true; bottom: true; left: true; right: true }
-        margins.top: Theme.topInset
-        margins.bottom: Theme.bottomInset
-        margins.left: Theme.leftInset
-        margins.right: Theme.rightInset
+        // Keep the Bottom layer surface at the physical output bounds. A covered surface
+        // can stop receiving frame callbacks, leaving a layer-shell margin/resize commit
+        // pending when the bar changes mode. Move the artwork inside this stable surface
+        // instead; it can repaint when exposed without waiting for a new configure.
         color: 'transparent'
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Bottom
@@ -34,6 +35,10 @@ Scope {
         Canvas {
             id: outline
             anchors.fill: parent
+            anchors.topMargin: Theme.topInset
+            anchors.bottomMargin: Theme.bottomInset
+            anchors.leftMargin: Theme.leftInset
+            anchors.rightMargin: Theme.rightInset
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             Connections {
