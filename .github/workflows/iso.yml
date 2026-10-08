@@ -288,6 +288,7 @@ jobs:
           name: boot-test
           path: |
             out/test/
+            !out/test/performance/**
             !out/test/**/*.qcow2
             !out/test/**/*.iso
             !out/test/**/*.sock
