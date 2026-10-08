@@ -7,6 +7,7 @@ the same covered-mode transitions reproduce a stale native window geometry.
 """
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -22,6 +23,16 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 class FrameGeometryError(AssertionError):
     """Only a native frame dimension mismatch establishes baseline reproduction."""
+
+
+def inner_frame_probe_points(surface, scale, frame_width, capture_width, capture_height):
+    # The right/bottom path is at w-f+0.5 with a one-logical-pixel stroke,
+    # so its outer edge ends at w-f+1. Choose the first whole physical pixel
+    # beyond that edge. Adding one *physical* pixel to the cutout can still
+    # land on the antialiased hairline at fractional or double scale.
+    padding = surface.get('edgeOverscan', 0)
+    return ((math.ceil((surface['width'] - padding - frame_width + 1) * scale), capture_height // 2),
+            (capture_width // 2, math.ceil((surface['height'] - padding - frame_width + 1) * scale)))
 
 
 def validate_preview(process, log_path):
@@ -202,10 +213,8 @@ def exercise(base, out, compositor, frame_source=None):
                         # Detect an old inset ring still painted beneath the hidden bar.
                         # Overscan must not move/thin the original inner right or
                         # bottom edge. Sample just outside each expected hairline.
-                        overscan = surface.get('edgeOverscan', 0)
-                        inner = actual['frameWidth']
-                        for x, y in ((round((surface['width'] - overscan - inner) * scale) + 1, capture.height // 2),
-                                     (capture.width // 2, round((surface['height'] - overscan - inner) * scale) + 1)):
+                        for x, y in inner_frame_probe_points(surface, scale, actual['frameWidth'],
+                                                             capture.width, capture.height):
                             pixel = image.getpixel((x, y))
                             assert max(abs(a - b) for a, b in zip(pixel, ground)) <= 3, (label, name, 'inner frame moved', (x, y), pixel, ground)
                         edge = label.split('-')[1]
