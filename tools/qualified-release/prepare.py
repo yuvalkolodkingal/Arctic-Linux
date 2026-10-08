@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
          'tools/native-functional/fetch-image.py'}
-BUILD_INPUTS = {'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
+BUILD_INPUTS = {'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
+                'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
 NATIVE_GATES = set('fresh-defaults-and-isolation archive-content-roundtrips actual-role-file-manager-terminal-editor '
                    'open-codec-content-and-player-state portal-and-accessibility-reachability '
                    'owned-process-cleanup-config-preservation selinux-and-new-avcs open-codec-lossless-command-decode'.split())
