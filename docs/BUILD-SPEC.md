@@ -90,17 +90,22 @@ checked against the SHA-256 there and again in `%prep`.
 Metapackage: `arctic-desktop` (subpackage, no files) Requires everything a desktop needs:
 mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-settings, arctic-desktop-config,
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
-arctic-grub-theme, foot, fish, bash, nano, featherpad, epiphany, celluloid, fastfetch, swaybg, swayidle,
+arctic-grub-theme, fastfetch, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
 pipewire-pulseaudio, NetworkManager-wifi, bluez,
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
-gnome-keyring-pam, pcmanfm (GTK 3), xarchiver and its archive companions, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
+gnome-keyring-pam, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
 fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
 adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop, mako (the waybar session's notification
 daemon; the shell is its own notification server), pavucontrol, network-manager-applet and
 blueman (the shell draws its own sound, network and Bluetooth menus and pairs with its own
 agent; the waybar session and the menus' "More…" links still use them). arctic-shell Requires glib2 (gdbus).
+
+Swappable defaults are Recommends: Epiphany, Foot, fish, GTK 3 PCManFM, XArchiver,
+Celluloid and FeatherPad. The installer can replace or deselect them without removing
+the desktop metapackage. Fresh media also includes Bash, Nano and archive format tools;
+the composed install follows the selected module packages and MIME defaults (§5, §7).
 
 ## 3. Desktop session (installed and live)
 
