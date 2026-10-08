@@ -4,8 +4,8 @@
  "name": "Winter",
  "dark": false,
  "colorScheme": "prefer-light",
- "wallpaper": "snowfield-winter",
- "lockWallpaper": "fox-winter",
+ "wallpaper": "/usr/share/backgrounds/arctic/default.jpg",
+ "lockWallpaper": "/usr/share/backgrounds/arctic/default.jpg",
  "colors": {
   "ground": "#eef2f5",
   "surface": "#fbfcfd",

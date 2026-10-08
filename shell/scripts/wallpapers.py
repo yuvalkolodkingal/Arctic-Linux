@@ -8,10 +8,9 @@
     wallpapers.py delete <path>     delete one of your pictures (not the one in use)
     wallpapers.py rename <path> <name>  rename one of your pictures (same folder and type)
 
-Items are the Arctic design wallpapers (snowfield, aurora, fox) — shown in the active theme's
-variant and applied by name, so they follow Winter / Polar night switches — followed by the
-pictures in your folder (default ~/Pictures/Wallpapers). Design wallpapers are looked up in
-~/.local/share/arctic/wallpapers, then /usr/share/backgrounds/arctic.
+Items are the packaged Arctic photo collection followed by the pictures in your folder
+(default ~/Pictures/Wallpapers). Older installations without a collection keep the legacy
+illustrations, and saved choices continue to take precedence over fresh defaults.
 
 Thumbnails (480×300 JPEG, Pillow; SVGs rendered with rsvg-convert) are cached in
 ~/.cache/arctic/thumbs. Settings live in ~/.config/arctic/wallpapers.json ({"folder": …}).
@@ -37,7 +36,7 @@ HOME = Path.home()
 CONFIG = Path(os.environ.get('XDG_CONFIG_HOME') or HOME / '.config') / 'arctic'
 CACHE = Path(os.environ.get('XDG_CACHE_HOME') or HOME / '.cache') / 'arctic' / 'thumbs'
 DATA = Path(os.environ.get('XDG_DATA_HOME') or HOME / '.local/share') / 'arctic' / 'wallpapers'
-SYSTEM = [DATA, Path('/usr/share/backgrounds/arctic')]
+SYSTEM = [DATA, Path(os.environ.get('ARCTIC_BACKGROUNDS_DIR') or '/usr/share/backgrounds/arctic')]
 SETTINGS = CONFIG / 'wallpapers.json'
 DESIGN = [('snowfield', 'Snowfield'), ('aurora', 'Aurora'), ('fox', 'Fox')]
 IMAGES = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.svg'}
@@ -95,12 +94,20 @@ def current():
     if saved:
         return saved
     try:
-        drawn = Path((CACHE.parent / 'wallpaper-current').read_text().strip()).stem
+        drawn_path = Path((CACHE.parent / 'wallpaper-current').read_text().strip())
+        drawn = drawn_path.stem
     except OSError:
+        drawn_path = None
         drawn = ''
     for name, _label in DESIGN:
         if drawn.startswith(name + '-'):
             return name
+    photos, default = photo_collection()
+    if photos:
+        for item in photos:
+            if drawn_path and drawn_path.resolve() == item['path'].resolve():
+                return str(item['path'])
+        return str(default)
     return 'snowfield' if theme() == 'winter' else 'aurora'
 
 
@@ -312,18 +319,46 @@ def design_file(stem):
     return None
 
 
+def photo_collection():
+    """Only manifest-listed, local JPEG exports; aliases and legacy art aren't gallery entries."""
+    for folder in SYSTEM:
+        try:
+            collection = json.loads((folder / 'collection.json').read_text())
+            if collection.get('schema') != 1:
+                continue
+            photos = []
+            for item in collection['wallpapers']:
+                slug = item['slug']
+                if not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug) or item['file'] != slug + '.jpg':
+                    continue
+                path = folder / item['file']
+                if path.is_symlink() or not path.is_file():
+                    continue
+                photos.append(dict(path=path, name=item['title'], photographer=item['photographer'],
+                                   collectionTheme=item['theme']))
+            default = folder / (collection['default'] + '.jpg')
+            if photos and any(item['path'] == default for item in photos):
+                return photos, default
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return [], None
+
+
 def library():
     active = theme()
     items = []
-    for name, label in DESIGN:
-        path = design_file('{}-{}'.format(name, active))
+    photos, _default = photo_collection()
+    candidates = photos or [dict(path=design_file('{}-{}'.format(name, active)), key=name, name=label)
+                            for name, label in DESIGN]
+    for item in candidates:
+        path = item['path']
         if path is None:
             continue
         try:
             thumb = thumbnail(path)
         except (OSError, ValueError):
             thumb = ''
-        items.append(dict(key=name, name=label, path=str(path), thumb=thumb, arctic=True))
+        items.append(dict(item, key=item.get('key', str(path)), path=str(path), thumb=thumb, arctic=True))
     data = settings()
     folder = Path(data.get('folder') or default_folder()).expanduser()
     system = {p.resolve() for p in SYSTEM if p.is_dir()}

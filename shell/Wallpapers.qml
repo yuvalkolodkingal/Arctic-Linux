@@ -7,7 +7,7 @@ import Quickshell
 import Quickshell.Io
 
 // Wallpaper picker (from the original shell): a searchable grid of thumbnails; click one to
-// use it. The Arctic wallpapers come first and follow the Winter / Polar night switch; your
+// use it. The Arctic photo collection comes first; existing illustrated choices and your
 // own pictures come from a folder you choose (default ~/Pictures/Wallpapers).
 // Applying goes through `arctic-wallpaper`, so the lock screen and the next login agree.
 // "Match colours to wallpaper" is `arctic-theme auto on|off` (settings.json "auto_colors",
@@ -160,10 +160,17 @@ Popover {
                 Text { text: 'Wallpapers'; color: Theme.ink; font.family: Theme.fontSans; font.pixelSize: 20; font.weight: Font.DemiBold }
                 Text {
                     text: picker.autoColors ? 'Click one to use it. Your pictures colour the desktop; Arctic wallpapers keep the Arctic palette.'
-                                            : 'Click one to use it. Arctic wallpapers follow the ' + Theme.themeName + ' theme.'
+                                            : 'Click one to use it. Colours stay with the ' + Theme.themeName + ' theme.'
                     color: Theme.inkMuted
                     font.family: Theme.fontSans
                     font.pixelSize: 13
+                }
+                Text {
+                    visible: picker.items.some(item => !!item.photographer)
+                    text: 'Collection photos by Yuval Kolodkin-Gal'
+                    color: Theme.inkSubtle
+                    font.family: Theme.fontSans
+                    font.pixelSize: 12
                 }
             }
             Item { Layout.fillWidth: true }
@@ -257,7 +264,7 @@ Popover {
                                 elide: Text.ElideRight
                             }
                             Text {
-                                visible: cell.modelData.arctic
+                                visible: cell.modelData.arctic && !cell.modelData.photographer
                                 text: 'Follows the theme'
                                 color: Theme.inkSubtle
                                 font.family: Theme.fontSans

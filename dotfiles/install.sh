@@ -82,6 +82,10 @@ copy_tree "$tmp" "$TARGET"
 mkdir -p "$TARGET/.local/share/fonts/arctic" "$TARGET/.local/share/arctic/wallpapers" "$TARGET/.local/share/arctic/logos"
 cp "$DESIGN"/fonts/*.woff2 "$TARGET/.local/share/fonts/arctic/"
 cp "$DESIGN"/wallpapers/*.svg "$TARGET/.local/share/arctic/wallpapers/"
+cp "$DESIGN"/backgrounds/*.jpg "$DESIGN"/backgrounds/collection.json \
+   "$DESIGN"/backgrounds/COPYRIGHT "$DESIGN"/backgrounds/NOTICE "$TARGET/.local/share/arctic/wallpapers/"
+photo_default=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["default"])' "$DESIGN/backgrounds/collection.json")
+ln -sfn "$photo_default.jpg" "$TARGET/.local/share/arctic/wallpapers/default.jpg"
 cp "$DESIGN"/logos/*.svg "$TARGET/.local/share/arctic/logos/"
 
 # 2b. The theme engine (arctic-themegen; arctic-theme makes wallpaper colours with it) and the

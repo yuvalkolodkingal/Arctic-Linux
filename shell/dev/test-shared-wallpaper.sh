@@ -59,6 +59,11 @@ arctic-login-wallpaper set "$WORK/pictures/a.png" >"$OUT/separate.json"
 cp -a "$REPO/branding/sddm/arctic" "$WORK/theme"
 mkdir -p /usr/share/backgrounds/arctic
 cp "$REPO/design/wallpapers/"*.svg /usr/share/backgrounds/arctic/
+cp "$REPO/design/backgrounds/"*.jpg "$REPO/design/backgrounds/collection.json" /usr/share/backgrounds/arctic/
+python3 -B "$REPO/design/tools/import-wallpapers.py" --check --png /usr/share/backgrounds/arctic/default.png
+photo_default=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["default"])' "$REPO/design/backgrounds/collection.json")
+ln -sf "$photo_default.jpg" /usr/share/backgrounds/arctic/default.jpg
+ln -sf /usr/share/backgrounds/arctic/default.png "$WORK/theme/background.png"
 mkdir -p /dev/dri /usr/share/wayland-sessions
 printf '[Desktop Entry]\nName=Mango\nExec=/bin/true\nType=Application\n' > /usr/share/wayland-sessions/arctic-wallpaper-test.desktop
 sddm-greeter-qt6 --test-mode --theme "$WORK/theme" >"$OUT/sddm.log" 2>&1 &
@@ -107,7 +112,7 @@ arctic-login-wallpaper set "$WORK/pictures/b.png" >"$OUT/after-damage.json"
 sleep 3
 shot lock-recovered-b
 python3 - "$OUT" <<'PY'
-from PIL import Image
+from PIL import Image, ImageOps
 from pathlib import Path
 import sys
 root=Path(sys.argv[1])
@@ -118,6 +123,11 @@ for screen,size in [('landscape',(1280,800)),('portrait',(900,1600))]:
  assert pixel('sddm-a')==(20,104,182), (screen,pixel('sddm-a'))
  assert pixel('sddm-b')==(187,96,32), (screen,pixel('sddm-b'))
  assert pixel('sddm-missing')!=pixel('sddm-b')
+ # Missing broker images must actually render the packaged photo, including crop.
+ photo=ImageOps.fit(Image.open('/usr/share/backgrounds/arctic/default.png').convert('RGB'),size,
+                    method=Image.Resampling.BILINEAR)
+ expected=photo.getpixel((5,5))
+ assert max(abs(a-b) for a,b in zip(pixel('sddm-missing'),expected)) <= 8, (screen,'photo fallback',pixel('sddm-missing'),expected)
  assert pixel('sddm-recovered')==pixel('sddm-a')
  assert pixel('lock-a')!=pixel('lock-rotated-b'), (screen,'rotation did not change lock')
  assert pixel('lock-damaged')!=pixel('lock-recovered-b'), (screen,'binding did not recover')

@@ -5,6 +5,7 @@ Print one structured serial record per check. GUI probes run as the desktop user
 require a new Mango client and keep it mapped for five seconds.
 """
 import json
+import hashlib
 import os
 from pathlib import Path
 import pwd
@@ -153,6 +154,44 @@ def app(prefix, command, pattern, match_title=False):
                     child.wait()
 
 
+def wallpapers(prefix, expected, folder=Path('/usr/share/backgrounds/arctic'),
+               greeter=Path('/usr/share/sddm/themes/arctic/background.png')):
+    """Verify the intended exports in the actual image and discovery as its user."""
+    from PIL import Image, ImageChops
+    actual = json.loads((folder / 'collection.json').read_text())
+    if actual != expected:
+        raise RuntimeError('Installed photo collection differs from the source-pinned expectation')
+    paths = []
+    for item in expected['wallpapers']:
+        path = folder / item['file']
+        if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != item['sha256']:
+            raise RuntimeError('Packaged photo hash differs: ' + item['file'])
+        with Image.open(path) as image:
+            if image.format != 'JPEG' or image.size != (item['width'], item['height']):
+                raise RuntimeError('Packaged photo dimensions/format differ: ' + item['file'])
+            image.load()
+        paths.append(str(path))
+    owners = run(['rpm', '-qf', '--qf', '%{NAME}\n', *paths]).splitlines()
+    if len(owners) != len(paths) or set(owners) != {'arctic-backgrounds'}:
+        raise RuntimeError('Photo ownership is not arctic-backgrounds')
+    if (folder / 'default.jpg').resolve() != folder / (expected['default'] + '.jpg'):
+        raise RuntimeError('Fresh desktop/lock alias does not select the pinned default')
+    if greeter.resolve() != folder / 'default.png':
+        raise RuntimeError('Packaged greeter fallback does not select the photo default')
+    with Image.open(folder / 'default.png') as image:
+        if image.format != 'PNG':
+            raise RuntimeError('Compatibility default is not a real PNG')
+        image.load()
+        with Image.open(folder / (expected['default'] + '.jpg')) as photo:
+            if image.size != photo.size or ImageChops.difference(image.convert('RGB'), photo.convert('RGB')).getbbox():
+                raise RuntimeError('Compatibility default PNG pixels differ from the pinned photo')
+    found = json.loads(run(prefix + ['python3', '/usr/share/arctic/shell/scripts/wallpapers.py', 'list']))
+    discovered = {item['key'] for item in found['items'] if item.get('arctic') and item.get('photographer') == expected['author']}
+    if discovered != set(paths):
+        raise RuntimeError('User wallpaper picker does not discover the complete pinned photo collection')
+    return f"{len(paths)} owned/verified photos; source {expected['revision']}; picker and default aliases verified"
+
+
 def main():
     stage = sys.argv[1]
     # Never run these probes/upgrades on a developer workstation or real test PC.
@@ -205,6 +244,9 @@ def main():
     try:
         prefix = desktop()
         record(stage, 'desktop', 'passed', run(prefix + ['mmsg', 'get', 'all-clients']))
+        if profile == 'lightweight':
+            check('wallpapers', lambda: wallpapers(prefix, json.loads(
+                Path(__file__).with_name('expected-wallpapers.json').read_text())))
         for role, (command, pattern) in applications.items():
             check('app-' + role, lambda command=command, pattern=pattern:
                   app(prefix, command, pattern))
