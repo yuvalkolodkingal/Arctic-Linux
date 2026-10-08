@@ -83,7 +83,11 @@ if [[ -c /dev/kvm ]]; then
   # Keep QEMU's runner UID, with only the existing device's kvm group. Do not
   # change host device modes, install host modules, or run the emulator as root.
   [[ "$(stat -c %G /dev/kvm)" == kvm ]]
-  qemu=(sudo -u "$(id -un)" -g kvm -- qemu-system-x86_64)
+  # Hosted sudo permits root commands but not a custom non-root runas group.
+  # Drop UID/GID before exec instead; the emulator itself stays unprivileged.
+  kvm_gid=$(getent group kvm | cut -d: -f3)
+  [[ "$kvm_gid" =~ ^[0-9]+$ ]]
+  qemu=(sudo -n setpriv --reuid "$(id -u)" --regid "$kvm_gid" --init-groups -- qemu-system-x86_64)
   kvm=(-enable-kvm -cpu host)
 fi
 timeout --signal=TERM --kill-after=15s 35m "${qemu[@]}" "${kvm[@]}" \
