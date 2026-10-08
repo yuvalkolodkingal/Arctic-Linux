@@ -200,6 +200,14 @@ def exercise(base, out, compositor, frame_source=None):
                             pixel = image.getpixel((x, y))
                             assert max(abs(a - b) for a, b in zip(pixel, ground)) <= 3, (label, name, (x, y), pixel, ground)
                         # Detect an old inset ring still painted beneath the hidden bar.
+                        # Overscan must not move/thin the original inner right or
+                        # bottom edge. Sample just outside each expected hairline.
+                        overscan = surface.get('edgeOverscan', 0)
+                        inner = actual['frameWidth']
+                        for x, y in ((round((surface['width'] - overscan - inner) * scale) + 1, capture.height // 2),
+                                     (capture.width // 2, round((surface['height'] - overscan - inner) * scale) + 1)):
+                            pixel = image.getpixel((x, y))
+                            assert max(abs(a - b) for a, b in zip(pixel, ground)) <= 3, (label, name, 'inner frame moved', (x, y), pixel, ground)
                         edge = label.split('-')[1]
                         x, y = {'top': (capture.width // 2, round(58 * scale)),
                                 'bottom': (capture.width // 2, capture.height - round(58 * scale)),
