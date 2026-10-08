@@ -7,6 +7,7 @@ this execution code has passed independent review. Never dispatches or publishes
 import argparse
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -113,6 +114,7 @@ def verify(args):
     R.require(set(manifest['execution_files']) == {'.github/workflows/native-candidate-20261008.yml',
               'tools/test-install.sh', 'tools/lib/vmtest.py', 'tools/lib/container.sh',
               'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
+              'tools/native-functional/compose-photo-probe.py',
               'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
               'tools/native-functional/source-provenance.json'}, 'Execution pin set differs')
     R.verify_iso(args.inputs)
@@ -147,13 +149,24 @@ def run(args):
                   args.evidence/'provision.log',20*60,args.source,env,container)
         prepared=(args.evidence/'vm-prepared-image-id.txt').read_text().strip()
         R.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}',prepared),'Immutable test-tool image ID missing')
+        verify(args) # refuse changed source before preparing any guest payload
         state.update(status='running_live_install_first_boot',vm_tool_image_id=prepared);save()
+        payload = args.evidence.parent / 'native-payload'
+        R.require(not payload.exists(), 'Native payload must be unused')
+        payload.mkdir()
+        spec = importlib.util.spec_from_file_location('native_photo_composer', args.bundle / 'compose-photo-probe.py')
+        composer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(composer)
+        photo_probe = payload / 'photo-check.py'
+        photo_collection_sha = composer.compose(args.source, photo_probe)
+        state['photo_probe'] = dict(sha256=R.digest(photo_probe), collection_sha256=photo_collection_sha);save()
         name,sha=CHECKERS['native-functional'];R.pinned_file(args.bundle/name,sha)
         container='arctic-paired-native-'+uuid.uuid4().hex
         env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container,
                  ARCTIC_FEDORA_IMAGE=prepared,ARCTIC_VM_TOOLS_PREPARED='1',ARCTIC_NATIVE_AUDIO_FIXTURE='1',
                  ARCTIC_NATIVE_LAUNCHER=str(args.bundle/'native-launcher-v6.py'),
                  ARCTIC_NATIVE_EDITOR_SAVE_FIXTURE='1',ARCTIC_NATIVE_PHYSICAL_CONTROLLER=str(args.bundle/'native-physical-controller.py'),
+                 ARCTIC_NATIVE_PHOTO_CHECKER=str(photo_probe),
                  ARCTIC_NATIVE_PHYSICAL_SHA=R.digest(args.bundle/'native-physical-controller.py'),
                  ARCTIC_NATIVE_PHYSICAL_CHECKER_SHA=sha)
         argv=['bash',str(args.bundle.parents[1]/'tools/test-install.sh'),'--iso',str(args.inputs/'iso'/R.ISO),
@@ -173,6 +186,13 @@ def run(args):
                 for stage,name in (('live','serial-install.log'),('installed','serial-boot.log'))}
             state['editor_save_stages']={stage:check_editor_save((vm/name).read_text(),stage,vm,args.evidence/('native-'+stage))
                  for stage,name in (('live','serial-install.log'),('installed','serial-boot.log'))}
+            state['photos'] = {}
+            for stage, name in (('live', 'serial-install.log'), ('installed', 'serial-boot.log')):
+                rows = E.records((vm/name).read_text().splitlines(), 'ARCTIC-NATIVE-PHOTOS ')
+                R.require(len(rows) == 1 and rows[0]['stage'] == stage and rows[0]['status'] == 'passed'
+                          and rows[0]['collection_sha256'] == photo_collection_sha
+                          and rows[0]['release_acceptance'] is False, 'Missing/failed pinned photo image verification: ' + stage)
+                state['photos'][stage] = rows[0]
         except BaseException as error:errors.append('native stages: '+str(error))
         state['audio']={}
         for stage in ('install','boot'):

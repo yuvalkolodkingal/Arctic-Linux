@@ -212,6 +212,10 @@ if [[ -n "${ARCTIC_NATIVE_LAUNCHER:-}" ]]; then
   [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && "$COLLECT_VIA" == terminal && -f "$ARCTIC_NATIVE_LAUNCHER" ]] || arctic_die "native launcher requires explicit audio/checker/terminal fixture"
   cp "$ARCTIC_NATIVE_LAUNCHER" "$DATA/native-launcher.py"
 fi
+if [[ -n "${ARCTIC_NATIVE_PHOTO_CHECKER:-}" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && -f "$ARCTIC_NATIVE_PHOTO_CHECKER" ]] || arctic_die "photo fixture requires explicit native launcher/audio/checker"
+  cp "$ARCTIC_NATIVE_PHOTO_CHECKER" "$DATA/photo-check.py"
+fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
   cp "$INSTALLER" "$DATA/arctic-install"
@@ -296,6 +300,10 @@ fi
 if [ -f "\$D/guest-check.py" ]; then
   python3 "\$D/guest-check.py" live >> "\$S" 2>&1
   smoke_rc=\$?
+  if [ "\$smoke_rc" = 0 ] && [ -f "\$D/photo-check.py" ]; then
+    python3 "\$D/photo-check.py" live >> "\$S" 2>&1
+    smoke_rc=\$?
+  fi
   say "ARCTIC-LIVE-SMOKE-EXIT=\$smoke_rc"
   if [ "\$smoke_rc" != 0 ]; then systemctl poweroff; exit "\$smoke_rc"; fi
 fi
@@ -407,7 +415,12 @@ sec "engine log (tail)"; tail -60 /var/log/arctic-install/engine.log
 echo
 if [ -f /run/t/guest-check.py ]; then
   python3 /run/t/guest-check.py installed
-  echo "ARCTIC-INSTALLED-SMOKE-EXIT=$?"
+  smoke_rc=$?
+  if [ "$smoke_rc" = 0 ] && [ -f /run/t/photo-check.py ]; then
+    python3 /run/t/photo-check.py installed
+    smoke_rc=$?
+  fi
+  echo "ARCTIC-INSTALLED-SMOKE-EXIT=$smoke_rc"
 fi
 echo ARCTIC-COLLECT-END
 if [ -f /run/t/guest-check.py ]; then sync; systemctl poweroff; fi
