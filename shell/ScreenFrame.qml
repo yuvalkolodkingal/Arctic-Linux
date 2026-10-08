@@ -58,13 +58,13 @@ Scope {
             // outer boundary under fractional scaling. Solid exterior strips
             // keep that edge opaque; the Canvas still paints the inner curve
             // and hairline, beyond these two logical pixels.
-            Rectangle { anchors { top: true; left: true; right: true }
+            Rectangle { anchors { top: parent.top; left: parent.left; right: parent.right }
                 height: Math.min(2, Theme.frameWidth); color: Theme.ground }
-            Rectangle { anchors { bottom: true; left: true; right: true }
+            Rectangle { anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
                 height: Math.min(2, Theme.frameWidth); color: Theme.ground }
-            Rectangle { anchors { left: true; top: true; bottom: true }
+            Rectangle { anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
                 width: Math.min(2, Theme.frameWidth); color: Theme.ground }
-            Rectangle { anchors { right: true; top: true; bottom: true }
+            Rectangle { anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
                 width: Math.min(2, Theme.frameWidth); color: Theme.ground }
             function rounded(ctx, x, y, w, h, r) {
                 ctx.moveTo(x + r, y);
