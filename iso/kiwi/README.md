@@ -2,16 +2,18 @@
 
 `tools/build-iso.sh` builds this description with kiwi-ng 11 in a privileged Fedora 44
 container, adding the local RPM repository from `tools/build-rpms.sh` (`out/repo`) with
-`--add-repo`. It runs `kiwi-ng system prepare` (packages + `config.sh`), installs Zen Browser
-from Flathub into the image root from outside the chroot (`--zen yes` by default: absence fails
-the build; `--zen auto/no` are explicit development choices), then `kiwi-ng system create` (SELinux labels, live initrd,
-erofs, ISO). The workflow explicitly uses `--zen yes`, requiring the non-Chromium browser
-even above 2 GiB; its release path already supports split downloads.
+`--add-repo`. It runs `kiwi-ng system prepare` (packages + `config.sh`), then
+`kiwi-ng system create` (SELinux labels, live initrd, erofs, ISO). GNOME Web (Epiphany)
+is the required non-Chromium browser and shares WebKitGTK with Arctic's web apps.
+The default `--zen no` keeps Zen optional; `--zen yes` additionally preloads it from
+Flathub and fails if that download is absent, while `--zen auto` tolerates download failure.
 Output: `out/iso/Arctic-Linux-1.2-x86_64.iso`, its `.sha256`, the package list and
 `.build-info` (whether Zen is in it).
 
-Candidates can use `--name Arctic-Linux-1.2-optimized-candidate-x86_64.iso` and
-`--max-bytes 1500000000` (decimal 1.5 GB, about 1.397 GiB). A missed size gate retains
+Candidates can use `--name Arctic-Linux-1.2-optimized-candidate-x86_64.iso`.
+The workflow requires a size strictly below 2,000,000,000 decimal bytes
+(`--max-bytes 1999999999`) and prefers below 1,600,000,000
+(`--preferred-max-bytes 1599999999`). A missed required size gate retains
 the image/checksum and exits with a clear failure; it never removes features to meet
 the budget. Explicit `--erofs-compression`, `--erofs-cluster` and `--dedupe` experiments
 must pass the functional/performance gates in `docs/OPTIMIZATION.md` before adoption.
