@@ -32,6 +32,11 @@ FAKES = {
     "mmsg": 'echo "mmsg $*" >> "$ARCTIC_TEST_LOG"; echo \'{"success":true}\'',
     "arctic-shell-ipc": 'echo "arctic-shell-ipc $*" >> "$ARCTIC_TEST_LOG"',
     "swaybg": 'exit 0',
+    # The wallpaper integration invokes these detached helpers. Their own
+    # behavior is tested separately; real helpers can recreate this fixture's
+    # temporary state/cache while tearDown removes it.
+    "arctic-login-wallpaper": 'echo "arctic-login-wallpaper $*" >> "$ARCTIC_TEST_LOG"',
+    "arctic-hook": 'echo "arctic-hook $*" >> "$ARCTIC_TEST_LOG"',
 }
 REDRAW_STUB = 'echo "arctic-wallpaper $*" >> "$ARCTIC_TEST_LOG"'
 
