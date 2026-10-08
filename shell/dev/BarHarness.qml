@@ -48,6 +48,9 @@ ShellRoot {
             anchors { top: true; bottom: true; left: true; right: true }
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Background
+            // Fully cover rounded fractional output bounds in this private fixture.
+            margins.right: -1
+            margins.bottom: -1
             color: '#21834f'
             mask: Region {}
         }
@@ -61,6 +64,8 @@ ShellRoot {
             anchors { top: true; bottom: true; left: true; right: true }
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
+            margins.right: -1
+            margins.bottom: -1
             color: '#41678d'
             mask: Region {}
         }
@@ -83,7 +88,9 @@ ShellRoot {
             return JSON.stringify({ground: Theme.ground.toString(), frameWidth: Theme.frameWidth,
                 insets: {top: Theme.topInset, bottom: Theme.bottomInset, left: Theme.leftInset, right: Theme.rightInset},
                 surfaces: frames.instances.map(f => ({screen: f.modelData.name,
-                    width: f.surface.width, height: f.surface.height}))});
+                    width: f.surface.width, height: f.surface.height,
+                    devicePixelRatio: f.surface.devicePixelRatio,
+                    margins: {right: f.surface.margins.right, bottom: f.surface.margins.bottom}}))});
         }
         function geometry(): string { return JSON.stringify({ready: WindowGeometry.ready, monitors: WindowGeometry.monitors, windows: WindowGeometry.windows, error: WindowGeometry.error}); }
         function focus(name: string): void { barOn(onScreen(name)).toggleFocusMode(); }
