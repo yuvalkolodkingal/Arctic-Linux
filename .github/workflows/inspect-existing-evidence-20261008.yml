@@ -30,8 +30,8 @@ jobs:
           assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
           repo = 'repos/yuvalkolodkingal/Arctic-Linux'
           evidence = [
-              (11579638576, 37845367926, '8fd9d2278cd99d89a33aab2f73648267f6fd2d92',
-               'screen-frame-regression', 'ffe3297e33878a396d066b6a8b2376c16df1d61fc6fa74d87a9b6d41e52f27e7'),
+              (11584082521, 37854472664, 'f31b341a84325a6a845f42d55f582fb836eb9d19',
+               'arctic-iso-metadata', '57310bef94d7896453d11e9fa3061270a839ebd67cc8d292b6ba04cc5772d142'),
           ]
           sensitive = re.compile(r'(?i)authorization:|(?:gh[pousr]_|github_pat_)[a-z0-9_]+|'
                                  r'(?:password|token|secret)\s*[=:]\s*\S+|'
@@ -55,7 +55,8 @@ jobs:
                           member = item.filename
                           assert not Path(member).is_absolute() and '..' not in Path(member).parts
                           print('ARCTIC-MEMBER', member, item.file_size)
-                          if member.endswith(('serial.log', 'baseline-result.json', 'results.json', 'shell.log', 'compositor.log')):
+                          if member.endswith(('serial.log', 'baseline-result.json', 'results.json', 'shell.log', 'compositor.log',
+                                              '.sha256', '.build-info', 'BUILD-INFO')):
                               assert item.file_size < 5_000_000
                               lines = archive.read(item).decode('utf-8', errors='replace').splitlines()
                               print('ARCTIC-TEXT-BEGIN', member)
