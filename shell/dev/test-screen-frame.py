@@ -150,6 +150,15 @@ def exercise(base, out, compositor, frame_source=None):
         assert pointer.stdout.readline().strip() == 'OK'
         ipc('cover', 'false')
 
+        for mode, suffix in (('client-header', '.h'), ('private-code', '.c')):
+            subprocess.run(['wayland-scanner', mode, str(SOURCE / 'dev/wlr-screencopy-unstable-v1.xml'),
+                            str(base / ('screencopy-client' + suffix))], check=True)
+        capture_path = base / 'raw-screencopy'
+        subprocess.run(['gcc', '-std=c11', '-Wall', '-Wextra', '-Wno-unused-parameter',
+                        '-Werror', str(SOURCE / 'dev/raw-screencopy.c'),
+                        str(base / 'screencopy-client.c'), '-I', str(base),
+                        '-lwayland-client', '-o', str(capture_path)], check=True)
+
         def snapshot(label, check_pixels):
             validate_preview(preview, out / 'shell.log')
             actual = state()
@@ -159,7 +168,15 @@ def exercise(base, out, compositor, frame_source=None):
                 scale = output['scale']
                 # Grim defaults to the highest scale across outputs, even with
                 # -o. Bind the capture to this output's actual physical scale.
-                run('grim', '-o', name, '-s', scale, path)
+                run('grim', '-o', name, '-s', scale, out / f'grim-{label}-{name}.png')
+                # Read the native output buffer without resampling rounded
+                # logical output dimensions. Keep Grim's image for comparison.
+                raw = base / 'capture.ppm'
+                run(capture_path, name, raw)
+                with Image.open(raw) as native:
+                    mode = next(m for m in output['modes'] if m['current'])
+                    assert native.size == (mode['width'], mode['height']), (name, native.size, mode)
+                    native.save(path)
                 with Image.open(path) as capture:
                     surface = next(s for s in actual['surfaces'] if s['screen'] == name)
                     expected = (round(capture.width / scale), round(capture.height / scale))
