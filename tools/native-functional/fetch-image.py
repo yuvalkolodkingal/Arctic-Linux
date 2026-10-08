@@ -9,6 +9,9 @@ import subprocess
 import zipfile
 
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
+# In the pinned iso.yml this one fail-closed step runs Try, Install and Safe
+# sequentially. A skipped step cannot satisfy the three startup prerequisites.
+BOOT_STEPS = ('Boot test in QEMU (UEFI, Try mode)',)
 
 
 def require(value, reason):
@@ -87,6 +90,17 @@ def extract(archive_path, target, image):
                 'Actual unsplit ISO bytes or SHA256 differ')
 
 
+def validate_boot_steps(image, jobs):
+    matches = [job for job in jobs if job['name'] == 'iso' and job['run_attempt'] == 1]
+    require(len(matches) == 1 and matches[0]['head_sha'] == image['source_sha']
+            and matches[0]['status'] == 'completed' and matches[0]['conclusion'] == 'success',
+            'Pinned first-attempt ISO job is absent or failed')
+    for name in BOOT_STEPS:
+        steps = [step for step in matches[0]['steps'] if step['name'] == name]
+        require(len(steps) == 1 and steps[0]['status'] == 'completed'
+                and steps[0]['conclusion'] == 'success', 'Required boot lane did not pass: ' + name)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', type=Path, required=True)
@@ -99,6 +113,10 @@ def main():
     run = api('/actions/runs/' + str(image['run_id']))
     artifact = api('/actions/artifacts/' + str(image['artifact_id']))
     validate(image, run, artifact)
+    require(run['run_attempt'] == 1, 'Image run attempt differs from the pinned candidate')
+    page = api('/actions/runs/' + str(image['run_id']) + '/jobs?filter=all&per_page=100')
+    require(page['total_count'] == len(page['jobs']), 'Incomplete image-job inventory')
+    validate_boot_steps(image, page['jobs'])
     archive = args.out.parent / 'candidate-artifact.zip'
     require(not archive.exists(), 'Download path must be unused')
     try:

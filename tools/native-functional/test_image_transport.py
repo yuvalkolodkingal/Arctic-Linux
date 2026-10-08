@@ -45,6 +45,23 @@ class ImageTransportControls(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(RuntimeError):
                 F.validate(image, run, wrong)
 
+    def test_successful_run_cannot_hide_skipped_or_failed_boot_lanes(self):
+        job = dict(name='iso', run_attempt=1, head_sha=self.image()['source_sha'],
+                   status='completed', conclusion='success', steps=[
+                       dict(name=name, status='completed', conclusion='success') for name in F.BOOT_STEPS])
+        F.validate_boot_steps(self.image(), [job])
+        for index in range(len(F.BOOT_STEPS)):
+            for fault in ('skipped', 'failure', 'missing', 'duplicate'):
+                wrong = copy.deepcopy(job)
+                if fault == 'missing':
+                    wrong['steps'].pop(index)
+                elif fault == 'duplicate':
+                    wrong['steps'].append(dict(wrong['steps'][index]))
+                else:
+                    wrong['steps'][index]['conclusion'] = fault
+                with self.subTest(index=index, fault=fault), self.assertRaises(RuntimeError):
+                    F.validate_boot_steps(self.image(), [wrong])
+
     def archive(self, path, image, extra=None, content=b'iso', source=None):
         wanted = 'iso/' + image['name']
         with zipfile.ZipFile(path, 'w') as archive:
