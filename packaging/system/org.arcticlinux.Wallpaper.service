@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.arcticlinux.Wallpaper
+Exec=/usr/bin/false
+User=arctic-wallpaper
+SystemdService=arctic-login-wallpaper.service

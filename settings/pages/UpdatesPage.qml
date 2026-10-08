@@ -12,17 +12,21 @@ Page {
     title: "Updates"
     lede: "Security fixes and new versions of your apps and of Arctic Linux."
     property var up: ({ available: true, state: "idle" })
-    readonly property bool active: up.state === "checking" || up.state === "downloading"
+    property bool requestPending: false
+    readonly property bool active: requestPending || up.state === "checking" || up.state === "downloading"
     function load() {
         Backend.call(["updates"], r => { if (r.ok) page.up = r; }, true);
     }
     function run(args, message) {
+        page.requestPending = true;
         Backend.call(["update-run"].concat(args), r => {
+            page.requestPending = false;
             if (r.ok) {
                 page.up = r;
                 if (message)
                     Backend.notify("success", message, false);
             }
+            page.load();
         });
     }
     property var more: ({ available: false, flatpak: false, apps: null, firmware: { available: false, devices: [] } })
@@ -43,13 +47,17 @@ Page {
         onTriggered: page.load()
     }
     readonly property var headline: ({
-            idle: ["check-circle", Theme.success, "Arctic Linux is up to date"],
+            idle: ["check-circle", Theme.success, "No updates at the last check"],
             checking: ["refresh", Theme.info, "Checking for updates…"],
             downloading: ["download", Theme.info, "Downloading updates…"],
             ready: ["download", Theme.accentText, "Updates are ready to install"],
             failed: ["alert", Theme.error, "The last update didn’t work"]
         })
-    readonly property var head: headline[up.state] || headline.idle
+    readonly property var head: requestPending && !["checking", "downloading"].includes(up.state)
+        ? ["refresh", Theme.info, "Waiting for the update command…"]
+        : up.held ? ["info", Theme.info, "Another offline update is waiting"]
+        : up.state === "idle" && !up.checkedAt ? ["refresh", Theme.info, "Check for updates"]
+        : headline[up.state] || headline.idle
 
     ArBanner {
         visible: page.up.available === false
@@ -100,13 +108,15 @@ Page {
             title: page.head[2]
             desc: {
                 const u = page.up;
+                if (u.held) return u.message || "Finish the pending offline update before checking again.";
                 if (u.state === "ready")
                     return u.count + (u.count === 1 ? " update" : " updates") + " downloaded" + (u.stagedAt ? " " + u.stagedAt.replace("T", " at ").replace(/:\d\dZ?$/, "") : "") + ". They install while the computer restarts.";
                 if (u.state === "downloading")
                     return u.count + " updates" + (u.downloadMb ? ", " + Math.round(u.downloadMb) + " MB" : "") + ". You can keep working.";
                 if (u.state === "failed")
                     return u.error || "Check the network and try again.";
-                return u.channel === "testing" ? "You get test versions first." : "";
+                return (u.checkedAt ? "Last checked " + page.when(u.checkedAt) + ". " : "")
+                    + (u.channel === "testing" ? "You get test versions first." : "");
             }
             resettable: false
             Row {
@@ -118,7 +128,6 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 ArButton {
-                    visible: page.up.state !== "ready"
                     text: page.active ? "Checking…" : "Check now"
                     enabled: !page.active
                     gapColor: Theme.surfaceRaised
@@ -127,11 +136,21 @@ Page {
                 ArButton {
                     visible: page.up.state === "ready"
                     text: "Restart and install"
+                    enabled: !page.active
                     variant: "primary"
                     gapColor: Theme.surfaceRaised
                     onClicked: page.run(["apply"], "Restarting to install updates…")
                 }
             }
+        }
+        Text {
+            visible: !!page.up.error && page.up.state !== "failed"
+            width: parent.width
+            text: page.up.error || ""
+            wrapMode: Text.Wrap
+            color: Theme.warning
+            font.family: Theme.fontSans
+            font.pixelSize: 13
         }
         Repeater {
             model: page.up.state === "ready" ? (page.up.packages || []).slice(0, 8) : []
@@ -140,6 +159,41 @@ Page {
                 title: typeof modelData === "string" ? modelData : (modelData.name || "")
                 desc: typeof modelData === "string" ? "" : (modelData.version || "")
                 resettable: false
+            }
+        }
+    }
+
+    Group {
+        visible: !Backend.live
+        title: "Nix packages"
+        SettingRow {
+            searchKey: "updates.nix"
+            title: "Your Nix packages"
+            desc: "Update or roll back your own profile in Get apps. Pinned inputs stay pinned. Nix itself updates with Arctic’s system packages."
+            resettable: false
+            ArButton {
+                text: "Manage Nix updates"
+                gapColor: Theme.surfaceRaised
+                onClicked: Backend.launch(["arctic-shell-ipc", "apps", "open", "nix"])
+            }
+        }
+        SettingRow {
+            searchKey: "updates.nix.shared"
+            title: "Shared installer Nix packages"
+            desc: "Administrator action for installer fallbacks such as lazygit and yazi. Update replaces the installer's pin with the supported Nixpkgs release. Custom shared profiles are left for their administrator."
+            resettable: false
+            Row {
+                spacing: Theme.space2
+                ArButton {
+                    text: "Update shared packages…"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.launch(["arctic-open", "terminal", "--hold", "-e", "pkexec", "/usr/libexec/arctic-nix-system", "update"])
+                }
+                ArButton {
+                    text: "Roll back…"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.launch(["arctic-open", "terminal", "--hold", "-e", "pkexec", "/usr/libexec/arctic-nix-system", "rollback"])
+                }
             }
         }
     }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!--
-  Arctic Linux 1.1 live ISO (kiwi-ng 11, Fedora 44).
+  Arctic Linux 1.2 live ISO (kiwi-ng 11, Fedora 44).
 
   Derived from fedora-kiwi-descriptions (branch f44): the LiveInstall profile
   (components/liveinstall.xml), BootCoreLive (components/boot.xml), BaseCommon/HardwareCommon
@@ -16,11 +16,11 @@
 	<description type="system">
 		<author>Arctic Linux</author>
 		<contact>https://github.com/yuvalkolodkingal/Arctic-Linux/issues</contact>
-		<specification>Arctic Linux 1.1 live media (Fedora 44 base, Mango desktop)</specification>
+		<specification>Arctic Linux 1.2 live media (Fedora 44 base, Mango desktop)</specification>
 	</description>
 
 	<preferences>
-		<version>1.1.0</version>
+		<version>1.2.0</version>
 		<packagemanager>dnf5</packagemanager>
 		<locale>en_US</locale>
 		<keytable>us</keytable>
@@ -28,7 +28,7 @@
 		<release-version>44</release-version>
 		<bootloader-theme>arctic</bootloader-theme>
 		<type image="iso"
-			publisher="Arctic Linux" volid="Arctic-Linux-1.1" application_id="Arctic-Linux-1.1"
+			publisher="Arctic Linux" volid="Arctic-Linux-1.2" application_id="Arctic-Linux-1.2"
 			primary="true" flags="dmsquash" filesystem="erofs" erofscompression="lzma,level=6"
 			fscreateoptions="-Efragments -C 1048576"
 			mediacheck="true" firmware="uefi" efiparttable="gpt" efifatimagesize="30"

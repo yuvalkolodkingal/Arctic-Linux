@@ -76,7 +76,7 @@ func TestMarkDetectedHybridLaptop(t *testing.T) {
 	}
 	// Drivers are listed first in the picker, with the device, and not counted as apps.
 	p := c.Picker()
-	if p.Categories[0].ID != "drivers" || !p.Categories[0].Hardware || p.Modules[0].ID != "nvidia" || len(p.Modules) != 128 {
+	if p.Categories[0].ID != "drivers" || !p.Categories[0].Hardware || p.Modules[0].ID != "nvidia" || len(p.Modules) != 131 {
 		t.Fatalf("picker %+v / %d modules, first %+v", p.Categories[0], len(p.Modules), p.Modules[0])
 	}
 	if p.Modules[0].Device != nv.Device || !strings.Contains(p.Modules[0].Summary, "your NVIDIA GeForce RTX 4060") || !p.Modules[0].Default {

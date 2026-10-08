@@ -2,7 +2,7 @@
 // Get apps' pure logic (tests: tests/test-getapps.cjs): which cards the chooser shows, page
 // names, the Esc ladder, row states and the words jobs and sizes are shown with.
 
-const PAGES = ['choose', 'flatpak', 'dnf', 'web', 'terminal', 'remove', 'console'];
+const PAGES = ['choose', 'flatpak', 'dnf', 'web', 'terminal', 'remove', 'console', 'nix'];
 const ALIASES = { flathub: 'flatpak', fedora: 'dnf', webapp: 'web', 'web-apps': 'web', install: 'choose', home: 'choose' };
 const TABS = ['flatpak', 'dnf', 'web', 'terminal'];
 
@@ -18,14 +18,14 @@ function cards(state) {
           desc: 'Apps and tools from Fedora and RPM Fusion.', status: 'Asks for your password' },
         { page: 'web', title: 'Web apps', big: true, glyph: 'globe', tint: 'infoSoft',
           desc: 'Any website as an app, with its own window and sign-in.', status: 'Needs the internet' },
+        { page: 'nix', title: 'Nix packages', big: false, glyph: 'package', tint: 'infoSoft',
+          desc: 'Nixpkgs packages in your own profile.', short: 'Install, remove, update and roll back' },
         { page: 'terminal', title: 'Terminal apps', big: false, glyph: 'prompt', tint: 'slate900',
           desc: 'Put a terminal program like btop in the launcher.', short: 'Terminal programs like btop in the launcher' },
-        { page: 'remove', title: 'Remove apps', big: false, glyph: 'trash', tint: 'surfaceSunken',
-          desc: 'Uninstall Flatpak apps, Fedora packages and web apps.', short: 'Flatpak, Fedora and web apps' },
         { page: 'console', title: 'Console', big: false, glyph: 'terminal', tint: 'surfaceSunken',
           desc: 'Type dnf and flatpak commands.', short: 'Type dnf and flatpak commands' },
     ];
-    return list.filter(c => !(c.page === 'web' && !s.webapp) && !(c.page === 'remove' && s.live))
+    return list.filter(c => !(c.page === 'web' && !s.webapp) && !(c.page === 'nix' && s.live))
                .map((c, i) => Object.assign({ digit: i + 1 }, c));
 }
 
@@ -78,6 +78,8 @@ function jobLabel(job) {
     switch (job.kind) {
     case 'install': return (done ? 'Installed ' : 'Installing ') + name;
     case 'remove': return (done ? 'Removed ' : 'Removing ') + name;
+    case 'update': return done ? 'Updated Nix packages' : 'Updating Nix packages';
+    case 'rollback': return done ? 'Rolled back Nix packages' : 'Rolling back Nix packages';
     case 'add-remote': return done ? 'Added Flathub' : 'Adding Flathub';
     case 'console': return 'Running a Console command';
     }

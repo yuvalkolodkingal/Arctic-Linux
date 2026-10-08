@@ -1,0 +1,16 @@
+id = 'tailscale'
+name = 'Tailscale'
+summary = 'Private device network. Sign-in and routing remain your choice.'
+category = "security"
+tile = "tor-browser"
+icon = "globe"
+default = false
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ['tailscale']
+download_mb = 15

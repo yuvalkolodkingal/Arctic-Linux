@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import Quickshell.Bluetooth
 import Quickshell.Services.SystemTray
 import Quickshell.Services.UPower
+import "BarVisibility.js" as BarVisibility
 
 // The top bar (design TopBar): 34px frost with a 1px line along the bottom.
 // Left: fox mark (launcher) and workspaces 1–5, plus the "Live session" tag on the live USB.
@@ -19,22 +20,120 @@ PanelWindow {
     required property var modelData
     required property var shell
     screen: modelData
-    visible: !Session.barHidden
+    property bool refreshLayer: false
+    visible: !Session.barHidden && !refreshLayer
 
-    anchors { top: true; left: true; right: true }
-    implicitHeight: Theme.barHeight
-    color: Theme.frost
-    exclusionMode: ExclusionMode.Normal
+    readonly property bool vertical: Session.barVertical
+    anchors { top: bar.vertical || Session.barPosition === "top"; bottom: bar.vertical || Session.barPosition === "bottom"; left: !bar.vertical || Session.barPosition === "left"; right: !bar.vertical || Session.barPosition === "right" }
+    // Keep the layer surface's geometry stable. Only the exposed strip accepts input;
+    // at rest the transparent 3px screen-edge strip remains a reliable reveal target.
+    property bool revealed: false
+    property bool pointerOver: false
+    readonly property bool popupHere: shell && shell.barPopovers
+        ? shell.barPopovers.some(p => p.open && p.screen === bar.screen) : menuHere
+    readonly property bool heldOpen: pointerOver || press.active || focusMode || popupHere
+    readonly property bool windowOverlap: Session.barDodgeWindows
+        && WindowGeometry.ready && BarVisibility.overlaps(WindowGeometry.monitors,
+            WindowGeometry.windows, screen ? screen.name : '', Session.barPosition, Theme.barHeight)
+    readonly property bool hideRequested: Session.barAutoHide || windowOverlap
+    readonly property bool expanded: !hideRequested || revealed || heldOpen
+    property real reveal: expanded ? 1 : 0
+    readonly property int exposed: Math.max(3, Math.ceil(Theme.barHeight * reveal))
+    implicitHeight: vertical ? 0 : Theme.barHeight
+    implicitWidth: vertical ? Theme.barHeight : 0
+    contentItem.clip: true
+    color: 'transparent'
+    mask: Region {
+        x: bar.vertical && Session.barPosition === 'right' ? bar.width - bar.exposed : 0
+        y: !bar.vertical && Session.barPosition === 'bottom' ? bar.height - bar.exposed : 0
+        width: bar.vertical ? bar.exposed : bar.width
+        height: bar.vertical ? bar.height : bar.exposed
+    }
+    Behavior on reveal {
+        NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard }
+    }
+    function updateReveal() {
+        if (heldOpen) { revealed = true; conceal.stop(); }
+        else if (hideRequested) conceal.restart();
+        else { conceal.stop(); revealed = false; }
+    }
+    onHideRequestedChanged: {
+        // A new overlap gets the same grace period as pointer exit. A clear region reveals
+        // immediately, and reserves no space that could move windows and create a loop.
+        if (hideRequested) revealed = true;
+        updateReveal();
+    }
+    function resetReveal() {
+        tipPopup.dismiss();
+        pointerOver = false;
+        updateReveal();
+    }
+    HoverHandler {
+        id: revealHover
+        onHoveredChanged: { bar.pointerOver = hovered; bar.updateReveal(); }
+        onPointChanged: { bar.pointerOver = hovered; bar.updateReveal(); }
+    }
+    // Observe presses before Flickable/MouseArea accept them, without taking their exclusive
+    // grab. On release outside, clear the stale hover Qt can retain until another mouse move.
+    Item {
+        anchors.fill: parent
+        z: 100
+        PointHandler {
+            id: press
+            acceptedButtons: Qt.AllButtons
+            onActiveChanged: {
+                if (!active) bar.pointerOver = point.position.x >= 0 && point.position.x < bar.width
+                    && point.position.y >= 0 && point.position.y < bar.height;
+                bar.updateReveal();
+            }
+        }
+    }
+    Timer {
+        id: conceal
+        interval: 700
+        onTriggered: if (!bar.heldOpen) { tipPopup.dismiss(); bar.revealed = false; }
+    }
+    onHeldOpenChanged: updateReveal()
+    onPopupHereChanged: {
+        if (popupHere) tipPopup.dismiss();
+        else if (focusMode) { barKeys.forceActiveFocus(); idle.restart(); }
+    }
+    Connections {
+        target: Session
+        function onBarPositionChanged() { bar.resetReveal(); }
+        function onBarHideModeChanged() { bar.resetReveal(); }
+        function onBarCanHideChanged() {
+            if (Session.barCanHide) {
+                // An occluded Top surface may receive no frame callbacks to commit a
+                // pending layer change. Remap once with Overlay as its initial layer.
+                bar.refreshLayer = true;
+                Qt.callLater(function() { bar.refreshLayer = false; });
+            }
+        }
+    }
+    onScreenChanged: resetReveal()
+    // With no reserved zone, Normal placement would inset the trigger behind the frame's
+    // reserved bands. Ignore other exclusive zones so auto-hide reaches the physical edge.
+    Binding {
+        target: bar
+        property: 'exclusionMode'
+        // exclusiveZone's setter also sets Normal. Apply the mode after that setter, on
+        // both preference and zone changes, so the physical edge stays reachable.
+        delayed: true
+        value: bar.exclusiveZone >= 0 && Session.barCanHide ? ExclusionMode.Ignore : ExclusionMode.Normal
+    }
     // Reserve the frame's top band too, so tiled windows keep Mango's gap from the frame.
-    exclusiveZone: Theme.barHeight + Theme.frameWidth
-    WlrLayershell.layer: WlrLayer.Top
+    exclusiveZone: Session.barCanHide ? 0 : Theme.barHeight + Theme.frameWidth
+    // Keep the edge trigger reachable above fullscreen windows in either hiding mode.
+    // Popovers are created after the bar on the same layer and remain above it.
+    WlrLayershell.layer: Session.barCanHide ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.namespace: 'arctic-bar'
 
     // The menu open on this bar, if any: tooltips stay quiet meanwhile.
     readonly property var menuHost: bar.shell ? bar.shell.barMenu : null
     readonly property bool menuHere: menuHost !== null && menuHost.open && menuHost.screen === bar.screen
     function menuOpen(name) { return menuHere && menuHost.panel === name; }
-    function hint(item, text) { if (!menuHere) tipPopup.request(item, text); }
+    function hint(item, text) { if (!popupHere) tipPopup.request(item, text); }
 
     // ---- keyboard mode (Super + Alt + B): Left/Right across the items, Enter opens --------
     // The bar takes the keyboard (Top layer); a menu it opens (Overlay) takes it while open and
@@ -52,12 +151,12 @@ PanelWindow {
             }
         }
         walk(bar.contentItem);
-        return out.sort((a, b) => a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x);
+        return out.sort((a, b) => bar.vertical ? a.mapToItem(null, 0, 0).y - b.mapToItem(null, 0, 0).y : a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x);
     }
     function moveFocus(item) {
         if (focusedStop) focusedStop.keyboardFocused = false;
         focusedStop = item;
-        if (item) item.keyboardFocused = true;
+        if (item) { item.keyboardFocused = true; if (bar.vertical && side.item) side.item.ensureVisible(item); }
     }
     function enterFocusMode() {
         const stops = barStops();
@@ -68,13 +167,15 @@ PanelWindow {
     }
     function leaveFocusMode() {
         focusMode = false;
+        updateReveal();
         moveFocus(null);
         idle.stop();
     }
     function toggleFocusMode() { if (focusMode) leaveFocusMode(); else enterFocusMode(); }
     Timer { id: idle; interval: 10000; onTriggered: if (!bar.menuHere) bar.leaveFocusMode() }
-    onVisibleChanged: if (!visible && focusMode) leaveFocusMode()
+    onVisibleChanged: { if (!visible && focusMode) leaveFocusMode(); if (!visible) { conceal.stop(); pointerOver = false; revealed = false; tipPopup.dismiss(); } }
     onMenuHereChanged: {
+        if (!menuHere && !revealHover.hovered) conceal.restart();
         if (menuHere) tipPopup.dismiss();
         else if (focusMode) { barKeys.forceActiveFocus(); idle.restart(); }
     }
@@ -86,8 +187,8 @@ PanelWindow {
             idle.restart();
             const stops = bar.barStops();
             const at = stops.indexOf(bar.focusedStop);
-            if (event.key === Qt.Key_Right || event.key === Qt.Key_Tab) bar.moveFocus(stops[Math.min(stops.length - 1, at + 1)] || null);
-            else if (event.key === Qt.Key_Left || event.key === Qt.Key_Backtab) bar.moveFocus(stops[Math.max(0, at - 1)] || null);
+            if (event.key === Qt.Key_Right || event.key === Qt.Key_Tab || (bar.vertical && event.key === Qt.Key_Down)) bar.moveFocus(stops[Math.min(stops.length - 1, at + 1)] || null);
+            else if (event.key === Qt.Key_Left || event.key === Qt.Key_Backtab || (bar.vertical && event.key === Qt.Key_Up)) bar.moveFocus(stops[Math.max(0, at - 1)] || null);
             else if (event.key === Qt.Key_Home) bar.moveFocus(stops[0] || null);
             else if (event.key === Qt.Key_End) bar.moveFocus(stops[stops.length - 1] || null);
             else if (event.key === Qt.Key_Escape) bar.leaveFocusMode();
@@ -104,6 +205,7 @@ PanelWindow {
     function unhint(item) { tipPopup.release(item); }
     // Where a panel's menu hangs: the centre x of the visible bar item that owns it, else null.
     function ownerOf(name) {
+        if (bar.vertical && side.item) return side.item.ownerOf(name);
         const owners = {
             network: networkItem,
             bluetooth: bluetoothItem,
@@ -120,7 +222,7 @@ PanelWindow {
     function anchorFor(name) {
         if (!bar.visible) return name in hiddenAnchors ? hiddenAnchors[name] : null;
         const item = ownerOf(name);
-        return item ? item.mapToItem(null, item.width / 2, 0).x : null;
+        return item && item.visible ? (bar.vertical ? item.mapToItem(null, 0, item.height / 2).y : item.mapToItem(null, item.width / 2, 0).x) : null;
     }
     // While the bar is hidden its menus still open by key, where they hung before it went
     // (shell.toggleBar() calls this just before hiding it).
@@ -138,17 +240,31 @@ PanelWindow {
             .sort((a, b) => anchorFor(a) - anchorFor(b));
     }
 
+    // All visual content travels together toward the configured edge. The window itself
+    // does not move or resize, so changing the input region cannot lose the edge trigger.
+    Item {
+        id: slide
+        width: bar.width
+        height: bar.height
+        x: bar.vertical ? (Session.barPosition === 'left' ? -1 : 1) * width * (1 - bar.reveal) : 0
+        y: !bar.vertical ? (Session.barPosition === 'top' ? -1 : 1) * height * (1 - bar.reveal) : 0
+        Rectangle { anchors.fill: parent; color: Theme.frost }
     SystemClock { id: clock; precision: SystemClock.Minutes }
     BarTooltip { id: tipPopup; anchor.window: bar }
 
     Rectangle {
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: 1
+        x: bar.vertical && Session.barPosition === 'left' ? parent.width - 1 : 0
+        y: bar.vertical ? 0 : parent.height - 1
+        width: bar.vertical ? 1 : parent.width
+        height: bar.vertical ? parent.height : 1
         color: Theme.line
     }
 
+    Loader { id: side; property var hostBar: bar; anchors.fill: parent; active: bar.vertical; sourceComponent: Component { VerticalBar { bar: side.hostBar } } }
+
     // ---- left ---------------------------------------------------------------------------
     RowLayout {
+        visible: !bar.vertical
         anchors.left: parent.left
         anchors.leftMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
@@ -163,6 +279,7 @@ PanelWindow {
             onHoverChanged: h => h ? bar.hint(launcherItem, tooltip) : bar.unhint(launcherItem)
         }
         Workspaces {
+            visible: Session.barWorkspaces
             monitorName: bar.screen ? bar.screen.name : ''
             onHovered: (item, text) => bar.hint(item, text)
             onUnhovered: item => bar.unhint(item)
@@ -196,6 +313,7 @@ PanelWindow {
     // ---- centre: clock (tabular figures); click for the calendar ------------------------
     BarItem {
         id: clockItem
+        visible: !bar.vertical && Session.barClock
         anchors.centerIn: parent
         text: Qt.formatDateTime(clock.date, 'ddd d MMM · hh:mm')
         textWeight: Font.DemiBold
@@ -207,6 +325,7 @@ PanelWindow {
     }
     // Left of the clock: what records, listens or watches, and the modes that are on.
     ModeIndicators {
+        visible: !bar.vertical
         anchors.right: clockItem.left
         anchors.rightMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
@@ -220,7 +339,7 @@ PanelWindow {
         anchors.left: clockItem.right
         anchors.leftMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
-        visible: WeatherService.showInBar
+        visible: !bar.vertical && WeatherService.showInBar
         hasMenu: true
         tooltip: WeatherService.summary + '  (Super + Ctrl + T)'
         onClicked: bar.shell.togglePanel('calendar', bar.screen, clockItem.mapToItem(null, clockItem.width / 2, 0).x)
@@ -233,7 +352,7 @@ PanelWindow {
         anchors.left: weatherItem.visible ? weatherItem.right : clockItem.right
         anchors.leftMargin: weatherItem.visible ? Theme.space1 : Theme.space2
         anchors.verticalCenter: parent.verticalCenter
-        visible: MediaService.available && MediaService.title !== ''
+        visible: !bar.vertical && Session.barMedia && MediaService.available && MediaService.title !== ''
         hasMenu: true
         active: bar.menuOpen('media')
         iconName: MediaService.playing ? 'music' : 'pause'
@@ -251,6 +370,7 @@ PanelWindow {
 
     // ---- right ----------------------------------------------------------------------------
     RowLayout {
+        visible: !bar.vertical
         anchors.right: parent.right
         anchors.rightMargin: Theme.space2
         anchors.verticalCenter: parent.verticalCenter
@@ -336,7 +456,7 @@ PanelWindow {
         Repeater {
             // nm-applet's own icon is folded into the network item below, and blueman's applet
             // (started by "More Bluetooth options…") into the Bluetooth item.
-            model: SystemTray.items.values.filter(i => i.id !== 'nm-applet' && !String(i.id).startsWith('blueman'))
+            model: Session.barTray ? SystemTray.items.values.filter(i => i.id !== 'nm-applet' && !String(i.id).startsWith('blueman')) : []
             BarItem {
                 id: trayItem
                 required property var modelData
@@ -396,9 +516,10 @@ PanelWindow {
             hasMenu: true
             active: bar.menuOpen('battery')
             iconName: b.charging ? 'battery-charging' : 'battery'
-            iconColor: b.present && !b.charging && b.percent <= 10 ? Theme.error : Theme.ink
-            text: b.percent + '%' + (b.low ? ' · Low' : '')
-            tooltip: (b.full ? 'Fully charged' : b.percent + '%' + (b.timeText ? ' · ' + b.timeText : ''))
+            batteryPercent: b.percent
+            iconColor: b.present && b.chargeKnown && !b.charging && b.percent <= 10 ? Theme.error : Theme.ink
+            text: b.percentText + (b.low ? ' · Low' : '')
+            tooltip: 'Battery · ' + b.percentText + (b.timeText ? ' · ' + b.timeText : '')
                      + (PowerService.available && PowerService.current ? ' · ' + PowerService.current.label : '') + '  (Super + Ctrl + P)'
             onClicked: bar.shell.togglePanel('battery', bar.screen, batteryItem.mapToItem(null, batteryItem.width / 2, 0).x)
             onHoverChanged: h => h ? bar.hint(batteryItem, tooltip) : bar.unhint(batteryItem)
@@ -411,4 +532,5 @@ PanelWindow {
             onHoverChanged: h => h ? bar.hint(powerItem, tooltip) : bar.unhint(powerItem)
         }
     }
+    } // slide
 }

@@ -44,6 +44,7 @@ Scope {
         powerOpen = false;
         reveal = false;
         wallpaperView.reload();
+        sharedWallpaperView.reload();
         // The password is typed in the first layout (the installer's), whatever was active.
         if (KeyboardService.multiple && KeyboardService.index !== 0) KeyboardService.set(0, true);
         lock.locked = true;
@@ -191,8 +192,29 @@ Scope {
         onLoadFailed: root.wallpaper = ''
     }
     readonly property string fallbackWallpaper: '/usr/share/backgrounds/arctic/' + Theme.tokens.lockWallpaper + '.svg'
+    property var sharedWallpaper: ({})
+    readonly property string sharedSource: sharedWallpaper.enabled === true && /^[a-f0-9]{32}$/.test(sharedWallpaper.revision || '')
+        ? 'file:///var/lib/arctic-login-wallpaper/generation-' + sharedWallpaper.revision + '/wallpaper.png' : ''
+    FileView {
+        id: sharedWallpaperView
+        path: '/var/lib/arctic-login-wallpaper/current/state.json'
+        printErrors: false
+        onLoaded: {
+            try { root.sharedWallpaper = JSON.parse(text()); }
+            catch (_) { root.sharedWallpaper = ({}); }
+        }
+        onLoadFailed: root.sharedWallpaper = ({})
+    }
+    Timer {
+        interval: 2000
+        repeat: true
+        running: root.showing
+        onTriggered: sharedWallpaperView.reload()
+    }
 
-    SystemClock { id: clock; precision: SystemClock.Minutes; enabled: lock.locked }
+    // Use our notifying state: this Quickshell snapshot doesn't emit locked changes when
+    // acquiring the session lock, leaving a clock bound to lock.locked stopped at startup.
+    SystemClock { id: clock; precision: SystemClock.Minutes; enabled: root.showing }
 
     // Caps Lock, from the keyboard LEDs (sysfs has no change events, so it is read twice a
     // second, only while locked).
@@ -219,7 +241,11 @@ Scope {
             Image {
                 id: backdrop
                 anchors.fill: parent
-                source: root.wallpaper ? 'file://' + root.wallpaper : 'file://' + root.fallbackWallpaper
+                property string requestedSource: root.sharedSource || (root.wallpaper ? 'file://' + root.wallpaper : 'file://' + root.fallbackWallpaper)
+                property bool imageFailed: false
+                onRequestedSourceChanged: imageFailed = false
+                source: imageFailed ? 'file://' + root.fallbackWallpaper : requestedSource
+                onStatusChanged: if (status === Image.Error) imageFailed = true
                 fillMode: Image.PreserveAspectCrop
                 sourceSize: Qt.size(surface.width, surface.height)
                 asynchronous: true
@@ -461,12 +487,13 @@ Scope {
                         Icon {
                             visible: statusPill.hasBattery
                             name: BatteryService.charging ? 'battery-charging' : 'battery'
+                            batteryPercent: BatteryService.percent
                             size: 16
                             color: Theme.ink
                         }
                         Text {
                             visible: statusPill.hasBattery
-                            text: statusPill.hasBattery ? BatteryService.percent + '%' : ''
+                            text: statusPill.hasBattery ? BatteryService.percentText : ''
                             color: Theme.ink
                             font.family: Theme.fontSans
                             font.pixelSize: 12

@@ -44,8 +44,9 @@ The automated sequence is:
    disk with the existing encrypted CI profile. A nonzero or missing installer result fails.
 4. Boot that disk with the live ISO detached; unlock LUKS, log in, and repeat identity,
    network and application probes. Wait up to ten minutes for deferred first-boot work;
-   Zed is required here, but explicitly **unrun** in live mode because it is downloaded at
-   installation time. Missing installed applications fail, rather than silently falling back.
+   The legacy lane requires Zed here but labels it **unrun** in live mode because it is downloaded
+   at installation time. The lightweight lane requires FeatherPad in both phases. Missing
+   applications or a different fallback app fail.
 5. If a previous tag was supplied, install that ISO into a **different fresh disk**, prove its
    source version, and test the documented same-Fedora update path described below.
 
@@ -76,8 +77,21 @@ tools/test-install.sh --iso out/reliability/candidate-iso/Arctic-Linux-1.1-x86_6
 python3 tools/reliability/report.py out/reliability/candidate
 ```
 
-Repeat with `--firmware bios` and a different output directory. The profile expects kitty,
-Nautilus, Zen, Zed and VLC; a custom app profile needs corresponding probe expectations.
+Repeat with `--firmware bios` and a different output directory. The default `legacy` lane expects
+kitty, Nautilus, Zen, Zed and VLC. For an optimized candidate, pass
+`--reliability-app-profile lightweight` and `--app-profile lightweight` to the harness and report
+respectively. This lane expects Foot, PCManFM, Epiphany, FeatherPad and Celluloid, including the
+live editor. The workflow has the same explicit `app_profile` choice. These options select pinned
+installer profiles (`profiles/ci/reliability-{legacy,lightweight}.toml`) so future default-app
+changes do not silently alter previous-release installation. An explicit `--profile` override
+must match the selected expectations. Upgrades retain the legacy lane's existing choices.
+
+Both lanes use main's single `guest-check.py` hook and one set of serial exit markers/shutdown
+rules. `--reliability-version` cannot be combined with `--guest-check`. Reports require the
+profile-neutral `app-media` record; older `app-vlc` evidence is not a pass for the revised checker.
+Application window IDs must match and persist; an expected app name in a fallback window's title
+does not pass. These checks do not certify rendered browser/media content, precision performance,
+optimized signed higher-EVR offline updates or a rebuilt ISO; those still need separate evidence.
 There are no installer binary overrides, fixtures, debug-shell fallbacks or proxy bypasses
 in the release lane. External HTTPS failure is reported as a failed network probe; inspect
 its log to distinguish repository/service outage from a guest defect.

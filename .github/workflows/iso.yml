@@ -10,15 +10,19 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v1.1.0-build.<run number>)
+        description: Release tag (default v1.2.0-build.<run number>)
         type: string
         default: ""
       prerelease:
-        description: Mark the release as a pre-release (untick for a stable release such as v1.1.0)
+        description: Mark the release as a pre-release (untick for a stable release such as v1.2.0)
         type: boolean
         default: true
       draft:
         description: Keep the release as a draft for reviewing boot-test results before publication
+        type: boolean
+        default: false
+      nix_acceptance:
+        description: Enforcing VM install, Nix GUI and update/reboot acceptance (no release)
         type: boolean
         default: false
       boot_test:
@@ -34,7 +38,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ISO: Arctic-Linux-1.1-x86_64.iso
+  ISO: Arctic-Linux-1.2-x86_64.iso
 
 jobs:
   iso:
@@ -68,12 +72,15 @@ jobs:
           cat out/BUILD-INFO
 
       - name: Build ISO
-        run: tools/build-iso.sh --work /mnt/arctic/kiwi-work
+        # A live desktop must include a browser. Keep Zen even above 2 GiB;
+        # the release step already splits large images when necessary.
+        run: tools/build-iso.sh --work /mnt/arctic/kiwi-work --zen yes
 
       - name: Size and split
         id: size
         run: |
           cd out/iso
+          sha256sum --check "$ISO.sha256"
           size=$(stat -c %s "$ISO")
           echo "ISO size: $size bytes ($((size / 1024 / 1024)) MiB)"
           echo "bytes=$size" >> "$GITHUB_OUTPUT"
@@ -99,6 +106,17 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+      - name: Upload image metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: arctic-iso-metadata
+          path: |
+            out/BUILD-INFO
+            out/iso/*.sha256
+            out/iso/*.build-info
+            out/iso/*.packages
+          retention-days: 14
+
       - name: Boot test in QEMU (UEFI, Try mode)
         if: ${{ github.event_name == 'push' || inputs.boot_test }}
         continue-on-error: true
@@ -106,6 +124,32 @@ jobs:
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; kvm=--kvm; timeout=420; else kvm=; timeout=900; fi
           tools/test-iso.sh --firmware uefi --mode try --timeout "$timeout" --interval 30 $kvm
           tools/test-iso.sh --firmware bios --mode install --timeout "$timeout" --interval 30 $kvm
+
+      - name: Nix enforcing VM acceptance
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.nix_acceptance }}
+        run: |
+          test '${{ inputs.release }}' = false
+          test -c /dev/kvm
+          # Docker's root test process accesses the passed device; no host chmod or SELinux changes.
+          timeout --signal=TERM --kill-after=60s 100m tools/test-install.sh \
+            --kvm --memory 4096 --smp 2 --boot-append '' --install-timeout 2400 \
+            --guest-check tools/nix-acceptance/guest.py --out "$PWD/out/test/nix"
+          cp out/test/nix/serial-boot.log out/test/nix/serial-before-update-reboot.log
+          timeout --signal=TERM --kill-after=60s 45m tools/test-install.sh \
+            --stage boot --kvm --memory 4096 --smp 2 --boot-append '' \
+            --guest-check tools/nix-acceptance/guest.py --out "$PWD/out/test/nix"
+
+      - name: Upload Nix acceptance evidence
+        if: ${{ always() && inputs.nix_acceptance }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nix-acceptance
+          retention-days: 14
+          path: |
+            out/test/nix/
+            !out/test/nix/*.qcow2
+            !out/test/nix/*.iso
+            !out/test/nix/*.sock
 
       - name: Upload screenshots
         if: ${{ always() && (github.event_name == 'push' || inputs.boot_test) }}
@@ -131,12 +175,12 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.1.0-build.$GITHUB_RUN_NUMBER"
+            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
             pre=""; [ "${{ inputs.prerelease }}" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
-            echo "Arctic Linux 1.1 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
+            echo "Arctic Linux 1.2 live ISO (Fedora 44 base, Mango desktop) for x86_64, UEFI and BIOS."
             echo
             echo "Write it to a USB stick (at least 4 GB), for example with Fedora Media Writer or"
             echo "\`sudo dd if=$ISO of=/dev/sdX bs=4M status=progress oflag=sync\`, and boot from it."

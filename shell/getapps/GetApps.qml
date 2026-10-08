@@ -54,6 +54,7 @@ FocusScope {
         anchors.fill: parent
         focus: true
         sourceComponent: router.page === 'flatpak' || router.page === 'dnf' ? sourcePage
+                         : router.page === 'nix' ? nixPage
                          : router.page === 'remove' ? removePage
                          : router.page === 'console' ? consolePage
                          : router.page === 'web' ? webPage
@@ -80,10 +81,15 @@ FocusScope {
         }
     }
     Component {
+        id: nixPage
+        NixPage { initialQuery: router.query; onBackRequested: router.open('choose', '') }
+    }
+    Component {
         id: removePage
         RemovePage {
             initialTab: router.removeTab
             initialFilter: router.query
+            onOpenPage: name => router.open(name, '')
             onBackRequested: router.open('choose', '')
         }
     }
@@ -110,3 +116,4 @@ FocusScope {
         }
     }
 }
+

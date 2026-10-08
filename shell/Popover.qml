@@ -58,6 +58,9 @@ PanelWindow {
     color: 'transparent'
     anchors { top: true; bottom: true; left: true; right: true }
     margins.top: Theme.topInset
+    margins.bottom: Theme.bottomInset
+    margins.left: Theme.leftInset
+    margins.right: Theme.rightInset
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: layerName
@@ -121,10 +124,12 @@ PanelWindow {
         border.color: Theme.line
         dockEdge: popover.placement === 'dock' ? dockPos.edge : ''
         x: popover.placement === 'dock' ? dockPos.animatedX
+           : popover.placement === 'point' && Session.barVertical ? (Session.barPosition === 'left' ? Theme.space1 + Theme.frameWidth + (Session.barCanHide ? Theme.barHeight : 0) : popover.width - width - Theme.space1 - Theme.frameWidth - (Session.barCanHide ? Theme.barHeight : 0))
            : popover.placement === 'point' ? Math.max(Theme.space2, Math.min(popover.pointX - width / 2, popover.width - width - Theme.space2))
            : (popover.width - width) / 2
         y: popover.placement === 'dock' ? dockPos.animatedY
-           : popover.placement === 'point' ? Theme.space1 + Theme.frameWidth
+           : popover.placement === 'point' && Session.barVertical ? Math.max(Theme.space2, Math.min(popover.pointX - height / 2, popover.height - height - Theme.space2))
+           : popover.placement === 'point' ? (Session.barPosition === 'bottom' ? popover.height - height - Theme.space1 - Theme.frameWidth - (Session.barCanHide ? Theme.barHeight : 0) : Theme.space1 + Theme.frameWidth + (Session.barCanHide ? Theme.barHeight : 0))
            : Math.max(Theme.space4, (popover.height - height) / 2 - Theme.topInset / 2)
         Behavior on width { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }
         Behavior on height { enabled: popover.animateSize && popover.sizeSettled; NumberAnimation { duration: Theme.durationBase; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeStandard } }

@@ -133,6 +133,10 @@ ShellRoot {
 
     // ---- bar menus (BarMenu) --------------------------------------------------------------------
     readonly property var barMenu: menuHost
+    // Auto-hide stays revealed while any popover on its screen is being used (including
+    // launcher, notifications, keyboard and power, which have separate menu hosts).
+    readonly property var barPopovers: [launcher, wallpapers, power, keys, updates, notificationCenter,
+        keyboardPanel, clipboard, emoji, sharePicker, recordDialog, menuHost, wifiShare, commandMenu, firstLoginCard]
     // A dialog that needs the keyboard is open over a menu: the menu lets go of it meanwhile.
     readonly property bool modalOpen: polkit.active || btPair.open
     function barOn(screen) {
@@ -203,7 +207,7 @@ ShellRoot {
     // While the bar is hidden: what records, listens or watches, in the top-right corner.
     Variants {
         model: Quickshell.screens
-        PrivacyPeek {}
+        PrivacyPeek { bar: root.barOn(screen) }
     }
 
     Launcher { id: launcher; shell: root }

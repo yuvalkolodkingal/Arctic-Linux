@@ -22,7 +22,7 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
    priority). It does nothing with `AUTO=off`, on a metered connection with `METERED=skip`
    (`nmcli -t -f METERED general`) or without a connection, and waits while
    `arctic-firstboot.service` is installing apps (up to an hour).
-2. `dnf5 upgrade --offline -y --refresh` downloads the updates to `/var/lib/dnf/offline/packages`,
+2. `dnf5 upgrade --offline -y --refresh` with strict Arctic repository overrides downloads the updates to `/var/lib/dnf/offline/packages`,
    tests the transaction and stores it in `/usr/lib/sysimage/libdnf5/offline`
    (`offline-transaction-state.toml` with status `download-complete`, `transaction.json`). The
    running system is not touched. When packages were installed or removed while it ran (the
@@ -51,9 +51,11 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
 
 **Someone else's offline transaction.** dnf5 keeps one offline transaction, whoever prepared it
 (`dnf5 install --offline`, `dnf5 system-upgrade download`, dnf5daemon). The state's `cmd_line`
-says whose: arctic-update's own are exactly `dnf5 upgrade --offline -y --refresh` or
-`dnf5 distro-sync --offline -y --refresh`, with the matching `verb` and no release change
-(`target_releasever` = `system_releasever`). Any other stored transaction (except a
+says whose: arctic-update's own use `dnf5 upgrade --offline -y --refresh` or
+`dnf5 distro-sync --offline -y --refresh`, with strict `skip_if_unavailable=False`
+overrides for `arctic` and `arctic-testing`, the matching `verb`, and no release change
+(`target_releasever` = `system_releasever`). The exact legacy command forms remain recognized
+so queued updates survive an Arctic upgrade. Any other stored transaction (except a
 half-written `download-incomplete` one, which dnf5 itself ignores) is left alone: the daily
 check doesn't unschedule, clean, replace, prune or schedule it and says so in the status file;
 `now` and `channel` refuse unless given `--replace`, `apply` refuses.
@@ -76,3 +78,25 @@ removes the stored transaction.
 
 dnf5-automatic (`dnf5-plugin-automatic`) is not used: it can only install into the running
 system; `80-arctic.preset` keeps its timer disabled.
+
+## Manual checks and repository failures (1.2)
+
+Settings keeps **Check now** available when updates are already queued. Its helper waits for
+the actual command result while the UI polls progress; authorization cancellation is an
+error, and closing Settings does not send a broken stdout pipe to the detached updater.
+The page displays repository errors, pending foreign transactions and automatic-update
+modes correctly. An unchecked system is not labeled up to date.
+
+Both manual and scheduled checks retain `--refresh` and require available metadata from
+the enabled Arctic stable/testing repository. This overrides `skip_if_unavailable` only
+for those two IDs during update checks. Live/installer defaults, disabled repositories,
+third-party repository policies, package signatures and metadata caches are unchanged.
+A failed check retains a valid prior download and exposes `check_error`; a successful retry
+clears it. Unknown or foreign offline transactions remain untouched.
+
+The real-DNF container suite exercises the Settings backend with newly published RPMs and
+a warm cache, refreshes an existing queue to a newer RPM, checks Arctic-unavailable failure
+and optional-repository skipping, then executes the resulting offline transaction. These
+controlled fixture RPMs are unsigned; production signature settings are not changed. The
+headless Settings suite verifies rendering separately. Native ISO validation remains a
+separate enforcing-SELinux installation/update/reboot check.

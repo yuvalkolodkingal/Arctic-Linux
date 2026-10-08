@@ -1,6 +1,7 @@
 singleton Theme 1.0 Theme.qml
 singleton Session 1.0 Session.qml
 singleton Outputs 1.0 Outputs.qml
+singleton WindowGeometry 1.0 WindowGeometry.qml
 singleton AudioService 1.0 AudioService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton DndService 1.0 DndService.qml
@@ -98,3 +99,5 @@ WeatherItem 1.0 WeatherItem.qml
 WifiShare 1.0 WifiShare.qml
 WhatsNew 1.0 WhatsNew.qml
 Workspaces 1.0 Workspaces.qml
+
+VerticalBar 1.0 VerticalBar.qml

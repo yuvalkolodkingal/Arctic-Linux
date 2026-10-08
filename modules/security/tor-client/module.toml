@@ -1,0 +1,16 @@
+id = 'tor-client'
+name = 'Tor SOCKS client'
+summary = 'Optional per-app SOCKS connection. Starts only when you request it.'
+category = "security"
+tile = "tor-browser"
+icon = "globe"
+default = false
+in_live_image = false
+gpu = false
+requires = []
+conflicts = []
+
+[[install]]
+method = "dnf"
+packages = ['tor']
+download_mb = 15

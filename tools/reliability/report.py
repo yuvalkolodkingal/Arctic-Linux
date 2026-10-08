@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 CHECKS = ('identity', 'network', 'desktop', 'app-terminal', 'app-files',
-          'app-browser', 'app-editor', 'app-settings', 'app-vlc')
+          'app-browser', 'app-editor', 'app-settings', 'app-media')
 PREFIX = 'ARCTIC-RELIABILITY '
 
 
@@ -21,8 +21,10 @@ def read_records(path):
     return records
 
 
-def evaluate(directory, upgrade=False):
-    stages = [('live', 'serial-install.log', tuple(c for c in CHECKS if c != 'app-editor')),
+def evaluate(directory, upgrade=False, app_profile='legacy'):
+    if app_profile not in ('legacy', 'lightweight'):
+        raise ValueError('unsupported reliability app profile: ' + str(app_profile))
+    stages = [('live', 'serial-install.log', tuple(c for c in CHECKS if c != 'app-editor' or app_profile == 'lightweight')),
               ('installed', 'serial-boot.log', CHECKS + (('upgrade',) if upgrade else ()))]
     if upgrade:
         stages.append(('installed', 'serial-upgrade.log', CHECKS + ('upgrade-transaction',)))
@@ -51,8 +53,9 @@ def evaluate(directory, upgrade=False):
                         status='passed' if any(line.endswith(target) for line in log.splitlines())
                         else 'failed' if 'boot stage: exit' in log else 'unrun',
                         evidence='test.log', detail=target))
-    results.append(dict(stage='live', check='app-editor', status='unrun',
-                        detail='Zed is downloaded at install time, not required in the live image'))
+    if app_profile == 'legacy':
+        results.append(dict(stage='live', check='app-editor', status='unrun',
+                            detail='Legacy Zed is downloaded at install time, not required in the live image'))
     for name in ('physical-hardware', 'visual-content-audio-calls', 'fedora-major-upgrade'):
         results.append(dict(stage=name, check='manual-or-unsupported', status='unrun'))
     if not upgrade:
@@ -64,8 +67,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('--upgrade', action='store_true')
+    parser.add_argument('--app-profile', choices=('legacy', 'lightweight'), default='legacy')
     args = parser.parse_args()
-    results = evaluate(args.directory, args.upgrade)
+    results = evaluate(args.directory, args.upgrade, args.app_profile)
     args.directory.mkdir(parents=True, exist_ok=True)
     (args.directory / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
     print('| Stage | Check | Result | Evidence |\n|---|---|---|---|')

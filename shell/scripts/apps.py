@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import appslib  # noqa: E402
+import nixlib  # noqa: E402
 
 HOME = Path.home()
 DATA_HOME = Path(os.environ.get('XDG_DATA_HOME') or HOME / '.local/share')
@@ -159,6 +160,7 @@ def cmd_sources(_args):
     out(dict(live=cmdline_live(), wheel=wheel,
              flatpak=dict(present=flatpak, flathub=flathub, install_to='system' if wheel else 'user'),
              dnf=dict(present=shutil.which('dnf5') is not None),
+             nix=nixlib.status(),
              fedora_catalog=dict(present=bool(files), files=files),
              webapp=dict(present=webapp_present(), command=WEBAPP),
              snapshots=SNAPPER_ROOT.exists()))
@@ -603,10 +605,12 @@ def terminal_apps():
 
 
 def cmd_installed(args):
-    if not args or args[0] not in ('flatpak', 'dnf', 'terminal'):
+    if not args or args[0] not in ('flatpak', 'dnf', 'terminal', 'nix'):
         usage('usage: apps.py installed flatpak|dnf|terminal [--other]')
     if args[0] == 'flatpak':
         return out(dict(source='flatpak', apps=installed_flatpaks()))
+    if args[0] == 'nix':
+        return out(dict(source='nix', apps=nixlib.installed()))
     if args[0] == 'terminal':
         return out(dict(source='terminal', apps=terminal_apps()))
     apps, blocked = installed_dnf(other='--other' in args[1:])
@@ -886,7 +890,8 @@ def owner_of(desktop_id):
         overrides = any((d / 'applications' / (desktop_id + '.desktop')).is_file() for d in DATA_DIRS)
         result.update(source='launcher', target=dict(path=text, overrides=overrides))
     elif text.startswith('/nix/') or os.path.realpath(text).startswith('/nix/'):
-        result.update(source='nix', target=dict(name=name))
+        result.update(source='nix', target=dict(name=name),
+                      blocked=dict(message='Manage this package in Get apps → Nix packages. Shared or external profiles require their owner.'))
     else:
         owners = rpm_owners([text]).get(text, [])
         if owners:
@@ -1008,6 +1013,7 @@ COMMANDS = {
     'installed-ids': cmd_installed_ids, 'counts': cmd_counts, 'preview-remove': cmd_preview_remove,
     'owner': cmd_owner, 'terminal-app': cmd_terminal_app, 'launcher-entry': cmd_launcher_entry,
     'protected': cmd_protected,
+    'nix-search': lambda args: out(nixlib.search(args[0])) if len(args) == 1 else usage('Pass one Nix search string.'),
 }
 
 

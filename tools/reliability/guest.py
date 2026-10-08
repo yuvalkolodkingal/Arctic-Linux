@@ -14,6 +14,33 @@ import sys
 import time
 
 
+# Expected app IDs are selected explicitly by the test lane. An arctic-open
+# fallback or a window whose title happens to mention the expected app cannot pass.
+PROFILES = {
+    'legacy': {
+        'terminal': (['arctic-open', 'terminal'], r'kitty'),
+        'files': (['arctic-open', 'files'], r'(?:org\.gnome\.)?nautilus'),
+        'browser': (['arctic-open', 'browser'], r'(?:app\.zen_browser\.)?zen'),
+        'editor': (['arctic-open', 'editor'], r'(?:dev\.zed\.)?zed'),
+        'media': (['vlc'], r'vlc'),
+    },
+    'lightweight': {
+        'terminal': (['arctic-open', 'terminal'], r'foot'),
+        'files': (['arctic-open', 'files'], r'pcmanfm'),
+        'browser': (['arctic-open', 'browser'], r'org\.gnome\.Epiphany'),
+        'editor': (['arctic-open', 'editor'], r'(?:org\.qt-project\.)?featherpad'),
+        'media': (['celluloid'], r'io\.github\.celluloid_player\.Celluloid'),
+    },
+}
+
+
+def expected_apps(profile, stage):
+    if profile not in PROFILES:
+        raise ValueError('unsupported reliability app profile: ' + str(profile))
+    return {role: spec for role, spec in PROFILES[profile].items()
+            if not (profile == 'legacy' and stage == 'live' and role == 'editor')}
+
+
 def run(argv, **kwargs):
     return subprocess.run(argv, text=True, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT, timeout=kwargs.pop('timeout', 45),
@@ -55,7 +82,11 @@ def clients(prefix):
     return {str(c['id']): c for c in json.loads(run(prefix + ['mmsg', 'get', 'all-clients']))['clients']}
 
 
-def app(prefix, command, pattern):
+def app(prefix, command, pattern, match_title=False):
+    def matches(client):
+        value = client.get('title', '') if match_title else client.get('appid', client.get('app_id', ''))
+        return re.fullmatch(pattern, str(value), re.I)
+
     before = set(clients(prefix))
     # arctic-open may detach. Its exit status alone is not evidence of a window.
     with open('/tmp/arctic-release-app.log', 'a') as log:
@@ -65,11 +96,11 @@ def app(prefix, command, pattern):
             while time.monotonic() < until:
                 current = clients(prefix)
                 new = {key for key, value in current.items() if key not in before
-                       and re.search(pattern, str(value.get('appid', value.get('app_id', ''))) +
-                                     ' ' + str(value.get('title', '')), re.I)}
+                       and matches(value)}
                 if new:
                     time.sleep(5)
-                    if new & set(clients(prefix)):
+                    after = clients(prefix)
+                    if any(key in after and matches(after[key]) for key in new):
                         return f'{command}: new mapped clients {sorted(new)} persisted 5s'
                 time.sleep(2)
             raise RuntimeError(f'{command}: no persistent new window; see /tmp/arctic-release-app.log')
@@ -89,6 +120,8 @@ def main():
     if Path(__file__).parent != Path('/run/t') or os.geteuid() != 0 or run(['systemd-detect-virt']) not in ('qemu', 'kvm'):
         raise RuntimeError('guest probes require root inside a QEMU/KVM VM')
     config = json.loads(Path(__file__).with_name('config.json').read_text())
+    profile = config.get('app_profile', 'legacy')
+    applications = expected_apps(profile, stage)
     failed = False
     upgrade = config.get('upgrade_to')
     state_path = Path('/var/lib/arctic-release-test/upgrade.json')
@@ -131,16 +164,13 @@ def main():
     try:
         prefix = desktop()
         record(stage, 'desktop', 'passed', run(prefix + ['mmsg', 'get', 'all-clients']))
-        # Profile-specific expectations: falling back to another app must not pass.
-        for role, pattern in [('terminal', 'kitty'), ('files', 'nautilus'),
-                              ('browser', 'zen'), ('editor', 'zed')]:
-            if stage == 'live' and role == 'editor':
-                record(stage, 'app-editor', 'unrun', 'Zed is downloaded by the installer; not a live-image requirement')
-                continue
-            check('app-' + role, lambda role=role, pattern=pattern:
-                  app(prefix, ['arctic-open', role], pattern))
-        check('app-vlc', lambda: app(prefix, ['vlc'], 'vlc'))
-        check('app-settings', lambda: app(prefix, ['arctic-settings'], 'Arctic Settings'))
+        for role, (command, pattern) in applications.items():
+            check('app-' + role, lambda command=command, pattern=pattern:
+                  app(prefix, command, pattern))
+        if 'editor' not in applications:
+            record(stage, 'app-editor', 'unrun', 'Legacy Zed is downloaded by the installer; not a live-image requirement')
+        # Settings is a Quickshell window with a shared toolkit app ID.
+        check('app-settings', lambda: app(prefix, ['arctic-settings'], r'Arctic Settings', match_title=True))
     except Exception as exc:
         failed = True
         record(stage, 'desktop', 'failed', exc)

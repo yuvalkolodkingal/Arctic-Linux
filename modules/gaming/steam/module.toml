@@ -17,7 +17,7 @@ conflicts = []
 # (controller udev rules) and works with a host MangoHud/GameMode. With the RPM Fusion NVIDIA
 # driver, xorg-x11-drv-nvidia-libs.i686 follows through RPM boolean dependencies.
 method = "dnf"
-packages = ["steam"]
+packages = ["steam", "vulkan-loader.x86_64", "vulkan-loader.i686"]
 repos = ["rpmfusion-free", "rpmfusion-nonfree"]
 download_mb = 206
 

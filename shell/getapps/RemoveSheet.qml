@@ -256,7 +256,7 @@ Sheet {
             text: sheet.source === 'terminal-app' ? 'The launcher entry for ' + sheet.name + ' will be removed. The program itself stays installed.'
                   : sheet.source === 'launcher' ? 'This is your own launcher entry for ' + sheet.name + '.'
                                                    + (sheet.request && sheet.request.target && sheet.request.target.overrides ? ' Removing it brings back the original.' : '')
-                  : sheet.source === 'nix' ? sheet.name + ' was installed with Nix. Remove it in a terminal: sudo nix profile remove --profile /nix/var/nix/profiles/default ' + sheet.name
+                  : sheet.source === 'nix' ? 'Manage your packages in Get apps → Nix packages. Shared and external profiles require their owner.'
                   : sheet.source === 'unknown' && !sheet.blocked ? 'Arctic Linux can’t tell where ' + sheet.name + ' came from.' : ''
         }
 

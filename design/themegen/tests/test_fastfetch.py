@@ -359,7 +359,7 @@ class InfoTest(unittest.TestCase):
         return str(f)
 
     def test_os_and_base(self):
-        self.assertEqual(self.info("os", ARCTIC_OS_RELEASE=str(OS_RELEASE)), "Arctic Linux 1.1 (Fedora 44)\n")
+        self.assertEqual(self.info("os", ARCTIC_OS_RELEASE=str(OS_RELEASE)), "Arctic Linux 1.2 (Fedora 44)\n")
         self.assertEqual(self.info("base", ARCTIC_OS_RELEASE=str(OS_RELEASE)), "Fedora 44\n")
         fedora = self.os_release('NAME="Fedora Linux"\nVERSION="44 (Workstation Edition)"\nID=fedora\n'
                                  'VERSION_ID=44\nPRETTY_NAME="Fedora Linux 44 (Workstation Edition)"\n')
@@ -586,7 +586,7 @@ class FastfetchRunTest(unittest.TestCase):
         for name in ("polar-night", "winter"):
             out = self.fastfetch("--config", str(self.themes / name / "fastfetch/config.jsonc"), "--pipe")
             self.assertIn("Arctic Linux", out)
-            self.assertRegex(out, r"os {8}Arctic Linux 1\.1 \(Fedora 44\)\n")
+            self.assertRegex(out, r"os {8}Arctic Linux 1\.2 \(Fedora 44\)\n")
             self.assertRegex(out, r"wm {8}Mango · Wayland\n")
             self.assertRegex(out, r"theme {5}Polar night\n")
             self.assertRegex(out, r"updates {3}not checked yet\n")

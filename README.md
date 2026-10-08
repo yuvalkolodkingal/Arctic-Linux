@@ -28,7 +28,7 @@ includes the script, authentic repository screens, chapters, and caption files. 
 
 Download the ISO from the [releases](https://github.com/yuvalkolodkingal/Arctic-Linux/releases), write
 it to a USB stick (4 GB or more), for example with Fedora Media Writer or
-`sudo dd if=Arctic-Linux-1.1-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync`, and boot it.
+`sudo dd if=Arctic-Linux-1.2-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync`, and boot it.
 
 ## Updates
 

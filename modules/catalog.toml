@@ -173,7 +173,7 @@ choice = "any"
 collapsed = true
 note = ""
 role = "security app"
-modules = ["keepassxc", "bitwarden", "onepassword", "proton-pass", "authenticator", "protonvpn", "tor-browser"]
+modules = ["tor-client", "tailscale", "vpn-tools", "keepassxc", "bitwarden", "onepassword", "proton-pass", "authenticator", "protonvpn", "tor-browser"]
 
 [[category]]
 id = "sync"

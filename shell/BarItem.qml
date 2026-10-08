@@ -11,6 +11,11 @@ Rectangle {
     property string text: ''
     property color textColor: Theme.ink
     property int textWeight: Font.Medium
+    property int iconSize: 16
+    property real batteryPercent: NaN
+    property int textSize: 13
+    property int textAlignment: Text.AlignLeft
+    property real horizontalPadding: Theme.space2
     property int maxTextWidth: 0        // > 0: the label is elided beyond this (the media title)
     property string tooltip: ''
     property bool interactive: true
@@ -27,7 +32,7 @@ Rectangle {
     signal scrolled(int steps)
     signal hoverChanged(bool hovering)
 
-    implicitWidth: row.implicitWidth + 2 * Theme.space2
+    implicitWidth: row.implicitWidth + 2 * horizontalPadding
     implicitHeight: 26
     radius: 13
     color: accentFill ? (mouse.pressed ? Theme.accentPressed : mouse.containsMouse ? Theme.accentHover : Theme.accent)
@@ -47,18 +52,20 @@ Rectangle {
         Icon {
             visible: item.iconName !== ''
             name: item.iconName
-            size: 16
+            size: item.iconSize
             color: item.iconColor
+            batteryPercent: item.batteryPercent
         }
         Text {
             visible: item.text !== ''
             Layout.maximumWidth: item.maxTextWidth > 0 ? item.maxTextWidth : -1
+            horizontalAlignment: item.textAlignment
             elide: Text.ElideRight
             text: item.text
             textFormat: Text.PlainText
             color: item.textColor
             font.family: Theme.fontSans
-            font.pixelSize: 13
+            font.pixelSize: item.textSize
             font.weight: item.textWeight
             font.features: { 'tnum': 1 }
         }

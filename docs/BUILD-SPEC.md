@@ -57,8 +57,8 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 1.1.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-1.1.0/` of the
+Version 1.2.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-1.2.0/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 The one other source is `Source1`, the Nerd Fonts "Symbols Only" release for
@@ -477,7 +477,7 @@ greeter's copy and vconsole.conf; non-Latin layouts as `us,<layout>` + `grp:alt_
 with a Latin console keymap),
 `/etc/arctic/default-apps`, kernel-install/dracut, grub2-mkconfig, efibootmgr/grub2-install,
 app diff (dnf remove/install in chroot, flatpak from host with FLATPAK_* into /mnt, nix via
-`nix --store /mnt profile add`; a Flatpak app the image ships — Zen when the ISO fits in 2 GiB —
+`nix --store /mnt profile add`; a Flatpak app the image ships — including Zen —
 counts as in the live image whatever the catalog says: kept when ticked, uninstalled with its
 unused runtimes when not), setfiles relabel, unmount. Drivers (internal/installer/drivers.go):
 installed in the chroot in the apps' dnf transaction with the RPM Fusion repositories; for an
@@ -527,13 +527,20 @@ closed at the end); os-prober only runs for "alongside". Every command goes thro
 kiwi-ng 11 (Fedora 44 package `kiwi-cli` + `kiwi-systemdeps-iso-media`), description in
 `iso/kiwi/` derived from fedora-kiwi-descriptions (F44). Image type iso, hybrid, UEFI (shim,
 Secure Boot) + BIOS. Packages: `arctic-desktop`, `arctic-installer`, `arctic-live`,
-livesys-scripts, kernel, dracut-live, Zen Flatpak preinstalled only if the ISO stays ≤ 2 GiB
-(else skipped — note it). Repos: Fedora 44 + updates + the local `out/repo`. Boot menu entries
+livesys-scripts, kernel, dracut-live. The ISO workflow requires the Firefox-based Zen Flatpak
+(`--zen yes`): missing browser installation fails the build, and images above 2 GiB retain it.
+The release path splits larger images; workflow artifacts retain the complete ISO. The local
+builder's optional `--zen auto|no` modes remain available for development. Enforcing VM
+acceptance launches Zen through its exported desktop entry as the normal desktop user in
+the live session and both installed boots, requiring a mapped window to persist five seconds.
+The workflow checks the ISO checksum before upload and publishes a separate small metadata
+artifact containing its checksum, package list and source/build identity. Repos: Fedora 44 +
+updates + the local `out/repo`. Boot menu entries
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
 "Check USB for errors" (`rd.live.check`), "Boot from first disk". GRUB theme `arctic`.
-Volume id `Arctic-Linux-1.1` (the installer finds its media by the `Arctic-Linux` prefix). Output
-`out/iso/Arctic-Linux-1.1-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
+Volume id `Arctic-Linux-1.2` (the installer finds its media by the `Arctic-Linux` prefix). Output
+`out/iso/Arctic-Linux-1.2-x86_64.iso` + `.sha256`; `.build-info` also gets the packages' version,
 Release suffix, commit and `arctic_repos=enabled|disabled` from out/BUILD-INFO.
 
 Design assets not copied into `design/` (all 78 icons, 30 app tiles, lockups, wallpapers as
@@ -569,7 +576,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 1.1.0, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 1.2.0, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),

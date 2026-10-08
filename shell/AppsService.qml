@@ -167,7 +167,9 @@ Singleton {
         if (job.phase === 'done' && job.kind === 'install')
             argv = ['notify-send', '-a', 'Arctic Linux', '-i', job.icon || 'system-software-install']
                    .concat(job.desktop ? ['-A', 'open=Open'] : [])
-                   .concat([name + ' is installed', 'It’s in the launcher (Super + Space).']);
+                   .concat([name + ' is installed', job.source === 'nix' ? 'Installed in your Nix profile. Desktop apps provide launcher entries; command-line tools run in a terminal.' : 'It’s in the launcher (Super + Space).']);
+        else if (job.phase === 'done' && (job.kind === 'update' || job.kind === 'rollback'))
+            argv = ['notify-send', '-a', 'Arctic Linux', '-i', 'system-software-update', GetAppsLogic.jobLabel(job), 'Your Nix profile changed. Restart running apps to use it.'];
         else if (job.phase === 'done' && job.kind === 'remove')
             argv = ['notify-send', '-a', 'Arctic Linux', '-i', job.icon || 'user-trash', name + ' was removed', ''];
         else if (job.phase === 'failed')

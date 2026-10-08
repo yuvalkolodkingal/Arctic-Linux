@@ -1,6 +1,6 @@
 id = "tor-browser"
 name = "Tor Browser"
-summary = "Browse anonymously over Tor."
+summary = "Browse through Tor. Only Tor Browser traffic uses its connection."
 category = "security"
 role = "private browser"
 default = false

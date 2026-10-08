@@ -17,3 +17,6 @@ enable arctic-*.service
 enable gcr-ssh-agent.socket
 # Flatpak apps installed just for you, updated daily (arctic-update flatpak --user).
 enable arctic-flatpak-update.timer
+
+# Optional Tailscale UI starts only when the user requests it.
+disable tailscale-systray.service

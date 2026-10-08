@@ -30,9 +30,10 @@
 #   arctic-desktop         (metapackage)
 
 %global dist_version    44
-%global arctic_version  1.1
+%global arctic_version  1.2
 %global selinuxtype     targeted
-# Go binaries are built with the Go linker (CGO_ENABLED=0); no separate debuginfo.
+# Pure Go commands omit native symbol/debug tables; Go runtime stack metadata and
+# the GNU build ID remain. The cgo host keeps Fedora's external-link flags below.
 %global debug_package   %{nil}
 # ---- stream 1 (web apps): arctic-webapp-host is cgo, linked externally with Fedora's flags;
 # brp-strip strips it too. Its WebKitGTK floor is the version it was built against (it links
@@ -48,7 +49,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        1.1.0
+Version:        1.2.0
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -218,6 +219,10 @@ Requires:       bash
 Requires:       python3
 # arctic-themegen: colours from wallpapers
 Requires:       python3-pillow
+# The unprivileged, D-Bus-activated shared login wallpaper publisher.
+Requires:       python3-dbus
+Requires:       python3-gobject-base
+Requires:       polkit
 %{?systemd_requires}
 # kitty and fish are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
@@ -367,7 +372,7 @@ Requires:       pipewire-utils
 Recommends:     ddcutil
 # Sharing a Wi-Fi network as a QR code; importing OpenVPN files (Settings → Network)
 Recommends:     qrencode
-Recommends:     NetworkManager-openvpn
+# NetworkManager-openvpn is installer opt-in or installed explicitly from Settings.
 # --- stream 6 (launcher, command menu): the launcher finds files with fd and converts units
 # with qalc when they are installed.
 Recommends:     fd-find
@@ -726,7 +731,7 @@ if [ -f go.mod ]; then
   export GOCACHE="$PWD/_build/gocache" GOPATH="$PWD/_build/gopath"
   mkdir -p _build/bin
   for cmd in arcticd arctic-install arctic-webapp; do
-    go build -ldflags "-B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
+    go build -ldflags "-s -w -B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
   done
   # ---- stream 1 (web apps): the window (docs/BUILD-SPEC.md §11), cgo against WebKitGTK 6.0
   # and GTK 4. Go reads CGO_CFLAGS/CGO_LDFLAGS, not the CFLAGS/LDFLAGS rpm exports; -tags
@@ -929,10 +934,19 @@ install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
+install -Dpm 0755 packaging/nix/arctic-nix-system %{buildroot}%{_libexecdir}/arctic-nix-system
+install -Dpm 0644 packaging/nix/org.arcticlinux.nix.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
+install -Dpm 0644 packaging/desktop/arctic-nix.sh %{buildroot}%{_sysconfdir}/profile.d/zz-arctic-nix.sh
+install -Dpm 0644 packaging/environment.d/60-arctic-nix.conf %{buildroot}%{_prefix}/lib/environment.d/60-arctic-nix.conf
 # Stream 5 (system): the SSH agent's socket for the session (gcr-ssh-agent), and the root helper
 # Settings uses for the firewall, remote login and snapshots (pkexec, org.arcticlinux.system).
 install -Dpm 0644 packaging/desktop/arctic-ssh-agent.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 install -Dpm 0755 packaging/system/arctic-system-helper %{buildroot}%{_libexecdir}/arctic/arctic-system-helper
+install -Dpm 0644 packaging/systemd/arctic-login-wallpaper.service %{buildroot}%{_unitdir}/arctic-login-wallpaper.service
+install -Dpm 0644 packaging/system/arctic-wallpaper.sysusers %{buildroot}%{_sysusersdir}/arctic-wallpaper.conf
+install -Dpm 0644 packaging/system/org.arcticlinux.Wallpaper.service %{buildroot}%{_datadir}/dbus-1/system-services/org.arcticlinux.Wallpaper.service
+install -Dpm 0644 packaging/system/org.arcticlinux.Wallpaper.conf %{buildroot}%{_datadir}/dbus-1/system.d/org.arcticlinux.Wallpaper.conf
+install -Dpm 0644 packaging/polkit/org.arcticlinux.wallpaper.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.wallpaper.policy
 install -Dpm 0644 packaging/polkit/org.arcticlinux.system.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 # Reading the firewall's rules (Settings > Sharing) without a password in the active session.
@@ -1273,10 +1287,13 @@ for f in .zshrc .zprofile; do \
 done
 
 %post -n arctic-desktop-config
+systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
+%systemd_post arctic-login-wallpaper.service
 %systemd_post arctic-firstboot.service arctic-update-stage.timer
 %systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
+%systemd_preun arctic-login-wallpaper.service
 %systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
 %systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
@@ -1308,6 +1325,7 @@ if [ ! -e %{_bindir}/neofetch ] && [ ! -L %{_bindir}/neofetch ]; then
 fi
 
 %postun -n arctic-desktop-config
+%systemd_postun_with_restart arctic-login-wallpaper.service
 if [ "$1" -eq 0 ] && [ -x %{_bindir}/dconf ]; then %{_bindir}/dconf update || :; fi
 
 %triggerin -n arctic-desktop-config -- zsh
@@ -1443,8 +1461,17 @@ fi
 %dir %{_sysconfdir}/arctic/mango
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
 %{_sysconfdir}/profile.d/arctic-graphics.sh
+%{_libexecdir}/arctic-nix-system
+%{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
+%{_sysconfdir}/profile.d/zz-arctic-nix.sh
+%{_prefix}/lib/environment.d/60-arctic-nix.conf
 %{_sysconfdir}/profile.d/arctic-ssh-agent.sh
 %{_libexecdir}/arctic/arctic-system-helper
+%{_unitdir}/arctic-login-wallpaper.service
+%{_sysusersdir}/arctic-wallpaper.conf
+%{_datadir}/dbus-1/system-services/org.arcticlinux.Wallpaper.service
+%{_datadir}/dbus-1/system.d/org.arcticlinux.Wallpaper.conf
+%{_datadir}/polkit-1/actions/org.arcticlinux.wallpaper.policy
 %{_datadir}/polkit-1/actions/org.arcticlinux.system.policy
 %{_datadir}/polkit-1/rules.d/50-arctic-firewalld-read.rules
 %{_datadir}/Thunar/sendto/arctic-sendto-localsend.desktop
@@ -1583,6 +1610,9 @@ fi
 # metapackage: no files
 
 %changelog
+* Sun Oct 04 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.0-1
+- Nix integration, taskbar fixes, two-row Get apps and reliable update checks.
+
 * Sat Oct 03 2026 Arctic Linux <arctic@arcticlinux.org> - 1.1.0-1
 - Web-app pages follow desktop light/dark switches without a reload
 - Include Chromium for WebRTC calls; recommend it for WhatsApp and honor the

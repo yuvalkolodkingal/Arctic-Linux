@@ -80,6 +80,7 @@ Arctic Linux updates: downloaded in the background, installed the next time you 
   arctic-update auto [on|off|download-only]
                                            show or change automatic updates
   arctic-update metered [skip|allow]       downloads on metered connections
+  arctic-update nix                      update your Arctic Nix profile (no sudo)
   arctic-update flatpak [--notify]         update Flatpak apps now (yours and the system's)
   arctic-update firmware [--json]          firmware updates fwupd offers for this computer
   arctic-update firmware install           install them (in a terminal: fwupdmgr update)
@@ -357,12 +358,13 @@ follow() {
 }
 
 run_dnf5() {  # VERB MODE
-  if [[ $2 == interactive ]]; then
-    dnf5 "$1" --offline -y --refresh
-  else
-    LC_ALL=C dnf5 "$1" --offline -y --refresh 2>&1 | follow
-    return "${PIPESTATUS[0]}"
-  fi
+  # Require current Arctic metadata for both manual and automatic checks. Keep other
+  # repositories' policies and the live/install defaults unchanged. No cache is deleted.
+  # Keep this exact argv in the helper's ownership allowlist, including legacy commands.
+  LC_ALL=C dnf5 "$1" --offline -y --refresh \
+    --setopt=arctic.skip_if_unavailable=False \
+    --setopt=arctic-testing.skip_if_unavailable=False 2>&1 | follow
+  return "${PIPESTATUS[0]}"
 }
 
 # stage VERB MODE REPLACE: store an offline transaction (VERB: upgrade | distro-sync) without
@@ -387,7 +389,7 @@ stage() {
   disarm "$([[ $replace == yes ]] && echo force)"
   while :; do
     before="$(stamp)" mark="$(rpmdb_mark)"
-    status_set state=checking "message=Checking for updates…"
+    status_set state=checking check_error= "message=Checking for updates…"
     run_dnf5 "$verb" "$mode"
     rc=$?
     after="$(stamp)"
@@ -538,6 +540,7 @@ cmd_stage() {
   fi
   local err
   err="$(head -c 300 "$ERRFILE" 2>/dev/null)"
+  status_set "check_error=${err:-The update check failed.}"
   warn "the check failed${err:+: $err}"
   if [[ $UNSAFE == yes ]]; then
     dnf5 -q offline clean || warn "dnf5 offline clean failed"
@@ -575,7 +578,12 @@ cmd_now() {
     say "You're on a metered connection; downloading anyway because you asked."
   fi
   say "Checking for updates…"
+  ERRFILE="$(mktemp)"
+  trap 'rm -f "$ERRFILE"' EXIT
   if ! stage "$verb" interactive "$replace"; then
+    local err
+    err="$(head -c 300 "$ERRFILE" 2>/dev/null)"
+    status_set "check_error=${err:-The update check failed.}"
     if [[ $UNSAFE == yes ]]; then
       dnf5 -q offline clean || warn "dnf5 offline clean failed"
     elif keep_previous arm; then
@@ -583,7 +591,7 @@ cmd_now() {
       die "the check failed; the updates downloaded earlier are still ready and will be installed at the next restart"
     fi
     status_set state=failed packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
-      "message=Couldn't check for updates."
+      "message=Couldn't check for updates${err:+: $err}"
     die "the check failed (see the messages above)"
   fi
   # You asked: automatic installs start again after failed ones.
@@ -946,6 +954,7 @@ case $cmd in
   metered)           cmd_metered "$@" ;;
   stage)             cmd_stage ;;
   after-transaction) cmd_after_transaction ;;
+  nix)               exec arctic-nix update "$@" ;;
   flatpak)           cmd_flatpak "$@" ;;
   firmware)          cmd_firmware "$@" ;;
   upgrade)           cmd_upgrade "$@" ;;

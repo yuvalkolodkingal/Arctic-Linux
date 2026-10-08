@@ -130,6 +130,27 @@ Rectangle {
     }
 
     // ---- wallpaper ------------------------------------------------------------------
+    // Probe the public system copy. SDDM never reads a user's home or runs the publisher.
+    // File URL query revisions bypass Qt's cache after the broker's atomic generation swap.
+    Image {
+        id: sharedProbe
+        visible: false
+        asynchronous: true
+        cache: false
+        sourceSize: Qt.size(root.width, root.height)
+        property int revision: 0
+        source: "file:///var/lib/arctic-login-wallpaper/current/wallpaper.png?revision=" + revision
+        onStatusChanged: {
+            if (status === Image.Ready) wallpaper.source = source;
+            else if (status === Image.Error) wallpaper.source = config.background || "background.png";
+        }
+    }
+    Timer {
+        interval: 5000
+        running: true
+        repeat: true
+        onTriggered: sharedProbe.revision++
+    }
     Image {
         id: wallpaper
         anchors.fill: parent

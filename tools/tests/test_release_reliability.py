@@ -51,6 +51,16 @@ class EvidenceTests(unittest.TestCase):
         self.assertTrue(all(r['status'] == 'passed' for r in self.automated()))
         self.assertTrue(any(r['status'] == 'unrun' for r in report.evaluate(self.path)))
 
+    def test_lightweight_live_editor_is_required(self):
+        self.evidence()
+        results = report.evaluate(self.path, app_profile='lightweight')
+        editor = next(r for r in results if r['stage'] == 'live' and r['check'] == 'app-editor')
+        self.assertEqual(editor['status'], 'unrun')
+        self.assertIn('evidence', editor)
+        p = self.path / 'serial-install.log'
+        p.write_text(p.read_text() + report.PREFIX + json.dumps(dict(stage='live', check='app-editor', status='passed')) + '\n')
+        self.assertTrue(all(r['status'] == 'passed' for r in report.evaluate(self.path, app_profile='lightweight') if 'evidence' in r))
+
     def test_failed_probe_fails(self):
         self.evidence()
         p = self.path / 'serial-boot.log'
@@ -142,6 +152,23 @@ class AppTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'no persistent new window'):
             self.probe([client, client])
 
+    def test_expected_name_in_fallback_title_does_not_pass(self):
+        with self.assertRaisesRegex(RuntimeError, 'no persistent new window'):
+            self.probe([{}, {'1': {'appid': 'epiphany', 'title': 'zen'}}])
+
+    def test_app_identity_must_persist(self):
+        with self.assertRaisesRegex(RuntimeError, 'no persistent new window'):
+            self.probe([{}, {'1': {'appid': 'zen'}}, {'1': {'appid': 'kitty'}}])
+
+    def test_profiles_pin_distinct_apps_and_live_editor(self):
+        self.assertNotIn('editor', guest.expected_apps('legacy', 'live'))
+        self.assertIn('editor', guest.expected_apps('lightweight', 'live'))
+        for role in ('terminal', 'files', 'browser', 'editor', 'media'):
+            self.assertNotEqual(guest.expected_apps('legacy', 'installed')[role],
+                                guest.expected_apps('lightweight', 'installed')[role])
+        with self.assertRaises(ValueError):
+            guest.expected_apps('unknown', 'live')
+
 
 class HarnessTests(unittest.TestCase):
     def test_generated_guest_shell_and_python_driver_parse(self):
@@ -162,6 +189,18 @@ class HarnessTests(unittest.TestCase):
             script = (ROOT / 'tools/test-install.sh').read_text().split("DRIVER <<'PY' || true\n", 1)[1].split('\nPY\n', 1)[0]
             compile(script, 'vm-driver', 'exec')
             self.assertEqual(json.loads((tmp / 'out/data/config.json').read_text())['version'], '1.1')
+            self.assertEqual((tmp / 'out/data/guest-check.py').read_text(),
+                             (ROOT / 'tools/reliability/guest.py').read_text())
+            for name, marker in (('run.sh', 'ARCTIC-LIVE-SMOKE-EXIT='),
+                                 ('collect.sh', 'ARCTIC-INSTALLED-SMOKE-EXIT=')):
+                self.assertEqual((tmp / 'out/data' / name).read_text().count(marker), 1)
+
+    def test_generic_guest_check_cannot_be_replaced_by_reliability(self):
+        result = subprocess.run(['bash', str(ROOT / 'tools/test-install.sh'),
+                                 '--reliability-version', '1.2', '--guest-check', '/not-used'],
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('mutually exclusive', result.stderr)
 
 
 if __name__ == '__main__':
