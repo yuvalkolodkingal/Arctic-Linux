@@ -15,26 +15,27 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Install the pixel inspection reader
+        run: sudo apt-get update && sudo apt-get install -y python3-pil
       - name: Verify fixed artifacts and inspect existing synthetic VM evidence
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 -B - <<'PY'
-          import base64, hashlib, json, os, re, subprocess, tempfile, zipfile
+          import base64, hashlib, io, json, os, re, subprocess, tempfile, zipfile
           from pathlib import Path
+          from PIL import Image
           assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
           assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-existing-evidence-20261008'
           assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
           repo = 'repos/yuvalkolodkingal/Arctic-Linux'
           evidence = [
-              (11575143038, 37830169067, '5680fb12f2c276f83f846e30e3260fdcc79196c6',
-               'boot-test', 'fa4e28f5bcb8685fa9232010c817b5f9d7fdd5f16d54c02940106db944c79bd0'),
-              (11575333480, 37835601271, 'd24ec7a435d10ed63208db00f6f184fe7060ada9',
-               'screen-frame-regression', '274dcc96870af073b6f1b99a0bf046549f38ca58916cefcdf9b16881c52beb26'),
+              (11579638576, 37845367926, '8fd9d2278cd99d89a33aab2f73648267f6fd2d92',
+               'screen-frame-regression', 'ffe3297e33878a396d066b6a8b2376c16df1d61fc6fa74d87a9b6d41e52f27e7'),
           ]
           sensitive = re.compile(r'(?i)authorization:|(?:gh[pousr]_|github_pat_)[a-z0-9_]+|'
                                  r'(?:password|token|secret)\s*[=:]\s*\S+|'
-                                 r'[\w.+-]+@[\w.-]+\.[a-z]{2,}|https?://\S*\?(?:\S*)')
+                                 r'[\w.+-]+@[\w.-]+|https?://\S*\?(?:\S*)')
           with tempfile.TemporaryDirectory(prefix='arctic-evidence-') as temp:
               for artifact_id, run_id, source, name, digest in evidence:
                   endpoint = f'{repo}/actions/artifacts/{artifact_id}'
@@ -62,11 +63,19 @@ jobs:
                                   print('[redacted diagnostic line]' if sensitive.search(line) else line[:1500])
                               print('ARCTIC-TEXT-END', member)
                           # These are synthetic VM screenshots already authorized for diagnostic upload.
-                          selected = member.endswith('99-final.png') or member.endswith('exposed-top-auto-1.5-0-HEADLESS-1.png')
+                          selected = Path(member).name in (
+                              'exposed-top-auto-1.5-0-HEADLESS-1.png',
+                              'exposed-top-auto-1-0-HEADLESS-1.png')
                           if selected:
                               assert item.file_size < 2_000_000
                               content = archive.read(item)
                               assert content.startswith(b'\x89PNG\r\n\x1a\n')
+                              with Image.open(io.BytesIO(content)) as image:
+                                  assert image.size == (1024, 768)
+                                  image = image.convert('RGB')
+                                  print('ARCTIC-PIXELS', json.dumps(dict(member=member,
+                                      right=[dict(x=x, y=384, rgb=image.getpixel((x, 384))) for x in range(1008, 1024)],
+                                      bottom=[dict(x=512, y=y, rgb=image.getpixel((512, y))) for y in range(752, 768)])))
                               encoded = base64.b64encode(content).decode('ascii')
                               print('ARCTIC-PNG-BEGIN', member, hashlib.sha256(content).hexdigest())
                               for offset in range(0, len(encoded), 1024):
