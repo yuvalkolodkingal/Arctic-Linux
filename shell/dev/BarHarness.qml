@@ -90,6 +90,7 @@ ShellRoot {
                 surfaces: frames.instances.map(f => ({screen: f.modelData.name,
                     width: f.surface.width, height: f.surface.height,
                     devicePixelRatio: f.surface.devicePixelRatio,
+                    edgeOverscan: f.surface.edgeOverscan || 0,
                     margins: {right: f.surface.margins.right, bottom: f.surface.margins.bottom}}))});
         }
         function geometry(): string { return JSON.stringify({ready: WindowGeometry.ready, monitors: WindowGeometry.monitors, windows: WindowGeometry.windows, error: WindowGeometry.error}); }

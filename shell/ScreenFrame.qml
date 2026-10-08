@@ -54,6 +54,18 @@ Scope {
                 function onLineChanged() { outline.requestPaint(); }
                 function onFrameWidthChanged() { outline.requestPaint(); }
             }
+            // Canvas textures can filter against transparent texels at their
+            // outer boundary under fractional scaling. Solid exterior strips
+            // keep that edge opaque; the Canvas still paints the inner curve
+            // and hairline, beyond these two logical pixels.
+            Rectangle { anchors { top: true; left: true; right: true }
+                height: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { bottom: true; left: true; right: true }
+                height: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { left: true; top: true; bottom: true }
+                width: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { right: true; top: true; bottom: true }
+                width: Math.min(2, Theme.frameWidth); color: Theme.ground }
             function rounded(ctx, x, y, w, h, r) {
                 ctx.moveTo(x + r, y);
                 ctx.lineTo(x + w - r, y);
@@ -69,17 +81,20 @@ Scope {
             onPaint: {
                 const ctx = getContext('2d');
                 const f = Theme.frameWidth, r = Theme.frameRadius;
+                // Overscan extends only the outside paint. Preserve the original
+                // inner edge and fixed-bar inset relative to the reserved area.
+                const w = width - frame.edgeOverscan, h = height - frame.edgeOverscan;
                 ctx.reset();
                 if (f <= 0) return;
                 ctx.fillStyle = Theme.ground;
                 ctx.fillRect(0, 0, width, height);
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.beginPath();
-                rounded(ctx, f, f, width - 2 * f, height - 2 * f, r);
+                rounded(ctx, f, f, w - 2 * f, h - 2 * f, r);
                 ctx.fill();
                 ctx.globalCompositeOperation = 'source-over';
                 ctx.beginPath();
-                rounded(ctx, f - 0.5, f - 0.5, width - 2 * f + 1, height - 2 * f + 1, r + 0.5);
+                rounded(ctx, f - 0.5, f - 0.5, w - 2 * f + 1, h - 2 * f + 1, r + 0.5);
                 ctx.strokeStyle = Theme.line;
                 ctx.lineWidth = 1;
                 ctx.stroke();
