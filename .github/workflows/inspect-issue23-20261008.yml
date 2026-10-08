@@ -26,7 +26,7 @@ jobs:
           assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-issue23-20261008'
           assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
           sensitive = re.compile(r'(?i)(?:gh[pousr]_|github_pat_)[a-z0-9_]+|'
-                                 r'AKIA[A-Z0-9]{16}|[\w.+-]+@[\w.-]+\.[a-z]{2,}|'
+                                 r'AKIA[A-Z0-9]{16}|[\w.+-]+@[\w.-]+|'
                                  r'(?:password|token|secret|authorization)\s*[:=]\s*\S+')
           with tempfile.TemporaryDirectory(prefix='arctic-original-issue-') as temporary:
               root = Path(temporary)
