@@ -343,6 +343,8 @@ jobs:
         run: |
           # Scenefx requires DMA-BUF-backed render targets even without a GPU.
           # Expose only the hosted runner's udmabuf allocator to the test container.
+          sudo apt-get update
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)"
           sudo modprobe udmabuf
           test -c /dev/udmabuf
           git fetch --depth 1 origin 2d5ac68847a5feb541177aeaa5a9a00d5ad44815
