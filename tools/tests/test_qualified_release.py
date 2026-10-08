@@ -20,10 +20,36 @@ spec.loader.exec_module(prepare)
 class PublicationGuardTest(unittest.TestCase):
     def test_unknown_runtime_roots_and_build_inputs_require_rebuild(self):
         names = ['go.sum', 'vendor/example/file.go', 'new-runtime/data.bin', 'shell/ScreenFrame.qml',
-                 'tools/build-iso.sh', 'tools/build-cache.py', 'tools/native-functional/execution-manifest.json',
+                 'tools/build-iso.sh', 'tools/build-cache.py', '.github/workflows/iso.yml',
+                 'tools/native-functional/execution-manifest.json',
                  '.github/workflows/publish-qualified-20261008.yml', 'docs/release.md', 'README.md',
                  'iso/kiwi/README.md']
-        self.assertEqual(prepare.product_changes(names), names[:6])
+        self.assertEqual(prepare.product_changes(names), names[:7])
+
+    def test_product_rename_into_helper_root_still_requires_rebuild(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def git(*args):
+                return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
+            git('init', '-q')
+            git('config', 'user.name', 'Arctic guard control')
+            git('config', 'user.email', 'guard@example.invalid')
+            source = root / 'profiles/ci/offline.toml'
+            source.parent.mkdir(parents=True)
+            source.write_text('[profile]\nname = "offline"\n')
+            git('add', '.')
+            git('commit', '-qm', 'Runtime profile')
+            before = git('rev-parse', 'HEAD')
+            destination = root / 'tools/reliability/profiles/offline.toml'
+            destination.parent.mkdir(parents=True)
+            source.rename(destination)
+            git('add', '-A')
+            git('commit', '-qm', 'Move into helper tree')
+            self.assertEqual(git('diff', '--name-only', before, 'HEAD'),
+                             'tools/reliability/profiles/offline.toml')
+            with patch.object(prepare, 'ROOT', root):
+                self.assertEqual(prepare.changed_product_files(before, 'HEAD'),
+                                 ['profiles/ci/offline.toml'])
 
     def test_disabled_or_unapproved_manifest_never_downloads_or_writes_assets(self):
         manifest = json.loads((ROOT / 'tools/qualified-release/manifest.json').read_text())
