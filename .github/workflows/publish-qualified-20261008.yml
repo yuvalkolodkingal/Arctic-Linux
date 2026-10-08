@@ -82,6 +82,14 @@ jobs:
               assert tag_target() == target, 'Actual release tag target differs'
               assert api('/git/ref/heads/main')['object']['sha'] == target, 'Main advanced during draft upload'
               assert not api('/pulls?state=open&per_page=100'), 'A PR opened during draft upload'
+          def ensure_tag(target):
+              existing = tag_target(optional=True)
+              assert existing in (None, target), 'Existing tag points at an unqualified source'
+              if existing is None:
+                  subprocess.run(['gh', 'api', '--method', 'POST', repo + '/git/refs',
+                                  '-f', 'ref=refs/tags/v1.2.1', '-f', 'sha=' + target],
+                                 check=True, stdout=subprocess.DEVNULL, timeout=60)
+              assert tag_target() == target, 'Created release tag target differs'
           def sha(path):
               value = hashlib.sha256()
               with path.open('rb') as source:
@@ -106,10 +114,13 @@ jobs:
           checksum = root / (iso.name + '.sha256')
           assert checksum.read_text().strip().split() == [proof['image']['sha256'], iso.name]
           assets = [iso, checksum, root / 'qualification.json']
+          # Draft creation need not materialize a tag. Bind an actual ref to
+          # the fully qualified target before creating/uploading the draft.
+          ensure_tag(target)
           # Creating a draft first prevents a partially uploaded release becoming
           # public. A verification failure leaves only this owned draft to repair.
           subprocess.run(['gh', 'release', 'create', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
-                          '--target', target, '--title', 'Arctic Linux 1.2.1', '--draft',
+                          '--target', target, '--verify-tag', '--title', 'Arctic Linux 1.2.1', '--draft',
                           '--notes-file', str(root / 'release-notes.md'), *map(str, assets)], check=True, timeout=20 * 60)
           release = api('/releases/tags/v1.2.1')
           assert release['draft'] is True and release['prerelease'] is False
