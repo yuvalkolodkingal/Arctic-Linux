@@ -206,6 +206,39 @@ jobs:
           tools/test-iso.sh --iso "out/iso/$ISO" --firmware bios --mode install --require-startup --timeout "$timeout" --interval 30 $kvm
           tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode safe --require-startup --timeout "$timeout" --interval 30 $kvm
 
+      - name: Screen startup diagnostics before longer acceptance lanes
+        if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
+        run: |
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import os, shutil
+          target = Path(os.environ['RUNNER_TEMP']) / 'startup-diagnostics'
+          target.mkdir()
+          for name in ('uefi-try', 'bios-install', 'uefi-safe'):
+              source = Path('out/test') / name
+              if not source.exists():
+                  continue
+              for path in source.rglob('*'):
+                  if path.suffix not in ('.json', '.log', '.txt', '.tsv', '.png', '.rgb', '.wav'):
+                      continue
+                  if path.is_symlink() or not path.is_file():
+                      raise RuntimeError('Unexpected startup diagnostic: ' + str(path))
+                  output = target / name / path.relative_to(source)
+                  output.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(path, output)
+          PY
+          python3 -B tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/startup-diagnostics" --out "$RUNNER_TEMP/startup-screened"
+
+      - name: Upload screened startup diagnostics before longer acceptance lanes
+        if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-diagnostics
+          path: ${{ runner.temp }}/startup-screened/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Nix enforcing VM acceptance
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.nix_acceptance }}
         run: |
