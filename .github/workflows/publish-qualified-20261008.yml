@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   actions: read
+  pull-requests: read
 
 jobs:
   prepare:
@@ -42,6 +43,7 @@ jobs:
     permissions:
       contents: write
       actions: read
+      pull-requests: read
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -60,6 +62,22 @@ jobs:
           repo = 'repos/yuvalkolodkingal/Arctic-Linux'
           def api(path):
               return json.loads(subprocess.check_output(['gh', 'api', repo + path], timeout=60))
+          def tag_target(optional=False):
+              result = subprocess.run(['gh', 'api', repo + '/git/ref/tags/v1.2.1'],
+                                      text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+              if result.returncode and optional and '(HTTP 404)' in result.stderr:
+                  return None
+              assert result.returncode == 0, 'Cannot verify the release tag'
+              obj = json.loads(result.stdout)['object']
+              seen = set()
+              for _ in range(10):
+                  assert re.fullmatch('[0-9a-f]{40}', obj['sha']) and obj['sha'] not in seen
+                  seen.add(obj['sha'])
+                  if obj['type'] == 'commit':
+                      return obj['sha']
+                  assert obj['type'] == 'tag', 'Tag resolves to a non-commit object'
+                  obj = api('/git/tags/' + obj['sha'])['object']
+              raise RuntimeError('Annotated tag chain exceeds verification bound')
           def sha(path):
               value = hashlib.sha256()
               with path.open('rb') as source:
@@ -77,6 +95,7 @@ jobs:
           assert re.fullmatch('[0-9a-f]{40}', target)
           assert api('/git/ref/heads/main')['object']['sha'] == target
           assert not api('/pulls?state=open&per_page=100')
+          assert tag_target(optional=True) in (None, target), 'Existing tag points at an unqualified source'
           iso = root / 'Arctic-Linux-1.2.1-x86_64.iso'
           assert 0 < iso.stat().st_size == proof['image']['bytes'] < 2_000_000_000
           assert sha(iso) == proof['image']['sha256']
@@ -94,6 +113,11 @@ jobs:
           expected = {path.name: (path.stat().st_size, 'sha256:' + sha(path)) for path in assets}
           assert {asset['name']: (asset['size'], asset['digest']) for asset in release['assets']} == expected
           assert all(asset['state'] == 'uploaded' for asset in release['assets'])
+          # Uploading nearly 2 GB can take minutes. Recheck the actual tag,
+          # main and all-PR-closure gates immediately before public promotion.
+          assert tag_target() == target, 'Actual release tag target differs'
+          assert api('/git/ref/heads/main')['object']['sha'] == target, 'Main advanced during draft upload'
+          assert not api('/pulls?state=open&per_page=100'), 'A PR opened during draft upload'
           subprocess.run(['gh', 'release', 'edit', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
                           '--draft=false', '--prerelease=false', '--latest'], check=True, timeout=60)
           release = api('/releases/tags/v1.2.1')
