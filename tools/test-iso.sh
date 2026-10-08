@@ -159,16 +159,10 @@ while time.time() - t0 < timeout and vm.alive():
     time.sleep(10 if elapsed < 120 else interval)
 
 if collect and vm.alive():
-    # A terminal in the session (Super+Enter → arctic-open terminal), then logs to the serial port.
-    shot("97-before-collect")
-    keys("meta_l-ret")
-    time.sleep(60)
-    keys("ret")          # skips the fetch animation (any key does) and gives a fresh prompt
-    time.sleep(5)
-    shot("98-terminal")
-    type_text(collection_command(mode, require_startup), gap=0.2)
-    keys("ret")
-    time.sleep(30)
+    # Install mode owns exclusive keyboard focus; preserve its actual window
+    # and collect from an authenticated live console instead of driving the UI.
+    from iso_startup import collect_session
+    collect_session(vm, mode, require_startup, shot, log)
     if vmtest.serial_has(f"{out}/serial.log", "ARCTIC-COLLECT-END"):
         log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
     else:

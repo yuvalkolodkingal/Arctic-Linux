@@ -144,17 +144,38 @@ class NativeObserverTest(unittest.TestCase):
 
     def test_independent_transition_timestamp_is_inside_observation_bracket(self):
         state = Path(self.directory.name)/'mapped.json'
+        transition = {}
+        state_lock = threading.Lock()
+        stopped = threading.Event()
 
         def current():
-            if not state.exists():
-                return {}
-            value = json.loads(state.read_text())
-            return {'9': dict(id=9, appid='kitty', title='fixture')}
+            with state_lock:
+                return {'9': dict(id=9, appid='kitty', title='fixture')} if transition else {}
+
+        def publish():
+            # Model the compositor's authoritative state transition independently
+            # of observer queries. Sampling a timestamp before write_text exposes
+            # a gap where a later query correctly sees the window still absent.
+            while not stopped.wait(.00025):
+                if state.exists():
+                    with state_lock:
+                        transition['mapped_ns'] = time.monotonic_ns()
+                    return
+
+        publisher = threading.Thread(target=publish, daemon=True)
+        publisher.start()
+
+        def stop_publisher():
+            stopped.set()
+            publisher.join(timeout=2)
+            self.assertFalse(publisher.is_alive())
+
+        self.addCleanup(stop_publisher)
 
         fixture, prefix = self.server(lambda: json.dumps(dict(clients=list(current().values()))).encode()+b'\n')
-        program = ('import pathlib,json,time; time.sleep(.04); '
+        program = ('import pathlib,time; time.sleep(.04); '
                    f'path=pathlib.Path({str(state)!r}); '
-                   'now=time.monotonic_ns(); path.write_text(json.dumps(dict(mapped_ns=now))); '
+                   'path.write_text("ready"); '
                    'time.sleep(10)')
         bounds = []
         with patch.object(guest, 'clients', side_effect=lambda _: current()), \
@@ -164,10 +185,9 @@ class NativeObserverTest(unittest.TestCase):
                                      timeout=3, hold_seconds=.02, observations=bounds)
         self.assertEqual(len(bounds), 1)
         observation = bounds[0]
-        transition = (json.loads(state.read_text())['mapped_ns']-
-                      observation['launch_started_monotonic_ns'])/1e9
-        self.assertLessEqual(observation['lower_seconds'], transition)
-        self.assertGreaterEqual(observation['upper_seconds'], transition)
+        mapped_seconds = (transition['mapped_ns']-observation['launch_started_monotonic_ns'])/1e9
+        self.assertLessEqual(observation['lower_seconds'], mapped_seconds)
+        self.assertGreaterEqual(observation['upper_seconds'], mapped_seconds)
         self.assertEqual(measured, observation['upper_seconds'])
         self.assertEqual(observation['observer'], guest.MAPPING_OBSERVER)
         self.assertGreater(len(observation['query_roundtrips']), 2)

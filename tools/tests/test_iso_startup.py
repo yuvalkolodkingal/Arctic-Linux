@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import Mock
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('iso_startup', ROOT / 'tools/lib/iso_startup.py')
@@ -72,6 +73,61 @@ class StartupTests(unittest.TestCase):
         lanes = [line for line in workflow.splitlines() if 'tools/test-iso.sh ' in line]
         self.assertEqual(len(lanes), 3)
         self.assertTrue(all('--require-startup' in lane for lane in lanes))
+
+    def test_install_collector_preserves_exclusive_focus_installer(self):
+        vm = Mock()
+        startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock())
+        keys = [call.args[0] for call in vm.keys.call_args_list]
+        self.assertEqual(keys, ['ctrl-alt-f3', 'ret', 'ret'])
+        self.assertEqual(vm.type_text.call_args_list[0].args[0], 'liveuser')
+        command = vm.type_text.call_args_list[1].args[0]
+        self.assertIn('call installer state', command)
+        self.assertIn('chvt', command)
+        self.assertNotIn('meta_l-ret', keys)
+
+    def test_actual_installer_probe_rejects_missing_failed_or_unready_ui(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, body in {'id': 'echo 1000', 'runuser': 'printf "%s" "$TEST_STATE"'}.items():
+                binary = root / name
+                binary.write_text('#!/bin/sh\n' + body + '\n')
+                binary.chmod(0o755)
+            for state, valid in [
+                    ('{"page":"welcome","ready":true,"connected":true,"failure":""}', True),
+                    ('', False),
+                    ('{"page":"welcome","ready":false,"connected":true,"failure":""}', False),
+                    ('{"page":"welcome","ready":true,"connected":false,"failure":""}', False),
+                    ('{"page":"welcome","ready":true,"connected":true,"failure":"bridge failed"}', False),
+                    ('{"page":"timezone","ready":true,"connected":true,"failure":""}', False)]:
+                result = subprocess.run(['sh', '-c', startup.installer_probe()],
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        env={**os.environ, 'PATH': str(root) + ':' + os.environ['PATH'],
+                                             'TEST_STATE': state})
+                self.assertEqual(result.returncode == 0, valid, state)
+
+    def test_console_restores_only_discovered_live_wayland_vt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = {
+                'loginctl': 'case "$1:$2:$4" in list-sessions:*) '
+                            'printf "tty 1000 liveuser seat0 tty3\\ngui 1000 liveuser seat0 tty2\\nother 1001 other seat0 tty1\\n";; '
+                            'show-session:tty:Type) echo tty;; show-session:gui:Type) echo wayland;; '
+                            'show-session:gui:VTNr) echo "$TEST_VT";; *) exit 1;; esac',
+                'chvt': 'printf "%s\\n" "$1" >> "$TEST_VT_LOG"; exit "$TEST_VT_EXIT"',
+            }
+            for name, body in scripts.items():
+                binary = root / name
+                binary.write_text('#!/bin/sh\n' + body + '\n')
+                binary.chmod(0o755)
+            log = root / 'vt.log'
+            for vt, status, expected in [('2', '0', True), ('2', '1', False),
+                                          ('0', '0', False), ('bad', '0', False)]:
+                log.write_text('')
+                result = subprocess.run(['sh', '-c', startup.restore_desktop()],
+                                        env={**os.environ, 'PATH': str(root) + ':' + os.environ['PATH'],
+                                             'TEST_VT': vt, 'TEST_VT_EXIT': status, 'TEST_VT_LOG': str(log)})
+                self.assertEqual(result.returncode == 0, expected)
+                self.assertEqual(log.read_text(), '2\n' if vt == '2' else '')
 
 
 if __name__ == '__main__':

@@ -201,6 +201,26 @@ func TestCompanionMimeDefaults(t *testing.T) {
 	}
 }
 
+func TestFreshInstallPreservesLiveMimeHandlers(t *testing.T) {
+	live, err := os.ReadFile("../../packaging/desktop/live-mimeapps.list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := loadJob(t, "defaults.toml", "uefi")
+	in := New(&Recorder{}, job, newReporter(), Options{})
+	installed := in.mimeApps()
+	for _, line := range strings.Split(string(live), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "[") {
+			continue
+		}
+		want := strings.TrimSuffix(line, ";") + "\n"
+		if !strings.Contains(installed, want) {
+			t.Errorf("fresh install lost live handler %q", line)
+		}
+	}
+}
+
 func TestFreshDefaultsCompleteOffline(t *testing.T) {
 	for _, profileName := range []string{"defaults.toml", "ci/offline.toml"} {
 		t.Run(profileName, func(t *testing.T) {
