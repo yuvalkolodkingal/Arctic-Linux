@@ -138,24 +138,33 @@ your_folder() {   # the wallpaper picker's folder (wallpapers.py): its setting, 
 }
 
 rotation_pictures() {   # rotation_pictures FOLDER|arctic: the pictures to rotate through, sorted
-  local n f
+  local n f photos
   if [[ "$1" == arctic ]]; then
     for f in "${DIRS[@]}"; do
       if [[ -f "$f/collection.json" ]]; then
-        python3 - "$f" <<'PY'
+        photos=$(python3 - "$f" <<'PY'
 import json, re, sys
 from pathlib import Path
 folder = Path(sys.argv[1])
-data = json.loads((folder / 'collection.json').read_text())
-assert data['schema'] == 1
-for item in data['wallpapers']:
-    slug = item['slug']
-    assert re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug) and item['file'] == slug + '.jpg'
-    photo = folder / item['file']
-    if photo.is_file() and not photo.is_symlink():
-        print(photo.resolve())
+try:
+    data = json.loads((folder / 'collection.json').read_text())
+    assert data['schema'] == 1
+    photos = []
+    for item in data['wallpapers']:
+        slug = item['slug']
+        if not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug) or item['file'] != slug + '.jpg':
+            continue
+        photo = folder / item['file']
+        if photo.is_file() and not photo.is_symlink():
+            photos.append(str(photo.resolve()))
+    print('\n'.join(photos), end='')
+except (OSError, ValueError, KeyError, TypeError, AssertionError):
+    sys.exit(1)
 PY
-        return
+        ) || continue
+        [[ -n "$photos" ]] || continue
+        printf '%s\n' "$photos"
+        return 0
       fi
     done
     for n in $NAMES; do find_design "$n-$VARIANT" || true; done

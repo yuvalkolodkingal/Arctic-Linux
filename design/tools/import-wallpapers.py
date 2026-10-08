@@ -20,6 +20,16 @@ AUTHOR = 'Yuval Kolodkin-Gal'
 REPOSITORY = 'https://github.com/yuvalkolodkingal/Wallpapers'
 
 
+def verify_metadata(image, path):
+    # A strict allowlist also rejects Exif/GPS IFD pointers, so nested dates and
+    # camera identifiers cannot pass hidden beneath the top-level dictionary.
+    exif = image.getexif()
+    assert set(exif).issubset({315, 33432, 305}), 'Unapproved EXIF metadata: ' + str(path)
+    assert not exif.get(315) or exif[315] == AUTHOR, path
+    assert not exif.get(33432) or AUTHOR in str(exif[33432]), path
+    assert not {'xmp', 'XML:com.adobe.xmp', 'comment'}.intersection(image.info), path
+
+
 def verify(folder):
     collection = json.loads((folder / 'collection.json').read_text())
     assert collection['author'] == AUTHOR
@@ -37,7 +47,7 @@ def verify(folder):
         with Image.open(path) as image:
             assert image.format == 'JPEG' and image.size == (item['width'], item['height'])
             assert image.width * 9 == image.height * 16, path
-            assert not {34853, 306, 271, 272}.intersection(image.getexif()), path
+            verify_metadata(image, path)
             image.load()
     assert collection['default'] in slugs
     assert {p.name for p in folder.glob('*.jpg')} == {s + '.jpg' for s in slugs}
