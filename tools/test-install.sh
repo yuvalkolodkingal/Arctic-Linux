@@ -6,6 +6,8 @@
 #   tools/test-install.sh --guest-check FILE   Python live/installed assertions in disposable VM
 #   tools/test-install.sh --guest-check-interactive  screenshot desktop checks and type the
 #                                               test password only after an unlock request marker
+#   tools/test-install.sh --reliability-version 1.2 --reliability-app-profile lightweight
+#   tools/test-install.sh --stage boot --reliability-version 1.0 --upgrade-to 1.2
 #   tools/test-install.sh --stage install       only the install (fresh disk)
 #   tools/test-install.sh --stage boot          only boot the disk a previous run installed
 #   tools/test-install.sh --boot-network online allow outbound user-mode NAT only for the
@@ -20,7 +22,7 @@
 #   --performance-context FILE                copy declared paired-run provenance to data CD.
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
 #                                               the default install with apps from the live
-#                                               image; preinstalled Zen is kept offline,
+#                                               image; lightweight defaults are kept offline,
 #                                               unavailable extras are deferred)
 #   tools/test-install.sh --iso PATH            default out/iso/Arctic-Linux-1.2-x86_64.iso
 #   tools/test-install.sh --install-timeout S   seconds for the install (default 7200)
@@ -98,6 +100,10 @@ VIA=service
 OUT=""
 GUEST_CHECK=""
 GUEST_CHECK_INTERACTIVE=0
+RELIABILITY_VERSION=""
+RELIABILITY_APP_PROFILE=legacy
+UPGRADE_TO=""
+PROFILE_EXPLICIT=0
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 BOOT_NETWORK=offline
@@ -110,12 +116,15 @@ USER_PASSWORD="arctic-ci-pass"
 
 while (( $# )); do
   case "$1" in
+    --upgrade-to) UPGRADE_TO="$2"; shift 2 ;;
+    --reliability-version) RELIABILITY_VERSION="$2"; shift 2 ;;
+    --reliability-app-profile) RELIABILITY_APP_PROFILE="$2"; shift 2 ;;
     --guest-check) GUEST_CHECK="$2"; shift 2 ;;
     --guest-check-interactive) GUEST_CHECK_INTERACTIVE=1; shift ;;
     --iso) ISO="$2"; shift 2 ;;
     --firmware) FIRMWARE="$2"; shift 2 ;;
     --stage) STAGE="$2"; shift 2 ;;
-    --profile) PROFILE="$2"; shift 2 ;;
+    --profile) PROFILE="$2"; PROFILE_EXPLICIT=1; shift 2 ;;
     --install-timeout) INSTALL_TIMEOUT="$2"; shift 2 ;;
     --memory) MEMORY="$2"; shift 2 ;;
     --smp) SMP="$2"; shift 2 ;;
@@ -144,6 +153,17 @@ if [[ -n "$FRESH_BOOT_FROM$PERFORMANCE_CONTEXT" ]]; then
   FRESH_BOOT_FROM="$(cd "$FRESH_BOOT_FROM" && pwd)"
 fi
 case "$BOOT_NETWORK" in offline|online) ;; *) arctic_die "--boot-network takes offline or online" ;; esac
+case "$RELIABILITY_APP_PROFILE" in legacy|lightweight) ;; *) arctic_die "--reliability-app-profile takes legacy or lightweight" ;; esac
+if [[ -n "$UPGRADE_TO" ]]; then
+  [[ "$STAGE" == boot && -n "$RELIABILITY_VERSION" && "$UPGRADE_TO" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] ||
+    arctic_die "--upgrade-to requires --stage boot and --reliability-version SOURCE"
+fi
+if [[ -n "$RELIABILITY_VERSION" ]]; then
+  [[ "$RELIABILITY_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || arctic_die "invalid reliability version"
+  [[ -z "$GUEST_CHECK" ]] || arctic_die "--reliability-version and --guest-check are mutually exclusive"
+  GUEST_CHECK="$HERE/reliability/guest.py"
+  if ! (( PROFILE_EXPLICIT )); then PROFILE="$HERE/reliability/profiles/$RELIABILITY_APP_PROFILE.toml"; fi
+fi
 [[ -f "$PROFILE" ]] || arctic_die "no profile at $PROFILE"
 if [[ "$STAGE" != boot ]]; then
   [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
@@ -174,6 +194,10 @@ rm -rf "$DATA"; mkdir -p "$DATA"
 cp "$PROFILE" "$DATA/profile.toml"
 if [[ -n "$PERFORMANCE_CONTEXT" ]]; then cp "$PERFORMANCE_CONTEXT" "$DATA/performance-context.json"; fi
 if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
+if [[ -n "$RELIABILITY_VERSION" ]]; then
+  printf '{"version":"%s","upgrade_to":"%s","app_profile":"%s"}\n' \
+    "$RELIABILITY_VERSION" "$UPGRADE_TO" "$RELIABILITY_APP_PROFILE" > "$DATA/config.json"
+fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
   cp "$INSTALLER" "$DATA/arctic-install"
@@ -736,6 +760,16 @@ if stage in ("all", "install"):
 if rc == 0 and stage in ("all", "boot"):
     rc = stage_boot()
     log(f"boot stage: exit {rc}")
+    if rc == 0 and E.get("UPGRADE_TO"):
+        # Collect fresh evidence after the signed transaction, without the live ISO.
+        # The generic guest checker owns collection and shutdown in both boots.
+        os.rename(serial("boot"), f"{out}/serial-upgrade.log")
+        os.rename(f"{out}/qemu-boot.log", f"{out}/qemu-upgrade.log")
+        for f in os.listdir(out):
+            if f.startswith("boot-") and f.endswith(".png"):
+                os.rename(f"{out}/{f}", f"{out}/upgrade-{f}")
+        rc = stage_boot()
+        log(f"post-upgrade boot stage: exit {rc}")
 for f in os.listdir(out):
     if f.endswith("-probe.png"):
         os.remove(os.path.join(out, f))
@@ -790,7 +824,7 @@ fi
 "$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e VM_TOOLS_PREPARED="${ARCTIC_VM_TOOLS_PREPARED:-0}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
-  -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
+  -e GUEST_CHECK="$GUEST_CHECK" -e UPGRADE_TO="$UPGRADE_TO" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e GUEST_CHECK_INTERACTIVE="$GUEST_CHECK_INTERACTIVE" \
   -e ONLINE_PROXY="$ONLINE_PROXY" -e BOOT_NETWORK="$BOOT_NETWORK" \
   -e COLLECT_VIA="$COLLECT_VIA" -e FRESH_BOOT_FROM="$FRESH_BOOT_FROM" \
