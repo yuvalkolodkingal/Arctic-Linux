@@ -18,6 +18,7 @@ FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-re
          'tools/native-functional/fetch-image.py'}
 BUILD_INPUTS = {'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
+DOCUMENTATION = {'README.md', 'iso/kiwi/README.md'}
 NATIVE_GATES = set('fresh-defaults-and-isolation archive-content-roundtrips actual-role-file-manager-terminal-editor '
                    'open-codec-content-and-player-state portal-and-accessibility-reachability '
                    'owned-process-cleanup-config-preservation selinux-and-new-avcs open-codec-lossless-command-decode'.split())
@@ -48,7 +49,7 @@ def product_changes(names):
     # Unknown roots are product changes too: a new vendor/go.sum/runtime asset
     # cannot silently evade the rebuild gate. Only helper/docs paths are exempt.
     return [name for name in names if name in BUILD_INPUTS or
-            not (name == 'README.md' or name.startswith(('docs/', '.github/', 'tools/')))]
+            not (name in DOCUMENTATION or name.startswith(('docs/', '.github/', 'tools/')))]
 
 
 def main_checks(source):
