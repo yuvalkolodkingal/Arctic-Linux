@@ -116,9 +116,9 @@ def test_zone(base, env, zone, harness, rollover):
     with log_path.open('w') as log:
         process = subprocess.Popen(['quickshell', '--no-color', '-p', str(shell)], env=env, stdout=log, stderr=log)
         try:
-            def ipc(function, *args):
+            def ipc(function, *args, timeout=3):
                 result = subprocess.run(['quickshell', 'ipc', '-p', str(shell), 'call', 'clockTest', function, *args],
-                                        env=env, capture_output=True, text=True, timeout=3)
+                                        env=env, capture_output=True, text=True, timeout=timeout)
                 if result.returncode:
                     raise RuntimeError(result.stderr + log_path.read_text())
                 return result.stdout.strip()
@@ -128,7 +128,7 @@ def test_zone(base, env, zone, harness, rollover):
                 if 'Configuration Loaded' in log_path.read_text():
                     break
                 time.sleep(.05)
-            sample = lambda: json.loads(ipc('sample'))
+            sample = lambda timeout=3: json.loads(ipc('sample', timeout=timeout))
             check(not sample()['enabled'], 'Clock should sleep while unlocked')
             ipc('engage')
             for _ in range(20):
@@ -167,15 +167,21 @@ def test_zone(base, env, zone, harness, rollover):
             # than within 150 ms. Wait for delivery while retaining the strict
             # fresh-tick check, and bound recovery independently of wall time.
             deadline = time.monotonic() + 2
-            while True:
-                resumed = sample()
-                if (resumed['tick'] > relock['tick']
+            resumed, recovered = relock, False
+            while time.monotonic() < deadline:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    resumed = sample(timeout=remaining)
+                except subprocess.TimeoutExpired:
+                    break
+                if (time.monotonic() <= deadline and resumed['tick'] > relock['tick']
                         and -500 <= resumed['now'] - resumed['tick'] < 1000):
+                    recovered = True
                     break
-                if time.monotonic() >= deadline:
-                    break
-                time.sleep(.05)
-            check(resumed['tick'] > relock['tick'] and -500 <= resumed['now'] - resumed['tick'] < 1000,
+                time.sleep(min(.05, max(0, deadline - time.monotonic())))
+            check(recovered,
                   'Clock did not recover after the event loop resumed: ' + str(resumed))
             if rollover:
                 print(f'{zone}: lock/relock/resume and local formats passed; waiting for minute rollover', flush=True)
