@@ -111,8 +111,8 @@ class ClipboardTest(unittest.TestCase):
         listing = ('124\tsome text  with spaces\n123\t[[ binary data 12 KiB png 800x600 ]]\n'
                    '122\t[[ something else ]]\nnot a line\n')
         (root / 'listing').write_text(listing)
-        self.fake(root / 'bin/cliphist', 'echo "cliphist $*" >> {log}; cat > {log}.stdin\n'
-                  'case "$1" in list) cat {root}/listing ;; decode) [ "$2" = 9 ] && {{ echo "id 9 not found" >&2; exit 1; }}; '
+        self.fake(root / 'bin/cliphist', 'echo "cliphist $*" >> {log}\n'
+                  'case "$1" in delete) cat > {log}.stdin ;; list) cat {root}/listing ;; decode) [ "$2" = 9 ] && {{ echo "id 9 not found" >&2; exit 1; }}; '
                   'printf "hello" ;; esac'.format(log=self.log, root=root))
         self.fake(root / 'bin/wl-copy', 'echo "wl-copy $*" >> {log}; cat > {log}.copied'.format(log=self.log))
         self.env = dict(os.environ, PATH='{}:/usr/bin:/bin'.format(root / 'bin'), XDG_CACHE_HOME=str(root / 'cache'))
