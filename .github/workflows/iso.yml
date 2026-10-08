@@ -314,20 +314,6 @@ jobs:
           retention-days: 14
           path: ${{ runner.temp }}/paired-screened/
 
-      - name: Upload screenshots
-        if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: boot-test
-          path: |
-            out/test/
-            !out/test/performance/**
-            !out/test/**/*.qcow2
-            !out/test/**/*.iso
-            !out/test/**/*.sock
-          if-no-files-found: ignore
-          retention-days: 14
-
       - name: Required optimized ISO size
         run: |
           bytes=$(stat -c %s "out/iso/$ISO")
