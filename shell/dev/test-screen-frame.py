@@ -225,8 +225,16 @@ def exercise(base, out, compositor, frame_source=None):
                         assert image.getpixel((x, y)) == (33, 131, 79), (label, name, 'interior is not backdrop')
             results.append(dict(case=label, state=actual))
 
-        for scale in (1, 1.5, 2):
-            run('wlr-randr', '--output', names[0], '--scale', scale)
+        # Keep mixed-DPI coverage and exercise both rounded physical axes.
+        # One common scale-1 profile already covers both outputs; then scale
+        # landscape and portrait independently to include the latter's
+        # 1600/1.5 fractional logical height without duplicate captures.
+        profiles = ((names[0], 1), (names[0], 1.5), (names[0], 2),
+                    (names[1], 1.5), (names[1], 2))
+        for scaled_output, scale in profiles:
+            for name in names:
+                run('wlr-randr', '--output', name, '--scale', scale if name == scaled_output else 1)
+            suffix = '' if scaled_output == names[0] else '-portrait'
             for edge in ('top', 'bottom', 'left', 'right'):
                 for cycle in range(3):
                     ipc('cover', 'false')
@@ -239,12 +247,12 @@ def exercise(base, out, compositor, frame_source=None):
                         ipc('mode', mode)
                         time.sleep(.3)
                         if mode != 'always':
-                            snapshot(f'covered-{edge}-{mode}-{scale}-{cycle}', False)
+                            snapshot(f'covered-{edge}-{mode}-{scale}-{cycle}{suffix}', False)
                     ipc('cover', 'false')
                     wait(lambda: all(b['reveal'] == 0 for b in json.loads(ipc('state'))), 'auto bars did not hide')
                     # Capture after exposure and verify the visible artwork on all four edges.
                     time.sleep(.2)
-                    snapshot(f'exposed-{edge}-auto-{scale}-{cycle}', True)
+                    snapshot(f'exposed-{edge}-auto-{scale}-{cycle}{suffix}', True)
                     before = state()
                     ipc('focus', names[0])
                     time.sleep(.3)
