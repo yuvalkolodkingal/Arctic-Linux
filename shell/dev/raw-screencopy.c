@@ -57,7 +57,9 @@ static void buffer(void *data, struct zwlr_screencopy_frame_v1 *frame,
         uint32_t f, uint32_t w, uint32_t h, uint32_t s) {
     assert(!pixels && w > 0 && h > 0 && w <= 8192 && h <= 8192);
     assert(s >= w * 4 && (uint64_t)s * h < 64 * 1024 * 1024);
-    assert(f == WL_SHM_FORMAT_XRGB8888 || f == WL_SHM_FORMAT_ARGB8888);
+    fprintf(stderr, "native screencopy format=%#x width=%u height=%u stride=%u\n", f, w, h, s);
+    assert(f == WL_SHM_FORMAT_XRGB8888 || f == WL_SHM_FORMAT_ARGB8888 ||
+           f == WL_SHM_FORMAT_XBGR8888 || f == WL_SHM_FORMAT_ABGR8888);
     width = w; height = h; stride = s; format = f;
     size_t size = (size_t)stride * height;
     int fd = memfd_create("arctic-private-screencopy", MFD_CLOEXEC);
@@ -110,6 +112,10 @@ int main(int argc, char **argv) {
             uint32_t pixel;
             memcpy(&pixel, pixels + row * stride + x * 4, sizeof(pixel));
             unsigned char rgb[] = {pixel >> 16, pixel >> 8, pixel};
+            if (format == WL_SHM_FORMAT_XBGR8888 || format == WL_SHM_FORMAT_ABGR8888) {
+                rgb[0] = pixel;
+                rgb[2] = pixel >> 16;
+            }
             assert(fwrite(rgb, 1, 3, file) == 3);
         }
     }
