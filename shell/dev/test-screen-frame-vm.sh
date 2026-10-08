@@ -61,7 +61,7 @@ cat > "$WORK/initrd/init" <<'INIT'
 #!/bin/busybox sh
 set -eu
 export PATH=/bin
-busybox --install -s /bin
+/bin/busybox --install -s /bin
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
