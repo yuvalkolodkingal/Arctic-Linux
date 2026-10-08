@@ -100,9 +100,23 @@ class ActualPublicationScriptTest(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/publish-qualified-20261008.yml').read_text()
         body = workflow.split("python3 -B - <<'PY'\n", 1)[1].rsplit('\n          PY', 1)[0]
         nodes = [node for node in ast.parse(textwrap.dedent(body)).body
-                 if isinstance(node, ast.FunctionDef) and node.name in ('tag_target', 'promotion_guard', 'ensure_tag')]
+                 if isinstance(node, ast.FunctionDef) and node.name in ('tag_target', 'promotion_guard', 'ensure_tag', 'uploaded_draft')]
         self.env = dict(re=re, json=json, subprocess=subprocess, repo='repos/control/repo', api=Mock())
         exec(compile(ast.Module(body=nodes, type_ignores=[]), '<actual publisher functions>', 'exec'), self.env)
+
+    def test_uploaded_draft_uses_its_unique_id_and_rejects_published_or_wrong_target(self):
+        target = 'a' * 40
+        release = dict(id=7, tag_name='v1.2.1', draft=True, target_commitish=target)
+        self.env['api'].side_effect = [[release], release]
+        self.assertEqual(self.env['uploaded_draft'](target)['id'], 7)
+        self.assertEqual(self.env['api'].call_args.args[0], '/releases/7')
+        for rows, actual in (([], release), ([release, release], release),
+                             ([release], release | {'draft': False}),
+                             ([release], release | {'target_commitish': 'b' * 40}),
+                             ([release], release | {'id': 8})):
+            self.env['api'].side_effect = [rows, actual]
+            with self.assertRaises(AssertionError):
+                self.env['uploaded_draft'](target)
 
     def test_fresh_tag_is_created_and_reverified_before_draft_upload(self):
         target = 'a' * 40
