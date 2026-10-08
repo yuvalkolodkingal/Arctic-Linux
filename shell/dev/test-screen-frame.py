@@ -79,6 +79,11 @@ def exercise(base, out, compositor, frame_source=None):
     is_sway = Path(compositor).name == 'sway'
     env['WLR_RENDERER'] = 'pixman' if is_sway else 'gles2'
     env['WLR_RENDERER_ALLOW_SOFTWARE'] = '1'
+    if not is_sway:
+        # Scenefx 0.5 requires this explicit switch to create EGL without a DRM
+        # render node. It applies only to the owned private test compositor.
+        env['WLR_RENDERER_FORCE_SOFTWARE'] = '1'
+        env['LIBGL_ALWAYS_SOFTWARE'] = '1'
     bus = subprocess.Popen(['dbus-daemon', '--session', '--nofork', '--nopidfile', '--print-address=1'],
                            env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     processes = [bus]
