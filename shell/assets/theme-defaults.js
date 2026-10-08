@@ -7,8 +7,8 @@ var THEME = {
  "name": "Polar night",
  "dark": true,
  "colorScheme": "prefer-dark",
- "wallpaper": "aurora-polar-night",
- "lockWallpaper": "fox-polar-night",
+ "wallpaper": "/usr/share/backgrounds/arctic/default.jpg",
+ "lockWallpaper": "/usr/share/backgrounds/arctic/default.jpg",
  "colors": {
   "ground": "#12171e",
   "surface": "#1a212a",

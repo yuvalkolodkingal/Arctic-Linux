@@ -31,9 +31,13 @@ source "$CONF/current/theme.env" 2>/dev/null || true
 img="$(arctic-login-wallpaper current 2>/dev/null || true)"
 [[ -n "$img" && -f "$img" ]] || img="$(arctic-wallpaper current 2>/dev/null)"
 if [[ -z "$img" || ! -f "$img" ]]; then
-  CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/arctic/wallpapers"
-  [[ -f "$CACHE/${ARCTIC_LOCK_WALLPAPER:-fox-polar-night}.png" ]] || arctic-wallpaper render >/dev/null 2>&1
-  img="$CACHE/${ARCTIC_LOCK_WALLPAPER:-fox-polar-night}.png"
+  if [[ "${ARCTIC_LOCK_WALLPAPER:-}" == /* && -f "$ARCTIC_LOCK_WALLPAPER" ]]; then
+    img="$ARCTIC_LOCK_WALLPAPER"
+  else
+    CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/arctic/wallpapers"
+    [[ -f "$CACHE/${ARCTIC_LOCK_WALLPAPER:-fox-polar-night}.png" ]] || arctic-wallpaper render >/dev/null 2>&1
+    img="$CACHE/${ARCTIC_LOCK_WALLPAPER:-fox-polar-night}.png"
+  fi
 fi
 args=(-f)
 [[ -f "$img" ]] && args+=(-i "$img")

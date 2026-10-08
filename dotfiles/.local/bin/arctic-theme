@@ -272,7 +272,8 @@ def wallpaper_picture():
             return drawn
     except OSError:
         pass
-    return design_file("aurora", variant)
+    default = os.path.join(BACKGROUNDS, "default.jpg")
+    return default if os.path.isfile(default) else design_file("aurora", variant)
 
 
 # ---- the engine ----------------------------------------------------------------------------------

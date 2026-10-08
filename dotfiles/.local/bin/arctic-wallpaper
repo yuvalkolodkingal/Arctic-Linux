@@ -46,6 +46,9 @@ load_theme() {   # the active theme's theme.env; VARIANT = which design wallpape
   # shellcheck source=/dev/null
   [[ -f "$env_file" ]] && source "$env_file"
   ARCTIC_THEME="${ARCTIC_THEME:-polar-night}"
+  if [[ -z "$ARCTIC_WALLPAPER" && -f "${DIRS[1]}/default.jpg" ]]; then
+    ARCTIC_WALLPAPER="${DIRS[1]}/default.jpg"
+  fi
   ARCTIC_WALLPAPER="${ARCTIC_WALLPAPER:-aurora-polar-night}"
   ARCTIC_GROUND="${ARCTIC_GROUND:-#12171e}"
   # Arctic's wallpapers come in a Winter and a Polar night drawing: the theme's own, or (for
@@ -137,6 +140,24 @@ your_folder() {   # the wallpaper picker's folder (wallpapers.py): its setting, 
 rotation_pictures() {   # rotation_pictures FOLDER|arctic: the pictures to rotate through, sorted
   local n f
   if [[ "$1" == arctic ]]; then
+    for f in "${DIRS[@]}"; do
+      if [[ -f "$f/collection.json" ]]; then
+        python3 - "$f" <<'PY'
+import json, re, sys
+from pathlib import Path
+folder = Path(sys.argv[1])
+data = json.loads((folder / 'collection.json').read_text())
+assert data['schema'] == 1
+for item in data['wallpapers']:
+    slug = item['slug']
+    assert re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug) and item['file'] == slug + '.jpg'
+    photo = folder / item['file']
+    if photo.is_file() and not photo.is_symlink():
+        print(photo.resolve())
+PY
+        return
+      fi
+    done
     for n in $NAMES; do find_design "$n-$VARIANT" || true; done
     return 0
   fi

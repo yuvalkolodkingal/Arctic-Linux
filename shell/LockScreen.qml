@@ -191,7 +191,8 @@ Scope {
         onLoaded: root.wallpaper = text().trim()
         onLoadFailed: root.wallpaper = ''
     }
-    readonly property string fallbackWallpaper: '/usr/share/backgrounds/arctic/' + Theme.tokens.lockWallpaper + '.svg'
+    readonly property string fallbackWallpaper: Theme.tokens.lockWallpaper.startsWith('/')
+        ? Theme.tokens.lockWallpaper : '/usr/share/backgrounds/arctic/' + Theme.tokens.lockWallpaper + '.svg'
     property var sharedWallpaper: ({})
     readonly property string sharedSource: sharedWallpaper.enabled === true && /^[a-f0-9]{32}$/.test(sharedWallpaper.revision || '')
         ? 'file:///var/lib/arctic-login-wallpaper/generation-' + sharedWallpaper.revision + '/wallpaper.png' : ''

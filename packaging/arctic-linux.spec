@@ -7,7 +7,7 @@
 #   arctic-release         packaging/release/                  os-release, macros.dist, presets,
 #                                                              the Arctic repositories + key
 #   arctic-logos           branding/logos/ (install-path tree) system-logos
-#   arctic-backgrounds     design/wallpapers/*.svg (+ PNG rendered here)
+#   arctic-backgrounds     design/backgrounds/ photos; legacy design/wallpapers/ compatibility
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-fonts-symbols   Nerd Fonts "Symbols Only" (Source1, the one download) + packaging/fonts
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
@@ -149,15 +149,16 @@ hicolor arctic-logo-icon / fedora-logo-icon / start-here icons) and the brand SV
 %package -n arctic-backgrounds
 Summary:        Arctic Linux wallpapers
 BuildArch:      noarch
+License:        MIT AND LicenseRef-YKG-Wallpapers
 # SDDM requires desktop-backgrounds-compat for /usr/share/backgrounds/default.*; Arctic's
 # default wallpaper takes its place (and keeps Fedora's 10 MB f44-backgrounds out).
 Provides:       desktop-backgrounds-compat = %{version}-%{release}
 Conflicts:      desktop-backgrounds-compat
 
 %description -n arctic-backgrounds
-The six Arctic Linux wallpapers (snowfield, aurora and fox, each in Winter and Polar night)
-as SVG and as 3840×2160 PNG in /usr/share/backgrounds/arctic, plus the
-/usr/share/backgrounds/default{,-dark}.png names other programs look for.
+Photographs by Yuval Kolodkin-Gal from the pinned Wallpapers collection, with
+credits and checksums. Fresh desktop, lock and greeter defaults use a photo.
+Legacy illustrations remain available for existing saved wallpaper choices.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-fonts
@@ -770,8 +771,10 @@ for toml in design/themes/*/colors.toml; do
 done
 # --- end stream 6
 
-# ---- Wallpapers: SVG → 3840×2160 PNG ----
+# ---- Photo masters, one compatibility default PNG, and legacy saved choices ----
 mkdir -p _build/backgrounds
+python3 -B design/tools/import-wallpapers.py --check --png _build/backgrounds/default.png
+cp -p design/backgrounds/*.jpg design/backgrounds/collection.json _build/backgrounds/
 for svg in design/wallpapers/*.svg; do
   cp -p "$svg" _build/backgrounds/
   rsvg-convert -w 3840 -h 2160 -o "_build/backgrounds/$(basename "$svg" .svg).png" "$svg"
@@ -842,8 +845,10 @@ test -s logos.files
 # ---------------------------------------------------------------- arctic-backgrounds
 install -d %{buildroot}%{_datadir}/backgrounds/arctic
 install -pm 0644 _build/backgrounds/* %{buildroot}%{_datadir}/backgrounds/arctic/
-ln -s arctic/aurora-winter.png %{buildroot}%{_datadir}/backgrounds/default.png
-ln -s arctic/aurora-polar-night.png %{buildroot}%{_datadir}/backgrounds/default-dark.png
+photo_default=$(python3 -c 'import json; print(json.load(open("design/backgrounds/collection.json"))["default"])')
+ln -s "$photo_default.jpg" %{buildroot}%{_datadir}/backgrounds/arctic/default.jpg
+ln -s arctic/default.png %{buildroot}%{_datadir}/backgrounds/default.png
+ln -s arctic/default.png %{buildroot}%{_datadir}/backgrounds/default-dark.png
 
 # ---------------------------------------------------------------- arctic-fonts
 install -d %{buildroot}%{_datadir}/fonts/arctic
@@ -1093,6 +1098,8 @@ install -Dpm 0644 packaging/sddm-wayland-mango/greeter.conf %{buildroot}%{_datad
 # ---------------------------------------------------------------- arctic-sddm-theme
 install -d %{buildroot}%{_datadir}/sddm/themes/arctic
 cp -a branding/sddm/arctic/. %{buildroot}%{_datadir}/sddm/themes/arctic/
+# theme.conf.user and broker-selected images keep their existing precedence.
+ln -sf %{_datadir}/backgrounds/arctic/default.png %{buildroot}%{_datadir}/sddm/themes/arctic/background.png
 
 # ---------------------------------------------------------------- arctic-plymouth-theme
 install -d %{buildroot}%{_datadir}/plymouth/themes/arctic
@@ -1435,6 +1442,7 @@ fi
 %license LICENSE
 
 %files -n arctic-backgrounds
+%license LICENSE design/backgrounds/COPYRIGHT design/backgrounds/NOTICE
 %dir %{_datadir}/backgrounds
 %{_datadir}/backgrounds/arctic/
 %{_datadir}/backgrounds/default.png
