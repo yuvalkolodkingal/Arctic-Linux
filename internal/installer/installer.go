@@ -1679,18 +1679,28 @@ func (in *Installer) defaultApps() string {
 func (in *Installer) mimeApps() string {
 	seen := map[string]bool{}
 	var lines []string
-	for _, m := range in.installedApps() {
-		if !in.Job.Data.Apps.Selection.Contains(m.ID) {
-			continue
-		}
-		id := in.desktopID(m)
+	add := func(id string, mime []string) {
 		if id == "" {
-			continue
+			return
 		}
-		for _, mt := range m.Defaults.Mime {
+		for _, mt := range mime {
 			if !seen[mt] {
 				seen[mt] = true
 				lines = append(lines, mt+"="+id)
+			}
+		}
+	}
+	apps := in.installedApps()
+	// Primary handlers from every selected app take precedence over companions.
+	for _, m := range apps {
+		if in.Job.Data.Apps.Selection.Contains(m.ID) {
+			add(in.desktopID(m), m.Defaults.Mime)
+		}
+	}
+	for _, m := range apps {
+		if in.Job.Data.Apps.Selection.Contains(m.ID) {
+			for _, association := range m.Defaults.Associations {
+				add(association.DesktopID, association.Mime)
 			}
 		}
 	}

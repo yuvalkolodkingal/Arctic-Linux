@@ -182,9 +182,9 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.release || inputs.boot_test }}
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; kvm=--kvm; timeout=420; else kvm=; timeout=900; fi
-          tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode try --timeout "$timeout" --interval 30 $kvm
-          tools/test-iso.sh --iso "out/iso/$ISO" --firmware bios --mode install --timeout "$timeout" --interval 30 $kvm
-          tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode safe --timeout "$timeout" --interval 30 $kvm
+          tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode try --require-startup --timeout "$timeout" --interval 30 $kvm
+          tools/test-iso.sh --iso "out/iso/$ISO" --firmware bios --mode install --require-startup --timeout "$timeout" --interval 30 $kvm
+          tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode safe --require-startup --timeout "$timeout" --interval 30 $kvm
 
       - name: Nix enforcing VM acceptance
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.nix_acceptance }}

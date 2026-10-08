@@ -177,6 +177,30 @@ func TestGoldenDefaultUEFILUKS(t *testing.T) {
 
 // Fresh defaults come from the image copy. Failed online package checks must
 // still leave usable app roles, while genuinely downloaded codecs/themes defer.
+func TestCompanionMimeDefaults(t *testing.T) {
+	job := loadJob(t, "defaults.toml", "uefi")
+	in := New(&Recorder{}, job, newReporter(), Options{})
+	want := "application/zip=xarchiver.desktop\n"
+	if mime := in.mimeApps(); !strings.Contains(mime, want) || !strings.Contains(mime, "inode/directory=pcmanfm.desktop\n") {
+		t.Fatalf("selected PCManFM lost directory or companion archive defaults: %s", mime)
+	}
+	// An explicit primary handler from any selected app wins over companions.
+	job.Catalog.Modules["celluloid"].Defaults.Mime = append(job.Catalog.Modules["celluloid"].Defaults.Mime, "application/zip")
+	if mime := in.mimeApps(); strings.Contains(mime, want) || !strings.Contains(mime, "application/zip=io.github.celluloid_player.Celluloid.desktop\n") {
+		t.Fatalf("companion replaced a selected primary handler: %s", mime)
+	}
+	job.Catalog.Modules["celluloid"].Defaults.Mime = nil
+	in.skipped["pcmanfm"] = true
+	if mime := in.mimeApps(); strings.Contains(mime, "xarchiver.desktop") {
+		t.Fatalf("skipped module still supplied archive defaults: %s", mime)
+	}
+	delete(in.skipped, "pcmanfm")
+	job.Data.Apps.Selection["files"] = []string{"nautilus"}
+	if mime := in.mimeApps(); strings.Contains(mime, "xarchiver.desktop") || !strings.Contains(mime, "inode/directory=org.gnome.Nautilus.desktop\n") {
+		t.Fatalf("deselected companion leaked into the alternative file manager: %s", mime)
+	}
+}
+
 func TestFreshDefaultsCompleteOffline(t *testing.T) {
 	for _, profileName := range []string{"defaults.toml", "ci/offline.toml"} {
 		t.Run(profileName, func(t *testing.T) {
@@ -208,6 +232,7 @@ func TestFreshDefaultsCompleteOffline(t *testing.T) {
 			for _, want := range []string{
 				"browser=epiphany", "editor=featherpad", "terminal=foot", "files=pcmanfm",
 				"x-scheme-handler/https=org.gnome.Epiphany.desktop", "inode/directory=pcmanfm.desktop",
+				"application/zip=xarchiver.desktop", "application/x-7z-compressed=xarchiver.desktop",
 				"video/mp4=io.github.celluloid_player.Celluloid.desktop",
 				`"id": "codecs"`, `"id": "adw-gtk3-flatpak"`, `"id": "adw-gtk3-dark-flatpak"`,
 				"write /mnt/var/lib/arctic/pending.json", "$ usermod --root /mnt --lock root",

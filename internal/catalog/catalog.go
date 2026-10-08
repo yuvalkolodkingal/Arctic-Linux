@@ -75,11 +75,19 @@ type Install struct {
 
 // Defaults declares what the module becomes the default for.
 type Defaults struct {
-	DesktopID string   `toml:"desktop_id" json:"desktop_id,omitempty"`
-	Mime      []string `toml:"mime" json:"mime,omitempty"`
-	Role      string   `toml:"role" json:"role,omitempty"`       // key in /etc/arctic/default-apps
-	Command   string   `toml:"command" json:"command,omitempty"` // may contain {terminal}
-	Shell     string   `toml:"shell" json:"shell,omitempty"`     // login shell for the shell category
+	DesktopID    string            `toml:"desktop_id" json:"desktop_id,omitempty"`
+	Mime         []string          `toml:"mime" json:"mime,omitempty"`
+	Associations []MimeAssociation `toml:"associations" json:"associations,omitempty"` // companion apps installed by this module
+	Role         string            `toml:"role" json:"role,omitempty"`                 // key in /etc/arctic/default-apps
+	Command      string            `toml:"command" json:"command,omitempty"`           // may contain {terminal}
+	Shell        string            `toml:"shell" json:"shell,omitempty"`               // login shell for the shell category
+}
+
+// MimeAssociation gives a companion app its own MIME handler, without changing
+// the selected module's desktop ID or taking precedence over selected apps.
+type MimeAssociation struct {
+	DesktopID string   `toml:"desktop_id" json:"desktop_id"`
+	Mime      []string `toml:"mime" json:"mime"`
 }
 
 // Session holds desktop-component settings (only used by system modules in v0.1).

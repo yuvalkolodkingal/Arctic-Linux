@@ -29,6 +29,11 @@ rd.live.image` and `arctic.mode=try` (Install: `arctic.mode=install`; Safe graph
 live autologin to show the SDDM login screen.
 
 Test it with `tools/test-iso.sh` (QEMU, OVMF or SeaBIOS, screenshots in `out/test/`).
+The ISO release workflow requires `--require-startup` in Try, Install and Safe
+graphics lanes. A timeout or an undetected boot menu fails qualification. The
+selected live kernel mode, live-user Mango session, enforcing SELinux and unique
+completed session records must all be observed. These startup gates supplement
+the installed-system, media, update/reboot and performance acceptance checks.
 
 On a constrained builder, `--scratch /path/to/dedicated/scratch` puts create-stage
 intermediates and temporary files on that storage; the prepared root stays in

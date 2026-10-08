@@ -417,6 +417,7 @@ glyph from its `icon`) by `installer-ui/dev/export-assets.js`.
 `modules/<category>/<id>/module.toml` as in PLAN §4.1, fields: `id, name, summary, category,
 default, tile, icon, in_live_image, gpu, proprietary, requires, conflicts, [[install]] method = "dnf"|"copr"|"flatpak"|"nix"
 (+ packages | copr+packages | remote+ref | attr), verified, download_mb, [defaults] desktop_id, mime,
+optional [[defaults.associations]] desktop_id + mime for installed companion apps (primary selected apps take precedence),
 [session] …`. Hidden mandatory modules live in `modules/_system/`. Profiles (`profiles/*.toml`)
 reference module ids only.
 
