@@ -16,9 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
          'tools/native-functional/fetch-image.py'}
-PRODUCT = ['.gitattributes', 'LICENSE', 'branding', 'cmd', 'design', 'dotfiles', 'fetch', 'go.mod',
-           'installer-ui', 'internal', 'iso', 'live', 'modules', 'packaging', 'profiles', 'settings', 'shell',
-           'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/lib/container.sh', 'tools/lib/arcticrepo.py']
+BUILD_INPUTS = {'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
 NATIVE_GATES = set('fresh-defaults-and-isolation archive-content-roundtrips actual-role-file-manager-terminal-editor '
                    'open-codec-content-and-player-state portal-and-accessibility-reachability '
                    'owned-process-cleanup-config-preservation selinux-and-new-avcs open-codec-lossless-command-decode'.split())
@@ -43,6 +41,29 @@ def api(path):
 
 def git(*args):
     return subprocess.check_output(['git', '-C', str(ROOT), *args], text=True, timeout=120).strip()
+
+
+def product_changes(names):
+    # Unknown roots are product changes too: a new vendor/go.sum/runtime asset
+    # cannot silently evade the rebuild gate. Only helper/docs paths are exempt.
+    return [name for name in names if name in BUILD_INPUTS or
+            not (name == 'README.md' or name.startswith(('docs/', '.github/', 'tools/')))]
+
+
+def main_checks(source):
+    runs = api('/actions/runs?head_sha=' + source + '&event=push&per_page=100')['workflow_runs']
+    result = {}
+    for name, path in (('ci', '.github/workflows/ci.yml'), ('stable', '.github/workflows/repo.yml')):
+        matches = [run for run in runs if run['head_sha'] == source and run['head_branch'] == 'main'
+                   and run['event'] == 'push' and run['path'] == path and run['run_attempt'] == 1]
+        require(len(matches) == 1 and matches[0]['status'] == 'completed' and matches[0]['conclusion'] == 'success',
+                'Current main source checks or stable repository deployment have not passed: ' + name)
+        result[name] = matches[0]['id']
+    jobs = api('/actions/runs/' + str(result['ci']) + '/jobs?per_page=100')
+    require(jobs['total_count'] == len(jobs['jobs']) and len(jobs['jobs']) >= 15
+            and all(job['status'] == 'completed' and job['conclusion'] == 'success' for job in jobs['jobs']),
+            'Current main required source/native checks are incomplete')
+    return result
 
 
 def validate_lane(pin, workflow, artifact_name):
@@ -159,10 +180,11 @@ def prepare(manifest, out):
     release_main = api('/git/ref/heads/main')['object']['sha']
     require(re.fullmatch('[0-9a-f]{40}', release_main), 'Invalid current main source')
     require(not api('/pulls?state=open&per_page=100'), 'Arctic PRs remain open')
+    current_checks = main_checks(release_main)
     for ref in (manifest['image']['source_sha'], manifest['main_sha'], release_main):
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
-    require(not git('diff', '--name-only', manifest['image']['source_sha'], release_main, '--', *PRODUCT),
+    require(not product_changes(git('diff', '--name-only', manifest['image']['source_sha'], release_main).splitlines()),
             'Product changed after the qualified ISO was built; rebuild required')
     spec = importlib.util.spec_from_file_location('qualified_fetch', ROOT / 'tools/native-functional/fetch-image.py')
     fetch = importlib.util.module_from_spec(spec)
@@ -211,7 +233,8 @@ def prepare(manifest, out):
         shutil.copyfile(temp / 'inputs/iso' / image['name'], out / name)
         require((out / name).stat().st_size == image['bytes'] and sha(out / name) == image['sha256'], 'Prepared ISO bytes differ')
         (out / (name + '.sha256')).write_text(image['sha256'] + '  ' + name + '\n')
-        proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main, image=image,
+        proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main,
+                     release_main_checks=current_checks, image=image,
                      performance=perf, native=native, update=manifest['update'], release_acceptance='qualified',
                      measured_speed_or_ram_gain_claim=False)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')

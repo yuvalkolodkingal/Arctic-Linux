@@ -13,6 +13,12 @@ spec.loader.exec_module(prepare)
 
 
 class PublicationGuardTest(unittest.TestCase):
+    def test_unknown_runtime_roots_and_build_inputs_require_rebuild(self):
+        names = ['go.sum', 'vendor/example/file.go', 'new-runtime/data.bin', 'shell/ScreenFrame.qml',
+                 'tools/build-iso.sh', 'tools/native-functional/execution-manifest.json',
+                 '.github/workflows/publish-qualified-20261008.yml', 'docs/release.md', 'README.md']
+        self.assertEqual(prepare.product_changes(names), names[:5])
+
     def test_disabled_or_unapproved_manifest_never_downloads_or_writes_assets(self):
         manifest = json.loads((ROOT / 'tools/qualified-release/manifest.json').read_text())
         self.assertFalse(manifest['ready'])
