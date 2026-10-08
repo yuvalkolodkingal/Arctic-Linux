@@ -24,6 +24,13 @@ class FrameGeometryError(AssertionError):
     """Only a native frame dimension mismatch establishes baseline reproduction."""
 
 
+def validate_preview(process, log_path):
+    assert process.poll() is None, 'private preview exited: ' + log_path.read_text()
+    errors = re.findall(r'TypeError|ReferenceError|SyntaxError|is not a type|Cannot assign|Unable to assign|Failed to load',
+                        log_path.read_text())
+    assert not errors, errors
+
+
 def stop(process):
     if process.poll() is None:
         process.terminate()
@@ -139,6 +146,7 @@ def exercise(base, out, compositor, frame_source=None):
         ipc('cover', 'false')
 
         def snapshot(label, check_pixels):
+            validate_preview(preview, out / 'shell.log')
             actual = state()
             for name in names:
                 path = out / f'{label}-{name}.png'
@@ -150,11 +158,17 @@ def exercise(base, out, compositor, frame_source=None):
                     expected = (round(capture.width / scale), round(capture.height / scale))
                     # Require configured native dimensions, not just requested Theme margins.
                     if abs(surface['width'] - expected[0]) > 1 or abs(surface['height'] - expected[1]) > 1:
+                        # Validate before classifying the baseline mismatch as a reproduction.
+                        validate_preview(preview, out / 'shell.log')
                         raise FrameGeometryError((label, surface, expected))
                     if check_pixels:
                         image = capture.convert('RGB')
                         ground = ImageColor.getrgb(actual['ground'])[:3]
-                        for x, y in ((capture.width // 2, round(2 * scale)),
+                        for x, y in ((capture.width // 2, 0),
+                                     (capture.width // 2, capture.height - 1),
+                                     (0, capture.height // 2),
+                                     (capture.width - 1, capture.height // 2),
+                                     (capture.width // 2, round(2 * scale)),
                                      (capture.width // 2, capture.height - 1 - round(2 * scale)),
                                      (round(2 * scale), capture.height // 2),
                                      (capture.width - 1 - round(2 * scale), capture.height // 2)):
@@ -195,9 +209,7 @@ def exercise(base, out, compositor, frame_source=None):
                     assert state()['surfaces'] == before['surfaces'], 'reveal resized the frame'
                     ipc('focus', names[0])
             # Both outputs remain independent at different scales and aspect ratios.
-        errors = re.findall(r'TypeError|ReferenceError|SyntaxError|is not a type|Cannot assign|Unable to assign',
-                            (out / 'shell.log').read_text())
-        assert not errors, errors
+        validate_preview(preview, out / 'shell.log')
         return results
     finally:
         for process in reversed(processes):

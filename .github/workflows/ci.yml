@@ -346,7 +346,7 @@ jobs:
           name: rpms
           path: out/frame-rpms
       - name: Install the checkout's Mango build
-        run: dnf -y install out/frame-rpms/mangowm-*.x86_64.rpm
+        run: dnf -y install out/frame-rpms/repo/mangowm-*.x86_64.rpm
       - name: Replay original and repaired frame on Mango and sway
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
