@@ -64,7 +64,7 @@ jobs:
           iso=(out/reliability/candidate-iso/*.iso)
           timeout --signal=TERM --kill-after=60s 75m tools/test-install.sh \
             --iso "${iso[0]}" --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 \
-            --boot-append '' --install-timeout 2400 --reliability-version "$VERSION" \
+            --boot-append '' --boot-network online --install-timeout 2400 --reliability-version "$VERSION" \
             --reliability-app-profile "$APP_PROFILE" \
             --out "$PWD/out/reliability/candidate"
       - name: Candidate evidence
@@ -82,13 +82,13 @@ jobs:
           iso=(out/reliability/previous-iso/*.iso)
           timeout --signal=TERM --kill-after=60s 60m tools/test-install.sh \
             --iso "${iso[0]}" --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 \
-            --boot-append '' --install-timeout 2400 --reliability-version "$PREVIOUS_VERSION" \
+            --boot-append '' --boot-network online --install-timeout 2400 --reliability-version "$PREVIOUS_VERSION" \
             --reliability-app-profile legacy \
             --out "$PWD/out/reliability/previous"
           python3 tools/reliability/report.py out/reliability/previous > out/reliability/previous/before-upgrade.md
           cp out/reliability/previous/serial-boot.log out/reliability/previous/serial-before-upgrade.log
           timeout --signal=TERM --kill-after=60s 35m tools/test-install.sh \
-            --stage boot --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 --boot-append '' \
+            --stage boot --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 --boot-append '' --boot-network online \
             --reliability-version "$PREVIOUS_VERSION" --upgrade-to "$VERSION" \
             --reliability-app-profile legacy \
             --out "$PWD/out/reliability/previous"

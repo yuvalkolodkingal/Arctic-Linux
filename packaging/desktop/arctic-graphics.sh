@@ -4,6 +4,12 @@
 # "Safe graphics mode" (nomodeset → simpledrm) only have Mesa's software renderer, which
 # wlroots refuses unless allowed. Harmless with a real GPU (it only allows the fallback).
 export WLR_RENDERER_ALLOW_SOFTWARE=1
+# Scenefx 0.5 needs an explicit EGL software path when Safe graphics disables
+# hardware modesetting. Allowing software alone does not select that path.
+if grep -Eq '(^| )nomodeset( |$)' /proc/cmdline 2>/dev/null; then
+  export WLR_RENDERER_FORCE_SOFTWARE=1
+  export LIBGL_ALWAYS_SOFTWARE=1
+fi
 if [ -z "${WLR_NO_HARDWARE_CURSORS:-}" ] && command -v systemd-detect-virt >/dev/null 2>&1; then
   case "$(systemd-detect-virt --vm 2>/dev/null)" in
     none|"") ;;

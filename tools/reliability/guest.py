@@ -52,6 +52,15 @@ def record(stage, check, status, detail):
           status=status, detail=str(detail))), flush=True)
 
 
+def network(stage):
+    # The live installation lane is intentionally isolated. External HTTPS,
+    # deferred downloads and signed upgrades are tested only on the installed disk.
+    if stage == 'live':
+        return None
+    return run(['curl', '--fail', '--location', '--max-time', '30',
+                '--noproxy', '*', 'https://fedoraproject.org/']).splitlines()[0][:160]
+
+
 def session_signature(proc_root, uid, runtime, display, env, expected_socket):
     # Mango sets this after exec, so its own /proc environ can lack it. Accept
     # only same-user children of the matching Wayland session, then authenticate
@@ -189,8 +198,10 @@ def main():
             if status not in ('active', 'activating'):
                 break
             time.sleep(5)
-    check('network', lambda: run(['curl', '--fail', '--location', '--max-time', '30',
-                                 '--noproxy', '*', 'https://fedoraproject.org/']).splitlines()[0][:160])
+    if stage == 'live':
+        record(stage, 'network', 'unrun', 'Offline live installation; external HTTPS is required after disk boot')
+    else:
+        check('network', lambda: network(stage))
     try:
         prefix = desktop()
         record(stage, 'desktop', 'passed', run(prefix + ['mmsg', 'get', 'all-clients']))

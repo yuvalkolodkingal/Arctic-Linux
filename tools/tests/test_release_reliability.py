@@ -79,6 +79,20 @@ class EvidenceTests(unittest.TestCase):
         (self.path / 'serial-boot.log').write_text('ARCTIC-COLLECT-END\n')
         self.assertTrue(all(r['status'] == 'unrun' for r in self.automated()))
 
+    def test_external_network_is_required_only_after_offline_install(self):
+        self.evidence()
+        p = self.path / 'serial-install.log'
+        p.write_text('\n'.join(line for line in p.read_text().splitlines() if '"network"' not in line))
+        results = report.evaluate(self.path)
+        live = next(r for r in results if r['stage'] == 'live' and r['check'] == 'network')
+        self.assertEqual(live['status'], 'unrun')
+        self.assertNotIn('evidence', live)
+        self.assertTrue(all(r['status'] == 'passed' for r in results if 'evidence' in r))
+        p = self.path / 'serial-boot.log'
+        p.write_text('\n'.join(line for line in p.read_text().splitlines() if '"network"' not in line))
+        self.assertTrue(any(r['check'] == 'network' and r['status'] == 'unrun' and 'evidence' in r
+                            for r in report.evaluate(self.path)))
+
     def test_malformed_json_fails(self):
         for value in ('{bad', '[]', '{"status":"maybe"}'):
             with self.subTest(value=value):
@@ -173,6 +187,14 @@ class AppTests(unittest.TestCase):
 
 
 class SessionTests(unittest.TestCase):
+    def test_live_probe_never_requests_external_network(self):
+        with patch.object(guest, 'run') as run:
+            self.assertIsNone(guest.network('live'))
+            run.assert_not_called()
+        with patch.object(guest, 'run', side_effect=RuntimeError('HTTPS failed')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'HTTPS failed'):
+                guest.network('installed')
+            run.assert_called_once()
     def test_child_signature_is_bound_to_user_display_and_compositor_socket(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
