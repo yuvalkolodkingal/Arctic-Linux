@@ -23,7 +23,7 @@ class PublicationGuardTest(unittest.TestCase):
                  'tools/build-iso.sh', 'tools/build-cache.py', '.github/workflows/iso.yml',
                  'tools/native-functional/execution-manifest.json',
                  '.github/workflows/publish-qualified-20261008.yml', 'docs/release.md', 'README.md',
-                 'iso/kiwi/README.md']
+                 'iso/kiwi/README.md', 'shell/dev/test-lock-clock.py']
         self.assertEqual(prepare.product_changes(names), names[:7])
 
     def test_product_rename_into_helper_root_still_requires_rebuild(self):
@@ -51,6 +51,29 @@ class PublicationGuardTest(unittest.TestCase):
                 self.assertEqual(prepare.changed_product_files(before, 'HEAD'),
                                  ['profiles/ci/offline.toml'])
 
+    def test_docs_only_stable_fallback_rejects_runtime_changes_and_failed_exact_run(self):
+        source, stable = 'a' * 40, 'b' * 40
+        def run(sha, path, number, conclusion='success'):
+            return dict(head_sha=sha, head_branch='main', event='push', path=path,
+                        run_attempt=1, status='completed', conclusion=conclusion, id=number)
+        ci = run(source, '.github/workflows/ci.yml', 1)
+        prior = run(stable, '.github/workflows/repo.yml', 2)
+        jobs = dict(total_count=15, jobs=[dict(status='completed', conclusion='success')] * 15)
+        def api(path):
+            if '/jobs?' in path:
+                return jobs
+            return dict(workflow_runs=[ci] if source in path else [prior])
+        with patch.object(prepare, 'api', side_effect=api), patch.object(prepare, 'git', return_value='docs/release.md\nREADME.md'):
+            self.assertEqual(prepare.main_checks(source, stable)['stable_source_sha'], stable)
+        for name in ('shell/LockScreen.qml', 'tools/qualified-release/prepare.py', '.github/workflows/repo.yml'):
+            with patch.object(prepare, 'api', side_effect=api), patch.object(prepare, 'git', return_value=name), self.assertRaises(RuntimeError):
+                prepare.main_checks(source, stable)
+        failed = run(source, '.github/workflows/repo.yml', 3, 'failure')
+        with patch.object(prepare, 'api', return_value=dict(workflow_runs=[ci, failed])), patch.object(prepare, 'git') as git:
+            with self.assertRaises(RuntimeError):
+                prepare.main_checks(source, stable)
+            git.assert_not_called()
+
     def test_disabled_or_unapproved_manifest_never_downloads_or_writes_assets(self):
         manifest = json.loads((ROOT / 'tools/qualified-release/manifest.json').read_text())
         self.assertFalse(manifest['ready'])
@@ -77,9 +100,25 @@ class ActualPublicationScriptTest(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/publish-qualified-20261008.yml').read_text()
         body = workflow.split("python3 -B - <<'PY'\n", 1)[1].rsplit('\n          PY', 1)[0]
         nodes = [node for node in ast.parse(textwrap.dedent(body)).body
-                 if isinstance(node, ast.FunctionDef) and node.name in ('tag_target', 'promotion_guard')]
+                 if isinstance(node, ast.FunctionDef) and node.name in ('tag_target', 'promotion_guard', 'ensure_tag')]
         self.env = dict(re=re, json=json, subprocess=subprocess, repo='repos/control/repo', api=Mock())
         exec(compile(ast.Module(body=nodes, type_ignores=[]), '<actual publisher functions>', 'exec'), self.env)
+
+    def test_fresh_tag_is_created_and_reverified_before_draft_upload(self):
+        target = 'a' * 40
+        self.env['tag_target'] = Mock(side_effect=[None, target])
+        with patch.object(subprocess, 'run') as write:
+            self.env['ensure_tag'](target)
+            self.assertIn('ref=refs/tags/v1.2.1', write.call_args.args[0])
+            self.assertIn('sha=' + target, write.call_args.args[0])
+        self.env['tag_target'] = Mock(side_effect=[target, target])
+        with patch.object(subprocess, 'run') as write:
+            self.env['ensure_tag'](target)
+            write.assert_not_called()
+        for values in (['b' * 40], [None, 'b' * 40]):
+            self.env['tag_target'] = Mock(side_effect=values)
+            with patch.object(subprocess, 'run'), self.assertRaises(AssertionError):
+                self.env['ensure_tag'](target)
 
     def response(self, sha='a' * 40, kind='commit'):
         return SimpleNamespace(returncode=0, stdout=json.dumps({'object': {'type': kind, 'sha': sha}}), stderr='')
