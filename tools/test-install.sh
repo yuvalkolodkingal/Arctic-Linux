@@ -197,6 +197,9 @@ if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
 if [[ -n "$RELIABILITY_VERSION" ]]; then
   printf '{"version":"%s","upgrade_to":"%s","app_profile":"%s"}\n' \
     "$RELIABILITY_VERSION" "$UPGRADE_TO" "$RELIABILITY_APP_PROFILE" > "$DATA/config.json"
+  if [[ "$RELIABILITY_APP_PROFILE" == lightweight ]]; then
+    cp "$HERE/../design/backgrounds/collection.json" "$DATA/expected-wallpapers.json"
+  fi
 fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"

@@ -101,6 +101,40 @@ class RotateTests(unittest.TestCase):
         self.wallpaper('rotate', '1h', 'a', 'b', code=2)
         self.assertFalse((self.config / 'wallpaper-rotate.json').exists())
 
+    def test_photo_default_rotation_and_saved_choices(self):
+        for name in ('city-afterglow', 'butterfly-in-gold'):
+            (self.backgrounds / (name + '.jpg')).write_bytes(b'x')
+        (self.backgrounds / 'default.jpg').symlink_to('city-afterglow.jpg')
+        photos = [dict(slug=s, file=s + '.jpg') for s in ('city-afterglow', 'butterfly-in-gold')]
+        (self.backgrounds / 'collection.json').write_text(json.dumps(dict(schema=1, wallpapers=photos)))
+        (self.config / 'wallpaper').unlink()
+        self.wallpaper()
+        self.assertEqual(self.drawn(), 'default.jpg')
+        self.assertFalse((self.config / 'wallpaper').exists())
+        # An upgrade must retain both illustrated names and personal file selections.
+        for saved, expected in [('fox', 'fox-polar-night.png'), (str(self.pictures / 'b.jpg'), 'b.jpg')]:
+            (self.config / 'wallpaper').write_text(saved + '\n')
+            self.wallpaper()
+            self.assertEqual(self.drawn(), expected)
+            self.assertEqual((self.config / 'wallpaper').read_text().strip(), saved)
+        self.wallpaper('rotate', '1h', 'arctic')
+        self.wallpaper('next')
+        self.assertEqual(self.drawn(), 'city-afterglow.jpg')
+        self.wallpaper('next')
+        self.assertEqual(self.drawn(), 'butterfly-in-gold.jpg')
+
+    def test_unusable_local_manifest_falls_through_to_packaged_photos(self):
+        (self.backgrounds / 'city.jpg').write_bytes(b'x')
+        (self.backgrounds / 'collection.json').write_text(json.dumps(dict(schema=1, wallpapers=[dict(slug='city', file='city.jpg')])))
+        local = Path(self.env['XDG_DATA_HOME']) / 'arctic/wallpapers'
+        local.mkdir(parents=True)
+        self.wallpaper('rotate', '1h', 'arctic')
+        for invalid in ('{bad', '{"schema":1,"wallpapers":[]}',
+                        '{"schema":1,"wallpapers":[{"slug":"missing","file":"missing.jpg"}]}'):
+            (local / 'collection.json').write_text(invalid)
+            self.wallpaper('next')
+            self.assertEqual(self.drawn(), 'city.jpg')
+
     def test_next_in_order_saves_the_picture_and_follows_its_colours(self):
         self.wallpaper('rotate', '1h', str(self.pictures))
         seen = []

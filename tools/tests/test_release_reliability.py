@@ -1,5 +1,6 @@
 """Failure-path tests for release evidence; no QEMU, network or disks required."""
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -61,7 +62,15 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn('evidence', editor)
         p = self.path / 'serial-install.log'
         p.write_text(p.read_text() + report.PREFIX + json.dumps(dict(stage='live', check='app-editor', status='passed')) + '\n')
+        for filename, stage in [('serial-install.log', 'live'), ('serial-boot.log', 'installed')]:
+            p = self.path / filename
+            p.write_text(p.read_text() + report.PREFIX + json.dumps(dict(stage=stage, check='wallpapers', status='passed')) + '\n')
         self.assertTrue(all(r['status'] == 'passed' for r in report.evaluate(self.path, app_profile='lightweight') if 'evidence' in r))
+
+    def test_lightweight_wallpaper_evidence_is_required_on_both_boots(self):
+        self.evidence()
+        found = [r for r in report.evaluate(self.path, app_profile='lightweight') if r['check'] == 'wallpapers']
+        self.assertEqual([(r['stage'], r['status']) for r in found], [('live', 'unrun'), ('installed', 'unrun')])
 
     def test_failed_probe_fails(self):
         self.evidence()
@@ -115,6 +124,49 @@ class EvidenceTests(unittest.TestCase):
         result = subprocess.run(['python3', str(ROOT / 'tools/reliability/report.py'), str(self.path)], capture_output=True)
         self.assertEqual(result.returncode, 1)
         self.assertTrue((self.path / 'results.json').exists())
+
+
+class PackagedPhotoTests(unittest.TestCase):
+    def setUp(self):
+        from PIL import Image
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.folder = Path(self.temp.name)
+        photo = self.folder / 'city.jpg'
+        Image.new('RGB', (16, 9)).save(photo)
+        Image.new('RGB', (16, 9)).save(self.folder / 'default.png')
+        (self.folder / 'default.jpg').symlink_to('city.jpg')
+        self.greeter = self.folder / 'greeter.png'
+        self.greeter.symlink_to('default.png')
+        self.expected = dict(author='Yuval Kolodkin-Gal', default='city', revision='a'*40,
+                             wallpapers=[dict(file='city.jpg', width=16, height=9,
+                                              sha256=hashlib.sha256(photo.read_bytes()).hexdigest())])
+        (self.folder / 'collection.json').write_text(json.dumps(self.expected))
+        self.discovery = json.dumps(dict(items=[dict(key=str(photo), arctic=True, photographer=self.expected['author'])]))
+
+    def test_changed_packaged_image_fails_before_picker_discovery(self):
+        (self.folder / 'city.jpg').write_bytes(b'changed')
+        with patch.object(guest, 'run') as run_mock, self.assertRaisesRegex(RuntimeError, 'hash differs'):
+            guest.wallpapers([], self.expected, self.folder, self.greeter)
+        run_mock.assert_not_called()
+
+    def test_missing_picker_entry_fails_despite_owned_valid_exports(self):
+        with patch.object(guest, 'run', side_effect=['arctic-backgrounds', '{"items":[]}']), self.assertRaisesRegex(RuntimeError, 'picker'):
+            guest.wallpapers([], self.expected, self.folder, self.greeter)
+
+    def test_wrong_rpm_ownership_fails(self):
+        with patch.object(guest, 'run', return_value='other-package'), self.assertRaisesRegex(RuntimeError, 'ownership'):
+            guest.wallpapers([], self.expected, self.folder, self.greeter)
+
+    def test_wrong_compatibility_png_fails_even_with_correct_photo_and_aliases(self):
+        from PIL import Image
+        Image.new('RGB', (16, 9), 'blue').save(self.folder / 'default.png')
+        with patch.object(guest, 'run', return_value='arctic-backgrounds'), self.assertRaisesRegex(RuntimeError, 'PNG pixels differ'):
+            guest.wallpapers([], self.expected, self.folder, self.greeter)
+
+    def test_owned_exports_and_complete_discovery_pass(self):
+        with patch.object(guest, 'run', side_effect=['arctic-backgrounds', self.discovery]):
+            self.assertIn('1 owned/verified photos', guest.wallpapers([], self.expected, self.folder, self.greeter))
 
 
 class FetchTests(unittest.TestCase):

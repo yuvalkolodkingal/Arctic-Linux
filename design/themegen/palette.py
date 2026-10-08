@@ -37,9 +37,9 @@ OPTIONAL_ROLES = ("shadow",)
 
 MODES = ("dark", "light")
 BUILTINS = {
-    # name: (mode, wallpaper, lock wallpaper) — the design wallpapers drawn for each theme
-    "winter": ("light", "snowfield-winter", "fox-winter"),
-    "polar-night": ("dark", "aurora-polar-night", "fox-polar-night"),
+    # Packaged photo defaults retain the accessible Winter / Polar night colours.
+    "winter": ("light", "/usr/share/backgrounds/arctic/default.jpg", "/usr/share/backgrounds/arctic/default.jpg"),
+    "polar-night": ("dark", "/usr/share/backgrounds/arctic/default.jpg", "/usr/share/backgrounds/arctic/default.jpg"),
 }
 BUILTIN_FOR_MODE = {"light": "winter", "dark": "polar-night"}
 

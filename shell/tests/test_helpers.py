@@ -182,6 +182,38 @@ class WallpaperTests(unittest.TestCase):
         (self.config / 'wallpaper').write_text('fox\n')
         self.assertEqual(self.module.library()['current'], 'fox')
 
+    def install_photos(self):
+        from PIL import Image
+        photos = []
+        for slug in ('city-afterglow', 'butterfly-in-gold'):
+            Image.new('RGB', (64, 36), (90, 50, 10)).save(self.data / (slug + '.jpg'))
+            photos.append(dict(slug=slug, file=slug + '.jpg', title=slug.replace('-', ' '),
+                               theme='ember', photographer='Yuval Kolodkin-Gal'))
+        (self.data / 'collection.json').write_text(json.dumps(dict(schema=1, default='city-afterglow', wallpapers=photos)))
+        return photos
+
+    def test_photos_replace_gallery_illustrations_and_preserve_user_choices(self):
+        self.install_photos()
+        result = self.module.library()
+        packaged = [item for item in result['items'] if item['arctic']]
+        self.assertEqual([Path(item['key']).name for item in packaged],
+                         ['city-afterglow.jpg', 'butterfly-in-gold.jpg'])
+        self.assertTrue(all(item['photographer'] == 'Yuval Kolodkin-Gal' for item in packaged))
+        self.assertEqual(result['current'], str(self.data / 'city-afterglow.jpg'))
+        for saved in ('fox', str(self.pictures / 'my-dog_photo.jpg')):
+            (self.config / 'wallpaper').write_text(saved + '\n')
+            self.assertEqual(self.module.library()['current'], saved)
+        with self.assertRaises(ValueError):
+            self.module.own_file(str(self.data / 'city-afterglow.jpg'))
+
+    def test_photo_manifest_cannot_list_outside_files_or_symlinks(self):
+        photos = self.install_photos()
+        photos.append(dict(slug='../../my-dog_photo', file='../../my-dog_photo.jpg', title='bad'))
+        (self.data / 'linked.jpg').symlink_to(self.pictures / 'my-dog_photo.jpg')
+        photos.append(dict(slug='linked', file='linked.jpg', title='bad'))
+        (self.data / 'collection.json').write_text(json.dumps(dict(schema=1, default='city-afterglow', wallpapers=photos)))
+        self.assertEqual(len(self.module.photo_collection()[0]), 2)
+
     def test_folder_is_saved(self):
         other = Path(self.tmp.name) / 'elsewhere'
         other.mkdir()
