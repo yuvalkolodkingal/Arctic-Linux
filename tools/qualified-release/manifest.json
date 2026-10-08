@@ -1,0 +1,13 @@
+{
+  "ready": false,
+  "release_acceptance": false,
+  "publication_approved": true,
+  "tag": "v1.2.1",
+  "main_sha": null,
+  "image": null,
+  "performance": null,
+  "native": null,
+  "update": null,
+  "media_review": null,
+  "execution_files": {}
+}

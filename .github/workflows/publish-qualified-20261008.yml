@@ -1,0 +1,103 @@
+name: Publish the qualified retained Arctic ISO
+
+on:
+  push:
+    branches: [codex/publish-qualified-20261008]
+    paths: [.github/qualification-20261008.publish]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          filter: blob:none
+          sparse-checkout: |
+            .github
+            tools
+          persist-credentials: false
+      - name: Verify all evidence and prepare the exact retained ISO assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B tools/qualified-release/prepare.py --manifest tools/qualified-release/manifest.json \
+            --out "$RUNNER_TEMP/qualified-assets"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-publication-assets
+          path: ${{ runner.temp }}/qualified-assets/
+          compression-level: 0
+          retention-days: 14
+  publish:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-publication-assets
+          path: assets
+      - name: Verify exact bytes, upload a draft, verify uploaded digests, publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, subprocess
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/publish-qualified-20261008'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          repo = 'repos/yuvalkolodkingal/Arctic-Linux'
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', repo + path], timeout=60))
+          def sha(path):
+              value = hashlib.sha256()
+              with path.open('rb') as source:
+                  for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                      value.update(chunk)
+              return value.hexdigest()
+          root = Path('assets')
+          assert {path.name for path in root.iterdir()} == {
+              'Arctic-Linux-1.2.1-x86_64.iso', 'Arctic-Linux-1.2.1-x86_64.iso.sha256',
+              'qualification.json', 'release-notes.md'}
+          assert all(path.is_file() and not path.is_symlink() for path in root.iterdir())
+          proof = json.loads((root / 'qualification.json').read_text())
+          assert proof['tag'] == 'v1.2.1' and proof['release_acceptance'] == 'qualified'
+          target = proof['release_main_sha']
+          assert re.fullmatch('[0-9a-f]{40}', target)
+          assert api('/git/ref/heads/main')['object']['sha'] == target
+          assert not api('/pulls?state=open&per_page=100')
+          iso = root / 'Arctic-Linux-1.2.1-x86_64.iso'
+          assert 0 < iso.stat().st_size == proof['image']['bytes'] < 2_000_000_000
+          assert sha(iso) == proof['image']['sha256']
+          checksum = root / (iso.name + '.sha256')
+          assert checksum.read_text().strip().split() == [proof['image']['sha256'], iso.name]
+          assets = [iso, checksum, root / 'qualification.json']
+          # Creating a draft first prevents a partially uploaded release becoming
+          # public. A verification failure leaves only this owned draft to repair.
+          subprocess.run(['gh', 'release', 'create', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
+                          '--target', target, '--title', 'Arctic Linux 1.2.1', '--draft',
+                          '--notes-file', str(root / 'release-notes.md'), *map(str, assets)], check=True, timeout=20 * 60)
+          release = api('/releases/tags/v1.2.1')
+          assert release['draft'] is True and release['prerelease'] is False
+          assert release['target_commitish'] == target and len(release['assets']) == len(assets)
+          expected = {path.name: (path.stat().st_size, 'sha256:' + sha(path)) for path in assets}
+          assert {asset['name']: (asset['size'], asset['digest']) for asset in release['assets']} == expected
+          assert all(asset['state'] == 'uploaded' for asset in release['assets'])
+          subprocess.run(['gh', 'release', 'edit', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
+                          '--draft=false', '--prerelease=false', '--latest'], check=True, timeout=60)
+          release = api('/releases/tags/v1.2.1')
+          assert release['draft'] is False and release['prerelease'] is False
+          assert {asset['name']: (asset['size'], asset['digest']) for asset in release['assets']} == expected
+          print('ARCTIC-QUALIFIED-RELEASE', release['html_url'], proof['image']['sha256'], flush=True)
+          PY
