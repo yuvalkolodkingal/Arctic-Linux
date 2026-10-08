@@ -60,6 +60,7 @@ jobs:
           persist-credentials: false
           # These collections are already export-ignored from the RPM source.
           # build-rpms also avoids archive prefetching their omitted blobs.
+          filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /*

@@ -43,8 +43,10 @@ def exercise(performance, prefix, wallpaper=False):
 
     settings = prefix + ['python3', '/usr/share/arctic/settings/scripts/arctic_settings.py']
     shell = prefix + ['quickshell', 'ipc', '-p', run(prefix + ['arctic-shell', '--path']), 'call']
+    roles = performance['functional_roles'](prefix)
     check('selinux-enforcing', lambda: require(run(['getenforce']) == 'Enforcing', 'SELinux enforcing'))
-    check('default-browser', lambda: require('zen' in (value := run(prefix + ['xdg-settings', 'get', 'default-web-browser'])).lower(), value))
+    check('default-browser', lambda: require(
+          (value := run(prefix + ['xdg-settings', 'get', 'default-web-browser'])) == roles['default_browser_desktop'], value))
     for feature in ('motion', 'gaming', 'optional-network'):
         check(feature+'-status', lambda feature=feature: json.loads(run(settings + [feature], timeout=180)))
     check('webapp-runtimes', lambda: json.loads(run(prefix + ['arctic-webapp', 'runtimes', '--json'], timeout=180)))
@@ -98,13 +100,14 @@ def exercise(performance, prefix, wallpaper=False):
 
     # Functional window evidence is useful even when TCG cannot support a
     # reliable timing comparison. Use the shipped browser choice and launchers.
-    for pattern, command in [('kitty', ['kitty']),
-                             ('org.gnome.nautilus', ['nautilus', '--new-window']),
-                             ('zen', ['arctic-open', 'browser'])]:
-        check('persistent-window-' + pattern,
-              lambda pattern=pattern, command=command: dict(
-                  mapped_for_seconds=5,
-                  diagnostic_startup_seconds=performance['startup'](prefix, command, pattern)))
+    with performance['role_workload'](prefix) as workload:
+        for role in performance['ROLE_ORDER']:
+            app = roles['roles'][role]
+            command = performance['role_command'](app, workload)
+            check('persistent-window-' + role,
+                  lambda app=app, command=command: dict(
+                      app_id=app['id'], mapped_for_seconds=5,
+                      diagnostic_startup_seconds=performance['startup'](prefix, command, app['appids'])))
 
     def lock_unlock():
         locked = lambda: run(shell + ['lock', 'isLocked']).lower() == 'true'
