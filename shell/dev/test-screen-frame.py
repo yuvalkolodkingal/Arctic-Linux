@@ -162,6 +162,7 @@ def exercise(base, out, compositor, frame_source=None):
         def snapshot(label, check_pixels):
             validate_preview(preview, out / 'shell.log')
             actual = state()
+            print('Frame snapshot:', label, json.dumps(actual), flush=True)
             for name in names:
                 path = out / f'{label}-{name}.png'
                 output = next(o for o in json.loads(run('wlr-randr', '--json')) if o['name'] == name)

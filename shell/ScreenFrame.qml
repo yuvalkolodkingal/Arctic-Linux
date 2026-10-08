@@ -22,6 +22,13 @@ Scope {
         screen: root.modelData
         visible: Theme.frameWidth > 0
         anchors { top: true; bottom: true; left: true; right: true }
+        // Layer-shell configures integer logical dimensions. At fractional scale
+        // the last physical pixel can fall outside those rounded bounds. Extend
+        // this click-through artwork by one logical pixel and let the output clip
+        // it; the separate exclusive zones retain their original dimensions.
+        readonly property int edgeOverscan: Math.abs(devicePixelRatio - Math.round(devicePixelRatio)) > 0.001 ? 1 : 0
+        margins.right: -edgeOverscan
+        margins.bottom: -edgeOverscan
         // Keep the Bottom layer surface at the physical output bounds. A covered surface
         // can stop receiving frame callbacks, leaving a layer-shell margin/resize commit
         // pending when the bar changes mode. Move the artwork inside this stable surface
