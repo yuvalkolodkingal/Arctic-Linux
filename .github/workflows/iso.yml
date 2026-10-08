@@ -39,7 +39,7 @@ on:
         default: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: iso-${{ github.ref }}
@@ -52,9 +52,12 @@ jobs:
   iso:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    outputs:
+      split: ${{ steps.size.outputs.split }}
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           # These collections are already export-ignored from the RPM source.
           # build-rpms also avoids archive prefetching their omitted blobs.
           sparse-checkout-cone-mode: false
@@ -278,12 +281,37 @@ jobs:
           echo "Required: strictly below 2000000000 decimal bytes; preferred: below 1600000000. Actual: $bytes"
           test "$bytes" -lt 2000000000
 
+  publish:
+    name: Publish the completed ISO
+    needs: iso
+    if: ${{ github.event_name == 'push' || inputs.release }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: docs/releases
+      - uses: actions/download-artifact@v4
+        with:
+          name: arctic-linux-iso
+          path: out
+      - name: Verify the retained ISO
+        run: |
+          cd out/iso
+          sha256sum --check "$ISO.sha256"
+          test "$(stat -c %s "$ISO")" -lt 2000000000
       - name: Publish release
-        if: ${{ github.event_name == 'push' || inputs.release }}
         env:
           GH_TOKEN: ${{ github.token }}
-          SPLIT: ${{ steps.size.outputs.split }}
+          SPLIT: ${{ needs.iso.outputs.split }}
           CANONICAL: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+          RELEASE_DRAFT: ${{ inputs.draft }}
         run: |
           # A released ISO must install systems that get Arctic's updates.
           if [ "$CANONICAL" = true ] && ! grep -qx 'arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
@@ -293,8 +321,8 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
-            pre=""; [ "${{ inputs.prerelease }}" = false ] || pre="--prerelease"
+            tag="$RELEASE_TAG"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
+            pre=""; [ "$RELEASE_PRERELEASE" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
@@ -341,6 +369,6 @@ jobs:
           else
             files=("out/iso/$ISO" "out/iso/$ISO.sha256")
           fi
-          draft=""; [ "${{ inputs.draft }}" != true ] || draft="--draft"
+          draft=""; [ "$RELEASE_DRAFT" != true ] || draft="--draft"
           gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
             --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre $draft
