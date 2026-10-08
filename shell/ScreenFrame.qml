@@ -54,6 +54,18 @@ Scope {
                 function onLineChanged() { outline.requestPaint(); }
                 function onFrameWidthChanged() { outline.requestPaint(); }
             }
+            // Canvas textures can filter against transparent texels at their
+            // outer boundary under fractional scaling. Solid exterior strips
+            // keep that edge opaque; the Canvas still paints the inner curve
+            // and hairline, beyond these two logical pixels.
+            Rectangle { anchors { top: true; left: true; right: true }
+                height: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { bottom: true; left: true; right: true }
+                height: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { left: true; top: true; bottom: true }
+                width: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { right: true; top: true; bottom: true }
+                width: Math.min(2, Theme.frameWidth); color: Theme.ground }
             function rounded(ctx, x, y, w, h, r) {
                 ctx.moveTo(x + r, y);
                 ctx.lineTo(x + w - r, y);
