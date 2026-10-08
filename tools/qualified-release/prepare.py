@@ -20,6 +20,9 @@ BUILD_INPUTS = {'.github/workflows/iso.yml',
                 'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
 DOCUMENTATION = {'README.md', 'iso/kiwi/README.md'}
+# arctic-linux.spec excludes shell/dev from the installed shell payload. This
+# private compositor fixture has no runtime or image-build invocation.
+TEST_ONLY = {'shell/dev/test-lock-clock.py'}
 NATIVE_GATES = set('fresh-defaults-and-isolation archive-content-roundtrips actual-role-file-manager-terminal-editor '
                    'open-codec-content-and-player-state portal-and-accessibility-reachability '
                    'owned-process-cleanup-config-preservation selinux-and-new-avcs open-codec-lossless-command-decode'.split())
@@ -50,7 +53,8 @@ def product_changes(names):
     # Unknown roots are product changes too: a new vendor/go.sum/runtime asset
     # cannot silently evade the rebuild gate. Only helper/docs paths are exempt.
     return [name for name in names if name in BUILD_INPUTS or
-            not (name in DOCUMENTATION or name.startswith(('docs/', '.github/', 'tools/')))]
+            not (name in DOCUMENTATION or name in TEST_ONLY
+                 or name.startswith(('docs/', '.github/', 'tools/')))]
 
 
 def changed_product_files(source, target):
@@ -59,15 +63,27 @@ def changed_product_files(source, target):
     return product_changes(git('diff', '--no-renames', '--name-only', source, target).splitlines())
 
 
-def main_checks(source):
+def main_checks(source, stable_source):
     runs = api('/actions/runs?head_sha=' + source + '&event=push&per_page=100')['workflow_runs']
     result = {}
     for name, path in (('ci', '.github/workflows/ci.yml'), ('stable', '.github/workflows/repo.yml')):
         matches = [run for run in runs if run['head_sha'] == source and run['head_branch'] == 'main'
                    and run['event'] == 'push' and run['path'] == path and run['run_attempt'] == 1]
+        if name == 'stable' and not matches and stable_source != source:
+            changes = git('diff', '--no-renames', '--name-only', stable_source, source).splitlines()
+            # repo.yml deliberately ignores these exact docs/Markdown paths.
+            # Never use this fallback for a pending/failed current-source run,
+            # another helper change, or an unverified publication source.
+            require(changes and all(name.startswith('docs/') or name.endswith('.md') for name in changes),
+                    'Current main requires a new stable repository deployment')
+            prior = api('/actions/runs?head_sha=' + stable_source + '&event=push&per_page=100')['workflow_runs']
+            matches = [run for run in prior if run['head_sha'] == stable_source and run['head_branch'] == 'main'
+                       and run['event'] == 'push' and run['path'] == path and run['run_attempt'] == 1]
         require(len(matches) == 1 and matches[0]['status'] == 'completed' and matches[0]['conclusion'] == 'success',
                 'Current main source checks or stable repository deployment have not passed: ' + name)
         result[name] = matches[0]['id']
+        if name == 'stable':
+            result['stable_source_sha'] = matches[0]['head_sha']
     jobs = api('/actions/runs/' + str(result['ci']) + '/jobs?per_page=100')
     require(jobs['total_count'] == len(jobs['jobs']) and len(jobs['jobs']) >= 15
             and all(job['status'] == 'completed' and job['conclusion'] == 'success' for job in jobs['jobs']),
@@ -189,10 +205,10 @@ def prepare(manifest, out):
     release_main = api('/git/ref/heads/main')['object']['sha']
     require(re.fullmatch('[0-9a-f]{40}', release_main), 'Invalid current main source')
     require(not api('/pulls?state=open&per_page=100'), 'Arctic PRs remain open')
-    current_checks = main_checks(release_main)
     for ref in (manifest['image']['source_sha'], manifest['main_sha'], release_main):
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
+    current_checks = main_checks(release_main, manifest['main_sha'])
     require(not changed_product_files(manifest['image']['source_sha'], release_main),
             'Product changed after the qualified ISO was built; rebuild required')
     spec = importlib.util.spec_from_file_location('qualified_fetch', ROOT / 'tools/native-functional/fetch-image.py')
