@@ -74,14 +74,21 @@ with open(os.environ['TEST_ENGINE_LOG'],'w') as target: json.dump(sys.argv[1:],t
         loop = next(node for node in ast.walk(function) if isinstance(node, ast.For)
                     and isinstance(node.target, ast.Name) and node.target.id=='attempt'
                     and 'COLLECT_VIA' in ast.unparse(node.iter))
-        for mode in ('console', 'terminal'):
+        # Execute the actual loop in its function context. Optional branches can
+        # legitimately return early, and compiling them at module scope is invalid.
+        wrapper = ast.parse('def collect_branch():\n    pass\n').body[0]
+        wrapper.body = [loop, ast.Return(value=ast.Name(id='collected', ctx=ast.Load()))]
+        ast.fix_missing_locations(wrapper)
+        for mode, native_failed in (('console', False), ('terminal', False), ('terminal', True)):
             vm, terminal = Mock(), Mock()
             namespace = dict(E=dict(COLLECT_VIA=mode, PROFILE_USER='ci', GUEST_CHECK='probe',
-                                    GUEST_CHECK_INTERACTIVE='0'),
+                                    GUEST_CHECK_INTERACTIVE='0',
+                                    NATIVE_LAUNCHER_FIXTURE='1' if native_failed else '0'),
                 vm=vm, time=types.SimpleNamespace(time=lambda:0, sleep=lambda _:None),
                 password='test-secret', open_terminal=terminal, serial=lambda _: 'fixture', log=Mock(),
                 vmtest=types.SimpleNamespace(serial_has=lambda *_:True), lock_password_sent=False)
-            exec(compile(ast.Module(body=[loop], type_ignores=[]), '<actual collection branch>','exec'), namespace)
+            exec(compile(ast.Module(body=[wrapper], type_ignores=[]), '<actual collection branch>','exec'), namespace)
+            collected = namespace['collect_branch']()
             if mode=='console':
                 terminal.assert_not_called()
                 self.assertEqual(vm.keys.call_args_list[0].args, ('ctrl-alt-f3',))
@@ -89,7 +96,12 @@ with open(os.environ['TEST_ENGINE_LOG'],'w') as target: json.dump(sys.argv[1:],t
                                  ['ci','test-secret','sudo sh /dev/sr0','test-secret'])
             else:
                 terminal.assert_called_once()
-            self.assertTrue(namespace['collected'])
+            if native_failed:
+                self.assertEqual(collected, 1)
+                self.assertEqual(vm.type_text.call_args_list[0].args, ('sudo sh /dev/sr0; exit',))
+                namespace['log'].assert_called_once_with('owned native launcher failed; no retry')
+            else:
+                self.assertIs(collected, True)
 
     def test_actual_console_restore_uses_session_vt_and_refuses_wrong_or_inactive_session(self):
         program = SOURCE.split("python3 - <<'PY' || exit 1\n",1)[1].split('\nPY\n',1)[0]
