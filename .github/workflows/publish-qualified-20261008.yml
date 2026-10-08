@@ -78,6 +78,10 @@ jobs:
                   assert obj['type'] == 'tag', 'Tag resolves to a non-commit object'
                   obj = api('/git/tags/' + obj['sha'])['object']
               raise RuntimeError('Annotated tag chain exceeds verification bound')
+          def promotion_guard(target):
+              assert tag_target() == target, 'Actual release tag target differs'
+              assert api('/git/ref/heads/main')['object']['sha'] == target, 'Main advanced during draft upload'
+              assert not api('/pulls?state=open&per_page=100'), 'A PR opened during draft upload'
           def sha(path):
               value = hashlib.sha256()
               with path.open('rb') as source:
@@ -115,9 +119,7 @@ jobs:
           assert all(asset['state'] == 'uploaded' for asset in release['assets'])
           # Uploading nearly 2 GB can take minutes. Recheck the actual tag,
           # main and all-PR-closure gates immediately before public promotion.
-          assert tag_target() == target, 'Actual release tag target differs'
-          assert api('/git/ref/heads/main')['object']['sha'] == target, 'Main advanced during draft upload'
-          assert not api('/pulls?state=open&per_page=100'), 'A PR opened during draft upload'
+          promotion_guard(target)
           subprocess.run(['gh', 'release', 'edit', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
                           '--draft=false', '--prerelease=false', '--latest'], check=True, timeout=60)
           release = api('/releases/tags/v1.2.1')
