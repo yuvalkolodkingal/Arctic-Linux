@@ -14,6 +14,10 @@ cleanup() {
 trap cleanup EXIT
 mount -t tmpfs tmpfs /run
 mount -t tmpfs tmpfs /tmp
+# Grim uses POSIX shm_open, which requires the normal /dev/shm tmpfs. The
+# minimal fixture's devtmpfs does not create it like a systemd OS boot does.
+mkdir -p /dev/shm
+mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /dev/shm
 mkdir -m 700 "$HOME"
 modprobe udmabuf || test -c /dev/udmabuf
 test -c /dev/udmabuf
