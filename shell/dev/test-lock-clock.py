@@ -163,10 +163,20 @@ def test_zone(base, env, zone, harness, rollover):
                 time.sleep(2.2)
             finally:
                 process.send_signal(signal.SIGCONT)
-            time.sleep(.15)
-            resumed = sample()
+            # A second-precision Qt timer may resume at its next boundary rather
+            # than within 150 ms. Wait for delivery while retaining the strict
+            # fresh-tick check, and bound recovery independently of wall time.
+            deadline = time.monotonic() + 2
+            while True:
+                resumed = sample()
+                if (resumed['tick'] > relock['tick']
+                        and -500 <= resumed['now'] - resumed['tick'] < 1000):
+                    break
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(.05)
             check(resumed['tick'] > relock['tick'] and -500 <= resumed['now'] - resumed['tick'] < 1000,
-                  'Clock did not recover after the event loop resumed')
+                  'Clock did not recover after the event loop resumed: ' + str(resumed))
             if rollover:
                 print(f'{zone}: lock/relock/resume and local formats passed; waiting for minute rollover', flush=True)
                 deadline = time.monotonic() + 65
