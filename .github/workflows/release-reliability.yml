@@ -1,0 +1,107 @@
+name: Release reliability
+
+# Validation only: no release, repository publication, or physical disks.
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Exact existing release or RC tag (never latest)
+        required: true
+        default: v1.1.0
+      version:
+        description: Expected candidate VERSION_ID
+        required: true
+        default: '1.1'
+      previous:
+        description: Previous release tag; empty skips supported same-Fedora upgrade test
+        default: v1.0.0
+      previous_version:
+        description: Expected previous VERSION_ID
+        default: '1.0'
+      app_profile:
+        description: Exact candidate app expectations and installer choices
+        type: choice
+        options: [legacy, lightweight]
+        default: legacy
+
+permissions:
+  contents: read
+concurrency:
+  group: reliability-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  vm:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        firmware: [uefi, bios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CANDIDATE: ${{ inputs.candidate }}
+      VERSION: ${{ inputs.version }}
+      PREVIOUS: ${{ inputs.previous }}
+      PREVIOUS_VERSION: ${{ inputs.previous_version }}
+      FIRMWARE: ${{ matrix.firmware }}
+      APP_PROFILE: ${{ inputs.app_profile }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require VM resources
+        run: |
+          mkdir -p out/reliability
+          { df -h .; free -m; nproc; ls -l /dev/kvm; } > out/reliability/resources.txt 2>&1
+          # Do not silently substitute slow TCG and report a boot timeout as an OS failure.
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          test "$(df --output=avail -BG . | tail -1 | tr -dc '0-9')" -ge 25
+      - name: Fetch and verify candidate
+        run: python3 tools/reliability/fetch-iso.py "$CANDIDATE" out/reliability/candidate-iso
+      - name: Live boot, blank disk install, installed boot and smoke checks
+        run: |
+          iso=(out/reliability/candidate-iso/*.iso)
+          timeout --signal=TERM --kill-after=60s 75m tools/test-install.sh \
+            --iso "${iso[0]}" --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 \
+            --boot-append '' --install-timeout 2400 --reliability-version "$VERSION" \
+            --reliability-app-profile "$APP_PROFILE" \
+            --out "$PWD/out/reliability/candidate"
+      - name: Candidate evidence
+        if: always()
+        run: python3 tools/reliability/report.py out/reliability/candidate --app-profile "$APP_PROFILE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Fetch and verify previous release
+        if: ${{ success() && inputs.previous != '' }}
+        run: |
+          # Keep evidence, reclaim only the disposable candidate disk and ISO.
+          rm -f out/reliability/candidate/target.qcow2 out/reliability/candidate-iso/*.iso
+          python3 tools/reliability/fetch-iso.py "$PREVIOUS" out/reliability/previous-iso
+      - name: Install previous release, upgrade from signed repositories, reboot
+        if: ${{ success() && inputs.previous != '' }}
+        run: |
+          iso=(out/reliability/previous-iso/*.iso)
+          timeout --signal=TERM --kill-after=60s 60m tools/test-install.sh \
+            --iso "${iso[0]}" --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 \
+            --boot-append '' --install-timeout 2400 --reliability-version "$PREVIOUS_VERSION" \
+            --reliability-app-profile legacy \
+            --out "$PWD/out/reliability/previous"
+          python3 tools/reliability/report.py out/reliability/previous > out/reliability/previous/before-upgrade.md
+          cp out/reliability/previous/serial-boot.log out/reliability/previous/serial-before-upgrade.log
+          timeout --signal=TERM --kill-after=60s 35m tools/test-install.sh \
+            --stage boot --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 --boot-append '' \
+            --reliability-version "$PREVIOUS_VERSION" --upgrade-to "$VERSION" \
+            --reliability-app-profile legacy \
+            --out "$PWD/out/reliability/previous"
+      - name: Upgrade evidence
+        if: ${{ always() && inputs.previous != '' }}
+        run: python3 tools/reliability/report.py out/reliability/previous --upgrade >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-reliability-${{ matrix.firmware }}
+          retention-days: 14
+          path: |
+            out/reliability/
+            !out/reliability/**/*.iso
+            !out/reliability/**/*.qcow2
+            !out/reliability/**/qmp*.sock

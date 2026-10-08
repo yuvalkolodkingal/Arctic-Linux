@@ -82,3 +82,7 @@ CI (`.github/workflows/ci.yml`) runs the Go, Python and Node tests, shellcheck a
 the RPMs and checks an unsigned test repository with dnf5. `.github/workflows/iso.yml` builds the
 ISO and publishes a release for `v*` tags; `.github/workflows/repo.yml` publishes the package
 repository.
+
+For candidate acceptance, use [Release reliability](docs/RELEASE-RELIABILITY.md): asserted
+UEFI/BIOS VM install/reboot, network and application checks, the supported previous-release
+upgrade, and a manual hardware/tester checklist with previous-ISO fallback.

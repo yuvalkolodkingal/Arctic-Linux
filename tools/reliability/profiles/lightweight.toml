@@ -1,0 +1,42 @@
+# CI profile: the default install (encrypted, whole disk) with no internet, as in
+# tools/test-install.sh. GNOME Web, FeatherPad, Foot, fish, PCManFM + XArchiver
+# and Celluloid come from the live image. Optional media codecs and Flatpak
+# themes are retried and deferred until online; default apps need no download.
+# The harness passes ARCTIC_LUKS_PASSPHRASE and ARCTIC_USER_PASSWORD and types the
+# passphrase at boot.
+
+description = "CI: offline install on a blank disk, encrypted, downloads deferred"
+
+[welcome]
+language = "en_US.UTF-8"
+
+[keyboard]
+layout = "us"
+variant = ""
+
+[timezone]
+timezone = "UTC"
+auto_time = true
+
+[disk]
+disk = ""
+mode = "erase"
+
+[encryption]
+enabled = true
+
+[account]
+full_name = "Arctic CI"
+username = "ci"
+hostname = "arctic-ci"
+autologin = false
+
+[apps]
+browser = ["gnome-web"]
+editor = ["featherpad"]
+terminal = ["foot"]
+shell = ["fish"]
+files = ["pcmanfm"]
+office = []
+video = ["celluloid"]
+extras = []
