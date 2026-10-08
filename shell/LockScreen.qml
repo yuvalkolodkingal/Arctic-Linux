@@ -193,6 +193,8 @@ Scope {
     }
     readonly property string fallbackWallpaper: Theme.tokens.lockWallpaper.startsWith('/')
         ? Theme.tokens.lockWallpaper : '/usr/share/backgrounds/arctic/' + Theme.tokens.lockWallpaper + '.svg'
+    readonly property string localPhotoDefault: Session.dataHome + '/arctic/wallpapers/default.jpg'
+    readonly property bool usesPhotoDefault: Theme.tokens.lockWallpaper === '/usr/share/backgrounds/arctic/default.jpg'
     property var sharedWallpaper: ({})
     readonly property string sharedSource: sharedWallpaper.enabled === true && /^[a-f0-9]{32}$/.test(sharedWallpaper.revision || '')
         ? 'file:///var/lib/arctic-login-wallpaper/generation-' + sharedWallpaper.revision + '/wallpaper.png' : ''
@@ -243,10 +245,16 @@ Scope {
                 id: backdrop
                 anchors.fill: parent
                 property string requestedSource: root.sharedSource || (root.wallpaper ? 'file://' + root.wallpaper : 'file://' + root.fallbackWallpaper)
-                property bool imageFailed: false
-                onRequestedSourceChanged: imageFailed = false
-                source: imageFailed ? 'file://' + root.fallbackWallpaper : requestedSource
-                onStatusChanged: if (status === Image.Error) imageFailed = true
+                property int fallbackStage: 0
+                onRequestedSourceChanged: fallbackStage = 0
+                source: fallbackStage === 2 ? 'file://' + root.localPhotoDefault
+                    : fallbackStage === 1 ? 'file://' + root.fallbackWallpaper : requestedSource
+                onStatusChanged: if (status === Image.Error) {
+                    if (root.usesPhotoDefault && source.toString() === 'file://' + root.fallbackWallpaper)
+                        fallbackStage = 2;
+                    else if (fallbackStage === 0)
+                        fallbackStage = 1;
+                }
                 fillMode: Image.PreserveAspectCrop
                 sourceSize: Qt.size(surface.width, surface.height)
                 asynchronous: true

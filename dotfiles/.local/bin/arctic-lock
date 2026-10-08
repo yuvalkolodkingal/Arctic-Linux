@@ -31,7 +31,10 @@ source "$CONF/current/theme.env" 2>/dev/null || true
 img="$(arctic-login-wallpaper current 2>/dev/null || true)"
 [[ -n "$img" && -f "$img" ]] || img="$(arctic-wallpaper current 2>/dev/null)"
 if [[ -z "$img" || ! -f "$img" ]]; then
-  if [[ "${ARCTIC_LOCK_WALLPAPER:-}" == /* && -f "$ARCTIC_LOCK_WALLPAPER" ]]; then
+  local_photo="${XDG_DATA_HOME:-$HOME/.local/share}/arctic/wallpapers/default.jpg"
+  if [[ "${ARCTIC_LOCK_WALLPAPER:-}" == /usr/share/backgrounds/arctic/default.jpg && -f "$local_photo" ]]; then
+    img="$local_photo"
+  elif [[ "${ARCTIC_LOCK_WALLPAPER:-}" == /* && -f "$ARCTIC_LOCK_WALLPAPER" ]]; then
     img="$ARCTIC_LOCK_WALLPAPER"
   else
     CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/arctic/wallpapers"

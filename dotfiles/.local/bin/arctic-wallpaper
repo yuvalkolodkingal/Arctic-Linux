@@ -46,8 +46,10 @@ load_theme() {   # the active theme's theme.env; VARIANT = which design wallpape
   # shellcheck source=/dev/null
   [[ -f "$env_file" ]] && source "$env_file"
   ARCTIC_THEME="${ARCTIC_THEME:-polar-night}"
-  if [[ -z "$ARCTIC_WALLPAPER" && -f "${DIRS[1]}/default.jpg" ]]; then
-    ARCTIC_WALLPAPER="${DIRS[1]}/default.jpg"
+  if [[ -z "$ARCTIC_WALLPAPER" ]]; then
+    for d in "${DIRS[@]}"; do
+      if [[ -f "$d/default.jpg" ]]; then ARCTIC_WALLPAPER="$d/default.jpg"; break; fi
+    done
   fi
   ARCTIC_WALLPAPER="${ARCTIC_WALLPAPER:-aurora-polar-night}"
   ARCTIC_GROUND="${ARCTIC_GROUND:-#12171e}"
@@ -322,6 +324,14 @@ case "${1:-}" in
     fi ;;
 esac
 
+if [[ -z "$img" ]]; then
+  # The documented dotfiles install owns its photos in the user's data directory.
+  if [[ "$ARCTIC_WALLPAPER" == /usr/share/backgrounds/arctic/default.jpg ]]; then
+    for d in "${DIRS[@]}"; do
+      if [[ -f "$d/default.jpg" ]]; then img="$d/default.jpg"; break; fi
+    done
+  fi
+fi
 if [[ -z "$img" ]]; then
   if [[ "$ARCTIC_WALLPAPER" == /* && -f "$ARCTIC_WALLPAPER" ]]; then img="$ARCTIC_WALLPAPER"
   else img="$(find_design "$ARCTIC_WALLPAPER" || find_design "aurora-$VARIANT" || true)"; fi
