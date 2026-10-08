@@ -157,7 +157,7 @@ def app(prefix, command, pattern, match_title=False):
 def wallpapers(prefix, expected, folder=Path('/usr/share/backgrounds/arctic'),
                greeter=Path('/usr/share/sddm/themes/arctic/background.png')):
     """Verify the intended exports in the actual image and discovery as its user."""
-    from PIL import Image
+    from PIL import Image, ImageChops
     actual = json.loads((folder / 'collection.json').read_text())
     if actual != expected:
         raise RuntimeError('Installed photo collection differs from the source-pinned expectation')
@@ -182,6 +182,9 @@ def wallpapers(prefix, expected, folder=Path('/usr/share/backgrounds/arctic'),
         if image.format != 'PNG':
             raise RuntimeError('Compatibility default is not a real PNG')
         image.load()
+        with Image.open(folder / (expected['default'] + '.jpg')) as photo:
+            if image.size != photo.size or ImageChops.difference(image.convert('RGB'), photo.convert('RGB')).getbbox():
+                raise RuntimeError('Compatibility default PNG pixels differ from the pinned photo')
     found = json.loads(run(prefix + ['python3', '/usr/share/arctic/shell/scripts/wallpapers.py', 'list']))
     discovered = {item['key'] for item in found['items'] if item.get('arctic') and item.get('photographer') == expected['author']}
     if discovered != set(paths):

@@ -158,6 +158,12 @@ class PackagedPhotoTests(unittest.TestCase):
         with patch.object(guest, 'run', return_value='other-package'), self.assertRaisesRegex(RuntimeError, 'ownership'):
             guest.wallpapers([], self.expected, self.folder, self.greeter)
 
+    def test_wrong_compatibility_png_fails_even_with_correct_photo_and_aliases(self):
+        from PIL import Image
+        Image.new('RGB', (16, 9), 'blue').save(self.folder / 'default.png')
+        with patch.object(guest, 'run', return_value='arctic-backgrounds'), self.assertRaisesRegex(RuntimeError, 'PNG pixels differ'):
+            guest.wallpapers([], self.expected, self.folder, self.greeter)
+
     def test_owned_exports_and_complete_discovery_pass(self):
         with patch.object(guest, 'run', side_effect=['arctic-backgrounds', self.discovery]):
             self.assertIn('1 owned/verified photos', guest.wallpapers([], self.expected, self.folder, self.greeter))
