@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
          'tools/native-functional/fetch-image.py'}
-BUILD_INPUTS = {'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
+BUILD_INPUTS = {'.github/workflows/iso.yml',
+                'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
 DOCUMENTATION = {'README.md', 'iso/kiwi/README.md'}
 NATIVE_GATES = set('fresh-defaults-and-isolation archive-content-roundtrips actual-role-file-manager-terminal-editor '
@@ -50,6 +51,12 @@ def product_changes(names):
     # cannot silently evade the rebuild gate. Only helper/docs paths are exempt.
     return [name for name in names if name in BUILD_INPUTS or
             not (name in DOCUMENTATION or name.startswith(('docs/', '.github/', 'tools/')))]
+
+
+def changed_product_files(source, target):
+    # A rename must retain its removed source path, including when its new
+    # destination is documentation or a qualification helper.
+    return product_changes(git('diff', '--no-renames', '--name-only', source, target).splitlines())
 
 
 def main_checks(source):
@@ -186,7 +193,7 @@ def prepare(manifest, out):
     for ref in (manifest['image']['source_sha'], manifest['main_sha'], release_main):
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
-    require(not product_changes(git('diff', '--name-only', manifest['image']['source_sha'], release_main).splitlines()),
+    require(not changed_product_files(manifest['image']['source_sha'], release_main),
             'Product changed after the qualified ISO was built; rebuild required')
     spec = importlib.util.spec_from_file_location('qualified_fetch', ROOT / 'tools/native-functional/fetch-image.py')
     fetch = importlib.util.module_from_spec(spec)
