@@ -155,11 +155,13 @@ def exercise(base, out, compositor, frame_source=None):
             actual = state()
             for name in names:
                 path = out / f'{label}-{name}.png'
-                run('grim', '-o', name, path)
+                output = next(o for o in json.loads(run('wlr-randr', '--json')) if o['name'] == name)
+                scale = output['scale']
+                # Grim defaults to the highest scale across outputs, even with
+                # -o. Bind the capture to this output's actual physical scale.
+                run('grim', '-o', name, '-s', scale, path)
                 with Image.open(path) as capture:
                     surface = next(s for s in actual['surfaces'] if s['screen'] == name)
-                    output = next(o for o in json.loads(run('wlr-randr', '--json')) if o['name'] == name)
-                    scale = output['scale']
                     expected = (round(capture.width / scale), round(capture.height / scale))
                     # Require configured native dimensions, not just requested Theme margins.
                     if abs(surface['width'] - expected[0]) > 1 or abs(surface['height'] - expected[1]) > 1:
