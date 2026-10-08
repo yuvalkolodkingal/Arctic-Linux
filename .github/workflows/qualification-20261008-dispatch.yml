@@ -40,7 +40,7 @@ jobs:
           changed = subprocess.check_output(['git', 'diff', '--name-only', reviewed, source], text=True).splitlines()
           assert changed == ['.github/qualification-20261008.activate'], changed
           inputs = {'release': False, 'tag': '', 'prerelease': True, 'draft': False,
-                    'boot_test': True, 'nix_acceptance': False, 'performance_acceptance': False,
+                    'boot_test': True, 'nix_acceptance': False, 'performance_acceptance': True,
                     'expected_source_sha': source}
           path = Path(os.environ['RUNNER_TEMP']) / 'qualification-20261008-request.json'
           with path.open('x') as output:

@@ -251,17 +251,35 @@ jobs:
           timeout --signal=TERM --kill-after=60s 120m python3 tools/performance/run-paired.py \
             --baseline "$baseline/Arctic-Linux-1.2-x86_64.iso" --candidate "out/iso/$ISO" --out "$PWD/out/test/performance"
 
+      - name: Screen paired performance diagnostics
+        if: ${{ always() && inputs.performance_acceptance }}
+        run: |
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import os, shutil
+          source = Path('out/test/performance')
+          target = Path(os.environ['RUNNER_TEMP']) / 'paired-diagnostics'
+          target.mkdir()
+          if source.exists():
+              for path in source.rglob('*'):
+                  if path.suffix not in ('.json', '.log', '.txt', '.tsv', '.png', '.rgb', '.wav'):
+                      continue
+                  if path.is_symlink() or not path.is_file():
+                      raise RuntimeError('Unexpected diagnostic file: ' + str(path))
+                  output = target / path.relative_to(source)
+                  output.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(path, output)
+          PY
+          python3 -B tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/paired-diagnostics" --out "$RUNNER_TEMP/paired-screened"
+
       - name: Upload paired performance evidence
         if: ${{ always() && inputs.performance_acceptance }}
         uses: actions/upload-artifact@v4
         with:
           name: paired-performance
           retention-days: 14
-          path: |
-            out/test/performance/
-            !out/test/performance/**/*.qcow2
-            !out/test/performance/**/*.iso
-            !out/test/performance/**/*.sock
+          path: ${{ runner.temp }}/paired-screened/
 
       - name: Upload screenshots
         if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
