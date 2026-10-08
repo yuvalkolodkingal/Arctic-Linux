@@ -90,6 +90,18 @@ jobs:
                                   '-f', 'ref=refs/tags/v1.2.1', '-f', 'sha=' + target],
                                  check=True, stdout=subprocess.DEVNULL, timeout=60)
               assert tag_target() == target, 'Created release tag target differs'
+          def uploaded_draft(target):
+              # The tag endpoint is documented for published releases. Listing
+              # with write access includes drafts; verify this unique tag and ID.
+              matches = [release for release in api('/releases?per_page=100')
+                         if release['tag_name'] == 'v1.2.1']
+              assert len(matches) == 1, 'Owned uploaded draft is absent or ambiguous'
+              release = matches[0]
+              assert type(release['id']) is int and release['id'] > 0
+              actual = api('/releases/' + str(release['id']))
+              assert actual['id'] == release['id'] and actual['tag_name'] == 'v1.2.1'
+              assert actual['draft'] is True and actual['target_commitish'] == target
+              return actual
           def sha(path):
               value = hashlib.sha256()
               with path.open('rb') as source:
@@ -122,7 +134,7 @@ jobs:
           subprocess.run(['gh', 'release', 'create', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
                           '--target', target, '--verify-tag', '--title', 'Arctic Linux 1.2.1', '--draft',
                           '--notes-file', str(root / 'release-notes.md'), *map(str, assets)], check=True, timeout=20 * 60)
-          release = api('/releases/tags/v1.2.1')
+          release = uploaded_draft(target)
           assert release['draft'] is True and release['prerelease'] is False
           assert release['target_commitish'] == target and len(release['assets']) == len(assets)
           expected = {path.name: (path.stat().st_size, 'sha256:' + sha(path)) for path in assets}
