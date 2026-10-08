@@ -1,7 +1,9 @@
 """Failure-path tests for release evidence; no QEMU, network or disks required."""
 import importlib.util
 import json
+import os
 from pathlib import Path
+import socket
 import subprocess
 import tempfile
 import unittest
@@ -170,7 +172,73 @@ class AppTests(unittest.TestCase):
             guest.expected_apps('unknown', 'live')
 
 
+class SessionTests(unittest.TestCase):
+    def test_child_signature_is_bound_to_user_display_and_compositor_socket(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / 'runtime'
+            runtime.mkdir()
+            endpoint = runtime / 'mango-10.sock'
+            with socket.socket(socket.AF_UNIX) as sock:
+                sock.bind(str(endpoint))
+                def child(pid, display, signature, directory=runtime):
+                    proc = root / str(pid)
+                    proc.mkdir()
+                    (proc / 'environ').write_bytes(
+                        f'WAYLAND_DISPLAY={display}\0XDG_RUNTIME_DIR={directory}\0MANGO_INSTANCE_SIGNATURE={signature}\0'.encode())
+                args = (root, os.getuid(), runtime, 'wayland-0', {}, endpoint)
+                with self.assertRaisesRegex(RuntimeError, 'found 0'):
+                    guest.session_signature(*args)
+                child(11, 'wayland-1', endpoint)
+                child(12, 'wayland-0', endpoint, root / 'other-runtime')
+                with self.assertRaisesRegex(RuntimeError, 'found 0'):
+                    guest.session_signature(*args)
+                child(13, 'wayland-0', endpoint)
+                self.assertEqual(guest.session_signature(*args), str(endpoint))
+                with self.assertRaisesRegex(RuntimeError, 'this compositor socket'):
+                    guest.session_signature(*args[:-1], runtime / 'mango-99.sock')
+                child(14, 'wayland-0', runtime / 'mango-99.sock')
+                with self.assertRaisesRegex(RuntimeError, 'found 2'):
+                    guest.session_signature(*args)
+
+    def test_unowned_or_non_socket_signature_cannot_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            endpoint = root / 'mango-10.sock'
+            endpoint.touch()
+            env = {'MANGO_INSTANCE_SIGNATURE': str(endpoint)}
+            with self.assertRaisesRegex(RuntimeError, 'this compositor socket'):
+                guest.session_signature(root, os.getuid(), root, 'wayland-0', env, endpoint)
+            endpoint.unlink()
+            with socket.socket(socket.AF_UNIX) as sock:
+                sock.bind(str(endpoint))
+                with self.assertRaisesRegex(RuntimeError, 'this compositor socket'):
+                    guest.session_signature(root, os.getuid() + 1, root, 'wayland-0', env, endpoint)
+
+
 class HarnessTests(unittest.TestCase):
+    def test_upgrade_retains_transaction_and_reboot_diagnostics(self):
+        script = (ROOT / 'tools/test-install.sh').read_text().split("DRIVER <<'PY' || true\n", 1)[1].split('\nPY\n', 1)[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            boots = []
+            def boot():
+                boots.append(len(boots) + 1)
+                for name in ('serial-boot.log', 'qemu-boot.log', 'boot-desktop.png'):
+                    (root / name).write_text(f'boot {boots[-1]}')
+                return 0
+            exit_mock = MagicMock()
+            exec('rc = 0\n' + script.rsplit('\nrc = 0\n', 1)[1],
+                 {'os': os, 'sys': exit_mock, 'stage': 'boot', 'out': str(root),
+                  'E': {'UPGRADE_TO': '1.2'}, 'stage_boot': boot,
+                  'serial': lambda phase: str(root / f'serial-{phase}.log'), 'log': lambda text: None})
+            self.assertEqual(boots, [1, 2])
+            for name in ('serial-upgrade.log', 'qemu-upgrade.log', 'upgrade-boot-desktop.png'):
+                self.assertEqual((root / name).read_text(), 'boot 1')
+            for name in ('serial-boot.log', 'qemu-boot.log', 'boot-desktop.png'):
+                self.assertEqual((root / name).read_text(), 'boot 2')
+            exit_mock.exit.assert_called_once_with(0)
+
     def test_generated_guest_shell_and_python_driver_parse(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)

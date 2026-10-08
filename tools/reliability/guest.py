@@ -52,6 +52,33 @@ def record(stage, check, status, detail):
           status=status, detail=str(detail))), flush=True)
 
 
+def session_signature(proc_root, uid, runtime, display, env, expected_socket):
+    # Mango sets this after exec, so its own /proc environ can lack it. Accept
+    # only same-user children of the matching Wayland session, then authenticate
+    # the socket against the running compositor's PID and runtime directory.
+    signatures = {env['MANGO_INSTANCE_SIGNATURE']} if env.get('MANGO_INSTANCE_SIGNATURE') else set()
+    for child in proc_root.glob('[0-9]*'):
+        try:
+            if child.stat().st_uid != uid:
+                continue
+            child_env = dict(v.split('=', 1) for v in
+                (child / 'environ').read_bytes().decode().split('\0') if '=' in v)
+            if (child_env.get('WAYLAND_DISPLAY') == display
+                    and child_env.get('XDG_RUNTIME_DIR') == str(runtime)
+                    and child_env.get('MANGO_INSTANCE_SIGNATURE')):
+                signatures.add(child_env['MANGO_INSTANCE_SIGNATURE'])
+        except (FileNotFoundError, ProcessLookupError, PermissionError, UnicodeDecodeError):
+            continue
+    if len(signatures) != 1:
+        raise RuntimeError(f'expected one Mango IPC signature, found {len(signatures)}')
+    signature = signatures.pop()
+    socket = Path(signature)
+    if (socket != expected_socket or socket.parent != runtime or socket.is_symlink()
+            or not socket.is_socket() or socket.stat().st_uid != uid):
+        raise RuntimeError('Mango IPC signature does not identify this compositor socket')
+    return signature
+
+
 def desktop():
     for proc in Path('/proc').glob('[0-9]*'):
         try:
@@ -67,7 +94,10 @@ def desktop():
             sockets = sorted(p for p in runtime.glob('wayland-*') if p.is_socket())
             if len(sockets) != 1:
                 raise RuntimeError(f'expected one Wayland socket, got {sockets}')
+            signature = session_signature(Path('/proc'), user.pw_uid, runtime,
+                                          sockets[0].name, env, runtime / f'mango-{proc.name}.sock')
             return ['runuser', '-u', user.pw_name, '--', 'env',
+                    f'MANGO_INSTANCE_SIGNATURE={signature}',
                     f'HOME={user.pw_dir}', f'XDG_RUNTIME_DIR={runtime}',
                     f'WAYLAND_DISPLAY={sockets[0].name}',
                     f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus',

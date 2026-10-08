@@ -648,6 +648,7 @@ if rc == 0 and stage in ("all", "boot"):
         # Collect fresh evidence after the signed transaction, without the live ISO.
         # The generic guest checker owns collection and shutdown in both boots.
         os.rename(serial("boot"), f"{out}/serial-upgrade.log")
+        os.rename(f"{out}/qemu-boot.log", f"{out}/qemu-upgrade.log")
         for f in os.listdir(out):
             if f.startswith("boot-") and f.endswith(".png"):
                 os.rename(f"{out}/{f}", f"{out}/upgrade-{f}")
