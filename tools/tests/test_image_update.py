@@ -2,6 +2,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -97,3 +99,31 @@ class HigherEvrTest(unittest.TestCase):
                                        (('1', '1.0', '1'), ('0', '9.0', '9'), 1)):
             with self.subTest(before=before, after=after), self.assertRaisesRegex(RuntimeError, 'not higher'):
                 self.check(before, after, compare)
+
+    @unittest.skipUnless(shutil.which('rpm'), 'real RPM comparison needs the Fedora test image')
+    def test_real_rpm_rules_for_preview_replacement_epochs_and_version_precedence(self):
+        from unittest.mock import patch
+        for before, after, expected in ((('0', '1.2', '1.preview.1'), ('0', '1.2', '1.20261008'), True),
+                                        (('0', '1.2', '1'), ('0', '1.2', '1'), False),
+                                        (('0', '1.2', '2'), ('0', '1.2', '1'), False),
+                                        (('0', '2.0', '1'), ('0', '1.0', '999'), False),
+                                        (('0', '2.0', '1'), ('1', '1.0', '1'), True),
+                                        (('1', '1.0', '1'), ('0', '9.0', '999'), False)):
+            def run(argv, **kwargs):
+                if argv[1] == '-qp':
+                    return 'arctic-shell\t' + '\t'.join(after)
+                if argv[1] == '-q':
+                    return 'arctic-shell\t' + '\t'.join(before)
+                return subprocess.check_output(argv, text=True).strip()
+            with self.subTest(before=before, after=after), patch.object(self.guest, 'run', side_effect=run):
+                if expected:
+                    self.assertIn('arctic-shell', self.guest.higher_downloaded_evr(['control.rpm'], {'arctic-shell'}))
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'not higher'):
+                        self.guest.higher_downloaded_evr(['control.rpm'], {'arctic-shell'})
+
+    def test_missing_or_duplicate_downloaded_replacements_fail(self):
+        from unittest.mock import patch
+        for query in ('other-package\t0\t1.2\t2', 'arctic-shell\t0\t1.2\t2\narctic-shell\t0\t1.2\t3'):
+            with self.subTest(query=query), patch.object(self.guest, 'run', return_value=query), self.assertRaises(RuntimeError):
+                self.guest.higher_downloaded_evr(['control.rpm'], {'arctic-shell'})

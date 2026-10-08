@@ -72,7 +72,7 @@ jobs:
           evidence="$RUNNER_TEMP/arctic-update/evidence"
           inputs="$RUNNER_TEMP/arctic-update/inputs"
           mkdir -p out/test/qualified-update-payload
-          tools/performance/compose-nix-probe.py out/test/qualified-update-payload/guest.py \
+          python3 -B tools/performance/compose-nix-probe.py out/test/qualified-update-payload/guest.py \
             --expected-stable-source "$EXPECTED_STABLE"
           python3 -B tools/image-update/guard.py --source "$GITHUB_WORKSPACE/source" \
             --manifest tools/image-update/execution-manifest.json --inputs "$inputs" --proof "$evidence/pre-provision.json"
