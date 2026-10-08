@@ -4,6 +4,8 @@
 #   tools/test-install.sh                       UEFI: install, then boot the installed disk
 #   tools/test-install.sh --firmware bios       SeaBIOS instead of OVMF
 #   tools/test-install.sh --guest-check FILE   Python live/installed assertions in disposable VM
+#   tools/test-install.sh --reliability-version 1.2 --reliability-app-profile lightweight
+#   tools/test-install.sh --stage boot --reliability-version 1.0 --upgrade-to 1.2
 #   tools/test-install.sh --stage install       only the install (fresh disk)
 #   tools/test-install.sh --stage boot          only boot the disk a previous run installed
 #   tools/test-install.sh --profile FILE        install profile (default profiles/ci/offline.toml:
@@ -83,6 +85,10 @@ INSTALLER=""
 VIA=service
 OUT=""
 GUEST_CHECK=""
+RELIABILITY_VERSION=""
+RELIABILITY_APP_PROFILE=legacy
+UPGRADE_TO=""
+PROFILE_EXPLICIT=0
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 # Test secrets only (typed into the VM and passed to the installer).
@@ -91,11 +97,14 @@ USER_PASSWORD="arctic-ci-pass"
 
 while (( $# )); do
   case "$1" in
+    --upgrade-to) UPGRADE_TO="$2"; shift 2 ;;
+    --reliability-version) RELIABILITY_VERSION="$2"; shift 2 ;;
+    --reliability-app-profile) RELIABILITY_APP_PROFILE="$2"; shift 2 ;;
     --guest-check) GUEST_CHECK="$2"; shift 2 ;;
     --iso) ISO="$2"; shift 2 ;;
     --firmware) FIRMWARE="$2"; shift 2 ;;
     --stage) STAGE="$2"; shift 2 ;;
-    --profile) PROFILE="$2"; shift 2 ;;
+    --profile) PROFILE="$2"; PROFILE_EXPLICIT=1; shift 2 ;;
     --install-timeout) INSTALL_TIMEOUT="$2"; shift 2 ;;
     --memory) MEMORY="$2"; shift 2 ;;
     --smp) SMP="$2"; shift 2 ;;
@@ -112,6 +121,17 @@ while (( $# )); do
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$STAGE" in all|install|boot) ;; *) arctic_die "--stage takes all, install or boot" ;; esac
+case "$RELIABILITY_APP_PROFILE" in legacy|lightweight) ;; *) arctic_die "--reliability-app-profile takes legacy or lightweight" ;; esac
+if [[ -n "$UPGRADE_TO" ]]; then
+  [[ "$STAGE" == boot && -n "$RELIABILITY_VERSION" && "$UPGRADE_TO" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] ||
+    arctic_die "--upgrade-to requires --stage boot and --reliability-version SOURCE"
+fi
+if [[ -n "$RELIABILITY_VERSION" ]]; then
+  [[ "$RELIABILITY_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || arctic_die "invalid reliability version"
+  [[ -z "$GUEST_CHECK" ]] || arctic_die "--reliability-version and --guest-check are mutually exclusive"
+  GUEST_CHECK="$HERE/reliability/guest.py"
+  if ! (( PROFILE_EXPLICIT )); then PROFILE="$HERE/reliability/profiles/$RELIABILITY_APP_PROFILE.toml"; fi
+fi
 [[ -f "$PROFILE" ]] || arctic_die "no profile at $PROFILE"
 if [[ "$STAGE" != boot ]]; then
   [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
@@ -137,6 +157,10 @@ DATA="$OUT/data"
 rm -rf "$DATA"; mkdir -p "$DATA"
 cp "$PROFILE" "$DATA/profile.toml"
 if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
+if [[ -n "$RELIABILITY_VERSION" ]]; then
+  printf '{"version":"%s","upgrade_to":"%s","app_profile":"%s"}\n' \
+    "$RELIABILITY_VERSION" "$UPGRADE_TO" "$RELIABILITY_APP_PROFILE" > "$DATA/config.json"
+fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
   cp "$INSTALLER" "$DATA/arctic-install"
@@ -620,6 +644,16 @@ if stage in ("all", "install"):
 if rc == 0 and stage in ("all", "boot"):
     rc = stage_boot()
     log(f"boot stage: exit {rc}")
+    if rc == 0 and E.get("UPGRADE_TO"):
+        # Collect fresh evidence after the signed transaction, without the live ISO.
+        # The generic guest checker owns collection and shutdown in both boots.
+        os.rename(serial("boot"), f"{out}/serial-upgrade.log")
+        os.rename(f"{out}/qemu-boot.log", f"{out}/qemu-upgrade.log")
+        for f in os.listdir(out):
+            if f.startswith("boot-") and f.endswith(".png"):
+                os.rename(f"{out}/{f}", f"{out}/upgrade-{f}")
+        rc = stage_boot()
+        log(f"post-upgrade boot stage: exit {rc}")
 for f in os.listdir(out):
     if f.endswith("-probe.png"):
         os.remove(os.path.join(out, f))
@@ -649,7 +683,7 @@ arctic_log "install test ($FIRMWARE, stage $STAGE, profile $(basename "$PROFILE"
 rc=0
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
-  -e GUEST_CHECK="$GUEST_CHECK" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
+  -e GUEST_CHECK="$GUEST_CHECK" -e UPGRADE_TO="$UPGRADE_TO" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" \
