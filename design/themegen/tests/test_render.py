@@ -47,7 +47,8 @@ class PaletteTests(unittest.TestCase):
     def test_builtins(self):
         pn = palette.builtin("polar-night")
         self.assertEqual((pn["name"], pn["label"], pn["mode"], pn["base"]), ("polar-night", "Polar night", "dark", "polar-night"))
-        self.assertEqual((pn["wallpaper"], pn["lock_wallpaper"]), ("aurora-polar-night", "fox-polar-night"))
+        photo = "/usr/share/backgrounds/arctic/default.jpg"
+        self.assertEqual((pn["wallpaper"], pn["lock_wallpaper"]), (photo, photo))
         self.assertEqual(pn["colors"]["accent"], "#f6bd55")
         self.assertEqual(pn["colors"]["shadow"], "#000000cc")
         w = palette.builtin("winter")
@@ -86,7 +87,7 @@ class PaletteTests(unittest.TestCase):
         p["colors"]["glow"] = "#ffffff80"
         v = palette.validate(p)
         self.assertEqual((v["label"], v["base"], v["wallpaper"], v["lock_wallpaper"]),
-                         ("winter", "winter", "snowfield-winter", "fox-winter"))
+                         ("winter", "winter", "/usr/share/backgrounds/arctic/default.jpg", "/usr/share/backgrounds/arctic/default.jpg"))
         self.assertEqual(v["colors"]["shadow"], "#12171e33")
         self.assertEqual(v["colors"]["glow"], "#ffffff80")
 

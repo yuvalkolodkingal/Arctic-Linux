@@ -65,6 +65,6 @@
     "ansi-15": "#f3f6f9",
     "shadow": "#000000cc"
   },
-  "wallpaper": "aurora-polar-night",
-  "lock_wallpaper": "fox-polar-night"
+  "wallpaper": "/usr/share/backgrounds/arctic/default.jpg",
+  "lock_wallpaper": "/usr/share/backgrounds/arctic/default.jpg"
 }
