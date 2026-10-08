@@ -8,7 +8,10 @@ set -euo pipefail
 [[ "${GITHUB_REPOSITORY:-}" == yuvalkolodkingal/Arctic-Linux ]] || exit 2
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="$REPO/out/test/frame-vm"
+EVIDENCE="$REPO/out/test/frame"
+[[ ! -e "$EVIDENCE" ]] || { echo 'The replay evidence directory already exists.' >&2; exit 2; }
 mkdir -p "$WORK/root" "$WORK/initrd/bin" "$WORK/initrd/dev" "$WORK/initrd/proc" "$WORK/initrd/sys" "$WORK/initrd/newroot"
+mkdir -p "$EVIDENCE"
 [[ ! -e "$WORK/guest.tar" ]] || { echo 'The VM fixture already exists.' >&2; exit 2; }
 container=""
 cleanup() { [[ -z "$container" ]] || docker rm -f "$container" >/dev/null; }
@@ -19,7 +22,7 @@ container=$(docker create -v "$REPO:/arctic:ro" registry.fedoraproject.org/fedor
     dbus-daemon fontconfig google-noto-sans-fonts procps-ng libcap gcc wayland-devel \
     mesa-dri-drivers findutils which glib2
   dnf -y install /arctic/out/frame-rpms/repo/mangowm-*.x86_64.rpm
-  mkdir -p /arctic /root /run /tmp
+  mkdir -p /arctic /evidence /frame-tools /root /run /tmp
   kernel=$(rpm -q kernel-core --qf "%{VERSION}-%{RELEASE}.%{ARCH}")
   test -f "/lib/modules/$kernel/vmlinuz"
   grep -E "^CONFIG_UDMABUF=(y|m)$" "/lib/modules/$kernel/config"
@@ -36,7 +39,7 @@ kernel=$(cat "$WORK/root/frame-kernel")
 cp "$WORK/root/lib/modules/$kernel/vmlinuz" "$WORK/vmlinuz"
 cp /bin/busybox "$WORK/initrd/bin/busybox"
 (ldd "$WORK/initrd/bin/busybox" 2>&1 || true) | grep -Eq 'not a dynamic executable|statically linked'
-sudo cp /bin/busybox "$WORK/root/frame-busybox"
+sudo cp /bin/busybox "$WORK/root/frame-tools/busybox"
 for module in virtio_pci 9pnet_virtio 9p; do
   sudo modprobe --show-depends --dirname "$WORK/root" --set-version "$kernel" "$module"
 done | awk '$1 == "insmod" {print $2}' | sort -u > "$WORK/modules"
@@ -61,7 +64,7 @@ cat > "$WORK/initrd/init" <<'INIT'
 #!/bin/busybox sh
 set -eu
 export PATH=/bin
-busybox --install -s /bin
+/bin/busybox --install -s /bin
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
@@ -70,6 +73,7 @@ modprobe 9pnet_virtio
 modprobe 9p
 mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 arctic-root /newroot
 mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 arctic-source /newroot/arctic
+mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 arctic-evidence /newroot/evidence
 mount --move /dev /newroot/dev
 mount --move /proc /newroot/proc
 mount --move /sys /newroot/sys
@@ -83,15 +87,20 @@ if [[ -c /dev/kvm ]]; then
   # Keep QEMU's runner UID, with only the existing device's kvm group. Do not
   # change host device modes, install host modules, or run the emulator as root.
   [[ "$(stat -c %G /dev/kvm)" == kvm ]]
-  qemu=(sudo -u "$(id -un)" -g kvm -- qemu-system-x86_64)
+  # Hosted sudo permits root commands but not a custom non-root runas group.
+  # Drop UID/GID before exec instead; the emulator itself stays unprivileged.
+  kvm_gid=$(getent group kvm | cut -d: -f3)
+  [[ "$kvm_gid" =~ ^[0-9]+$ ]]
+  qemu=(sudo -n setpriv --reuid "$(id -u)" --regid "$kvm_gid" --init-groups -- qemu-system-x86_64)
   kvm=(-enable-kvm -cpu host)
 fi
 timeout --signal=TERM --kill-after=15s 35m "${qemu[@]}" "${kvm[@]}" \
   -m 4096 -smp 2 -nodefaults -no-reboot -display none -serial stdio \
   -kernel "$WORK/vmlinuz" -initrd "$WORK/initrd.gz" \
   -append 'console=ttyS0 rdinit=/init panic=-1 selinux=0 arctic.frame-test=1' \
-  -virtfs "local,path=$WORK/root,mount_tag=arctic-root,security_model=none" \
-  -virtfs "local,path=$REPO,mount_tag=arctic-source,security_model=none" \
+  -virtfs "local,path=$WORK/root,mount_tag=arctic-root,security_model=none,readonly=on" \
+  -virtfs "local,path=$REPO,mount_tag=arctic-source,security_model=none,readonly=on" \
+  -virtfs "local,path=$EVIDENCE,mount_tag=arctic-evidence,security_model=mapped-xattr" \
   2>&1 | tee "$WORK/serial.log"
 test "$(grep -c '^ARCTIC-FRAME-VM-PASS' "$WORK/serial.log")" -eq 1
 ! grep -q '^ARCTIC-FRAME-VM-FAIL' "$WORK/serial.log"
