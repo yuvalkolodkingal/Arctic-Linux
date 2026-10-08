@@ -5,6 +5,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      expected_source_sha:
+        description: Optional exact reviewed source for an artifact-only qualification run
+        type: string
+        default: ""
       release:
         description: Publish a GitHub release with the ISO
         type: boolean
@@ -59,6 +63,18 @@ jobs:
             !/Wallpapers/
             !/v2-walls/
             !/showcase/
+
+      - name: Verify qualification source
+        env:
+          EXPECTED_SOURCE: ${{ inputs.expected_source_sha }}
+          RELEASE_REQUESTED: ${{ inputs.release }}
+        run: |
+          if [ -n "$EXPECTED_SOURCE" ]; then
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$RELEASE_REQUESTED" = false
+            [[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+            test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          fi
 
       - name: Free disk space
         run: |
