@@ -1,6 +1,27 @@
 """Fail-closed evidence for the disposable ISO boot harness."""
 import shlex
+import time
 from pathlib import Path
+
+
+def installer_probe():
+    validate = ("import json,sys; s=json.load(sys.stdin); "
+                "assert s['page']=='welcome' and s['ready'] is True "
+                "and s['connected'] is True and not s['failure']")
+    return ("runuser -u liveuser -- env XDG_RUNTIME_DIR=/run/user/$(id -u liveuser) "
+            "quickshell ipc -p /usr/share/arctic/installer-ui call installer state | "
+            "python3 -c " + shlex.quote(validate))
+
+
+def restore_desktop():
+    # Discover the live user's real Wayland VT rather than guessing tty1/tty2.
+    return ("restored=0; for s in $(loginctl list-sessions --no-legend | "
+            "awk '$3==\"liveuser\" {print $1}'); do "
+            "[ \"$(loginctl show-session \"$s\" -p Type --value)\" = wayland ] || continue; "
+            "vt=$(loginctl show-session \"$s\" -p VTNr --value); "
+            "case $vt in ''|0|*[!0-9]*) continue;; esac; "
+            "if chvt \"$vt\"; then restored=1; break; fi; done; "
+            "test \"$restored\" = 1")
 
 
 def collection_command(mode, require_startup):
@@ -18,10 +39,36 @@ def collection_command(mode, require_startup):
                   'test "$(getenforce)" = Enforcing']
         checks.append(("" if mode == 'safe' else '! ') +
                       "grep -Eq '(^| )nomodeset( |$)' /proc/cmdline")
+        if mode == 'install':
+            # Preserve the exclusive-focus installer and prove it actually
+            # reached its connected, ready welcome state before collecting.
+            checks.extend(['(' + installer_probe() + ')', '(' + restore_desktop() + ')'])
         commands += 'if ' + ' && '.join(checks) + '; then '
         commands += f'echo ARCTIC-STARTUP-PASS={mode}; else echo ARCTIC-STARTUP-FAILED; fi; '
     commands += 'echo ARCTIC-COLLECT-END'
     return 'sudo sh -c ' + shlex.quote('(' + commands + ') >/dev/ttyS0 2>&1')
+
+
+def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep):
+    shot('97-before-collect')
+    if mode == 'install':
+        # The installer intentionally has exclusive layer-shell keyboard focus.
+        # Super+Enter and typed shell commands would instead drive its wizard.
+        vm.keys('ctrl-alt-f3')
+        sleep(5)
+        vm.type_text('liveuser', gap=.2)
+        vm.keys('ret')
+        sleep(5)
+    else:
+        vm.keys('meta_l-ret')
+        sleep(60)
+        vm.keys('ret')
+        sleep(5)
+    shot('98-console' if mode == 'install' else '98-terminal')
+    vm.type_text(collection_command(mode, require_startup), gap=.2)
+    vm.keys('ret')
+    sleep(30)
+    log('session collection command sent through ' + ('console' if mode == 'install' else 'terminal'))
 
 
 def collection_complete(path, mode=None):
