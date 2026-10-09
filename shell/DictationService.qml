@@ -43,9 +43,10 @@ Singleton {
         }
     }
     // Root setup changes readiness before a user recording creates the runtime snapshot.
+    // Active polling also reconciles a stale recording file after a broker crash.
     Timer {
-        interval: dictation.status.state === 'downloading' || dictation.status.state === 'queued' ? 5000 : 60000
-        running: !dictation.active
+        interval: dictation.active || dictation.status.state === 'downloading' || dictation.status.state === 'queued' ? 5000 : 60000
+        running: true
         repeat: true
         onTriggered: dictation.probeStatus()
     }
