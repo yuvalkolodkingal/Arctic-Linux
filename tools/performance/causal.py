@@ -35,6 +35,25 @@ def deferred_termination():
         signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
+def write_uprobe_command(root, command):
+    """Issue one bounded command without seeking or clearing global events."""
+    if not isinstance(command, str) or not command.endswith('\n') or '\n' in command[:-1]:
+        raise RuntimeError('Expected exactly one causal tracefs command')
+    data = command.encode('ascii')
+    if not 1 < len(data) <= 4096:
+        raise RuntimeError('Causal tracefs command exceeds the bounded write')
+    # Python append mode seeks to SEEK_END, which Linux seq_lseek rejects.
+    # Truncation instead deletes every registered uprobe, including unrelated
+    # events. The tracefs command interface needs neither operation.
+    with deferred_termination():
+        fd = os.open(root / 'uprobe_events', os.O_WRONLY | os.O_CLOEXEC)
+        try:
+            if os.write(fd, data) != len(data):
+                raise RuntimeError('Incomplete causal tracefs command write')
+        finally:
+            os.close(fd)
+
+
 def elf_symbol_offset(path, name=SYMBOL):
     """Locate the exported function's file offset; refuse other ELF ABIs."""
     raw = path.read_bytes()
@@ -211,8 +230,7 @@ class LowerBoundProbe:
                 raise RuntimeError('Refusing to reuse an existing causal event group')
             self.registration_requested = True
             with deferred_termination():
-                with (self.root / 'uprobe_events').open('a') as output:
-                    output.write(command)
+                write_uprobe_command(self.root, command)
                 self.registered = True
             event = self.instance / 'events' / self.group / 'map_create'
             (event / 'filter').write_text('common_pid == ' + str(self.pid))
@@ -316,8 +334,7 @@ class LowerBoundProbe:
         global_event = self.root / 'events' / self.group / 'map_create' if self.root else None
         if (getattr(self, 'registered', False) or getattr(self, 'registration_requested', False)) and global_event.exists():
             def unregister():
-                with (self.root / 'uprobe_events').open('a') as output:
-                    output.write('-:' + self.group + '/map_create\n')
+                write_uprobe_command(self.root, '-:' + self.group + '/map_create\n')
             cleanup(unregister)
             self.registered = False
         if (getattr(self, 'mounted', False) or getattr(self, 'mount_requested', False)) and os.path.ismount(self.root):
