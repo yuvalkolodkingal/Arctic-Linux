@@ -238,8 +238,13 @@ def exercise(base, out, compositor, frame_source=None):
                 wait(lambda: not json.loads(run('wlr-randr', '--json')),
                      'destroyed outputs remain advertised')
                 wait(lambda: not state()['surfaces'], 'removed frame surfaces remain')
+                for _ in range(2):
+                    run('mmsg', 'dispatch', 'create_virtual_output')
+                wait(lambda: len(json.loads(run('wlr-randr', '--json'))) == 2,
+                     'recreated outputs were not advertised')
+                names = sorted(output['name'] for output in json.loads(run('wlr-randr', '--json')))
+                assert len(set(names)) == 2 and all(name.startswith('HEADLESS-') for name in names)
                 for name, mode, position in zip(names, ('1024x768', '900x1600'), ('0,0', '1024,0')):
-                    run('mmsg', 'dispatch', 'create_virtual_output', name)
                     run('wlr-randr', '--output', name, '--custom-mode', mode, '--pos', position)
                 wait(lambda: {surface['screen'] for surface in state()['surfaces']} == set(names),
                      'frame surfaces did not return on recreated outputs')
