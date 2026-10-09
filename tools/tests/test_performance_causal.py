@@ -86,7 +86,7 @@ class CausalControls(unittest.TestCase):
 
     def test_missing_forged_lossy_or_wrong_launch_receipts_fail_qualification(self):
         original=R.paired_roles()
-        for fault in ['missing','method','clock','pid','library','layout','loss','old_event','future_event','boolean_resolution','forged_lower']:
+        for fault in ['missing','method','clock','pid','library','version','layout','loss','old_event','future_event','boolean_resolution','forged_lower']:
             runs=copy.deepcopy(original)
             bound=runs['candidate'][0]['startup_role_terminal_cold_seconds']['observation_bounds'][0]
             proof=bound['causal_lower_bound']
@@ -95,6 +95,7 @@ class CausalControls(unittest.TestCase):
             elif fault=='clock':proof['clock']='local'
             elif fault=='pid':proof['matched_events'][0]['kernel_pid']+=1
             elif fault=='library':proof['library_sha256']='unknown'
+            elif fault=='version':proof['library_rpm']='wlroots-0.20.3-1.fc44.x86_64'
             elif fault=='layout':proof['identifier_offset']=64
             elif fault=='loss':proof['loss_counts']['cpu0']['overrun']=1
             elif fault=='old_event':proof['matched_events'][0]['lower_monotonic_ns']=1
@@ -114,6 +115,26 @@ class CausalControls(unittest.TestCase):
     def test_host_cannot_activate_root_tracing(self):
         with self.assertRaisesRegex(RuntimeError,'disposable root collector'):
             with C.LowerBoundProbe([]):pass
+
+    def test_cleanup_failure_still_disables_unregisters_and_attempts_owned_unmount(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            probe=C.LowerBoundProbe([]);probe.root=root;probe.instance=root/'owned';probe.instance.mkdir()
+            (root/'uprobe_events').write_text('')
+            (probe.instance/'tracing_on').write_text('1')
+            event=probe.instance/'events'/probe.group/'map_create/enable';event.parent.mkdir(parents=True)
+            event.write_text('1')
+            stats=probe.instance/'per_cpu/cpu0/stats';stats.parent.mkdir(parents=True)
+            stats.write_text('overrun: 0\ncommit overrun: 0\ndropped events: 0\n')
+            probe.registered=True;probe.mounted=True
+            # Ordinary fixture directories deliberately cannot be removed while
+            # nonempty, modeling failed instance cleanup without host tracing.
+            with patch.object(C.subprocess,'run') as run, self.assertRaisesRegex(RuntimeError,'cleanup failed'):
+                probe.__exit__(None,None,None)
+            self.assertEqual((probe.instance/'tracing_on').read_text(),'0')
+            self.assertEqual(event.read_text(),'0')
+            self.assertEqual((root/'uprobe_events').read_text(),'-:'+probe.group+'/map_create\n')
+            run.assert_called_once_with(['umount',str(root)],check=True,timeout=15)
 
 
 if __name__=='__main__':unittest.main()
