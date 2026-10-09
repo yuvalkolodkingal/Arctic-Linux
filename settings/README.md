@@ -11,7 +11,7 @@ quickshell -p settings          # from a checkout
 ```
 
 Pages: Appearance, Windows, Displays, Keyboard and mouse, Shortcuts, Default apps, Network,
-Sharing, Bluetooth, Sound, Updates, Power and lock, Startup apps, Printers and scanners, Date and
+Sharing, Bluetooth, Sound, Dictation, Updates, Power and lock, Startup apps, Printers and scanners, Date and
 time, Users and sign-in, About. `Ctrl + F` (or `/`, or just typing
 in the page list) searches every setting; a result opens its page and highlights the row. `↑ ↓`
 in the page list switch pages, `Tab` goes into the page, `Esc` comes back, `Ctrl + PgUp/PgDn`
@@ -92,6 +92,19 @@ When a tool is missing, its controls say so instead of failing: no `arctic-updat
 update with dnf; the older `arctic-theme` → only Winter and Polar night; no `wlr-randr` → scale,
 rotation and position only (plus wdisplays if installed); no NetworkManager, BlueZ or PipeWire →
 a note.
+
+Dictation uses the local `arctic-dictation` controller. Settings shows setup, download,
+recording, transcription and error states; language and acceleration can change while idle.
+The online installer downloads VoxType and a multilingual Whisper model after the OS copy;
+offline installation queues retryable setup. Recording stays unavailable until both are
+verified. Setup discloses app and model download sizes before authorization. The live ISO
+contains only the controller and frontend.
+
+Focus a text field and release **Super + Ctrl + X** to start recording; the same shortcut
+stops and inserts text. **Super + Ctrl + Backspace** cancels. On the visible taskbar, the
+dictation pill can start, stop or cancel without focusing Settings. With a hidden taskbar,
+the pill shows recording or transcription status and the shortcuts remain available.
+QML consumes status only and never receives the transcript.
 
 ## Developing
 

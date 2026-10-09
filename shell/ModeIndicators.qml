@@ -29,7 +29,7 @@ GridLayout {
     property bool urgentOnly: false
     property bool revealed: false
     // Something records, listens or watches right now.
-    readonly property bool urgent: pills.count > 0 || RecordService.recording
+    readonly property bool urgent: pills.count > 0 || RecordService.recording || DictationService.active
     columnSpacing: Theme.space1
     rowSpacing: Theme.space1
 
@@ -84,6 +84,26 @@ GridLayout {
             onClicked: row.bar.shell.togglePanel('sound', row.bar.screen, undefined, undefined)
             onHoverChanged: h => h ? row.bar.hint(pill, tooltip) : row.bar.unhint(pill)
         }
+    }
+    Indicator {
+        id: dictation
+        visible: DictationService.active || (!row.urgentOnly && (DictationService.status.ready || DictationService.status.state === 'error'))
+        color: DictationService.recording ? Theme.errorSoft : DictationService.active ? Theme.infoSoft : 'transparent'
+        iconName: DictationService.recording ? 'mic' : DictationService.active ? 'refresh' : DictationService.status.state === 'error' ? 'alert' : 'mic'
+        iconColor: DictationService.recording ? Theme.error : DictationService.status.state === 'error' ? Theme.warning : Theme.inkMuted
+        text: row.vertical ? '' : DictationService.recording ? 'Dictating' : DictationService.active ? 'Transcribing' : ''
+        textColor: DictationService.recording ? Theme.error : Theme.inkMuted
+        textWeight: Font.DemiBold
+        tooltip: DictationService.headline + (DictationService.recording ? ' · click to stop; right-click to cancel'
+            : DictationService.active ? ' · click or right-click to cancel'
+            : DictationService.status.ready ? ' · click to start (Super + Ctrl + X); right-click for Settings' : ' · click for Settings')
+        onClicked: {
+            if (DictationService.status.state === 'error') DictationService.openSettings();
+            else if (DictationService.active && !DictationService.recording) DictationService.cancel();
+            else DictationService.toggle();
+        }
+        onRightClicked: DictationService.active ? DictationService.cancel() : DictationService.openSettings()
+        onHoverChanged: h => { if (row.bar) h ? row.bar.hint(dictation, tooltip) : row.bar.unhint(dictation); }
     }
     Indicator {
         id: recording

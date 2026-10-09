@@ -15,6 +15,17 @@ if arctic-is-live 2>/dev/null; then
   exit 0
 fi
 
+# Mark locking and stop private audio before either lock implementation takes focus.
+# The controller produces status JSON only; never include it in a notification or log.
+if command -v arctic-dictation >/dev/null 2>&1; then
+  timeout 1s arctic-dictation lock >/dev/null 2>&1 || true
+fi
+watch_dictation_unlock() {
+  if command -v arctic-dictation >/dev/null 2>&1; then
+    arctic-dictation watch-unlock >/dev/null 2>&1 &
+  fi
+}
+
 if arctic-shell-ipc lock lock >/dev/null 2>&1; then
   # Wait until the compositor confirms the lock (isLocked reports WlSessionLock.secure: every
   # screen covered), so "lock before sleep" really locks first.
@@ -24,7 +35,10 @@ if arctic-shell-ipc lock lock >/dev/null 2>&1; then
   done
 fi
 
-pgrep -u "$UID" -x swaylock >/dev/null && exit 0
+if pgrep -u "$UID" -x swaylock >/dev/null; then
+  watch_dictation_unlock
+  exit 0
+fi
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
 # shellcheck source=/dev/null
 source "$CONF/current/theme.env" 2>/dev/null || true
@@ -44,4 +58,11 @@ if [[ -z "$img" || ! -f "$img" ]]; then
 fi
 args=(-f)
 [[ -f "$img" ]] && args+=(-i "$img")
-exec swaylock "${args[@]}" "$@"
+# -f returns only once swaylock has acquired the lock. A separate controller watcher clears
+# the private marker after unlock, so before-sleep can return while the lock stays secure.
+swaylock "${args[@]}" "$@"
+lock_result=$?
+if [[ "$lock_result" -eq 0 ]]; then
+  watch_dictation_unlock
+fi
+exit "$lock_result"
