@@ -201,6 +201,51 @@ class NativeObserverTest(unittest.TestCase):
                 guest.startup(prefix, [sys.executable, '-c', f'open({str(sentinel)!r},"w").close()'], 'kitty')
         self.assertFalse(sentinel.exists())
 
+    def test_parent_delay_does_not_inflate_worker_mapping_timestamp(self):
+        transition = {}
+        def response():
+            clients = [dict(id=42, appid='foot')] if transition else []
+            return json.dumps(dict(clients=clients)).encode()+b'\n'
+        _, prefix = self.server(response)
+        with guest.NativeClientQuery(prefix) as observer:
+            observer.query()  # Worker startup is outside the measurement.
+            started = time.monotonic_ns()
+            observer.begin_observation(set(), ('foot',), started, 2, .00005)
+            time.sleep(.02)
+            transition['mapped_ns'] = time.monotonic_ns()
+            # Deliberately postpone the parent read after the mapping event.
+            time.sleep(.15)
+            result = observer.finish_observation(None, started, 2)
+            self.assertLessEqual(result['lower_ns'], transition['mapped_ns'])
+            self.assertGreaterEqual(result['upper_ns'], transition['mapped_ns'])
+            self.assertLess(result['upper_ns']-transition['mapped_ns'], 100_000_000)
+            self.assertGreater(time.monotonic_ns()-result['upper_ns'], 100_000_000)
+            self.assertEqual(result['windows'][0]['id'], 42)
+
+    def test_timeout_is_explicit_and_cancellation_reaps_autonomous_worker(self):
+        _, prefix = self.server(lambda: b'{"clients":[]}\n')
+        with guest.NativeClientQuery(prefix) as observer:
+            started = time.monotonic_ns()
+            observer.begin_observation(set(), 'foot', started, .02, .00005)
+            self.assertIsNone(observer.finish_observation(None, started, .02))
+            # A completed timeout permits subsequent queries on the same worker.
+            self.assertEqual(observer.query(), {})
+            observer.begin_observation(set(), 'foot', time.monotonic_ns(), 300, .00005)
+            process = observer.process
+        self.assertIsNotNone(process.poll())
+
+    def test_existing_and_unrelated_windows_do_not_satisfy_mapping(self):
+        state = [dict(id=1, appid='foot'), dict(id=2, appid='unrelated', title='foot')]
+        _, prefix = self.server(lambda: json.dumps(dict(clients=state)).encode()+b'\n')
+        with guest.NativeClientQuery(prefix) as observer:
+            observer.query()
+            started = time.monotonic_ns()
+            observer.begin_observation({'1'}, ('foot',), started, 2, .00005)
+            time.sleep(.02)
+            state.append(dict(id=3, appid='foot'))
+            result = observer.finish_observation(None, started, 2)
+            self.assertEqual([c['id'] for c in result['windows']], [3])
+
     def test_cleanup_failure_propagates_and_reaps_only_started_processes(self):
         _, prefix = self.server(lambda: b'{"clients":[]}\n')
         original_popen = subprocess.Popen
