@@ -10,6 +10,7 @@ import time
 REQUEST_PREFIX = 'ARCTIC-INSTALLER-REQUEST '
 EXPECTED = [('vt-away', cycle) for cycle in range(3)] + [
     (kind, cycle) for cycle in range(3) for kind in ('output-disconnect', 'output-restore')]
+ACTIVE_EXPECTED = [('vt-away', 0), ('output-disconnect', 0), ('output-restore', 0)]
 
 
 def require(value, message):
@@ -75,6 +76,8 @@ class InstallerController:
         self.disconnected = set()
         self.receipts = []
         self.failed = False
+        self.active = context.get('schema') == 'arctic-installer-active-context-v1'
+        self.expected = ACTIVE_EXPECTED if self.active else EXPECTED
         proof = display.proof
         require(proof['gpu_id'] == 'arctic_taskbar_gpu' and proof['guest_monitor_verification_required'] is True,
                 'installer controller requires the reviewed owned GPU fixture')
@@ -144,28 +147,34 @@ class InstallerController:
         require(len(pending) <= 16384, 'installer serial pending line exceeds bound')
         lines = complete.decode('utf-8').splitlines()
         requests = [line[len(REQUEST_PREFIX):] for line in lines if line.startswith(REQUEST_PREFIX)]
-        require(len(requests) <= len(EXPECTED), 'duplicate or additional installer host request')
+        require(len(requests) <= len(self.expected), 'duplicate or additional installer host request')
         active = False
         while self.position < len(requests):
             text = requests[self.position]
             require(len(text) <= 16384, 'installer request exceeds bound')
             value = strict_json(text)
             require(type(value) is dict and value.get('schema') == 'arctic-installer-request-v1'
-                    and value.get('token') == self.context['token'] and type(value.get('cycle')) is int
-                    and (value.get('kind'), value['cycle']) == EXPECTED[self.position],
+                    and value.get('binding_id') == self.context['binding_id'] and type(value.get('cycle')) is int
+                    and (value.get('kind'), value['cycle']) == self.expected[self.position],
                     'installer request identity, order or cycle differs')
             boot = value.get('boot_id')
             require(type(boot) is str and re.fullmatch('[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', boot),
                     'installer request boot identity missing')
             require(self.boot_id is None or self.boot_id == boot, 'installer requests span boots')
             self.boot_id = boot
-            common = {'schema', 'kind', 'token', 'boot_id', 'cycle'}
+            common = {'schema', 'kind', 'binding_id', 'boot_id', 'cycle'}
             extra = ({'away', 'original_vt', 'engine_sha256'} if value['kind'] == 'vt-away' else
                      {'mode', 'hosting_output', 'hosting_head', 'enabled_outputs', 'engine_sha256'} |
                      ({'enabled_output_count', 'outputs_sha256', 'outputs'} if value['kind'] == 'output-restore' else set()))
+            if self.active:
+                extra |= {'elapsed_ns'}
+                require(type(value.get('elapsed_ns')) is int and value['elapsed_ns'] > 0,
+                        'active request lacks an observation timestamp')
             require(set(value) == common | extra and re.fullmatch('[0-9a-f]{64}', value['engine_sha256']),
                     'installer request field inventory differs')
             receipt = dict(request=value, request_sha256=hashlib.sha256(text.encode()).hexdigest())
+            if self.active:
+                receipt['disk_io'] = self.active_write_proof()
             if value['kind'] == 'vt-away':
                 away = value.get('away', {})
                 require(type(away) is dict and away.get('foreground') == 'tty6' and away.get('active') is False
@@ -208,9 +217,39 @@ class InstallerController:
         return active
 
     def finish(self):
-        require(self.position == len(EXPECTED) and not self.disconnected and not self.failed,
+        require(self.position == len(self.expected) and not self.disconnected and not self.failed,
                 'installer host transition matrix incomplete or failed')
         return self.receipts
+
+    def active_write_proof(self):
+        """Two actual QMP counters on only the freshly acquired target node."""
+        def sample():
+            rows = self.display._query(self.vm, 'query-block')
+            owned = [row['inserted'] for row in rows if row.get('inserted', {}).get('node-name') == 'target0']
+            require(len(owned) == 1 and owned[0].get('file') == str(self.out / 'target.qcow2')
+                    and owned[0].get('ro') is False, 'QMP target is not this invocation’s writable disk')
+            stats = self.display._query(self.vm, 'query-blockstats', {'query-nodes': True})
+            selected = [row['stats'] for row in stats if row.get('node-name') == 'target0']
+            require(len(selected) == 1 and all(type(selected[0].get(k)) is int and selected[0][k] >= 0
+                    for k in ('wr_bytes', 'wr_operations')), 'actual owned target counters absent')
+            return dict(wr_bytes=selected[0]['wr_bytes'], wr_operations=selected[0]['wr_operations'],
+                        monotonic_ns=time.monotonic_ns())
+        # Btrfs can initially buffer a real copy. Wait for observed writes within
+        # a fixed bound instead of treating half a second without a flush as failure.
+        self.display.deadline = time.monotonic() + 22
+        before = sample(); end = time.monotonic() + 20
+        after = before
+        while time.monotonic() < end:
+            time.sleep(.5); after = sample()
+            if after['wr_bytes'] > before['wr_bytes'] and after['wr_operations'] > before['wr_operations']:
+                break
+        require(after['wr_bytes'] > before['wr_bytes'] and after['wr_operations'] > before['wr_operations']
+                and after['monotonic_ns'] > before['monotonic_ns'], 'genuine target writes did not continue during disruption')
+        if self.receipts:
+            require(before['wr_bytes'] >= self.receipts[-1]['disk_io']['after']['wr_bytes'], 'target write counters regressed')
+        return dict(node_name='target0', before=before, after=after, write_bps=self.context['write_bps'],
+                    target_file=str(self.out / 'target.qcow2'), target_serial=self.context['disk_serial'],
+                    inserted_node_name='target0', inserted_readonly=False)
 
     def restore(self):
         if self.disconnected and self.vm.proc.poll() is None:

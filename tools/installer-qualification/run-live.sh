@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Additive fresh installer live boot; no target disk or OS installation.
+# Owned fresh installer live boot; the explicit active profile adds its private target.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/../lib/container.sh"
@@ -41,12 +41,26 @@ for name,path in {'checker_sha256':execution/'tools/installer-qualification/gues
                   'capture_sha256':payload/'raw-screencopy'}.items():
     assert path.is_file() and not path.is_symlink() and sha(path)==value[name]
 assert (payload/'raw-screencopy').read_bytes()[:4]==b'\x7fELF'
+if value['schema']=='arctic-installer-active-context-v1':
+    for name,key in (('active-guest.py','active_checker_sha256'),('installed-guest.py','installed_checker_sha256')):
+        assert sha(execution/'tools/installer-qualification'/name)==value[key]
 PY
 cp "$execution_tree/tools/installer-qualification/guest.py" "$out/data/installer-guest.py"
 cp "$execution_tree/tools/native-functional/taskbar-runtime.py" "$out/data/taskbar-runtime.py"
 cp "$execution_tree/tools/native-functional/native_smoke.py" "$out/data/native_smoke.py"
 cp "$payload/raw-screencopy" "$out/data/raw-screencopy"
 cp "$context" "$out/data/installer-context.json"
+python3 - "$execution_tree" "$out/data" <<'PY'
+import json,os,secrets,shutil,sys
+from pathlib import Path
+execution,data=map(Path,sys.argv[1:])
+context=json.loads((data/'installer-context.json').read_text())
+if context['schema']=='arctic-installer-active-context-v1':
+    shutil.copyfile(execution/'tools/installer-qualification/active-guest.py',data/'installer-active.py')
+    shutil.copyfile(execution/'tools/installer-qualification/installed-guest.py',data/'installed-guest.py')
+    fd=os.open(data/'active-credentials.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as stream:json.dump({'password':secrets.token_hex(16)},stream)
+PY
 chmod 0755 "$out/data/raw-screencopy"
 cat > "$out/system-area.sh" <<'BOOTSTRAP'
 #!/bin/sh
@@ -55,6 +69,9 @@ set -eu
 [ "$(blkid -s LABEL -o value /dev/sr0)" = ARCTICGUI ]
 mkdir -p /run/t
 mountpoint -q /run/t || mount -t iso9660 -o ro /dev/sr0 /run/t
+if [ -f /run/t/installed-guest.py ] && ! grep -qw rd.live.image /proc/cmdline; then
+  exec python3 -I /run/t/installed-guest.py "$@" </dev/null >/dev/ttyS0 2>&1
+fi
 session=
 for candidate in $(loginctl list-sessions --no-legend | awk '$3=="liveuser" {print $1}'); do
   [ "$(loginctl show-session "$candidate" -p Type --value)" = wayland ] || continue

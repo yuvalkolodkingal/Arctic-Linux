@@ -48,7 +48,7 @@ def fixture():
                                  outputs={name:dict(head=n,connector_id=10+n) for n,name in enumerate(('Virtual-1','Virtual-2'))}))
     baseline['capture']=capture('baseline.png',baseline)
     def request(kind,cycle,**extra):
-        return dict(schema='arctic-installer-request-v1',kind=kind,cycle=cycle,token=context['token'],boot_id=boot,engine_sha256=C.hash_value(engine),**extra)
+        return dict(schema='arctic-installer-request-v1',kind=kind,cycle=cycle,binding_id=context['binding_id'],boot_id=boot,engine_sha256=C.hash_value(engine),**extra)
     cases=[];requests=[]
     for kind in ('vt','output'):
         for cycle in range(3):

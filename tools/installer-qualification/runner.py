@@ -56,13 +56,15 @@ def execute(argv, log, seconds, cwd, env):
 
 
 def verify(args, execution):
+    active_profile = getattr(args, 'active_profile', False)
+    contract = E.active_contract() if active_profile else C
     manifest = json.loads(args.manifest.read_text())
     C.require(manifest.get('ready') is True and manifest.get('release_acceptance') is False,
               'Installer lane disabled until the final image and execution code are reviewed')
     C.require(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted' and
               os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux' and
               os.environ.get('GITHUB_REF') == 'refs/heads/codex/qualification-dispatch-20261009' and
-              os.environ.get('GITHUB_WORKFLOW') == 'Candidate installer restoration qualification' and
+              os.environ.get('GITHUB_WORKFLOW') == ('Candidate active installer restoration qualification' if active_profile else 'Candidate installer restoration qualification') and
               os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_RUN_ATTEMPT') == '1',
               'Requires the reviewed disposable installer Actions lane')
     image = manifest['image']
@@ -73,7 +75,7 @@ def verify(args, execution):
         C.require(subprocess.check_output(['git', '-C', str(tree), 'rev-parse', 'HEAD'], text=True, timeout=30).strip() == expected and
                   not subprocess.check_output(['git', '-C', str(tree), 'status', '--porcelain'], text=True, timeout=30).strip(), 'Dirty or changed image/execution checkout')
     inputs = manifest['execution_files']
-    C.require(set(inputs) == set(C.EXECUTION_FILES), 'Installer execution inventory differs')
+    C.require(set(inputs) == set(contract.EXECUTION_FILES), 'Installer execution inventory differs')
     for name, expected in inputs.items():
         path = execution / name
         C.require(path.is_file() and not path.is_symlink() and sha(path) == expected, 'Pinned installer execution bytes differ: ' + name)
@@ -82,7 +84,7 @@ def verify(args, execution):
     return manifest, iso
 
 
-def preserve_host(vm, target):
+def preserve_host(vm, target, active=False):
     target.mkdir()
     for name in ('host-execution.json', 'installer-host-transitions.json',
                  *('installer-vt-away-' + str(n) + '.png' for n in range(3))):
@@ -90,15 +92,29 @@ def preserve_host(vm, target):
         if path.is_file() and not path.is_symlink():
             C.require(path.stat().st_size <= 4 * 1024 * 1024, 'Oversized host receipt/capture')
             shutil.copyfile(path, target / name)
+    if active:
+        for name in ('installed-boot.json', 'serial-installed.log', 'installed-getty-password.png', 'installed-sudo-password.png'):
+            path = vm / name
+            if path.is_file() and not path.is_symlink():
+                C.require(path.stat().st_size <= 8*1024*1024, 'Oversized installed boot proof')
+                shutil.copyfile(path, target / name)
+        path = vm / 'qemu-installer-installed.log'
+        if path.is_file() and not path.is_symlink():
+            C.require(path.stat().st_size <= 4*1024*1024, 'Oversized installed QEMU diagnostic')
+            with path.open('rb') as stream:
+                (target / 'qemu-installer-installed.log.bounded-prefix.bin').write_bytes(stream.read(64*1024))
     # UART and transport contain bounded framed data. Keep diagnostic prefixes
     # rather than uploading duplicate base64 payloads; record complete hashes.
     records = {}
-    for name, bound in (('serial.log', 8 * 1024 * 1024), ('installer-port.log', 64 * 1024 * 1024), ('qemu-installer-live.log', 4 * 1024 * 1024)):
+    streams = [('serial.log', 8 * 1024 * 1024), ('installer-port.log', 64 * 1024 * 1024), ('qemu-installer-live.log', 4 * 1024 * 1024)]
+    if active:
+        streams += [('serial-installed.log', 8*1024*1024), ('qemu-installer-installed.log', 4*1024*1024)]
+    for name, bound in streams:
         path = vm / name
         if path.is_file() and not path.is_symlink():
             C.require(path.stat().st_size <= bound, 'Oversized installer diagnostic stream')
             records[name] = dict(bytes=path.stat().st_size, sha256=sha(path))
-            if name == 'serial.log':
+            if name in ('serial.log', 'serial-installed.log'):
                 shutil.copyfile(path, target / name)
             else:
                 with path.open('rb') as stream:
@@ -112,17 +128,26 @@ def main():
     parser.add_argument('--inputs', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, default=HERE / 'execution-manifest.json')
     parser.add_argument('--evidence', type=Path, required=True)
+    parser.add_argument('--active-profile', action='store_true', help='Additive real GUI install on its owned target disk')
     args = parser.parse_args()
+    if args.active_profile and args.manifest == HERE / 'execution-manifest.json':
+        args.manifest = HERE / 'active-execution-manifest.json'
+    contract = E.active_contract() if args.active_profile else C
     execution = HERE.parents[1]
     manifest, iso = verify(args, execution)
     C.require(not args.evidence.exists(), 'Installer evidence output must be unused')
     args.evidence.mkdir(parents=True)
-    state = dict(schema='arctic-installer-execution-v1', status='failed_or_unrun', release_acceptance=False,
+    state = dict(schema='arctic-installer-active-execution-v1' if args.active_profile else 'arctic-installer-execution-v1',
+                 status='failed_or_unrun', release_acceptance=False,
                  image=manifest['image'], execution=dict(source_sha=os.environ['GITHUB_SHA'], run_id=int(os.environ['GITHUB_RUN_ID']),
                  manifest_sha256=sha(args.manifest)), source_inputs=manifest['execution_files'], errors=[],
                  limitations=['Prepared idle Hebrew keyboard wizard; no in-flight installation preservation claim',
                               'All twelve physical restoration captures require independent manual review',
                               'Separate original native, security and actual CLI install lanes remain required'])
+    if args.active_profile:
+        state['limitations'] = ['Owned offline UEFI installation with encryption explicitly disabled through the shipped GUI',
+            'QEMU target writes capped at 8 MiB/s to retain genuine copy across both disruptions; no performance claim',
+            'All seven active restoration and pre-input console captures require independent manual review; original idle/native/CLI gates remain required']
     owned_images = []
     vm = args.evidence.parent / ('installer-vm-' + uuid.uuid4().hex)
     payload = args.evidence.parent / ('installer-tools-' + uuid.uuid4().hex)
@@ -139,7 +164,8 @@ def main():
             container = 'arctic-paired-native-' + uuid.uuid4().hex
             check = subprocess.run(['docker', 'container', 'inspect', container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
             C.require(check.returncode != 0, 'Owned preparation container already exists')
-            env = dict(os.environ, CONTAINER_ENGINE='docker', ARCTIC_VM_CONTAINER_NAME=container)
+            env = dict(os.environ, CONTAINER_ENGINE='docker', ARCTIC_VM_CONTAINER_NAME=container,
+                       ARCTIC_INSTALLER_ACTIVE='1' if args.active_profile else '0')
             if argument is None:
                 payload.mkdir(); env['ARCTIC_FEDORA_IMAGE'] = prepared
                 argv = ['bash', str(execution / script), str(execution), str(payload)]
@@ -158,31 +184,41 @@ def main():
         state['build'], state['vm_tool_image_id'] = build, prepared
         context = dict(schema='arctic-installer-context-v1', source_sha=manifest['image']['source_sha'],
                        iso_sha256=manifest['image']['sha256'], iso_bytes=manifest['image']['bytes'], execution_sha=os.environ['GITHUB_SHA'],
-                       token=uuid.uuid4().hex, checker_sha256=state['source_inputs']['tools/installer-qualification/guest.py'],
+                       binding_id=uuid.uuid4().hex, checker_sha256=state['source_inputs']['tools/installer-qualification/guest.py'],
                        runtime_sha256=state['source_inputs']['tools/native-functional/taskbar-runtime.py'],
                        native_sha256=state['source_inputs']['tools/native-functional/native_smoke.py'], capture_sha256=sha(payload / 'raw-screencopy'))
-        C.context_check(context); state['context'] = context
+        if args.active_profile:
+            context.update(schema='arctic-installer-active-context-v1',
+                active_checker_sha256=state['source_inputs']['tools/installer-qualification/active-guest.py'],
+                installed_checker_sha256=state['source_inputs']['tools/installer-qualification/installed-guest.py'],
+                disk_serial='arctic-a-' + uuid.uuid4().hex[:11], disk_bytes=64*1024**3,
+                disk_node='target0', write_bps=8*1024**2)
+        contract.context_check(context); state['context'] = context
         context_file = payload / 'installer-context.json'; write(context_file, context)
         verify(args, execution); save()
         env = dict(os.environ, CONTAINER_ENGINE='docker', ARCTIC_VM_CONTAINER_NAME='arctic-paired-native-' + uuid.uuid4().hex,
                    ARCTIC_FEDORA_IMAGE=prepared)
         try:
             execute(['bash', str(HERE / 'run-live.sh'), str(args.source), str(execution), str(iso), str(payload),
-                     str(context_file), 'uefi', str(vm)], args.evidence / 'installer-harness.log', 35 * 60, execution, env)
+                     str(context_file), 'uefi', str(vm)], args.evidence / 'installer-harness.log',
+                    (80 if args.active_profile else 35) * 60, execution, env)
         except BaseException as error: errors.append('harness: ' + type(error).__name__ + ': ' + str(error))
-        finally: state['diagnostic_streams'] = preserve_host(vm, args.evidence / 'host')
+        finally: state['diagnostic_streams'] = preserve_host(vm, args.evidence / 'host', args.active_profile)
         result = E.extract(vm / 'installer-port.log', vm / 'serial.log', args.evidence / 'installer', context)
         report = result['report']; state['guest'] = result['state']
         state['host'] = json.loads((args.evidence / 'host/host-execution.json').read_text())
-        C.validate_report(report, context, result['files'], lambda name: (args.evidence / 'installer' / name).read_bytes(), C.packaged_source_hashes(args.source))
+        contract.validate_report(report, context, result['files'], lambda name: (args.evidence / 'installer' / name).read_bytes(), contract.packaged_source_hashes(args.source))
+        if args.active_profile:
+            contract.validate_catalog_selection(report, (args.source / 'modules/catalog.toml').read_bytes())
         C.require(state['host']['host_transitions'] == json.loads((args.evidence / 'host/installer-host-transitions.json').read_text())['receipts'] and
                   [row['request'] for row in state['host']['host_transitions']] == result['requests'], 'Host and guest actual transitions differ')
         state['transport'] = dict(status='passed', report_path='installer/installer-report.json',
                                   report_sha256=sha(args.evidence / 'installer/installer-report.json'),
                                   port_sha256=sha(vm / 'installer-port.log'), serial_sha256=sha(vm / 'serial.log'))
-        state['required_images'] = {name: sha(args.evidence / name) for name in C.REQUIRED_IMAGES}
-        state['status'] = 'live_installer_restoration_passed_pending_manual_visual_review'
-        C.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], (vm / 'serial.log').read_bytes(),
+        state['required_images'] = {name: sha(args.evidence / name) for name in contract.REQUIRED_IMAGES}
+        state['status'] = ('live_installer_active_restoration_completed_and_installed_boot_passed_pending_manual_visual_review'
+                           if args.active_profile else 'live_installer_restoration_passed_pending_manual_visual_review')
+        contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], (vm / 'serial.log').read_bytes(),
                              lambda name: (args.evidence / name).read_bytes())
     except BaseException as error:
         errors.append(type(error).__name__ + ': ' + str(error))

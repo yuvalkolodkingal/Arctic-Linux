@@ -1,0 +1,4 @@
+$ cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --label arctic-root --key-file - /dev/vda4 < [secret: disk passphrase]
+$ cryptsetup open --allow-discards --key-file - /dev/vda4 luks-7b561c51-f551-44b1-90f7-0ec12e7f42d8 < [secret: disk passphrase]
+$ cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --label arctic-root --key-file - /dev/vda4 < [secret: disk passphrase]
+$ cryptsetup open --allow-discards --key-file - /dev/vda4 luks-cefc8610-6aa0-40f9-9ec4-912fb4bcd8c8 < [secret: disk passphrase]
