@@ -100,7 +100,7 @@ def installer_restoration_probe(timeout_seconds=25):
         raise ValueError('Installer restoration deadline must be 1..25 seconds')
     # Bound the whole operation, including an unresponsive IPC command. Repeat
     # the complete socket/state/mapped-layer check as outputs return, then fail
-    # closed before the host's 30-second collection wait ends.
+    # closed before the host's installer collection wait ends.
     loop = 'until (' + installer_probe(require_visible=True) + '); do sleep 1; done'
     return 'timeout ' + str(timeout_seconds) + 's sh -c ' + shlex.quote(loop)
 
@@ -188,7 +188,9 @@ def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep, seri
     shot('98-console' if mode == 'install' else '98-terminal')
     vm.type_text(collection_command(mode, require_startup), gap=.2)
     vm.keys('ret')
-    sleep(30)
+    # Leave room for journal collection plus the complete 25-second remapping
+    # deadline on BIOS/TCG, rather than terminating a still-valid guest probe.
+    sleep(45 if mode == 'install' and require_startup else 30)
     log('session collection command sent through ' + ('console' if mode == 'install' else 'terminal'))
 
 
