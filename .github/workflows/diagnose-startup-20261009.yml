@@ -97,6 +97,7 @@ jobs:
             --iso "$RUNNER_TEMP/arctic-startup-diagnostic/Arctic-Linux-1.2-candidate-37854472664-1-x86_64.iso" \
             --firmware "$FIRMWARE" --mode "$MODE" --require-startup --timeout 120 --interval 15 --kvm
       - name: Screen only owned startup diagnostics
+        id: screen
         if: always()
         env:
           FIRMWARE: ${{ matrix.firmware }}
@@ -126,6 +127,36 @@ jobs:
           PY
           python3 -B tools/native-functional/screen-evidence.py \
             --source "$RUNNER_TEMP/startup-picked" --out "$RUNNER_TEMP/startup-screened"
+      - name: Emit bounded screened startup evidence
+        if: always() && steps.screen.outcome == 'success'
+        run: |
+          python3 -B - <<'PY'
+          import base64, hashlib, os, struct
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'startup-screened'
+          for name in ('test.log', 'serial.log'):
+              path = root / name
+              if not path.is_file():
+                  continue
+              data = path.read_bytes()
+              assert len(data) <= 128 * 1024 * 1024
+              print('ARCTIC-STARTUP-TEXT-BEGIN', name)
+              print(data.decode('utf-8', errors='replace')[-16384:])
+              print('ARCTIC-STARTUP-TEXT-END', name)
+          for name in ('97-console-login.png', '99-final.png'):
+              path = root / name
+              if not path.is_file():
+                  continue
+              data = path.read_bytes()
+              assert len(data) <= 2 * 1024 * 1024 and data.startswith(b'\x89PNG\r\n\x1a\n')
+              width, height = struct.unpack('>II', data[16:24])
+              assert 1 <= width <= 4096 and 1 <= height <= 4096
+              print('ARCTIC-STARTUP-PNG-BEGIN', name, hashlib.sha256(data).hexdigest())
+              encoded = base64.b64encode(data).decode('ascii')
+              for offset in range(0, len(encoded), 1024):
+                  print('ARCTIC-STARTUP-PNG-DATA', encoded[offset:offset + 1024])
+              print('ARCTIC-STARTUP-PNG-END', name)
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
