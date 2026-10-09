@@ -151,6 +151,41 @@ actual Hebrew/English CPU retry recordings. Its observations explicitly declare
 `gpu_supported:false`; this result cannot substitute for the modern GPU-failure
 gate. The final publisher must require both hardware executions.
 
+The modern lane also requires `gpu-loader-fault-handling-new-cpu-retry`. After the
+process-failure gate, the checker cancels capture and replaces only its owned
+broker while holding the shipped launch lock. A fresh socket peer, broker
+PID/start identity and actual Vulkan child environment must show the private
+bad-ICD manifest and `VK_LOADER_DEBUG=error`. The manifest names an absent
+library; no system driver, model, receipt or render device is changed. A child
+that fails too quickly to be observed cannot pass. If recording legitimately
+continues until on-demand loading completes, the checker routes the fixed
+public English fixture and explicitly stops before awaiting a terminal result.
+
+Arctic discards an attempt when its native diagnostic collector observes an
+error. That branch must advertise CPU retry and leave the receiver empty.
+The native library may instead complete locally after failing Vulkan
+initialization; that branch must insert the actual fixed English transcription
+without an unintended Enter. Its CPU execution is explicitly described as
+inferred from the only ICD naming an absent library, never as a native GPU
+device observation. The output is measured against the immutable fixture,
+included in the private leakage scan, and cleared before the next activation.
+Both outcomes are accepted and recorded distinctly; a GPU error is not assumed
+to make the upstream process return nonzero.
+
+Two new English/Hebrew CPU recordings must then insert text while the same broker
+and bad-ICD environment remain. The failed-attempt branch retains the forced
+Vulkan preference; the completed-continuation branch explicitly selects CPU.
+Their two numeric/hash-only measurements, and the optional single continuation,
+are
+validated separately against the immutable fixtures and selected model/CPU
+pins; the existing twelve canonical sample bound remains unchanged. Cleanup
+stops the owned injected broker and removes the private manifest. This tests
+an actual process-scoped loader configuration error, not a physical GPU driver
+crash or acceleration. The unchanged forced-process-failure gate still requires
+actual failed-engine cleanup followed by two explicitly activated CPU recordings
+with the preference forced Vulkan. Both modern GPU gates remain required; legacy Small
+continues to use its separate unsupported-Vulkan gate.
+
 Before any playback/insertion, one recording-indicator marker per session phase
 contains boot/installation/phase/user identity and `receiver_empty:true`. The
 helper holds the real recording state until the host QMP screenshot observer

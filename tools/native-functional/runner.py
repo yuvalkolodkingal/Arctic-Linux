@@ -18,6 +18,7 @@ import subprocess
 import uuid
 
 import evidence as E
+import apps as A
 
 HERE = Path(__file__).resolve().parent
 CHECKERS = E.CHECKERS
@@ -177,6 +178,7 @@ def verify(args):
               'tools/test-install.sh', 'tools/lib/vmtest.py', 'tools/lib/container.sh',
               'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
               'tools/native-functional/compose-photo-probe.py',
+              'tools/native-functional/apps.py',
               'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
               'tools/native-functional/source-provenance.json'} | TASKBAR_FILES, 'Execution pin set differs')
     R.verify_iso(args.inputs)
@@ -260,7 +262,14 @@ def run(args):
         composer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(composer)
         photo_probe = payload / 'photo-check.py'
-        photo_collection_sha = composer.compose(args.source, photo_probe)
+        app_context = dict(source_sha=R.SOURCE, iso_sha256=R.ISO_SHA256, iso_bytes=R.ISO_BYTES)
+        photo_collection_sha = composer.compose(args.source, photo_probe, app_context, args.bundle.parents[1])
+        app_context.update(checker_sha256=R.digest(args.bundle/'apps.py'),
+            native_sha256=R.digest(args.bundle/'native_smoke.py'),
+            manifest_sha256=R.digest(args.source/'iso/kiwi/config.kiwi'),
+            mimeapps_sha256=R.digest(args.source/'packaging/desktop/live-mimeapps.list'))
+        mimes = A.mime_defaults((args.source/'packaging/desktop/live-mimeapps.list').read_bytes())
+        state['app_defaults_context'] = app_context
         state['photo_probe'] = dict(sha256=R.digest(photo_probe), collection_sha256=photo_collection_sha);save()
         name,sha=CHECKERS['native-functional'];R.pinned_file(args.bundle/name,sha)
         container='arctic-paired-native-'+uuid.uuid4().hex
@@ -295,12 +304,18 @@ def run(args):
             state['editor_save_stages']={stage:check_editor_save((vm/name).read_text(),stage,vm,args.evidence/('native-'+stage))
                  for stage,name in (('live','serial-install.log'),('installed','serial-boot.log'))}
             state['photos'] = {}
+            state['apps'] = {}
             for stage, name in (('live', 'serial-install.log'), ('installed', 'serial-boot.log')):
                 rows = E.records((vm/name).read_text().splitlines(), 'ARCTIC-NATIVE-PHOTOS ')
                 R.require(len(rows) == 1 and rows[0]['stage'] == stage and rows[0]['status'] == 'passed'
                           and rows[0]['collection_sha256'] == photo_collection_sha
                           and rows[0]['release_acceptance'] is False, 'Missing/failed pinned photo image verification: ' + stage)
                 state['photos'][stage] = rows[0]
+                rows = E.records((vm/name).read_text().splitlines(), 'ARCTIC-NATIVE-APP-DEFAULTS ')
+                R.require(len(rows) == 1 and rows[0]['stage'] == stage, 'Missing/duplicate actual app-defaults proof: ' + stage)
+                proof = json.loads((args.evidence/('native-'+stage)/'serial-native-provenance.json').read_text())
+                A.validate_report(rows[0], app_context, mimes, proof)
+                state['apps'][stage] = rows[0]
         except BaseException as error:errors.append('native stages: '+str(error))
         try:
             serial=vm/'serial-boot.log'

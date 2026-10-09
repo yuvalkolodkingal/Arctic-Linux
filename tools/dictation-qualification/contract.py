@@ -15,7 +15,7 @@ COMMON = {'selinux-enforcing', 'no-new-avcs'}
 SESSION = {'installed-payload-integrity', 'cpu-english-transcription-insertion',
            'cpu-hebrew-transcription-insertion', 'recording-status-published',
            'cancel-discards', 'broker-death-discards', 'missing-model-error', 'microphone-disconnect-error',
-           'lock-discards', 'gpu-runtime-failure-cpu-retry', 'transcript-private-cleanup',
+           'lock-discards', 'gpu-runtime-failure-cpu-retry', 'gpu-loader-fault-handling-new-cpu-retry', 'transcript-private-cleanup',
            'transcript-log-notification-leak-scan', 'local-offline-transcription'}
 GATES = {
     'live': COMMON | {'live-payload-model-absent', 'live-controller-unavailable'},
@@ -42,12 +42,13 @@ PROFILES = {
                     'model_download_bytes': 574041195, 'download_bytes': 678117115},
 }
 LEGACY_GPU_GATE = 'legacy-gpu-unsupported-cpu-retry'
+LOADER_GPU_GATE = 'gpu-loader-fault-handling-new-cpu-retry'
 
 
 def gates(phase, profile):
     expected = GATES[phase]
     if profile == 'small-v2' and 'gpu-runtime-failure-cpu-retry' in expected:
-        return (expected - {'gpu-runtime-failure-cpu-retry'}) | {LEGACY_GPU_GATE}
+        return (expected - {'gpu-runtime-failure-cpu-retry', LOADER_GPU_GATE}) | {LEGACY_GPU_GATE}
     return expected
 
 
@@ -58,9 +59,11 @@ def pinned(profile):
 
 EVIDENCE_KINDS = {'actual-boot', 'actual-installed-files', 'actual-session',
                   'file-removal-fixture', 'device-disconnect-fixture',
-                  'owned-process-kill-fixture', 'interval-log-scan'}
+                  'owned-process-kill-fixture', 'loader-configuration-fixture', 'interval-log-scan'}
 LIMITATIONS = ['measured-public-read-speech-only', 'no-whisper-parity-claim',
                'virtual-source-not-physical-microphone', 'forced-process-failure-not-driver-failure',
+               'private-bad-icd-loader-fixture-not-physical-driver-crash',
+               'loader-cpu-continuation-inferred-from-absent-only-icd-not-native-device-observation',
                'legacy-profile-does-not-certify-vulkan',
                'hardware-acceleration-not-certified-by-this-vm', 'visible-indicator-needs-screenshot-review',
                'recovery-service-tested-separately-from-polkit-dialog',
@@ -69,12 +72,17 @@ OBSERVATIONS = {'count', 'ready', 'pending', 'elapsed_ns', 'matched', 'avcs', 'l
                 'active_backend_cpu', 'active_backend_vulkan', 'returncode', 'bytes',
                 'sha256', 'boot_id', 'pid', 'start_ticks', 'file_count', 'drained',
                 'installer_exit', 'source_id', 'restored', 'snapshot_sha256', 'audit_lost', 'audit_enabled',
-                'audit_lost_before', 'audit_enabled_before', 'automatic_ready', 'gpu_supported'}
+                'audit_lost_before', 'audit_enabled_before', 'automatic_ready', 'gpu_supported',
+                'fresh_broker', 'inherited_loader_environment', 'actionable_gpu_error',
+                'receiver_empty_before_retry', 'explicit_new_cpu_recordings', 'socket_inode', 'retry_samples',
+                'cpu_continuation_inferred', 'native_backend_directly_observed',
+                'cpu_preference_explicitly_selected', 'continuation_samples'}
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in ('selinux-enforcing', 'encrypted-installed-boot',
     'offline-os-healthy', 'local-offline-transcription')})
 EXPECTED_KINDS.update({name: 'actual-installed-files' for name in ('live-payload-model-absent', 'installed-payload-integrity')})
 EXPECTED_KINDS[LEGACY_GPU_GATE] = 'actual-session'
+EXPECTED_KINDS[LOADER_GPU_GATE] = 'loader-configuration-fixture'
 EXPECTED_KINDS.update({'missing-model-error': 'file-removal-fixture',
     'microphone-disconnect-error': 'device-disconnect-fixture',
     'gpu-runtime-failure-cpu-retry': 'owned-process-kill-fixture',
@@ -95,6 +103,10 @@ REQUIRED_OBSERVATIONS = {
     'microphone-disconnect-error': {'count': 0, 'drained': True, 'restored': True},
     'lock-discards': {'locked': True, 'count': 0, 'drained': True},
     'gpu-runtime-failure-cpu-retry': {'active_backend_vulkan': True, 'active_backend_cpu': True, 'count': 2},
+    LOADER_GPU_GATE: {'active_backend_vulkan': True, 'active_backend_cpu': True, 'count': 2,
+                     'fresh_broker': True, 'inherited_loader_environment': True,
+                     'native_backend_directly_observed': False, 'receiver_empty_before_retry': True,
+                     'explicit_new_cpu_recordings': True, 'drained': True},
     LEGACY_GPU_GATE: {'gpu_supported': False, 'active_backend_vulkan': False, 'active_backend_cpu': True, 'count': 2},
     'transcript-private-cleanup': {'file_count': 0, 'drained': True},
     'no-new-avcs': {'avcs': 0}, 'transcript-log-notification-leak-scan': {'matched': 0},
@@ -163,6 +175,8 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
     ids = [gate.get('id') for gate in report['gates'] if isinstance(gate, dict)]
     require(len(ids) == len(report['gates']) and len(ids) == len(set(ids))
             and set(ids) == gates(expected['phase'], profile), 'report-missing-duplicate-extra-gates')
+    loader_samples = []
+    continuation_samples = []
     for gate in report['gates']:
         require(set(gate) == {'id', 'status', 'evidence_kind', 'code', 'observations'}, 'gate-fields')
         require(gate['status'] in ('passed', 'failed', 'unrun'), 'gate-status')
@@ -170,7 +184,15 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
         require(isinstance(gate['code'], str) and re.fullmatch('[a-z0-9-]{1,80}', gate['code']), 'gate-safe-code')
         require(isinstance(gate['observations'], dict) and set(gate['observations']) <= OBSERVATIONS, 'gate-observation-fields')
         for key, value in gate['observations'].items():
-            if key.endswith('sha256'):
+            if key in ('retry_samples', 'continuation_samples'):
+                require(gate['id'] == LOADER_GPU_GATE and isinstance(value, list)
+                        and len(value) <= (2 if key == 'retry_samples' else 1),
+                        'loader-retry-samples-scope-bound')
+                if key == 'retry_samples':
+                    loader_samples = value
+                else:
+                    continuation_samples = value
+            elif key.endswith('sha256'):
                 require(digest(value), 'gate-observation-hash')
             elif key == 'boot_id':
                 require(uuid(value), 'gate-observation-boot')
@@ -189,6 +211,20 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                 require(profile == 'small-v2', 'legacy-gpu-gate-on-modern-profile')
             if gate['id'] == 'gpu-runtime-failure-cpu-retry':
                 require(profile == 'turbo-q5-v3', 'modern-gpu-gate-on-legacy-profile')
+            if gate['id'] == LOADER_GPU_GATE:
+                require(profile == 'turbo-q5-v3' and len(loader_samples) == 2,
+                        'loader-retry-profile-or-coverage')
+                require(all(type(gate['observations'].get(key)) is int and gate['observations'][key] > 0
+                            for key in ('pid', 'start_ticks', 'socket_inode'))
+                        and digest(gate['observations'].get('sha256')), 'loader-retry-broker-fixture-identity')
+                observed = gate['observations']
+                require(type(observed.get('actionable_gpu_error')) is bool
+                        and type(observed.get('cpu_continuation_inferred')) is bool
+                        and observed['actionable_gpu_error'] != observed['cpu_continuation_inferred']
+                        and type(observed.get('cpu_preference_explicitly_selected')) is bool
+                        and observed['cpu_preference_explicitly_selected'] == observed['cpu_continuation_inferred']
+                        and len(continuation_samples) == int(observed['cpu_continuation_inferred']),
+                        'loader-outcome-contradiction')
             if gate['id'] == 'local-offline-transcription':
                 require(type(gate['observations'].get('returncode')) is int
                         and gate['observations']['returncode'] > 0, 'offline-network-check-successful-response')
@@ -197,7 +233,8 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                 require(digest(gate['observations'].get('sha256')), 'recording-indicator-ack-missing')
             if gate['id'] == 'transcript-log-notification-leak-scan':
                 require(type(gate['observations'].get('count')) is int
-                        and gate['observations']['count'] >= 10, 'leak-scan-coverage')
+                        and gate['observations']['count'] >= (14 if profile == 'turbo-q5-v3' else 12),
+                        'leak-scan-coverage')
             if gate['id'] == 'no-new-avcs':
                 observed = gate['observations']
                 require(type(observed.get('audit_enabled')) is int and observed['audit_enabled'] in (1, 2)
@@ -216,7 +253,7 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
         require(encrypted['status'] != 'passed', 'passed-encryption-without-disk-identity')
     require(isinstance(report['samples'], list) and len(report['samples']) <= 12, 'report-samples-bound')
     fixture_samples = None
-    if report['samples']:
+    if report['samples'] or loader_samples or continuation_samples:
         require(fixture_manifest is not None, 'fixture-manifest-required')
         raw = fixture_manifest.read_bytes() if isinstance(fixture_manifest, Path) else fixture_manifest
         require(isinstance(raw, bytes) and len(raw) <= 128 * 1024
@@ -232,13 +269,19 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                    'hypothesis_sha256', 'elapsed_ns', 'audio_frames', 'sample_rate',
                    'reference_words', 'word_edits', 'reference_chars', 'char_edits', 'backend', 'cpu_variant', 'binary_sha256', 'model_sha256'}
     seen = set()
-    for sample in report['samples']:
+    collection = [(item, 'canonical') for item in report['samples']]
+    collection += [(item, 'retry') for item in loader_samples] + [(item, 'continuation') for item in continuation_samples]
+    for sample, role in collection:
         require(isinstance(sample, dict) and set(sample) == sample_keys, 'sample-fields')
         cpu_key = 'avx2' if PROFILES[profile]['cpu_variant'] == 'avx2' else 'cpu'
-        require(sample['backend'] == 'cpu' and sample['cpu_variant'] == PROFILES[profile]['cpu_variant']
-                and sample['binary_sha256'] == PROFILE_ASSETS[profile][cpu_key]['sha256']
+        expected_backend = 'cpu-inferred-after-loader-fault' if role == 'continuation' else 'cpu'
+        expected_cpu = 'vulkan-build' if role == 'continuation' else PROFILES[profile]['cpu_variant']
+        key = 'vulkan' if role == 'continuation' else cpu_key
+        require(key in PROFILE_ASSETS[profile] and sample['backend'] == expected_backend and sample['cpu_variant'] == expected_cpu
+                and sample['binary_sha256'] == PROFILE_ASSETS[profile][key]['sha256']
                 and sample['model_sha256'] == PROFILE_ASSETS[profile]['model']['sha256'], 'sample-profile-backend-pins')
-        require(sample['language'] in ('he', 'en') and sample['purpose'] in ('cpu-session', 'cpu-retry'), 'sample-language-purpose')
+        allowed = ('loader-continuation',) if role == 'continuation' else ('cpu-loader-retry',) if role == 'retry' else ('cpu-session', 'cpu-retry')
+        require(sample['language'] in ('he', 'en') and sample['purpose'] in allowed, 'sample-language-purpose')
         require(type(sample['source_row']) is int and 0 <= sample['source_row'] < 5, 'sample-row')
         identity = (sample['language'], sample['source_row'], sample['purpose'])
         require(identity not in seen, 'sample-duplicate'); seen.add(identity)
@@ -252,10 +295,24 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
         require(sample['elapsed_ns'] > 0 and sample['audio_frames'] > 0 and sample['sample_rate'] == 16000
                 and sample['reference_words'] > 0 and sample['reference_chars'] > 0, 'sample-positive-counts')
     passed = all(gate['status'] == 'passed' for gate in report['gates'])
+    if loader_samples:
+        require({(sample['language'], sample['source_row'], sample['purpose']) for sample in loader_samples} ==
+                {(lang, 0, 'cpu-loader-retry') for lang in ('en', 'he')}, 'loader-retry-sample-coverage')
+    if continuation_samples:
+        require({(sample['language'], sample['source_row'], sample['purpose']) for sample in continuation_samples} ==
+                {('en', 0, 'loader-continuation')}, 'loader-continuation-sample-coverage')
+        leakage = next(gate for gate in report['gates'] if gate['id'] == 'transcript-log-notification-leak-scan')
+        if leakage['status'] == 'passed':
+            require(leakage['observations']['count'] >= 15, 'loader-continuation-leak-scan-coverage')
     if expected['phase'] in ('online-installed', 'recovered-offline') and passed:
         require(report['payload'] == pinned(profile), 'session-payload-absent')
-        require(seen == {(lang, row, 'cpu-session') for lang in ('en', 'he') for row in range(5)}
-                | {(lang, 0, 'cpu-retry') for lang in ('en', 'he')}, 'session-sample-coverage')
+        required = {(lang, row, 'cpu-session') for lang in ('en', 'he') for row in range(5)}
+        required |= {(lang, 0, 'cpu-retry') for lang in ('en', 'he')}
+        if profile == 'turbo-q5-v3':
+            required |= {(lang, 0, 'cpu-loader-retry') for lang in ('en', 'he')}
+            if continuation_samples:
+                required.add(('en', 0, 'loader-continuation'))
+        require(seen == required, 'session-sample-coverage')
     require(report['status'] == ('passed' if passed else 'failed'), 'report-status-derived')
     if require_passed:
         require(passed, 'image-dictation-gates-incomplete')

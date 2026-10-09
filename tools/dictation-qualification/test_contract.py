@@ -51,7 +51,11 @@ def synthetic(phase='live', installation=1, boot=1, profile='turbo-q5-v3'):
             observations['snapshot_sha256'] = 'd' * 64
             observations['sha256'] = 'e' * 64
         if name == 'transcript-log-notification-leak-scan':
-            observations['count'] = 12
+            observations['count'] = 14 if profile == 'turbo-q5-v3' else 12
+        if name == c.LOADER_GPU_GATE:
+            observations.update(pid=123, start_ticks=456, socket_inode=789, sha256='d' * 64,
+                actionable_gpu_error=True, cpu_continuation_inferred=False,
+                cpu_preference_explicitly_selected=False, continuation_samples=[])
         if name == 'no-new-avcs':
             observations.update(audit_lost=0, audit_lost_before=0, audit_enabled=1, audit_enabled_before=1)
         report['gates'].append({'id': name, 'status': 'passed', 'evidence_kind': c.EXPECTED_KINDS[name],
@@ -67,6 +71,10 @@ def synthetic(phase='live', installation=1, boot=1, profile='turbo-q5-v3'):
                         'reference_chars': 20, 'char_edits': 2, 'backend': 'cpu', 'cpu_variant': c.PROFILES[profile]['cpu_variant'],
                         'binary_sha256': c.PROFILE_ASSETS[profile]['avx2' if profile == 'turbo-q5-v3' else 'cpu']['sha256'],
                         'model_sha256': c.PROFILE_ASSETS[profile]['model']['sha256']})
+        if profile == 'turbo-q5-v3':
+            gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+            gate['observations']['retry_samples'] = [dict(item, purpose='cpu-loader-retry')
+                for item in report['samples'] if item['purpose'] == 'cpu-retry']
     return report
 
 class ContractControls(unittest.TestCase):
@@ -101,6 +109,88 @@ class ContractControls(unittest.TestCase):
         report['status'] = 'failed'
         c.validate(report, report['context'], fixture_manifest=FIXTURES)
         self.rejects(report, 'image-dictation-gates-incomplete')
+
+    def test_loader_gate_is_additive_modern_only_and_fail_closed(self):
+        report = synthetic('online-installed')
+        self.assertIn('gpu-runtime-failure-cpu-retry', {g['id'] for g in report['gates']})
+        self.assertIn(c.LOADER_GPU_GATE, {g['id'] for g in report['gates']})
+        self.assertEqual(len(report['samples']), 12)
+        gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+        gate.update(status='failed', code='loader-engine-not-observed', observations={})
+        report['status'] = 'failed'
+        c.validate(report, report['context'], fixture_manifest=FIXTURES)
+        self.rejects(report, 'image-dictation-gates-incomplete')
+        report = synthetic('online-installed', profile='small-v2')
+        self.assertNotIn(c.LOADER_GPU_GATE, {g['id'] for g in report['gates']})
+        self.assertIn(c.LEGACY_GPU_GATE, {g['id'] for g in report['gates']})
+
+    def test_loader_requires_actual_identity_environment_error_and_new_recordings(self):
+        for field in ('fresh_broker', 'inherited_loader_environment',
+                      'receiver_empty_before_retry', 'explicit_new_cpu_recordings', 'drained'):
+            report = synthetic('online-installed')
+            gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+            gate['observations'][field] = False
+            self.rejects(report, 'gate-contradictory-or-missing-observations')
+        for field, value in (('pid', 0), ('start_ticks', True), ('socket_inode', 0), ('sha256', 'diagnostic text')):
+            report = synthetic('online-installed')
+            gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+            gate['observations'][field] = value
+            self.rejects(report, 'gate-observation-hash' if field == 'sha256' else 'loader-retry-broker-fixture-identity')
+
+    def test_real_local_continuation_is_distinct_from_actionable_discard(self):
+        report = synthetic('online-installed')
+        gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+        item = dict(report['samples'][0], purpose='loader-continuation',
+            backend='cpu-inferred-after-loader-fault', cpu_variant='vulkan-build',
+            binary_sha256=c.ASSETS['vulkan']['sha256'])
+        gate['observations'].update(actionable_gpu_error=False, cpu_continuation_inferred=True,
+            cpu_preference_explicitly_selected=True, continuation_samples=[item])
+        leak = next(g for g in report['gates'] if g['id'] == 'transcript-log-notification-leak-scan')
+        leak['observations']['count'] = 15
+        c.validate_report(report, report['context'], FIXTURES)
+        self.assertEqual(len(report['samples']), 12)
+        for field, value, code in (('actionable_gpu_error', True, 'loader-outcome-contradiction'),
+                ('cpu_preference_explicitly_selected', False, 'loader-outcome-contradiction'),
+                ('native_backend_directly_observed', True, 'gate-contradictory-or-missing-observations')):
+            changed = copy.deepcopy(report)
+            next(g for g in changed['gates'] if g['id'] == c.LOADER_GPU_GATE)['observations'][field] = value
+            self.rejects(changed, code)
+        for field, value, code in (('binary_sha256', c.ASSETS['avx2']['sha256'], 'sample-profile-backend-pins'),
+                ('model_sha256', c.ASSETS['small']['sha256'], 'sample-profile-backend-pins'),
+                ('wav_sha256', 'f' * 64, 'sample-fixture-binding'),
+                ('elapsed_ns', True, 'sample-numeric'), ('backend', 'vulkan', 'sample-profile-backend-pins')):
+            changed = copy.deepcopy(report)
+            next(g for g in changed['gates'] if g['id'] == c.LOADER_GPU_GATE)['observations']['continuation_samples'][0][field] = value
+            self.rejects(changed, code)
+        changed = copy.deepcopy(report)
+        next(g for g in changed['gates'] if g['id'] == 'transcript-log-notification-leak-scan')['observations']['count'] = 14
+        self.rejects(changed, 'loader-continuation-leak-scan-coverage')
+        changed = copy.deepcopy(report)
+        next(g for g in changed['gates'] if g['id'] == c.LOADER_GPU_GATE)['observations']['continuation_samples'].append(item)
+        self.rejects(changed, 'loader-retry-samples-scope-bound')
+
+    def test_loader_retry_measurements_bind_fixture_profile_and_separate_bounds(self):
+        for field, value, code in (('wav_sha256', 'f' * 64, 'sample-fixture-binding'),
+                ('binary_sha256', c.ASSETS['cpu']['sha256'], 'sample-profile-backend-pins'),
+                ('model_sha256', c.ASSETS['small']['sha256'], 'sample-profile-backend-pins'),
+                ('elapsed_ns', True, 'sample-numeric'), ('purpose', 'cpu-retry', 'sample-language-purpose'),
+                ('source_row', 1, 'sample-fixture-binding')):
+            report = synthetic('online-installed')
+            gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+            gate['observations']['retry_samples'][0][field] = value
+            self.rejects(report, code)
+        report = synthetic('online-installed')
+        gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+        gate['observations']['retry_samples'].append(copy.deepcopy(gate['observations']['retry_samples'][0]))
+        self.rejects(report, 'loader-retry-samples-scope-bound')
+        report = synthetic('online-installed')
+        gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+        gate['observations']['retry_samples'][0]['transcript'] = 'private text'
+        self.rejects(report, 'sample-fields')
+        report = synthetic('online-installed')
+        gate = next(g for g in report['gates'] if g['id'] == c.LOADER_GPU_GATE)
+        report['samples'].append(gate['observations']['retry_samples'][0])
+        self.rejects(report, 'report-samples-bound')
 
     def test_no_fake_gpu_or_ordinary_fixture_evidence(self):
         report = synthetic('online-installed')
@@ -266,6 +356,61 @@ class ContractControls(unittest.TestCase):
             with mock.patch.object(module, 'CONTROLLER', changed):
                 with self.assertRaisesRegex(c.Invalid, 'installed-profile-asset-pin'):
                     module.installed_controller()
+
+    def test_loader_environment_requires_actual_values_owner_and_stable_process(self):
+        module = self.guest()
+        checker = module.Checker.__new__(module.Checker)
+        checker.account = mock.Mock(pw_uid=module.os.getuid())
+        environment = {'VK_DRIVER_FILES': '/private/bad-icd.json', 'VK_LOADER_DEBUG': 'error'}
+        with tempfile.TemporaryDirectory() as root:
+            proc = Path(root) / '123'; proc.mkdir()
+            (proc / 'environ').write_bytes(b'VK_DRIVER_FILES=/private/bad-icd.json\0VK_LOADER_DEBUG=error\0')
+            with (mock.patch.object(module, 'Path', side_effect=lambda value: Path(root) if str(value) == '/proc' else Path(value)),
+                  mock.patch.object(module, 'iter_process', return_value=456) as ticks):
+                checker.loader_environment(123, 456, environment)
+                ticks.side_effect = [456, 457]
+                with self.assertRaisesRegex(c.Invalid, 'loader-environment-not-inherited'):
+                    checker.loader_environment(123, 456, environment)
+                ticks.side_effect = None
+                (proc / 'environ').write_bytes(b'VK_DRIVER_FILES=/other.json\0VK_LOADER_DEBUG=error\0')
+                with self.assertRaisesRegex(c.Invalid, 'loader-environment-not-inherited'):
+                    checker.loader_environment(123, 456, environment)
+                checker.account.pw_uid += 1
+                with self.assertRaisesRegex(c.Invalid, 'loader-environment-process-identity'):
+                    checker.loader_environment(123, 456, environment)
+
+    def test_loader_engine_requires_same_broker_and_actual_direct_parent(self):
+        module = self.guest()
+        checker = module.Checker.__new__(module.Checker)
+        broker = (42, 100, 200)
+        environment = {'VK_DRIVER_FILES': '/private/bad-icd.json', 'VK_LOADER_DEBUG': 'error'}
+        checker.broker_identity = mock.Mock(return_value=broker)
+        checker.loader_environment = mock.Mock()
+        with tempfile.TemporaryDirectory() as root:
+            proc = Path(root) / '123'; proc.mkdir(); (proc / 'status').write_text('PPid:\t42\n')
+            with mock.patch.object(module, 'Path', side_effect=lambda value: Path(root) if str(value) == '/proc' else Path(value)):
+                checker.loader_engine((123, 456, Path('/pinned/voxtype-vulkan')), broker, environment)
+                checker.broker_identity.assert_called_with(broker)
+                checker.loader_environment.assert_called_once_with(123, 456, environment)
+                (proc / 'status').write_text('PPid:\t43\n')
+                with self.assertRaisesRegex(c.Invalid, 'loader-engine-parent-mismatch'):
+                    checker.loader_engine((123, 456, Path('/pinned/voxtype-vulkan')), broker, environment)
+
+    def test_loader_start_allows_only_real_recording_or_actionable_initialization_failure(self):
+        module = self.guest()
+        recording = {'ok': True, 'state': 'recording', 'backend': 'vulkan',
+                     'active_backend': 'vulkan', 'error': ''}
+        failed = {'ok': False, 'state': 'error', 'backend': 'vulkan', 'active_backend': 'cpu',
+                  'error': 'GPU initialization failed. CPU is selected for this session; record again.'}
+        module.Checker.loader_start_response(0, recording)
+        module.Checker.loader_start_response(1, failed)
+        for code, value in ((1, recording), (0, failed), (True, failed), (2, failed),
+                (1, dict(failed, error='Recording could not start. Check the microphone in Sound settings.')),
+                (1, dict(failed, error='GPU transcription failed. CPU is selected for this session; record again.')),
+                (1, dict(failed, active_backend='vulkan')), (1, dict(failed, backend='cpu')),
+                (0, dict(recording, state='ready')), (0, dict(recording, active_backend='cpu'))):
+            with self.assertRaisesRegex(c.Invalid, 'loader-start-command-outcome'):
+                module.Checker.loader_start_response(code, value)
 
     def test_hidden_upstream_transcript_temporaries_are_audited(self):
         module = self.guest()

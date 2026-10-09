@@ -12,13 +12,15 @@ import re
 import shutil
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
          'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py',
-         'tools/dictation-qualification/contract.py'}
+         'tools/dictation-qualification/contract.py', 'tools/installer-qualification/contract.py',
+         'tools/native-functional/apps.py'}
 BUILD_INPUTS = {'.github/workflows/iso.yml',
                 'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
@@ -274,6 +276,244 @@ def dictation_proof(archives, manifest):
                 release_acceptance=False)
 
 
+def installer_archive_records(archive, state, allowed_files, evidence):
+    """Bind the public archive and decoded aliases to the protected collector."""
+    names = {entry.filename for entry in archive.infolist() if not entry.is_dir()}
+    require(names == set(allowed_files), 'Installer public archive inventory differs')
+    screening = read_json(archive, 'upload-screening.json')
+    require(set(screening) == {'scope', 'files'}
+            and screening['scope'] == 'Owned synthetic QEMU VM only; no host desktop, VM disks or credentials'
+            and set(screening['files']) == names - {'upload-screening.json'},
+            'Installer upload screening inventory differs')
+    diagnostics = {'provision.log', 'capture-build.log', 'installer-harness.log'}
+    for name, item in screening['files'].items():
+        data = archive.read(name)
+        require(set(item) == {'original_sha256', 'uploaded_sha256', 'bytes', 'redactions'}
+                and type(item['bytes']) is int and item['bytes'] == len(data)
+                and re.fullmatch('[0-9a-f]{64}', item['original_sha256'])
+                and item['uploaded_sha256'] == hashlib.sha256(data).hexdigest()
+                and type(item['redactions']) is int and item['redactions'] >= 0
+                and (name in diagnostics or item['redactions'] == 0)
+                and (item['redactions'] > 0 or item['original_sha256'] == item['uploaded_sha256']),
+                'Installer uploaded evidence changed or screening receipt differs: ' + name)
+    guest, report = state['guest'], state['guest']['report']
+    files = guest['files']
+    require(set(files) == {Path(name).name for name in names if name.startswith('installer/')}
+            - {'installer-state.json', 'transport-manifest.json', 'installer-provenance.json',
+               'serial-installer-report.json'}, 'Installer transported payload inventory differs')
+    for name, info in files.items():
+        data = archive.read('installer/' + name)
+        require(Path(name).name == name and set(info) == {'bytes', 'sha256'}
+                and type(info['bytes']) is int and 0 < info['bytes'] <= 4 * 1024 * 1024
+                and len(data) == info['bytes'] and hashlib.sha256(data).hexdigest() == info['sha256'],
+                'Installer transported file bytes or hash differ: ' + name)
+    canonical = lambda value: json.dumps(value, sort_keys=True, allow_nan=False).encode('ascii')
+    for name, expected in (('installer-state.json', guest), ('installer-provenance.json', guest['provenance']),
+                           ('installer-report.json', report), ('serial-installer-report.json', report)):
+        require(canonical(read_json(archive, 'installer/' + name)) == canonical(expected),
+                'Installer decoded transport alias differs: ' + name)
+    transport = read_json(archive, 'installer/transport-manifest.json')
+    require(set(transport) == {'schema', 'token', 'evidence_root', 'files', 'bytes'}
+            and transport['schema'] == 'arctic-installer-evidence-v1'
+            and transport['token'] == state['context']['token']
+            and transport['evidence_root'] == report['evidence_root']
+            and re.fullmatch('/tmp/arctic-native-smoke-installer-[A-Za-z0-9_-]+', transport['evidence_root'])
+            and type(transport['files']) is list and 1 <= len(transport['files']) <= 32,
+            'Installer decoded transport manifest identity differs')
+    paths = []
+    for item in transport['files']:
+        require(set(item) == {'path', 'bytes', 'sha256', 'compressed_bytes', 'chunks', 'encoding'}
+                and item['path'] in files and item['bytes'] == files[item['path']]['bytes']
+                and type(item['bytes']) is int and item['sha256'] == files[item['path']]['sha256']
+                and type(item['compressed_bytes']) is int and 0 < item['compressed_bytes'] <= 4 * 1024 * 1024 + 65536
+                and type(item['chunks']) is int and item['chunks'] == math.ceil(item['compressed_bytes'] / (18 * 1024))
+                and item['encoding'] == 'zlib+base64', 'Installer decoded transport manifest file differs')
+        paths.append(item['path'])
+    require(paths == sorted(files) and type(transport['bytes']) is int
+            and transport['bytes'] == sum(item['bytes'] for item in files.values()) <= 32 * 1024 * 1024,
+            'Installer decoded transport manifest inventory or byte total differs')
+    require(state['transport']['report_sha256'] == files['installer-report.json']['sha256'],
+            'Installer original transport does not bind the actual report bytes')
+    streams = state['diagnostic_streams']
+    require(set(streams) == {'serial.log', 'installer-port.log', 'qemu-installer-live.log'}
+            and streams['serial.log'] == guest['serial'] and streams['installer-port.log'] == guest['port']
+            and streams['installer-port.log']['sha256'] == state['transport']['port_sha256'],
+            'Installer complete original diagnostic stream identity differs')
+    for name, bound in (('serial.log', 8 * 1024 * 1024), ('installer-port.log', 64 * 1024 * 1024),
+                        ('qemu-installer-live.log', 4 * 1024 * 1024)):
+        item = streams[name]
+        require(set(item) == {'bytes', 'sha256'} and type(item['bytes']) is int
+                and (0 <= item['bytes'] <= bound if name == 'qemu-installer-live.log' else 0 < item['bytes'] <= bound)
+                and re.fullmatch('[0-9a-f]{64}', item['sha256']), 'Installer diagnostic stream bounds differ')
+        if name != 'serial.log':
+            require(archive.getinfo('host/' + name + '.bounded-prefix.bin').file_size == min(item['bytes'], 64 * 1024),
+                    'Installer diagnostic stream prefix length differs')
+    prefix = archive.read('host/installer-port.log.bounded-prefix.bin')
+    for line, kind, expected in zip(prefix.splitlines(keepends=True)[:2], ('BEGIN', 'PROVENANCE'),
+                                    (guest['begin'], guest['provenance'])):
+        actual_kind, actual = evidence.record(line.decode('ascii'), {'BEGIN', 'PROVENANCE'}, 4 * 1024 * 1024 + 512)
+        require(actual_kind == kind and canonical(actual) == canonical(expected),
+                'Installer retained protected-port prefix identity differs')
+    require(len(prefix.splitlines()) >= 2, 'Installer retained protected-port prefix is incomplete')
+    begin, proof, end = guest['begin'], guest['provenance'], guest['collector']
+    evidence.exact(begin, {'schema', 'stage', 'context', 'transport', 'release_acceptance'} | evidence.IDENTITY,
+                   'Installer BEGIN fields differ')
+    evidence.exact(proof, {'schema', 'stage', 'context', 'transport', 'cmdline', 'virtualization',
+                          'release_acceptance'} | evidence.IDENTITY, 'Installer provenance fields differ')
+    evidence.exact(end, {'token', 'status', 'error', 'evidence_export_complete', 'release_acceptance'} | evidence.IDENTITY,
+                   'Installer collector fields differ')
+    require(begin['schema'] == 'arctic-installer-runner-v1' and proof['schema'] == 'arctic-installer-provenance-v1'
+            and begin['stage'] == proof['stage'] == 'live'
+            and canonical(begin['context']) == canonical(proof['context']) == canonical(state['context'])
+            and begin['release_acceptance'] is proof['release_acceptance'] is end['release_acceptance'] is False
+            and end['token'] == state['context']['token'] and end['status'] == 'passed' and end['error'] is None
+            and end['evidence_export_complete'] is True
+            and all(type(record[k]) is type(report[k]) and record[k] == report[k]
+                    for record in (begin, proof, end) for k in evidence.IDENTITY),
+            'Installer actual collector context, boot or completion differs')
+    channel = begin['transport']
+    evidence.exact(channel, {'schema', 'name', 'device', 'major', 'minor', 'uid', 'mode'},
+                   'Installer protected port fields differ')
+    require(canonical(channel) == canonical(proof['transport'])
+            and channel['schema'] == 'arctic-installer-virtio-port-v1'
+            and channel['name'] == 'arctic-installer-evidence'
+            and type(channel['device']) is str and re.fullmatch('/dev/vport[0-9]+p[0-9]+', channel['device'])
+            and type(channel['uid']) is int and channel['uid'] == 0
+            and type(channel['mode']) is int and 0 <= channel['mode'] <= 0o7777 and not channel['mode'] & 0o022
+            and type(channel['major']) is int and 0 < channel['major'] <= 99999
+            and type(channel['minor']) is int and 0 <= channel['minor'] <= 99999
+            and type(proof['cmdline']) is str and len(proof['cmdline']) <= 16384
+            and {'rd.live.image', 'arctic.mode=install'} <= set(proof['cmdline'].split())
+            and proof['virtualization'] in ('qemu', 'kvm'),
+            'Installer actual live boot or protected evidence port differs')
+    uart = [evidence.record(line, {'REQUEST', 'PORT-END'}, 16448)
+            for line in archive.read('host/serial.log').decode('utf-8').splitlines(keepends=True)
+            if line.startswith(evidence.PREFIX)]
+    require(len(uart) == 10 and [kind for kind, value in uart] == ['REQUEST'] * 9 + ['PORT-END'],
+            'Installer original UART request/completion sequence differs')
+    requests = [value for kind, value in uart[:-1]]
+    evidence.validate_requests(requests, begin, report)
+    require(canonical(requests) == canonical(guest['requests']),
+            'Installer original UART requests differ from transported guest receipts')
+    marker = uart[-1][1]
+    evidence.exact(marker, {'schema', 'token', 'status', 'end_sha256', 'release_acceptance'} | evidence.IDENTITY,
+                   'Installer UART completion fields differ')
+    require(canonical(marker) == canonical(guest['port_end'])
+            and marker['schema'] == 'arctic-installer-port-end-v1'
+            and marker['token'] == state['context']['token'] and marker['status'] == end['status']
+            and marker['release_acceptance'] is False
+            and all(type(marker[k]) is type(begin[k]) and marker[k] == begin[k] for k in evidence.IDENTITY)
+            and marker['end_sha256'] == evidence.digest(evidence.canonical(end)),
+            'Installer original UART completion does not bind the actual collector')
+    return files
+
+
+def installer_proof(archive, manifest):
+    """Require the fresh live image's actual GUI restoration matrix and review."""
+    image, pin = manifest['image'], manifest['installer']
+    path = ROOT / 'tools/installer-qualification/contract.py'
+    require(sha(path) == source_hash(pin['source_sha'], 'tools/installer-qualification/contract.py'),
+            'Publication installer validator differs from reviewed execution')
+    # Imported producer/transport validation code must match the reviewed lane,
+    # even when publication runs on a later helper-only source commit.
+    for name in ('guest.py', 'evidence.py'):
+        require(sha(ROOT / 'tools/installer-qualification' / name)
+                == source_hash(pin['source_sha'], 'tools/installer-qualification/' + name),
+                'Publication installer helper differs from reviewed execution: ' + name)
+    spec = importlib.util.spec_from_file_location('qualified_installer_contract', path)
+    contract = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contract)
+    spec = importlib.util.spec_from_file_location('qualified_installer_transport', path.with_name('evidence.py'))
+    evidence = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(evidence)
+    state = read_json(archive, 'execution.json')
+    execution = contract.validate_execution(state, image, pin['source_sha'],
+        archive.read('host/serial.log'), archive.read)
+    require(state.get('errors') == [], 'Installer execution contains failures despite its status')
+    require(type(state['execution']['run_id']) is int and state['execution']['run_id'] == pin['run_id'],
+            'Installer embedded execution run differs from its archived workflow')
+    require(set(state['source_inputs']) == set(contract.EXECUTION_FILES),
+            'Installer execution source inventory differs')
+    for name, expected in state['source_inputs'].items():
+        require(expected == source_hash(pin['source_sha'], name),
+                'Installer execution source bytes differ: ' + name)
+    build = state['build']
+    require(build['schema'] == 'arctic-taskbar-tools-v1' and build['release_acceptance'] is False
+            and set(build['sources']) == {'shell/dev/virtual-pointer.c',
+                'tools/native-functional/taskbar-screencopy.c', 'shell/dev/wlr-screencopy-unstable-v1.xml'}
+            and set(build['binaries']) == {'virtual-pointer', 'raw-screencopy'},
+            'Installer native capture build inventory differs')
+    for name, expected in build['sources'].items():
+        require(expected == source_hash(pin['source_sha'], name),
+                'Installer native capture source bytes differ: ' + name)
+    context = state['context']
+    expected = dict(schema='arctic-installer-context-v1', source_sha=image['source_sha'],
+        iso_sha256=image['sha256'], iso_bytes=image['bytes'], execution_sha=pin['source_sha'],
+        token=context['token'], checker_sha256=source_hash(pin['source_sha'], 'tools/installer-qualification/guest.py'),
+        runtime_sha256=source_hash(pin['source_sha'], 'tools/native-functional/taskbar-runtime.py'),
+        native_sha256=source_hash(pin['source_sha'], 'tools/native-functional/native_smoke.py'),
+        capture_sha256=build['binaries']['raw-screencopy'])
+    require(context == expected and re.fullmatch('[0-9a-f]{64}', expected['capture_sha256']),
+            'Installer exact-image helper or compiled capture context differs')
+    guest = read_json(archive, 'installer/installer-state.json')
+    host = read_json(archive, 'host/host-execution.json')
+    report = read_json(archive, 'installer/installer-report.json')
+    transitions = read_json(archive, 'host/installer-host-transitions.json')
+    require(guest == state['guest'] and host == state['host'],
+            'Installer independently checked guest/host records differ from archive')
+    require(transitions['schema'] == 'arctic-installer-host-transitions-v1'
+            and transitions['context'] == expected and transitions['boot_id'] == report['boot_id']
+            and transitions['release_acceptance'] is False
+            and transitions['receipts'] == host['host_transitions'],
+            'Installer actual host transition record or live boot differs')
+    files = installer_archive_records(archive, state, contract.ARCHIVE_FILES, evidence)
+    actual_guest = {entry.filename.removeprefix('installer/') for entry in archive.infolist()
+                    if not entry.is_dir() and entry.filename.startswith('installer/')}
+    require(actual_guest == set(files) | {'installer-state.json', 'transport-manifest.json',
+            'installer-provenance.json', 'serial-installer-report.json'},
+            'Installer transported payload contains unexpected or missing files')
+    # The publish checkout is sparse. Reconstruct only the declared source
+    # inputs from the ISO's actual commit before deriving installed-file hashes.
+    with tempfile.TemporaryDirectory(prefix='arctic-installer-source-') as temp:
+        source = Path(temp)
+        require(not git('ls-tree', '--name-only', image['source_sha'], '--',
+                'dotfiles/.local/bin/arctic-installer'), 'Alternate built installer wrapper needs review')
+        for name in set(contract.PACKAGED_SOURCES.values()):
+            require(not Path(name).is_absolute() and '..' not in Path(name).parts,
+                    'Unsafe installer packaged source path')
+            target = source / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(subprocess.check_output(['git', '-C', str(ROOT), 'show',
+                image['source_sha'] + ':' + name], timeout=120))
+        sources = contract.packaged_source_hashes(source)
+    summary = contract.validate_report(report, expected, files,
+        lambda name: archive.read('installer/' + name), sources)
+    require([row['request'] for row in transitions['receipts']] == summary['requests'],
+            'Installer independently observed guest requests and host actions differ')
+    guest_images = {'installer/' + name + '.png' for name in (
+        'baseline', 'vt-0', 'vt-1', 'vt-2', 'output-0', 'output-1', 'output-2',
+        'output-0-relocated', 'output-2-relocated')}
+    host_images = {'host/installer-vt-away-' + str(cycle) + '.png' for cycle in range(3)}
+    required_images = state['required_images']
+    require(set(required_images) == guest_images | host_images,
+            'Installer complete twelve-capture visual inventory differs')
+    for name, expected_sha in required_images.items():
+        require(0 < archive.getinfo(name).file_size <= 4 * 1024 * 1024
+                and archive.read(name).startswith(b'\x89PNG\r\n\x1a\n')
+                and hashlib.sha256(archive.read(name)).hexdigest() == expected_sha,
+                'Installer restoration screenshot bytes or hash differ: ' + name)
+    require({name for name in actual_guest if name.endswith('.png')}
+            == {Path(name).name for name in guest_images}, 'Installer guest capture matrix differs')
+    review = manifest['installer_media_review']
+    require(review['visual_status'] == 'passed' and review['image_sha256'] == image['sha256']
+            and review['installer_archive_sha256'] == pin['archive_sha256']
+            and review['images'] == required_images,
+            'Exact-image installer baseline, disruption and restoration visual review is absent')
+    return dict(run_id=pin['run_id'], source_sha=pin['source_sha'], archive_sha256=pin['archive_sha256'],
+        execution=execution, restoration=summary, visual_review=review,
+        scope='prepared Hebrew keyboard wizard; no active installation progress claim', release_acceptance=False)
+
+
 def taskbar_proof(archive, manifest):
     """Independently check the actual-image taskbar matrix, inputs and captures."""
     names = [entry.filename for entry in archive.infolist() if not entry.is_dir()
@@ -459,6 +699,44 @@ def taskbar_proof(archive, manifest):
                 visual_review=review, transport=transport, transport_prefix=prefix_info, release_acceptance=False)
 
 
+def native_apps_proof(archive, manifest, state):
+    """Repeat the additive exact-source RPM/GTK3/GIO check for both real boots."""
+    image, pin = manifest['image'], manifest['native']
+    path = ROOT / 'tools/native-functional/apps.py'
+    require(sha(path) == source_hash(pin['source_sha'], 'tools/native-functional/apps.py'),
+            'Publication app-defaults validator differs from reviewed execution')
+    spec = importlib.util.spec_from_file_location('qualified_native_apps', path)
+    apps = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(apps)
+    expected = dict(source_sha=image['source_sha'], iso_sha256=image['sha256'], iso_bytes=image['bytes'],
+        checker_sha256=source_hash(pin['source_sha'], 'tools/native-functional/apps.py'),
+        native_sha256=source_hash(pin['source_sha'], 'tools/native-functional/native_smoke.py'),
+        manifest_sha256=source_hash(image['source_sha'], 'iso/kiwi/config.kiwi'),
+        mimeapps_sha256=source_hash(image['source_sha'], 'packaging/desktop/live-mimeapps.list'))
+    require(state['app_defaults_context'] == expected and type(state['apps']) is dict
+            and set(state['apps']) == {'live', 'installed'},
+            'Native requested-apps context or actual two-boot inventory differs')
+    def source(name):
+        return subprocess.check_output(['git', '-C', str(ROOT), 'show', image['source_sha'] + ':' + name], timeout=120)
+    mimes = apps.mime_defaults(source('packaging/desktop/live-mimeapps.list'))
+    packages = {item.attrib['name'] for item in ET.fromstring(source('iso/kiwi/config.kiwi')).iter('package')}
+    require(set(apps.PACKAGES) - {'bash'} <= packages, 'Exact image manifest requested applications differ')
+    proofs, boots = {}, set()
+    for stage in ('live', 'installed'):
+        provenance = read_json(archive, 'native-' + stage + '/serial-native-provenance.json')
+        require(provenance['stage'] == state['apps'][stage]['stage'] == stage
+                and provenance['native_source_sha256'] == expected['native_sha256']
+                and provenance['release_acceptance'] is False
+                and ('rd.live.image' in provenance['cmdline'].split()) == (stage == 'live'),
+                'Application defaults original native source or actual boot medium differs')
+        proofs[stage] = apps.validate_report(state['apps'][stage], expected, mimes, provenance)
+        boots.add(state['apps'][stage]['boot_id'])
+    require(len(boots) == 2, 'Requested-apps live and installed probes must be actual separate boots')
+    return dict(context=expected, stages=proofs,
+                scope='Actual installed application inventory, GTK3 RPM requirements and fresh desktop GIO defaults',
+                release_acceptance=False)
+
+
 def native_proof(archive, manifest):
     state = read_json(archive, 'execution.json')
     image, pin = manifest['image'], manifest['native']
@@ -502,9 +780,10 @@ def native_proof(archive, manifest):
             required_audio[name] = item['sha256']
     require(review['audio'] == required_audio and bool(required_audio), 'Exact audio review inventory differs')
     taskbar = taskbar_proof(archive, manifest)
+    apps = native_apps_proof(archive, manifest, state)
     return dict(run_id=pin['run_id'], source_sha=pin['source_sha'], artifact_sha256=pin['archive_sha256'],
                 native_gates='all eight passed in live and encrypted offline installed phases',
-                media_review=review, photos='passed in live and installed phases', taskbar=taskbar)
+                media_review=review, photos='passed in live and installed phases', taskbar=taskbar, apps=apps)
 
 
 def prepare(manifest, out):
@@ -531,8 +810,11 @@ def prepare(manifest, out):
     require(not api('/pulls?state=open&per_page=100'), 'Arctic PRs remain open')
     require(type(manifest['dictation']) is dict and set(manifest['dictation']) == {'small-v2', 'turbo-q5-v3'},
             'Both dictation hardware qualification pins are required')
+    require(type(manifest['installer']) is dict and type(manifest['installer_media_review']) is dict,
+            'Actual installer restoration qualification and visual review pins are required')
     for ref in {manifest['image']['source_sha'], manifest['main_sha'], release_main,
-                manifest['native']['source_sha'], *(pin['source_sha'] for pin in manifest['dictation'].values())}:
+                manifest['native']['source_sha'], manifest['installer']['source_sha'],
+                *(pin['source_sha'] for pin in manifest['dictation'].values())}:
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
     current_checks = main_checks(release_main, manifest['main_sha'])
@@ -557,6 +839,8 @@ def prepare(manifest, out):
     for profile, pin in manifest['dictation'].items():
         validate_lane(pin, '.github/workflows/dictation-candidate-20261009.yml',
                       'dictation-candidate-qualification-' + profile)
+    validate_lane(manifest['installer'], '.github/workflows/installer-candidate-20261009.yml',
+                  'candidate-installer-restoration')
     validate_lane(manifest['update'], '.github/workflows/image-update-20261008.yml', 'same-image-nix-signed-update')
     require(not out.exists(), 'Prepared release assets must be unused')
     with tempfile.TemporaryDirectory(prefix='arctic-qualified-') as temp:
@@ -577,6 +861,8 @@ def prepare(manifest, out):
             dictation_archives = {profile: stack.enter_context(archive(pin, temp / ('dictation-' + profile + '.zip')))
                                   for profile, pin in manifest['dictation'].items()}
             dictation = dictation_proof(dictation_archives, manifest)
+        with archive(manifest['installer'], temp / 'installer.zip') as evidence:
+            installer = installer_proof(evidence, manifest)
         with archive(manifest['update'], temp / 'update.zip') as evidence:
             update = read_json(evidence, 'update-result.json')
             pins = read_json(evidence, 'pre-final-boot.json')
@@ -600,7 +886,7 @@ def prepare(manifest, out):
         (out / (name + '.torrent.sha256')).write_text(transport['torrent_sha256'] + '  ' + name + '.torrent\n')
         proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main,
                      release_main_checks=current_checks, image=image,
-                     performance=perf, native=native, dictation=dictation,
+                     performance=perf, native=native, dictation=dictation, installer=installer,
                      update=manifest['update'], release_acceptance='qualified',
                      measured_speed_or_ram_gain_claim=False, torrent=transport)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')
@@ -609,6 +895,7 @@ def prepare(manifest, out):
             'Lightweight defaults: GNOME Web, Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash. '
             'Includes the covered/fractional screen-frame fix and the author\'s photo wallpapers, with City Afterglow as the fresh default.\n\n'
             'The exact retained ISO passed Try/Install/Safe startup, enforcing encrypted offline installation, native app/media checks, '
+            'six live graphical installer restoration cycles retaining the prepared Hebrew keyboard wizard, '
             'paired KVM precision/regression checks and a signed optimized stable Arctic update with offline apply and subsequent reboot. '
             'These checks make no physical hardware, substantial speed or RAM improvement claim.\n\n'
             f"ISO bytes: {image['bytes']}. SHA-256: `{image['sha256']}`.\n\n"

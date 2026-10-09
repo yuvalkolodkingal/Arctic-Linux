@@ -6,6 +6,7 @@ the shipped fixed setup wrapper. Public output contains fixed codes and hashes.
 """
 import argparse
 import ctypes
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -16,13 +17,15 @@ import re
 import resource
 import shutil
 import signal
+import socket
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
 import time
 
-from contract import (ASSETS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, PROFILE_ASSETS, PROFILES, SCHEMA, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, EXPECTED_KINDS, LEGACY_GPU_GATE, LOADER_GPU_GATE, LIMITATIONS, PROFILE_ASSETS, PROFILES, SCHEMA, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -403,7 +406,7 @@ class Checker:
         self.player = subprocess.Popen(self.prefix + ['/usr/bin/pw-play', '--target=' + self.sink_name, str(self.audio)],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
-    def transcribe(self, sample, purpose='cpu-session'):
+    def transcribe(self, sample, purpose='cpu-session', store=True, loader=None):
         self.empty(); require(self.focused(), 'receiver-focus-lost')
         self.status('set-language', sample['language'])
         before = time.monotonic_ns()
@@ -414,6 +417,8 @@ class Checker:
         cpu_key = 'avx2' if self.profile['cpu_variant'] == 'avx2' else 'cpu'
         require(len(engines) == 1 and engines[0][2] == PAYLOAD / self.names[cpu_key]
                 and sha(engines[0][2]) == self.assets[cpu_key]['sha256'], 'cpu-owned-process-profile-pin')
+        if loader is not None:
+            self.loader_engine(engines[0], *loader)
         wait(self.capture_link, 10)
         self.play(sample)
         require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0, 'fixture-playback-failed')
@@ -446,7 +451,8 @@ class Checker:
                 'reference_chars': metric['reference_characters'], 'char_edits': metric['character_edits'],
                 'backend': 'cpu', 'cpu_variant': self.profile['cpu_variant'],
                 'binary_sha256': self.assets[cpu_key]['sha256'], 'model_sha256': self.assets['model']['sha256']}
-        self.report['samples'].append(item)
+        if store:
+            self.report['samples'].append(item)
         return item
 
     def samples(self, language):
@@ -579,6 +585,218 @@ class Checker:
             sample = next(s for s in self.fixtures if s['language'] == language and s['source_row'] == 0)
             self.transcribe(sample, 'cpu-retry')
         return {'gpu_supported': False, 'active_backend_vulkan': False, 'active_backend_cpu': True, 'count': 2}
+
+    def broker_identity(self, expected=None):
+        control = self.private / 'control.sock'
+        info = control.lstat()
+        require(stat.S_ISSOCK(info.st_mode) and info.st_uid == self.account.pw_uid
+                and not info.st_mode & 0o077, 'loader-control-socket-unsafe')
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
+            peer.settimeout(1); peer.connect(str(control))
+            pid, uid, _gid = struct.unpack('3i', peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+        proc = Path('/proc') / str(pid)
+        ticks = iter_process(pid)
+        require(uid == self.account.pw_uid and proc.stat().st_uid == uid
+                and str(pid) not in self.initial_processes, 'loader-broker-not-owned')
+        require((proc / 'exe').resolve(strict=True) == Path('/usr/bin/python3').resolve(strict=True)
+                and (proc / 'cmdline').read_bytes().split(b'\0') ==
+                [b'/usr/bin/python3', b'-I', str(CONTROLLER).encode(), b'_broker', b''],
+                'loader-broker-command-identity')
+        identity = (pid, ticks, info.st_ino)
+        require(expected is None or identity == expected, 'loader-broker-changed')
+        require(iter_process(pid) == ticks, 'loader-broker-process-reused')
+        return identity
+
+    def loader_environment(self, pid, ticks, environment):
+        proc = Path('/proc') / str(pid)
+        require(proc.stat().st_uid == self.account.pw_uid and iter_process(pid) == ticks,
+                'loader-environment-process-identity')
+        raw = (proc / 'environ').read_bytes()
+        require(len(raw) <= 128 * 1024, 'loader-environment-bound')
+        actual = dict(row.split(b'=', 1) for row in raw.split(b'\0') if b'=' in row)
+        require(all(actual.get(key.encode()) == value.encode() for key, value in environment.items())
+                and iter_process(pid) == ticks, 'loader-environment-not-inherited')
+
+    def loader_engine(self, engine, broker, environment):
+        pid, ticks, _binary = engine
+        self.broker_identity(broker)
+        parent = (Path('/proc') / str(pid) / 'status').read_text()
+        require(re.search(r'^PPid:\s*' + str(broker[0]) + r'\s*$', parent, re.M),
+                'loader-engine-parent-mismatch')
+        self.loader_environment(pid, ticks, environment)
+
+    @staticmethod
+    def loader_start_response(code, value):
+        # An observed startup loader error is returned as CLI exit 1. Accept
+        # exactly the actionable GPU initialization outcome, never an arbitrary
+        # microphone, lock, setup or command error disguised as this fixture.
+        recording = (type(code) is int and code == 0 and value.get('ok') is True
+                     and value.get('state') == 'recording' and value.get('backend') == 'vulkan'
+                     and value.get('active_backend') == 'vulkan' and not value.get('error'))
+        init_error = (type(code) is int and code == 1 and value.get('ok') is False
+                      and value.get('state') == 'error' and value.get('backend') == 'vulkan'
+                      and value.get('active_backend') == 'cpu' and value.get('error') ==
+                      'GPU initialization failed. CPU is selected for this session; record again.')
+        require(recording or init_error, 'loader-start-command-outcome')
+
+    def gpu_loader_failure(self):
+        require(self.profile_id == 'turbo-q5-v3', 'loader-gate-requires-modern-profile')
+        require(self.controller.gpu_available(), 'no-supported-vulkan-device')
+        self.empty(); self.status('cancel', check=False); self.no_engine()
+        self.status('set-backend', 'vulkan'); self.status('set-language', 'en')
+        old = self.broker_identity()
+        icd = self.root / 'bad-icd.json'
+        missing = self.root / 'libarctic-qualification-missing-vulkan-driver.so'
+        require(not icd.exists() and not missing.exists(), 'loader-fixture-already-present')
+        descriptor = os.open(icd, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, 'w') as manifest:
+            manifest.write(json.dumps({'file_format_version': '1.0.0', 'ICD': {
+                'library_path': str(missing), 'api_version': '1.3.0'}}, sort_keys=True) + '\n')
+        os.chmod(icd, 0o600); os.chown(icd, self.account.pw_uid, self.account.pw_gid)
+        environment = {'VK_DRIVER_FILES': str(icd), 'VK_LOADER_DEBUG': 'error'}
+        wrapper = activation = None
+        broker = None
+        try:
+            # Hold the shipped client launcher lock across the owned handoff;
+            # status-only clients cannot create a replacement audio owner.
+            fd = os.open(self.private / 'launch.lock', os.O_RDWR | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'w') as launch:
+                info = os.fstat(launch.fileno())
+                require(stat.S_ISREG(info.st_mode) and info.st_uid == self.account.pw_uid
+                        and not info.st_mode & 0o077, 'loader-launch-lock-unsafe')
+                def locked():
+                    try:
+                        fcntl.flock(launch, fcntl.LOCK_EX | fcntl.LOCK_NB); return True
+                    except BlockingIOError:
+                        return False
+                wait(locked, 3)
+                self.broker_identity(old); self.kill_identity(old[0], old[1])
+                wait(lambda: not (Path('/proc') / str(old[0])).exists(), 5)
+                self.no_engine()
+                wrapper = subprocess.Popen(self.prefix + [key + '=' + value for key, value in environment.items()]
+                    + ['/usr/bin/python3', '-I', str(CONTROLLER), '_broker'], stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL, start_new_session=True)
+                def published():
+                    require(wrapper.poll() is None, 'loader-broker-wrapper-died')
+                    control = self.private / 'control.sock'
+                    return control.exists() and control.lstat().st_ino != old[2]
+                wait(published, 5)
+                broker = self.broker_identity()
+                require(broker[0] != old[0] and broker[2] != old[2], 'loader-broker-not-fresh')
+                parent = (Path('/proc') / str(broker[0]) / 'status').read_text()
+                require(re.search(r'^PPid:\s*' + str(wrapper.pid) + r'\s*$', parent, re.M),
+                        'loader-broker-wrapper-parent')
+                self.loader_environment(broker[0], broker[1], environment)
+            response = self.root / 'loader-start-response.private'
+            attempted = time.monotonic_ns()
+            with response.open('xb') as out:
+                os.fchmod(out.fileno(), 0o600)
+                activation = subprocess.Popen(self.prefix + ['/usr/bin/arctic-dictation', 'start'],
+                    stdout=out, stderr=subprocess.DEVNULL, start_new_session=True)
+                def observed():
+                    found = self.engines()
+                    require(len(found) <= 1, 'loader-engine-not-unique')
+                    return found[0] if found else None
+                engine = wait(observed, 5)
+                require(engine[2] == PAYLOAD / self.names['vulkan']
+                        and sha(engine[2]) == self.assets['vulkan']['sha256'], 'loader-vulkan-process-pin')
+                self.loader_engine(engine, broker, environment)
+                start_code = activation.wait(timeout=15)
+            require(response.stat().st_size <= 16384, 'loader-start-response-bound')
+            start_raw = response.read_text()
+            self.snapshots.append(start_raw)
+            try:
+                start_value = json.loads(start_raw)
+            except ValueError:
+                raise Invalid('loader-start-response-json')
+            require(isinstance(start_value, dict), 'loader-start-response-json')
+            self.loader_start_response(start_code, start_value)
+            value = self.status(check=False)
+            if value.get('state') == 'recording':
+                # With on-demand model loading, initialization may not finish
+                # until stop. Route actual speech and explicitly stop if alive.
+                def capture_or_error():
+                    if self.status(check=False).get('state') == 'error':
+                        return 'error'
+                    return 'capture' if self.engines() and self.capture_link() else None
+                if wait(capture_or_error, 10) == 'capture':
+                    sample = next(s for s in self.fixtures if s['language'] == 'en' and s['source_row'] == 0)
+                    self.play(sample)
+                    require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0, 'loader-playback-failed')
+                    if self.status(check=False).get('state') == 'recording':
+                        self.status('stop', check=False)
+            terminal = wait(lambda: (v if (v := self.status(check=False)).get('state') in ('ready', 'error') else None), 240)
+            continued = terminal.get('state') == 'ready'
+            continuation = []
+            if continued:
+                # The native backend can swallow loader initialization errors
+                # and complete locally on CPU. The controller selects a Vulkan
+                # executable; its status alone cannot prove a native GPU device.
+                sample = next(s for s in self.fixtures if s['language'] == 'en' and s['source_row'] == 0)
+                previous, stable = None, 0
+                def received():
+                    nonlocal previous, stable
+                    text = (self.root / 'received.private').read_text()
+                    stable = stable + 1 if text and text == previous else 0
+                    previous = text
+                    return text if stable >= 3 else None
+                hypothesis = wait(received, 5)
+                require(hypothesis and '\n' not in hypothesis and self.focused(), 'loader-continuation-insertion-failed')
+                self.phrases.append(hypothesis)
+                metrics = self.accuracy.metrics((DATA / 'dictation-fixtures' / sample['reference']).read_text(), hypothesis)
+                continuation.append({'language': 'en', 'source_row': 0, 'purpose': 'loader-continuation',
+                    'wav_sha256': sample['wav_sha256'], 'reference_sha256': sample['reference_sha256'],
+                    'hypothesis_sha256': hashlib.sha256(hypothesis.encode()).hexdigest(),
+                    'elapsed_ns': time.monotonic_ns() - attempted, 'audio_frames': sample['audio_frames'],
+                    'sample_rate': 16000, 'reference_words': metrics['reference_words'], 'word_edits': metrics['word_edits'],
+                    'reference_chars': metrics['reference_characters'], 'char_edits': metrics['character_edits'],
+                    'backend': 'cpu-inferred-after-loader-fault', 'cpu_variant': 'vulkan-build',
+                    'binary_sha256': self.assets['vulkan']['sha256'], 'model_sha256': self.assets['model']['sha256']})
+                self.empty()
+                # A successful native continuation does not activate Arctic's
+                # session fallback. Explicitly select CPU for the new recording.
+                self.status('set-backend', 'cpu')
+            else:
+                require(terminal.get('ok') is False and terminal.get('active_backend') == 'cpu'
+                        and terminal.get('backend') == 'vulkan' and terminal.get('error') in (
+                            'GPU initialization failed. CPU is selected for this session; record again.',
+                            'GPU transcription failed. CPU is selected for this session; record again.'),
+                        'loader-error-not-actionable-cpu-retry')
+                require((self.root / 'received.private').read_bytes() == b'', 'loader-error-inserted-text')
+            self.no_engine(); require(not self.transcript_files(), 'loader-error-retained-transcript')
+            time.sleep(.5); self.no_engine()
+            require((self.root / 'received.private').read_bytes() == b'', 'loader-receiver-not-empty-before-retry')
+            retries = []
+            for language in ('en', 'he'):
+                self.broker_identity(broker)
+                require(self.status().get('backend') == ('cpu' if continued else 'vulkan'), 'loader-retry-preference-changed')
+                sample = next(s for s in self.fixtures if s['language'] == language and s['source_row'] == 0)
+                retries.append(self.transcribe(sample, 'cpu-loader-retry', store=False, loader=(broker, environment)))
+                self.broker_identity(broker)
+            return {'count': 2, 'active_backend_vulkan': True, 'active_backend_cpu': True,
+                    'fresh_broker': True, 'inherited_loader_environment': True,
+                    'actionable_gpu_error': not continued, 'cpu_continuation_inferred': continued,
+                    'native_backend_directly_observed': False, 'cpu_preference_explicitly_selected': continued,
+                    'receiver_empty_before_retry': True,
+                    'explicit_new_cpu_recordings': True, 'drained': True,
+                    'pid': broker[0], 'start_ticks': broker[1], 'socket_inode': broker[2],
+                    'sha256': sha(icd), 'retry_samples': retries, 'continuation_samples': continuation}
+        finally:
+            errors = []
+            def stop_broker():
+                if broker is not None and (Path('/proc') / str(broker[0])).exists():
+                    self.broker_identity(broker); self.status('cancel', check=False)
+                    self.kill_identity(broker[0], broker[1])
+            for operation in (lambda: self.kill(activation), lambda: self.kill(self.player),
+                              stop_broker, lambda: self.kill(wrapper),
+                              lambda: self.status('cancel', check=False), self.no_engine,
+                              lambda: self.status('set-backend', 'cpu'), lambda: icd.unlink(missing_ok=True)):
+                try:
+                    operation()
+                except (Invalid, OSError, ValueError, subprocess.TimeoutExpired):
+                    errors.append(True)
+            self.player = None
+            require(not errors, 'loader-owned-cleanup-failed')
 
     @staticmethod
     def kill_identity(pid, ticks):
@@ -740,7 +958,8 @@ class Checker:
         self.gate('microphone-disconnect-error', self.microphone, 'device-disconnect-fixture')
         self.gate('lock-discards', self.locked)
         if self.profile_id == 'turbo-q5-v3':
-            self.gate('gpu-runtime-failure-cpu-retry', self.gpu_failure, 'owned-process-kill-fixture')
+            if self.gate('gpu-runtime-failure-cpu-retry', self.gpu_failure, 'owned-process-kill-fixture'):
+                self.gate(LOADER_GPU_GATE, self.gpu_loader_failure, 'loader-configuration-fixture')
         else:
             self.gate(LEGACY_GPU_GATE, self.legacy_gpu)
         self.gate('transcript-private-cleanup', self.cleanup_check)
