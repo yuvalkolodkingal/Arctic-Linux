@@ -34,10 +34,10 @@ def causal_module():
 
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
-CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v3-raw-clock-autonomous'
+CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v5-original-appid-native-bracket-raw-clock-autonomous'
 MAPPING_POLL_SECONDS = .001
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v10-raw-causal-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v12-original-appid-native-bracket-role-first-use'
 ROLE_POLL_SECONDS = .00005
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
@@ -138,7 +138,9 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
                     # Only identities are needed until the persistence query.
                     # Do not duplicate a potentially 4 MiB client inventory or
                     # large titles alongside the trace in the mapping envelope.
-                    matched = [dict(id=c['id'], **({'foreign_toplevel_id': c['foreign_toplevel_id']}
+                    matched = [dict(id=c['id'],
+                               **({'appid': c.get('appid', c.get('app_id', ''))} if clock_name == 'CLOCK_MONOTONIC_RAW' else {}),
+                               **({'foreign_toplevel_id': c['foreign_toplevel_id']}
                                if c.get('foreign_toplevel_id') else {})) for c in windows]
                     result = dict(payload=dict(clients=matched), lower_ns=max(lower_ns, started_ns),
                                   upper_ns=query_finished, query_roundtrips=traces)
@@ -723,15 +725,11 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                     break
                 windows = observation['windows']
                 observed_window_ids.update(str(window['id']) for window in windows)
-                measured = (observation['upper_ns'] - started_ns)/1e9
                 causal_bound = None
                 if CAUSAL_TRACER is not None:
-                    causal_lower, causal_bound = CAUSAL_TRACER.bound(windows, started_ns, observation['upper_ns'])
-                    # The independent before-insertion return event can tighten
-                    # only the LOWER endpoint. Keep the original conservative
-                    # query upper, every sample and all original numeric gates.
-                    causal_bound['ipc_lower_monotonic_ns'] = observation['lower_ns']
-                    observation['lower_ns'] = max(observation['lower_ns'], causal_lower)
+                    observation['lower_ns'], observation['upper_ns'], causal_bound = CAUSAL_TRACER.bound(
+                        windows, started_ns, observation['lower_ns'], observation['upper_ns'], pattern)
+                measured = (observation['upper_ns'] - started_ns)/1e9
                 lower = (observation['lower_ns'] - started_ns)/1e9
                 time.sleep(hold_seconds)
                 persistent = observer.query()
@@ -894,6 +892,12 @@ def main(preconditioned=False, functional=False, causal_precision=False):
         declared = None
         if preconditioned:
             context = json.loads(Path('/run/t/performance-context.json').read_text())
+            if 'external_execution' in context:
+                expected = context['external_execution']['observer']['frozen_sha256']
+                actual = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+                if actual != expected:
+                    raise RuntimeError('External frozen observer file differs')
+                emit('external_execution', dict(context=context, observer_file_sha256=actual))
             declared = declare_roles(prefix, context, inventory)
             emit('app_roles', declared)
         elif functional:

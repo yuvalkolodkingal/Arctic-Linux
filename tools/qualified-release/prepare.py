@@ -148,6 +148,135 @@ def source_hash(ref, name):
         ['git', '-C', str(ROOT), 'show', ref + ':' + name], timeout=120)).hexdigest()
 
 
+EXTERNAL_PERFORMANCE_MODE = 'frozen-external-paired-v1'
+LEGACY_PERFORMANCE_MODE = 'in-producer-paired-v1'
+EXTERNAL_PERFORMANCE_WORKFLOW = '.github/workflows/paired-candidate-20261009.yml'
+EXTERNAL_PERFORMANCE_MARKER = '.github/qualification-20261009.performance'
+EXTERNAL_PERFORMANCE_PLAN = 'tools/performance/execution-manifest.json'
+
+
+def performance_mode(manifest):
+    mode = manifest['image'].get('producer_mode', LEGACY_PERFORMANCE_MODE)
+    require(mode in (LEGACY_PERFORMANCE_MODE, EXTERNAL_PERFORMANCE_MODE),
+            'Unknown image performance mode')
+    require(manifest['performance'].get('performance_mode', LEGACY_PERFORMANCE_MODE) == mode,
+            'Image and performance lane modes differ')
+    return mode
+
+
+def source_bytes(ref, name):
+    require(re.fullmatch('[0-9a-f]{40}', ref) and not Path(name).is_absolute()
+            and '..' not in Path(name).parts, 'Unsafe qualification source identity')
+    return subprocess.check_output(['git', '-C', str(ROOT), 'show', ref + ':' + name], timeout=120)
+
+
+def performance_contract(expected_sha):
+    path = ROOT / 'tools/performance/contract.py'
+    require(path.is_file() and not path.is_symlink()
+            and type(expected_sha) is str and re.fullmatch('[0-9a-f]{64}', expected_sha) and sha(path) == expected_sha,
+            'External performance validator is absent, unsafe or differs from the reviewed source')
+    # Compile the verified bytes directly: ignored Python bytecode must never
+    # substitute a timestamp/size-matched stale validator for the pinned source.
+    data = path.read_bytes()
+    require(hashlib.sha256(data).hexdigest() == expected_sha, 'Performance validator changed before loading')
+    spec = importlib.util.spec_from_file_location('qualified_performance_contract', path)
+    result = importlib.util.module_from_spec(spec)
+    exec(compile(data, str(path), 'exec'), result.__dict__)
+    return result
+
+
+def publication_files(manifest):
+    if performance_mode(manifest) == LEGACY_PERFORMANCE_MODE:
+        return FILES
+    return FILES | set(performance_contract(manifest['execution_files'].get('tools/performance/contract.py')).EXECUTION_FILES)
+
+
+def validate_performance_lane(manifest, jobs, fetch):
+    """Require exactly one successful producer mode; failures are never rescued."""
+    image, pin = manifest['image'], manifest['performance']
+    if performance_mode(manifest) == LEGACY_PERFORMANCE_MODE:
+        steps = [step for job in jobs if job['name'] == 'iso'
+                 for step in job['steps'] if step['name'] == 'Paired KVM performance acceptance']
+        require(len(steps) == 1 and steps[0]['conclusion'] == 'success',
+                'Actual paired same-image measurements did not pass')
+        require(pin['run_id'] == image['run_id'] and pin['source_sha'] == image['source_sha'],
+                'Performance image/run differs')
+        return validate_artifact(pin, 'paired-performance')
+    fetch.validate_external_producer_steps(image, jobs)
+    require(re.fullmatch('[0-9a-f]{40}', pin.get('reviewed_parent_sha', ''))
+            and re.fullmatch('[0-9a-f]{64}', pin.get('plan_sha256', ''))
+            and re.fullmatch('[0-9a-f]{64}', pin.get('execution_json_sha256', ''))
+            and pin['run_id'] != image['run_id'], 'Invalid frozen external performance pin')
+    artifact = validate_lane(pin, EXTERNAL_PERFORMANCE_WORKFLOW, 'external-paired-performance')
+    run = api('/actions/runs/' + str(pin['run_id']))
+    require(run['head_branch'] == 'codex/qualification-dispatch-20261008'
+            and run['head_sha'] == pin['source_sha'] and run['path'] == EXTERNAL_PERFORMANCE_WORKFLOW
+            and run['event'] == 'push' and type(run['run_attempt']) is int and run['run_attempt'] == 1
+            and run['status'] == 'completed' and run['conclusion'] == 'success',
+            'External performance branch or first-attempt execution differs')
+    parent, source = pin['reviewed_parent_sha'], pin['source_sha']
+    require(git('rev-list', '--parents', '-n', '1', source).split() == [source, parent]
+            and source_bytes(source, EXTERNAL_PERFORMANCE_MARKER) == (parent + '\n').encode()
+            and git('diff', '--no-renames', '--name-only', parent, source).splitlines() == [EXTERNAL_PERFORMANCE_MARKER],
+            'External performance activation is not the reviewed marker-only child')
+    return artifact
+
+
+def performance_proof(evidence, manifest, fetch):
+    image, pin = manifest['image'], manifest['performance']
+    if performance_mode(manifest) == LEGACY_PERFORMANCE_MODE:
+        state, comparison = read_json(evidence, 'status.json'), read_json(evidence, 'comparison.json')
+        require(state['phase'] == 'complete_regression_gate_passed' and state['acceleration'] == 'kvm'
+                and state['memory_mib'] == 4096 and state['vcpus'] == 2 and state['restricted_network'] is True
+                and state['images']['candidate']['sha256'] == image['sha256']
+                and len(state['runs']) == 6 and all(row['harness_exit'] == 0 for row in state['runs'])
+                and comparison['status'] == 'regression_gate_passed'
+                and comparison['measurement_precision']['valid'] is True
+                and comparison['measurement_precision']['threshold_enclosure_valid'] is True,
+                'Same-image paired precision/regression evidence failed')
+        return dict(pin)
+    contract = performance_contract(source_hash(pin['source_sha'], 'tools/performance/contract.py'))
+    raw_plan = source_bytes(pin['source_sha'], EXTERNAL_PERFORMANCE_PLAN)
+    require(len(raw_plan) < 128 * 1024
+            and hashlib.sha256(raw_plan).hexdigest() == pin['plan_sha256'],
+            'Frozen external plan differs from the reviewed source')
+    plan = contract.parse_json(raw_plan)
+    require(plan['ready'] is True, 'External performance plan is unreviewed')
+    require(evidence.getinfo('execution.json').file_size <= 4_000_000
+            and hashlib.sha256(evidence.read('execution.json')).hexdigest() == pin['execution_json_sha256'],
+            'External performance execution receipt differs')
+    expected_files = {name: source_hash(pin['source_sha'], name) for name in contract.EXECUTION_FILES}
+    for name, expected in expected_files.items():
+        path = ROOT / name
+        require(path.is_file() and not path.is_symlink() and sha(path) == expected,
+                'Frozen performance execution helper drift: ' + name)
+    candidate_sources = {name: source_hash(image['source_sha'], name)
+                         for name in contract.CANDIDATE_SOURCE_FILES}
+    observer = contract.observer_hashes_from_sources(
+        source_bytes(pin['source_sha'], 'tools/performance/guest.py'),
+        source_bytes(pin['source_sha'], 'tools/performance/causal.py'))
+    observer['comparator_sha256'] = source_hash(pin['source_sha'], 'tools/performance/compare.py')
+    contract.validate_plan(plan, candidate_source_files=candidate_sources,
+                           execution_files=expected_files, observer=observer)
+    require(plan['image'] == image, 'Frozen performance plan image differs')
+    require(0 < evidence.getinfo('producer-receipt.json').file_size <= 32_768,
+            'Oversized external producer receipt')
+    receipt_raw = evidence.read('producer-receipt.json')
+    require(hashlib.sha256(receipt_raw).hexdigest() == image['producer_receipt_sha256'],
+            'External producer receipt bytes differ')
+    receipt = fetch.read_receipt(receipt_raw, image)
+    spec = importlib.util.spec_from_file_location('qualified_frozen_comparator', ROOT / 'tools/performance/compare.py')
+    comparator = importlib.util.module_from_spec(spec)
+    comparator_bytes = (ROOT / 'tools/performance/compare.py').read_bytes()
+    require(hashlib.sha256(comparator_bytes).hexdigest() == observer['comparator_sha256'],
+            'Frozen comparator changed before loading')
+    exec(compile(comparator_bytes, str(ROOT / 'tools/performance/compare.py'), 'exec'), comparator.__dict__)
+    replay = contract.validate_evidence(evidence, plan=plan, plan_sha256=pin['plan_sha256'], image=image,
+        execution_source_sha=pin['source_sha'], reviewed_parent_sha=pin['reviewed_parent_sha'],
+        execution_run_id=pin['run_id'], comparator=comparator, producer_receipt=receipt)
+    return dict(pin=pin, replay=replay, candidate_source_files=candidate_sources, observer=observer)
+
+
 def dictation_lane_proof(archive, manifest, hardware_profile):
     """Check one complete hardware lane without substituting another profile."""
     state = read_json(archive, 'execution.json')
@@ -800,7 +929,7 @@ def prepare(manifest, out):
             and event['after'] == os.environ['GITHUB_SHA'] == git('rev-parse', 'HEAD')
             and git('diff', '--name-only', parent, 'HEAD').splitlines() == ['.github/qualification-20261008.publish']
             and not git('status', '--porcelain'), 'Publication activation/source differs')
-    require(set(manifest['execution_files']) == FILES, 'Publication execution inventory differs')
+    require(set(manifest['execution_files']) == publication_files(manifest), 'Publication execution inventory differs')
     for name, expected in manifest['execution_files'].items():
         require(re.fullmatch('[0-9a-f]{64}', expected) and not (ROOT / name).is_symlink()
                 and sha(ROOT / name) == expected, 'Publication source bytes differ: ' + name)
@@ -814,6 +943,7 @@ def prepare(manifest, out):
             'Actual installer restoration qualification and visual review pins are required')
     for ref in {manifest['image']['source_sha'], manifest['main_sha'], release_main,
                 manifest['native']['source_sha'], manifest['installer']['source_sha'],
+                manifest['performance']['source_sha'],
                 *(pin['source_sha'] for pin in manifest['dictation'].values())}:
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
@@ -829,12 +959,8 @@ def prepare(manifest, out):
     jobs = fetch.api('/actions/runs/' + str(image['run_id']) + '/jobs?filter=all&per_page=100')
     require(jobs['total_count'] == len(jobs['jobs']), 'Incomplete build-job inventory')
     fetch.validate_boot_steps(image, jobs['jobs'])
-    steps = [step for job in jobs['jobs'] if job['name'] == 'iso'
-             for step in job['steps'] if step['name'] == 'Paired KVM performance acceptance']
-    require(len(steps) == 1 and steps[0]['conclusion'] == 'success', 'Actual paired same-image measurements did not pass')
     perf = manifest['performance']
-    require(perf['run_id'] == image['run_id'] and perf['source_sha'] == image['source_sha'], 'Performance image/run differs')
-    validate_artifact(perf, 'paired-performance')
+    validate_performance_lane(manifest, jobs['jobs'], fetch)
     validate_lane(manifest['native'], '.github/workflows/native-candidate-20261008.yml', 'native-candidate-qualification')
     for profile, pin in manifest['dictation'].items():
         validate_lane(pin, '.github/workflows/dictation-candidate-20261009.yml',
@@ -846,15 +972,7 @@ def prepare(manifest, out):
     with tempfile.TemporaryDirectory(prefix='arctic-qualified-') as temp:
         temp = Path(temp)
         with archive(perf, temp / 'performance.zip') as evidence:
-            state, comparison = read_json(evidence, 'status.json'), read_json(evidence, 'comparison.json')
-            require(state['phase'] == 'complete_regression_gate_passed' and state['acceleration'] == 'kvm'
-                    and state['memory_mib'] == 4096 and state['vcpus'] == 2 and state['restricted_network'] is True
-                    and state['images']['candidate']['sha256'] == image['sha256']
-                    and len(state['runs']) == 6 and all(row['harness_exit'] == 0 for row in state['runs'])
-                    and comparison['status'] == 'regression_gate_passed'
-                    and comparison['measurement_precision']['valid'] is True
-                    and comparison['measurement_precision']['threshold_enclosure_valid'] is True,
-                    'Same-image paired precision/regression evidence failed')
+            performance = performance_proof(evidence, manifest, fetch)
         with archive(manifest['native'], temp / 'native.zip') as evidence:
             native = native_proof(evidence, manifest)
         with ExitStack() as stack:
@@ -886,7 +1004,7 @@ def prepare(manifest, out):
         (out / (name + '.torrent.sha256')).write_text(transport['torrent_sha256'] + '  ' + name + '.torrent\n')
         proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main,
                      release_main_checks=current_checks, image=image,
-                     performance=perf, native=native, dictation=dictation, installer=installer,
+                     performance=performance, native=native, dictation=dictation, installer=installer,
                      update=manifest['update'], release_acceptance='qualified',
                      measured_speed_or_ram_gain_claim=False, torrent=transport)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')
