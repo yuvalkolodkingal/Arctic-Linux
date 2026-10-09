@@ -344,8 +344,10 @@ def exercise(base, out, compositor, frame_source=None):
             stop(installer)
 
             # Exercise the production observer against actual private Mango and
-            # Foot before the unchanged frame matrix. This is not ISO speed or
-            # RAM evidence: it only checks temporal precision of the collector.
+            # Foot before the unchanged frame matrix. Keep its precision result
+            # separate: this forced-software, headless rendering fixture is not
+            # the ISO's guest graphics/session. Every failed bracket remains a
+            # failed measurement; only the full paired ISO run can qualify it.
             observer_spec = importlib.util.spec_from_file_location('native_mapping_observer',
                 SOURCE.parent / 'tools/performance/guest.py')
             observer = importlib.util.module_from_spec(observer_spec)
@@ -358,6 +360,7 @@ def exercise(base, out, compositor, frame_source=None):
             observer.emit = lambda check, value: print('ARCTIC-PERFORMANCE ' + json.dumps(
                 dict(stage='private-frame-fixture', check=check, value=value)), flush=True)
             measurements = []
+            raw_observations = []
             for launch in range(4):
                 brackets = []
                 elapsed = observer.startup(prefix, ['foot'], ('foot',), timeout=30,
@@ -365,12 +368,20 @@ def exercise(base, out, compositor, frame_source=None):
                     poll_seconds=observer.ROLE_POLL_SECONDS, label='private-foot')
                 assert len(brackets) == 1
                 bracket = brackets[0]
-                assert bracket['interval_seconds'] <= min(.005, elapsed*.025), bracket
+                limit = min(.005, elapsed*.025)
+                raw_observations.append(bracket)
                 measurements.append(dict(launch=launch, observed_seconds=elapsed,
                     lower_seconds=bracket['lower_seconds'], upper_seconds=bracket['upper_seconds'],
-                    interval_seconds=bracket['interval_seconds'], observer=bracket['observer']))
-            results.append(dict(case='native-foot-observer-precision', measurements=measurements))
-            print('ARCTIC-NATIVE-FOOT-PRECISION ' + json.dumps(measurements), flush=True)
+                    interval_seconds=bracket['interval_seconds'], observer=bracket['observer'],
+                    precision_limit_seconds=limit, precision_valid=bracket['interval_seconds'] <= limit))
+            precision = dict(case='native-foot-observer-precision',
+                status=('measurement_precision_gate_passed' if all(m['precision_valid'] for m in measurements)
+                        else 'measurement_precision_gate_failed'), measurements=measurements,
+                scope='Private forced-software/headless fixture; not ISO qualification')
+            (out / 'native-foot-precision.json').write_text(json.dumps(
+                dict(precision, raw_observations=raw_observations), indent=2)+'\n')
+            results.append(precision)
+            print('ARCTIC-NATIVE-FOOT-PRECISION ' + json.dumps(precision), flush=True)
 
         # Keep mixed-DPI coverage and exercise both rounded physical axes.
         # One common scale-1 profile already covers both outputs; then scale

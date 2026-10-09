@@ -44,7 +44,19 @@ limit. Summarization occurs after gate computation and never modifies input logs
 
 Local Unix-socket fixtures check fragmented and malformed transport, actual UID,
 independent mapping brackets, postponed parent reads, timeouts, cancellation and
-owned-process cleanup. The disposable native frame VM additionally checks four
+owned-process cleanup. The disposable native frame VM additionally records four
 Foot launches against the same unchanged precision limit before its full frame
-matrix. These controls validate the observer; they do not qualify an ISO or
-establish speed/RAM gains. A fresh complete counterbalanced paired run is required.
+matrix. It retains all raw observations and marks each invalid bracket and the
+overall precision result as failed. That diagnostic is separate from the original
+frame geometry/pixel gate: this fixture forces software GLES with two headless
+outputs and does not reproduce the ISO's graphics/session environment.
+
+The first two actual v2 fixture runs mapped Foot, but their final queries took
+212 and 375 ms, giving failed 213 and 377 ms mapping brackets. Removing parent
+handoffs did not resolve this fixture's precision limitation. Mango 0.17.3 handles
+client scene creation, insertion and resize synchronously before returning to
+queued IPC; its watch notifications do not provide an authoritative timestamp.
+The failed experiments are retained rather than converted into passes. Observer
+transport controls and frame success cannot qualify precision or speed/RAM gains.
+The rebuilt ISO's full six-boot paired gate remains mandatory with every original
+precision, enclosure and regression threshold unchanged.
