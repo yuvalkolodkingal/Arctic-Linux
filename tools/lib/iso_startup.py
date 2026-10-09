@@ -4,6 +4,26 @@ import time
 from pathlib import Path
 
 
+def console_screen(path):
+    """Input guard only: refuse to type shell commands into a graphical wizard.
+
+    Guest authentication, installer IPC, enforcing SELinux and unique completion
+    records still determine startup acceptance. A dark image alone never passes.
+    """
+    from PIL import Image
+    try:
+        with Image.open(path) as image:
+            if not (320 <= image.width <= 4096 and 200 <= image.height <= 4096):
+                return False
+            # Linux's text VT is black with a small amount of white console text.
+            # Examine original pixels; a missing/blank/graphical capture fails.
+            histogram = image.convert('L').histogram()
+            total = image.width * image.height
+            return sum(histogram[:17]) / total > .90 and sum(histogram[192:]) >= 30
+    except (OSError, TypeError, ValueError):
+        return False
+
+
 def installer_probe():
     validate = ("import json,sys; s=json.load(sys.stdin); "
                 "assert s['page']=='welcome' and s['ready'] is True "
@@ -54,8 +74,15 @@ def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep):
     if mode == 'install':
         # The installer intentionally has exclusive layer-shell keyboard focus.
         # Super+Enter and typed shell commands would instead drive its wizard.
-        vm.keys('ctrl-alt-f3')
+        # Keep modifiers down through QEMU's normal 100 ms key-up delay rather
+        # than compressing the entire VT chord into one zero-duration batch.
+        reply = vm.cmd('send-key', keys=[dict(type='qcode', data=key)
+                       for key in ('ctrl', 'alt', 'f3')], **{'hold-time': 100})
+        if 'error' in reply:
+            raise RuntimeError('QEMU refused the console VT chord')
         sleep(5)
+        if not console_screen(shot('97-console-login')):
+            raise RuntimeError('Console VT was not visible; refused to type into the installer')
         vm.type_text('liveuser', gap=.2)
         vm.keys('ret')
         sleep(5)

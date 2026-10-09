@@ -33,7 +33,8 @@ def role_run(image, number):
     result = legacy.run(image + str(number))
     result['identity']['sampler'] = comparison.ROLE_SAMPLER
     records = sorted(['kitty-0:1-1.x86_64', 'nautilus-0:1-1.x86_64'] if image == 'baseline'
-                     else ['foot-0:1-1.x86_64', 'pcmanfm-0:1-1.x86_64', 'epiphany-0:1-1.x86_64'])
+                     else ['foot-0:1-1.x86_64', 'pcmanfm-0:1-1.x86_64',
+                           'epiphany-1:50.1-1.fc44.x86_64', 'epiphany-runtime-1:50.1-1.fc44.x86_64'])
     result['rpm_inventory'] = dict(nevra=records,
         sha256=hashlib.sha256(('\n'.join(records)+'\n').encode()).hexdigest())
     roles, configured, programs = {}, {}, {}
@@ -45,6 +46,9 @@ def role_run(image, number):
                    dict(kind='rpm', nevra=next(value for value in records if value.startswith(app['rpm']+'-'))))
         if package['kind'] == 'rpm':
             package['binary_owner'] = package['nevra']
+            if 'desktop_rpm' in app:
+                package['desktop_owner'] = next(value for value in records
+                    if value.startswith(app['desktop_rpm']+'-') and '-runtime-' not in value)
         roles[role] = dict(id=ident, role=role, configured_command=configured[role],
             legacy_system_mime_fallback=False, program_path=programs[app['program']],
             appids=list(app['appids']), package=package)
@@ -186,6 +190,22 @@ class RoleQualificationTest(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaises(ValueError):
                 comparison.compare(runs)
 
+    def test_epiphany_runtime_and_desktop_launcher_have_distinct_exact_owners(self):
+        for fault in ('binary_owned_by_launcher', 'missing_runtime', 'missing_launcher', 'wrong_launcher'):
+            runs = paired_roles()
+            run = runs['candidate'][0]
+            package = run['app_roles']['roles']['browser']['package']
+            if fault == 'binary_owned_by_launcher':
+                package['nevra'] = package['binary_owner'] = package['desktop_owner']
+            elif fault == 'missing_runtime':
+                run['rpm_inventory']['nevra'].remove(package['nevra'])
+            elif fault == 'missing_launcher':
+                package.pop('desktop_owner')
+            else:
+                package['desktop_owner'] = 'chromium-0:1-1.x86_64'
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                comparison.compare(runs)
+
     def test_reused_profiles_preconditioned_cold_and_changed_source_are_rejected(self):
         for fault in ('running', 'profile', 'dirty', 'terminal_collector', 'order', 'cold_label',
                       'duplicate_boot', 'base_changed', 'profile_changed', 'historical_profile', 'remote_page'):
@@ -323,7 +343,7 @@ class RoleDeclarationTest(unittest.TestCase):
                     values[0]='Z';(proc/'stat').write_text('42 (python (fixture)) '+' '.join(values))
                 with self.subTest(fault=fault),self.assertRaises(RuntimeError): guest.worker_cpu_ticks(changed,root)
 
-    def declare(self, image, mutation=None):
+    def declare(self, image, mutation=None, owners=None):
         fixture = role_run(image, 1)
         state = copy.deepcopy(fixture['app_roles']['pristine_state'])
         state['sources'] = fixture['app_roles']['configuration_sources']
@@ -336,7 +356,13 @@ class RoleDeclarationTest(unittest.TestCase):
             if 'flatpak' in argv: return 'a'*64
             if argv[:2] == ['rpm', '-qf']:
                 program = Path(argv[-1]).name
-                return next(value for value in fixture['rpm_inventory']['nevra'] if value.startswith(program+'-'))
+                if owners and program in owners:
+                    return owners[program]
+                if program == 'org.gnome.Epiphany.desktop':
+                    return fixture['app_roles']['roles']['browser']['package']['desktop_owner']
+                app = next(app for app in guest.ROLE_APPS.values() if app['program'] == program)
+                return next(value for value in fixture['rpm_inventory']['nevra']
+                    if value.startswith(app['rpm']+'-') and (app['rpm'] != 'epiphany' or '-runtime-' not in value))
             raise AssertionError('Unexpected command: '+repr(argv))
         with patch.object(guest, 'run', side_effect=run), \
                 patch.object(guest.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_uid=1000)):
@@ -352,6 +378,16 @@ class RoleDeclarationTest(unittest.TestCase):
             self.assertTrue(any(call[:2] == ['rpm', '-qf'] for call in calls))
         result, _ = self.declare('baseline', lambda state: state['configured'].pop('browser'))
         self.assertTrue(result['roles']['browser']['legacy_system_mime_fallback'])
+
+    def test_actual_declaration_rejects_swapped_epiphany_split_package_ownership(self):
+        result, calls = self.declare('candidate')
+        browser = result['roles']['browser']['package']
+        self.assertTrue(browser['binary_owner'].startswith('epiphany-runtime-1:'))
+        self.assertTrue(browser['desktop_owner'].startswith('epiphany-1:'))
+        for program, wrong in [('epiphany', browser['desktop_owner']),
+                               ('org.gnome.Epiphany.desktop', browser['binary_owner'])]:
+            with self.subTest(program=program), self.assertRaises(RuntimeError):
+                self.declare('candidate', owners={program: wrong})
 
     def test_missing_selected_program_and_arbitrary_installed_browser_never_substitute(self):
         mutations = [lambda state: state['programs'].update(foot=None),

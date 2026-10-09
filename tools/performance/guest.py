@@ -41,7 +41,8 @@ ROLE_APPS = {
                flatpak='app.zen_browser.zen', desktop='app.zen_browser.zen.desktop',
                appids=('zen', 'app.zen_browser.zen'), cold_paths=('home/.var/app/app.zen_browser.zen',)),
     'gnome-web': dict(role='browser', configured=('epiphany', 'gtk-launch org.gnome.Epiphany'),
-                     program='epiphany', rpm='epiphany', desktop='org.gnome.Epiphany.desktop',
+                     program='epiphany', rpm='epiphany-runtime', desktop_rpm='epiphany',
+                     desktop='org.gnome.Epiphany.desktop',
                      appids=('org.gnome.epiphany', 'epiphany'),
                      cold_paths=('cache/epiphany', 'data/epiphany', 'config/epiphany')),
 }
@@ -360,6 +361,17 @@ def declare_roles(prefix, context, inventory):
             if owner != packages[0]:
                 raise RuntimeError('Configured program is not owned by the declared role RPM: ' + ident)
             package['binary_owner'] = owner
+            if 'desktop_rpm' in app:
+                launchers = [value for value in inventory['nevra']
+                             if re.match(re.escape(app['desktop_rpm'])+r'-[0-9]+:', value)]
+                if len(launchers) != 1:
+                    raise RuntimeError('Missing or ambiguous role launcher RPM: ' + ident)
+                desktop_owner = run(['rpm', '-qf', '--qf',
+                    '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}',
+                    '/usr/share/applications/' + app['desktop']])
+                if desktop_owner != launchers[0]:
+                    raise RuntimeError('Desktop launcher is not owned by the declared role RPM: ' + ident)
+                package['desktop_owner'] = desktop_owner
         else:
             commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', app['flatpak']])
             if not re.fullmatch('[0-9a-f]{64}', commit):

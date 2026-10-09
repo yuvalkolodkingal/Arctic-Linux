@@ -6,7 +6,7 @@ import shlex
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('iso_startup', ROOT / 'tools/lib/iso_startup.py')
@@ -76,14 +76,39 @@ class StartupTests(unittest.TestCase):
 
     def test_install_collector_preserves_exclusive_focus_installer(self):
         vm = Mock()
-        startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock())
+        vm.cmd.return_value = {'return': {}}
+        with patch.object(startup, 'console_screen', return_value=True):
+            startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock())
         keys = [call.args[0] for call in vm.keys.call_args_list]
-        self.assertEqual(keys, ['ctrl-alt-f3', 'ret', 'ret'])
+        self.assertEqual(keys, ['ret', 'ret'])
+        vm.cmd.assert_called_once_with('send-key', keys=[dict(type='qcode',data=key)
+            for key in ('ctrl','alt','f3')], **{'hold-time':100})
         self.assertEqual(vm.type_text.call_args_list[0].args[0], 'liveuser')
         command = vm.type_text.call_args_list[1].args[0]
         self.assertIn('call installer state', command)
         self.assertIn('chvt', command)
         self.assertNotIn('meta_l-ret', keys)
+
+    def test_failed_vt_switch_never_types_into_the_graphical_installer(self):
+        for error in (True, False):
+            vm = Mock()
+            vm.cmd.return_value = {'error': {'desc': 'no keyboard'}} if error else {'return': {}}
+            with patch.object(startup, 'console_screen', return_value=False), self.assertRaises(RuntimeError):
+                startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock())
+            vm.type_text.assert_not_called()
+            vm.keys.assert_not_called()
+
+    def test_console_input_guard_refuses_missing_blank_and_graphical_captures(self):
+        from PIL import Image, ImageDraw
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'console.png'
+            self.assertFalse(startup.console_screen(path))
+            for color, text, expected in [('#000000',False,False),('#1b232c',True,False),
+                                          ('#000000',True,True),('#ffffff',True,False)]:
+                image=Image.new('RGB',(1280,800),color)
+                if text: ImageDraw.Draw(image).text((0,0),'localhost-live login:',fill='white')
+                image.save(path)
+                self.assertEqual(startup.console_screen(path),expected)
 
     def test_actual_installer_probe_rejects_missing_failed_or_unready_ui(self):
         with tempfile.TemporaryDirectory() as tmp:
