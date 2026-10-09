@@ -60,7 +60,16 @@ def installer_probe():
     validate = ("import json,sys; s=json.load(sys.stdin); "
                 "assert s['page']=='welcome' and s['ready'] is True "
                 "and s['connected'] is True and not s['failure']")
-    return ("runuser -u liveuser -- env XDG_RUNTIME_DIR=/run/user/$(id -u liveuser) "
+    # Quickshell's path selector filters instances by WAYLAND_DISPLAY. A tty
+    # login has no display environment, even while the installer remains alive.
+    # Discover exactly one actual socket; never guess a display or start a UI.
+    return ("runtime=/run/user/$(id -u liveuser); display=; "
+            "for socket in \"$runtime\"/wayland-*; do "
+            "[ -S \"$socket\" ] || continue; "
+            "[ -z \"$display\" ] || exit 1; display=${socket##*/}; done; "
+            "test -n \"$display\" && "
+            "runuser -u liveuser -- env XDG_RUNTIME_DIR=\"$runtime\" "
+            "WAYLAND_DISPLAY=\"$display\" "
             "quickshell ipc -p /usr/share/arctic/installer-ui call installer state | "
             "python3 -c " + shlex.quote(validate))
 

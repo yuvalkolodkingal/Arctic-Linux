@@ -17,12 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Diagnose the rebuilt image; its producer passed Try, then stopped at tty6 input guarding.
+        # Safe passed at 445f560; rerun the corrected BIOS IPC display selector only.
         include:
           - firmware: bios
             mode: install
-          - firmware: uefi
-            mode: safe
     steps:
       - uses: actions/checkout@v4
         with:
