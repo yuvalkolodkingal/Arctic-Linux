@@ -55,3 +55,51 @@ jobs:
                           print(text)
                           print('ARCTIC-ISO-METADATA-END', item.filename)
           PY
+      - name: Read fixed screened failed startup evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import base64, hashlib, json, os, stat, struct, subprocess, tempfile, zipfile
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/qualification-dispatch-20261008'
+          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11592803816'
+          digest = '0ecdef00bf1957e5f648d2e55f921167feeac35b6038eee2064cf42d27d5a511'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['name'] == 'startup-diagnostics' and not metadata['expired']
+          assert metadata['workflow_run']['id'] == 37875703862
+          assert metadata['workflow_run']['head_sha'] == '50c8bc4cd576baf741868aaa17b94737199ccc9d'
+          assert metadata['size_in_bytes'] == 23254483 and metadata['digest'] == 'sha256:' + digest
+          with tempfile.TemporaryDirectory(prefix='arctic-startup-evidence-') as folder:
+              path = Path(folder) / 'retained.zip'
+              with path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              assert path.stat().st_size == 23254483 and hashlib.sha256(path.read_bytes()).hexdigest() == digest
+              with zipfile.ZipFile(path) as archive:
+                  items = archive.infolist()
+                  assert len(items) <= 300 and sum(item.file_size for item in items) < 150_000_000
+                  assert len({item.filename for item in items}) == len(items)
+                  for item in items:
+                      p = Path(item.filename)
+                      assert not p.is_absolute() and '..' not in p.parts
+                      assert not stat.S_ISLNK(item.external_attr >> 16)
+                      if p.name in ('serial.log', 'test.log'):
+                          assert item.file_size < 2_000_000
+                          print('ARCTIC-STARTUP-TEXT-BEGIN', item.filename)
+                          lines = archive.read(item).decode('utf-8', errors='strict').splitlines()
+                          for line in lines[-240:]:
+                              print(line[:1500])
+                          print('ARCTIC-STARTUP-TEXT-END', item.filename)
+                      if p.parent.name == 'bios-install' and p.name in ('97-before-collect.png', '97-console-login.png', '97-console-authentication-failed.png', '98-console.png', '99-final.png'):
+                          assert item.file_size < 2_000_000
+                          data = archive.read(item)
+                          assert data.startswith(b'\x89PNG\r\n\x1a\n')
+                          width, height = struct.unpack('>II', data[16:24])
+                          assert 1 <= width <= 4096 and 1 <= height <= 4096
+                          print('ARCTIC-STARTUP-PNG-BEGIN', item.filename, hashlib.sha256(data).hexdigest())
+                          encoded = base64.b64encode(data).decode('ascii')
+                          for offset in range(0, len(encoded), 1024):
+                              print('ARCTIC-STARTUP-PNG-DATA', encoded[offset:offset + 1024])
+                          print('ARCTIC-STARTUP-PNG-END', item.filename)
+          PY
