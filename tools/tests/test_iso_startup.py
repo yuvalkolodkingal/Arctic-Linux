@@ -3,6 +3,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shlex
+import socket
 import subprocess
 import tempfile
 import unittest
@@ -156,17 +157,29 @@ class StartupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'console.png'
             self.assertFalse(startup.console_screen(path))
-            for color, text, expected in [('#000000',False,False),('#1b232c',True,False),
-                                          ('#000000',True,True),('#ffffff',True,False)]:
+            for color, foreground, expected in [('#000000',None,False),
+                    ('#1b232c','white',False), ('#000000','white',True),
+                    ('#000000','#aaaaaa',True), ('#000000','#888888',False),
+                    ('#ffffff','white',False)]:
                 image=Image.new('RGB',(1280,800),color)
-                if text: ImageDraw.Draw(image).text((0,0),'localhost-live login:',fill='white')
+                if foreground:
+                    ImageDraw.Draw(image).text((0,0),'localhost-live login:',fill=foreground)
                 image.save(path)
                 self.assertEqual(startup.console_screen(path),expected)
 
     def test_actual_installer_probe_rejects_missing_failed_or_unready_ui(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for name, body in {'id': 'echo 1000', 'runuser': 'printf "%s" "$TEST_STATE"'}.items():
+            runtime = root/'run/1000'
+            runtime.mkdir(parents=True)
+            display = socket.socket(socket.AF_UNIX)
+            self.addCleanup(display.close)
+            display.bind(str(runtime/'wayland-17'))
+            for name, body in {'id': 'echo 1000',
+                    'runuser': 'shift 3; exec "$@"',
+                    'quickshell': 'test "$WAYLAND_DISPLAY" = wayland-17 && '
+                        'test "$XDG_RUNTIME_DIR" = "$TEST_RUNTIME" || exit 1; '
+                        'printf "%s" "$TEST_STATE"'}.items():
                 binary = root / name
                 binary.write_text('#!/bin/sh\n' + body + '\n')
                 binary.chmod(0o755)
@@ -177,11 +190,42 @@ class StartupTests(unittest.TestCase):
                     ('{"page":"welcome","ready":true,"connected":false,"failure":""}', False),
                     ('{"page":"welcome","ready":true,"connected":true,"failure":"bridge failed"}', False),
                     ('{"page":"timezone","ready":true,"connected":true,"failure":""}', False)]:
-                result = subprocess.run(['sh', '-c', startup.installer_probe()],
+                command = startup.installer_probe().replace('/run/user/',str(root/'run')+'/')
+                result = subprocess.run(['sh', '-c', command],
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         env={**os.environ, 'PATH': str(root) + ':' + os.environ['PATH'],
-                                             'TEST_STATE': state})
+                                             'TEST_STATE': state, 'TEST_RUNTIME':str(runtime),
+                                             'WAYLAND_DISPLAY':'wrong-console-display'})
                 self.assertEqual(result.returncode == 0, valid, state)
+
+    def test_installer_probe_requires_one_actual_wayland_socket(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root/'run/1000'
+            runtime.mkdir(parents=True)
+            for name, body in {'id':'echo 1000',
+                    'runuser':'touch "$TEST_CALLED"; exit 1'}.items():
+                binary=root/name
+                binary.write_text('#!/bin/sh\n'+body+'\n')
+                binary.chmod(0o755)
+            called=root/'called'
+            command=startup.installer_probe().replace('/run/user/',str(root/'run')+'/')
+            env={**os.environ,'PATH':str(root)+':'+os.environ['PATH'],'TEST_CALLED':str(called)}
+            # A regular file and lock file cannot impersonate a Wayland socket.
+            (runtime/'wayland-0').touch()
+            (runtime/'wayland-0.lock').touch()
+            result=subprocess.run(['sh','-c',command],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            self.assertNotEqual(result.returncode,0)
+            self.assertFalse(called.exists())
+            sockets=[]
+            for name in ('wayland-3','wayland-9'):
+                display=socket.socket(socket.AF_UNIX)
+                sockets.append(display)
+                self.addCleanup(display.close)
+                display.bind(str(runtime/name))
+            result=subprocess.run(['sh','-c',command],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            self.assertNotEqual(result.returncode,0)
+            self.assertFalse(called.exists())
 
     def test_console_restores_only_discovered_live_wayland_vt(self):
         with tempfile.TemporaryDirectory() as tmp:

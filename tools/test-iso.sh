@@ -162,7 +162,15 @@ if collect and vm.alive():
     # Install mode owns exclusive keyboard focus; preserve its actual window
     # and collect from an authenticated live console instead of driving the UI.
     from iso_startup import collect_session
-    collect_session(vm, mode, require_startup, shot, log, serial_path=f"{out}/serial.log")
+    try:
+        collect_session(vm, mode, require_startup, shot, log, serial_path=f"{out}/serial.log")
+    except (RuntimeError, ValueError) as error:
+        # Keep the exact collector failure in the screened test.log artifact,
+        # rather than only in the running producer's unavailable stderr.
+        log(f"FAIL: session collection: {error}")
+        shot("99-final")
+        vm.quit()
+        sys.exit(1)
     if vmtest.serial_has(f"{out}/serial.log", "ARCTIC-COLLECT-END"):
         log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
     else:

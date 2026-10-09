@@ -45,6 +45,17 @@ jobs:
           ref: ${{ steps.image.outputs.source }}
           path: source
           persist-credentials: false
+      - name: Install and verify host evidence decoder before starting guests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pil
+          python3 -B - <<'PY'
+          import sys
+          sys.path.insert(0, 'execution/tools/lib')
+          import vmtest
+          assert vmtest.chord_for('A') == ['shift', 'a']
+          print('Host PNG and physical-input evidence dependencies are available')
+          PY
       - name: Fetch and verify retained ISO archive and actual image bytes
         env:
           GH_TOKEN: ${{ github.token }}
