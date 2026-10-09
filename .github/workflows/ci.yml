@@ -344,10 +344,11 @@ jobs:
           name: rpms
           path: out/frame-rpms
       - name: Prepare the private software compositor allocator
+        timeout-minutes: 8
         run: |
           # Boot the test kernel inside QEMU; the Azure host has no udmabuf driver.
-          sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 busybox-static cpio kmod xz-utils zstd
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y qemu-system-x86 busybox-static cpio kmod xz-utils zstd
           git fetch --depth 1 origin 2d5ac68847a5feb541177aeaa5a9a00d5ad44815
       - name: Replay original and repaired frame on Mango and sway
         run: bash shell/dev/test-screen-frame-vm.sh
