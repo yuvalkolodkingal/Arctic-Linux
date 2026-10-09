@@ -17,11 +17,13 @@ def console_screen(path):
         with Image.open(path) as image:
             if not (320 <= image.width <= 4096 and 200 <= image.height <= 4096):
                 return False
-            # Linux's text VT is black with a small amount of white console text.
+            # Linux's normal VT foreground is VGA light gray (170), while bold
+            # text can be white. The retained BIOS tty6 has 4,184 gray pixels
+            # and no pixels at 192+, so a white-only check rejects a real getty.
             # Examine original pixels; a missing/blank/graphical capture fails.
             histogram = image.convert('L').histogram()
             total = image.width * image.height
-            return sum(histogram[:17]) / total > .90 and sum(histogram[192:]) >= 30
+            return sum(histogram[:17]) / total > .90 and sum(histogram[160:]) >= 30
     except (OSError, TypeError, ValueError):
         return False
 
@@ -58,7 +60,16 @@ def installer_probe():
     validate = ("import json,sys; s=json.load(sys.stdin); "
                 "assert s['page']=='welcome' and s['ready'] is True "
                 "and s['connected'] is True and not s['failure']")
-    return ("runuser -u liveuser -- env XDG_RUNTIME_DIR=/run/user/$(id -u liveuser) "
+    # Quickshell's path selector filters instances by WAYLAND_DISPLAY. A tty
+    # login has no display environment, even while the installer remains alive.
+    # Discover exactly one actual socket; never guess a display or start a UI.
+    return ("runtime=/run/user/$(id -u liveuser); display=; "
+            "for socket in \"$runtime\"/wayland-*; do "
+            "[ -S \"$socket\" ] || continue; "
+            "[ -z \"$display\" ] || exit 1; display=${socket##*/}; done; "
+            "test -n \"$display\" && "
+            "runuser -u liveuser -- env XDG_RUNTIME_DIR=\"$runtime\" "
+            "WAYLAND_DISPLAY=\"$display\" "
             "quickshell ipc -p /usr/share/arctic/installer-ui call installer state | "
             "python3 -c " + shlex.quote(validate))
 
