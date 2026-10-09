@@ -108,6 +108,16 @@ enforcement intact. Uprobes temporarily trap the observed function's return in
 the kernel; that instrumentation and reader costs are included in the
 measurement; a frozen combined source hash is shared by all six boots.
 
+The tracefs command interface uses a write-only, close-on-exec descriptor with
+one complete command of at most 4096 bytes per write and an exact byte-count
+check. It never seeks, appends, creates or truncates the command file. Python
+[FileIO append mode](https://github.com/python/cpython/blob/v3.14.0/Modules/_io/fileio.c)
+explicitly seeks to `SEEK_END`, which Linux
+[seq_lseek](https://github.com/torvalds/linux/blob/master/fs/seq_file.c) rejects.
+Opening `uprobe_events` with `O_TRUNC` would instead remove unrelated global
+events. Both registration and removal use the bounded command writer; failed
+writes close the owned descriptor and cleanup still attempts every owned resource.
+
 Unknown identifiers, wrong-process events, wrong clocks, stale/future receipts,
 unsupported ELF layouts, absent tracing, lost events, bounded-reader overflow and
 cleanup failure fail qualification. Kernel text timestamp precision is disclosed.
@@ -149,3 +159,11 @@ failed image and preserve actual library/probe/loss/timing evidence. That lane m
 not pass the native image fetch guard, mark a failed producer qualified, publish,
 or supply final six-boot acceptance. The final image still requires six fresh paired
 KVM boots and every unchanged precision, enclosure and regression check.
+
+The first actual [retained-image calibration](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37951719419)
+installed and booted kernel `7.2.9-200.fc44.x86_64` with SELinux enforcing,
+all five required tracing features enabled, lockdown `none` and `kvm-clock`.
+It failed before any launch measurement because Python append-mode opening of
+`uprobe_events` returned `EINVAL`. Its original failed report is retained.
+The nonseeking writer correction has source controls, but needs a new reviewed
+calibration activation and actual runtime result; it is not timing evidence.

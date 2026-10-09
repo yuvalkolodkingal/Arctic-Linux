@@ -24,6 +24,69 @@ R = load('causal_roles', ROOT/'tools/tests/test_performance_roles.py')
 
 
 class CausalControls(unittest.TestCase):
+    def test_tracefs_command_uses_one_nontruncating_nonseeking_owned_write(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);events=root/'uprobe_events'
+            original=b'unrelated global events must not be truncated'+b'X'*100
+            events.write_bytes(original)
+            command='-:owned/map_create\n';data=command.encode('ascii')
+            actual_open,actual_write,actual_close=os.open,os.write,os.close
+            with patch.object(C.os,'open',wraps=actual_open) as opened, \
+                 patch.object(C.os,'write',wraps=actual_write) as written, \
+                 patch.object(C.os,'close',wraps=actual_close) as closed, \
+                 patch.object(C.os,'lseek',side_effect=AssertionError('tracefs must not seek')):
+                C.write_uprobe_command(root,command)
+            opened.assert_called_once_with(events,os.O_WRONLY|os.O_CLOEXEC)
+            self.assertEqual(opened.call_args.args[1]&(os.O_APPEND|os.O_TRUNC|os.O_CREAT),0)
+            written.assert_called_once()
+            fd,payload=written.call_args.args
+            self.assertEqual(payload,data)
+            closed.assert_called_once_with(fd)
+            with self.assertRaises(OSError):os.fstat(fd)
+            # A regular fixture has byte-offset semantics; the real seq-file
+            # parses commands. Its untouched suffix detects destructive flags.
+            self.assertEqual(events.read_bytes(),data+original[len(data):])
+
+    def test_tracefs_short_or_failed_write_closes_fd_and_never_retries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'uprobe_events').touch()
+            command='-:owned/map_create\n';actual_close=os.close
+            for fault in (0,len(command)-1,OSError(22,'kernel rejected command')):
+                with self.subTest(fault=fault), \
+                     patch.object(C.os,'write',**({'side_effect':fault} if isinstance(fault,Exception) else {'return_value':fault})) as written, \
+                     patch.object(C.os,'close',wraps=actual_close) as closed:
+                    with self.assertRaises((OSError,RuntimeError)):
+                        C.write_uprobe_command(root,command)
+                    written.assert_called_once()
+                    fd=written.call_args.args[0]
+                    closed.assert_called_once_with(fd)
+                    with self.assertRaises(OSError):os.fstat(fd)
+            with patch.object(C.os,'open') as opened:
+                for fault in ('', 'missing newline', 'two\ncommands\n','X'*4096+'\n'):
+                    with self.subTest(fault=fault),self.assertRaises(RuntimeError):
+                        C.write_uprobe_command(root,fault)
+                opened.assert_not_called()
+
+    def test_unregister_write_failure_still_closes_owned_fd_and_attempts_unmount(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);probe=C.LowerBoundProbe([]);probe.root=root
+            (root/'events'/probe.group/'map_create').mkdir(parents=True)
+            (root/'trace_pipe').touch()
+            fd=os.open(root/'trace_pipe',os.O_RDONLY);probe.fd=fd
+            probe.registration_requested=True;probe.mounted=True
+            previous=signal.getsignal(signal.SIGTERM);probe.old_sigterm=previous
+            with patch.object(C,'write_uprobe_command',side_effect=OSError(22,'unregister failed')) as written, \
+                 patch.object(C.subprocess,'run') as run, \
+                 patch.object(C.os.path,'ismount',return_value=True), \
+                 self.assertRaisesRegex(RuntimeError,'cleanup failed.*unregister failed'):
+                probe.__exit__(None,None,None)
+            written.assert_called_once_with(root,'-:'+probe.group+'/map_create\n')
+            run.assert_called_once_with(['umount',str(root)],check=True,timeout=15)
+            self.assertIsNone(probe.fd)
+            with self.assertRaises(OSError):os.fstat(fd)
+            self.assertEqual(signal.getsignal(signal.SIGTERM),previous)
+            self.assertFalse(hasattr(probe,'old_sigterm'))
+
     def test_kernel_timestamp_identity_and_precision_are_literal(self):
         ident = '0123456789abcdef'*2
         for fraction, expected, resolution in [('123456789', 123456789, 1), ('123456', 123456000, 1000)]:
