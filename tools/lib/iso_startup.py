@@ -1,6 +1,8 @@
 """Fail-closed evidence for the disposable ISO boot harness."""
 import shlex
 import time
+import re
+import uuid
 from pathlib import Path
 
 
@@ -22,6 +24,34 @@ def console_screen(path):
             return sum(histogram[:17]) / total > .90 and sum(histogram[192:]) >= 30
     except (OSError, TypeError, ValueError):
         return False
+
+
+def console_auth_command(nonce):
+    if not re.fullmatch('[0-9a-f]{32}', nonce):
+        raise ValueError('Invalid console authentication nonce')
+    # Only the authenticated live account can emit this response. sudo merely
+    # opens the serial device after the unprivileged caller's identity checks.
+    response = 'printf "ARCTIC-CONSOLE-READY=' + nonce + ' user=liveuser uid=%s\\n" "$1" >/dev/ttyS0'
+    return ('uid=$(id -u); test "$(id -un)" = liveuser && '
+            'test "$uid" = "$(id -u liveuser)" && test "$uid" -ge 1000 && '
+            'sudo sh -c ' + shlex.quote(response) + ' sh "$uid"')
+
+
+def console_authenticated(path, nonce):
+    if not re.fullmatch('[0-9a-f]{32}', nonce):
+        return False
+    try:
+        content = Path(path).read_bytes()
+    except (OSError, TypeError):
+        return False
+    if len(content) > 1024 * 1024:
+        return False
+    lines = content.decode('utf-8', errors='replace').splitlines()
+    records = [line for line in lines if line.startswith('ARCTIC-CONSOLE-READY=')]
+    if len(records) != 1:
+        return False
+    match = re.fullmatch('ARCTIC-CONSOLE-READY=' + nonce + r' user=liveuser uid=([0-9]+)', records[0])
+    return bool(match and 1000 <= int(match[1]) <= 2147483647)
 
 
 def installer_probe():
@@ -69,9 +99,11 @@ def collection_command(mode, require_startup):
     return 'sudo sh -c ' + shlex.quote('(' + commands + ') >/dev/ttyS0 2>&1')
 
 
-def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep):
+def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep, serial_path=None):
     shot('97-before-collect')
     if mode == 'install':
+        if serial_path is None:
+            raise ValueError('Live console authentication needs the owned serial log')
         # The installer intentionally has exclusive layer-shell keyboard focus.
         # Super+Enter and typed shell commands would instead drive its wizard.
         # tty3 can belong to the live SDDM greeter (the retained BIOS captures
@@ -88,7 +120,23 @@ def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep):
             raise RuntimeError('Console VT was not visible; refused to type into the installer')
         vm.type_text('liveuser', gap=.2)
         vm.keys('ret')
-        sleep(5)
+        sleep(3)
+        # PAM may request the live account's empty password. If the shell is
+        # already up, this is just an empty command. Never send the probe as a
+        # password: first require a fresh response from the actual live UID.
+        vm.keys('ret')
+        sleep(3)
+        nonce = uuid.uuid4().hex
+        vm.type_text(console_auth_command(nonce), gap=.2)
+        vm.keys('ret')
+        for _ in range(30):
+            if console_authenticated(serial_path, nonce):
+                break
+            sleep(1)
+        else:
+            shot('97-console-authentication-failed')
+            raise RuntimeError('Live console authentication did not produce an exact UID response')
+        log('authenticated liveuser text console with a unique UID response')
     else:
         vm.keys('meta_l-ret')
         sleep(60)
