@@ -56,13 +56,16 @@ if [[ -z "$img" || ! -f "$img" ]]; then
     img="$CACHE/${ARCTIC_LOCK_WALLPAPER:-fox-polar-night}.png"
   fi
 fi
-args=(-f)
+args=()
 [[ -f "$img" ]] && args+=(-i "$img")
-# -f returns only once swaylock has acquired the lock. A separate controller watcher clears
-# the private marker after unlock, so before-sleep can return while the lock stays secure.
-swaylock "${args[@]}" "$@"
-lock_result=$?
-if [[ "$lock_result" -eq 0 ]]; then
-  watch_dictation_unlock
+# The controller supervises a foreground swaylock and returns after its --ready-fd confirms
+# the secure lock. It clears dictation's marker only after an actual successful unlock;
+# a crashed lock client cannot be mistaken for an unlocked compositor.
+if command -v arctic-dictation >/dev/null 2>&1; then
+  if timeout --kill-after=1s 15s arctic-dictation lock-fallback "${args[@]}" "$@" >/dev/null 2>&1; then
+    exit 0
+  fi
 fi
-exit "$lock_result"
+# An unavailable optional controller must not prevent locking. This legacy fallback leaves
+# an existing dictation guard in place because its unlock outcome cannot be supervised.
+exec swaylock -f "${args[@]}" "$@"
