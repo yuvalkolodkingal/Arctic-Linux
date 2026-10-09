@@ -156,10 +156,13 @@ class StartupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'console.png'
             self.assertFalse(startup.console_screen(path))
-            for color, text, expected in [('#000000',False,False),('#1b232c',True,False),
-                                          ('#000000',True,True),('#ffffff',True,False)]:
+            for color, foreground, expected in [('#000000',None,False),
+                    ('#1b232c','white',False), ('#000000','white',True),
+                    ('#000000','#aaaaaa',True), ('#000000','#888888',False),
+                    ('#ffffff','white',False)]:
                 image=Image.new('RGB',(1280,800),color)
-                if text: ImageDraw.Draw(image).text((0,0),'localhost-live login:',fill='white')
+                if foreground:
+                    ImageDraw.Draw(image).text((0,0),'localhost-live login:',fill=foreground)
                 image.save(path)
                 self.assertEqual(startup.console_screen(path),expected)
 

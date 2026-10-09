@@ -17,11 +17,13 @@ def console_screen(path):
         with Image.open(path) as image:
             if not (320 <= image.width <= 4096 and 200 <= image.height <= 4096):
                 return False
-            # Linux's text VT is black with a small amount of white console text.
+            # Linux's normal VT foreground is VGA light gray (170), while bold
+            # text can be white. The retained BIOS tty6 has 4,184 gray pixels
+            # and no pixels at 192+, so a white-only check rejects a real getty.
             # Examine original pixels; a missing/blank/graphical capture fails.
             histogram = image.convert('L').histogram()
             total = image.width * image.height
-            return sum(histogram[:17]) / total > .90 and sum(histogram[192:]) >= 30
+            return sum(histogram[:17]) / total > .90 and sum(histogram[160:]) >= 30
     except (OSError, TypeError, ValueError):
         return False
 
