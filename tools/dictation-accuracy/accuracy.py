@@ -383,6 +383,9 @@ def measure(args):
         require(interfaces == ["lo"], "offline-network-namespace-required")
         report["runtime"] = {"machine": platform.machine(), "kernel": platform.release(),
                              "python": platform.python_version(), "network_interfaces": interfaces,
+                             "libc": list(platform.libc_ver()),
+                             "distribution": {key: value for key, value in platform.freedesktop_os_release().items()
+                                              if key in ("ID", "VERSION_ID", "PRETTY_NAME")},
                              "network_namespace": os.readlink("/proc/self/ns/net"),
                              "harness_sha256": sha(__file__), "pins_sha256": sha(HERE / "pins.json")}
         source_commit = os.environ.get("ARCTIC_SOURCE_COMMIT", "")
