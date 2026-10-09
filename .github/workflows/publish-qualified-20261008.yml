@@ -14,7 +14,9 @@ jobs:
   prepare:
     if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Three bounded evidence downloads (15 minutes each), exact-image fetch
+    # (20 minutes), hash validation and artifact upload need more than 45 minutes.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,12 +41,16 @@ jobs:
   publish:
     needs: prepare
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: write
       actions: read
       pull-requests: read
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/qualified-release
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: verified-publication-assets
@@ -111,6 +117,7 @@ jobs:
           root = Path('assets')
           assert {path.name for path in root.iterdir()} == {
               'Arctic-Linux-1.2.1-x86_64.iso', 'Arctic-Linux-1.2.1-x86_64.iso.sha256',
+              'Arctic-Linux-1.2.1-x86_64.iso.torrent', 'Arctic-Linux-1.2.1-x86_64.iso.torrent.sha256',
               'qualification.json', 'release-notes.md'}
           assert all(path.is_file() and not path.is_symlink() for path in root.iterdir())
           proof = json.loads((root / 'qualification.json').read_text())
@@ -125,7 +132,16 @@ jobs:
           assert sha(iso) == proof['image']['sha256']
           checksum = root / (iso.name + '.sha256')
           assert checksum.read_text().strip().split() == [proof['image']['sha256'], iso.name]
-          assets = [iso, checksum, root / 'qualification.json']
+          torrent = root / (iso.name + '.torrent')
+          torrent_checksum = root / (torrent.name + '.sha256')
+          assert torrent_checksum.read_text().strip().split() == [proof['torrent']['torrent_sha256'], torrent.name]
+          assert sha(torrent) == proof['torrent']['torrent_sha256']
+          subprocess.run(['python3', '-B', 'tools/qualified-release/torrent.py', 'create',
+                          '--iso', str(iso), '--torrent', str(root / 'regenerated.torrent'), '--tag', 'v1.2.1'],
+                         check=True, stdout=subprocess.DEVNULL, timeout=120)
+          assert (root / 'regenerated.torrent').read_bytes() == torrent.read_bytes()
+          (root / 'regenerated.torrent').unlink()
+          assets = [iso, checksum, torrent, torrent_checksum, root / 'qualification.json']
           # Draft creation need not materialize a tag. Bind an actual ref to
           # the fully qualified target before creating/uploading the draft.
           ensure_tag(target)
@@ -150,3 +166,15 @@ jobs:
           assert {asset['name']: (asset['size'], asset['digest']) for asset in release['assets']} == expected
           print('ARCTIC-QUALIFIED-RELEASE', release['html_url'], proof['image']['sha256'], flush=True)
           PY
+      - name: Verify the full public download and actual HTTP torrent piece ranges
+        run: |
+          python3 -B tools/qualified-release/torrent.py verify-public \
+            --iso assets/Arctic-Linux-1.2.1-x86_64.iso \
+            --torrent assets/Arctic-Linux-1.2.1-x86_64.iso.torrent --tag v1.2.1 \
+            > release-download-verification.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-download-verification
+          path: release-download-verification.json
+          if-no-files-found: error
+          retention-days: 14
