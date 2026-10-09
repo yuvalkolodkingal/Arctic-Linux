@@ -47,6 +47,9 @@ jobs:
                   items = archive.infolist()
                   assert len(items) <= 1000 and sum(item.file_size for item in items) <= 550_000_000
                   assert len({item.filename for item in items}) == len(items)
+                  # Report phase/comparison before any large boot log. Their
+                  # complete JSON stays tightly bounded; logs use bounded tails.
+                  items.sort(key=lambda item: item.filename not in ('status.json', 'comparison.json'))
                   for item in items:
                       p = Path(item.filename)
                       assert not p.is_absolute() and '..' not in p.parts
@@ -56,14 +59,22 @@ jobs:
                                   p.name.endswith('-install-harness.log'))
                       if not selected:
                           continue
-                      assert item.file_size <= 5_000_000
-                      text = archive.read(item).decode('utf-8', errors='strict')
-                      lines = text.splitlines()
+                      print('ARCTIC-PAIRED-MEMBER', item.filename, item.file_size)
                       if item.filename in ('status.json', 'comparison.json'):
-                          assert item.file_size <= 500_000 and len(lines) <= 4000
+                          assert item.file_size <= 500_000
+                          text = archive.read(item).decode('utf-8', errors='strict')
+                          lines = text.splitlines()
+                          assert len(lines) <= 4000
                           json.loads(text)
                       else:
-                          lines = lines[-240:]
+                          # The aggregate expanded-size bound above still
+                          # applies. Do not read a whole multi-megabyte serial
+                          # log into memory or print unbounded diagnostics.
+                          with archive.open(item) as stream:
+                              stream.seek(max(0, item.file_size - 2_000_000))
+                              data = stream.read(2_000_001)
+                          assert len(data) <= 2_000_000
+                          lines = data.decode('utf-8', errors='replace').splitlines()[-240:]
                       print('ARCTIC-PAIRED-TEXT-BEGIN', item.filename)
                       for line in lines:
                           print('[redacted diagnostic line]' if sensitive.search(line) else line[:4000])
