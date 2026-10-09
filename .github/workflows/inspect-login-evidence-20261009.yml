@@ -1,9 +1,9 @@
-name: Inspect retained Arctic candidate evidence
+name: Inspect retained candidate login evidence
 
 on:
   push:
-    branches: [codex/inspect-existing-evidence-20261008]
-    paths: [.github/workflows/inspect-existing-evidence-20261008.yml]
+    branches: [codex/inspect-login-failure-20261009]
+    paths: [.github/workflows/inspect-login-evidence-20261009.yml]
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
           from pathlib import Path
           from PIL import Image
           assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
-          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-existing-evidence-20261008'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-login-failure-20261009'
           assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
           repo = 'repos/yuvalkolodkingal/Arctic-Linux'
           evidence = [
@@ -60,16 +60,17 @@ jobs:
                           if member.endswith(('serial.log', 'baseline-result.json', 'results.json', 'shell.log', 'compositor.log',
                                               '.sha256', '.build-info', 'BUILD-INFO', 'harness.log', 'state.json',
                                               'status.json', 'comparison.json', 'performance-context.json',
-                                              'serial-boot.log', 'serial-install.log')):
+                                              'serial-boot.log', 'serial-install.log', 'test.log')):
                               assert item.file_size < 5_000_000
                               lines = archive.read(item).decode('utf-8', errors='replace').splitlines()
                               print('ARCTIC-TEXT-BEGIN', member)
-                              for line in lines[-600:]:
+                              # Preserve driver timing as well as the ending failure.
+                              selected_lines = lines[:60] + lines[-600:] if len(lines) > 660 else lines
+                              for line in selected_lines:
                                   print('[redacted diagnostic line]' if sensitive.search(line) else line[:1500])
                               print('ARCTIC-TEXT-END', member)
                           # These are synthetic VM screenshots already authorized for diagnostic upload.
-                          selected = member.endswith(('bios-install/98-console.png',
-                                                        'bios-install/99-final.png'))
+                          selected = member.endswith('runs/candidate/1/boot-41-no-login-detected.png')
                           if selected:
                               assert item.file_size < 2_000_000
                               content = archive.read(item)
