@@ -84,6 +84,26 @@ restart the graphical session before recording again.
 
 ## Controller and validation contract
 
+The [2026-10-09 Fedora 44 container measurement](evidence/dictation/fedora44-small-cpu-20261009.json)
+completed ten actual CPU transcriptions with networking unavailable, using the
+pinned runtime and small model. The first five test recordings in file order
+from each FLEURS language were selected before inference:
+
+| Language | Reference words | Word edits / WER | Character edits / CER |
+|---|---:|---:|---:|
+| English | 103 | 8 / 7.8% | 13 / 2.8% |
+| Hebrew | 100 | 42 / 42.0% | 58 / 12.2% |
+
+These short read-speech samples do not establish general accuracy or equivalence
+with another Whisper implementation. Language was explicitly selected, and the
+normalization ignores punctuation and Hebrew vowel/cantillation marks. With two
+CPU threads and a fresh process for each recording, English took 399.8 seconds
+for 40.86 seconds of audio; Hebrew took 465.4 seconds for 59.82 seconds of audio.
+Timing includes model initialization and applies to this host. This report tests
+file inference rather than microphones, GPU recovery or insertion in the ISO.
+A stronger multilingual model is being evaluated on the same fixed recordings
+before the default-model recommendation is finalized.
+
 `arctic-dictation` accepts `status`, `settings`, `start`, `stop`, `toggle`,
 `cancel`, `setup`/`retry`, `set-language auto|he|en`, and
 `set-backend auto|cpu|vulkan`. Shell locking additionally uses `lock`, `unlock`
