@@ -49,7 +49,8 @@ jobs:
                   assert len({item.filename for item in items}) == len(items)
                   # Report phase/comparison before any large boot log. Their
                   # complete JSON stays tightly bounded; logs use bounded tails.
-                  items.sort(key=lambda item: item.filename not in ('status.json', 'comparison.json'))
+                  items.sort(key=lambda item: 0 if item.filename == 'status.json' else
+                             1 if item.filename == 'comparison.json' else 2)
                   for item in items:
                       p = Path(item.filename)
                       assert not p.is_absolute() and '..' not in p.parts
@@ -61,8 +62,20 @@ jobs:
                           continue
                       print('ARCTIC-PAIRED-MEMBER', item.filename, item.file_size)
                       if item.filename in ('status.json', 'comparison.json'):
-                          assert item.file_size <= 500_000
-                          text = archive.read(item).decode('utf-8', errors='strict')
+                          if item.filename == 'comparison.json':
+                              # The actual retained report is 13,783,519 bytes:
+                              # most of it is raw observation traces. Parse a
+                              # bounded document but print bounded result fields.
+                              assert item.file_size <= 16_000_000
+                              result = json.loads(archive.read(item).decode('utf-8', errors='strict'))
+                              summary = {key: result.get(key) for key in
+                                  ('status', 'error', 'metrics', 'measurement_precision', 'identity',
+                                   'application_role_comparison', 'limitations')}
+                              text = json.dumps(summary, indent=2)
+                          else:
+                              assert item.file_size <= 500_000
+                              text = archive.read(item).decode('utf-8', errors='strict')
+                          assert len(text.encode('utf-8')) <= 500_000
                           lines = text.splitlines()
                           assert len(lines) <= 4000
                           json.loads(text)
