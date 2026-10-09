@@ -1,0 +1,23 @@
+From: Arctic Linux maintainers
+Subject: [PATCH] Do not advertise DMA-BUF without a renderer DRM device
+
+Scenefx's software EGL renderer can expose texture import formats without a
+DRM descriptor. wlroots cannot create DRM/DMA-BUF globals in that case, and
+passing its NULL DMA-BUF result to the scene crashes compositor startup.
+Keep wl_shm available and create device-dependent globals only with a DRM FD.
+The accelerated renderer path and hardware buffer support remain intact.
+
+--- a/src/main.c
++++ b/src/main.c
+@@ -494,8 +494,9 @@
+ 	 * integrate it with wlr_scene. */
+ 	wlr_renderer_init_wl_shm(server.renderer, server.display);
+ 
+-	if (wlr_renderer_get_texture_formats(server.renderer,
+-										 WLR_BUFFER_CAP_DMABUF)) {
++	drm_fd = wlr_renderer_get_drm_fd(server.renderer);
++	if (drm_fd >= 0 && wlr_renderer_get_texture_formats(server.renderer,
++																 WLR_BUFFER_CAP_DMABUF)) {
+ 		wlr_drm_create(server.display, server.renderer);
+ 		wlr_scene_set_linux_dmabuf_v1(server.scene,
+ 									  wlr_linux_dmabuf_v1_create_with_renderer(

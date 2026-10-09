@@ -1,0 +1,35 @@
+From: Arctic Linux maintainers
+Subject: [PATCH] Destroy scene output before changing layer surfaces
+
+The retained BIOS ISO diagnostic aborts in wlr_output_finish during a VT
+switch. Destroying layer scene nodes while this output is still active can
+create a surface-enter bind listener which misses the destroy signal being
+emitted. Remove the scene output before any layer or lock teardown.
+
+Related upstream analysis and fix:
+https://github.com/labwc/labwc/pull/3701
+https://gitlab.freedesktop.org/wlroots/wlroots/-/issues/4096
+
+--- a/src/manage/monitor.c
++++ b/src/manage/monitor.c
+@@ -836,6 +836,12 @@
+ 
+ 	m->iscleanuping = true;
+ 
++	/* Stop surface-enter callbacks for the dying output before layer/lock
++	 * teardown changes the scene. New bind listeners would otherwise miss
++	 * the destroy signal in progress and make wlr_output_finish abort. */
++	wlr_scene_output_destroy(m->scene_output);
++	m->scene_output = NULL;
++
+ 	/* m->layers[i] are intentionally not unlinked */
+ 	for (i = 0; i < LENGTH(m->layers); i++) {
+ 		wl_list_for_each_safe(l, tmp, &m->layers[i], link)
+@@ -855,7 +861,6 @@
+ 		handle_session_lock_surface_destroy(&m->destroy_lock_surface, NULL);
+ 	m->wlr_output->data = NULL;
+ 
+-	wlr_scene_output_destroy(m->scene_output);
+ 	wlr_output_layout_remove(server.output_layout, m->wlr_output);
+ 
+ 	monitor_close(m);

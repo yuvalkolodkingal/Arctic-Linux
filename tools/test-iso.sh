@@ -162,7 +162,7 @@ if collect and vm.alive():
     # Install mode owns exclusive keyboard focus; preserve its actual window
     # and collect from an authenticated live console instead of driving the UI.
     from iso_startup import collect_session
-    collect_session(vm, mode, require_startup, shot, log)
+    collect_session(vm, mode, require_startup, shot, log, serial_path=f"{out}/serial.log")
     if vmtest.serial_has(f"{out}/serial.log", "ARCTIC-COLLECT-END"):
         log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
     else:

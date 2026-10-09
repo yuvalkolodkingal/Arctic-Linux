@@ -1,0 +1,33 @@
+{
+  "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
+  "native_source_sha256": "99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b",
+  "files": {
+    "native_smoke.py": "99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b",
+    "guest-check-native-v6.py": "f5998bc2c1e61fc4ed4d87a942fbd67dbc7a65b736011fc246092247cb25f529",
+    "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
+    "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
+  },
+  "validator_functions": [
+    "check_editor_save",
+    "check_fullscreen",
+    "check_native",
+    "check_physical",
+    "desktop_controller",
+    "exactly_zero",
+    "extract_evidence",
+    "installed_scope",
+    "native_block",
+    "preserve_audio",
+    "records",
+    "validate_harness_serial"
+  ],
+  "validators_source_sha256": "1cf453d97fbae6dbcef1b0c8c6706645833ffeccdc91310e25d39ea982ee4199",
+  "each_selected_function_source_equal": true,
+  "release_acceptance": false,
+  "adapted_host_controls": {
+    "test_native_desktop_v6.py": "a3f5b1e6acc81b759a0dfa723012ea4db9deb45577514825de6090762d85f6b1",
+    "test_native_physical_v6.py": "fed9e6e2f62c507b101c9bf311773f5db5837ec44ce8e2548356bf6b684aaa1c",
+    "test_native_v6.py": "1ee2213393b4974bae151192bc354361ed2eed77be8f382b6580741fb7adba17",
+    "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3"
+  }
+}

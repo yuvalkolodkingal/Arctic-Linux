@@ -1,6 +1,6 @@
 # Native taskbar checks
 
-`BarHarness.qml` exercises the checkout's real `Bar`, `VerticalBar` and `BarMenu` on the current
+`BarHarness.qml` exercises the checkout's real `Bar`, `VerticalBar`, `BarMenu` and `ScreenFrame` on the current
 Mango/Wayland desktop. It uses real tray, sound, battery, weather and workspace services, and
 an in-memory recording indicator fixture. Its separate popup is a test card. It does not
 replace the installed shell, write taskbar preferences or restart applications.
@@ -47,6 +47,30 @@ toggleHidden` to restore it. Keep the user's original hidden state when it was a
 Native checks require two connected outputs, Quickshell, Mango's `mmsg`, `grim`, `wtype`, a C
 compiler and the Wayland client library. A successful native preview check is distinct from
 verification of an installed package or after a session restart.
+
+## Covered frame regression
+
+`test-screen-frame.py` starts its own headless compositor, private D-Bus session and throwaway
+configuration. It never connects to the installed shell. Its opaque cover and plain backdrop
+are test surfaces; captured images contain only that isolated desktop. The frame and bar are
+the production components.
+
+```sh
+python3 shell/dev/test-screen-frame.py --compositor mango \
+  --baseline-ref 2d5ac68847a5feb541177aeaa5a9a00d5ad44815 --out /tmp/arctic-frame-mango
+python3 shell/dev/test-screen-frame.py --compositor sway \
+  --baseline-ref 2d5ac68847a5feb541177aeaa5a9a00d5ad44815 --out /tmp/arctic-frame-sway
+```
+
+The runner checks native configured frame dimensions while covered, exposed edge pixels,
+repeated Always visible/Auto-hide/Dodge transitions, four bar edges, scales 1/1.5/2, landscape
+and portrait outputs, and unchanged frame dimensions during bar reveal. Only a native dimension
+mismatch counts as baseline reproduction; startup failures fail the run. A passing replay of
+the baseline is recorded as unreproduced. This is separate from installed-ISO qualification,
+real fullscreen application coverage and physical hardware testing.
+
+The runner also needs Pillow, `wlr-randr`, the Wayland client development library, and
+`dbus-daemon`. CI installs the checkout's built Mango RPM before running both compositors.
 
 ## Dodge windows
 

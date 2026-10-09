@@ -5,6 +5,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      expected_source_sha:
+        description: Optional exact reviewed source for an artifact-only qualification run
+        type: string
+        default: ""
       release:
         description: Publish a GitHub release with the ISO
         type: boolean
@@ -35,7 +39,7 @@ on:
         default: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: iso-${{ github.ref }}
@@ -48,9 +52,12 @@ jobs:
   iso:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    outputs:
+      split: ${{ steps.size.outputs.split }}
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           # These collections are already export-ignored from the RPM source.
           # build-rpms also avoids archive prefetching their omitted blobs.
           filter: blob:none
@@ -60,6 +67,18 @@ jobs:
             !/Wallpapers/
             !/v2-walls/
             !/showcase/
+
+      - name: Verify qualification source
+        env:
+          EXPECTED_SOURCE: ${{ inputs.expected_source_sha }}
+          RELEASE_REQUESTED: ${{ inputs.release }}
+        run: |
+          if [ -n "$EXPECTED_SOURCE" ]; then
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$RELEASE_REQUESTED" = false
+            [[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+            test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          fi
 
       - name: Free disk space
         run: |
@@ -187,6 +206,39 @@ jobs:
           tools/test-iso.sh --iso "out/iso/$ISO" --firmware bios --mode install --require-startup --timeout "$timeout" --interval 30 $kvm
           tools/test-iso.sh --iso "out/iso/$ISO" --firmware uefi --mode safe --require-startup --timeout "$timeout" --interval 30 $kvm
 
+      - name: Screen startup diagnostics before longer acceptance lanes
+        if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
+        run: |
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import os, shutil
+          target = Path(os.environ['RUNNER_TEMP']) / 'startup-diagnostics'
+          target.mkdir()
+          for name in ('uefi-try', 'bios-install', 'uefi-safe'):
+              source = Path('out/test') / name
+              if not source.exists():
+                  continue
+              for path in source.rglob('*'):
+                  if path.suffix not in ('.json', '.log', '.txt', '.tsv', '.png', '.rgb', '.wav'):
+                      continue
+                  if path.is_symlink() or not path.is_file():
+                      raise RuntimeError('Unexpected startup diagnostic: ' + str(path))
+                  output = target / name / path.relative_to(source)
+                  output.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(path, output)
+          PY
+          python3 -B tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/startup-diagnostics" --out "$RUNNER_TEMP/startup-screened"
+
+      - name: Upload screened startup diagnostics before longer acceptance lanes
+        if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-diagnostics
+          path: ${{ runner.temp }}/startup-screened/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Nix enforcing VM acceptance
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.nix_acceptance }}
         run: |
@@ -232,30 +284,35 @@ jobs:
           timeout --signal=TERM --kill-after=60s 120m python3 tools/performance/run-paired.py \
             --baseline "$baseline/Arctic-Linux-1.2-x86_64.iso" --candidate "out/iso/$ISO" --out "$PWD/out/test/performance"
 
+      - name: Screen paired performance diagnostics
+        if: ${{ always() && inputs.performance_acceptance }}
+        run: |
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import os, shutil
+          source = Path('out/test/performance')
+          target = Path(os.environ['RUNNER_TEMP']) / 'paired-diagnostics'
+          target.mkdir()
+          if source.exists():
+              for path in source.rglob('*'):
+                  if path.suffix not in ('.json', '.log', '.txt', '.tsv', '.png', '.rgb', '.wav'):
+                      continue
+                  if path.is_symlink() or not path.is_file():
+                      raise RuntimeError('Unexpected diagnostic file: ' + str(path))
+                  output = target / path.relative_to(source)
+                  output.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(path, output)
+          PY
+          python3 -B tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/paired-diagnostics" --out "$RUNNER_TEMP/paired-screened"
+
       - name: Upload paired performance evidence
         if: ${{ always() && inputs.performance_acceptance }}
         uses: actions/upload-artifact@v4
         with:
           name: paired-performance
           retention-days: 14
-          path: |
-            out/test/performance/
-            !out/test/performance/**/*.qcow2
-            !out/test/performance/**/*.iso
-            !out/test/performance/**/*.sock
-
-      - name: Upload screenshots
-        if: ${{ always() && (github.event_name == 'push' || inputs.release || inputs.boot_test) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: boot-test
-          path: |
-            out/test/
-            !out/test/**/*.qcow2
-            !out/test/**/*.iso
-            !out/test/**/*.sock
-          if-no-files-found: ignore
-          retention-days: 14
+          path: ${{ runner.temp }}/paired-screened/
 
       - name: Required optimized ISO size
         run: |
@@ -263,12 +320,37 @@ jobs:
           echo "Required: strictly below 2000000000 decimal bytes; preferred: below 1600000000. Actual: $bytes"
           test "$bytes" -lt 2000000000
 
+  publish:
+    name: Publish the completed ISO
+    needs: iso
+    if: ${{ github.event_name == 'push' || inputs.release }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: docs/releases
+      - uses: actions/download-artifact@v4
+        with:
+          name: arctic-linux-iso
+          path: out
+      - name: Verify the retained ISO
+        run: |
+          cd out/iso
+          sha256sum --check "$ISO.sha256"
+          test "$(stat -c %s "$ISO")" -lt 2000000000
       - name: Publish release
-        if: ${{ github.event_name == 'push' || inputs.release }}
         env:
           GH_TOKEN: ${{ github.token }}
-          SPLIT: ${{ steps.size.outputs.split }}
+          SPLIT: ${{ needs.iso.outputs.split }}
           CANONICAL: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+          RELEASE_DRAFT: ${{ inputs.draft }}
         run: |
           # A released ISO must install systems that get Arctic's updates.
           if [ "$CANONICAL" = true ] && ! grep -qx 'arctic_repos=enabled' "out/iso/${ISO%.iso}.build-info" 2>/dev/null; then
@@ -278,8 +360,8 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="${{ inputs.tag }}"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
-            pre=""; [ "${{ inputs.prerelease }}" = false ] || pre="--prerelease"
+            tag="$RELEASE_TAG"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
+            pre=""; [ "$RELEASE_PRERELEASE" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"
           {
@@ -326,6 +408,6 @@ jobs:
           else
             files=("out/iso/$ISO" "out/iso/$ISO.sha256")
           fi
-          draft=""; [ "${{ inputs.draft }}" != true ] || draft="--draft"
+          draft=""; [ "$RELEASE_DRAFT" != true ] || draft="--draft"
           gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
             --title "Arctic Linux ${tag#v}" --notes-file notes.md $pre $draft

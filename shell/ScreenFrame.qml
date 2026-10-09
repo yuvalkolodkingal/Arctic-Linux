@@ -15,16 +15,24 @@ import Quickshell.Wayland
 Scope {
     id: root
     required property var modelData
+    readonly property var surface: frame
 
     PanelWindow {
         id: frame
         screen: root.modelData
         visible: Theme.frameWidth > 0
         anchors { top: true; bottom: true; left: true; right: true }
-        margins.top: Theme.topInset
-        margins.bottom: Theme.bottomInset
-        margins.left: Theme.leftInset
-        margins.right: Theme.rightInset
+        // Layer-shell configures integer logical dimensions. At fractional scale
+        // the last physical pixel can fall outside those rounded bounds. Extend
+        // this click-through artwork by one logical pixel and let the output clip
+        // it; the separate exclusive zones retain their original dimensions.
+        readonly property int edgeOverscan: Math.abs(devicePixelRatio - Math.round(devicePixelRatio)) > 0.001 ? 1 : 0
+        margins.right: -edgeOverscan
+        margins.bottom: -edgeOverscan
+        // Keep the Bottom layer surface at the physical output bounds. A covered surface
+        // can stop receiving frame callbacks, leaving a layer-shell margin/resize commit
+        // pending when the bar changes mode. Move the artwork inside this stable surface
+        // instead; it can repaint when exposed without waiting for a new configure.
         color: 'transparent'
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Bottom
@@ -34,6 +42,10 @@ Scope {
         Canvas {
             id: outline
             anchors.fill: parent
+            anchors.topMargin: Theme.topInset
+            anchors.bottomMargin: Theme.bottomInset
+            anchors.leftMargin: Theme.leftInset
+            anchors.rightMargin: Theme.rightInset
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             Connections {
@@ -42,6 +54,18 @@ Scope {
                 function onLineChanged() { outline.requestPaint(); }
                 function onFrameWidthChanged() { outline.requestPaint(); }
             }
+            // Canvas textures can filter against transparent texels at their
+            // outer boundary under fractional scaling. Solid exterior strips
+            // keep that edge opaque; the Canvas still paints the inner curve
+            // and hairline, beyond these two logical pixels.
+            Rectangle { anchors { top: parent.top; left: parent.left; right: parent.right }
+                height: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
+                height: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+                width: Math.min(2, Theme.frameWidth); color: Theme.ground }
+            Rectangle { anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
+                width: Math.min(2, Theme.frameWidth); color: Theme.ground }
             function rounded(ctx, x, y, w, h, r) {
                 ctx.moveTo(x + r, y);
                 ctx.lineTo(x + w - r, y);
@@ -57,17 +81,20 @@ Scope {
             onPaint: {
                 const ctx = getContext('2d');
                 const f = Theme.frameWidth, r = Theme.frameRadius;
+                // Overscan extends only the outside paint. Preserve the original
+                // inner edge and fixed-bar inset relative to the reserved area.
+                const w = width - frame.edgeOverscan, h = height - frame.edgeOverscan;
                 ctx.reset();
                 if (f <= 0) return;
                 ctx.fillStyle = Theme.ground;
                 ctx.fillRect(0, 0, width, height);
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.beginPath();
-                rounded(ctx, f, f, width - 2 * f, height - 2 * f, r);
+                rounded(ctx, f, f, w - 2 * f, h - 2 * f, r);
                 ctx.fill();
                 ctx.globalCompositeOperation = 'source-over';
                 ctx.beginPath();
-                rounded(ctx, f - 0.5, f - 0.5, width - 2 * f + 1, height - 2 * f + 1, r + 0.5);
+                rounded(ctx, f - 0.5, f - 0.5, w - 2 * f + 1, h - 2 * f + 1, r + 0.5);
                 ctx.strokeStyle = Theme.line;
                 ctx.lineWidth = 1;
                 ctx.stroke();

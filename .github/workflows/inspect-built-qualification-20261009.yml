@@ -1,0 +1,105 @@
+name: Inspect retained rebuilt ISO metadata
+
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261008]
+    paths: [.github/workflows/inspect-built-qualification-20261009.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify fixed retained metadata archive and report image identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/qualification-dispatch-20261008'
+          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11592298820'
+          digest = '80843951250529956eac2432fa9dd2b6351ecac3461675a59a3d2643aebaa4b9'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['name'] == 'arctic-iso-metadata' and not metadata['expired']
+          assert metadata['workflow_run']['id'] == 37875703862
+          assert metadata['workflow_run']['head_sha'] == '50c8bc4cd576baf741868aaa17b94737199ccc9d'
+          assert metadata['size_in_bytes'] == 31830 and metadata['digest'] == 'sha256:' + digest
+          sensitive = re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|(?:AKIA|ASIA)[A-Z0-9]{16}|-----BEGIN[^\n]*PRIVATE KEY|password\s*[:=]\s*\S+|Authorization\s*[:=]|https?://[^\s]*\?[^\s]', re.I)
+          with tempfile.TemporaryDirectory(prefix='arctic-iso-metadata-') as folder:
+              path = Path(folder) / 'retained.zip'
+              with path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              assert path.stat().st_size == 31830 and hashlib.sha256(path.read_bytes()).hexdigest() == digest
+              with zipfile.ZipFile(path) as archive:
+                  items = archive.infolist()
+                  assert len(items) <= 30 and sum(item.file_size for item in items) < 2_000_000
+                  assert len({item.filename for item in items}) == len(items)
+                  for item in items:
+                      p = Path(item.filename)
+                      assert not p.is_absolute() and '..' not in p.parts
+                      assert not stat.S_ISLNK(item.external_attr >> 16)
+                      print('ARCTIC-ISO-METADATA-MEMBER', item.filename, item.file_size)
+                      if p.name == 'BUILD-INFO' or p.suffix in ('.sha256', '.build-info'):
+                          assert item.file_size < 100_000
+                          text = archive.read(item).decode('utf-8', errors='strict')
+                          assert not sensitive.search(text), 'Sensitive metadata refused'
+                          assert len(text.splitlines()) <= 300
+                          print('ARCTIC-ISO-METADATA-BEGIN', item.filename)
+                          print(text)
+                          print('ARCTIC-ISO-METADATA-END', item.filename)
+          PY
+      - name: Read fixed screened failed startup evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import base64, hashlib, json, os, stat, struct, subprocess, tempfile, zipfile
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/qualification-dispatch-20261008'
+          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11592803816'
+          digest = '0ecdef00bf1957e5f648d2e55f921167feeac35b6038eee2064cf42d27d5a511'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['name'] == 'startup-diagnostics' and not metadata['expired']
+          assert metadata['workflow_run']['id'] == 37875703862
+          assert metadata['workflow_run']['head_sha'] == '50c8bc4cd576baf741868aaa17b94737199ccc9d'
+          assert metadata['size_in_bytes'] == 23254483 and metadata['digest'] == 'sha256:' + digest
+          with tempfile.TemporaryDirectory(prefix='arctic-startup-evidence-') as folder:
+              path = Path(folder) / 'retained.zip'
+              with path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              assert path.stat().st_size == 23254483 and hashlib.sha256(path.read_bytes()).hexdigest() == digest
+              with zipfile.ZipFile(path) as archive:
+                  items = archive.infolist()
+                  assert len(items) <= 300 and sum(item.file_size for item in items) < 150_000_000
+                  assert len({item.filename for item in items}) == len(items)
+                  for item in items:
+                      p = Path(item.filename)
+                      assert not p.is_absolute() and '..' not in p.parts
+                      assert not stat.S_ISLNK(item.external_attr >> 16)
+                      if p.name in ('serial.log', 'test.log'):
+                          assert item.file_size < 2_000_000
+                          print('ARCTIC-STARTUP-TEXT-BEGIN', item.filename)
+                          lines = archive.read(item).decode('utf-8', errors='strict').splitlines()
+                          for line in lines[-240:]:
+                              print(line[:1500])
+                          print('ARCTIC-STARTUP-TEXT-END', item.filename)
+                      if p.parent.name == 'bios-install' and p.name in ('97-before-collect.png', '97-console-login.png', '97-console-authentication-failed.png', '98-console.png', '99-final.png'):
+                          assert item.file_size < 2_000_000
+                          data = archive.read(item)
+                          assert data.startswith(b'\x89PNG\r\n\x1a\n')
+                          width, height = struct.unpack('>II', data[16:24])
+                          assert 1 <= width <= 4096 and 1 <= height <= 4096
+                          print('ARCTIC-STARTUP-PNG-BEGIN', item.filename, hashlib.sha256(data).hexdigest())
+                          encoded = base64.b64encode(data).decode('ascii')
+                          for offset in range(0, len(encoded), 1024):
+                              print('ARCTIC-STARTUP-PNG-DATA', encoded[offset:offset + 1024])
+                          print('ARCTIC-STARTUP-PNG-END', item.filename)
+          PY
