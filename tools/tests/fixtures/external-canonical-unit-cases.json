@@ -1,0 +1,181 @@
+{
+  "schema": "arctic-local-package-canonical-unit-cases-v1",
+  "source_proposal_sha256": "8264929e394d500093487c61882c518a4bea08111304b3f9ceaed27ded7f3cc2",
+  "images": [
+    {
+      "image": "arctic-qualification-fedora44:local",
+      "id": "sha256:0567db9073b403d5fd14476ef5d19bba4b59fc2bdfe40bd4ea43d05a96f774ca",
+      "verified_package_owned_files_links": 464,
+      "rpm_database_sha256": "b78fa8fa4e889657f1f592f0fad3d8986b814f7c2c6d77c19f3190b096219a8a"
+    },
+    {
+      "image": "arctic-headless-display-fedora44:local",
+      "id": "sha256:3c41bf8a38534181a1612949768dfae5af46c21931acfccceacf7c9e0cfe9afb",
+      "verified_package_owned_files_links": 29,
+      "rpm_database_sha256": "c3a0c3bb75e8bf62c0f491b4738c462ea12d738fec790c2e79ff08a0a38a5568"
+    }
+  ],
+  "packages": {
+    "systemd": {
+      "name": "systemd",
+      "epoch": 0,
+      "version": "259.9",
+      "release": "1.fc44",
+      "arch": "x86_64",
+      "header_sha256": "9232af1751fdd945d7a8c643867e27f61bdaa0badd0842fc6d91772dae8e7e8f",
+      "file_digest_algorithm": 8
+    },
+    "systemd-udev": {
+      "name": "systemd-udev",
+      "epoch": 0,
+      "version": "259.9",
+      "release": "1.fc44",
+      "arch": "x86_64",
+      "header_sha256": "a3bd0c3464f052bc6106aa8e594f41864f74b14374b253f15213b8a607de6034",
+      "file_digest_algorithm": 8
+    }
+  },
+  "cases": [
+    {
+      "unit": "modprobe@configfs.service",
+      "description": "Load Kernel Module configfs",
+      "template": "/usr/lib/systemd/system/modprobe@.service",
+      "template_sha256": "ac9abd099882e3c01d48786c143b2381c08a690da13984bbfa37ac1c84c8e91b",
+      "instance_refs": [
+        {
+          "path": "usr/lib/systemd/system/sys-kernel-config.mount",
+          "sha256": "de66a6ededccc6b8aec74190a5091ee03015c60a459b1fcb9d8d787d1e493492"
+        }
+      ],
+      "basis": "Literal packaged dependency instance; not reconstructed historical token."
+    },
+    {
+      "unit": "modprobe@fuse.service",
+      "description": "Load Kernel Module fuse",
+      "template": "/usr/lib/systemd/system/modprobe@.service",
+      "template_sha256": "ac9abd099882e3c01d48786c143b2381c08a690da13984bbfa37ac1c84c8e91b",
+      "instance_refs": [
+        {
+          "path": "usr/lib/systemd/system/sys-fs-fuse-connections.mount",
+          "sha256": "ffce2d2db0561a15b633c67ad2888c1abe82b259e473b2205e84cbaf8f5cde13"
+        }
+      ],
+      "basis": "Literal packaged dependency instance; not reconstructed historical token."
+    },
+    {
+      "unit": "modprobe@drm.service",
+      "description": "Load Kernel Module drm",
+      "template": "/usr/lib/systemd/system/modprobe@.service",
+      "template_sha256": "ac9abd099882e3c01d48786c143b2381c08a690da13984bbfa37ac1c84c8e91b",
+      "instance_refs": [
+        {
+          "path": "usr/lib/systemd/system/systemd-logind.service",
+          "sha256": "dc957df8aecb3fe47eae55e2ddf102f49d8da50d4fb37fd91a6b4235e7c221cb"
+        }
+      ],
+      "basis": "Literal packaged dependency instance; not reconstructed historical token."
+    },
+    {
+      "unit": "modprobe@loop.service",
+      "description": "Load Kernel Module loop",
+      "template": "/usr/lib/systemd/system/modprobe@.service",
+      "template_sha256": "ac9abd099882e3c01d48786c143b2381c08a690da13984bbfa37ac1c84c8e91b",
+      "instance_refs": [
+        {
+          "path": "usr/lib/systemd/system/systemd-confext-initrd.service",
+          "sha256": "ff452fdc9f8577c4a38d8291bf46a704acd863da597de8eb6e6375ff53054de7"
+        },
+        {
+          "path": "usr/lib/systemd/system/systemd-loop@.service",
+          "sha256": "55eacd8514d6caa613e343fb6048a0f03b1d213a1a99d9381b96f2de1d778833"
+        },
+        {
+          "path": "usr/lib/systemd/system/systemd-sysext-initrd.service",
+          "sha256": "af1e9b6639f4341391181f1214e3f2d61a9b264f62d6fb6a4758eb18c112aa7a"
+        },
+        {
+          "path": "usr/lib/systemd/system/systemd-portabled.service",
+          "sha256": "7259a3a3d2654b0e08e3ed3043d3014f044d20b08c174701531385b10bbbecee"
+        },
+        {
+          "path": "usr/lib/systemd/system/systemd-repart@.service",
+          "sha256": "503173e5cba736ae102d80dadddcbc748271f09d0b59d2159ea05cbe37b9b3d9"
+        }
+      ],
+      "basis": "Literal packaged dependency instance; not reconstructed historical token."
+    },
+    {
+      "unit": "modprobe@dm_mod.service",
+      "description": "Load Kernel Module dm_mod",
+      "template": "/usr/lib/systemd/system/modprobe@.service",
+      "template_sha256": "ac9abd099882e3c01d48786c143b2381c08a690da13984bbfa37ac1c84c8e91b",
+      "instance_refs": [
+        {
+          "path": "usr/lib/systemd/system/systemd-confext-initrd.service",
+          "sha256": "ff452fdc9f8577c4a38d8291bf46a704acd863da597de8eb6e6375ff53054de7"
+        },
+        {
+          "path": "usr/lib/systemd/system/systemd-sysext-initrd.service",
+          "sha256": "af1e9b6639f4341391181f1214e3f2d61a9b264f62d6fb6a4758eb18c112aa7a"
+        },
+        {
+          "path": "usr/lib/systemd/system/systemd-repart@.service",
+          "sha256": "503173e5cba736ae102d80dadddcbc748271f09d0b59d2159ea05cbe37b9b3d9"
+        }
+      ],
+      "basis": "Literal packaged dependency instance; not reconstructed historical token."
+    },
+    {
+      "unit": "modprobe@efi_pstore.service",
+      "description": "Load Kernel Module efi_pstore",
+      "template": "/usr/lib/systemd/system/modprobe@.service",
+      "template_sha256": "ac9abd099882e3c01d48786c143b2381c08a690da13984bbfa37ac1c84c8e91b",
+      "instance_refs": [
+        {
+          "path": "usr/lib/systemd/system/systemd-pstore.service",
+          "sha256": "6480e7b711ee6f6f4c2a96d0c197f4ee32601743d97de421b4a6d40f73fa851e"
+        }
+      ],
+      "basis": "Literal packaged dependency instance; not reconstructed historical token."
+    },
+    {
+      "unit": "user@1000.service",
+      "description": "User Manager for UID 1000",
+      "template": "/usr/lib/systemd/system/user@.service",
+      "template_sha256": "67b639696113f4070794e389421256cb043257261733ae17c640cf586c5e5034",
+      "basis": "Original public job37971533836 measured UID and desktop_uid fields are all1000; owned CI user profile ci/Arctic CI."
+    },
+    {
+      "unit": "user-runtime-dir@1000.service",
+      "description": "User Runtime Directory /run/user/1000",
+      "template": "/usr/lib/systemd/system/user-runtime-dir@.service",
+      "template_sha256": "bf3702919c8dc87f5e2da18aa393a53a71275ef8a7813c43287af36d6dfe7bb6",
+      "basis": "Same positive owned synthetic UID1000."
+    },
+    {
+      "unit": "getty@tty1.service",
+      "description": "Getty on tty1",
+      "template": "/usr/lib/systemd/system/getty@.service",
+      "template_sha256": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e",
+      "basis": "Immutable image has /etc/systemd/system/getty.target.wants/getty@tty1.service alias; fixed public console."
+    },
+    {
+      "unit": "serial-getty@ttyS0.service",
+      "description": "Serial Getty on ttyS0",
+      "template": "/usr/lib/systemd/system/serial-getty@.service",
+      "template_sha256": "45cd1e87f55b95f6f6c64e7cdc5704e4f62627d940f0ad9a943cfe25513a326e",
+      "basis": "Reviewed harness sets console=ttyS0,115200 and records to /dev/ttyS0."
+    }
+  ],
+  "source_inventory_sha256": {
+    "out/external-screening-unit-inventory/headless/package-verified-units.json": "bd1676c8d29613565dc80fbe254110a155b06bf723627a68941b545acd1f1734",
+    "out/external-screening-unit-inventory/qualification/package-verified-units.json": "3934712751372c48979bc7121e4e2c941443152526847940742d54dd397c564e"
+  },
+  "limits": [
+    "The inventories are existing local Fedora44 images, not proof of target ISO runtime or exact target package versions.",
+    "Actual unit bytes/links match stored RPM database FILEDIGESTS/FILELINKTOS; package signatures not independently verified here.",
+    "No omitted historical raw token was reconstructed or asserted to be one of these names.",
+    "The ten bounded proposed canonical cases improve known compatibility coverage, but total future full-UART zero-redaction success requires actual complete evidence.",
+    "Additional units such as systemd-cryptsetup and devices requiring escaping remain excluded pending concrete canonical source evidence."
+  ]
+}

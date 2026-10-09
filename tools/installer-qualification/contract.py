@@ -23,7 +23,7 @@ EXECUTION_FILES = tuple(sorted({
     'tools/native-functional/native_smoke.py', 'tools/native-functional/taskbar-runtime.py',
     'tools/native-functional/taskbar-screencopy.c', 'shell/dev/virtual-pointer.c',
     'shell/dev/wlr-screencopy-unstable-v1.xml'}))
-CONTEXT_KEYS = {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'token',
+CONTEXT_KEYS = {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'binding_id',
                 'checker_sha256', 'runtime_sha256', 'native_sha256', 'capture_sha256'}
 GUEST_IMAGES = tuple(['baseline.png'] + [kind + '-' + str(cycle) + '.png' for kind in ('vt', 'output')
                                       for cycle in range(3)] + ['output-0-relocated.png', 'output-2-relocated.png'])
@@ -88,7 +88,7 @@ def context_check(value):
     require(all(is_hash(value[k], 40) for k in ('source_sha', 'execution_sha')) and
             all(is_hash(value[k]) for k in CONTEXT_KEYS if k.endswith('sha256')) and
             type(value['iso_bytes']) is int and 0 < value['iso_bytes'] < 2_000_000_000 and
-            is_hash(value['token'], 32), 'installer context identities differ')
+            is_hash(value['binding_id'], 32), 'installer context identities differ')
 
 
 def engine_check(value):
@@ -249,7 +249,7 @@ def validate_report(report, expected_context, files, image_loader, source_hashes
                     request['enabled_output_count'] == count, 'host restore request differs from real guest absence')
             requests.extend([disruption['disconnect_request'], request])
     expected = [('vt-away', n) for n in range(3)] + [(kind, n) for n in range(3) for kind in ('output-disconnect', 'output-restore')]
-    require([(r['kind'], r['cycle']) for r in requests] == expected and all(r['token'] == expected_context['token'] and
+    require([(r['kind'], r['cycle']) for r in requests] == expected and all(r['binding_id'] == expected_context['binding_id'] and
             r['boot_id'] == report['boot_id'] and r['schema'] == 'arctic-installer-request-v1' and
             r['engine_sha256'] == hash_value(baseline['engine']) for r in requests), 'actual disruption requests differ')
     cleanup, security = report['cleanup'], report['security']
@@ -321,7 +321,7 @@ def validate_execution(state, expected_image, execution_source, serial_bytes=Non
         request = receipt['request']
         # Guest emits sorted JSON using the same canonical serialization; this
         # binds each host operation to exactly one complete UART request.
-        require(receipt['request_sha256'] == hash_value(request) and request['token'] == context['token'] and
+        require(receipt['request_sha256'] == hash_value(request) and request['binding_id'] == context['binding_id'] and
                 request['boot_id'] == report['boot_id'] and request['engine_sha256'] == hash_value(report['baseline']['engine']),
                 'host UART request digest/boot/prepared state differs')
         if request['kind'] == 'vt-away':

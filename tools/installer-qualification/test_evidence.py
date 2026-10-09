@@ -20,7 +20,7 @@ class Controls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.context = dict(schema='arctic-installer-context-v1', source_sha='1' * 40, execution_sha='2' * 40,
-            iso_sha256='3' * 64, iso_bytes=1_929_381_888, token='4' * 32,
+            iso_sha256='3' * 64, iso_bytes=1_929_381_888, binding_id='4' * 32,
             checker_sha256='5' * 64, runtime_sha256='6' * 64, native_sha256='7' * 64, capture_sha256='8' * 64)
         cls.identity = dict(boot_id='01234567-89ab-cdef-0123-456789abcdef', desktop_uid=1000,
                             active_desktop_session='2')
@@ -32,7 +32,7 @@ class Controls(unittest.TestCase):
         cls.proof = dict(schema='arctic-installer-provenance-v1', stage='live', context=cls.context,
                          **cls.identity, transport=cls.transport, release_acceptance=False,
                          cmdline='ro rd.live.image arctic.mode=install', virtualization='qemu')
-        cls.end = dict(token=cls.context['token'], **cls.identity, status='passed', error=None,
+        cls.end = dict(binding_id=cls.context['binding_id'], **cls.identity, status='passed', error=None,
                        evidence_export_complete=True, release_acceptance=False)
         image = Image.new('RGB', (1280, 720), (32, 36, 40))
         stream = io.BytesIO()
@@ -61,7 +61,7 @@ class Controls(unittest.TestCase):
         cls.requests = []
         def request(kind, cycle, **fields):
             value = dict(schema='arctic-installer-request-v1', kind=kind, cycle=cycle,
-                         token=cls.context['token'], boot_id=cls.identity['boot_id'], **fields)
+                         binding_id=cls.context['binding_id'], boot_id=cls.identity['boot_id'], **fields)
             cls.requests.append(value)
             return value
         for cycle in range(3):
@@ -101,16 +101,16 @@ class Controls(unittest.TestCase):
             parts = [compressed[i:i + e.CHUNK] for i in range(0, len(compressed), e.CHUNK)]
             entries.append(dict(path=name, bytes=len(data), sha256=e.digest(data), compressed_bytes=len(compressed),
                                 chunks=len(parts), encoding='zlib+base64'))
-            rows.extend(('EVIDENCE-CHUNK', dict(token=self.context['token'], path=name, index=i,
+            rows.extend(('EVIDENCE-CHUNK', dict(binding_id=self.context['binding_id'], path=name, index=i,
                        data=base64.b64encode(part).decode())) for i, part in enumerate(parts))
-        rows.extend((('EVIDENCE-MANIFEST', dict(schema='arctic-installer-evidence-v1', token=self.context['token'],
+        rows.extend((('EVIDENCE-MANIFEST', dict(schema='arctic-installer-evidence-v1', binding_id=self.context['binding_id'],
                       evidence_root=self.root, files=entries, bytes=sum(map(len, files.values())))),
                      ('END', copy.deepcopy(self.end if end is None else end))))
         return rows
 
     def wire(self, rows, requests=None, marker=None):
         end = rows[-1][1]
-        marker = (dict(schema='arctic-installer-port-end-v1', token=self.context['token'], **self.identity,
+        marker = (dict(schema='arctic-installer-port-end-v1', binding_id=self.context['binding_id'], **self.identity,
                        status=end['status'], release_acceptance=False, end_sha256=e.digest(e.canonical(end)))
                   if marker is None else marker)
         port = ''.join(e.PREFIX + kind + ' ' + json.dumps(value) + '\n' for kind, value in rows).encode()
@@ -165,7 +165,7 @@ class Controls(unittest.TestCase):
         for change in ('context', 'port', 'live'):
             rows = self.rows()
             if change == 'context':
-                rows[0][1]['context']['token'] = '0' * 32
+                rows[0][1]['context']['binding_id'] = '0' * 32
             elif change == 'port':
                 rows[0][1]['transport']['name'] = 'arctic-taskbar-evidence'
             else:
@@ -175,7 +175,7 @@ class Controls(unittest.TestCase):
 
     def test_uart_end_digest_identity_duplicates_and_foreign_records_fail(self):
         port, uart = self.wire(self.rows())
-        marker = dict(schema='arctic-installer-port-end-v1', token=self.context['token'], **self.identity,
+        marker = dict(schema='arctic-installer-port-end-v1', binding_id=self.context['binding_id'], **self.identity,
                       status='passed', release_acceptance=False, end_sha256='0' * 64)
         with self.assertRaises(RuntimeError):
             self.check(marker=marker)
@@ -190,7 +190,7 @@ class Controls(unittest.TestCase):
                          [self.requests[1], self.requests[0], *self.requests[2:]]):
             with self.assertRaises(RuntimeError):
                 self.check(requests=requests)
-        for key, value in (('token', '0' * 32), ('cycle', True), ('boot_id', 'f' * 36)):
+        for key, value in (('binding_id', '0' * 32), ('cycle', True), ('boot_id', 'f' * 36)):
             requests = copy.deepcopy(self.requests)
             requests[0][key] = value
             with self.assertRaises(RuntimeError):
@@ -235,14 +235,14 @@ class Controls(unittest.TestCase):
                 self.check(rows)
 
     def test_chunk_order_foreign_token_boolean_index_and_noncanonical_base64_fail(self):
-        for mutation in ('swap', 'duplicate', 'token', 'index', 'data'):
+        for mutation in ('swap', 'duplicate', 'binding_id', 'index', 'data'):
             rows = self.rows()
             if mutation == 'swap':
                 rows[3], rows[4] = rows[4], rows[3]
             elif mutation == 'duplicate':
                 rows.insert(3, copy.deepcopy(rows[3]))
-            elif mutation == 'token':
-                rows[3][1]['token'] = '0' * 32
+            elif mutation == 'binding_id':
+                rows[3][1]['binding_id'] = '0' * 32
             elif mutation == 'index':
                 rows[3][1]['index'] = True
             else:

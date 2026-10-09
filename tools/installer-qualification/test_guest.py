@@ -20,7 +20,7 @@ spec.loader.exec_module(guest)
 
 def context():
     return dict(schema='arctic-installer-context-v1', source_sha='1' * 40, execution_sha='2' * 40,
-                iso_sha256='3' * 64, iso_bytes=1_929_381_888, token='4' * 32,
+                iso_sha256='3' * 64, iso_bytes=1_929_381_888, binding_id='4' * 32,
                 checker_sha256='5' * 64, runtime_sha256='6' * 64,
                 native_sha256='7' * 64, capture_sha256='8' * 64)
 
@@ -73,7 +73,7 @@ class Controls(unittest.TestCase):
     def test_context_exact_source_image_and_size(self):
         self.assertEqual(guest.validate_context(context()), context())
         changes = [('iso_bytes', True), ('iso_bytes', 2_000_000_000), ('source_sha', 'z' * 40),
-                   ('token', 'a' * 64), ('checker_sha256', 'a' * 40), ('extra', 'unsupported')]
+                   ('binding_id', 'a' * 64), ('checker_sha256', 'a' * 40), ('extra', 'unsupported')]
         for key, value in changes:
             with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
                 changed = context()

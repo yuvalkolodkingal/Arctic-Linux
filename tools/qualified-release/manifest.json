@@ -12,6 +12,8 @@
   "dictation_media_review": null,
   "installer": null,
   "installer_media_review": null,
+  "installer_active": null,
+  "installer_active_media_review": null,
   "update": null,
   "media_review": null,
   "execution_files": {}

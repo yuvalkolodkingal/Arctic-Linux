@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Fresh live-ISO GUI restoration VM; never starts an OS installation."""
+"""Owned live-ISO restoration VM, with an explicit genuine-installation profile."""
 import argparse
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import socket
@@ -114,9 +115,10 @@ def owned_vm_type(vmtest, display_module):
     return OwnedVM
 
 
-def prepare_vm(display, out, firmware):
-    # No writable target disk, host filesystem share, networking, audio/input
-    # passthrough, replacement compositor or replacement installer is exposed.
+def prepare_vm(display, out, firmware, context=None, installed=False):
+    # Both profiles exclude networking, host shares, audio/input passthrough and
+    # replacement product processes. Only the explicit active profile adds its
+    # newly acquired standalone guest target disk.
     argv = ['qemu-system-x86_64', '-machine', 'q35', '-accel', 'kvm', '-cpu', 'max',
             '-smp', '2', '-m', '4096', '-display', display.display_arg, '-vga', 'none',
             '-device', 'virtio-vga,id=arctic_taskbar_gpu,max_outputs=2', '-S',
@@ -131,10 +133,137 @@ def prepare_vm(display, out, firmware):
             '-device', 'virtio-serial-pci,id=installer_serial', '-device',
             'virtserialport,bus=installer_serial.0,chardev=installer_evidence,name=arctic-installer-evidence']
     if firmware == 'uefi':
-        shutil.copyfile('/usr/share/edk2/ovmf/OVMF_VARS.fd', out / 'OVMF_VARS.fd')
+        if not installed:
+            require(not (out / 'OVMF_VARS.fd').exists() and not (out / 'OVMF_VARS.fd').is_symlink(),
+                    'owned variable store already exists')
+            shutil.copyfile('/usr/share/edk2/ovmf/OVMF_VARS.fd', out / 'OVMF_VARS.fd')
+        else:
+            require((out / 'OVMF_VARS.fd').is_file() and not (out / 'OVMF_VARS.fd').is_symlink(),
+                    'installed boot requires the original owned variable store')
         argv.extend(['-drive', 'if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd',
                      '-drive', 'if=pflash,format=raw,unit=1,file=' + str(out / 'OVMF_VARS.fd')])
+    if context and context.get('schema') == 'arctic-installer-active-context-v1':
+        require(firmware == 'uefi', 'active install requires the separately reviewed UEFI fixture')
+        target = out / 'target.qcow2'
+        if not installed:
+            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            os.close(fd)
+            subprocess.run(['qemu-img', 'create', '-f', 'qcow2', str(target), str(context['disk_bytes'])],
+                           check=True, timeout=30, stdout=subprocess.DEVNULL)
+        info = json.loads(subprocess.check_output(['qemu-img', 'info', '--output=json', str(target)], timeout=30))
+        require(target.is_file() and not target.is_symlink() and info['format'] == 'qcow2'
+                and info['virtual-size'] == context['disk_bytes'] and 'backing-filename' not in info,
+                'active target is not a fresh standalone owned qcow2')
+        argv.extend(['-drive', 'file=' + str(target) + ',if=none,id=active_target,node-name=target0,format=qcow2,bps_wr=' +
+                     str(context['write_bps']), '-device', 'virtio-blk-pci,drive=active_target,serial=' + context['disk_serial'] +
+                     (',bootindex=0' if installed else '')])
+        if installed:
+            live_drive = argv.index('file=/iso,media=cdrom,readonly=on,if=none,id=live')
+            del argv[live_drive-1:live_drive+1]
+            live_device = argv.index('ide-cd,drive=live,bus=ide.1,bootindex=0')
+            del argv[live_device-1:live_device+1]
+            argv[argv.index('-serial')+1] = 'file:' + str(out / 'serial-installed.log')
+            argv[argv.index('-qmp')+1] = 'unix:' + str(out / 'qmp-installed.sock') + ',server=on,wait=off'
+            # Installed proof uses only UART, never the already completed live port.
+            argv[argv.index('-chardev')+1] = 'file,id=installer_evidence,path=' + str(out / 'installed-unused-port.log')
     return argv
+
+
+def console_prompt(vm, startup, out, label, expected, private_password, archive=True):
+    """Observe a strict last console line before permitting any secret input."""
+    kinds = {'installed-getty-password': 'getty-auth',
+             'installed-sudo-password': 'sudo-auth', 'installed-login-shell': 'installed-user-shell'}
+    require(label in kinds, 'unreviewed installed console prompt kind')
+    deadline = time.monotonic() + 45
+    while vm.alive() and time.monotonic() < deadline:
+        path = vm.shot(label + '-probe')
+        require(path and startup.console_screen(path), 'actual password console disappeared')
+        result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
+                                capture_output=True, timeout=10, check=True)
+        require(len(result.stdout) <= 65536, 'prompt OCR exceeds bound')
+        text = result.stdout.decode()
+        # A failed login must not make a secret-bearing probe a public image.
+        require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        observed_line = lines[-1].rstrip('_| ') if lines else None
+        if observed_line == expected:
+            from PIL import Image
+            with Image.open(path) as image:
+                require(image.size == (1280,720), 'installed prompt physical dimensions differ')
+            record = dict(path=label+'.png', bytes=Path(path).stat().st_size, sha256=sha(path),
+                          size=[1280,720], prompt_kind=kinds[label],
+                          observed_line_sha256=hashlib.sha256(observed_line.encode('utf-8')).hexdigest(),
+                          observed_ns=time.monotonic_ns())
+            if archive:
+                require(not (out/(label+'.png')).exists(), 'password prompt capture reused')
+                os.replace(path, out/(label+'.png'))
+            else:
+                Path(path).unlink()
+            return record
+        time.sleep(.5)
+    raise RuntimeError('exact console prompt was not observed; secret input refused')
+
+
+def ocr_provenance():
+    trained = [path for path in subprocess.check_output(['rpm','-ql','tesseract-langpack-eng'],text=True,timeout=10).splitlines()
+               if path.endswith('/eng.traineddata')]
+    require(len(trained)==1, 'English prompt OCR model is ambiguous')
+    return dict(packages=subprocess.check_output(['rpm','-q','tesseract','tesseract-langpack-eng'],text=True,timeout=10).splitlines(),
+                program_sha256=sha('/usr/bin/tesseract'), traineddata_sha256=sha(trained[0]),
+                version=subprocess.check_output(['tesseract','--version'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines()[0])
+
+
+def boot_installed(vm, startup, vmtest, out, context):
+    """Authenticate on a new QEMU boot of the same disk, with hidden TTY secrets."""
+    deadline = time.monotonic() + 900
+    while vm.alive() and time.monotonic() < deadline:
+        shot = vm.shot('installed-login-probe')
+        if shot and vmtest.looks_like_boot_menu(shot):
+            vm.keys('ret')
+        if shot and vmtest.classify(shot) == 'login':
+            break
+        time.sleep(2)
+    else:
+        raise RuntimeError('fresh installed login display did not appear')
+    vm.cmd('send-key', keys=[{'type': 'qcode', 'data': k} for k in ('ctrl', 'alt', 'f6')], **{'hold-time': 100})
+    time.sleep(4)
+    require(startup.console_screen(vm.shot('installed-console-login')), 'fresh installed console was not visible')
+    private = json.loads((out / 'data/active-credentials.json').read_text())
+    password = private['password']
+    require(set(private) == {'password'} and re.fullmatch('[a-z0-9]{32}', password), 'private credential fixture differs')
+    # Permit secret input only at the observed shipped getty/sudo password prompt.
+    # No secret appears in shell command text, argv or public receipts.
+    vm.type_text('arcticqual', gap=.15); vm.keys('ret')
+    getty = console_prompt(vm,startup,out,'installed-getty-password','Password:',password)
+    vm.type_text(password, gap=.1); vm.keys('ret')
+    shell = console_prompt(vm,startup,out,'installed-login-shell','arcticqual@arctic-qual ~ >',password,archive=False)
+    nonce = uuid.uuid4().hex
+    vm.type_text('sudo sh /dev/sr0 ' + nonce, gap=.08); vm.keys('ret')
+    sudo = console_prompt(vm,startup,out,'installed-sudo-password','[sudo] password for arcticqual:',password)
+    vm.type_text(password, gap=.1); vm.keys('ret')
+    password = None; private.clear()
+    serial = out / 'serial-installed.log'
+    deadline = time.monotonic() + 120
+    while vm.alive() and time.monotonic() < deadline:
+        data = serial.read_bytes()
+        require(len(data) <= 8*1024*1024, 'installed UART exceeds bound')
+        lines = data.decode().splitlines()
+        require('ARCTIC-ACTIVE-INSTALLED-FAILED' not in lines, 'installed guest proof failed')
+        records = [line[len('ARCTIC-ACTIVE-INSTALLED '):] for line in lines if line.startswith('ARCTIC-ACTIVE-INSTALLED ')]
+        if records:
+            require(len(records) == 1 and
+                    lines.count('ARCTIC-ACTIVE-INSTALLED-READY=' + nonce + ' user=arcticqual uid=1000') == 1,
+                    'fresh installed authentication/receipt is ambiguous')
+            checker = load('active_boot_strict_base', '/execution/tools/installer-qualification/guest.py')
+            report = checker.strict_json(records[0])
+            require(report['context'] == context and report['authentication']['nonce'] == nonce,
+                    'fresh installed helper context/authentication differs')
+            prompts = dict(schema='arctic-active-password-prompts-v1',engine=ocr_provenance(),getty=getty,sudo=sudo,
+                login_shell={key: shell[key] for key in ('prompt_kind','observed_line_sha256','observed_ns')},
+                private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
+            return report, dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest()), prompts
+        time.sleep(.5)
+    raise RuntimeError('fresh installed proof did not complete')
 
 
 def choose_install(vm, vmtest, out):
@@ -210,8 +339,12 @@ def main():
     signal.signal(signal.SIGTERM, interrupted)
     try:
         display = display_module.TaskbarDisplay()
-        argv = prepare_vm(display, out, args.firmware)
+        active = context.get('schema') == 'arctic-installer-active-context-v1'
+        argv = prepare_vm(display, out, args.firmware, context)
         state['qemu_argv'] = argv
+        if active:
+            state['target_proof'] = dict(path='target.qcow2', virtual_bytes=context['disk_bytes'], serial=context['disk_serial'],
+                                        backing_file=False, node_name='target0', write_bps=context['write_bps'])
         vm = owned_vm_type(vmtest, display_module)(argv, str(out / 'qmp.sock'), 'installer-live')
         state['display_preparation'] = dict(display.enable(vm), controller_sha256=sha('/execution/tools/native-functional/taskbar-display.py'))
         display_module.qmp_query(vm, 'cont')
@@ -223,7 +356,7 @@ def main():
         # The CD launcher returns to the discovered Wayland VT before the
         # checker observes the pre-existing packaged installer and engine.
         vm.type_text('sudo sh /dev/sr0', gap=.1); vm.keys('ret')
-        deadline = time.monotonic() + 660
+        deadline = time.monotonic() + (56*60 if active else 660)
         while vm.alive() and time.monotonic() < deadline:
             controller.poll(out / 'serial.log')
             if vmtest.serial_has(str(out / 'serial.log'), 'ARCTIC-INSTALLER-PORT-END '):
@@ -232,6 +365,31 @@ def main():
         else:
             raise RuntimeError('installer guest evidence did not complete in bound')
         state['host_transitions'] = controller.finish()
+        if active:
+            # Read the protected report directly from the original port before
+            # stopping this owned live VM; extraction is independently repeated later.
+            reports = [controller_module.strict_json(line.split(' ',1)[1]) for line in
+                       (out/'installer-port.log').read_text().splitlines() if line.startswith('ARCTIC-INSTALLER-REPORT ')]
+            require(len(reports) == 1 and reports[0]['status'] == 'passed', 'active live collector did not pass')
+            live_boot, live_pid = reports[0]['boot_id'], vm.proc.pid
+            state['output_cleanup'] = controller.restore()
+            stop_owned(vm, display); vm.close_handles()
+            state['live_qemu_stopped_before_installed_boot'] = vm.proc.poll() is not None
+            controller = None
+            display = display_module.TaskbarDisplay()
+            argv = prepare_vm(display, out, args.firmware, context, installed=True)
+            vm = owned_vm_type(vmtest, display_module)(argv, str(out/'qmp-installed.sock'), 'installer-installed')
+            require(vm.proc.pid != live_pid, 'installed boot reused the live QEMU process')
+            display.enable(vm); display_module.qmp_query(vm, 'cont')
+            report, serial_proof, prompts = boot_installed(vm, startup, vmtest, out, context)
+            state['password_prompt_evidence'] = prompts
+            require(report['boot_id'] != live_boot, 'installed boot reused the live guest boot')
+            state['installed_boot'] = dict(status='passed', live_qemu_pid=live_pid, installed_qemu_pid=vm.proc.pid,
+                qemu_argv=argv, target={k: state['target_proof'][k] for k in ('path','virtual_bytes','serial','backing_file')},
+                boot_id=report['boot_id'], parent_live_boot_id=live_boot, selinux=report['selinux'],
+                root=report['root'], keyboard=report['keyboard'], authentication=report['authentication'],
+                serial=serial_proof, receipt_sha256=hashlib.sha256(json.dumps(report,sort_keys=True,allow_nan=False).encode()).hexdigest())
+            (out/'installed-boot.json').write_text(json.dumps(report,sort_keys=True,allow_nan=False)+'\n')
         state['status'] = 'host_completed_pending_guest_evidence_validation_and_visual_review'
     except BaseException as error:
         errors.append(type(error).__name__ + ': ' + str(error))

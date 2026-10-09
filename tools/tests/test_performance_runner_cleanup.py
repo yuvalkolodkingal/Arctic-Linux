@@ -61,7 +61,7 @@ class OwnedCleanupTest(unittest.TestCase):
         def screen(source, target):
             self.screens.append(json.loads((source/'execution.json').read_text())['status'])
             shutil.copytree(source, target)
-        self.screen = types.SimpleNamespace(screen=screen)
+        self.screen = types.SimpleNamespace(screen_external=screen)
         self.stack = []
         for context in (patch.object(runner, 'C', self.contract),
                 patch.object(runner, 'activation', return_value=(self.plan, 'c'*40)),
@@ -210,13 +210,13 @@ class OwnedCleanupTest(unittest.TestCase):
         self.failed_evidence()
 
     def test_repeated_actual_signals_during_screening_replace_only_owned_pass_snapshot(self):
-        screen = self.screen.screen
+        screen = self.screen.screen_external
         def interrupted_screen(source, target):
             screen(source, target)
             if len(self.screens) == 1:
                 os.kill(os.getpid(), signal.SIGTERM)
                 os.kill(os.getpid(), signal.SIGINT)
-        self.screen.screen = interrupted_screen
+        self.screen.screen_external = interrupted_screen
         with patch.object(runner.subprocess, 'Popen', return_value=Child()):
             with self.assertRaises(InterruptedError):
                 runner.run(self.args)

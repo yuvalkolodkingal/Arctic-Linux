@@ -39,6 +39,17 @@ REQUEST_ORDER = [('vt-away', i) for i in range(3)] + [
 CASE_ORDER = [('vt', i) for i in range(3)] + [('output', i) for i in range(3)]
 
 
+def active_request_order(context):
+    return ([('vt-away', 0), ('output-disconnect', 0), ('output-restore', 0)]
+            if context.get('schema') == 'arctic-installer-active-context-v1' else REQUEST_ORDER)
+
+
+def active_contract():
+    spec = importlib.util.spec_from_file_location('installer_active_independent_contract', HERE / 'active-contract.py')
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return module
+
+
 def canonical(value):
     return json.dumps(value, sort_keys=True, allow_nan=False).encode('ascii')
 
@@ -88,7 +99,7 @@ def block(port_data, serial_data, context):
           'installer BEGIN schema differs')
     exact(proof, {'schema', 'stage', 'context', 'transport', 'cmdline', 'virtualization',
                   'release_acceptance'} | IDENTITY, 'installer provenance schema differs')
-    exact(end, {'token', 'status', 'error', 'evidence_export_complete', 'release_acceptance'} | IDENTITY,
+    exact(end, {'binding_id', 'status', 'error', 'evidence_export_complete', 'release_acceptance'} | IDENTITY,
           'installer END schema differs')
     validate_context(begin['context'])
     validate_context(proof['context'])
@@ -104,7 +115,7 @@ def block(port_data, serial_data, context):
             and re.fullmatch('[A-Za-z0-9_-]{1,64}', begin['active_desktop_session'])
             and all(type(proof[k]) is type(begin[k]) and type(end[k]) is type(begin[k])
                     and begin[k] == proof[k] == end[k] for k in IDENTITY)
-            and end['token'] == context['token'], 'installer boot, UID, session, or token differs')
+            and end['binding_id'] == context['binding_id'], 'installer boot, UID, session, or binding_id differs')
     require(type(proof['cmdline']) is str and len(proof['cmdline']) <= 16384
             and {'rd.live.image', 'arctic.mode=install'} <= set(proof['cmdline'].split())
             and proof['virtualization'] in ('qemu', 'kvm'), 'installer actual live boot identity differs')
@@ -128,13 +139,15 @@ def block(port_data, serial_data, context):
             and all(kind == 'REQUEST' for kind, _ in uart[:-1]),
             'missing, duplicate, or reversed installer UART completion')
     marker = uart[-1][1]
-    exact(marker, {'schema', 'token', 'status', 'end_sha256', 'release_acceptance'} | IDENTITY,
+    exact(marker, {'schema', 'binding_id', 'status', 'end_sha256', 'release_acceptance'} | IDENTITY,
           'installer UART completion schema differs')
-    require(marker['schema'] == 'arctic-installer-port-end-v1' and marker['token'] == context['token']
+    require(marker['schema'] == 'arctic-installer-port-end-v1' and marker['binding_id'] == context['binding_id']
             and marker['status'] == end['status'] and marker['release_acceptance'] is False
             and all(type(marker[k]) is type(begin[k]) and marker[k] == begin[k] for k in IDENTITY)
             and marker['end_sha256'] == digest(canonical(end)), 'installer port END/UART receipt differs')
-    require(type(report) is dict and report.get('schema') == guest.SCHEMA
+    report_schema = ('arctic-live-installer-active-restoration-v1'
+                     if context['schema'] == 'arctic-installer-active-context-v1' else guest.SCHEMA)
+    require(type(report) is dict and report.get('schema') == report_schema
             and report.get('stage') == 'live' and report.get('release_acceptance') is False
             and report.get('status') in ('passed', 'failed') and canonical(report.get('context')) == canonical(context)
             and all(type(report.get(k)) is type(begin[k]) and report[k] == begin[k] for k in IDENTITY), 'installer REPORT identity differs')
@@ -144,19 +157,25 @@ def block(port_data, serial_data, context):
 
 
 def validate_requests(requests, begin, report):
-    require(type(requests) is list and len(requests) <= len(REQUEST_ORDER), 'too many installer requests')
+    context = begin['context']; order = active_request_order(context)
+    active = context['schema'] == 'arctic-installer-active-context-v1'
+    require(type(requests) is list and len(requests) <= len(order), 'too many installer requests')
     for index, value in enumerate(requests):
-        common = {'schema', 'kind', 'token', 'boot_id', 'cycle'}
+        common = {'schema', 'kind', 'binding_id', 'boot_id', 'cycle'}
         require(type(value) is dict and type(value.get('cycle')) is int
-                and (value.get('kind'), value['cycle']) == REQUEST_ORDER[index],
+                and (value.get('kind'), value['cycle']) == order[index],
                 'duplicate, missing, or reordered installer request')
         extra = ({'away', 'original_vt', 'engine_sha256'} if value['kind'] == 'vt-away' else
                  {'mode', 'hosting_output', 'hosting_head', 'enabled_outputs', 'engine_sha256'} |
                  ({'enabled_output_count', 'outputs_sha256', 'outputs'} if value['kind'] == 'output-restore' else set()))
+        if active:
+            extra |= {'elapsed_ns'}
+            require(type(value.get('elapsed_ns')) is int and value['elapsed_ns'] > 0,
+                    'active request observation timestamp differs')
         exact(value, common | extra, 'installer request fields differ')
-        require(value['schema'] == 'arctic-installer-request-v1' and value['token'] == begin['context']['token']
+        require(value['schema'] == 'arctic-installer-request-v1' and value['binding_id'] == begin['context']['binding_id']
                 and value['boot_id'] == begin['boot_id'] and type(value['engine_sha256']) is str
-                and SHA.fullmatch(value['engine_sha256']), 'installer request token, boot, or engine digest differs')
+                and SHA.fullmatch(value['engine_sha256']), 'installer request binding_id, boot, or engine digest differs')
         if value['kind'] == 'vt-away':
             away = value['away']
             exact(away, ('session', 'uid', 'vt', 'active', 'foreground'), 'installer away-VT state differs')
@@ -183,8 +202,8 @@ def validate_requests(requests, begin, report):
 
 
 def decode(chunks, manifest, context, report):
-    exact(manifest, ('schema', 'token', 'evidence_root', 'files', 'bytes'), 'installer manifest schema differs')
-    require(manifest['schema'] == 'arctic-installer-evidence-v1' and manifest['token'] == context['token']
+    exact(manifest, ('schema', 'binding_id', 'evidence_root', 'files', 'bytes'), 'installer manifest schema differs')
+    require(manifest['schema'] == 'arctic-installer-evidence-v1' and manifest['binding_id'] == context['binding_id']
             and type(manifest['evidence_root']) is str
             and re.fullmatch('/tmp/arctic-native-smoke-installer-[A-Za-z0-9_-]+', manifest['evidence_root'])
             and report.get('evidence_root') == manifest['evidence_root']
@@ -208,8 +227,8 @@ def decode(chunks, manifest, context, report):
         require(len(selected) == entry['chunks'], 'missing installer chunks')
         pieces = []
         for index, chunk in enumerate(selected):
-            exact(chunk, ('token', 'path', 'index', 'data'), 'installer chunk schema differs')
-            require(chunk['token'] == context['token'] and chunk['path'] == name
+            exact(chunk, ('binding_id', 'path', 'index', 'data'), 'installer chunk schema differs')
+            require(chunk['binding_id'] == context['binding_id'] and chunk['path'] == name
                     and type(chunk['index']) is int and chunk['index'] == index
                     and type(chunk['data']) is str and 0 < len(chunk['data']) <= 24576,
                     'duplicate, reordered, foreign, or oversized installer chunk')
@@ -264,6 +283,13 @@ def validate_capture(value, visible, name, decoded):
 
 
 def validate_pass(report, begin, end, requests, decoded):
+    if begin['context']['schema'] == 'arctic-installer-active-context-v1':
+        require(report['status'] == end['status'] == 'passed' and end['error'] is None
+                and end['evidence_export_complete'] is True, 'active installer collector or export failed')
+        files = {name: dict(bytes=len(data), sha256=digest(data)) for name, data in decoded.items()}
+        summary = active_contract().validate_report(report, begin['context'], files, decoded.__getitem__, None)
+        require(canonical(summary['requests']) == canonical(requests), 'active UART request replay differs')
+        return
     require(report['status'] == end['status'] == 'passed' and end['error'] is None
             and end['evidence_export_complete'] is True and report.get('errors') == []
             and type(report.get('captures')) is int and report['captures'] == 9,
@@ -337,7 +363,8 @@ def extract(port_path, serial_path, destination, context):
     state = dict(schema='arctic-installer-evidence-state-v1', status='failed', context=context,
                  **{key: begin[key] for key in IDENTITY}, release_acceptance=False,
                  begin=begin, provenance=proof, report=report, collector=end, port_end=marker,
-                 requests=requests, files={}, required_pngs=9, received_pngs=sum(name.endswith('.png') for name in decoded),
+                 requests=requests, files={}, required_pngs=4 if context['schema'] == 'arctic-installer-active-context-v1' else 9,
+                 received_pngs=sum(name.endswith('.png') for name in decoded),
                  received_requests=len(requests), errors=[],
                  port=dict(bytes=len(port_data), sha256=digest(port_data)),
                  serial=dict(bytes=len(serial_data), sha256=digest(serial_data)),

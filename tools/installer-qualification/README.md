@@ -39,7 +39,7 @@ are not sufficient release acceptance. The prepared idle engine scope and any
 unavailable connection-log/audit telemetry remain explicit limitations.
 
 Guest transport is a bounded named virtio port, bound to the UART completion and
-nine host requests with exact token, source, ISO, execution, boot, UID and session
+nine host requests with the exact binding ID, source, ISO, execution, boot, UID and session
 identities. The extractor rejects malformed framing, duplicate JSON fields,
 invalid paths, mismatched hashes, oversized chunks and decompression expansion.
 Valid failed evidence is retained with a failed state. Protected complete UART is

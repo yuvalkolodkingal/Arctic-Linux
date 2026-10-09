@@ -357,7 +357,7 @@ def run(args):
                             def screen_owned():
                                 nonlocal screened_owned
                                 require_owned_evidence()
-                                screen.screen(args.evidence, args.screened)
+                                screen.screen_external(args.evidence, args.screened)
                                 screened_owned = True
                             attempt('screen', screen_owned)
                         # A queued cancellation during copying/screening must never leave

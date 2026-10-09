@@ -10,35 +10,42 @@ import statistics
 
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
-CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v5-original-appid-native-bracket-raw-clock-autonomous'
+CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v6-original-appid-preinsert-bracket-raw-clock-autonomous'
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v12-original-appid-native-bracket-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v13-original-appid-preinsert-bracket-role-first-use'
 ROLE_ORDER = ('terminal', 'files', 'browser')
 MAPPING_PROFILES = (
     dict(executable_sha256='1c66767fc0d814e9002306c983524b476edc671de544f3b2a6f755ea7a52dcb1',
+         native_audit_sha256='dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c',
          function_file_offset=0x430d0, function_size=4109,
          function_sha256='d48615861b8819d95e30fbbf74db46e24f8e3d738e20824e0e598578972004a2',
-         instruction_file_offset=0x435ef, client_ext_offset=1584,
+         instruction_file_offset=0x435de,
+         lower_instruction_file_offsets=dict(tail=0x435d9, head=0x43733, scroller=0x43d63),
+         client_ext_offset=1584,
          ipc_function_file_offset=0x6b00, ipc_function_size=1234,
          ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
          client_type_offset=0, client_surface_offset=328, xdg_type=0,
          xdg_toplevel_offset=56, xdg_appid_offset=192,
          xwayland_type=2, xwayland_class_offset=144),
     dict(executable_sha256='2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b',
-         native_audit_sha256='c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa',
+         native_audit_sha256='dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c',
          function_file_offset=0x43110, function_size=4109,
          function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
-         instruction_file_offset=0x4362f, client_ext_offset=1584,
+         instruction_file_offset=0x4361e,
+         lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3),
+         client_ext_offset=1584,
          ipc_function_file_offset=0x6b00, ipc_function_size=1234,
          ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
          client_type_offset=0, client_surface_offset=328, xdg_type=0,
          xdg_toplevel_offset=56, xdg_appid_offset=192,
          xwayland_type=2, xwayland_class_offset=144),
     dict(executable_sha256='67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35',
-         native_audit_sha256='c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa',
+         native_audit_sha256='dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c',
          function_file_offset=0x430d0, function_size=4109,
          function_sha256='11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd',
-         instruction_file_offset=0x435ef, client_ext_offset=1584,
+         instruction_file_offset=0x435de,
+         lower_instruction_file_offsets=dict(tail=0x435d9, head=0x43733, scroller=0x43d63),
+         client_ext_offset=1584,
          ipc_function_file_offset=0x6b00, ipc_function_size=1234,
          ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
          client_type_offset=0, client_surface_offset=328, xdg_type=0,
@@ -271,18 +278,101 @@ def idle_sample_layout(samples):
         raise ValueError('Missing or unpaired CPU/PSS/private samples')
 
 
+def kernel_readbacks_valid(readbacks, pid):
+    """Validate literal kernel schemas and effective filters, without tracefs IO."""
+    if type(pid) is not int or not 0 < pid < 2**31 or not isinstance(readbacks, dict):
+        return False
+    names = {'map_create', 'map_listed_xdg', 'map_listed_x11'} | {
+        'map_before_' + branch + '_' + kind
+        for branch in ('tail', 'head', 'scroller') for kind in ('xdg', 'x11')}
+    if set(readbacks) != names:
+        return False
+    common = [('unsigned short', 'common_type', 0, 2, 0),
+              ('unsigned char', 'common_flags', 2, 1, 0),
+              ('unsigned char', 'common_preempt_count', 3, 1, 0),
+              ('int', 'common_pid', 4, 4, 1)]
+    identity = [('unsigned long', '__probe_func', 8, 8, 0),
+                ('unsigned long', '__probe_ret_ip', 16, 8, 0),
+                ('__data_loc char[]', 'foreign_id', 24, 4, 1)]
+    native = [('unsigned long', '__probe_ip', 8, 8, 0),
+              ('u32', 'client_type', 16, 4, 0),
+              ('__data_loc char[]', 'original_app_id', 20, 4, 1),
+              ('__data_loc char[]', 'foreign_id', 24, 4, 1),
+              ('__data_loc char[]', 'app_id', 28, 4, 1),
+              ('u64', 'client', 32, 8, 0), ('u64', 'handle', 40, 8, 0),
+              ('u64', 'owner', 48, 8, 0)]
+    event_ids = set()
+    field_pattern = re.compile(
+        r'[ \t]*field:([^;\n]+);[ \t]*offset:([0-9]{1,5});[ \t]*'
+        r'size:([0-9]{1,5});[ \t]*signed:([01]);[ \t]*')
+    for name, record in readbacks.items():
+        if (not isinstance(record, dict) or set(record) != {
+                'format_text', 'format_sha256', 'filter_text', 'filter_sha256'}):
+            return False
+        for key, limit in (('format', 16384), ('filter', 1024)):
+            raw = record[key + '_text']
+            if (not isinstance(raw, str) or not 0 < len(raw) <= limit or not raw.endswith('\n')
+                    or any(char != '\n' and char != '\t' and not ' ' <= char <= '~' for char in raw)
+                    or record[key + '_sha256'] != hashlib.sha256(raw.encode('ascii')).hexdigest()):
+                return False
+        lines = record['format_text'].splitlines()
+        if (len(lines) < 5 or lines[0] != 'name: ' + name
+                or not re.fullmatch(r'ID: [1-9][0-9]{0,4}', lines[1])
+                or lines[2] != 'format:'):
+            return False
+        event_id = int(lines[1][4:])
+        if event_id > 65535 or event_id in event_ids:
+            return False
+        event_ids.add(event_id)
+        fields, footer = [], None
+        for line in lines[3:]:
+            if footer is not None:
+                return False
+            if not line.strip(' \t'):
+                continue
+            if line.startswith('print fmt: '):
+                if footer is not None or not re.fullmatch(r'print fmt: "(?:[^"\\]|\\.)*"(?:, [^\n]+)?', line):
+                    return False
+                footer = line
+                continue
+            match = field_pattern.fullmatch(line)
+            if footer is not None or not match:
+                return False
+            declaration = match[1].rsplit(' ', 1)
+            if len(declaration) != 2:
+                return False
+            fields.append((declaration[0], declaration[1], int(match[2]), int(match[3]), int(match[4])))
+        expected_footer = (r'print fmt: "(%lx <- %lx) foreign_id=\"%s\"", REC->__probe_func, REC->__probe_ret_ip, __get_str(foreign_id)'
+                           if name == 'map_create' else
+                           r'print fmt: "(%lx) client_type=%u original_app_id=\"%s\" foreign_id=\"%s\" app_id=\"%s\" client=0x%Lx handle=0x%Lx owner=0x%Lx", REC->__probe_ip, REC->client_type, __get_str(original_app_id), __get_str(foreign_id), __get_str(app_id), REC->client, REC->handle, REC->owner')
+        if footer != expected_footer or fields != common + (identity if name == 'map_create' else native):
+            return False
+        expected_filter = 'common_pid==' + str(pid)
+        if name != 'map_create':
+            expected_filter += '&&client_type==' + ('0' if name.endswith('_xdg') else '2')
+        filter_text = record['filter_text']
+        if ('\n' in filter_text[:-1]
+                or re.sub(r'[ \t\n]', '', filter_text) != expected_filter
+                or not re.fullmatch(r'[ \t]*common_pid[ \t]*==[ \t]*' + str(pid)
+                                    + (r'[ \t]*&&[ \t]*client_type[ \t]*==[ \t]*'
+                                       + ('0' if name.endswith('_xdg') else '2')
+                                       if name != 'map_create' else '') + r'[ \t]*\n', filter_text)):
+            return False
+    return True
+
+
 def causal_precision(bound, expected_appids):
-    """Require both same-launch native receipts and the original IPC bracket."""
-    if (not isinstance(expected_appids, (tuple, list)) or not 0 < len(expected_appids) <= 8
-            or len(set(expected_appids)) != len(expected_appids)
+    """Require identity provenance, the native insertion bracket and original IPC."""
+    if (not isinstance(bound, dict) or not isinstance(expected_appids, (tuple, list))
+            or not 0 < len(expected_appids) <= 8
             or any(not isinstance(appid, str) or not re.fullmatch('[a-z0-9._-]{1,128}', appid)
-                   or re.fullmatch('[0-9a-f]{32}', appid)
-                   for appid in expected_appids)):
+                   or re.fullmatch('[0-9a-f]{32}', appid) for appid in expected_appids)
+            or len(set(expected_appids)) != len(expected_appids)):
         return False
     proof = bound.get('causal_lower_bound')
     if not isinstance(proof, dict):
         return False
-    if (proof.get('method') != 'wlroots-0.20-and-mango-managed-list-original-appid-native-bracket-raw-v4'
+    if (proof.get('method') != 'wlroots-0.20-and-mango-managed-list-original-appid-preinsert-bracket-raw-v5'
             or proof.get('clock') != 'mono_raw' or proof.get('userspace_clock') != 'CLOCK_MONOTONIC_RAW'
             or bound.get('clock') != 'CLOCK_MONOTONIC_RAW' or proof.get('status') != 'bounded-managed-list-insertion'
             or proof.get('exported_symbol') != 'wlr_ext_foreign_toplevel_handle_v1_create'
@@ -295,26 +385,43 @@ def causal_precision(bound, expected_appids):
             or proof.get('audited_mango_header_sha256') != '0c76fd2a2f677170ad9ef27df9296444bfdf1c69cb40a05dadadd51e050d3428'):
         return False
     profile = proof.get('upper_mapping_profile')
-    mapping = proof.get('upper_executable_mapping')
     if (not isinstance(profile, dict) or profile not in MAPPING_PROFILES
             or any(type(profile.get(key)) is not int for key in
                    ('function_file_offset','function_size','instruction_file_offset','client_ext_offset',
                     'ipc_function_file_offset','ipc_function_size','client_type_offset','client_surface_offset',
                     'xdg_type','xdg_toplevel_offset','xdg_appid_offset','xwayland_type','xwayland_class_offset'))
-            or proof.get('mango_sha256') != profile['executable_sha256']
-            or not isinstance(mapping, dict)
-            or set(mapping) != {'start', 'end', 'file_offset', 'instruction_address'}
-            or any(type(value) is not int or value < 0 for value in mapping.values())
-            or not 0 < mapping['start'] <= mapping['instruction_address'] < mapping['end']
-            or not mapping['file_offset'] <= profile['instruction_file_offset'] < mapping['file_offset']+mapping['end']-mapping['start']
-            or mapping['instruction_address'] != mapping['start']+profile['instruction_file_offset']-mapping['file_offset']
-            or proof.get('upper_instruction_address') != mapping['instruction_address']):
+            or not isinstance(profile.get('lower_instruction_file_offsets'), dict)
+            or set(profile['lower_instruction_file_offsets']) != {'tail', 'head', 'scroller'}
+            or any(type(offset) is not int for offset in profile['lower_instruction_file_offsets'].values())
+            or proof.get('mango_sha256') != profile['executable_sha256']):
+        return False
+
+    def mapping_valid(mapping, offset):
+        return (isinstance(mapping, dict)
+                and set(mapping) == {'start', 'end', 'file_offset', 'instruction_address'}
+                and all(type(value) is int and value >= 0 for value in mapping.values())
+                and 0 < mapping['start'] <= mapping['instruction_address'] < mapping['end']
+                and mapping['file_offset'] <= offset < mapping['file_offset']+mapping['end']-mapping['start']
+                and mapping['instruction_address'] == mapping['start']+offset-mapping['file_offset'])
+
+    mapping = proof.get('upper_executable_mapping')
+    lower_mappings = proof.get('lower_executable_mappings')
+    if (not mapping_valid(mapping, profile['instruction_file_offset'])
+            or proof.get('upper_instruction_address') != mapping['instruction_address']
+            or type(proof.get('upper_instruction_address')) is not int
+            or not isinstance(lower_mappings, dict) or set(lower_mappings) != {'tail', 'head', 'scroller'}
+            or any(not mapping_valid(lower_mappings[branch], offset)
+                   for branch, offset in profile['lower_instruction_file_offsets'].items())
+            or any(any(lower_mappings[branch][key] != mapping[key] for key in ('start', 'end', 'file_offset'))
+                   for branch in lower_mappings)):
         return False
     if any(not isinstance(proof.get(key), str) or not re.fullmatch('[0-9a-f]{64}', proof[key])
            for key in ('library_sha256', 'mango_sha256')):
         return False
     if any(type(proof.get(key)) is not int or proof[key] <= 0
            for key in ('kernel_pid', 'desktop_uid', 'mango_start_ticks', 'exported_file_offset')):
+        return False
+    if not kernel_readbacks_valid(proof.get('kernel_event_readbacks'), proof['kernel_pid']):
         return False
     if (not isinstance(proof.get('library_rpm'), str) or not re.fullmatch(
             r'wlroots(?:0\.20)?-0\.20\.2-[A-Za-z0-9._+]+\.x86_64', proof['library_rpm'])
@@ -334,91 +441,84 @@ def causal_precision(bound, expected_appids):
     started = bound.get('launch_started_monotonic_ns')
     ipc_lower = proof.get('ipc_lower_monotonic_ns')
     ipc_upper = proof.get('ipc_upper_monotonic_ns')
+    identity_events = proof.get('matched_identity_events')
     events = proof.get('matched_events')
     upper_events = proof.get('matched_upper_events')
     ipc_clients = proof.get('matched_ipc_clients')
     if (type(started) is not int or started <= 0 or type(ipc_lower) is not int
             or type(ipc_upper) is not int or not started <= ipc_lower <= ipc_upper
             or not isinstance(events, list) or not 0 < len(events) <= 64
+            or not isinstance(identity_events, list) or len(identity_events) != len(events)
             or not isinstance(upper_events, list) or len(upper_events) != len(events)
             or proof.get('application_id_predicate') != list(expected_appids)
-            or not isinstance(ipc_clients, list) or len(ipc_clients) != len(events)
-            or type(proof.get('upper_instruction_address')) is not int or proof['upper_instruction_address'] <= 0):
+            or not isinstance(ipc_clients, list) or len(ipc_clients) != len(events)):
         return False
+
+    def timestamp_valid(event, edge):
+        text = event.get('kernel_timestamp_text')
+        token = re.fullmatch(r'([0-9]{1,20})\.([0-9]{1,9})', text) if isinstance(text, str) else None
+        if not token:
+            return False
+        literal = int(token[1])*1_000_000_000 + int(token[2].ljust(9, '0'))
+        resolution = 10 ** (9-len(token[2]))
+        return (resolution in (1, 10, 100, 1000)
+                and type(event.get('timestamp_resolution_ns')) is int
+                and event['timestamp_resolution_ns'] == resolution
+                and type(event.get('kernel_text_monotonic_ns')) is int
+                and event['kernel_text_monotonic_ns'] == literal
+                and type(event.get('timestamp_rounding_allowance_ns')) is int
+                and event['timestamp_rounding_allowance_ns'] == resolution
+                and type(event.get(edge + '_monotonic_ns')) is int
+                and event[edge + '_monotonic_ns'] == literal + (resolution if edge == 'upper' else -resolution))
+
     identities = []
-    for event in events:
-        if not isinstance(event, dict):
+    for identity, before, after, ipc_client in zip(identity_events, events, upper_events, ipc_clients):
+        if any(not isinstance(event, dict) for event in (identity, before, after, ipc_client)):
             return False
-        text = event.get('kernel_timestamp_text')
-        token = re.fullmatch(r'([0-9]{1,20})\.([0-9]{1,9})', text) if isinstance(text, str) else None
-        if not token:
-            return False
-        literal = int(token[1])*1_000_000_000 + int(token[2].ljust(9, '0'))
-        resolution = 10 ** (9-len(token[2]))
-        if (event.get('event') != 'map_create' or type(event.get('kernel_pid')) is not int
-                or event.get('kernel_pid') != proof['kernel_pid']
-                or not isinstance(event.get('foreign_toplevel_id'), str)
-                or not re.fullmatch('[0-9a-f]{32}', event['foreign_toplevel_id'])
-                or type(event.get('lower_monotonic_ns')) is not int
-                or not started <= event['lower_monotonic_ns'] <= ipc_upper
-                or type(event.get('timestamp_resolution_ns')) is not int
-                or event.get('timestamp_resolution_ns') not in (1, 10, 100, 1000)
-                or type(event.get('kernel_text_monotonic_ns')) is not int
-                or event['kernel_text_monotonic_ns'] != literal
-                or event['timestamp_resolution_ns'] != resolution
-                or type(event.get('timestamp_rounding_allowance_ns')) is not int
-                or event['timestamp_rounding_allowance_ns'] != event['timestamp_resolution_ns']
-                or event['lower_monotonic_ns'] != event['kernel_text_monotonic_ns'] - event['timestamp_rounding_allowance_ns']):
-            return False
-        identities.append(event['foreign_toplevel_id'])
-    for lower_event, event, ipc_client in zip(events, upper_events, ipc_clients):
-        if not isinstance(event, dict):
-            return False
-        text = event.get('kernel_timestamp_text')
-        token = re.fullmatch(r'([0-9]{1,20})\.([0-9]{1,9})', text) if isinstance(text, str) else None
-        if not token:
-            return False
-        literal = int(token[1])*1_000_000_000 + int(token[2].ljust(9, '0'))
-        resolution = 10 ** (9-len(token[2]))
-        if (not isinstance(ipc_client, dict)
-                or ipc_client.get('foreign_toplevel_id') != lower_event['foreign_toplevel_id']
+        if (identity.get('event') != 'map_create'
+                or not isinstance(identity.get('foreign_toplevel_id'), str)
+                or not re.fullmatch('[0-9a-f]{32}', identity['foreign_toplevel_id'])
+                or any(type(event.get('kernel_pid')) is not int or event['kernel_pid'] != proof['kernel_pid']
+                       for event in (identity, before, after))
+                or not timestamp_valid(identity, 'lower') or not timestamp_valid(before, 'lower')
+                or not timestamp_valid(after, 'upper')
+                or not started <= identity['lower_monotonic_ns'] <= before['lower_monotonic_ns'] <= after['upper_monotonic_ns']
+                or before['lower_monotonic_ns'] > ipc_upper
+                or after['kernel_text_monotonic_ns']-after['timestamp_resolution_ns'] > ipc_upper
+                or any(event.get('foreign_toplevel_id') != identity['foreign_toplevel_id']
+                       for event in (before, after, ipc_client))
                 or type(ipc_client.get('id')) is not int or ipc_client['id'] <= 0
                 or not isinstance(ipc_client.get('appid'), str)
-                or ipc_client['appid'].lower() not in expected_appids
-                or not isinstance(event.get('app_id'), str)
-                or event['app_id'].lower() not in expected_appids
-                or not isinstance(event.get('original_app_id'), str)
-                or not re.fullmatch('[A-Za-z0-9._-]{1,128}', event['original_app_id'])
-                or event['original_app_id'] != event['app_id'] or event['original_app_id'] != ipc_client['appid']
-                or type(event.get('client_type')) is not int or event['client_type'] not in (profile['xdg_type'], profile['xwayland_type'])
-                or event.get('event') != ('map_listed_xdg' if event['client_type'] == profile['xdg_type'] else 'map_listed_x11')
-                or type(event.get('kernel_pid')) is not int
-                or event['kernel_pid'] != proof['kernel_pid']
-                or event.get('foreign_toplevel_id') != lower_event['foreign_toplevel_id']
-                or type(event.get('upper_monotonic_ns')) is not int
-                or not lower_event['lower_monotonic_ns'] <= event['upper_monotonic_ns']
-                or type(event.get('timestamp_resolution_ns')) is not int
-                or event.get('timestamp_resolution_ns') not in (1, 10, 100, 1000)
-                or type(event.get('kernel_text_monotonic_ns')) is not int
-                or event['kernel_text_monotonic_ns'] != literal
-                or event['timestamp_resolution_ns'] != resolution
-                or type(event.get('timestamp_rounding_allowance_ns')) is not int
-                or event['timestamp_rounding_allowance_ns'] != resolution
-                or event['upper_monotonic_ns'] != literal+resolution
-                or literal-resolution > ipc_upper
-                or type(event.get('instruction_address')) is not int
-                or event['instruction_address'] != proof['upper_instruction_address']
-                or any(type(event.get(key)) is not int or not 0 < event[key] < 2**64
-                       for key in ('client_address', 'handle_address', 'handle_owner_address'))
-                or event['handle_owner_address'] != event['client_address']):
+                or not re.fullmatch('[A-Za-z0-9._-]{1,128}', ipc_client['appid'])
+                or ipc_client['appid'].lower() not in expected_appids):
             return False
+        branch = re.fullmatch(r'map_before_(tail|head|scroller)_(xdg|x11)', before.get('event', '')) if isinstance(before.get('event'), str) else None
+        if (not branch or type(before.get('client_type')) is not int or type(after.get('client_type')) is not int
+                or before['client_type'] != (profile['xdg_type'] if branch[2] == 'xdg' else profile['xwayland_type'])
+                or after.get('event') != 'map_listed_' + branch[2]
+                or type(before.get('instruction_address')) is not int
+                or before['instruction_address'] != lower_mappings[branch[1]]['instruction_address']
+                or type(after.get('instruction_address')) is not int
+                or after['instruction_address'] != proof['upper_instruction_address']
+                or any(before.get(key) != after.get(key) for key in
+                       ('client_type', 'original_app_id', 'app_id', 'client_address', 'handle_address', 'handle_owner_address'))
+                or any(not isinstance(before.get(key), str) or not re.fullmatch('[A-Za-z0-9._-]{1,128}', before[key])
+                       for key in ('original_app_id', 'app_id'))
+                or before['original_app_id'] != before['app_id'] or before['original_app_id'] != ipc_client['appid']
+                or any(type(event.get(key)) is not int or not 0 < event[key] < 2**64
+                       for event in (before, after) for key in ('client_address', 'handle_address', 'handle_owner_address'))
+                or before['handle_owner_address'] != before['client_address']):
+            return False
+        identities.append(identity['foreign_toplevel_id'])
     lower = max(ipc_lower, min(event['lower_monotonic_ns'] for event in events))
     native_upper = min(ipc_upper, min(event['upper_monotonic_ns'] for event in upper_events))
     return (len(identities) == len(set(identities))
             and len({client['id'] for client in ipc_clients}) == len(events)
-            and len({event['client_address'] for event in upper_events}) == len(events)
-            and len({event['handle_address'] for event in upper_events}) == len(events)
+            and len({event['client_address'] for event in events}) == len(events)
+            and len({event['handle_address'] for event in events}) == len(events)
             and started <= lower <= native_upper
+            and all(isinstance(bound.get(key), (float, int)) and not isinstance(bound[key], bool)
+                    and math.isfinite(bound[key]) for key in ('lower_seconds', 'upper_seconds'))
             and math.isclose((lower - started) / 1e9, bound['lower_seconds'], abs_tol=1e-9, rel_tol=1e-9)
             and math.isclose((native_upper - started) / 1e9, bound['upper_seconds'], abs_tol=1e-9, rel_tol=1e-9))
 

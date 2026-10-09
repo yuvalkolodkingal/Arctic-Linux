@@ -174,6 +174,7 @@ class CausalControls(unittest.TestCase):
                     function_file_offset=file_offset,function_size=size,
                     function_sha256=hashlib.sha256(raw[file_offset:file_offset+size]).hexdigest(),
                     instruction_file_offset=file_offset,client_ext_offset=1584,
+                    lower_instruction_file_offsets=dict(tail=file_offset+1, head=file_offset+4, scroller=file_offset+7),
                     ipc_function_file_offset=getter_offset,ipc_function_size=getter_size,
                     ipc_function_sha256=hashlib.sha256(raw[getter_offset:getter_offset+getter_size]).hexdigest())
                 with patch.object(C,'MAPPING_PROFILES',(profile,)):
@@ -205,9 +206,9 @@ class CausalControls(unittest.TestCase):
         # equal code or source alone cannot admit a new packaging build.
         expected={
             '2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b':
-                (0x43110,0x4362f,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
+                (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
             '67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35':
-                (0x430d0,0x435ef,'11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd')}
+                (0x430d0,0x435de,'11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd')}
         self.assertEqual(C.MAPPING_PROFILES,R.comparison.MAPPING_PROFILES)
         admitted={profile['executable_sha256']:profile for profile in C.MAPPING_PROFILES}
         self.assertEqual(set(admitted),set(expected)|{'1c66767fc0d814e9002306c983524b476edc671de544f3b2a6f755ea7a52dcb1'})
@@ -215,10 +216,9 @@ class CausalControls(unittest.TestCase):
             profile=admitted[digest]
             self.assertEqual((profile['function_file_offset'],profile['instruction_file_offset'],
                 profile['function_sha256']),(start,upper,function_digest))
-            self.assertEqual(profile['native_audit_sha256'],'c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa')
-            bound=R.causal_bound(.09975,.1)
+            self.assertEqual(profile['native_audit_sha256'],'dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c')
+            bound=R.causal_bound(.09975,.1,profile_index=C.MAPPING_PROFILES.index(profile))
             proof=bound['causal_lower_bound']
-            proof['upper_mapping_profile']=dict(profile);proof['mango_sha256']=digest
             address=proof['upper_executable_mapping']['start']+upper-proof['upper_executable_mapping']['file_offset']
             proof['upper_executable_mapping']['instruction_address']=address
             proof['upper_instruction_address']=address
@@ -287,12 +287,14 @@ class CausalControls(unittest.TestCase):
 
     def test_bound_intersects_both_native_receipts_with_original_ipc(self):
         probe=C.LowerBoundProbe([]);probe.pid=234
-        probe.proof={'method':C.METHOD,'upper_instruction_address':0x435ef}
+        probe.proof={'method':C.METHOD,'upper_instruction_address':0x435de,
+            'lower_executable_mappings':{'tail':{'instruction_address':0x435d9}}}
         ident='a'*32
         probe.events[ident]=C.trace_receipt(f'mango-234 [000] d... 0.040000: map_create: foreign_id="{ident}"',234)
-        probe.upper_events[ident]=C.trace_receipt(f'mango-234 [000] d... 0.040500: map_listed_xdg: (0x435ef) client_type=0 original_app_id="foot" foreign_id="{ident}" app_id="foot" client=0x1000 handle=0x2000 owner=0x1000',234)
+        probe.lower_events[ident]=C.trace_receipt(f'mango-234 [000] d... 0.040000: map_before_tail_xdg: (0x435d9) client_type=0 original_app_id="foot" foreign_id="{ident}" app_id="foot" client=0x1000 handle=0x2000 owner=0x1000',234)
+        probe.upper_events[ident]=C.trace_receipt(f'mango-234 [000] d... 0.040500: map_listed_xdg: (0x435de) client_type=0 original_app_id="foot" foreign_id="{ident}" app_id="foot" client=0x1000 handle=0x2000 owner=0x1000',234)
         with patch.object(C,'loss_counts',return_value={'cpu0':{'overrun':0,'commit overrun':0,'dropped events':0}}), \
-                patch.object(probe,'_check_owner'):
+                patch.object(probe,'_check_owner'),patch.object(probe,'_check_readbacks'):
             lower,upper,proof=probe.bound([{'id':1,'foreign_toplevel_id':ident,'appid':'foot'}],10_000_000,39_000_000,51_000_000,('foot',))
             self.assertEqual(lower,39_999_000)
             self.assertEqual(upper,40_501_000)
@@ -345,6 +347,157 @@ class CausalControls(unittest.TestCase):
             self.assertIn('client_type=+0(%bx):u32',command)
             self.assertTrue(command.endswith('\n'))
 
+    def test_all_native_lower_branches_capture_original_first_at_exact_site(self):
+        for profile in C.MAPPING_PROFILES:
+            commands=C.lower_probe_commands('owned',Path('/usr/bin/mango'),profile)
+            self.assertEqual(set(commands),{'map_before_'+branch+'_'+kind
+                for branch in ('tail','head','scroller') for kind in ('xdg','x11')})
+            for name,command in commands.items():
+                branch,kind=name.split('_')[2:]
+                self.assertIn(f'/usr/bin/mango:0x{profile["lower_instruction_file_offsets"][branch]:x} ',command)
+                chain=('+0(+192(+56(+328(%bx))))' if kind=='xdg' else '+0(+144(+328(%bx)))')
+                self.assertIn('original_app_id='+chain+':string ',command)
+                self.assertLess(command.index('original_app_id='),command.index('foreign_id='))
+                self.assertLess(command.index('foreign_id='),command.index(' app_id='))
+                self.assertIn('client=%bx:x64 handle=+1584(%bx):x64 owner=+80(+1584(%bx)):x64',command)
+
+    def test_kernel_readbacks_preserve_exact_bytes_and_reject_oversize_or_nonascii(self):
+        record=R.kernel_event_readbacks(234)['map_before_tail_xdg']
+        with tempfile.TemporaryDirectory() as temp:
+            event=Path(temp)
+            for key in ('format','filter'):(event/key).write_bytes(record[key+'_text'].encode('ascii'))
+            self.assertEqual(C.LowerBoundProbe._readback(event),record)
+            for key,raw in (('format',b'X'*16385),('filter',b'X'*1025),('format',b'\xff'),('filter',b'\xff')):
+                with self.subTest(key=key,length=len(raw)):
+                    original=(event/key).read_bytes();(event/key).write_bytes(raw)
+                    with self.assertRaises((RuntimeError,UnicodeDecodeError)):C.LowerBoundProbe._readback(event)
+                    (event/key).write_bytes(original)
+
+    def test_readback_validator_is_identical_to_frozen_replay_and_rejects_resealed_changes(self):
+        import ast
+        def helper(path):
+            source=path.read_text();tree=ast.parse(source)
+            node=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name=='kernel_readbacks_valid')
+            return ast.dump(node,include_attributes=False)
+        self.assertEqual(helper(ROOT/'tools/performance/causal.py'),helper(ROOT/'tools/performance/compare.py'))
+        records=R.kernel_event_readbacks(234)
+        self.assertTrue(C.kernel_readbacks_valid(records,234))
+        for fault in ('missing','extra','hash','pid','type','field_offset','field_type','footer','event_id','duplicate_id','split_pid'):
+            changed=copy.deepcopy(records);record=changed['map_before_tail_xdg']
+            if fault=='missing':changed.pop('map_before_head_x11')
+            elif fault=='extra':changed['other']=copy.deepcopy(record)
+            elif fault=='hash':record['format_sha256']='0'*64
+            elif fault=='pid':record['filter_text']=record['filter_text'].replace('234','235')
+            elif fault=='type':record['filter_text']=record['filter_text'].replace('== 0','== 2')
+            elif fault=='field_offset':record['format_text']=record['format_text'].replace('offset:20;','offset:21;')
+            elif fault=='field_type':record['format_text']=record['format_text'].replace('u64 client;','u32 client;')
+            elif fault=='footer':record['format_text']=record['format_text'].replace('client=0x%Lx','client=%Lx')
+            elif fault=='event_id':record['format_text']=record['format_text'].replace('ID: 101','ID: 65536')
+            elif fault=='duplicate_id':record['format_text']=record['format_text'].replace('ID: 101','ID: 100')
+            else:record['filter_text']=record['filter_text'].replace('common_pid','common_ pid')
+            if fault!='hash':
+                for key in ('format','filter'):record[key+'_sha256']=hashlib.sha256(record[key+'_text'].encode()).hexdigest()
+            with self.subTest(fault=fault):self.assertFalse(C.kernel_readbacks_valid(changed,234))
+
+    def test_registered_kernel_readbacks_are_reread_and_bound_to_literal_initial_values(self):
+        with tempfile.TemporaryDirectory() as temp:
+            probe=C.LowerBoundProbe([]);probe.pid=234;probe.instance=Path(temp)
+            records=R.kernel_event_readbacks(probe.pid)
+            probe.proof={'kernel_event_readbacks':copy.deepcopy(records)};probe.requested_events=set(records)
+            for name,record in records.items():
+                event=probe.instance/'events'/probe.group/name;event.mkdir(parents=True)
+                for key in ('format','filter'):(event/key).write_text(record[key+'_text'])
+            probe._check_readbacks()
+            event=probe.instance/'events'/probe.group/'map_before_head_xdg'
+            for key,replacement in (('format','ID: 111'),('filter','common_pid == 235 && client_type == 0')):
+                target=event/key;original=target.read_text();target.write_text(replacement+'\n')
+                with self.subTest(key=key),self.assertRaisesRegex(RuntimeError,'format or PID/type filter changed'):
+                    probe._check_readbacks()
+                target.write_text(original)
+            # Even schema-valid whitespace changes are refused after initial capture.
+            target=event/'filter';target.write_text(target.read_text().replace(' == ','\t==\t'))
+            with self.assertRaisesRegex(RuntimeError,'format or PID/type filter changed'):probe._check_readbacks()
+
+    def test_reader_keeps_identity_separate_and_rejects_repeated_pre_branch_for_same_handle(self):
+        ident='a'*32
+        identity=f'mango-234 [001] d... 0.039000: map_create: foreign_id="{ident}"'
+        def native(name,stamp,ip):
+            return f'mango-234 [001] d... {stamp}: {name}: (0x{ip:x}) client_type=0 original_app_id="foot" foreign_id="{ident}" app_id="foot" client=0x1000 handle=0x2000 owner=0x1000'
+        pre=native('map_before_tail_xdg','0.040000',0x435d9)
+        post=native('map_listed_xdg','0.040500',0x435de)
+        for duplicate in (False,True):
+            probe=C.LowerBoundProbe([]);probe.pid=234;probe.fd=999
+            lines=[identity,pre,post]
+            if duplicate:lines.append(native('map_before_head_xdg','0.040700',0x43733))
+            def received(fd,limit):probe.stopped.set();return ('\n'.join(lines)+'\n').encode()
+            with patch.object(C.select,'select',return_value=([probe.fd],[],[])),patch.object(C.os,'read',side_effect=received):probe._read()
+            self.assertEqual(probe.events[ident]['event'],'map_create')
+            self.assertEqual(probe.lower_events[ident]['event'],'map_before_tail_xdg')
+            self.assertEqual(probe.upper_events[ident]['event'],'map_listed_xdg')
+            if duplicate:self.assertIn('Duplicate',probe.error)
+            else:self.assertIsNone(probe.error)
+
+    def test_runtime_bound_requires_all_receipts_and_replays_each_branch_and_type(self):
+        # Real readback-file IO with synthetic kernel payloads; no host tracing.
+        for branch in ('tail','head','scroller'):
+            for client_type in (0,2):
+                original=R.causal_bound(.09975,.1,branch=branch,client_type=client_type)
+                for fault in ('valid','identity_missing','pre_missing','post_missing','identity_after_pre',
+                              'pre_after_post','pre_ip','post_ip','pre_original','pre_owner','pre_type','changed_filter'):
+                    with self.subTest(branch=branch,client_type=client_type,fault=fault),tempfile.TemporaryDirectory() as temp:
+                        probe=C.LowerBoundProbe([]);probe.pid=123;probe.instance=Path(temp)
+                        proof=copy.deepcopy(original['causal_lower_bound']);ident='c'*32
+                        probe.proof=proof;probe.requested_events=set(proof['kernel_event_readbacks'])
+                        for name,record in proof['kernel_event_readbacks'].items():
+                            event=probe.instance/'events'/probe.group/name;event.mkdir(parents=True)
+                            for key in ('format','filter'):(event/key).write_text(record[key+'_text'])
+                        probe.events={ident:copy.deepcopy(proof['matched_identity_events'][0])}
+                        probe.lower_events={ident:copy.deepcopy(proof['matched_events'][0])}
+                        probe.upper_events={ident:copy.deepcopy(proof['matched_upper_events'][0])}
+                        before=probe.lower_events[ident];after=probe.upper_events[ident]
+                        if fault=='identity_missing':probe.events.clear()
+                        elif fault=='pre_missing':probe.lower_events.clear()
+                        elif fault=='post_missing':probe.upper_events.clear()
+                        elif fault=='identity_after_pre':probe.events[ident]['lower_monotonic_ns']=after['upper_monotonic_ns']+1
+                        elif fault=='pre_after_post':before['lower_monotonic_ns']=after['upper_monotonic_ns']+1
+                        elif fault=='pre_ip':before['instruction_address']+=1
+                        elif fault=='post_ip':after['instruction_address']+=1
+                        elif fault=='pre_original':before['original_app_id']='unrelated'
+                        elif fault=='pre_owner':before['handle_owner_address']+=1
+                        elif fault=='pre_type':before['client_type']=1
+                        elif fault=='changed_filter':
+                            (probe.instance/'events'/probe.group/'map_before_tail_xdg'/'filter').write_text('common_pid == 124 && client_type == 0\n')
+                        with patch.object(probe,'_check_owner'),patch.object(C,'loss_counts',return_value=proof['loss_counts']):
+                            arguments=(proof['matched_ipc_clients'],original['launch_started_monotonic_ns'],
+                                proof['ipc_lower_monotonic_ns'],proof['ipc_upper_monotonic_ns'],('foot',))
+                            if fault=='valid':
+                                lower,upper,receipt=probe.bound(*arguments,timeout=0)
+                                actual=dict(original,causal_lower_bound=receipt)
+                                self.assertEqual(lower,1_099_750_000);self.assertEqual(upper,1_100_000_000)
+                                self.assertTrue(R.comparison.causal_precision(actual,('foot',)))
+                            else:
+                                with self.assertRaises(RuntimeError):probe.bound(*arguments,timeout=0)
+
+    def test_bound_rereads_filters_after_waiting_for_receipts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            original=R.causal_bound(.09975,.1);proof=original['causal_lower_bound']
+            probe=C.LowerBoundProbe([]);probe.pid=123;probe.instance=Path(temp);probe.proof=proof
+            probe.requested_events=set(proof['kernel_event_readbacks']);ident='c'*32
+            probe.events={ident:proof['matched_identity_events'][0]}
+            probe.lower_events={ident:proof['matched_events'][0]};probe.upper_events={ident:proof['matched_upper_events'][0]}
+            for name,record in proof['kernel_event_readbacks'].items():
+                event=probe.instance/'events'/probe.group/name;event.mkdir(parents=True)
+                for key in ('format','filter'):(event/key).write_text(record[key+'_text'])
+            checks=[]
+            def owner():
+                checks.append(True)
+                if len(checks)==2:
+                    (probe.instance/'events'/probe.group/'map_before_tail_xdg'/'filter').write_text('none\n')
+            with patch.object(probe,'_check_owner',side_effect=owner),self.assertRaisesRegex(RuntimeError,'format or PID/type filter changed'):
+                probe.bound(proof['matched_ipc_clients'],original['launch_started_monotonic_ns'],
+                    proof['ipc_lower_monotonic_ns'],proof['ipc_upper_monotonic_ns'],('foot',),timeout=0)
+            self.assertEqual(len(checks),2)
+
     def test_original_first_kernel_budget_and_fault_formatter_controls(self):
         # Independent kernel-format vectors, derived from trace_probe_tmpl.h
         # d0e458a5 (get_data_size/store_trace_args) and trace_uprobe.c
@@ -379,21 +532,23 @@ class CausalControls(unittest.TestCase):
         aliased=C.trace_receipt(formatted('"'+ident+'"','"'+ident+'"','"'+ident+'"'),234)
         self.assertFalse(C.original_appid_matches(aliased,dict(appid=ident),(ident,)))
         probe=C.LowerBoundProbe([])
-        with patch.object(probe,'_check_owner'),self.assertRaisesRegex(RuntimeError,'exact application-ID'):
+        with patch.object(probe,'_check_owner'),patch.object(probe,'_check_readbacks'),self.assertRaisesRegex(RuntimeError,'exact application-ID'):
             probe.bound([],1,1,1,(ident,),timeout=0)
         bound=R.causal_bound(.09975,.1,appids=(ident,))
         self.assertFalse(R.comparison.causal_precision(bound,(ident,)))
 
     def test_multiple_matching_windows_bound_the_first_eligible_managed_client(self):
         probe=C.LowerBoundProbe([]);probe.pid=234
-        probe.proof={'method':C.METHOD,'upper_instruction_address':0x435ef}
+        probe.proof={'method':C.METHOD,'upper_instruction_address':0x435de,
+            'lower_executable_mappings':{'tail':{'instruction_address':0x435d9}}}
         windows=[]
         for ident,created,listed in (('a'*32,'0.040000','0.045000'),('b'*32,'0.042000','0.043000')):
             windows.append(dict(id=len(windows)+1,foreign_toplevel_id=ident,appid='foot'))
             probe.events[ident]=C.trace_receipt(f'mango-234 [000] d... {created}: map_create: foreign_id="{ident}"',234)
             client=0x1000*len(windows);handle=0x4000+client
-            probe.upper_events[ident]=C.trace_receipt(f'mango-234 [000] d... {listed}: map_listed_xdg: (0x435ef) client_type=0 original_app_id="foot" foreign_id="{ident}" app_id="foot" client=0x{client:x} handle=0x{handle:x} owner=0x{client:x}',234)
-        with patch.object(probe,'_check_owner'),patch.object(C,'loss_counts',return_value={'cpu0':{'overrun':0,'commit overrun':0,'dropped events':0}}):
+            probe.lower_events[ident]=C.trace_receipt(f'mango-234 [000] d... {created}: map_before_tail_xdg: (0x435d9) client_type=0 original_app_id="foot" foreign_id="{ident}" app_id="foot" client=0x{client:x} handle=0x{handle:x} owner=0x{client:x}',234)
+            probe.upper_events[ident]=C.trace_receipt(f'mango-234 [000] d... {listed}: map_listed_xdg: (0x435de) client_type=0 original_app_id="foot" foreign_id="{ident}" app_id="foot" client=0x{client:x} handle=0x{handle:x} owner=0x{client:x}',234)
+        with patch.object(probe,'_check_owner'),patch.object(probe,'_check_readbacks'),patch.object(C,'loss_counts',return_value={'cpu0':{'overrun':0,'commit overrun':0,'dropped events':0}}):
             lower,upper,proof=probe.bound(windows,10_000_000,41_000_000,60_000_000,('foot',))
             self.assertEqual(lower,41_000_000)
             self.assertEqual(upper,43_001_000)
@@ -559,6 +714,8 @@ class CausalControls(unittest.TestCase):
         runs=R.paired_roles();bound=runs['candidate'][0]['startup_role_terminal_cold_seconds']['observation_bounds'][0]
         event=bound['causal_lower_bound']['matched_upper_events'][0]
         event['event']='map_listed_x11';event['client_type']=2
+        before=bound['causal_lower_bound']['matched_events'][0]
+        before['event']='map_before_tail_x11';before['client_type']=2
         self.assertTrue(R.comparison.causal_precision(bound,('foot',)))
 
     def test_old_sampler_remains_unqualified_in_new_role_lane(self):
@@ -643,14 +800,15 @@ class CausalControls(unittest.TestCase):
         for fault in ('ipc','client','handle'):
             runs=R.paired_roles();bound=runs['candidate'][0]['startup_role_terminal_cold_seconds']['observation_bounds'][0]
             proof=bound['causal_lower_bound']
+            identity=copy.deepcopy(proof['matched_identity_events'][0])
             lower=copy.deepcopy(proof['matched_events'][0]);upper=copy.deepcopy(proof['matched_upper_events'][0]);ipc=copy.deepcopy(proof['matched_ipc_clients'][0])
-            lower['foreign_toplevel_id']=upper['foreign_toplevel_id']=ipc['foreign_toplevel_id']='d'*32
-            ipc['id']=2;upper['client_address']=upper['handle_owner_address']=0x3000;upper['handle_address']=0x4000
-            proof['matched_events'].append(lower);proof['matched_upper_events'].append(upper);proof['matched_ipc_clients'].append(ipc)
+            identity['foreign_toplevel_id']=lower['foreign_toplevel_id']=upper['foreign_toplevel_id']=ipc['foreign_toplevel_id']='d'*32
+            ipc['id']=2;lower['client_address']=lower['handle_owner_address']=upper['client_address']=upper['handle_owner_address']=0x3000;lower['handle_address']=upper['handle_address']=0x4000
+            proof['matched_identity_events'].append(identity);proof['matched_events'].append(lower);proof['matched_upper_events'].append(upper);proof['matched_ipc_clients'].append(ipc)
             self.assertTrue(R.comparison.causal_precision(bound,('foot',)))
             if fault=='ipc':ipc['id']=1
-            elif fault=='client':upper['client_address']=upper['handle_owner_address']=0x1000
-            else:upper['handle_address']=0x2000
+            elif fault=='client':lower['client_address']=lower['handle_owner_address']=upper['client_address']=upper['handle_owner_address']=0x1000
+            else:lower['handle_address']=upper['handle_address']=0x2000
             with self.subTest(fault=fault):
                 self.assertFalse(R.comparison.causal_precision(bound,('foot',)))
                 self.assertEqual(R.comparison.compare(runs)['status'],'measurement_precision_gate_failed')

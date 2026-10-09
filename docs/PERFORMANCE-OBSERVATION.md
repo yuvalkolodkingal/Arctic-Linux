@@ -169,7 +169,7 @@ The nonseeking writer correction has source controls, but needs a new reviewed
 calibration activation and actual runtime result; it is not timing evidence.
 
 
-## Native managed-list bracket (v12, pending actual calibration)
+## Historical native managed-list bracket (v12, failed calibration)
 
 Retained-image research run 37971533836 restored the actual active Wayland VT
 and output, initialized both raw clocks and matched all four lower receipts
@@ -290,6 +290,80 @@ also has a tighter relative precision budget. Every original point regression,
 sample is discarded to obtain a pass. Historical v10 and v11 evidence is rejected by
 the versioned sampler. Actual retained-image calibration and the rebuilt image's
 full paired test still decide whether this measurement method is usable.
+
+## Managed-list insertion bracket (v13, pending fresh calibration)
+
+Actual retained-image calibration
+[37997321166](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37997321166)
+failed the original cold Foot sample's precision check. Its foreign-handle
+creation at `250.819655` and historical upper at `250.826593` span 6.938 ms,
+or 6.940 ms including display rounding, above that sample's 1.126084475 ms
+limit. The other three native widths including rounding were 0.220, 0.220 and
+0.393 ms. These observations do not identify which call or scheduling interval
+caused the cold width. That image and run remain failed and unqualified.
+
+The v13 role sampler uses method
+`wlroots-0.20-and-mango-managed-list-original-appid-preinsert-bracket-raw-v5`
+and observer `mango-socket-worker-v6-original-appid-preinsert-bracket-raw-clock-autonomous`.
+It keeps the foreign-handle return receipt as separate identity provenance,
+and brackets the same managed-client-list membership transition with probes
+immediately before each actual `wl_list_insert` call and at their common return
+successor. Focus-stack work after this successor is outside the membership
+bracket. The original negative/positive IPC interval is still required and
+intersected with the native interval. This measures availability under the same
+managed-list/app-ID predicate; it is neither response delivery nor first frame.
+
+The independently replayed exact-byte CFG audit covers all three admitted ELFs,
+including the cold helper's real jump back into the error path and 69 static
+negative controls. Its report SHA-256 is
+`dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c`.
+Whole-ELF, complete map function, original getter, ABI and original app-ID audit
+pins remain mandatory. No new executable is admitted by matching source alone.
+
+| Exact executable | Tail pre-call | Head pre-call | Scroller pre-call | Common post-call |
+| --- | --- | --- | --- | --- |
+| Retained `2f110722…` | `0x43619` | `0x43773` | `0x43da3` | `0x4361e` |
+| Immutable baseline `67ba9d6d…` | `0x435d9` | `0x43733` | `0x43d63` | `0x435de` |
+| Previously audited stable `1c66767f…` | `0x435d9` | `0x43733` | `0x43d63` | `0x435de` |
+
+At every call, RSI is `Client.link` at client byte 280. RDI is the correct
+position in `server.clients`: its tail predecessor, head, or the selected
+scroller client's link with a tail fallback. Exact IPC loop bytes enumerate
+this list at `0x7f348`, distinct from the focus stack at `0x7f358`. RBX is the
+client, R12 the client listener at byte 360 and R14 its link; the proof explicitly
+assumes the SysV callee-preserved RBX/R12/R14 ABI and valid compositor list,
+monitor selection and scroller state. It is not a complete heap-integrity proof.
+Each managed path reaches exactly one selected pre-call and the common post-call;
+unmanaged and error paths cannot reach them.
+
+Six type-specific pre-call events and two post-call events preserve the selected
+original-first string capture and every original identity, ownership and fault
+guard. All three same-ID receipts must belong to the current launch and agree
+with the later IPC metadata. The collector archives literal `format` and
+`filter` readbacks with SHA-256 for all nine events, checks their exact field
+types/layouts and PID/type filters before tracing, and rereads them before and
+after receipt collection. Missing, changed, malformed or coherently resealed
+incompatible schemas fail. Cleanup removes every owned hook.
+
+Official Linux v7.2 `trace_uprobe.c` fetches probe arguments before reserving the
+event timestamp. The user thread remains trapped until the pre-call timestamp,
+and the post-call timestamp follows insertion, so this fetch order preserves
+the conservative bracket. Probe fetching, timestamp reservation, trap and
+preemption costs remain in the measured sample or interval; none is subtracted.
+That supporting source is not an exact audit of Fedora
+`7.2.9-200.fc44.x86_64`. Actual target-kernel format/filter and fresh cold timing
+must still validate this implementation. Source replay cannot promise that the
+next cold sample passes. The first sample is not warmed, discarded or replaced,
+and all precision, enclosure, regression and paired-boot limits remain unchanged.
+
+The research calibration composer embeds the same new recorder and validator
+into its unchanged four sequential Foot launches. Its source and comparator
+hashes update from those literal sources; the paired composer independently
+freezes the new source and exact composed-script hashes. Old v12 receipts cannot
+qualify the new lane. A separately reviewed independent calibration reader must
+also bind the new identity/pre/post fields and nine archived kernel readbacks
+before any new research run is interpreted. No activation or image qualification
+is implied by this source change.
 
 ## Frozen external qualification of an unchanged ISO
 

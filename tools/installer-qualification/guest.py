@@ -26,8 +26,10 @@ import time
 import zlib
 
 SCHEMA = 'arctic-live-installer-restoration-v1'
-CONTEXT_FIELDS = {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'token',
+CONTEXT_FIELDS = {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'binding_id',
                   'checker_sha256', 'runtime_sha256', 'native_sha256', 'capture_sha256'}
+ACTIVE_FIELDS = {'active_checker_sha256', 'installed_checker_sha256', 'disk_serial',
+                 'disk_bytes', 'disk_node', 'write_bps'}
 BUNDLE = {'installer-guest.py': 'checker_sha256', 'taskbar-runtime.py': 'runtime_sha256',
           'native_smoke.py': 'native_sha256', 'raw-screencopy': 'capture_sha256'}
 GUI_PATH = '/usr/share/arctic/installer-ui'
@@ -93,16 +95,29 @@ def read_regular(path, limit=MAX_FILE, root_owned=False):
 
 
 def validate_context(value):
+    if type(value) is dict and value.get('schema') == 'arctic-installer-active-context-v1':
+        require(set(value) == CONTEXT_FIELDS | ACTIVE_FIELDS, 'active installer context differs')
+        base = {key: value[key] for key in CONTEXT_FIELDS}
+        base['schema'] = 'arctic-installer-context-v1'
+        validate_context(base)
+        require(all(type(value[key]) is str and re.fullmatch('[0-9a-f]{64}', value[key])
+                    for key in ('active_checker_sha256', 'installed_checker_sha256')),
+                'active installer checker hash differs')
+        require(type(value['disk_serial']) is str and re.fullmatch('arctic-a-[0-9a-f]{11}', value['disk_serial'])
+                and type(value['disk_bytes']) is int and value['disk_bytes'] == 64 * 1024**3
+                and value['disk_node'] == 'target0' and type(value['write_bps']) is int
+                and value['write_bps'] == 8 * 1024**2, 'owned active target fixture differs')
+        return value
     require(type(value) is dict and set(value) == CONTEXT_FIELDS
             and value['schema'] == 'arctic-installer-context-v1', 'installer context differs')
-    for key in CONTEXT_FIELDS - {'schema', 'iso_bytes', 'source_sha', 'execution_sha', 'token'}:
+    for key in CONTEXT_FIELDS - {'schema', 'iso_bytes', 'source_sha', 'execution_sha', 'binding_id'}:
         require(type(value[key]) is str and re.fullmatch('[0-9a-f]{64}', value[key]),
                 'invalid installer SHA-256: ' + key)
     for key in ('source_sha', 'execution_sha'):
         require(type(value[key]) is str and re.fullmatch('[0-9a-f]{40}', value[key]),
                 'invalid installer commit: ' + key)
-    require(type(value['token']) is str and re.fullmatch('[0-9a-f]{32}', value['token']),
-            'invalid installer execution token')
+    require(type(value['binding_id']) is str and re.fullmatch('[0-9a-f]{32}', value['binding_id']),
+            'invalid installer execution binding_id')
     require(type(value['iso_bytes']) is int and 0 < value['iso_bytes'] < 2_000_000_000,
             'invalid exact-image size')
     return value
@@ -133,13 +148,16 @@ class EngineRPC:
         self.buffer = b''
         self.next_id = 1
 
-    def call(self, method, params=None):
+    def permitted(self, method, params):
         allowed = method == 'Hello' and params == {
             'client': 'installer-restoration-qualification', 'version': '1.2.1'}
         allowed |= method == 'GetWizard' and params is None
         allowed |= method == 'GetStep' and type(params) is dict and set(params) == {'id'} \
             and params['id'] in ('welcome', 'keyboard', 'install')
-        require(allowed, 'installer RPC method or parameters outside read-only whitelist')
+        return allowed
+
+    def call(self, method, params=None):
+        require(self.permitted(method, params), 'installer RPC method or parameters outside read-only whitelist')
         request_id = self.next_id
         self.next_id += 1
         request = dict(id=request_id, method=method)
@@ -641,7 +659,7 @@ class Installer:
     def request(self, kind, cycle, **fields):
         require(kind in ('vt-away', 'output-disconnect', 'output-restore')
                 and type(cycle) is int and 0 <= cycle < 3, 'invalid installer host request')
-        value = dict(schema='arctic-installer-request-v1', kind=kind, token=self.context['token'],
+        value = dict(schema='arctic-installer-request-v1', kind=kind, binding_id=self.context['binding_id'],
                      boot_id=self.boot_id, cycle=cycle, **fields)
         self.request_emit('REQUEST', value)
         return value
@@ -851,7 +869,7 @@ def inventory(root, uid, transport):
     return files, total
 
 
-def export(root, uid, token, transport, stream):
+def export(root, uid, binding_id, transport, stream):
     # Same reviewed zlib/chunk bounds as taskbar transport, with installer
     # schema and report name. Validate all files before emitting any archive.
     files, total = inventory(root, uid, transport)
@@ -862,9 +880,9 @@ def export(root, uid, token, transport, stream):
         entries.append(dict(path=name, bytes=len(data), sha256=sha(data), compressed_bytes=len(compressed),
                             chunks=len(parts), encoding='zlib+base64'))
         for index, part in enumerate(parts):
-            emit('EVIDENCE-CHUNK', dict(token=token, path=name, index=index,
+            emit('EVIDENCE-CHUNK', dict(binding_id=binding_id, path=name, index=index,
                                       data=base64.b64encode(part).decode('ascii')), stream)
-    emit('EVIDENCE-MANIFEST', dict(schema='arctic-installer-evidence-v1', token=token,
+    emit('EVIDENCE-MANIFEST', dict(schema='arctic-installer-evidence-v1', binding_id=binding_id,
                                  evidence_root=str(root), files=entries, bytes=total), stream)
 
 
@@ -876,7 +894,6 @@ def load_checked(path, name):
 
 
 def main(argv=None):
-    overall_deadline = time.monotonic() + TIMEOUT
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--disposable-guest', action='store_true', required=True)
     args = parser.parse_args(argv)
@@ -884,6 +901,9 @@ def main(argv=None):
     require(Path(__file__).absolute() == Path('/run/t/installer-guest.py')
             and Path(__file__).resolve() == Path('/run/t/installer-guest.py'), 'reviewed CD checker path differs')
     context = validate_context(strict_json(read_regular('/run/t/installer-context.json', 16384, True)))
+    active = context['schema'] == 'arctic-installer-active-context-v1'
+    timeout = 55 * 60 if active else TIMEOUT
+    overall_deadline = time.monotonic() + timeout
     for name, key in BUNDLE.items():
         require(sha(read_regular(Path('/run/t') / name, 32 * 1024 * 1024, True)) == context[key],
                 'reviewed installer bundle hash differs: ' + name)
@@ -892,13 +912,20 @@ def main(argv=None):
     native = load_checked('/run/t/native_smoke.py', 'installer_reviewed_native')
     native.guest_guard('live', True)
     require('arctic.mode=install' in Path('/proc/cmdline').read_text().split(), 'actual installer boot mode differs')
-    collector = Installer(native, context)
+    if active:
+        require(sha(read_regular('/run/t/installer-active.py', root_owned=True)) == context['active_checker_sha256']
+                and sha(read_regular('/run/t/installed-guest.py', root_owned=True)) == context['installed_checker_sha256'],
+                'active fixture checker bytes differ')
+        active_module = load_checked('/run/t/installer-active.py', 'reviewed_active_installer')
+        collector = active_module.installer_type(sys.modules[__name__])(native, context)
+    else:
+        collector = Installer(native, context)
     collector.deadline = min(collector.deadline, overall_deadline - 120)
     require(time.monotonic() < collector.deadline, 'installer bootstrap exhausted the overall budget')
     identity = dict(boot_id=collector.boot_id, desktop_uid=collector.uid,
                     active_desktop_session=collector.session)
     transport.PORT_NAME = PORT_NAME
-    transport.TIMEOUT = TIMEOUT
+    transport.TIMEOUT = timeout
     transport.emit = emit
     port, port_proof = transport.open_port()
     port_proof['schema'] = 'arctic-installer-virtio-port-v1'
@@ -922,7 +949,7 @@ def main(argv=None):
     try:
         report = collector.run()
         emit('REPORT', report, port)
-        export(collector.root, collector.uid, context['token'], transport, port)
+        export(collector.root, collector.uid, context['binding_id'], transport, port)
         complete = True
         passed = report['status'] == 'passed' and not cancelled
         if not passed:
@@ -932,10 +959,10 @@ def main(argv=None):
     finally:
         signal.alarm(0)
         try:
-            end = dict(token=context['token'], **identity, status='passed' if passed else 'failed',
+            end = dict(binding_id=context['binding_id'], **identity, status='passed' if passed else 'failed',
                        error=error, evidence_export_complete=complete, release_acceptance=False)
             emit('END', end, port)
-            emit('PORT-END', dict(schema='arctic-installer-port-end-v1', token=context['token'], **identity,
+            emit('PORT-END', dict(schema='arctic-installer-port-end-v1', binding_id=context['binding_id'], **identity,
                                  status=end['status'], release_acceptance=False,
                                  end_sha256=sha(json.dumps(end, sort_keys=True, allow_nan=False).encode('ascii'))))
         finally:

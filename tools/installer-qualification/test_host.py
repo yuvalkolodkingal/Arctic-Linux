@@ -52,7 +52,7 @@ class Controls(unittest.TestCase):
     def test_partial_utf8_request_waits_until_newline_and_exact_request_processed_once(self):
         with tempfile.TemporaryDirectory() as root:
             serial=Path(root)/'serial.log';display=Display();controller=H.InstallerController(types.SimpleNamespace(proc=Proc()),display,G.context(),root)
-            value=dict(schema='arctic-installer-request-v1',kind='vt-away',token=G.context()['token'],boot_id='11111111-1111-1111-1111-111111111111',cycle=0,
+            value=dict(schema='arctic-installer-request-v1',kind='vt-away',binding_id=G.context()['binding_id'],boot_id='11111111-1111-1111-1111-111111111111',cycle=0,
                        away=dict(session='1',uid=1000,vt=2,active=False,foreground='tty6'),original_vt=2,engine_sha256='a'*64)
             line=H.REQUEST_PREFIX+json.dumps(value,sort_keys=True)
             serial.write_bytes((line+'\n').encode()[:-3]);self.assertFalse(controller.poll(serial));self.assertEqual(controller.position,0)

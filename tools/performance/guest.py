@@ -34,10 +34,10 @@ def causal_module():
 
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
-CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v5-original-appid-native-bracket-raw-clock-autonomous'
+CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v6-original-appid-preinsert-bracket-raw-clock-autonomous'
 MAPPING_POLL_SECONDS = .001
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v12-original-appid-native-bracket-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v13-original-appid-preinsert-bracket-role-first-use'
 ROLE_POLL_SECONDS = .00005
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
