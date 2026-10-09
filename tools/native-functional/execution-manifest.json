@@ -1,5 +1,5 @@
 {
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
   "image": {
     "run_id": 37854472664,
@@ -14,7 +14,7 @@
   "execution_files": {
     ".github/workflows/native-candidate-20261008.yml": "b9dd4014e5ce395cfbbaa9a1a9e56791485704c80970202ab62f6392b5b683de",
     "tools/test-install.sh": "2b9b6e864047cf9f35ab22ef7e3d7324f10b03c23b17c7340aeb87c06910e7b4",
-    "tools/lib/vmtest.py": "8b5136dee77373aee27ec3a695ab712b2b1997adb7fda03dfcb4371fe0414717",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/native-functional/fetch-image.py": "d107a50ee7b0ded51149aeae0812c70d68fda17685b1d3bb192beaac47b80248",
     "tools/native-functional/screen-evidence.py": "f590c26ae63f7259f0b46fc27a254eba01f06b04b3f804d9933b6602a744838c",
