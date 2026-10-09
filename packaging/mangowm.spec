@@ -19,6 +19,7 @@ URL:            https://github.com/mangowm/mango
 Source0:        %{url}/archive/refs/tags/%{version}.tar.gz#/mango-%{version}.tar.gz
 Patch0:         mango-client-geometry-events.patch
 Patch1:         mango-software-renderer-dmabuf.patch
+Patch2:         mango-output-teardown.patch
 
 BuildRequires:  meson
 BuildRequires:  gcc
