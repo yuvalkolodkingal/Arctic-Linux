@@ -1,5 +1,7 @@
 """Fail-closed evidence for the disposable ISO boot harness."""
 import shlex
+import base64
+import zlib
 import time
 import re
 import uuid
@@ -100,7 +102,7 @@ def installer_restoration_probe(timeout_seconds=25):
         raise ValueError('Installer restoration deadline must be 1..25 seconds')
     # Bound the whole operation, including an unresponsive IPC command. Repeat
     # the complete socket/state/mapped-layer check as outputs return, then fail
-    # closed before the host's 30-second collection wait ends.
+    # closed before the host's installer collection wait ends.
     loop = 'until (' + installer_probe(require_visible=True) + '); do sleep 1; done'
     return 'timeout ' + str(timeout_seconds) + 's sh -c ' + shlex.quote(loop)
 
@@ -140,6 +142,18 @@ def collection_command(mode, require_startup):
         commands += f'echo ARCTIC-STARTUP-PASS={mode}; else echo ARCTIC-STARTUP-FAILED; fi; '
     commands += 'echo ARCTIC-COLLECT-END'
     return 'sudo sh -c ' + shlex.quote('(' + commands + ') >/dev/ttyS0 2>&1')
+
+
+def console_transport(command):
+    # Nested shell quoting expands the complete mapping/retry probe to 12 KB.
+    # Sending those keystrokes at the verified VT's conservative rate takes
+    # forty minutes. Compress only this generated, reviewed command as data;
+    # the actual authentication, privilege and acceptance checks are unchanged.
+    payload = base64.b64encode(zlib.compress(command.encode(), 9)).decode('ascii')
+    program = ('import base64,zlib,subprocess; '
+               'subprocess.run(["sh","-c",zlib.decompress(base64.b64decode(' +
+               repr(payload) + ')).decode()],check=True)')
+    return 'python3 -c ' + shlex.quote(program)
 
 
 def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep, serial_path=None):
@@ -186,9 +200,14 @@ def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep, seri
         vm.keys('ret')
         sleep(5)
     shot('98-console' if mode == 'install' else '98-terminal')
-    vm.type_text(collection_command(mode, require_startup), gap=.2)
+    command = collection_command(mode, require_startup)
+    if mode == 'install':
+        command = console_transport(command)
+    vm.type_text(command, gap=.2)
     vm.keys('ret')
-    sleep(30)
+    # Leave room for journal collection plus the complete 25-second remapping
+    # deadline on BIOS/TCG, rather than terminating a still-valid guest probe.
+    sleep(45 if mode == 'install' and require_startup else 30)
     log('session collection command sent through ' + ('console' if mode == 'install' else 'terminal'))
 
 

@@ -1,5 +1,7 @@
 """A timeout, login screen or echoed/partial marker cannot qualify a release."""
 import importlib.util
+import ast
+import base64
 import json
 import os
 from pathlib import Path
@@ -8,6 +10,7 @@ import socket
 import subprocess
 import tempfile
 import unittest
+import zlib
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -89,9 +92,29 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(vm.type_text.call_args_list[0].args[0], 'liveuser')
         self.assertIn('ARCTIC-CONSOLE-READY=', vm.type_text.call_args_list[1].args[0])
         command = vm.type_text.call_args_list[2].args[0]
-        self.assertIn('call installer state', command)
-        self.assertIn('chvt', command)
+        program=ast.parse(shlex.split(command)[2])
+        payload=next(node.args[0].value for node in ast.walk(program)
+                     if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute)
+                     and node.func.attr=='b64decode')
+        original=zlib.decompress(base64.b64decode(payload)).decode()
+        self.assertEqual(original,startup.collection_command('install',True))
+        self.assertIn('call installer state',original)
+        self.assertIn('chvt',original)
+        self.assertLess(len(command),2500)
         self.assertNotIn('meta_l-ret', keys)
+
+    def test_console_transport_executes_literal_command_and_propagates_failure(self):
+        # Execute the actual transport, including Unicode and shell metacharacters
+        # as literal data, rather than accepting an encoding-only round trip.
+        text='owned capture: שלום `literal` $(literal) "quoted"'
+        command='printf %s '+shlex.quote(text)
+        result=subprocess.run(['sh','-c',startup.console_transport(command)],
+                              stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.assertEqual(result.returncode,0,result.stderr.decode())
+        self.assertEqual(result.stdout.decode(),text)
+        result=subprocess.run(['sh','-c',startup.console_transport('exit 7')],
+                              stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.assertNotEqual(result.returncode,0)
 
     def test_failed_vt_switch_never_types_into_the_graphical_installer(self):
         for error in (True, False):
