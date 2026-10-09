@@ -41,6 +41,28 @@ def run(boot_id, kitty=2.63):
 
 
 class QualificationTest(unittest.TestCase):
+    def test_compact_report_retains_brackets_gates_and_hash_of_complete_raw_trace(self):
+        runs = {'baseline': [run('b'+str(n)) for n in range(3)],
+                'candidate': [run('c'+str(n)) for n in range(3)]}
+        original = comparison.compare(runs)
+        trace = [dict(socket_seconds=.00012, parent_seconds=.02, uid=1000)] * 10000
+        for group in runs.values():
+            for boot in group:
+                for app in ('kitty', 'org.gnome.nautilus', 'zen'):
+                    for bound in boot['startup_'+app+'_seconds']['observation_bounds']:
+                        bound['query_roundtrips'] = trace
+        large_input = json.dumps(runs)
+        report = comparison.compare(runs)
+        self.assertGreater(len(large_input), 4*1024*1024)
+        self.assertLess(len(json.dumps(report)), 4*1024*1024)
+        for key in ('status', 'metrics', 'measurement_precision'):
+            self.assertEqual(report[key], original[key])
+        bound = report['startup_observation']['candidate'][0]['kitty']['observation_bounds'][0]
+        self.assertEqual(bound['query_roundtrip_summary']['count'], len(trace))
+        self.assertEqual(bound['query_roundtrip_summary']['sha256'], hashlib.sha256(
+            json.dumps(trace, sort_keys=True, separators=(',', ':')).encode()).hexdigest())
+        self.assertIs(runs['candidate'][0]['startup_kitty_seconds']['observation_bounds'][0]['query_roundtrips'], trace)
+
     def test_legacy_memory_samples_must_remain_complete_and_paired(self):
         runs={'baseline':[run('b'+str(n)) for n in range(3)],'candidate':[run('c'+str(n)) for n in range(3)]}
         for sample in runs['candidate'][0]['idle_samples'][5::5]:sample.pop('process_private_bytes')

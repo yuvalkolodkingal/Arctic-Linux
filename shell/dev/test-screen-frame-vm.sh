@@ -20,7 +20,7 @@ container=$(docker create -v "$REPO:/arctic:ro" registry.fedoraproject.org/fedor
   dnf -y install kernel-core kernel-modules-core kmod git quickshell qt6-qtsvg qt6-qtwayland \
     sway grim wlr-randr python3 python3-pillow python3-pyte python3-dbus python3-gobject-base \
     dbus-daemon fontconfig google-noto-sans-fonts procps-ng libcap gcc wayland-devel \
-    mesa-dri-drivers findutils which glib2
+    mesa-dri-drivers findutils which glib2 foot
   dnf -y install /arctic/out/frame-rpms/repo/mangowm-*.x86_64.rpm
   mkdir -p /arctic /evidence /frame-tools /root /run /tmp
   kernel=$(rpm -q kernel-core --qf "%{VERSION}-%{RELEASE}.%{ARCH}")

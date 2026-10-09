@@ -201,6 +201,93 @@ class NativeObserverTest(unittest.TestCase):
                 guest.startup(prefix, [sys.executable, '-c', f'open({str(sentinel)!r},"w").close()'], 'kitty')
         self.assertFalse(sentinel.exists())
 
+    def test_parent_delay_does_not_inflate_worker_mapping_timestamp(self):
+        transition = {}
+        def response():
+            clients = [dict(id=42, appid='foot')] if transition else []
+            return json.dumps(dict(clients=clients)).encode()+b'\n'
+        _, prefix = self.server(response)
+        with guest.NativeClientQuery(prefix) as observer:
+            observer.query()  # Worker startup is outside the measurement.
+            started = time.monotonic_ns()
+            observer.begin_observation(set(), ('foot',), started, 2, .00005)
+            time.sleep(.02)
+            transition['mapped_ns'] = time.monotonic_ns()
+            # Deliberately postpone the parent read after the mapping event.
+            time.sleep(.15)
+            result = observer.finish_observation(None, started, 2)
+            self.assertLessEqual(result['lower_ns'], transition['mapped_ns'])
+            self.assertGreaterEqual(result['upper_ns'], transition['mapped_ns'])
+            self.assertLess(result['upper_ns']-transition['mapped_ns'], 100_000_000)
+            self.assertGreater(time.monotonic_ns()-result['upper_ns'], 100_000_000)
+            self.assertEqual(result['windows'][0]['id'], 42)
+
+    def test_timeout_is_explicit_and_cancellation_reaps_autonomous_worker(self):
+        _, prefix = self.server(lambda: b'{"clients":[]}\n')
+        with guest.NativeClientQuery(prefix) as observer:
+            started = time.monotonic_ns()
+            observer.begin_observation(set(), 'foot', started, .02, .00005)
+            self.assertIsNone(observer.finish_observation(None, started, .02))
+            # A completed timeout permits subsequent queries on the same worker.
+            self.assertEqual(observer.query(), {})
+            observer.begin_observation(set(), 'foot', time.monotonic_ns(), 300, .00005)
+            process = observer.process
+        self.assertIsNotNone(process.poll())
+
+    def test_existing_and_unrelated_windows_do_not_satisfy_mapping(self):
+        state = [dict(id=1, appid='foot'), dict(id=2, appid='unrelated', title='foot')]
+        _, prefix = self.server(lambda: json.dumps(dict(clients=state)).encode()+b'\n')
+        with guest.NativeClientQuery(prefix) as observer:
+            observer.query()
+            started = time.monotonic_ns()
+            observer.begin_observation({'1'}, ('foot',), started, 2, .00005)
+            time.sleep(.02)
+            state.append(dict(id=3, appid='foot'))
+            result = observer.finish_observation(None, started, 2)
+            self.assertEqual([c['id'] for c in result['windows']], [3])
+
+    def test_mapping_reply_does_not_duplicate_large_client_payload(self):
+        title = 'x' * 3_500_000
+        _, prefix = self.server(lambda: json.dumps(dict(clients=[dict(
+            id=7, appid='foot', title=title)])).encode()+b'\n')
+        with guest.NativeClientQuery(prefix) as observer:
+            self.assertEqual(observer.query()['7']['title'], title)
+            started = time.monotonic_ns()
+            observer.begin_observation(set(), ('foot',), started, 2, .00005)
+            result = observer.finish_observation(None, started, 2)
+            self.assertEqual(result['windows'], [dict(id=7)])
+            self.assertLess(len(json.dumps(result)), 2000)
+            # Persistence still retrieves actual app/title metadata on demand.
+            self.assertEqual(observer.query()['7']['title'], title)
+
+    def test_combined_encoded_reply_budget_fails_before_worker_pipe_write(self):
+        # A valid <4MiB raw JSON reply expands when Python renders 1e10 as a
+        # decimal float. Exercise the total encoded envelope independently of
+        # the Mango byte/count limits, without overriding a production ceiling.
+        response = b'{"clients":[{"id":1,"values":[' + b'1e10,'*330_000 + b'1e10]}]}'
+        self.assertLess(len(response), 4*1024*1024)
+        _, prefix = self.server(lambda: response)
+        with guest.NativeClientQuery(prefix) as observer:
+            started = time.monotonic()
+            with self.assertRaisesRegex(RuntimeError, 'Combined native observer reply exceeds transport budget'):
+                observer.query()
+            self.assertLess(time.monotonic()-started, 3)
+            process = observer.process
+        self.assertIsNotNone(process.poll())
+
+    def test_cancellation_reaps_worker_blocked_writing_bounded_large_reply(self):
+        _, prefix = self.server(lambda: json.dumps(dict(clients=[dict(
+            id=7, appid='foot', title='x'*3_500_000)])).encode()+b'\n')
+        started = time.monotonic()
+        with guest.NativeClientQuery(prefix) as observer:
+            observer._send(dict(kind='get'))
+            # The parent intentionally does not drain the large reply.
+            time.sleep(.25)
+            self.assertIsNone(observer.process.poll())
+            process = observer.process
+        self.assertLess(time.monotonic()-started, 2)
+        self.assertIsNotNone(process.poll())
+
     def test_cleanup_failure_propagates_and_reaps_only_started_processes(self):
         _, prefix = self.server(lambda: b'{"clients":[]}\n')
         original_popen = subprocess.Popen

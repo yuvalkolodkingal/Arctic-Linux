@@ -18,6 +18,18 @@ mount -t tmpfs tmpfs /tmp
 # minimal fixture's devtmpfs does not create it like a systemd OS boot does.
 mkdir -p /dev/shm
 mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /dev/shm
+# A terminal needs the ordinary devpts mount. This minimal rendering VM boots
+# without systemd's filesystem setup; provide it only inside this owned guest.
+mkdir -p /dev/pts
+mount -t devpts -o newinstance,ptmxmode=0666,mode=0620 devpts /dev/pts
+ln -sfn pts/ptmx /dev/ptmx
+python3 - <<'PY'
+import os, pty
+master, slave = pty.openpty()
+print('Private terminal PTY:', os.ttyname(slave), flush=True)
+os.close(slave)
+os.close(master)
+PY
 mkdir -m 700 "$HOME"
 modprobe udmabuf || test -c /dev/udmabuf
 test -c /dev/udmabuf
