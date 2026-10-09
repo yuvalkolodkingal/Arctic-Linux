@@ -17,11 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Safe passed at 63ff4cf; only the corrected BIOS path needs another run.
         include:
           - firmware: bios
             mode: install
-          - firmware: uefi
-            mode: safe
     steps:
       - uses: actions/checkout@v4
         with:
@@ -143,7 +142,7 @@ jobs:
               print('ARCTIC-STARTUP-TEXT-BEGIN', name)
               print(data.decode('utf-8', errors='replace')[-16384:])
               print('ARCTIC-STARTUP-TEXT-END', name)
-          for name in ('97-console-login.png', '99-final.png'):
+          for name in ('97-before-collect.png', '97-console-login.png', '99-final.png'):
               path = root / name
               if not path.is_file():
                   continue

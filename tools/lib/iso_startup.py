@@ -74,10 +74,13 @@ def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep):
     if mode == 'install':
         # The installer intentionally has exclusive layer-shell keyboard focus.
         # Super+Enter and typed shell commands would instead drive its wizard.
-        # Keep modifiers down through QEMU's normal 100 ms key-up delay rather
-        # than compressing the entire VT chord into one zero-duration batch.
+        # tty3 can belong to the live SDDM greeter (the retained BIOS captures
+        # show the installer before Ctrl+Alt+F3 and that greeter afterwards).
+        # logind reserves tty6 for a getty by default; still verify its actual
+        # image before any input. Keep modifiers down through QEMU's 100 ms
+        # key-up delay instead of a zero-duration input-send-event batch.
         reply = vm.cmd('send-key', keys=[dict(type='qcode', data=key)
-                       for key in ('ctrl', 'alt', 'f3')], **{'hold-time': 100})
+                       for key in ('ctrl', 'alt', 'f6')], **{'hold-time': 100})
         if 'error' in reply:
             raise RuntimeError('QEMU refused the console VT chord')
         sleep(5)

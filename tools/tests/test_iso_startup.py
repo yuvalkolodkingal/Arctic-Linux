@@ -82,7 +82,7 @@ class StartupTests(unittest.TestCase):
         keys = [call.args[0] for call in vm.keys.call_args_list]
         self.assertEqual(keys, ['ret', 'ret'])
         vm.cmd.assert_called_once_with('send-key', keys=[dict(type='qcode',data=key)
-            for key in ('ctrl','alt','f3')], **{'hold-time':100})
+            for key in ('ctrl','alt','f6')], **{'hold-time':100})
         self.assertEqual(vm.type_text.call_args_list[0].args[0], 'liveuser')
         command = vm.type_text.call_args_list[1].args[0]
         self.assertIn('call installer state', command)
