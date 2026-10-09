@@ -71,7 +71,7 @@ all point regressions were within their limits and the enclosure check passed.
 Candidate Foot cold brackets were 12.4–12.9 ms against 1.61–1.77 ms limits.
 The original evidence is retained. A new observer cannot reclassify this image.
 
-The v9 paired observer adds a read-only kernel return probe to the actual loaded
+The v10 paired observer adds a read-only kernel return probe to the actual loaded
 wlroots library. It retains the same socket observer and unchanged upper bound.
 The kernel event tightens only the lower endpoint when its unique foreign-toplevel
 identifier matches a newly observed IPC client. It is a bound before mapping,
@@ -103,21 +103,45 @@ The observer resolves the exported function from the actual ELF's dynamic symbol
 table and records both production executable/library hashes and RPM identities.
 Package verification must pass. It uses the actual desktop-owned Mango PID and
 start ticks, a unique 128 KiB tracefs instance, PID filtering and the kernel's
-`mono` clock. It leaves scheduling, compositor source/binary files, preferences and SELinux
+`mono_raw` clock. It leaves scheduling, compositor source/binary files, preferences and SELinux
 enforcement intact. Uprobes temporarily trap the observed function's return in
 the kernel; that instrumentation and reader costs are included in the
 measurement; a frozen combined source hash is shared by all six boots.
 
 Unknown identifiers, wrong-process events, wrong clocks, stale/future receipts,
 unsupported ELF layouts, absent tracing, lost events, bounded-reader overflow and
-cleanup failure fail qualification. Kernel text timestamp precision is disclosed;
-printed timestamps are conservatively floored, and resolution above 1 microsecond
-is rejected by comparison. The root collector removes only its own event and
+cleanup failure fail qualification. Kernel text timestamp precision is disclosed.
+Linux [trace output](https://github.com/torvalds/linux/blob/master/kernel/trace/trace_output.c)
+uses [ns2usecs](https://github.com/torvalds/linux/blob/master/kernel/trace/trace.c),
+which adds 500 ns before division: six-digit timestamps are rounded to the nearest
+microsecond, not floored. The receipt retains the literal displayed time and
+subtracts one full displayed unit (1 microsecond for six digits) to preserve a
+conservative lower bound. The decimal token is retained; comparison independently
+derives its integer value and displayed resolution and requires exactly that allowance/arithmetic
+and rejects resolution above 1 microsecond. The root collector removes only its own event and
 instance, and unmounts tracefs only if it mounted it. No persistent configuration
 or SELinux relaxation is installed. Cancellation is deferred across resource
 ownership handoffs and bounded cleanup; the sole reader thread inherits blocked
 termination signals so repeat cancellation cannot bypass that unwind. Historical
 v8 role evidence remains rejected.
+
+The paired IPC worker and launch collector use Python
+`clock_gettime_ns(CLOCK_MONOTONIC_RAW)` without a decimal text conversion;
+kernel receipts use ftrace `mono_raw` (`ktime_get_raw_fast_ns()`). They share
+Linux's raw timekeeper base, with no offset conversion or assumed boot timestamp.
+Only their within-launch differences form app latency. Operational timeouts keep
+normal monotonic time, and systemd boot-startup metrics retain their original
+separate source. Linux ftrace's adjusted `mono` clock and `bpf_ktime_get_ns()`
+both use `ktime_get_mono_fast_ns()`. The official
+[timekeeping documentation](https://github.com/torvalds/linux/blob/master/Documentation/core-api/timekeeping.rst)
+allows adjusted fast-clock jumps during timekeeper updates or suspend. The
+[raw-clock implementation](https://github.com/torvalds/linux/blob/master/kernel/time/timekeeping.c)
+avoids the NTP/PTP slope change and explicitly describes raw fast access as
+correct. Mixed raw/adjusted evidence and prior v9 samples are rejected.
+Calibration records the actual guest kernel config, clocksource and lockdown
+state. This measures guest raw-clock latency, not universal host clock accuracy,
+and cannot qualify this source without actual runtime evidence. The display
+allowance covers rounding and does not invent a cross-clock accuracy margin.
 
 Source controls are not runtime calibration. Before another final-image build,
 an explicitly unqualified research lane should try this instrument on the retained

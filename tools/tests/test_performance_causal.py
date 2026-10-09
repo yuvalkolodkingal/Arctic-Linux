@@ -30,11 +30,30 @@ class CausalControls(unittest.TestCase):
             line = f' mango-234 [001] d... 99.{fraction}: map_create: (0x7ffff123 <- 0x7ffff456) foreign_id="{ident}"'
             event = C.trace_receipt(line, 234)
             self.assertEqual(event['foreign_toplevel_id'], ident)
-            self.assertEqual(event['lower_monotonic_ns'], 99_000_000_000+expected)
+            self.assertEqual(event['kernel_text_monotonic_ns'], 99_000_000_000+expected)
+            self.assertEqual(event['kernel_timestamp_text'],'99.'+fraction)
+            self.assertEqual(event['lower_monotonic_ns'], 99_000_000_000+expected-resolution)
+            self.assertEqual(event['timestamp_rounding_allowance_ns'],resolution)
             self.assertEqual(event['timestamp_resolution_ns'], resolution)
         for fault in [line.replace('mango-234', 'mango-235'), line.replace(ident,'fault'),
                       line.replace('.123456:', '.1234567890:'), line.replace('map_create:', 'other:')]:
             with self.subTest(fault=fault), self.assertRaises(RuntimeError): C.trace_receipt(fault,234)
+
+    def test_linux_rounded_microsecond_text_is_always_a_conservative_lower(self):
+        ident='a'*32
+        # Linux ns2usecs() adds500 then divides1000. Exercise both sides of
+        # rounding and second rollover; direct parsed text is too late for the
+        # first half of each unit and cannot be used as a causal lower bound.
+        for base in (99_123_456_000,99_999_999_000,100_000_000_000):
+            for offset in (-500,-499,-1,0,1,499,500):
+                actual=base+offset
+                printed=((actual+500)//1000)*1000
+                seconds,fraction=divmod(printed,1_000_000_000)
+                line=f'mango-234 [001] d... {seconds}.{fraction//1000:06d}: map_create: foreign_id="{ident}"'
+                event=C.trace_receipt(line,234)
+                self.assertEqual(event['kernel_text_monotonic_ns'],printed)
+                self.assertEqual(event['lower_monotonic_ns'],printed-1000)
+                self.assertLessEqual(event['lower_monotonic_ns'],actual)
 
     @unittest.skipUnless(shutil.which('gcc'), 'gcc required for independent ELF fixture')
     def test_exported_real_elf_function_has_file_offset_and_absent_symbol_is_rejected(self):
@@ -89,7 +108,7 @@ class CausalControls(unittest.TestCase):
 
     def test_missing_forged_lossy_or_wrong_launch_receipts_fail_qualification(self):
         original=R.paired_roles()
-        for fault in ['missing','method','clock','pid','library','version','layout','loss','old_event','future_event','boolean_resolution','forged_lower']:
+        for fault in ['missing','method','clock','pid','library','version','layout','loss','old_event','future_event','boolean_resolution','forged_lower','missing_literal','missing_allowance','boolean_literal','boolean_allowance','zero_allowance','short_allowance','unsubtracted_display','missing_text','malformed_text','text_literal_mismatch']:
             runs=copy.deepcopy(original)
             bound=runs['candidate'][0]['startup_role_terminal_cold_seconds']['observation_bounds'][0]
             proof=bound['causal_lower_bound']
@@ -104,15 +123,54 @@ class CausalControls(unittest.TestCase):
             elif fault=='old_event':proof['matched_events'][0]['lower_monotonic_ns']=1
             elif fault=='future_event':proof['matched_events'][0]['lower_monotonic_ns']=2_000_000_000
             elif fault=='boolean_resolution':proof['matched_events'][0]['timestamp_resolution_ns']=True
+            elif fault=='missing_literal':proof['matched_events'][0].pop('kernel_text_monotonic_ns')
+            elif fault=='missing_allowance':proof['matched_events'][0].pop('timestamp_rounding_allowance_ns')
+            elif fault=='boolean_literal':proof['matched_events'][0]['kernel_text_monotonic_ns']=True
+            elif fault=='boolean_allowance':proof['matched_events'][0]['timestamp_rounding_allowance_ns']=True
+            elif fault=='zero_allowance':proof['matched_events'][0]['timestamp_rounding_allowance_ns']=0
+            elif fault=='short_allowance':proof['matched_events'][0]['timestamp_rounding_allowance_ns']=500
+            elif fault=='unsubtracted_display':proof['matched_events'][0]['kernel_text_monotonic_ns']=proof['matched_events'][0]['lower_monotonic_ns']
+            elif fault=='missing_text':proof['matched_events'][0].pop('kernel_timestamp_text')
+            elif fault=='malformed_text':proof['matched_events'][0]['kernel_timestamp_text']='10.999e-3'
+            elif fault=='text_literal_mismatch':proof['matched_events'][0]['kernel_timestamp_text']='10.999000'
             else:bound['lower_seconds']+=.0001;bound['interval_seconds']-=.0001
             with self.subTest(fault=fault):
                 report=R.comparison.compare(runs)
                 self.assertEqual(report['status'],'measurement_precision_gate_failed')
                 self.assertFalse(report['measurement_precision']['valid'])
 
+    def test_six_digit_kernel_text_cannot_claim_nanosecond_precision(self):
+        runs=R.paired_roles()
+        bound=runs['candidate'][0]['startup_role_terminal_cold_seconds']['observation_bounds'][0]
+        event=bound['causal_lower_bound']['matched_events'][0]
+        self.assertEqual(len(event['kernel_timestamp_text'].split('.')[1]),6)
+        self.assertTrue(R.comparison.causal_precision(bound))
+        event['timestamp_resolution_ns']=event['timestamp_rounding_allowance_ns']=1
+        event['lower_monotonic_ns']=event['kernel_text_monotonic_ns']-1
+        bound['lower_seconds']=(event['lower_monotonic_ns']-bound['launch_started_monotonic_ns'])/1e9
+        bound['interval_seconds']=bound['upper_seconds']-bound['lower_seconds']
+        self.assertFalse(R.comparison.causal_precision(bound))
+        self.assertEqual(R.comparison.compare(runs)['status'],'measurement_precision_gate_failed')
+
     def test_old_sampler_remains_unqualified_in_new_role_lane(self):
         runs=R.paired_roles()
         for run in runs['candidate']:run['identity']['sampler']='cpu-30-pss-6-v8-autonomous-role-first-use'
+        with self.assertRaises(ValueError):R.comparison.compare(runs)
+
+    def test_mixed_adjusted_and_raw_clock_evidence_cannot_pass(self):
+        for fault in ('timing','bound','kernel','userspace','observer'):
+            runs=R.paired_roles()
+            timing=runs['candidate'][0]['startup_role_terminal_cold_seconds']
+            bound=timing['observation_bounds'][0]
+            if fault=='timing':timing['clock']='CLOCK_MONOTONIC'
+            elif fault=='bound':bound['clock']='CLOCK_MONOTONIC'
+            elif fault=='kernel':bound['causal_lower_bound']['clock']='mono'
+            elif fault=='userspace':bound['causal_lower_bound']['userspace_clock']='CLOCK_MONOTONIC'
+            else:timing['observer']=bound['observer']='mango-socket-worker-v2-autonomous'
+            with self.subTest(fault=fault):
+                self.assertEqual(R.comparison.compare(runs)['status'],'measurement_precision_gate_failed')
+        runs=R.paired_roles()
+        for run in runs['candidate']:run['identity']['sampler']='cpu-30-pss-6-v9-causal-role-first-use'
         with self.assertRaises(ValueError):R.comparison.compare(runs)
 
     def test_host_cannot_activate_root_tracing(self):

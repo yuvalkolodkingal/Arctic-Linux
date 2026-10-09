@@ -33,16 +33,18 @@ def causal_bound(lower, upper):
     started = 1_000_000_000
     event_ns = started + round(lower * 1e9)
     return dict(lower_seconds=lower, upper_seconds=upper, interval_seconds=upper-lower,
-        observer=guest.MAPPING_OBSERVER, launch_started_monotonic_ns=started,
-        causal_lower_bound=dict(method='wlroots-0.20-return-before-mango-list-insertion-v1',
-            clock='mono', status='bound-before-mapping', exported_symbol='wlr_ext_foreign_toplevel_handle_v1_create',
+        observer=guest.CAUSAL_MAPPING_OBSERVER, clock='CLOCK_MONOTONIC_RAW', launch_started_monotonic_ns=started,
+        causal_lower_bound=dict(method='wlroots-0.20-return-before-mango-list-insertion-raw-v2',
+            clock='mono_raw', userspace_clock='CLOCK_MONOTONIC_RAW', status='bound-before-mapping', exported_symbol='wlr_ext_foreign_toplevel_handle_v1_create',
             identifier_offset=56, audited_header_sha256='9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3',
             audited_source_sha256='5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088',
             library_sha256='a'*64, mango_sha256='b'*64, mango_rpm='mangowm-0.17.3-1.fc44.x86_64', kernel_pid=123, desktop_uid=1000,
             mango_start_ticks=100, exported_file_offset=4096, library_rpm='wlroots0.20-0.20.2-1.fc44.x86_64',
             library_path='/usr/lib64/libwlroots-0.20.so', ipc_lower_monotonic_ns=event_ns-1000,
             matched_events=[dict(kernel_pid=123, foreign_toplevel_id='c'*32,
-                lower_monotonic_ns=event_ns, timestamp_resolution_ns=1)],
+                lower_monotonic_ns=event_ns, kernel_text_monotonic_ns=event_ns+1000,
+                kernel_timestamp_text=f'{(event_ns+1000)//1_000_000_000}.{(event_ns+1000)%1_000_000_000//1000:06d}',
+                timestamp_resolution_ns=1000, timestamp_rounding_allowance_ns=1000)],
             loss_counts={'cpu0': {'overrun':0, 'commit overrun':0, 'dropped events':0}}))
 
 
@@ -74,7 +76,7 @@ def role_run(image, number):
             result['startup_role_'+role+'_'+phase+'_seconds'] = dict(first=values[0],
                 **({'warm': values[1:]} if phase == 'warm' else {}),
                 observation_bounds=[causal_bound(value-.00025, value) for value in values],
-                observer=guest.MAPPING_OBSERVER, poll_sleep_seconds=guest.ROLE_POLL_SECONDS,
+                observer=guest.CAUSAL_MAPPING_OBSERVER, clock='CLOCK_MONOTONIC_RAW', poll_sleep_seconds=guest.ROLE_POLL_SECONDS,
                 app_id=ident, phase=('first_gui_role_execution_from_pristine_install' if phase == 'cold'
                                     else 'after_45_second_preconditioning'))
         result['precondition_role_'+role] = dict(persistent_hold_seconds=45, app_id=ident)

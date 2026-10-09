@@ -21,7 +21,7 @@ SYMBOL = 'wlr_ext_foreign_toplevel_handle_v1_create'
 IDENTIFIER_OFFSET = 56  # x86_64 wlroots 0.20 public header, three pointers + two wl_lists
 HEADER_SHA256 = '9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3'
 SOURCE_SHA256 = '5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088'
-METHOD = 'wlroots-0.20-return-before-mango-list-insertion-v1'
+METHOD = 'wlroots-0.20-return-before-mango-list-insertion-raw-v2'
 MAX_EVENTS = 8192
 
 
@@ -81,9 +81,13 @@ def trace_receipt(line, pid):
     digits = match[3]
     resolution = 10 ** (9 - len(digits))
     timestamp = int(match[2]) * 1_000_000_000 + int(digits.ljust(9, '0'))
-    # tracefs may print fewer than nine digits. Floor the printed timestamp to
-    # preserve a conservative lower endpoint instead of claiming lost digits.
-    return dict(foreign_toplevel_id=match[4], lower_monotonic_ns=timestamp,
+    # Linux ns2usecs() rounds six-digit text to the nearest microsecond. Never
+    # treat a rounded display as a lower endpoint: subtract a full displayed
+    # unit, covering both rounding and truncation without inventing precision.
+    return dict(foreign_toplevel_id=match[4], kernel_text_monotonic_ns=timestamp,
+                kernel_timestamp_text=match[2]+'.'+digits,
+                timestamp_rounding_allowance_ns=resolution,
+                lower_monotonic_ns=timestamp-resolution,
                 timestamp_resolution_ns=resolution, kernel_pid=pid)
 
 
@@ -168,7 +172,7 @@ class LowerBoundProbe:
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
             if mango_verified.returncode or mango_verified.stdout or mango_verified.stderr:
                 raise RuntimeError('Production Mango package verification failed')
-            self.proof = dict(method=METHOD, clock='mono', kernel_pid=self.pid,
+            self.proof = dict(method=METHOD, clock='mono_raw', userspace_clock='CLOCK_MONOTONIC_RAW', kernel_pid=self.pid,
                 desktop_uid=uid, mango_start_ticks=int((proc / 'stat').read_text().rsplit(')', 1)[1].split()[19]),
                 mango_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(), mango_rpm=mango_owner,
                 library_path=str(library), library_rpm=owner,
@@ -191,9 +195,9 @@ class LowerBoundProbe:
                 self.instance.mkdir()
                 self.instance_created = True
             (self.instance / 'tracing_on').write_text('0')
-            (self.instance / 'trace_clock').write_text('mono')
-            if '[mono]' not in (self.instance / 'trace_clock').read_text():
-                raise RuntimeError('Causal trace clock is not monotonic')
+            (self.instance / 'trace_clock').write_text('mono_raw')
+            if '[mono_raw]' not in (self.instance / 'trace_clock').read_text():
+                raise RuntimeError('Causal trace clock is not the common monotonic raw clock')
             (self.instance / 'buffer_size_kb').write_text('128')
             (self.instance / 'options/overwrite').write_text('0')
             (self.instance / 'options/context-info').write_text('1')

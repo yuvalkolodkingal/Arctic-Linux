@@ -10,8 +10,9 @@ import statistics
 
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
+CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v3-raw-clock-autonomous'
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v9-causal-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v10-raw-causal-role-first-use'
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
@@ -244,8 +245,9 @@ def causal_precision(bound):
     proof = bound.get('causal_lower_bound')
     if not isinstance(proof, dict):
         return False
-    if (proof.get('method') != 'wlroots-0.20-return-before-mango-list-insertion-v1'
-            or proof.get('clock') != 'mono' or proof.get('status') != 'bound-before-mapping'
+    if (proof.get('method') != 'wlroots-0.20-return-before-mango-list-insertion-raw-v2'
+            or proof.get('clock') != 'mono_raw' or proof.get('userspace_clock') != 'CLOCK_MONOTONIC_RAW'
+            or bound.get('clock') != 'CLOCK_MONOTONIC_RAW' or proof.get('status') != 'bound-before-mapping'
             or proof.get('exported_symbol') != 'wlr_ext_foreign_toplevel_handle_v1_create'
             or proof.get('identifier_offset') != 56
             or proof.get('audited_header_sha256') != '9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3'
@@ -281,6 +283,14 @@ def causal_precision(bound):
     upper = started + round(bound['upper_seconds'] * 1e9)
     identities = []
     for event in events:
+        if not isinstance(event, dict):
+            return False
+        text = event.get('kernel_timestamp_text')
+        token = re.fullmatch(r'([0-9]{1,20})\.([0-9]{1,9})', text) if isinstance(text, str) else None
+        if not token:
+            return False
+        literal = int(token[1])*1_000_000_000 + int(token[2].ljust(9, '0'))
+        resolution = 10 ** (9-len(token[2]))
         if (not isinstance(event, dict) or type(event.get('kernel_pid')) is not int
                 or event.get('kernel_pid') != proof['kernel_pid']
                 or not isinstance(event.get('foreign_toplevel_id'), str)
@@ -288,7 +298,13 @@ def causal_precision(bound):
                 or type(event.get('lower_monotonic_ns')) is not int
                 or not started <= event['lower_monotonic_ns'] <= upper
                 or type(event.get('timestamp_resolution_ns')) is not int
-                or event.get('timestamp_resolution_ns') not in (1, 10, 100, 1000)):
+                or event.get('timestamp_resolution_ns') not in (1, 10, 100, 1000)
+                or type(event.get('kernel_text_monotonic_ns')) is not int
+                or event['kernel_text_monotonic_ns'] != literal
+                or event['timestamp_resolution_ns'] != resolution
+                or type(event.get('timestamp_rounding_allowance_ns')) is not int
+                or event['timestamp_rounding_allowance_ns'] != event['timestamp_resolution_ns']
+                or event['lower_monotonic_ns'] != event['kernel_text_monotonic_ns'] - event['timestamp_rounding_allowance_ns']):
             return False
         identities.append(event['foreign_toplevel_id'])
     lower = max(ipc_lower, min(event['lower_monotonic_ns'] for event in events))
@@ -320,9 +336,11 @@ def mapping_precision(run):
                     or not math.isclose(width, upper-lower, abs_tol=1e-9, rel_tol=1e-9)):
                 raise ValueError('Inconsistent mapped-window observation bounds: ' + app)
             limit = min(.005, sample * .025)
+            expected_observer = CAUSAL_MAPPING_OBSERVER if sampler == ROLE_SAMPLER else MAPPING_OBSERVER
             current_observer = (run['identity'].get('sampler') == sampler
-                                and timing.get('observer') == MAPPING_OBSERVER
-                                and bound.get('observer') == MAPPING_OBSERVER
+                                and timing.get('observer') == expected_observer
+                                and bound.get('observer') == expected_observer
+                                and (sampler != ROLE_SAMPLER or timing.get('clock') == 'CLOCK_MONOTONIC_RAW')
                                 and timing.get('poll_sleep_seconds') == poll)
             causal_valid = causal_precision(bound) if sampler == ROLE_SAMPLER else True
             result.append(dict(app=app, launch=index, lower_seconds=lower, upper_seconds=upper,
