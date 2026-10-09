@@ -445,6 +445,13 @@ def lock_supervisor(generation, arguments):
     marker = shared / "dictation-locked"
     if any(arg in ("-f", "--daemonize", "--ready-fd") or arg.startswith("--ready-fd=") for arg in arguments):
         raise Failure("The lock supervisor needs a foreground swaylock process.")
+    data = read_json(marker)
+    if data.get("generation") == generation:
+        # Register ownership before swaylock initialization. This does not claim
+        # that the compositor is secured: the caller still waits for ready-fd.
+        # It only makes another lock request during startup idempotent.
+        data.update(supervisor_pid=os.getpid(), supervisor_start=process_start(os.getpid()))
+        atomic_json(marker, data)
     read_fd, write_fd = os.pipe()
     process = subprocess.Popen(["/usr/bin/swaylock", "--ready-fd", str(write_fd), *arguments],
                                pass_fds=(write_fd,), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -456,10 +463,6 @@ def lock_supervisor(generation, arguments):
         process.terminate()
         process.wait(timeout=3)
         raise Failure("The fallback lock could not secure this session.")
-    data = read_json(marker)
-    if data.get("generation") == generation:
-        data.update(supervisor_pid=os.getpid(), supervisor_start=process_start(os.getpid()))
-        atomic_json(marker, data)
     # The caller may now return to swayidle. This detached supervisor remains
     # the real parent, distinguishing a normal unlock from a lock-client crash.
     print("secure", flush=True)

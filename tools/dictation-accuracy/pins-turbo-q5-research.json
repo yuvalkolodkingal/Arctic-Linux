@@ -1,0 +1,52 @@
+{
+  "schema": "arctic-dictation-accuracy-pins-v1",
+  "dataset": {
+    "repository": "google/fleurs",
+    "commit": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "license": "CC-BY-4.0",
+    "selection": "First five rows in file order from each language test split; no filtering or retries with different samples",
+    "samples_per_language": 5,
+    "files": [
+      {
+        "config": "en_us",
+        "language": "en",
+        "path": "parquet-data/en_us/test-00000-of-00001.parquet",
+        "bytes": 401722686,
+        "sha256": "6428a4d04d3aac29e16b45e039bb1470a8bd7aa334cf92f7984c9c520d1f234d"
+      },
+      {
+        "config": "he_il",
+        "language": "he",
+        "path": "parquet-data/he_il/test-00000-of-00001.parquet",
+        "bytes": 470284545,
+        "sha256": "a02a744c016aa48289cfc50368e88ed3762df12ccfb330a3b53668db718fdace"
+      }
+    ]
+  },
+  "voxtype": {
+    "version": "1.1.0",
+    "source_commit": "e2638ca63f566f1682bcedc0abea8e4b25211c21",
+    "cpu": {
+      "url": "https://github.com/peteonrails/voxtype/releases/download/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline",
+      "bytes": 18579224,
+      "sha256": "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a"
+    },
+    "model": {
+      "name": "large-v3-turbo-q5_0",
+      "multilingual": true,
+      "repository": "ggerganov/whisper.cpp",
+      "commit": "98aa99a0a9db05ae2342309f5096248665f7cba3",
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/98aa99a0a9db05ae2342309f5096248665f7cba3/ggml-large-v3-turbo-q5_0.bin",
+      "bytes": 574041195,
+      "sha256": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"
+    }
+  },
+  "research": {
+    "purpose": "Compare a quantized multilingual turbo model against measured small on the identical fixed ten FLEURS samples.",
+    "production_model_changed": false,
+    "release_acceptance": false,
+    "comparison_fixture_manifest_sha256": "d97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd",
+    "comparison_threads": 2,
+    "source_model_path_contract": "Voxtype v1.1.0 src/transcribe/whisper.rs accepts an existing absolute .bin path; whisper-rs=0.16.0. Runtime compatibility must still be measured."
+  }
+}
