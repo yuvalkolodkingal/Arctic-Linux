@@ -158,6 +158,8 @@ jobs:
         run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
       - name: Recovered native probe controls (host fixtures only)
         run: python3 -m unittest discover -s tools/native-functional -p 'test_*.py' -v
+      - name: Dictation fixture provenance and accuracy scoring controls
+        run: python3 -m unittest discover -s tools/dictation-accuracy -p 'test_*.py' -v
       - name: Python unittest (packaging/firstboot)
         run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
       - name: Python unittest (packaging/updates, arctic-update)

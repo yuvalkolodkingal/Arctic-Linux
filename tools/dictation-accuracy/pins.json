@@ -1,0 +1,20 @@
+{
+  "schema": "arctic-dictation-accuracy-pins-v1",
+  "dataset": {
+    "repository": "google/fleurs",
+    "commit": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "license": "CC-BY-4.0",
+    "selection": "First five rows in file order from each language test split; no filtering or retries with different samples",
+    "samples_per_language": 5,
+    "files": [
+      {"config": "en_us", "language": "en", "path": "parquet-data/en_us/test-00000-of-00001.parquet", "bytes": 401722686, "sha256": "6428a4d04d3aac29e16b45e039bb1470a8bd7aa334cf92f7984c9c520d1f234d"},
+      {"config": "he_il", "language": "he", "path": "parquet-data/he_il/test-00000-of-00001.parquet", "bytes": 470284545, "sha256": "a02a744c016aa48289cfc50368e88ed3762df12ccfb330a3b53668db718fdace"}
+    ]
+  },
+  "voxtype": {
+    "version": "1.1.0",
+    "source_commit": "e2638ca63f566f1682bcedc0abea8e4b25211c21",
+    "cpu": {"url": "https://github.com/peteonrails/voxtype/releases/download/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline", "bytes": 18579224, "sha256": "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a"},
+    "model": {"name": "small", "multilingual": true, "repository": "ggerganov/whisper.cpp", "commit": "80da2d8bfee42b0e836fc3a9890373e5defc00a6", "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/80da2d8bfee42b0e836fc3a9890373e5defc00a6/ggml-small.bin", "bytes": 487601967, "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"}
+  }
+}
