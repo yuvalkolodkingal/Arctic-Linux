@@ -225,6 +225,48 @@ def exercise(base, out, compositor, frame_source=None):
                         assert image.getpixel((x, y)) == (33, 131, 79), (label, name, 'interior is not backdrop')
             results.append(dict(case=label, state=actual))
 
+        if not is_sway and not frame_source:
+            # Exercise the real output destroy signal with Bottom/Top layers
+            # and covered frame surfaces still mapped. Recreating all outputs
+            # must retain the compositor and preview processes across cycles.
+            compositor_pid = display.pid
+            for cycle in range(3):
+                ipc('cover', 'true')
+                time.sleep(.2)
+                run('mmsg', 'dispatch', 'destroy_all_virtual_output')
+                assert display.poll() is None, (out / 'compositor.log').read_text()
+                wait(lambda: not json.loads(run('wlr-randr', '--json')),
+                     'destroyed outputs remain advertised')
+                # Qt can retain a screen model while the backend has no
+                # outputs. Record that transient state; require the real
+                # output inventory to be empty and exact restored models below.
+                transient = state()
+                results.append(dict(case=f'outputs-unavailable-{cycle}', state=transient))
+                print('No advertised outputs; transient Qt frame models:', json.dumps(transient), flush=True)
+                for _ in range(2):
+                    run('mmsg', 'dispatch', 'create_virtual_output')
+                wait(lambda: len(json.loads(run('wlr-randr', '--json'))) == 2,
+                     'recreated outputs were not advertised')
+                names = sorted(output['name'] for output in json.loads(run('wlr-randr', '--json')))
+                assert len(set(names)) == 2 and all(name.startswith('HEADLESS-') for name in names)
+                for name, mode, position in zip(names, ('1024x768', '900x1600'), ('0,0', '1024,0')):
+                    run('wlr-randr', '--output', name, '--custom-mode', mode, '--pos', position)
+                def frames_restored():
+                    surfaces = state()['surfaces']
+                    return len(surfaces) == 2 and {surface['screen'] for surface in surfaces} == set(names)
+
+                wait(frames_restored, 'frame surfaces did not return on recreated outputs')
+                validate_preview(preview, out / 'shell.log')
+                assert display.poll() is None and display.pid == compositor_pid
+                ipc('cover', 'false')
+                pointer.stdin.write('move 200 200 1924 1600\n')
+                pointer.stdin.flush()
+                assert pointer.stdout.readline().strip() == 'OK'
+                time.sleep(.2)
+                results.append(dict(case=f'output-teardown-{cycle}', compositor_pid=compositor_pid,
+                                    state=state()))
+                print(f'Output teardown cycle {cycle}: same Mango/preview processes survived.', flush=True)
+
         # Keep mixed-DPI coverage and exercise both rounded physical axes.
         # One common scale-1 profile already covers both outputs; then scale
         # landscape and portrait independently to include the latter's
