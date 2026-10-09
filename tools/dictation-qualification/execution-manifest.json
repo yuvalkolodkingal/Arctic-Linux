@@ -1,0 +1,12 @@
+{
+  "ready": false,
+  "release_acceptance": false,
+  "image": null,
+  "fixture_manifest_sha256": null,
+  "fixture_decoder": null,
+  "execution_files": {},
+  "hardware_profiles": [
+    "small-v2",
+    "turbo-q5-v3"
+  ]
+}

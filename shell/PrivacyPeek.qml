@@ -11,10 +11,12 @@ PanelWindow {
     required property var modelData
     property var bar: null
     screen: modelData
-    visible: (Session.barHidden || (bar !== null && !bar.expanded)) && indicators.urgent
+    // Side bars can scroll the status pills offscreen on short or scaled outputs.
+    // Keep active dictation visible even while an expanded side bar is being scrolled.
+    visible: (Session.barHidden || (bar !== null && (!bar.expanded || (bar.vertical && DictationService.active)))) && indicators.urgent
     anchors { top: true; right: true }
     margins.top: Theme.frameWidth + Theme.space2
-    margins.right: Theme.frameWidth + Theme.space2
+    margins.right: Theme.frameWidth + Theme.space2 + (bar !== null && bar.vertical && bar.expanded && Session.barPosition === 'right' ? Theme.barHeight : 0)
     implicitWidth: box.width
     implicitHeight: box.height
     color: 'transparent'

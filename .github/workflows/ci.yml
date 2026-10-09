@@ -145,7 +145,7 @@ jobs:
         # them those checks are skipped. python3-dbus, python3-dbusmock and dbus-daemon run the
         # Bluetooth agent against a mock BlueZ; glibc-langpack-en lets arctic-update's Flatpak count
         # test run in a non-C locale.
-        run: dnf -y install git python3 python3-pyte python3-pillow python3-rpm nodejs librsvg2-tools util-linux procps-ng zsh fzf foot fastfetch python3-dbus python3-gobject-base python3-dbusmock dbus-daemon glibc-langpack-en xorriso cpio 7zip ffmpeg-free zip unzip gzip bzip2 xz
+        run: dnf -y install git gcc binutils python3 python3-pyte python3-pillow python3-rpm nodejs librsvg2-tools util-linux procps-ng zsh fzf foot fastfetch python3-dbus python3-gobject-base python3-dbusmock dbus-daemon glibc-langpack-en xorriso cpio 7zip ffmpeg-free zip unzip gzip bzip2 xz
       - uses: actions/checkout@v4
       - name: Python unittest (design/themegen — theme engine, wallpaper colours, arctic-theme, app templates and theme hooks)
         run: python3 -m unittest discover -s design/themegen/tests -v
@@ -158,8 +158,14 @@ jobs:
         run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
       - name: Recovered native probe controls (host fixtures only)
         run: python3 -m unittest discover -s tools/native-functional -p 'test_*.py' -v
+      - name: Dictation fixture provenance and accuracy scoring controls
+        run: python3 -m unittest discover -s tools/dictation-accuracy -p 'test_*.py' -v
+      - name: Exact-image dictation evidence and execution controls
+        run: python3 -m unittest discover -s tools/dictation-qualification -p 'test_*.py' -v
       - name: Python unittest (packaging/firstboot)
         run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
+      - name: Dictation failure, integrity, privacy and socket controls
+        run: python3 -m unittest discover -s packaging/dictation -p 'test_*.py' -v
       - name: Python unittest (packaging/updates, arctic-update)
         run: python3 -m unittest discover -s packaging/updates -p 'test_*.py' -v
       - name: Python unittest (settings/tests)
@@ -173,7 +179,7 @@ jobs:
           done
 
   units:
-    name: systemd units (arctic-update)
+    name: systemd units (updates and dictation setup)
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:
@@ -187,6 +193,9 @@ jobs:
           install -m 0755 dotfiles/.local/bin/arctic-login-wallpaper /usr/bin/arctic-login-wallpaper
           systemd-sysusers packaging/system/arctic-wallpaper.sysusers
           systemd-analyze verify --man=no packaging/systemd/arctic-login-wallpaper.service
+          install -Dpm 0755 packaging/firstboot/arctic-firstboot /usr/libexec/arctic/arctic-firstboot
+          systemd-analyze verify --man=no packaging/systemd/arctic-firstboot.service packaging/systemd/arctic-firstboot.timer \
+            packaging/systemd/arctic-dictation-setup.service packaging/systemd/arctic-dictation-setup.timer
           # --man=no: the container has no man pages (tsflags=nodocs), so the
           # Documentation=man: check would fail although the page ships with dnf5.
           systemd-analyze verify --man=no packaging/systemd/arctic-update-stage.service \

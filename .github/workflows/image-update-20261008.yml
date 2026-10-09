@@ -1,0 +1,151 @@
+name: Same-image Nix and signed update qualification
+
+on:
+  push:
+    branches: [codex/image-update-20261008]
+    paths: [.github/qualification-20261008.update]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  update:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Read the reviewed disabled-until-pinned manifest
+        id: manifest
+        working-directory: execution
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          reviewed = Path('.github/qualification-20261008.update').read_text().strip()
+          assert re.fullmatch('[0-9a-f]{40}', reviewed)
+          assert event['before'] == reviewed and event['after'] == os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == reviewed
+          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/qualification-20261008.update']
+          manifest = json.loads(Path('tools/image-update/execution-manifest.json').read_text())
+          assert manifest['ready'] is True and manifest['release_acceptance'] is False
+          image, stable = manifest['image'], manifest['stable']
+          assert re.fullmatch('[0-9a-f]{40}', image['source_sha'])
+          assert re.fullmatch('[0-9a-f]{40}', stable['source_sha'])
+          assert image['name'] == f"Arctic-Linux-1.2-candidate-{image['run_id']}-1-x86_64.iso"
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('source=' + image['source_sha'] + '\n')
+              output.write('stable=' + stable['source_sha'] + '\n')
+              output.write('iso=' + image['name'] + '\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          ref: ${{ steps.manifest.outputs.source }}
+          persist-credentials: false
+      - name: Verify actual execution and published stable source before downloading
+        run: |
+          mkdir "$RUNNER_TEMP/arctic-update"
+          python3 -B execution/tools/image-update/guard.py \
+            --source "$GITHUB_WORKSPACE/source" --manifest execution/tools/image-update/execution-manifest.json \
+            --proof "$RUNNER_TEMP/arctic-update/evidence/pre-download.json"
+          python3 -B execution/tools/native-functional/fetch-image.py \
+            --manifest execution/tools/image-update/execution-manifest.json \
+            --out "$RUNNER_TEMP/arctic-update/inputs"
+      - name: Install, stage signed higher-EVR update, apply offline, verify subsequent boot
+        working-directory: execution
+        env:
+          ISO_NAME: ${{ steps.manifest.outputs.iso }}
+          EXPECTED_STABLE: ${{ steps.manifest.outputs.stable }}
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          vm="$PWD/out/test/qualified-update"
+          evidence="$RUNNER_TEMP/arctic-update/evidence"
+          inputs="$RUNNER_TEMP/arctic-update/inputs"
+          mkdir -p out/test/qualified-update-payload
+          python3 -B tools/performance/compose-nix-probe.py out/test/qualified-update-payload/guest.py \
+            --expected-stable-source "$EXPECTED_STABLE"
+          python3 -B tools/image-update/guard.py --source "$GITHUB_WORKSPACE/source" \
+            --manifest tools/image-update/execution-manifest.json --inputs "$inputs" --proof "$evidence/pre-provision.json"
+          container="arctic-paired-update-$(python3 -c 'import uuid;print(uuid.uuid4().hex)')"
+          prepared=''
+          cleanup() {
+            docker rm --force "$container" >/dev/null 2>&1 || :
+            if [ -n "$prepared" ]; then docker image rm "$prepared" >/dev/null 2>&1 || :; fi
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          export CONTAINER_ENGINE=docker ARCTIC_VM_CONTAINER_NAME="$container"
+          timeout --signal=TERM --kill-after=30s 20m tools/performance/prepare-vm-tools.sh "$evidence"
+          prepared=$(cat "$evidence/vm-prepared-image-id.txt")
+          [[ "$prepared" =~ ^(sha256:)?[0-9a-f]{64}$ ]]
+          export ARCTIC_FEDORA_IMAGE="$prepared" ARCTIC_VM_TOOLS_PREPARED=1
+          python3 -B tools/image-update/guard.py --source "$GITHUB_WORKSPACE/source" \
+            --manifest tools/image-update/execution-manifest.json --inputs "$inputs" --proof "$evidence/pre-vm.json"
+          container="arctic-paired-update-$(python3 -c 'import uuid;print(uuid.uuid4().hex)')"
+          export ARCTIC_VM_CONTAINER_NAME="$container"
+          timeout --signal=TERM --kill-after=30s 110m tools/test-install.sh \
+            --iso "$inputs/iso/$ISO_NAME" --kvm --memory 4096 --smp 2 --boot-append '' \
+            --install-timeout 2400 --boot-network online --profile "$GITHUB_WORKSPACE/source/profiles/ci/offline.toml" \
+            --guest-check "$PWD/out/test/qualified-update-payload/guest.py" --out "$vm"
+          cp "$vm/serial-boot.log" "$vm/serial-before-update-reboot.log"
+          cp "$vm/qemu-boot.log" "$vm/qemu-before-update-reboot.log"
+          for shot in "$vm"/boot-*.png; do
+            [ -e "$shot" ] || continue
+            cp "$shot" "${shot%/*}/before-update-${shot##*/}"
+          done
+          # This intermediate TCG boot applies the already downloaded transaction
+          # with restricted networking. It makes no desktop or performance claim.
+          container="arctic-paired-update-$(python3 -c 'import uuid;print(uuid.uuid4().hex)')"
+          timeout --signal=TERM --kill-after=30s 95m docker run --rm --name "$container" --network none \
+            -v "$PWD:$PWD:ro" -v "$PWD/out:$PWD/out" -w "$PWD" "$prepared" \
+            python3 tools/performance/offline-update-boot.py --disk "$vm/target.qcow2" \
+            --vars "$vm/OVMF_VARS.fd" --out "$vm/offline-update" --timeout 5400
+          python3 -B tools/image-update/guard.py --source "$GITHUB_WORKSPACE/source" \
+            --manifest tools/image-update/execution-manifest.json --inputs "$inputs" --proof "$evidence/pre-final-boot.json"
+          container="arctic-paired-update-$(python3 -c 'import uuid;print(uuid.uuid4().hex)')"
+          export ARCTIC_VM_CONTAINER_NAME="$container"
+          timeout --signal=TERM --kill-after=30s 45m tools/test-install.sh --stage boot \
+            --kvm --memory 4096 --smp 2 --boot-append '' --boot-network offline \
+            --profile "$GITHUB_WORKSPACE/source/profiles/ci/offline.toml" \
+            --guest-check "$PWD/out/test/qualified-update-payload/guest.py" --out "$vm"
+          python3 -B tools/image-update/verify-records.py --vm "$vm" --out "$evidence/update-result.json"
+      - name: Select and screen bounded owned VM diagnostics
+        if: always()
+        run: |
+          python3 -B - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          source = Path('execution/out/test/qualified-update')
+          target = Path(os.environ['RUNNER_TEMP']) / 'arctic-update/evidence/vm'
+          allowed = {'.json', '.log', '.txt', '.tsv', '.png', '.rgb', '.wav'}
+          if source.exists():
+              for path in source.rglob('*'):
+                  if path.is_symlink():
+                      raise RuntimeError('Diagnostic symlink')
+                  if not path.is_file() or path.suffix not in allowed:
+                      continue
+                  relative = path.relative_to(source)
+                  output = target / relative
+                  output.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(path, output)
+          PY
+          python3 -B execution/tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/arctic-update/evidence" --out "$RUNNER_TEMP/arctic-update/screened"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: same-image-nix-signed-update
+          path: ${{ runner.temp }}/arctic-update/screened/
+          if-no-files-found: ignore
+          retention-days: 14

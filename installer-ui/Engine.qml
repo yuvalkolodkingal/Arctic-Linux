@@ -11,7 +11,8 @@ import Quickshell.Io
 Singleton {
     id: engine
 
-    readonly property string clientVersion: "1.2.0"
+    readonly property string clientVersion: "1.2.1"
+    readonly property string dictationDownloadNotice: "Online installation downloads 506.2 MB or 678.1 MB for local dictation, depending on your processor, plus any missing system packages. Offline installation queues setup for when you connect; dictation stays unavailable until setup finishes. Audio stays on this computer."
     property bool connected: false      // Hello answered
     property bool starting: false
     property string failure: ""         // why the bridge is not usable

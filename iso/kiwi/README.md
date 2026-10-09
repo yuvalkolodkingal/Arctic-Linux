@@ -11,11 +11,15 @@ Output: `out/iso/Arctic-Linux-1.2-x86_64.iso`, its `.sha256`, the package list a
 `.build-info` (whether Zen is in it).
 
 Candidates can use `--name Arctic-Linux-1.2-optimized-candidate-x86_64.iso`.
-The workflow requires a size strictly below 2,000,000,000 decimal bytes
-(`--max-bytes 1999999999`) and prefers below 1,600,000,000
-(`--preferred-max-bytes 1599999999`). A missed required size gate retains
-the image/checksum and exits with a clear failure; it never removes features to meet
-the budget. Explicit `--erofs-compression`, `--erofs-cluster` and `--dedupe` experiments
+Artifact-only workflow candidates pass `--max-bytes 1999999999` and
+`--preferred-max-bytes 1599999999` to the builder. If the required limit is missed,
+the builder retains the image/checksum and exits with a failure; the workflow
+continues far enough to upload that candidate for inspection. All workflow paths,
+including tag builds and manual releases, then require a size strictly below
+2,000,000,000 decimal bytes in the final `Required optimized ISO size` step before
+publication. Below 1,600,000,000 bytes is a preference, not a publication gate.
+The workflow never removes features to meet the budget.
+Explicit `--erofs-compression`, `--erofs-cluster` and `--dedupe` experiments
 must pass the functional/performance gates in `docs/OPTIMIZATION.md` before adoption.
 
 | File | What it is |

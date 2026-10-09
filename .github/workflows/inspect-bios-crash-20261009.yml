@@ -1,0 +1,64 @@
+name: Inspect retained BIOS compositor crash
+
+on:
+  push:
+    branches: [codex/inspect-bios-crash-20261009]
+    paths: [.github/workflows/inspect-bios-crash-20261009.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read fixed screened BIOS journal and crash stack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-bios-crash-20261009'
+          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11591625220'
+          digest = 'd067fd2cad3be7719a5527b515b5e4d577183adfacca4f4fdc88a369992df420'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['name'] == 'diagnostic-startup-bios-install' and not metadata['expired']
+          assert metadata['workflow_run']['id'] == 37872797834
+          assert metadata['workflow_run']['head_sha'] == '4502dedf5dc208c6e05e0dcb011d14ca91846974'
+          assert metadata['size_in_bytes'] == 3338922 and metadata['digest'] == 'sha256:' + digest
+          with tempfile.TemporaryDirectory(prefix='arctic-crash-reader-') as folder:
+              path = Path(folder) / 'retained.zip'
+              with path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              assert path.stat().st_size == 3338922
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+              with zipfile.ZipFile(path) as archive:
+                  items = archive.infolist()
+                  assert len(items) <= 100 and sum(item.file_size for item in items) < 50_000_000
+                  assert len({item.filename for item in items}) == len(items)
+                  for item in items:
+                      p = Path(item.filename)
+                      assert not p.is_absolute() and '..' not in p.parts
+                      assert not stat.S_ISLNK(item.external_attr >> 16)
+                  selected = [item for item in items if Path(item.filename).name == 'serial.log']
+                  assert len(selected) == 1 and selected[0].file_size <= 1_000_000
+                  data = archive.read(selected[0])
+                  print('ARCTIC-CRASH-JOURNAL-SHA256', hashlib.sha256(data).hexdigest())
+                  lines = data.decode('utf-8', errors='strict').splitlines()
+                  pattern = re.compile(r'mango|coredump|core dump|segfault|signal|session.*(stop|fail|exit)|tty[1-9]|switch.*vt', re.I)
+                  indexes = {i for i, line in enumerate(lines) if pattern.search(line)}
+                  for i, line in enumerate(lines):
+                      if 'Stack trace of thread' in line:
+                          indexes.update(range(max(0, i - 4), min(len(lines), i + 36)))
+                          break
+                  rendered = '\n'.join(f'{i + 1}: {lines[i][:1200]}' for i in sorted(indexes))
+                  assert len(rendered.encode('utf-8')) < 100_000
+                  print('ARCTIC-CRASH-JOURNAL-BEGIN')
+                  print(rendered)
+                  print('ARCTIC-CRASH-JOURNAL-END')
+          PY

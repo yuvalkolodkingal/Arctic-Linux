@@ -1,0 +1,37 @@
+{
+  "ready": false,
+  "release_acceptance": false,
+  "image": {
+    "run_id": 37903438836,
+    "source_sha": "e2a62bb8945f7fe9975cb862986af4dd2be0873d",
+    "name": "Arctic-Linux-1.2-candidate-37903438836-1-x86_64.iso",
+    "bytes": 1929230336,
+    "sha256": "73a95290df7df8d1b4d47c90767e1e231cb340864ed3b3478dde2176b7bfb9c0",
+    "artifact_id": 11604221573,
+    "archive_bytes": 1929415684,
+    "archive_sha256": "1b3267d5b7e0fc3b7980f77a3e72345f6ad3061de47a2a3006fcd2c84cb59dee"
+  },
+  "execution_files": {
+    ".github/workflows/installer-candidate-20261009.yml": "64bd5f795ea178fed197491d2ba7de6262fa049ff0d0bb351c0c6fa79da57b07",
+    "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
+    "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
+    "tools/installer-qualification/contract.py": "65506a8dc61a052515c1221d57a5759e315edf5807172b54abe137b29a2b862b",
+    "tools/installer-qualification/controller.py": "da9a13501747544069273a3aeea8169b705e3a72a2eea05e25679ab9d5f27d3f",
+    "tools/installer-qualification/driver.py": "8f3843d0c05aeb3027f9e805fe78996b4e796556a4a0fccb9e99b523a300ea88",
+    "tools/installer-qualification/evidence.py": "85c1f19e4aed120e9f5c2828f8e5dcba2f8a0219f7caacafb55837b642a8c035",
+    "tools/installer-qualification/guest.py": "8e610e27c9bc5caa40909d5102241b2e076a1f262e1ed54936d2b8d53b68cc3e",
+    "tools/installer-qualification/run-live.sh": "8051dc045bfc1b3b5258b552579be627b47f09896c545bf70917ae60fdb434de",
+    "tools/installer-qualification/runner.py": "bee6325b7d30113f3c0729be71bef8e11161847c9d25e187a59f82d6908602bd",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    "tools/native-functional/fetch-image.py": "d107a50ee7b0ded51149aeae0812c70d68fda17685b1d3bb192beaac47b80248",
+    "tools/native-functional/native_smoke.py": "99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b",
+    "tools/native-functional/prepare-taskbar-tools.sh": "ec12af29cdbda3007cf8e62c417ae7ccdbca4cfad251131814d4f4d09ce75712",
+    "tools/native-functional/screen-evidence.py": "f590c26ae63f7259f0b46fc27a254eba01f06b04b3f804d9933b6602a744838c",
+    "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
+    "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
+    "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
+    "tools/performance/prepare-vm-tools.sh": "be178c9666d59c246e3ca1d6b805eb3e9286e17c3d306b17bb703d2f1561edfe"
+  }
+}

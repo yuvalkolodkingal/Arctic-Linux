@@ -14,11 +14,11 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v1.2.0-build.<run number>)
+        description: Release tag (default v1.2.1-build.<run number>)
         type: string
         default: ""
       prerelease:
-        description: Mark the release as a pre-release (untick for a stable release such as v1.2.0)
+        description: Mark the release as a pre-release (untick for a stable release such as v1.2.1)
         type: boolean
         default: true
       draft:
@@ -360,7 +360,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="$RELEASE_TAG"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
+            tag="$RELEASE_TAG"; [ -n "$tag" ] || tag="v1.2.1-build.$GITHUB_RUN_NUMBER"
             pre=""; [ "$RELEASE_PRERELEASE" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"

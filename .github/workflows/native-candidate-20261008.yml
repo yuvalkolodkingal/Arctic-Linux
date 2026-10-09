@@ -13,7 +13,12 @@ jobs:
   native:
     if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    # Sequential phase limits allow 8m host dependencies + 15m artifact fetch
+    # + 20m VM provisioning + 15m taskbar tool compilation + 180m harness.
+    # The installed matrix supplements every frozen original native gate.
+    # Leave time for verification,
+    # cleanup and screened evidence without changing any acceptance limit.
+    timeout-minutes: 270
     steps:
       - uses: actions/checkout@v4
         with:

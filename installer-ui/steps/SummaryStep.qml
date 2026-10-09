@@ -6,6 +6,7 @@
 // elsewhere on the page, a key held down or a double click from Apps do nothing.
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls.Basic as Controls
 import ".."
 import "../components"
 
@@ -66,58 +67,143 @@ StepPage {
         page.forceActiveFocus();
     }
 
+    function ensureVisible(item) {
+        const p = item.mapToItem(summaryFlick.contentItem, 0, 0);
+        if (p.y < summaryFlick.contentY)
+            summaryFlick.contentY = Math.max(0, p.y - 4);
+        else if (p.y + item.height > summaryFlick.contentY + summaryFlick.height)
+            summaryFlick.contentY = Math.max(0, Math.min(summaryFlick.contentHeight - summaryFlick.height, p.y + item.height - summaryFlick.height + 4));
+    }
+
     Component.onCompleted: load()
 
-    Column {
-        width: page.width
-        spacing: 14
-
-        ArList {
-            id: list
-            width: parent.width
-            activeFocusOnTab: false
-            view.interactive: false
-            accessibleName: "Summary"
-            model: page.rows
-            delegate: ArListRow {
-                id: srow
-                required property var modelData
-                required property int index
-                width: ListView.view.width
-                first: index === 0
-                hoverEnabled: false
-                // The engine names the icon (the Drivers row shares the apps step).
-                iconName: modelData.icon || page.icons[modelData.step] || "check"
-                title: modelData.label
-                desc: modelData.value
-                ArButton {
-                    variant: "ghost"
-                    size: "sm"
-                    text: "Change"
-                    gapColor: Theme.surfaceRaised
-                    Accessible.name: "Change " + srow.modelData.label.toLowerCase()
-                    onClicked: Wizard.gotoStep(srow.modelData.step)
-                }
+    // Keep the disclosure, every Change link and the erase warning reachable
+    // above the persistent footer at smaller output sizes.
+    Flickable {
+        id: summaryFlick
+        width: page.width + 8
+        x: -4
+        y: -4
+        height: Math.max(0, Math.min(summaryColumn.height + 8, page.availableHeight + 4))
+        contentWidth: width
+        contentHeight: summaryColumn.height + 8
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        Accessible.role: Accessible.Pane
+        Accessible.name: "Installation summary"
+        activeFocusOnTab: interactive
+        function scrollBy(dy) {
+            contentY = Math.max(0, Math.min(contentHeight - height, contentY + dy));
+        }
+        Keys.onPressed: event => {
+            const step = Math.max(40, height - 48);
+            if (event.key === Qt.Key_Down)
+                scrollBy(40);
+            else if (event.key === Qt.Key_Up)
+                scrollBy(-40);
+            else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_Space)
+                scrollBy(step);
+            else if (event.key === Qt.Key_PageUp)
+                scrollBy(-step);
+            else if (event.key === Qt.Key_Home)
+                contentY = 0;
+            else if (event.key === Qt.Key_End)
+                scrollBy(contentHeight);
+            else
+                return;
+            event.accepted = true;
+        }
+        Controls.ScrollBar.vertical: Controls.ScrollBar {
+            policy: Controls.ScrollBar.AsNeeded
+            width: 6
+            contentItem: Rectangle {
+                implicitWidth: 6
+                radius: 3
+                color: Theme.inkMuted
             }
         }
-
-        // An answer the engine rejected when installing was asked for (for example a
-        // username the system already has): where to change it. The footer has the message.
-        ArBanner {
-            visible: Wizard.errorStep !== ""
-            width: parent.width
-            kind: "error"
-            title: "The " + Wizard.railName(Wizard.errorStep) + " step needs a change"
-            actionText: "Go to " + Wizard.railName(Wizard.errorStep)
-            onAction: Wizard.gotoStep(Wizard.errorStep)
+        Rectangle {
+            visible: summaryFlick.activeFocus
+            parent: summaryFlick
+            anchors.fill: parent
+            color: "transparent"
+            radius: Theme.radiusMd
+            border.width: Theme.focusWidth
+            border.color: Theme.focus
+            z: 10
         }
 
-        ArBanner {
-            visible: page.warning !== ""
-            width: parent.width
-            kind: "warning"
-            strong: true
-            text: page.richWarning(page.warning)
+        Column {
+            id: summaryColumn
+            x: 4
+            y: 4
+            width: page.width
+            spacing: 14
+
+            ArBanner {
+                width: parent.width
+                kind: "info"
+                title: "Local dictation setup"
+                text: Engine.dictationDownloadNotice
+            }
+
+            ArList {
+                id: list
+                width: parent.width
+                activeFocusOnTab: false
+                view.interactive: false
+                accessibleName: "Summary"
+                model: page.rows
+                delegate: ArListRow {
+                    id: srow
+                    required property var modelData
+                    required property int index
+                    width: ListView.view.width
+                    first: index === 0
+                    hoverEnabled: false
+                    // The engine names the icon (the Drivers row shares the apps step).
+                    iconName: modelData.icon || page.icons[modelData.step] || "check"
+                    title: modelData.label
+                    desc: modelData.value
+                    ArButton {
+                        id: changeButton
+                        onActiveFocusChanged: if (activeFocus) Qt.callLater(() => page.ensureVisible(changeButton))
+                        variant: "ghost"
+                        size: "sm"
+                        text: "Change"
+                        gapColor: Theme.surfaceRaised
+                        Accessible.name: "Change " + srow.modelData.label.toLowerCase()
+                        onClicked: Wizard.gotoStep(srow.modelData.step)
+                    }
+                }
+            }
+
+            // An answer the engine rejected when installing was asked for (for example a
+            // username the system already has): where to change it. The footer has the message.
+            FocusScope {
+                id: errorScope
+                visible: Wizard.errorStep !== ""
+                width: parent.width
+                implicitHeight: errorBanner.height
+                onActiveFocusChanged: if (activeFocus) Qt.callLater(() => page.ensureVisible(errorScope))
+                ArBanner {
+                    id: errorBanner
+                    width: parent.width
+                    kind: "error"
+                    title: "The " + Wizard.railName(Wizard.errorStep) + " step needs a change"
+                    actionText: "Go to " + Wizard.railName(Wizard.errorStep)
+                    onAction: Wizard.gotoStep(Wizard.errorStep)
+                }
+            }
+
+            ArBanner {
+                visible: page.warning !== ""
+                width: parent.width
+                kind: "warning"
+                strong: true
+                text: page.richWarning(page.warning)
+            }
         }
     }
 }
