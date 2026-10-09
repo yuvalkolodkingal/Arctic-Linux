@@ -179,6 +179,9 @@ class LowerBoundProbe:
                 raise RuntimeError('Causal trace clock is not monotonic')
             (self.instance / 'buffer_size_kb').write_text('128')
             (self.instance / 'options/overwrite').write_text('0')
+            (self.instance / 'options/context-info').write_text('1')
+            if (self.instance / 'options/record-tgid').exists():
+                (self.instance / 'options/record-tgid').write_text('0')
             if (self.instance / 'options/nsecs').exists():
                 (self.instance / 'options/nsecs').write_text('1')
             command = (f'r:{self.group}/map_create {library}:0x{offset:x} '

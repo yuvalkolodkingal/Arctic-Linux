@@ -103,8 +103,9 @@ The observer resolves the exported function from the actual ELF's dynamic symbol
 table and records both production executable/library hashes and RPM identities.
 Package verification must pass. It uses the actual desktop-owned Mango PID and
 start ticks, a unique 128 KiB tracefs instance, PID filtering and the kernel's
-`mono` clock. It leaves scheduling, compositor code, preferences and SELinux
-enforcement intact. Kernel instrumentation and reader costs are included in the
+`mono` clock. It leaves scheduling, compositor source/binary files, preferences and SELinux
+enforcement intact. Uprobes temporarily trap the observed function's return in
+the kernel; that instrumentation and reader costs are included in the
 measurement; a frozen combined source hash is shared by all six boots.
 
 Unknown identifiers, wrong-process events, wrong clocks, stale/future receipts,
