@@ -875,6 +875,15 @@ install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinu
 # It lives here, not in arctic-installer, because the installer is removed from the new system.
 install -Dpm 0644 packaging/systemd/arctic-firstboot.service %{buildroot}%{_unitdir}/arctic-firstboot.service
 install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir}/arctic/arctic-firstboot
+# Dictation ships only the controller. The installer/first-boot service fetches
+# the pinned Voxtype binaries and multilingual model after the live-root copy.
+install -Dpm 0755 packaging/dictation/arctic-dictation %{buildroot}%{_bindir}/arctic-dictation
+install -Dpm 0755 packaging/dictation/arctic-dictation-setup %{buildroot}%{_libexecdir}/arctic/arctic-dictation-setup
+install -Dpm 0755 packaging/dictation/arctic-dictation-install %{buildroot}%{_libexecdir}/arctic/arctic-dictation-install
+install -Dpm 0644 packaging/dictation/dictation.py %{buildroot}%{_datadir}/arctic/dictation/dictation.py
+install -Dpm 0644 packaging/dictation/child_exec.py %{buildroot}%{_datadir}/arctic/dictation/child_exec.py
+install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
+install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
 # New accounts start from /etc/skel. What Arctic keeps up to date is installed once, in
 # /usr/share/arctic, and the home directory only points at it, so package updates reach
 # accounts that already exist (a copy in the home directory would never change again):
@@ -1173,6 +1182,7 @@ for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/
 done
 # arctic-update's file handling (update.conf, dnf5's offline state, the status file).
 python3 -m unittest discover -s packaging/updates -p 'test_*.py'
+python3 -m unittest discover -s packaging/dictation -p 'test_*.py'
 # ---- stream 1 (web apps): the host is the real cgo build and the manager is cgo-free; both
 # start without a display; the launcher entries the manager writes are valid.
 readelf -d %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
@@ -1305,11 +1315,13 @@ done
 systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 %systemd_post arctic-login-wallpaper.service
 %systemd_post arctic-firstboot.service arctic-update-stage.timer
+%systemd_post arctic-dictation-setup.service
 %systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-login-wallpaper.service
 %systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
+%systemd_preun arctic-dictation-setup.service
 %systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
@@ -1518,6 +1530,12 @@ fi
 %{_unitdir}/arctic-firstboot.service
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
+%{_bindir}/arctic-dictation
+%{_libexecdir}/arctic/arctic-dictation-setup
+%{_libexecdir}/arctic/arctic-dictation-install
+%{_datadir}/arctic/dictation/
+%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
+%{_unitdir}/arctic-dictation-setup.service
 %{_libexecdir}/arctic/neofetch
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer

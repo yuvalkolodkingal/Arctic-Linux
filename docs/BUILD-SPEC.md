@@ -341,6 +341,21 @@ reads (sshd_config.d is root-only). Units:
 `arctic-flatpak-update.timer` (system and user), `gcr-ssh-agent.socket` (user preset), and the
 XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
 
+### 3.4 Local dictation
+
+`arctic-desktop-config` ships `packaging/dictation/` as the small standard-library
+controller in `/usr/share/arctic/dictation/`, `/usr/bin/arctic-dictation`, the fixed
+polkit setup helper, and `arctic-dictation-setup.service`. No engine binary or model
+belongs in the RPM/live ISO. Installer finalization writes a target setup queue,
+enables the background service and makes a bounded, nonfatal online setup attempt;
+offline installations retain an explicit unready first-boot queue. The pinned
+Voxtype 1.1.0 CPU/Vulkan and multilingual Whisper small downloads require exact
+bytes and SHA-256 verification. See [DICTATION.md](DICTATION.md) for hashes, sizes,
+dependency/readiness checks, privacy, lock and cancellation behavior, commands and
+the native release acceptance contract. CI/RPM checks run the dictation control
+tests; systemd CI verifies its unit, and installer goldens include the queue/setup
+hook. Source checks do not qualify audio inference or the final image.
+
 ## 4. Engine ↔ installer UI protocol
 
 - `arcticd` listens on `/run/arcticd.sock` (systemd socket activation: `arcticd.socket`,

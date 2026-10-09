@@ -194,6 +194,12 @@ write /mnt/etc/xdg/mimeapps.list (0644)
     | application/zstd=xarchiver.desktop
     | application/x-zstd-compressed-tar=xarchiver.desktop
     | application/x-cpio=xarchiver.desktop
+write /mnt/var/lib/arctic/dictation/pending.json (0644)
+    | {"version":"1.1.0"}
+write /mnt/var/lib/arctic/dictation/setup.json (0644)
+    | {"state":"queued","progress":0,"error":"","version":"1.1.0","download_bytes":572524159}
+$ systemctl --root=/mnt enable arctic-dictation-setup.service
+$ chroot /mnt /usr/bin/python3 -I /usr/share/arctic/dictation/dictation.py --install
 mkdir -p /mnt/var/log/arctic-install
 $ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install
 $ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt /mnt/home /mnt/var/log /mnt/nix /mnt/boot

@@ -96,6 +96,58 @@ func runPlan(t *testing.T, job *backend.Job, rec *Recorder, rep *testReporter) e
 	return in.Run(context.Background())
 }
 
+func TestDictationInstallQueueAndNonfatalSetup(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		offline, fail, completed bool
+	}{
+		{"online", false, false, false},
+		{"offline", true, false, false},
+		{"download-failure", false, true, false},
+		{"ready", false, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			job := loadJob(t, "defaults.toml", "uefi")
+			job.Offline = tc.offline
+			var setup *Cmd
+			rec := &Recorder{
+				ExistsFn: func(p string) bool {
+					return (tc.completed && p == "/mnt/var/lib/arctic/dictation/verified.json") || DefaultExists(p)
+				},
+				Respond: func(c Cmd) (string, error) {
+					if c.Name == "chroot" && strings.Contains(strings.Join(c.Args, " "), "/usr/share/arctic/dictation/dictation.py") {
+						copy := c
+						setup = &copy
+						if tc.fail {
+							return "", errors.New("download failed")
+						}
+					}
+					return DefaultRespond(c)
+				},
+			}
+			if err := runPlan(t, job, rec, newReporter()); err != nil {
+				t.Fatalf("dictation setup must not fail OS installation: %v", err)
+			}
+			if setup == nil || !setup.AllowFail {
+				t.Fatal("installer must make a nonfatal target setup attempt")
+			}
+			if strings.Contains(strings.Join(setup.Args, " "), "--offline") != tc.offline {
+				t.Fatalf("wrong offline setup contract: %v", setup.Args)
+			}
+			plan := rec.Plan()
+			if !strings.Contains(plan, "enable arctic-dictation-setup.service") ||
+				!strings.Contains(plan, "write /mnt/var/lib/arctic/dictation/pending.json") ||
+				!strings.Contains(plan, "\"state\":\"queued\"") {
+				t.Fatal("installation must persist and enable retryable first-boot setup")
+			}
+			notes := strings.Join(job.Outcome.Notes, "\n")
+			if strings.Contains(notes, "Local dictation is not ready yet") == tc.completed {
+				t.Fatalf("readiness note must reflect setup receipt: %v", job.Outcome.Notes)
+			}
+		})
+	}
+}
+
 func golden(t *testing.T, name, got string) {
 	t.Helper()
 	path := filepath.Join("testdata", name)

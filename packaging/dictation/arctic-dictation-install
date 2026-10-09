@@ -1,0 +1,4 @@
+#!/bin/sh
+# Called by the already privileged installer in the installed target's chroot.
+case "$*" in ""|--offline) ;; *) exit 2 ;; esac
+exec /usr/bin/python3 -I /usr/share/arctic/dictation/dictation.py --install "$@"

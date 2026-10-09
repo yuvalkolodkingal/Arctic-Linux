@@ -162,6 +162,8 @@ jobs:
         run: python3 -m unittest discover -s tools/dictation-accuracy -p 'test_*.py' -v
       - name: Python unittest (packaging/firstboot)
         run: python3 -m unittest discover -s packaging/firstboot -p 'test_*.py' -v
+      - name: Dictation failure, integrity, privacy and socket controls
+        run: python3 -m unittest discover -s packaging/dictation -p 'test_*.py' -v
       - name: Python unittest (packaging/updates, arctic-update)
         run: python3 -m unittest discover -s packaging/updates -p 'test_*.py' -v
       - name: Python unittest (settings/tests)
@@ -175,7 +177,7 @@ jobs:
           done
 
   units:
-    name: systemd units (arctic-update)
+    name: systemd units (updates and dictation setup)
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:
@@ -189,6 +191,7 @@ jobs:
           install -m 0755 dotfiles/.local/bin/arctic-login-wallpaper /usr/bin/arctic-login-wallpaper
           systemd-sysusers packaging/system/arctic-wallpaper.sysusers
           systemd-analyze verify --man=no packaging/systemd/arctic-login-wallpaper.service
+          systemd-analyze verify --man=no packaging/systemd/arctic-dictation-setup.service
           # --man=no: the container has no man pages (tsflags=nodocs), so the
           # Documentation=man: check would fail although the page ships with dnf5.
           systemd-analyze verify --man=no packaging/systemd/arctic-update-stage.service \

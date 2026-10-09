@@ -1505,6 +1505,7 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 			return err
 		}
 	}
+	in.finishDictation(ctx)
 	if len(in.deferred) > 0 {
 		// Version 2 carries each module's install methods, because the catalog leaves the
 		// installed system together with arctic-installer (arctic-firstboot reads this).
@@ -1570,6 +1571,40 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	_, err = in.R.Run(ctx, Cmd{Name: "umount", Args: []string{t}, AllowFail: true})
 	return err
 }
+
+// finishDictation keeps the speech engine and model out of the live image. The
+// copied system gets a bounded online setup attempt, or an explicit first-boot
+// queue when offline. A model/dependency download must never undo an OS install.
+func (in *Installer) finishDictation(ctx context.Context) {
+	queue := "{\"version\":\"1.1.0\"}\n"
+	status := "{\"state\":\"queued\",\"progress\":0,\"error\":\"\",\"version\":\"1.1.0\",\"download_bytes\":572524159}\n"
+	for _, file := range []struct{ name, data string }{{"pending.json", queue}, {"setup.json", status}} {
+		if err := in.write(in.tgt("/var/lib/arctic/dictation/"+file.name), file.data, 0o644); err != nil {
+			in.Rep.Logf("dictation queue could not be saved (continuing): %v", err)
+			in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteDictationPending)
+			return
+		}
+	}
+	if err := in.run(ctx, "systemctl", "--root="+in.Opt.Target, "enable", "arctic-dictation-setup.service"); err != nil {
+		in.Rep.Logf("dictation first-boot setup could not be enabled (continuing): %v", err)
+	}
+	args := []string{"--install"}
+	if in.Job.Offline {
+		args = append(args, "--offline")
+	}
+	in.t.Update(0.4, "Preparing local dictation (573 MB download; no audio leaves this computer)…")
+	setupCtx, cancel := context.WithTimeout(ctx, 11*time.Minute)
+	defer cancel()
+	if _, err := in.R.Run(setupCtx, Chroot(in.Opt.Target, Cmd{Name: "/usr/bin/python3", Args: append([]string{"-I", "/usr/share/arctic/dictation/dictation.py"}, args...), AllowFail: true})); err != nil {
+		in.Rep.Logf("dictation setup did not finish (continuing with a retryable queue): %v", err)
+	}
+	if !in.R.Exists(in.tgt("/var/lib/arctic/dictation/verified.json")) {
+		in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteDictationPending)
+	}
+}
+
+// NoteDictationPending describes a retryable, nonfatal download or offline queue.
+const NoteDictationPending = "Local dictation is not ready yet. Connect to the internet and choose Retry setup in Settings → Dictation."
 
 // NoteStillOpen is the Done screen's note when the new system is complete but its disk
 // couldn't be let go of at the end (Outcome.Notes).
