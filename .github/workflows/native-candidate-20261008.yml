@@ -13,7 +13,10 @@ jobs:
   native:
     if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    # Sequential phase limits allow 8m host dependencies + 15m artifact fetch
+    # + 20m VM provisioning + 110m harness. Leave time for verification,
+    # cleanup and screened evidence without changing any acceptance limit.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,9 +49,10 @@ jobs:
           path: source
           persist-credentials: false
       - name: Install and verify host evidence decoder before starting guests
+        timeout-minutes: 8
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-pil
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil
           python3 -B - <<'PY'
           import sys
           sys.path.insert(0, 'execution/tools/lib')

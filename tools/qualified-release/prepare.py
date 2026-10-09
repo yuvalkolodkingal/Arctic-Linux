@@ -15,7 +15,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
-         'tools/native-functional/fetch-image.py'}
+         'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py'}
 BUILD_INPUTS = {'.github/workflows/iso.yml',
                 'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
@@ -258,20 +258,28 @@ def prepare(manifest, out):
         shutil.copyfile(temp / 'inputs/iso' / image['name'], out / name)
         require((out / name).stat().st_size == image['bytes'] and sha(out / name) == image['sha256'], 'Prepared ISO bytes differ')
         (out / (name + '.sha256')).write_text(image['sha256'] + '  ' + name + '\n')
+        torrent_spec = importlib.util.spec_from_file_location('qualified_torrent', ROOT / 'tools/qualified-release/torrent.py')
+        torrent = importlib.util.module_from_spec(torrent_spec)
+        torrent_spec.loader.exec_module(torrent)
+        transport = torrent.create(out / name, out / (name + '.torrent'), manifest['tag'])
+        require(transport['iso_sha256'] == image['sha256'], 'Torrent image checksum differs')
+        (out / (name + '.torrent.sha256')).write_text(transport['torrent_sha256'] + '  ' + name + '.torrent\n')
         proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main,
                      release_main_checks=current_checks, image=image,
                      performance=perf, native=native, update=manifest['update'], release_acceptance='qualified',
-                     measured_speed_or_ram_gain_claim=False)
+                     measured_speed_or_ram_gain_claim=False, torrent=transport)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')
         (out / 'release-notes.md').write_text(
             'Arctic Linux 1.2.1 for x86_64, with UEFI and BIOS boot.\n\n'
             'Lightweight defaults: GNOME Web, Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash. '
-            'Includes the covered/fractional screen-frame fix and 18 approved photo wallpapers, with City Afterglow as the fresh default.\n\n'
+            'Includes the covered/fractional screen-frame fix and the author\'s photo wallpapers, with City Afterglow as the fresh default.\n\n'
             'The exact retained ISO passed Try/Install/Safe startup, enforcing encrypted offline installation, native app/media checks, '
             'paired KVM precision/regression checks and a signed optimized stable Arctic update with offline apply and subsequent reboot. '
             'These checks make no physical hardware, substantial speed or RAM improvement claim.\n\n'
             f"ISO bytes: {image['bytes']}. SHA-256: `{image['sha256']}`.\n\n"
             'Download the ISO and checksum, then run `sha256sum -c Arctic-Linux-1.2.1-x86_64.iso.sha256`. '
+            'A single-file torrent is included with the immutable GitHub Release URL as its HTTP seed. '
+            'Its piece hashes describe the exact ISO; no active peer or tracker availability is claimed. '
             'Write the ISO using Fedora Media Writer and boot the USB drive. '
             'Updates use the signed stable Arctic and Fedora repositories. See qualification.json for exact source, artifact and check identities.\n')
 

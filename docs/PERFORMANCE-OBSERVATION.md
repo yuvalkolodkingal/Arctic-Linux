@@ -1,8 +1,10 @@
 # Mapped-window observation
 
-The paired performance run uses an unmodified Mango 0.17.3 session and a frozen
-collector/toolchain shared by all three pristine boots of each image. Different
-configured apps are compared by declared desktop role. No host cache flush,
+The paired performance run keeps each image's production Mango session and
+settings, with a frozen collector/toolchain shared by all three pristine boots
+of each image. The optimized image includes the reviewed Mango 0.17.3 output
+teardown recovery patch; no compositor substitution is made for measurement.
+Different configured apps are compared by declared desktop role. No host cache flush,
 service change, alternate compositor, or application preference is introduced.
 
 The v2 autonomous observer enters the actual desktop user's environment once,
