@@ -226,6 +226,73 @@ def exercise(base, out, compositor, frame_source=None):
             results.append(dict(case=label, state=actual))
 
         if not is_sway and not frame_source:
+            # Exercise the real installer too: its single persistent Top window
+            # receives closed when all outputs disappear, unlike the frame's
+            # per-screen Variants. Readiness alone cannot prove it remapped.
+            installer_source = SOURCE.parent / 'installer-ui'
+            installer_env = dict(env, ARCTIC_INSTALLER_BRIDGE='python3 ' +
+                                 str(installer_source / 'dev/mock-bridge.py'),
+                                 ARCTIC_LIVE_KEYBOARD='true',
+                                 ARCTIC_MOCK_LOG=str(out / 'installer-engine.log'))
+            with (out / 'installer.log').open('w') as log:
+                installer = subprocess.Popen(['quickshell', '--no-color', '-p', str(installer_source)],
+                                             env=installer_env, stdout=log, stderr=log)
+                processes.append(installer)
+
+            def installer_ipc(*words):
+                validate_preview(installer, out / 'installer.log')
+                return run('quickshell', 'ipc', '--pid', installer.pid, 'call', 'installer', *words)
+
+            def installer_state():
+                try:
+                    return json.loads(installer_ipc('state'))
+                except subprocess.CalledProcessError:
+                    return {}
+
+            def installer_ready(page, keyboard=None):
+                actual = installer_state()
+                return (actual.get('page') == page and actual.get('ready') is True
+                        and (keyboard is None or actual.get('keyboard') == keyboard))
+
+            wait(lambda: installer_ready('welcome'), 'private installer did not reach ready welcome')
+            assert installer_ipc('next') == 'ok'
+            wait(lambda: installer_ready('keyboard'), 'private keyboard form was not ready')
+            assert installer_ipc('fill', json.dumps(dict(layout='de'))) == 'ok'
+            wait(lambda: installer_ready('keyboard', 'de'), 'private keyboard choice did not save')
+            initial_installer = installer_state()
+            installer_pid = installer.pid
+
+            def verify_installer(label):
+                actual = installer_state()
+                window = actual['window']
+                assert actual['page'] == initial_installer['page'] == 'keyboard'
+                assert actual['keyboard'] == initial_installer['keyboard'] == 'de'
+                assert actual['connected'] is True and actual['ready'] is True and not actual['failure']
+                assert window['visible'] is True and window['backing_visible'] is True
+                layers = json.loads(run('mmsg', 'get', 'all-layers'))['layers']
+                mapped = [layer for layer in layers if layer['name'] == 'arctic-installer']
+                assert len(mapped) == 1 and mapped[0]['layer'] == 'top', mapped
+                assert mapped[0]['monitor'] == window['screen'] and window['screen'] in names
+                output = next(o for o in json.loads(run('wlr-randr', '--json'))
+                              if o['name'] == window['screen'])
+                mode = next(m for m in output['modes'] if m['current'])
+                assert abs(window['width'] - mode['width'] / output['scale']) <= 1
+                assert abs(window['height'] - mode['height'] / output['scale']) <= 1
+                raw = base / 'installer-capture.ppm'
+                run(capture_path, window['screen'], raw)
+                with Image.open(raw) as image:
+                    image.save(out / (label + '.png'))
+                    pixel = image.convert('RGB').getpixel((image.width - 10, image.height // 2))
+                    background = ImageColor.getrgb(window['background'])[:3]
+                    assert max(abs(a - b) for a, b in zip(pixel, background)) <= 3, (label, pixel, background)
+                assert installer.poll() is None and installer.pid == installer_pid
+                assert (out / 'installer-engine.log').read_text().count('"method": "Hello"') == 1
+                results.append(dict(case=label, installer_pid=installer_pid, state=actual, layers=mapped))
+                print('Installer restoration:', label, json.dumps(actual), flush=True)
+
+            ipc('cover', 'false')
+            time.sleep(.3)
+            verify_installer('installer-before-output-loss')
             # Exercise the real output destroy signal with Bottom/Top layers
             # and covered frame surfaces still mapped. Recreating all outputs
             # must retain the compositor and preview processes across cycles.
@@ -263,9 +330,17 @@ def exercise(base, out, compositor, frame_source=None):
                 pointer.stdin.flush()
                 assert pointer.stdout.readline().strip() == 'OK'
                 time.sleep(.2)
+                def installer_restored():
+                    window = installer_state().get('window', {})
+                    return (window.get('visible') is True and window.get('backing_visible') is True
+                            and window.get('screen') in names)
+
+                wait(installer_restored, 'installer did not show again after output restoration')
+                verify_installer(f'installer-restored-{cycle}')
                 results.append(dict(case=f'output-teardown-{cycle}', compositor_pid=compositor_pid,
                                     state=state()))
                 print(f'Output teardown cycle {cycle}: same Mango/preview processes survived.', flush=True)
+            stop(installer)
 
         # Keep mixed-DPI coverage and exercise both rounded physical axes.
         # One common scale-1 profile already covers both outputs; then scale

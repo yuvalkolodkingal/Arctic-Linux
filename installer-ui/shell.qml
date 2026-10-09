@@ -15,6 +15,19 @@ ShellRoot {
 
     Component.onCompleted: Engine.start()
 
+    function restoreWindow() {
+        // Mango closes layer surfaces when a DRM output disappears during a
+        // VT switch. Keep this Frame and engine alive, then show the same
+        // window once Qt advertises a real output again. Its unnamed 100x100
+        // placeholder is not an output; do not remap into that interval.
+        if (!win.visible && Quickshell.screens.some(screen => screen.name !== "" && screen.width > 0 && screen.height > 0))
+            win.visible = true;
+    }
+    Connections {
+        target: Quickshell
+        function onScreensChanged() { Qt.callLater(root.restoreWindow); }
+    }
+
     PanelWindow {
         id: win
         anchors {
@@ -89,6 +102,14 @@ ShellRoot {
         // Current state for scripts: {page, current, view, valid, busy, percent, …}
         function state(): string {
             return JSON.stringify({
+                window: {
+                    visible: win.visible,
+                    backing_visible: win.backingWindowVisible,
+                    width: win.width,
+                    height: win.height,
+                    screen: win.screen ? win.screen.name : "",
+                    background: String(win.color)
+                },
                 page: frame.pageKey,
                 current: Wizard.current,
                 view: Wizard.view,
