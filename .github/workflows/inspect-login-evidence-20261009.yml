@@ -1,0 +1,87 @@
+name: Inspect retained candidate login evidence
+
+on:
+  push:
+    branches: [codex/inspect-login-failure-20261009]
+    paths: [.github/workflows/inspect-login-evidence-20261009.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Install the pixel inspection reader
+        run: sudo apt-get update && sudo apt-get install -y python3-pil
+      - name: Verify fixed artifacts and inspect existing synthetic VM evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import base64, hashlib, io, json, os, re, subprocess, tempfile, zipfile
+          from pathlib import Path
+          from PIL import Image
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-login-failure-20261009'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          repo = 'repos/yuvalkolodkingal/Arctic-Linux'
+          evidence = [
+              (11587953084, 37854472664, 'f31b341a84325a6a845f42d55f582fb836eb9d19',
+               'boot-test', '341b541a0cf6215a369154d610b31697534cc33d14a301916ef914022173f6b0'),
+              (11588027770, 37854472664, 'f31b341a84325a6a845f42d55f582fb836eb9d19',
+               'paired-performance', 'becb37282b3f2bc7d41104553c96dbdfea9c7ff60b8dc9ac5bf6ab29e95e64db'),
+          ]
+          sensitive = re.compile(r'(?i)authorization:|(?:gh[pousr]_|github_pat_)[a-z0-9_]+|'
+                                 r'(?:password|token|secret)\s*[=:]\s*\S+|'
+                                 r'[\w.+-]+@[\w.-]+|https?://\S*\?(?:\S*)')
+          with tempfile.TemporaryDirectory(prefix='arctic-evidence-') as temp:
+              for artifact_id, run_id, source, name, digest in evidence:
+                  endpoint = f'{repo}/actions/artifacts/{artifact_id}'
+                  metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+                  assert metadata['name'] == name and not metadata['expired'], metadata['name']
+                  assert metadata['workflow_run']['id'] == run_id
+                  assert metadata['workflow_run']['head_sha'] == source
+                  assert metadata['digest'] == 'sha256:' + digest
+                  path = Path(temp) / f'{artifact_id}.zip'
+                  with path.open('xb') as archive:
+                      subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=archive, check=True)
+                  assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, 'archive hash mismatch'
+                  print('ARCTIC-ARTIFACT', artifact_id, run_id, source, name, digest, flush=True)
+                  with zipfile.ZipFile(path) as archive:
+                      assert sum(item.file_size for item in archive.infolist()) < 100_000_000
+                      for item in archive.infolist():
+                          member = item.filename
+                          assert not Path(member).is_absolute() and '..' not in Path(member).parts
+                          print('ARCTIC-MEMBER', member, item.file_size)
+                          if member.endswith(('serial.log', 'baseline-result.json', 'results.json', 'shell.log', 'compositor.log',
+                                              '.sha256', '.build-info', 'BUILD-INFO', 'harness.log', 'state.json',
+                                              'status.json', 'comparison.json', 'performance-context.json',
+                                              'serial-boot.log', 'serial-install.log', 'test.log')):
+                              assert item.file_size < 5_000_000
+                              lines = archive.read(item).decode('utf-8', errors='replace').splitlines()
+                              print('ARCTIC-TEXT-BEGIN', member)
+                              # Preserve driver timing as well as the ending failure.
+                              selected_lines = lines[:60] + lines[-600:] if len(lines) > 660 else lines
+                              for line in selected_lines:
+                                  print('[redacted diagnostic line]' if sensitive.search(line) else line[:1500])
+                              print('ARCTIC-TEXT-END', member)
+                          # These are synthetic VM screenshots already authorized for diagnostic upload.
+                          selected = member.endswith('runs/candidate/1/boot-41-no-login-detected.png')
+                          if selected:
+                              assert item.file_size < 2_000_000
+                              content = archive.read(item)
+                              assert content.startswith(b'\x89PNG\r\n\x1a\n')
+                              with Image.open(io.BytesIO(content)) as image:
+                                  assert 1 <= image.width <= 4096 and 1 <= image.height <= 4096
+                                  image = image.convert('RGB')
+                                  print('ARCTIC-IMAGE-SIZE', member, image.size)
+                              encoded = base64.b64encode(content).decode('ascii')
+                              print('ARCTIC-PNG-BEGIN', member, hashlib.sha256(content).hexdigest())
+                              for offset in range(0, len(encoded), 1024):
+                                  print('ARCTIC-PNG-DATA', encoded[offset:offset + 1024])
+                              print('ARCTIC-PNG-END', member)
+          PY
