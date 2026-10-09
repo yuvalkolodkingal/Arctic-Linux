@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import ExitStack
 from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location("dictation", Path(__file__).with_name("dictation.py"))
@@ -516,14 +517,83 @@ class Sessions(unittest.TestCase):
         self.assertEqual(result["state"], "ready")
 
     def test_lock_returns_without_waiting_for_broker_or_audio_shutdown(self):
-        with mock.patch.object(d, "runtime_paths", return_value=(self.shared, self.private)), \
-                mock.patch.object(d, "ready", return_value=True), mock.patch.object(d.subprocess, "run") as run:
-            before = time.monotonic()
-            d.client("lock")
-        self.assertLess(time.monotonic() - before, 0.1)
-        run.assert_not_called()
-        self.assertTrue((self.shared / "dictation-locked").exists())
-        self.assertNotEqual(d.cancellation(self.private), "")
+        # This is a source contract, not a latency benchmark: keep the real
+        # atomic writes/fsync while rejecting broker IPC and shutdown waits.
+        marker, cancelled = self.shared / "dictation-locked", self.private / "cancel.json"
+        control = self.private / "control.sock"
+        socket_type, process_type = socket.socket, subprocess.Popen
+        with socket_type(socket.AF_UNIX, socket.SOCK_STREAM) as endpoint:
+            endpoint.bind(str(control))
+        control_inode = control.lstat().st_ino
+        probe = socket_type(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(probe.close)
+        process = object.__new__(process_type)
+        old_cancel, old_lock = "1" * 32, "2" * 32
+        forbidden = [(d.socket, "socket"), (d.socket, "create_connection"),
+                     *[(socket_type, name) for name in ("connect", "connect_ex", "send", "sendall", "recv", "recv_into", "shutdown")],
+                     (d.subprocess, "run"), (d.subprocess, "Popen"),
+                     *[(process_type, name) for name in ("wait", "communicate", "terminate", "kill")],
+                     (d.time, "sleep"), (d.select, "select"), (d.threading.Event, "wait"), (d.threading.Thread, "join"),
+                     *[(d.os, name) for name in ("wait", "waitpid", "kill", "killpg")],
+                     (d.Broker, "terminate"), (d, "supervised")]
+
+        def check_lock(client):
+            d.atomic_json(cancelled, {"generation": old_cancel})
+            d.atomic_json(marker, {"locked": True, "generation": old_lock})
+            with ExitStack() as stack:
+                stack.enter_context(mock.patch.object(d, "runtime_paths", return_value=(self.shared, self.private)))
+                stack.enter_context(mock.patch.object(d, "ready", return_value=True))
+                guards = []
+                for target, name in forbidden:
+                    def fail(*_args, operation=name, **_kwargs):
+                        self.fail("lock invoked forbidden operation: " + operation)
+                    guards.append(stack.enter_context(mock.patch.object(target, name, side_effect=fail)))
+                result = client("lock")
+                for guard in guards:
+                    guard.assert_not_called()
+            self.assertEqual(result["state"], "ready")
+            lock, cancellation = d.read_json(marker), d.read_json(cancelled)
+            self.assertEqual(set(lock), {"locked", "generation"}, "lock did not publish locked state")
+            self.assertIs(lock["locked"], True)
+            self.assertRegex(lock["generation"], r"^[0-9a-f]{32}$")
+            self.assertNotEqual(lock["generation"], old_lock, "lock retained stale locked generation")
+            self.assertEqual(set(cancellation), {"generation"}, "lock did not publish private cancellation state")
+            self.assertRegex(cancellation["generation"], r"^[0-9a-f]{32}$")
+            self.assertNotEqual(cancellation["generation"], old_cancel, "lock retained stale private cancellation")
+            self.assertNotEqual(cancellation["generation"], lock["generation"])
+            for path in (marker, cancelled):
+                self.assertTrue(path.is_file() and not path.is_symlink())
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.stat().st_uid, os.getuid())
+            self.assertEqual(control.lstat().st_ino, control_inode)
+            self.assertTrue(control.is_socket())
+
+        check_lock(d.client)
+        # Each mutant executes the genuine lock and its security writes before
+        # adding a forbidden dependency or corrupting the published generation.
+        operations = [("broker-socket", lambda: d.socket.socket(socket.AF_UNIX, socket.SOCK_STREAM), "forbidden operation: socket$"),
+                      ("broker-connect", lambda: probe.connect(str(control)), "forbidden operation: connect$"),
+                      ("broker-send", lambda: probe.sendall(b'lock\n'), "forbidden operation: sendall$"),
+                      ("broker-receive", lambda: probe.recv(1), "forbidden operation: recv$"),
+                      ("command-shutdown", lambda: d.subprocess.run(["/usr/bin/voxtype", "record", "cancel"]), "forbidden operation: run$"),
+                      ("child-shutdown", lambda: d.subprocess.Popen(["/usr/bin/voxtype", "record", "cancel"]), "forbidden operation: Popen$"),
+                      ("process-wait", lambda: process.wait(timeout=1), "forbidden operation: wait$"),
+                      ("sleep-wait", lambda: d.time.sleep(1), "forbidden operation: sleep$"),
+                      ("select-wait", lambda: d.select.select([], [], [], 1), "forbidden operation: select$"),
+                      ("event-wait", lambda: d.threading.Event().wait(1), "forbidden operation: wait$"),
+                      ("thread-wait", lambda: d.threading.Thread().join(1), "forbidden operation: join$"),
+                      ("engine-shutdown", lambda: self.broker.terminate(), "forbidden operation: terminate$"),
+                      ("missing-cancellation", lambda: cancelled.unlink(), "did not publish private cancellation state"),
+                      ("stale-cancellation", lambda: d.atomic_json(cancelled, {"generation": old_cancel}), "retained stale private cancellation"),
+                      ("missing-lock", lambda: marker.unlink(), "did not publish locked state"),
+                      ("stale-lock", lambda: d.atomic_json(marker, {"locked": True, "generation": old_lock}), "retained stale locked generation")]
+        for label, operation, reason in operations:
+            def mutant(verb):
+                result = d.client(verb)
+                operation()
+                return result
+            with self.subTest(mutant=label), self.assertRaisesRegex(AssertionError, reason):
+                check_lock(mutant)
 
     def test_repeated_managed_fallback_lock_keeps_supervisor_generation(self):
         marker = self.shared / "dictation-locked"
