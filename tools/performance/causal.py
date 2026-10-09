@@ -5,6 +5,7 @@ kernel timestamp is a LOWER bound, never an exact mapping or frame timestamp.
 No compositor code, configuration, scheduling or SELinux setting is changed.
 """
 import hashlib
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import re
@@ -22,6 +23,16 @@ HEADER_SHA256 = '9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f
 SOURCE_SHA256 = '5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088'
 METHOD = 'wlroots-0.20-return-before-mango-list-insertion-v1'
 MAX_EVENTS = 8192
+
+
+@contextmanager
+def deferred_termination():
+    """Deliver cancellation only after ownership handoff or complete unwind."""
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
 def elf_symbol_offset(path, name=SYMBOL):
@@ -169,10 +180,16 @@ class LowerBoundProbe:
             if not (self.root / 'uprobe_events').is_file():
                 # Mount only at the guest's standard tracefs mount point, and
                 # undo only this mount on exit. No host/device passthrough exists.
-                subprocess.run(['mount', '-t', 'tracefs', 'tracefs', str(self.root)], check=True, timeout=15)
-                self.mounted = True
+                if os.path.ismount(self.root):
+                    raise RuntimeError('Refusing to cover an existing tracing mount')
+                self.mount_requested = True
+                with deferred_termination():
+                    subprocess.run(['mount', '-t', 'tracefs', 'tracefs', str(self.root)], check=True, timeout=15)
+                    self.mounted = True
             self.instance = self.root / 'instances' / self.group
-            self.instance.mkdir()
+            with deferred_termination():
+                self.instance.mkdir()
+                self.instance_created = True
             (self.instance / 'tracing_on').write_text('0')
             (self.instance / 'trace_clock').write_text('mono')
             if '[mono]' not in (self.instance / 'trace_clock').read_text():
@@ -186,15 +203,24 @@ class LowerBoundProbe:
                 (self.instance / 'options/nsecs').write_text('1')
             command = (f'r:{self.group}/map_create {library}:0x{offset:x} '
                        f'foreign_id=+0(+{IDENTIFIER_OFFSET}($retval)):string\n')
-            with (self.root / 'uprobe_events').open('a') as output:
-                output.write(command)
-            self.registered = True
+            if (self.root / 'events' / self.group).exists():
+                raise RuntimeError('Refusing to reuse an existing causal event group')
+            self.registration_requested = True
+            with deferred_termination():
+                with (self.root / 'uprobe_events').open('a') as output:
+                    output.write(command)
+                self.registered = True
             event = self.instance / 'events' / self.group / 'map_create'
             (event / 'filter').write_text('common_pid == ' + str(self.pid))
             (event / 'enable').write_text('1')
-            self.fd = os.open(self.instance / 'trace_pipe', os.O_RDONLY | os.O_NONBLOCK)
+            with deferred_termination():
+                self.fd = os.open(self.instance / 'trace_pipe', os.O_RDONLY | os.O_NONBLOCK)
             self.thread = threading.Thread(target=self._read, daemon=True)
-            self.thread.start()
+            # The only collector worker inherits blocked cancellation signals.
+            # Process-directed TERM/INT must remain pending on the main thread
+            # during its ownership handoffs and complete bounded unwind.
+            with deferred_termination():
+                self.thread.start()
             (self.instance / 'tracing_on').write_text('1')
             loss_counts(self.instance)
             return self
@@ -253,6 +279,13 @@ class LowerBoundProbe:
             loss_counts=loss_counts(self.instance), status='bound-before-mapping')
 
     def __exit__(self, *unused):
+        # A second TERM/INT must not interrupt bounded cleanup. Restore the old
+        # handlers before unmasking; pending cancellation then acts only after
+        # every owned resource has had its cleanup attempt.
+        with deferred_termination():
+            self._cleanup()
+
+    def _cleanup(self):
         errors = []
         def cleanup(action):
             try:
@@ -261,7 +294,7 @@ class LowerBoundProbe:
                 errors.append(str(error))
         self.stopped.set()
         if self.thread:
-            self.thread.join(timeout=2)
+            cleanup(lambda: self.thread.join(timeout=2))
             if self.thread.is_alive():
                 errors.append('Owned causal reader did not stop')
         if self.error:
@@ -269,20 +302,21 @@ class LowerBoundProbe:
         if self.fd is not None:
             cleanup(lambda: os.close(self.fd))
             self.fd = None
-        if self.instance and self.instance.exists():
+        if getattr(self, 'instance_created', False) and self.instance.exists():
             cleanup(lambda: (self.instance / 'tracing_on').write_text('0'))
             cleanup(lambda: loss_counts(self.instance))
             event = self.instance / 'events' / self.group / 'map_create' / 'enable'
             if event.exists():
                 cleanup(lambda: event.write_text('0'))
             cleanup(self.instance.rmdir)
-        if getattr(self, 'registered', False):
+        global_event = self.root / 'events' / self.group / 'map_create' if self.root else None
+        if (getattr(self, 'registered', False) or getattr(self, 'registration_requested', False)) and global_event.exists():
             def unregister():
                 with (self.root / 'uprobe_events').open('a') as output:
                     output.write('-:' + self.group + '/map_create\n')
             cleanup(unregister)
             self.registered = False
-        if getattr(self, 'mounted', False):
+        if (getattr(self, 'mounted', False) or getattr(self, 'mount_requested', False)) and os.path.ismount(self.root):
             cleanup(lambda: subprocess.run(['umount', str(self.root)], check=True, timeout=15))
             self.mounted = False
         if hasattr(self, 'old_sigterm'):

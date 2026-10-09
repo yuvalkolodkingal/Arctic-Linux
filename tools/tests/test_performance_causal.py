@@ -1,10 +1,13 @@
 """Independent kernel-format, ELF and causal interval failure controls."""
 import copy
 import importlib.util
+import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -126,15 +129,61 @@ class CausalControls(unittest.TestCase):
             event.write_text('1')
             stats=probe.instance/'per_cpu/cpu0/stats';stats.parent.mkdir(parents=True)
             stats.write_text('overrun: 0\ncommit overrun: 0\ndropped events: 0\n')
-            probe.registered=True;probe.mounted=True
+            (root/'events'/probe.group/'map_create').mkdir(parents=True)
+            probe.instance_created=True;probe.registered=True;probe.mounted=True
             # Ordinary fixture directories deliberately cannot be removed while
             # nonempty, modeling failed instance cleanup without host tracing.
-            with patch.object(C.subprocess,'run') as run, self.assertRaisesRegex(RuntimeError,'cleanup failed'):
+            with patch.object(C.subprocess,'run') as run, patch.object(C.os.path,'ismount',return_value=True), self.assertRaisesRegex(RuntimeError,'cleanup failed'):
                 probe.__exit__(None,None,None)
             self.assertEqual((probe.instance/'tracing_on').read_text(),'0')
             self.assertEqual(event.read_text(),'0')
             self.assertEqual((root/'uprobe_events').read_text(),'-:'+probe.group+'/map_create\n')
             run.assert_called_once_with(['umount',str(root)],check=True,timeout=15)
+
+    def test_cancellation_is_delivered_after_resource_ownership_handoff(self):
+        state={}
+        previous=signal.getsignal(signal.SIGTERM)
+        def interrupted(signum,frame):
+            self.assertTrue(state.get('owned'))
+            raise InterruptedError('termination after handoff')
+        signal.signal(signal.SIGTERM,interrupted)
+        try:
+            with self.assertRaisesRegex(InterruptedError,'after handoff'):
+                with C.deferred_termination():
+                    os.kill(os.getpid(),signal.SIGTERM)
+                    state['owned']=True
+        finally:
+            signal.signal(signal.SIGTERM,previous)
+
+    def test_collector_worker_inherits_blocked_process_cancellation(self):
+        masks=[]
+        def worker():masks.append(signal.pthread_sigmask(signal.SIG_BLOCK,set()))
+        with C.deferred_termination():
+            thread=threading.Thread(target=worker);thread.start()
+        thread.join(timeout=2)
+        self.assertFalse(thread.is_alive())
+        self.assertTrue({signal.SIGTERM,signal.SIGINT}<=masks[0])
+
+    def test_repeat_termination_during_join_cannot_skip_owned_event_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);probe=C.LowerBoundProbe([]);probe.root=root
+            (root/'events'/probe.group/'map_create').mkdir(parents=True)
+            (root/'uprobe_events').write_text('')
+            probe.registration_requested=True;probe.mount_requested=True
+            class Reader:
+                def join(self,timeout):os.kill(os.getpid(),signal.SIGTERM)
+                def is_alive(self):return False
+            probe.thread=Reader()
+            previous=signal.getsignal(signal.SIGTERM)
+            def interrupted(signum,frame):raise InterruptedError('repeat termination after unwind')
+            signal.signal(signal.SIGTERM,interrupted);probe.old_sigterm=interrupted
+            try:
+                with patch.object(C.subprocess,'run') as run, patch.object(C.os.path,'ismount',return_value=True), self.assertRaisesRegex(InterruptedError,'after unwind'):
+                    probe.__exit__(None,None,None)
+                self.assertEqual((root/'uprobe_events').read_text(),'-:'+probe.group+'/map_create\n')
+                run.assert_called_once_with(['umount',str(root)],check=True,timeout=15)
+            finally:
+                signal.signal(signal.SIGTERM,previous)
 
 
 if __name__=='__main__':unittest.main()

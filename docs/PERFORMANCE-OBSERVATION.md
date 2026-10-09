@@ -114,7 +114,10 @@ cleanup failure fail qualification. Kernel text timestamp precision is disclosed
 printed timestamps are conservatively floored, and resolution above 1 microsecond
 is rejected by comparison. The root collector removes only its own event and
 instance, and unmounts tracefs only if it mounted it. No persistent configuration
-or SELinux relaxation is installed. Historical v8 role evidence remains rejected.
+or SELinux relaxation is installed. Cancellation is deferred across resource
+ownership handoffs and bounded cleanup; the sole reader thread inherits blocked
+termination signals so repeat cancellation cannot bypass that unwind. Historical
+v8 role evidence remains rejected.
 
 Source controls are not runtime calibration. Before another final-image build,
 an explicitly unqualified research lane should try this instrument on the retained
