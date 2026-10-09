@@ -9,9 +9,9 @@ import re
 import statistics
 
 
-MAPPING_OBSERVER = 'mango-socket-worker-v1'
+MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v7-declared-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v8-autonomous-role-first-use'
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
@@ -144,7 +144,7 @@ def role_evidence(runs):
 def mapped_timings(run):
     if 'app_roles' in run:
         return [('role_' + role + '_' + phase, run['startup_role_' + role + '_' + phase + '_seconds'],
-                 1 if phase == 'cold' else 3, ROLE_SAMPLER, .00025)
+                 1 if phase == 'cold' else 3, ROLE_SAMPLER, .00005)
                 for role in ROLE_ORDER for phase in ('cold', 'warm')]
     return [(app, run['startup_' + app + '_seconds'], 3, SAMPLER, .001)
             for app in ('kitty', 'org.gnome.nautilus', 'zen')]
@@ -417,7 +417,7 @@ def compare(runs):
                 idle_measurement_scope={name: [r.get('idle_measurement_scope') for r in group]
                                         for name, group in runs.items()},
                 measured_payload={name: [r['measured_payload'] for r in group] for name, group in runs.items()},
-                startup_observation={name: [{app: timing for app, timing, *_ in mapped_timings(r)}
+                startup_observation={name: [{app: compact_startup_observation(timing) for app, timing, *_ in mapped_timings(r)}
                     for r in group] for name, group in runs.items()},
                 installed_mount_allocations={name: [r.get('installed_mount_allocations') for r in group]
                                              for name, group in runs.items()},
@@ -432,6 +432,29 @@ def compare(runs):
                              'Map timestamps are bounded observations, not exact compositor/first-frame timestamps; IPC roundtrips and brackets are reported',
                              'The app regression threshold remains 10%; precision failures cannot become passes or excuse an observed regression',
                              'Passing a regression gate does not establish a substantial optimization'])
+
+
+def compact_startup_observation(timing):
+    """Keep every bracket; hash raw traces retained in the source guest logs.
+
+    Traces are diagnostics rather than gate inputs. Large raw traces previously
+    made the comparison exceed the release preparer's 4 MiB JSON limit.
+    """
+    result = dict(timing)
+    result['observation_bounds'] = []
+    for bound in timing.get('observation_bounds', []):
+        compact = dict(bound)
+        traces = compact.pop('query_roundtrips', None)
+        if traces is not None:
+            raw = json.dumps(traces, sort_keys=True, separators=(',', ':')).encode()
+            durations = sorted(t['socket_seconds'] for t in traces)
+            compact['query_roundtrip_summary'] = dict(count=len(traces),
+                sha256=hashlib.sha256(raw).hexdigest(), raw_trace_location='source guest log',
+                socket_seconds=dict(min=min(durations), median=statistics.median(durations),
+                    p95=durations[min(len(durations)-1, math.ceil(len(durations)*.95)-1)],
+                    max=max(durations)) if durations else None)
+        result['observation_bounds'].append(compact)
+    return result
 
 
 def main():

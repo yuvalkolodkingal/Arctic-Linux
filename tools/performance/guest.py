@@ -20,11 +20,11 @@ import time
 from contextlib import contextmanager
 
 
-MAPPING_OBSERVER = 'mango-socket-worker-v1'
+MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
 MAPPING_POLL_SECONDS = .001
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v7-declared-role-first-use'
-ROLE_POLL_SECONDS = .00025
+ROLE_SAMPLER = 'cpu-30-pss-6-v8-autonomous-role-first-use'
+ROLE_POLL_SECONDS = .00005
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
@@ -52,11 +52,10 @@ ROLE_APPS = {
 # A fresh socket is required for each get: Mango closes one-shot connections.
 # A watch arrival has no server timestamp and is not an exact map timestamp.
 CLIENT_QUERY_WORKER = r'''
-import json, os, socket, sys, time
+import json, os, select, socket, sys, time
 path = os.environ['MANGO_INSTANCE_SIGNATURE']
-for command in sys.stdin:
-    if command != 'get\n':
-        raise RuntimeError('Unexpected observer command')
+MAX_REPLY_BYTES = 4 * 1024 * 1024
+def query():
     started = time.monotonic_ns()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
         peer.settimeout(2)
@@ -74,32 +73,108 @@ for command in sys.stdin:
     value = json.loads(b''.join(chunks))
     if not isinstance(value, dict) or not isinstance(value.get('clients'), list):
         raise RuntimeError('Invalid Mango client response')
-    print(json.dumps(dict(payload=value, uid=os.getuid(),
-        query_seconds=(time.monotonic_ns()-started)/1e9)), flush=True)
+    identities = set()
+    for client in value['clients']:
+        if not isinstance(client, dict) or 'id' not in client or str(client['id']) in identities:
+            raise RuntimeError('Invalid or duplicate Mango client identity')
+        identities.add(str(client['id']))
+    return value, started, time.monotonic_ns()
+
+# Unbuffered stdin avoids hiding cancellation/EOF behind a TextIO buffer.
+# No parent request or subprocess is needed between these read-only polls.
+with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
+    while True:
+        line = control.readline(65536)
+        if not line:
+            break
+        command = json.loads(line)
+        if command['kind'] == 'get':
+            payload, started, finished = query()
+            result = dict(payload=payload, query_seconds=(finished-started)/1e9)
+        elif command['kind'] == 'observe':
+            started_ns = command['started_ns']
+            lower_ns = started_ns
+            before = set(command['before'])
+            pattern = command['pattern']
+            traces = []
+            until_ns = started_ns + int(command['timeout'] * 1e9)
+            while time.monotonic_ns() < until_ns:
+                if select.select([control], [], [], 0)[0]:
+                    # Parent closes stdin on cancellation. Unexpected pipelined
+                    # commands fail rather than produce an ambiguous response.
+                    if control.read(1):
+                        raise RuntimeError('Unexpected observer command while mapping')
+                    sys.exit(0)
+                payload, query_started, query_finished = query()
+                traces.append(dict(socket_seconds=(query_finished-query_started)/1e9,
+                    started_monotonic_ns=query_started, finished_monotonic_ns=query_finished))
+                if len(traces) > 32768:
+                    raise RuntimeError('Mapping observation exceeded bounded trace capacity')
+                windows = [c for c in payload['clients'] if str(c['id']) not in before and (
+                    pattern in (str(c.get('appid', c.get('app_id', ''))) + ' ' + str(c.get('title', ''))).lower()
+                    if isinstance(pattern, str) else str(c.get('appid', c.get('app_id', ''))).lower() in pattern)]
+                if windows:
+                    # Only identities are needed until the persistence query.
+                    # Do not duplicate a potentially 4 MiB client inventory or
+                    # large titles alongside the trace in the mapping envelope.
+                    matched = [dict(id=c['id']) for c in windows]
+                    result = dict(payload=dict(clients=matched), lower_ns=max(lower_ns, started_ns),
+                                  upper_ns=query_finished, query_roundtrips=traces)
+                    break
+                # A negative query only proves absence at an unknown point
+                # between its start and end. Its START is the conservative lower
+                # bound; using its end could exclude the actual mapping event.
+                lower_ns = query_started
+                time.sleep(command['poll_seconds'])
+            else:
+                result = dict(payload={'clients': []}, windows=[], timed_out=True,
+                              query_roundtrips=traces)
+        else:
+            raise RuntimeError('Unexpected observer command')
+        result['uid'] = os.getuid()
+        reply = json.dumps(result, separators=(',', ':'), ensure_ascii=False,
+                           allow_nan=False).encode() + b'\n'
+        # The TOTAL encoded envelope is the transport bound, independent of
+        # the query/trace-count ceilings. Reject before writing so cancellation
+        # cannot strand a worker writing an oversized reply to the parent pipe.
+        if len(reply) > MAX_REPLY_BYTES:
+            raise RuntimeError('Combined native observer reply exceeds transport budget')
+        sys.stdout.buffer.write(reply)
+        sys.stdout.buffer.flush()
 '''
 
 
 class NativeClientQuery:
-    """Bounded read-only queries with no per-poll process launch or root IPC."""
+    """Bounded read-only queries and autonomous worker-side mapping timestamps."""
     def __init__(self, prefix):
         self.prefix = prefix
         self.process = None
         self.buffer = b''
         self.roundtrips = []
+        self.pending = None
 
     def __enter__(self):
         self.process = subprocess.Popen(self.prefix + ['python3', '-u', '-c', CLIENT_QUERY_WORKER],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         return self
 
-    def query(self):
+    def _send(self, command):
+        if self.pending is not None:
+            raise RuntimeError('Native observer already has a pending operation')
+        self.pending = command
+        self.process.stdin.write((json.dumps(command) + '\n').encode())
+
+    def _receive(self, timeout, child=None):
         started = time.monotonic()
-        self.process.stdin.write(b'get\n')
-        until = started + 3
+        until = started + timeout
         while b'\n' not in self.buffer:
             remaining = until - time.monotonic()
-            if remaining <= 0 or not select.select([self.process.stdout], [], [], remaining)[0]:
+            if remaining <= 0:
                 raise RuntimeError('Native Mango observer timed out; no CLI fallback')
+            if child is not None and child.poll() not in (None, 0):
+                raise RuntimeError('Observed application exited before mapping')
+            if not select.select([self.process.stdout], [], [], min(remaining, .1))[0]:
+                continue
             chunk = os.read(self.process.stdout.fileno(), 65536)
             if not chunk:
                 self.process.wait(timeout=1)
@@ -119,17 +194,46 @@ class NativeClientQuery:
             if not isinstance(client, dict) or 'id' not in client or str(client['id']) in result:
                 raise RuntimeError('Invalid or duplicate Mango client identity')
             result[str(client['id'])] = client
-        self.roundtrips.append(dict(parent_seconds=time.monotonic()-started,
+        value['clients_by_id'] = result
+        self.pending = None
+        return value, time.monotonic()-started
+
+    def query(self):
+        self._send(dict(kind='get'))
+        value, elapsed = self._receive(3)
+        self.roundtrips.append(dict(parent_seconds=elapsed,
                                     socket_seconds=value['query_seconds'], uid=value['uid']))
-        return result
+        return value['clients_by_id']
+
+    def begin_observation(self, before, pattern, started_ns, timeout, poll_seconds):
+        self._send(dict(kind='observe', before=sorted(before), pattern=pattern,
+                        started_ns=started_ns, timeout=timeout, poll_seconds=poll_seconds))
+
+    def finish_observation(self, child, started_ns, timeout):
+        value, _ = self._receive(timeout+3, child)
+        if value.get('timed_out'):
+            return None
+        lower, upper = value['lower_ns'], value['upper_ns']
+        if (any(type(n) is not int for n in (lower, upper))
+                or not started_ns <= lower <= upper <= time.monotonic_ns()):
+            raise RuntimeError('Invalid worker mapping timestamp bracket')
+        identities = value['clients_by_id']
+        if not identities:
+            raise RuntimeError('Invalid worker mapped-window identities')
+        value['windows'] = list(identities.values())
+        self.roundtrips.extend(dict(trace, uid=value['uid']) for trace in value['query_roundtrips'])
+        return value
 
     def __exit__(self, *args):
         if self.process is None:
             return
         self.process.stdin.close()
+        # Closing our read end also releases an owned worker currently writing
+        # a bounded but pipe-sized reply after cancellation/application failure.
+        self.process.stdout.close()
         try:
-            # Let runuser reap the worker after natural stdin EOF. Immediately
-            # terminating the wrapper can orphan a worker zombie in containers.
+            # Let runuser reap the worker after natural stdin EOF, including
+            # cancellation while autonomously polling. Only our worker is owned.
             try:
                 self.process.wait(timeout=3)
             except subprocess.TimeoutExpired:
@@ -140,7 +244,6 @@ class NativeClientQuery:
                     self.process.kill()
                     self.process.wait(timeout=3)
         finally:
-            self.process.stdout.close()
             self.process.stderr.close()
 
 
@@ -572,36 +675,38 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
             raise RuntimeError('Mango CLI/native observer initial client identities differ')
         started_ns = time.monotonic_ns()
         started = started_ns / 1e9
-        last_absent_start = started
+        # Arm before the original parent-side Popen. Both processes use the
+        # same monotonic clock; actual launch overhead remains in the metric.
+        observer.begin_observation(before, pattern, started_ns, timeout, poll_seconds)
         child = subprocess.Popen(prefix + command, stdout=output, stderr=output)
         observed_window_ids = set()
         try:
             while time.monotonic() - started < timeout:
-                query_started = time.monotonic()
-                current = observer.query()
-                windows = [c for key, c in current.items() if key not in before and (
-                    pattern in (str(c.get('appid', c.get('app_id', ''))) + ' ' + str(c.get('title', ''))).lower()
-                    if isinstance(pattern, str) else str(c.get('appid', c.get('app_id', ''))).lower() in pattern)]
-                if windows:
-                    observed_window_ids.update(str(window['id']) for window in windows)
-                    measured = time.monotonic() - started
-                    time.sleep(hold_seconds)
-                    if not any(str(window['id']) in observer.query() for window in windows):
-                        continue
-                    if observations is not None:
-                        observations.append(dict(lower_seconds=last_absent_start - started,
-                                                 upper_seconds=measured,
-                                                 interval_seconds=measured - (last_absent_start - started),
-                                                 launch_started_monotonic_ns=started_ns,
-                                                 observer=MAPPING_OBSERVER,
-                                                 query_roundtrips=observer.roundtrips))
-                    emit('mapped_window_' + label, windows)
-                    emit('app_workload_' + label, snapshot())
-                    return measured
-                last_absent_start = query_started
-                time.sleep(poll_seconds)
-                if child.poll() not in (None, 0):
+                try:
+                    observation = observer.finish_observation(child, started_ns, timeout)
+                except Exception:
+                    emit('startup_' + label + '_diagnostic', dict(exit_code=child.poll(),
+                        launch_output=Path('/tmp/arctic-performance-apps.log').read_text(errors='replace')[-12000:]))
+                    raise
+                if observation is None:
                     break
+                windows = observation['windows']
+                observed_window_ids.update(str(window['id']) for window in windows)
+                measured = (observation['upper_ns'] - started_ns)/1e9
+                lower = (observation['lower_ns'] - started_ns)/1e9
+                time.sleep(hold_seconds)
+                persistent = observer.query()
+                if not any(str(window['id']) in persistent for window in windows):
+                    observer.begin_observation(before, pattern, started_ns, timeout, poll_seconds)
+                    continue
+                if observations is not None:
+                    observations.append(dict(lower_seconds=lower, upper_seconds=measured,
+                        interval_seconds=measured-lower, launch_started_monotonic_ns=started_ns,
+                        observer=MAPPING_OBSERVER, query_roundtrips=observer.roundtrips))
+                emit('mapped_window_' + label, [persistent[str(c['id'])] for c in windows
+                                               if str(c['id']) in persistent])
+                emit('app_workload_' + label, snapshot())
+                return measured
             emit('startup_' + label + '_diagnostic', dict(exit_code=child.poll(),
                  clients=list(clients(prefix).values()),
                  launch_output=Path('/tmp/arctic-performance-apps.log').read_text(errors='replace')[-12000:]))
