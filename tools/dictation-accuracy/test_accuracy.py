@@ -5,6 +5,16 @@ from pathlib import Path
 import tempfile
 import unittest
 import wave
+import io
+
+try:
+    import numpy
+    import pyarrow
+    import pyarrow.parquet
+    import soundfile
+    DECODERS = True
+except ImportError:
+    DECODERS = False
 
 
 HERE = Path(__file__).resolve().parent
@@ -115,6 +125,31 @@ class ProvenanceTests(unittest.TestCase):
         self.assertNotIn("SENSITIVE", str(failure.exception))
         self.assertEqual((output / "en-00.stdout.private").read_text(), "SENSITIVE_TRANSCRIPT")
         self.assertEqual((output / "en-00.stderr.private").stat().st_mode & 0o777, 0o600)
+
+
+@unittest.skipUnless(DECODERS, "fixture preparation dependencies unavailable")
+class SourceAudioTests(unittest.TestCase):
+    def test_real_float_parquet_quantization_and_row_order(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            encoded = io.BytesIO()
+            values = numpy.array([-1, -0.5, -1 / 32768, 0, 1 / 32768, 0.5, 1], dtype="float32")
+            soundfile.write(encoded, values, 16000, format="WAV", subtype="FLOAT")
+            table = pyarrow.Table.from_pylist([
+                {"id": row, "audio": {"bytes": encoded.getvalue()}, "raw_transcription": "reference fixture"}
+                for row in range(5)])
+            source = root / "source.parquet"
+            pyarrow.parquet.write_table(table, source)
+            rows = accuracy.extract_rows(source, "en", root)
+            self.assertEqual([row["source_row"] for row in rows], list(range(5)))
+            self.assertEqual([row["source_id"] for row in rows], [str(row) for row in range(5)])
+            for row in rows:
+                self.assertEqual(row["source_audio_subtype"], "FLOAT")
+                self.assertEqual(row["pcm16_positive_endpoint_saturations"], 1)
+                with wave.open(str(root / row["wav"]), "rb") as converted:
+                    self.assertEqual(converted.getnframes(), 7)
+                    actual = numpy.frombuffer(converted.readframes(7), dtype="<i2")
+                numpy.testing.assert_array_equal(actual, [-32768, -16384, -1, 0, 1, 16384, 32767])
 
 
 if __name__ == "__main__":

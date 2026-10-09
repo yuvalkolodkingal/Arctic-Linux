@@ -14,15 +14,19 @@ order. A bad row fails preparation; it never selects an easier replacement.
 Preparation needs Python, pyarrow and soundfile. Measurement needs only Python
 and the verified local runtime/model files.
 
-The source recordings are decoded at their native mono 16 kHz PCM16 format and
-written to WAV without resampling, denoising, clipping or trimming. The private
+The source recordings retain their native mono 16 kHz rate and full duration.
+PCM16 samples are preserved. FLEURS FLOAT WAV samples are quantized to PCM16 by
+multiplying by 32768, rounding to nearest with ties to even and saturating the
+positive endpoint to 32767. Nonfinite or out-of-range source samples fail
+preparation. The manifest records source encoding and endpoint saturation
+counts. No resampling, denoising, gain change or trimming is performed. The private
 bundle contains ten WAVs, original references and a hashed fixture manifest.
 The upstream read-speech dataset is licensed CC-BY-4.0. Attribution:
 Google FLEURS, *FLEURS: Few-shot Learning Evaluation of Universal
 Representations of Speech*, Conneau et al. (2022),
 <https://huggingface.co/datasets/google/fleurs> and
 <https://arxiv.org/abs/2205.12446>. Source commit:
-`70bb2e84b976b7e960aa89f1c648e09c59f894dd`. Conversion to PCM16 WAV is the
+`70bb2e84b976b7e960aa89f1c648e09c59f894dd`. The documented conversion to PCM16 WAV is the
 only fixture change. Keep this attribution with any redistributed audio.
 
 Run the **Dictation accuracy research** Actions workflow after the source

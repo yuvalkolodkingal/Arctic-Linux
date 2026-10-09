@@ -156,6 +156,7 @@ def extract_rows(source, language, destination):
     # Preparation-only dependencies. Measurement uses the standard library.
     import pyarrow.parquet as parquet
     import soundfile
+    import numpy
     table = parquet.ParquetFile(source)
     columns = {"id", "audio", "raw_transcription"}
     require(columns.issubset(table.schema_arrow.names), "source-parquet-schema")
@@ -169,9 +170,20 @@ def extract_rows(source, language, destination):
                 "source-audio-not-embedded")
         encoded = audio["bytes"]
         info = soundfile.info(io.BytesIO(encoded))
-        require(info.samplerate == 16000 and info.channels == 1 and info.subtype == "PCM_16",
-                "source-audio-format-not-lossless-pcm16")
-        samples_pcm, rate = soundfile.read(io.BytesIO(encoded), dtype="int16")
+        require(info.samplerate == 16000 and info.channels == 1 and info.subtype in ("PCM_16", "FLOAT"),
+                "source-audio-format")
+        if info.subtype == "PCM_16":
+            samples_pcm, rate = soundfile.read(io.BytesIO(encoded), dtype="int16")
+            saturated = 0
+        else:
+            samples_float, rate = soundfile.read(io.BytesIO(encoded), dtype="float64")
+            require(numpy.isfinite(samples_float).all() and
+                    numpy.all(numpy.abs(samples_float) <= 1), "source-audio-amplitude")
+            # FLEURS stores normalized float32 WAV. Specify the quantization
+            # instead of silently treating a float-to-int cast as PCM decoding.
+            quantized = numpy.rint(samples_float * 32768)
+            saturated = int(numpy.count_nonzero(quantized > 32767))
+            samples_pcm = numpy.clip(quantized, -32768, 32767).astype("int16")
         require(rate == 16000, "source-audio-rate")
         wav = destination / (name + ".wav")
         soundfile.write(wav, samples_pcm, rate, format="WAV", subtype="PCM_16")
@@ -187,6 +199,8 @@ def extract_rows(source, language, destination):
                         "wav_bytes": wav.stat().st_size, "wav_sha256": sha(wav),
                         "source_audio_bytes": len(encoded),
                         "source_audio_sha256": hashlib.sha256(encoded).hexdigest(),
+                        "source_audio_subtype": info.subtype,
+                        "pcm16_positive_endpoint_saturations": saturated,
                         "reference": reference_path.name,
                         "reference_bytes": reference_path.stat().st_size,
                         "reference_sha256": sha(reference_path), **wav_metadata(wav)})
@@ -206,7 +220,7 @@ def prepare(args):
         download(url, parquet, source)
         samples.extend(extract_rows(parquet, source["language"], bundle))
     manifest = {"schema": "arctic-dictation-fixtures-v1", "dataset": PINS["dataset"],
-                "conversion": "Decode source PCM16 at native mono 16000Hz; write PCM16 WAV; no resampling, filtering or trimming",
+                "conversion": "Native mono 16000Hz PCM16 is preserved; FLOAT WAV is quantized with round-to-nearest ties-to-even after multiplication by 32768, saturating positive endpoint to 32767; no resampling, filtering, gain change or trimming",
                 "decoder": {"pyarrow": pyarrow.__version__, "soundfile": soundfile.__version__,
                             "libsndfile": soundfile.__libsndfile_version__},
                 "samples": samples}
