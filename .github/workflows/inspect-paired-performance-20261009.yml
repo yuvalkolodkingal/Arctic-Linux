@@ -1,0 +1,95 @@
+name: Inspect retained rebuilt paired performance
+
+on:
+  push:
+    branches: [codex/inspect-paired-performance-20261009]
+    paths: [.github/workflows/inspect-paired-performance-20261009.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read exact screened retained paired evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-paired-performance-20261009'
+          artifact_id = 11596956866
+          expected_bytes = 32884224
+          digest = 'cf9fbc259fa2c712ef4eecfdf21257792fc39a4e74107bb8a3354ac226d8f505'
+          assert 0 < expected_bytes <= 550_000_000 and re.fullmatch('[0-9a-f]{64}', digest)
+          endpoint = f'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/{artifact_id}'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['name'] == 'paired-performance' and not metadata['expired']
+          assert metadata['workflow_run']['id'] == 37875703862
+          assert metadata['workflow_run']['head_sha'] == '50c8bc4cd576baf741868aaa17b94737199ccc9d'
+          assert metadata['size_in_bytes'] == expected_bytes and metadata['digest'] == 'sha256:' + digest
+          sensitive = re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|(?:AKIA|ASIA)[A-Z0-9]{16}|'
+              r'-----BEGIN[^\n]*PRIVATE KEY|(?:password|token|secret)\s*[:=]\s*\S+|Authorization\s*[:=]|'
+              r'[\w.+-]+@[\w.-]+|https?://[^\s]*\?[^\s]', re.I)
+          with tempfile.TemporaryDirectory(prefix='arctic-paired-reader-') as folder:
+              path = Path(folder) / 'retained.zip'
+              with path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              assert path.stat().st_size == expected_bytes
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+              with zipfile.ZipFile(path) as archive:
+                  items = archive.infolist()
+                  assert len(items) <= 1000 and sum(item.file_size for item in items) <= 550_000_000
+                  assert len({item.filename for item in items}) == len(items)
+                  # Report phase/comparison before any large boot log. Their
+                  # complete JSON stays tightly bounded; logs use bounded tails.
+                  items.sort(key=lambda item: 0 if item.filename == 'status.json' else
+                             1 if item.filename == 'comparison.json' else 2)
+                  for item in items:
+                      p = Path(item.filename)
+                      assert not p.is_absolute() and '..' not in p.parts
+                      assert stat.S_IFMT(item.external_attr >> 16) in (0, stat.S_IFREG, stat.S_IFDIR)
+                      selected = (item.filename in ('status.json', 'comparison.json') or
+                                  p.name in ('harness.log', 'serial-boot.log', 'serial-install.log') or
+                                  p.name.endswith('-install-harness.log'))
+                      if not selected:
+                          continue
+                      print('ARCTIC-PAIRED-MEMBER', item.filename, item.file_size)
+                      if item.filename in ('status.json', 'comparison.json'):
+                          if item.filename == 'comparison.json':
+                              # The actual retained report is 13,783,519 bytes:
+                              # most of it is raw observation traces. Parse a
+                              # bounded document but print bounded result fields.
+                              assert item.file_size <= 16_000_000
+                              result = json.loads(archive.read(item).decode('utf-8', errors='strict'))
+                              summary = {key: result.get(key) for key in
+                                  ('status', 'error', 'metrics', 'measurement_precision', 'identity',
+                                   'application_role_comparison', 'limitations')}
+                              text = json.dumps(summary, indent=2)
+                          else:
+                              assert item.file_size <= 500_000
+                              text = archive.read(item).decode('utf-8', errors='strict')
+                          assert len(text.encode('utf-8')) <= 500_000
+                          lines = text.splitlines()
+                          assert len(lines) <= 4000
+                          json.loads(text)
+                      else:
+                          # The aggregate expanded-size bound above still
+                          # applies. Do not read a whole multi-megabyte serial
+                          # log into memory or print unbounded diagnostics.
+                          with archive.open(item) as stream:
+                              stream.seek(max(0, item.file_size - 2_000_000))
+                              data = stream.read(2_000_001)
+                          assert len(data) <= 2_000_000
+                          lines = data.decode('utf-8', errors='replace').splitlines()[-240:]
+                      print('ARCTIC-PAIRED-TEXT-BEGIN', item.filename)
+                      for line in lines:
+                          print('[redacted diagnostic line]' if sensitive.search(line) else line[:4000])
+                      print('ARCTIC-PAIRED-TEXT-END', item.filename)
+          PY
