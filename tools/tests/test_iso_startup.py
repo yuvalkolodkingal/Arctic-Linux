@@ -1,5 +1,6 @@
 """A timeout, login screen or echoed/partial marker cannot qualify a release."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shlex
@@ -175,11 +176,20 @@ class StartupTests(unittest.TestCase):
             display = socket.socket(socket.AF_UNIX)
             self.addCleanup(display.close)
             display.bind(str(runtime/'wayland-17'))
+            mango = socket.socket(socket.AF_UNIX)
+            self.addCleanup(mango.close)
+            mango.bind(str(runtime/'mango-123.sock'))
             for name, body in {'id': 'echo 1000',
                     'runuser': 'shift 3; exec "$@"',
                     'quickshell': 'test "$WAYLAND_DISPLAY" = wayland-17 && '
                         'test "$XDG_RUNTIME_DIR" = "$TEST_RUNTIME" || exit 1; '
-                        'printf "%s" "$TEST_STATE"'}.items():
+                        'printf "%s" "$TEST_STATE"',
+                    'mmsg': 'test "$MANGO_INSTANCE_SIGNATURE" = "$TEST_RUNTIME/mango-123.sock" && '
+                        'test "$*" = "get all-layers" || exit 1; '
+                        'if [ -n "$TEST_TRANSIENT_FILE" ]; then '
+                        'n=$(cat "$TEST_TRANSIENT_FILE" 2>/dev/null || echo 0); n=$((n+1)); '
+                        'echo "$n" >"$TEST_TRANSIENT_FILE"; [ "$n" -ge 3 ] || exit 1; fi; '
+                        'printf "%s" "$TEST_LAYERS"'}.items():
                 binary = root / name
                 binary.write_text('#!/bin/sh\n' + body + '\n')
                 binary.chmod(0o755)
@@ -197,6 +207,71 @@ class StartupTests(unittest.TestCase):
                                              'TEST_STATE': state, 'TEST_RUNTIME':str(runtime),
                                              'WAYLAND_DISPLAY':'wrong-console-display'})
                 self.assertEqual(result.returncode == 0, valid, state)
+            valid_window = dict(visible=True, backing_visible=True, width=1280,
+                                height=800, screen='Virtual-1')
+            layer = dict(name='arctic-installer',layer='top',monitor='Virtual-1')
+            valid_layers = json.dumps(dict(layers=[layer]))
+            for window, valid in [(valid_window,True), ({},False),
+                    ({**valid_window,'visible':False},False),
+                    ({**valid_window,'backing_visible':False},False),
+                    ({**valid_window,'width':100},False),
+                    ({**valid_window,'height':100},False),
+                    ({**valid_window,'screen':''},False)]:
+                state=json.dumps(dict(page='welcome',ready=True,connected=True,
+                                      failure='',window=window))
+                command=startup.installer_probe(require_visible=True).replace(
+                    '/run/user/',str(root/'run')+'/')
+                result=subprocess.run(['sh','-c',command],stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,env={**os.environ,'PATH':str(root)+':'+os.environ['PATH'],
+                    'TEST_STATE':state,'TEST_RUNTIME':str(runtime),'WAYLAND_DISPLAY':'wrong-console-display',
+                    'TEST_LAYERS':valid_layers})
+                self.assertEqual(result.returncode==0,valid,state)
+            state=json.dumps(dict(page='welcome',ready=True,connected=True,failure='',window=valid_window))
+            env={**os.environ,'PATH':str(root)+':'+os.environ['PATH'],'TEST_STATE':state,
+                 'TEST_RUNTIME':str(runtime),'WAYLAND_DISPLAY':'wrong-console-display',
+                 'MANGO_INSTANCE_SIGNATURE':'wrong-console-compositor'}
+            for layers, valid in [(valid_layers,True), ('',False), ('{}',False),
+                    (json.dumps(dict(layers=[])),False),
+                    (json.dumps(dict(layers=[layer,layer])),False),
+                    (json.dumps(dict(layers=[dict(layer,layer='bottom')])),False),
+                    (json.dumps(dict(layers=[dict(layer,monitor='Virtual-2')])),False)]:
+                result=subprocess.run(['sh','-c',command],stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                      env=dict(env,TEST_LAYERS=layers))
+                self.assertEqual(result.returncode==0,valid,layers)
+                if valid:
+                    self.assertTrue(result.stdout.startswith(b'ARCTIC-INSTALLER-WINDOW='))
+            deadline = startup.installer_restoration_probe().replace('/run/user/',str(root/'run')+'/')
+            counter=root/'retries'
+            (root/'sleep').write_text('#!/bin/sh\nexit 0\n')
+            (root/'sleep').chmod(0o755)
+            result=subprocess.run(['sh','-c',deadline],stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                env=dict(env,TEST_LAYERS=valid_layers,TEST_TRANSIENT_FILE=str(counter)),timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr.decode())
+            self.assertEqual(counter.read_text().strip(),'3')
+            self.assertTrue(result.stdout.startswith(b'ARCTIC-INSTALLER-WINDOW='))
+            (root/'sleep').unlink()
+            deadline=startup.installer_restoration_probe(1).replace('/run/user/',str(root/'run')+'/')
+            result=subprocess.run(['sh','-c',deadline],stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                  env=dict(env,TEST_LAYERS='{}'),timeout=5)
+            self.assertEqual(result.returncode,124)
+            self.assertNotIn(b'ARCTIC-INSTALLER-WINDOW=',result.stdout)
+            for bad in (0,26,True,'25'):
+                with self.assertRaises(ValueError):
+                    startup.installer_restoration_probe(bad)
+            # Missing, regular, or ambiguous compositor sockets cannot select
+            # an unrelated inherited instance or become successful evidence.
+            mango.close()
+            (runtime/'mango-123.sock').unlink()
+            for extra in (False,True):
+                (runtime/'mango-123.sock').touch()
+                if extra:
+                    peers=[]
+                    for name in ('mango-4.sock','mango-9.sock'):
+                        peer=socket.socket(socket.AF_UNIX);peers.append(peer);self.addCleanup(peer.close)
+                        peer.bind(str(runtime/name))
+                result=subprocess.run(['sh','-c',command],stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                      env=dict(env,TEST_LAYERS=valid_layers))
+                self.assertNotEqual(result.returncode,0)
 
     def test_installer_probe_requires_one_actual_wayland_socket(self):
         with tempfile.TemporaryDirectory() as tmp:

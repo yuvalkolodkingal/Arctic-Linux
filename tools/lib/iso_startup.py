@@ -56,22 +56,53 @@ def console_authenticated(path, nonce):
     return bool(match and 1000 <= int(match[1]) <= 2147483647)
 
 
-def installer_probe():
-    validate = ("import json,sys; s=json.load(sys.stdin); "
+def installer_probe(require_visible=False):
+    validate = ("import json,sys; s=" + ("json.loads(sys.argv[1])" if require_visible else "json.load(sys.stdin)") + "; "
                 "assert s['page']=='welcome' and s['ready'] is True "
                 "and s['connected'] is True and not s['failure']")
+    if require_visible:
+        validate += (" and s['window']['visible'] is True "
+                     "and s['window']['backing_visible'] is True "
+                     "and s['window']['width'] >= 320 and s['window']['height'] >= 200 "
+                     "and isinstance(s['window']['screen'],str) and s['window']['screen'] != ''")
+        validate += ("; layers=json.loads(sys.argv[2])['layers']; "
+                     "mapped=[l for l in layers if l['name']=='arctic-installer']; "
+                     "assert len(mapped)==1 and mapped[0]['layer']=='top' "
+                     "and mapped[0]['monitor']==s['window']['screen']; "
+                     "print('ARCTIC-INSTALLER-WINDOW='+json.dumps(dict(window=s['window'],layers=mapped)))")
     # Quickshell's path selector filters instances by WAYLAND_DISPLAY. A tty
     # login has no display environment, even while the installer remains alive.
     # Discover exactly one actual socket; never guess a display or start a UI.
-    return ("runtime=/run/user/$(id -u liveuser); display=; "
+    select = ("runtime=/run/user/$(id -u liveuser); display=; "
             "for socket in \"$runtime\"/wayland-*; do "
             "[ -S \"$socket\" ] || continue; "
             "[ -z \"$display\" ] || exit 1; display=${socket##*/}; done; "
-            "test -n \"$display\" && "
-            "runuser -u liveuser -- env XDG_RUNTIME_DIR=\"$runtime\" "
+            "test -n \"$display\" || exit 1; ")
+    query = "quickshell ipc -p /usr/share/arctic/installer-ui call installer state"
+    if require_visible:
+        select += ("mango=; for socket in \"$runtime\"/mango-*.sock; do "
+                   "[ -S \"$socket\" ] || continue; "
+                   "[ -z \"$mango\" ] || exit 1; mango=$socket; done; "
+                   "test -n \"$mango\" && ")
+        query = ('state=$(' + query + ') && layers=$(mmsg get all-layers) && python3 -c ' +
+                 shlex.quote(validate) + ' "$state" "$layers"')
+        return select + ('runuser -u liveuser -- env XDG_RUNTIME_DIR="$runtime" '
+                         'WAYLAND_DISPLAY="$display" MANGO_INSTANCE_SIGNATURE="$mango" sh -c ' +
+                         shlex.quote(query))
+    return select + ("runuser -u liveuser -- env XDG_RUNTIME_DIR=\"$runtime\" "
             "WAYLAND_DISPLAY=\"$display\" "
-            "quickshell ipc -p /usr/share/arctic/installer-ui call installer state | "
+            + query + " | "
             "python3 -c " + shlex.quote(validate))
+
+
+def installer_restoration_probe(timeout_seconds=25):
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 25:
+        raise ValueError('Installer restoration deadline must be 1..25 seconds')
+    # Bound the whole operation, including an unresponsive IPC command. Repeat
+    # the complete socket/state/mapped-layer check as outputs return, then fail
+    # closed before the host's 30-second collection wait ends.
+    loop = 'until (' + installer_probe(require_visible=True) + '); do sleep 1; done'
+    return 'timeout ' + str(timeout_seconds) + 's sh -c ' + shlex.quote(loop)
 
 
 def restore_desktop():
@@ -103,7 +134,8 @@ def collection_command(mode, require_startup):
         if mode == 'install':
             # Preserve the exclusive-focus installer and prove it actually
             # reached its connected, ready welcome state before collecting.
-            checks.extend(['(' + installer_probe() + ')', '(' + restore_desktop() + ')'])
+            checks.extend(['(' + installer_probe() + ')', '(' + restore_desktop() + ')',
+                           '(' + installer_restoration_probe() + ')'])
         commands += 'if ' + ' && '.join(checks) + '; then '
         commands += f'echo ARCTIC-STARTUP-PASS={mode}; else echo ARCTIC-STARTUP-FAILED; fi; '
     commands += 'echo ARCTIC-COLLECT-END'
