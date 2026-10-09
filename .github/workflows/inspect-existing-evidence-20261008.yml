@@ -30,8 +30,10 @@ jobs:
           assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
           repo = 'repos/yuvalkolodkingal/Arctic-Linux'
           evidence = [
-              (11584082521, 37854472664, 'f31b341a84325a6a845f42d55f582fb836eb9d19',
-               'arctic-iso-metadata', '57310bef94d7896453d11e9fa3061270a839ebd67cc8d292b6ba04cc5772d142'),
+              (11587953084, 37854472664, 'f31b341a84325a6a845f42d55f582fb836eb9d19',
+               'boot-test', '341b541a0cf6215a369154d610b31697534cc33d14a301916ef914022173f6b0'),
+              (11588027770, 37854472664, 'f31b341a84325a6a845f42d55f582fb836eb9d19',
+               'paired-performance', 'becb37282b3f2bc7d41104553c96dbdfea9c7ff60b8dc9ac5bf6ab29e95e64db'),
           ]
           sensitive = re.compile(r'(?i)authorization:|(?:gh[pousr]_|github_pat_)[a-z0-9_]+|'
                                  r'(?:password|token|secret)\s*[=:]\s*\S+|'
@@ -56,27 +58,26 @@ jobs:
                           assert not Path(member).is_absolute() and '..' not in Path(member).parts
                           print('ARCTIC-MEMBER', member, item.file_size)
                           if member.endswith(('serial.log', 'baseline-result.json', 'results.json', 'shell.log', 'compositor.log',
-                                              '.sha256', '.build-info', 'BUILD-INFO')):
+                                              '.sha256', '.build-info', 'BUILD-INFO', 'harness.log', 'state.json',
+                                              'status.json', 'comparison.json', 'performance-context.json',
+                                              'serial-boot.log', 'serial-install.log')):
                               assert item.file_size < 5_000_000
                               lines = archive.read(item).decode('utf-8', errors='replace').splitlines()
                               print('ARCTIC-TEXT-BEGIN', member)
-                              for line in lines[-400:]:
+                              for line in lines[-600:]:
                                   print('[redacted diagnostic line]' if sensitive.search(line) else line[:1500])
                               print('ARCTIC-TEXT-END', member)
                           # These are synthetic VM screenshots already authorized for diagnostic upload.
-                          selected = Path(member).name in (
-                              'exposed-top-auto-1.5-0-HEADLESS-1.png',
-                              'exposed-top-auto-1-0-HEADLESS-1.png')
+                          selected = member.endswith(('bios-install/98-console.png',
+                                                        'bios-install/99-final.png'))
                           if selected:
                               assert item.file_size < 2_000_000
                               content = archive.read(item)
                               assert content.startswith(b'\x89PNG\r\n\x1a\n')
                               with Image.open(io.BytesIO(content)) as image:
-                                  assert image.size == (1024, 768)
+                                  assert 1 <= image.width <= 4096 and 1 <= image.height <= 4096
                                   image = image.convert('RGB')
-                                  print('ARCTIC-PIXELS', json.dumps(dict(member=member,
-                                      right=[dict(x=x, y=384, rgb=image.getpixel((x, 384))) for x in range(1008, 1024)],
-                                      bottom=[dict(x=512, y=y, rgb=image.getpixel((512, y))) for y in range(752, 768)])))
+                                  print('ARCTIC-IMAGE-SIZE', member, image.size)
                               encoded = base64.b64encode(content).decode('ascii')
                               print('ARCTIC-PNG-BEGIN', member, hashlib.sha256(content).hexdigest())
                               for offset in range(0, len(encoded), 1024):
