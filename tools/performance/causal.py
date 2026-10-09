@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import select
+import signal
 import struct
 import subprocess
 import threading
@@ -116,6 +117,10 @@ class LowerBoundProbe:
                 raise RuntimeError('Causal instrumentation requires SELinux enforcing')
             if self.prefix[:2] != ['runuser', '-u']:
                 raise RuntimeError('Causal instrumentation requires the actual desktop user')
+            self.old_sigterm = signal.getsignal(signal.SIGTERM)
+            def interrupted(signum, frame):
+                raise InterruptedError('Owned causal instrumentation interrupted')
+            signal.signal(signal.SIGTERM, interrupted)
             import pwd
             uid = pwd.getpwnam(self.prefix[2]).pw_uid
             candidates = []
@@ -277,5 +282,8 @@ class LowerBoundProbe:
         if getattr(self, 'mounted', False):
             cleanup(lambda: subprocess.run(['umount', str(self.root)], check=True, timeout=15))
             self.mounted = False
+        if hasattr(self, 'old_sigterm'):
+            cleanup(lambda: signal.signal(signal.SIGTERM, self.old_sigterm))
+            del self.old_sigterm
         if errors:
             raise RuntimeError('Owned causal instrumentation cleanup failed: ' + '; '.join(errors))
