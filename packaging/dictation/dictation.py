@@ -453,9 +453,14 @@ def lock_supervisor(generation, arguments):
         data.update(supervisor_pid=os.getpid(), supervisor_start=process_start(os.getpid()))
         atomic_json(marker, data)
     read_fd, write_fd = os.pipe()
-    process = subprocess.Popen(["/usr/bin/swaylock", "--ready-fd", str(write_fd), *arguments],
-                               pass_fds=(write_fd,), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    os.close(write_fd)
+    try:
+        process = subprocess.Popen(["/usr/bin/swaylock", "--ready-fd", str(write_fd), *arguments],
+                                   pass_fds=(write_fd,), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        os.close(read_fd)
+        raise
+    finally:
+        os.close(write_fd)
     readers, _, _ = select.select([read_fd], [], [], 10)
     secured = bool(readers and os.read(read_fd, 1))
     os.close(read_fd)

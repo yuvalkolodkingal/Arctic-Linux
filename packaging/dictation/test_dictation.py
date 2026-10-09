@@ -326,6 +326,20 @@ class Sessions(unittest.TestCase):
         probe.assert_not_called()
         self.assertTrue(marker.exists())
 
+    def test_fallback_supervisor_is_registered_before_lock_initialization(self):
+        marker = self.shared / "dictation-locked"
+        d.atomic_json(marker, {"locked": True, "generation": "initializing"})
+        def spawn(*_a, **_k):
+            data = d.read_json(marker)
+            self.assertEqual(data["generation"], "initializing")
+            self.assertTrue(d.owned_lock_supervisor(data))
+            raise OSError("swaylock unavailable")
+        with mock.patch.object(d, "runtime_paths", return_value=(self.shared, self.private)), \
+                mock.patch.object(d.subprocess, "Popen", side_effect=spawn):
+            with self.assertRaises(OSError):
+                d.lock_supervisor("initializing", [])
+        self.assertTrue(marker.exists())
+
     def test_dead_broker_cancel_cleans_all_owned_transcript_temps(self):
         for name in ("transcript", ".transcript.123.tmp", "transcript.done", "insertion"):
             (self.private / name).write_text("private phrase")
