@@ -54,6 +54,7 @@ ROLE_APPS = {
 CLIENT_QUERY_WORKER = r'''
 import json, os, select, socket, sys, time
 path = os.environ['MANGO_INSTANCE_SIGNATURE']
+MAX_REPLY_BYTES = 4 * 1024 * 1024
 def query():
     started = time.monotonic_ns()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
@@ -113,7 +114,11 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
                     pattern in (str(c.get('appid', c.get('app_id', ''))) + ' ' + str(c.get('title', ''))).lower()
                     if isinstance(pattern, str) else str(c.get('appid', c.get('app_id', ''))).lower() in pattern)]
                 if windows:
-                    result = dict(payload=payload, windows=windows, lower_ns=max(lower_ns, started_ns),
+                    # Only identities are needed until the persistence query.
+                    # Do not duplicate a potentially 4 MiB client inventory or
+                    # large titles alongside the trace in the mapping envelope.
+                    matched = [dict(id=c['id']) for c in windows]
+                    result = dict(payload=dict(clients=matched), lower_ns=max(lower_ns, started_ns),
                                   upper_ns=query_finished, query_roundtrips=traces)
                     break
                 # A negative query only proves absence at an unknown point
@@ -127,7 +132,15 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
         else:
             raise RuntimeError('Unexpected observer command')
         result['uid'] = os.getuid()
-        print(json.dumps(result, separators=(',', ':')), flush=True)
+        reply = json.dumps(result, separators=(',', ':'), ensure_ascii=False,
+                           allow_nan=False).encode() + b'\n'
+        # The TOTAL encoded envelope is the transport bound, independent of
+        # the query/trace-count ceilings. Reject before writing so cancellation
+        # cannot strand a worker writing an oversized reply to the parent pipe.
+        if len(reply) > MAX_REPLY_BYTES:
+            raise RuntimeError('Combined native observer reply exceeds transport budget')
+        sys.stdout.buffer.write(reply)
+        sys.stdout.buffer.flush()
 '''
 
 
@@ -205,8 +218,9 @@ class NativeClientQuery:
                 or not started_ns <= lower <= upper <= time.monotonic_ns()):
             raise RuntimeError('Invalid worker mapping timestamp bracket')
         identities = value['clients_by_id']
-        if not value['windows'] or any(str(c['id']) not in identities for c in value['windows']):
+        if not identities:
             raise RuntimeError('Invalid worker mapped-window identities')
+        value['windows'] = list(identities.values())
         self.roundtrips.extend(dict(trace, uid=value['uid']) for trace in value['query_roundtrips'])
         return value
 
@@ -214,6 +228,9 @@ class NativeClientQuery:
         if self.process is None:
             return
         self.process.stdin.close()
+        # Closing our read end also releases an owned worker currently writing
+        # a bounded but pipe-sized reply after cancellation/application failure.
+        self.process.stdout.close()
         try:
             # Let runuser reap the worker after natural stdin EOF, including
             # cancellation while autonomously polling. Only our worker is owned.
@@ -227,7 +244,6 @@ class NativeClientQuery:
                     self.process.kill()
                     self.process.wait(timeout=3)
         finally:
-            self.process.stdout.close()
             self.process.stderr.close()
 
 
@@ -666,7 +682,12 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
         observed_window_ids = set()
         try:
             while time.monotonic() - started < timeout:
-                observation = observer.finish_observation(child, started_ns, timeout)
+                try:
+                    observation = observer.finish_observation(child, started_ns, timeout)
+                except Exception:
+                    emit('startup_' + label + '_diagnostic', dict(exit_code=child.poll(),
+                        launch_output=Path('/tmp/arctic-performance-apps.log').read_text(errors='replace')[-12000:]))
+                    raise
                 if observation is None:
                     break
                 windows = observation['windows']
@@ -682,7 +703,8 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                     observations.append(dict(lower_seconds=lower, upper_seconds=measured,
                         interval_seconds=measured-lower, launch_started_monotonic_ns=started_ns,
                         observer=MAPPING_OBSERVER, query_roundtrips=observer.roundtrips))
-                emit('mapped_window_' + label, windows)
+                emit('mapped_window_' + label, [persistent[str(c['id'])] for c in windows
+                                               if str(c['id']) in persistent])
                 emit('app_workload_' + label, snapshot())
                 return measured
             emit('startup_' + label + '_diagnostic', dict(exit_code=child.poll(),

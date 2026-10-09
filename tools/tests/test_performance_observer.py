@@ -246,6 +246,48 @@ class NativeObserverTest(unittest.TestCase):
             result = observer.finish_observation(None, started, 2)
             self.assertEqual([c['id'] for c in result['windows']], [3])
 
+    def test_mapping_reply_does_not_duplicate_large_client_payload(self):
+        title = 'x' * 3_500_000
+        _, prefix = self.server(lambda: json.dumps(dict(clients=[dict(
+            id=7, appid='foot', title=title)])).encode()+b'\n')
+        with guest.NativeClientQuery(prefix) as observer:
+            self.assertEqual(observer.query()['7']['title'], title)
+            started = time.monotonic_ns()
+            observer.begin_observation(set(), ('foot',), started, 2, .00005)
+            result = observer.finish_observation(None, started, 2)
+            self.assertEqual(result['windows'], [dict(id=7)])
+            self.assertLess(len(json.dumps(result)), 2000)
+            # Persistence still retrieves actual app/title metadata on demand.
+            self.assertEqual(observer.query()['7']['title'], title)
+
+    def test_combined_encoded_reply_budget_fails_before_worker_pipe_write(self):
+        # A valid <4MiB raw JSON reply expands when Python renders 1e10 as a
+        # decimal float. Exercise the total encoded envelope independently of
+        # the Mango byte/count limits, without overriding a production ceiling.
+        response = b'{"clients":[{"id":1,"values":[' + b'1e10,'*330_000 + b'1e10]}]}'
+        self.assertLess(len(response), 4*1024*1024)
+        _, prefix = self.server(lambda: response)
+        with guest.NativeClientQuery(prefix) as observer:
+            started = time.monotonic()
+            with self.assertRaisesRegex(RuntimeError, 'Combined native observer reply exceeds transport budget'):
+                observer.query()
+            self.assertLess(time.monotonic()-started, 3)
+            process = observer.process
+        self.assertIsNotNone(process.poll())
+
+    def test_cancellation_reaps_worker_blocked_writing_bounded_large_reply(self):
+        _, prefix = self.server(lambda: json.dumps(dict(clients=[dict(
+            id=7, appid='foot', title='x'*3_500_000)])).encode()+b'\n')
+        started = time.monotonic()
+        with guest.NativeClientQuery(prefix) as observer:
+            observer._send(dict(kind='get'))
+            # The parent intentionally does not drain the large reply.
+            time.sleep(.25)
+            self.assertIsNone(observer.process.poll())
+            process = observer.process
+        self.assertLess(time.monotonic()-started, 2)
+        self.assertIsNotNone(process.poll())
+
     def test_cleanup_failure_propagates_and_reaps_only_started_processes(self):
         _, prefix = self.server(lambda: b'{"clients":[]}\n')
         original_popen = subprocess.Popen

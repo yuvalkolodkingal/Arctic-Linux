@@ -19,10 +19,15 @@ only closes observed newly launched matching clients and reaps owned processes.
 Role polling sleeps 50 microseconds between socket queries. The worker's CPU,
 allocations, scheduling, socket processing and compositor response time are
 measurement costs, not free instrumentation. Whole-guest counters include
-collector helpers; parent-only CPU counters do not. Up to 32,768 query traces and
-4 MiB per response are allowed; exceeding a bound, a UID mismatch, malformed
+collector helpers; parent-only CPU counters do not. Up to 32,768 query traces,
+4 MiB of raw Mango data, and 4 MiB for the complete encoded worker reply are
+allowed. Mapping replies include matched identities rather than duplicated
+client metadata; the persistence query retrieves actual metadata afterward.
+The total envelope is checked before any pipe write; count and query ceilings
+do not guarantee that the combined envelope fits. Exceeding a bound, a UID mismatch, malformed
 response, duplicate client identity, timeout or disconnect fails observation.
-Cancellation closes stdin so the wrapper can reap its worker.
+Cancellation closes stdin and the parent's stdout read end so the wrapper can
+reap its worker even while a bounded large reply is being written.
 
 The qualification limits remain unchanged: every mapping bracket must be at
 most `min(5ms, 2.5% of its observed launch time)`, and the candidate median upper
