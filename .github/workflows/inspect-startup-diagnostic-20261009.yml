@@ -1,0 +1,65 @@
+name: Inspect retained startup diagnostic
+
+on:
+  push:
+    branches: [codex/acceptance-diagnostics-fixes-20261009]
+    paths: [.github/workflows/inspect-startup-diagnostic-20261009.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read fixed retained BIOS captures before the VT chord
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import base64, hashlib, json, os, re, stat, struct, subprocess, tempfile, zipfile
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/acceptance-diagnostics-fixes-20261009'
+          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11590590403'
+          digest = 'cb35f358ad14ca8450fe42112ef257d2f15558208f491a5a236b8c06ea5bef34'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['name'] == 'diagnostic-startup-bios-install' and not metadata['expired']
+          assert metadata['workflow_run']['id'] == 37870096999
+          assert metadata['workflow_run']['head_sha'] == '63ff4cf60248c90bd006b5a4dec8aa9bf4707843'
+          assert metadata['size_in_bytes'] == 2558250 and metadata['digest'] == 'sha256:' + digest
+          with tempfile.TemporaryDirectory(prefix='arctic-startup-reader-') as folder:
+              path = Path(folder) / 'retained.zip'
+              with path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              assert path.stat().st_size == 2558250
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+              with zipfile.ZipFile(path) as archive:
+                  items = archive.infolist()
+                  assert len(items) <= 100 and sum(item.file_size for item in items) < 50_000_000
+                  assert len({item.filename for item in items}) == len(items)
+                  for item in items:
+                      p = Path(item.filename)
+                      assert not p.is_absolute() and '..' not in p.parts
+                      assert not stat.S_ISLNK(item.external_attr >> 16)
+                      print('ARCTIC-STARTUP-MEMBER', item.filename, item.file_size)
+                  boots = [item for item in items if re.fullmatch(r'\d+-boot-\d+s\.png', Path(item.filename).name)]
+                  last = max(boots, key=lambda item: int(re.search(r'-boot-(\d+)s', item.filename)[1])) if boots else None
+                  selected = [item for item in items if Path(item.filename).name == '97-before-collect.png']
+                  if last:
+                      selected.append(last)
+                  for item in selected:
+                      assert item.file_size <= 2 * 1024 * 1024
+                      data = archive.read(item)
+                      assert data.startswith(b'\x89PNG\r\n\x1a\n')
+                      width, height = struct.unpack('>II', data[16:24])
+                      assert 1 <= width <= 4096 and 1 <= height <= 4096
+                      print('ARCTIC-STARTUP-PNG-BEGIN', item.filename, hashlib.sha256(data).hexdigest())
+                      encoded = base64.b64encode(data).decode('ascii')
+                      for offset in range(0, len(encoded), 1024):
+                          print('ARCTIC-STARTUP-PNG-DATA', encoded[offset:offset + 1024])
+                      print('ARCTIC-STARTUP-PNG-END', item.filename)
+          PY
