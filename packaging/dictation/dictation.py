@@ -28,24 +28,76 @@ import urllib.request
 VERSION = "1.1.0"
 SOURCE_COMMIT = "e2638ca63f566f1682bcedc0abea8e4b25211c21"
 MODEL_COMMIT = "80da2d8bfee42b0e836fc3a9890373e5defc00a6"
+TURBO_COMMIT = "98aa99a0a9db05ae2342309f5096248665f7cba3"
 RELEASE = "https://github.com/peteonrails/voxtype/releases/download/v1.1.0/"
 ASSETS = {
     "cpu": ("voxtype-cpu", RELEASE + "voxtype-1.1.0-linux-x86_64-baseline", 18579224,
             "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a"),
+    "avx2": ("voxtype-cpu-avx2", RELEASE + "voxtype-1.1.0-linux-x86_64-avx2", 19153728,
+             "e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28"),
     "vulkan": ("voxtype-vulkan", RELEASE + "voxtype-1.1.0-linux-x86_64-vulkan", 66342968,
                "db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2"),
-    "model": ("ggml-small.bin", "https://huggingface.co/ggerganov/whisper.cpp/resolve/" + MODEL_COMMIT + "/ggml-small.bin",
+    "small": ("ggml-small.bin", "https://huggingface.co/ggerganov/whisper.cpp/resolve/" + MODEL_COMMIT + "/ggml-small.bin",
               487601967, "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"),
+    "turbo": ("ggml-large-v3-turbo-q5_0.bin", "https://huggingface.co/ggerganov/whisper.cpp/resolve/" + TURBO_COMMIT + "/ggml-large-v3-turbo-q5_0.bin",
+              574041195, "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
 }
 PAYLOAD = Path("/opt/arctic/voxtype") / VERSION
 SYSTEM = Path("/var/lib/arctic/dictation")
 SCRIPT = Path("/usr/share/arctic/dictation/dictation.py")
-DOWNLOAD_BYTES = sum(a[2] for a in ASSETS.values())
-DEPENDENCIES = ["pipewire-alsa", "wtype", "wl-clipboard", "vulkan-loader", "mesa-vulkan-drivers"]
-RUNTIME_LIBRARIES = (Path("/usr/lib64/alsa-lib/libasound_module_pcm_pipewire.so"),
-                     Path("/usr/lib64/libvulkan.so.1"),
+AUDIO_DEPENDENCIES = ("pipewire-alsa", "wtype", "wl-clipboard")
+AUDIO_LIBRARIES = (Path("/usr/lib64/alsa-lib/libasound_module_pcm_pipewire.so"),
                      Path("/etc/alsa/conf.d/50-pipewire.conf"),
                      Path("/etc/alsa/conf.d/99-pipewire-default.conf"))
+PROFILES = {
+    "small-v2": {"id": "small-v2", "model": "small", "cpu_variant": "baseline",
+                 "assets": {"cpu": ASSETS["cpu"], "model": ASSETS["small"]},
+                 "dependencies": AUDIO_DEPENDENCIES, "libraries": AUDIO_LIBRARIES},
+    "turbo-q5-v3": {"id": "turbo-q5-v3", "model": "large-v3-turbo-q5_0", "cpu_variant": "avx2",
+                    "assets": {"cpu": ASSETS["cpu"], "avx2": ASSETS["avx2"], "vulkan": ASSETS["vulkan"], "model": ASSETS["turbo"]},
+                    "dependencies": (*AUDIO_DEPENDENCIES, "vulkan-loader", "mesa-vulkan-drivers"),
+                    "libraries": (*AUDIO_LIBRARIES, Path("/usr/lib64/libvulkan.so.1"))},
+}
+
+
+def v3_supported(cpuinfo=None):
+    try:
+        text = Path("/proc/cpuinfo").read_text() if cpuinfo is None else cpuinfo
+        flags = [set(line.split(":", 1)[1].lower().split()) for line in text.splitlines()
+                 if line.partition(":")[0].strip() == "flags" and ":" in line]
+        processors = sum(line.partition(":")[0].strip() == "processor" for line in text.splitlines())
+        if processors and len(flags) != processors:
+            return False
+        common = set.intersection(*flags) if flags else set()
+        return {"avx", "avx2", "fma", "f16c", "bmi1", "bmi2", "movbe", "popcnt", "xsave"} <= common and bool(common & {"abm", "lzcnt"})
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def recommended_profile(cpuinfo=None):
+    return PROFILES["turbo-q5-v3" if v3_supported(cpuinfo) else "small-v2"]
+
+
+def profile_selection(system=None):
+    system = SYSTEM if system is None else system
+    path = system / "profile-selection.json"
+    value = read_json(path) if trusted_file(path) else {}
+    return "compatibility" if isinstance(value, dict) and value.get("selection") == "compatibility" else "recommended"
+
+
+def desired_profile(cpuinfo=None, system=None):
+    return PROFILES["small-v2"] if profile_selection(system) == "compatibility" else recommended_profile(cpuinfo)
+
+
+def profile_status(profile):
+    return {"profile": profile["id"], "model": profile["model"], "cpu_variant": profile["cpu_variant"],
+            "model_download_bytes": profile["assets"]["model"][2],
+            "download_bytes": sum(asset[2] for asset in profile["assets"].values())}
+
+
+def profile_digest(profile):
+    descriptor = {**profile_status(profile), "assets": profile["assets"], "dependencies": profile["dependencies"]}
+    return hashlib.sha256(json.dumps(descriptor, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 class Failure(Exception):
@@ -98,12 +150,13 @@ def sha256(path):
     return h.hexdigest()
 
 
-def dependencies_ready(libraries=None, commands=None):
+def dependencies_ready(libraries=None, commands=None, profile=None):
     # Fedora library sonames may be symlinks; inspect their resolved, root-owned
     # targets, never a user PATH substitute. No subprocess or full model rehash
     # belongs in a frequently refreshed readiness check.
     commands = [Path("/usr/bin/wtype"), Path("/usr/bin/wl-copy")] if commands is None else commands
-    paths = [*commands, *(RUNTIME_LIBRARIES if libraries is None else libraries)]
+    profile = desired_profile() if profile is None else profile
+    paths = [*commands, *(profile["libraries"] if libraries is None else libraries)]
     for path in paths:
         try:
             target = path.resolve(strict=True)
@@ -116,20 +169,25 @@ def dependencies_ready(libraries=None, commands=None):
     return True
 
 
-def ready(payload=PAYLOAD, system=SYSTEM):
+def ready(payload=PAYLOAD, system=SYSTEM, profile=None):
     """A root-owned receipt attests hashes; cheap stat checks detect replacement.
 
     Never repeatedly hash 488 MB from settings polling. Users cannot modify the
     receipt or the payload, and setup always checks the complete SHA before it
     writes this receipt. Missing dependencies still keep readiness false.
     """
+    profile = desired_profile(system=system) if profile is None else profile
     receipt = system / "verified.json"
     if not trusted_file(receipt):
         return False
     data = read_json(receipt)
-    if data.get("version") != VERSION:
+    if not isinstance(data, dict) or not isinstance(data.get("files"), dict):
         return False
-    for key, (name, _url, size, digest) in ASSETS.items():
+    if (data.get("version") != VERSION or data.get("profile") != profile["id"] or
+            data.get("profile_sha256") != profile_digest(profile) or
+            data.get("model") != profile["model"] or set(data.get("files", {})) != set(profile["assets"])):
+        return False
+    for key, (name, _url, size, digest) in profile["assets"].items():
         path = payload / name
         if not trusted_file(path, size):
             return False
@@ -139,7 +197,7 @@ def ready(payload=PAYLOAD, system=SYSTEM):
             return False
         if key != "model" and not st.st_mode & 0o111:
             return False
-    return dependencies_ready()
+    return dependencies_ready(profile=profile)
 
 
 def download(asset, destination, deadline, progress, opener=urllib.request.urlopen):
@@ -201,14 +259,16 @@ def download(asset, destination, deadline, progress, opener=urllib.request.urlop
     os.replace(part, destination)
 
 
-def queue(system=SYSTEM, error=""):
+def queue(system=SYSTEM, error="", profile=None):
+    profile = desired_profile() if profile is None else profile
     directory(system, 0, 0o755)
     atomic_json(system / "setup.json", {"state": "queued", "progress": 0, "error": error,
-                "version": VERSION, "download_bytes": DOWNLOAD_BYTES}, 0o644)
-    atomic_json(system / "pending.json", {"version": VERSION}, 0o644)
+                "version": VERSION, **profile_status(profile)}, 0o644)
+    atomic_json(system / "pending.json", {"version": VERSION, "profile": profile["id"],
+                "profile_sha256": profile_digest(profile)}, 0o644)
 
 
-def request_setup(system=SYSTEM):
+def request_setup(system=SYSTEM, selection=None):
     """An authenticated retry neither overwrites a running download nor loses reboot recovery."""
     directory(system, 0, 0o755)
     fd = os.open(system / "setup.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -216,12 +276,19 @@ def request_setup(system=SYSTEM):
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            pass
+            if selection is not None:
+                raise Failure("Dictation setup is already running. Wait for it to finish before changing profile.")
         else:
-            queue(system)
+            if selection is not None:
+                if selection not in ("compatibility", "recommended"):
+                    raise Failure("Choose a supported dictation profile.")
+                atomic_json(system / "profile-selection.json", {"selection": selection}, 0o644)
+            queue(system, profile=desired_profile(system=system))
     finally:
         os.close(fd)
-    subprocess.run(["/usr/bin/systemctl", "enable", "--now", "arctic-dictation-setup.service"],
+    subprocess.run(["/usr/bin/systemctl", "enable", "--now", "arctic-dictation-setup.timer"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=True)
+    subprocess.run(["/usr/bin/systemctl", "start", "--no-block", "arctic-dictation-setup.service"],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=True)
 
 
@@ -229,9 +296,6 @@ def system_setup(offline=False, payload=PAYLOAD, system=SYSTEM, seconds=600):
     if os.geteuid() != 0:
         raise Failure("Dictation setup needs administrator authorization.")
     directory(system, 0, 0o755)
-    if offline:
-        queue(system)
-        return False
     directory(payload.parent.parent, 0, 0o755)
     directory(payload.parent, 0, 0o755)
     directory(payload, 0, 0o755)
@@ -241,49 +305,73 @@ def system_setup(offline=False, payload=PAYLOAD, system=SYSTEM, seconds=600):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return False
-        queue(system)
+        profile = desired_profile(system=system)
+        queue(system, profile=profile)
+        if offline:
+            return False
         deadline = time.monotonic() + seconds
         try:
             if platform.machine() != "x86_64":
                 raise Failure("This Arctic dictation payload requires x86_64 hardware.")
             atomic_json(system / "setup.json", {"state": "downloading", "progress": 0,
-                        "error": "", "version": VERSION, "download_bytes": DOWNLOAD_BYTES}, 0o644)
+                        "error": "", "version": VERSION, **profile_status(profile)}, 0o644)
             result = subprocess.run(["/usr/bin/dnf", "-y", "--setopt=timeout=15", "--setopt=retries=1",
-                                     "--setopt=install_weak_deps=False", "install", *DEPENDENCIES],
+                                     "--setopt=install_weak_deps=False", "install", *profile["dependencies"]],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                     timeout=min(120, max(1, deadline - time.monotonic())))
             if result.returncode:
                 raise Failure("Dictation dependencies could not be installed. Connect to the internet and retry setup.")
             done = 0
             last_update = [0.0]
-            for key, asset in ASSETS.items():
+            total = profile_status(profile)["download_bytes"]
+            previous = read_json(system / "verified.json") if trusted_file(system / "verified.json") else {}
+            for key, asset in profile["assets"].items():
                 def report(count):
                     now = time.monotonic()
                     if now - last_update[0] >= 0.5 or count == asset[2]:
-                        atomic_json(system / "setup.json", {"state": "downloading", "progress": (done + count) / DOWNLOAD_BYTES,
-                                    "error": "", "version": VERSION, "download_bytes": DOWNLOAD_BYTES}, 0o644)
+                        atomic_json(system / "setup.json", {"state": "downloading", "progress": (done + count) / total,
+                                    "error": "", "version": VERSION, **profile_status(profile)}, 0o644)
                         last_update[0] = now
                 download(asset, payload / asset[0], deadline, report)
                 done += asset[2]
-            receipt = {"version": VERSION, "source_commit": SOURCE_COMMIT, "files": {}}
-            for key, asset in ASSETS.items():
+            receipt = {"version": VERSION, "source_commit": SOURCE_COMMIT, "profile_sha256": profile_digest(profile),
+                       **profile_status(profile), "files": {}}
+            for key, asset in profile["assets"].items():
                 receipt["files"][key] = {"sha256": asset[3], "size": asset[2], "mtime_ns": (payload / asset[0]).stat().st_mtime_ns}
-            atomic_json(system / "verified.json", receipt, 0o644)
             subprocess.run(["/usr/sbin/restorecon", "-RF", str(payload), str(system)],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, check=False)
-            if not dependencies_ready():
+            if not dependencies_ready(profile=profile):
                 raise Failure("Dictation audio or text-insertion dependencies are missing. Retry setup.")
+            atomic_json(system / "verified.json", receipt, 0o644)
             atomic_json(system / "setup.json", {"state": "ready", "progress": 1, "error": "", "version": VERSION,
-                        "download_bytes": DOWNLOAD_BYTES}, 0o644)
+                        **profile_status(profile)}, 0o644)
             (system / "pending.json").unlink(missing_ok=True)
+            cleanup_replaced_model(previous, profile, payload)
             return True
         except (Failure, OSError, urllib.error.URLError, subprocess.TimeoutExpired) as error:
             # Never put URL exceptions, command output, secrets or user speech in a public status file.
             message = str(error) if isinstance(error, Failure) else "Dictation setup could not finish. Connect to the internet and retry setup."
-            queue(system, message)
+            queue(system, message, profile)
             return False
     finally:
         os.close(lock)
+
+
+def cleanup_replaced_model(previous, profile, payload):
+    # Only a known, formerly verified model can be removed, and only after the
+    # replacement receipt is published. Downloads never fetch both models.
+    files = previous.get("files", {}) if isinstance(previous, dict) else {}
+    recorded = files.get("model", {}) if isinstance(files, dict) else {}
+    for key in ("small", "turbo"):
+        name, _url, size, digest = ASSETS[key]
+        path = payload / name
+        if name == profile["assets"]["model"][0] or not trusted_file(path, size):
+            continue
+        if recorded == {"sha256": digest, "size": size, "mtime_ns": path.stat().st_mtime_ns}:
+            try:
+                path.unlink()
+            except OSError:
+                pass  # An optional old-model cleanup cannot undo successful setup.
 
 
 def runtime_paths():
@@ -299,21 +387,42 @@ def runtime_paths():
 def preferences():
     path = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "arctic" / "dictation.json"
     value = read_json(path)
+    if not isinstance(value, dict):
+        value = {}
     return {"language": value.get("language") if value.get("language") in ("auto", "he", "en") else "auto",
             "backend": value.get("backend") if value.get("backend") in ("auto", "cpu", "vulkan") else "auto"}
 
 
 def snapshot(runtime=None):
-    available = ready()
+    profile = desired_profile()
+    compatibility_required = profile["cpu_variant"] == "avx2" and (
+        Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "arctic/dictation/compatibility-required.json").exists()
+    available = ready() and not compatibility_required
     setup = read_json(SYSTEM / "setup.json") if trusted_file(SYSTEM / "setup.json") else {}
+    if not isinstance(setup, dict):
+        setup = {}
     state = "ready" if available else setup.get("state", "unavailable")
     if state == "ready" and not available:
         state = "error"
+    # During a download the frozen queue controls the exact progress denominator.
+    # Only whitelist IDs are accepted; arbitrary status JSON cannot supply URLs.
+    if state in ("queued", "downloading") and setup.get("profile") in PROFILES:
+        profile = PROFILES[setup["profile"]]
     result = {"ok": True, "state": state, "ready": available, "progress": setup.get("progress", 0),
-              "error": setup.get("error", ""), "model": "small", "model_download_bytes": ASSETS["model"][2],
-              "download_bytes": DOWNLOAD_BYTES, "version": VERSION, "active_backend": "", **preferences()}
+              "error": setup.get("error", ""), **profile_status(profile),
+              "version": VERSION, "active_backend": "", "active_cpu_variant": "",
+              "profile_selection": profile_selection(),
+              "recommended_profile": profile_status(recommended_profile()),
+              "compatibility_profile": profile_status(PROFILES["small-v2"]),
+              "compatibility_required": compatibility_required,
+              **preferences()}
     if runtime:
         result.update(runtime)
+    if compatibility_required:
+        result.update(ready=False, state="error", compatibility_required=True, active_backend="", active_cpu_variant="",
+                      error="Optimized CPU inference is incompatible. Choose Small compatibility setup in Settings, then record again.")
+    elif profile["cpu_variant"] == "baseline":
+        result["compatibility_required"] = False
     if not available and state == "error" and not result["error"]:
         result["error"] = "Dictation files or dependencies are missing. Retry setup."
     return result
@@ -339,7 +448,8 @@ def child_environment(private):
     return env
 
 
-def voxtype_config(private, language):
+def voxtype_config(private, language, profile=None):
+    profile = desired_profile() if profile is None else profile
     selected = '["he", "en"]' if language == "auto" else json.dumps(language)
     return f'''engine = "whisper"
 state_file = {json.dumps(str(private / "voxtype-state"))}
@@ -351,7 +461,7 @@ sample_rate = 16000
 max_duration_secs = 60
 [whisper]
 mode = "local"
-model = {json.dumps(str(PAYLOAD / ASSETS["model"][0]))}
+model = {json.dumps(str(PAYLOAD / profile["assets"]["model"][0]))}
 language = {selected}
 translate = false
 on_demand_loading = true
@@ -359,6 +469,10 @@ gpu_isolation = false
 context_window_optimization = false
 eager_processing = false
 streaming = false
+[text]
+spoken_punctuation = false
+filter_filler_words = false
+smart_auto_submit = false
 [output]
 mode = "file"
 file_path = {json.dumps(str(private / "transcript"))}
@@ -379,8 +493,7 @@ enabled = false
 def gpu_available():
     # The Vulkan release has an x86-64-v3 ISA floor; the CPU baseline supports v2.
     try:
-        flags = Path("/proc/cpuinfo").read_text().lower()
-        return all(f" {flag}" in flags for flag in ("avx2", "fma", "bmi1", "bmi2", "f16c", "movbe")) and any(Path("/dev/dri").glob("renderD*"))
+        return v3_supported() and any(Path("/dev/dri").glob("renderD*"))
     except OSError:
         return False
 
@@ -488,12 +601,16 @@ class Broker:
         self.started = 0.0
         self.stopped = 0.0
         self.fallback_cpu = False
+        self.cpu_variant = ""
         self.lock_checked = 0.0
         self.lock_state = False
         self.cancel_generation = cancellation(private)
         self.write()
 
     def write(self, **updates):
+        if updates.get("state") in ("ready", "unavailable"):
+            updates.setdefault("active_cpu_variant", "")
+            updates.setdefault("active_backend", "")
         self.runtime.update(updates)
         value = snapshot(self.runtime)
         atomic_json(self.shared / "dictation.json", value)
@@ -546,7 +663,11 @@ class Broker:
     def start(self, generation=None):
         if self.process:
             return self.write()
-        if not ready():
+        profile = desired_profile()
+        if profile["cpu_variant"] == "avx2" and (self.private / "compatibility-required.json").exists():
+            return self.write(ok=False, state="error", compatibility_required=True, active_backend="", active_cpu_variant="",
+                              error="Optimized CPU inference is incompatible. Choose Small compatibility setup in Settings, then record again.")
+        if not ready(profile=profile):
             return self.write(ok=False, state="error", error="Dictation is not ready. Finish setup before recording.")
         if self.locked(force=True):
             return self.write(ok=False, state="error", error="Unlock the session before recording.")
@@ -557,14 +678,19 @@ class Broker:
         self.erase()
         self.failure = ""
         settings = preferences()
-        backend = "cpu" if self.fallback_cpu or settings["backend"] == "cpu" else "vulkan" if gpu_available() else "cpu"
+        if settings["backend"] == "vulkan" and "vulkan" not in profile["assets"] and not self.fallback_cpu:
+            return self.write(ok=False, state="error", error="This Small compatibility profile uses CPU only. Select CPU or automatic acceleration and retry.")
+        backend = "cpu" if self.fallback_cpu or settings["backend"] == "cpu" else "vulkan" if "vulkan" in profile["assets"] and gpu_available() else "cpu"
         if settings["backend"] == "vulkan" and backend != "vulkan" and not self.fallback_cpu:
             return self.write(ok=False, state="error", error="Vulkan acceleration is unavailable on this machine. Select CPU and retry.")
         config = self.private / "config.toml"
-        config.write_text(voxtype_config(self.private, settings["language"]))
+        config.write_text(voxtype_config(self.private, settings["language"], profile))
         os.chmod(config, 0o600)
         self.env = child_environment(self.private)
-        self.binary = str(PAYLOAD / ASSETS[backend][0])
+        cpu_key = "avx2" if profile["cpu_variant"] == "avx2" else "cpu"
+        self.cpu_variant = "avx2" if cpu_key == "avx2" else "baseline"
+        binary_key = "vulkan" if backend == "vulkan" else cpu_key
+        self.binary = str(PAYLOAD / profile["assets"][binary_key][0])
         self.process = supervised([self.binary, "--quiet", "--config", str(config), "daemon"], env=self.env,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         for stream in (self.process.stdout, self.process.stderr):
@@ -580,11 +706,18 @@ class Broker:
                 break
             time.sleep(0.025)
         if not (self.private / "voxtype-state").exists() or self.process.poll() is not None or self.failure:
+            trapped = backend == "cpu" and self.cpu_variant == "avx2" and self.process.poll() == -signal.SIGILL
             self.terminate()
             if backend == "vulkan":
                 self.fallback_cpu = True
-            message = "GPU initialization failed. CPU is selected for this session; record again." if self.fallback_cpu else "The local speech engine could not start. Retry setup or choose CPU."
-            return self.write(ok=False, state="error", error=message, active_backend="cpu" if self.fallback_cpu else "")
+            if trapped:
+                atomic_json(self.private / "compatibility-required.json", {"required": True})
+            message = ("Optimized CPU inference is incompatible. Choose Small compatibility setup in Settings, then record again."
+                       if trapped else "GPU initialization failed. CPU is selected for this session; record again." if self.fallback_cpu
+                       else "The local speech engine could not start. Retry setup or choose CPU.")
+            return self.write(ok=False, state="error", error=message, active_backend="cpu" if self.fallback_cpu and not trapped else "",
+                              compatibility_required=trapped,
+                              active_cpu_variant=profile["cpu_variant"] if self.fallback_cpu and not trapped else "")
         if cancellation(self.private) != generation or self.locked(force=True):
             self.terminate()
             return self.write(ok=True, state="ready", error="", message="Recording discarded.")
@@ -598,7 +731,8 @@ class Broker:
         self.started = time.monotonic()
         self.stopped = 0
         self.last_active = self.started
-        return self.write(ok=True, state="recording", error="", active_backend=backend)
+        return self.write(ok=True, state="recording", error="", compatibility_required=False, active_backend=backend,
+                          active_cpu_variant=self.cpu_variant if backend == "cpu" else "")
 
     def record(self, verb):
         return subprocess.run([self.binary, "--quiet", "--config", str(self.private / "config.toml"), "record", verb],
@@ -638,15 +772,21 @@ class Broker:
         if self.failure or self.process.poll() is not None:
             category = self.failure
             backend = self.runtime.get("active_backend")
+            trapped = backend == "cpu" and self.cpu_variant == "avx2" and self.process.poll() == -signal.SIGILL
             self.terminate()
-            if category == "microphone":
+            if trapped:
+                atomic_json(self.private / "compatibility-required.json", {"required": True})
+                message = "Optimized CPU inference is incompatible. Choose Small compatibility setup in Settings, then record again."
+            elif category == "microphone":
                 message = "The microphone could not record. Select an input in Sound settings and try again."
             elif backend == "vulkan":
                 self.fallback_cpu = True
                 message = "GPU transcription failed. CPU is selected for this session; record again."
             else:
                 message = "Local transcription failed. Retry setup or record again with CPU."
-            self.write(ok=False, state="error", error=message, active_backend="cpu" if self.fallback_cpu else "")
+            self.write(ok=False, state="error", error=message, active_backend="cpu" if self.fallback_cpu and not trapped else "",
+                       compatibility_required=trapped,
+                       active_cpu_variant=desired_profile()["cpu_variant"] if self.fallback_cpu and not trapped else "")
             return
         state_path = self.private / "voxtype-state"
         state = state_path.read_text().strip() if state_path.exists() else ""
@@ -701,12 +841,18 @@ class Broker:
 
     def serve(self):
         control = self.private / "control.sock"
-        control.unlink(missing_ok=True)
+        staged = self.private / ("control." + str(os.getpid()) + "." + os.urandom(8).hex() + ".sock")
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(str(control))
-        os.chmod(control, 0o600)
-        server.listen(4)
+        published_inode = None
         try:
+            # A path's existence must mean an endpoint is already listening.
+            # Publishing directly at bind() allows clients to race listen() and
+            # mistake a live starting broker for a dead controller.
+            server.bind(str(staged))
+            os.chmod(staged, 0o600)
+            server.listen(4)
+            published_inode = staged.stat().st_ino
+            os.replace(staged, control)
             while True:
                 readers, _, _ = select.select([server], [], [], 0.1)
                 if readers:
@@ -749,7 +895,27 @@ class Broker:
         finally:
             self.terminate()
             server.close()
-            control.unlink(missing_ok=True)
+            staged.unlink(missing_ok=True)
+            # An older broker must never remove a newer endpoint's pathname.
+            try:
+                if published_inode is not None and control.lstat().st_ino == published_inode:
+                    control.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def run_broker(shared, private):
+    # Client launch waits are bounded; a slow first startup can outlive one.
+    # Hold a separate lock for the complete broker lifetime so another launcher
+    # can never create a second audio owner or replace an active status file.
+    fd = os.open(private / "broker.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        Broker(shared, private).serve()
+        return True
 
 
 def client(verb):
@@ -792,9 +958,13 @@ def client(verb):
         # unknown locks retain their marker until authoritative unlock/session
         # restart. Keep this legacy verb harmless for existing wrapper callers.
         return snapshot()
-    if verb in ("retry", "setup"):
-        result = subprocess.run(["/usr/bin/pkexec", "/usr/libexec/arctic/arctic-dictation-setup"],
+    if verb in ("retry", "setup", "compatibility-setup", "recommended-setup"):
+        client("cancel")
+        arguments = ["--compatibility"] if verb == "compatibility-setup" else ["--recommended"] if verb == "recommended-setup" else []
+        result = subprocess.run(["/usr/bin/pkexec", "/usr/libexec/arctic/arctic-dictation-setup", *arguments],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+        if result.returncode == 0 and verb == "recommended-setup":
+            (private / "compatibility-required.json").unlink(missing_ok=True)
         return snapshot({"ok": result.returncode == 0, "error": "" if not result.returncode else "Setup needs administrator authorization. Retry setup."})
     if verb in ("set-language", "set-backend"):
         key = "language" if verb == "set-language" else "backend"
@@ -866,7 +1036,11 @@ def main():
         if os.geteuid() != 0:
             raise Failure("Dictation setup needs administrator authorization.")
         if verb == "--queue":
-            request_setup()
+            allowed = {(): None, ("--compatibility",): "compatibility", ("--recommended",): "recommended"}
+            arguments = tuple(sys.argv[2:])
+            if arguments not in allowed:
+                raise Failure("Choose a supported dictation setup operation.")
+            request_setup(selection=allowed[arguments])
             return
         success = system_setup(offline="--offline" in sys.argv)
         # Installer callers deliberately treat a dependency/model failure as nonfatal.
@@ -876,12 +1050,12 @@ def main():
         import resource
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         shared, private = runtime_paths()
-        Broker(shared, private).serve()
+        run_broker(shared, private)
         return
     if verb == "_lock-supervisor":
         lock_supervisor(sys.argv[2], sys.argv[3:])
         return
-    if verb not in ("status", "settings", "start", "stop", "toggle", "cancel", "setup", "retry", "set-language", "set-backend", "lock", "unlock", "watch-unlock", "lock-fallback"):
+    if verb not in ("status", "settings", "start", "stop", "toggle", "cancel", "setup", "retry", "compatibility-setup", "recommended-setup", "set-language", "set-backend", "lock", "unlock", "watch-unlock", "lock-fallback"):
         raise Failure("Unknown dictation command.")
     try:
         result = client(verb)

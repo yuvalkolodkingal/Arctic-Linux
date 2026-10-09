@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Prepare exact qualified ISO assets; all GitHub calls here are read-only."""
 import argparse
+from contextlib import ExitStack
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -15,7 +17,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
-         'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py'}
+         'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py',
+         'tools/dictation-qualification/contract.py'}
 BUILD_INPUTS = {'.github/workflows/iso.yml',
                 'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
@@ -136,6 +139,326 @@ def read_json(archive, name):
     return json.loads(archive.read(name))
 
 
+def source_hash(ref, name):
+    require(re.fullmatch('[0-9a-f]{40}', ref) and not Path(name).is_absolute()
+            and '..' not in Path(name).parts, 'Unsafe qualification source identity')
+    return hashlib.sha256(subprocess.check_output(
+        ['git', '-C', str(ROOT), 'show', ref + ':' + name], timeout=120)).hexdigest()
+
+
+def dictation_lane_proof(archive, manifest, hardware_profile):
+    """Check one complete hardware lane without substituting another profile."""
+    state = read_json(archive, 'execution.json')
+    image, pin = manifest['image'], manifest['dictation'][hardware_profile]
+    require(state['schema'] == 'arctic-dictation-execution-v2' and state['hardware_profile'] == hardware_profile
+            and state['status'] == 'exact_image_dictation_online_offline_local_sessions_passed'
+            and state['image'] == image and state['execution_checker_head'] == pin['source_sha']
+            and state['release_acceptance'] is False
+            and state['fixture_manifest_sha256'] == pin['fixture_manifest_sha256']
+            and re.fullmatch('[0-9a-f]{64}', pin['fixture_manifest_sha256']),
+            'Dictation execution does not qualify this exact image')
+    path = ROOT / 'tools/dictation-qualification/contract.py'
+    require(sha(path) == source_hash(pin['source_sha'], 'tools/dictation-qualification/contract.py'),
+            'Publication dictation validator differs from reviewed execution')
+    spec = importlib.util.spec_from_file_location('qualified_dictation_contract', path)
+    contract = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contract)
+    required = {'online-installed-live', 'offline-installed-live', 'online-installed',
+                'offline-installed', 'recovery', 'recovered-offline'}
+    require(set(state['reports']) == required and set(state['installations']) == {'online', 'offline'},
+            'Missing/extra dictation installation or report phases')
+    indicator_names = {'dictation-indicator-' + phase + '.png' for phase in ('online-installed', 'recovered-offline')}
+    require({entry.filename for entry in archive.infolist() if not entry.is_dir()}
+            == {'execution.json', 'fixtures.json'} | {name + '.json' for name in required} | indicator_names,
+            'Dictation evidence contains unexpected or missing files')
+    require(archive.getinfo('fixtures.json').file_size < 128 * 1024, 'Oversized dictation fixture manifest')
+    fixtures = archive.read('fixtures.json')
+    require(hashlib.sha256(fixtures).hexdigest() == pin['fixture_manifest_sha256'],
+            'Public dictation fixture manifest differs')
+    hashes = {key: source_hash(pin['source_sha'], name) for key, name in (
+        ('checker_sha256', 'tools/dictation-qualification/guest_check.py'),
+        ('contract_sha256', 'tools/dictation-qualification/contract.py'),
+        ('accuracy_sha256', 'tools/dictation-accuracy/accuracy.py'),
+        ('pins_sha256', 'tools/dictation-accuracy/pins.json'))}
+    hashes['controller_sha256'] = source_hash(image['source_sha'], 'packaging/dictation/dictation.py')
+    hashes['child_exec_sha256'] = source_hash(image['source_sha'], 'packaging/dictation/child_exec.py')
+    reports = {}
+    for name in sorted(required):
+        info = state['reports'][name]
+        require(info['path'] == name + '.json' and info['status'] == 'passed'
+                and re.fullmatch('[0-9a-f]{64}', info['sha256'])
+                and archive.getinfo(info['path']).file_size < 128 * 1024
+                and hashlib.sha256(archive.read(info['path'])).hexdigest() == info['sha256'],
+                'Dictation checked report path, bytes or status differs')
+        phase = 'live' if name.endswith('-live') else name
+        kind = 'online' if name.startswith('online-') else 'offline'
+        expected = dict(schema='arctic-dictation-context-v2', phase=phase, hardware_profile=hardware_profile,
+                        source_sha=image['source_sha'], iso_sha256=image['sha256'], iso_bytes=image['bytes'],
+                        installation_id=state['installations'][kind],
+                        fixture_manifest_sha256=pin['fixture_manifest_sha256'], **hashes)
+        report = read_json(archive, info['path'])
+        contract.validate_report(report, expected, fixture_manifest=fixtures)
+        require(info['phase'] == phase and info['installation_id'] == expected['installation_id']
+                and info['boot_id'] == report['boot_id'], 'Dictation report/host provenance differs')
+        reports[name] = report
+    contract.validate_execution(state, reports, fixture_manifest=fixtures)
+    required_images = {}
+    require(set(state['indicators']) == {'online-installed', 'recovered-offline'}, 'Missing dictation indicator phases')
+    for phase, info in state['indicators'].items():
+        request = info['request']
+        name = 'dictation-indicator-' + phase + '.png'
+        require(info['path'] == name and info['iso_sha256'] == image['sha256']
+                and info['installation_id'] == reports[phase]['context']['installation_id']
+                and request['boot_id'] == reports[phase]['boot_id'] and request['phase'] == phase
+                and request['installation_id'] == info['installation_id'] and request['receiver_empty'] is True
+                and re.fullmatch('[0-9a-f]{32}', request['capture_nonce'])
+                and any(gate['id'] == 'recording-status-published' and gate['status'] == 'passed'
+                        and gate['observations'].get('sha256') == hashlib.sha256(request['capture_nonce'].encode()).hexdigest()
+                        for gate in reports[phase]['gates'])
+                and type(request['desktop_uid']) is int and request['desktop_uid'] > 0
+                and archive.getinfo(name).file_size < 4 * 1024 * 1024
+                and hashlib.sha256(archive.read(name)).hexdigest() == info['sha256']
+                and archive.read(name).startswith(b'\x89PNG\r\n\x1a\n'), 'Dictation indicator provenance/bytes differ')
+        required_images[name] = info['sha256']
+    review = manifest['dictation_media_review'][hardware_profile]
+    require(review['image_sha256'] == image['sha256'] and review['dictation_archive_sha256'] == pin['archive_sha256']
+            and review['visual_status'] == 'passed' and review['images'] == required_images,
+            'Exact-image dictation recording indicator visual review is absent')
+    measurements = {}
+    for phase in ('online-installed', 'recovered-offline'):
+        measurements[phase] = {}
+        for language in ('en', 'he'):
+            rows = [sample for sample in reports[phase]['samples']
+                    if sample['language'] == language and sample['purpose'] == 'cpu-session']
+            words = sum(row['reference_words'] for row in rows)
+            characters = sum(row['reference_chars'] for row in rows)
+            measurements[phase][language] = dict(samples=len(rows),
+                wer=sum(row['word_edits'] for row in rows) / words,
+                cer=sum(row['char_edits'] for row in rows) / characters,
+                elapsed_ns=sum(row['elapsed_ns'] for row in rows),
+                audio_seconds=sum(row['audio_frames'] for row in rows) / 16000)
+    proof = dict(run_id=pin['run_id'], source_sha=pin['source_sha'], artifact_sha256=pin['archive_sha256'],
+                hardware_profile=hardware_profile, profile=contract.PROFILES[hardware_profile],
+                fixture_manifest_sha256=pin['fixture_manifest_sha256'],
+                gates='online and offline installations; same-disk recovery; real local Hebrew/English CPU sessions and failure retry',
+                limitations=reports['online-installed']['limitations'], reports=state['reports'],
+                indicator_review=review, measurements=measurements)
+    return proof, {'state': state, 'reports': reports}, fixtures
+
+
+def dictation_proof(archives, manifest):
+    """Both six-boot hardware lanes are required for the same final image."""
+    profiles = {'small-v2', 'turbo-q5-v3'}
+    pins = manifest['dictation']
+    require(type(pins) is dict and set(pins) == profiles and type(archives) is dict and set(archives) == profiles,
+            'Dictation execution hardware profile inventory differs')
+    require(len({pin['source_sha'] for pin in pins.values()}) == 1
+            and len({pin['run_id'] for pin in pins.values()}) == 1
+            and len({pin['fixture_manifest_sha256'] for pin in pins.values()}) == 1
+            and len({pin['artifact_id'] for pin in pins.values()}) == 2
+            and len({pin['archive_sha256'] for pin in pins.values()}) == 2,
+            'Dictation execution profile source, run, fixture or distinct artifact identities differ')
+    proofs, executions, fixture_bytes = {}, {}, None
+    for profile in sorted(profiles):
+        proof, execution, fixtures = dictation_lane_proof(archives[profile], manifest, profile)
+        require(fixture_bytes is None or fixtures == fixture_bytes, 'Dictation profile fixture bytes differ')
+        fixture_bytes = fixtures
+        proofs[profile], executions[profile] = proof, execution
+    path = ROOT / 'tools/dictation-qualification/contract.py'
+    spec = importlib.util.spec_from_file_location('qualified_dictation_profiles', path)
+    contract = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contract)
+    cross = contract.validate_release_profiles(executions, fixture_manifest=fixture_bytes)
+    return dict(hardware_profiles=proofs, cross_profile=cross,
+                gates='two complete six-boot hardware lanes; distinct actual CPU/installed payloads and encrypted recovery disks',
+                release_acceptance=False)
+
+
+def taskbar_proof(archive, manifest):
+    """Independently check the actual-image taskbar matrix, inputs and captures."""
+    names = [entry.filename for entry in archive.infolist() if not entry.is_dir()
+             and Path(entry.filename).name == 'taskbar-report.json']
+    require(len(names) == 1, 'Missing/duplicate actual-image taskbar report')
+    execution = read_json(archive, 'execution.json')
+    state = read_json(archive, 'taskbar/taskbar-state.json')
+    transport = execution['taskbar_transport']
+    require(set(transport) == {'name', 'bytes', 'sha256', 'kind'}
+            and transport['name'] == 'taskbar-boot.log'
+            and transport['kind'] == 'root-owned named virtio-serial output bound to original installed native boot'
+            and type(transport['bytes']) is int and 0 < transport['bytes'] <= 210 * 1024 * 1024
+            and re.fullmatch('[0-9a-f]{64}', transport['sha256']), 'Taskbar original port transport identity differs')
+    prefix_name = 'taskbar-boot.log.bounded-prefix.bin'
+    prefix_info = execution['harness_evidence'][prefix_name]
+    require(prefix_info['original_bytes'] == transport['bytes']
+            and prefix_info['original_sha256'] == transport['sha256']
+            and prefix_info['bytes'] == min(64 * 1024, transport['bytes'])
+            and archive.getinfo('harness/' + prefix_name).file_size == prefix_info['bytes']
+            and hashlib.sha256(archive.read('harness/' + prefix_name)).hexdigest() == prefix_info['sha256'],
+            'Taskbar retained original transport bytes/hash or bounded prefix differs')
+    context = execution['taskbar_context']
+    image, pin = manifest['image'], manifest['native']
+    require(set(context) == {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'token',
+            'checker_sha256', 'runtime_sha256', 'native_sha256', 'pointer_sha256', 'capture_sha256'}
+            and context['schema'] == 'arctic-taskbar-context-v1'
+            and context['source_sha'] == image['source_sha'] and context['iso_sha256'] == image['sha256']
+            and context['iso_bytes'] == image['bytes'] and context['execution_sha'] == pin['source_sha']
+            and re.fullmatch('[0-9a-f]{32}', context['token']), 'Taskbar exact-image execution context differs')
+    for key, name in (('checker_sha256', 'taskbar.py'), ('runtime_sha256', 'taskbar-runtime.py'),
+                      ('native_sha256', 'native_smoke.py')):
+        require(context[key] == source_hash(pin['source_sha'], 'tools/native-functional/' + name),
+                'Taskbar executed checker bytes differ: ' + name)
+    build = execution['taskbar_build']
+    require(build['schema'] == 'arctic-taskbar-tools-v1' and build['release_acceptance'] is False
+            and set(build['sources']) == {'shell/dev/virtual-pointer.c',
+                 'tools/native-functional/taskbar-screencopy.c', 'shell/dev/wlr-screencopy-unstable-v1.xml'}
+            and set(build['binaries']) == {'virtual-pointer', 'raw-screencopy'}, 'Taskbar tool build inventory differs')
+    for name, sha in build['sources'].items():
+        require(sha == source_hash(pin['source_sha'], name), 'Taskbar compiled source bytes differ: ' + name)
+    require(context['pointer_sha256'] == build['binaries']['virtual-pointer']
+            and context['capture_sha256'] == build['binaries']['raw-screencopy']
+            and all(re.fullmatch('[0-9a-f]{64}', sha) for sha in build['binaries'].values()),
+            'Taskbar compiled ELF identity differs')
+    require(execution['taskbar'] == state and state['schema'] == 'arctic-taskbar-state-v1'
+            and state['stage'] == 'installed' and state['status'] == 'passed'
+            and state['release_acceptance'] is False and state['required_pngs'] == 480
+            and state['context'] == context, 'Taskbar runtime/transport proof failed or differs')
+    provenance = state['provenance']
+    native = read_json(archive, 'native-installed/serial-native-provenance.json')
+    require(provenance['context'] == context and provenance['stage'] == 'installed'
+            and provenance['schema'] == 'arctic-taskbar-provenance-v1'
+            and provenance['release_acceptance'] is False
+            and all(provenance[key] == native[key] for key in ('boot_id', 'desktop_uid',
+                    'active_desktop_session', 'cmdline')) and native['stage'] == 'installed'
+            and native['native_source_sha256'] == context['native_sha256']
+            and provenance['virtualization'] in ('qemu', 'kvm')
+            and 'rd.live.image' not in provenance['cmdline'].split(), 'Taskbar installed boot/session identity differs')
+    collector = state['collector']
+    require(collector['status'] == 'passed' and collector['error'] is None
+            and collector['evidence_export_complete'] is True and collector['release_acceptance'] is False
+            and collector['token'] == context['token']
+            and all(collector[key] == provenance[key] for key in ('boot_id', 'desktop_uid', 'active_desktop_session')),
+            'Taskbar collector completion proof differs')
+    channel = provenance['transport']
+    require(set(channel) == {'schema', 'name', 'device', 'major', 'minor', 'uid', 'mode'}
+            and channel['schema'] == 'arctic-taskbar-virtio-port-v1'
+            and channel['name'] == 'arctic-taskbar-evidence'
+            and re.fullmatch('/dev/vport[0-9]+p[0-9]+', channel['device'])
+            and type(channel['uid']) is int and channel['uid'] == 0
+            and type(channel['mode']) is int and 0 <= channel['mode'] <= 0o7777 and not channel['mode'] & 0o022
+            and type(channel['major']) is int and 0 < channel['major'] <= 99999
+            and type(channel['minor']) is int and 0 <= channel['minor'] <= 99999,
+            'Taskbar actual guarded transport device proof differs')
+    report = read_json(archive, names[0])
+    require(report['schema'] == 'arctic-installed-taskbar-v1' and report['stage'] == 'installed'
+            and report['status'] == 'passed' and report['release_acceptance'] is False
+            and report['reservation_observer'] == 'Mango maximized-client rectangles; IPC does not expose raw exclusive-zone values',
+            'Taskbar report identity, status or measurement scope differs')
+    required_cleanup = {'settings_bytes_restored', 'outputs_restored', 'original_windows_retained',
+                        'bars_restored', 'only_proved_owned_processes_stopped'}
+    require(set(report['cleanup']) == required_cleanup and all(report['cleanup'][key] is True for key in required_cleanup)
+            and report['security']['selinux'] == 'Enforcing' and report['security']['observed_new_avcs'] == 0,
+            'Taskbar cleanup or security interval failed')
+    for name in ('Bar.qml', 'ScreenFrame.qml', 'Session.qml', 'Theme.qml', 'VerticalBar.qml', 'shell.qml',
+                 'BarVisibility.js', 'scripts/window_geometry.py'):
+        require(report['installed_inputs']['/usr/share/arctic/shell/' + name]
+                == source_hash(manifest['image']['source_sha'], 'shell/' + name),
+                'Actual taskbar shell bytes differ from built source: ' + name)
+    require(re.fullmatch('[0-9a-f]{64}', report['installed_inputs']['/usr/bin/foot']), 'Taskbar Foot executable unbound')
+    require(all(re.fullmatch('[0-9a-f]{64}', report['installed_inputs'][name])
+                for name in ('/usr/bin/mango', '/usr/bin/mmsg'))
+            and report['installed_inputs']['/run/t/virtual-pointer'] == context['pointer_sha256']
+            and report['installed_inputs']['/run/t/raw-screencopy'] == context['capture_sha256'],
+            'Taskbar installed compositor or probe executable unbound')
+    window = report['owned_window']
+    require(type(window['pid']) is int and window['pid'] > 1 and type(window['start_ticks']) is int
+            and window['start_ticks'] > 0 and type(window['client_id']) is str and bool(window['client_id'])
+            and window['uid'] == provenance['desktop_uid'] and window['is_xwayland'] is False
+            and window['executable'] == '/usr/bin/foot'
+            and window['executable_sha256'] == report['installed_inputs']['/usr/bin/foot'],
+            'Taskbar fresh native Foot ownership proof differs')
+    cases = report['results']
+    require(type(cases) is list and len(cases) == 24, 'Taskbar case count differs')
+    outputs = {case['output'] for case in cases}
+    require(len(outputs) == 2 and {(case['output'], case['scale'], case['edge']) for case in cases}
+            == {(output, scale, edge) for output in outputs for scale in (1, 1.5, 2)
+                for edge in ('top', 'bottom', 'left', 'right')}, 'Taskbar output/scale/edge coverage incomplete')
+    evidence_root = Path(report['evidence_root'])
+    require(evidence_root.is_absolute() and evidence_root.parent == Path('/tmp')
+            and evidence_root.name.startswith('arctic-native-smoke-'), 'Unexpected taskbar guest evidence root')
+    prefix = Path(names[0]).parent
+    require(prefix == Path('taskbar'), 'Taskbar archive transport path differs')
+    for name, item in state['files'].items():
+        relative = Path(name)
+        require(not relative.is_absolute() and '..' not in relative.parts and relative.as_posix() == name
+                and relative.suffix in ('.png', '.json', '.log'), 'Unsafe taskbar transported file path')
+        entry = archive.getinfo((prefix / relative).as_posix())
+        require(entry.file_size == item['bytes'] and entry.file_size <= 4 * 1024 * 1024
+                and hashlib.sha256(archive.read(entry)).hexdigest() == item['sha256'],
+                'Taskbar transported file bytes differ')
+    require(len(state['files']) <= 512 and sum(item['bytes'] for item in state['files'].values()) <= 128 * 1024 * 1024,
+            'Taskbar transported archive bounds differ')
+    captures = {}
+    def capture(item, shown=None):
+        relative = Path(item['path']).relative_to(evidence_root)
+        require('..' not in relative.parts and relative.suffix == '.png', 'Unsafe taskbar capture path')
+        name = (prefix / relative).as_posix()
+        require(archive.getinfo(name).file_size < 4 * 1024 * 1024
+                and hashlib.sha256(archive.read(name)).hexdigest() == item['sha256']
+                and archive.read(name).startswith(b'\x89PNG\r\n\x1a\n'), 'Taskbar physical capture bytes differ')
+        if shown is not None:
+            fraction = item['non_foot_fraction']
+            require(item['visible'] is shown and type(fraction) in (int, float)
+                    and 0 <= fraction <= 1 and (fraction >= .6 if shown else fraction <= .1),
+                    'Taskbar actual pixel visibility gate failed')
+        captures[name] = item['sha256']
+    for case in cases:
+        baseline = case['baseline']
+        require(set(baseline) == {'x', 'y', 'width', 'height'}
+                and all(type(value) in (int, float) and math.isfinite(value) for value in baseline.values())
+                and baseline['width'] > 0 and baseline['height'] > 0, 'Invalid taskbar baseline geometry')
+        for mode, actual in (('always', case['always_geometry']), ('dodge', case['hiding_geometry'])):
+            insets = dict.fromkeys(('top', 'bottom', 'left', 'right'), 6)
+            if mode == 'always': insets[case['edge']] += 32
+            expected = dict(x=baseline['x'] + insets['left'], y=baseline['y'] + insets['top'],
+                            width=baseline['width'] - insets['left'] - insets['right'],
+                            height=baseline['height'] - insets['top'] - insets['bottom'])
+            require(set(actual) == set(expected)
+                    and all(type(actual[key]) in (int, float) and math.isfinite(actual[key])
+                            and abs(actual[key] - value) <= 1 for key, value in expected.items()),
+                    'Taskbar effective frame/exclusive geometry failed')
+        require([row['mode'] for row in case['covered_windows']] == ['auto', 'dodge']
+                and [row['mode'] for row in case['transitions']] == ['auto', 'dodge', 'always', 'auto', 'dodge'],
+                'Taskbar covered/fullscreen transitions incomplete')
+        for row in case['covered_windows'] + case['transitions']:
+            capture(row['rest'], False)
+            if row['mode'] != 'always': capture(row['reveal'], True)
+            if row in case['covered_windows']:
+                require(set(row['geometry']) == set(case['hiding_geometry'])
+                        and all(abs(row['geometry'][key] - value) <= 1
+                                for key, value in case['hiding_geometry'].items()),
+                        'Taskbar covered Auto/Dodge effective geometry differs')
+            layers = row['layers']
+            for namespace, count, layer in (('arctic-bar', 1, 'top' if row['mode'] == 'always' else 'overlay'),
+                                           ('arctic-frame', 1, 'bottom'),
+                                           ('arctic-frame-reserve', 3 if row['mode'] == 'always' else 4, 'bottom')):
+                members = [item for item in layers if item.get('name') == namespace]
+                require(all(sum(item.get('monitor') == output for item in members) == count for output in outputs)
+                        and all(item.get('monitor') in outputs and item.get('layer') == layer for item in members),
+                        'Taskbar actual mapped layer counts differ')
+        capture(case['exposed_frame'])
+    images = {'taskbar/' + name: item['sha256'] for name, item in state['files'].items()
+              if Path(name).suffix == '.png'}
+    require(len(images) >= 480 and all(name in images for name in captures),
+            'Taskbar complete visual review inventory missing')
+    review = manifest['taskbar_media_review']
+    require(review['visual_status'] == 'passed' and review['image_sha256'] == image['sha256']
+            and review['native_archive_sha256'] == pin['archive_sha256'] and review['images'] == images,
+            'Exact taskbar screenshot visual review is absent')
+    return dict(schema=report['schema'], cases=24, outputs=sorted(outputs),
+                reservation_observer=report['reservation_observer'], captures=captures,
+                visual_review=review, transport=transport, transport_prefix=prefix_info, release_acceptance=False)
+
+
 def native_proof(archive, manifest):
     state = read_json(archive, 'execution.json')
     image, pin = manifest['image'], manifest['native']
@@ -178,9 +501,10 @@ def native_proof(archive, manifest):
                     and hashlib.sha256(archive.read(name)).hexdigest() == item['sha256'], 'Reviewed audio bytes differ')
             required_audio[name] = item['sha256']
     require(review['audio'] == required_audio and bool(required_audio), 'Exact audio review inventory differs')
+    taskbar = taskbar_proof(archive, manifest)
     return dict(run_id=pin['run_id'], source_sha=pin['source_sha'], artifact_sha256=pin['archive_sha256'],
                 native_gates='all eight passed in live and encrypted offline installed phases',
-                media_review=review, photos='passed in live and installed phases')
+                media_review=review, photos='passed in live and installed phases', taskbar=taskbar)
 
 
 def prepare(manifest, out):
@@ -205,7 +529,10 @@ def prepare(manifest, out):
     release_main = api('/git/ref/heads/main')['object']['sha']
     require(re.fullmatch('[0-9a-f]{40}', release_main), 'Invalid current main source')
     require(not api('/pulls?state=open&per_page=100'), 'Arctic PRs remain open')
-    for ref in (manifest['image']['source_sha'], manifest['main_sha'], release_main):
+    require(type(manifest['dictation']) is dict and set(manifest['dictation']) == {'small-v2', 'turbo-q5-v3'},
+            'Both dictation hardware qualification pins are required')
+    for ref in {manifest['image']['source_sha'], manifest['main_sha'], release_main,
+                manifest['native']['source_sha'], *(pin['source_sha'] for pin in manifest['dictation'].values())}:
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
     current_checks = main_checks(release_main, manifest['main_sha'])
@@ -227,6 +554,9 @@ def prepare(manifest, out):
     require(perf['run_id'] == image['run_id'] and perf['source_sha'] == image['source_sha'], 'Performance image/run differs')
     validate_artifact(perf, 'paired-performance')
     validate_lane(manifest['native'], '.github/workflows/native-candidate-20261008.yml', 'native-candidate-qualification')
+    for profile, pin in manifest['dictation'].items():
+        validate_lane(pin, '.github/workflows/dictation-candidate-20261009.yml',
+                      'dictation-candidate-qualification-' + profile)
     validate_lane(manifest['update'], '.github/workflows/image-update-20261008.yml', 'same-image-nix-signed-update')
     require(not out.exists(), 'Prepared release assets must be unused')
     with tempfile.TemporaryDirectory(prefix='arctic-qualified-') as temp:
@@ -243,6 +573,10 @@ def prepare(manifest, out):
                     'Same-image paired precision/regression evidence failed')
         with archive(manifest['native'], temp / 'native.zip') as evidence:
             native = native_proof(evidence, manifest)
+        with ExitStack() as stack:
+            dictation_archives = {profile: stack.enter_context(archive(pin, temp / ('dictation-' + profile + '.zip')))
+                                  for profile, pin in manifest['dictation'].items()}
+            dictation = dictation_proof(dictation_archives, manifest)
         with archive(manifest['update'], temp / 'update.zip') as evidence:
             update = read_json(evidence, 'update-result.json')
             pins = read_json(evidence, 'pre-final-boot.json')
@@ -266,7 +600,8 @@ def prepare(manifest, out):
         (out / (name + '.torrent.sha256')).write_text(transport['torrent_sha256'] + '  ' + name + '.torrent\n')
         proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main,
                      release_main_checks=current_checks, image=image,
-                     performance=perf, native=native, update=manifest['update'], release_acceptance='qualified',
+                     performance=perf, native=native, dictation=dictation,
+                     update=manifest['update'], release_acceptance='qualified',
                      measured_speed_or_ram_gain_claim=False, torrent=transport)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')
         (out / 'release-notes.md').write_text(

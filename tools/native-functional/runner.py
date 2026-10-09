@@ -22,6 +22,11 @@ import evidence as E
 HERE = Path(__file__).resolve().parent
 CHECKERS = E.CHECKERS
 LAUNCHER_SHA = E.LAUNCHER_SHA
+TASKBAR_FILES = {'tools/native-functional/taskbar.py', 'tools/native-functional/taskbar-runtime.py',
+                 'tools/native-functional/taskbar-evidence.py', 'tools/native-functional/prepare-taskbar-tools.sh',
+                 'tools/native-functional/taskbar-screencopy.c', 'tools/native-functional/taskbar-display.py',
+                 'shell/dev/virtual-pointer.c',
+                 'shell/dev/wlr-screencopy-unstable-v1.xml'}
 
 class R(E.R):
     @staticmethod
@@ -46,14 +51,25 @@ class R(E.R):
                 status = child.wait(timeout=seconds)
                 R.require(status == 0, 'Native command failed (' + str(status) + '); see ' + log.name)
             except BaseException:
-                subprocess.run(['docker', 'rm', '-f', container], stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, timeout=30)
+                # Attempt both owned-container and host process-group cleanup;
+                # an unresponsive daemon must not skip the latter.
+                try:
+                    subprocess.run(['docker', 'rm', '-f', container], stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL, timeout=30)
+                except BaseException:
+                    pass
                 if child.poll() is None:
-                    os.killpg(child.pid, signal.SIGTERM)
+                    try:
+                        os.killpg(child.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
                     try:
                         child.wait(timeout=15)
                     except subprocess.TimeoutExpired:
-                        os.killpg(child.pid, signal.SIGKILL)
+                        try:
+                            os.killpg(child.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
                         child.wait(timeout=15)
                 raise
 
@@ -64,7 +80,26 @@ class R(E.R):
         copied = {}
         if vm.exists():
             for path in vm.iterdir():
-                if path.is_file() and not path.is_symlink() and path.suffix in ('.log', '.png', '.txt'):
+                if path.is_file() and not path.is_symlink() and (path.suffix in ('.log', '.png', '.txt')
+                        or path.name in ('taskbar-display-install.json', 'taskbar-display-boot.json')):
+                    if path.name in ('taskbar-install.log', 'taskbar-boot.log'):
+                        R.require(path.stat().st_size <= 210 * 1024 * 1024, 'Oversized taskbar port transport')
+                        output = target / (path.name + '.bounded-prefix.bin')
+                        with path.open('rb') as source:
+                            output.write_bytes(source.read(64 * 1024))
+                        copied[output.name] = dict(bytes=output.stat().st_size, sha256=R.digest(output),
+                                                  original_bytes=path.stat().st_size, original_sha256=R.digest(path))
+                        continue
+                    if path.name in ('serial-install.log', 'serial-boot.log') and path.stat().st_size >= 128 * 1024 * 1024:
+                        R.require(path.stat().st_size <= 256 * 1024 * 1024, 'Oversized serial transport')
+                        # The full taskbar transport is extracted separately. Do
+                        # not upload duplicate huge serial/base64 diagnostics.
+                        output = target / (path.name + '.bounded-prefix.bin')
+                        with path.open('rb') as source:
+                            output.write_bytes(source.read(4 * 1024 * 1024))
+                        copied[output.name] = dict(bytes=output.stat().st_size, sha256=R.digest(output),
+                                                  original_bytes=path.stat().st_size, original_sha256=R.digest(path))
+                        continue
                     R.require(path.stat().st_size < 128 * 1024 * 1024, 'Oversized diagnostic ' + path.name)
                     shutil.copyfile(path, target / path.name)
                     copied[path.name] = dict(bytes=path.stat().st_size, sha256=R.digest(path))
@@ -78,6 +113,33 @@ class R(E.R):
                   'ISO byte count differs or exceeds release limit')
         R.require(R.digest(path) == R.ISO_SHA256, 'Actual ISO SHA256 differs')
         return dict(name=R.ISO, bytes=R.ISO_BYTES, sha256=R.ISO_SHA256, source=R.SOURCE)
+
+    @staticmethod
+    def display_evidence(vm, controller_sha256):
+        result = {}
+        for stage in ('install', 'boot'):
+            path = vm / ('taskbar-display-' + stage + '.json')
+            R.require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 64 * 1024,
+                      'Missing/oversized taskbar display fixture receipt: ' + stage)
+            value = json.loads(path.read_text())
+            R.require(value.get('schema') == 'arctic-qemu-taskbar-display-v1'
+                      and value.get('controller_sha256') == controller_sha256
+                      and value.get('status') == 'uiinfo_applied_pending_guest_two_output_evidence'
+                      and value.get('gpu_id') == 'arctic_taskbar_gpu'
+                      and value.get('display_backend') == 'dbus' and value.get('qemu_uid') == 0
+                      and value.get('guest_monitor_verification_required') is True
+                      and type(value.get('qemu_pid')) is int and value['qemu_pid'] > 1
+                      and type(value.get('bus_pid')) is int and value['bus_pid'] > 1,
+                      'Taskbar display fixture receipt differs: ' + stage)
+            heads = value.get('heads', [])
+            R.require(len(heads) == 2 and {head['head'] for head in heads} == {0, 1}
+                      and len({head['console_id'] for head in heads}) == 2
+                      and len({head['device_address'] for head in heads}) == 1
+                      and all(type(head['head']) is int and type(head['console_id']) is int
+                          and head['width'] == 1280 and head['height'] == 720 for head in heads),
+                      'Taskbar display does not declare both bounded GPU heads')
+            result[stage] = dict(receipt=value, bytes=path.stat().st_size, sha256=R.digest(path))
+        return result
 
 def verify(args):
     manifest = json.loads(args.manifest.read_text())
@@ -116,7 +178,7 @@ def verify(args):
               'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
               'tools/native-functional/compose-photo-probe.py',
               'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
-              'tools/native-functional/source-provenance.json'}, 'Execution pin set differs')
+              'tools/native-functional/source-provenance.json'} | TASKBAR_FILES, 'Execution pin set differs')
     R.verify_iso(args.inputs)
 
 def checker_proof():
@@ -137,6 +199,7 @@ def run(args):
                release_acceptance=False,source_image_run=R.ORIGINAL_RUN,
                recovered_native_source_commit='bdf797b19833fc8fe4002a328333edfc3777dfed')
     prepared=None
+    owned_images=[]
     def save():
         state['recorded_at_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
         R.write_json(args.evidence/'execution.json',state)
@@ -149,11 +212,50 @@ def run(args):
                   args.evidence/'provision.log',20*60,args.source,env,container)
         prepared=(args.evidence/'vm-prepared-image-id.txt').read_text().strip()
         R.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}',prepared),'Immutable test-tool image ID missing')
+        owned_images.append(prepared)
         verify(args) # refuse changed source before preparing any guest payload
         state.update(status='running_live_install_first_boot',vm_tool_image_id=prepared);save()
         payload = args.evidence.parent / 'native-payload'
         R.require(not payload.exists(), 'Native payload must be unused')
         payload.mkdir()
+        taskbar_payload = payload / 'taskbar'
+        taskbar_payload.mkdir()
+        container='arctic-paired-native-'+uuid.uuid4().hex
+        env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container,ARCTIC_FEDORA_IMAGE=prepared)
+        R.execute(['bash', str(args.bundle/'prepare-taskbar-tools.sh'), str(args.bundle.parents[1]), str(taskbar_payload)],
+                  args.evidence/'taskbar-build.log',15*60,args.bundle.parents[1],env,container)
+        build = json.loads((taskbar_payload/'build-provenance.json').read_text())
+        R.require(build['schema']=='arctic-taskbar-tools-v1' and build['release_acceptance'] is False
+                  and set(build['sources']) == {'shell/dev/virtual-pointer.c','tools/native-functional/taskbar-screencopy.c',
+                                              'shell/dev/wlr-screencopy-unstable-v1.xml'}, 'Taskbar compilation source inventory differs')
+        for name, expected in build['sources'].items(): R.pinned_file(args.bundle.parents[1]/name, expected)
+        for name, expected in build['binaries'].items():
+            R.require(name in ('virtual-pointer','raw-screencopy'), 'Unexpected taskbar binary')
+            R.pinned_file(taskbar_payload/name,expected)
+            R.require((taskbar_payload/name).read_bytes()[:4]==b'\x7fELF', 'Taskbar tool is not native ELF')
+        R.require(set(build['binaries'])=={'virtual-pointer','raw-screencopy'},'Taskbar binary inventory differs')
+        display_host = build.get('display_host', {})
+        R.require(display_host.get('backend') == 'dbus' and display_host.get('gl') is False
+                  and set(display_host.get('programs', {})) == {'/usr/bin/qemu-system-x86_64',
+                    '/usr/bin/dbus-daemon', '/usr/bin/gdbus'}
+                  and all(re.fullmatch('[0-9a-f]{64}', value) for value in display_host['programs'].values())
+                  and len(display_host.get('packages', [])) == 4,
+                  'Taskbar display host inventory differs')
+        R.pinned_file(taskbar_payload/'taskbar-display-capabilities.txt', display_host['capabilities_sha256'])
+        base_prepared = prepared
+        prepared = (taskbar_payload/'taskbar-vm-prepared-image-id.txt').read_text().strip()
+        R.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}', prepared), 'Immutable taskbar VM image ID missing')
+        owned_images.append(prepared)
+        shutil.copyfile(taskbar_payload/'taskbar-display-capabilities.txt', args.evidence/'taskbar-display-capabilities.txt')
+        state.update(vm_base_tool_image_id=base_prepared, vm_tool_image_id=prepared)
+        for name in ('taskbar.py','taskbar-runtime.py','native_smoke.py'): shutil.copyfile(args.bundle/name, taskbar_payload/name)
+        taskbar_context=dict(schema='arctic-taskbar-context-v1',source_sha=R.SOURCE,iso_sha256=R.ISO_SHA256,
+            iso_bytes=R.ISO_BYTES,execution_sha=os.environ['GITHUB_SHA'],token=uuid.uuid4().hex,
+            checker_sha256=R.digest(taskbar_payload/'taskbar.py'),runtime_sha256=R.digest(taskbar_payload/'taskbar-runtime.py'),
+            native_sha256=R.digest(taskbar_payload/'native_smoke.py'),pointer_sha256=R.digest(taskbar_payload/'virtual-pointer'),
+            capture_sha256=R.digest(taskbar_payload/'raw-screencopy'))
+        R.write_json(taskbar_payload/'taskbar-context.json',taskbar_context)
+        state.update(taskbar_context=taskbar_context,taskbar_build=build);save()
         spec = importlib.util.spec_from_file_location('native_photo_composer', args.bundle / 'compose-photo-probe.py')
         composer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(composer)
@@ -167,6 +269,9 @@ def run(args):
                  ARCTIC_NATIVE_LAUNCHER=str(args.bundle/'native-launcher-v6.py'),
                  ARCTIC_NATIVE_EDITOR_SAVE_FIXTURE='1',ARCTIC_NATIVE_PHYSICAL_CONTROLLER=str(args.bundle/'native-physical-controller.py'),
                  ARCTIC_NATIVE_PHOTO_CHECKER=str(photo_probe),
+                 ARCTIC_NATIVE_TASKBAR_BUNDLE=str(taskbar_payload),ARCTIC_NATIVE_TWO_OUTPUTS='1',
+                 ARCTIC_NATIVE_TASKBAR_DISPLAY_CONTROLLER=str(args.bundle/'taskbar-display.py'),
+                 ARCTIC_NATIVE_TASKBAR_DISPLAY_SHA=R.digest(args.bundle/'taskbar-display.py'),
                  ARCTIC_NATIVE_PHYSICAL_SHA=R.digest(args.bundle/'native-physical-controller.py'),
                  ARCTIC_NATIVE_PHYSICAL_CHECKER_SHA=sha)
         argv=['bash',str(args.bundle.parents[1]/'tools/test-install.sh'),'--iso',str(args.inputs/'iso'/R.ISO),
@@ -176,9 +281,12 @@ def run(args):
         verify(args) # recheck actual source/ISO after provisioning, immediately before the sole VM
         state['immediate_pre_vm_verification']=dict(iso=R.verify_iso(args.inputs),execution_manifest_sha256=R.digest(args.manifest));save()
         errors=[]
-        try:R.execute(argv,args.evidence/'native-harness.log',110*60,args.bundle.parents[1],env,container)
+        try:R.execute(argv,args.evidence/'native-harness.log',180*60,args.bundle.parents[1],env,container)
         except BaseException as error:errors.append('harness: '+str(error))
         finally:state['harness_evidence']=R.preserve_phase(vm,args.evidence,'harness');save()
+        try:
+            state['taskbar_displays'] = R.display_evidence(vm, R.digest(args.bundle/'taskbar-display.py'))
+        except BaseException as error:errors.append('taskbar display setup: '+str(error))
         # Extract complete available native files and bounded WAV even on failed probes.
         try:
             state['native_stages']=validate_harness_serial(vm,args.evidence)
@@ -194,6 +302,20 @@ def run(args):
                           and rows[0]['release_acceptance'] is False, 'Missing/failed pinned photo image verification: ' + stage)
                 state['photos'][stage] = rows[0]
         except BaseException as error:errors.append('native stages: '+str(error))
+        try:
+            serial=vm/'serial-boot.log'
+            R.require(serial.is_file() and not serial.is_symlink() and serial.stat().st_size<=256*1024*1024,
+                      'Missing/oversized taskbar serial transport')
+            port=vm/'taskbar-boot.log'
+            R.require(port.is_file() and not port.is_symlink() and port.stat().st_size<=210*1024*1024,
+                      'Missing/oversized taskbar virtio port transport')
+            spec=importlib.util.spec_from_file_location('native_taskbar_evidence',args.bundle/'taskbar-evidence.py')
+            taskbar_evidence=importlib.util.module_from_spec(spec);spec.loader.exec_module(taskbar_evidence)
+            state['taskbar_transport']=dict(name=port.name,bytes=port.stat().st_size,sha256=R.digest(port),
+                kind='root-owned named virtio-serial output bound to original installed native boot')
+            state['taskbar']=taskbar_evidence.check_taskbar(serial.read_text(),taskbar_context,args.evidence/'taskbar',
+                                                         transport_serial=port.read_text())
+        except BaseException as error:errors.append('taskbar: '+str(error))
         state['audio']={}
         for stage in ('install','boot'):
             try:state['audio'][stage]=preserve_audio(vm/('native-audio-'+stage+'.wav'),args.evidence/'virtual-audio')
@@ -203,7 +325,11 @@ def run(args):
     except BaseException as error:
         state.update(status='failed_or_unrun',error=str(error));save();raise
     finally:
-        if prepared:subprocess.run(['docker','image','rm',prepared],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+        for image in reversed(owned_images):
+            try:
+                subprocess.run(['docker','image','rm',image],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+            except BaseException:
+                pass
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

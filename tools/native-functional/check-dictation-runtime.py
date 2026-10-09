@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--controller", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--profile", choices=("auto", "small-v2", "turbo-q5-v3"), default="auto")
     args = parser.parse_args()
     spec = importlib.util.spec_from_file_location("arctic_dictation", args.controller)
     controller = importlib.util.module_from_spec(spec)
@@ -27,14 +28,18 @@ def main():
     runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
     if Path("/dev/snd").exists() or any((runtime / name).exists() for name in ("pipewire-0", "pulse/native")):
         raise SystemExit("This negative probe requires a container with no microphone/audio session.")
-    for key in ("cpu", "model"):
-        name, _url, size, digest = controller.ASSETS[key]
+    profile = controller.desired_profile() if args.profile == "auto" else controller.PROFILES[args.profile]
+    cpu_key = "avx2" if profile["cpu_variant"] == "avx2" else "cpu"
+    if cpu_key == "avx2" and not controller.v3_supported():
+        raise SystemExit("The optimized CPU negative probe requires validated x86-64-v3 hardware.")
+    for key in (cpu_key, "model"):
+        name, _url, size, digest = profile["assets"][key]
         path = controller.PAYLOAD / name
         if path.stat().st_size != size or controller.sha256(path) != digest:
             raise SystemExit("The pinned CPU/model files failed byte/SHA verification.")
     result = {"schema": 1, "qualification": "supplemental-container-runtime",
-              "voxtype_version": controller.VERSION, "engine": "real-pinned-cpu",
-              "model": "small-multilingual", "microphone": "intentionally-absent",
+              "voxtype_version": controller.VERSION, "engine": "real-pinned-cpu", **controller.profile_status(profile),
+              "microphone": "intentionally-absent",
               "gpu_tested": False, "iso_tested": False, "transcript_published": False,
               "passed": False, "daemon_started": False, "microphone_error_observed": False}
     begin = time.monotonic()
@@ -44,10 +49,10 @@ def main():
         private.mkdir(mode=0o700)
         broker = controller.Broker(shared, private)
         config = private / "config.toml"
-        config.write_text(controller.voxtype_config(private, "auto"))
+        config.write_text(controller.voxtype_config(private, "auto", profile))
         config.chmod(0o600)
         env = controller.child_environment(private)
-        binary = str(controller.PAYLOAD / controller.ASSETS["cpu"][0])
+        binary = str(controller.PAYLOAD / profile["assets"][cpu_key][0])
         # Same parent-death exec guard as the installed controller. This is an
         # actual engine invocation, not a fake model/audio/daemon implementation.
         process = subprocess.Popen(["/usr/bin/python3", "-I", str(args.controller.with_name("child_exec.py")),

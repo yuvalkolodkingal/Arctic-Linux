@@ -1,0 +1,125 @@
+name: Calibrate retained unqualified causal observer
+
+on:
+  push:
+    branches: [codex/performance-causal-calibration-20261009]
+    paths: [.github/causal-calibration-20261009.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  research:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 130
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/Wallpapers/
+            !/v2-walls/
+            !/showcase/
+      - name: Verify reviewed research activation only
+        run: |
+          python3 -B - <<'PY'
+          import json,os,re,subprocess
+          from pathlib import Path
+          assert os.environ['GITHUB_EVENT_NAME']=='push'
+          assert os.environ['GITHUB_REF']=='refs/heads/codex/performance-causal-calibration-20261009'
+          assert os.environ['RUNNER_ENVIRONMENT']=='github-hosted'
+          reviewed=Path('.github/causal-calibration-20261009.activate').read_text().strip()
+          event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          assert re.fullmatch('[0-9a-f]{40}',reviewed)
+          assert event['before']==reviewed==subprocess.check_output(['git','rev-parse','HEAD^'],text=True).strip()
+          assert event['after']==os.environ['GITHUB_SHA']==subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert subprocess.check_output(['git','diff','--name-only',reviewed,'HEAD'],text=True).splitlines()==['.github/causal-calibration-20261009.activate']
+          assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip()
+          print('Research only: failed retained producer remains unqualified; no build or release permission')
+          PY
+      - name: Verify the explicitly unqualified retained image and archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib,json,os,stat,subprocess,zipfile
+          from pathlib import Path
+          repo='repos/yuvalkolodkingal/Arctic-Linux'
+          def api(path):return json.loads(subprocess.check_output(['gh','api',repo+path],timeout=60))
+          source='e2a62bb8945f7fe9975cb862986af4dd2be0873d'
+          run=api('/actions/runs/37903438836')
+          assert run['head_sha']==source and run['run_attempt']==1
+          assert run['status']=='completed' and run['conclusion']=='failure'
+          assert run['event']=='workflow_dispatch' and run['path']=='.github/workflows/iso.yml'
+          page=api('/actions/runs/37903438836/jobs?filter=all&per_page=100')
+          assert page['total_count']==len(page['jobs'])
+          jobs=[job for job in page['jobs'] if job['name']=='iso' and job['run_attempt']==1]
+          assert len(jobs)==1 and jobs[0]['head_sha']==source
+          steps={step['name']:step for step in jobs[0]['steps']}
+          assert steps['Boot test in QEMU (UEFI, Try mode)']['conclusion']=='success'
+          assert steps['Paired KVM performance acceptance']['conclusion']=='failure'
+          metadata=api('/actions/artifacts/11604221573')
+          archive_digest='1b3267d5b7e0fc3b7980f77a3e72345f6ad3061de47a2a3006fcd2c84cb59dee'
+          assert metadata['workflow_run']['id']==37903438836 and metadata['workflow_run']['head_sha']==source
+          assert metadata['name']=='arctic-linux-iso' and metadata['expired'] is False
+          assert metadata['size_in_bytes']==1929415684 and metadata['digest']=='sha256:'+archive_digest
+          root=Path(os.environ['RUNNER_TEMP'])/'causal-research';root.mkdir()
+          archive=root/'retained.zip'
+          with archive.open('xb') as output:subprocess.run(['gh','api',repo+'/actions/artifacts/11604221573/zip'],stdout=output,check=True,timeout=900)
+          assert archive.stat().st_size==1929415684
+          with archive.open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()==archive_digest
+          name='Arctic-Linux-1.2-candidate-37903438836-1-x86_64.iso'
+          with zipfile.ZipFile(archive) as zipped:
+              entries=zipped.infolist()
+              assert len(entries)<=20 and len({entry.filename for entry in entries})==len(entries)
+              assert sum(entry.file_size for entry in entries)<2010000000
+              for entry in entries:
+                  path=Path(entry.filename)
+                  assert not path.is_absolute() and '..' not in path.parts and not entry.is_dir()
+                  assert (entry.external_attr>>16&0o170000) in (0,stat.S_IFREG)
+              item=zipped.getinfo('iso/'+name);assert item.file_size==1929230336
+              with zipped.open(item) as stream,(root/name).open('xb') as target:
+                  for block in iter(lambda:stream.read(1024*1024),b''):target.write(block)
+          archive.unlink()
+          with (root/name).open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()=='73a95290df7df8d1b4d47c90767e1e231cb340864ed3b3478dde2176b7bfb9c0'
+          PY
+      - name: Calibrate only on a new disposable offline installed KVM guest
+        run: |
+          test -c /dev/kvm
+          sudo chmod 666 /dev/kvm
+          python3 -B tools/performance/compose-calibration-probe.py "$RUNNER_TEMP/causal-calibration.py"
+          timeout --signal=TERM --kill-after=60s 110m tools/test-install.sh \
+            --iso "$RUNNER_TEMP/causal-research/Arctic-Linux-1.2-candidate-37903438836-1-x86_64.iso" \
+            --kvm --memory 4096 --smp 2 --boot-append '' --collect-via console \
+            --boot-network offline --install-timeout 2400 --profile profiles/ci/offline.toml \
+            --guest-check "$RUNNER_TEMP/causal-calibration.py" --out "$PWD/out/test/causal-calibration"
+      - name: Screen research diagnostics without changing qualification
+        if: always()
+        run: |
+          python3 -B - <<'PY'
+          import os,shutil
+          from pathlib import Path
+          source=Path('out/test/causal-calibration')
+          target=Path(os.environ['RUNNER_TEMP'])/'causal-picked';target.mkdir()
+          for path in source.rglob('*'):
+              if path.suffix not in ('.json','.log','.txt','.tsv','.png','.rgb','.wav'):
+                  continue
+              assert not path.is_symlink() and path.is_file()
+              output=target/path.relative_to(source);output.parent.mkdir(parents=True,exist_ok=True)
+              shutil.copyfile(path,output)
+          PY
+          python3 -B tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/causal-picked" --out "$RUNNER_TEMP/causal-screened"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unqualified-causal-calibration
+          path: ${{ runner.temp }}/causal-screened/
+          if-no-files-found: ignore
+          retention-days: 14

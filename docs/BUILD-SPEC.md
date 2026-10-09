@@ -345,15 +345,20 @@ XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
 
 `arctic-desktop-config` ships `packaging/dictation/` as the small standard-library
 controller in `/usr/share/arctic/dictation/`, `/usr/bin/arctic-dictation`, the fixed
-polkit setup helper, and `arctic-dictation-setup.service`. No engine binary or model
-belongs in the RPM/live ISO. Installer finalization writes a target setup queue,
-enables the background service and makes a bounded, nonfatal online setup attempt;
-offline installations retain an explicit unready first-boot queue. The pinned
-Voxtype 1.1.0 CPU/Vulkan and multilingual Whisper small downloads require exact
-bytes and SHA-256 verification. See [DICTATION.md](DICTATION.md) for hashes, sizes,
+polkit setup helper, and `arctic-dictation-setup.service`/`.timer`. No engine binary
+or model belongs in the RPM/live ISO. Installer finalization writes a target setup
+queue, enables the background timer and makes a bounded, nonfatal online setup
+attempt; offline installations retain an explicit unready first-boot queue. The
+fixed hardware profiles use Voxtype 1.1.0 baseline/Small (506,181,191 bytes) on
+legacy or unknown CPUs and AVX2/Vulkan/Turbo Q5 (678,117,115 bytes) on validated
+x86-64-v3 CPUs, plus missing system dependencies. Each attempt downloads one
+multilingual model and verifies exact bytes and SHA-256 before readiness. GPU
+failure offers a fresh CPU recording; optimized CPU incompatibility offers an
+explicit administrator-authorized Small setup, without automatic audio retry or
+model download. See [DICTATION.md](DICTATION.md) for hashes, sizes,
 dependency/readiness checks, privacy, lock and cancellation behavior, commands and
 the native release acceptance contract. CI/RPM checks run the dictation control
-tests; systemd CI verifies its unit, and installer goldens include the queue/setup
+tests; systemd CI verifies its service and timer, and installer goldens include the queue/setup
 hook. Source checks do not qualify audio inference or the final image.
 
 ## 4. Engine ↔ installer UI protocol
@@ -605,7 +610,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 1.2.0, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 1.2.1, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),

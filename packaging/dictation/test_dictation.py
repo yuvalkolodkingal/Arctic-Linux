@@ -1,5 +1,6 @@
 """Failure and privacy contracts. These do not substitute for native audio tests."""
 import hashlib
+import copy
 import fcntl
 import importlib.util
 import io
@@ -135,9 +136,17 @@ class Setup(unittest.TestCase):
             cpu.chmod(0o755)
             d.atomic_json(folder / "verified.json", {"version": d.VERSION, "files": {
                 "cpu": {"sha256": "f" * 64, "size": 3, "mtime_ns": cpu.stat().st_mtime_ns}}})
-            with mock.patch.object(d, "ASSETS", assets), mock.patch.object(d, "trusted_file", return_value=True), \
-                    mock.patch.object(d, "dependencies_ready", return_value=False):
-                self.assertFalse(d.ready(folder, folder))
+            profile = {"id": "small-v2", "model": "small", "cpu_variant": "baseline", "assets": assets,
+                       "dependencies": (), "libraries": ()}
+            d.atomic_json(folder / "verified.json", {"version": d.VERSION, **d.profile_status({**profile, "assets": {**assets, "model": assets["cpu"]}}),
+                "profile_sha256": d.profile_digest({**profile, "assets": {**assets, "model": assets["cpu"]}}), "files": {
+                "cpu": {"sha256": "f" * 64, "size": 3, "mtime_ns": cpu.stat().st_mtime_ns},
+                "model": {"sha256": "f" * 64, "size": 3, "mtime_ns": cpu.stat().st_mtime_ns}}})
+            profile["assets"]["model"] = assets["cpu"]
+            with mock.patch.object(d, "trusted_file", return_value=True), \
+                    mock.patch.object(d, "dependencies_ready", return_value=False) as dependencies:
+                self.assertFalse(d.ready(folder, folder, profile))
+            dependencies.assert_called_once_with(profile=profile)
 
     def test_retry_does_not_reset_active_download_and_enables_reboot_recovery(self):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(d, "directory"), \
@@ -151,8 +160,9 @@ class Setup(unittest.TestCase):
             finally:
                 os.close(fd)
             self.assertEqual(d.read_json(system / "setup.json")["progress"], 0.75)
-            self.assertIn("--now", run.call_args.args[0])
-            self.assertIn("enable", run.call_args.args[0])
+            commands = [c.args[0] for c in run.call_args_list]
+            self.assertIn(["/usr/bin/systemctl", "enable", "--now", "arctic-dictation-setup.timer"], commands)
+            self.assertIn(["/usr/bin/systemctl", "start", "--no-block", "arctic-dictation-setup.service"], commands)
 
     def test_offline_queue_never_attempts_network(self):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(d.os, "geteuid", return_value=0), \
@@ -178,14 +188,173 @@ class Setup(unittest.TestCase):
             self.assertFalse((system / "verified.json").exists())
 
     def test_public_manifest_is_pinned_and_outside_iso(self):
-        self.assertEqual(d.DOWNLOAD_BYTES, 572524159)
-        self.assertEqual(d.ASSETS["model"][2], 487601967)
+        self.assertEqual(d.profile_status(d.PROFILES["small-v2"])["download_bytes"], 506181191)
+        self.assertEqual(d.profile_status(d.PROFILES["turbo-q5-v3"])["download_bytes"], 678117115)
+        self.assertEqual(d.ASSETS["small"][2], 487601967)
+        self.assertEqual(d.ASSETS["turbo"][2], 574041195)
         for _name, url, size, digest in d.ASSETS.values():
             self.assertTrue(url.startswith("https://"))
             self.assertNotIn("/main/", url)
             self.assertGreater(size, 0)
             self.assertEqual(len(digest), 64)
         self.assertEqual(str(d.PAYLOAD), "/opt/arctic/voxtype/1.1.0")
+
+
+class Profiles(unittest.TestCase):
+    flags = "avx avx2 fma f16c bmi1 bmi2 movbe popcnt xsave abm"
+
+    def test_modern_and_legacy_hardware_select_one_multilingual_model(self):
+        modern = d.desired_profile("flags: " + self.flags)
+        legacy = d.desired_profile("flags: sse4_2 popcnt")
+        self.assertEqual(modern["id"], "turbo-q5-v3")
+        self.assertEqual(legacy["id"], "small-v2")
+        for profile in (modern, legacy):
+            self.assertEqual(sum(asset[0].endswith(".bin") for asset in profile["assets"].values()), 1)
+        self.assertNotIn("vulkan-loader", legacy["dependencies"])
+
+    def test_cpu_flags_use_all_processors_and_exact_tokens(self):
+        self.assertFalse(d.v3_supported("flags: " + self.flags + "\nflags: sse4_2 popcnt"))
+        self.assertFalse(d.v3_supported("flags: " + self.flags.replace("avx2", "avx2_fake")))
+        self.assertFalse(d.v3_supported("not_flags: " + self.flags))
+        self.assertFalse(d.v3_supported("flags: " + self.flags.replace("fma", "")))
+        self.assertTrue(d.v3_supported("flags: " + self.flags.replace("abm", "lzcnt")))
+        self.assertEqual(d.desired_profile("unknown")["id"], "small-v2")
+        self.assertFalse(d.v3_supported("processor: 0\nflags: " + self.flags + "\nprocessor: 1\n"))
+
+    def test_compatibility_selection_is_fixed_root_owned_and_retry_persisted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            system = Path(temporary)
+            with mock.patch.object(d, "directory"), mock.patch.object(d.subprocess, "run"), \
+                    mock.patch.object(d, "trusted_file", side_effect=lambda p, size=None: p.is_file()):
+                d.request_setup(system, selection="compatibility")
+                self.assertEqual(d.desired_profile("flags: " + self.flags, system)["id"], "small-v2")
+                self.assertEqual(d.read_json(system / "pending.json")["profile"], "small-v2")
+                d.request_setup(system)
+                self.assertEqual(d.read_json(system / "pending.json")["profile"], "small-v2")
+                d.request_setup(system, selection="recommended")
+                self.assertEqual(d.desired_profile("flags: " + self.flags, system)["id"], "turbo-q5-v3")
+                with self.assertRaises(d.Failure):
+                    d.request_setup(system, selection="https://unsafe/model.bin")
+                d.atomic_json(system / "profile-selection.json", {"selection": "https://unsafe/model.bin"})
+                self.assertEqual(d.desired_profile("flags: " + self.flags, system)["id"], "turbo-q5-v3")
+            with mock.patch.object(d, "trusted_file", return_value=False):
+                self.assertEqual(d.desired_profile("flags: " + self.flags, system)["id"], "turbo-q5-v3")
+
+    def test_profile_change_during_download_does_not_change_queue_or_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            system = Path(temporary)
+            d.atomic_json(system / "setup.json", {"state": "downloading", "progress": 0.25})
+            with mock.patch.object(d, "directory"), mock.patch.object(d.fcntl, "flock", side_effect=BlockingIOError), \
+                    mock.patch.object(d.subprocess, "run") as run:
+                with self.assertRaises(d.Failure):
+                    d.request_setup(system, selection="compatibility")
+            self.assertFalse((system / "profile-selection.json").exists())
+            self.assertEqual(d.read_json(system / "setup.json")["progress"], 0.25)
+            run.assert_not_called()
+
+    def test_profile_receipt_cannot_substitute_or_add_a_model(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            profile = copy.deepcopy(d.PROFILES["small-v2"])
+            profile["assets"] = {"cpu": ("cpu", "https://invalid/pin", 3, "f" * 64),
+                                 "model": ("model.bin", "https://invalid/model", 5, "e" * 64)}
+            for key, asset in profile["assets"].items():
+                (folder / asset[0]).write_bytes(b"x" * asset[2])
+                (folder / asset[0]).chmod(0o755 if key == "cpu" else 0o644)
+            receipt = {"version": d.VERSION, **d.profile_status(profile), "profile_sha256": d.profile_digest(profile),
+                       "files": {key: {"sha256": asset[3], "size": asset[2], "mtime_ns": (folder / asset[0]).stat().st_mtime_ns}
+                                 for key, asset in profile["assets"].items()}}
+            def check(value):
+                d.atomic_json(folder / "verified.json", value)
+                return d.ready(folder, folder, profile)
+            with mock.patch.object(d, "trusted_file", side_effect=lambda p, size=None: p.is_file() and (size is None or p.stat().st_size == size)), \
+                    mock.patch.object(d, "dependencies_ready", return_value=True):
+                self.assertTrue(check(receipt))
+                for field, value in (("profile", "turbo-q5-v3"), ("model", "large-v3-turbo-q5_0"), ("profile_sha256", "0" * 64)):
+                    self.assertFalse(check({**receipt, field: value}))
+                wrong = copy.deepcopy(receipt)
+                wrong["files"]["model"]["sha256"] = "0" * 64
+                self.assertFalse(check(wrong))
+                wrong = copy.deepcopy(receipt)
+                wrong["files"]["extra-model"] = wrong["files"]["model"]
+                self.assertFalse(check(wrong))
+
+    def test_setup_downloads_only_selected_profile_and_failure_preserves_receipt(self):
+        for name in ("small-v2", "turbo-q5-v3"):
+            with self.subTest(profile=name), tempfile.TemporaryDirectory() as temporary:
+                system, payload = Path(temporary) / "state", Path(temporary) / "payload" / "version"
+                system.mkdir()
+                original = {"old": "verified-receipt"}
+                d.atomic_json(system / "verified.json", original)
+                selected = d.PROFILES[name]
+                downloaded = []
+                def fetch(asset, destination, _deadline, progress):
+                    downloaded.append(asset[0])
+                    destination.write_bytes(b"fixture")
+                    progress(asset[2])
+                with mock.patch.object(d, "desired_profile", return_value=selected), mock.patch.object(d, "directory"), \
+                        mock.patch.object(d.os, "geteuid", return_value=0), \
+                        mock.patch.object(d.subprocess, "run", return_value=mock.Mock(returncode=0)), \
+                        mock.patch.object(d, "download", side_effect=fetch), mock.patch.object(d, "dependencies_ready", return_value=False):
+                    payload.mkdir(parents=True)
+                    self.assertFalse(d.system_setup(system=system, payload=payload))
+                self.assertEqual(downloaded, [a[0] for a in selected["assets"].values()])
+                self.assertEqual(sum(n.endswith(".bin") for n in downloaded), 1)
+                self.assertEqual(d.read_json(system / "verified.json"), original)
+                state = d.read_json(system / "setup.json")
+                self.assertEqual(state["profile"], name)
+                self.assertEqual(state["download_bytes"], d.profile_status(selected)["download_bytes"])
+
+    def test_queued_status_uses_matching_profile_disclosure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            system = Path(temporary)
+            with mock.patch.object(d, "directory"):
+                d.queue(system, profile=d.PROFILES["small-v2"])
+            with mock.patch.object(d, "SYSTEM", system), mock.patch.object(d, "trusted_file", return_value=True), \
+                    mock.patch.object(d, "ready", return_value=False), \
+                    mock.patch.object(d, "desired_profile", return_value=d.PROFILES["turbo-q5-v3"]):
+                value = d.snapshot()
+            self.assertEqual(value["model"], "small")
+            self.assertEqual(value["download_bytes"], 506181191)
+
+    def test_persistent_sigill_marker_makes_status_unready_after_broker_exit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime = Path(temporary)
+            marker = runtime / "arctic/dictation/compatibility-required.json"
+            marker.parent.mkdir(parents=True)
+            d.atomic_json(marker, {"required": True})
+            with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(runtime)}), \
+                    mock.patch.object(d, "trusted_file", return_value=False), mock.patch.object(d, "ready", return_value=True), \
+                    mock.patch.object(d, "desired_profile", return_value=d.PROFILES["turbo-q5-v3"]):
+                result = d.snapshot({"state": "ready", "compatibility_required": False})
+            self.assertFalse(result["ready"])
+            self.assertEqual(result["state"], "error")
+            self.assertTrue(result["compatibility_required"])
+            self.assertIn("Small compatibility setup", result["error"])
+            with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(runtime)}), \
+                    mock.patch.object(d, "trusted_file", return_value=False), mock.patch.object(d, "ready", return_value=True), \
+                    mock.patch.object(d, "desired_profile", return_value=d.PROFILES["small-v2"]):
+                compatible = d.snapshot()
+            self.assertTrue(compatible["ready"])
+            self.assertFalse(compatible["compatibility_required"])
+            self.assertEqual(compatible["state"], "ready")
+
+    def test_replaced_model_cleanup_requires_matching_old_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            old = folder / "old-model.bin"
+            old.write_bytes(b"model")
+            unrelated = folder / "private-user-file"
+            unrelated.write_bytes(b"keep")
+            asset = (old.name, "https://invalid/pinned", 5, "f" * 64)
+            previous = {"files": {"model": {"sha256": "f" * 64, "size": 5, "mtime_ns": old.stat().st_mtime_ns}}}
+            with mock.patch.object(d, "ASSETS", {"small": asset, "turbo": d.ASSETS["turbo"]}), \
+                    mock.patch.object(d, "trusted_file", side_effect=lambda p, size=None: p.is_file() and (size is None or p.stat().st_size == size)):
+                d.cleanup_replaced_model({"files": {"model": {"sha256": "0" * 64}}}, d.PROFILES["turbo-q5-v3"], folder)
+                self.assertTrue(old.exists())
+                d.cleanup_replaced_model(previous, d.PROFILES["turbo-q5-v3"], folder)
+            self.assertFalse(old.exists())
+            self.assertEqual(unrelated.read_bytes(), b"keep")
 
 
 class Sessions(unittest.TestCase):
@@ -223,6 +392,54 @@ class Sessions(unittest.TestCase):
         result = d.read_json(self.shared / "dictation.json")
         self.assertEqual(result["active_backend"], "cpu")
         self.assertIn("record again", result["error"])
+
+    def test_actual_optimized_cpu_sigill_requires_explicit_small_setup(self):
+        child = subprocess.Popen(["/bin/sh", "-c", "kill -ILL $$"], start_new_session=True,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        child.wait(timeout=2)
+        self.broker.process = child
+        self.broker.cpu_variant = "avx2"
+        self.broker.runtime["active_backend"] = "cpu"
+        with mock.patch.object(self.broker, "locked", return_value=False):
+            self.broker.tick()
+        result = d.read_json(self.shared / "dictation.json")
+        self.assertTrue(result["compatibility_required"])
+        self.assertIn("Small compatibility setup", result["error"])
+        self.assertEqual(result["active_cpu_variant"], "")
+        self.assertIsNone(self.broker.process)
+        self.assertTrue((self.private / "compatibility-required.json").exists())
+        with mock.patch.object(d, "desired_profile", return_value=d.PROFILES["turbo-q5-v3"]), \
+                mock.patch.object(d, "supervised") as run:
+            result = self.broker.start()
+        run.assert_not_called()
+        self.assertTrue(result["compatibility_required"])
+        self.assertNotIn("record again", result["error"].lower().split("then")[0])
+
+    def test_small_profile_never_selects_unshipped_vulkan(self):
+        process = mock.Mock()
+        process.poll.return_value = None
+        process.stdout = io.BufferedReader(io.BytesIO(b""))
+        process.stderr = io.BufferedReader(io.BytesIO(b""))
+        def spawn(*_a, **_k):
+            (self.private / "voxtype-state").write_text("idle")
+            return process
+        with mock.patch.object(d, "desired_profile", return_value=d.PROFILES["small-v2"]), \
+                mock.patch.object(d, "ready", return_value=True), mock.patch.object(self.broker, "locked", return_value=False), \
+                mock.patch.object(d, "gpu_available", return_value=True), \
+                mock.patch.object(d, "preferences", return_value={"backend": "auto", "language": "auto"}), \
+                mock.patch.object(d, "supervised", side_effect=spawn) as run, mock.patch.object(self.broker, "record", return_value=0):
+            result = self.broker.start()
+        self.assertEqual(run.call_args.args[0][0], str(d.PAYLOAD / d.ASSETS["cpu"][0]))
+        self.assertEqual(result["active_backend"], "cpu")
+        self.assertEqual(result["active_cpu_variant"], "baseline")
+        self.broker.process = None
+        with mock.patch.object(d, "desired_profile", return_value=d.PROFILES["small-v2"]), \
+                mock.patch.object(d, "ready", return_value=True), mock.patch.object(self.broker, "locked", return_value=False), \
+                mock.patch.object(d, "preferences", return_value={"backend": "vulkan", "language": "auto"}), \
+                mock.patch.object(d, "supervised") as run:
+            result = self.broker.start()
+        run.assert_not_called()
+        self.assertIn("CPU only", result["error"])
 
     def test_forced_vulkan_preference_allows_cpu_retry_after_gpu_failure(self):
         self.broker.fallback_cpu = True
@@ -468,11 +685,54 @@ class Sessions(unittest.TestCase):
         self.assertFalse(config["hotkey"]["enabled"])
         self.assertFalse(config["output"]["notification"]["on_transcription"])
         self.assertFalse(config["whisper"]["streaming"])
+        self.assertEqual(config["text"], {"spoken_punctuation": False, "filter_filler_words": False,
+                                          "smart_auto_submit": False})
         with mock.patch.dict(os.environ, {"RUST_LOG": "trace", "VOXTYPE_ENGINE": "remote"}):
             env = d.child_environment(self.private)
         self.assertEqual(env["RUST_LOG"], "error")
         self.assertNotIn("VOXTYPE_ENGINE", env)
         self.assertEqual(env["PIPEWIRE_RUNTIME_DIR"], os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+
+    def test_endpoint_is_published_only_after_it_is_listening(self):
+        control = self.private / "control.sock"
+        events = []
+        class Socket:
+            def bind(_self, path):
+                events.append("bind")
+                self.assertFalse(control.exists())
+                Path(path).touch()
+            def listen(_self, backlog):
+                events.append("listen")
+                self.assertFalse(control.exists())
+                self.assertEqual(backlog, 4)
+            def close(_self):
+                events.append("close")
+        def usable(_read, _write, _errors, _timeout):
+            self.assertEqual(events, ["bind", "listen"])
+            self.assertTrue(control.exists())
+            self.assertEqual(control.stat().st_mode & 0o777, 0o600)
+            return ([], [], [])
+        self.broker.last_active = time.monotonic() - 301
+        with mock.patch.object(d.socket, "socket", return_value=Socket()), \
+                mock.patch.object(d.select, "select", side_effect=usable):
+            self.broker.serve()
+        self.assertEqual(events, ["bind", "listen", "close"])
+        self.assertFalse(control.exists())
+        self.assertEqual(list(self.private.glob("control.*.sock")), [])
+
+    def test_lifetime_lock_prevents_duplicate_broker_after_slow_startup(self):
+        fd = os.open(self.private / "broker.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            with mock.patch.object(d, "Broker") as factory:
+                self.assertFalse(d.run_broker(self.shared, self.private))
+            factory.assert_not_called()
+        finally:
+            os.close(fd)
+        with mock.patch.object(d, "Broker") as factory:
+            self.assertTrue(d.run_broker(self.shared, self.private))
+        factory.assert_called_once_with(self.shared, self.private)
+        factory.return_value.serve.assert_called_once()
 
     def test_private_socket_survives_disconnected_probe(self):
         self.broker.last_active = time.monotonic() - 301

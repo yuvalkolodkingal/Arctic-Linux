@@ -37,6 +37,12 @@ reset per option, search, undo — and is built from Arctic's own parts.
 | Look | `Theme.qml` (the design tokens of the current theme: `~/.config/arctic/current/theme.json`, live), `components/` (the installer's components, ported unchanged — `tests/test_app_files.py` keeps them in sync — plus `ArSlider` and `ArSegmented`) |
 | Backend | `Backend.qml` runs `scripts/arctic_settings.py`, which does every read and write and prints JSON |
 
+Quickshell keeps imports inside each application's config root. Dictation uses
+the canonical parser in `shell/DictationStatus.js`, bundled as an identical local
+`settings/DictationStatus.js` resource. After changing the parser, run
+`cp shell/DictationStatus.js settings/DictationStatus.js`; the consistency checks
+reject drift, and RPM installation uses the canonical source for both apps.
+
 ## What it changes
 
 Settings never runs as root. The few system-wide changes ask for your password: through polkit

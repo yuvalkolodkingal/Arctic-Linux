@@ -14,6 +14,8 @@
 #                                               installed boot (default: offline). The live
 #                                               installer remains isolated; use this for
 #                                               installed Nix fetch/update acceptance.
+#   --install-network online                  normal online live installation via NAT;
+#                                             no proxy CA or --test-online override.
 #   --collect-via console                     authenticate on tty3 and restore the actual
 #                                             desktop VT before probing; never launches the
 #                                             default GUI terminal (performance first-use).
@@ -77,8 +79,8 @@
 #
 # The VM has restricted user-mode networking by default. QEMU blocks guest access to the
 # host and outside networks, irrespective of the host's connectivity. Only the explicit
-# --online-via-proxy test enables routing for both phases; --boot-network online enables
-# it only after installation. Neither adds host forwards or changes the host's networking.
+# --online-via-proxy test enables routing for both phases; explicit --install-network
+# and --boot-network select each phase independently. None adds host forwards.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -93,8 +95,15 @@ STAGE=all
 NATIVE_AUDIO_FIXTURE="${ARCTIC_NATIVE_AUDIO_FIXTURE:-0}"
 NATIVE_PHYSICAL_CONTROLLER="${ARCTIC_NATIVE_PHYSICAL_CONTROLLER:-}"
 NATIVE_EDITOR_SAVE_FIXTURE="${ARCTIC_NATIVE_EDITOR_SAVE_FIXTURE:-0}"
+NATIVE_TASKBAR_BUNDLE="${ARCTIC_NATIVE_TASKBAR_BUNDLE:-}"
+NATIVE_TASKBAR_DISPLAY_CONTROLLER="${ARCTIC_NATIVE_TASKBAR_DISPLAY_CONTROLLER:-}"
+NATIVE_TWO_OUTPUTS="${ARCTIC_NATIVE_TWO_OUTPUTS:-0}"
+NATIVE_DICTATION_CPU_PROFILE="${ARCTIC_NATIVE_DICTATION_CPU_PROFILE:-}"
+case "$NATIVE_TWO_OUTPUTS" in 0|1) ;; *) arctic_die "invalid native output fixture switch" ;; esac
+case "$NATIVE_DICTATION_CPU_PROFILE" in ''|small-v2|turbo-q5-v3) ;; *) arctic_die "invalid dictation CPU profile" ;; esac
 case "$NATIVE_EDITOR_SAVE_FIXTURE" in 0|1) ;; *) arctic_die "invalid native editor save switch" ;; esac
 physical_args=()
+taskbar_host_args=()
 case "$NATIVE_AUDIO_FIXTURE" in 0|1) ;; *) arctic_die "invalid native audio fixture switch" ;; esac
 PROFILE="$ROOT/profiles/ci/offline.toml"
 INSTALL_TIMEOUT=7200
@@ -114,6 +123,7 @@ PROFILE_EXPLICIT=0
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 BOOT_NETWORK=offline
+INSTALL_NETWORK=offline
 COLLECT_VIA=terminal
 FRESH_BOOT_FROM=""
 PERFORMANCE_CONTEXT=""
@@ -143,6 +153,7 @@ while (( $# )); do
     --test-hardware) TEST_HARDWARE="$2"; shift 2 ;;
     --online-via-proxy) ONLINE_PROXY=1; shift ;;
     --boot-network) BOOT_NETWORK="$2"; shift 2 ;;
+    --install-network) INSTALL_NETWORK="$2"; shift 2 ;;
     --collect-via) COLLECT_VIA="$2"; shift 2 ;;
     --fresh-boot-from) FRESH_BOOT_FROM="$2"; shift 2 ;;
     --performance-context) PERFORMANCE_CONTEXT="$2"; shift 2 ;;
@@ -160,6 +171,7 @@ if [[ -n "$FRESH_BOOT_FROM$PERFORMANCE_CONTEXT" ]]; then
   FRESH_BOOT_FROM="$(cd "$FRESH_BOOT_FROM" && pwd)"
 fi
 case "$BOOT_NETWORK" in offline|online) ;; *) arctic_die "--boot-network takes offline or online" ;; esac
+case "$INSTALL_NETWORK" in offline|online) ;; *) arctic_die "--install-network takes offline or online" ;; esac
 case "$RELIABILITY_APP_PROFILE" in legacy|lightweight) ;; *) arctic_die "--reliability-app-profile takes legacy or lightweight" ;; esac
 if [[ -n "$UPGRADE_TO" ]]; then
   [[ "$STAGE" == boot && -n "$RELIABILITY_VERSION" && "$UPGRADE_TO" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] ||
@@ -201,6 +213,20 @@ rm -rf "$DATA"; mkdir -p "$DATA"
 cp "$PROFILE" "$DATA/profile.toml"
 if [[ -n "$PERFORMANCE_CONTEXT" ]]; then cp "$PERFORMANCE_CONTEXT" "$DATA/performance-context.json"; fi
 if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
+if [[ -n "${ARCTIC_DICTATION_BUNDLE:-}" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && "$COLLECT_VIA" == terminal && -d "$ARCTIC_DICTATION_BUNDLE" ]] ||
+    arctic_die "dictation fixture requires explicit audio/checker/terminal bundle"
+  for name in dictation-qualification dictation-accuracy dictation-fixtures; do
+    [[ -d "$ARCTIC_DICTATION_BUNDLE/$name" && ! -L "$ARCTIC_DICTATION_BUNDLE/$name" ]] || arctic_die "missing dictation fixture directory"
+    cp -a "$ARCTIC_DICTATION_BUNDLE/$name" "$DATA/$name"
+  done
+  [[ -f "$ARCTIC_DICTATION_BUNDLE/dictation-context.json" && ! -L "$ARCTIC_DICTATION_BUNDLE/dictation-context.json" ]] || arctic_die "missing dictation context"
+  cp "$ARCTIC_DICTATION_BUNDLE/dictation-context.json" "$DATA/dictation-context.json"
+fi
+if [[ -n "$NATIVE_DICTATION_CPU_PROFILE" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -f "$DATA/dictation-context.json" ]] ||
+    arctic_die "dictation CPU profile requires the explicit dictation/audio/checker bundle"
+fi
 if [[ -n "$RELIABILITY_VERSION" ]]; then
   printf '{"version":"%s","upgrade_to":"%s","app_profile":"%s"}\n' \
     "$RELIABILITY_VERSION" "$UPGRADE_TO" "$RELIABILITY_APP_PROFILE" > "$DATA/config.json"
@@ -215,6 +241,19 @@ fi
 if [[ -n "${ARCTIC_NATIVE_PHOTO_CHECKER:-}" ]]; then
   [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && -f "$ARCTIC_NATIVE_PHOTO_CHECKER" ]] || arctic_die "photo fixture requires explicit native launcher/audio/checker"
   cp "$ARCTIC_NATIVE_PHOTO_CHECKER" "$DATA/photo-check.py"
+fi
+if [[ -n "$NATIVE_TASKBAR_BUNDLE" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && "$NATIVE_TWO_OUTPUTS" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && -d "$NATIVE_TASKBAR_BUNDLE" ]] ||
+    arctic_die "taskbar fixture requires explicit original native/audio/two-output lane"
+  for name in taskbar.py taskbar-runtime.py native_smoke.py virtual-pointer raw-screencopy taskbar-context.json; do
+    [[ -f "$NATIVE_TASKBAR_BUNDLE/$name" && ! -L "$NATIVE_TASKBAR_BUNDLE/$name" ]] || arctic_die "missing taskbar fixture file"
+    cp -a "$NATIVE_TASKBAR_BUNDLE/$name" "$DATA/$name"
+  done
+  [[ -f "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" && ! -L "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" ]] ||
+    arctic_die "taskbar fixture requires its pinned host display controller"
+  taskbar_host_args=(-v "$NATIVE_TASKBAR_DISPLAY_CONTROLLER:/arctic-taskbar-display.py:ro")
+elif [[ "$NATIVE_TWO_OUTPUTS" == 1 || -n "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" ]]; then
+  arctic_die "two-output display controller requires the explicit taskbar bundle"
 fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
@@ -286,7 +325,7 @@ fi
   nmcli general; nmcli networking connectivity check
   "\$AI" version
 } 2>&1 | tee -a "\$S"
-if [ "$ONLINE_PROXY" != 1 ]; then
+if [ "$ONLINE_PROXY" != 1 ] && [ "$INSTALL_NETWORK" = offline ]; then
   # Check transport reachability, not TLS trust or an HTTP success code: any HTTP response
   # would mean the supposedly offline guest can reach an outside server.
   response=\$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 http://fedoraproject.org/ || true)
@@ -296,6 +335,14 @@ if [ "$ONLINE_PROXY" != 1 ]; then
     systemctl poweroff; exit 93
   fi
   say 'ARCTIC-OFFLINE-GATE=passed: restricted QEMU network, no outside HTTP response'
+fi
+if [ "$ONLINE_PROXY" != 1 ] && [ "$INSTALL_NETWORK" = online ]; then
+  response=\$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 20 https://mirrors.fedoraproject.org/ || true)
+  if [ "\$response" = 000 ]; then
+    say 'ARCTIC-ONLINE-GATE=failed: normal TLS network route unavailable'
+    systemctl poweroff; exit 94
+  fi
+  say 'ARCTIC-ONLINE-GATE=passed: normal TLS network route, no test-online override'
 fi
 if [ -f "\$D/guest-check.py" ]; then
   python3 "\$D/guest-check.py" live >> "\$S" 2>&1
@@ -416,6 +463,10 @@ echo
 if [ -f /run/t/guest-check.py ]; then
   python3 /run/t/guest-check.py installed
   smoke_rc=$?
+  if [ "$smoke_rc" = 0 ] && [ -f /run/t/taskbar-runtime.py ]; then
+    python3 /run/t/taskbar-runtime.py --disposable-guest
+    smoke_rc=$?
+  fi
   if [ "$smoke_rc" = 0 ] && [ -f /run/t/photo-check.py ]; then
     python3 /run/t/photo-check.py installed
     smoke_rc=$?
@@ -515,6 +566,60 @@ def physical_poll(vm,name):
     return "ARCTIC-NATIVE-RUNNER-END " not in raw
 
 
+dictation_indicator_seen = False
+
+def dictation_indicator_poll(vm):
+    """Capture only the owned receiver's empty pre-playback recording interval."""
+    global dictation_indicator_seen
+    if E.get("DICTATION_FIXTURE") != "1" or dictation_indicator_seen:
+        return
+    import hashlib, json, re
+    from pathlib import Path
+    prefix = "ARCTIC-DICTATION-RECORDING-INDICATOR-REQUESTED "
+    path = serial("boot")
+    raw = Path(path).read_text(errors="strict") if Path(path).exists() else ""
+    rows = [json.loads(line[len(prefix):]) for line in raw.splitlines() if line.startswith(prefix)]
+    if not rows:
+        return
+    context = json.loads(Path(out, "data/dictation-context.json").read_text())
+    if len(rows) != 1:
+        raise RuntimeError("Duplicate dictation indicator request")
+    request = rows[0]
+    if (set(request) != {"boot_id", "installation_id", "phase", "desktop_uid", "receiver_empty", "capture_nonce"}
+        or request["phase"] not in ("online-installed", "recovered-offline")
+        or request["phase"] != context["phase"] or request["installation_id"] != context["installation_id"]
+        or request["receiver_empty"] is not True or type(request["desktop_uid"]) is not int
+        or request["desktop_uid"] <= 0 or not re.fullmatch(r"[0-9a-f]{32}", request["capture_nonce"])
+        or not re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", request["boot_id"])):
+        raise RuntimeError("Invalid dictation indicator request")
+    image = vm.shot("dictation-indicator-" + request["phase"])
+    if not image or not Path(image).is_file() or Path(image).stat().st_size > 4 * 1024 * 1024:
+        raise RuntimeError("Missing/oversized dictation indicator capture")
+    data = Path(image).read_bytes()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError("Invalid dictation indicator PNG")
+    proof = dict(request=request, path=Path(image).name, sha256=hashlib.sha256(data).hexdigest(),
+                 iso_sha256=context["iso_sha256"], installation_id=context["installation_id"])
+    Path(out, "dictation-indicator-receipt.json").write_text(json.dumps(proof, sort_keys=True) + "\n")
+    # Only after screenshot completion. The collector holds playback until this
+    # nonce appears in its empty owned receiver, then clears it before speech.
+    vm.type_text(request["capture_nonce"], gap=.05)
+    dictation_indicator_seen = True
+
+
+taskbar_display_module = None
+if E.get("NATIVE_TASKBAR_FIXTURE") == "1":
+    import hashlib, importlib.util
+    path = "/arctic-taskbar-display.py"
+    with open(path, "rb") as stream: data = stream.read(65537)
+    if (E.get("NATIVE_TWO_OUTPUTS") != "1" or len(data) > 65536
+        or hashlib.sha256(data).hexdigest() != E["NATIVE_TASKBAR_DISPLAY_SHA"]):
+        raise RuntimeError("taskbar display controller source differs")
+    spec = importlib.util.spec_from_file_location("taskbar_display", path)
+    taskbar_display_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(taskbar_display_module)
+
+
 def qemu_argv(name, with_iso):
     # Explicit boot-only connectivity must never make an offline install online.
     online = E.get("ONLINE_PROXY") == "1" or (not with_iso and E.get("BOOT_NETWORK") == "online")
@@ -539,6 +644,89 @@ def qemu_argv(name, with_iso):
         a += ["-drive", "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd",
               "-drive", f"if=pflash,format=raw,unit=1,file={out}/OVMF_VARS.fd"]
     return a
+
+def dictation_network_argv(argv, with_iso):
+    if not with_iso or E.get("INSTALL_NETWORK") != "online":
+        return argv
+    # Add the installation-only online fixture after the frozen constructor.
+    # Boot connectivity remains independently selected by the original function.
+    argv = list(argv)
+    at = argv.index("-netdev")
+    argv[at+1] = "user,id=net0"
+    return argv
+
+def dictation_cpu_argv(argv):
+    profile = E.get("NATIVE_DICTATION_CPU_PROFILE", "")
+    if not profile:
+        return argv
+    if profile not in ("small-v2", "turbo-q5-v3") or E.get("DICTATION_FIXTURE") != "1":
+        raise RuntimeError("Invalid dictation CPU fixture")
+    argv = list(argv)
+    if profile == "small-v2":
+        at = argv.index("-cpu") + 1
+        argv[at] += ",-avx,-avx2,-fma,-f16c,-bmi1,-bmi2"
+    return argv
+
+def native_taskbar_argv(argv, name, display_arg=None):
+    if E.get("NATIVE_TWO_OUTPUTS") != "1":
+        return argv
+    # Supplement the frozen QEMU constructor with two actual GPU scanouts.
+    # Default devices and every original native/physical source gate stay exact.
+    argv = list(argv)
+    if E.get("NATIVE_TASKBAR_FIXTURE") != "1" or not isinstance(display_arg, str) or not display_arg.startswith("dbus,addr=unix:path=/tmp/arctic-tb-display-") or not display_arg.endswith("/bus,gl=off"):
+        raise RuntimeError("Invalid private taskbar display fixture")
+    at = argv.index("-display")
+    argv[at+1] = display_arg
+    argv.append("-S")
+    at = argv.index("-vga")
+    argv[at:at+2] = ["-vga", "none", "-device", "virtio-vga,id=arctic_taskbar_gpu,max_outputs=2"]
+    # A fixed test-only output channel carries all taskbar PNGs without UART
+    # baud pacing. It exposes no host directory or incoming host data.
+    port_path = f"{out}/taskbar-{name}.log".replace(",", ",,")
+    argv += ["-chardev", f"file,id=taskbar_evidence,path={port_path}",
+             "-device", "virtio-serial-pci,id=taskbar_serial",
+             "-device", "virtserialport,bus=taskbar_serial.0,chardev=taskbar_evidence,name=arctic-taskbar-evidence"]
+    return argv
+
+def enable_taskbar_display(vm, display, name):
+    import json
+    from pathlib import Path
+    proof = dict(display.enable(vm), controller_sha256=E["NATIVE_TASKBAR_DISPLAY_SHA"])
+    Path(out, "taskbar-display-" + name + ".json").write_text(json.dumps(proof, sort_keys=True) + "\n")
+    answer = taskbar_display_module.qmp_query(vm, "cont", seconds=10)
+    if not isinstance(answer, dict):
+        raise RuntimeError("Taskbar VM failed to continue after UIInfo")
+    answer = taskbar_display_module.qmp_query(vm, "query-status", seconds=10)
+    if not isinstance(answer, dict) or answer.get("running") is not True:
+        raise RuntimeError("Taskbar VM did not run after UIInfo")
+
+def close_taskbar_vm(vm, display):
+    # Preserve the original cleanup path for every fixture-free VM. A taskbar
+    # setup failure must still stop its owned QEMU when the QMP reader stalls.
+    if display is None:
+        if vm is not None: vm.quit()
+        return
+    import subprocess
+    errors = []
+    try:
+        if vm is not None:
+            if vm.proc.poll() is None:
+                try: taskbar_display_module.qmp_query(vm, "quit", seconds=10)
+                except BaseException as error: errors.append(error)
+            for action in ("wait", "terminate", "wait", "kill", "wait"):
+                try:
+                    if vm.proc.poll() is None:
+                        if action == "wait": vm.proc.wait(timeout=5)
+                        else: getattr(vm.proc, action)()
+                except subprocess.TimeoutExpired:
+                    pass
+                except BaseException as error:
+                    errors.append(error)
+            if vm.proc.poll() is None: errors.append(RuntimeError("Owned taskbar QEMU remains alive"))
+    finally:
+        try: display.close()
+        except BaseException as error: errors.append(error)
+    if errors: raise errors[0]
 
 def wait_menu(vm, prefix, limit):
     t = time.time()
@@ -582,8 +770,12 @@ def serial(name):
 
 # ---- stage 1: install from the live session ------------------------------------------------
 def stage_install():
-    vm = vmtest.VM(qemu_argv("install", True), "/tmp/qmp-install.sock", "install")
+    vm = None
+    display = None
     try:
+        if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
+        vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("install", True), True), "install", display.display_arg if display else None)), "/tmp/qmp-install.sock", "install")
+        if display is not None: enable_taskbar_display(vm, display, "install")
         if wait_menu(vm, "install", 300):
             vm.keys("home")
             edit_entry(vm, "install", LIVE_APPEND, 2)   # setparams, (empty), linux
@@ -655,7 +847,7 @@ def stage_install():
             log("ARCTIC-PRISTINE-INSTALL-POWEROFF=clean")
         return int(rc) if rc.isdigit() else 92
     finally:
-        vm.quit()
+        close_taskbar_vm(vm, display)
 
 # ---- stage 2: boot the installed disk ------------------------------------------------------
 def wait_for(vm, prefix, want, limit, every=5):
@@ -675,9 +867,13 @@ def wait_for(vm, prefix, want, limit, every=5):
     return None
 
 def stage_boot():
-    vm = vmtest.VM(qemu_argv("boot", False), "/tmp/qmp-boot.sock", "boot")
+    vm = None
+    display = None
     ok = True
     try:
+        if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
+        vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("boot", False), False), "boot", display.display_arg if display else None)), "/tmp/qmp-boot.sock", "boot")
+        if display is not None: enable_taskbar_display(vm, display, "boot")
         if wait_menu(vm, "boot", 240):
             if boot_append:
                 # A BLS entry: load_video, set gfxpayload=keep, insmod gzio, linux, initrd.
@@ -772,7 +968,7 @@ def stage_boot():
         vm.shot("boot-51-desktop")
         collected = False
         lock_password_sent = False
-        for attempt in ((1,) if E.get("COLLECT_VIA") == "console" else (1, 2, 3)):
+        for attempt in ((1,) if E.get("COLLECT_VIA") == "console" or E.get("NATIVE_TASKBAR_FIXTURE") == "1" else (1, 2, 3)):
             if E.get("COLLECT_VIA") == "console":
                 vm.keys("ctrl-alt-f3")
                 time.sleep(5)
@@ -794,8 +990,12 @@ def stage_boot():
             t = time.time()
             last_probe_shot = t
             probe_shots = 0
-            while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
+            # The supplemental taskbar helper has its own unchanged 30m check
+            # deadline plus 10m bounded export; preserve the original 1h budget.
+            collect_limit = 6000 if E.get("NATIVE_TASKBAR_FIXTURE") == "1" else 3600 if E.get("GUEST_CHECK") else 240
+            while time.time() - t < collect_limit and vm.alive():
                 physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"boot")
+                dictation_indicator_poll(vm)
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("boot"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
                     log("owned native launcher failed; no retry")
                     return 1
@@ -812,7 +1012,7 @@ def stage_boot():
                         vm.type_text(password, gap=0.3)
                         vm.keys("ret")
                         lock_password_sent = True
-                time.sleep(.1 if physical_active else 5)
+                time.sleep(.1 if physical_active else 1 if E.get("DICTATION_FIXTURE") == "1" else 5)
             collected = vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END")
             vm.shot(f"boot-5{attempt + 1}-collected")
             if collected:
@@ -845,7 +1045,7 @@ def stage_boot():
             ok = False
         return 0 if ok else 1
     finally:
-        vm.quit()
+        close_taskbar_vm(vm, display)
 
 rc = 0
 if stage in ("all", "install"):
@@ -892,7 +1092,13 @@ if [[ "$NATIVE_AUDIO_FIXTURE" == 1 ]]; then
   grep -q 'name "hda-output"' <<< "$device_help"
   { printf '%s\n' "$audio_help" "$device_help"; qemu-system-x86_64 -device hda-output,help; } > "$OUT/native-audio-capabilities.txt"
 fi
-xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
+data_owner_args=()
+if [[ "$NATIVE_TASKBAR_FIXTURE" == 1 ]]; then
+  # Rock Ridge otherwise preserves the GitHub checkout/context writer UID.
+  # The guarded taskbar CD is immutable and explicitly owned by guest root.
+  data_owner_args=(-uid 0 -gid 0)
+fi
+xorriso -as mkisofs -quiet -V ARCTICTEST -J -R "${data_owner_args[@]}" -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
 if [ "$STAGE" != boot ]; then
   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
   [ "$FIRMWARE" = uefi ] && cp /usr/share/edk2/ovmf/OVMF_VARS.fd "$OUT/OVMF_VARS.fd"
@@ -927,6 +1133,10 @@ fi
 "$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e NATIVE_LAUNCHER_FIXTURE="$([[ -f "$DATA/native-launcher.py" ]] && echo 1 || echo 0)" \
   -e NATIVE_AUDIO_FIXTURE="$NATIVE_AUDIO_FIXTURE" \
+  -e NATIVE_TWO_OUTPUTS="$NATIVE_TWO_OUTPUTS" \
+  -e NATIVE_TASKBAR_FIXTURE="$([[ -f "$DATA/taskbar-context.json" ]] && echo 1 || echo 0)" \
+  -e NATIVE_TASKBAR_DISPLAY_SHA="${ARCTIC_NATIVE_TASKBAR_DISPLAY_SHA:-}" \
+  -e NATIVE_DICTATION_CPU_PROFILE="$NATIVE_DICTATION_CPU_PROFILE" \
   -e NATIVE_PHYSICAL_FIXTURE="$([[ -n "$NATIVE_PHYSICAL_CONTROLLER" ]] && echo 1 || echo 0)" \
   -e NATIVE_EDITOR_SAVE_FIXTURE="$NATIVE_EDITOR_SAVE_FIXTURE" \
   -e NATIVE_PHYSICAL_SHA="${ARCTIC_NATIVE_PHYSICAL_SHA:-}" \
@@ -935,11 +1145,12 @@ fi
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
   -e GUEST_CHECK="$GUEST_CHECK" -e UPGRADE_TO="$UPGRADE_TO" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e GUEST_CHECK_INTERACTIVE="$GUEST_CHECK_INTERACTIVE" \
-  -e ONLINE_PROXY="$ONLINE_PROXY" -e BOOT_NETWORK="$BOOT_NETWORK" \
+  -e ONLINE_PROXY="$ONLINE_PROXY" -e BOOT_NETWORK="$BOOT_NETWORK" -e INSTALL_NETWORK="$INSTALL_NETWORK" \
+  -e DICTATION_FIXTURE="$([[ -f "$DATA/dictation-context.json" ]] && echo 1 || echo 0)" \
   -e COLLECT_VIA="$COLLECT_VIA" -e FRESH_BOOT_FROM="$FRESH_BOOT_FROM" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" "${base_args[@]}" "${physical_args[@]}" \
+  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" "${base_args[@]}" "${physical_args[@]}" "${taskbar_host_args[@]}" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner" || rc=$?
 
 arctic_log "result: exit $rc (serial logs, test.log and screenshots in $OUT)"

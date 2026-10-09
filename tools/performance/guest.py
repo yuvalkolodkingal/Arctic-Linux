@@ -17,13 +17,27 @@ import statistics
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+import importlib.util
+
+CAUSAL_TRACER = None
+
+def causal_module():
+    try:
+        import arctic_performance_causal
+        return arctic_performance_causal
+    except ModuleNotFoundError:
+        spec = importlib.util.spec_from_file_location('arctic_performance_causal', Path(__file__).with_name('causal.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
+CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v3-raw-clock-autonomous'
 MAPPING_POLL_SECONDS = .001
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v8-autonomous-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v10-raw-causal-role-first-use'
 ROLE_POLL_SECONDS = .00005
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
@@ -54,9 +68,16 @@ ROLE_APPS = {
 CLIENT_QUERY_WORKER = r'''
 import json, os, select, socket, sys, time
 path = os.environ['MANGO_INSTANCE_SIGNATURE']
+clock_name = sys.argv[1]
+if clock_name == 'CLOCK_MONOTONIC_RAW':
+    def clock_ns():return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
+elif clock_name == 'CLOCK_MONOTONIC':
+    clock_ns = time.monotonic_ns
+else:
+    raise RuntimeError('Unsupported observer clock; no clock fallback')
 MAX_REPLY_BYTES = 4 * 1024 * 1024
 def query():
-    started = time.monotonic_ns()
+    started = clock_ns()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
         peer.settimeout(2)
         peer.connect(path)
@@ -78,7 +99,7 @@ def query():
         if not isinstance(client, dict) or 'id' not in client or str(client['id']) in identities:
             raise RuntimeError('Invalid or duplicate Mango client identity')
         identities.add(str(client['id']))
-    return value, started, time.monotonic_ns()
+    return value, started, clock_ns()
 
 # Unbuffered stdin avoids hiding cancellation/EOF behind a TextIO buffer.
 # No parent request or subprocess is needed between these read-only polls.
@@ -97,8 +118,8 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
             before = set(command['before'])
             pattern = command['pattern']
             traces = []
-            until_ns = started_ns + int(command['timeout'] * 1e9)
-            while time.monotonic_ns() < until_ns:
+            until = command['deadline_monotonic']
+            while time.monotonic() < until:
                 if select.select([control], [], [], 0)[0]:
                     # Parent closes stdin on cancellation. Unexpected pipelined
                     # commands fail rather than produce an ambiguous response.
@@ -117,7 +138,8 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
                     # Only identities are needed until the persistence query.
                     # Do not duplicate a potentially 4 MiB client inventory or
                     # large titles alongside the trace in the mapping envelope.
-                    matched = [dict(id=c['id']) for c in windows]
+                    matched = [dict(id=c['id'], **({'foreign_toplevel_id': c['foreign_toplevel_id']}
+                               if c.get('foreign_toplevel_id') else {})) for c in windows]
                     result = dict(payload=dict(clients=matched), lower_ns=max(lower_ns, started_ns),
                                   upper_ns=query_finished, query_roundtrips=traces)
                     break
@@ -132,6 +154,7 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
         else:
             raise RuntimeError('Unexpected observer command')
         result['uid'] = os.getuid()
+        result['clock'] = clock_name
         reply = json.dumps(result, separators=(',', ':'), ensure_ascii=False,
                            allow_nan=False).encode() + b'\n'
         # The TOTAL encoded envelope is the transport bound, independent of
@@ -146,17 +169,22 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
 
 class NativeClientQuery:
     """Bounded read-only queries and autonomous worker-side mapping timestamps."""
-    def __init__(self, prefix):
+    def __init__(self, prefix, raw_clock=False):
         self.prefix = prefix
+        self.clock = 'CLOCK_MONOTONIC_RAW' if raw_clock else 'CLOCK_MONOTONIC'
+        self.identifier = CAUSAL_MAPPING_OBSERVER if raw_clock else MAPPING_OBSERVER
         self.process = None
         self.buffer = b''
         self.roundtrips = []
         self.pending = None
 
     def __enter__(self):
-        self.process = subprocess.Popen(self.prefix + ['python3', '-u', '-c', CLIENT_QUERY_WORKER],
+        self.process = subprocess.Popen(self.prefix + ['python3', '-u', '-c', CLIENT_QUERY_WORKER, self.clock],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         return self
+
+    def now_ns(self):
+        return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW) if self.clock == 'CLOCK_MONOTONIC_RAW' else time.monotonic_ns()
 
     def _send(self, command):
         if self.pending is not None:
@@ -187,6 +215,8 @@ class NativeClientQuery:
         if self.buffer:
             raise RuntimeError('Unsolicited native observer response')
         value = json.loads(line)
+        if value.get('clock') != self.clock:
+            raise RuntimeError('Native observer clock differs from collector; no conversion fallback')
         if self.prefix[:2] == ['runuser', '-u'] and value['uid'] != pwd.getpwnam(self.prefix[2]).pw_uid:
             raise RuntimeError('Native observer did not use the desktop user')
         result = {}
@@ -205,9 +235,10 @@ class NativeClientQuery:
                                     socket_seconds=value['query_seconds'], uid=value['uid']))
         return value['clients_by_id']
 
-    def begin_observation(self, before, pattern, started_ns, timeout, poll_seconds):
+    def begin_observation(self, before, pattern, started_ns, timeout, poll_seconds, deadline=None):
         self._send(dict(kind='observe', before=sorted(before), pattern=pattern,
-                        started_ns=started_ns, timeout=timeout, poll_seconds=poll_seconds))
+                        started_ns=started_ns, timeout=timeout, poll_seconds=poll_seconds,
+                        deadline_monotonic=time.monotonic()+timeout if deadline is None else deadline))
 
     def finish_observation(self, child, started_ns, timeout):
         value, _ = self._receive(timeout+3, child)
@@ -215,7 +246,7 @@ class NativeClientQuery:
             return None
         lower, upper = value['lower_ns'], value['upper_ns']
         if (any(type(n) is not int for n in (lower, upper))
-                or not started_ns <= lower <= upper <= time.monotonic_ns()):
+                or not started_ns <= lower <= upper <= self.now_ns()):
             raise RuntimeError('Invalid worker mapping timestamp bracket')
         identities = value['clients_by_id']
         if not identities:
@@ -666,22 +697,22 @@ def collect_idle(worker=None):
 def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=None,
             poll_seconds=MAPPING_POLL_SECONDS, label=None):
     label = label or (pattern if isinstance(pattern, str) else pattern[0])
-    with NativeClientQuery(prefix) as observer, open('/tmp/arctic-performance-apps.log', 'a') as output:
+    with NativeClientQuery(prefix, raw_clock=CAUSAL_TRACER is not None) as observer, open('/tmp/arctic-performance-apps.log', 'a') as output:
         # Check the production CLI and native query agree before launching. No
         # altered compositor, application preference or service is involved.
         before = set(clients(prefix))
         native_before = observer.query()
         if before != set(native_before):
             raise RuntimeError('Mango CLI/native observer initial client identities differ')
-        started_ns = time.monotonic_ns()
-        started = started_ns / 1e9
+        started_ns = observer.now_ns()
+        deadline = time.monotonic() + timeout
         # Arm before the original parent-side Popen. Both processes use the
         # same monotonic clock; actual launch overhead remains in the metric.
-        observer.begin_observation(before, pattern, started_ns, timeout, poll_seconds)
+        observer.begin_observation(before, pattern, started_ns, timeout, poll_seconds, deadline=deadline)
         child = subprocess.Popen(prefix + command, stdout=output, stderr=output)
         observed_window_ids = set()
         try:
-            while time.monotonic() - started < timeout:
+            while time.monotonic() < deadline:
                 try:
                     observation = observer.finish_observation(child, started_ns, timeout)
                 except Exception:
@@ -693,16 +724,25 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                 windows = observation['windows']
                 observed_window_ids.update(str(window['id']) for window in windows)
                 measured = (observation['upper_ns'] - started_ns)/1e9
+                causal_bound = None
+                if CAUSAL_TRACER is not None:
+                    causal_lower, causal_bound = CAUSAL_TRACER.bound(windows, started_ns, observation['upper_ns'])
+                    # The independent before-insertion return event can tighten
+                    # only the LOWER endpoint. Keep the original conservative
+                    # query upper, every sample and all original numeric gates.
+                    causal_bound['ipc_lower_monotonic_ns'] = observation['lower_ns']
+                    observation['lower_ns'] = max(observation['lower_ns'], causal_lower)
                 lower = (observation['lower_ns'] - started_ns)/1e9
                 time.sleep(hold_seconds)
                 persistent = observer.query()
                 if not any(str(window['id']) in persistent for window in windows):
-                    observer.begin_observation(before, pattern, started_ns, timeout, poll_seconds)
+                    observer.begin_observation(before, pattern, started_ns, timeout, poll_seconds, deadline=deadline)
                     continue
                 if observations is not None:
                     observations.append(dict(lower_seconds=lower, upper_seconds=measured,
                         interval_seconds=measured-lower, launch_started_monotonic_ns=started_ns,
-                        observer=MAPPING_OBSERVER, query_roundtrips=observer.roundtrips))
+                        observer=observer.identifier, clock=observer.clock, query_roundtrips=observer.roundtrips,
+                        causal_lower_bound=causal_bound))
                 emit('mapped_window_' + label, [persistent[str(c['id'])] for c in windows
                                                if str(c['id']) in persistent])
                 emit('app_workload_' + label, snapshot())
@@ -783,7 +823,8 @@ def measure(prefix, declared=None, workload=None, order=None, complete=True, pre
                                poll_seconds=ROLE_POLL_SECONDS, label='role_'+role) for _ in range(3)]
             emit('startup_role_' + role + '_warm_seconds', dict(first=samples[0], warm=samples[1:],
                  observation_bounds=bounds, poll_sleep_seconds=ROLE_POLL_SECONDS,
-                 observer=MAPPING_OBSERVER, app_id=app['id'],
+                 observer=CAUSAL_MAPPING_OBSERVER if CAUSAL_TRACER else MAPPING_OBSERVER,
+                 clock='CLOCK_MONOTONIC_RAW' if CAUSAL_TRACER else 'CLOCK_MONOTONIC', app_id=app['id'],
                  phase='after_45_second_preconditioning' if preconditioned else 'functional_probe_repeated_launch'))
             order.append('warm:'+role)
     else:
@@ -818,7 +859,9 @@ def first_use_and_precondition(prefix, declared, workload):
         seconds = startup(prefix, role_command(app, workload), app['appids'], observations=bounds,
                           poll_seconds=ROLE_POLL_SECONDS, label='role_'+role)
         emit('startup_role_' + role + '_cold_seconds', dict(first=seconds, observation_bounds=bounds,
-             poll_sleep_seconds=ROLE_POLL_SECONDS, observer=MAPPING_OBSERVER, app_id=app['id'],
+             poll_sleep_seconds=ROLE_POLL_SECONDS,
+             observer=CAUSAL_MAPPING_OBSERVER if CAUSAL_TRACER else MAPPING_OBSERVER,
+             clock='CLOCK_MONOTONIC_RAW' if CAUSAL_TRACER else 'CLOCK_MONOTONIC', app_id=app['id'],
              phase='first_gui_role_execution_from_pristine_install',
              meaning='Before any role preconditioning, from pristine user state on this boot; shared OS libraries/host caches may be warm'))
         order.append('cold:'+role)
@@ -832,7 +875,8 @@ def first_use_and_precondition(prefix, declared, workload):
     return order
 
 
-def main(preconditioned=False, functional=False):
+def main(preconditioned=False, functional=False, causal_precision=False):
+    global CAUSAL_TRACER
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
             or run(['systemd-detect-virt', '--vm']) not in ('qemu', 'kvm')):
         raise RuntimeError('This probe requires root inside a disposable QEMU VM')
@@ -863,23 +907,28 @@ def main(preconditioned=False, functional=False):
             quickshell=run(['rpm', '-q', 'quickshell']),
             role_packages={role: app['package'] for role, app in declared['roles'].items()} if declared
                           else dict(kitty=run(['rpm', '-q', 'kitty']))))
-        if preconditioned:
-            emit('pristine_idle_measurement_scope', dict(
-                phase='before_any_gui_role_or_workload_worker',
-                collector_present=True, workload_worker_present=False,
-                meaning='Settled logged-in desktop before GUI-role execution; whole-guest counters/PSS include the frozen root collector and normal authenticated console/session processes'))
-            emit('pristine_idle_samples', collect_idle())
-            with role_workload(prefix) as workload:
-                emit('role_workload', workload)
-                order = first_use_and_precondition(prefix, declared, workload)
-                order.insert(0, 'pristine_idle')
-                measure(prefix, declared, workload, order, complete=False)
-                emit('role_measurement_order', order)
-        elif functional:
-            with role_workload(prefix) as workload:
-                measure(prefix, declared, workload, [], complete=False, preconditioned=False)
-        else:
-            measure(prefix, complete=False)
+        with (causal_module().LowerBoundProbe(prefix) if causal_precision else nullcontext(None)) as tracer:
+            CAUSAL_TRACER = tracer
+            try:
+                if preconditioned:
+                    emit('pristine_idle_measurement_scope', dict(
+                        phase='before_any_gui_role_or_workload_worker',
+                        collector_present=True, workload_worker_present=False,
+                        meaning='Settled logged-in desktop before GUI-role execution; whole-guest counters/PSS include the frozen root collector and normal authenticated console/session processes'))
+                    emit('pristine_idle_samples', collect_idle())
+                    with role_workload(prefix) as workload:
+                        emit('role_workload', workload)
+                        order = first_use_and_precondition(prefix, declared, workload)
+                        order.insert(0, 'pristine_idle')
+                        measure(prefix, declared, workload, order, complete=False)
+                        emit('role_measurement_order', order)
+                elif functional:
+                    with role_workload(prefix) as workload:
+                        measure(prefix, declared, workload, [], complete=False, preconditioned=False)
+                else:
+                    measure(prefix, complete=False)
+            finally:
+                CAUSAL_TRACER = None
     finally:
         restored = json.loads(run(prefix + ['arctic-keep-awake', 'off', '--quiet']))
         emit('keep_awake_restored', restored)

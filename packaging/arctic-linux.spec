@@ -49,7 +49,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        1.2.0
+Version:        1.2.1
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -874,6 +874,7 @@ install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinu
 # arctic-firstboot finishes app installs the installer put off (/var/lib/arctic/pending.json).
 # It lives here, not in arctic-installer, because the installer is removed from the new system.
 install -Dpm 0644 packaging/systemd/arctic-firstboot.service %{buildroot}%{_unitdir}/arctic-firstboot.service
+install -Dpm 0644 packaging/systemd/arctic-firstboot.timer %{buildroot}%{_unitdir}/arctic-firstboot.timer
 install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir}/arctic/arctic-firstboot
 # Dictation ships only the controller. The installer/first-boot service fetches
 # the pinned Voxtype binaries and multilingual model after the live-root copy.
@@ -884,6 +885,7 @@ install -Dpm 0644 packaging/dictation/dictation.py %{buildroot}%{_datadir}/arcti
 install -Dpm 0644 packaging/dictation/child_exec.py %{buildroot}%{_datadir}/arctic/dictation/child_exec.py
 install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
+install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
 # New accounts start from /etc/skel. What Arctic keeps up to date is installed once, in
 # /usr/share/arctic, and the home directory only points at it, so package updates reach
 # accounts that already exist (a copy in the home directory would never change again):
@@ -1072,6 +1074,9 @@ install -pm 0644 fetch/config %{buildroot}%{_datadir}/arctic/fetch/config
 install -d %{buildroot}%{_datadir}/arctic/settings
 # tests/ and dev/ (headless screenshots) are development-only.
 tar -C settings --exclude=./tests --exclude=./dev --exclude=./README.md -cf - . | tar -C %{buildroot}%{_datadir}/arctic/settings -xf -
+# Each Quickshell config root needs a local resource. Keep the status whitelist
+# sourced from one canonical parser; never follow an import outside Settings.
+install -pm 0644 shell/DictationStatus.js %{buildroot}%{_datadir}/arctic/settings/DictationStatus.js
 chmod 0755 %{buildroot}%{_datadir}/arctic/settings/scripts/arctic_settings.py
 desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/settings/org.arcticlinux.Settings.desktop
 install -Dpm 0644 packaging/settings/org.arcticlinux.Settings.svg \
@@ -1314,18 +1319,26 @@ done
 %post -n arctic-desktop-config
 systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 %systemd_post arctic-login-wallpaper.service
-%systemd_post arctic-firstboot.service arctic-update-stage.timer
-%systemd_post arctic-dictation-setup.service
+%systemd_post arctic-firstboot.timer arctic-update-stage.timer
+%systemd_post arctic-dictation-setup.timer
 %systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-login-wallpaper.service
-%systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
-%systemd_preun arctic-dictation-setup.service
+%systemd_preun arctic-firstboot.service arctic-firstboot.timer arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
+%systemd_preun arctic-dictation-setup.service arctic-dictation-setup.timer
 %systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# Migrate old boot-wanted download services to post-boot retries once. Do not stop a
+# currently running setup, and do not override later administrator timer choices.
+if [ ! -e %{_sharedstatedir}/arctic/.postboot-setup-timers ]; then
+  if systemctl --no-reload disable arctic-firstboot.service arctic-dictation-setup.service >/dev/null 2>&1 && \
+     systemctl --no-reload preset arctic-firstboot.timer arctic-dictation-setup.timer >/dev/null 2>&1; then
+    mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.postboot-setup-timers || :
+  fi
+fi
 # Systems installed before automatic updates existed (0.1) get the new timers once, as the
 # presets say (%%systemd_post presets only on a first install). Removing the marker doesn't
 # undo a choice: `arctic-update auto off` also sets AUTO=off, which the timer's check honours.
@@ -1528,6 +1541,7 @@ fi
 %{_userunitdir}/mango-session.target.d/arctic-autostart.conf
 %{_userunitdir}/app-*@autostart.service.d/
 %{_unitdir}/arctic-firstboot.service
+%{_unitdir}/arctic-firstboot.timer
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
 %{_bindir}/arctic-dictation
@@ -1536,6 +1550,7 @@ fi
 %{_datadir}/arctic/dictation/
 %{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 %{_unitdir}/arctic-dictation-setup.service
+%{_unitdir}/arctic-dictation-setup.timer
 %{_libexecdir}/arctic/neofetch
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer
@@ -1646,6 +1661,11 @@ fi
 # metapackage: no files
 
 %changelog
+* Fri Oct 09 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.1-1
+- Repair taskbar frame transitions and installer window restoration.
+- Use the lightweight default applications and repository photo wallpapers.
+- Prepare local Hebrew and English dictation during installation, with retryable offline setup.
+
 * Sun Oct 04 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.0-1
 - Nix integration, taskbar fixes, two-row Get apps and reliable update checks.
 

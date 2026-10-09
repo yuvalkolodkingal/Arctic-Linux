@@ -1577,7 +1577,9 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 // queue when offline. A model/dependency download must never undo an OS install.
 func (in *Installer) finishDictation(ctx context.Context) {
 	queue := "{\"version\":\"1.1.0\"}\n"
-	status := "{\"state\":\"queued\",\"progress\":0,\"error\":\"\",\"version\":\"1.1.0\",\"download_bytes\":572524159}\n"
+	// The fixed setup helper selects the hardware profile and exact disclosure
+	// before network access; don't duplicate model/byte constants in Go.
+	status := "{\"state\":\"queued\",\"progress\":0,\"error\":\"\",\"version\":\"1.1.0\"}\n"
 	for _, file := range []struct{ name, data string }{{"pending.json", queue}, {"setup.json", status}} {
 		if err := in.write(in.tgt("/var/lib/arctic/dictation/"+file.name), file.data, 0o644); err != nil {
 			in.Rep.Logf("dictation queue could not be saved (continuing): %v", err)
@@ -1585,14 +1587,14 @@ func (in *Installer) finishDictation(ctx context.Context) {
 			return
 		}
 	}
-	if err := in.run(ctx, "systemctl", "--root="+in.Opt.Target, "enable", "arctic-dictation-setup.service"); err != nil {
+	if err := in.run(ctx, "systemctl", "--root="+in.Opt.Target, "enable", "arctic-dictation-setup.timer"); err != nil {
 		in.Rep.Logf("dictation first-boot setup could not be enabled (continuing): %v", err)
 	}
 	args := []string{"--install"}
 	if in.Job.Offline {
 		args = append(args, "--offline")
 	}
-	in.t.Update(0.4, "Preparing local dictation (573 MB download; no audio leaves this computer)…")
+	in.t.Update(0.4, "Preparing local dictation (model download depends on hardware; audio stays on this computer)…")
 	setupCtx, cancel := context.WithTimeout(ctx, 11*time.Minute)
 	defer cancel()
 	if _, err := in.R.Run(setupCtx, Chroot(in.Opt.Target, Cmd{Name: "/usr/bin/python3", Args: append([]string{"-I", "/usr/share/arctic/dictation/dictation.py"}, args...), AllowFail: true})); err != nil {

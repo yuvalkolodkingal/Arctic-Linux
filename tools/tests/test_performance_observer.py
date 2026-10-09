@@ -222,6 +222,34 @@ class NativeObserverTest(unittest.TestCase):
             self.assertGreater(time.monotonic_ns()-result['upper_ns'], 100_000_000)
             self.assertEqual(result['windows'][0]['id'], 42)
 
+    def test_raw_worker_transition_uses_one_unconverted_raw_clock(self):
+        transition={}
+        def response():
+            clients=[dict(id=42,appid='foot')] if transition else []
+            return json.dumps(dict(clients=clients)).encode()+b'\n'
+        _,prefix=self.server(response)
+        with guest.NativeClientQuery(prefix,raw_clock=True) as observer:
+            observer.query()
+            with patch.object(guest.time,'monotonic_ns',side_effect=AssertionError('raw collector cannot use adjusted monotonic')):
+                started=time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
+                observer.begin_observation(set(),('foot',),started,2,.00005)
+                time.sleep(.02)
+                transition['mapped_ns']=time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
+                time.sleep(.04)
+                result=observer.finish_observation(None,started,2)
+                self.assertLessEqual(result['lower_ns'],transition['mapped_ns'])
+                self.assertGreaterEqual(result['upper_ns'],transition['mapped_ns'])
+                self.assertLessEqual(result['upper_ns'],observer.now_ns())
+                self.assertEqual(result['clock'],'CLOCK_MONOTONIC_RAW')
+                self.assertEqual(observer.identifier,guest.CAUSAL_MAPPING_OBSERVER)
+
+    def test_worker_clock_mismatch_has_no_conversion_fallback(self):
+        _,prefix=self.server(lambda:b'{"clients":[]}\n')
+        with guest.NativeClientQuery(prefix,raw_clock=True) as observer:
+            observer.clock='CLOCK_MONOTONIC'
+            with self.assertRaisesRegex(RuntimeError,'clock differs'):
+                observer.query()
+
     def test_timeout_is_explicit_and_cancellation_reaps_autonomous_worker(self):
         _, prefix = self.server(lambda: b'{"clients":[]}\n')
         with guest.NativeClientQuery(prefix) as observer:

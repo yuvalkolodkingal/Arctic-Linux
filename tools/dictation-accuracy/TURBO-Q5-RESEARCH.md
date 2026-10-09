@@ -27,3 +27,21 @@ Quantized-model compatibility, accuracy, RAM and CPU latency still require the
 real run. The tiny read-speech corpus cannot establish Whisper accuracy parity,
 GPU support or release qualification. A production model decision needs the
 comparison evidence plus actual recording and installation validation.
+
+Two additional research manifests select the optimized Haswell/x86-64-v3 CPU
+asset: `pins-small-avx2-research.json` keeps small, and
+`pins-turbo-q5-avx2-research.json` selects quantized turbo. Both retain the exact
+ten utterances and two threads. The binary is 19,153,728 bytes, SHA-256
+`e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28`.
+Upstream's v1.1.0 `Dockerfile.build` uses `target-cpu=haswell` and disables
+GGML native tuning, AVX512, GFNI and AVXVNNI; its release workflow verifies the
+x86-64-v3 ISA floor. Keep CPU variant explicit in measurement reports rather
+than labelling an AVX2 run as the baseline. Comparing model and CPU changes in
+separate runs helps attribute accuracy and speed differences.
+
+An eventual production selector should use the intersection of Linux CPU flag
+tokens across processors: AVX, AVX2, FMA, F16C, BMI1, BMI2, MOVBE, POPCNT, XSAVE
+and LZCNT (Linux commonly calls it `abm`). Linux's exposed AVX flag reflects
+available OS AVX state; literal `osxsave` is not present on all suitable kernels.
+Retain the v2 baseline, and handle a genuine optimized CPU SIGILL with explicit
+baseline retry. None of these research manifests changes production selection.

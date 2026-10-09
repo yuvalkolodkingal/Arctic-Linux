@@ -210,8 +210,8 @@ write /mnt/etc/xdg/mimeapps.list (0644)
 write /mnt/var/lib/arctic/dictation/pending.json (0644)
     | {"version":"1.1.0"}
 write /mnt/var/lib/arctic/dictation/setup.json (0644)
-    | {"state":"queued","progress":0,"error":"","version":"1.1.0","download_bytes":572524159}
-$ systemctl --root=/mnt enable arctic-dictation-setup.service
+    | {"state":"queued","progress":0,"error":"","version":"1.1.0"}
+$ systemctl --root=/mnt enable arctic-dictation-setup.timer
 $ chroot /mnt /usr/bin/python3 -I /usr/share/arctic/dictation/dictation.py --install
 mkdir -p /mnt/var/log/arctic-install
 $ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install

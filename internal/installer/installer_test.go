@@ -135,7 +135,7 @@ func TestDictationInstallQueueAndNonfatalSetup(t *testing.T) {
 				t.Fatalf("wrong offline setup contract: %v", setup.Args)
 			}
 			plan := rec.Plan()
-			if !strings.Contains(plan, "enable arctic-dictation-setup.service") ||
+			if !strings.Contains(plan, "enable arctic-dictation-setup.timer") ||
 				!strings.Contains(plan, "write /mnt/var/lib/arctic/dictation/pending.json") ||
 				!strings.Contains(plan, "\"state\":\"queued\"") {
 				t.Fatal("installation must persist and enable retryable first-boot setup")

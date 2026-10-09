@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../shell/DictationStatus.js" as Status
+import "DictationStatus.js" as Status
 
 Singleton {
     id: dictation

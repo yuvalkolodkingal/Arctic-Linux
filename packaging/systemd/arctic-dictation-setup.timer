@@ -1,0 +1,12 @@
+[Unit]
+Description=Retry Arctic's local dictation setup after login is available
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=15min
+AccuracySec=30s
+RandomizedDelaySec=30s
+Unit=arctic-dictation-setup.service
+
+[Install]
+WantedBy=timers.target

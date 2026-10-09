@@ -50,6 +50,7 @@ var PAGES = [
 
 var ENTRIES = [
     ["dictation", "dictation.setup", "Prepare local dictation", "voxtype whisper multilingual model download install offline retry not ready"],
+    ["dictation", "dictation.profile", "Dictation hardware model", "small large turbo q5 avx2 baseline compatibility recommended hardware cpu model"],
     ["dictation", "dictation.record", "Start and stop dictation", "voice speech recording transcript text shortcut microphone"],
     ["dictation", "dictation.cancel", "Cancel dictation", "discard recording transcription stop abort"],
     ["dictation", "dictation.language", "Dictation language", "hebrew english multilingual auto detect עברית"],

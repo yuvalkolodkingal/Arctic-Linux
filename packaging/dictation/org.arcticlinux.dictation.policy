@@ -4,7 +4,7 @@
   <vendor>Arctic Linux</vendor>
   <action id="org.arcticlinux.dictation.setup">
     <description>Finish local dictation setup</description>
-    <message>Administrator authentication is required to install the pinned local speech engine and multilingual model (572,524,159 bytes plus system dependencies).</message>
+    <message>Administrator authentication is required to install local dictation (about 506 MB for legacy CPUs or 678 MB for modern CPUs, plus missing system dependencies).</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>

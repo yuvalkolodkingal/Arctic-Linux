@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
 import "../components"
-import "../../shell/DictationStatus.js" as Status
+import "../DictationStatus.js" as Status
 
 Page {
     id: page
@@ -11,8 +11,14 @@ Page {
     lede: "Type by speaking with VoxType and a multilingual Whisper model on this computer."
     readonly property var status: DictationService.status
     readonly property bool settingUp: status.state === 'queued' || status.state === 'downloading'
+    readonly property bool downloading: status.state === 'downloading'
     readonly property bool canConfigure: !DictationService.active && !DictationService.busy
     onShown: DictationService.refresh()
+    function prepare(action) {
+        if (!['retry', 'compatibility-setup', 'recommended-setup'].includes(action)) return;
+        setupDialog.setupAction = action;
+        setupDialog.open();
+    }
 
     Timer {
         interval: page.settingUp || DictationService.active ? 1500 : 15000
@@ -35,7 +41,7 @@ Page {
         SettingRow {
             searchKey: "dictation.setup"
             title: "App and Whisper model"
-            desc: "Whisper small multilingual: " + Status.size(page.status.model_download_bytes) + " model. App, CPU and Vulkan support plus model: " + Status.size(page.status.download_bytes) + " download (" + page.status.download_bytes + " bytes). Downloads are checked before use."
+            desc: Status.setupDescription(page.status)
             resettable: false
             stacked: true
             Column {
@@ -53,9 +59,9 @@ Page {
                     ArButton {
                         text: page.status.ready ? "Verify / repair setup…" : page.status.state === 'downloading' ? "Setup running" : "Set up / retry…"
                         iconName: "download"
-                        enabled: page.canConfigure && page.status.state !== 'downloading'
+                        enabled: page.canConfigure && Status.profileKnown(Status.setupTarget(page.status, 'retry')) && !page.downloading
                         gapColor: Theme.surfaceRaised
-                        onClicked: setupDialog.open()
+                        onClicked: page.prepare('retry')
                     }
                     ArButton {
                         text: "Refresh"
@@ -64,6 +70,32 @@ Page {
                         gapColor: Theme.surfaceRaised
                         onClicked: DictationService.refresh()
                     }
+                }
+            }
+        }
+        SettingRow {
+            searchKey: "dictation.profile"
+            title: "Hardware profile"
+            desc: Status.selectionDetail(page.status)
+            resettable: false
+            stacked: true
+            Row {
+                spacing: Theme.space2
+                ArButton {
+                    text: "Use compatibility model…"
+                    iconName: "download"
+                    visible: page.status.profile !== 'small-v2' || page.status.compatibility_required
+                    enabled: page.canConfigure && !page.downloading && Status.profileKnown(page.status.compatibility_profile)
+                    gapColor: Theme.surfaceRaised
+                    onClicked: page.prepare('compatibility-setup')
+                }
+                ArButton {
+                    text: "Use recommended model…"
+                    iconName: "download"
+                    visible: page.status.profile_selection === 'compatibility'
+                    enabled: page.canConfigure && !page.downloading && Status.profileKnown(page.status.recommended_profile)
+                    gapColor: Theme.surfaceRaised
+                    onClicked: page.prepare('recommended-setup')
                 }
             }
         }
@@ -115,14 +147,13 @@ Page {
         SettingRow {
             searchKey: "dictation.backend"
             title: "Acceleration"
-            desc: "Automatic uses supported Vulkan GPU acceleration with a CPU fallback. After a GPU failure, review the error and record again using CPU. Accuracy and speed depend on your hardware and audio."
-                  + (page.status.active_backend ? " Current backend: " + (page.status.active_backend === 'vulkan' ? "Vulkan GPU." : "CPU.") : "")
+            desc: Status.accelerationDetail(page.status)
             resettable: false
             ArSelect {
                 width: 220
                 enabled: page.canConfigure
                 Component.onCompleted: combo.Accessible.name = "Dictation acceleration"
-                model: [{ value: "auto", label: "Automatic" }, { value: "cpu", label: "CPU" }, { value: "vulkan", label: "Vulkan GPU" }]
+                model: Status.backends(page.status)
                 value: page.status.backend
                 onActivated: v => DictationService.run(['set-backend', v])
             }
@@ -141,12 +172,17 @@ Page {
 
     ArDialog {
         id: setupDialog
-        title: "Prepare local dictation?"
-        body: "The pinned app and model files total " + Status.size(page.status.download_bytes) + " (" + page.status.download_bytes + " bytes), including the " + Status.size(page.status.model_download_bytes) + " multilingual Whisper model. Missing system packages may need additional downloads. An administrator password may be requested. Existing verified files can be reused. Setup failures remain retryable."
+        property string setupAction: 'retry'
+        readonly property var descriptor: Status.setupTarget(page.status, setupAction)
+        title: setupAction === 'compatibility-setup' ? "Set up compatibility dictation?"
+            : setupAction === 'recommended-setup' ? "Use recommended dictation?" : "Prepare local dictation?"
+        body: (setupAction === 'compatibility-setup' ? "Use Whisper Small with baseline CPU for compatibility. "
+            : setupAction === 'recommended-setup' ? "Use the model selected for this computer's CPU capabilities. " : "")
+            + Status.setupConsent(descriptor)
         ArButton {
             text: "Download and verify"
-            enabled: page.canConfigure
-            onClicked: { setupDialog.close(); DictationService.run(['retry']); }
+            enabled: page.canConfigure && !page.downloading && Status.profileKnown(setupDialog.descriptor)
+            onClicked: { setupDialog.close(); DictationService.run([setupDialog.setupAction]); }
         }
     }
 }

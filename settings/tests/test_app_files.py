@@ -68,6 +68,22 @@ class SearchIndexTest(unittest.TestCase):
 
 
 class IntegrationFilesTest(unittest.TestCase):
+    def test_dictation_status_resource_matches_canonical_parser(self):
+        local = APP / 'DictationStatus.js'
+        self.assertFalse(local.is_symlink(), 'Quickshell must bundle a local regular resource')
+        self.assertEqual(local.read_bytes(), (REPO / 'shell/DictationStatus.js').read_bytes(),
+                         'Copy shell/DictationStatus.js to settings/DictationStatus.js after parser changes')
+
+    def test_javascript_imports_stay_inside_the_settings_config_root(self):
+        root = APP.resolve()
+        for qml in APP.rglob('*.qml'):
+            for name in re.findall(r'^import "([^"]+\.js)" as ', qml.read_text(), re.M):
+                with self.subTest(qml=qml.relative_to(APP), resource=name):
+                    resource = (qml.parent / name).resolve()
+                    self.assertTrue(resource.is_relative_to(root),
+                                    'Quickshell redirects config-root escapes to qs-blackhole')
+                    self.assertTrue(resource.is_file(), 'Imported script must exist in the config root')
+
     def test_desktop_entry(self):
         entry = (REPO / 'packaging/settings/org.arcticlinux.Settings.desktop').read_text()
         self.assertIn('Exec=arctic-settings', entry)

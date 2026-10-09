@@ -14,9 +14,10 @@ jobs:
   prepare:
     if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
     runs-on: ubuntu-24.04
-    # Three bounded evidence downloads (15 minutes each), exact-image fetch
-    # (20 minutes), hash validation and artifact upload need more than 45 minutes.
-    timeout-minutes: 90
+    # Five bounded evidence downloads (15 minutes each), exact-image fetch
+    # (20 minutes), bounded source fetches, hash validation and artifact upload.
+    # The new dictation lane supplements every original acceptance gate.
+    timeout-minutes: 145
     steps:
       - uses: actions/checkout@v4
         with:

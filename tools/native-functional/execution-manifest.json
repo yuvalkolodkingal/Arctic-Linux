@@ -1,5 +1,5 @@
 {
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
   "image": {
     "run_id": 37903438836,
@@ -12,15 +12,23 @@
     "archive_sha256": "1b3267d5b7e0fc3b7980f77a3e72345f6ad3061de47a2a3006fcd2c84cb59dee"
   },
   "execution_files": {
-    ".github/workflows/native-candidate-20261008.yml": "90461f447b7831cc952b8964967ad589e6c2196ea0a35e31825418e5ca29b839",
-    "tools/test-install.sh": "2b9b6e864047cf9f35ab22ef7e3d7324f10b03c23b17c7340aeb87c06910e7b4",
-    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    ".github/workflows/native-candidate-20261008.yml": "7a942b2d0d8ad5ff5a6f721353bc202b920f834cd01d91629dc17744c5384256",
+    "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
+    "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
-    "tools/native-functional/fetch-image.py": "d107a50ee7b0ded51149aeae0812c70d68fda17685b1d3bb192beaac47b80248",
-    "tools/native-functional/screen-evidence.py": "f590c26ae63f7259f0b46fc27a254eba01f06b04b3f804d9933b6602a744838c",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/compose-photo-probe.py": "707ba78e54be089c60e54d99833cc2f0f1d7ecca57e299de882d661e83e633cf",
-    "tools/native-functional/runner.py": "6b8c2c566467ecaf7efcda15b3465802275eb3933bbad29b5e76ec08891dc1ac",
     "tools/native-functional/evidence.py": "3ad76896c10c86558ed257e8eab20754d6e534307b7c6db17236c8bc03be3a1e",
-    "tools/native-functional/source-provenance.json": "82df9062ba8c810509ea93cb8cba324cc03364c88142e61832cf6f34b24e789d"
+    "tools/native-functional/fetch-image.py": "d107a50ee7b0ded51149aeae0812c70d68fda17685b1d3bb192beaac47b80248",
+    "tools/native-functional/prepare-taskbar-tools.sh": "ec12af29cdbda3007cf8e62c417ae7ccdbca4cfad251131814d4f4d09ce75712",
+    "tools/native-functional/runner.py": "0ac8c240666adf075b5832d89c1006683e2ff77c420cf07c8c25b73361800957",
+    "tools/native-functional/screen-evidence.py": "f590c26ae63f7259f0b46fc27a254eba01f06b04b3f804d9933b6602a744838c",
+    "tools/native-functional/source-provenance.json": "82df9062ba8c810509ea93cb8cba324cc03364c88142e61832cf6f34b24e789d",
+    "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
+    "tools/native-functional/taskbar-evidence.py": "be332f829fb35a09d42c8b1cbfd94df214ac1a87f10dcec0328dc19de77a346d",
+    "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
+    "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
+    "tools/native-functional/taskbar.py": "458a9ec5f8ebc0b7c612163c29fa5c372cd3c03010d146217b1aa7215ff7a1df",
+    "tools/test-install.sh": "122e01121b4aab97052a2d2ceeeadecbca45dbddfb2279c52751a81149b9178d"
   }
 }

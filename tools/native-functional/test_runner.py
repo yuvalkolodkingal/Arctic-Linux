@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -11,6 +12,49 @@ import runner as N
 
 
 class ExecutionControls(unittest.TestCase):
+    def test_taskbar_display_receipts_require_both_heads_and_the_pinned_controller(self):
+        receipt = dict(schema='arctic-qemu-taskbar-display-v1', controller_sha256='a'*64,
+            status='uiinfo_applied_pending_guest_two_output_evidence', display_backend='dbus',
+            qemu_uid=0, qemu_pid=2345, bus_pid=2344, gpu_id='arctic_taskbar_gpu', guest_monitor_verification_required=True,
+            heads=[dict(head=index, console_id=index, device_address='pci/0000/00.02.0',
+                        width=1280, height=720) for index in (0, 1)])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for stage in ('install', 'boot'):
+                (root/('taskbar-display-'+stage+'.json')).write_text(json.dumps(receipt))
+            checked = N.R.display_evidence(root, 'a'*64)
+            self.assertEqual(set(checked), {'install', 'boot'})
+            for changed in (dict(receipt, controller_sha256='b'*64), dict(receipt, heads=receipt['heads'][:1]),
+                            dict(receipt, display_backend='none'), dict(receipt, qemu_uid=1000),
+                            dict(receipt, guest_monitor_verification_required=False)):
+                (root/'taskbar-display-boot.json').write_text(json.dumps(changed))
+                with self.assertRaisesRegex(RuntimeError, 'display fixture receipt|GPU heads'):
+                    N.R.display_evidence(root, 'a'*64)
+            (root/'taskbar-display-boot.json').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'Missing/oversized'):
+                N.R.display_evidence(root, 'a'*64)
+
+    def test_container_cleanup_timeout_still_stops_owned_host_process_group(self):
+        class Child:
+            pid = 9876
+            count = 0
+            def wait(self, timeout):
+                self.count += 1
+                if self.count == 1:
+                    raise subprocess.TimeoutExpired('owned command', timeout)
+                return -15
+            def poll(self):
+                return None
+        child = Child()
+        with tempfile.TemporaryDirectory() as temp, patch.object(N.subprocess, 'Popen', return_value=child), \
+             patch.object(N.subprocess, 'run', side_effect=subprocess.TimeoutExpired('docker rm', 30)), \
+             patch.object(N.os, 'killpg') as killed:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                N.R.execute(['owned command'], Path(temp)/'output.log', 1, Path(temp), {},
+                            'arctic-paired-native-' + 'a'*32)
+            killed.assert_called_once_with(child.pid, N.signal.SIGTERM)
+            self.assertEqual(child.count, 2)
+
     def test_disabled_manifest_fails_before_any_command(self):
         with tempfile.TemporaryDirectory() as folder:
             manifest = Path(folder) / 'manifest.json'
