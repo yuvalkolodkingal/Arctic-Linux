@@ -94,7 +94,8 @@ jobs:
           sudo chmod 666 /dev/kvm
           tools/test-iso.sh \
             --iso "$RUNNER_TEMP/arctic-startup-diagnostic/Arctic-Linux-1.2-candidate-37854472664-1-x86_64.iso" \
-            --firmware "$FIRMWARE" --mode "$MODE" --require-startup --timeout 120 --interval 15 --kvm
+            --firmware "$FIRMWARE" --mode "$MODE" --require-startup --timeout 120 --interval 15 --kvm \
+            --append 'console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1'
       - name: Screen only owned startup diagnostics
         id: screen
         if: always()
