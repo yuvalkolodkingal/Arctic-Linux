@@ -211,6 +211,65 @@ def amber_runs(path, scale=2):
     return runs, scale
 
 
+def _login_controls(im):
+    """Find the SDDM submit button beside both edges of its password field.
+
+    Wallpaper colours can produce much longer amber runs than the controls. Match
+    their local geometry instead of letting unrelated rows hide the login card.
+    The card is horizontally centred; its exact vertical position depends on the
+    screen height, clock and number of user rows (branding/sddm/arctic/Main.qml).
+    """
+    w, h = im.size
+    if w < 320 or h < 200:
+        return False
+    region = im.crop((max(0, w // 2 - 400), h // 4,
+                      min(w, w // 2 + 400), h))
+    rw, rh = region.size
+    mask = bytearray(_is_amber(p) for p in region.getdata())
+    components = []
+    for seed in range(len(mask)):
+        if not mask[seed]:
+            continue
+        mask[seed] = 0
+        stack = [seed]
+        x0 = x1 = seed % rw
+        y0 = y1 = seed // rw
+        count = 0
+        while stack:
+            i = stack.pop()
+            x, y = i % rw, i // rw
+            count += 1
+            x0, x1 = min(x0, x), max(x1, x)
+            y0, y1 = min(y0, y), max(y1, y)
+            for ny in range(max(0, y - 1), min(rh, y + 2)):
+                for nx in range(max(0, x - 1), min(rw, x + 2)):
+                    j = ny * rw + nx
+                    if mask[j]:
+                        mask[j] = 0
+                        stack.append(j)
+        components.append((x0, y0, x1 + 1, y1 + 1, count))
+    for bx0, by0, bx1, by1, count in components:
+        bw, bh = bx1 - bx0, by1 - by0
+        if not (28 <= bw <= 96 and 28 <= bh <= 96
+                and 0.8 <= bw / bh <= 1.25 and count >= 0.65 * bw * bh):
+            continue
+        edges = []
+        for x0, y0, x1, y1, _ in components:
+            if (3 * bw <= x1 - x0 <= 8 * bw and y1 - y0 <= 0.15 * bh
+                    and 0 < bx0 - x1 <= bw):
+                edges.append((x0, y0, x1, y1))
+        for tx0, ty0, tx1, ty1 in edges:
+            if not (abs(ty0 - by0) <= 0.2 * bh):
+                continue
+            for lx0, ly0, lx1, ly1 in edges:
+                if (abs(ly1 - by1) <= 0.2 * bh
+                        and ly0 - ty1 >= 0.7 * bh
+                        and abs(tx0 - lx0) <= 0.2 * bw
+                        and abs(tx1 - lx1) <= 0.2 * bw):
+                    return True
+    return False
+
+
 def classify(path):
     """A rough guess of what is on screen (sizes as drawn at 1920x1080, the virtio-vga mode):
     "grub"   the arctic GRUB theme: a filled amber selection bar (~420x40 px);
@@ -219,18 +278,17 @@ def classify(path):
     "prompt" the Plymouth passphrase prompt: a thin amber-edged entry box (~400 px), no button;
     "dark"   almost black; else "other"."""
     try:
-        im = Image.open(path).convert("L")
+        im = Image.open(path).convert("RGB")
     except OSError:
         return "none"
-    small = im.resize((64, 36))
+    if _login_controls(im):
+        return "login"
+    small = im.convert("L").resize((64, 36))
     mean = sum(small.getdata()) / (64 * 36)
     runs, scale = amber_runs(path)
     long_rows = sum(scale for r in runs if r >= 200)      # rows (full-res) with a long amber line
-    button_rows = sum(scale for r in runs if 36 <= r <= 80)
     if long_rows >= 24:
         return "grub"
-    if button_rows >= 24:
-        return "login"
     if 1 <= long_rows <= 16:
         return "prompt"
     if mean < 6:

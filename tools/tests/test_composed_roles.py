@@ -18,12 +18,17 @@ class ComposedRoleControls(unittest.TestCase):
         expected = G.EXPECTED_ROLES[image]
         state = dict(uid=1000, sources=[], configured={}, programs={})
         inventory = {'nevra': []}
+        owners = {}
         for role, ident in expected.items():
             app = G.ROLE_APPS[ident]
             state['configured'][role] = app['configured'][0]
             state['programs'][app['program']] = '/usr/bin/' + app['program']
             if 'rpm' in app:
                 inventory['nevra'].append(app['rpm'] + '-0:1-1.x86_64')
+                owners['/usr/bin/' + app['program']] = app['rpm'] + '-0:1-1.x86_64'
+                if 'desktop_rpm' in app:
+                    inventory['nevra'].append(app['desktop_rpm'] + '-0:1-1.x86_64')
+                    owners['/usr/share/applications/' + app['desktop']] = app['desktop_rpm'] + '-0:1-1.x86_64'
         browser = G.ROLE_APPS[expected['browser']]['desktop']
         if mutate:
             mutate(state, inventory)
@@ -34,7 +39,7 @@ class ComposedRoleControls(unittest.TestCase):
             if 'xdg-settings' in argv:
                 return browser
             if '-qf' in argv:
-                return Path(argv[-1]).name + '-0:1-1.x86_64'
+                return owners.get(argv[-1], 'unrelated-rpm-0:1-1.x86_64')
             if 'flatpak' in argv:
                 return 'a' * 64
             raise AssertionError(argv)
@@ -48,6 +53,10 @@ class ComposedRoleControls(unittest.TestCase):
                 result = self.resolve(image)
                 self.assertEqual({role: app['id'] for role, app in result['roles'].items()}, G.EXPECTED_ROLES[image])
                 self.assertFalse(result['first_use_measurement'])
+                if image == 'candidate':
+                    package = result['roles']['browser']['package']
+                    self.assertEqual(package['binary_owner'], 'epiphany-runtime-0:1-1.x86_64')
+                    self.assertEqual(package['desktop_owner'], 'epiphany-0:1-1.x86_64')
 
     def test_wrong_uid_mixed_configuration_missing_binary_and_owner_refused(self):
         mutations = [lambda s, i: s.update(uid=0),
@@ -55,6 +64,8 @@ class ComposedRoleControls(unittest.TestCase):
                      lambda s, i: s['configured'].update(browser='chromium'),
                      lambda s, i: s['programs'].update(epiphany=None),
                      lambda s, i: s['programs'].update(epiphany='/usr/bin/other'),
+                     lambda s, i: i['nevra'].remove('epiphany-0:1-1.x86_64'),
+                     lambda s, i: i['nevra'].remove('epiphany-runtime-0:1-1.x86_64'),
                      lambda s, i: i.update(nevra=[])]
         for mutate in mutations:
             with self.subTest(mutate=mutate), self.assertRaises(RuntimeError):

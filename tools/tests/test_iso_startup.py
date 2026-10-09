@@ -6,7 +6,7 @@ import shlex
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('iso_startup', ROOT / 'tools/lib/iso_startup.py')
@@ -76,14 +76,92 @@ class StartupTests(unittest.TestCase):
 
     def test_install_collector_preserves_exclusive_focus_installer(self):
         vm = Mock()
-        startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock())
+        vm.cmd.return_value = {'return': {}}
+        with patch.object(startup, 'console_screen', return_value=True), \
+                patch.object(startup, 'console_authenticated', return_value=True):
+            startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock(), serial_path='owned.log')
         keys = [call.args[0] for call in vm.keys.call_args_list]
-        self.assertEqual(keys, ['ctrl-alt-f3', 'ret', 'ret'])
+        self.assertEqual(keys, ['ret', 'ret', 'ret', 'ret'])
+        vm.cmd.assert_called_once_with('send-key', keys=[dict(type='qcode',data=key)
+            for key in ('ctrl','alt','f6')], **{'hold-time':100})
         self.assertEqual(vm.type_text.call_args_list[0].args[0], 'liveuser')
-        command = vm.type_text.call_args_list[1].args[0]
+        self.assertIn('ARCTIC-CONSOLE-READY=', vm.type_text.call_args_list[1].args[0])
+        command = vm.type_text.call_args_list[2].args[0]
         self.assertIn('call installer state', command)
         self.assertIn('chvt', command)
         self.assertNotIn('meta_l-ret', keys)
+
+    def test_failed_vt_switch_never_types_into_the_graphical_installer(self):
+        for error in (True, False):
+            vm = Mock()
+            vm.cmd.return_value = {'error': {'desc': 'no keyboard'}} if error else {'return': {}}
+            with patch.object(startup, 'console_screen', return_value=False), self.assertRaises(RuntimeError):
+                startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock(), serial_path='owned.log')
+            vm.type_text.assert_not_called()
+            vm.keys.assert_not_called()
+
+    def test_missing_console_authentication_refuses_privileged_collection(self):
+        vm = Mock()
+        vm.cmd.return_value = {'return': {}}
+        with patch.object(startup, 'console_screen', return_value=True), \
+                patch.object(startup, 'console_authenticated', return_value=False), \
+                self.assertRaisesRegex(RuntimeError, 'authentication'):
+            startup.collect_session(vm, 'install', True, Mock(), Mock(), sleep=Mock(), serial_path='owned.log')
+        self.assertEqual(len(vm.type_text.call_args_list), 2)
+        self.assertNotIn('ARCTIC-COLLECT-BEGIN', vm.type_text.call_args_list[-1].args[0])
+
+    def test_authentication_response_rejects_echoes_wrong_identity_and_replay(self):
+        nonce = 'a' * 32
+        valid = 'ARCTIC-CONSOLE-READY=' + nonce + ' user=liveuser uid=1000\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'serial.log'
+            self.assertFalse(startup.console_authenticated(path, nonce))
+            for value in ('', 'echo ' + valid, valid.replace(nonce, 'b' * 32),
+                          valid.replace('liveuser', 'root'), valid.replace('1000', '0'),
+                          valid.replace('1000', '999'), valid * 2, valid.replace('1000', '2147483648'),
+                          'x' * (1024 * 1024 + 1)):
+                path.write_text(value)
+                self.assertFalse(startup.console_authenticated(path, nonce))
+            path.write_text(valid.replace('\n', '\r\n'))
+            self.assertTrue(startup.console_authenticated(path, nonce))
+            self.assertFalse(startup.console_authenticated(path, 'invalid'))
+
+    def test_actual_console_response_requires_live_user_uid_and_sudo(self):
+        nonce = 'a' * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, body in {
+                'id': 'case "$*" in -un) echo "$TEST_USER";; "-u liveuser") echo 1000;; -u) echo "$TEST_UID";; *) exit 1;; esac',
+                'sudo': '[ "$TEST_SUDO" = yes ] || exit 1; exec "$@"',
+            }.items():
+                p = root / name
+                p.write_text('#!/bin/sh\n' + body + '\n')
+                p.chmod(0o755)
+            serial = root / 'serial.log'
+            command = startup.console_auth_command(nonce).replace('/dev/ttyS0', str(serial))
+            subprocess.run(['bash', '-n'], input=command, text=True, check=True)
+            for user, uid, sudo, passes in [('liveuser', '1000', 'yes', True),
+                    ('root', '0', 'yes', False), ('other', '1000', 'yes', False),
+                    ('liveuser', '1001', 'yes', False), ('liveuser', '1000', 'no', False)]:
+                serial.unlink(missing_ok=True)
+                subprocess.run(['sh', '-c', command], check=False, env={**os.environ,
+                    'PATH': str(root) + ':' + os.environ['PATH'], 'TEST_USER': user,
+                    'TEST_UID': uid, 'TEST_SUDO': sudo})
+                self.assertEqual(startup.console_authenticated(serial, nonce), passes)
+            with self.assertRaises(ValueError):
+                startup.console_auth_command('invalid')
+
+    def test_console_input_guard_refuses_missing_blank_and_graphical_captures(self):
+        from PIL import Image, ImageDraw
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'console.png'
+            self.assertFalse(startup.console_screen(path))
+            for color, text, expected in [('#000000',False,False),('#1b232c',True,False),
+                                          ('#000000',True,True),('#ffffff',True,False)]:
+                image=Image.new('RGB',(1280,800),color)
+                if text: ImageDraw.Draw(image).text((0,0),'localhost-live login:',fill='white')
+                image.save(path)
+                self.assertEqual(startup.console_screen(path),expected)
 
     def test_actual_installer_probe_rejects_missing_failed_or_unready_ui(self):
         with tempfile.TemporaryDirectory() as tmp:

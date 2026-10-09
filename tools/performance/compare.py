@@ -85,12 +85,17 @@ def role_evidence(runs):
                             or not re.fullmatch('[0-9a-f]{64}', package.get('commit', ''))):
                         raise ValueError('Missing declared Zen Flatpak identity')
                 else:
-                    rpm = 'epiphany' if ident == 'gnome-web' else ident
+                    rpm = 'epiphany-runtime' if ident == 'gnome-web' else ident
                     nevra = package.get('nevra', '')
                     if (package.get('kind') != 'rpm' or package.get('binary_owner') != nevra
                             or not re.match(re.escape(rpm) + r'-[0-9]+:', nevra)
                             or nevra not in run['rpm_inventory']['nevra']):
                         raise ValueError('Declared application RPM is absent or does not own the executable: ' + role)
+                    if ident == 'gnome-web':
+                        launcher = package.get('desktop_owner', '')
+                        if (not re.match(r'epiphany-[0-9]+:', launcher)
+                                or launcher not in run['rpm_inventory']['nevra']):
+                            raise ValueError('Declared Epiphany desktop launcher RPM is absent or wrong')
                 for phase in ('cold', 'warm'):
                     timing = run.get('startup_role_' + role + '_' + phase + '_seconds', {})
                     expected_phase = ('first_gui_role_execution_from_pristine_install' if phase == 'cold'
