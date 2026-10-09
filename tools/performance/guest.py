@@ -413,6 +413,15 @@ def functional_roles(prefix, inventory=None):
             if len(packages) != 1 or owner != packages[0]:
                 raise RuntimeError('Role RPM identity or binary owner differs: ' + ident)
             package = dict(kind='rpm', nevra=owner, binary_owner=owner)
+            if 'desktop_rpm' in app:
+                launchers = [value for value in inventory['nevra']
+                             if re.match(re.escape(app['desktop_rpm'])+r'-[0-9]+:', value)]
+                desktop_owner = run(['rpm', '-qf', '--qf',
+                    '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}',
+                    '/usr/share/applications/' + app['desktop']])
+                if len(launchers) != 1 or desktop_owner != launchers[0]:
+                    raise RuntimeError('Role desktop launcher owner differs: ' + ident)
+                package['desktop_owner'] = desktop_owner
         else:
             commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', app['flatpak']])
             if not re.fullmatch('[0-9a-f]{64}', commit):

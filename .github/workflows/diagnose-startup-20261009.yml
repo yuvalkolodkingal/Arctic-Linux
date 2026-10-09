@@ -102,8 +102,30 @@ jobs:
           FIRMWARE: ${{ matrix.firmware }}
           MODE: ${{ matrix.mode }}
         run: |
+          python3 -B - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          source = Path('out/test') / (os.environ['FIRMWARE'] + '-' + os.environ['MODE'])
+          target = Path(os.environ['RUNNER_TEMP']) / 'startup-picked'
+          target.mkdir()
+          if source.is_symlink():
+              raise RuntimeError('Diagnostic source must be an owned directory')
+          total = 0
+          for path in source.rglob('*'):
+              if path.suffix not in ('.json', '.log', '.txt', '.tsv', '.png', '.rgb', '.wav'):
+                  continue
+              if path.is_symlink() or not path.is_file():
+                  raise RuntimeError('Unexpected startup diagnostic member')
+              size = path.stat().st_size
+              total += size
+              if size > 128 * 1024 * 1024 or total > 512 * 1024 * 1024:
+                  raise RuntimeError('Startup diagnostic byte bounds exceeded')
+              output = target / path.relative_to(source)
+              output.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(path, output)
+          PY
           python3 -B tools/native-functional/screen-evidence.py \
-            --source "out/test/$FIRMWARE-$MODE" --out "$RUNNER_TEMP/startup-screened"
+            --source "$RUNNER_TEMP/startup-picked" --out "$RUNNER_TEMP/startup-screened"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
