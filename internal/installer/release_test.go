@@ -107,7 +107,7 @@ func TestGoldenNVIDIALUKSBusy(t *testing.T) {
 			t.Errorf("plan has %q", not)
 		}
 	}
-	if len(job.Outcome.Notes) != 0 {
+	if !reflect.DeepEqual(job.Outcome.Notes, []string{NoteDictationPending}) {
 		t.Errorf("notes %v", job.Outcome.Notes)
 	}
 }
@@ -138,7 +138,7 @@ func TestLateCloseFailureKeepsSystem(t *testing.T) {
 			t.Errorf("plan lacks %q", w)
 		}
 	}
-	if !reflect.DeepEqual(job.Outcome.Notes, []string{NoteStillOpen}) {
+	if !reflect.DeepEqual(job.Outcome.Notes, []string{NoteDictationPending, NoteStillOpen}) {
 		t.Errorf("notes %v", job.Outcome.Notes)
 	}
 	if job.Outcome.MOK != "requested" {

@@ -81,6 +81,10 @@ The [desktop tour](Desktop-Tour) walks through the rest.
   after 15 minutes. It always locks before it sleeps.
 - **Security**: SELinux is on, the `root` account is locked, and there's no SSH server.
 - **Flatpak and Nix**, ready to use. See [Apps and software](Apps-and-Software).
+- **Local dictation** downloads its engine and Hebrew/English Whisper model during
+  online installation. Offline or failed setup remains queued for first boot;
+  **Settings → Dictation** shows readiness and **Retry setup**. A failed download
+  does not prevent installation. See [Local dictation](../DICTATION.md).
 
 ## Apps that finish installing after first boot
 

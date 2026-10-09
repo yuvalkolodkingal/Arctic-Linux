@@ -15,8 +15,8 @@ arctic-settings displays     # open it on a page
 ```
 
 The page names for `arctic-settings <page>` are `appearance`, `windows`, `displays`, `input`,
-`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `notifications`, `updates`, `power`, `startup`
-and `about`.
+`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `notifications`, `updates`, `power`,
+`startup`, `dictation` and `about`.
 
 ## Finding a setting
 
@@ -66,6 +66,7 @@ file). That's what `Ctrl + Z` uses.
 | Bluetooth, sound | BlueZ and PipeWire directly | At once |
 | Updates | through `arctic-update` | At once |
 | Notifications: schedule, history, per-app choices | `~/.config/arctic/notifications.json`; do not disturb through `arctic-dnd` | At once |
+| Dictation: Hebrew/English language and CPU/Vulkan preference | `~/.config/arctic/dictation.json` | Next recording; Retry setup asks for administrator authorization |
 
 `settings.conf` is read after Arctic's own Mango files and **before** your
 `~/.config/mango/user.conf`, so anything you set by hand in `user.conf` still wins. When it does,
@@ -76,6 +77,21 @@ Settings says so on the row. If your `~/.config/mango/config.conf` doesn't inclu
 When a program Settings needs is missing, the page says so instead of failing. For example,
 without `wlr-randr` the Displays page can change scale, rotation and position but not the
 resolution.
+
+## Dictation
+
+Local Whisper dictation supports Hebrew and English. Online installation downloads
+the speech engine and multilingual model; offline installation queues first-boot
+setup. The page shows **not ready** until the required files and dependencies are
+available. **Retry setup** resumes a failed download. The pinned files total
+572.5 MB, plus any missing system packages.
+
+Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop
+and insert. `Super + Ctrl + BackSpace` cancels. Recording and transcription have a
+visible indicator; locking discards the result. GPU errors select CPU for the
+session and ask you to record again. Audio is processed locally, and transcripts
+are excluded from status, logs and notifications. See [Local dictation](../DICTATION.md)
+for download sizes, privacy details and hardware limitations.
 
 ## Appearance
 

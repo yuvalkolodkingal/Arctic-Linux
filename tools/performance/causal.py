@@ -1,7 +1,8 @@
 """Read-only causal mapping bounds, only in the disposable measurement guest.
 
-The wlroots handle return precedes Mango's managed client-list insertion. Its
-kernel timestamp is a LOWER bound, never an exact mapping or frame timestamp.
+The wlroots handle return precedes Mango's managed client-list insertion.
+An audited Mango instruction after that insertion supplies a native upper
+bound. Both use the kernel raw clock; neither is a frame timestamp.
 No compositor code, configuration, scheduling or SELinux setting is changed.
 """
 import hashlib
@@ -21,8 +22,125 @@ SYMBOL = 'wlr_ext_foreign_toplevel_handle_v1_create'
 IDENTIFIER_OFFSET = 56  # x86_64 wlroots 0.20 public header, three pointers + two wl_lists
 HEADER_SHA256 = '9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3'
 SOURCE_SHA256 = '5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088'
-METHOD = 'wlroots-0.20-return-before-mango-list-insertion-raw-v2'
+METHOD = 'wlroots-0.20-and-mango-managed-list-original-appid-native-bracket-raw-v4'
 MAX_EVENTS = 8192
+APPID_OFFSET = 48
+HANDLE_DATA_OFFSET = 80
+MANGO_SOURCE_SHA256 = '586627878578a2545655d4accb790a73112be7eaf6b1dab9d162b4195d962eef'
+MANGO_HEADER_SHA256 = '0c76fd2a2f677170ad9ef27df9296444bfdf1c69cb40a05dadadd51e050d3428'
+ORIGINAL_APPID_AUDIT_SHA256 = '3c6e8e8582215a02b16ebc24e85c8ca807df70dd6bc1c33f57684f656fc9b692'
+# Exact audited machine code, including every managed-list insertion branch.
+# Each admitted whole executable is independently audited. Changed build IDs,
+# machine code or ABI require a new explicit profile, with no guessed fallback.
+MAPPING_PROFILES = (
+    dict(executable_sha256='1c66767fc0d814e9002306c983524b476edc671de544f3b2a6f755ea7a52dcb1',
+         function_file_offset=0x430d0, function_size=4109,
+         function_sha256='d48615861b8819d95e30fbbf74db46e24f8e3d738e20824e0e598578972004a2',
+         instruction_file_offset=0x435ef, client_ext_offset=1584,
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+    dict(executable_sha256='2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b',
+         native_audit_sha256='c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa',
+         function_file_offset=0x43110, function_size=4109,
+         function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
+         instruction_file_offset=0x4362f, client_ext_offset=1584,
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+    dict(executable_sha256='67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35',
+         native_audit_sha256='c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa',
+         function_file_offset=0x430d0, function_size=4109,
+         function_sha256='11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd',
+         instruction_file_offset=0x435ef, client_ext_offset=1584,
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+)
+
+
+def mapping_profile(path):
+    raw = path.read_bytes()
+    if len(raw) > 64*1024*1024 or raw[:6] != b'\x7fELF\x02\x01':
+        raise RuntimeError('Native upper probe requires bounded ELF64')
+    header = struct.unpack_from('<16sHHIQQQIHHHHHH', raw)
+    if header[2] != 62 or header[9] != 56:
+        raise RuntimeError('Native upper probe requires the audited x86_64 ELF ABI')
+    segments = [struct.unpack_from('<IIQQQQQQ', raw, header[5]+n*56)
+                for n in range(header[10])]
+    executable_sha256 = hashlib.sha256(raw).hexdigest()
+    matched = []
+    for profile in MAPPING_PROFILES:
+        start, size = profile['function_file_offset'], profile['function_size']
+        if (executable_sha256 != profile['executable_sha256'] or start+size > len(raw)
+                or hashlib.sha256(raw[start:start+size]).hexdigest() != profile['function_sha256']):
+            continue
+        getter_start, getter_size = profile['ipc_function_file_offset'], profile['ipc_function_size']
+        if (getter_start+getter_size > len(raw) or hashlib.sha256(
+                raw[getter_start:getter_start+getter_size]).hexdigest() != profile['ipc_function_sha256']):
+            raise RuntimeError('Audited original app-ID getter bytes differ')
+        loads = [segment for segment in segments if segment[0] == 1 and segment[1] & 1
+                 and segment[2] <= start and start+size <= segment[2]+segment[5]]
+        if len(loads) != 1:
+            raise RuntimeError('Audited mapping function is not in one executable ELF load')
+        getter_loads = [segment for segment in segments if segment[0] == 1 and segment[1] & 1
+            and segment[2] <= getter_start and getter_start+getter_size <= segment[2]+segment[5]]
+        if len(getter_loads) != 1:
+            raise RuntimeError('Audited original app-ID getter is not in one executable ELF load')
+        matched.append(dict(profile))
+    if len(matched) != 1:
+        raise RuntimeError('Unknown or ambiguous Mango mapping machine code; reaudit required')
+    return matched[0]
+
+
+def instruction_mapping(path, maps, offset):
+    matches = []
+    for line in maps.splitlines():
+        fields = line.split(None, 5)
+        if len(fields) != 6 or fields[5] != str(path) or 'x' not in fields[1]:
+            continue
+        start, end = (int(value, 16) for value in fields[0].split('-'))
+        file_offset = int(fields[2], 16)
+        if file_offset <= offset < file_offset+end-start:
+            matches.append(dict(start=start, end=end, file_offset=file_offset,
+                                instruction_address=start+offset-file_offset))
+    if len(matches) != 1:
+        raise RuntimeError('Native upper instruction lacks one actual executable process mapping')
+    return matches[0]
+
+
+def upper_probe_commands(group, executable, profile):
+    """Capture the exact getter branch; the other Client kind is not recorded."""
+    common = (f'foreign_id=+0(+{IDENTIFIER_OFFSET}(+{profile["client_ext_offset"]}(%bx))):string '
+        f'app_id=+0(+{APPID_OFFSET}(+{profile["client_ext_offset"]}(%bx))):string '
+        f'client=%bx:x64 handle=+{profile["client_ext_offset"]}(%bx):x64 '
+        f'owner=+{HANDLE_DATA_OFFSET}(+{profile["client_ext_offset"]}(%bx)):x64')
+    surface = f'+{profile["client_surface_offset"]}(%bx)'
+    chains = dict(map_listed_xdg=f'+0(+{profile["xdg_appid_offset"]}(+{profile["xdg_toplevel_offset"]}({surface})))',
+                  map_listed_x11=f'+0(+{profile["xwayland_class_offset"]}({surface}))')
+    return {name: f'p:{group}/{name} {executable}:0x{profile["instruction_file_offset"]:x} '
+            + f'client_type=+{profile["client_type_offset"]}(%bx):u32 '
+            + 'original_app_id=' + chain + ':string ' + common + '\n' for name, chain in chains.items()}
+
+
+def original_appid_matches(event, window, pattern):
+    # An intermediate pointer-dereference fault can leave the original data_loc
+    # pointing at the following foreign identifier. No admitted role may alias it.
+    if any(re.fullmatch('[0-9a-f]{32}', appid) for appid in pattern):
+        return False
+    if (type(event.get('client_type')) is not int or event['client_type'] not in (0, 2)
+            or event.get('event') != ('map_listed_xdg' if event['client_type'] == 0 else 'map_listed_x11')):
+        return False
+    values = (event.get('original_app_id'), event.get('app_id'), window.get('appid'))
+    return (all(isinstance(value, str) and re.fullmatch('[A-Za-z0-9._-]{1,128}', value) for value in values)
+        and values[0] == values[1] == values[2] and values[0].lower() in pattern)
+
 
 
 @contextmanager
@@ -94,20 +212,40 @@ def elf_symbol_offset(path, name=SYMBOL):
 
 
 def trace_receipt(line, pid):
-    match = re.search(r'-(\d+)\s+\[\d+\].*?\s(\d+)\.(\d{1,9}):\s+map_create:\s+(?:\([^\n]*\)\s+)?foreign_id="([0-9a-f]{32})"\s*$', line)
+    match = re.search(r'-(\d+)\s+\[\d+\].*?\s(\d+)\.(\d{1,9}):\s+(map_create|map_listed_xdg|map_listed_x11):\s+(.*)$', line)
     if not match or int(match[1]) != pid:
         raise RuntimeError('Unexpected or unbound causal kernel event')
     digits = match[3]
     resolution = 10 ** (9 - len(digits))
+    if resolution > 1000:
+        raise RuntimeError('Causal kernel timestamp text is too coarse')
     timestamp = int(match[2]) * 1_000_000_000 + int(digits.ljust(9, '0'))
-    # Linux ns2usecs() rounds six-digit text to the nearest microsecond. Never
-    # treat a rounded display as a lower endpoint: subtract a full displayed
-    # unit, covering both rounding and truncation without inventing precision.
-    return dict(foreign_toplevel_id=match[4], kernel_text_monotonic_ns=timestamp,
-                kernel_timestamp_text=match[2]+'.'+digits,
-                timestamp_rounding_allowance_ns=resolution,
-                lower_monotonic_ns=timestamp-resolution,
-                timestamp_resolution_ns=resolution, kernel_pid=pid)
+    # Linux rounds six-digit text to the nearest microsecond. Enclose its
+    # literal display by one full unit on EACH side, never invent precision.
+    event = dict(event=match[4], kernel_text_monotonic_ns=timestamp,
+                 kernel_timestamp_text=match[2]+'.'+digits,
+                 timestamp_rounding_allowance_ns=resolution,
+                 timestamp_resolution_ns=resolution, kernel_pid=pid)
+    if match[4] == 'map_create':
+        body = re.fullmatch(r'(?:\([^\n]*\)\s+)?foreign_id="([0-9a-f]{32})"\s*', match[5])
+        if not body:
+            raise RuntimeError('Malformed before-mapping identity receipt')
+        event.update(foreign_toplevel_id=body[1], lower_monotonic_ns=timestamp-resolution)
+    else:
+        body = re.fullmatch(r'\((0x[0-9a-f]+)\)\s+client_type=(0|2)\s+original_app_id="([A-Za-z0-9._-]{1,128})"\s+foreign_id="([0-9a-f]{32})"\s+app_id="([A-Za-z0-9._-]{1,128})"\s+client=(0x[0-9a-f]+)\s+handle=(0x[0-9a-f]+)\s+owner=(0x[0-9a-f]+)\s*', match[5])
+        if not body or any(not 0 < int(body[n], 16) < 2**64 for n in (1,6,7,8)):
+            raise RuntimeError('Malformed after-list-insertion native receipt')
+        event.update(foreign_toplevel_id=body[4], upper_monotonic_ns=timestamp+resolution,
+                     instruction_address=int(body[1],16), app_id=body[5],
+                     client_address=int(body[6],16), handle_address=int(body[7],16),
+                     handle_owner_address=int(body[8],16), client_type=int(body[2]),
+                     original_app_id=body[3])
+        expected_type = 0 if match[4] == 'map_listed_xdg' else 2
+        if event['client_type'] != expected_type or event['original_app_id'] != event['app_id']:
+            raise RuntimeError('Original app-ID getter kind or copied metadata disagrees')
+        if event['handle_owner_address'] != event['client_address']:
+            raise RuntimeError('Native mapping handle does not belong to captured client')
+    return event
 
 
 def loss_counts(root):
@@ -134,12 +272,14 @@ class LowerBoundProbe:
         self.instance = None
         self.group = 'arctic_map_' + uuid.uuid4().hex
         self.events = {}
+        self.upper_events = {}
         self.condition = threading.Condition()
         self.stopped = threading.Event()
         self.error = None
         self.thread = None
         self.fd = None
         self.proof = None
+        self.requested_events = set()
 
     def __enter__(self):
         try:
@@ -184,6 +324,7 @@ class LowerBoundProbe:
                 raise RuntimeError('Production wlroots package verification failed')
             offset = elf_symbol_offset(library)
             executable = (proc / 'exe').resolve(strict=True)
+            self.executable = executable
             mango_owner = subprocess.check_output(['rpm', '-qf', str(executable)], text=True).strip()
             if executable != Path('/usr/bin/mango') or not re.fullmatch(r'mangowm-0\.17\.3-[A-Za-z0-9._+]+\.x86_64', mango_owner):
                 raise RuntimeError('Causal ordering requires the audited production Mango 0.17.3')
@@ -191,7 +332,14 @@ class LowerBoundProbe:
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
             if mango_verified.returncode or mango_verified.stdout or mango_verified.stderr:
                 raise RuntimeError('Production Mango package verification failed')
-            self.proof = dict(method=METHOD, clock='mono_raw', userspace_clock='CLOCK_MONOTONIC_RAW', kernel_pid=self.pid,
+            profile = mapping_profile(executable)
+            mapping = instruction_mapping(executable, (proc/'maps').read_text(), profile['instruction_file_offset'])
+            self.proof = dict(upper_mapping_profile=profile, upper_executable_mapping=mapping,
+                upper_instruction_address=mapping['instruction_address'],
+                upper_appid_offset=APPID_OFFSET, upper_handle_data_offset=HANDLE_DATA_OFFSET,
+                audited_original_appid_sha256=ORIGINAL_APPID_AUDIT_SHA256,
+                audited_mango_source_sha256=MANGO_SOURCE_SHA256, audited_mango_header_sha256=MANGO_HEADER_SHA256,
+                method=METHOD, clock='mono_raw', userspace_clock='CLOCK_MONOTONIC_RAW', kernel_pid=self.pid,
                 desktop_uid=uid, mango_start_ticks=int((proc / 'stat').read_text().rsplit(')', 1)[1].split()[19]),
                 mango_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(), mango_rpm=mango_owner,
                 library_path=str(library), library_rpm=owner,
@@ -224,17 +372,23 @@ class LowerBoundProbe:
                 (self.instance / 'options/record-tgid').write_text('0')
             if (self.instance / 'options/nsecs').exists():
                 (self.instance / 'options/nsecs').write_text('1')
-            command = (f'r:{self.group}/map_create {library}:0x{offset:x} '
-                       f'foreign_id=+0(+{IDENTIFIER_OFFSET}($retval)):string\n')
             if (self.root / 'events' / self.group).exists():
                 raise RuntimeError('Refusing to reuse an existing causal event group')
-            self.registration_requested = True
-            with deferred_termination():
-                write_uprobe_command(self.root, command)
-                self.registered = True
-            event = self.instance / 'events' / self.group / 'map_create'
-            (event / 'filter').write_text('common_pid == ' + str(self.pid))
-            (event / 'enable').write_text('1')
+            commands = dict(map_create=(f'r:{self.group}/map_create {library}:0x{offset:x} '
+                f'foreign_id=+0(+{IDENTIFIER_OFFSET}($retval)):string\n'))
+            commands.update(upper_probe_commands(self.group, executable, profile))
+            for name, command in commands.items():
+                with deferred_termination():
+                    self.requested_events.add(name)
+                    write_uprobe_command(self.root, command)
+                event = self.instance / 'events' / self.group / name
+                expression = 'common_pid == ' + str(self.pid)
+                if name == 'map_listed_xdg':
+                    expression += ' && client_type == ' + str(profile['xdg_type'])
+                elif name == 'map_listed_x11':
+                    expression += ' && client_type == ' + str(profile['xwayland_type'])
+                (event / 'filter').write_text(expression)
+                (event / 'enable').write_text('1')
             with deferred_termination():
                 self.fd = os.open(self.instance / 'trace_pipe', os.O_RDONLY | os.O_NONBLOCK)
             self.thread = threading.Thread(target=self._read, daemon=True)
@@ -269,22 +423,42 @@ class LowerBoundProbe:
                     event = trace_receipt(line.decode('ascii'), self.pid)
                     key = event['foreign_toplevel_id']
                     with self.condition:
-                        if key in self.events or len(self.events) >= MAX_EVENTS:
+                        target = self.events if event['event'] == 'map_create' else self.upper_events
+                        if key in target or len(self.events)+len(self.upper_events) >= MAX_EVENTS:
                             raise RuntimeError('Duplicate or unbounded causal kernel events')
-                        self.events[key] = event
+                        target[key] = event
                         self.condition.notify_all()
         except BaseException as error:
             with self.condition:
                 self.error = str(error)
                 self.condition.notify_all()
 
-    def bound(self, windows, started_ns, upper_ns, timeout=2):
+    def _check_owner(self):
+        proc = Path('/proc') / str(self.pid)
+        try:
+            start = int((proc/'stat').read_text().rsplit(')', 1)[1].split()[19])
+            if (proc.stat().st_uid != self.proof['desktop_uid']
+                    or start != self.proof['mango_start_ticks']
+                    or (proc/'exe').resolve(strict=True) != self.executable):
+                raise RuntimeError('Causal Mango owner changed during the launch')
+        except (OSError, ValueError, IndexError) as error:
+            raise RuntimeError('Causal Mango owner is absent or unreadable') from error
+
+    def bound(self, windows, started_ns, ipc_lower_ns, ipc_upper_ns, pattern, timeout=2):
+        self._check_owner()
+        if (not isinstance(pattern, tuple) or not 0 < len(pattern) <= 8
+                or len(set(pattern)) != len(pattern) or any(not isinstance(appid, str)
+                    or not re.fullmatch('[a-z0-9._-]{1,128}', appid)
+                    or re.fullmatch('[0-9a-f]{32}', appid) for appid in pattern)):
+            raise RuntimeError('Native mapping bounds require the original exact application-ID predicate')
         identities = [window.get('foreign_toplevel_id') for window in windows]
-        if not identities or len(set(identities)) != len(identities) or any(not isinstance(key, str) or not re.fullmatch('[0-9a-f]{32}', key) for key in identities):
+        if not 0 < len(identities) <= 64 or len(set(identities)) != len(identities) or any(not isinstance(key, str) or not re.fullmatch('[0-9a-f]{32}', key) for key in identities):
             raise RuntimeError('Mapped IPC clients lack unique causal identities')
+        if not started_ns <= ipc_lower_ns <= ipc_upper_ns:
+            raise RuntimeError('IPC mapping interval does not belong to this launch')
         deadline = time.monotonic() + timeout
         with self.condition:
-            while not all(key in self.events for key in identities):
+            while not all(key in self.events and key in self.upper_events for key in identities):
                 if self.error:
                     raise RuntimeError(self.error)
                 remaining = deadline - time.monotonic()
@@ -294,11 +468,33 @@ class LowerBoundProbe:
             if self.error:
                 raise RuntimeError(self.error)
             events = [dict(self.events[key]) for key in identities]
-        if any(not started_ns <= event['lower_monotonic_ns'] <= upper_ns for event in events):
-            raise RuntimeError('Causal event is outside the current launch clock interval')
-        lower = min(event['lower_monotonic_ns'] for event in events)
-        return lower, dict(self.proof, matched_events=events,
-            loss_counts=loss_counts(self.instance), status='bound-before-mapping')
+            upper_events = [dict(self.upper_events[key]) for key in identities]
+        self._check_owner()
+        if (any(type(window.get('id')) is not int or window['id'] <= 0 for window in windows)
+                or len({window['id'] for window in windows}) != len(windows)
+                or len({event['client_address'] for event in upper_events}) != len(windows)
+                or len({event['handle_address'] for event in upper_events}) != len(windows)):
+            raise RuntimeError('Mapped native and IPC clients have duplicate object identities')
+        for window, lower, upper in zip(windows, events, upper_events):
+            if (not started_ns <= lower['lower_monotonic_ns'] <= upper['upper_monotonic_ns']
+                    or lower['lower_monotonic_ns'] > ipc_upper_ns
+                    or upper['kernel_text_monotonic_ns']-upper['timestamp_rounding_allowance_ns'] > ipc_upper_ns
+                    or upper['instruction_address'] != self.proof['upper_instruction_address']
+                    or upper['handle_owner_address'] != upper['client_address']
+                    or not original_appid_matches(upper, window, pattern)):
+                raise RuntimeError('Causal receipt ordering, callsite or current launch is invalid')
+        # The original predicate succeeds when ANY newly matched client enters
+        # the managed list. Each matched pair brackets that same transition;
+        # take the earliest upper and earliest lower, then intersect with IPC.
+        lower = max(ipc_lower_ns, min(event['lower_monotonic_ns'] for event in events))
+        upper = min(ipc_upper_ns, min(event['upper_monotonic_ns'] for event in upper_events))
+        if not started_ns <= lower <= upper <= ipc_upper_ns:
+            raise RuntimeError('Native and IPC mapping brackets do not intersect')
+        return lower, upper, dict(self.proof, matched_events=events,
+            matched_upper_events=upper_events, matched_ipc_clients=[dict(window) for window in windows],
+            application_id_predicate=list(pattern), ipc_lower_monotonic_ns=ipc_lower_ns,
+            ipc_upper_monotonic_ns=ipc_upper_ns,
+            loss_counts=loss_counts(self.instance), status='bounded-managed-list-insertion')
 
     def __exit__(self, *unused):
         # A second TERM/INT must not interrupt bounded cleanup. Restore the old
@@ -327,16 +523,16 @@ class LowerBoundProbe:
         if getattr(self, 'instance_created', False) and self.instance.exists():
             cleanup(lambda: (self.instance / 'tracing_on').write_text('0'))
             cleanup(lambda: loss_counts(self.instance))
-            event = self.instance / 'events' / self.group / 'map_create' / 'enable'
-            if event.exists():
-                cleanup(lambda: event.write_text('0'))
+            for name in self.requested_events:
+                event = self.instance / 'events' / self.group / name / 'enable'
+                if event.exists():
+                    cleanup(lambda event=event: event.write_text('0'))
             cleanup(self.instance.rmdir)
-        global_event = self.root / 'events' / self.group / 'map_create' if self.root else None
-        if (getattr(self, 'registered', False) or getattr(self, 'registration_requested', False)) and global_event.exists():
-            def unregister():
-                write_uprobe_command(self.root, '-:' + self.group + '/map_create\n')
-            cleanup(unregister)
-            self.registered = False
+        for name in sorted(self.requested_events):
+            event = self.root / 'events' / self.group / name if self.root else None
+            if event and event.exists():
+                cleanup(lambda name=name: write_uprobe_command(self.root, '-:' + self.group + '/' + name + '\n'))
+        self.requested_events.clear()
         if (getattr(self, 'mounted', False) or getattr(self, 'mount_requested', False)) and os.path.ismount(self.root):
             cleanup(lambda: subprocess.run(['umount', str(self.root)], check=True, timeout=15))
             self.mounted = False

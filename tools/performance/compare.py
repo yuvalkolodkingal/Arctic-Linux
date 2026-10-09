@@ -10,10 +10,41 @@ import statistics
 
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
-CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v3-raw-clock-autonomous'
+CAUSAL_MAPPING_OBSERVER = 'mango-socket-worker-v5-original-appid-native-bracket-raw-clock-autonomous'
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v10-raw-causal-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v12-original-appid-native-bracket-role-first-use'
 ROLE_ORDER = ('terminal', 'files', 'browser')
+MAPPING_PROFILES = (
+    dict(executable_sha256='1c66767fc0d814e9002306c983524b476edc671de544f3b2a6f755ea7a52dcb1',
+         function_file_offset=0x430d0, function_size=4109,
+         function_sha256='d48615861b8819d95e30fbbf74db46e24f8e3d738e20824e0e598578972004a2',
+         instruction_file_offset=0x435ef, client_ext_offset=1584,
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+    dict(executable_sha256='2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b',
+         native_audit_sha256='c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa',
+         function_file_offset=0x43110, function_size=4109,
+         function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
+         instruction_file_offset=0x4362f, client_ext_offset=1584,
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+    dict(executable_sha256='67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35',
+         native_audit_sha256='c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa',
+         function_file_offset=0x430d0, function_size=4109,
+         function_sha256='11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd',
+         instruction_file_offset=0x435ef, client_ext_offset=1584,
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+)
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
 ROLE_COMMANDS = {'kitty': ('kitty',), 'foot': ('foot',), 'nautilus': ('nautilus',),
@@ -240,18 +271,44 @@ def idle_sample_layout(samples):
         raise ValueError('Missing or unpaired CPU/PSS/private samples')
 
 
-def causal_precision(bound):
-    """The stronger lower endpoint requires a same-launch kernel receipt."""
+def causal_precision(bound, expected_appids):
+    """Require both same-launch native receipts and the original IPC bracket."""
+    if (not isinstance(expected_appids, (tuple, list)) or not 0 < len(expected_appids) <= 8
+            or len(set(expected_appids)) != len(expected_appids)
+            or any(not isinstance(appid, str) or not re.fullmatch('[a-z0-9._-]{1,128}', appid)
+                   or re.fullmatch('[0-9a-f]{32}', appid)
+                   for appid in expected_appids)):
+        return False
     proof = bound.get('causal_lower_bound')
     if not isinstance(proof, dict):
         return False
-    if (proof.get('method') != 'wlroots-0.20-return-before-mango-list-insertion-raw-v2'
+    if (proof.get('method') != 'wlroots-0.20-and-mango-managed-list-original-appid-native-bracket-raw-v4'
             or proof.get('clock') != 'mono_raw' or proof.get('userspace_clock') != 'CLOCK_MONOTONIC_RAW'
-            or bound.get('clock') != 'CLOCK_MONOTONIC_RAW' or proof.get('status') != 'bound-before-mapping'
+            or bound.get('clock') != 'CLOCK_MONOTONIC_RAW' or proof.get('status') != 'bounded-managed-list-insertion'
             or proof.get('exported_symbol') != 'wlr_ext_foreign_toplevel_handle_v1_create'
             or proof.get('identifier_offset') != 56
             or proof.get('audited_header_sha256') != '9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3'
-            or proof.get('audited_source_sha256') != '5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088'):
+            or proof.get('audited_source_sha256') != '5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088'
+            or proof.get('upper_appid_offset') != 48 or proof.get('upper_handle_data_offset') != 80
+            or proof.get('audited_original_appid_sha256') != '3c6e8e8582215a02b16ebc24e85c8ca807df70dd6bc1c33f57684f656fc9b692'
+            or proof.get('audited_mango_source_sha256') != '586627878578a2545655d4accb790a73112be7eaf6b1dab9d162b4195d962eef'
+            or proof.get('audited_mango_header_sha256') != '0c76fd2a2f677170ad9ef27df9296444bfdf1c69cb40a05dadadd51e050d3428'):
+        return False
+    profile = proof.get('upper_mapping_profile')
+    mapping = proof.get('upper_executable_mapping')
+    if (not isinstance(profile, dict) or profile not in MAPPING_PROFILES
+            or any(type(profile.get(key)) is not int for key in
+                   ('function_file_offset','function_size','instruction_file_offset','client_ext_offset',
+                    'ipc_function_file_offset','ipc_function_size','client_type_offset','client_surface_offset',
+                    'xdg_type','xdg_toplevel_offset','xdg_appid_offset','xwayland_type','xwayland_class_offset'))
+            or proof.get('mango_sha256') != profile['executable_sha256']
+            or not isinstance(mapping, dict)
+            or set(mapping) != {'start', 'end', 'file_offset', 'instruction_address'}
+            or any(type(value) is not int or value < 0 for value in mapping.values())
+            or not 0 < mapping['start'] <= mapping['instruction_address'] < mapping['end']
+            or not mapping['file_offset'] <= profile['instruction_file_offset'] < mapping['file_offset']+mapping['end']-mapping['start']
+            or mapping['instruction_address'] != mapping['start']+profile['instruction_file_offset']-mapping['file_offset']
+            or proof.get('upper_instruction_address') != mapping['instruction_address']):
         return False
     if any(not isinstance(proof.get(key), str) or not re.fullmatch('[0-9a-f]{64}', proof[key])
            for key in ('library_sha256', 'mango_sha256')):
@@ -276,11 +333,18 @@ def causal_precision(bound):
         return False
     started = bound.get('launch_started_monotonic_ns')
     ipc_lower = proof.get('ipc_lower_monotonic_ns')
+    ipc_upper = proof.get('ipc_upper_monotonic_ns')
     events = proof.get('matched_events')
+    upper_events = proof.get('matched_upper_events')
+    ipc_clients = proof.get('matched_ipc_clients')
     if (type(started) is not int or started <= 0 or type(ipc_lower) is not int
-            or not isinstance(events, list) or not 0 < len(events) <= 64):
+            or type(ipc_upper) is not int or not started <= ipc_lower <= ipc_upper
+            or not isinstance(events, list) or not 0 < len(events) <= 64
+            or not isinstance(upper_events, list) or len(upper_events) != len(events)
+            or proof.get('application_id_predicate') != list(expected_appids)
+            or not isinstance(ipc_clients, list) or len(ipc_clients) != len(events)
+            or type(proof.get('upper_instruction_address')) is not int or proof['upper_instruction_address'] <= 0):
         return False
-    upper = started + round(bound['upper_seconds'] * 1e9)
     identities = []
     for event in events:
         if not isinstance(event, dict):
@@ -291,12 +355,12 @@ def causal_precision(bound):
             return False
         literal = int(token[1])*1_000_000_000 + int(token[2].ljust(9, '0'))
         resolution = 10 ** (9-len(token[2]))
-        if (not isinstance(event, dict) or type(event.get('kernel_pid')) is not int
+        if (event.get('event') != 'map_create' or type(event.get('kernel_pid')) is not int
                 or event.get('kernel_pid') != proof['kernel_pid']
                 or not isinstance(event.get('foreign_toplevel_id'), str)
                 or not re.fullmatch('[0-9a-f]{32}', event['foreign_toplevel_id'])
                 or type(event.get('lower_monotonic_ns')) is not int
-                or not started <= event['lower_monotonic_ns'] <= upper
+                or not started <= event['lower_monotonic_ns'] <= ipc_upper
                 or type(event.get('timestamp_resolution_ns')) is not int
                 or event.get('timestamp_resolution_ns') not in (1, 10, 100, 1000)
                 or type(event.get('kernel_text_monotonic_ns')) is not int
@@ -307,9 +371,56 @@ def causal_precision(bound):
                 or event['lower_monotonic_ns'] != event['kernel_text_monotonic_ns'] - event['timestamp_rounding_allowance_ns']):
             return False
         identities.append(event['foreign_toplevel_id'])
+    for lower_event, event, ipc_client in zip(events, upper_events, ipc_clients):
+        if not isinstance(event, dict):
+            return False
+        text = event.get('kernel_timestamp_text')
+        token = re.fullmatch(r'([0-9]{1,20})\.([0-9]{1,9})', text) if isinstance(text, str) else None
+        if not token:
+            return False
+        literal = int(token[1])*1_000_000_000 + int(token[2].ljust(9, '0'))
+        resolution = 10 ** (9-len(token[2]))
+        if (not isinstance(ipc_client, dict)
+                or ipc_client.get('foreign_toplevel_id') != lower_event['foreign_toplevel_id']
+                or type(ipc_client.get('id')) is not int or ipc_client['id'] <= 0
+                or not isinstance(ipc_client.get('appid'), str)
+                or ipc_client['appid'].lower() not in expected_appids
+                or not isinstance(event.get('app_id'), str)
+                or event['app_id'].lower() not in expected_appids
+                or not isinstance(event.get('original_app_id'), str)
+                or not re.fullmatch('[A-Za-z0-9._-]{1,128}', event['original_app_id'])
+                or event['original_app_id'] != event['app_id'] or event['original_app_id'] != ipc_client['appid']
+                or type(event.get('client_type')) is not int or event['client_type'] not in (profile['xdg_type'], profile['xwayland_type'])
+                or event.get('event') != ('map_listed_xdg' if event['client_type'] == profile['xdg_type'] else 'map_listed_x11')
+                or type(event.get('kernel_pid')) is not int
+                or event['kernel_pid'] != proof['kernel_pid']
+                or event.get('foreign_toplevel_id') != lower_event['foreign_toplevel_id']
+                or type(event.get('upper_monotonic_ns')) is not int
+                or not lower_event['lower_monotonic_ns'] <= event['upper_monotonic_ns']
+                or type(event.get('timestamp_resolution_ns')) is not int
+                or event.get('timestamp_resolution_ns') not in (1, 10, 100, 1000)
+                or type(event.get('kernel_text_monotonic_ns')) is not int
+                or event['kernel_text_monotonic_ns'] != literal
+                or event['timestamp_resolution_ns'] != resolution
+                or type(event.get('timestamp_rounding_allowance_ns')) is not int
+                or event['timestamp_rounding_allowance_ns'] != resolution
+                or event['upper_monotonic_ns'] != literal+resolution
+                or literal-resolution > ipc_upper
+                or type(event.get('instruction_address')) is not int
+                or event['instruction_address'] != proof['upper_instruction_address']
+                or any(type(event.get(key)) is not int or not 0 < event[key] < 2**64
+                       for key in ('client_address', 'handle_address', 'handle_owner_address'))
+                or event['handle_owner_address'] != event['client_address']):
+            return False
     lower = max(ipc_lower, min(event['lower_monotonic_ns'] for event in events))
-    return (len(identities) == len(set(identities)) and started <= ipc_lower <= upper
-            and math.isclose((lower - started) / 1e9, bound['lower_seconds'], abs_tol=1e-9, rel_tol=1e-9))
+    native_upper = min(ipc_upper, min(event['upper_monotonic_ns'] for event in upper_events))
+    return (len(identities) == len(set(identities))
+            and len({client['id'] for client in ipc_clients}) == len(events)
+            and len({event['client_address'] for event in upper_events}) == len(events)
+            and len({event['handle_address'] for event in upper_events}) == len(events)
+            and started <= lower <= native_upper
+            and math.isclose((lower - started) / 1e9, bound['lower_seconds'], abs_tol=1e-9, rel_tol=1e-9)
+            and math.isclose((native_upper - started) / 1e9, bound['upper_seconds'], abs_tol=1e-9, rel_tol=1e-9))
 
 
 def mapping_precision(run):
@@ -342,7 +453,8 @@ def mapping_precision(run):
                                 and bound.get('observer') == expected_observer
                                 and (sampler != ROLE_SAMPLER or timing.get('clock') == 'CLOCK_MONOTONIC_RAW')
                                 and timing.get('poll_sleep_seconds') == poll)
-            causal_valid = causal_precision(bound) if sampler == ROLE_SAMPLER else True
+            causal_valid = (causal_precision(bound, ROLE_APPIDS.get(timing.get('app_id'), ()))
+                            if sampler == ROLE_SAMPLER else True)
             result.append(dict(app=app, launch=index, lower_seconds=lower, upper_seconds=upper,
                                interval_seconds=width, maximum_interval_seconds=limit,
                                current_observer=current_observer,
@@ -380,18 +492,42 @@ def mapping_enclosures(runs):
     return result
 
 
-def read_run(path):
+def read_run(path, strict=False):
     records = {}
-    for line in path.read_text(errors='replace').splitlines():
+    exits = []
+    text = path.read_text(errors='strict' if strict else 'replace')
+    for line in text.splitlines():
         if 'ARCTIC-INSTALLED-SMOKE-EXIT=' in line:
             status = line.split('ARCTIC-INSTALLED-SMOKE-EXIT=', 1)[1].strip()
+            exits.append(status)
             if status != '0':
                 raise ValueError(f'{path}: installed probe exit was not successful: {status}')
         if 'ARCTIC-PERFORMANCE ' not in line:
             continue
-        value = json.loads(line.split('ARCTIC-PERFORMANCE ', 1)[1])
+        content = line.split('ARCTIC-PERFORMANCE ', 1)[1]
+        if strict:
+            def unique(pairs):
+                result = {}
+                for key, item in pairs:
+                    if key in result:
+                        raise ValueError('Duplicate canonical JSON field: ' + key)
+                    result[key] = item
+                return result
+            def invalid(number):
+                raise ValueError('Non-finite canonical JSON number: ' + number)
+            value = json.loads(content, object_pairs_hook=unique, parse_constant=invalid)
+            if value.get('stage') != 'installed':
+                raise ValueError('Unexpected canonical probe stage')
+        else:
+            value = json.loads(content)
         if value['stage'] == 'installed':
+            if strict and value['check'] in records and not (value['check'].startswith(
+                    ('mapped_window_', 'app_workload_')) or value['check'].endswith('_diagnostic')):
+                raise ValueError(f'{path}: duplicate canonical probe record: {value["check"]}')
             records[value['check']] = value['value']
+    if strict and (exits != ['0'] or any(text.count(marker) != 1 for marker in (
+            'ARCTIC-COLLECT-BEGIN', 'ARCTIC-COLLECT-END', 'ARCTIC-PERFORMANCE-CONSOLE-RESTORED'))):
+        raise ValueError(f'{path}: missing/duplicate completed original console collection')
     if records.get('done') is not True or records.get('security') != 'Enforcing':
         raise ValueError(f'{path}: incomplete probe or SELinux not enforcing')
     samples = records.get('idle_samples', [])
@@ -511,6 +647,19 @@ def compare(runs):
                              'Passing a regression gate does not establish a substantial optimization'])
 
 
+def compare_checked(runs, *, candidate_commit, candidate_catalog_sha256, candidate_battery_sha256):
+    """Use image-source expectations for both the runner and independent replay."""
+    for run in runs['candidate']:
+        payload = run['measured_payload']
+        if '.git' + candidate_commit not in payload['arctic_shell']:
+            raise ValueError('Candidate RPM source differs from requested commit')
+        if payload['catalog_sha256'].split()[0] != candidate_catalog_sha256:
+            raise ValueError('Candidate catalog source changed or was replaced by an update')
+        if payload['battery_sha256'].split()[0] != candidate_battery_sha256:
+            raise ValueError('Candidate battery source changed or was replaced by an update')
+    return compare(runs)
+
+
 def compact_startup_observation(timing):
     """Keep every bracket; hash raw traces retained in the source guest logs.
 
@@ -546,15 +695,9 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     try:
         runs = {name: [read_run(path) for path in getattr(args, name + '_log')] for name in ('baseline', 'candidate')}
-        for run in runs['candidate']:
-            payload = run['measured_payload']
-            if '.git' + args.candidate_commit not in payload['arctic_shell']:
-                raise ValueError('Candidate RPM source differs from requested commit')
-            if payload['catalog_sha256'].split()[0] != args.candidate_catalog_sha256:
-                raise ValueError('Candidate catalog source changed or was replaced by an update')
-            if payload['battery_sha256'].split()[0] != args.candidate_battery_sha256:
-                raise ValueError('Candidate battery source changed or was replaced by an update')
-        result = compare(runs)
+        result = compare_checked(runs, candidate_commit=args.candidate_commit,
+            candidate_catalog_sha256=args.candidate_catalog_sha256,
+            candidate_battery_sha256=args.candidate_battery_sha256)
     except Exception as error:
         result = dict(status='incomplete_or_inconsistent_measurement', error=str(error))
     args.out.write_text(json.dumps(result, indent=2) + '\n')

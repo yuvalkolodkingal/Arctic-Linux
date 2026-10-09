@@ -7,6 +7,11 @@
   "image": null,
   "performance": null,
   "native": null,
+  "taskbar_media_review": null,
+  "dictation": null,
+  "dictation_media_review": null,
+  "installer": null,
+  "installer_media_review": null,
   "update": null,
   "media_review": null,
   "execution_files": {}

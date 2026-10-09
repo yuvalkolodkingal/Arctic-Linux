@@ -1,0 +1,12 @@
+[Unit]
+Description=Retry Arctic's deferred app installation after login is available
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=15min
+AccuracySec=30s
+RandomizedDelaySec=30s
+Unit=arctic-firstboot.service
+
+[Install]
+WantedBy=timers.target

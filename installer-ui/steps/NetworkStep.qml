@@ -12,7 +12,7 @@ StepPage {
     lede: "Pick a Wi-Fi network or plug in a cable."
     measure: 600
     valid: online
-    helpText: "Arctic Linux downloads the apps you pick and the latest security updates while it installs. Pick your Wi-Fi network and type its password, or plug in a network cable."
+    helpText: "Arctic Linux downloads the apps you pick and the latest security updates while it installs. Pick your Wi-Fi network and type its password, or plug in a network cable. " + Engine.dictationDownloadNotice
 
     readonly property var opts: Wizard.step.options || {}
     property bool online: !!opts.online
@@ -137,10 +137,11 @@ StepPage {
         spacing: Theme.space4
 
         ArBanner {
+            id: networkInfo
             width: parent.width
             kind: "info"
             title: "Why do I need the internet?"
-            text: "Arctic Linux downloads the apps you pick and the latest security updates while it installs, so you start up to date."
+            text: "Arctic Linux downloads the apps you pick and the latest security updates while it installs, so you start up to date. " + Engine.dictationDownloadNotice
         }
 
         // A Wi-Fi card that works only once its driver is installed (Broadcom wl): say how
@@ -157,8 +158,8 @@ StepPage {
         ArList {
             id: list
             width: parent.width
-            // What's above it: the info banner (170 with spacing), and the driver hint when shown.
-            height: Math.min(implicitHeight, Math.max(120, page.availableHeight - 170 - (hint.visible ? hint.height + Theme.space4 : 0)))
+            // The disclosure wraps with the window width; reserve its actual height.
+            height: Math.min(implicitHeight, Math.max(120, page.availableHeight - networkInfo.height - Theme.space4 - (hint.visible ? hint.height + Theme.space4 : 0)))
             accessibleName: "Networks"
             model: page.rows
             // Arrows only move; Space or a click connects.

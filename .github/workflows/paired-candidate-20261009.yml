@@ -1,0 +1,62 @@
+name: Frozen exact-image paired performance qualification
+
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261008]
+    paths: [.github/qualification-20261009.performance]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  paired:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    # Input fetches are separate. The original paired runner retains its 120m
+    # limit, all six boots and every numerical acceptance limit.
+    timeout-minutes: 170
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify reviewed marker-only activation and frozen execution
+        id: candidate
+        run: |
+          source=$(python3 -B execution/tools/performance/qualification.py \
+            --manifest execution/tools/performance/execution-manifest.json --activation-source)
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.candidate.outputs.source }}
+          path: source
+          persist-credentials: false
+      - name: Fetch verified successful first-attempt external producer
+        timeout-minutes: 17
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/arctic-external-paired"
+          python3 -B execution/tools/native-functional/fetch-image.py \
+            --manifest execution/tools/performance/execution-manifest.json \
+            --out "$RUNNER_TEMP/arctic-external-paired/inputs"
+      - name: Original offline installs and all six frozen interleaved KVM boots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B execution/tools/performance/qualification.py \
+            --manifest "$GITHUB_WORKSPACE/execution/tools/performance/execution-manifest.json" \
+            --source "$GITHUB_WORKSPACE/source" \
+            --inputs "$RUNNER_TEMP/arctic-external-paired/inputs" \
+            --work "$RUNNER_TEMP/arctic-external-paired/work" \
+            --evidence "$RUNNER_TEMP/arctic-external-paired/evidence" \
+            --screened "$RUNNER_TEMP/arctic-external-paired/screened"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-paired-performance
+          path: ${{ runner.temp }}/arctic-external-paired/screened/
+          if-no-files-found: ignore
+          retention-days: 14

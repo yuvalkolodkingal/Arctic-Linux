@@ -14,11 +14,11 @@ on:
         type: boolean
         default: false
       tag:
-        description: Release tag (default v1.2.0-build.<run number>)
+        description: Release tag (default v1.2.1-build.<run number>)
         type: string
         default: ""
       prerelease:
-        description: Mark the release as a pre-release (untick for a stable release such as v1.2.0)
+        description: Mark the release as a pre-release (untick for a stable release such as v1.2.1)
         type: boolean
         default: true
       draft:
@@ -30,9 +30,16 @@ on:
         type: boolean
         default: false
       performance_acceptance:
-        description: Three paired KVM boots versus immutable v1.2 (artifact only)
+        description: Six paired KVM boots versus immutable v1.2 (artifact only)
         type: boolean
         default: false
+      performance_mode:
+        description: Keep paired acceptance in the producer or explicitly freeze an artifact for a separate lane
+        type: choice
+        options:
+          - in-producer-paired-v1
+          - frozen-external-paired-v1
+        default: in-producer-paired-v1
       boot_test:
         description: Boot the ISO in QEMU and upload screenshots
         type: boolean
@@ -72,13 +79,24 @@ jobs:
         env:
           EXPECTED_SOURCE: ${{ inputs.expected_source_sha }}
           RELEASE_REQUESTED: ${{ inputs.release }}
+          PERFORMANCE_MODE: ${{ inputs.performance_mode }}
         run: |
+          case "$PERFORMANCE_MODE" in
+            ''|in-producer-paired-v1|frozen-external-paired-v1) ;;
+            *) echo 'Unknown performance producer mode'; exit 1 ;;
+          esac
           if [ -n "$EXPECTED_SOURCE" ]; then
             test "$GITHUB_EVENT_NAME" = workflow_dispatch
             test "$RELEASE_REQUESTED" = false
             [[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
             test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
           fi
+
+      - name: Verify explicit external performance producer request
+        if: ${{ inputs.performance_mode == 'frozen-external-paired-v1' }}
+        env:
+          PRODUCER_INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: python3 -B tools/performance/producer-receipt.py --request-only
 
       - name: Free disk space
         run: |
@@ -171,6 +189,7 @@ jobs:
           fi
 
       - name: Upload the ISO (workflow artifact)
+        if: ${{ inputs.performance_mode != 'frozen-external-paired-v1' }}
         uses: actions/upload-artifact@v4
         with:
           name: arctic-linux-iso
@@ -267,7 +286,7 @@ jobs:
             !out/test/nix/*.sock
 
       - name: Paired KVM performance acceptance
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.performance_acceptance }}
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.performance_acceptance && inputs.performance_mode != 'frozen-external-paired-v1' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -281,11 +300,13 @@ jobs:
           cat "$baseline/Arctic-Linux-1.2-x86_64.iso.part00" "$baseline/Arctic-Linux-1.2-x86_64.iso.part01" \
             > "$baseline/Arctic-Linux-1.2-x86_64.iso"
           rm "$baseline/Arctic-Linux-1.2-x86_64.iso.part00" "$baseline/Arctic-Linux-1.2-x86_64.iso.part01"
-          timeout --signal=TERM --kill-after=60s 120m python3 tools/performance/run-paired.py \
+          # Allow nested owned-command and prepared-image cleanup to finish.
+          # The measurement budget stays 120m; only cancellation grace changes.
+          timeout --signal=TERM --kill-after=300s 120m python3 tools/performance/run-paired.py \
             --baseline "$baseline/Arctic-Linux-1.2-x86_64.iso" --candidate "out/iso/$ISO" --out "$PWD/out/test/performance"
 
       - name: Screen paired performance diagnostics
-        if: ${{ always() && inputs.performance_acceptance }}
+        if: ${{ always() && inputs.performance_acceptance && inputs.performance_mode != 'frozen-external-paired-v1' }}
         run: |
           python3 -B - <<'PY'
           from pathlib import Path
@@ -307,7 +328,7 @@ jobs:
             --source "$RUNNER_TEMP/paired-diagnostics" --out "$RUNNER_TEMP/paired-screened"
 
       - name: Upload paired performance evidence
-        if: ${{ always() && inputs.performance_acceptance }}
+        if: ${{ always() && inputs.performance_acceptance && inputs.performance_mode != 'frozen-external-paired-v1' }}
         uses: actions/upload-artifact@v4
         with:
           name: paired-performance
@@ -320,10 +341,36 @@ jobs:
           echo "Required: strictly below 2000000000 decimal bytes; preferred: below 1600000000. Actual: $bytes"
           test "$bytes" -lt 2000000000
 
+      - name: Write external performance producer receipt
+        if: ${{ inputs.performance_mode == 'frozen-external-paired-v1' }}
+        env:
+          PRODUCER_INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          python3 -B tools/performance/producer-receipt.py \
+            --iso "out/iso/$ISO" --startup out/test --out out/PERFORMANCE-PLAN.json
+
+      - name: Upload external-mode ISO and producer receipt (workflow artifact)
+        if: ${{ inputs.performance_mode == 'frozen-external-paired-v1' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: arctic-linux-iso
+          path: |
+            out/iso/${{ env.ISO }}
+            out/iso/${{ env.ISO }}.sha256
+            out/iso/*.packages
+            out/iso/*.build-info
+            out/iso/*.rpm-inventory.tsv
+            out/iso/*.flatpak-refs.txt
+            out/BUILD-INFO
+            out/PERFORMANCE-PLAN.json
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+
   publish:
     name: Publish the completed ISO
     needs: iso
-    if: ${{ github.event_name == 'push' || inputs.release }}
+    if: ${{ (github.event_name == 'push' || inputs.release) && inputs.performance_mode != 'frozen-external-paired-v1' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -360,7 +407,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             tag="$GITHUB_REF_NAME"; pre=""
           else
-            tag="$RELEASE_TAG"; [ -n "$tag" ] || tag="v1.2.0-build.$GITHUB_RUN_NUMBER"
+            tag="$RELEASE_TAG"; [ -n "$tag" ] || tag="v1.2.1-build.$GITHUB_RUN_NUMBER"
             pre=""; [ "$RELEASE_PRERELEASE" = false ] || pre="--prerelease"
           fi
           sha="$(cut -d' ' -f1 "out/iso/$ISO.sha256")"

@@ -107,7 +107,7 @@ try:
             if len(bounds)!=1:raise RuntimeError('Calibration requires exactly one retained launch bracket')
             bound=bounds[0]
             limit=min(.005,measured*.025)
-            receipt_valid=comparison['causal_precision'](bound)
+            receipt_valid=comparison['causal_precision'](bound, ('foot',))
             state['observations'].append(dict(launch=index,upper_seconds=measured,
                 maximum_interval_seconds=limit,causal_receipt_valid=receipt_valid,
                 valid=receipt_valid and bound['interval_seconds']<=limit,bound=bound))
