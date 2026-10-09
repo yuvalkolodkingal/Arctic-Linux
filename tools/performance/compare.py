@@ -11,7 +11,7 @@ import statistics
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v8-autonomous-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v9-causal-role-first-use'
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
@@ -239,6 +239,63 @@ def idle_sample_layout(samples):
         raise ValueError('Missing or unpaired CPU/PSS/private samples')
 
 
+def causal_precision(bound):
+    """The stronger lower endpoint requires a same-launch kernel receipt."""
+    proof = bound.get('causal_lower_bound')
+    if not isinstance(proof, dict):
+        return False
+    if (proof.get('method') != 'wlroots-0.20-return-before-mango-list-insertion-v1'
+            or proof.get('clock') != 'mono' or proof.get('status') != 'bound-before-mapping'
+            or proof.get('exported_symbol') != 'wlr_ext_foreign_toplevel_handle_v1_create'
+            or proof.get('identifier_offset') != 56
+            or proof.get('audited_header_sha256') != '9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3'
+            or proof.get('audited_source_sha256') != '5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088'):
+        return False
+    if any(not isinstance(proof.get(key), str) or not re.fullmatch('[0-9a-f]{64}', proof[key])
+           for key in ('library_sha256', 'mango_sha256')):
+        return False
+    if any(type(proof.get(key)) is not int or proof[key] <= 0
+           for key in ('kernel_pid', 'desktop_uid', 'mango_start_ticks', 'exported_file_offset')):
+        return False
+    if (not isinstance(proof.get('library_rpm'), str) or not re.fullmatch(
+            r'wlroots(?:0\.20)?-0\.20\.2-[A-Za-z0-9._+]+\.x86_64', proof['library_rpm'])
+            or not isinstance(proof.get('library_path'), str) or not re.fullmatch(
+            r'/usr/lib64/libwlroots-0\.20\.so(?:\.[0-9]+)*', proof['library_path'])):
+        return False
+    if not isinstance(proof.get('mango_rpm'), str) or not re.fullmatch(
+            r'mangowm-0\.17\.3-[A-Za-z0-9._+]+\.x86_64', proof['mango_rpm']):
+        return False
+    losses = proof.get('loss_counts')
+    if not isinstance(losses, dict) or not losses or any(
+            not isinstance(cpu, str) or not re.fullmatch(r'cpu[0-9]+', cpu) or not isinstance(counts, dict)
+            or set(counts) != {'overrun', 'commit overrun', 'dropped events'}
+            or any(type(value) is not int or value != 0 for value in counts.values())
+            for cpu, counts in losses.items()):
+        return False
+    started = bound.get('launch_started_monotonic_ns')
+    ipc_lower = proof.get('ipc_lower_monotonic_ns')
+    events = proof.get('matched_events')
+    if (type(started) is not int or started <= 0 or type(ipc_lower) is not int
+            or not isinstance(events, list) or not 0 < len(events) <= 64):
+        return False
+    upper = started + round(bound['upper_seconds'] * 1e9)
+    identities = []
+    for event in events:
+        if (not isinstance(event, dict) or type(event.get('kernel_pid')) is not int
+                or event.get('kernel_pid') != proof['kernel_pid']
+                or not isinstance(event.get('foreign_toplevel_id'), str)
+                or not re.fullmatch('[0-9a-f]{32}', event['foreign_toplevel_id'])
+                or type(event.get('lower_monotonic_ns')) is not int
+                or not started <= event['lower_monotonic_ns'] <= upper
+                or type(event.get('timestamp_resolution_ns')) is not int
+                or event.get('timestamp_resolution_ns') not in (1, 10, 100, 1000)):
+            return False
+        identities.append(event['foreign_toplevel_id'])
+    lower = max(ipc_lower, min(event['lower_monotonic_ns'] for event in events))
+    return (len(identities) == len(set(identities)) and started <= ipc_lower <= upper
+            and math.isclose((lower - started) / 1e9, bound['lower_seconds'], abs_tol=1e-9, rel_tol=1e-9))
+
+
 def mapping_precision(run):
     """Sampling uncertainty is a separate fail-closed gate, never an exemption.
 
@@ -267,10 +324,12 @@ def mapping_precision(run):
                                 and timing.get('observer') == MAPPING_OBSERVER
                                 and bound.get('observer') == MAPPING_OBSERVER
                                 and timing.get('poll_sleep_seconds') == poll)
+            causal_valid = causal_precision(bound) if sampler == ROLE_SAMPLER else True
             result.append(dict(app=app, launch=index, lower_seconds=lower, upper_seconds=upper,
                                interval_seconds=width, maximum_interval_seconds=limit,
                                current_observer=current_observer,
-                               valid=current_observer and width <= limit))
+                               causal_lower_bound_valid=causal_valid,
+                               valid=current_observer and causal_valid and width <= limit))
     return result
 
 
@@ -406,7 +465,7 @@ def compare(runs):
                 metrics=results, identity={name: [r['identity'] for r in group] for name, group in runs.items()},
                 measurement_precision=dict(valid=precision_valid, checks=precision,
                     threshold_enclosure_valid=enclosure_valid,
-                    rule='Each mapped-window bracket <= min(5ms, 2.5% of observed time); all six boots use the same current observer',
+                    rule='Each mapped-window bracket <= min(5ms, 2.5% of observed time); all six boots use the same current observer; role bounds require loss-free same-launch causal receipts',
                     enclosure_rule='For each mapped metric candidate median upper <= 1.10 * baseline median lower; zero baseline lower is unresolved and fails qualification'),
                 package_attribution=attribution,
                 application_role_comparison=roles,

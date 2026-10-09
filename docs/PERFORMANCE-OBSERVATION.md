@@ -62,3 +62,62 @@ The failed experiments are retained rather than converted into passes. Observer
 transport controls and frame success cannot qualify precision or speed/RAM gains.
 The rebuilt ISO's full six-boot paired gate remains mandatory with every original
 precision, enclosure and regression threshold unchanged.
+
+## Causal lower-bound extension (unqualified until real calibration)
+
+The replacement ISO run 37903438836 also failed precision: 20 of 36 baseline
+brackets and 15 of 36 candidate brackets exceeded their original limits, although
+all point regressions were within their limits and the enclosure check passed.
+Candidate Foot cold brackets were 12.4–12.9 ms against 1.61–1.77 ms limits.
+The original evidence is retained. A new observer cannot reclassify this image.
+
+The v9 paired observer adds a read-only kernel return probe to the actual loaded
+wlroots library. It retains the same socket observer and unchanged upper bound.
+The kernel event tightens only the lower endpoint when its unique foreign-toplevel
+identifier matches a newly observed IPC client. It is a bound before mapping,
+not an exact mapping, scene visibility, presentation or first-frame timestamp.
+
+The causal ordering is specific to the audited Mango 0.17.3 and wlroots 0.20.2:
+
+1. [Mango's `handle_client_map`](https://github.com/mangowm/mango/blob/0.17.3/src/manage/client.c)
+   assigns the return of `wlr_ext_foreign_toplevel_handle_v1_create` to
+   `c->ext_foreign_toplevel` before any branch inserts `c->link` into
+   `server.clients`. Scene allocation and foreign-protocol announcements are
+   separate; neither is used as proof that the client is already visible.
+2. The [wlroots 0.20.2 creation function](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/types/wlr_ext_foreign_toplevel_list_v1.c)
+   allocates the identifier before returning a successful handle. The kernel
+   return-probe timestamp precedes the caller's assignment and later insertion.
+3. [Mango `get all-clients`](https://github.com/mangowm/mango/blob/0.17.3/src/ipc/ipc.c)
+   enumerates only `server.clients`; `build_client_json` reports that handle's
+   identifier as `foreign_toplevel_id`. Therefore a matching return event must
+   precede the first possible positive result under the existing IPC predicate.
+   The final socket completion remains the conservative upper bound.
+
+The exact audited x86_64 [header](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/include/wlr/types/wlr_ext_foreign_toplevel_list_v1.h)
+has `identifier` at byte 56. Header SHA-256 is
+`9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3`;
+creation-source SHA-256 is
+`5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088`.
+The interface is unstable: a different wlroots version is rejected until audited.
+The observer resolves the exported function from the actual ELF's dynamic symbol
+table and records both production executable/library hashes and RPM identities.
+Package verification must pass. It uses the actual desktop-owned Mango PID and
+start ticks, a unique 128 KiB tracefs instance, PID filtering and the kernel's
+`mono` clock. It leaves scheduling, compositor code, preferences and SELinux
+enforcement intact. Kernel instrumentation and reader costs are included in the
+measurement; a frozen combined source hash is shared by all six boots.
+
+Unknown identifiers, wrong-process events, wrong clocks, stale/future receipts,
+unsupported ELF layouts, absent tracing, lost events, bounded-reader overflow and
+cleanup failure fail qualification. Kernel text timestamp precision is disclosed;
+printed timestamps are conservatively floored, and resolution above 1 microsecond
+is rejected by comparison. The root collector removes only its own event and
+instance, and unmounts tracefs only if it mounted it. No persistent configuration
+or SELinux relaxation is installed. Historical v8 role evidence remains rejected.
+
+Source controls are not runtime calibration. Before another final-image build,
+an explicitly unqualified research lane should try this instrument on the retained
+failed image and preserve actual library/probe/loss/timing evidence. That lane must
+not pass the native image fetch guard, mark a failed producer qualified, publish,
+or supply final six-boot acceptance. The final image still requires six fresh paired
+KVM boots and every unchanged precision, enclosure and regression check.

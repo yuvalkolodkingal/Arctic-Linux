@@ -17,13 +17,26 @@ import statistics
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+import importlib.util
+
+CAUSAL_TRACER = None
+
+def causal_module():
+    try:
+        import arctic_performance_causal
+        return arctic_performance_causal
+    except ModuleNotFoundError:
+        spec = importlib.util.spec_from_file_location('arctic_performance_causal', Path(__file__).with_name('causal.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
 
 MAPPING_OBSERVER = 'mango-socket-worker-v2-autonomous'
 MAPPING_POLL_SECONDS = .001
 SAMPLER = 'cpu-30-pss-6-v6-bounded-native-query'
-ROLE_SAMPLER = 'cpu-30-pss-6-v8-autonomous-role-first-use'
+ROLE_SAMPLER = 'cpu-30-pss-6-v9-causal-role-first-use'
 ROLE_POLL_SECONDS = .00005
 ROLE_ORDER = ('terminal', 'files', 'browser')
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
@@ -117,7 +130,8 @@ with os.fdopen(os.dup(sys.stdin.fileno()), 'rb', buffering=0) as control:
                     # Only identities are needed until the persistence query.
                     # Do not duplicate a potentially 4 MiB client inventory or
                     # large titles alongside the trace in the mapping envelope.
-                    matched = [dict(id=c['id']) for c in windows]
+                    matched = [dict(id=c['id'], **({'foreign_toplevel_id': c['foreign_toplevel_id']}
+                               if c.get('foreign_toplevel_id') else {})) for c in windows]
                     result = dict(payload=dict(clients=matched), lower_ns=max(lower_ns, started_ns),
                                   upper_ns=query_finished, query_roundtrips=traces)
                     break
@@ -693,6 +707,14 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                 windows = observation['windows']
                 observed_window_ids.update(str(window['id']) for window in windows)
                 measured = (observation['upper_ns'] - started_ns)/1e9
+                causal_bound = None
+                if CAUSAL_TRACER is not None:
+                    causal_lower, causal_bound = CAUSAL_TRACER.bound(windows, started_ns, observation['upper_ns'])
+                    # The independent before-insertion return event can tighten
+                    # only the LOWER endpoint. Keep the original conservative
+                    # query upper, every sample and all original numeric gates.
+                    causal_bound['ipc_lower_monotonic_ns'] = observation['lower_ns']
+                    observation['lower_ns'] = max(observation['lower_ns'], causal_lower)
                 lower = (observation['lower_ns'] - started_ns)/1e9
                 time.sleep(hold_seconds)
                 persistent = observer.query()
@@ -702,7 +724,8 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
                 if observations is not None:
                     observations.append(dict(lower_seconds=lower, upper_seconds=measured,
                         interval_seconds=measured-lower, launch_started_monotonic_ns=started_ns,
-                        observer=MAPPING_OBSERVER, query_roundtrips=observer.roundtrips))
+                        observer=MAPPING_OBSERVER, query_roundtrips=observer.roundtrips,
+                        causal_lower_bound=causal_bound))
                 emit('mapped_window_' + label, [persistent[str(c['id'])] for c in windows
                                                if str(c['id']) in persistent])
                 emit('app_workload_' + label, snapshot())
@@ -832,7 +855,8 @@ def first_use_and_precondition(prefix, declared, workload):
     return order
 
 
-def main(preconditioned=False, functional=False):
+def main(preconditioned=False, functional=False, causal_precision=False):
+    global CAUSAL_TRACER
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
             or run(['systemd-detect-virt', '--vm']) not in ('qemu', 'kvm')):
         raise RuntimeError('This probe requires root inside a disposable QEMU VM')
@@ -863,23 +887,28 @@ def main(preconditioned=False, functional=False):
             quickshell=run(['rpm', '-q', 'quickshell']),
             role_packages={role: app['package'] for role, app in declared['roles'].items()} if declared
                           else dict(kitty=run(['rpm', '-q', 'kitty']))))
-        if preconditioned:
-            emit('pristine_idle_measurement_scope', dict(
-                phase='before_any_gui_role_or_workload_worker',
-                collector_present=True, workload_worker_present=False,
-                meaning='Settled logged-in desktop before GUI-role execution; whole-guest counters/PSS include the frozen root collector and normal authenticated console/session processes'))
-            emit('pristine_idle_samples', collect_idle())
-            with role_workload(prefix) as workload:
-                emit('role_workload', workload)
-                order = first_use_and_precondition(prefix, declared, workload)
-                order.insert(0, 'pristine_idle')
-                measure(prefix, declared, workload, order, complete=False)
-                emit('role_measurement_order', order)
-        elif functional:
-            with role_workload(prefix) as workload:
-                measure(prefix, declared, workload, [], complete=False, preconditioned=False)
-        else:
-            measure(prefix, complete=False)
+        with (causal_module().LowerBoundProbe(prefix) if causal_precision else nullcontext(None)) as tracer:
+            CAUSAL_TRACER = tracer
+            try:
+                if preconditioned:
+                    emit('pristine_idle_measurement_scope', dict(
+                        phase='before_any_gui_role_or_workload_worker',
+                        collector_present=True, workload_worker_present=False,
+                        meaning='Settled logged-in desktop before GUI-role execution; whole-guest counters/PSS include the frozen root collector and normal authenticated console/session processes'))
+                    emit('pristine_idle_samples', collect_idle())
+                    with role_workload(prefix) as workload:
+                        emit('role_workload', workload)
+                        order = first_use_and_precondition(prefix, declared, workload)
+                        order.insert(0, 'pristine_idle')
+                        measure(prefix, declared, workload, order, complete=False)
+                        emit('role_measurement_order', order)
+                elif functional:
+                    with role_workload(prefix) as workload:
+                        measure(prefix, declared, workload, [], complete=False, preconditioned=False)
+                else:
+                    measure(prefix, complete=False)
+            finally:
+                CAUSAL_TRACER = None
     finally:
         restored = json.loads(run(prefix + ['arctic-keep-awake', 'off', '--quiet']))
         emit('keep_awake_restored', restored)
