@@ -1,0 +1,523 @@
+name: Inspect exact retained Mango ABI (static only)
+
+on:
+  push:
+    branches: [diagnostic/performance-abi-20261009]
+    paths: [.github/workflows/inspect-performance-abi-20261009.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/Wallpapers/
+            !/v2-walls/
+            !/showcase/
+      - name: Verify reviewed inspector-only child
+        run: |
+          python3 -B - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_EVENT_NAME'] == 'push'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/diagnostic/performance-abi-20261009'
+          assert os.environ['RUNNER_ENVIRONMENT'] == 'github-hosted'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          seed = '807204386f981ad798b9cc41d67950370dc4c021'
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert subprocess.check_output(['git','show','-s','--format=%P','HEAD'],text=True).strip().split() == [seed]
+          assert event['before'] == seed and event['after'] == head == os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git','diff','--name-only',seed,head],text=True).splitlines() == ['.github/workflows/inspect-performance-abi-20261009.yml']
+          assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip()
+          print('Read-only static ABI inspection; retained images remain unqualified')
+          PY
+      - name: Install host static inspection tools
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y xorriso erofs-utils rpm binutils cpio
+      - name: Extract pinned images and RPM as static data only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          timeout --signal=TERM --kill-after=15s 60m python3 -B - <<'PY'
+          #!/usr/bin/env python3
+          """Static, read-only ABI evidence; never execute an extracted program."""
+          import base64
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import shlex
+          import shutil
+          import signal
+          import stat
+          import struct
+          import subprocess
+          import tempfile
+          import zipfile
+
+          REPO = 'yuvalkolodkingal/Arctic-Linux'
+          API = 'repos/' + REPO
+          SEED = '807204386f981ad798b9cc41d67950370dc4c021'
+          BRANCH = 'diagnostic/performance-abi-20261009'
+          WORKFLOW = '.github/workflows/inspect-performance-abi-20261009.yml'
+          SOURCE = 'a98ba9a1b19cc8a9934e6cb673b0f02edb6dd28d'
+          RETAINED = 'e2a62bb8945f7fe9975cb862986af4dd2be0873d'
+          BASELINE = 'd13da6c907460136fc22017314112ce351592a3f'
+          PINS = {'source_rpm': {'source_sha': 'a98ba9a1b19cc8a9934e6cb673b0f02edb6dd28d', 'files': {'packaging/mangowm.spec': {'blob_sha': '6787aee370e574570cdecd8a884e6d7126cf13af', 'sha256': 'e9de7e9cce9e2a73beadedd1a1623f87f72d23abd703baffa839f5bcd63eb531', 'bytes': 3484}, 'packaging/patches/mango-client-geometry-events.patch': {'blob_sha': '7c7cf591884bf89cab85d7270a6bbc0d5babf339', 'sha256': '0dc2b073a07a2f3f425b9ba5255d56ee6f244180279747a55079a969cf8271a9', 'bytes': 3502}, 'packaging/patches/mango-software-renderer-dmabuf.patch': {'blob_sha': '28f1f8b8f92711d912568a48f05ca8d27c7b4998', 'sha256': '00ae475f37e1061963fa3213b9681b67134a9b3cbfc4214114ed37e3dcc043dd', 'bytes': 1050}, 'packaging/patches/mango-output-teardown.patch': {'blob_sha': '3b502ebcdfcccaa4a6ddc054905a7ca27852d284', 'sha256': '751aaae5b7b211349066b2ae0aac533f87ec91261f2c1edc86a41cafc41c7561', 'bytes': 1334}, 'iso/kiwi/config.kiwi': {'blob_sha': '25b367dc0fc1c5558d208385b178fa11496e887f', 'sha256': 'cdafa1655892b149cf5a8816538a234460a2825a580b868f7b56c8408e95932e', 'bytes': 10626}}}, 'retained': {'source_sha': 'e2a62bb8945f7fe9975cb862986af4dd2be0873d', 'files': {'packaging/mangowm.spec': {'blob_sha': '6787aee370e574570cdecd8a884e6d7126cf13af', 'sha256': 'e9de7e9cce9e2a73beadedd1a1623f87f72d23abd703baffa839f5bcd63eb531', 'bytes': 3484}, 'packaging/patches/mango-client-geometry-events.patch': {'blob_sha': '7c7cf591884bf89cab85d7270a6bbc0d5babf339', 'sha256': '0dc2b073a07a2f3f425b9ba5255d56ee6f244180279747a55079a969cf8271a9', 'bytes': 3502}, 'packaging/patches/mango-software-renderer-dmabuf.patch': {'blob_sha': '28f1f8b8f92711d912568a48f05ca8d27c7b4998', 'sha256': '00ae475f37e1061963fa3213b9681b67134a9b3cbfc4214114ed37e3dcc043dd', 'bytes': 1050}, 'packaging/patches/mango-output-teardown.patch': {'blob_sha': '3b502ebcdfcccaa4a6ddc054905a7ca27852d284', 'sha256': '751aaae5b7b211349066b2ae0aac533f87ec91261f2c1edc86a41cafc41c7561', 'bytes': 1334}, 'iso/kiwi/config.kiwi': {'blob_sha': 'ef327350eff7a6e42cbe6f70a30c462e3347724e', 'sha256': '0c4d3ae0b83ed10be6da59edc5d141ea3c582e9e82ef4e1985512f9cf59d2a53', 'bytes': 10626}}}, 'baseline': {'source_sha': 'd13da6c907460136fc22017314112ce351592a3f', 'files': {'packaging/mangowm.spec': {'blob_sha': '67a5ab940c20e50e92010ca40f236652fda59370', 'sha256': '81aabc17d479513d10cf2c83da372cf0f1e2077e8b66afac15594bdff2e087ef', 'bytes': 3387}, 'packaging/patches/mango-client-geometry-events.patch': {'blob_sha': '7c7cf591884bf89cab85d7270a6bbc0d5babf339', 'sha256': '0dc2b073a07a2f3f425b9ba5255d56ee6f244180279747a55079a969cf8271a9', 'bytes': 3502}, 'iso/kiwi/config.kiwi': {'blob_sha': 'c879c48326aa739c9988073060841c725d689e6c', 'sha256': '9ac4c5079e91a74a85161e0b400bda8745fe438aa0a352ad624c1295b1b64019', 'bytes': 8982}}}}
+          LIMIT = 31 * 1024 * 1024
+          OUTPUT = Path(os.environ['RUNNER_TEMP']) / 'arctic-abi-evidence'
+          ALLOWED = set()
+          REPORT = {'schema': 'arctic-static-mango-abi-v1', 'release_acceptance': False,
+                    'scope': 'Static extraction only: no image build, boot, application execution or benchmark',
+                    'status': 'failed_or_unrun', 'images': {}, 'tools': {}}
+
+
+          def require(condition, message):
+              if not condition:
+                  raise ValueError(message)
+
+
+          def capture(argv, *, timeout=90, limit=2 * 1024 * 1024, allow_failure=False, include_stderr=False):
+              result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                      timeout=timeout, env={**os.environ, 'LC_ALL': 'C'})
+              require(len(result.stdout) <= limit and len(result.stderr) <= limit, 'Command output bound exceeded')
+              if not allow_failure:
+                  require(result.returncode == 0, 'Static command failed: ' + Path(argv[0]).name)
+              # Never copy API/transport stderr or temporary redirect URLs into evidence.
+              data = result.stdout + (result.stderr if include_stderr else b'')
+              return result.returncode, data.decode('utf-8', errors='strict')
+
+
+          def api(path):
+              return json.loads(capture(['gh', 'api', API + path], limit=4 * 1024 * 1024)[1])
+
+
+          def sha(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+          def put(name, data):
+              require(re.fullmatch(r'[a-z0-9_./-]+', name) and '..' not in PurePosixPath(name).parts,
+                      'Unsafe evidence name')
+              path = OUTPUT / name
+              require(sum((OUTPUT / p).stat().st_size for p in ALLOWED) + len(data) < LIMIT - 512 * 1024,
+                      'Small-artifact budget exceeded; partial static evidence only')
+              path.parent.mkdir(parents=True, exist_ok=True)
+              require(not path.exists() and not path.is_symlink(), 'Evidence output already exists')
+              path.write_bytes(data)
+              ALLOWED.add(name)
+              return path
+
+
+          def write_report():
+              path = OUTPUT / 'report.json'
+              REPORT['files'] = {p: {'bytes': (OUTPUT / p).stat().st_size, 'sha256': sha(OUTPUT / p)}
+                                 for p in sorted(ALLOWED)}
+              path.write_text(json.dumps(REPORT, sort_keys=True, indent=2) + '\n')
+
+
+          def safe_regular(root, relative):
+              path = root / relative
+              require(path.is_file() and not path.is_symlink(), 'Expected regular extracted file')
+              require(path.resolve().is_relative_to(root.resolve()), 'Extracted symlink escape')
+              return path
+
+
+          def guard():
+              require(os.environ['GITHUB_REPOSITORY'] == REPO, 'Wrong repository')
+              require(os.environ['GITHUB_EVENT_NAME'] == 'push', 'Push only')
+              require(os.environ['GITHUB_REF'] == 'refs/heads/' + BRANCH, 'Wrong diagnostic branch')
+              require(os.environ['RUNNER_ENVIRONMENT'] == 'github-hosted', 'Hosted runner required')
+              require(os.environ['GITHUB_RUN_ATTEMPT'] == '1', 'First attempt only')
+              event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+              head = capture(['git', 'rev-parse', 'HEAD'])[1].strip()
+              parents = capture(['git', 'show', '-s', '--format=%P', 'HEAD'])[1].strip().split()
+              require(event['before'] == SEED and parents == [SEED], 'Exact seed parent required')
+              require(event['after'] == os.environ['GITHUB_SHA'] == head, 'Exact pushed child required')
+              require(capture(['git', 'diff', '--name-only', SEED, head])[1].splitlines() == [WORKFLOW],
+                      'Inspector-only child required')
+              require(not capture(['git', 'status', '--porcelain'])[1].strip(), 'Clean checkout required')
+              REPORT['diagnostic'] = {'seed_sha': SEED, 'workflow_sha': head,
+                                      'run_id': int(os.environ['GITHUB_RUN_ID']), 'run_attempt': 1}
+
+
+          def verify_source(label, commit=None, output_label=None, *, save_source=True):
+              pin = PINS[label]
+              commit = commit or pin['source_sha']
+              require(re.fullmatch('[0-9a-f]{40}', commit), 'Invalid source commit')
+              meta = api('/git/commits/' + commit)
+              require(meta['sha'] == commit, 'Source commit mismatch')
+              tree = api('/git/trees/' + meta['tree']['sha'] + '?recursive=1')
+              require(tree['truncated'] is False and len(tree['tree']) <= 10000, 'Source tree incomplete')
+              entries = {item['path']: item for item in tree['tree']}
+              result = {}
+              for name, expected in pin['files'].items():
+                  entry = entries[name]
+                  require(entry['type'] == 'blob' and entry['sha'] == expected['blob_sha'],
+                          'Packaged source differs from reviewed source')
+                  blob = api('/git/blobs/' + expected['blob_sha'])
+                  require(blob['encoding'] == 'base64', 'Unexpected source encoding')
+                  data = base64.b64decode(blob['content'], validate=False)
+                  require(len(data) == expected['bytes'] and hashlib.sha256(data).hexdigest() == expected['sha256'],
+                          'Source checksum mismatch')
+                  if save_source and commit == pin['source_sha']:
+                      put((output_label or label) + '/source/' + name, data)
+                  result[name] = expected
+              return {'commit': commit, 'tree': meta['tree']['sha'], 'files': result}
+
+
+          def run_identity(run_id, source, conclusion, event, path):
+              run = api('/actions/runs/' + str(run_id))
+              require(run['id'] == run_id and run['head_sha'] == source and run['run_attempt'] == 1,
+                      'Run identity mismatch')
+              require(run['status'] == 'completed' and run['conclusion'] == conclusion
+                      and run['event'] == event and run['path'] == path, 'Run state mismatch')
+              return {'id': run_id, 'source_sha': source, 'run_attempt': 1,
+                      'conclusion': conclusion, 'event': event, 'workflow_path': path}
+
+
+          def download_artifact(artifact_id, run_id, source, name, size, digest, target):
+              meta = api('/actions/artifacts/' + str(artifact_id))
+              require(meta['id'] == artifact_id and meta['name'] == name and meta['expired'] is False,
+                      'Artifact identity mismatch')
+              require(meta['workflow_run']['id'] == run_id and meta['workflow_run']['head_sha'] == source,
+                      'Artifact source mismatch')
+              require(meta['size_in_bytes'] == size and meta['digest'] == 'sha256:' + digest,
+                      'Artifact metadata checksum mismatch')
+              # Official gh handles authenticated API redirects; no custom Authorization header
+              # is sent to archive hosts, and no redirect URL is retained or printed.
+              with target.open('xb') as stream:
+                  result = subprocess.run(['gh', 'api', API + '/actions/artifacts/' + str(artifact_id) + '/zip'],
+                                          stdout=stream, stderr=subprocess.PIPE, timeout=1200)
+              require(result.returncode == 0, 'Artifact download failed')
+              require(target.stat().st_size == size and sha(target) == digest, 'Actual archive checksum mismatch')
+              return {'id': artifact_id, 'name': name, 'bytes': size, 'sha256': digest}
+
+
+          def zip_inventory(archive, *, max_bytes, max_items=300):
+              entries = archive.infolist()
+              require(0 < len(entries) <= max_items and len({p.filename for p in entries}) == len(entries),
+                      'Invalid ZIP inventory')
+              require(sum(p.file_size for p in entries) <= max_bytes, 'ZIP decompressed-size bound exceeded')
+              for entry in entries:
+                  path = PurePosixPath(entry.filename)
+                  require(not path.is_absolute() and '..' not in path.parts and '\\' not in entry.filename,
+                          'Unsafe ZIP path')
+                  require((entry.external_attr >> 16 & 0o170000) in (0, stat.S_IFREG, stat.S_IFDIR),
+                          'Nonregular ZIP member')
+              return entries
+
+
+          def rpm_identity(arguments, mango):
+              prefix = ['rpm', '--noplugins'] + arguments
+              fields = capture(prefix + ['--qf', '%{NAME}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\t%{FILEDIGESTALGO}\n'])[1].strip().split('\t')
+              require(len(fields) == 5 and fields[0:2] == ['mangowm', '0.17.3'] and fields[3:] == ['x86_64', '8'],
+                      'Unexpected Mango RPM identity or digest algorithm')
+              rows = capture(prefix + ['--qf', '[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\n]'])[1].splitlines()
+              matches = [row.split('\t') for row in rows if row.startswith('/usr/bin/mango\t')]
+              require(len(matches) == 1 and len(matches[0]) == 3, 'Mango RPM file record missing or duplicated')
+              require(re.fullmatch('[0-9a-f]{64}', matches[0][1]) and int(matches[0][2]) & 0o170000 == stat.S_IFREG,
+                      'Invalid Mango RPM file record')
+              require(sha(mango) == matches[0][1], 'Actual Mango ELF differs from RPM file digest')
+              return {'nevra': '-'.join(fields[:3]) + '.' + fields[3], 'file_digest_algorithm': 'sha256',
+                      'file_sha256': matches[0][1], 'file_digest_verified': True}
+
+
+          def elf_sections(data):
+              require(len(data) >= 64 and data[:6] == b'\x7fELF\x02\x01', 'Invalid ELF section inventory')
+              offset = struct.unpack_from('<Q', data, 40)[0]
+              entry_size, count, names_index = struct.unpack_from('<HHH', data, 58)
+              require(entry_size == 64 and 1 <= count <= 256 and 0 < names_index < count
+                      and offset + count * entry_size <= len(data), 'Unsupported ELF section table')
+              rows = [struct.unpack_from('<IIQQQQIIQQ', data, offset + index * 64) for index in range(count)]
+              names = rows[names_index]
+              require(names[1] == 3 and names[4] + names[5] <= len(data), 'Invalid ELF section names')
+              strings = data[names[4]:names[4] + names[5]]
+              result = {}
+              for index, row in enumerate(rows):
+                  name_offset, kind, flags, address, file_offset, size, link, info, alignment, element_size = row
+                  require(name_offset < len(strings), 'Invalid ELF section name offset')
+                  end = strings.find(b'\0', name_offset)
+                  require(end >= name_offset, 'Unterminated ELF section name')
+                  name = strings[name_offset:end].decode('ascii', errors='strict')
+                  require(name not in result, 'Duplicate ELF section name')
+                  require(kind == 8 or file_offset + size <= len(data), 'ELF section exceeds file')
+                  result[name] = {'index': index, 'type': kind, 'flags': flags, 'address': address,
+                                  'file_offset': file_offset, 'bytes': size, 'link': link, 'info': info,
+                                  'alignment': alignment, 'entry_bytes': element_size,
+                                  'allocated': bool(flags & 2), 'executable': bool(flags & 4),
+                                  'sha256': None if kind == 8 else hashlib.sha256(data[file_offset:file_offset + size]).hexdigest()}
+              return result
+
+
+          def save_elf(label, mango, provenance, *, disassembly=True):
+              size = mango.stat().st_size
+              require(4096 <= size < 4 * 1024 * 1024, 'Unexpected Mango ELF size')
+              data = mango.read_bytes()
+              require(data[:6] == b'\x7fELF\x02\x01' and struct.unpack_from('<H', data, 18)[0] == 62,
+                      'Expected little-endian x86_64 ELF')
+              put(label + '/mango.elf', data)
+              provenance['elf'] = {'bytes': size, 'sha256': hashlib.sha256(data).hexdigest(), 'machine': 'x86_64'}
+              provenance['elf']['sections'] = elf_sections(data)
+              commands = [('elf-headers.txt', ['readelf', '-hW', '-lW', '-SW', '-nW', str(mango)]),
+                          ('elf-unwind.txt', ['readelf', '--debug-dump=frames', '-W', str(mango)])]
+              if disassembly:
+                  commands.append(('elf-disassembly.txt', ['objdump', '-d', '-w', str(mango)]))
+              for filename, args in commands:
+                  put(label + '/' + filename, capture(args, limit=8 * 1024 * 1024)[1].encode())
+              REPORT['images'][label] = provenance
+
+
+          def current_rpm(folder, *, label, run_id, event, artifact_id, archive_bytes, archive_sha256):
+              provenance = {'kind': 'source-ci-rpm', 'source': verify_source('source_rpm', output_label=label)}
+              provenance['run'] = run_identity(run_id, SOURCE, 'success', event, '.github/workflows/ci.yml')
+              archive = folder / 'current.zip'
+              provenance['archive'] = download_artifact(artifact_id, run_id, SOURCE, 'rpms', archive_bytes, archive_sha256, archive)
+              with zipfile.ZipFile(archive) as zipped:
+                  entries = zip_inventory(zipped, max_bytes=256 * 1024 * 1024)
+                  packages = [p for p in entries if re.fullmatch(r'mangowm-[^/]+\.x86_64\.rpm', PurePosixPath(p.filename).name)]
+                  infos = [p for p in entries if PurePosixPath(p.filename).name == 'BUILD-INFO']
+                  require(len(packages) == len(infos) == 1, 'Unique Mango RPM and BUILD-INFO required')
+                  require(packages[0].file_size < 16 * 1024 * 1024 and infos[0].file_size < 100000, 'RPM metadata bound exceeded')
+                  package = folder / 'mangowm.rpm'; package.write_bytes(zipped.read(packages[0]))
+                  build = dict(line.split('=', 1) for line in zipped.read(infos[0]).decode().splitlines() if '=' in line)
+              actual_commit = build['git_commit']
+              provenance['built_checkout_source'] = verify_source('source_rpm', actual_commit, save_source=False)
+              provenance['build_info'] = {k: build[k] for k in ('version', 'release_suffix', 'git_commit',
+                  'git_dirty', 'build_time', 'commit_time', 'builder_image_id')}
+              mango = folder / 'mango'
+              # cpio writes only the selected member to stdout; it cannot create filesystem paths.
+              with mango.open('xb') as stream:
+                  producer = subprocess.Popen(['rpm2cpio', str(package)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                  consumer = subprocess.Popen(['cpio', '--quiet', '--to-stdout', '-i', './usr/bin/mango'],
+                                              stdin=producer.stdout, stdout=stream, stderr=subprocess.DEVNULL)
+                  producer.stdout.close()
+                  require(consumer.wait(timeout=90) == 0 and producer.wait(timeout=90) == 0, 'RPM payload extraction failed')
+              provenance['rpm'] = rpm_identity(['-qp', str(package)], mango)
+              require('.git' + actual_commit[:7] in provenance['rpm']['nevra'], 'RPM checkout suffix mismatch')
+              code, digest_output = capture(['rpmkeys', '--checksig', '--nosignature', str(package)])
+              require('digests OK' in digest_output, 'RPM package digest verification missing')
+              provenance['rpm']['package_digest_verified'] = True
+              provenance['rpm']['package_sha256'] = sha(package)
+              put(label + '/mangowm.rpm', package.read_bytes())
+              save_elf(label, mango, provenance, disassembly=label == 'source_rpm')
+
+
+          def compare_source_rpms():
+              pr = REPORT['images']['source_rpm']['elf']
+              push = REPORT['images']['source_rpm_push']['elf']
+              names = sorted(set(pr['sections']) | set(push['sections']))
+              differences = {name: {'pull_request': pr['sections'].get(name), 'push': push['sections'].get(name)}
+                             for name in names if pr['sections'].get(name) != push['sections'].get(name)}
+              REPORT['reproducibility'] = {'scope': 'Static byte/layout comparison only; no canonical profile or performance acceptance is inferred',
+                  'pull_request_elf_sha256': pr['sha256'], 'push_elf_sha256': push['sha256'],
+                  'whole_elf_identical': pr['sha256'] == push['sha256'],
+                  'different_sections': differences,
+                  'allocated_different_sections': [name for name in differences
+                      if pr['sections'].get(name, {}).get('allocated') or push['sections'].get(name, {}).get('allocated')],
+                  'executable_different_sections': [name for name in differences
+                      if pr['sections'].get(name, {}).get('executable') or push['sections'].get(name, {}).get('executable')]}
+
+
+          def iso_elf(label, iso, provenance, folder):
+              # No mounts, loop devices or guest appliance: inspect and decompress data only.
+              listing = capture(['xorriso', '-indev', str(iso), '-find', '/LiveOS', '-type', 'f', '-exec', 'echo', '--'],
+                                limit=1024 * 1024)[1]
+              paths = [shlex.split(line) for line in listing.splitlines() if line.strip()]
+              require(len(paths) <= 16 and all(len(p) == 1 for p in paths), 'Unexpected LiveOS inventory')
+              members = [p[0] for p in paths if p[0].endswith(('.img', '.erofs', '.squashfs'))]
+              require(len(members) == 1 and members[0].startswith('/LiveOS/')
+                      and '..' not in PurePosixPath(members[0]).parts, 'Unique LiveOS root filesystem required')
+              filesystem = folder / 'rootfs.image'
+              capture(['xorriso', '-osirrox', 'on', '-indev', str(iso), '-extract', members[0], str(filesystem)], timeout=600)
+              require(1024 < filesystem.stat().st_size < 3 * 1024**3, 'Root filesystem size bound exceeded')
+              with filesystem.open('rb') as stream:
+                  prefix = stream.read(2048)
+              require(prefix[1024:1028] == b'\xe2\xe1\xf5\xe0', 'Expected pinned Kiwi EROFS format')
+              provenance['filesystem'] = {'iso_member': members[0], 'format': 'erofs',
+                                         'bytes': filesystem.stat().st_size, 'sha256': sha(filesystem)}
+              REPORT['images'][label] = provenance
+              root = folder / 'root'; root.mkdir()
+              code, diagnostic = capture(['fsck.erofs', '--extract=' + str(root), '--no-preserve', str(filesystem)],
+                                         timeout=900, allow_failure=True, include_stderr=True, limit=64000)
+              provenance['filesystem']['extraction'] = {'exit_code': code,
+                  'diagnostic': diagnostic.replace(os.environ['RUNNER_TEMP'], '<runner-temp>')}
+              require(code == 0, 'Pinned EROFS extraction failed; reader support is unproven')
+              mango = safe_regular(root, 'usr/bin/mango')
+              safe_regular(root, 'usr/lib/sysimage/rpm/rpmdb.sqlite')
+              provenance['rpm'] = rpm_identity(['--root', str(root), '--dbpath', '/usr/lib/sysimage/rpm', '-q', 'mangowm'], mango)
+              code, verification = capture(['rpm', '--noplugins', '--root', str(root), '--dbpath', '/usr/lib/sysimage/rpm',
+                                            '-V', '--noscripts', 'mangowm'], allow_failure=True, limit=100000)
+              provenance['rpm']['static_full_verify'] = {'exit_code': code, 'output': verification,
+                  'limitation': 'EROFS extraction deliberately does not preserve owners; full installed-system verification is not claimed'}
+              if label == 'retained':
+                  require(sha(mango) == '2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b',
+                          'Retained Mango differs from actual calibration receipt')
+              save_elf(label, mango, provenance)
+
+
+          def retained_iso(folder):
+              provenance = {'kind': 'retained-failed-producer-iso', 'source': verify_source('retained')}
+              provenance['run'] = run_identity(37903438836, RETAINED, 'failure', 'workflow_dispatch', '.github/workflows/iso.yml')
+              jobs = api('/actions/runs/37903438836/jobs?filter=all&per_page=100')
+              require(jobs['total_count'] == len(jobs['jobs']), 'Incomplete producer jobs')
+              selected = [p for p in jobs['jobs'] if p['name'] == 'iso' and p['run_attempt'] == 1]
+              require(len(selected) == 1 and selected[0]['head_sha'] == RETAINED, 'Producer job mismatch')
+              steps = {p['name']: p['conclusion'] for p in selected[0]['steps']}
+              require(steps['Boot test in QEMU (UEFI, Try mode)'] == 'success'
+                      and steps['Paired KVM performance acceptance'] == 'failure', 'Retained failed step binding lost')
+              provenance['producer_steps'] = {k: steps[k] for k in ('Boot test in QEMU (UEFI, Try mode)', 'Paired KVM performance acceptance')}
+              archive = folder / 'retained.zip'
+              provenance['archive'] = download_artifact(11604221573, 37903438836, RETAINED, 'arctic-linux-iso', 1929415684,
+                  '1b3267d5b7e0fc3b7980f77a3e72345f6ad3061de47a2a3006fcd2c84cb59dee', archive)
+              iso = folder / 'retained.iso'
+              with zipfile.ZipFile(archive) as zipped:
+                  zip_inventory(zipped, max_bytes=2010000000, max_items=20)
+                  item = zipped.getinfo('iso/Arctic-Linux-1.2-candidate-37903438836-1-x86_64.iso')
+                  require(item.file_size == 1929230336, 'Retained ISO ZIP size mismatch')
+                  with zipped.open(item) as source, iso.open('xb') as target:
+                      shutil.copyfileobj(source, target, 1024 * 1024)
+              archive.unlink()
+              require(iso.stat().st_size == 1929230336 and sha(iso) == '73a95290df7df8d1b4d47c90767e1e231cb340864ed3b3478dde2176b7bfb9c0',
+                      'Retained ISO checksum mismatch')
+              provenance['iso'] = {'bytes': iso.stat().st_size, 'sha256': sha(iso)}
+              iso_elf('retained', iso, provenance, folder)
+
+
+          def baseline_iso(folder):
+              provenance = {'kind': 'immutable-v1.2.0-release-iso', 'source': verify_source('baseline')}
+              release = api('/releases/tags/v1.2.0')
+              require(release['id'] == 403366368 and release['tag_name'] == 'v1.2.0'
+                      and release['target_commitish'] == BASELINE and release['draft'] is False,
+                      'Immutable baseline release identity mismatch')
+              assets = {a['id']: a for a in release['assets']}
+              pins = [(611480575, 'Arctic-Linux-1.2-x86_64.iso.part00', 1992294400,
+                       '325e2538a0ff18e235fabc12e191933114042c9fccc2983233a4d36307edc4d7'),
+                      (611480574, 'Arctic-Linux-1.2-x86_64.iso.part01', 329779200,
+                       'd8c6ac234f5962a18c131314e5b666211c00aaad36bc4244d3eabb3d4fbfe18a')]
+              provenance['release'] = {'id': release['id'], 'tag': 'v1.2.0', 'source_sha': BASELINE, 'assets': []}
+              iso = folder / 'baseline.iso'
+              with iso.open('xb') as target:
+                  for asset_id, name, size, digest in pins:
+                      meta = assets[asset_id]
+                      require(meta['name'] == name and meta['size'] == size and meta['digest'] == 'sha256:' + digest,
+                              'Baseline split asset identity mismatch')
+                      subprocess.run(['gh', 'release', 'download', 'v1.2.0', '--repo', REPO,
+                                      '--pattern', name, '--dir', str(folder)], check=True,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1200)
+                      part = folder / name
+                      require(part.stat().st_size == size and sha(part) == digest, 'Actual baseline part checksum mismatch')
+                      with part.open('rb') as stream:
+                          shutil.copyfileobj(stream, target, 1024 * 1024)
+                      part.unlink()
+                      provenance['release']['assets'].append({'id': asset_id, 'name': name, 'bytes': size, 'sha256': digest})
+              require(iso.stat().st_size == 2322073600 and sha(iso) == '054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f',
+                      'Complete baseline ISO checksum mismatch')
+              provenance['iso'] = {'bytes': iso.stat().st_size, 'sha256': sha(iso)}
+              iso_elf('baseline', iso, provenance, folder)
+
+
+          def main():
+              guard()
+              OUTPUT.mkdir(mode=0o700)
+              def deadline(signum, frame):
+                  raise ValueError('Combined static inspection time budget exceeded')
+              signal.signal(signal.SIGTERM, deadline)
+              try:
+                  for name in ('gh', 'xorriso', 'fsck.erofs', 'rpm', 'readelf', 'objdump'):
+                      flag = '--version' if name != 'fsck.erofs' else '-V'
+                      code, text = capture([name, flag], allow_failure=True, include_stderr=True, limit=100000)
+                      REPORT['tools'][name] = {'exit_code': code, 'version': text[:4000]}
+                  erofs = shutil.which('fsck.erofs')
+                  REPORT['tools']['erofs_linkage'] = capture(['ldd', erofs], limit=100000)[1]
+                  code, help_text = capture(['fsck.erofs', '--help'], allow_failure=True,
+                                            include_stderr=True, limit=100000)
+                  REPORT['tools']['erofs_capabilities'] = {'exit_code': code, 'help': help_text}
+                  require(re.search(r'\blzma\b', help_text, re.I) is not None
+                          and '--extract' in help_text and '--no-preserve' in help_text,
+                          'Installed EROFS reader does not advertise required LZMA extraction support')
+                  functions = (
+                      lambda folder: current_rpm(folder, label='source_rpm', run_id=37969507794, event='pull_request',
+                          artifact_id=11634907628, archive_bytes=64777241,
+                          archive_sha256='58490143fdf0d6635da0a59f743fafe60c4b460e03455d7d206a638e5e6ba765'),
+                      lambda folder: current_rpm(folder, label='source_rpm_push', run_id=37969500516, event='push',
+                          artifact_id=11634484997, archive_bytes=64777225,
+                          archive_sha256='d00e503b6d2c3c7b6671a3702b2010d205134b32b778499266c82e76322eef10'),
+                      retained_iso, baseline_iso)
+                  for function in functions:
+                      require(shutil.disk_usage(os.environ['RUNNER_TEMP']).free > 12 * 1024**3, 'Insufficient temporary disk')
+                      with tempfile.TemporaryDirectory(prefix='arctic-static-abi-', dir=os.environ['RUNNER_TEMP']) as temp:
+                          function(Path(temp))
+                      if {'source_rpm', 'source_rpm_push'} <= set(REPORT['images']):
+                          compare_source_rpms()
+                      write_report()
+                  REPORT['status'] = 'static_evidence_complete'
+              except Exception as error:
+                  # Whitelisted messages only; never leak network stderr/URLs or exception payloads.
+                  REPORT['failure'] = {'type': type(error).__name__,
+                      'reason': str(error) if isinstance(error, ValueError) else 'Static inspection failed; no qualification claim'}
+                  raise
+              finally:
+                  write_report()
+                  actual = {str(p.relative_to(OUTPUT)) for p in OUTPUT.rglob('*') if p.is_file()}
+                  require(actual == ALLOWED | {'report.json'} and all(not p.is_symlink() for p in OUTPUT.rglob('*')),
+                          'Evidence inventory mismatch')
+                  require(sum(p.stat().st_size for p in OUTPUT.rglob('*') if p.is_file()) < LIMIT,
+                          'Evidence exceeds small-artifact limit')
+
+
+          if __name__ == '__main__':
+              main()
+          PY
+      - name: Validate the small evidence inventory
+        id: evidence
+        if: always()
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path, PurePosixPath
+          root = Path(os.environ['RUNNER_TEMP']) / 'arctic-abi-evidence'
+          assert root.is_dir() and not root.is_symlink()
+          report = json.loads((root / 'report.json').read_text())
+          assert report['schema'] == 'arctic-static-mango-abi-v1' and report['release_acceptance'] is False
+          assert report['status'] in ['failed_or_unrun', 'static_evidence_complete']
+          files = report['files']
+          assert len(files) <= 50
+          actual = {str(p.relative_to(root)) for p in root.rglob('*') if p.is_file()}
+          assert actual == set(files) | {'report.json'}
+          assert sum(p.stat().st_size for p in root.rglob('*') if p.is_file()) < 31 * 1024 * 1024
+          for p in root.rglob('*'):
+              assert not p.is_symlink()
+          for name, metadata in files.items():
+              assert re.fullmatch(r'(source_rpm|source_rpm_push|retained|baseline)/(mango\.elf|mangowm\.rpm|elf-(headers|unwind|disassembly)\.txt|source/(packaging/mangowm\.spec|packaging/patches/mango-(client-geometry-events|software-renderer-dmabuf|output-teardown)\.patch|iso/kiwi/config\.kiwi))', name)
+              path = root / name
+              assert path.stat().st_size == metadata['bytes']
+              with path.open('rb') as stream:
+                  assert hashlib.file_digest(stream, 'sha256').hexdigest() == metadata['sha256']
+          print('Screened static diagnostic inventory; release acceptance remains false')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && steps.evidence.outcome == 'success' }}
+        with:
+          name: static-mango-abi-evidence
+          path: ${{ runner.temp }}/arctic-abi-evidence/
+          if-no-files-found: error
+          retention-days: 14
