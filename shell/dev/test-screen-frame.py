@@ -251,9 +251,11 @@ def exercise(base, out, compositor, frame_source=None):
                 assert len(set(names)) == 2 and all(name.startswith('HEADLESS-') for name in names)
                 for name, mode, position in zip(names, ('1024x768', '900x1600'), ('0,0', '1024,0')):
                     run('wlr-randr', '--output', name, '--custom-mode', mode, '--pos', position)
-                wait(lambda: len(state()['surfaces']) == 2 and
-                     {surface['screen'] for surface in state()['surfaces']} == set(names),
-                     'frame surfaces did not return on recreated outputs')
+                def frames_restored():
+                    surfaces = state()['surfaces']
+                    return len(surfaces) == 2 and {surface['screen'] for surface in surfaces} == set(names)
+
+                wait(frames_restored, 'frame surfaces did not return on recreated outputs')
                 validate_preview(preview, out / 'shell.log')
                 assert display.poll() is None and display.pid == compositor_pid
                 ipc('cover', 'false')
