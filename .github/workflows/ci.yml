@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches-ignore: [diagnostic/performance-abi-20261009]
   pull_request:
   workflow_dispatch:
 
