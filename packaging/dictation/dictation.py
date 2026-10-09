@@ -428,6 +428,18 @@ def supervised(argv, **kwargs):
                              str(os.getpid()), *argv], start_new_session=True, **kwargs)
 
 
+def process_start(pid):
+    try:
+        return Path(f"/proc/{int(pid)}/stat").read_text().split(") ", 1)[1].split()[19]
+    except (OSError, ValueError, IndexError, TypeError):
+        return ""
+
+
+def owned_lock_supervisor(marker):
+    pid, started = marker.get("supervisor_pid"), marker.get("supervisor_start")
+    return bool(pid and started and process_start(pid) == started)
+
+
 def lock_supervisor(generation, arguments):
     shared, _private = runtime_paths()
     marker = shared / "dictation-locked"
@@ -444,6 +456,10 @@ def lock_supervisor(generation, arguments):
         process.terminate()
         process.wait(timeout=3)
         raise Failure("The fallback lock could not secure this session.")
+    data = read_json(marker)
+    if data.get("generation") == generation:
+        data.update(supervisor_pid=os.getpid(), supervisor_start=process_start(os.getpid()))
+        atomic_json(marker, data)
     # The caller may now return to swayidle. This detached supervisor remains
     # the real parent, distinguishing a normal unlock from a lock-client crash.
     print("secure", flush=True)
@@ -749,7 +765,12 @@ def client(verb):
     if verb in ("lock", "unlock"):
         marker = shared / "dictation-locked"
         if verb == "lock":
-            atomic_json(marker, {"locked": True, "generation": os.urandom(16).hex()})
+            existing = read_json(marker)
+            # Repeated lock requests must retain a known fallback supervisor's
+            # generation, so its normal unlock can release this same marker.
+            # An unowned/stale marker starts a fresh fail-closed generation.
+            if not owned_lock_supervisor(existing):
+                atomic_json(marker, {"locked": True, "generation": os.urandom(16).hex()})
             mark_cancel(private)
             # No IPC or child-shutdown wait in the security lock path. The
             # broker observes this generation even during initialization.
@@ -757,23 +778,11 @@ def client(verb):
         marker.unlink(missing_ok=True)
         return snapshot()
     if verb == "watch-unlock":
-        # Only launched after swaylock -f reports secure. A watcher from an older
-        # lock cannot clear a newer generation. The shell's explicit unlock path
-        # remains authoritative for its own protocol lock.
-        marker = shared / "dictation-locked"
-        generation = read_json(marker).get("generation")
-        if not generation:
-            return snapshot()
-        while read_json(marker).get("generation") == generation:
-            probe = subprocess.run(["/usr/bin/pgrep", "-u", str(os.getuid()), "-x", "swaylock"],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-            shell = subprocess.run(["/usr/bin/arctic-shell-ipc", "lock", "isLocked"], stdout=subprocess.PIPE,
-                                   stderr=subprocess.DEVNULL, timeout=2, text=True)
-            if probe.returncode == 1 and shell.returncode == 0 and shell.stdout.strip() == "false":
-                if read_json(marker).get("generation") == generation:
-                    marker.unlink(missing_ok=True)
-                break
-            time.sleep(0.5)
+        # A vanished foreign swaylock can mean a crash with the compositor still
+        # locked. Its absence and the shell's *own* unlocked flag cannot prove
+        # foreign unlock. Managed supervisors clear on observed normal exit;
+        # unknown locks retain their marker until authoritative unlock/session
+        # restart. Keep this legacy verb harmless for existing wrapper callers.
         return snapshot()
     if verb in ("retry", "setup"):
         result = subprocess.run(["/usr/bin/pkexec", "/usr/libexec/arctic/arctic-dictation-setup"],

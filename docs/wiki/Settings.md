@@ -15,8 +15,8 @@ arctic-settings displays     # open it on a page
 ```
 
 The page names for `arctic-settings <page>` are `appearance`, `windows`, `displays`, `input`,
-`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `notifications`, `updates`, `power`, `startup`
-`dictation` and `about`.
+`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `notifications`, `updates`, `power`,
+`startup`, `dictation` and `about`.
 
 ## Finding a setting
 
@@ -68,6 +68,16 @@ file). That's what `Ctrl + Z` uses.
 | Notifications: schedule, history, per-app choices | `~/.config/arctic/notifications.json`; do not disturb through `arctic-dnd` | At once |
 | Dictation: Hebrew/English language and CPU/Vulkan preference | `~/.config/arctic/dictation.json` | Next recording; Retry setup asks for administrator authorization |
 
+`settings.conf` is read after Arctic's own Mango files and **before** your
+`~/.config/mango/user.conf`, so anything you set by hand in `user.conf` still wins. When it does,
+Settings says so on the row. If your `~/.config/mango/config.conf` doesn't include
+`settings.conf` yet (it was copied before 0.2), Settings adds the line
+`source-optional=~/.config/mango/settings.conf` just before the `user.conf` line.
+
+When a program Settings needs is missing, the page says so instead of failing. For example,
+without `wlr-randr` the Displays page can change scale, rotation and position but not the
+resolution.
+
 ## Dictation
 
 Local Whisper dictation supports Hebrew and English. Online installation downloads
@@ -82,16 +92,6 @@ visible indicator; locking discards the result. GPU errors select CPU for the
 session and ask you to record again. Audio is processed locally, and transcripts
 are excluded from status, logs and notifications. See [Local dictation](../DICTATION.md)
 for download sizes, privacy details and hardware limitations.
-
-`settings.conf` is read after Arctic's own Mango files and **before** your
-`~/.config/mango/user.conf`, so anything you set by hand in `user.conf` still wins. When it does,
-Settings says so on the row. If your `~/.config/mango/config.conf` doesn't include
-`settings.conf` yet (it was copied before 0.2), Settings adds the line
-`source-optional=~/.config/mango/settings.conf` just before the `user.conf` line.
-
-When a program Settings needs is missing, the page says so instead of failing. For example,
-without `wlr-randr` the Displays page can change scale, rotation and position but not the
-resolution.
 
 ## Appearance
 

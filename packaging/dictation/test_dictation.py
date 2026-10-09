@@ -308,6 +308,24 @@ class Sessions(unittest.TestCase):
         self.assertTrue((self.shared / "dictation-locked").exists())
         self.assertNotEqual(d.cancellation(self.private), "")
 
+    def test_repeated_managed_fallback_lock_keeps_supervisor_generation(self):
+        marker = self.shared / "dictation-locked"
+        original = {"locked": True, "generation": "same-lock", "supervisor_pid": os.getpid(),
+                    "supervisor_start": d.process_start(os.getpid())}
+        d.atomic_json(marker, original)
+        with mock.patch.object(d, "runtime_paths", return_value=(self.shared, self.private)):
+            d.client("lock")
+        self.assertEqual(d.read_json(marker), original)
+
+    def test_legacy_watcher_cannot_guess_foreign_unlock_after_crash(self):
+        marker = self.shared / "dictation-locked"
+        d.atomic_json(marker, {"locked": True, "generation": "unknown-foreign-lock"})
+        with mock.patch.object(d, "runtime_paths", return_value=(self.shared, self.private)), \
+                mock.patch.object(d.subprocess, "run") as probe:
+            d.client("watch-unlock")
+        probe.assert_not_called()
+        self.assertTrue(marker.exists())
+
     def test_dead_broker_cancel_cleans_all_owned_transcript_temps(self):
         for name in ("transcript", ".transcript.123.tmp", "transcript.done", "insertion"):
             (self.private / name).write_text("private phrase")
