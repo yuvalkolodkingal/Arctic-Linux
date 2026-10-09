@@ -197,6 +197,23 @@ class StartupTests(unittest.TestCase):
                                              'TEST_STATE': state, 'TEST_RUNTIME':str(runtime),
                                              'WAYLAND_DISPLAY':'wrong-console-display'})
                 self.assertEqual(result.returncode == 0, valid, state)
+            valid_window = dict(visible=True, backing_visible=True, width=1280,
+                                height=800, screen='Virtual-1')
+            for window, valid in [(valid_window,True), ({},False),
+                    ({**valid_window,'visible':False},False),
+                    ({**valid_window,'backing_visible':False},False),
+                    ({**valid_window,'width':100},False),
+                    ({**valid_window,'height':100},False),
+                    ({**valid_window,'screen':''},False)]:
+                import json
+                state=json.dumps(dict(page='welcome',ready=True,connected=True,
+                                      failure='',window=window))
+                command=startup.installer_probe(require_visible=True).replace(
+                    '/run/user/',str(root/'run')+'/')
+                result=subprocess.run(['sh','-c',command],stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,env={**os.environ,'PATH':str(root)+':'+os.environ['PATH'],
+                    'TEST_STATE':state,'TEST_RUNTIME':str(runtime),'WAYLAND_DISPLAY':'wrong-console-display'})
+                self.assertEqual(result.returncode==0,valid,state)
 
     def test_installer_probe_requires_one_actual_wayland_socket(self):
         with tempfile.TemporaryDirectory() as tmp:

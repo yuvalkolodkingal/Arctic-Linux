@@ -56,10 +56,15 @@ def console_authenticated(path, nonce):
     return bool(match and 1000 <= int(match[1]) <= 2147483647)
 
 
-def installer_probe():
+def installer_probe(require_visible=False):
     validate = ("import json,sys; s=json.load(sys.stdin); "
                 "assert s['page']=='welcome' and s['ready'] is True "
                 "and s['connected'] is True and not s['failure']")
+    if require_visible:
+        validate += (" and s['window']['visible'] is True "
+                     "and s['window']['backing_visible'] is True "
+                     "and s['window']['width'] >= 320 and s['window']['height'] >= 200 "
+                     "and isinstance(s['window']['screen'],str) and s['window']['screen'] != ''")
     # Quickshell's path selector filters instances by WAYLAND_DISPLAY. A tty
     # login has no display environment, even while the installer remains alive.
     # Discover exactly one actual socket; never guess a display or start a UI.
@@ -103,7 +108,8 @@ def collection_command(mode, require_startup):
         if mode == 'install':
             # Preserve the exclusive-focus installer and prove it actually
             # reached its connected, ready welcome state before collecting.
-            checks.extend(['(' + installer_probe() + ')', '(' + restore_desktop() + ')'])
+            checks.extend(['(' + installer_probe() + ')', '(' + restore_desktop() + ')',
+                           'sleep 1', '(' + installer_probe(require_visible=True) + ')'])
         commands += 'if ' + ' && '.join(checks) + '; then '
         commands += f'echo ARCTIC-STARTUP-PASS={mode}; else echo ARCTIC-STARTUP-FAILED; fi; '
     commands += 'echo ARCTIC-COLLECT-END'
