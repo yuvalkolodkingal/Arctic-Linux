@@ -1,6 +1,7 @@
 """Adversarial full replay controls; no VM or invented runtime result."""
 import copy
 import ast
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -229,11 +230,32 @@ class ActivationTest(unittest.TestCase):
             self.git(root,'config','user.email','fixture@example.invalid')
             path=root/'helper.py';path.write_text('value="trusted"\n')
             self.git(root,'add','helper.py');self.git(root,'commit','-qm','Trusted helper fixture')
+            head=self.git(root,'rev-parse','HEAD')
             path.write_text('value="poison!"\n')
-            stat=path.stat();py_compile.compile(str(path),doraise=True)
+            stat=path.stat();py_compile.compile(str(path),doraise=True,
+                invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP)
             path.write_text('value="trusted"\n');os.utime(path,ns=(stat.st_atime_ns,stat.st_mtime_ns))
-            with patch.object(runner,'ROOT',root):
+            spec=importlib.util.spec_from_file_location('ordinary_fixture_helper',path)
+            ordinary=importlib.util.module_from_spec(spec);spec.loader.exec_module(ordinary)
+            self.assertEqual(ordinary.value,'poison!')
+            with patch.object(runner,'ROOT',root),patch.dict(os.environ,
+                    GITHUB_ACTIONS='true',GITHUB_SHA=head):
                 self.assertEqual(runner.load('verified_fixture_helper',path).value,'trusted')
+
+    def test_loader_rejects_wrong_actions_head_before_compiling_clean_helper(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);self.git(root,'init','-q')
+            self.git(root,'config','user.name','Performance fixture')
+            self.git(root,'config','user.email','fixture@example.invalid')
+            path=root/'helper.py';path.write_text('raise AssertionError("wrong-head helper executed")\n')
+            self.git(root,'add','helper.py');self.git(root,'commit','-qm','Clean wrong-head fixture')
+            head=self.git(root,'rev-parse','HEAD');self.assertNotEqual(head,'0'*40)
+            with patch.object(runner,'ROOT',root),patch.dict(os.environ,
+                    GITHUB_ACTIONS='true',GITHUB_SHA='0'*40),patch.object(runner,'compile',
+                    side_effect=AssertionError('wrong-head helper compiled'),create=True) as compiler:
+                with self.assertRaisesRegex(ValueError,'^Execution helper HEAD differs from actual Actions source$'):
+                    runner.load('wrong_head_fixture_helper',path)
+                compiler.assert_not_called()
 
     def test_loader_rejects_drift_and_symlink_before_executing_sentinel(self):
         for fault in ('drift','symlink'):
@@ -243,12 +265,17 @@ class ActivationTest(unittest.TestCase):
                 self.git(root,'config','user.email','fixture@example.invalid')
                 path=root/'helper.py';path.write_text('value="trusted"\n')
                 self.git(root,'add','helper.py');self.git(root,'commit','-qm','Trusted helper fixture')
+                head=self.git(root,'rev-parse','HEAD')
                 sentinel='raise AssertionError("unverified code executed")\n'
                 if fault=='drift':path.write_text(sentinel)
                 else:
                     other=root/'sentinel.py';other.write_text(sentinel)
                     path.unlink();path.symlink_to(other)
-                with patch.object(runner,'ROOT',root),self.subTest(fault=fault),self.assertRaises(ValueError):
+                reason=('Execution helper bytes differ from Git HEAD' if fault=='drift'
+                        else 'Execution helper is not a regular contained source file')
+                with patch.object(runner,'ROOT',root),patch.dict(os.environ,
+                        GITHUB_ACTIONS='true',GITHUB_SHA=head),self.subTest(fault=fault),\
+                        self.assertRaisesRegex(ValueError,'^'+reason+'$'):
                     runner.load('unverified_fixture_helper',path)
 
     def test_dispatch_request_has_exact_nine_typed_external_fields_and_no_release(self):
