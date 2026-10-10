@@ -78,9 +78,25 @@ DIAGNOSTIC_LITERALS = {
 }
 
 
-def diagnostic_code(stage, error):
+def contract_assertion_code(error, contract=C):
+    """Project only a contract-minted identity, without reading error text."""
+    if type(error) is not RuntimeError:
+        return None
+    proof = error.__dict__.get('_arctic_installer_assertion')
+    source = contract.require.__globals__
+    if type(proof) is tuple and len(proof) == 2 and proof[0] is source['_ASSERTION_TOKEN'] and \
+            type(proof[1]) is str and proof[1] in source['_ASSERTION_SITES'].values():
+        return 'installer-report-validation-assertion-' + proof[1]
+    return None
+
+
+def diagnostic_code(stage, error, contract=C):
     """Select fixed stage/class/literal codes without formatting private errors."""
     C.require(type(stage) is str and stage in DIAGNOSTIC_STAGES, 'Unknown installer diagnostic stage')
+    if stage == 'report-validation':
+        assertion = contract_assertion_code(error, contract)
+        if assertion is not None:
+            return assertion
     if isinstance(error, RuntimeError) and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
         for message, code in DIAGNOSTIC_LITERALS.get(stage, ()):
             if error.args[0] == message:
@@ -91,8 +107,8 @@ def diagnostic_code(stage, error):
     return 'installer-' + stage + '-other-error'
 
 
-def diagnose(stage, error):
-    code = diagnostic_code(stage, error)
+def diagnose(stage, error, contract=C):
+    code = diagnostic_code(stage, error, contract)
     try:
         print('ARCTIC-INSTALLER-DIAGNOSTIC=' + code, flush=True)
     except (OSError, ValueError):
@@ -419,7 +435,7 @@ def main():
         contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], (vm / 'serial.log').read_bytes(),
                              lambda name: (args.evidence / name).read_bytes())
     except BaseException as error:
-        diagnose(diagnostic_stage, error)
+        diagnose(diagnostic_stage, error, contract)
         if report is not None:
             diagnose_report(report, args.active_profile)
         errors.append(type(error).__name__ + ': ' + str(error))

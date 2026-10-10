@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "acd83c0247aa74a6fe65105d87016fd09ea4b7b12eec87a70b246c6e3f93aac6",
+  "native_source_sha256": "63ef27ec411ba6c629143e318ef6fab2cd17e3c1f827ae374ebbb374b30d6507",
   "files": {
-    "native_smoke.py": "acd83c0247aa74a6fe65105d87016fd09ea4b7b12eec87a70b246c6e3f93aac6",
-    "guest-check-native-v6.py": "ece303a93b147b33d3d777c80a034d24ce5cc2e67ce6bd3319aea349f3307412",
+    "native_smoke.py": "63ef27ec411ba6c629143e318ef6fab2cd17e3c1f827ae374ebbb374b30d6507",
+    "guest-check-native-v6.py": "683dd33b7bb38a5da5012a2ae51550650f48cf2aeb9f9bb7d7af7806c11a639e",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -29,7 +29,8 @@
     "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
     "test_native_v6.py": "1ee2213393b4974bae151192bc354361ed2eed77be8f382b6580741fb7adba17",
     "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
-    "test_native_protocol_diagnostics.py": "f8413cda460849c07071bfa84403cbb3278fa67af1ffec1b1cc5cca541e70fed"
+    "test_native_protocol_diagnostics.py": "7014c13d94f546b0c026b604b834448d2a6248b38a1e9919939707010cfe10ca",
+    "test_renderer_trials.py": "c74f85496704625d7fbd103050637058c0b349236678e61a4bdac942a7422f42"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {
@@ -37,5 +38,24 @@
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
     "release_acceptance": false
+  },
+  "controlled_renderer_trials": {
+    "trigger": "original static oracle unmatched only",
+    "interventions": [
+      "GSK_RENDERER unset",
+      "GSK_RENDERER=gl"
+    ],
+    "same_primary_fixture_oracle_settle_seconds": 0.5,
+    "primary_failure_and_overall_FAIL_preserved": true,
+    "GTK_source_version": "4.22.5",
+    "realized_renderer": "closed successful GSK realization message plus owned process/fd2 and mapped GTK RPM/library binding",
+    "raw_stderr_exported": false,
+    "release_acceptance": false,
+    "upstream_source_sha256": {
+      "gskrenderer.c": "d7976357a39dfc695f4419e77265be593f6cef11fabe85877d550b3efa978df4",
+      "gskdebugprivate.h": "c7b08473062632e550d884a8287afbbdce00c0cf0dd2af45d86e2004c682ffb5",
+      "gskdebug.c": "00d934fc7bec46a17be298144cebbb7cb5e978b8edab768caa81819382d0e5cc",
+      "gdkdebugprivate.h": "96fbd2e0f5ef8a99085bfc8f6bb73046fafbf420219ef35178e562448e990b0c"
+    }
   }
 }

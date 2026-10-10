@@ -368,7 +368,9 @@ class NativeProtocolProjection:
     MAX_RECORDS = 512
     INTERFACES = {'wl_compositor', 'wl_subcompositor', 'xdg_wm_base',
                   'wp_viewporter', 'wl_shm', 'zwp_linux_dmabuf_v1'}
-    HEADER = re.compile(r'^\[\s*[0-9]{1,12}\.[0-9]{1,6}\]\s*(?:\{[^{}\r\n]{1,80}\}\s*)?'
+    HEADER = re.compile(r'^\[(?:\s*[0-9]{1,12}\.[0-9]{1,6}|'
+                        r'(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{6})\]\s*'
+                        r'(?:\{[^{}\r\n]{1,80}\}\s*)?'
                         r'(?P<send>->\s*)?(?P<iface>[a-z][a-z0-9_]{0,63})[@#](?P<id>[0-9]{1,8})\.'
                         r'(?P<op>[a-z_]{1,64})\((?P<args>[^\r\n]*)\)$')
     def __init__(self):
@@ -570,6 +572,38 @@ class NativeProtocolProjection:
                     video_surface_identified=False,compositor_commit_or_display_proven=False)
 
 
+class NativeRendererProjection:
+    """GTK 4.22.5 successful realization messages; no arbitrary log export.
+
+    gsk_renderer_new_for_surface_full emits this literal only after successful
+    realization, through gdk_debug_message's unprefixed stderr line. A requested
+    environment variable alone is never a renderer observation. The message
+    identifies a GSK toplevel renderer, not GtkGLArea or an mpv framebuffer.
+    """
+    LINE=re.compile(rb"Using renderer '(GskGLRenderer|GskVulkanRenderer|GskCairoRenderer)' for surface 'GdkWaylandToplevel'\n")
+    TYPES={b'GskGLRenderer':'gl',b'GskVulkanRenderer':'vulkan',b'GskCairoRenderer':'cairo'}
+    MAX_BYTES=256*1024
+    def __init__(self):
+        self.types=set(); self.messages=0; self.bytes=0; self.capped=False
+    def feed(self,line):
+        if type(line) is not bytes: return
+        self.bytes+=len(line)
+        if self.bytes>self.MAX_BYTES:
+            self.capped=True; return
+        if len(line)>256: return
+        match=self.LINE.fullmatch(line)
+        if match:
+            if self.messages>=16: self.capped=True; return
+            self.types.add(self.TYPES[match[1]]); self.messages+=1
+    def snapshot(self):
+        observed=len(self.types)==1 and not self.capped
+        return dict(status='reported-realized' if observed else 'unknown',
+                    renderer=next(iter(self.types)) if observed else None,
+                    message_count=self.messages,capped=self.capped,
+                    gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
+                    video_widget_or_framebuffer_attested=False,release_acceptance=False)
+
+
 class NativeProtocolDrain:
     """One bounded private capture; drain excess until original app cleanup.
 
@@ -577,8 +611,9 @@ class NativeProtocolDrain:
     app fd2 and start-ticks bind the stream; wrapper PID is never app ownership.
     """
     RAW_CAP=256*1024
-    def __init__(self):
+    def __init__(self,renderer=False):
         self.stream=None; self.projection=NativeProtocolProjection(); self.lock=threading.Lock()
+        self.renderer=NativeRendererProjection() if renderer is True else None
         self.stop=threading.Event(); self.eof=False; self.failed=False; self.partial=False
         self.pending_bytes=0; self.timed_out=False
         self.binding=None; self.raw_bytes=0; self.raw_fd=None
@@ -636,6 +671,7 @@ class NativeProtocolDrain:
                         pending+=block
                         while b'\n' in pending:
                             line,pending=pending.split(b'\n',1); self.projection.feed(line+b'\n')
+                            if self.renderer is not None: self.renderer.feed(line+b'\n')
                         if len(pending)>self.projection.MAX_LINE:
                             self.projection.capped=True; pending=b''
                         self.pending_bytes=len(pending)
@@ -672,6 +708,13 @@ class NativeProtocolDrain:
         elif self.timed_out: value['status']='incomplete'
         if not matched:
             value.update(records=[],structural_surfaces=[],unique_xdg_root_id=None)
+        if self.renderer is not None:
+            with self.lock: realized=self.renderer.snapshot()
+            if not matched or self.failed or self.timed_out:
+                realized.update(status='unknown',renderer=None)
+            realized.update(owned_stderr_binding_verified=matched,
+                            exclusive_writer_proven=False,environment_request_is_not_attestation=True)
+            value['realized_renderer']=realized
         return value
 
     def finish(self):
@@ -802,6 +845,55 @@ class Smoke:
         if drain is not None:
             try: drain.finish()
             except Exception: pass
+
+    def controlled_renderer_trials(self,fixture,expected,source_sha,primary):
+        """Failure-only diagnostics. Primary oracle/error and overall FAIL stand."""
+        rows=[dict(intervention=mode,status='unrun',release_acceptance=False)
+              for mode in ('default','gl')]
+        value=dict(schema='arctic-native-controlled-renderers-v1',stage=self.stage,
+            primary_screenshot_sha256=primary['screenshot']['sha256'],
+            primary_oracle_status='unmatched',primary_failure_preserved=True,
+            same_fixture_sha256=primary['fixture_sha256'],same_expected_rgb_sha256=primary['expected_rgb_sha256'],
+            trials=rows,release_acceptance=False,rendering_cause_proven=False,
+            controls=dict(order=['default','gl'],fresh_owned_app_each=True,settle_seconds=.5,
+                same_static_oracle=True,shared_isolated_config_and_cache=True,
+                preceding_primary_and_default_warm_cache_confound=True,
+                gsk_debug_renderer_both=True,wayland_debug_client_both=True,
+                GPU_acceleration_or_software_rendering_proven=False))
+        try:
+            require(primary['oracle']['status']=='unmatched','controlled trials require the failed primary oracle')
+            require(digest(fixture)==primary['fixture_sha256'] and digest(expected)==primary['expected_rgb_sha256'],
+                    'controlled fixture identity changed')
+            self.finish_native_protocol()
+            # Retire only the two already-proved fresh Celluloid processes.
+            # Other baseline apps/configuration stay as observed; no global kill.
+            players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
+            require(1<=len(players)<=2,'controlled primary player inventory differs')
+            for player in players: retire_renderer_player(player,self.uid)
+            for index,mode in enumerate(('default','gl')):
+                trial=None
+                try:
+                    trial=RendererTrialSmoke(self,mode)
+                    rows[index]=trial.observe(fixture,expected,source_sha)
+                except Exception as error:
+                    rows[index].update(status='unknown',error=renderer_trial_error(error))
+                finally:
+                    if trial is not None:
+                        # Parent cleanup retains every fresh proof even after a
+                        # trial failure; bounded private stderr never enters export.
+                        self.owned.extend(trial.owned); self.launches.extend(trial.launches)
+                        trial.finish_native_protocol()
+                        cleanup=True
+                        for player in trial.owned:
+                            try: retire_renderer_player(player,self.uid)
+                            except Exception: cleanup=False
+                        rows[index]['owned_trial_cleanup_completed']=cleanup
+        except Exception as error:
+            value['preparation_error']=renderer_trial_error(error)
+        # Failures of this optional receipt cannot replace the primary error.
+        try:
+            write_renderer_receipt(self.root,self.uid,value)
+        except (OSError,ValueError,RuntimeError): pass
 
     def setup(self):
         require(Path('/etc/arctic/default-apps').is_file(), 'system role file unavailable')
@@ -1296,6 +1388,8 @@ class Smoke:
             self.native_protocol_diagnostic(player,state,screenshot,client)
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
+        if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':
+            self.controlled_renderer_trials(fixture,expected,source_sha,info)
         require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
 
@@ -1384,6 +1478,220 @@ class Smoke:
                     retained_tmp_evidence=str(self.root))
 
 
+# BEGIN CONTROLLED_RENDERER_TRIALS
+def renderer_trial_error(error):
+    return {RuntimeError:'guard-error',OSError:'os-error',ValueError:'value-error',
+            TypeError:'type-error',KeyError:'key-error',subprocess.TimeoutExpired:'timeout'}.get(type(error),'other-error')
+
+
+def write_renderer_receipt(root,uid,value):
+    raw=(json.dumps(value,sort_keys=True)+'\n').encode()
+    require(len(raw)<=512*1024,'controlled renderer receipt exceeded bound')
+    directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        require(os.fstat(directory).st_uid==uid,'controlled receipt directory owner differs')
+        fd=os.open('0-controlled-renderer-trials.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                   0o600,dir_fd=directory)
+        with os.fdopen(fd,'wb') as stream:
+            os.fchown(stream.fileno(),uid,-1)
+            info=os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_uid==uid and info.st_nlink==1
+                    and not info.st_mode&0o077,'controlled receipt file identity differs')
+            stream.write(raw)
+    finally: os.close(directory)
+
+
+def retire_renderer_player(proof,uid):
+    require(type(uid) is int and uid>0 and proof.get('executable')=='/usr/bin/celluloid'
+            and all(type(proof.get(k)) is int and proof[k]>0 for k in ('pid','start_ticks')),
+            'controlled cleanup requires proved native player identity')
+    try: descriptor=os.pidfd_open(proof['pid'])
+    except ProcessLookupError: return
+    try:
+        current=identity(proof['pid'],uid)
+        require(all(current[k]==proof[k] for k in ('pid','start_ticks','executable'))
+                and digest(current['executable'])==proof['executable_sha256'],
+                'controlled cleanup player identity changed')
+        signal.pidfd_send_signal(descriptor,signal.SIGTERM)
+    finally: os.close(descriptor)
+    until=time.monotonic()+5
+    while time.monotonic()<until:
+        try:
+            current=identity(proof['pid'],uid)
+            if any(current[k]!=proof[k] for k in ('pid','start_ticks','executable')): return
+        except (FileNotFoundError,ProcessLookupError,RuntimeError): return
+        time.sleep(.1)
+    raise RuntimeError('controlled cleanup player survived bounded retirement')
+
+
+class RendererTrialSmoke(Smoke):
+    """One owned default/GL diagnostic, isolated from the primary receipt state."""
+    def __init__(self,parent,mode):
+        require(mode in ('default','gl'),'unsupported controlled renderer intervention')
+        self.mode=mode; self.user=parent.user; self.uid=parent.uid; self.stage=parent.stage
+        self.root=parent.root/('renderer-trial-'+mode)
+        self.root.mkdir(mode=0o700); os.chown(self.root,self.uid,self.user.pw_gid)
+        self.prefix=list(parent.prefix); self.original_prefix=list(parent.original_prefix)
+        self.owned=[]; self.launches=[]; self.gui_v6=True
+        self.deadline=time.monotonic()+120
+
+    def trace(self,*args,**kwargs):
+        pass  # No arbitrary client snapshots, stdout, stderr, argv or labels.
+
+    def remaining(self):
+        value=self.deadline-time.monotonic()
+        require(value>0,'controlled renderer diagnostic time bound')
+        return value
+
+    def cmd(self,argv,*,original=False,**kwargs):
+        require(original is False,'controlled renderer commands use isolated prefix')
+        kwargs['timeout']=min(kwargs.get('timeout',45),self.remaining())
+        return execute(self.prefix+argv,**kwargs)
+
+    def clients(self):
+        data=json.loads(self.cmd(['mmsg','get','all-clients'])[1])
+        require(type(data) is dict and type(data.get('clients')) is list,
+                'controlled renderer client collection differs')
+        require(all(type(c) is dict and type(c.get('id')) is int for c in data['clients'])
+                and len({c['id'] for c in data['clients']})==len(data['clients']),
+                'controlled renderer client identities differ')
+        return {str(c['id']):c for c in data['clients']}
+
+    def wait(self,fn,timeout=30,label='functional observation'):
+        return Smoke.wait(self,fn,min(timeout,self.remaining()),'controlled renderer observation')
+
+    def launch_renderer(self,argv):
+        require(argv[0]=='/usr/bin/celluloid','controlled renderer executable differs')
+        drain=NativeProtocolDrain(renderer=True); reader=None; writer=None
+        self.native_protocol_drain=drain
+        try:
+            read,writer=os.pipe()
+            try: reader=os.fdopen(read,'rb',buffering=0)
+            except BaseException:
+                os.close(read); raise
+            drain.start(reader)
+            options=['env','-u','GSK_RENDERER','GSK_DEBUG=renderer','WAYLAND_DEBUG=client']
+            if self.mode=='gl': options.append('GSK_RENDERER=gl')
+            child=subprocess.Popen(self.prefix+options+argv,stdout=subprocess.DEVNULL,stderr=writer)
+            self.launches.append(child)
+        except BaseException:
+            drain.finish(); raise
+        finally:
+            if writer is not None: os.close(writer)
+
+    def fullscreen(self,player):
+        before=self.alive(player)
+        require(before.get('is_fullscreen') is False,'controlled player was not a fresh window')
+        response=self.cmd(['mmsg','dispatch','togglefullscreen','client,'+player['client_id']])
+        require(response[0]==0 and json.loads(response[1])=={'success':True},'controlled fullscreen action failed')
+        self.wait(lambda:self.alive(player).get('is_fullscreen') is True,10)
+
+    def gtk_binding(self,player):
+        require(self.cmd(['rpm','-q','--qf','%{VERSION}','gtk4'])[1]=='4.22.5',
+                'controlled renderer GTK source version differs')
+        path=Path('/proc')/str(player['pid'])/'maps'
+        require(path.stat().st_uid==self.uid,'controlled GTK maps owner differs')
+        with path.open() as stream: raw=stream.read(LIMIT+1)
+        require(len(raw)<=LIMIT,'controlled GTK maps exceeded bound')
+        paths={Path(line.split(maxsplit=5)[5]).resolve(strict=True) for line in raw.splitlines()
+               if len(line.split(maxsplit=5))==6 and Path(line.split(maxsplit=5)[5]).name.startswith('libgtk-4.so.')}
+        require(len(paths)==1,'controlled player GTK mapping absent or ambiguous')
+        library=paths.pop(); info=library.stat()
+        require(stat.S_ISREG(info.st_mode) and info.st_uid==0 and not info.st_mode&0o022,
+                'controlled mapped GTK library unsafe')
+        require(self.cmd(['rpm','-qf','--qf','%{NAME}:%{VERSION}',str(library)])[1]=='gtk4:4.22.5',
+                'controlled mapped GTK package differs')
+        self.alive(player)
+        return dict(package='gtk4',version='4.22.5',mapped_library_sha256=digest(library))
+
+    def observe(self,fixture,expected,source_sha):
+        value=dict(intervention=self.mode,status='unknown',release_acceptance=False,
+            requested_gsk_renderer='unset' if self.mode=='default' else 'gl',
+            recording_flags=['GSK_DEBUG=renderer','WAYLAND_DEBUG=client'],
+            command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
+            settle_seconds=.5,diagnostic_time_bound_seconds=120,rendering_cause_proven=False)
+        private=None
+        try:
+            ipc=self.root/'player.sock'
+            player=self.fresh_window(lambda:self.launch_renderer(['/usr/bin/celluloid','--no-existing-session',
+                '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),'celluloid',r'celluloid')
+            require(self.native_protocol_drain.bind(player,self.uid),'controlled owned stderr binding unavailable')
+            value['player']={k:player[k] for k in ('pid','start_ticks','executable_sha256')}
+            value['player'].update(uid=self.uid,client_id=int(player['client_id']),executable='/usr/bin/celluloid')
+            value['gtk']=self.gtk_binding(player)
+            self.wait(lambda:ipc.is_socket())
+            def ready():
+                try: return mpv_property(ipc,'video-params',player['pid'],self.uid)
+                except RuntimeError as error:
+                    args=BaseException.args.__get__(error)
+                    if type(args) is tuple and len(args)==1 and type(args[0]) is str and args[0]=='mpv property unavailable: video-params': return None
+                    raise
+            self.wait(ready)
+            state={k:mpv_property(ipc,k,player['pid'],self.uid)
+                   for k in ('path','pause','video-params','current-vo','time-pos')}
+            require(state['path']==str(fixture) and state['pause'] is False and state['current-vo']=='libmpv'
+                    and type(state['video-params']) is dict and type(state['video-params'].get('w')) is int
+                    and type(state['video-params'].get('h')) is int
+                    and state['video-params']['w']==160 and state['video-params']['h']==120,
+                    'controlled exact media state differs')
+            require(type(state['time-pos']) in (int,float) and math.isfinite(state['time-pos'])
+                    and 0<=state['time-pos']<=100000,'controlled playback time invalid')
+            value['media']=dict(fixture_sha256=digest(fixture),expected_rgb_sha256=digest(expected),
+                input_rgb_sha256=source_sha,decoded_video_dimensions=[160,120],pause=False,current_vo='libmpv',
+                observed_time_seconds=state['time-pos'])
+            require(json.loads(self.cmd(['mmsg','dispatch','focusid','client,'+player['client_id']])[1]).get('success') is True,
+                    'controlled focus action failed')
+            self.wait(lambda:self.alive(player).get('is_focused') is True,10)
+            self.fullscreen(player)
+            time.sleep(.5)
+            before=self.alive(player); monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            monitor,geometry,crop=visual_capture_geometry(before,monitors)
+            require(before.get('is_fullscreen') is True and crop==dict(x=0,y=0,width=monitor['width'],height=monitor['height']),
+                    'controlled capture requires full owned fullscreen viewport')
+            image=self.root/'reference.png'
+            require(not image.exists() and not image.is_symlink(),'controlled PNG path already exists')
+            self.cmd(['grim','-o',monitor['name'],str(image)])
+            info=image.lstat()
+            require(stat.S_ISREG(info.st_mode) and info.st_uid==self.uid and info.st_nlink==1
+                    and 0<info.st_size<=LIMIT,'controlled PNG identity or bound differs')
+            header=image.read_bytes()[:24]
+            require(header[:8]==b'\x89PNG\r\n\x1a\n' and header[12:16]==b'IHDR'
+                    and list(struct.unpack('>II',header[16:24]))==[monitor['width'],monitor['height']],
+                    'controlled PNG dimensions differ')
+            after=self.alive(player); monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
+            require(all(after.get(k)==before.get(k) for k in ('id','pid','is_visible','is_focused','is_fullscreen','monitor'))
+                    and geometry_after==geometry and crop_after==crop
+                    and all(monitor_after.get(k)==monitor.get(k) for k in ('name','x','y','width','height','scale','is_hdr')),
+                    'controlled capture identity or geometry changed')
+            value['capture']=dict(path='renderer-trial-'+self.mode+'/reference.png',sha256=digest(image),
+                bytes=info.st_size,dimensions=[monitor['width'],monitor['height']],client_geometry=geometry,
+                client_pixel_crop=crop,complete_owned_viewport=True,screencopy_may_request_repaint=True)
+            private=Path(tempfile.mkdtemp(prefix='arctic-renderer-rgb-private-',dir='/tmp'))
+            os.chown(private,self.uid,self.user.pw_gid)
+            rgb=private/'frame.private'
+            x,y,w,h=[crop[k] for k in ('x','y','width','height')]
+            self.cmd(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-i',str(image),'-frames:v','1',
+                      '-vf',f'crop={w}:{h}:{x}:{y}','-pix_fmt','rgb24','-f','rawvideo',str(rgb)])
+            require(rgb.stat().st_size==w*h*3<=LIMIT,'controlled raw RGB frame bound differs')
+            value['actual_rgb_sha256']=digest(rgb)
+            require(digest(fixture)==value['media']['fixture_sha256'] and digest(expected)==value['media']['expected_rgb_sha256'],
+                    'controlled fixture changed during capture')
+            value['oracle']=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
+            value['protocol']=self.native_protocol_drain.snapshot(player,self.uid)
+            value['realized_renderer']=value['protocol']['realized_renderer']
+            value['status']='observed' if value['realized_renderer']['status']=='reported-realized' else 'unknown'
+            value['requested_renderer_matched']=value['realized_renderer']['renderer']=='gl' if self.mode=='gl' else None
+        except Exception as error:
+            value['error']=renderer_trial_error(error)
+        finally:
+            if private is not None:
+                try: shutil.rmtree(private)
+                except OSError: value['private_rgb_cleanup_completed']=False
+        return value
+# END CONTROLLED_RENDERER_TRIALS
+
+
 def mpv_property(path, key, expected_pid, expected_uid):
     with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
         peer.settimeout(2)
@@ -1465,7 +1773,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'acd83c0247aa74a6fe65105d87016fd09ea4b7b12eec87a70b246c6e3f93aac6'
+    native_source_sha = '63ef27ec411ba6c629143e318ef6fab2cd17e3c1f827ae374ebbb374b30d6507'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

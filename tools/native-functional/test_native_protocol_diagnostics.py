@@ -33,6 +33,10 @@ def restore_native_source(text):
     text=text.replace('(self.launch_protocol_player if getattr(self,\'gui_v6\',False) else self.launch)(', 'self.launch(')
     text=text.replace("        if getattr(self,'gui_v6',False):\n            self.native_protocol_diagnostic(player,state,screenshot,client)\n",'')
     text=text.replace('        smoke.finish_native_protocol()\n','')
+    text=text.replace("        if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':\n            self.controlled_renderer_trials(fixture,expected,source_sha,info)\n",'')
+    a=text.index('# BEGIN CONTROLLED_RENDERER_TRIALS\n')
+    z=text.index('# END CONTROLLED_RENDERER_TRIALS\n',a)+len('# END CONTROLLED_RENDERER_TRIALS\n\n\n')
+    text=text[:a]+text[z:]
     return text
 
 
@@ -63,6 +67,27 @@ def positive():
     return p,data
 
 
+def wayland_126_line(row, clock=(13,38,2,123456), queue=b'private-queue-label'):
+    # Wayland 1.26.0 src/connection.c wl_closure_print, lines 1560-1582:
+    # https://gitlab.freedesktop.org/wayland/wayland/-/raw/1.26.0/src/connection.c
+    # SHA256 2db8435dfd051ee3f8b7fae5c37eb35d22c21cc158fc21f77bcf3d4b920a4f1f
+    # Run its C formatter literals through libc; the diagnostic regex is not
+    # used to produce this independent input. This exercises the uncolored
+    # non-TTY path without optional thread IDs. FORCE_COLOR can still force
+    # ANSI output; that format remains deliberately unprojected.
+    buffer=ctypes.create_string_buffer(256)
+    snprintf=ctypes.CDLL(None).snprintf;snprintf.restype=ctypes.c_int
+    count=snprintf(buffer,ctypes.c_size_t(len(buffer)),b'%s[%02u:%02u:%02u.%06u] ',
+                   b'',*(ctypes.c_uint(v) for v in clock))
+    if not 0<count<len(buffer):raise AssertionError('formatter fixture byte bound')
+    prefix=buffer.raw[:count]
+    if queue is not None:
+        count=snprintf(buffer,ctypes.c_size_t(len(buffer)),b'%s{%s} ',b'',queue)
+        if not 0<count<len(buffer):raise AssertionError('queue fixture byte bound')
+        prefix+=buffer.raw[:count]
+    return prefix+row.split(b'] ',1)[1]
+
+
 class ProtocolControls(unittest.TestCase):
     def test_byte_reversal_preserves_all_inherited_native_code(self):
         text=(HERE/'native_smoke.py').read_text(); restored=restore_native_source(text)
@@ -83,6 +108,54 @@ class ProtocolControls(unittest.TestCase):
         a,b=p.snapshot(),q.snapshot();a.pop('input_bytes');b.pop('input_bytes')
         self.assertEqual(a,b)
         self.assertNotIn('private-queue-label',json.dumps(q.snapshot()))
+
+    def test_wayland_126_actual_C_clock_formatter_replays_same_typed_lifecycle(self):
+        old,data=positive()
+        for clock,queue in [((0,0,0,0),None),((13,38,2,123456),b'private-queue-label'),
+                            ((23,59,59,999999),b'Default Queue')]:
+            with self.subTest(clock=clock,queue_present=queue is not None):
+                p=N.NativeProtocolProjection()
+                for row in data:p.feed(wayland_126_line(row,clock,queue))
+                expected,actual=old.snapshot(),p.snapshot()
+                expected.pop('input_bytes');actual.pop('input_bytes')
+                self.assertEqual(actual,expected)
+                self.assertFalse(actual['video_surface_identified'])
+                self.assertFalse(actual['compositor_commit_or_display_proven'])
+                self.assertNotIn('private-queue-label',json.dumps(actual))
+                self.assertNotIn('13:38:02',json.dumps(actual))
+
+    def test_wayland_126_malformed_clock_prefixes_and_optional_thread_color_are_omitted(self):
+        _,data=positive();message=data[0].split(b'] ',1)[1]
+        for prefix in [b'[24:00:00.000000] ',b'[00:60:00.000000] ',b'[00:00:60.000000] ',
+                       b'[00:00:00.00000] ',b'[00:00:00.0000000] ',b'[0:00:00.000000] ',
+                       b'[00:00:00.000000] TID#secret ',b'\x1b[32m[00:00:00.000000] ',
+                       b'[00:00:00.000000] {'+b'x'*81+b'} ',
+                       b'[00:00:00.000000] {private\rqueue} ']:
+            with self.subTest(prefix_hash=hashlib.sha256(prefix).hexdigest()):
+                p=N.NativeProtocolProjection();p.feed(prefix+message)
+                self.assertEqual(p.snapshot()['records'],[])
+                self.assertEqual(p.snapshot()['omitted_lines'],1)
+                self.assertEqual(p.snapshot()['status'],'unknown')
+
+    def test_wayland_126_clock_does_not_bypass_identity_direction_or_geometry_checks(self):
+        for row in [line('wl_surface',900,'commit'),
+                    line('xdg_surface',8,'configure','88',True),
+                    line('wl_shm_pool',11,'create_buffer','new id wl_buffer#13, 0, 1280, 720, 1279, 0'),
+                    line('wp_viewport',10,'set_source','NaN, 0, 10, 10')]:
+            p,_=positive();p.feed(wayland_126_line(row))
+            self.assertTrue(p.rejected)
+
+    def test_wayland_126_opaque_private_arguments_remain_unexported_and_bounded(self):
+        p,_=positive()
+        for row in [line('xdg_toplevel',9,'set_title','"private transcript"'),
+                    line('wl_registry',2,'global','17, "private-interface", 1',False)]:
+            p.feed(wayland_126_line(row))
+        projected=json.dumps(p.snapshot())
+        for value in ['private transcript','private-interface','private-queue-label']:
+            self.assertNotIn(value,projected)
+        self.assertEqual(p.snapshot()['status'],'observed')
+        p.feed(wayland_126_line(line('xdg_toplevel',9,'set_title','"'+('x'*p.MAX_LINE)+'"')))
+        self.assertTrue(p.capped)
 
     def test_foreign_unknown_receiver_buffer_ids_duplicate_objects_serials_and_ack_rejected(self):
         rows=[line('wl_surface',900,'commit'),line('wl_surface',7,'attach','wl_buffer#900, 0, 0'),

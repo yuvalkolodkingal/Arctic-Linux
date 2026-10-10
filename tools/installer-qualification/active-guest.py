@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import stat
 import time
 
 SCHEMA = 'arctic-live-installer-active-restoration-v1'
@@ -20,6 +21,77 @@ components/FocusRing.qml components/Icon.qml components/Mark.qml components/Shad
 steps/AccountStep.qml steps/AppsStep.qml steps/AttentionView.qml steps/DiskStep.qml steps/DoneStep.qml steps/EncryptionStep.qml
 steps/InstallStep.qml steps/KeyboardStep.qml steps/NetworkStep.qml steps/StepPage.qml steps/SummaryStep.qml steps/TimezoneStep.qml
 steps/WelcomeStep.qml steps/qmldir'''.split())
+
+
+def ram_attribute(path, limit=4096):
+    """Bounded nofollow read; sysfs attributes do not report content length."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(fd)
+        if not (stat.S_ISREG(before.st_mode) and before.st_uid == 0 and not before.st_mode & 0o022
+                and 0 <= before.st_size <= limit):
+            raise ValueError('RAM attribute protection differs')
+        data = os.read(fd, limit + 1)
+        after = os.fstat(fd)
+        if len(data) > limit or any(getattr(before, key) != getattr(after, key)
+                for key in ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_mtime_ns', 'st_ctime_ns')):
+            raise ValueError('RAM attribute identity changed')
+        return data.decode('ascii').strip()
+    finally:
+        os.close(fd)
+
+
+def proven_unbacked_zram(row, sys_root=Path('/sys'), dev_root=Path('/dev'), proc_root=Path('/proc')):
+    """Exclude only a twice-observed canonical RAM device with no writeback."""
+    if type(row) is not dict or type(row.get('name')) is not str or \
+            not re.fullmatch(r'zram(0|[1-9][0-9]{0,3})', row['name']) or row.get('type') != 'disk' or \
+            type(row.get('size')) is not int or not 0 < row['size'] <= 64 * 1024**3 or row['size'] % 512:
+        return False
+    name = row['name']; index = int(name[4:])
+    try:
+        sys_root = Path(sys_root).resolve(strict=True)
+        def observation():
+            node = (sys_root / 'class/block' / name).resolve(strict=True)
+            if node != sys_root / 'devices/virtual/block' / name or \
+                    (node / 'subsystem').resolve(strict=True) != sys_root / 'class/block':
+                raise ValueError('RAM sysfs identity differs')
+            identity = node.lstat()
+            slaves = node / 'slaves'; slave_identity = slaves.lstat()
+            if not all(stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022
+                       for info in (identity, slave_identity)) or slaves.is_symlink() or next(slaves.iterdir(), None) is not None:
+                raise ValueError('RAM node protection or slaves differ')
+            if any((node / key).exists() or (node / key).is_symlink() for key in ('device', 'partition')):
+                raise ValueError('RAM has a transport or partition')
+            devices = ram_attribute(Path(proc_root) / 'devices', 65536)
+            if devices.count('Block devices:\n') != 1:
+                raise ValueError('RAM block major inventory differs')
+            majors = [int(match.group(1)) for line in devices.split('Block devices:\n')[1].splitlines()
+                      if (match := re.fullmatch(r'\s*([0-9]{1,4})\s+zram', line))]
+            if len(majors) != 1 or not 0 < majors[0] < 4096:
+                raise ValueError('RAM dynamic major differs')
+            dev = ram_attribute(node / 'dev')
+            match = re.fullmatch(r'([0-9]{1,4}):([0-9]{1,4})', dev)
+            if not match or (int(match[1]), int(match[2])) != (majors[0], index) or \
+                    (sys_root / 'dev/block' / dev).resolve(strict=True) != node:
+                raise ValueError('RAM major/minor backlink differs')
+            block = (Path(dev_root) / name).lstat()
+            if not stat.S_ISBLK(block.st_mode) or block.st_uid != 0 or \
+                    (os.major(block.st_rdev), os.minor(block.st_rdev)) != (majors[0], index):
+                raise ValueError('RAM block node differs')
+            backing = ram_attribute(node / 'backing_dev')
+            size = ram_attribute(node / 'size'); disksize = ram_attribute(node / 'disksize')
+            state = ram_attribute(node / 'initstate'); algorithm = ram_attribute(node / 'comp_algorithm')
+            if backing != 'none' or state != '1' or not re.fullmatch('[0-9]{1,20}', size) or \
+                    not re.fullmatch('[0-9]{1,20}', disksize) or int(size) * 512 != row['size'] or int(disksize) != row['size'] or \
+                    not re.fullmatch(r'(?:[a-z0-9_-]{1,32}|\[[a-z0-9_-]{1,32}\])(?:\s+(?:[a-z0-9_-]{1,32}|\[[a-z0-9_-]{1,32}\]))*', algorithm) or \
+                    len(re.findall(r'\[[a-z0-9_-]{1,32}\]', algorithm)) != 1:
+                raise ValueError('RAM backing or initialized size differs')
+            return (node, identity.st_dev, identity.st_ino, identity.st_mode, identity.st_uid,
+                    block.st_dev, block.st_ino, block.st_mode, block.st_uid, block.st_rdev,
+                    slave_identity.st_dev, slave_identity.st_ino, dev, tuple(majors), backing, size, disksize, state, algorithm)
+        return observation() == observation()
+    except (OSError, ValueError):
+        return False
 
 
 def installer_type(G):
@@ -156,7 +228,21 @@ def installer_type(G):
             G.require(major_minor == str(os.major(info.st_rdev)) + ':' + str(os.minor(info.st_rdev))
                       and __import__('stat').S_ISBLK(info.st_mode), 'owned target device identity differs')
             all_disks = json.loads(self.target_read('target-lsblk-disks', lambda: self.command(['lsblk', '--json', '--bytes', '--nodeps', '-o', 'NAME,TYPE,SIZE']))[1])['blockdevices']
-            G.require([d['name'] for d in all_disks if d['type'] == 'disk'] == ['vda'], 'unexpected writable guest disk')
+            G.require(type(all_disks) is list and len(all_disks) <= 32 and all(type(row) is dict and
+                      type(row.get('name')) is str and len(row['name']) <= 128 and type(row.get('type')) is str
+                      for row in all_disks), 'guest disk inventory is not bounded')
+            persistent = []
+            for row in all_disks:
+                if row['type'] != 'disk':
+                    continue
+                if row['name'] != 'vda' and re.fullmatch(r'zram(0|[1-9][0-9]{0,3})', row['name']):
+                    self.diagnostic_phase = 'target-lsblk-disks-ram-proof'
+                    if proven_unbacked_zram(row):
+                        self.diagnostic_phase = 'target-lsblk-disks'
+                        continue
+                    self.diagnostic_phase = 'target-lsblk-disks-ram-unproved'
+                persistent.append(row['name'])
+            G.require(persistent == ['vda'], 'unexpected writable guest disk')
             if pristine:
                 self.diagnostic_phase = 'target-pristine-partitions'
                 G.require(not any((n / 'partition').exists() and n.resolve().parent == node.resolve()
