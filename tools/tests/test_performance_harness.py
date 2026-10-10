@@ -69,6 +69,12 @@ with open(os.environ['TEST_ENGINE_LOG'],'w') as target: json.dump(sys.argv[1:],t
         self.assertEqual(values['COLLECT_VIA'], 'terminal')
 
     def test_actual_console_qmp_branch_never_opens_a_gui_terminal(self):
+        host_stages = next(node for node in ast.parse(DRIVER).body
+                           if isinstance(node, ast.Assign) and any(
+                               isinstance(target, ast.Name) and target.id == 'DICTATION_HOST_STAGES'
+                               for target in node.targets))
+        host_observer = next(node for node in ast.parse(DRIVER).body
+                             if isinstance(node, ast.FunctionDef) and node.name == 'dictation_host_stage')
         indicator = next(node for node in ast.parse(DRIVER).body
                          if isinstance(node, ast.FunctionDef) and node.name == 'dictation_indicator_poll')
         function = next(node for node in ast.parse(DRIVER).body
@@ -89,11 +95,15 @@ with open(os.environ['TEST_ENGINE_LOG'],'w') as target: json.dump(sys.argv[1:],t
                 vm=vm, time=types.SimpleNamespace(time=lambda:0, sleep=lambda _:None),
                 password='test-secret', open_terminal=terminal, serial=lambda _: 'fixture', log=Mock(),
                 vmtest=types.SimpleNamespace(serial_has=lambda *_:True), lock_password_sent=False,
-                dictation_indicator_seen=False)
+                dictation_indicator_seen=False, print=Mock())
             # Execute the actual inactive optional observer too. Performance
             # collection must neither request its recording image nor inject a nonce.
-            exec(compile(ast.Module(body=[indicator, wrapper], type_ignores=[]), '<actual collection branch>','exec'), namespace)
+            # Execute the real optional host observer too. Without its opt-in
+            # token it must preserve ordinary performance collection behavior.
+            exec(compile(ast.Module(body=[host_stages, host_observer, indicator, wrapper], type_ignores=[]),
+                         '<actual collection branch>','exec'), namespace)
             collected = namespace['collect_branch']()
+            namespace['print'].assert_not_called()
             self.assertFalse(namespace['dictation_indicator_seen'])
             self.assertFalse(any(call.args[0].startswith('dictation-') for call in vm.shot.call_args_list))
             if mode=='console':
