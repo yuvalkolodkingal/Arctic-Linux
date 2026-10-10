@@ -936,6 +936,124 @@ def native_proof(archive, manifest):
                 media_review=review, photos='passed in live and installed phases', taskbar=taskbar, apps=apps)
 
 
+def release_notes(proof, comparison):
+    """Present already-validated proof; this formatter grants no acceptance."""
+    image = proof['image']
+    lines = [
+        'Arctic Linux 1.2.1 for x86_64, with UEFI and BIOS boot.', '',
+        'Lightweight defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash. '
+        'Includes the covered/fractional screen-frame fix, installer restoration, battery-full icon, lock-screen clock, '
+        'wallpaper settings, separate Remove Apps menu and reliable update detection.', '',
+        'The author\'s 19 photo wallpapers include **Ember Clouds, City Silhouette**. City Afterglow is the fresh-install default; '
+        'existing custom wallpaper choices are preserved.', '',
+        'The exact retained ISO passed Try/Install/Safe startup, enforcing encrypted offline installation, native app/media checks, '
+        'six live graphical installer restoration cycles retaining the prepared Hebrew keyboard wizard, '
+        'VT and hosting-output restoration while the original root-copy writer continued, completion of that same unencrypted offline install '
+        'and a fresh installed boot, paired KVM precision/regression checks, Nix integration and a signed stable Arctic update '
+        'with offline apply and subsequent reboot.', '',
+        f"ISO size: **{image['bytes']:,} bytes**. SHA-256: `{image['sha256']}`.", '',
+        '## Local dictation', '',
+        'Voxtype **1.1.0** runs multilingual Whisper locally in Hebrew or English. Audio is not sent to a transcription service. '
+        'The live ISO excludes Voxtype binaries and model weights. An online OS installation downloads the pinned payload and verifies '
+        'its byte sizes and SHA-256 checksums. The online setup attempt is bounded to 600 seconds '
+        '(the enclosing installer command has an 11-minute timeout). An offline installation queues retryable first-boot setup '
+        'and shows dictation as not ready. Download failure or timeout leaves the OS installation usable and setup pending; '
+        '**Settings → Dictation** shows status, errors and a setup retry.', '',
+        'Press **Super+Ctrl+X** to explicitly start recording, then press it again to stop and insert text. '
+        '**Super+Ctrl+BackSpace** cancels. The desktop shows recording status. Choose Hebrew or English explicitly. '
+        'GPU acceleration uses the supported Vulkan backend; a GPU/process failure offers an explicit CPU retry. '
+        'Automatic GPU-to-CPU fallback is not assumed.', '',
+        '| Qualified CPU profile | Multilingual model | Pinned payload download (bytes) | Model weights (bytes) |',
+        '|---|---|---:|---:|',
+    ]
+    profiles = proof['dictation']['hardware_profiles']
+    for name in ('small-v2', 'turbo-q5-v3'):
+        profile = profiles[name]['profile']
+        lines.append(f"| {name} ({profile['cpu_variant']}) | {profile['model']} | "
+                     f"{profile['download_bytes']:,} | {profile['model_download_bytes']:,} |")
+    lines += ['', 'These are payload download sizes, including the selected binaries and weights; package-manager dependencies '
+              'may require additional downloads and space. They are not a measurement of the final installed disk allocation.', '',
+              'The retained exact-image CPU sessions measured the same fixed public-read-speech samples after an online install '
+              'and after recovery of an offline installation, with transcription network access disabled. '
+              'WER and CER are aggregate word/character edit rates, not an accuracy-parity claim. '
+              'Elapsed time is the sum across the listed phrases and includes recording and controller insertion completion, '
+              'not pure decoder time or a median per-phrase latency.', '',
+              '| CPU profile | Installed phase | Language | Samples | WER (%) | CER (%) | Audio (s) | Total elapsed (s) |',
+              '|---|---|---|---:|---:|---:|---:|---:|']
+    for name in ('small-v2', 'turbo-q5-v3'):
+        for phase in ('online-installed', 'recovered-offline'):
+            for language in ('en', 'he'):
+                value = profiles[name]['measurements'][phase][language]
+                lines.append(f"| {name} | {phase} | {language} | {value['samples']} | "
+                             f"{100 * value['wer']:.4f} | {100 * value['cer']:.4f} | "
+                             f"{value['audio_seconds']:.3f} | {value['elapsed_ns'] / 1e9:.3f} |")
+    lines += ['', 'Dictation limitations: these are virtual-microphone public-read-speech tests, not physical microphone tests '
+              'or Whisper accuracy parity. Owned-process failure and a private invalid-ICD loader fixture do not prove recovery '
+              'from a physical GPU/driver crash; loader CPU continuation was inferred rather than native-device observed. '
+              'The legacy CPU profile does not certify Vulkan, and this VM does not certify physical GPU acceleration. '
+              'Recording indicators have a separate screenshot review. First-boot/service recovery was tested separately '
+              'from the interactive polkit authorization dialog. Explicit English/Hebrew selection does not establish '
+              'mixed-language recognition. The exact machine-readable limitations for each profile are:', '']
+    for name in ('small-v2', 'turbo-q5-v3'):
+        lines.append(f"- {name}: " + ', '.join('`' + value + '`' for value in profiles[name]['limitations']))
+    roles = comparison.get('application_role_comparison')
+    idle_scope = ('Pristine idle precedes all GUI-role executions and the workload worker; normalized idle follows app workloads '
+                  'and includes temporary benchmark processes.' if roles else
+                  'Normalized idle follows app workloads and includes temporary benchmark processes; '
+                  'this comparison does not measure a separate pristine desktop idle phase.')
+    launch_scope = ('First GUI-role launches use pristine app profiles; shared libraries and host storage caches may already be warm.'
+                    if roles else 'These same-application GUI launches follow 45-second preconditioning; '
+                    'they are warmed launches, not first-ever cold starts.')
+    lines += ['', '## Paired VM measurements', '',
+              'The following medians come from the retained validated comparison: three installed boots per image, '
+              'KVM/QEMU, 4,096 MiB guest RAM and two vCPUs. Baseline and candidate columns describe that exact pair. '
+              'The installed-size metric is allocated bytes on the root filesystem (`du -x`), excluding separate mounts. '
+              'Both paired installations are offline base-OS installations before dictation payload/model setup, '
+              'so their storage and RAM results do not describe an actively transcribing, dictation-ready installation.', '',
+              'Process PSS/private bytes cover guest processes, including the collector and authenticated console/session. '
+              + idle_scope + ' MemAvailable is kernel available memory, not used RAM. '
+              'Mapped app times end at managed-window observation, not first rendered frame. ' + launch_scope, '',
+              '| Metric | Unit | Baseline median | Candidate median | Difference (%) |',
+              '|---|---|---:|---:|---:|']
+    for value in comparison['metrics']:
+        medians = value['median']
+        render = (lambda number: f'{number:,}') if value['unit'] == 'bytes' else (lambda number: f'{number:.6f}')
+        difference = value['percent_difference']
+        lines.append(f"| `{value['metric']}` | {value['unit']} | {render(medians['baseline'])} | "
+                     f"{render(medians['candidate'])} | {'n/a' if difference is None else f'{difference:+.4f}'} |")
+    if roles:
+        lines += ['', 'GUI roles compare these declared applications; replacing the application is a comparison by role, '
+                  'and does not resolve or overwrite a historical same-application regression:', '',
+                  '| Role | Baseline application | Candidate application |', '|---|---|---|']
+        for role in ('terminal', 'files', 'browser'):
+            lines.append(f"| {role} | `{roles['baseline']['roles'][role]['id']}` | `{roles['candidate']['roles'][role]['id']}` |")
+    precision = comparison['measurement_precision']
+    checks = [check for boots in precision['checks'].values() for boot in boots for check in boot]
+    lines += ['', f"Mapped observation brackets: {len(checks)} validated launches; "
+              f"actual widths {min(check['interval_seconds'] for check in checks) * 1000:.6f}–"
+              f"{max(check['interval_seconds'] for check in checks) * 1000:.6f} ms. "
+              'Precision and threshold-enclosure gates both passed. The unchanged precision rule is: '
+              + precision['rule'] + '. The unchanged enclosure rule is: ' + precision['enclosure_rule'] + '.', '',
+              '**Passing a regression gate does not establish optimization.** No substantial startup, RAM, '
+              'physical-hardware or gaming improvement is claimed. Comparator limitations:', '']
+    lines += ['- ' + limitation for limitation in comparison['limitations']]
+    lines += ['', '## Downloads and stable updates', '',
+              'Download the ISO and checksum, then verify:', '', '```sh',
+              'sha256sum -c Arctic-Linux-1.2.1-x86_64.iso.sha256', '```', '',
+              'Write the verified ISO with Fedora Media Writer. A single-file torrent is included with the immutable '
+              'GitHub Release URL as its HTTP seed. Its piece hashes describe the exact ISO; '
+              'no active peer or tracker availability is claimed.', '',
+              'Existing Arctic installations receive signed RPMs through stable `arctic`, alongside the configured Fedora repositories. '
+              'Check the selected channel and prepare the stable update:', '', '```sh',
+              'arctic-update channel', 'arctic-update now', 'arctic-update apply', '```', '',
+              '`channel` displays the current selection. If it reports testing, run `arctic-update channel stable` before `now`; '
+              'systems using stable already need no channel change. '
+              '`apply` restarts into the prepared offline update; save your work first. '
+              'The direct terminal alternative is `sudo dnf --refresh upgrade`, followed by a reboot. '
+              'See `qualification.json` for exact image, source, artifact, measurements and check identities.', '']
+    return '\n'.join(lines)
+
+
 def prepare(manifest, out):
     require(manifest.get('ready') is True and manifest.get('publication_approved') is True
             and manifest.get('release_acceptance') is False, 'Publication disabled until exact qualification is reviewed')
@@ -999,6 +1117,8 @@ def prepare(manifest, out):
         temp = Path(temp)
         with archive(perf, temp / 'performance.zip') as evidence:
             performance = performance_proof(evidence, manifest, fetch)
+            comparison = (read_json(evidence, 'comparison.json') if performance_mode(manifest) == LEGACY_PERFORMANCE_MODE
+                          else performance['replay']['comparison'])
         with archive(manifest['native'], temp / 'native.zip') as evidence:
             native = native_proof(evidence, manifest)
         with ExitStack() as stack:
@@ -1036,21 +1156,7 @@ def prepare(manifest, out):
                      update=manifest['update'], release_acceptance='qualified',
                      measured_speed_or_ram_gain_claim=False, torrent=transport)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')
-        (out / 'release-notes.md').write_text(
-            'Arctic Linux 1.2.1 for x86_64, with UEFI and BIOS boot.\n\n'
-            'Lightweight defaults: GNOME Web, Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash. '
-            'Includes the covered/fractional screen-frame fix and the author\'s photo wallpapers, with City Afterglow as the fresh default.\n\n'
-            'The exact retained ISO passed Try/Install/Safe startup, enforcing encrypted offline installation, native app/media checks, '
-            'six live graphical installer restoration cycles retaining the prepared Hebrew keyboard wizard, '
-            'VT and hosting-output restoration while the original root-copy writer continued, completion of that same unencrypted offline install and a fresh installed boot, '
-            'paired KVM precision/regression checks and a signed optimized stable Arctic update with offline apply and subsequent reboot. '
-            'These checks make no physical hardware, substantial speed or RAM improvement claim.\n\n'
-            f"ISO bytes: {image['bytes']}. SHA-256: `{image['sha256']}`.\n\n"
-            'Download the ISO and checksum, then run `sha256sum -c Arctic-Linux-1.2.1-x86_64.iso.sha256`. '
-            'A single-file torrent is included with the immutable GitHub Release URL as its HTTP seed. '
-            'Its piece hashes describe the exact ISO; no active peer or tracker availability is claimed. '
-            'Write the ISO using Fedora Media Writer and boot the USB drive. '
-            'Updates use the signed stable Arctic and Fedora repositories. See qualification.json for exact source, artifact and check identities.\n')
+        (out / 'release-notes.md').write_text(release_notes(proof, comparison))
 
 
 def main():

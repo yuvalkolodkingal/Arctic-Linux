@@ -31,6 +31,16 @@ def unique(pairs):
     return result
 
 
+def restore_empty_tag(value):
+    # The actual Actions inputs context omitted the default-empty tag even
+    # though the dispatch request included it (ISO run 38031125436). Its event
+    # projection was not exposed. Treat only that optional empty default as
+    # equivalent in either projection; never fill another field or coerce it.
+    if isinstance(value, dict) and set(value) == set(F.INPUT_TYPES) - {'tag'}:
+        return dict(value, tag='')
+    return value
+
+
 def request(environment):
     source = environment['GITHUB_SHA']
     F.require(environment['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
@@ -42,13 +52,16 @@ def request(environment):
               and environment['GITHUB_RUN_ATTEMPT'] == '1', 'External producer must be a fresh first attempt')
     raw = environment['PRODUCER_INPUTS_JSON']
     F.require(len(raw.encode()) <= 16_384, 'Oversized producer inputs')
-    inputs = json.loads(raw, object_pairs_hook=unique)
+    inputs = restore_empty_tag(json.loads(raw, object_pairs_hook=unique))
     F.validate_external_inputs(inputs, source)
+    F.require(inputs['tag'] == '' and inputs['prerelease'] is True
+              and inputs['draft'] is False and inputs['nix_acceptance'] is False,
+              'External producer request differs from the frozen artifact-only flags')
     event_path = Path(environment['GITHUB_EVENT_PATH'])
     F.require(event_path.is_file() and not event_path.is_symlink()
               and event_path.stat().st_size <= 1_000_000, 'Invalid dispatch event file')
     event = json.loads(event_path.read_bytes(), object_pairs_hook=unique)
-    dispatched = event.get('inputs')
+    dispatched = restore_empty_tag(event.get('inputs'))
     F.require(isinstance(dispatched, dict) and set(dispatched) == set(F.INPUT_TYPES),
               'Actual dispatch input inventory differs')
     # The event payload preserves booleans as strings; the Actions inputs

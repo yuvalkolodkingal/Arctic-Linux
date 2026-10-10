@@ -189,6 +189,119 @@ class ExternalProducerControls(unittest.TestCase):
             data = json.loads(event.read_text()); data['inputs']['boot_test'] = 'false'; event.write_text(json.dumps(data))
             with self.assertRaises(RuntimeError): W.request(environment)
 
+    def test_observed_default_empty_tag_omission_gets_canonical_typed_receipt(self):
+        # Verbatim public inputs context from failed first-attempt ISO
+        # 38031125436; the separate dispatch artifact retained all nine fields.
+        observed = (ROOT / 'tools/tests/fixtures/external-producer-inputs-38031125436.json').read_text()
+        inputs = json.loads(observed)
+        self.assertEqual(set(inputs), set(F.INPUT_TYPES) - {'tag'})
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); environment, image, startup, output = self.fixture(root)
+            inputs['expected_source_sha'] = environment['GITHUB_SHA']
+            environment['PRODUCER_INPUTS_JSON'] = json.dumps(inputs)
+            result = W.write_receipt(environment, image, startup, output)
+            self.assertEqual(result['inputs'], self.inputs())
+            self.assertEqual(set(result['inputs']), set(F.INPUT_TYPES))
+            self.assertTrue(all(type(result['inputs'][key]) is kind for key, kind in F.INPUT_TYPES.items()))
+            pinned = dict(self.image(), producer_receipt_sha256=F.digest(output))
+            self.assertEqual(F.read_receipt(output.read_bytes(), pinned), result)
+            # Stored receipts never gain the context-only omission allowance.
+            result['inputs'].pop('tag')
+            with self.assertRaises(RuntimeError): F.validate_external_receipt(result, pinned)
+
+    def test_context_omission_does_not_restore_other_fields_or_coerce_types(self):
+        with tempfile.TemporaryDirectory() as folder:
+            environment = self.environment(Path(folder))
+            for omit_tag in (False, True):
+                for key in set(F.INPUT_TYPES) - {'tag'}:
+                    inputs = self.inputs()
+                    if omit_tag: inputs.pop('tag')
+                    inputs.pop(key)
+                    with self.subTest(omit_tag=omit_tag, missing=key), self.assertRaises(RuntimeError):
+                        W.request(dict(environment, PRODUCER_INPUTS_JSON=json.dumps(inputs)))
+                inputs = self.inputs()
+                if omit_tag: inputs.pop('tag')
+                inputs['unknown'] = False
+                with self.subTest(omit_tag=omit_tag, unknown=True), self.assertRaises(RuntimeError):
+                    W.request(dict(environment, PRODUCER_INPUTS_JSON=json.dumps(inputs)))
+                wrong_types = {key: ('true', 'false', 0, 1, None) if kind is bool else (None, False, 1)
+                               for key, kind in F.INPUT_TYPES.items() if key != 'tag'}
+                for key, values in wrong_types.items():
+                    for value in values:
+                        inputs = self.inputs()
+                        if omit_tag: inputs.pop('tag')
+                        inputs[key] = value
+                        with self.subTest(omit_tag=omit_tag, key=key, value=value), self.assertRaises(RuntimeError):
+                            W.request(dict(environment, PRODUCER_INPUTS_JSON=json.dumps(inputs)))
+            for tag in (None, False, 0, [], {}, 'v1.2.1', ' ', '\n'):
+                inputs = dict(self.inputs(), tag=tag)
+                with self.subTest(tag=tag), self.assertRaises(RuntimeError):
+                    W.request(dict(environment, PRODUCER_INPUTS_JSON=json.dumps(inputs)))
+            raw = json.dumps(self.inputs())[:-1] + ', "tag": ""}'
+            with self.assertRaisesRegex(RuntimeError, 'Duplicate producer dispatch JSON field'):
+                W.request(dict(environment, PRODUCER_INPUTS_JSON=raw))
+
+    def test_optional_empty_tag_projection_matrix_keeps_all_nine_canonical_fields(self):
+        # Event omission is a synthetic default-equivalence control, not a
+        # claim that the failed producer exposed its event projection.
+        for omit_context in (False, True):
+            for omit_event in (False, True):
+                with self.subTest(omit_context=omit_context, omit_event=omit_event), tempfile.TemporaryDirectory() as folder:
+                    environment = self.environment(Path(folder))
+                    inputs = self.inputs()
+                    if omit_context: inputs.pop('tag')
+                    environment['PRODUCER_INPUTS_JSON'] = json.dumps(inputs)
+                    event = Path(environment['GITHUB_EVENT_PATH'])
+                    data = json.loads(event.read_text())
+                    if omit_event: data['inputs'].pop('tag')
+                    event.write_text(json.dumps(data))
+                    self.assertEqual(W.request(environment)['inputs'], self.inputs())
+
+    def test_frozen_flags_and_exact_event_binding_survive_context_omission(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); environment = self.environment(root)
+            for omit_tag in (False, True):
+                for key, value in (('tag', 'v1.2.1'), ('prerelease', False), ('draft', True),
+                                   ('nix_acceptance', True), ('release', True), ('boot_test', False),
+                                   ('performance_acceptance', True), ('performance_mode', F.LEGACY_MODE),
+                                   ('expected_source_sha', '5' * 40)):
+                    inputs = self.inputs()
+                    if omit_tag: inputs.pop('tag')
+                    inputs[key] = value
+                    with self.subTest(omit_tag=omit_tag, key=key), self.assertRaises(RuntimeError):
+                        W.request(dict(environment, PRODUCER_INPUTS_JSON=json.dumps(inputs)))
+            inputs = self.inputs(); inputs.pop('tag')
+            environment['PRODUCER_INPUTS_JSON'] = json.dumps(inputs)
+            event = Path(environment['GITHUB_EVENT_PATH'])
+            original = json.loads(event.read_text())
+            for fault in ('nonempty-tag', 'unknown', 'missing-release',
+                          'typed-bool', 'wrong-bool', 'duplicate-tag'):
+                data = copy.deepcopy(original)
+                if fault == 'nonempty-tag': data['inputs']['tag'] = 'v1.2.1'
+                elif fault == 'unknown': data['inputs']['unknown'] = 'false'
+                elif fault == 'missing-release': data['inputs'].pop('release')
+                elif fault == 'typed-bool': data['inputs']['release'] = False
+                elif fault == 'wrong-bool': data['inputs']['boot_test'] = 'false'
+                raw = json.dumps(data)
+                if fault == 'duplicate-tag':
+                    raw = raw.replace('"tag": ""', '"tag": "", "tag": ""')
+                event.write_text(raw)
+                with self.subTest(fault=fault), self.assertRaises(RuntimeError): W.request(environment)
+            for omit_tag in (False, True):
+                for key in set(F.INPUT_TYPES) - {'tag'}:
+                    data = copy.deepcopy(original)
+                    if omit_tag: data['inputs'].pop('tag')
+                    data['inputs'].pop(key)
+                    event.write_text(json.dumps(data))
+                    with self.subTest(omit_tag=omit_tag, missing_event=key), self.assertRaises(RuntimeError):
+                        W.request(environment)
+                data = copy.deepcopy(original)
+                if omit_tag: data['inputs'].pop('tag')
+                data['inputs']['unknown'] = 'false'
+                event.write_text(json.dumps(data))
+                with self.subTest(omit_tag=omit_tag, unknown_event=True), self.assertRaises(RuntimeError):
+                    W.request(environment)
+
     def test_writer_records_actual_iso_and_complete_unique_startup_bytes(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); environment, image, startup, output = self.fixture(root)

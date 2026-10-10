@@ -1,0 +1,10 @@
+{
+  "expected_source_sha": "3308d8b680ad09aeba3ffff47bc1e4c3d8a62853",
+  "release": false,
+  "prerelease": true,
+  "draft": false,
+  "nix_acceptance": false,
+  "performance_acceptance": false,
+  "performance_mode": "frozen-external-paired-v1",
+  "boot_test": true
+}
