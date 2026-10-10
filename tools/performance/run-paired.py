@@ -48,7 +48,10 @@ def failure_phase_summary(work, screen_failure):
                 'tracebacks', 'supported_exceptions', 'unsupported_exception_like_lines',
                 'admitted_observer_records', 'frames', 'source_candidates')},
             collector_order='unavailable', frame_status='unavailable', control_status='unavailable',
-            last_observer_phase='unavailable'),
+            last_observer_phase='unavailable',
+            # Class tokens are unauthenticated shape observations, not causes.
+            exception_shape=dict(reason='not_observed', count='unavailable',
+                exception_class='none', format='none')),
         # envelope-only-end
         guest_failure=dict(status='unavailable', code='none', exception_class='none',
             last_observer_phase='unavailable'))
@@ -101,6 +104,52 @@ def failure_phase_summary(work, screen_failure):
     # envelope-only-begin
     def envelope_count(number):
         return 'zero' if number == 0 else 'one' if number == 1 else 'multiple'
+    # exception-shape-only-begin
+    def envelope_exception_shape(body, traces):
+        shape = result['guest_envelope']['exception_shape']
+        if len(traces) != 1:
+            shape['reason'] = 'traceback_not_unique'
+            return
+        if result['guest_envelope']['counts']['admitted_observer_records'] != 'one':
+            shape['reason'] = 'observer_not_unique'
+            return
+        # CPython v3.14.0 Lib/traceback.py _format_final_exc_line and the
+        # default _colorize.Traceback theme define these exact token wrappers.
+        # This is a source-reference grammar, not a claim about guest colors.
+        # Do not strip terminal escapes or classify private message contents.
+        classes = {'RuntimeError', 'ValueError', 'InterruptedError', 'TypeError',
+            'NameError', 'UnboundLocalError', 'AttributeError', 'KeyError', 'IndexError',
+            'OSError', 'FileNotFoundError', 'PermissionError', 'ProcessLookupError',
+            'TimeoutError', 'ConnectionError', 'BrokenPipeError', 'ImportError',
+            'ModuleNotFoundError', 'AssertionError', 'MemoryError', 'OverflowError',
+            'ZeroDivisionError', 'StopIteration', 'KeyboardInterrupt', 'SystemExit'}
+        name = r'[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*'
+        plain = re.compile('^(' + name + r')(?:: |$)')
+        colored = re.compile(r'^\x1b\[1;35m(' + name
+            + r')\x1b\[0m(?:: \x1b\[35m([^\x00-\x1f\x7f]*)\x1b\[0m)?$')
+        tokens, invalid_control = [], False
+        for line in body[traces[0] + 1:]:
+            match = colored.fullmatch(line)
+            if match:
+                tokens.append((match[1], 'python314_default'))
+                continue
+            match = plain.match(line)
+            if match:
+                tokens.append((match[1], 'plain'))
+                invalid_control |= any(ord(c) < 32 or ord(c) == 127 for c in line)
+            elif line.startswith('\x1b') and re.search(name + r'(?:\x1b\[0m)?: ', line):
+                # A changed/custom/malformed wrapper is a rejected category.
+                invalid_control = True
+        shape['count'] = envelope_count(len(tokens))
+        if invalid_control:
+            shape['reason'] = 'exception_control'
+        elif len(tokens) != 1:
+            shape['reason'] = 'exception_missing' if not tokens else 'exception_multiplicity'
+        elif tokens[0][0] not in classes:
+            shape['reason'] = 'unsupported_class'
+        else:
+            shape.update(reason='class_token_observed', exception_class=tokens[0][0], format=tokens[0][1])
+    # exception-shape-only-end
     def envelope_phase_prefix(body, traces, observer):
         # These fixed observations remain unauthenticated UART categories.
         # Invalid/duplicate identities or phases admit no phase observation.
@@ -240,6 +289,7 @@ def failure_phase_summary(work, screen_failure):
         envelope['counts'].update(tracebacks=envelope_count(len(traces)), supported_exceptions=envelope_count(len(exceptions)))  # envelope-only
         envelope['counts']['unsupported_exception_like_lines'] = envelope_count(sum(bool(re.match(r'^(?:[A-Za-z_][A-Za-z_0-9]*\.)*[A-Z][A-Za-z_0-9]*: ', line)) and not re.match(r'^(?:RuntimeError|ValueError|InterruptedError): ', line) for line in body))  # envelope-only
         envelope_phase_prefix(body, traces, observer)  # envelope-only
+        envelope_exception_shape(body, traces)  # exception-shape-only # envelope-only
         if len(traces) > 1 or len(exceptions) > 1:
             envelope['reason'] = 'traceback_multiplicity'  # envelope-only
             return dict(unknown, status='ambiguous')
