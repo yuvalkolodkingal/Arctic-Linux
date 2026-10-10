@@ -38,7 +38,8 @@ class ScreenFailureControls(unittest.TestCase):
             error,line=self.screen(member,PRIVATE.encode())
             self.assertIs(type(error),RuntimeError)
             self.assertEqual(error.args,('Sensitive text in external evidence',))
-            self.assertEqual(line,'ARCTIC-EVIDENCE-DIAGNOSTIC=external-text-'+role+'-rejection-sensitive-text\n')
+            self.assertEqual(line,'ARCTIC-EVIDENCE-RULE=source-view-named-secret\n'+
+                'ARCTIC-EVIDENCE-DIAGNOSTIC=external-text-'+role+'-rejection-sensitive-text\n')
             observed=line.encode()
             self.assertIs(S.external_text(observed),observed)
             self.assertNotIn(PRIVATE,line);self.assertNotIn(member,line)
@@ -98,7 +99,8 @@ class ScreenFailureControls(unittest.TestCase):
             result=subprocess.run([sys.executable,'-B',str(Path(__file__).with_name('screen-evidence.py')),
                 '--preserve-original','--source',str(source),'--out',str(target)],capture_output=True,timeout=10)
             self.assertNotEqual(result.returncode,0);self.assertFalse(target.exists())
-            self.assertEqual(result.stdout,b'ARCTIC-EVIDENCE-DIAGNOSTIC=external-text-execution-rejection-sensitive-text\n')
+            self.assertEqual(result.stdout,b'ARCTIC-EVIDENCE-RULE=source-view-named-secret\n'+
+                b'ARCTIC-EVIDENCE-DIAGNOSTIC=external-text-execution-rejection-sensitive-text\n')
             self.assertNotIn(PRIVATE.encode(),result.stdout+result.stderr)
             self.assertEqual((source/'execution.json').read_bytes(),PRIVATE.encode())
 
