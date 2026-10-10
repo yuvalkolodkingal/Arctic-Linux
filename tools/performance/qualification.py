@@ -291,6 +291,37 @@ def export_failure_phase(work, screened, screening_failure):
     helper = load('paired_failure_phase', ROOT/'tools/performance/run-paired.py')
     screen = load('paired_failure_screen', ROOT/'tools/native-functional/screen-evidence.py')
     summary = helper.failure_phase_summary(work, screening_failure)
+    # Independently close the new diagnostic fields before the unchanged
+    # scanner. These are source-site labels, never error messages or results.
+    C.require(type(summary) is dict and set(summary) == {'schema', 'status', 'release_acceptance',
+        'performance_acceptance', 'original_evidence_uploaded', 'screening_failure',
+        'private_owner_verified', 'observed_context', 'runner_phase', 'read_status', 'markers',
+        'smoke_exit', 'console_restore_error', 'guest_failure'}
+        and summary['schema'] == 'arctic-paired-failure-phase-v1', 'Unsafe failure summary fields')
+    diagnostic = summary['guest_failure']
+    sites = dict(guest=(193, 203, 205, 211, 215, 218, 221, 223, 227, 252, 255, 288, 324,
+        335, 360, 402, 418, 465, 470, 472, 484, 486, 488, 493, 498, 504, 509, 514, 529,
+        537, 544, 550, 559, 564, 607, 610, 621, 638, 653, 662, 690, 708, 751, 880, 884, 899, 940),
+        causal=(87, 90, 103, 107, 111, 116, 120, 123, 139, 285, 288, 296, 305, 308, 319,
+        322, 328, 332, 336, 343, 347, 358, 363, 375, 377, 391, 394, 418, 420, 422, 424,
+        427, 439, 445, 448, 451, 455, 461, 465, 489, 501, 510, 530, 558, 569, 586, 596,
+        605, 607, 616, 619, 621, 629, 642, 659, 666, 717))
+    codes = {name + '_' + str(line): 'InterruptedError' if (name, line) == ('causal', 427)
+        else 'RuntimeError' for name, lines in sites.items() for line in lines}
+    phases = {'unavailable', 'measurement_conditions', 'rpm_inventory', 'external_execution',
+        'app_roles', 'measured_payload', 'pristine_idle_measurement_scope', 'pristine_idle_samples',
+        'role_workload', 'role_measurement_order', 'keep_awake_restored', 'done'}
+    C.require(type(diagnostic) is dict
+        and set(diagnostic) == {'status', 'code', 'exception_class', 'last_observer_phase'}
+        and all(type(value) is str for value in diagnostic.values())
+        and diagnostic['status'] in {'unavailable', 'unknown', 'ambiguous', 'source_mismatch',
+            'invalid_uart', 'source_known_shape'}
+        and ((diagnostic['status'] == 'source_known_shape'
+            and codes.get(diagnostic['code']) == diagnostic['exception_class']
+            and diagnostic['last_observer_phase'] in phases)
+        or (diagnostic['status'] != 'source_known_shape' and diagnostic['code'] == 'none'
+            and diagnostic['exception_class'] == 'none' and diagnostic['last_observer_phase'] == 'unavailable')),
+        'Unsafe guest failure diagnostic')
     content = (json.dumps(summary, sort_keys=True, indent=2, allow_nan=False) + '\n').encode()
     C.require(len(content) <= 4096 and summary['release_acceptance'] is False
         and summary['performance_acceptance'] is False and summary['original_evidence_uploaded'] is False
