@@ -183,7 +183,15 @@ DIAGNOSTIC_EXCEPTION_CLASSES = {
     KeyboardInterrupt: ('KeyboardInterrupt', 'keyboard-interrupt'),
     SystemExit: ('SystemExit', 'system-exit'), Exception: ('Exception', 'exception'),
     BaseException: ('BaseException', 'base-exception')}
+TARGET_DIAGNOSTIC_PHASES = frozenset((
+    'target-enumerate', 'target-partition', 'target-serial', 'target-driver',
+    'target-size', 'target-node-stat', 'target-major-minor', 'target-lsblk-disks',
+    'target-pristine-partitions', 'target-lsblk-mounts'))
+TARGET_DIAGNOSTIC_ERRNOS = {1: 'eperm', 5: 'eio', 6: 'enxio', 12: 'enomem',
+    13: 'eacces', 16: 'ebusy', 19: 'enodev', 20: 'enotdir', 22: 'einval',
+    30: 'erofs', 38: 'enosys', 40: 'eloop', 95: 'eopnotsupp'}
 ACTIVE_DIAGNOSTIC_PHASES = frozenset((
+    *TARGET_DIAGNOSTIC_PHASES,
     'unknown', 'security-init', 'prepare-start', 'prepare-find-gui', 'prepare-identities',
     'prepare-rpc', 'prepare-target', 'prepare-credentials', 'prepare-summary-config',
     'prepare-summary-identities', 'prepare-copy', 'prepare-copy-identities',
@@ -203,12 +211,21 @@ def primary_diagnostic_reason(error):
     return 'unknown'
 
 
+def primary_diagnostic_errno(error):
+    """Read only the builtin descriptor of an exact builtin OSError."""
+    if type(error) is not OSError:
+        return 'unknown'
+    number = OSError.errno.__get__(error, OSError)
+    return TARGET_DIAGNOSTIC_ERRNOS.get(number, 'other') if type(number) is int else 'unknown'
+
+
 def masked_active_error(error, phase):
     """Keep the original mask and only append fixed trusted failure labels."""
     error_class = next((name for error_type, (name, _) in DIAGNOSTIC_EXCEPTION_CLASSES.items()
                         if type(error) is error_type), 'OtherError')
     phase = phase if type(phase) is str and phase in ACTIVE_DIAGNOSTIC_PHASES else 'unknown'
-    return (error_class + ': active installation or restoration failed [phase=' + phase +
+    errno = '; errno=' + primary_diagnostic_errno(error) if type(error) is OSError and phase in TARGET_DIAGNOSTIC_PHASES else ''
+    return (error_class + ': active installation or restoration failed [phase=' + phase + errno +
             '; reason=' + primary_diagnostic_reason(error) + ']')
 
 
@@ -757,7 +774,11 @@ class Installer:
         initial_engine = self.rpc.snapshot()
         require(initial_engine['wizard']['current'] == 'welcome', 'initial actual engine page differs')
         require(self.ipc('next') == 'ok', 'real welcome Next failed')
-        self.wait(lambda: strict_json(self.ipc('state')).get('page') == 'keyboard', 15,
+        def keyboard_ready():
+            state = strict_json(self.ipc('state'))
+            return (state.get('page') == state.get('current') == 'keyboard'
+                    and state.get('ready') is True)
+        self.wait(keyboard_ready, 15,
                   'real keyboard page did not load')
         require(self.ipc('fill', {'layout': 'il', 'variant': ''}) == 'ok', 'real Hebrew choice failed')
         def settled():

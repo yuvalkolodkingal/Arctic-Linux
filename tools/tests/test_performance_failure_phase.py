@@ -1,10 +1,13 @@
 """Fail-only fixed diagnostics: synthetic private logs, no VM/acceptance result."""
+import ast
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import types
 import unittest
 from unittest.mock import Mock, patch
@@ -225,6 +228,237 @@ class FixedFailurePhaseTest(unittest.TestCase):
         self.assertEqual((args.evidence/'runs/baseline/1/serial-boot.log').read_bytes(),
                          (seed/'runs/baseline/1/serial-boot.log').read_bytes())
         self.assertEqual({p.name for p in args.screened.iterdir()}, {'unqualified-failure-phase.json', 'upload-screening.json'})
+
+    def prepare_guest(self):
+        self.observer = F.contract.observer_hashes(ROOT)
+        self.state['observer_sha256'] = self.observer['frozen_sha256']
+        self.write('status.json', json.dumps(self.state))
+        self.write('runs/baseline/1/performance-context.json', json.dumps(dict(image='baseline', boot=1,
+            collector='console', external_execution=dict(observer=self.observer))))
+        subprocess.run([sys.executable, str(ROOT/'tools/performance/compose-paired-probe.py'),
+            str(self.work/'frozen-observer.py')], check=True, timeout=10)
+        # Independent fixtures derive actual raise/function locations, rather
+        # than inserting a production code or changing observer source bytes.
+        self.sites = []
+        for source in ('guest', 'causal'):
+            tree = ast.parse((ROOT/('tools/performance/'+source+'.py')).read_bytes())
+            parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call) or not node.exc.args:
+                    continue
+                first = node.exc.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    prefix, exact = first.value, True
+                elif isinstance(first, ast.JoinedStr) and isinstance(first.values[0], ast.Constant):
+                    prefix, exact = first.values[0].value, False
+                elif isinstance(first, ast.BinOp) and isinstance(first.left, ast.Constant):
+                    prefix, exact = first.left.value, False
+                else:
+                    continue
+                if not prefix or '\n' in prefix or '\r' in prefix:
+                    continue
+                function = node
+                while not isinstance(function, ast.FunctionDef) and function in parents:
+                    function = parents[function]
+                self.sites.append(dict(source=source, line=node.lineno,
+                    function=function.name if isinstance(function, ast.FunctionDef) else '<module>',
+                    exception=node.exc.func.id, prefix=prefix, exact=exact))
+        self.assertEqual(len(self.sites), 104)
+
+    def guest_record(self, check, value):
+        return 'ARCTIC-PERFORMANCE ' + json.dumps(dict(stage='installed', check=check, value=value)) + '\n'
+
+    def guest_trace(self, site=None, message=None):
+        site = site or next(x for x in self.sites if (x['source'], x['line']) == ('guest', 360))
+        frames = '  File "/run/t/guest-check.py", line 11, in <module>\n'
+        if site['function'] != 'main':
+            frames += '  File "/run/t/guest-check.py", line 881, in main\n'
+        frames += f'  File "/run/t/guest-check.py", line {site["line"]}, in {site["function"]}\n'
+        return ('ARCTIC-COLLECT-BEGIN\n'
+            + self.guest_record('observer_source_sha256', self.observer['source_sha256'])
+            + self.guest_record('measurement_conditions', {'private': 'password=do-not-export'})
+            + 'Traceback (most recent call last):\n' + frames
+            + site['exception'] + ': ' + (message if message is not None else site['prefix']) + '\n'
+            + 'password=do-not-export transcript: מילים סודיות https://private.invalid/?token=private\n'
+            + 'ARCTIC-INSTALLED-SMOKE-EXIT=1\nARCTIC-COLLECT-END\n')
+
+    def test_all_104_actual_source_sites_have_closed_diagnostic_codes_only(self):
+        self.prepare_guest()
+        for site in self.sites:
+            with self.subTest(source=site['source'], line=site['line']):
+                self.write('runs/baseline/1/serial-boot.log', self.guest_trace(site))
+                result = self.summary()
+                self.assertEqual(result['guest_failure'], dict(status='source_known_shape',
+                    code=site['source']+'_'+str(site['line']), exception_class=site['exception'],
+                    last_observer_phase='measurement_conditions'))
+                self.assertFalse(result['performance_acceptance'])
+                self.assertFalse(result['release_acceptance'])
+                content = json.dumps(result).encode()
+                self.assertEqual(screen.external_text(content), content)
+                self.assertNotIn(b'do-not-export', content)
+                # Exercise the independent consumer's entire closed 104-code
+                # inventory without substituting/reimplementing its validator.
+                target = self.root/'screened'
+                with patch.object(inner, 'failure_phase_summary', return_value=result):
+                    self.export(target)
+                import shutil
+                shutil.rmtree(target)
+
+    def test_known_dynamic_error_and_unknown_private_error_never_export_tails(self):
+        self.prepare_guest()
+        site = next(x for x in self.sites if (x['source'], x['line']) == ('guest', 211))
+        self.write('runs/baseline/1/serial-boot.log', self.guest_trace(site,
+            site['prefix']+'password=do-not-export transcript: מילים סודיות'))
+        result = self.summary()
+        self.assertEqual(result['guest_failure']['code'], 'guest_211')
+        original = (self.work/'runs/baseline/1/serial-boot.log').read_bytes()
+        self.export()
+        exported = (self.root/'screened/unqualified-failure-phase.json').read_bytes()
+        self.assertNotIn(b'do-not-export', exported)
+        self.assertNotIn('מילים'.encode(), exported)
+        self.assertNotIn(b'guest-check.py', exported)
+        self.assertEqual((self.work/'runs/baseline/1/serial-boot.log').read_bytes(), original)
+        self.write('runs/baseline/1/serial-boot.log', self.guest_trace(message='password=unknown transcript: private'))
+        self.assertEqual(self.summary()['guest_failure'], dict(status='unknown', code='none',
+            exception_class='none', last_observer_phase='unavailable'))
+
+    def test_echoed_or_injected_literals_frames_paths_and_control_bytes_cannot_classify(self):
+        self.prepare_guest()
+        valid = self.guest_trace()
+        variants = [
+            valid.replace('Traceback (most recent call last):', '$ echo Traceback (most recent call last):'),
+            valid.replace('/run/t/guest-check.py', '/private/guest-check.py'),
+            valid.replace('line 360, in desktop', 'line 361, in desktop'),
+            valid.replace('line 360, in desktop', 'line 360, in injected'),
+            valid.replace('line 11, in <module>', 'line 8, in <module>'),
+            valid.replace('line 881, in main', 'line 881, in injected'),
+            valid.replace('Traceback (most recent call last):', '\x1b[31mTraceback (most recent call last):'),
+            valid.replace('Traceback (most recent call last):', '\vTraceback (most recent call last):'),
+            valid.replace('RuntimeError: No unique non-root Mango session', 'RuntimeError: No unique non-root Mango session EXTRA'),
+            valid.replace('ARCTIC-COLLECT-BEGIN\n', '').replace('ARCTIC-COLLECT-END\n', '')]
+        for uart in variants:
+            with self.subTest(variant=variants.index(uart)):
+                self.write('runs/baseline/1/serial-boot.log', uart)
+                self.assertNotEqual(self.summary()['guest_failure']['status'], 'source_known_shape')
+        escaped = self.guest_record('measurement_conditions', {'private': valid})
+        self.write('runs/baseline/1/serial-boot.log', 'ARCTIC-COLLECT-BEGIN\n'+escaped+
+            'ARCTIC-INSTALLED-SMOKE-EXIT=1\nARCTIC-COLLECT-END\n')
+        self.assertEqual(self.summary()['guest_failure']['status'], 'unknown')
+
+    def test_duplicate_chain_markers_observer_records_and_phases_fail_closed(self):
+        self.prepare_guest()
+        valid = self.guest_trace()
+        variants = [valid.replace('Traceback (most recent call last):',
+                'Traceback (most recent call last):\nTraceback (most recent call last):'),
+            valid.replace('RuntimeError: No unique non-root Mango session',
+                'RuntimeError: No unique non-root Mango session\nRuntimeError: No unique non-root Mango session'),
+            valid.replace('ARCTIC-COLLECT-BEGIN\n', 'ARCTIC-COLLECT-BEGIN\nARCTIC-COLLECT-BEGIN\n'),
+            valid.replace('ARCTIC-COLLECT-END\n', 'ARCTIC-COLLECT-END\nARCTIC-COLLECT-END\n'),
+            valid.replace('ARCTIC-INSTALLED-SMOKE-EXIT=1\n',
+                'ARCTIC-INSTALLED-SMOKE-EXIT=1\nARCTIC-INSTALLED-SMOKE-EXIT=1\n'),
+            valid.replace('Traceback (most recent call last):',
+                self.guest_record('observer_source_sha256', self.observer['source_sha256'])+'Traceback (most recent call last):'),
+            valid.replace('Traceback (most recent call last):',
+                self.guest_record('measurement_conditions', {})+'Traceback (most recent call last):')]
+        for uart in variants:
+            self.write('runs/baseline/1/serial-boot.log', uart)
+            self.assertNotEqual(self.summary()['guest_failure']['status'], 'source_known_shape')
+
+    def test_truncated_invalid_utf8_invalid_json_or_nonzero_code_fail_closed(self):
+        self.prepare_guest()
+        valid = self.guest_trace()
+        path = self.work/'runs/baseline/1/serial-boot.log'
+        variants = [valid.rstrip('\n').encode(), b'\xff'+valid.encode(),
+            valid.replace('ARCTIC-COLLECT-END\n', '').encode(),
+            valid.replace('"stage": "installed"', '"stage": "installed", "stage": "installed"').encode(),
+            valid.replace('"stage": "installed"', '"stage": "live"').encode(),
+            valid.replace('ARCTIC-INSTALLED-SMOKE-EXIT=1', 'ARCTIC-INSTALLED-SMOKE-EXIT=999').encode(),
+            valid.replace('ARCTIC-INSTALLED-SMOKE-EXIT=1', 'ARCTIC-INSTALLED-SMOKE-EXIT=0').encode()]
+        nested = 'ARCTIC-PERFORMANCE {"stage":"installed","check":"measurement_conditions","value":'+ '['*1500+'0'+']'*1500+'}\n'
+        variants.append(valid.replace('Traceback (most recent call last):', nested+'Traceback (most recent call last):').encode())
+        for uart in variants:
+            path.write_bytes(uart)
+            self.assertNotEqual(self.summary()['guest_failure']['status'], 'source_known_shape')
+
+    def test_current_context_frozen_observer_and_source_hashes_are_required(self):
+        self.prepare_guest()
+        self.write('runs/baseline/1/serial-boot.log', self.guest_trace())
+        original = (self.work/'frozen-observer.py').read_bytes()
+        (self.work/'frozen-observer.py').write_bytes(original+b'# altered\n')
+        self.assertEqual(self.summary()['guest_failure']['status'], 'source_mismatch')
+        (self.work/'frozen-observer.py').write_bytes(original)
+        other = self.root/'other-sources'
+        for name in ('guest', 'causal'):
+            target = other/('tools/performance/'+name+'.py')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT/('tools/performance/'+name+'.py')).read_bytes())
+        (other/'tools/performance/guest.py').write_bytes(b'# changed\n')
+        with patch.object(inner, 'ROOT', other):
+            self.assertEqual(self.summary()['guest_failure']['status'], 'source_mismatch')
+        # A later current context cannot borrow the earlier boot's traceback.
+        self.write('runs/candidate/1/performance-context.json', json.dumps(dict(image='candidate', boot=1,
+            collector='console', external_execution=dict(observer=self.observer))))
+        self.write('runs/candidate/1/serial-boot.log', 'ARCTIC-INSTALLED-SMOKE-EXIT=1\n')
+        self.assertEqual(self.summary()['guest_failure']['status'], 'ambiguous')
+        self.assertEqual(self.summary()['observed_context'], 'candidate_1')
+
+    def test_actual_descriptor_owner_regular_type_symlink_and_changed_read_guards(self):
+        self.prepare_guest()
+        path = self.write('runs/baseline/1/serial-boot.log', self.guest_trace())
+        original = path.read_bytes()
+        real_fstat = os.fstat
+        inode = path.stat().st_ino
+        def wrong_owner(fd):
+            info = real_fstat(fd)
+            if info.st_ino == inode:
+                fields = list(info); fields[4] = os.geteuid()+1
+                return os.stat_result(fields)
+            return info
+        with patch.object(inner.os, 'fstat', side_effect=wrong_owner):
+            result = self.summary()
+        self.assertEqual(result['read_status']['serial'], 'unsafe_or_oversized')
+        self.assertEqual(result['guest_failure']['status'], 'unavailable')
+        real_fdopen = os.fdopen
+        class MutatingReader:
+            def __init__(reader, source): reader.source = source
+            def __enter__(reader): return reader
+            def __exit__(reader, *args): reader.source.close()
+            def fileno(reader): return reader.source.fileno()
+            def read(reader, size):
+                data = reader.source.read(size)
+                with path.open('ab') as output: output.write(b'changed\n')
+                return data
+        def mutated_open(fd, mode):
+            source = real_fdopen(fd, mode)
+            return MutatingReader(source) if real_fstat(fd).st_ino == inode else source
+        with patch.object(inner.os, 'fdopen', side_effect=mutated_open):
+            result = self.summary()
+        self.assertEqual(result['read_status']['serial'], 'unsafe_or_oversized')
+        path.unlink()
+        outside = self.root/'private-current-uart'; outside.write_bytes(original)
+        path.symlink_to(outside)
+        self.assertEqual(self.summary()['read_status']['serial'], 'unsafe_or_oversized')
+        path.unlink(); os.mkfifo(path)
+        self.assertEqual(self.summary()['read_status']['serial'], 'unsafe_or_oversized')
+
+    def test_consumer_rejects_arbitrary_fields_classes_codes_phases_and_wrong_types(self):
+        self.prepare_guest()
+        self.write('runs/baseline/1/serial-boot.log', self.guest_trace())
+        valid = self.summary()
+        changes = [dict(code='guest_999'), dict(exception_class='ValueError'),
+            dict(last_observer_phase='password=private'), dict(code=True),
+            dict(status='measured'), dict(status='unknown'), dict(message='private'),
+            dict(last_observer_phase='None'), dict(exception_class='transcript: private')]
+        for changed in changes:
+            summary = dict(valid, guest_failure=dict(valid['guest_failure'], **changed))
+            with patch.object(inner, 'failure_phase_summary', return_value=summary):
+                with self.assertRaisesRegex(ValueError, 'Unsafe guest failure diagnostic'):
+                    self.export()
+            self.assertFalse((self.root/'screened').exists())
+        for summary in (dict(valid, arbitrary='private'), dict(valid, schema='unknown')):
+            with patch.object(inner, 'failure_phase_summary', return_value=summary):
+                with self.assertRaisesRegex(ValueError, 'Unsafe failure summary fields'):
+                    self.export()
 
 
 if __name__ == '__main__':

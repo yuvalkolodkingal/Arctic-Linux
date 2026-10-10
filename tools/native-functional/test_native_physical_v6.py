@@ -93,7 +93,9 @@ class PhysicalControls(unittest.TestCase):
  def test_original_unicode_and_eight_gates_unchanged(self):
   # Preserve the entire recovered v6 workload, including all old gate thresholds.
   new=(HERE/'native_smoke.py').read_text()
-  self.assertEqual(hashlib.sha256(new.encode()).hexdigest(),'99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b')
+  spec=importlib.util.spec_from_file_location('native_diagnostic_byte_reversal',HERE/'test_native_protocol_diagnostics.py')
+  controls=importlib.util.module_from_spec(spec);spec.loader.exec_module(controls)
+  self.assertEqual(hashlib.sha256(controls.restore_native_source(new).encode()).hexdigest(),'99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b')
   self.assertIn('Unicode:',new)
   self.assertIn("self.wait(lambda:directory.name in self.alive(proof).get('title',''),30,",new)
 

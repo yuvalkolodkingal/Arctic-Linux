@@ -56,7 +56,7 @@ class Controls(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, '^Unknown installer diagnostic stage$'):
                 R.diagnostic_code(stage, PrivateError('private'))
 
-    def pipeline(self, failed_stage=None, active=False, inner_log=None, report_value=None):
+    def pipeline(self, failed_stage=None, active=False, inner_log=None, report_value=None, image_cleanup=None):
         """Drive actual main() using synthetic files and intercepted host commands."""
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -95,9 +95,11 @@ class Controls(unittest.TestCase):
 
             def host_command(argv, **kwargs):
                 if argv[:3] == ['docker', 'image', 'rm']:
-                    cleanup_images.append(argv[3])
+                    cleanup_images.append(argv[-1])
                     if failed_stage == 'cleanup':
                         raise subprocess.CalledProcessError(1, ['private-argv'], output=secret, stderr=secret)
+                    if image_cleanup is not None:
+                        return image_cleanup(argv, kwargs)
                     return SimpleNamespace(returncode=0)
                 self.assertEqual(argv[:3], ['docker', 'container', 'inspect'])
                 return SimpleNamespace(returncode=1)

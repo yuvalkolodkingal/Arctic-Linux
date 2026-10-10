@@ -41,7 +41,9 @@ def failure_phase_summary(work, screen_failure):
             graphical_login=False, missing_graphical_login=False, reported_collection=False,
             reported_incomplete_collection=False, console_restored=False,
             collector_begin=False, collector_end=False),
-        smoke_exit='unavailable', console_restore_error='unavailable')
+        smoke_exit='unavailable', console_restore_error='unavailable',
+        guest_failure=dict(status='unavailable', code='none', exception_class='none',
+            last_observer_phase='unavailable'))
     work = Path(work).absolute()
     if work.resolve() != work:
         return result
@@ -49,22 +51,31 @@ def failure_phase_summary(work, screen_failure):
         root = os.open(work, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError:
         return result
-    def read(relative, limit):
+    if os.fstat(root).st_uid != os.geteuid():
+        os.close(root)
+        return result
+    def read(relative, limit, anchor=None):
         # Every relative name comes from the closed inventories below. Walk
         # directories with openat/O_NOFOLLOW; reject substituted FIFO/devices.
         descriptors = []
         try:
-            current = root
+            current = root if anchor is None else anchor
             for part in Path(relative).parts[:-1]:
                 current = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=current)
                 descriptors.append(current)
+                if os.fstat(current).st_uid != os.geteuid():
+                    return None, 'unsafe_or_oversized'
             fd = os.open(Path(relative).name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=current)
             with os.fdopen(fd, 'rb') as source:
                 info = os.fstat(source.fileno())
-                if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                        or info.st_size > limit):
                     return None, 'unsafe_or_oversized'
                 content = source.read(limit + 1)
-                if len(content) > limit:
+                after = os.fstat(source.fileno())
+                identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+                if (len(content) > limit or len(content) != info.st_size
+                        or identity(info) != identity(after)):
                     return None, 'unsafe_or_oversized'
                 return content, 'readable'
         except FileNotFoundError:
@@ -77,8 +88,146 @@ def failure_phase_summary(work, screen_failure):
     def value(content):
         try:
             return prepared_json(content) if content is not None else None
-        except (ValueError, UnicodeError):
+        except (ValueError, UnicodeError, RecursionError):
             return None
+    def guest_failure(content, state, context):
+        # Source-bound traceback shape is a diagnostic observation, never
+        # authenticated runtime acceptance. All output strings are fixed here.
+        import ast
+        unknown = dict(status='unknown', code='none', exception_class='none',
+            last_observer_phase='unavailable')
+        pins = dict(guest='5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e',
+            causal='3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9')
+        observer = dict(source_sha256='1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2',
+            frozen_sha256='7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7',
+            comparator_sha256='4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9')
+        if result['smoke_exit'] != 'nonzero':
+            return unknown
+        declared = context.get('external_execution')
+        if (type(declared) is not dict or declared.get('observer') != observer
+                or state.get('observer_sha256') != observer['frozen_sha256']):
+            return dict(unknown, status='source_mismatch')
+        frozen, status = read('frozen-observer.py', 131072)
+        if status != 'readable' or hashlib.sha256(frozen).hexdigest() != observer['frozen_sha256']:
+            return dict(unknown, status='source_mismatch')
+        try:
+            source_root = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError:
+            return dict(unknown, status='source_mismatch')
+        inventory = []
+        try:
+            if os.fstat(source_root).st_uid != os.geteuid():
+                return dict(unknown, status='source_mismatch')
+            for name, expected in pins.items():
+                raw, status = read('tools/performance/' + name + '.py', 131072, source_root)
+                if status != 'readable' or hashlib.sha256(raw).hexdigest() != expected:
+                    return dict(unknown, status='source_mismatch')
+                tree = ast.parse(raw)
+                parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+                for node in ast.walk(tree):
+                    if (not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call)
+                            or not node.exc.args or not isinstance(node.exc.func, ast.Name)
+                            or node.exc.func.id not in ('RuntimeError', 'ValueError', 'InterruptedError')):
+                        continue
+                    first, prefix, exact = node.exc.args[0], None, False
+                    if isinstance(first, ast.Constant) and type(first.value) is str:
+                        prefix, exact = first.value, True
+                    elif (isinstance(first, ast.JoinedStr) and first.values
+                            and isinstance(first.values[0], ast.Constant)):
+                        prefix = first.values[0].value
+                    elif (isinstance(first, ast.BinOp) and isinstance(first.op, ast.Add)
+                            and isinstance(first.left, ast.Constant)):
+                        prefix = first.left.value
+                    if type(prefix) is not str or not prefix or '\n' in prefix or '\r' in prefix:
+                        continue
+                    function = node
+                    while function in parents and not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        function = parents[function]
+                    function = function.name if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)) else '<module>'
+                    inventory.append(dict(source=name, line=node.lineno, end_line=node.end_lineno,
+                        function=function, exception=node.exc.func.id, prefix=prefix, exact=exact,
+                        raise_sha256=hashlib.sha256(ast.get_source_segment(raw.decode(), node).encode()).hexdigest()))
+        except (ValueError, UnicodeError, SyntaxError):
+            return dict(unknown, status='source_mismatch')
+        finally:
+            os.close(source_root)
+        # Complete 104-site inventory bound to the original frozen observer.
+        # A changed source requires a fresh explicit inventory review.
+        digest = hashlib.sha256(json.dumps(inventory, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        if len(inventory) != 104 or digest != '2d94f03b8519b3a3e4d95f24a2834dec5171997a84e6deba1f02e20fd936701b':
+            return dict(unknown, status='source_mismatch')
+        try:
+            serial = content.decode('utf-8')
+        except UnicodeError:
+            return dict(unknown, status='invalid_uart')
+        if not serial.endswith('\n') or '\x00' in serial:
+            return dict(unknown, status='invalid_uart')
+        # Only LF/CRLF records count. Other terminal/control bytes cannot
+        # manufacture an observer record, traceback frame or collector marker.
+        lines = [line.removesuffix('\r') for line in serial.split('\n')]
+        positions = lambda token: [i for i, line in enumerate(lines) if line == token]
+        begins, ends = positions('ARCTIC-COLLECT-BEGIN'), positions('ARCTIC-COLLECT-END')
+        exits = [i for i, line in enumerate(lines) if re.fullmatch('ARCTIC-INSTALLED-SMOKE-EXIT=[0-9]{1,3}', line)]
+        if len(begins) != 1 or len(ends) != 1 or len(exits) != 1:
+            return dict(unknown, status='ambiguous')
+        begin, end, exit_at = begins[0], ends[0], exits[0]
+        if not begin < exit_at < end or not 1 <= int(lines[exit_at].rsplit('=', 1)[1]) <= 255:
+            return unknown
+        body = lines[begin + 1:exit_at]
+        traces = [i for i, line in enumerate(body) if line == 'Traceback (most recent call last):']
+        exceptions = [i for i, line in enumerate(body)
+            if re.match(r'^(?:RuntimeError|ValueError|InterruptedError): ', line)]
+        if len(traces) > 1 or len(exceptions) > 1:
+            return dict(unknown, status='ambiguous')
+        if len(traces) != 1 or len(exceptions) != 1 or traces[0] >= exceptions[0]:
+            return unknown
+        phase_keys = {'measurement_conditions', 'rpm_inventory', 'external_execution', 'app_roles',
+            'measured_payload', 'pristine_idle_measurement_scope', 'pristine_idle_samples',
+            'role_workload', 'role_measurement_order', 'keep_awake_restored', 'done'}
+        observer_records, seen_phases, last_phase = 0, set(), 'unavailable'
+        for line in body[:traces[0]]:
+            if not line.startswith('ARCTIC-PERFORMANCE '):
+                continue
+            if len(line.encode()) > 1048576:
+                return dict(unknown, status='invalid_uart')
+            record = value(line[len('ARCTIC-PERFORMANCE '):])
+            if (type(record) is not dict or set(record) != {'stage', 'check', 'value'}
+                    or record['stage'] != 'installed' or type(record['check']) is not str):
+                return dict(unknown, status='invalid_uart')
+            if record['check'] == 'observer_source_sha256':
+                observer_records += 1
+                if record['value'] != observer['source_sha256']:
+                    return dict(unknown, status='source_mismatch')
+            elif record['check'] in phase_keys:
+                if record['check'] in seen_phases:
+                    return dict(unknown, status='ambiguous')
+                seen_phases.add(record['check'])
+                last_phase = record['check']
+        if observer_records != 1:
+            return dict(unknown, status='ambiguous' if observer_records else 'unknown')
+        # Wrapper line 11 calls the original main. An echoed literal or a
+        # traceback from another path cannot supply a source-known code.
+        frame = re.compile(r'  File "/run/t/guest-check\.py", line ([1-9][0-9]{0,3}), in ([A-Za-z_][A-Za-z_0-9]*|<module>)')
+        frames = []
+        for line in body[traces[0] + 1:exceptions[0]]:
+            matched = frame.fullmatch(line)
+            if matched:
+                frames.append((int(matched[1]), matched[2]))
+            elif not line.startswith('    ') or len(line) > 4096:
+                return unknown
+        if (not 2 <= len(frames) <= 128 or frames[0] != (11, '<module>')
+                or frames[1][1] != 'main' or not 871 <= frames[1][0] <= 942):
+            return unknown
+        exception = body[exceptions[0]]
+        candidates = [entry for entry in inventory
+            if entry['line'] <= frames[-1][0] <= entry['end_line'] and entry['function'] == frames[-1][1]
+            and (exception == entry['exception'] + ': ' + entry['prefix'] if entry['exact']
+                 else exception.startswith(entry['exception'] + ': ' + entry['prefix']))]
+        if len(candidates) != 1:
+            return dict(unknown, status='ambiguous' if candidates else 'unknown')
+        entry = candidates[0]
+        return dict(status='source_known_shape', code=entry['source'] + '_' + str(entry['line']),
+            exception_class=entry['exception'], last_observer_phase=last_phase)
     try:
         content, result['read_status']['status'] = read('status.json', 65536)
         state = value(content)
@@ -119,6 +268,7 @@ def failure_phase_summary(work, screen_failure):
                 result['read_status']['context'] = 'unsafe_or_oversized'
                 return result
             current = prefix
+            current_context = context
             result['read_status']['context'] = status
             result['observed_context'] = f'{image}_{number}'
         if current is None:
@@ -149,6 +299,7 @@ def failure_phase_summary(work, screen_failure):
                 ('invalid_desktop_vt', b'RuntimeError: Invalid actual desktop VT'),
                 ('inactive_desktop_vt', b'RuntimeError: Desktop VT did not become active')) if literal in content]
             result['console_restore_error'] = 'none' if not errors else errors[0][0] if len(errors) == 1 else 'multiple'
+            result['guest_failure'] = guest_failure(content, state, current_context)
         return result
     finally:
         os.close(root)
