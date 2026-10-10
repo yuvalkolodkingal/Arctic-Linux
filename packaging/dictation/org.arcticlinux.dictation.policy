@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Arctic Linux</vendor>
+  <action id="org.arcticlinux.dictation.setup">
+    <description>Finish local dictation setup</description>
+    <message>Administrator authentication is required to install local dictation (about 506 MB for legacy CPUs or 678 MB for modern CPUs, plus missing system dependencies).</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/arctic/arctic-dictation-setup</annotate>
+  </action>
+</policyconfig>

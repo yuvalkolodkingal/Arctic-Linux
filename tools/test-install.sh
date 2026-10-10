@@ -14,6 +14,8 @@
 #                                               installed boot (default: offline). The live
 #                                               installer remains isolated; use this for
 #                                               installed Nix fetch/update acceptance.
+#   --install-network online                  normal online live installation via NAT;
+#                                             no proxy CA or --test-online override.
 #   --collect-via console                     authenticate on tty3 and restore the actual
 #                                             desktop VT before probing; never launches the
 #                                             default GUI terminal (performance first-use).
@@ -77,9 +79,22 @@
 #
 # The VM has restricted user-mode networking by default. QEMU blocks guest access to the
 # host and outside networks, irrespective of the host's connectivity. Only the explicit
-# --online-via-proxy test enables routing for both phases; --boot-network online enables
-# it only after installation. Neither adds host forwards or changes the host's networking.
+# --online-via-proxy test enables routing for both phases; explicit --install-network
+# and --boot-network select each phase independently. None adds host forwards.
 set -euo pipefail
+
+# Private host progress only. The fresh token is never copied to the guest CD.
+dictation_host_stage() {
+  case "${1:-}" in
+    host-data|host-container|container-packages|container-audio|container-data|container-disk|container-profile|container-driver|container-complete) ;;
+    *) return 0 ;;
+  esac
+  if [[ "${ARCTIC_DICTATION_HOST_TOKEN:-}" =~ ^[0-9a-f]{32}$ ]]; then
+    printf 'ARCTIC-DICTATION-HOST-STAGE %s %s\n' "$ARCTIC_DICTATION_HOST_TOKEN" "$1" 2>/dev/null || true
+  fi
+  return 0
+}
+dictation_host_stage host-data
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tools/lib/container.sh
@@ -93,8 +108,15 @@ STAGE=all
 NATIVE_AUDIO_FIXTURE="${ARCTIC_NATIVE_AUDIO_FIXTURE:-0}"
 NATIVE_PHYSICAL_CONTROLLER="${ARCTIC_NATIVE_PHYSICAL_CONTROLLER:-}"
 NATIVE_EDITOR_SAVE_FIXTURE="${ARCTIC_NATIVE_EDITOR_SAVE_FIXTURE:-0}"
+NATIVE_TASKBAR_BUNDLE="${ARCTIC_NATIVE_TASKBAR_BUNDLE:-}"
+NATIVE_TASKBAR_DISPLAY_CONTROLLER="${ARCTIC_NATIVE_TASKBAR_DISPLAY_CONTROLLER:-}"
+NATIVE_TWO_OUTPUTS="${ARCTIC_NATIVE_TWO_OUTPUTS:-0}"
+NATIVE_DICTATION_CPU_PROFILE="${ARCTIC_NATIVE_DICTATION_CPU_PROFILE:-}"
+case "$NATIVE_TWO_OUTPUTS" in 0|1) ;; *) arctic_die "invalid native output fixture switch" ;; esac
+case "$NATIVE_DICTATION_CPU_PROFILE" in ''|small-v2|turbo-q5-v3) ;; *) arctic_die "invalid dictation CPU profile" ;; esac
 case "$NATIVE_EDITOR_SAVE_FIXTURE" in 0|1) ;; *) arctic_die "invalid native editor save switch" ;; esac
 physical_args=()
+taskbar_host_args=()
 case "$NATIVE_AUDIO_FIXTURE" in 0|1) ;; *) arctic_die "invalid native audio fixture switch" ;; esac
 PROFILE="$ROOT/profiles/ci/offline.toml"
 INSTALL_TIMEOUT=7200
@@ -114,6 +136,7 @@ PROFILE_EXPLICIT=0
 TEST_HARDWARE=""
 ONLINE_PROXY=0
 BOOT_NETWORK=offline
+INSTALL_NETWORK=offline
 COLLECT_VIA=terminal
 FRESH_BOOT_FROM=""
 PERFORMANCE_CONTEXT=""
@@ -143,6 +166,7 @@ while (( $# )); do
     --test-hardware) TEST_HARDWARE="$2"; shift 2 ;;
     --online-via-proxy) ONLINE_PROXY=1; shift ;;
     --boot-network) BOOT_NETWORK="$2"; shift 2 ;;
+    --install-network) INSTALL_NETWORK="$2"; shift 2 ;;
     --collect-via) COLLECT_VIA="$2"; shift 2 ;;
     --fresh-boot-from) FRESH_BOOT_FROM="$2"; shift 2 ;;
     --performance-context) PERFORMANCE_CONTEXT="$2"; shift 2 ;;
@@ -160,6 +184,7 @@ if [[ -n "$FRESH_BOOT_FROM$PERFORMANCE_CONTEXT" ]]; then
   FRESH_BOOT_FROM="$(cd "$FRESH_BOOT_FROM" && pwd)"
 fi
 case "$BOOT_NETWORK" in offline|online) ;; *) arctic_die "--boot-network takes offline or online" ;; esac
+case "$INSTALL_NETWORK" in offline|online) ;; *) arctic_die "--install-network takes offline or online" ;; esac
 case "$RELIABILITY_APP_PROFILE" in legacy|lightweight) ;; *) arctic_die "--reliability-app-profile takes legacy or lightweight" ;; esac
 if [[ -n "$UPGRADE_TO" ]]; then
   [[ "$STAGE" == boot && -n "$RELIABILITY_VERSION" && "$UPGRADE_TO" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] ||
@@ -201,6 +226,20 @@ rm -rf "$DATA"; mkdir -p "$DATA"
 cp "$PROFILE" "$DATA/profile.toml"
 if [[ -n "$PERFORMANCE_CONTEXT" ]]; then cp "$PERFORMANCE_CONTEXT" "$DATA/performance-context.json"; fi
 if [[ -n "$GUEST_CHECK" ]]; then cp "$GUEST_CHECK" "$DATA/guest-check.py"; fi
+if [[ -n "${ARCTIC_DICTATION_BUNDLE:-}" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && "$COLLECT_VIA" == terminal && -d "$ARCTIC_DICTATION_BUNDLE" ]] ||
+    arctic_die "dictation fixture requires explicit audio/checker/terminal bundle"
+  for name in dictation-qualification dictation-accuracy dictation-fixtures; do
+    [[ -d "$ARCTIC_DICTATION_BUNDLE/$name" && ! -L "$ARCTIC_DICTATION_BUNDLE/$name" ]] || arctic_die "missing dictation fixture directory"
+    cp -a "$ARCTIC_DICTATION_BUNDLE/$name" "$DATA/$name"
+  done
+  [[ -f "$ARCTIC_DICTATION_BUNDLE/dictation-context.json" && ! -L "$ARCTIC_DICTATION_BUNDLE/dictation-context.json" ]] || arctic_die "missing dictation context"
+  cp "$ARCTIC_DICTATION_BUNDLE/dictation-context.json" "$DATA/dictation-context.json"
+fi
+if [[ -n "$NATIVE_DICTATION_CPU_PROFILE" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -f "$DATA/dictation-context.json" ]] ||
+    arctic_die "dictation CPU profile requires the explicit dictation/audio/checker bundle"
+fi
 if [[ -n "$RELIABILITY_VERSION" ]]; then
   printf '{"version":"%s","upgrade_to":"%s","app_profile":"%s"}\n' \
     "$RELIABILITY_VERSION" "$UPGRADE_TO" "$RELIABILITY_APP_PROFILE" > "$DATA/config.json"
@@ -215,6 +254,19 @@ fi
 if [[ -n "${ARCTIC_NATIVE_PHOTO_CHECKER:-}" ]]; then
   [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && -f "$ARCTIC_NATIVE_PHOTO_CHECKER" ]] || arctic_die "photo fixture requires explicit native launcher/audio/checker"
   cp "$ARCTIC_NATIVE_PHOTO_CHECKER" "$DATA/photo-check.py"
+fi
+if [[ -n "$NATIVE_TASKBAR_BUNDLE" ]]; then
+  [[ "$NATIVE_AUDIO_FIXTURE" == 1 && "$NATIVE_TWO_OUTPUTS" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && -d "$NATIVE_TASKBAR_BUNDLE" ]] ||
+    arctic_die "taskbar fixture requires explicit original native/audio/two-output lane"
+  for name in taskbar.py taskbar-runtime.py native_smoke.py virtual-pointer raw-screencopy taskbar-context.json; do
+    [[ -f "$NATIVE_TASKBAR_BUNDLE/$name" && ! -L "$NATIVE_TASKBAR_BUNDLE/$name" ]] || arctic_die "missing taskbar fixture file"
+    cp -a "$NATIVE_TASKBAR_BUNDLE/$name" "$DATA/$name"
+  done
+  [[ -f "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" && ! -L "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" ]] ||
+    arctic_die "taskbar fixture requires its pinned host display controller"
+  taskbar_host_args=(-v "$NATIVE_TASKBAR_DISPLAY_CONTROLLER:/arctic-taskbar-display.py:ro")
+elif [[ "$NATIVE_TWO_OUTPUTS" == 1 || -n "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" ]]; then
+  arctic_die "two-output display controller requires the explicit taskbar bundle"
 fi
 if [[ -n "$INSTALLER" ]]; then
   [[ -x "$INSTALLER" ]] || arctic_die "--installer: $INSTALLER is not an executable"
@@ -286,7 +338,7 @@ fi
   nmcli general; nmcli networking connectivity check
   "\$AI" version
 } 2>&1 | tee -a "\$S"
-if [ "$ONLINE_PROXY" != 1 ]; then
+if [ "$ONLINE_PROXY" != 1 ] && [ "$INSTALL_NETWORK" = offline ]; then
   # Check transport reachability, not TLS trust or an HTTP success code: any HTTP response
   # would mean the supposedly offline guest can reach an outside server.
   response=\$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 http://fedoraproject.org/ || true)
@@ -296,6 +348,14 @@ if [ "$ONLINE_PROXY" != 1 ]; then
     systemctl poweroff; exit 93
   fi
   say 'ARCTIC-OFFLINE-GATE=passed: restricted QEMU network, no outside HTTP response'
+fi
+if [ "$ONLINE_PROXY" != 1 ] && [ "$INSTALL_NETWORK" = online ]; then
+  response=\$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 20 https://mirrors.fedoraproject.org/ || true)
+  if [ "\$response" = 000 ]; then
+    say 'ARCTIC-ONLINE-GATE=failed: normal TLS network route unavailable'
+    systemctl poweroff; exit 94
+  fi
+  say 'ARCTIC-ONLINE-GATE=passed: normal TLS network route, no test-online override'
 fi
 if [ -f "\$D/guest-check.py" ]; then
   python3 "\$D/guest-check.py" live >> "\$S" 2>&1
@@ -416,6 +476,10 @@ echo
 if [ -f /run/t/guest-check.py ]; then
   python3 /run/t/guest-check.py installed
   smoke_rc=$?
+  if [ "$smoke_rc" = 0 ] && [ -f /run/t/taskbar-runtime.py ]; then
+    python3 /run/t/taskbar-runtime.py --disposable-guest
+    smoke_rc=$?
+  fi
   if [ "$smoke_rc" = 0 ] && [ -f /run/t/photo-check.py ]; then
     python3 /run/t/photo-check.py installed
     smoke_rc=$?
@@ -478,6 +542,208 @@ luks, password = E["LUKS_PASSPHRASE"], E["USER_PASSWORD"]
 boot_append = E.get("BOOT_APPEND", "").strip()
 LIVE_APPEND = "console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"
 
+DICTATION_HOST_STAGES = frozenset({
+    "install-acquire", "install-menu", "install-live", "install-settle",
+    "install-terminal", "install-start-marker", "install-start-observed",
+    "install-not-started", "install-engine", "install-exit-observed",
+    "install-exit-missing-vm-running", "install-exit-missing-vm-exited",
+    "install-shutdown", "install-cleanup", "boot-acquire", "boot-menu",
+    "boot-unlock", "boot-login", "boot-settle", "boot-terminal",
+    "boot-collect", "boot-collect-observed", "boot-collect-missing",
+    "boot-shutdown", "boot-cleanup",
+    "install-live-observed", "install-live-unobserved",
+    "install-terminal-attempt-one", "install-terminal-attempt-two", "install-terminal-attempt-three",
+    "install-command-type-before", "install-command-type-after",
+    "install-command-enter-before", "install-command-enter-after",
+    "install-marker-wait-observed", "install-marker-wait-unobserved",
+    "install-marker-vm-running", "install-marker-vm-exited", "install-marker-vm-unknown",
+    "install-command-shot-before", "install-command-shot-after",
+    "install-preterminal-capture-preserved", "install-preterminal-capture-unavailable",
+    "vm-acquire-qemu-exited", "vm-acquire-no-qmp", "vm-acquire-system-exit",
+    "vm-acquire-file-missing", "vm-acquire-permission-error", "vm-acquire-os-error",
+    "vm-acquire-json-error", "vm-acquire-qmp-error", "vm-acquire-keyboard-interrupt",
+    "vm-acquire-other-error", "vm-acquire-stderr-unobserved",
+    "vm-acquire-enforce-host-unavailable", "vm-acquire-enforce-only-spec-ctrl",
+    "vm-acquire-enforce-floor-unavailable", "vm-acquire-enforce-tcg-unavailable"})
+
+def dictation_host_stage(code):
+    import re
+    token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+    if code not in DICTATION_HOST_STAGES or re.fullmatch("[0-9a-f]{32}", token) is None:
+        return
+    try:
+        print("ARCTIC-DICTATION-HOST-STAGE " + token + " " + code, flush=True)
+    except (OSError, ValueError):
+        pass
+
+def dictation_qemu_startup(name, started_ns, error):
+    """Optional fixed startup facts; never format or export private stderr/argv."""
+    import json, re, stat
+    token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+    if type(token) is not str or re.fullmatch("[0-9a-f]{32}", token) is None:
+        return
+    if type(name) is not str or name not in ("install", "boot"):
+        return
+    classes = {SystemExit: "vm-acquire-system-exit", FileNotFoundError: "vm-acquire-file-missing",
+               PermissionError: "vm-acquire-permission-error", OSError: "vm-acquire-os-error",
+               json.JSONDecodeError: "vm-acquire-json-error", vmtest.QMPError: "vm-acquire-qmp-error",
+               KeyboardInterrupt: "vm-acquire-keyboard-interrupt"}
+    code = classes.get(type(error), "vm-acquire-other-error")
+    if type(error) is SystemExit:
+        args = BaseException.args.__get__(error)
+        if type(args) is tuple and len(args) == 1 and type(args[0]) is str:
+            if args[0] == "qemu exited: see qemu-" + name + ".log":
+                code = "vm-acquire-qemu-exited"
+            elif args[0] == "no QMP socket":
+                code = "vm-acquire-no-qmp"
+    dictation_host_stage(code)
+    codes = ["vm-acquire-stderr-unobserved"]
+    directory = descriptor = None
+    try:
+        if code != "vm-acquire-qemu-exited" or type(started_ns) is not int or started_ns <= 0:
+            raise ValueError()
+        directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        parent = os.fstat(directory)
+        # /out is a host-owned bind mount. Its file is written by this container's
+        # QEMU; bind its exact owner and stable directory rather than assume UID 0.
+        if not stat.S_ISDIR(parent.st_mode) or parent.st_mode & 0o022:
+            raise ValueError()
+        filename = "qemu-" + name + ".log"
+        descriptor = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = None
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid()
+                    or before.st_mode & 0o022 or before.st_nlink != 1
+                    or not 0 < before.st_size <= 65536
+                    or before.st_mtime_ns < started_ns or before.st_ctime_ns < started_ns):
+                raise ValueError()
+            data = stream.read(65537)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode, info.st_nlink,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        current = os.stat(out, follow_symlinks=False)
+        if (fields(before) != fields(after)
+                or fields(after) != fields(os.stat(filename, dir_fd=directory, follow_symlinks=False))
+                or len(data) != before.st_size
+                or (parent.st_dev, parent.st_ino, parent.st_uid, parent.st_mode)
+                != (current.st_dev, current.st_ino, current.st_uid, current.st_mode)):
+            raise ValueError()
+        # QEMU 10.2/11 target/i386/cpu.c: exact complete Linux stderr lines.
+        # A closed literal maps to a fixed label; unknown text is never returned.
+        lines = data.splitlines(keepends=True)
+        if any(not line.endswith(b"\n") or line.endswith(b"\r\n") for line in lines):
+            raise ValueError()
+        fatal = b"qemu-system-x86_64: Host doesn't support requested features\n"
+        tcg = b"qemu-system-x86_64: TCG doesn't support requested features\n"
+        warning = b"qemu-system-x86_64: warning: host doesn't support requested feature: "
+        spec = warning + b"CPUID[eax=07h,ecx=00h].EDX.spec-ctrl [bit 26]\n"
+        floor = {
+            b"CPUID[eax=01h].EDX.fpu [bit 0]\n", b"CPUID[eax=01h].EDX.cx8 [bit 8]\n",
+            b"CPUID[eax=01h].EDX.cmov [bit 15]\n", b"CPUID[eax=01h].EDX.mmx [bit 23]\n",
+            b"CPUID[eax=01h].EDX.fxsr [bit 24]\n", b"CPUID[eax=01h].EDX.sse [bit 25]\n",
+            b"CPUID[eax=01h].EDX.sse2 [bit 26]\n", b"CPUID[eax=80000001h].EDX.lm [bit 29]\n",
+            b"CPUID[eax=80000001h].EDX.syscall [bit 11]\n", b"CPUID[eax=01h].ECX.sse3 [bit 0]\n",
+            b"CPUID[eax=01h].ECX.ssse3 [bit 9]\n", b"CPUID[eax=01h].ECX.sse4.1 [bit 19]\n",
+            b"CPUID[eax=01h].ECX.sse4.2 [bit 20]\n", b"CPUID[eax=01h].ECX.popcnt [bit 23]\n",
+            b"CPUID[eax=01h].ECX.cx16 [bit 13]\n", b"CPUID[eax=80000001h].ECX.lahf-lm [bit 0]\n"}
+        if fatal in lines:
+            codes = ["vm-acquire-enforce-host-unavailable"]
+            if spec in lines and all(line in (spec, fatal) for line in lines):
+                codes.append("vm-acquire-enforce-only-spec-ctrl")
+            if any(warning + feature in lines for feature in floor):
+                codes.append("vm-acquire-enforce-floor-unavailable")
+        elif tcg in lines:
+            codes = ["vm-acquire-enforce-tcg-unavailable"]
+    except BaseException:
+        pass  # Optional observations must not replace the original exception.
+    finally:
+        for fd in (descriptor, directory):
+            if fd is not None:
+                try: os.close(fd)
+                except BaseException: pass
+    for code in codes:
+        dictation_host_stage(code)
+
+def dictation_acquire_vm(argv, qmp_path, name):
+    """Call the original constructor once, forwarding its value or exception."""
+    started_ns = 0
+    try:
+        import re
+        token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+        if type(token) is str and re.fullmatch("[0-9a-f]{32}", token):
+            started_ns = time.time_ns()
+    except Exception:
+        pass
+    try:
+        return vmtest.VM(argv, qmp_path, name)
+    except BaseException as error:
+        try: dictation_qemu_startup(name, started_ns, error)
+        except BaseException: pass
+        raise
+
+def dictation_install_wait_vm_stage(vm):
+    """Optional owned-process fact only; no QMP read, error text or new budget."""
+    import re
+    if re.fullmatch("[0-9a-f]{32}", E.get("ARCTIC_DICTATION_HOST_TOKEN", "")) is None:
+        return
+    try:
+        value = vm.proc.poll()
+        code = ("install-marker-vm-running" if value is None else
+                "install-marker-vm-exited" if type(value) is int else "install-marker-vm-unknown")
+    except Exception:
+        code = "install-marker-vm-unknown"
+    dictation_host_stage(code)
+
+def dictation_launch_desktop(path):
+    """Preserve only the original QMP shot taken before the first terminal."""
+    import hashlib, json, re, stat
+    token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+    if re.fullmatch("[0-9a-f]{32}", token) is None:
+        return
+    names = []
+    fd = None
+    try:
+        if type(path) is not str or path != out + "/install-20-live-desktop.png":
+            raise ValueError()
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        before = os.fstat(fd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid()
+                or before.st_mode & 0o022 or not 8 < before.st_size <= 4 * 1024 * 1024):
+            raise ValueError()
+        with os.fdopen(fd, "rb") as stream:
+            fd = None
+            data = stream.read(4 * 1024 * 1024 + 1)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        if (fields(before) != fields(after) or fields(after) != fields(os.stat(path, follow_symlinks=False))
+                or len(data) != before.st_size or not data.startswith(b"\x89PNG\r\n\x1a\n")):
+            raise ValueError()
+        proof = {"schema": "arctic-dictation-preterminal-capture-v1", "capture_stage": "before-first-terminal",
+                 "path": "dictation-launch-desktop.png", "bytes": len(data),
+                 "sha256": hashlib.sha256(data).hexdigest(), "token_sha256": hashlib.sha256(token.encode()).hexdigest()}
+        for name, content in ((proof["path"], data), ("dictation-launch-desktop-receipt.json",
+                (json.dumps(proof, sort_keys=True) + "\n").encode())):
+            descriptor = os.open(out + "/" + name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            names.append(name)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(content)
+        dictation_host_stage("install-preterminal-capture-preserved")
+    except Exception:
+        for name in names:
+            try:
+                os.unlink(out + "/" + name)
+            except OSError:
+                pass
+        dictation_host_stage("install-preterminal-capture-unavailable")
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
 # Default-off physical native input; no device, focus retry or guest acknowledgement channel.
 physical_module = None
 physical_controllers = {}
@@ -515,6 +781,60 @@ def physical_poll(vm,name):
     return "ARCTIC-NATIVE-RUNNER-END " not in raw
 
 
+dictation_indicator_seen = False
+
+def dictation_indicator_poll(vm):
+    """Capture only the owned receiver's empty pre-playback recording interval."""
+    global dictation_indicator_seen
+    if E.get("DICTATION_FIXTURE") != "1" or dictation_indicator_seen:
+        return
+    import hashlib, json, re
+    from pathlib import Path
+    prefix = "ARCTIC-DICTATION-RECORDING-INDICATOR-REQUESTED "
+    path = serial("boot")
+    raw = Path(path).read_text(errors="strict") if Path(path).exists() else ""
+    rows = [json.loads(line[len(prefix):]) for line in raw.splitlines() if line.startswith(prefix)]
+    if not rows:
+        return
+    context = json.loads(Path(out, "data/dictation-context.json").read_text())
+    if len(rows) != 1:
+        raise RuntimeError("Duplicate dictation indicator request")
+    request = rows[0]
+    if (set(request) != {"boot_id", "installation_id", "phase", "desktop_uid", "receiver_empty", "capture_nonce"}
+        or request["phase"] not in ("online-installed", "recovered-offline")
+        or request["phase"] != context["phase"] or request["installation_id"] != context["installation_id"]
+        or request["receiver_empty"] is not True or type(request["desktop_uid"]) is not int
+        or request["desktop_uid"] <= 0 or not re.fullmatch(r"[0-9a-f]{32}", request["capture_nonce"])
+        or not re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", request["boot_id"])):
+        raise RuntimeError("Invalid dictation indicator request")
+    image = vm.shot("dictation-indicator-" + request["phase"])
+    if not image or not Path(image).is_file() or Path(image).stat().st_size > 4 * 1024 * 1024:
+        raise RuntimeError("Missing/oversized dictation indicator capture")
+    data = Path(image).read_bytes()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError("Invalid dictation indicator PNG")
+    proof = dict(request=request, path=Path(image).name, sha256=hashlib.sha256(data).hexdigest(),
+                 iso_sha256=context["iso_sha256"], installation_id=context["installation_id"])
+    Path(out, "dictation-indicator-receipt.json").write_text(json.dumps(proof, sort_keys=True) + "\n")
+    # Only after screenshot completion. The collector holds playback until this
+    # nonce appears in its empty owned receiver, then clears it before speech.
+    vm.type_text(request["capture_nonce"], gap=.05)
+    dictation_indicator_seen = True
+
+
+taskbar_display_module = None
+if E.get("NATIVE_TASKBAR_FIXTURE") == "1":
+    import hashlib, importlib.util
+    path = "/arctic-taskbar-display.py"
+    with open(path, "rb") as stream: data = stream.read(65537)
+    if (E.get("NATIVE_TWO_OUTPUTS") != "1" or len(data) > 65536
+        or hashlib.sha256(data).hexdigest() != E["NATIVE_TASKBAR_DISPLAY_SHA"]):
+        raise RuntimeError("taskbar display controller source differs")
+    spec = importlib.util.spec_from_file_location("taskbar_display", path)
+    taskbar_display_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(taskbar_display_module)
+
+
 def qemu_argv(name, with_iso):
     # Explicit boot-only connectivity must never make an offline install online.
     online = E.get("ONLINE_PROXY") == "1" or (not with_iso and E.get("BOOT_NETWORK") == "online")
@@ -539,6 +859,118 @@ def qemu_argv(name, with_iso):
         a += ["-drive", "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd",
               "-drive", f"if=pflash,format=raw,unit=1,file={out}/OVMF_VARS.fd"]
     return a
+
+def dictation_network_argv(argv, with_iso):
+    if not with_iso or E.get("INSTALL_NETWORK") != "online":
+        return argv
+    # Add the installation-only online fixture after the frozen constructor.
+    # Boot connectivity remains independently selected by the original function.
+    argv = list(argv)
+    at = argv.index("-netdev")
+    argv[at+1] = "user,id=net0"
+    return argv
+
+def dictation_cpu_argv(argv):
+    profile = E.get("NATIVE_DICTATION_CPU_PROFILE", "")
+    if not profile:
+        return argv
+    if profile not in ("small-v2", "turbo-q5-v3") or E.get("DICTATION_FIXTURE") != "1":
+        raise RuntimeError("Invalid dictation CPU fixture")
+    argv = list(argv)
+    if profile == "small-v2":
+        at = argv.index("-cpu") + 1
+        # A versioned coherent v2 floor, without partially masked host XSAVE.
+        # QEMU Westmere-v2 adds spec-ctrl to Westmere's pre-AVX CPU model;
+        # enforce rejects unsupported requested features before guest execution.
+        # The hosted fixture lacks only optional spec-ctrl; retain its v2 floor.
+        argv[at] = "Westmere-v2,-spec-ctrl,enforce"
+    return argv
+
+def native_taskbar_argv(argv, name, display_arg=None):
+    if E.get("NATIVE_TWO_OUTPUTS") != "1":
+        return argv
+    # Supplement the frozen QEMU constructor with two actual GPU scanouts.
+    # Default devices and every original native/physical source gate stay exact.
+    argv = list(argv)
+    if E.get("NATIVE_TASKBAR_FIXTURE") != "1" or not isinstance(display_arg, str) or not display_arg.startswith("dbus,addr=unix:path=/tmp/arctic-tb-display-") or not display_arg.endswith("/bus,gl=off"):
+        raise RuntimeError("Invalid private taskbar display fixture")
+    at = argv.index("-display")
+    argv[at+1] = display_arg
+    argv.append("-S")
+    at = argv.index("-vga")
+    argv[at:at+2] = ["-vga", "none", "-device", "virtio-vga,id=arctic_taskbar_gpu,max_outputs=2"]
+    # A fixed test-only output channel carries all taskbar PNGs without UART
+    # baud pacing. It exposes no host directory or incoming host data.
+    port_path = f"{out}/taskbar-{name}.log".replace(",", ",,")
+    argv += ["-chardev", f"file,id=taskbar_evidence,path={port_path}",
+             "-device", "virtio-serial-pci,id=taskbar_serial",
+             "-device", "virtserialport,bus=taskbar_serial.0,chardev=taskbar_evidence,name=arctic-taskbar-evidence"]
+    # The original Native fixture alone gets a second, output-only bulk port.
+    # BEGIN/report/END and physical controllers stay on their original UART.
+    if E.get("NATIVE_PHYSICAL_FIXTURE") == "1":
+        if E.get("NATIVE_AUDIO_FIXTURE") != "1" or not E.get("GUEST_CHECK") or E.get("NATIVE_LAUNCHER_FIXTURE") != "1":
+            raise RuntimeError("Invalid original native bulk fixture")
+        native_path = f"{out}/native-evidence-{name}.log".replace(",", ",,")
+        argv += ["-chardev", f"file,id=native_evidence,path={native_path}",
+                 "-device", "virtserialport,bus=taskbar_serial.0,chardev=native_evidence,name=arctic-native-evidence"]
+    return argv
+
+def enable_taskbar_display(vm, display, name):
+    import json
+    from pathlib import Path
+    proof = dict(display.enable(vm), controller_sha256=E["NATIVE_TASKBAR_DISPLAY_SHA"])
+    Path(out, "taskbar-display-" + name + ".json").write_text(json.dumps(proof, sort_keys=True) + "\n")
+    answer = taskbar_display_module.qmp_query(vm, "cont", seconds=10)
+    if not isinstance(answer, dict):
+        raise RuntimeError("Taskbar VM failed to continue after UIInfo")
+    answer = taskbar_display_module.qmp_query(vm, "query-status", seconds=10)
+    if not isinstance(answer, dict) or answer.get("running") is not True:
+        raise RuntimeError("Taskbar VM did not run after UIInfo")
+
+def record_native_stop(vm, name, started, limit, marker):
+    # Failure-only observation from this owned QEMU; no raw stderr or new gate.
+    if E.get("NATIVE_PHYSICAL_FIXTURE") != "1" or E.get("NATIVE_TASKBAR_FIXTURE") != "1":
+        return
+    import json
+    status=vm.proc.poll()
+    elapsed=max(0,time.time()-started)
+    reason="process-exited" if status is not None else "deadline-expired" if elapsed>=limit else "exit-marker-missing"
+    value=dict(schema="arctic-native-harness-stop-v1",phase=name,qemu_returncode=status,
+               elapsed_seconds=elapsed,deadline_seconds=limit,deadline_reached=elapsed>=limit,
+               exit_marker_present=marker is not None,reason=reason,release_acceptance=False)
+    try:
+        fd=os.open(f"{out}/native-stop-{name}.json",os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        with os.fdopen(fd,"w") as stream:stream.write(json.dumps(value,sort_keys=True)+"\n")
+    except BaseException:
+        pass  # A secondary diagnostic error cannot replace the original failure.
+
+def close_taskbar_vm(vm, display):
+    # Preserve the original cleanup path for every fixture-free VM. A taskbar
+    # setup failure must still stop its owned QEMU when the QMP reader stalls.
+    if display is None:
+        if vm is not None: vm.quit()
+        return
+    import subprocess
+    errors = []
+    try:
+        if vm is not None:
+            if vm.proc.poll() is None:
+                try: taskbar_display_module.qmp_query(vm, "quit", seconds=10)
+                except BaseException as error: errors.append(error)
+            for action in ("wait", "terminate", "wait", "kill", "wait"):
+                try:
+                    if vm.proc.poll() is None:
+                        if action == "wait": vm.proc.wait(timeout=5)
+                        else: getattr(vm.proc, action)()
+                except subprocess.TimeoutExpired:
+                    pass
+                except BaseException as error:
+                    errors.append(error)
+            if vm.proc.poll() is None: errors.append(RuntimeError("Owned taskbar QEMU remains alive"))
+    finally:
+        try: display.close()
+        except BaseException as error: errors.append(error)
+    if errors: raise errors[0]
 
 def wait_menu(vm, prefix, limit):
     t = time.time()
@@ -582,8 +1014,14 @@ def serial(name):
 
 # ---- stage 1: install from the live session ------------------------------------------------
 def stage_install():
-    vm = vmtest.VM(qemu_argv("install", True), "/tmp/qmp-install.sock", "install")
+    vm = None
+    display = None
     try:
+        dictation_host_stage("install-acquire")
+        if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
+        vm = dictation_acquire_vm(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("install", True), True), "install", display.display_arg if display else None)), "/tmp/qmp-install.sock", "install")
+        if display is not None: enable_taskbar_display(vm, display, "install")
+        dictation_host_stage("install-menu")
         if wait_menu(vm, "install", 300):
             vm.keys("home")
             edit_entry(vm, "install", LIVE_APPEND, 2)   # setparams, (empty), linux
@@ -591,8 +1029,10 @@ def stage_install():
         start = time.time()
         # The live session is up when live-session logs its mode (journal → serial).
         n = 0
+        dictation_host_stage("install-live")
         while time.time() - start < 1500 and vm.alive():
             if vmtest.serial_has(serial("install"), "live session mode:"):
+                dictation_host_stage("install-live-observed")
                 log(f"live session started after {time.time() - start:.0f}s")
                 break
             n += 1
@@ -600,16 +1040,25 @@ def stage_install():
                 vm.shot(f"install-10-boot-{int(time.time() - start):04d}s")
             time.sleep(10)
         else:
+            dictation_host_stage("install-live-unobserved")
             log("no 'live session mode' line in the serial log; trying the terminal anyway")
+        dictation_host_stage("install-settle")
         time.sleep(120)   # the shell (Quickshell) and the welcome card settle
-        vm.shot("install-20-live-desktop")
+        dictation_launch_desktop(vm.shot("install-20-live-desktop"))
         started = False
         for attempt in (1, 2, 3):
+            dictation_host_stage(("install-terminal-attempt-one", "install-terminal-attempt-two", "install-terminal-attempt-three")[attempt - 1])
+            dictation_host_stage("install-terminal")
             open_terminal(vm, f"install-2{attempt}")
             command = "sudo sh /dev/sr0; exit" if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" else "sudo sh /dev/sr0"
+            dictation_host_stage("install-command-type-before")
             vm.type_text(command, gap=0.3)
+            dictation_host_stage("install-command-type-after")
+            dictation_host_stage("install-command-enter-before")
             vm.keys("ret")
+            dictation_host_stage("install-command-enter-after")
             t = time.time()
+            dictation_host_stage("install-start-marker")
             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
                 physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"install")
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("install"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
@@ -619,16 +1068,23 @@ def stage_install():
                     started = True
                     break
                 time.sleep(.1 if physical_active else 5)
+            dictation_host_stage("install-marker-wait-observed" if started else "install-marker-wait-unobserved")
+            dictation_install_wait_vm_stage(vm)
+            dictation_host_stage("install-command-shot-before")
             vm.shot(f"install-2{attempt}-command-typed")
+            dictation_host_stage("install-command-shot-after")
             if started:
+                dictation_host_stage("install-start-observed")
                 log(f"run.sh started (attempt {attempt})")
                 break
             log(f"run.sh did not start (attempt {attempt})")
         if not started:
+            dictation_host_stage("install-not-started")
             vm.shot("install-29-not-started")
             return 90
         t = time.time()
         k = 0
+        dictation_host_stage("install-engine")
         while time.time() - t < install_timeout and vm.alive():
             physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"install")
             if k % 10 == 0 and not physical_active:
@@ -641,9 +1097,13 @@ def stage_install():
         rc = vmtest.serial_value(serial("install"), "ARCTIC-INSTALL-EXIT=")
         log(f"install finished after {time.time() - t:.0f}s: exit {rc}")
         if rc is None:
+            record_native_stop(vm,"install",t,install_timeout,rc)
+            dictation_host_stage("install-exit-missing-vm-running" if vm.proc.poll() is None else "install-exit-missing-vm-exited")
             log("install timed out")
             vm.shot("install-49-timeout")
             return 91
+        dictation_host_stage("install-exit-observed")
+        dictation_host_stage("install-shutdown")
         if not vm.wait_exit(600):
             vm.shot("install-48-no-poweroff")
             log("the live system did not power off")
@@ -655,7 +1115,8 @@ def stage_install():
             log("ARCTIC-PRISTINE-INSTALL-POWEROFF=clean")
         return int(rc) if rc.isdigit() else 92
     finally:
-        vm.quit()
+        dictation_host_stage("install-cleanup")
+        close_taskbar_vm(vm, display)
 
 # ---- stage 2: boot the installed disk ------------------------------------------------------
 def wait_for(vm, prefix, want, limit, every=5):
@@ -675,9 +1136,15 @@ def wait_for(vm, prefix, want, limit, every=5):
     return None
 
 def stage_boot():
-    vm = vmtest.VM(qemu_argv("boot", False), "/tmp/qmp-boot.sock", "boot")
+    vm = None
+    display = None
     ok = True
     try:
+        dictation_host_stage("boot-acquire")
+        if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
+        vm = dictation_acquire_vm(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("boot", False), False), "boot", display.display_arg if display else None)), "/tmp/qmp-boot.sock", "boot")
+        if display is not None: enable_taskbar_display(vm, display, "boot")
+        dictation_host_stage("boot-menu")
         if wait_menu(vm, "boot", 240):
             if boot_append:
                 # A BLS entry: load_video, set gfxpayload=keep, insmod gzio, linux, initrd.
@@ -686,6 +1153,7 @@ def stage_boot():
             else:
                 vm.keys("ret")
                 log("booting the default entry")
+        dictation_host_stage("boot-unlock")
         p = wait_for(vm, "boot-30", {"prompt"}, 900)
         if p:
             time.sleep(3)
@@ -732,6 +1200,7 @@ def stage_boot():
             vm.shot("boot-41-no-login-detected")
             log("no login screen detected; typing the password anyway")
             ok = False
+        dictation_host_stage("boot-login")
         for attempt in (1, 2, 3):
             vm.type_text(password, gap=0.3)
             time.sleep(1)
@@ -751,6 +1220,7 @@ def stage_boot():
             log(f"still on the login screen after the password (attempt {attempt}): typing it again")
             vm.shot(f"boot-43-login-again-{attempt}")
         # The desktop: the login card is gone and the screen settles.
+        dictation_host_stage("boot-settle")
         t = time.time()
         prev = None
         stable = 0
@@ -772,7 +1242,8 @@ def stage_boot():
         vm.shot("boot-51-desktop")
         collected = False
         lock_password_sent = False
-        for attempt in ((1,) if E.get("COLLECT_VIA") == "console" else (1, 2, 3)):
+        for attempt in ((1,) if E.get("COLLECT_VIA") == "console" or E.get("NATIVE_TASKBAR_FIXTURE") == "1" else (1, 2, 3)):
+            dictation_host_stage("boot-terminal")
             if E.get("COLLECT_VIA") == "console":
                 vm.keys("ctrl-alt-f3")
                 time.sleep(5)
@@ -794,8 +1265,13 @@ def stage_boot():
             t = time.time()
             last_probe_shot = t
             probe_shots = 0
-            while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
+            # The supplemental taskbar helper has its own unchanged 30m check
+            # deadline plus 10m bounded export; preserve the original 1h budget.
+            collect_limit = 6000 if E.get("NATIVE_TASKBAR_FIXTURE") == "1" else 3600 if E.get("GUEST_CHECK") else 240
+            dictation_host_stage("boot-collect")
+            while time.time() - t < collect_limit and vm.alive():
                 physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"boot")
+                dictation_indicator_poll(vm)
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("boot"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
                     log("owned native launcher failed; no retry")
                     return 1
@@ -812,10 +1288,11 @@ def stage_boot():
                         vm.type_text(password, gap=0.3)
                         vm.keys("ret")
                         lock_password_sent = True
-                time.sleep(.1 if physical_active else 5)
+                time.sleep(.1 if physical_active else 1 if E.get("DICTATION_FIXTURE") == "1" else 5)
             collected = vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END")
             vm.shot(f"boot-5{attempt + 1}-collected")
             if collected:
+                dictation_host_stage("boot-collect-observed")
                 log(f"collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt {attempt})")
                 break
             log(f"collect.sh did not finish (attempt {attempt})")
@@ -836,16 +1313,19 @@ def stage_boot():
             log("collected from the debug shell" if collected else "debug shell collect did not finish")
             ok = False   # the session itself didn't work
         if not collected:
+            dictation_host_stage("boot-collect-missing")
             ok = False
         if E.get("GUEST_CHECK") and vmtest.serial_value(serial("boot"), "ARCTIC-INSTALLED-SMOKE-EXIT=") != "0":
             ok = False
         time.sleep(5)
         vm.shot("boot-99-final")
+        dictation_host_stage("boot-shutdown")
         if E.get("GUEST_CHECK") and not vm.wait_exit(120):
             ok = False
         return 0 if ok else 1
     finally:
-        vm.quit()
+        dictation_host_stage("boot-cleanup")
+        close_taskbar_vm(vm, display)
 
 rc = 0
 if stage in ("all", "install"):
@@ -871,6 +1351,17 @@ sys.exit(rc)
 PY
 
 inner=$(cat <<'INNER'
+dictation_host_stage() {
+  case "${1:-}" in
+    host-data|host-container|container-packages|container-audio|container-data|container-disk|container-profile|container-driver|container-complete) ;;
+    *) return 0 ;;
+  esac
+  if [[ "${ARCTIC_DICTATION_HOST_TOKEN:-}" =~ ^[0-9a-f]{32}$ ]]; then
+    printf 'ARCTIC-DICTATION-HOST-STAGE %s %s\n' "$ARCTIC_DICTATION_HOST_TOKEN" "$1" 2>/dev/null || true
+  fi
+  return 0
+}
+dictation_host_stage container-packages
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow xorriso
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
 if [[ "$VM_TOOLS_PREPARED" == 1 ]]; then
@@ -884,6 +1375,7 @@ fi
   sha256sum /usr/share/edk2/ovmf/*.fd /usr/share/seabios/*.bin
 } > "$OUT/vm-toolchain.txt"
 if [[ "$NATIVE_AUDIO_FIXTURE" == 1 ]]; then
+  dictation_host_stage container-audio
   # Capability queries exit without starting QEMU/VMs. No backend fallback.
   audio_help="$(qemu-system-x86_64 -audiodev help)"
   device_help="$(qemu-system-x86_64 -device help)"
@@ -892,7 +1384,15 @@ if [[ "$NATIVE_AUDIO_FIXTURE" == 1 ]]; then
   grep -q 'name "hda-output"' <<< "$device_help"
   { printf '%s\n' "$audio_help" "$device_help"; qemu-system-x86_64 -device hda-output,help; } > "$OUT/native-audio-capabilities.txt"
 fi
-xorriso -as mkisofs -quiet -V ARCTICTEST -J -R -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
+data_owner_args=()
+if [[ "$NATIVE_TASKBAR_FIXTURE" == 1 ]]; then
+  # Rock Ridge otherwise preserves the GitHub checkout/context writer UID.
+  # The guarded taskbar CD is immutable and explicitly owned by guest root.
+  data_owner_args=(-uid 0 -gid 0)
+fi
+dictation_host_stage container-data
+xorriso -as mkisofs -quiet -V ARCTICTEST -J -R "${data_owner_args[@]}" -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
+dictation_host_stage container-disk
 if [ "$STAGE" != boot ]; then
   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
   [ "$FIRMWARE" = uefi ] && cp /usr/share/edk2/ovmf/OVMF_VARS.fd "$OUT/OVMF_VARS.fd"
@@ -902,6 +1402,7 @@ elif [ -n "$FRESH_BOOT_FROM" ]; then
   qemu-img create -q -f qcow2 -F qcow2 -b "$FRESH_BOOT_FROM/target.qcow2" "$OUT/target.qcow2"
   cp "$FRESH_BOOT_FROM/OVMF_VARS.fd" "$OUT/OVMF_VARS.fd"
 fi
+dictation_host_stage container-profile
 PROFILE_USER="$(python3 -c 'import pathlib,tomllib,sys; print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())["account"]["username"])' "$OUT/data/profile.toml")"
 [[ "$PROFILE_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || exit 1
 export PROFILE_USER
@@ -909,7 +1410,9 @@ ACCEL="tcg,thread=multi"
 [ -e /dev/kvm ] && ACCEL=kvm
 export ACCEL
 rc=0
+dictation_host_stage container-driver
 python3 -c "$DRIVER" || rc=$?
+dictation_host_stage container-complete
 chown -R "$HOST_UID:$HOST_GID" "$OUT"
 exit $rc
 INNER
@@ -924,9 +1427,15 @@ if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
   [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
 fi
+dictation_host_stage host-container
 "$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+  -e ARCTIC_DICTATION_HOST_TOKEN="${ARCTIC_DICTATION_HOST_TOKEN:-}" \
   -e NATIVE_LAUNCHER_FIXTURE="$([[ -f "$DATA/native-launcher.py" ]] && echo 1 || echo 0)" \
   -e NATIVE_AUDIO_FIXTURE="$NATIVE_AUDIO_FIXTURE" \
+  -e NATIVE_TWO_OUTPUTS="$NATIVE_TWO_OUTPUTS" \
+  -e NATIVE_TASKBAR_FIXTURE="$([[ -f "$DATA/taskbar-context.json" ]] && echo 1 || echo 0)" \
+  -e NATIVE_TASKBAR_DISPLAY_SHA="${ARCTIC_NATIVE_TASKBAR_DISPLAY_SHA:-}" \
+  -e NATIVE_DICTATION_CPU_PROFILE="$NATIVE_DICTATION_CPU_PROFILE" \
   -e NATIVE_PHYSICAL_FIXTURE="$([[ -n "$NATIVE_PHYSICAL_CONTROLLER" ]] && echo 1 || echo 0)" \
   -e NATIVE_EDITOR_SAVE_FIXTURE="$NATIVE_EDITOR_SAVE_FIXTURE" \
   -e NATIVE_PHYSICAL_SHA="${ARCTIC_NATIVE_PHYSICAL_SHA:-}" \
@@ -935,11 +1444,12 @@ fi
   -e OUT="$OUT" -e FIRMWARE="$FIRMWARE" -e STAGE="$STAGE" -e MEMORY="$MEMORY" -e SMP="$SMP" \
   -e GUEST_CHECK="$GUEST_CHECK" -e UPGRADE_TO="$UPGRADE_TO" -e INSTALL_TIMEOUT="$INSTALL_TIMEOUT" -e BOOT_APPEND="$BOOT_APPEND" \
   -e GUEST_CHECK_INTERACTIVE="$GUEST_CHECK_INTERACTIVE" \
-  -e ONLINE_PROXY="$ONLINE_PROXY" -e BOOT_NETWORK="$BOOT_NETWORK" \
+  -e ONLINE_PROXY="$ONLINE_PROXY" -e BOOT_NETWORK="$BOOT_NETWORK" -e INSTALL_NETWORK="$INSTALL_NETWORK" \
+  -e DICTATION_FIXTURE="$([[ -f "$DATA/dictation-context.json" ]] && echo 1 || echo 0)" \
   -e COLLECT_VIA="$COLLECT_VIA" -e FRESH_BOOT_FROM="$FRESH_BOOT_FROM" \
   -e LUKS_PASSPHRASE="$LUKS_PASSPHRASE" -e USER_PASSWORD="$USER_PASSWORD" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" "${base_args[@]}" "${physical_args[@]}" \
+  -v "$HERE/lib:/arctic-lib:ro" -v "$OUT:$OUT" "${iso_args[@]}" "${base_args[@]}" "${physical_args[@]}" "${taskbar_host_args[@]}" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner" || rc=$?
 
 arctic_log "result: exit $rc (serial logs, test.log and screenshots in $OUT)"

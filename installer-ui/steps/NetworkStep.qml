@@ -1,5 +1,5 @@
-// Step 3 — Connect to the internet (INSTALL_STEPS[2]). Next stays disabled
-// until the engine reports online. A wired connection skips this step (engine).
+// Step 3 — Connect now, or explicitly choose an offline installation.
+// A wired connection skips this step (engine).
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -9,14 +9,18 @@ StepPage {
     id: page
     stepId: "network"
     title: "Connect to the internet"
-    lede: "Pick a Wi-Fi network or plug in a cable."
+    lede: "Connect now, or install offline and finish setup later."
     measure: 600
-    valid: online
-    helpText: "Arctic Linux downloads the apps you pick and the latest security updates while it installs. Pick your Wi-Fi network and type its password, or plug in a network cable."
+    valid: online || installOffline
+    nextLabel: !online && installOffline ? "Continue offline" : "Next"
+    helpText: "Pick a Wi-Fi network or plug in a network cable to download apps and security updates during installation. " + offlineNotice + " " + Engine.dictationDownloadNotice
 
     readonly property var opts: Wizard.step.options || {}
     property bool online: !!opts.online
     property bool wired: !!opts.wired
+    property bool installOffline: !!(Wizard.step.data && Wizard.step.data.offline)
+    readonly property string offlineNotice: "Offline installation uses the apps already on this image. App downloads and security updates wait until you connect. Dictation is not ready until its app and a verified model are available; setup is queued for a retry at first boot."
+    testState: ({ online: online, offline: installOffline })
     property string ssid: opts.ssid || ""
     property var networks: []
     property bool scanning: false
@@ -102,7 +106,15 @@ StepPage {
         list.mouseUsed = true;
         list.forceActiveFocus();
     }
+    function commit(done) {
+        Wizard.saveStep("network", { offline: installOffline }, done);
+    }
     function fillForm(v) {
+        if (v.offline !== undefined) {
+            if (typeof v.offline !== "boolean")
+                return "offline must be a boolean";
+            installOffline = v.offline;
+        }
         if (v.ssid !== undefined) {
             const row = rows.find(r => r.ssid === v.ssid);
             if (!row)
@@ -137,10 +149,21 @@ StepPage {
         spacing: Theme.space4
 
         ArBanner {
+            id: networkInfo
             width: parent.width
             kind: "info"
-            title: "Why do I need the internet?"
-            text: "Arctic Linux downloads the apps you pick and the latest security updates while it installs, so you start up to date."
+            title: page.online ? "Downloads during installation" : "You can install offline"
+            text: (page.online ? "Arctic Linux downloads the apps you pick and the latest security updates while it installs. " : page.offlineNotice + " ") + Engine.dictationDownloadNotice
+        }
+
+        ArCheck {
+            id: offlineChoice
+            visible: !page.online
+            width: parent.width
+            text: "Install offline"
+            description: "Finish downloads when you’re online."
+            checked: page.installOffline
+            onToggled: page.installOffline = checked
         }
 
         // A Wi-Fi card that works only once its driver is installed (Broadcom wl): say how
@@ -157,8 +180,8 @@ StepPage {
         ArList {
             id: list
             width: parent.width
-            // What's above it: the info banner (170 with spacing), and the driver hint when shown.
-            height: Math.min(implicitHeight, Math.max(120, page.availableHeight - 170 - (hint.visible ? hint.height + Theme.space4 : 0)))
+            // The disclosure wraps with the window width; reserve its actual height.
+            height: Math.min(implicitHeight, Math.max(120, page.availableHeight - networkInfo.height - Theme.space4 - (offlineChoice.visible ? offlineChoice.height + Theme.space4 : 0) - (hint.visible ? hint.height + Theme.space4 : 0)))
             accessibleName: "Networks"
             model: page.rows
             // Arrows only move; Space or a click connects.

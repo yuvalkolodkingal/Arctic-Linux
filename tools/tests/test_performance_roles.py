@@ -29,22 +29,88 @@ comparison = load('role_compare', ROOT/'tools/performance/compare.py')
 legacy = load('legacy_fixture', ROOT/'tools/tests/test_performance_compare.py')
 
 
-def causal_bound(lower, upper):
+def kernel_event_readbacks(pid=123):
+    """Literal x86_64 kernel readback fixture; hashes cover the retained text."""
+    common = [('unsigned short', 'common_type', 0, 2, 0),
+              ('unsigned char', 'common_flags', 2, 1, 0),
+              ('unsigned char', 'common_preempt_count', 3, 1, 0),
+              ('int', 'common_pid', 4, 4, 1)]
+    identity = [('unsigned long', '__probe_func', 8, 8, 0),
+                ('unsigned long', '__probe_ret_ip', 16, 8, 0),
+                ('__data_loc char[]', 'foreign_id', 24, 4, 1)]
+    native = [('unsigned long', '__probe_ip', 8, 8, 0),
+              ('u32', 'client_type', 16, 4, 0),
+              ('__data_loc char[]', 'original_app_id', 20, 4, 1),
+              ('__data_loc char[]', 'foreign_id', 24, 4, 1),
+              ('__data_loc char[]', 'app_id', 28, 4, 1),
+              ('u64', 'client', 32, 8, 0), ('u64', 'handle', 40, 8, 0),
+              ('u64', 'owner', 48, 8, 0)]
+    identity_footer = r'print fmt: "(%lx <- %lx) foreign_id=\"%s\"", REC->__probe_func, REC->__probe_ret_ip, __get_str(foreign_id)'
+    native_footer = r'print fmt: "(%lx) client_type=%u original_app_id=\"%s\" foreign_id=\"%s\" app_id=\"%s\" client=0x%Lx handle=0x%Lx owner=0x%Lx", REC->__probe_ip, REC->client_type, __get_str(original_app_id), __get_str(foreign_id), __get_str(app_id), REC->client, REC->handle, REC->owner'
+    names = ['map_create'] + ['map_before_' + branch + '_' + kind
+        for branch in ('tail', 'head', 'scroller') for kind in ('xdg', 'x11')] + ['map_listed_xdg', 'map_listed_x11']
+    records = {}
+    for index, name in enumerate(names):
+        fields = common + (identity if name == 'map_create' else native)
+        body = ''.join('\tfield:' + field_type + ' ' + field_name
+                       + f';\toffset:{offset};\tsize:{size};\tsigned:{signed};\n'
+                       for field_type, field_name, offset, size, signed in fields)
+        format_text = f'name: {name}\nID: {100+index}\nformat:\n' + body + '\n' + (
+            identity_footer if name == 'map_create' else native_footer) + '\n'
+        filter_text = f'common_pid == {pid}' + ('' if name == 'map_create' else
+            ' && client_type == ' + ('0' if name.endswith('_xdg') else '2')) + '\n'
+        records[name] = dict(format_text=format_text, filter_text=filter_text,
+            format_sha256=hashlib.sha256(format_text.encode()).hexdigest(),
+            filter_sha256=hashlib.sha256(filter_text.encode()).hexdigest())
+    return records
+
+
+def receipt(event, edge_ns, edge='lower', resolution=1000, **fields):
+    literal = edge_ns + (resolution if edge == 'lower' else -resolution)
+    digits = 9 - len(str(resolution)) + 1
+    return dict(event=event, kernel_pid=123, foreign_toplevel_id='c'*32,
+                **{edge + '_monotonic_ns': edge_ns}, kernel_text_monotonic_ns=literal,
+                kernel_timestamp_text=f'{literal//1_000_000_000}.{literal%1_000_000_000//resolution:0{digits}d}',
+                timestamp_resolution_ns=resolution, timestamp_rounding_allowance_ns=resolution, **fields)
+
+
+def causal_bound(lower, upper, appids=('foot',), profile_index=0, branch='tail', client_type=0):
     started = 1_000_000_000
     event_ns = started + round(lower * 1e9)
+    upper_ns = started + round(upper * 1e9)
+    profile = copy.deepcopy(comparison.MAPPING_PROFILES[profile_index])
+    mapping = dict(start=0x100000, end=0x200000, file_offset=0,
+                   instruction_address=0x100000+profile['instruction_file_offset'])
+    lower_mappings = {key: dict(start=mapping['start'], end=mapping['end'], file_offset=mapping['file_offset'],
+                               instruction_address=mapping['start']+offset-mapping['file_offset'])
+                      for key, offset in profile['lower_instruction_file_offsets'].items()}
+    kind = 'xdg' if client_type == 0 else 'x11'
+    fields = dict(client_type=client_type, original_app_id=appids[0], app_id=appids[0],
+                  client_address=0x1000, handle_address=0x2000, handle_owner_address=0x1000)
     return dict(lower_seconds=lower, upper_seconds=upper, interval_seconds=upper-lower,
         observer=guest.CAUSAL_MAPPING_OBSERVER, clock='CLOCK_MONOTONIC_RAW', launch_started_monotonic_ns=started,
-        causal_lower_bound=dict(method='wlroots-0.20-return-before-mango-list-insertion-raw-v2',
-            clock='mono_raw', userspace_clock='CLOCK_MONOTONIC_RAW', status='bound-before-mapping', exported_symbol='wlr_ext_foreign_toplevel_handle_v1_create',
+        causal_lower_bound=dict(method='wlroots-0.20-and-mango-managed-list-original-appid-preinsert-bracket-raw-v5',
+            clock='mono_raw', userspace_clock='CLOCK_MONOTONIC_RAW', status='bounded-managed-list-insertion', exported_symbol='wlr_ext_foreign_toplevel_handle_v1_create',
+            upper_mapping_profile=profile, upper_executable_mapping=mapping,
+            lower_executable_mappings=lower_mappings, kernel_event_readbacks=kernel_event_readbacks(),
+            upper_instruction_address=mapping['instruction_address'],
+            upper_appid_offset=48, upper_handle_data_offset=80,
+            audited_original_appid_sha256='3c6e8e8582215a02b16ebc24e85c8ca807df70dd6bc1c33f57684f656fc9b692',
+            audited_mango_source_sha256='586627878578a2545655d4accb790a73112be7eaf6b1dab9d162b4195d962eef',
+            audited_mango_header_sha256='0c76fd2a2f677170ad9ef27df9296444bfdf1c69cb40a05dadadd51e050d3428',
+            application_id_predicate=list(appids),
+            matched_ipc_clients=[dict(id=1, foreign_toplevel_id='c'*32, appid=appids[0])],
+            ipc_upper_monotonic_ns=upper_ns+10_000_000,
+            matched_upper_events=[receipt('map_listed_'+kind, upper_ns, 'upper',
+                instruction_address=mapping['instruction_address'], **fields)],
             identifier_offset=56, audited_header_sha256='9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3',
             audited_source_sha256='5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088',
-            library_sha256='a'*64, mango_sha256='b'*64, mango_rpm='mangowm-0.17.3-1.fc44.x86_64', kernel_pid=123, desktop_uid=1000,
+            library_sha256='a'*64, mango_sha256=profile['executable_sha256'], mango_rpm='mangowm-0.17.3-1.fc44.x86_64', kernel_pid=123, desktop_uid=1000,
             mango_start_ticks=100, exported_file_offset=4096, library_rpm='wlroots0.20-0.20.2-1.fc44.x86_64',
             library_path='/usr/lib64/libwlroots-0.20.so', ipc_lower_monotonic_ns=event_ns-1000,
-            matched_events=[dict(kernel_pid=123, foreign_toplevel_id='c'*32,
-                lower_monotonic_ns=event_ns, kernel_text_monotonic_ns=event_ns+1000,
-                kernel_timestamp_text=f'{(event_ns+1000)//1_000_000_000}.{(event_ns+1000)%1_000_000_000//1000:06d}',
-                timestamp_resolution_ns=1000, timestamp_rounding_allowance_ns=1000)],
+            matched_identity_events=[receipt('map_create', max(started, event_ns-10_000_000))],
+            matched_events=[receipt('map_before_'+branch+'_'+kind, event_ns,
+                instruction_address=lower_mappings[branch]['instruction_address'], **fields)],
             loss_counts={'cpu0': {'overrun':0, 'commit overrun':0, 'dropped events':0}}))
 
 
@@ -75,7 +141,7 @@ def role_run(image, number):
             values = [.04] if phase == 'cold' else [.03, .029, .031]
             result['startup_role_'+role+'_'+phase+'_seconds'] = dict(first=values[0],
                 **({'warm': values[1:]} if phase == 'warm' else {}),
-                observation_bounds=[causal_bound(value-.00025, value) for value in values],
+                observation_bounds=[causal_bound(value-.00025, value, app['appids']) for value in values],
                 observer=guest.CAUSAL_MAPPING_OBSERVER, clock='CLOCK_MONOTONIC_RAW', poll_sleep_seconds=guest.ROLE_POLL_SECONDS,
                 app_id=ident, phase=('first_gui_role_execution_from_pristine_install' if phase == 'cold'
                                     else 'after_45_second_preconditioning'))
@@ -252,7 +318,7 @@ class RoleQualificationTest(unittest.TestCase):
                 values = [.06] if phase == 'cold' else [.04, .04, .04]
                 timing['first'] = values[0]
                 if phase == 'warm': timing['warm'] = values[1:]
-                timing['observation_bounds'] = [causal_bound(value-.00025, value) for value in values]
+                timing['observation_bounds'] = [causal_bound(value-.00025, value, comparison.ROLE_APPIDS[timing['app_id']]) for value in values]
             result = comparison.compare(runs)
             self.assertEqual(result['status'], 'regression_gate_failed')
             suffix = 'first_gui_role_mapped' if phase == 'cold' else 'subsequent_mapped'
@@ -271,7 +337,7 @@ class RoleQualificationTest(unittest.TestCase):
             lower, upper = ((.03992, .04) if image == 'baseline' else (.04392, .04396))
             for run in group:
                 timing = run['startup_role_terminal_cold_seconds']
-                timing.update(first=upper, observation_bounds=[causal_bound(lower, upper)])
+                timing.update(first=upper, observation_bounds=[causal_bound(lower, upper, comparison.ROLE_APPIDS[timing['app_id']])])
         result = comparison.compare(runs)
         self.assertEqual(result['status'], 'measurement_precision_gate_failed')
         self.assertTrue(result['measurement_precision']['valid'])

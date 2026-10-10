@@ -1,10 +1,11 @@
 NAME="Arctic Linux"
-VERSION="1.2 (Fedora 44 base)"
+VERSION="1.2.1 (Fedora 44 base)"
 ID=arctic
 ID_LIKE=fedora
 VERSION_ID=1.2
+BUILD_ID=1.2.1
 PLATFORM_ID="platform:f44"
-PRETTY_NAME="Arctic Linux 1.2 (Fedora 44 base)"
+PRETTY_NAME="Arctic Linux 1.2.1 (Fedora 44 base)"
 ANSI_COLOR="0;38;2;239;166;55"
 LOGO=arctic-logo-icon
 CPE_NAME="cpe:/o:arcticlinux:arctic_linux:1.2"

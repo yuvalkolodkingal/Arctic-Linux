@@ -232,6 +232,70 @@ func TestNetworkRequiresOnline(t *testing.T) {
 	mustNext(t, w)
 }
 
+func TestExplicitOfflineNetworkChoiceSurvivesBackAndCanBeWithdrawn(t *testing.T) {
+	w, env := newTest(t)
+	mustNext(t, w)
+	if _, err := set(t, w, StepKeyboard, `{"layout":"il","variant":""}`); err != nil {
+		t.Fatal(err)
+	}
+	mustNext(t, w)
+	if _, err := set(t, w, StepNetwork, `{"offline":true}`); err != nil {
+		t.Fatal(err)
+	}
+	mustNext(t, w)
+	if w.Current() != StepTimezone || env.net.Online {
+		t.Fatal("offline choice must advance without inventing connectivity")
+	}
+	if err := w.Back(); err != nil {
+		t.Fatal(err)
+	}
+	step, err := w.Get(StepNetwork)
+	if err != nil || w.Current() != StepNetwork || !step.Data.(NetworkData).Offline || w.Data.Keyboard.Layout != "il" {
+		t.Fatalf("saved offline/keyboard choices were lost: %+v, %v", step, err)
+	}
+	if _, err := set(t, w, StepNetwork, `{}`); err != nil || !w.Data.Network.Offline {
+		t.Fatal("merging an empty network draft must preserve the explicit choice")
+	}
+	if _, err := set(t, w, StepNetwork, `{"offline":false}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Next(); err == nil || err.Code != protocol.CodeOffline || w.Current() != StepNetwork {
+		t.Fatal("withdrawn offline choice must require real connectivity")
+	}
+	env.net.Online = true
+	mustNext(t, w)
+}
+
+func TestOfflineNetworkChoiceRejectsNonBooleansWithoutChangingConsent(t *testing.T) {
+	w, _ := newTest(t)
+	if _, err := set(t, w, StepNetwork, `{"offline":true}`); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{`null`, `"true"`, `1`, `{}`, `[]`} {
+		if _, err := set(t, w, StepNetwork, `{"offline":`+value+`}`); err == nil || err.Code != protocol.CodeBadRequest {
+			t.Fatalf("nonboolean choice %s was accepted: %v", value, err)
+		}
+		if !w.Data.Network.Offline {
+			t.Fatal("malformed request changed the previously saved choice")
+		}
+	}
+}
+
+func TestOfflineNetworkChoiceRejectsAliasesAndUnknownFields(t *testing.T) {
+	w, _ := newTest(t)
+	if _, err := set(t, w, StepNetwork, `{"offline":true}`); err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []string{`{"Offline":null}`, `{"OFFLINE":null}`, `{"Offline":false}`, `{"offline":true,"OFFLINE":false}`, `{"online":true}`} {
+		if _, err := set(t, w, StepNetwork, input); err == nil || err.Code != protocol.CodeBadRequest {
+			t.Fatalf("noncanonical network setting accepted: %s, %v", input, err)
+		}
+		if !w.Data.Network.Offline {
+			t.Fatal("noncanonical request changed the saved offline choice")
+		}
+	}
+}
+
 func TestGotoOnlyDoneStepsAndReturnToSummary(t *testing.T) {
 	w, env := newTest(t)
 	if err := w.Goto("disk"); err == nil {

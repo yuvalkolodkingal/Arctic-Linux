@@ -11,6 +11,8 @@
     Super + Shift + F        Files in the terminal (yazi)
     Super + V                Clipboard history
     Super + Ctrl + E         Emoji
+    Super + Ctrl + X         Dictation: start / stop and insert text
+    Super + Ctrl + Backspace Cancel dictation without inserting text
     Super + Shift + A        Get apps (install or remove apps)
     Super + Shift + W        Wallpapers
     Super + /                This sheet

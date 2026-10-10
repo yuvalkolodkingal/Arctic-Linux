@@ -24,7 +24,7 @@ every kernel that has its development files, its kernel arguments are added with
 the akmods key is queued for enrolment with mokutil --import --hash-file, so MokManager asks
 for that code at the next restart. (A driver whose build the installer put off to boot comes
 here too, already installed: the same steps finish it.)
-This runs at boot (arctic-firstboot.service, after the network is up), tries each module's
+This runs after boot (arctic-firstboot.timer), tries each module's
 methods in order until one works — doing what the installer does for each method
 (installMethod / setupRepos) — and removes the modules that succeed. When nothing is left,
 the file is deleted and the service no longer starts. It never blocks login: it runs in the

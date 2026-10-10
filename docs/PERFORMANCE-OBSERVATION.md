@@ -63,7 +63,7 @@ transport controls and frame success cannot qualify precision or speed/RAM gains
 The rebuilt ISO's full six-boot paired gate remains mandatory with every original
 precision, enclosure and regression threshold unchanged.
 
-## Causal lower-bound extension (unqualified until real calibration)
+## Historical v10 causal lower-bound extension
 
 The replacement ISO run 37903438836 also failed precision: 20 of 36 baseline
 brackets and 15 of 36 candidate brackets exceeded their original limits, although
@@ -71,7 +71,7 @@ all point regressions were within their limits and the enclosure check passed.
 Candidate Foot cold brackets were 12.4–12.9 ms against 1.61–1.77 ms limits.
 The original evidence is retained. A new observer cannot reclassify this image.
 
-The v10 paired observer adds a read-only kernel return probe to the actual loaded
+The v10 paired observer added a read-only kernel return probe to the actual loaded
 wlroots library. It retains the same socket observer and unchanged upper bound.
 The kernel event tightens only the lower endpoint when its unique foreign-toplevel
 identifier matches a newly observed IPC client. It is a bound before mapping,
@@ -167,3 +167,248 @@ It failed before any launch measurement because Python append-mode opening of
 `uprobe_events` returned `EINVAL`. Its original failed report is retained.
 The nonseeking writer correction has source controls, but needs a new reviewed
 calibration activation and actual runtime result; it is not timing evidence.
+
+
+## Historical native managed-list bracket (v12, failed calibration)
+
+Retained-image research run 37971533836 restored the actual active Wayland VT
+and output, initialized both raw clocks and matched all four lower receipts
+without kernel event loss. It still failed all four precision checks: widths
+were 11.416, 5.390, 2.024 and 2.063 ms against limits 1.552, 1.334, 1.292 and
+1.136 ms. The positive socket roundtrips were 10.967, 5.044, 1.384 and 2.496 ms.
+Those failures remain failures; a changed observer cannot reclassify that run.
+
+The v12 observer retains the original app launch, exact application-ID match,
+positive socket query, five-second persistence check, measurement order and
+fresh installed boot requirements. It adds a temporary instruction uprobe to
+an independently audited production Mango ELF, immediately after the common
+focus-stack insertion returns and before window rules run. At that point all
+managed client-list insertion branches have completed. Unmanaged early-return
+paths never reach the hook. The existing foreign-handle return remains the
+conservative lower endpoint. This measures eligibility under the original
+managed-list/application-ID predicate; it does not measure scene visibility,
+pixels, presentation or first frame.
+
+Each admitted profile pins the whole executable SHA-256, the complete mapping
+function bytes, its file offset and length, the upper instruction offset and
+compiled client ABI and actual IPC getter function bytes. The initial signed stable ELF audit identifies
+`handle_client_map` at file offset `0x430d0`, length 4109, code SHA-256
+`d48615861b8819d95e30fbbf74db46e24f8e3d738e20824e0e598578972004a2`.
+Its upper instruction is `0x435ef`, after the focus-stack insertion at `0x435ea`.
+The default, master/head and scroller insertion paths all converge before it.
+The SysV callee-saved RBX still points to the mapped client. `Client`'s
+foreign-handle pointer is at byte 1584; its identifier, app ID and client owner
+are at handle bytes 56, 48 and 80. Actual retained, baseline and rebuilt ELF
+profiles must be independently audited before those images are admitted;
+unknown or changed executables fail instead of guessing a symbol or offset.
+No extra debug package is installed. The hook's trap cost remains included.
+
+Read-only static inspector run 37988626533 subsequently recovered the exact
+retained and immutable baseline Mango files. Independent native and provenance
+reviews admitted these two additional instrumentation profiles:
+
+| Image | Whole executable SHA-256 | Map offset / upper / map SHA-256 |
+| --- | --- | --- |
+| Retained failed producer 37903438836 | `2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b` | `0x43110` / `0x4362f` / `3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc` |
+| Immutable v1.2.0 baseline | `67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35` | `0x430d0` / `0x435ef` / `11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd` |
+
+Each complete 4109-byte map received its own branch/register audit. The shared
+1234-byte original getter and compiled field chains are separately pinned in
+each profile. The profile's native audit SHA-256 is
+`c263158a0e29ee302bed2f09a24c43e9017ce7d87ceb53d22b86398b39dcd2aa`.
+Extracted file hashes agree with each image's RPMDB file records; this is not a
+verification of target RPM signatures or all installed files. The retained
+producer remains failed and unqualified. Actual library/readiness, kernel
+format/filter, precision and paired-boot checks remain necessary. A rebuilt ISO
+with changed code, packaging notes or build ID needs a separate exact audit;
+neither identical source nor a matching map function admits an unknown ELF.
+
+The type-specific upper receipt records the kernel's literal instruction
+address, the client and handle pointers, the handle's owner, the same foreign
+identifier, the original application ID and the foreign-handle copy. Linux's
+entry formatter emits `event: (0x%lx)`, its `x64` formatter emits `0x%Lx` and
+its `u32` formatter emits decimal `%u`. The parser requires those literal forms
+instead of silently interpreting a different event format. The instruction address must match the unique
+actual executable mapping in the desktop-owned Mango process. The handle owner
+must equal the captured client. The collector rechecks PID, UID, start ticks and
+executable before and after receiving each launch's receipts. All hooks use
+PID filtering in the same owned `mono_raw` trace instance, bounded readers,
+zero-loss checks and cancellation-safe cleanup. All three registered events are
+removed; unrelated trace events are preserved.
+
+The exact short ASCII application-ID predicate is required in this lane;
+legacy title/substring matching does not receive a native upper. The original,
+copied and later positive IPC app IDs must be equal, with case preserved, and
+satisfy the original role predicate. The comparator binds that predicate to the
+independently validated declared role IDs. The previous v11 assumption that a
+long app ID could not clamp to a short accepted copy was incorrect: Mango's
+UTF-8 boundary backtracking can manufacture such a copy from malformed input,
+and wlroots does not validate app-ID UTF-8. A copied ID alone therefore cannot
+establish the predicate at insertion.
+
+The frozen IPC getter at `0x6b00`, length 1234, SHA-256
+`11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead`
+proves the original field chains. Client type 0 uses surface byte 328, XDG
+toplevel byte 56 and app-ID byte 192; type 2 uses surface byte 328 and X11 class
+byte 144. Two hooks at the same audited instruction capture only their selected
+getter chain, with PID and client-type filters. The selected original is the
+first dynamic string, followed by foreign identifier and copied ID. Each
+accepted ID is 1–128 ASCII bytes; missing, invalid, escaped, overlong and
+changed metadata fail. No request dispatch or metadata mutation occurs between
+foreign-handle creation and this pre-rules instruction. The original getter
+audit SHA-256 is
+`3c6e8e8582215a02b16ebc24e85c8ca807df70dd6bc1c33f57684f656fc9b692`.
+
+Kernel string capture does not guarantee that every failed fetch prints
+`(fault)`. Its declaration-order allocator gives each string the remaining
+dynamic budget. Forced truncation of the first string consumes that entire
+budget, so the required subsequent nonempty foreign identifier and copied ID
+cannot qualify. This remains true when an over-`PATH_MAX` original contributes
+zero during size calculation; the first string's budget is not always large.
+An intermediate pointer-chain fault can instead leave its data location
+pointing at the subsequent 32-hex foreign identifier. Exact three-way equality
+and explicit exclusion of 32-hex role IDs reject that alias. Source controls
+cover near-page and over-`PATH_MAX` truncation, intermediate-chain aliasing and
+final-string faults. Actual event-format/filter receipts and these hooks on the
+target kernel remain pending runtime calibration.
+
+For every retained window, both unique same-PID, same-ID receipts are mandatory.
+The displayed timestamp receives one full text unit of rounding allowance:
+subtract it for the lower event and add it for the upper event. Every receipt
+must belong to the current launch, including the original positive IPC endpoint.
+The collector intersects the original IPC bracket with the native bracket:
+`lower = max(IPC lower, earliest native lower)` and
+`upper = min(IPC upper, earliest native upper)`. The earliest endpoints preserve
+the original predicate that any newly matching client is sufficient. A reversed
+or disjoint intersection fails. The complete original IPC endpoints and query
+roundtrips remain in the report; their latency is never silently subtracted.
+
+The sample is the conservative upper of that intersection. The unchanged
+precision budget is `min(5 ms, 2.5% of that sample)`; a shorter corrected sample
+also has a tighter relative precision budget. Every original point regression,
+10% enclosure limit and six paired boot requirement remains mandatory. No
+sample is discarded to obtain a pass. Historical v10 and v11 evidence is rejected by
+the versioned sampler. Actual retained-image calibration and the rebuilt image's
+full paired test still decide whether this measurement method is usable.
+
+## Managed-list insertion bracket (v13, pending fresh calibration)
+
+Actual retained-image calibration
+[37997321166](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/37997321166)
+failed the original cold Foot sample's precision check. Its foreign-handle
+creation at `250.819655` and historical upper at `250.826593` span 6.938 ms,
+or 6.940 ms including display rounding, above that sample's 1.126084475 ms
+limit. The other three native widths including rounding were 0.220, 0.220 and
+0.393 ms. These observations do not identify which call or scheduling interval
+caused the cold width. That image and run remain failed and unqualified.
+
+The v13 role sampler uses method
+`wlroots-0.20-and-mango-managed-list-original-appid-preinsert-bracket-raw-v5`
+and observer `mango-socket-worker-v6-original-appid-preinsert-bracket-raw-clock-autonomous`.
+It keeps the foreign-handle return receipt as separate identity provenance,
+and brackets the same managed-client-list membership transition with probes
+immediately before each actual `wl_list_insert` call and at their common return
+successor. Focus-stack work after this successor is outside the membership
+bracket. The original negative/positive IPC interval is still required and
+intersected with the native interval. This measures availability under the same
+managed-list/app-ID predicate; it is neither response delivery nor first frame.
+
+The independently replayed exact-byte CFG audit covers all three admitted ELFs,
+including the cold helper's real jump back into the error path and 69 static
+negative controls. Its report SHA-256 is
+`dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c`.
+Whole-ELF, complete map function, original getter, ABI and original app-ID audit
+pins remain mandatory. No new executable is admitted by matching source alone.
+
+| Exact executable | Tail pre-call | Head pre-call | Scroller pre-call | Common post-call |
+| --- | --- | --- | --- | --- |
+| Retained `2f110722…` | `0x43619` | `0x43773` | `0x43da3` | `0x4361e` |
+| Immutable baseline `67ba9d6d…` | `0x435d9` | `0x43733` | `0x43d63` | `0x435de` |
+| Previously audited stable `1c66767f…` | `0x435d9` | `0x43733` | `0x43d63` | `0x435de` |
+
+At every call, RSI is `Client.link` at client byte 280. RDI is the correct
+position in `server.clients`: its tail predecessor, head, or the selected
+scroller client's link with a tail fallback. Exact IPC loop bytes enumerate
+this list at `0x7f348`, distinct from the focus stack at `0x7f358`. RBX is the
+client, R12 the client listener at byte 360 and R14 its link; the proof explicitly
+assumes the SysV callee-preserved RBX/R12/R14 ABI and valid compositor list,
+monitor selection and scroller state. It is not a complete heap-integrity proof.
+Each managed path reaches exactly one selected pre-call and the common post-call;
+unmanaged and error paths cannot reach them.
+
+Six type-specific pre-call events and two post-call events preserve the selected
+original-first string capture and every original identity, ownership and fault
+guard. All three same-ID receipts must belong to the current launch and agree
+with the later IPC metadata. The collector archives literal `format` and
+`filter` readbacks with SHA-256 for all nine events, checks their exact field
+types/layouts and PID/type filters before tracing, and rereads them before and
+after receipt collection. Missing, changed, malformed or coherently resealed
+incompatible schemas fail. Cleanup removes every owned hook.
+
+Official Linux v7.2 `trace_uprobe.c` fetches probe arguments before reserving the
+event timestamp. The user thread remains trapped until the pre-call timestamp,
+and the post-call timestamp follows insertion, so this fetch order preserves
+the conservative bracket. Probe fetching, timestamp reservation, trap and
+preemption costs remain in the measured sample or interval; none is subtracted.
+That supporting source is not an exact audit of Fedora
+`7.2.9-200.fc44.x86_64`. Actual target-kernel format/filter and fresh cold timing
+must still validate this implementation. Source replay cannot promise that the
+next cold sample passes. The first sample is not warmed, discarded or replaced,
+and all precision, enclosure, regression and paired-boot limits remain unchanged.
+
+The research calibration composer embeds the same new recorder and validator
+into its unchanged four sequential Foot launches. Its source and comparator
+hashes update from those literal sources; the paired composer independently
+freezes the new source and exact composed-script hashes. Old v12 receipts cannot
+qualify the new lane. A separately reviewed independent calibration reader must
+also bind the new identity/pre/post fields and nine archived kernel readbacks
+before any new research run is interpreted. No activation or image qualification
+is implied by this source change.
+
+## Frozen external qualification of an unchanged ISO
+
+The artifact-only producer embeds its Actions run ID in preview RPM versions.
+Mango's allocated packaging note consequently changes between a source-check
+RPM and a new ISO, even when native instructions match. Whole-ELF admission is
+retained. Packaging notes, build IDs, layouts and code are never normalized to
+admit an executable that has not been independently audited.
+
+The explicit `frozen-external-paired-v1` producer mode first completes the
+original UEFI Try, BIOS Install and UEFI Safe startup checks and the strict
+2,000,000,000-byte limit. It produces a typed byte-pinned performance-plan
+receipt, with paired performance deliberately skipped and publication skipped.
+The producer itself must succeed on attempt one. A failed historical producer,
+including run 37903438836, cannot use this mode to become eligible.
+
+After extraction and review of the exact candidate and immutable baseline
+executables, a separate execution manifest freezes the observer, comparator,
+harness, container helpers, baseline profile and image-source file hashes. A
+sole-marker child of that reviewed source activates one first-attempt push
+lane. Its candidate source checkout is clean at the ISO's full source SHA;
+that checkout supplies the installer profile, catalog, battery source and RPM
+commit expectation. The separate execution checkout supplies the frozen
+measurement tools. Image source and execution source are distinct identities.
+
+The lane performs both original offline installations and all six interleaved
+boots, in order baseline-1, candidate-1, candidate-2, baseline-2, baseline-3,
+candidate-3. It retains the original 120-minute runner timeout, KVM, 4 GiB RAM,
+two vCPUs, restricted networking, pristine powered-off installation sources,
+fresh overlays, console restoration and every original precision, regression
+and enclosure limit. Actual input ISO and candidate-source hashes are checked
+again before each VM stage. The same prepared container, QEMU and firmware
+inventory is required throughout. No alternate boots or partial run can pass.
+
+Every guest binds its unique context to the expected observer source and hashes
+the actual frozen probe file. Complete original serial logs, contexts, install
+exits, pristine source identities, tool inventories, original byte hashes and
+the exact producer receipt are retained. Qualification and publication both
+replay all six unredacted serial logs with the byte-pinned comparator and require
+type-sensitive equality of the full recomputed result. Equal self-declared
+observer hashes, a passing summary, duplicate canonical records, non-finite
+numbers, reruns, omitted boots or redacted/truncated inputs cannot qualify.
+
+The legacy in-producer paired mode continues requiring its successful paired
+step and same producer/source binding. The external mode is an explicit
+alternative evidence contract; it does not weaken the legacy contract or claim
+optimization from a regression pass. The prepared manifest is disabled until
+actual images, admitted executable profiles and reviewed source are available.

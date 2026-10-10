@@ -53,7 +53,9 @@ type (
 		Layout  string `json:"layout"`
 		Variant string `json:"variant"`
 	}
-	NetworkData  struct{}
+	NetworkData struct {
+		Offline bool `json:"offline"`
+	}
 	TimezoneData struct {
 		Timezone string `json:"timezone"`
 		AutoTime bool   `json:"auto_time"`
@@ -90,6 +92,7 @@ const (
 type Data struct {
 	Welcome    WelcomeData
 	Keyboard   KeyboardData
+	Network    NetworkData
 	Timezone   TimezoneData
 	Disk       DiskData
 	Encryption EncryptionData
@@ -416,7 +419,7 @@ func (w *Wizard) Get(id string) (protocol.StepResult, *protocol.Error) {
 		}
 	case StepNetwork:
 		n := w.env.Network()
-		res.Data = NetworkData{}
+		res.Data = w.Data.Network
 		res.Options = map[string]any{
 			"online": n.Online, "wired": n.Wired, "ssid": n.SSID,
 			"info_title": CopyNetworkWhyTitle, "info": CopyNetworkWhy,
@@ -634,7 +637,23 @@ func (w *Wizard) Set(id string, raw json.RawMessage) (any, *protocol.Error) {
 		w.Data.Keyboard = d
 		data = KeyboardView{d, KeyboardConfig(d)}
 	case StepNetwork:
-		data = NetworkData{}
+		d := w.Data.Network
+		for name := range present {
+			if name != "offline" {
+				return nil, protocol.Errorf(protocol.CodeBadRequest, "network data only supports offline")
+			}
+		}
+		if value, ok := present["offline"]; ok {
+			value = bytes.TrimSpace(value)
+			if !bytes.Equal(value, []byte("true")) && !bytes.Equal(value, []byte("false")) {
+				return nil, protocol.Errorf(protocol.CodeBadRequest, "offline must be a boolean")
+			}
+		}
+		if err := decode(&d); err != nil {
+			return nil, err
+		}
+		w.Data.Network = d
+		data = d
 	case StepTimezone:
 		d := w.Data.Timezone
 		if err := decode(&d); err != nil {
@@ -772,8 +791,8 @@ func stepName(id string) string {
 // Validate checks a whole step. full also checks secrets and the network.
 func (w *Wizard) Validate(id string, full bool) *protocol.Error {
 	if id == StepNetwork && full {
-		if !w.env.Network().Online {
-			return protocol.Errorf(protocol.CodeOffline, "Connect to the internet to continue.")
+		if !w.env.Network().Online && !w.Data.Network.Offline {
+			return protocol.Errorf(protocol.CodeOffline, "Connect to the internet or choose Install offline to continue.")
 		}
 		return nil
 	}

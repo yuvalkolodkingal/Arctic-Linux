@@ -322,7 +322,7 @@ class MockEngine:
         self.data = {
             "welcome": {"language": "en_US.UTF-8"},
             "keyboard": {"layout": "us", "variant": ""},
-            "network": {},
+            "network": {"offline": False},
             "timezone": {"timezone": "Asia/Jerusalem", "auto_time": True},
             "disk": {"disk": "/dev/nvme0n1", "mode": "erase"},
             "encryption": {"enabled": True},
@@ -573,8 +573,12 @@ class MockEngine:
             raise InvalidError("The installer is already running.", code="state")
         if sid not in self.data:
             raise InvalidError(f"Step {sid} has no settings.", code="not_found")
+        if sid == "network" and any(name != "offline" for name in (data or {})):
+            raise InvalidError("network data only supports offline", code="bad_request")
         merged = dict(self.data[sid])
         merged.update(data or {})
+        if sid == "network" and type(merged.get("offline")) is not bool:
+            raise InvalidError("offline must be a boolean", code="bad_request")
         if sid == "keyboard":
             merged.pop("xkb", None)  # read-only
             if "layout" in (data or {}) and "variant" not in data:
@@ -595,8 +599,8 @@ class MockEngine:
         return {"ok": True, "data": merged}
 
     def check_can_leave(self, sid):
-        if sid == "network" and not self.online():
-            raise InvalidError("Connect to the internet to continue.", {"network": "Connect to the internet to continue."}, code="offline")
+        if sid == "network" and not self.online() and not self.data["network"]["offline"]:
+            raise InvalidError("Connect to the internet or choose Install offline to continue.", {"network": "Connect or choose Install offline."}, code="offline")
         if sid == "encryption" and self.data["encryption"].get("enabled", True):
             p = self.secrets.get("luks_passphrase")
             if not p:

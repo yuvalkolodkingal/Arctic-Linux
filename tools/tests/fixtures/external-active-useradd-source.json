@@ -1,0 +1,20 @@
+{
+  "schema": "arctic-active-useradd-source-control-v1",
+  "source_commit": "6078921fb122c301edf3e2cf3c467f21765e77f9",
+  "scope": "Source-derived synthetic command rendering; no target ISO or runtime attestation",
+  "source_sha256": {
+    "internal/installer/runner.go": "c96be0d8888557917d473c66cd25fb01c8d8f1ead453172b26f59bf20758dfd8",
+    "internal/installer/installer.go": "460417f8268508af0ee51b8ee0f81b4c6a1e595e8c0469cea48eef38cd8b2262",
+    "tools/installer-qualification/active-guest.py": "a5742cddeac3464adb87d2908975a289ad25d0cdeaa867730e9e4d7c18b75aa5",
+    "modules/shell/fish/module.toml": "b47007f379e90d9f3b8be51712b4f62a36acfcd2d21869b26806fbc537700d03"
+  },
+  "renderer": "Actual exported installer.Cmd.String with shipped useradd arguments, fixed active account and password-hash Redact index",
+  "renderer_toolchain": "go version go1.27.2 linux/amd64",
+  "expected_record": "$ useradd --root /mnt --create-home --user-group --groups wheel --shell /usr/bin/fish --comment 'Arctic Qualification' --password [secret: password hash] arcticqual\n",
+  "expected_record_sha256": "b5c3652424f2ef350cb32dafe117b7ce9483441e0fba9386e5d1e4e43ee4d485",
+  "limits": [
+    "Only the literal source-owned [secret: password hash] mask is public, never a real password or hash",
+    "No arbitrary account, target path, shell, comment, command flags or alternate mask is accepted",
+    "This fixture does not prove the target installer emitted the command"
+  ]
+}

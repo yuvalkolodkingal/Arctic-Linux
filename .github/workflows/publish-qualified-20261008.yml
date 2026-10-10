@@ -2,8 +2,8 @@ name: Publish the qualified retained Arctic ISO
 
 on:
   push:
-    branches: [codex/publish-qualified-20261008]
-    paths: [.github/qualification-20261008.publish]
+    branches: [codex/publish-qualified-20261010]
+    paths: [.github/qualification-20261010.publish]
 
 permissions:
   contents: read
@@ -14,9 +14,10 @@ jobs:
   prepare:
     if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
     runs-on: ubuntu-24.04
-    # Three bounded evidence downloads (15 minutes each), exact-image fetch
-    # (20 minutes), hash validation and artifact upload need more than 45 minutes.
-    timeout-minutes: 90
+    # Six bounded evidence downloads (15 minutes each), exact-image fetch
+    # (20 minutes), bounded source fetches, hash validation and artifact upload.
+    # The dictation and installer lanes supplement every original acceptance gate.
+    timeout-minutes: 160
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,11 +27,17 @@ jobs:
             .github
             tools
           persist-credentials: false
+      - name: Install the bounded image evidence decoder
+        timeout-minutes: 7
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 \
+            install -y --no-install-recommends python3-pil
       - name: Verify all evidence and prepare the exact retained ISO assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 -B tools/qualified-release/prepare.py --manifest tools/qualified-release/manifest.json \
+          /usr/bin/python3 -B tools/qualified-release/prepare.py --manifest tools/qualified-release/manifest.json \
             --out "$RUNNER_TEMP/qualified-assets"
       - uses: actions/upload-artifact@v4
         with:
@@ -63,7 +70,7 @@ jobs:
           import hashlib, json, os, re, subprocess
           from pathlib import Path
           assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
-          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/publish-qualified-20261008'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/publish-qualified-20261010'
           assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
           repo = 'repos/yuvalkolodkingal/Arctic-Linux'
           def api(path):

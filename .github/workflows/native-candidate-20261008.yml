@@ -2,8 +2,8 @@ name: Candidate native image qualification
 
 on:
   push:
-    branches: [codex/qualification-dispatch-20261008]
-    paths: [.github/qualification-20261008.native]
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.native]
 
 permissions:
   contents: read
@@ -14,9 +14,11 @@ jobs:
     if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
     runs-on: ubuntu-24.04
     # Sequential phase limits allow 8m host dependencies + 15m artifact fetch
-    # + 20m VM provisioning + 110m harness. Leave time for verification,
+    # + 20m VM provisioning + 15m taskbar tool compilation + 180m harness.
+    # The installed matrix supplements every frozen original native gate.
+    # Leave time for verification,
     # cleanup and screened evidence without changing any acceptance limit.
-    timeout-minutes: 180
+    timeout-minutes: 270
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,11 +33,11 @@ jobs:
           import json, os, re, subprocess
           from pathlib import Path
           event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-          reviewed = Path('.github/qualification-20261008.native').read_text().strip()
+          reviewed = Path('.github/qualification-20261010.native').read_text().strip()
           assert re.fullmatch('[0-9a-f]{40}', reviewed)
           assert event['before'] == reviewed and event['after'] == os.environ['GITHUB_SHA']
           assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == reviewed
-          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/qualification-20261008.native']
+          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/qualification-20261010.native']
           manifest = json.loads(Path('tools/native-functional/execution-manifest.json').read_text())
           assert manifest['ready'] is True and manifest['release_acceptance'] is False
           source = manifest['image']['source_sha']

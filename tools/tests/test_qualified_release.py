@@ -1,6 +1,7 @@
 """Publication must remain disabled before image and qualification pins exist."""
 import importlib.util
 import ast
+import copy
 import json
 from pathlib import Path
 import re
@@ -9,6 +10,7 @@ import tempfile
 import textwrap
 from types import SimpleNamespace
 import unittest
+import zipfile
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -93,6 +95,113 @@ class PublicationGuardTest(unittest.TestCase):
         manifest = dict(image=dict(sha256='a' * 64), native=dict(source_sha='b' * 40))
         with patch.object(prepare, 'read_json', return_value=state), self.assertRaises(RuntimeError):
             prepare.native_proof(None, manifest)
+
+    def test_legacy_native_artifact_without_taskbar_report_never_qualifies(self):
+        with self.assertRaisesRegex(RuntimeError, 'Missing/duplicate actual-image taskbar'):
+            prepare.taskbar_proof(SimpleNamespace(infolist=lambda: []), {})
+
+    def test_taskbar_publisher_binds_real_transport_contract_to_image_boot_and_source(self):
+        spec = importlib.util.spec_from_file_location('taskbar_publisher_fixture',
+            ROOT / 'tools/native-functional/test_taskbar_transport.py')
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        fixture.Controls.setUpClass()
+        control = fixture.Controls()
+        report = copy.deepcopy(control.report)
+        report['reservation_observer'] = 'Mango maximized-client rectangles; IPC does not expose raw exclusive-zone values'
+        report['installed_inputs'].update({'/usr/bin/mango':'a'*64, '/usr/bin/mmsg':'a'*64,
+                                          '/usr/share/arctic/shell/shell.qml':'a'*64})
+        report['owned_window'] = dict(pid=1234, start_ticks=5678, client_id='42', uid=1000,
+            executable='/usr/bin/foot', executable_sha256='b'*64, is_xwayland=False)
+        files = dict(control.files)
+        files['taskbar-report.json'] = json.dumps(report).encode()
+        context = copy.deepcopy(control.context)
+        manifest = dict(image=dict(source_sha=context['source_sha'], sha256=context['iso_sha256'],
+                                   bytes=context['iso_bytes']), native=dict(source_sha=context['execution_sha'],
+                                                                          archive_sha256='f'*64))
+        def source_hash(ref, name):
+            return {'tools/native-functional/taskbar.py':'5'*64,
+                    'tools/native-functional/taskbar-runtime.py':'6'*64,
+                    'tools/native-functional/native_smoke.py':'7'*64}.get(name, 'a'*64)
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            serial, port = control.port_serial(control.rows(files, report))
+            state = fixture.e.check_taskbar(serial, context, folder/'taskbar', transport_serial=port)
+            manifest['taskbar_media_review'] = dict(visual_status='passed', image_sha256=context['iso_sha256'],
+                native_archive_sha256='f'*64, images={'taskbar/'+name:item['sha256']
+                    for name,item in state['files'].items() if Path(name).suffix == '.png'})
+            execution = dict(taskbar_context=context, taskbar=state, taskbar_build=dict(
+                schema='arctic-taskbar-tools-v1', release_acceptance=False,
+                sources={name:'a'*64 for name in ('shell/dev/virtual-pointer.c',
+                    'tools/native-functional/taskbar-screencopy.c', 'shell/dev/wlr-screencopy-unstable-v1.xml')},
+                binaries={'virtual-pointer':'8'*64, 'raw-screencopy':'9'*64}))
+            port_bytes = port.encode()
+            prefix_bytes = port_bytes[:64*1024]
+            transport_sha = prepare.hashlib.sha256(port_bytes).hexdigest()
+            prefix_sha = prepare.hashlib.sha256(prefix_bytes).hexdigest()
+            execution['taskbar_transport'] = dict(name='taskbar-boot.log', bytes=len(port_bytes),sha256=transport_sha,
+                kind='root-owned named virtio-serial output bound to original installed native boot')
+            execution['harness_evidence'] = {'taskbar-boot.log.bounded-prefix.bin':dict(bytes=len(prefix_bytes),
+                sha256=prefix_sha,original_bytes=len(port_bytes),original_sha256=transport_sha)}
+            (folder/'harness').mkdir()
+            (folder/'harness/taskbar-boot.log.bounded-prefix.bin').write_bytes(prefix_bytes)
+            (folder/'execution.json').write_text(json.dumps(execution))
+            (folder/'native-installed').mkdir()
+            proof = folder/'native-installed/serial-native-provenance.json'
+            proof.write_text(json.dumps(control.native))
+            def archive():
+                path = folder/'evidence.zip'
+                with zipfile.ZipFile(path, 'w') as output:
+                    for item in folder.rglob('*'):
+                        if item.is_file() and item != path:
+                            output.write(item, item.relative_to(folder).as_posix())
+                return zipfile.ZipFile(path)
+            with patch.object(prepare, 'source_hash', side_effect=source_hash), archive() as evidence:
+                self.assertEqual(prepare.taskbar_proof(evidence, manifest)['cases'], 24)
+                wrong = copy.deepcopy(manifest)
+                wrong['image']['sha256'] = 'f'*64
+                with self.assertRaisesRegex(RuntimeError, 'exact-image execution context'):
+                    prepare.taskbar_proof(evidence, wrong)
+                wrong = copy.deepcopy(manifest)
+                wrong['taskbar_media_review']['visual_status'] = 'pending'
+                with self.assertRaisesRegex(RuntimeError, 'visual review is absent'):
+                    prepare.taskbar_proof(evidence, wrong)
+            proof.write_text(json.dumps(dict(control.native, boot_id='ffffffff-ffff-ffff-ffff-ffffffffffff')))
+            with patch.object(prepare, 'source_hash', side_effect=source_hash), archive() as evidence:
+                with self.assertRaisesRegex(RuntimeError, 'installed boot/session identity'):
+                    prepare.taskbar_proof(evidence, manifest)
+
+    def test_failed_or_wrong_image_dictation_report_never_qualifies_release(self):
+        image = dict(sha256='a' * 64, source_sha='b' * 40)
+        manifest = dict(image=image, dictation={'turbo-q5-v3':dict(source_sha='c' * 40, fixture_manifest_sha256='d' * 64)})
+        state = dict(schema='arctic-dictation-execution-v2', hardware_profile='turbo-q5-v3', status='failed_or_unrun', image=image,
+                     execution_checker_head='c' * 40, release_acceptance=False,
+                     fixture_manifest_sha256='d' * 64)
+        for change in ({}, {'status': 'exact_image_dictation_online_offline_local_sessions_passed',
+                            'image': image | {'sha256': 'e' * 64}},
+                       {'status': 'exact_image_dictation_online_offline_local_sessions_passed',
+                        'release_acceptance': True}):
+            with patch.object(prepare, 'read_json', return_value=state | change), patch.object(prepare, 'source_hash') as source:
+                with self.assertRaisesRegex(RuntimeError, 'Dictation execution'):
+                    prepare.dictation_lane_proof(None, manifest, 'turbo-q5-v3')
+                source.assert_not_called()
+
+    def test_dictation_release_cannot_replace_two_hardware_lanes_with_one_artifact_or_checker(self):
+        profiles = {'small-v2', 'turbo-q5-v3'}
+        pins = {profile:dict(source_sha='a'*40,run_id=1,fixture_manifest_sha256='b'*64,
+                    artifact_id=index+1,archive_sha256=str(index+1)*64) for index,profile in enumerate(sorted(profiles))}
+        with patch.object(prepare, 'dictation_lane_proof') as lane:
+            for names in ({'small-v2'}, profiles):
+                manifest = dict(dictation={name:pins[name] for name in names})
+                if len(names)==2:
+                    manifest['dictation']['turbo-q5-v3'] = pins['small-v2']
+                with self.assertRaisesRegex(RuntimeError, 'Dictation execution'):
+                    prepare.dictation_proof({name:None for name in names},manifest)
+            changed = copy.deepcopy(pins)
+            changed['turbo-q5-v3']['source_sha'] = 'c'*40
+            with self.assertRaisesRegex(RuntimeError, 'Dictation execution'):
+                prepare.dictation_proof({name:None for name in profiles},dict(dictation=changed))
+            lane.assert_not_called()
 
 
 class ActualPublicationScriptTest(unittest.TestCase):

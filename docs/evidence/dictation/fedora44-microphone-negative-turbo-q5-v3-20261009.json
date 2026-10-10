@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "qualification": "supplemental-container-runtime",
+  "voxtype_version": "1.1.0",
+  "engine": "real-pinned-cpu",
+  "profile": "turbo-q5-v3",
+  "model": "large-v3-turbo-q5_0",
+  "cpu_variant": "avx2",
+  "model_download_bytes": 574041195,
+  "download_bytes": 678117115,
+  "microphone": "intentionally-absent",
+  "gpu_tested": false,
+  "iso_tested": false,
+  "transcript_published": false,
+  "passed": true,
+  "daemon_started": true,
+  "microphone_error_observed": true,
+  "record_start_returncode": 0,
+  "error_category": "microphone",
+  "owned_engine_terminated": true,
+  "private_transcript_files_erased": true,
+  "elapsed_seconds": 0.101,
+  "limitations": [
+    "No real microphone was present; this checks a genuine runtime failure.",
+    "No Vulkan device, text insertion, accuracy or exact-image installation was tested."
+  ]
+}

@@ -31,12 +31,13 @@ class ImageTransportControls(unittest.TestCase):
     def test_fixed_run_and_artifact_identity_adverses(self):
         image = self.image()
         run = dict(id=1, head_sha=image['source_sha'], event='workflow_dispatch',
-                   path='.github/workflows/iso.yml', status='completed', conclusion='success')
+                   path='.github/workflows/iso.yml', status='completed', conclusion='success', run_attempt=1)
         artifact = dict(id=2, name='arctic-linux-iso', expired=False, size_in_bytes=100,
                         digest='sha256:' + image['archive_sha256'],
                         workflow_run=dict(id=1, head_sha=image['source_sha']))
         F.validate(image, run, artifact)
-        for key, value in (('head_sha', '3' * 40), ('event', 'push'), ('conclusion', 'failure')):
+        for key, value in (('head_sha', '3' * 40), ('event', 'push'), ('conclusion', 'failure'),
+                           ('run_attempt', 2), ('run_attempt', True)):
             wrong = dict(run, **{key: value})
             with self.subTest(key=key), self.assertRaises(RuntimeError):
                 F.validate(image, wrong, artifact)
@@ -48,9 +49,9 @@ class ImageTransportControls(unittest.TestCase):
     def test_successful_run_cannot_hide_skipped_or_failed_boot_lanes(self):
         job = dict(name='iso', run_attempt=1, head_sha=self.image()['source_sha'],
                    status='completed', conclusion='success', steps=[
-                       dict(name=name, status='completed', conclusion='success') for name in F.BOOT_STEPS])
+                       dict(name=name, status='completed', conclusion='success') for name in (*F.BOOT_STEPS, F.PAIRED_STEP)])
         F.validate_boot_steps(self.image(), [job])
-        for index in range(len(F.BOOT_STEPS)):
+        for index in range(len(job['steps'])):
             for fault in ('skipped', 'failure', 'missing', 'duplicate'):
                 wrong = copy.deepcopy(job)
                 if fault == 'missing':

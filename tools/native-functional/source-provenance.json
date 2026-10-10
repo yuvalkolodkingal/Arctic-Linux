@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b",
+  "native_source_sha256": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
   "files": {
-    "native_smoke.py": "99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b",
-    "guest-check-native-v6.py": "f5998bc2c1e61fc4ed4d87a942fbd67dbc7a65b736011fc246092247cb25f529",
+    "native_smoke.py": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
+    "guest-check-native-v6.py": "aab4323815e239b5debeccf93c4b73f727cd9ed54715f519b8bb1e99915a1d78",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -22,12 +22,107 @@
     "validate_harness_serial"
   ],
   "validators_source_sha256": "1cf453d97fbae6dbcef1b0c8c6706645833ffeccdc91310e25d39ea982ee4199",
-  "each_selected_function_source_equal": true,
+  "each_selected_function_source_equal": false,
   "release_acceptance": false,
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "a3f5b1e6acc81b759a0dfa723012ea4db9deb45577514825de6090762d85f6b1",
-    "test_native_physical_v6.py": "fed9e6e2f62c507b101c9bf311773f5db5837ec44ce8e2548356bf6b684aaa1c",
+    "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
     "test_native_v6.py": "1ee2213393b4974bae151192bc354361ed2eed77be8f382b6580741fb7adba17",
-    "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3"
+    "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
+    "test_native_protocol_diagnostics.py": "c9435541f95460131e047866256ce105705dce0e6dc230d0bcbf1a4bf37fc114",
+    "test_renderer_trials.py": "30df3e5d8d07f73075c1be8d38008af836667d7e5bdaaafe780aedfa8d655133",
+    "test_native_capture_controls.py": "884d01f7ad7de8a6551ab6abdd25c46209c526bcfc78508fe7a809fc3b3723ae",
+    "test_native_bulk_transport.py": "5da5e45a6989e64e36ff2f0b2bb650550d5b3761e252e432b1bafac0f9984a42"
+  },
+  "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
+  "owned_protocol_diagnostics": {
+    "scope": "bounded owned-client geometry observations only; no GTK GLArea/framebuffer or compositor display proof",
+    "primary_gate_unchanged": true,
+    "raw_protocol_exported": false,
+    "release_acceptance": false
+  },
+  "controlled_renderer_trials": {
+    "trigger": "original static oracle unmatched only",
+    "interventions": [
+      "GSK_RENDERER unset",
+      "GSK_RENDERER=gl"
+    ],
+    "same_primary_fixture_oracle_settle_seconds": 0.5,
+    "primary_failure_and_overall_FAIL_preserved": true,
+    "GTK_source_version": "4.22.5",
+    "realized_renderer": "closed successful GSK realization message plus owned process/fd2 and mapped GTK RPM/library binding",
+    "raw_stderr_exported": false,
+    "release_acceptance": false,
+    "upstream_source_sha256": {
+      "gskrenderer.c": "d7976357a39dfc695f4419e77265be593f6cef11fabe85877d550b3efa978df4",
+      "gskdebugprivate.h": "c7b08473062632e550d884a8287afbbdce00c0cf0dd2af45d86e2004c682ffb5",
+      "gskdebug.c": "00d934fc7bec46a17be298144cebbb7cb5e978b8edab768caa81819382d0e5cc",
+      "gdkdebugprivate.h": "96fbd2e0f5ef8a99085bfc8f6bb73046fafbf420219ef35178e562448e990b0c"
+    }
+  },
+  "capture_precondition": {
+    "scope": "owned static reference player and subordinate same-fixture trials only",
+    "action": "script-message celluloid-action win.set-controls-visible(false)",
+    "private_settings_backend": "keyfile in existing owned isolated XDG_CONFIG_HOME; actual process environment bound",
+    "readback": "window-state show-controls false, written by supported action after GTK control visibility update",
+    "settle_seconds": 0.5,
+    "oracle_bytes_unchanged": true,
+    "release_acceptance": false,
+    "upstream_celluloid_version": "0.30",
+    "upstream_source_sha256": {
+      "celluloid-application.c": "42b6528cbe8d3ff2e18f62a582fbdc03b188cc9a7def9e42094fb091a594d7f6",
+      "celluloid-common.c": "c787a3164e34fd367f382484b4244b03e48abba82313dfa3308c68e6b8776025",
+      "celluloid-controller-actions.c": "fa5cbbacbbbb165176776504279c89da2081a614496d425fb2922690b04079f3",
+      "celluloid-controller.c": "94c5cba4078be1d1df3fa7b06e91007ab5833be400f49a7a52e0df4a48ee9daf",
+      "celluloid-main-window.c": "c12256cdd96e797111365ea405462c419d20784b9d38d1245e9d786289ebb2a5",
+      "celluloid-view.c": "aa2981a472b61388cd53317afcee94991f1b17bd660456f0b252283dbc14bd1f"
+    },
+    "upstream_glib_version": "2.88.3",
+    "upstream_glib_source_sha256": {
+      "gkeyfilesettingsbackend.c": "51a5d48003567ffb89f6b365f871fe2e16d9483c89d6bce7d3ad208465fcfc98",
+      "gsimpleaction.c": "4394f26f49ed227941a7e13b6f0be50ba380f89ad91030e65e551d8427119938"
+    }
+  },
+  "bulk_evidence_transport": {
+    "UART_records_unchanged": [
+      "BEGIN",
+      "PROVENANCE",
+      "FUNCTIONAL",
+      "END",
+      "physical controllers"
+    ],
+    "adapted_function": "validate_harness_serial (strict original-byte sidecar reconciliation only)",
+    "aggregate_bytes_limit": 16777216,
+    "chunks_per_file_limit": 172,
+    "context_fields": [
+      "stage",
+      "boot_id",
+      "native_source_sha256",
+      "checker_sha256"
+    ],
+    "file_bytes_limit": 4194304,
+    "file_count_limit": 128,
+    "kernel_or_product_fix": false,
+    "line_bytes_limit": 65536,
+    "original_CHUNK_and_MANIFEST_bytes_unchanged": true,
+    "original_UART_END_required": true,
+    "original_validator_source_sha256": "1cf453d97fbae6dbcef1b0c8c6706645833ffeccdc91310e25d39ea982ee4199",
+    "port": "arctic-native-evidence",
+    "release_acceptance": false,
+    "scope": "original disposable Native fixture only; dedicated output-only named virtio port",
+    "unchanged_acceptance_validator_functions": [
+      "check_editor_save",
+      "check_fullscreen",
+      "check_native",
+      "check_physical",
+      "desktop_controller",
+      "exactly_zero",
+      "extract_evidence",
+      "installed_scope",
+      "native_block",
+      "preserve_audio",
+      "records"
+    ],
+    "wire_bytes_limit": 33554432
   }
 }

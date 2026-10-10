@@ -13,7 +13,11 @@ class ReleaseIdentityTest(unittest.TestCase):
         version = re.search(r'^Version:\s+(\S+)', spec, re.M)[1]
         short = '.'.join(version.split('.')[:2])
         self.assertRegex(spec, rf'(?m)^%global arctic_version\s+{re.escape(short)}$')
-        self.assertIn(f'VERSION_ID={short}\n', (ROOT / 'packaging/release/os-release').read_text())
+        os_release = (ROOT / 'packaging/release/os-release').read_text()
+        self.assertIn(f'VERSION_ID={short}\n', os_release)
+        self.assertIn(f'VERSION="{version} (Fedora 44 base)"\n', os_release)
+        self.assertIn(f'PRETTY_NAME="Arctic Linux {version} (Fedora 44 base)"\n', os_release)
+        self.assertIn(f'BUILD_ID={version}\n', os_release)
         kiwi = ET.parse(ROOT / 'iso/kiwi/config.kiwi').getroot()
         self.assertEqual(kiwi.findtext('preferences/version'), version)
         self.assertEqual(kiwi.find('preferences/type').get('volid'), 'Arctic-Linux-' + short)

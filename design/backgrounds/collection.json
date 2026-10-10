@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "repository": "https://github.com/yuvalkolodkingal/Wallpapers",
-  "revision": "a94d5b481efa497556d5b24cc2fddf9c9cbcee6a",
+  "revision": "4f0288d170ad505a4f6c7239f85e200b44836621",
   "author": "Yuval Kolodkin-Gal",
   "default": "city-afterglow",
   "wallpapers": [
@@ -158,6 +158,17 @@
       "sha256": "3a49ed965b054bebc2ca8147fb608029287d1670632cb305bd08d3801b7a147e",
       "photographer": "Yuval Kolodkin-Gal",
       "file": "city-afterglow.jpg"
+    },
+    {
+      "slug": "ember-clouds-city-silhouette",
+      "title": "Ember Clouds, City Silhouette",
+      "theme": "ember",
+      "description": "Sunlit cloud edges glow orange beside a dark city silhouette.",
+      "width": 2048,
+      "height": 1152,
+      "sha256": "7af8cb5ce0d87773109d759afdd1d14ef22ce7e84fdc1533da1539083cd11b0b",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "ember-clouds-city-silhouette.jpg"
     },
     {
       "slug": "magenta-in-the-leaves",
