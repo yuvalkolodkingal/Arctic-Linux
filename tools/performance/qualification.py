@@ -296,7 +296,7 @@ def export_failure_phase(work, screened, screening_failure):
     C.require(type(summary) is dict and set(summary) == {'schema', 'status', 'release_acceptance',
         'performance_acceptance', 'original_evidence_uploaded', 'screening_failure',
         'private_owner_verified', 'observed_context', 'runner_phase', 'read_status', 'markers',
-        'smoke_exit', 'console_restore_error', 'guest_failure'}
+        'smoke_exit', 'console_restore_error', 'guest_failure', 'guest_envelope'}
         and summary['schema'] == 'arctic-paired-failure-phase-v1', 'Unsafe failure summary fields')
     diagnostic = summary['guest_failure']
     sites = dict(guest=(193, 203, 205, 211, 215, 218, 221, 223, 227, 252, 255, 288, 324,
@@ -322,6 +322,56 @@ def export_failure_phase(work, screened, screening_failure):
         or (diagnostic['status'] != 'source_known_shape' and diagnostic['code'] == 'none'
             and diagnostic['exception_class'] == 'none' and diagnostic['last_observer_phase'] == 'unavailable')),
         'Unsafe guest failure diagnostic')
+    # Envelope categories explain rejected shapes without exposing UART text.
+    # They are independently closed here and confer no runtime acceptance.
+    envelope = summary['guest_envelope']
+    counts = {'collector_begin', 'collector_end', 'smoke_exit', 'tracebacks',
+        'supported_exceptions', 'unsupported_exception_like_lines',
+        'admitted_observer_records', 'frames', 'source_candidates'}
+    source_faults = {'observer_context_mismatch', 'frozen_observer_mismatch',
+        'source_root_unavailable', 'source_directory_owner', 'source_blob_mismatch',
+        'source_parse_failure', 'source_inventory_mismatch', 'observer_source_mismatch'}
+    invalid = {'uart_utf8', 'uart_termination', 'observer_record_oversized', 'observer_record_invalid'}
+    ambiguous = {'marker_multiplicity', 'traceback_multiplicity', 'observer_phase_duplicate'}
+    unknown = {'smoke_not_nonzero', 'marker_order', 'smoke_exit_range', 'traceback_missing', 'traceback_order',
+        'frame_unrecognized', 'frame_chain_invalid'}
+    reasons = source_faults | invalid | ambiguous | unknown | {'not_observed',
+        'observer_record_count', 'source_candidate_count', 'source_known_shape'}
+    C.require(type(envelope) is dict and set(envelope) == {'reason', 'counts',
+        'collector_order', 'frame_status', 'control_status', 'last_observer_phase'}
+        and type(envelope['reason']) is str and envelope['reason'] in reasons
+        and type(envelope['counts']) is dict and set(envelope['counts']) == counts
+        and all(type(value) is str and value in {'unavailable', 'zero', 'one', 'multiple'}
+            for value in envelope['counts'].values())
+        and type(envelope['collector_order']) is str
+        and envelope['collector_order'] in {'unavailable', 'ordered', 'invalid'}
+        and type(envelope['frame_status']) is str
+        and envelope['frame_status'] in {'unavailable', 'recognized', 'unrecognized', 'control', 'invalid_chain'}
+        and type(envelope['control_status']) is str
+        and envelope['control_status'] in {'unavailable', 'none', 'present'}
+        and type(envelope['last_observer_phase']) is str
+        and envelope['last_observer_phase'] in phases, 'Unsafe guest UART envelope')
+    reason, category = envelope['reason'], diagnostic['status']
+    C.require((reason == 'not_observed' and category == 'unavailable')
+        or (reason in source_faults and category == 'source_mismatch')
+        or (reason in invalid and category == 'invalid_uart')
+        or (reason in ambiguous and category == 'ambiguous')
+        or (reason in unknown and category == 'unknown')
+        or (reason == 'observer_record_count' and ((category == 'unknown'
+            and envelope['counts']['admitted_observer_records'] == 'zero')
+            or (category == 'ambiguous' and envelope['counts']['admitted_observer_records'] == 'multiple')))
+        or (reason == 'source_candidate_count' and ((category == 'unknown'
+            and envelope['counts']['source_candidates'] == 'zero')
+            or (category == 'ambiguous' and envelope['counts']['source_candidates'] == 'multiple')))
+        or (reason == 'source_known_shape' and category == 'source_known_shape'
+            and all(envelope['counts'][key] == 'one' for key in counts - {'frames', 'unsupported_exception_like_lines'})
+            and envelope['counts']['frames'] == 'multiple'
+            and envelope['collector_order'] == 'ordered' and envelope['frame_status'] == 'recognized'
+            and envelope['last_observer_phase'] == diagnostic['last_observer_phase']),
+        'Guest UART envelope contradicts original classification')
+    C.require(envelope['last_observer_phase'] == 'unavailable'
+        or envelope['counts']['admitted_observer_records'] == 'one',
+        'Guest UART envelope phase lacks unique admitted observer identity')
     content = (json.dumps(summary, sort_keys=True, indent=2, allow_nan=False) + '\n').encode()
     C.require(len(content) <= 4096 and summary['release_acceptance'] is False
         and summary['performance_acceptance'] is False and summary['original_evidence_uploaded'] is False
