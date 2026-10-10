@@ -1,0 +1,86 @@
+{
+  "execution_files": {
+    ".github/workflows/safe-diagnostic-v7-20261010.yml": "6358051bc132934799bc753dab80b6aeea9614d5aa44367b3c244b85ebee8ea7",
+    "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/native-functional/native_smoke.py": "99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b",
+    "tools/native-functional/screen-evidence.py": "62536ba81bd098f5d67bc6525bbfd7ccf69b8b61745bc1ee9aa27a3e8bf9490a",
+    "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
+    "tools/safe-diagnostic/common.py": "3d277808effe2957f080dac29afa3418fbcb6570923d4cdcb479b6cc0abb8cc9",
+    "tools/safe-diagnostic/guest.py": "e5d7f3743e8f6c745d372842f0495a3fdff7e2017d51394ed7297bb2c60f1c69",
+    "tools/safe-diagnostic/host.py": "4699945c7793ac4ec0fc0bfa0b05d5167b5ccad96f2303617106460a196bfb72",
+    "tools/safe-diagnostic/run.sh": "3cd69c2e8d86da9f8aac12c24fef24c0ca21d9614a882387a52080d6e7c282b2",
+    "tools/safe-diagnostic/screencopy.c": "72deb18e64b271d8c2fb182511b19056b6d182d1ffdc77106dd9515f22fc40e0"
+  },
+  "image": {
+    "archive_bytes": 1930013330,
+    "archive_sha256": "07d60353230eccd0b077279cf6195d73dc6a57f61d9cba3c55503776a76be716",
+    "artifact_id": 11664120624,
+    "bytes": 1929826304,
+    "name": "Arctic-Linux-1.2-candidate-38032256030-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "1695aa2af6ec0da618e87c5387a03f44752121111f0bbe6900699d9549b40994",
+    "run_id": 38032256030,
+    "sha256": "0ab25cc921873ba8750042a6265b6a9e42e669cd78a08d6621c140fd18468609",
+    "source_sha": "bc0521136520daaa221e815822e88ffc44107957"
+  },
+  "image_qualified": false,
+  "observer_profile_admitted": false,
+  "performance_acceptance": false,
+  "ready": true,
+  "release_acceptance": false,
+  "schema": "arctic-safe-diagnostic-v1",
+  "source_files": {
+    "iso/kiwi/grub-arctic.cfg.iso-template": {
+      "blob_sha": "c6e97b51a8eca3606c36a5495a475a91881ab1d5",
+      "bytes": 2960,
+      "mode": "100644",
+      "sha256": "bf9a22c32fa9b8d2c15fc3dec4539fb221828e83bc0a7389381cae1f6c66e130"
+    },
+    "packaging/desktop/arctic-graphics.sh": {
+      "blob_sha": "6e4c585ed091d60d967daa9eb067e94676fb87b9",
+      "bytes": 1999,
+      "mode": "100644",
+      "sha256": "299457a89a18d21f4fd1d14bc204310f6aa49420914e5fffffe647122fad77f5"
+    },
+    "packaging/mangowm.spec": {
+      "blob_sha": "6787aee370e574570cdecd8a884e6d7126cf13af",
+      "bytes": 3484,
+      "mode": "100644",
+      "sha256": "e9de7e9cce9e2a73beadedd1a1623f87f72d23abd703baffa839f5bcd63eb531"
+    },
+    "packaging/patches/mango-software-renderer-dmabuf.patch": {
+      "blob_sha": "28f1f8b8f92711d912568a48f05ca8d27c7b4998",
+      "bytes": 1050,
+      "mode": "100644",
+      "sha256": "00ae475f37e1061963fa3213b9681b67134a9b3cbfc4214114ed37e3dcc043dd"
+    },
+    "packaging/sddm-wayland-mango/sddm-compositor-mango": {
+      "blob_sha": "9b1e249b83c6a3a59d4a6552c2a354efa9b95e54",
+      "bytes": 1131,
+      "mode": "100755",
+      "sha256": "46fb39bf871573f3a50f56e381d3ff0013b65f68fe82af8cc259703dc3fd6e20"
+    },
+    "tools/lib/iso_startup.py": {
+      "blob_sha": "fe1a84e11ab16545a553f7baeb6034f60343ade4",
+      "bytes": 11825,
+      "mode": "100644",
+      "sha256": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda"
+    },
+    "tools/lib/vmtest.py": {
+      "blob_sha": "ae182d56a92a7f5ce3b07d7f20a11c83b0b8844f",
+      "bytes": 11794,
+      "mode": "100644",
+      "sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    "tools/test-iso.sh": {
+      "blob_sha": "5f9239a936798223bbf8408cf4b1d63966173a49",
+      "bytes": 10734,
+      "mode": "100755",
+      "sha256": "c26da01f799e3e122e03983ca98afb882e14314f5a175fde1f462ef5c34b3283"
+    }
+  }
+}
