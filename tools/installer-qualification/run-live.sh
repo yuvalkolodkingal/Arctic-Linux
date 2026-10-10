@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Owned fresh installer live boot; the explicit active profile adds its private target.
 set -euo pipefail
+diagnostic_stage=run-live-init
+diagnostic_emit() {
+  if [[ "${ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN:-}" =~ ^[0-9a-f]{32}$ ]]; then
+    printf 'ARCTIC-INSTALLER-INNER %s installer-inner-%s-command-error\n' "$ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN" "$diagnostic_stage" || :
+  fi
+}
+trap 'if [[ $? != 0 ]]; then diagnostic_emit; fi' EXIT
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/../lib/container.sh"
 [[ $# == 7 ]] || arctic_die 'usage: run-live.sh SOURCE EXECUTION ISO PAYLOAD CONTEXT FIRMWARE OUT'
@@ -18,6 +25,7 @@ out=$(realpath "$out")
 for path in "$source_tree" "$execution_tree" "$iso" "$payload" "$context" "$out"; do
   [[ "$path" =~ ^/[A-Za-z0-9_./-]+$ ]] || arctic_die 'fixture paths require simple absolute names'
 done
+diagnostic_stage=run-live-context
 python3 - "$source_tree" "$execution_tree" "$iso" "$payload" "$context" <<'PY'
 import hashlib,importlib.util,json,subprocess,sys
 from pathlib import Path
@@ -45,11 +53,13 @@ if value['schema']=='arctic-installer-active-context-v1':
     for name,key in (('active-guest.py','active_checker_sha256'),('installed-guest.py','installed_checker_sha256')):
         assert sha(execution/'tools/installer-qualification'/name)==value[key]
 PY
+diagnostic_stage=run-live-payload
 cp "$execution_tree/tools/installer-qualification/guest.py" "$out/data/installer-guest.py"
 cp "$execution_tree/tools/native-functional/taskbar-runtime.py" "$out/data/taskbar-runtime.py"
 cp "$execution_tree/tools/native-functional/native_smoke.py" "$out/data/native_smoke.py"
 cp "$payload/raw-screencopy" "$out/data/raw-screencopy"
 cp "$context" "$out/data/installer-context.json"
+diagnostic_stage=run-live-credentials
 python3 - "$execution_tree" "$out/data" <<'PY'
 import json,os,secrets,shutil,sys
 from pathlib import Path
@@ -61,7 +71,9 @@ if context['schema']=='arctic-installer-active-context-v1':
     fd=os.open(data/'active-credentials.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump({'password':secrets.token_hex(16)},stream)
 PY
+diagnostic_stage=run-live-permissions
 chmod 0755 "$out/data/raw-screencopy"
+diagnostic_stage=run-live-bootstrap
 cat > "$out/system-area.sh" <<'BOOTSTRAP'
 #!/bin/sh
 set -eu
@@ -84,6 +96,7 @@ case "$vt" in ''|0|*[!0-9]*) exit 1;; esac
 chvt "$vt"
 exec python3 /run/t/installer-guest.py --disposable-guest </dev/null >/dev/ttyS0 2>&1
 BOOTSTRAP
+diagnostic_stage=run-live-container-binding
 engine=$(arctic_engine)
 arctic_container_args
 image="${ARCTIC_FEDORA_IMAGE:?immutable prepared VM image required}"
@@ -115,16 +128,27 @@ if receipt.is_file() and not receipt.is_symlink():
             raise SystemExit(1)
 PY_CLEANUP
 }
-trap cleanup EXIT
+trap 'if [[ $? != 0 ]]; then diagnostic_emit; fi; cleanup' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+diagnostic_stage=run-live-container-run
 "$engine" run --name "$container" --cidfile "$out/container-id" --label "org.arctic.installer.invocation=$invocation" "${ARCTIC_CONTAINER_ARGS[@]}" --device /dev/kvm \
-  -e OUT="$out" -e FIRMWARE="$firmware" -v "$execution_tree:/execution:ro" \
+  -e ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN -e OUT="$out" -e FIRMWARE="$firmware" -v "$execution_tree:/execution:ro" \
   -v "$iso:/iso:ro" -v "$out:$out" "$image" bash -c "$ARCTIC_CONTAINER_PROLOGUE"'
 set -euo pipefail
+diagnostic_stage=container-packages
+diagnostic_emit() {
+  if [[ "${ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN:-}" =~ ^[0-9a-f]{32}$ ]]; then
+    printf "ARCTIC-INSTALLER-INNER %s installer-inner-%s-command-error\n" "$ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN" "$diagnostic_stage" || :
+  fi
+}
+trap "if [[ \$? != 0 ]]; then diagnostic_emit; fi" EXIT
 rpm -q qemu-system-x86-core qemu-ui-dbus qemu-ui-opengl dbus-daemon glib2 xorriso python3-pillow >/dev/null
+diagnostic_stage=container-display
 qemu-system-x86_64 -display help | grep -qx dbus
+diagnostic_stage=container-data
 xorriso -as mkisofs -quiet -V ARCTICGUI -J -R -uid 0 -gid 0 -G "$OUT/system-area.sh" \
   -o "$OUT/data.iso" "$OUT/data"
+diagnostic_stage=container-driver
 python3 /execution/tools/installer-qualification/driver.py --out "$OUT" --firmware "$FIRMWARE"
 '

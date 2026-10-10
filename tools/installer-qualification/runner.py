@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import uuid
 
@@ -20,6 +21,9 @@ HERE = Path(__file__).resolve().parent
 _display_spec = importlib.util.spec_from_file_location('installer_runner_signal_guard', HERE.parent / 'native-functional/taskbar-display.py')
 _display = importlib.util.module_from_spec(_display_spec)
 _display_spec.loader.exec_module(_display)
+_driver_spec = importlib.util.spec_from_file_location('installer_inner_diagnostics', HERE / 'driver.py')
+_driver = importlib.util.module_from_spec(_driver_spec)
+_driver_spec.loader.exec_module(_driver)
 
 DIAGNOSTIC_STAGES = ('docker-info', 'provision', 'capture-build', 'build-binding', 'context',
                      'source-verify', 'run-live', 'extract', 'report-validation',
@@ -54,7 +58,21 @@ DIAGNOSTIC_LITERALS = {
                 ('installer output parent became a symlink', 'output-symlink'),
                 ('installer port input exceeds bound', 'port-bound'),
                 ('installer UART input exceeds bound', 'uart-bound')),
-    'report-validation': (('Host and guest actual transitions differ', 'transition-binding'),),
+    'report-validation': (
+        ('Host and guest actual transitions differ', 'transition-binding'),
+        ('installer report failed or is not exact live context', 'failed-status-or-context'),
+        ('active report contains missing or private fields', 'report-fields'),
+        ('active installer report failed or differs from exact live context', 'failed-status-or-context'),
+        ('installer restoration matrix differs', 'case-matrix'),
+        ('active restoration transition matrix differs', 'case-matrix'),
+        ('installer case failed', 'case-failed'),
+        ('active restoration case failed', 'case-failed'),
+        ('installer cleanup/retained engine proof differs', 'cleanup-retained-engine'),
+        ('active cleanup does not retain the completed engine', 'cleanup-retained-engine'),
+        ('live installer security interval failed', 'security-interval'),
+        ('active live installer security interval failed', 'security-interval'),
+        ('installer physical pixels absent', 'physical-pixels'),
+        ('capture physical dimensions differ', 'capture-dimensions')),
     'execution-validation': (('installer execution identity/status differs', 'execution-identity'),
                              ('active installer execution identity/status differs', 'execution-identity')),
 }
@@ -79,6 +97,80 @@ def diagnose(stage, error):
         print('ARCTIC-INSTALLER-DIAGNOSTIC=' + code, flush=True)
     except (OSError, ValueError):
         # Closed Actions stdout must not interrupt original failure cleanup.
+        pass
+
+
+def inner_codes(raw, token):
+    """Accept only complete host-nonce-bound fixed codes from the private log."""
+    if type(raw) is not bytes or len(raw) > 16 * 1024 * 1024 or type(token) is not str or not re.fullmatch('[0-9a-f]{32}', token):
+        return ()
+    prefix = ('ARCTIC-INSTALLER-INNER ' + token + ' ').encode('ascii')
+    allowed = {code.encode('ascii'): code for code in _driver.DIAGNOSTIC_CODES}
+    result = []
+    for line in raw.splitlines(keepends=True):
+        if line.endswith(b'\n') and line.startswith(prefix):
+            code = allowed.get(line[len(prefix):-1])
+            if code is not None and code not in result:
+                result.append(code)
+                if len(result) == 64:
+                    break
+    return tuple(result)
+
+
+def relay_inner(log, token):
+    try:
+        fd = os.open(log, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                return
+            codes = inner_codes(stream.read(16 * 1024 * 1024 + 1), token)
+        for code in codes:
+            print('ARCTIC-INSTALLER-DIAGNOSTIC=' + code, flush=True)
+    except (OSError, ValueError):
+        pass
+
+
+def reported_codes(report, active):
+    """Bounded fixed labels describe reported scalars, never acceptance verdicts."""
+    profile = 'active' if active else 'idle'
+    prefix = 'installer-reported-' + profile + '-'
+    if type(report) is not dict:
+        return (prefix + 'report-invalid',)
+    status = report.get('status')
+    codes = [prefix + 'status-' + (status if type(status) is str and status in ('passed', 'failed', 'unrun') else 'invalid')]
+    for key in ('baseline', 'completion') if active else ('baseline',):
+        codes.append(prefix + key + '-' + ('observed' if type(report.get(key)) is dict and report[key] else 'unrun'))
+    cases = report.get('cases')
+    valid_cases = type(cases) is list and len(cases) <= 64
+    for kind in ('vt', 'output'):
+        for cycle in range(1 if active else 3):
+            matches = [case for case in cases if type(case) is dict and type(case.get('kind')) is str and
+                       case['kind'] == kind and type(case.get('cycle')) is int and case['cycle'] == cycle] if valid_cases else []
+            status = 'unrun' if not matches and valid_cases else 'invalid'
+            if len(matches) == 1:
+                value = matches[0].get('status')
+                status = value if type(value) is str and value in ('passed', 'failed', 'unrun') else 'invalid'
+            codes.append(prefix + kind + '-' + str(cycle) + '-' + status)
+    cleanup = report.get('cleanup')
+    for key in ('original_vt_restored', 'engine_retained', *(() if active else ('owned_gui_stopped', 'owned_bridge_stopped'))):
+        value = cleanup.get(key) if type(cleanup) is dict else None
+        codes.append(prefix + 'cleanup-' + key.replace('_', '-') + '-' +
+                     ('passed' if value is True else 'failed' if value is False else 'unrun'))
+    security = report.get('security')
+    selinux = security.get('selinux') if type(security) is dict else None
+    avcs = security.get('observed_new_avcs') if type(security) is dict else None
+    codes.append(prefix + 'selinux-' + ('enforcing' if type(selinux) is str and selinux == 'Enforcing' else
+                                      'non-enforcing' if type(selinux) is str and selinux in ('Permissive', 'Disabled') else 'unrun'))
+    codes.append(prefix + 'avcs-' + ('clean' if type(avcs) is int and avcs == 0 else
+                                   'detected' if type(avcs) is int and avcs > 0 else 'unrun'))
+    return tuple(codes)
+
+
+def diagnose_report(report, active):
+    try:
+        for code in reported_codes(report, active):
+            print('ARCTIC-INSTALLER-DIAGNOSTIC=' + code, flush=True)
+    except (OSError, ValueError):
         pass
 
 
@@ -212,6 +304,7 @@ def main():
     vm = args.evidence.parent / ('installer-vm-' + uuid.uuid4().hex)
     payload = args.evidence.parent / ('installer-tools-' + uuid.uuid4().hex)
     errors = []
+    report = None
     def save(): write(args.evidence / 'execution.json', state)
     def interrupted(number, frame): raise InterruptedError('Installer qualification signal ' + str(number))
     signal.signal(signal.SIGINT, interrupted); signal.signal(signal.SIGTERM, interrupted)
@@ -263,6 +356,8 @@ def main():
         verify(args, execution); save()
         env = dict(os.environ, CONTAINER_ENGINE='docker', ARCTIC_VM_CONTAINER_NAME='arctic-paired-native-' + uuid.uuid4().hex,
                    ARCTIC_FEDORA_IMAGE=prepared)
+        diagnostic_token = uuid.uuid4().hex
+        env['ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN'] = diagnostic_token
         try:
             diagnostic_stage = 'run-live'
             execute(['bash', str(HERE / 'run-live.sh'), str(args.source), str(execution), str(iso), str(payload),
@@ -270,6 +365,7 @@ def main():
                     (80 if args.active_profile else 35) * 60, execution, env)
         except BaseException as error:
             diagnose(diagnostic_stage, error)
+            relay_inner(args.evidence / 'installer-harness.log', diagnostic_token)
             errors.append('harness: ' + type(error).__name__ + ': ' + str(error))
         finally:
             diagnostic_stage = 'extract'
@@ -294,6 +390,8 @@ def main():
                              lambda name: (args.evidence / name).read_bytes())
     except BaseException as error:
         diagnose(diagnostic_stage, error)
+        if report is not None:
+            diagnose_report(report, args.active_profile)
         errors.append(type(error).__name__ + ': ' + str(error))
     finally:
         diagnostic_stage = 'cleanup'

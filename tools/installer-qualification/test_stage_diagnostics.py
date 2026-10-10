@@ -56,7 +56,7 @@ class Controls(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, '^Unknown installer diagnostic stage$'):
                 R.diagnostic_code(stage, PrivateError('private'))
 
-    def pipeline(self, failed_stage=None, active=False):
+    def pipeline(self, failed_stage=None, active=False, inner_log=None, report_value=None):
         """Drive actual main() using synthetic files and intercepted host commands."""
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -124,6 +124,8 @@ class Controls(unittest.TestCase):
                     vm = Path(argv[-1]); vm.mkdir()
                     (vm / 'serial.log').write_bytes(b'synthetic serial')
                     (vm / 'installer-port.log').write_bytes(b'synthetic port')
+                    if inner_log is not None:
+                        Path(log).write_bytes(inner_log(_[-1]['ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN']))
                     fault(stage)
 
             def preserve(_vm, target, _active):
@@ -136,7 +138,8 @@ class Controls(unittest.TestCase):
                 fault('extract')
                 target.mkdir()
                 (target / 'installer-report.json').write_text('{}')
-                return {'report': {}, 'state': {'status': 'passed'}, 'files': {}, 'requests': []}
+                return {'report': {} if report_value is None else report_value,
+                        'state': {'status': 'passed'}, 'files': {}, 'requests': []}
 
             contract = SimpleNamespace(require=R.C.require, REQUIRED_IMAGES=(),
                 cleanup_images=cleanup_images,
@@ -176,7 +179,10 @@ class Controls(unittest.TestCase):
                     self.assertNotIn('synthetic-private', stdout)
                     lines = stdout.splitlines()
                     self.assertTrue(lines)
-                    self.assertTrue(all(line.startswith('ARCTIC-INSTALLER-DIAGNOSTIC=installer-' + stage + '-') for line in lines))
+                    self.assertTrue(any(line.startswith('ARCTIC-INSTALLER-DIAGNOSTIC=installer-' + stage + '-') for line in lines))
+                    self.assertTrue(all(line.startswith('ARCTIC-INSTALLER-DIAGNOSTIC=installer-' + stage + '-') or
+                                        (stage in ('report-validation', 'execution-validation') and
+                                         line.startswith('ARCTIC-INSTALLER-DIAGNOSTIC=installer-reported-')) for line in lines))
                     self.assertTrue(all(len(line) <= 110 for line in lines))
                     if stage in ('docker-info', 'provision', 'capture-build', 'build-binding', 'context', 'source-verify'):
                         self.assertNotIn('run-live', trace)
