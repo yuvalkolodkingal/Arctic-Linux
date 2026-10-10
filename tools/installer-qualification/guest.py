@@ -51,6 +51,14 @@ OVERRIDES = ('ARCTIC_INSTALLER_BRIDGE', 'ARCTIC_INSTALLER_SOCKET', 'ARCTIC_INSTA
 # Only source-attested fixed literals and phases may survive active error masking.
 # These labels describe failures; they never alter a report or release verdict.
 PRIMARY_DIAGNOSTIC_LITERALS = {'DRM connector belongs to another card': 'drm-connector-belongs-to-another-card',
+ 'Mango DRM process is absent or ambiguous': 'mango-drm-process-is-absent-or-ambiguous',
+ 'Mango DRM process session differs': 'mango-drm-process-session-differs',
+ 'Mango DRM process changed during observation': 'mango-drm-process-changed-during-observation',
+ 'Mango DRM descriptor has no canonical sysfs identity': 'mango-drm-descriptor-has-no-canonical-sysfs-identity',
+ 'Mango DRM descriptor major/minor backlink differs': 'mango-drm-descriptor-major-minor-backlink-differs',
+ 'Mango primary/render DRM device binding differs': 'mango-primary-render-drm-device-binding-differs',
+ 'actual DRM PCI transport is not virtio-pci': 'actual-drm-pci-transport-is-not-virtio-pci',
+ 'actual DRM virtio child is not GPU': 'actual-drm-virtio-child-is-not-gpu',
  'GUI Hebrew autosave has not completed': 'gui-hebrew-autosave-has-not-completed',
  'GUI Start replaced the original engine': 'gui-start-replaced-the-original-engine',
  'GUI fill outside Hebrew keyboard choice': 'gui-fill-outside-hebrew-keyboard-choice',
@@ -535,6 +543,47 @@ def window_proof(state, layers, outputs, expected_count=2):
     return dict(window=win, layers=mapped, output=output, physical_size=[mode['width'], mode['height']])
 
 
+def mango_drm_devices(uid, session, proc_root=Path('/proc'), sys_root=Path('/sys')):
+    """Bind the real compositor's open primary/render FDs to sysfs devices."""
+    mangos = []
+    for proc in Path(proc_root).glob('[0-9]*'):
+        try:
+            if proc.stat().st_uid != uid or (proc / 'comm').read_text().strip() != 'mango':
+                continue
+            proof, env = process_proof(int(proc.name), uid, '/usr/bin/mango', proc_root)
+            require(env.get('XDG_SESSION_ID') == session, 'Mango DRM process session differs')
+            mangos.append(proof)
+        except (FileNotFoundError, ProcessLookupError):
+            pass
+    require(len(mangos) == 1, 'Mango DRM process is absent or ambiguous')
+    proof = mangos[0]
+    devices, primary = set(), set()
+    for descriptor in (Path(proc_root) / str(proof['pid']) / 'fd').iterdir():
+        if not descriptor.name.isdigit():
+            continue
+        try:
+            info = descriptor.stat()
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if not stat.S_ISCHR(info.st_mode) or os.major(info.st_rdev) != 226:
+            continue
+        number = str(os.major(info.st_rdev)) + ':' + str(os.minor(info.st_rdev))
+        node = (Path(sys_root) / 'dev/char' / number).resolve(strict=True)
+        require(re.fullmatch(r'card[0-9]+|renderD[0-9]+', node.name) and
+                (Path(sys_root) / 'class/drm' / node.name).resolve(strict=True) == node,
+                'Mango DRM descriptor has no canonical sysfs identity')
+        require((node / 'dev').read_text().strip() == number,
+                'Mango DRM descriptor major/minor backlink differs')
+        device = (node / 'device').resolve(strict=True)
+        devices.add(device)
+        if re.fullmatch('card[0-9]+', node.name):
+            primary.add(device)
+    require(primary and devices == primary, 'Mango primary/render DRM device binding differs')
+    current, _ = process_proof(proof['pid'], uid, '/usr/bin/mango', proc_root)
+    require(current == proof, 'Mango DRM process changed during observation')
+    return primary
+
+
 class Installer:
     def __init__(self, native, context, request=emit):
         self.native, self.context, self.request_emit = native, context, request
@@ -716,15 +765,15 @@ class Installer:
     def drm_heads(self):
         # A single isolated virtio GPU initializes scanouts in index order.
         # Linux DRM virtual connector numbering therefore binds Virtual-1/2
-        # to scanout head 0/1. Reject extra cards, renamed/extra connectors,
-        # or missing kernel evidence rather than guessing from layout alone.
+        # to scanout head 0/1. Bind Mango's open DRM devices before requiring
+        # one card; reject renamed/extra connectors or missing kernel evidence.
+        compositor_devices = mango_drm_devices(self.uid, self.session)
         cards = sorted(p for p in Path('/sys/class/drm').glob('card*')
-                       if re.fullmatch('card[0-9]+', p.name))
+                       if re.fullmatch('card[0-9]+', p.name) and
+                       (p / 'device').resolve(strict=True) in compositor_devices)
         require(len(cards) == 1, 'QEMU head binding requires exactly one actual DRM card')
         card = cards[0]
         device = (card / 'device').resolve(strict=True)
-        driver = (card / 'device/driver').resolve(strict=True)
-        require(driver.name == 'virtio_gpu', 'actual DRM device is not virtio_gpu')
         pci = [p for p in (device, *device.parents)
                if re.fullmatch(r'[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]', p.name)]
         require(len(pci) == 1, 'virtio GPU PCI device binding is absent or ambiguous')
@@ -732,6 +781,15 @@ class Installer:
         vendor = (pci / 'vendor').read_text().strip()
         pci_id = (pci / 'device').read_text().strip()
         require(vendor == '0x1af4' and pci_id == '0x1050', 'actual PCI device is not the isolated QEMU virtio GPU')
+        require(device == pci and (device / 'driver').resolve(strict=True).name == 'virtio-pci',
+                'actual DRM PCI transport is not virtio-pci')
+        children = [p for p in device.glob('virtio*') if re.fullmatch('virtio[0-9]+', p.name)
+                    and p.resolve(strict=True).parent == device
+                    and (p / 'driver').resolve(strict=True).name == 'virtio_gpu']
+        require(len(children) == 1, 'actual DRM device is not virtio_gpu')
+        require(int((children[0] / 'device').read_text().strip(), 16) == 16,
+                'actual DRM virtio child is not GPU')
+        driver = (children[0] / 'driver').resolve(strict=True)
         connectors = sorted(p for p in Path('/sys/class/drm').glob(card.name + '-*') if p.is_dir())
         require({p.name for p in connectors} == {card.name + '-Virtual-1', card.name + '-Virtual-2'},
                 'actual DRM virtual connector inventory differs from exact two-head contract')

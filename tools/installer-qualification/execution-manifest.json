@@ -7,7 +7,7 @@
     "tools/installer-qualification/controller.py": "4befdfcafc565bcfaa52fc7b6b2b54d4c0e1c20a4ed1bdc1b5315af8bd5a1084",
     "tools/installer-qualification/driver.py": "b8b3251d7db2c0f05c8c86e65c61d6d44b72d6b7cae0154b18591784b1186784",
     "tools/installer-qualification/evidence.py": "d9f98ad0e3fed14b3c77898ba0924ccceaa06777a45f3eea7c28eb38e0dc1d9b",
-    "tools/installer-qualification/guest.py": "061d876d5281815fd209101e42031baec7784617ddaf1507425575ef61a30017",
+    "tools/installer-qualification/guest.py": "008b66b30caabee61772bfbbd48cd5858f7ff3d6088806456183daccebcc604f",
     "tools/installer-qualification/run-live.sh": "7e2eb556ce49ecda84d464a814179ffccf96d715202607ca441c74ae27950ec9",
     "tools/installer-qualification/runner.py": "1fed054371165705d8ccab8dfffba23e1ace71ca0a30abc0760fd43a33f72e1c",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
