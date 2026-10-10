@@ -350,16 +350,17 @@ class Checker:
         for name in ('pw-loopback', 'pw-play', 'pw-dump', 'wpctl'):
             require(Path('/usr/bin', name).is_file(), 'native-audio-tool-missing')
         help_text = self.cmd(['/usr/bin/pw-loopback', '--help']).stdout.decode()
-        require('--capture-props' in help_text and '--playback-props' in help_text, 'loopback-flags-unavailable')
+        require('--channels' in help_text and '--channel-map' in help_text
+                and '--capture-props' in help_text and '--playback-props' in help_text, 'loopback-flags-unavailable')
         old = self.cmd(['/usr/bin/wpctl', 'inspect', '@DEFAULT_AUDIO_SOURCE@'], check=False)
         match = re.search(r'\bid (\d+),', old.stdout.decode())
         self.old_source = int(match.group(1)) if match else None
         nonce = os.urandom(8).hex()
         self.sink_name = 'ArcticDictationFixtureSink' + nonce
         self.source_name = 'ArcticDictationFixtureSource' + nonce
-        self.loop = subprocess.Popen(self.prefix + ['/usr/bin/pw-loopback', '--channels=1', '--rate=16000',
-            '--capture-props=media.class=Audio/Sink node.name=' + self.sink_name,
-            '--playback-props=media.class=Audio/Source node.name=' + self.source_name],
+        self.loop = subprocess.Popen(self.prefix + ['/usr/bin/pw-loopback', '--channels=1', '--channel-map=[ MONO ]',
+            '--capture-props=audio.rate=16000 media.class=Audio/Sink node.name=' + self.sink_name,
+            '--playback-props=audio.rate=16000 media.class=Audio/Source node.name=' + self.source_name],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         def observed():
             require(self.loop.poll() is None, 'loopback-process-died')
