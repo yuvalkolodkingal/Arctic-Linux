@@ -338,7 +338,7 @@ def export_failure_phase(work, screened, screening_failure):
     reasons = source_faults | invalid | ambiguous | unknown | {'not_observed',
         'observer_record_count', 'source_candidate_count', 'source_known_shape'}
     C.require(type(envelope) is dict and set(envelope) == {'reason', 'counts',
-        'collector_order', 'frame_status', 'control_status', 'last_observer_phase', 'exception_shape'}
+        'collector_order', 'frame_status', 'control_status', 'last_observer_phase', 'exception_shape', 'colored_traceback'}
         and type(envelope['reason']) is str and envelope['reason'] in reasons
         and type(envelope['counts']) is dict and set(envelope['counts']) == counts
         and all(type(value) is str and value in {'unavailable', 'zero', 'one', 'multiple'}
@@ -406,6 +406,49 @@ def export_failure_phase(work, screened, screening_failure):
         and summary['smoke_exit'] == 'nonzero' and summary['private_owner_verified'] is True),
         'Exception shape lacks owned source-bound ordered failure envelope')
     # exception-shape-only-end
+    # colored-trace-only-begin
+    projection = envelope['colored_traceback']
+    C.require(type(projection) is dict and set(projection) == {'reason', 'code',
+        'exception_class', 'frames', 'candidates', 'format'}
+        and all(type(value) is str for value in projection.values())
+        and projection['reason'] in {'not_observed', 'traceback_not_unique', 'observer_not_unique',
+            'exception_not_supported', 'frame_source_unknown', 'frame_unrecognized',
+            'frame_context_unknown', 'frame_chain_invalid', 'source_candidate_count', 'source_projection'}
+        and projection['frames'] in {'unavailable', 'zero', 'one', 'multiple'}
+        and projection['candidates'] in {'unavailable', 'zero', 'one', 'multiple'}
+        and ((projection['reason'] == 'source_projection'
+            and codes.get(projection['code']) == projection['exception_class']
+            and projection['frames'] == 'multiple' and projection['candidates'] == 'one'
+            and projection['format'] == 'python314_default')
+        or (projection['reason'] != 'source_projection'
+            and projection['code'] == projection['exception_class'] == projection['format'] == 'none')),
+        'Unsafe unauthenticated colored source projection')
+    C.require(projection['reason'] == 'not_observed' or
+        (envelope['counts']['tracebacks'] == 'one'
+            or projection['reason'] == 'traceback_not_unique'),
+        'Colored source projection lacks unique traceback')
+    C.require(projection['reason'] in {'not_observed', 'traceback_not_unique', 'observer_not_unique'}
+        or (envelope['counts']['admitted_observer_records'] == 'one'
+            and envelope['collector_order'] == 'ordered' and summary['smoke_exit'] == 'nonzero'
+            and summary['private_owner_verified'] is True),
+        'Colored source projection lacks owned source-bound failure envelope')
+    C.require(projection['reason'] in {'not_observed', 'traceback_not_unique',
+        'observer_not_unique', 'exception_not_supported'} or
+        (shape['reason'] == 'class_token_observed' and shape['format'] == 'python314_default'
+            and (projection['reason'] != 'source_projection'
+                or projection['exception_class'] == shape['exception_class'])),
+        'Colored source projection contradicts independent exception shape')
+    C.require((projection['reason'] in {'not_observed', 'traceback_not_unique',
+            'observer_not_unique', 'exception_not_supported'}
+            and projection['frames'] == projection['candidates'] == 'unavailable')
+        or (projection['reason'] in {'frame_source_unknown', 'frame_unrecognized',
+            'frame_context_unknown', 'frame_chain_invalid'} and projection['candidates'] == 'unavailable')
+        or (projection['reason'] == 'source_candidate_count'
+            and projection['frames'] == 'multiple' and projection['candidates'] in {'zero', 'multiple'})
+        or (projection['reason'] == 'source_projection'
+            and projection['frames'] == 'multiple' and projection['candidates'] == 'one'),
+        'Colored source projection counts contradict rejection category')
+    # colored-trace-only-end
     content = (json.dumps(summary, sort_keys=True, indent=2, allow_nan=False) + '\n').encode()
     C.require(len(content) <= 4096 and summary['release_acceptance'] is False
         and summary['performance_acceptance'] is False and summary['original_evidence_uploaded'] is False

@@ -51,7 +51,11 @@ def failure_phase_summary(work, screen_failure):
             last_observer_phase='unavailable',
             # Class tokens are unauthenticated shape observations, not causes.
             exception_shape=dict(reason='not_observed', count='unavailable',
-                exception_class='none', format='none')),
+                exception_class='none', format='none'),
+            # colored-trace-only-begin
+            colored_traceback=dict(reason='not_observed', code='none', exception_class='none',
+                frames='unavailable', candidates='unavailable', format='none')),
+            # colored-trace-only-end
         # envelope-only-end
         guest_failure=dict(status='unavailable', code='none', exception_class='none',
             last_observer_phase='unavailable'))
@@ -150,6 +154,91 @@ def failure_phase_summary(work, screen_failure):
         else:
             shape.update(reason='class_token_observed', exception_class=tokens[0][0], format=tokens[0][1])
     # exception-shape-only-end
+    # colored-trace-only-begin
+    def envelope_colored_traceback(body, traces, inventory, source_frames):
+        # Exact CPython v3.14.0 default theme grammar, independently projected
+        # onto the same pinned 104-site inventory. This never changes admission.
+        out = result['guest_envelope']['colored_traceback']
+        if len(traces) != 1:
+            out['reason'] = 'traceback_not_unique'
+            return
+        if result['guest_envelope']['counts']['admitted_observer_records'] != 'one':
+            out['reason'] = 'observer_not_unique'
+            return
+        shape = result['guest_envelope']['exception_shape']
+        if (shape['reason'] != 'class_token_observed' or shape['format'] != 'python314_default'
+                or shape['exception_class'] not in {'RuntimeError', 'ValueError', 'InterruptedError'}):
+            out['reason'] = 'exception_not_supported'
+            return
+        exception = re.compile(r'\x1b\[1;35m(RuntimeError|ValueError|InterruptedError)\x1b\[0m: '
+            r'\x1b\[35m([^\x00-\x1f\x7f]*)\x1b\[0m')
+        endings = [(i, exception.fullmatch(line)) for i, line in enumerate(body)
+            if exception.fullmatch(line)]
+        if len(endings) != 1 or endings[0][0] <= traces[0]:
+            out['reason'] = 'exception_not_supported'
+            return
+        # The traceback header is plain in upstream, even in colored output.
+        frame = re.compile(r'  File \x1b\[35m"/run/t/guest-check\.py"\x1b\[0m, line '
+            r'\x1b\[35m([1-9][0-9]{0,3})\x1b\[0m, in '
+            r'\x1b\[35m([A-Za-z_][A-Za-z_0-9]*|<module>)\x1b\[0m')
+        frames, contexts = [], set()
+        for line in body[traces[0]+1:endings[0][0]]:
+            match = frame.fullmatch(line)
+            if match:
+                number, function = int(match[1]), match[2]
+                if not frames and (number, function) == (11, '<module>'):
+                    # Exact line 11 of the whole-hash-admitted composed wrapper.
+                    contexts = {'measurement["main"](preconditioned=True, causal_precision=True)'}
+                else:
+                    known = [entry for entry in source_frames
+                        if entry['function'] == function and entry['start'] <= number <= entry['end']]
+                    if not known:
+                        out['reason'] = 'frame_source_unknown'
+                        return
+                    contexts = {entry['lines'][number-1].strip() for entry in known}
+                    for entry in inventory:
+                        if entry['line'] <= number <= entry['end_line'] and entry['function'] == function:
+                            contexts.update(source['lines'][i-1].strip() for source in known
+                                if source['source'] == entry['source']
+                                for i in range(entry['line'], entry['end_line']+1))
+                frames.append((number, function))
+                out['frames'] = envelope_count(len(frames))
+                if len(frames) > 128:
+                    out['reason'] = 'frame_chain_invalid'
+                    return
+                continue
+            # Only source-equal code context or CPython's exact red caret groups
+            # can accompany an admitted frame. No general ANSI normalization.
+            if not frames or len(line) > 4096 or not line.startswith('    '):
+                out['reason'] = 'frame_unrecognized'
+                return
+            pieces = re.fullmatch(r'(?:[^\x00-\x1f\x7f]|\t|'
+                r'\x1b\[(?:1;31|31)m[^\x00-\x1f\x7f]*\x1b\[0m)*', line)
+            if not pieces:
+                out['reason'] = 'frame_unrecognized'
+                return
+            # Extract only the above closed default-theme context grammar.
+            text = re.sub(r'\x1b\[(?:1;31|31)m([^\x00-\x1f\x7f]*)\x1b\[0m', r'\1', line).strip()
+            if text not in contexts and not (contexts and re.fullmatch(r'[ ~^]*[~^][ ~^]*', text)):
+                out['reason'] = 'frame_context_unknown'
+                return
+        if (not 2 <= len(frames) <= 128 or frames[0] != (11, '<module>')
+                or frames[1][1] != 'main' or not 871 <= frames[1][0] <= 942):
+            out['reason'] = 'frame_chain_invalid'
+            return
+        ending = endings[0][1]
+        candidates = [entry for entry in inventory
+            if entry['line'] <= frames[-1][0] <= entry['end_line'] and entry['function'] == frames[-1][1]
+            and entry['exception'] == ending[1]
+            and (ending[2] == entry['prefix'] if entry['exact'] else ending[2].startswith(entry['prefix']))]
+        out['candidates'] = envelope_count(len(candidates))
+        if len(candidates) != 1:
+            out['reason'] = 'source_candidate_count'
+            return
+        entry = candidates[0]
+        out.update(reason='source_projection', code=entry['source']+'_'+str(entry['line']),
+            exception_class=entry['exception'], format='python314_default')
+    # colored-trace-only-end
     def envelope_phase_prefix(body, traces, observer):
         # These fixed observations remain unauthenticated UART categories.
         # Invalid/duplicate identities or phases admit no phase observation.
@@ -213,6 +302,7 @@ def failure_phase_summary(work, screen_failure):
             envelope['reason'] = 'source_root_unavailable'  # envelope-only
             return dict(unknown, status='source_mismatch')
         inventory = []
+        source_frames = []  # colored-trace-only # envelope-only
         try:
             if os.fstat(source_root).st_uid != os.geteuid():
                 envelope['reason'] = 'source_directory_owner'  # envelope-only
@@ -223,6 +313,9 @@ def failure_phase_summary(work, screen_failure):
                     envelope['reason'] = 'source_blob_mismatch'  # envelope-only
                     return dict(unknown, status='source_mismatch')
                 tree = ast.parse(raw)
+                source_frames.extend(dict(source=name, function=node.name, start=node.lineno,  # colored-trace-only # envelope-only
+                    end=node.end_lineno, lines=raw.decode().splitlines()) for node in ast.walk(tree)  # colored-trace-only # envelope-only
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))  # colored-trace-only # envelope-only
                 parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
                 for node in ast.walk(tree):
                     if (not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call)
@@ -290,6 +383,7 @@ def failure_phase_summary(work, screen_failure):
         envelope['counts']['unsupported_exception_like_lines'] = envelope_count(sum(bool(re.match(r'^(?:[A-Za-z_][A-Za-z_0-9]*\.)*[A-Z][A-Za-z_0-9]*: ', line)) and not re.match(r'^(?:RuntimeError|ValueError|InterruptedError): ', line) for line in body))  # envelope-only
         envelope_phase_prefix(body, traces, observer)  # envelope-only
         envelope_exception_shape(body, traces)  # exception-shape-only # envelope-only
+        envelope_colored_traceback(body, traces, inventory, source_frames)  # colored-trace-only # envelope-only
         if len(traces) > 1 or len(exceptions) > 1:
             envelope['reason'] = 'traceback_multiplicity'  # envelope-only
             return dict(unknown, status='ambiguous')
