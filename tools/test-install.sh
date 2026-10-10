@@ -905,6 +905,14 @@ def native_taskbar_argv(argv, name, display_arg=None):
     argv += ["-chardev", f"file,id=taskbar_evidence,path={port_path}",
              "-device", "virtio-serial-pci,id=taskbar_serial",
              "-device", "virtserialport,bus=taskbar_serial.0,chardev=taskbar_evidence,name=arctic-taskbar-evidence"]
+    # The original Native fixture alone gets a second, output-only bulk port.
+    # BEGIN/report/END and physical controllers stay on their original UART.
+    if E.get("NATIVE_PHYSICAL_FIXTURE") == "1":
+        if E.get("NATIVE_AUDIO_FIXTURE") != "1" or not E.get("GUEST_CHECK") or E.get("NATIVE_LAUNCHER_FIXTURE") != "1":
+            raise RuntimeError("Invalid original native bulk fixture")
+        native_path = f"{out}/native-evidence-{name}.log".replace(",", ",,")
+        argv += ["-chardev", f"file,id=native_evidence,path={native_path}",
+                 "-device", "virtserialport,bus=taskbar_serial.0,chardev=native_evidence,name=arctic-native-evidence"]
     return argv
 
 def enable_taskbar_display(vm, display, name):
@@ -918,6 +926,23 @@ def enable_taskbar_display(vm, display, name):
     answer = taskbar_display_module.qmp_query(vm, "query-status", seconds=10)
     if not isinstance(answer, dict) or answer.get("running") is not True:
         raise RuntimeError("Taskbar VM did not run after UIInfo")
+
+def record_native_stop(vm, name, started, limit, marker):
+    # Failure-only observation from this owned QEMU; no raw stderr or new gate.
+    if E.get("NATIVE_PHYSICAL_FIXTURE") != "1" or E.get("NATIVE_TASKBAR_FIXTURE") != "1":
+        return
+    import json
+    status=vm.proc.poll()
+    elapsed=max(0,time.time()-started)
+    reason="process-exited" if status is not None else "deadline-expired" if elapsed>=limit else "exit-marker-missing"
+    value=dict(schema="arctic-native-harness-stop-v1",phase=name,qemu_returncode=status,
+               elapsed_seconds=elapsed,deadline_seconds=limit,deadline_reached=elapsed>=limit,
+               exit_marker_present=marker is not None,reason=reason,release_acceptance=False)
+    try:
+        fd=os.open(f"{out}/native-stop-{name}.json",os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        with os.fdopen(fd,"w") as stream:stream.write(json.dumps(value,sort_keys=True)+"\n")
+    except BaseException:
+        pass  # A secondary diagnostic error cannot replace the original failure.
 
 def close_taskbar_vm(vm, display):
     # Preserve the original cleanup path for every fixture-free VM. A taskbar
@@ -1072,6 +1097,7 @@ def stage_install():
         rc = vmtest.serial_value(serial("install"), "ARCTIC-INSTALL-EXIT=")
         log(f"install finished after {time.time() - t:.0f}s: exit {rc}")
         if rc is None:
+            record_native_stop(vm,"install",t,install_timeout,rc)
             dictation_host_stage("install-exit-missing-vm-running" if vm.proc.poll() is None else "install-exit-missing-vm-exited")
             log("install timed out")
             vm.shot("install-49-timeout")

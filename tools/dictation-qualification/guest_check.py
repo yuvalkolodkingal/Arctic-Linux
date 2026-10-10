@@ -318,6 +318,49 @@ def desktop():
     require(len(users) == 1, 'desktop-not-unique')
     return users[0]
 
+def journal_messages(rows):
+    """Decode every full MESSAGE value from journalctl's reversible JSON schema.
+
+    --all retains long values; binary values and repeated fields are arrays.
+    Unreadable or truncated material fails closed rather than becoming a clean
+    scan. Raw messages stay private and never become diagnostic error text.
+    """
+    require(type(rows) is bytes, 'journal-output-byte-type')
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, 'journal-json-duplicate-field')
+            value[key] = item
+        return value
+    def invalid_constant(_value):
+        raise Invalid('journal-json-nonfinite')
+    def text(value):
+        if type(value) is str:
+            value.encode('utf-8')
+            return value
+        require(type(value) is list and all(type(byte) is int and 0 <= byte <= 255
+                                           for byte in value), 'journal-message-type')
+        return bytes(value).decode('utf-8')
+    messages = []
+    try:
+        for line in rows.decode('utf-8').split('\n'):
+            if not line:
+                continue
+            entry = json.loads(line, object_pairs_hook=unique, parse_constant=invalid_constant)
+            require(type(entry) is dict, 'journal-json-entry-type')
+            if 'MESSAGE' not in entry:
+                continue
+            value = entry['MESSAGE']
+            if type(value) is list and value and not all(type(byte) is int for byte in value):
+                messages.extend(text(item) for item in value)
+            else:
+                messages.append(text(value))
+    except UnicodeError:
+        raise Invalid('journal-message-encoding') from None
+    except (ValueError, RecursionError):
+        raise Invalid('journal-json-invalid') from None
+    return '\n'.join(messages)
+
 def iter_process(pid):
     value = (Path('/proc') / str(pid) / 'stat').read_text()
     return int(value[value.rfind(')') + 2:].split()[19])
@@ -1093,8 +1136,8 @@ class Checker:
 
     def leakage(self):
         require(len(self.phrases) >= 10, 'leak-scan-missing-real-hypotheses')
-        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60, output_role='interval-journal').stdout.decode()
-        journal = '\n'.join(str(json.loads(line).get('MESSAGE', '')) for line in rows.splitlines() if line)
+        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json', '--output-fields=MESSAGE', '--all'], 60, output_role='interval-journal').stdout
+        journal = journal_messages(rows)
         notices = self.cmd(['/usr/bin/arctic-shell-ipc', 'notifications', 'history']).stdout.decode()
         # Also inspect the fallback daemon if it actually owns a user process.
         fallback = self.cmd(['/usr/bin/pgrep', '-u', str(self.account.pw_uid), '-x', 'mako'], check=False)
@@ -1162,8 +1205,8 @@ class Checker:
 
     def avcs(self):
         self.security()
-        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60, output_role='interval-journal').stdout.decode()
-        journal = '\n'.join(str(json.loads(line).get('MESSAGE', '')) for line in rows.splitlines() if line)
+        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json', '--output-fields=MESSAGE', '--all'], 60, output_role='interval-journal').stdout
+        journal = journal_messages(rows)
         after = self.audit_state()
         require(after['enabled'] == self.audit_before['enabled'] and after['enabled'] in (1, 2)
                 and after['lost'] == self.audit_before['lost'], 'audit-disabled-or-lost-records')

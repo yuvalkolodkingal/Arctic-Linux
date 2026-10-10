@@ -1873,6 +1873,112 @@ def run_checks(prefix, stage, *, disposable_guest=False, gui_v6=False):
     return report
 
 
+# BEGIN NATIVE_BULK_TRANSPORT
+class NativeBulkWriter:
+    """Write the bounded stream without an unbounded blocking device write."""
+    def __init__(self, fd):
+        self.fd = fd
+        self.deadline = time.monotonic() + 2400
+        self.bytes = 0
+
+    def write(self, text):
+        import select
+        data = text.encode('ascii')
+        require(data.endswith(b'\n') and data.count(b'\n')==1 and len(data)-1<=65536,
+                'native bulk original line bound differs')
+        self.bytes += len(data)
+        require(self.bytes <= 32 * 1024 * 1024, 'native bulk wire byte bound exceeded')
+        deadline = min(self.deadline, time.monotonic() + 60)
+        view = memoryview(data)
+        while view:
+            require(time.monotonic() < deadline, 'native bulk virtio write timed out')
+            try:
+                count = os.write(self.fd, view)
+                require(count > 0, 'native bulk virtio device disconnected')
+                view = view[count:]
+            except BlockingIOError:
+                require(select.select([], [self.fd], [], max(0, deadline-time.monotonic()))[1],
+                        'native bulk virtio write timed out')
+        return len(text)
+
+    def flush(self):
+        pass  # Unbuffered os.write; END is written before the UART completion receipt.
+
+    def close(self):
+        if self.fd is not None:
+            fd, self.fd = self.fd, None
+            os.close(fd)
+
+
+def open_native_bulk_port():
+    alias = Path('/dev/virtio-ports') / 'arctic-native-evidence'
+    canonical = alias.resolve(strict=True)
+    require(canonical.parent == Path('/dev') and re.fullmatch('vport[0-9]+p[0-9]+', canonical.name),
+            'native bulk named virtio port resolves outside the canonical device namespace')
+    attrs = Path('/sys/class/virtio-ports') / canonical.name
+    # Sysfs class entries are kernel-owned symlinks; their attributes bind the
+    # named channel to the exact opened device, rather than trusting a dev alias.
+    for path in (alias.parent, attrs / 'name', attrs / 'dev'):
+        info = path.stat()
+        require(info.st_uid == 0 and not info.st_mode & 0o022, 'native bulk device/sysfs metadata is unprotected')
+    name = (attrs / 'name').read_text().strip()
+    device = (attrs / 'dev').read_text().strip()
+    require(name == 'arctic-native-evidence' and re.fullmatch('[0-9]{1,5}:[0-9]{1,5}', device),
+            'native bulk sysfs channel name/device differs')
+    major, minor = (int(v) for v in device.split(':'))
+    fd = os.open(canonical, os.O_WRONLY | os.O_NOFOLLOW | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        require(stat.S_ISCHR(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022
+                and (os.major(info.st_rdev), os.minor(info.st_rdev)) == (major, minor),
+                'native bulk virtio device type/owner/protection/sysfs identity differs')
+        receipt = dict(schema='arctic-native-bulk-virtio-port-v1', name='arctic-native-evidence', device=str(canonical),
+                       major=major, minor=minor, uid=info.st_uid, mode=stat.S_IMODE(info.st_mode))
+        return NativeBulkWriter(fd), receipt
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def native_bulk_export(encoded, manifest, provenance, begin):
+    # Every original chunk/manifest line remains byte-identical. The protected
+    # named output port is mandatory; there is no slow UART fallback.
+    context = dict(schema='arctic-native-bulk-v1', stage=begin['stage'],
+                   boot_id=provenance['boot_id'], native_source_sha256=begin['native_source_sha256'],
+                   checker_sha256=begin['checker_sha256'], release_acceptance=False)
+    require(context['stage'] in ('live','installed') and re.fullmatch(
+        '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', context['boot_id']), 'native bulk context differs')
+    import base64
+    port, _ = open_native_bulk_port()
+    primary=None
+    try:
+        port.write('ARCTIC-NATIVE-BULK-BEGIN '+json.dumps(context,sort_keys=True)+'\n')
+        total, count, digestor = 0, 0, hashlib.sha256()
+        def emit(line):
+            nonlocal total, count
+            raw = (line+'\n').encode('ascii')
+            require(len(raw)-1 <= 65536, 'native bulk line exceeds original UART bound')
+            total += len(raw); count += 1
+            require(total <= 32*1024*1024 and count <= 128*172+1, 'native bulk wire bounds differ')
+            digestor.update(raw);port.write(line+'\n')
+        for entry, chunks in encoded:
+            require(1 <= len(chunks) <= 172, 'native bulk original chunk bound differs')
+            for index, chunk in enumerate(chunks):
+                emit('ARCTIC-NATIVE-EVIDENCE-CHUNK '+json.dumps(dict(path=entry['path'],index=index,
+                     data=base64.b64encode(chunk).decode()),sort_keys=True))
+        emit('ARCTIC-NATIVE-EVIDENCE-MANIFEST '+json.dumps(manifest,sort_keys=True))
+        footer=dict(context, bytes=total, lines=count, sha256=digestor.hexdigest())
+        port.write('ARCTIC-NATIVE-BULK-END '+json.dumps(footer,sort_keys=True)+'\n')
+    except BaseException as exc:
+        primary=exc
+        raise
+    finally:
+        try:port.close()
+        except BaseException:
+            if primary is None:raise
+# END NATIVE_BULK_TRANSPORT
+
+
 def main():
     # This sole replaced entrypoint binds the original harness location/stage.
     import base64
@@ -1886,6 +1992,7 @@ def main():
     report, error, export_complete = None, None, False
     roots = []
     expected_uid = None
+    provenance = None
     begin = dict(stage=stage, native_source_sha256=native_source_sha,
                  checker_sha256=digest(Path(__file__)), release_acceptance=False)
     print('ARCTIC-NATIVE-RUNNER-BEGIN '+json.dumps(begin,sort_keys=True),flush=True)
@@ -1963,12 +2070,9 @@ def main():
                                  compressed_bytes=len(compressed),chunks=len(chunks),encoding='zlib+base64')
                     entries.append(entry)
                     encoded.append((entry,chunks))
-            for entry,chunks in encoded:
-                for index,chunk in enumerate(chunks):
-                    print('ARCTIC-NATIVE-EVIDENCE-CHUNK '+json.dumps(dict(path=entry['path'],index=index,
-                          data=base64.b64encode(chunk).decode()),sort_keys=True),flush=True)
-            print('ARCTIC-NATIVE-EVIDENCE-MANIFEST '+json.dumps(dict(schema='arctic-native-evidence-v1',
-                  stage=stage,files=entries,bytes=total,evidence_root=str(roots[0]) if roots else None),sort_keys=True),flush=True)
+            require(provenance is not None, 'native bulk requires original runtime provenance')
+            native_bulk_export(encoded, dict(schema='arctic-native-evidence-v1',
+                  stage=stage,files=entries,bytes=total,evidence_root=str(roots[0]) if roots else None), provenance, begin)
             export_complete = True
         except BaseException as exc:
             export_error = type(exc).__name__+': '+str(exc)

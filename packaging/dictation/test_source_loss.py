@@ -1,5 +1,6 @@
 """Owned graph loss and recording epoch contracts; local runtime control is separate."""
 import copy
+import hashlib
 import importlib.util
 import io
 import json
@@ -209,9 +210,21 @@ class Epoch(unittest.TestCase):
             self.assertNotIn('private',json.dumps(self.broker.runtime))
 
 class SourceScope(unittest.TestCase):
-    def test_controller_whole_byte_rollback_and_profile_receipts_unchanged(self):
-        base=subprocess.check_output(['git','show','688c2d01b6d5a2412ef7b20bce3bd4820350d188:packaging/dictation/dictation.py'],cwd=Path(__file__).parent).decode()
-        current=Path(d.__file__).read_text()
+    # Exact original 688c2d01 controller bytes, before Mic monitoring and the
+    # accepted GPU recording-control fix. Source RPMs carry no Git history.
+    ORIGINAL_CONTROLLER_SHA256 = 'bf11b3b1cf65cc66f21a21d7246f8ffd82f975762a99dba06137ad2e31a45290'
+
+    def controller_rollback(self, current):
+        # Reverse accepted 6482231 GPU changes before the original Mic reversal.
+        gpu_changes = [
+            ('    def record_control_failure(self, verb, backend):\n        # A failed owned recording command can precede the next engine tick.\n        # Preserve an observed microphone failure; otherwise a failed Vulkan\n        # recording selects CPU only for a later, explicitly started recording.\n        if cancellation(self.private) != self.cancel_generation or (self.shared / "dictation-locked").exists():\n            self.terminate()\n            return self.write(ok=True, state="ready", error="", message="Recording discarded.")\n        gpu_retry = backend == "vulkan" and self.failure not in ("microphone", "audio-monitor")\n        self.terminate()\n        if gpu_retry:\n            self.fallback_cpu = True\n            message = ("GPU initialization failed. CPU is selected for this session; record again."\n                       if verb == "start" else "GPU transcription failed. CPU is selected for this session; record again.")\n            return self.write(ok=False, state="error", error=message, active_backend="cpu",\n                              active_cpu_variant=desired_profile()["cpu_variant"])\n        message = ("Recording could not start. Check the microphone in Sound settings."\n                   if verb == "start" else "Recording could not stop safely and was discarded. Record again.")\n        return self.write(ok=False, state="error", error=message)\n\n', ''),
+            ('        try:\n            result = self.record("start")\n        except (OSError, subprocess.TimeoutExpired):\n            return self.record_control_failure("start", backend)\n', '        result = self.record("start")\n'),
+            ('        if result:\n            return self.record_control_failure("start", backend)\n', '        if result:\n            self.terminate()\n            return self.write(ok=False, state="error", error="Recording could not start. Check the microphone in Sound settings.")\n'),
+            ('            try:\n                failed = self.record("stop")\n            except (OSError, subprocess.TimeoutExpired):\n                failed = True\n            if failed:\n                return self.record_control_failure("stop", self.runtime.get("active_backend"))\n', '            if self.record("stop"):\n                self.terminate()\n                return self.write(ok=False, state="error", error="Recording could not stop safely and was discarded. Record again.")\n'),
+        ]
+        for addition, original in gpu_changes:
+            self.assertEqual(current.count(addition), 1)
+            current = current.replace(addition, original, 1)
         current=current.replace('import re\n','',1)
         current=current.replace('Path("/usr/bin/wl-copy"), Path("/usr/bin/pw-dump")','Path("/usr/bin/wl-copy")',1)
         begin=current.index('\n\n\nINPUT_GRAPH_BYTES =');end=current.index('\n\nclass Broker:',begin)
@@ -229,7 +242,25 @@ class SourceScope(unittest.TestCase):
         # Remove complete longer blocks before their constituent shorter line.
         for addition in sorted(additions,key=len,reverse=True):
             self.assertEqual(current.count(addition),1);current=current.replace(addition,'',1)
-        self.assertEqual(current,base)
+        return current
+
+    def test_controller_whole_byte_rollback_and_profile_receipts_unchanged(self):
+        original = self.controller_rollback(Path(d.__file__).read_text())
+        self.assertEqual(hashlib.sha256(original.encode('utf-8')).hexdigest(), self.ORIGINAL_CONTROLLER_SHA256)
         self.assertIn('Requires:       pipewire-utils',Path(__file__).parent.parent.joinpath('arctic-linux.spec').read_text())
+
+    def test_controller_rollback_rejects_original_byte_and_unremoved_gpu_changes(self):
+        current = Path(d.__file__).read_text()
+        mutations = [
+            ('original byte', 'VERSION = "1.1.0"', 'VERSION = "1.1.1"'),
+            ('unremoved GPU change', '    def command(self, verb, generation=None):',
+             '    # unremoved GPU control mutation\n    def command(self, verb, generation=None):'),
+        ]
+        for label, before, after in mutations:
+            with self.subTest(mutation=label):
+                self.assertEqual(current.count(before), 1)
+                original = self.controller_rollback(current.replace(before, after, 1))
+                with self.assertRaises(AssertionError):
+                    self.assertEqual(hashlib.sha256(original.encode('utf-8')).hexdigest(), self.ORIGINAL_CONTROLLER_SHA256)
 
 if __name__=='__main__':unittest.main()

@@ -7,18 +7,18 @@
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/apps.py": "8fc543a04d718e8d460d7b8b063de2f20c28e25fbcc8a4790187c8a0425bc7a8",
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
-    "tools/native-functional/evidence.py": "9306269cb24d081c49d279b09a8639e4797dc7520b704c4366172a0a17988bca",
+    "tools/native-functional/evidence.py": "b000b4fb2d3cd8fef7a164ec42213d567091fbae465a406b93a0c5e7b7617bf4",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
-    "tools/native-functional/runner.py": "28c4d7e4188175358c4588180cf53b59ae57de293344babbfd765bc618e685fb",
+    "tools/native-functional/runner.py": "8ac9113202964710142a326ac13d4260b30a89db61d7cd603316872ca1a7b17a",
     "tools/native-functional/screen-evidence.py": "d2291fea86226abb32766f680bccddc48bb6f6399c6ce6c189417cc1317dcfde",
-    "tools/native-functional/source-provenance.json": "7b828b4ff12dbbe35d69fb7c1bb8b2f24e3b925f32789b823bfa5a81cfdcf76d",
+    "tools/native-functional/source-provenance.json": "20bad8be3e3c07993f850e919d860e0b627b7e379411b08290a49a9d3c5b2554",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "be332f829fb35a09d42c8b1cbfd94df214ac1a87f10dcec0328dc19de77a346d",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/native-functional/taskbar.py": "458a9ec5f8ebc0b7c612163c29fa5c372cd3c03010d146217b1aa7215ff7a1df",
-    "tools/test-install.sh": "e8e5e7e3db092c03d1354fc46262dfafcb3cbecc6527138ee9896ac69d4c7d85"
+    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
   },
   "image": {
     "archive_bytes": 1929415684,
