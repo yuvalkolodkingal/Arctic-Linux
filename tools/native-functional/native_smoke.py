@@ -1869,7 +1869,7 @@ def run_checks(prefix, stage, *, disposable_guest=False, gui_v6=False):
     if gui_v6:
         report['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
     (smoke.root/'report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
-    print('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False),flush=True)
+    print('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False,separators=(',',':')),flush=True)
     return report
 
 
