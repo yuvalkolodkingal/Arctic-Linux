@@ -829,7 +829,7 @@ def measure(prefix, declared=None, workload=None, order=None, complete=True, pre
         for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
                                  ('zen', ['flatpak', 'run', 'app.zen_browser.zen', 'about:blank'])]:
             bounds = []
-            samples = [startup(prefix, command, pattern, observations=bounds) for _ in range(3)]
+            samples = [startup(prefix, command, (pattern,), observations=bounds) for _ in range(3)]
             emit('startup_' + pattern + '_seconds', dict(first=samples[0], warm=samples[1:],
                  observation_bounds=bounds, poll_sleep_seconds=MAPPING_POLL_SECONDS,
                  observer=MAPPING_OBSERVER))

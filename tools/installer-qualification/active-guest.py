@@ -459,21 +459,33 @@ def installer_type(G):
                 unavailable=unavailable, restore_request=restore)), 35, 'same active installer did not restore')
 
         def finish_install(self):
+            completion_previous_phase = getattr(self, 'diagnostic_phase', 'unknown')
             def done():
+                self.diagnostic_phase = 'completion-snapshot'
                 engine = self.rpc.snapshot()
+                self.diagnostic_phase = 'completion-engine-guard'
                 G.require(not engine['install']['options']['failed'] and not engine['install']['options']['attention'],
                           'real active installation failed or requires attention')
                 if engine['hello']['state'] != 'done':
+                    self.diagnostic_phase = 'completion-wait'
                     return None
+                self.diagnostic_phase = 'completion-gui-state'
                 gui = G.strict_json(self.ipc('state'))
+                self.diagnostic_phase = 'completion-gui-guard'
                 G.require(gui['page'] == gui['current'] == 'done' and gui['percent'] == 100,
                           'same real GUI did not reach Done')
+                self.diagnostic_phase = 'completion-identities'
                 identities = self.identities()
+                self.diagnostic_phase = 'completion-identity-guard'
                 G.require(identities == self.baseline['identities'] and self.rpc.config() == self.safe_config
                           and self.keyboard_files() == self.baseline['keyboard_files'], 'engine/choice changed before completion')
+                self.diagnostic_phase = 'completion-result'
                 return dict(engine=engine, identities=identities, config=self.safe_config, keyboard_files=self.keyboard_files(),
                             gui={k: gui[k] for k in ('page', 'current', 'percent')}, elapsed_ns=time.monotonic_ns() - self.started_ns)
-            return self.wait(done, 40 * 60, 'same real installation did not finish within its separate bound')
+            self.diagnostic_phase = 'completion-wait'
+            result = self.wait(done, 40 * 60, 'same real installation did not finish within its separate bound')
+            self.diagnostic_phase = completion_previous_phase
+            return result
 
         def cleanup(self):
             # Restore VT regardless of engine failure. Leave engine and GUI intact until

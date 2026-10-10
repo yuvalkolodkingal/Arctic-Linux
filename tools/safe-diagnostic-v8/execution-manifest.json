@@ -1,6 +1,6 @@
 {
   "execution_files": {
-    ".github/workflows/safe-rerender-v7-20261010.yml": "b3edff27c57e414ca8f0f67e23465a12f867535da3d7c9c2d184fe1156f38553",
+    ".github/workflows/safe-rerender-v8-20261010.yml": "2e79798eed94b4b9c19cc3a8de8bf1b51035ad2e8d773bbd07acd76761b664da",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
@@ -9,11 +9,11 @@
     "tools/native-functional/native_smoke.py": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
     "tools/native-functional/screen-evidence.py": "0632c2dd5f561df19235a90693d7d2494c8843485d11fccb8af1f7b9dd1ffdd0",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
-    "tools/safe-diagnostic-v7/common.py": "58c3270627e020af227496db3fa988d19ba92ffd7df0b98e5658b838e0f50dcb",
-    "tools/safe-diagnostic-v7/guest.py": "d36bc48bed1587006af168bf1c5ba33a285e10eb11c6db2288e290fc7fa248f3",
-    "tools/safe-diagnostic-v7/host.py": "95b7fe81ba465e24683aea105f1947eac5bde051a4d115d4d0a5b1ec4b21833c",
-    "tools/safe-diagnostic-v7/run.sh": "be9c1472894926c717b493b9b41ce7271f9046d765bc7128991910a9daf48d14",
-    "tools/safe-diagnostic-v7/screencopy.c": "72deb18e64b271d8c2fb182511b19056b6d182d1ffdc77106dd9515f22fc40e0"
+    "tools/safe-diagnostic-v8/common.py": "a42478604e284ca8b4f500e0b8d30887719174d3d33bbfc9909a1f152f09c6f3",
+    "tools/safe-diagnostic-v8/guest.py": "5e3e79ed638f89db96af2555bacbc0d4e1cab0a9c6119608871c7c2834562482",
+    "tools/safe-diagnostic-v8/host.py": "6a4d27c6bd52aec067d24276ff88648faf024e528b921f1a4556e72a8dcf77d0",
+    "tools/safe-diagnostic-v8/run.sh": "4d9357c37491d3513c775058ed71f687b9b2cdf3a4f95accef333588684170f6",
+    "tools/safe-diagnostic-v8/screencopy.c": "72deb18e64b271d8c2fb182511b19056b6d182d1ffdc77106dd9515f22fc40e0"
   },
   "image": {
     "archive_bytes": 1930013330,

@@ -231,9 +231,16 @@ class ExternalOriginalScreeningTests(unittest.TestCase):
                 original.replace('Finished', 'UnexpectedStatus'),
                 original.replace(' - ', ': '), original + ' extra text', unit,
                 original.replace('[ 1.234] systemd[1]: ', 'ordinary text: '))
-            for content in variants:
+            for variant_index, content in enumerate(variants):
                 with self.subTest(unit=unit, content=content):
-                    self.rejected(content.encode())
+                    raw = content.encode()
+                    # The separately reviewed exact configfs token is public
+                    # without a lifecycle/description prerequisite. Its private
+                    # affixes, case changes and every other unit remain rejected.
+                    if unit == 'modprobe@configfs.service' and variant_index in (5, 6, 7, 8, 9, 10, 11):
+                        self.assertIs(screen.external_text(raw), raw)
+                    else:
+                        self.rejected(raw)
         for unit, description in (('user@1001.service', 'User Manager for UID 1001'),
                 ('user@01000.service', 'User Manager for UID 01000'),
                 ('user-runtime-dir@0.service', 'User Runtime Directory /run/user/0'),
