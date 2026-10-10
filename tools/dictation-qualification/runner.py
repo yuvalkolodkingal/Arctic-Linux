@@ -58,7 +58,7 @@ def verify(args):
             'Dictation qualification is disabled until exact image, fixtures and execution are reviewed')
     expected_env = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted',
                         GITHUB_REPOSITORY='yuvalkolodkingal/Arctic-Linux',
-                        GITHUB_REF='refs/heads/codex/qualification-dispatch-20261008',
+                        GITHUB_REF='refs/heads/codex/qualification-dispatch-20261010',
                         GITHUB_WORKFLOW='Candidate dictation image qualification',
                         GITHUB_EVENT_NAME='push', GITHUB_RUN_ATTEMPT='1')
     require(all(os.environ.get(key) == value for key, value in expected_env.items()),

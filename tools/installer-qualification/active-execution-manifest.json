@@ -1,6 +1,6 @@
 {
   "execution_files": {
-    ".github/workflows/installer-active-candidate-20261009.yml": "7d8d4ebaa42f6f314f2f8eceee2c51666159887c5528b1b0d6a5eef1c479272e",
+    ".github/workflows/installer-active-candidate-20261009.yml": "83e9cd1346c09c6cc6377087c3e6359bb81f706f6e72d3b5660fe44d42990791",
     "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/installer-qualification/active-contract.py": "3feef8b7936db6d1e9857161f6eaa920b4678553174c808c9b54b0985405ef39",
@@ -12,7 +12,7 @@
     "tools/installer-qualification/guest.py": "8ac9cef711ffdeb2b52421592298e1deb0f68bb04eaf6822cee34edb61e22ccd",
     "tools/installer-qualification/installed-guest.py": "667d84b13bee846394cb42d4a09ff9953834671f9630ce9e76e609e5b51521c3",
     "tools/installer-qualification/run-live.sh": "5c2dbbdd51e2f6aefdb630f2bb7512ccee5ca1f413bc695a4a8f203959275d5c",
-    "tools/installer-qualification/runner.py": "0b3a74d25624150c6dd492a749a83ec6e10c54d9f1bd5892b21171b54a240e06",
+    "tools/installer-qualification/runner.py": "936b9dc40d08dcacfdd022a9fbab31cb326b4d6b6366efd329207483bf61fb83",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",

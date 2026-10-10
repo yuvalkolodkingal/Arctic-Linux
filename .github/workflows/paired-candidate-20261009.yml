@@ -2,8 +2,8 @@ name: Frozen exact-image paired performance qualification
 
 on:
   push:
-    branches: [codex/qualification-dispatch-20261008]
-    paths: [.github/qualification-20261009.performance]
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.performance]
 
 permissions:
   contents: read

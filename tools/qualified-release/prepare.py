@@ -152,7 +152,7 @@ def source_hash(ref, name):
 EXTERNAL_PERFORMANCE_MODE = 'frozen-external-paired-v1'
 LEGACY_PERFORMANCE_MODE = 'in-producer-paired-v1'
 EXTERNAL_PERFORMANCE_WORKFLOW = '.github/workflows/paired-candidate-20261009.yml'
-EXTERNAL_PERFORMANCE_MARKER = '.github/qualification-20261009.performance'
+EXTERNAL_PERFORMANCE_MARKER = '.github/qualification-20261010.performance'
 EXTERNAL_PERFORMANCE_PLAN = 'tools/performance/execution-manifest.json'
 
 
@@ -210,7 +210,7 @@ def validate_performance_lane(manifest, jobs, fetch):
             and pin['run_id'] != image['run_id'], 'Invalid frozen external performance pin')
     artifact = validate_lane(pin, EXTERNAL_PERFORMANCE_WORKFLOW, 'external-paired-performance')
     run = api('/actions/runs/' + str(pin['run_id']))
-    require(run['head_branch'] == 'codex/qualification-dispatch-20261008'
+    require(run['head_branch'] == 'codex/qualification-dispatch-20261010'
             and run['head_sha'] == pin['source_sha'] and run['path'] == EXTERNAL_PERFORMANCE_WORKFLOW
             and run['event'] == 'push' and type(run['run_attempt']) is int and run['run_attempt'] == 1
             and run['status'] == 'completed' and run['conclusion'] == 'success',
@@ -941,14 +941,14 @@ def prepare(manifest, out):
             and manifest.get('release_acceptance') is False, 'Publication disabled until exact qualification is reviewed')
     require(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'
             and os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux'
-            and os.environ.get('GITHUB_REF') == 'refs/heads/codex/publish-qualified-20261008'
+            and os.environ.get('GITHUB_REF') == 'refs/heads/codex/publish-qualified-20261010'
             and os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_RUN_ATTEMPT') == '1',
             'Requires the reviewed owned publication lane')
     event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-    parent = (ROOT / '.github/qualification-20261008.publish').read_text().strip()
+    parent = (ROOT / '.github/qualification-20261010.publish').read_text().strip()
     require(re.fullmatch('[0-9a-f]{40}', parent) and event['before'] == parent == git('rev-parse', 'HEAD^')
             and event['after'] == os.environ['GITHUB_SHA'] == git('rev-parse', 'HEAD')
-            and git('diff', '--name-only', parent, 'HEAD').splitlines() == ['.github/qualification-20261008.publish']
+            and git('diff', '--name-only', parent, 'HEAD').splitlines() == ['.github/qualification-20261010.publish']
             and not git('status', '--porcelain'), 'Publication activation/source differs')
     require(set(manifest['execution_files']) == publication_files(manifest), 'Publication execution inventory differs')
     for name, expected in manifest['execution_files'].items():

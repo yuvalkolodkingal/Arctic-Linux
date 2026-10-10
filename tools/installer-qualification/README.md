@@ -7,10 +7,10 @@ native eight checks, CLI installation lanes and performance observer are unchang
 and remain independently required on the same image.
 
 The lane is disabled: `execution-manifest.json` has `ready: false`, and no
-`.github/qualification-20261009.installer` activation file is included. After the
+`.github/qualification-20261010.installer` activation file is included. After the
 final image build and independent source review, the release owner must pin the
 exact build/artifact/ISO identities and execution input hashes, then activate with
-one reviewed marker-only commit on `codex/qualification-dispatch-20261009`.
+one reviewed marker-only commit on `codex/qualification-dispatch-20261010`.
 
 The checker advances the already opened real wizard from welcome to keyboard and
 chooses Hebrew through its supported IPC. It verifies the actual engine's

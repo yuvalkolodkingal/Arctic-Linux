@@ -1,0 +1,53 @@
+name: Inspect exact candidate Mango and wlroots (static only)
+
+on:
+  push:
+    branches: [codex/inspect-exact-image-mango-20261010]
+    paths: [.github/exact-image-mango-20261010.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check explicitly reviewed image pins and sole activation child
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import types
+          from pathlib import Path
+          path = Path('tools/exact-image-inspection/inspect.py')
+          inspector = types.ModuleType('exact_static_inspector')
+          inspector.__file__ = str(path.resolve())
+          exec(compile(path.read_bytes(), str(path), 'exec'), inspector.__dict__)
+          manifest = inspector.read_json(path.with_name('execution-manifest.json').read_text())
+          inspector.activation_guard(manifest, Path.cwd())
+          PY
+      - name: Install static host inspection tools
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y xorriso binutils
+      - name: Verify exact successful artifact and extract static ELF evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: timeout --signal=TERM --kill-after=15s 60m python3 -B tools/exact-image-inspection/inspect.py
+      - name: Upload static inspection evidence (unqualified)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-exact-image-mango-static
+          path: ${{ runner.temp }}/arctic-exact-image-mango-evidence
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 6

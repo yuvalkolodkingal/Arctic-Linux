@@ -2,8 +2,8 @@ name: Candidate installer restoration qualification
 
 on:
   push:
-    branches: [codex/qualification-dispatch-20261009]
-    paths: [.github/qualification-20261009.installer]
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.installer]
 
 permissions:
   contents: read
@@ -28,11 +28,11 @@ jobs:
           import json,os,re,subprocess
           from pathlib import Path
           event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-          reviewed=Path('.github/qualification-20261009.installer').read_text().strip()
+          reviewed=Path('.github/qualification-20261010.installer').read_text().strip()
           assert re.fullmatch('[0-9a-f]{40}',reviewed)
           assert event['before']==reviewed and event['after']==os.environ['GITHUB_SHA']
           assert subprocess.check_output(['git','rev-parse','HEAD^'],text=True).strip()==reviewed
-          assert subprocess.check_output(['git','diff','--name-only',reviewed,'HEAD'],text=True).splitlines()==['.github/qualification-20261009.installer']
+          assert subprocess.check_output(['git','diff','--name-only',reviewed,'HEAD'],text=True).splitlines()==['.github/qualification-20261010.installer']
           manifest=json.loads(Path('tools/installer-qualification/execution-manifest.json').read_text())
           assert manifest['ready'] is True and manifest['release_acceptance'] is False
           source=manifest['image']['source_sha']

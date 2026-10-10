@@ -442,7 +442,7 @@ class PublisherModeControls(unittest.TestCase):
             manifest['performance'].update(source_sha=source, reviewed_parent_sha=parent)
             pin = manifest['performance']
             run = dict(head_sha=source, path=P.EXTERNAL_PERFORMANCE_WORKFLOW, event='push', run_attempt=1,
-                       status='completed', conclusion='success', head_branch='codex/qualification-dispatch-20261008')
+                       status='completed', conclusion='success', head_branch='codex/qualification-dispatch-20261010')
             artifact = dict(workflow_run=dict(id=pin['run_id'], head_sha=source), name='external-paired-performance',
                             expired=False, size_in_bytes=100, digest='sha256:' + 'f' * 64)
             fetch = SimpleNamespace(validate_external_producer_steps=Mock())

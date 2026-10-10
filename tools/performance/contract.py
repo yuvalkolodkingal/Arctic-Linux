@@ -8,10 +8,10 @@ import tempfile
 
 MODE = 'frozen-external-paired-v1'
 WORKFLOW = '.github/workflows/paired-candidate-20261009.yml'
-MARKER = '.github/qualification-20261009.performance'
+MARKER = '.github/qualification-20261010.performance'
 MANIFEST = 'tools/performance/execution-manifest.json'
 ARTIFACT = 'external-paired-performance'
-BRANCH = 'codex/qualification-dispatch-20261008'
+BRANCH = 'codex/qualification-dispatch-20261010'
 BASELINE = dict(name='Arctic-Linux-1.2-x86_64.iso', bytes=2322073600,
     sha256='054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f',
     profile_sha256='e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d')

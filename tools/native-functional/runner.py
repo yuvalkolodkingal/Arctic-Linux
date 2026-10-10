@@ -149,7 +149,7 @@ def verify(args):
     R.require(os.environ.get('GITHUB_ACTIONS') == 'true'
               and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'
               and os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux'
-              and os.environ.get('GITHUB_REF') == 'refs/heads/codex/qualification-dispatch-20261008'
+              and os.environ.get('GITHUB_REF') == 'refs/heads/codex/qualification-dispatch-20261010'
               and os.environ.get('GITHUB_WORKFLOW') == 'Candidate native image qualification'
               and os.environ.get('GITHUB_EVENT_NAME') == 'push'
               and os.environ.get('GITHUB_RUN_ATTEMPT') == '1', 'Requires the reviewed disposable Arctic Actions lane')

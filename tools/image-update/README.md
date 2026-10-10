@@ -3,7 +3,7 @@
 This hosted QEMU lane is disabled until its manifest pins the rebuilt ISO, its
 successful build artifact, the optimized source deployed to stable Arctic, and
 the exact execution-file hashes. Independent review and source checks precede a
-single-file activation on `codex/image-update-20261008`.
+single-file activation on `codex/image-update-20261010`.
 
 It installs the same ISO on an encrypted disposable disk with enforcing SELinux,
 tests Nix desktop entries and user isolation, and stages the real signed Arctic

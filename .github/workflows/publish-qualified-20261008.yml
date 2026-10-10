@@ -2,8 +2,8 @@ name: Publish the qualified retained Arctic ISO
 
 on:
   push:
-    branches: [codex/publish-qualified-20261008]
-    paths: [.github/qualification-20261008.publish]
+    branches: [codex/publish-qualified-20261010]
+    paths: [.github/qualification-20261010.publish]
 
 permissions:
   contents: read
@@ -70,7 +70,7 @@ jobs:
           import hashlib, json, os, re, subprocess
           from pathlib import Path
           assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
-          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/publish-qualified-20261008'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/publish-qualified-20261010'
           assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
           repo = 'repos/yuvalkolodkingal/Arctic-Linux'
           def api(path):

@@ -63,7 +63,7 @@ def verify(args, execution):
               'Installer lane disabled until the final image and execution code are reviewed')
     C.require(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted' and
               os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux' and
-              os.environ.get('GITHUB_REF') == 'refs/heads/codex/qualification-dispatch-20261009' and
+              os.environ.get('GITHUB_REF') == 'refs/heads/codex/qualification-dispatch-20261010' and
               os.environ.get('GITHUB_WORKFLOW') == ('Candidate active installer restoration qualification' if active_profile else 'Candidate installer restoration qualification') and
               os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_RUN_ATTEMPT') == '1',
               'Requires the reviewed disposable installer Actions lane')

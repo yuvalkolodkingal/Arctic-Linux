@@ -2,8 +2,8 @@ name: Same-image Nix and signed update qualification
 
 on:
   push:
-    branches: [codex/image-update-20261008]
-    paths: [.github/qualification-20261008.update]
+    branches: [codex/image-update-20261010]
+    paths: [.github/qualification-20261010.update]
 
 permissions:
   contents: read
@@ -30,11 +30,11 @@ jobs:
           import json, os, re, subprocess
           from pathlib import Path
           event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-          reviewed = Path('.github/qualification-20261008.update').read_text().strip()
+          reviewed = Path('.github/qualification-20261010.update').read_text().strip()
           assert re.fullmatch('[0-9a-f]{40}', reviewed)
           assert event['before'] == reviewed and event['after'] == os.environ['GITHUB_SHA']
           assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == reviewed
-          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/qualification-20261008.update']
+          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/qualification-20261010.update']
           manifest = json.loads(Path('tools/image-update/execution-manifest.json').read_text())
           assert manifest['ready'] is True and manifest['release_acceptance'] is False
           image, stable = manifest['image'], manifest['stable']

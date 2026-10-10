@@ -1,0 +1,14 @@
+{
+  "execution_files": {
+    ".github/workflows/inspect-exact-image-mango-20261010.yml": "1989b45ff316f75e0ef96325f529285b89e71eec8f817a761fe4fc3ca7617ced",
+    "tools/exact-image-inspection/inspect.py": "b2e042ff3f22bae7a7024075ad293ab53fa1fea01e8d4e91403de90ec78cc573",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
+  },
+  "image": {},
+  "observer_profile_admitted": false,
+  "performance_acceptance": false,
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-exact-image-mango-inspection-v1",
+  "source_files": {}
+}

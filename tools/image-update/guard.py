@@ -45,17 +45,17 @@ def verify(manifest, source, inputs=None):
     require(os.environ.get('GITHUB_ACTIONS') == 'true'
             and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'
             and os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux'
-            and os.environ.get('GITHUB_REF') == 'refs/heads/codex/image-update-20261008'
+            and os.environ.get('GITHUB_REF') == 'refs/heads/codex/image-update-20261010'
             and os.environ.get('GITHUB_EVENT_NAME') == 'push'
             and os.environ.get('GITHUB_WORKFLOW') == 'Same-image Nix and signed update qualification'
             and os.environ.get('GITHUB_RUN_ATTEMPT') == '1', 'Requires this owned GitHub-hosted first attempt')
     event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-    reviewed = (ROOT / '.github/qualification-20261008.update').read_text().strip()
+    reviewed = (ROOT / '.github/qualification-20261010.update').read_text().strip()
     require(re.fullmatch('[0-9a-f]{40}', reviewed)
             and git(ROOT, 'rev-parse', 'HEAD') == os.environ['GITHUB_SHA'] == event['after']
             and git(ROOT, 'rev-parse', 'HEAD^') == reviewed == event['before']
             and git(ROOT, 'diff', '--name-only', reviewed, 'HEAD').splitlines()
-                == ['.github/qualification-20261008.update'], 'Activation must change only its reviewed marker')
+                == ['.github/qualification-20261010.update'], 'Activation must change only its reviewed marker')
     require(not git(ROOT, 'status', '--porcelain') and not git(source, 'status', '--porcelain'),
             'Both tracked execution and image source must be clean')
     image, stable = manifest['image'], manifest['stable']
