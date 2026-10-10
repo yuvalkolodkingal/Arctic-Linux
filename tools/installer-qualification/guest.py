@@ -213,6 +213,8 @@ ACTIVE_DIAGNOSTIC_PHASES = frozenset((
     'prepare-rpc', 'prepare-target', 'prepare-credentials', 'prepare-summary-config',
     'prepare-summary-identities', 'prepare-copy', 'prepare-copy-identities',
     'prepare-visible', 'prepare-baseline-physical', 'vt-0', 'output-0', 'completion',
+    'completion-wait', 'completion-snapshot', 'completion-engine-guard', 'completion-gui-state',
+    'completion-gui-guard', 'completion-identities', 'completion-identity-guard', 'completion-result',
     *('prepare-' + page + '-' + operation
       for page in ('welcome', 'keyboard', 'network', 'timezone', 'disk', 'encryption',
                    'account', 'apps', 'summary')
