@@ -12,6 +12,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import types
 import time
 import zipfile
@@ -263,6 +264,48 @@ class DirectoryArchive:
         return (self.root/name).read_bytes()
 
 
+def fixed_screen_failure(error):
+    """Classify only existing fixed errors; never stringify private values."""
+    if type(error) is TimeoutError:
+        return 'deadline'
+    if type(error) is not RuntimeError or len(error.args) != 1 or type(error.args[0]) is not str:
+        return 'unclassified'
+    return {'Sensitive text in external evidence': 'sensitive_text',
+        'Incomplete terminal escape in external evidence': 'terminal_escape',
+        'Too many diagnostic members': 'member_count',
+        'Diagnostic symlinks are forbidden': 'member_type',
+        'Diagnostic members must be regular files': 'member_type',
+        'Diagnostic byte bounds exceeded': 'member_size',
+        'Diagnostics must be an owned directory and upload path unused': 'ownership'}.get(
+            error.args[0], 'unclassified')
+
+
+def export_failure_phase(work, screened, screening_failure):
+    """Fail-only fallback: preserve private originals and screen fixed labels."""
+    work, screened = Path(work).absolute(), Path(screened).absolute()
+    C.require(work.name == 'work' and screened.name == 'screened'
+        and work.parent == screened.parent and work.parent.resolve() == work.parent
+        and work.parent.is_dir() and not work.parent.is_symlink()
+        and not screened.exists() and not screened.is_symlink(),
+        'Failure summary paths are not unused owned siblings')
+    helper = load('paired_failure_phase', ROOT/'tools/performance/run-paired.py')
+    screen = load('paired_failure_screen', ROOT/'tools/native-functional/screen-evidence.py')
+    summary = helper.failure_phase_summary(work, screening_failure)
+    content = (json.dumps(summary, sort_keys=True, indent=2, allow_nan=False) + '\n').encode()
+    C.require(len(content) <= 4096 and summary['release_acceptance'] is False
+        and summary['performance_acceptance'] is False and summary['original_evidence_uploaded'] is False
+        and summary['status'] == 'unqualified_fixed_observations_only', 'Unsafe failure summary')
+    with tempfile.TemporaryDirectory(prefix='arctic-paired-fixed-phase-', dir=work.parent) as temporary:
+        target = Path(temporary)/'unqualified-failure-phase.json'
+        with target.open('xb') as output:
+            os.chmod(target, 0o600)
+            output.write(content)
+        # This is the unchanged atomic scanner. No original member is dropped
+        # from a purported passing archive; this separate summary cannot replay.
+        screen.screen_external(Path(temporary), screened)
+    print('ARCTIC-PAIRED-FAILURE-PHASE-EXPORT=unqualified_summary_only', flush=True)
+
+
 def run(args):
     plan, parent = activation(args.manifest)
     C.require(not args.work.exists() and not args.evidence.exists() and not args.screened.exists(),
@@ -281,6 +324,7 @@ def run(args):
     child = None
     failure = None
     errors = []
+    screening_failure = 'not_observed'
     def interrupted(signum, frame):
         raise InterruptedError('External paired lane interrupted: ' + str(signum))
     previous = {}
@@ -315,10 +359,13 @@ def run(args):
                 with defer_signals() as cleanup_signals:
                     errors.extend(stop_owned(child))
                     def attempt(label, action):
+                        nonlocal screening_failure
                         try:
                             with evidence_deadline():
                                 return action()
                         except BaseException as error:
+                            if label in {'screen', 'screen failed state', 'screen late cancellation'}:
+                                screening_failure = fixed_screen_failure(error)
                             errors.append(label + ': ' + type(error).__name__)
                             return None
                     def status():
@@ -391,6 +438,10 @@ def run(args):
                             attempt('replace owned late screening', lambda: shutil.rmtree(args.screened))
                         if screen is not None:
                             attempt('screen late cancellation', screen_owned)
+            if (failure is not None or code or errors or cleanup_signals) and not args.screened.exists():
+                with defer_signals():
+                    attempt('unqualified fixed phase summary', lambda: export_failure_phase(
+                        args.work, args.screened, screening_failure))
         finally:
             with signal_transition():
                 for signum, handler in previous.items():

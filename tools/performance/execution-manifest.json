@@ -25,8 +25,8 @@
     "tools/performance/guest.py": "5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
-    "tools/performance/qualification.py": "e828d09f6e3824845f12bf50bb7ab47ef8a143eba3df9f5a6a449d3527cfd88b",
-    "tools/performance/run-paired.py": "7c76c70880a4b41d6b5b61cec2d626bccd747b2e6aec9453d420e0b2ea5aa03f",
+    "tools/performance/qualification.py": "0f293fcd6ffd2fd0cfad175f255027e276a83e842545d810ce04a814d34c6de3",
+    "tools/performance/run-paired.py": "3d0badf2818e52813e28a44767333c73bea5ab34828cc2df154a4c1f164cac95",
     "tools/test-install.sh": "122e01121b4aab97052a2d2ceeeadecbca45dbddfb2279c52751a81149b9178d"
   },
   "image": {

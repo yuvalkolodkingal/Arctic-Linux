@@ -22,6 +22,138 @@ BASELINE_SHA256 = '054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc482651
 BASELINE_PROFILE_SHA256 = 'e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d'
 
 
+def failure_phase_summary(work, screen_failure):
+    """Only fixed observations from bounded private files; never a boot result."""
+    screen_codes = {'sensitive_text', 'terminal_escape', 'member_count', 'member_type',
+                    'member_size', 'ownership', 'deadline', 'unclassified', 'not_observed'}
+    if type(screen_failure) is not str or screen_failure not in screen_codes:
+        raise ValueError('Invalid fixed screening code')
+    result = dict(schema='arctic-paired-failure-phase-v1',
+        status='unqualified_fixed_observations_only', release_acceptance=False,
+        performance_acceptance=False, original_evidence_uploaded=False,
+        screening_failure=screen_failure, private_owner_verified=False,
+        observed_context='none', runner_phase='unavailable',
+        read_status=dict(status='unavailable', owner='unavailable', baseline_install='unavailable',
+            candidate_install='unavailable', context='unavailable', harness='unavailable', serial='unavailable'),
+        markers=dict(baseline_clean_poweroff=False, candidate_clean_poweroff=False,
+            qemu_start=False, qemu_exit_before_qmp=False, qmp_not_connected=False,
+            default_entry=False, passphrase_prompt=False, missing_passphrase_prompt=False,
+            graphical_login=False, missing_graphical_login=False, reported_collection=False,
+            reported_incomplete_collection=False, console_restored=False,
+            collector_begin=False, collector_end=False),
+        smoke_exit='unavailable', console_restore_error='unavailable')
+    work = Path(work).absolute()
+    if work.resolve() != work:
+        return result
+    try:
+        root = os.open(work, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        return result
+    def read(relative, limit):
+        # Every relative name comes from the closed inventories below. Walk
+        # directories with openat/O_NOFOLLOW; reject substituted FIFO/devices.
+        descriptors = []
+        try:
+            current = root
+            for part in Path(relative).parts[:-1]:
+                current = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=current)
+                descriptors.append(current)
+            fd = os.open(Path(relative).name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=current)
+            with os.fdopen(fd, 'rb') as source:
+                info = os.fstat(source.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+                    return None, 'unsafe_or_oversized'
+                content = source.read(limit + 1)
+                if len(content) > limit:
+                    return None, 'unsafe_or_oversized'
+                return content, 'readable'
+        except FileNotFoundError:
+            return None, 'absent'
+        except OSError:
+            return None, 'unsafe_or_oversized'
+        finally:
+            for fd in reversed(descriptors):
+                os.close(fd)
+    def value(content):
+        try:
+            return prepared_json(content) if content is not None else None
+        except (ValueError, UnicodeError):
+            return None
+    try:
+        content, result['read_status']['status'] = read('status.json', 65536)
+        state = value(content)
+        content, result['read_status']['owner'] = read('vm-prepared-image-owner.json', 4096)
+        owner = value(content)
+        if (type(state) is not dict or type(owner) is not dict
+                or type(state.get('task_id')) is not str or not re.fullmatch('[0-9a-f]{32}', state['task_id'])
+                or set(owner) != {'schema', 'release_acceptance', 'task_id', 'container', 'base_id'}
+                or owner.get('schema') != 'arctic-paired-test-image-owner-v1'
+                or owner.get('release_acceptance') is not False or owner.get('task_id') != state['task_id']
+                or type(owner.get('container')) is not str
+                or not re.fullmatch('arctic-paired-' + state['task_id'] + '-[0-9a-f]{8}', owner['container'])
+                or type(owner.get('base_id')) is not str
+                or not re.fullmatch('(?:sha256:)?[0-9a-f]{64}', owner['base_id'])):
+            return result
+        result['private_owner_verified'] = True
+        # Deliberately exclude success/measurement phases from this diagnostic.
+        phases = {'prepare_immutable_vm_tools', 'offline_install_baseline', 'offline_install_candidate',
+                  'blocked', 'command_interrupted', 'command_timeout', 'prepared_image_cleanup_failed'}
+        phase = state.get('phase')
+        result['runner_phase'] = phase if type(phase) is str and phase in phases else 'unavailable'
+        for image in ('baseline', 'candidate'):
+            content, result['read_status'][image + '_install'] = read(image + '-install-harness.log', 1048576)
+            if content is not None:
+                result['markers'][image + '_clean_poweroff'] = b'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean' in content
+        current = None
+        # A context file observes preparation only; it proves no boot completion.
+        for image, number in (('baseline', 1), ('candidate', 1), ('candidate', 2),
+                              ('baseline', 2), ('baseline', 3), ('candidate', 3)):
+            prefix = f'runs/{image}/{number}/'
+            content, status = read(prefix + 'performance-context.json', 32768)
+            if status == 'absent':
+                continue
+            context = value(content)
+            if (type(context) is not dict or context.get('image') != image
+                    or type(context.get('boot')) is not int or context['boot'] != number
+                    or context.get('collector') != 'console'):
+                result['read_status']['context'] = 'unsafe_or_oversized'
+                return result
+            current = prefix
+            result['read_status']['context'] = status
+            result['observed_context'] = f'{image}_{number}'
+        if current is None:
+            return result
+        content, result['read_status']['harness'] = read(current + 'harness.log', 1048576)
+        if content is not None:
+            literals = dict(qemu_start=b'qemu started (boot):',
+                qemu_exit_before_qmp=b'qemu exited: see qemu-boot.log', qmp_not_connected=b'no QMP socket',
+                default_entry=b'booting the default entry',
+                passphrase_prompt=b'passphrase prompt on screen: boot-31-luks-prompt.png',
+                missing_passphrase_prompt=b'no passphrase prompt detected; typing the passphrase anyway',
+                graphical_login=b'login screen on screen: boot-41-login.png',
+                missing_graphical_login=b'no login screen detected; typing the password anyway',
+                reported_collection=b'collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt ',
+                reported_incomplete_collection=b'collect.sh did not finish (attempt ')
+            for key, literal in literals.items():
+                result['markers'][key] = literal in content
+        content, result['read_status']['serial'] = read(current + 'serial-boot.log', 8388608)
+        if content is not None:
+            for key, literal in (('console_restored', b'ARCTIC-PERFORMANCE-CONSOLE-RESTORED session='),
+                                 ('collector_begin', b'ARCTIC-COLLECT-BEGIN'), ('collector_end', b'ARCTIC-COLLECT-END')):
+                result['markers'][key] = literal in content
+            exits = re.findall(rb'(?:^|\n)ARCTIC-INSTALLED-SMOKE-EXIT=([0-9]{1,3})(?=\r?(?:\n|$))', content)
+            result['smoke_exit'] = ('absent' if not exits else 'ambiguous' if len(exits) != 1
+                else 'zero' if exits[0] == b'0' else 'nonzero')
+            errors = [(code, literal) for code, literal in (
+                ('no_unique_desktop_session', b'RuntimeError: No unique actual desktop session for console restoration'),
+                ('invalid_desktop_vt', b'RuntimeError: Invalid actual desktop VT'),
+                ('inactive_desktop_vt', b'RuntimeError: Desktop VT did not become active')) if literal in content]
+            result['console_restore_error'] = 'none' if not errors else errors[0][0] if len(errors) == 1 else 'multiple'
+        return result
+    finally:
+        os.close(root)
+
+
 @contextlib.contextmanager
 def prepared_signal_transition():
     """Brief parent-only mask for atomic handler changes, never across spawn."""
