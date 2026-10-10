@@ -20,11 +20,13 @@ import re
 import shlex
 import shutil
 import signal
+import selectors
 import socket
 import stat
 import struct
 import subprocess
 import tempfile
+import threading
 import time
 
 
@@ -354,6 +356,331 @@ def evaluate_reference_rgb(data, width, height, reference):
                 reason='No bounded 16-color reference ROI with sufficient matching visible content')
 
 
+# BEGIN NATIVE_PROTOCOL_DIAGNOSTICS
+class NativeProtocolProjection:
+    """Closed numeric projection of one client stderr stream, never raw text.
+
+    These are client-side requests/events, not proof that a compositor displayed
+    a buffer. A unique xdg root is structural; GTK GLArea identity remains open.
+    """
+    MAX_INPUT = 1024 * 1024
+    MAX_LINE = 2048
+    MAX_RECORDS = 512
+    INTERFACES = {'wl_compositor', 'wl_subcompositor', 'xdg_wm_base',
+                  'wp_viewporter', 'wl_shm', 'zwp_linux_dmabuf_v1'}
+    HEADER = re.compile(r'^\[\s*[0-9]{1,12}\.[0-9]{1,6}\]\s*(?:\{[^{}\r\n]{1,80}\}\s*)?'
+                        r'(?P<send>->\s*)?(?P<iface>[a-z][a-z0-9_]{0,63})[@#](?P<id>[0-9]{1,8})\.'
+                        r'(?P<op>[a-z_]{1,64})\((?P<args>[^\r\n]*)\)$')
+    def __init__(self):
+        self.objects = {1:'wl_display'}
+        self.surfaces, self.xdg, self.toplevels, self.children = {}, {}, {}, {}
+        self.viewports, self.buffers, self.pools = {}, {}, {}
+        self.records = []
+        self.rejected = self.capped = False
+        self.input_bytes = self.omitted = 0
+
+    @staticmethod
+    def number(text, low=0, high=1048576):
+        if not re.fullmatch(r'-?[0-9]{1,10}', text): raise ValueError()
+        value=int(text)
+        if not low<=value<=high: raise ValueError()
+        return value
+
+    def object(self, text, interface, new=False):
+        match=re.fullmatch(r'(?:new id )?([a-z][a-z0-9_]{0,63}|\[unknown\])[@#]([0-9]{1,8})',text)
+        if not match or match[1] not in (interface,'[unknown]'): raise ValueError()
+        value=self.number(match[2],2)
+        if new:
+            if len(self.objects)>=1024: self.capped=True; raise ValueError()
+            if not text.startswith('new id ') or value in self.objects: raise ValueError()
+            self.objects[value]=interface
+        elif self.objects.get(value)!=interface: raise ValueError()
+        return value
+
+    def feed(self, line):
+        self.input_bytes+=len(line)
+        if self.input_bytes>self.MAX_INPUT or len(line)>self.MAX_LINE:
+            self.capped=True; return
+        if self.rejected or self.capped: return
+        try:
+            text=line.decode('ascii').rstrip('\n')
+        except UnicodeDecodeError:
+            self.omitted+=1; return
+        match=self.HEADER.fullmatch(text)
+        if not match:
+            self.omitted+=1; return
+        iface,op=match['iface'],match['op']; args=match['args']; send=bool(match['send'])
+        key=(iface,op)
+        selected={('wl_display','get_registry'),('wl_registry','bind'),('wl_compositor','create_surface'),
+            ('wl_subcompositor','get_subsurface'),('xdg_wm_base','get_xdg_surface'),('xdg_surface','get_toplevel'),
+            ('xdg_toplevel','configure'),('xdg_surface','configure'),('xdg_surface','ack_configure'),
+            ('wl_surface','attach'),('wl_surface','commit'),('wl_surface','set_buffer_scale'),
+            ('wl_surface','set_buffer_transform'),('wp_viewporter','get_viewport'),('wp_viewport','set_source'),
+            ('wp_viewport','set_destination'),('wl_subsurface','set_position'),('wl_subsurface','set_sync'),
+            ('wl_subsurface','set_desync'),('wl_shm','create_pool'),('wl_shm_pool','create_buffer'),
+            ('zwp_linux_dmabuf_v1','create_params'),('zwp_linux_buffer_params_v1','create_immed')}
+        if key not in selected:
+            # Account for opaque new objects without exporting their names.
+            for match_id in re.finditer(r'new id (?:[a-z][a-z0-9_]{0,63}|\[unknown\])[@#]([0-9]{1,8})',args):
+                value=int(match_id[1])
+                if not 2<=value<=1048576 or value in self.objects: self.rejected=True; return
+                if len(self.objects)>=1024: self.capped=True; return
+                self.objects[value]='unsupported'
+            self.omitted+=1; return
+        try:
+            receiver=self.number(match['id'],1)
+            if self.objects.get(receiver)!=iface: raise ValueError()
+            event=key in {('xdg_toplevel','configure'),('xdg_surface','configure')}
+            if send==event: raise ValueError()
+            values=args.split(', ') if args else []
+            row=dict(interface=iface,object_id=receiver,operation=op,direction='request' if send else 'event')
+            if key==('wl_display','get_registry'):
+                if len(values)!=1 or any(v=='wl_registry' for v in self.objects.values()): raise ValueError()
+                row['created_id']=self.object(values[0],'wl_registry',True)
+            elif key==('wl_registry','bind'):
+                if len(values)!=4: raise ValueError()
+                interface=values[1][1:-1] if re.fullmatch(r'"[a-z][a-z0-9_]{0,63}"',values[1]) else None
+                if interface not in self.INTERFACES:
+                    match_id=re.fullmatch(r'new id (?:[a-z][a-z0-9_]{0,63}|\[unknown\])[@#]([0-9]{1,8})',values[3])
+                    if not match_id: raise ValueError()
+                    opaque=self.number(match_id[1],2)
+                    if len(self.objects)>=1024: self.capped=True; raise ValueError()
+                    if opaque in self.objects: raise ValueError()
+                    self.objects[opaque]='unsupported'
+                    self.omitted+=1; return
+                row.update(global_id=self.number(values[0],1),version=self.number(values[2],1,64),
+                           created_id=self.object(values[3],interface,True),bound_interface=interface)
+            elif key==('wl_compositor','create_surface'):
+                if len(values)!=1 or len(self.surfaces)>=64: raise ValueError()
+                surface=self.object(values[0],'wl_surface',True); self.surfaces[surface]={}
+                row['created_id']=surface
+            elif key==('xdg_wm_base','get_xdg_surface'):
+                if len(values)!=2: raise ValueError()
+                surface=self.object(values[1],'wl_surface'); child=self.object(values[0],'xdg_surface',True)
+                if surface in self.xdg.values() or surface in self.children: raise ValueError()
+                self.xdg[child]=surface; row.update(created_id=child,surface_id=surface)
+            elif key==('xdg_surface','get_toplevel'):
+                if len(values)!=1 or receiver not in self.xdg: raise ValueError()
+                if self.xdg[receiver] in self.toplevels.values(): raise ValueError()
+                top=self.object(values[0],'xdg_toplevel',True); self.toplevels[top]=self.xdg[receiver]
+                row.update(created_id=top,surface_id=self.xdg[receiver])
+            elif key==('wl_subcompositor','get_subsurface'):
+                if len(values)!=3: raise ValueError()
+                child=self.object(values[1],'wl_surface'); parent=self.object(values[2],'wl_surface')
+                if child==parent or child in self.children or child in self.xdg.values(): raise ValueError()
+                # Reject loops and ambiguity, never identify a video widget by guess.
+                cursor=parent
+                for _ in range(64):
+                    if cursor==child: raise ValueError()
+                    if cursor not in self.children: break
+                    cursor=self.children[cursor]['parent_id']
+                else: raise ValueError()
+                sub=self.object(values[0],'wl_subsurface',True)
+                self.children[child]={'parent_id':parent,'subsurface_id':sub}
+                row.update(created_id=sub,surface_id=child,parent_id=parent)
+            elif key in {('xdg_surface','configure'),('xdg_surface','ack_configure')}:
+                if len(values)!=1 or receiver not in self.xdg: raise ValueError()
+                serial=self.number(values[0],1,4294967295); surface=self.xdg[receiver]
+                if serial==self.surfaces[surface].get('configure_serial') and op=='configure': raise ValueError()
+                if op=='ack_configure' and serial!=self.surfaces[surface].get('configure_serial'): raise ValueError()
+                self.surfaces[surface]['configure_serial' if op=='configure' else 'ack_serial']=serial
+                row.update(surface_id=surface,serial=serial)
+            elif key==('xdg_toplevel','configure'):
+                if len(values)!=3 or not re.fullmatch(r'array\[[0-9]{1,4}\]',values[2]): raise ValueError()
+                surface=self.toplevels[receiver]; w=self.number(values[0],0,16384); h=self.number(values[1],0,16384)
+                self.surfaces[surface]['requested_size']=[w,h]; row.update(surface_id=surface,width=w,height=h)
+            elif key==('wp_viewporter','get_viewport'):
+                if len(values)!=2: raise ValueError()
+                surface=self.object(values[1],'wl_surface')
+                if surface in self.viewports.values(): raise ValueError()
+                viewport=self.object(values[0],'wp_viewport',True); self.viewports[viewport]=surface
+                row.update(created_id=viewport,surface_id=surface)
+            elif iface=='wp_viewport':
+                surface=self.viewports[receiver]
+                if op=='set_destination':
+                    if len(values)!=2: raise ValueError()
+                    pair=[self.number(v,-1,16384) for v in values]
+                    if pair!=[-1,-1] and min(pair)<1: raise ValueError()
+                    self.surfaces[surface]['viewport_destination']=pair; row.update(surface_id=surface,dimensions=pair)
+                else:
+                    if len(values)!=4 or any(not re.fullmatch(r'-?[0-9]{1,6}(?:\.[0-9]{1,8})?',v) for v in values): raise ValueError()
+                    box=[float(v) for v in values]
+                    if any(not math.isfinite(v) or not -1<=v<=16384 for v in box): raise ValueError()
+                    if box!=[-1.0]*4 and (min(box[:2])<0 or min(box[2:])<=0): raise ValueError()
+                    self.surfaces[surface]['viewport_source']=box; row.update(surface_id=surface,rectangle=box)
+            elif iface=='wl_subsurface':
+                matches=[s for s,v in self.children.items() if v['subsurface_id']==receiver]
+                if len(matches)!=1: raise ValueError()
+                surface=matches[0]; row['surface_id']=surface
+                if op=='set_position':
+                    if len(values)!=2: raise ValueError()
+                    pair=[self.number(v,-32768,32768) for v in values]
+                    self.surfaces[surface]['position']=pair; row['position']=pair
+                else:
+                    if values: raise ValueError()
+                    self.surfaces[surface]['synchronized']=op=='set_sync'
+            elif key==('wl_shm','create_pool'):
+                if len(values)!=3 or not re.fullmatch(r'fd [0-9]{1,8}|[0-9]{1,8}',values[1]): raise ValueError()
+                pool=self.object(values[0],'wl_shm_pool',True); size=self.number(values[2],1,268435456)
+                self.pools[pool]=size; row.update(created_id=pool,pool_bytes=size)
+            elif key==('wl_shm_pool','create_buffer'):
+                if len(values)!=6: raise ValueError()
+                buf=self.object(values[0],'wl_buffer',True)
+                offset,w,h,stride,fmt=[self.number(v,0,4294967295) for v in values[1:]]
+                if not 1<=w<=16384 or not 1<=h<=16384 or not w<=stride<=262144 or offset+stride*h>self.pools[receiver]: raise ValueError()
+                if fmt in (0,1) and stride<w*4: raise ValueError()
+                self.buffers[buf]=dict(width=w,height=h,stride=stride,format=fmt,transport='shm')
+                row.update(created_id=buf,**self.buffers[buf])
+            elif key==('zwp_linux_dmabuf_v1','create_params'):
+                if len(values)!=1: raise ValueError()
+                row['created_id']=self.object(values[0],'zwp_linux_buffer_params_v1',True)
+            elif key==('zwp_linux_buffer_params_v1','create_immed'):
+                if len(values)!=5: raise ValueError()
+                buf=self.object(values[0],'wl_buffer',True); w,h,fmt,flags=[self.number(v,0,4294967295) for v in values[1:]]
+                if not 1<=w<=16384 or not 1<=h<=16384: raise ValueError()
+                self.buffers[buf]=dict(width=w,height=h,format=fmt,transport='dmabuf',plane_stride_observed=False)
+                row.update(created_id=buf,**self.buffers[buf])
+            elif iface=='wl_surface':
+                surface=self.surfaces[receiver]; row['surface_id']=receiver
+                if op=='attach':
+                    if len(values)!=3: raise ValueError()
+                    buf=None if values[0]=='nil' else self.object(values[0],'wl_buffer')
+                    surface.update(buffer_id=buf,attach_offset=[self.number(v,-32768,32768) for v in values[1:]])
+                    row.update(buffer_id=buf,attach_offset=surface['attach_offset'])
+                elif op=='set_buffer_scale':
+                    if len(values)!=1: raise ValueError()
+                    surface['buffer_scale']=self.number(values[0],1,16); row['scale']=surface['buffer_scale']
+                elif op=='set_buffer_transform':
+                    if len(values)!=1: raise ValueError()
+                    surface['buffer_transform']=self.number(values[0],0,7); row['transform']=surface['buffer_transform']
+                elif op=='commit':
+                    if values: raise ValueError()
+                    row['client_transaction']=dict(surface)
+            if len(self.records)>=self.MAX_RECORDS: self.capped=True; return
+            self.records.append(row)
+        except (ValueError,KeyError,IndexError,OverflowError):
+            self.rejected=True
+
+    def snapshot(self):
+        roots=sorted(set(self.toplevels.values()))
+        status='rejected' if self.rejected else 'incomplete' if self.capped else 'observed' if len(roots)==1 else 'unknown'
+        return dict(status=status,records=list(self.records),input_bytes=self.input_bytes,
+                    omitted_lines=self.omitted,unique_xdg_root_id=roots[0] if len(roots)==1 else None,
+                    structural_surfaces=[dict(surface_id=s,**v,**self.children.get(s,{})) for s,v in sorted(self.surfaces.items())],
+                    video_surface_identified=False,compositor_commit_or_display_proven=False)
+
+
+class NativeProtocolDrain:
+    """One bounded private capture; drain excess until original app cleanup.
+
+    No raw file is inside the guest export tree. A descriptor identity, actual
+    app fd2 and start-ticks bind the stream; wrapper PID is never app ownership.
+    """
+    RAW_CAP=256*1024
+    def __init__(self):
+        self.stream=None; self.projection=NativeProtocolProjection(); self.lock=threading.Lock()
+        self.stop=threading.Event(); self.eof=False; self.failed=False; self.partial=False
+        self.pending_bytes=0; self.timed_out=False
+        self.binding=None; self.raw_bytes=0; self.raw_fd=None
+        private=Path(tempfile.mkdtemp(prefix='arctic-native-protocol-private-',dir='/tmp'))
+        self.raw_path=private/'stderr.private'
+        directory=os.open(private,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:
+            info=os.fstat(directory)
+            if info.st_uid!=os.geteuid() or info.st_mode&0o077:
+                raise RuntimeError('private protocol directory identity differs')
+            self.raw_fd=os.open('stderr.private',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=directory)
+        finally: os.close(directory)
+        info=os.fstat(self.raw_fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.geteuid() or info.st_nlink!=1 or info.st_mode&0o077:
+            self._close_capture(); raise RuntimeError('private protocol file identity differs')
+        self.thread=None
+
+    def _close_capture(self):
+        # One owner may close repeatedly after setup failure or normal EOF.
+        descriptor=self.raw_fd; self.raw_fd=None
+        if descriptor is not None:
+            try: os.close(descriptor)
+            except OSError: self.failed=True
+        if self.stream is not None:
+            try: self.stream.close()
+            except OSError: self.failed=True
+
+    def start(self,stream):
+        self.stream=stream
+        self.thread=threading.Thread(target=self._drain,daemon=True)
+        try: self.thread.start()
+        except Exception:
+            self.failed=True; self.thread=None; self._close_capture()
+            raise RuntimeError('owned protocol drainage unavailable') from None
+
+    def _drain(self):
+        pending=b''; deadline=time.monotonic()+300
+        try:
+            os.set_blocking(self.stream.fileno(),False)
+            with selectors.DefaultSelector() as selector:
+                selector.register(self.stream,selectors.EVENT_READ)
+                while not self.stop.is_set() and time.monotonic()<deadline:
+                    if not selector.select(.1): continue
+                    block=os.read(self.stream.fileno(),4096)
+                    if not block: self.eof=True; break
+                    with self.lock:
+                        kept=block[:max(0,self.RAW_CAP-self.raw_bytes)]
+                        if kept:
+                            offset=0
+                            while offset<len(kept):
+                                count=os.write(self.raw_fd,kept[offset:])
+                                if count<=0: raise OSError()
+                                offset+=count
+                            self.raw_bytes+=len(kept)
+                        pending+=block
+                        while b'\n' in pending:
+                            line,pending=pending.split(b'\n',1); self.projection.feed(line+b'\n')
+                        if len(pending)>self.projection.MAX_LINE:
+                            self.projection.capped=True; pending=b''
+                        self.pending_bytes=len(pending)
+                if pending: self.partial=True
+                if not self.eof and not self.stop.is_set(): self.timed_out=True
+        except (OSError,ValueError): self.failed=True
+        finally:
+            self._close_capture()
+
+    def bind(self,proof,uid):
+        try:
+            current=identity(proof['pid'],uid)
+            if any(current[k]!=proof[k] for k in ('pid','start_ticks','executable')): return False
+            if digest(current['executable'])!=proof['executable_sha256']: return False
+            pipe=os.fstat(self.stream.fileno()); actual=os.stat(Path('/proc')/str(proof['pid'])/'fd/2')
+            if not stat.S_ISFIFO(pipe.st_mode) or (pipe.st_dev,pipe.st_ino)!=(actual.st_dev,actual.st_ino): return False
+            self.binding={k:proof[k] for k in ('pid','start_ticks','executable_sha256')}
+            self.binding.update(uid=uid,client_id=int(proof['client_id']),pipe_device=pipe.st_dev,pipe_inode=pipe.st_ino)
+            return True
+        except (OSError,ValueError,KeyError,RuntimeError): return False
+
+    def snapshot(self,proof,uid):
+        matched=self.bind(proof,uid)
+        with self.lock:
+            value=self.projection.snapshot()
+        value.update(owner=self.binding if matched else None,ownership_verified=matched,
+                     private_raw_bytes=self.raw_bytes,drain_failed=self.failed,partial_line=self.partial or self.pending_bytes>0,
+                     private_raw_truncated=self.raw_bytes>=self.RAW_CAP,time_cap_reached=self.timed_out,
+                     input_complete=self.eof,private_raw_exported=False,release_acceptance=False,
+                     scope='owned client protocol observations only; GTK GLArea/framebuffer identity remains unknown')
+        value['protocol_sender_authenticated']=False
+        value['exclusive_stderr_writer_proven']=False
+        if not matched or self.failed or self.partial or self.pending_bytes: value['status']='unknown'
+        elif self.timed_out: value['status']='incomplete'
+        if not matched:
+            value.update(records=[],structural_surfaces=[],unique_xdg_root_id=None)
+        return value
+
+    def finish(self):
+        self.stop.set()
+        if self.thread is not None: self.thread.join(timeout=1)
+        else: self._close_capture()
+# END NATIVE_PROTOCOL_DIAGNOSTICS
+
+
 class Smoke:
     def __init__(self, prefix, stage):
         require(prefix[:2] == ['runuser', '-u'] and prefix[3:5] == ['--', 'env'], 'invalid desktop prefix')
@@ -400,6 +727,81 @@ class Smoke:
             child = subprocess.Popen(self.prefix+argv, stdout=stream, stderr=stream)
         self.launches.append(child)
         self.steps.append(dict(argv=argv, status='started-asynchronously', log=str(log)))
+
+    def launch_protocol_player(self, argv):
+        # Only the already isolated static Celluloid, no renderer/command flag.
+        require(argv[0]=='/usr/bin/celluloid' and getattr(self,'gui_v6',False),
+                'native protocol diagnostic player selection differs')
+        drain=None; reader=None; writer=None
+        try:
+            drain=NativeProtocolDrain()
+            read,writer=os.pipe()
+            try: reader=os.fdopen(read,'rb',buffering=0)
+            except BaseException:
+                os.close(read); raise
+            # Optional setup finishes before any diagnostic app is launched.
+            drain.start(reader)
+        except (OSError,RuntimeError):
+            if drain is not None: drain.finish()
+            if reader is not None: reader.close()
+            if writer is not None: os.close(writer)
+            # A failed private capture setup uses the original, uninstrumented launch.
+            self.launch(argv); return
+        log=self.root/('gui-launch-'+str(len(self.launches))+'.log')
+        try:
+            with log.open('ab') as stream:
+                child=subprocess.Popen(self.prefix+['WAYLAND_DEBUG=client']+argv,stdout=stream,stderr=writer)
+        except BaseException:
+            drain.finish(); raise
+        finally: os.close(writer)
+        self.launches.append(child)
+        self.steps.append(dict(argv=argv,status='started-asynchronously',log=str(log)))
+        self.native_protocol_drain=drain
+
+    def native_protocol_diagnostic(self, player, state, screenshot, client):
+        value=dict(schema='arctic-native-owned-protocol-viewport-v1',stage=self.stage if self.stage in ('live','installed') else 'unknown',
+                   observed_monotonic_ns=time.monotonic_ns(),
+                   release_acceptance=False,video_widget_and_framebuffer_dimensions=None,rendering_cause_proven=False)
+        try:
+            sha=screenshot['sha256']
+            if not isinstance(sha,str) or not re.fullmatch('[0-9a-f]{64}',sha): raise ValueError()
+            value['primary_screenshot_sha256']=sha
+            value['checker_sha256']=digest(Path(__file__))
+            if (any(type(client.get(k)) is not int for k in ('id','pid','x','y','width','height'))
+                    or type(client.get('is_fullscreen')) is not bool
+                    or not 1<=client['width']<=16384 or not 1<=client['height']<=16384
+                    or not all(-32768<=client[k]<=32768 for k in ('x','y'))): raise ValueError()
+            if client['pid']!=player['pid'] or client['id']!=int(player['client_id']): raise ValueError()
+            value['primary_capture_intended_geometry']={k:client[k] for k in ('id','pid','x','y','width','height','is_fullscreen')}
+            value['geometry_scope']='existing owned client snapshot immediately before primary PNG; protocol prefix sampled after unchanged oracle'
+            value['protocol']=self.native_protocol_drain.snapshot(player,self.uid)
+            params=state.get('video-params',{})
+            value['decoded_video_dimensions']={k:params[k] for k in ('w','h')
+                 if type(params.get(k)) is int and 1<=params[k]<=16384}
+            value['optional_mpv_output_and_osd_dimensions']='not_collected'
+        except Exception:
+            value['protocol']=dict(status='unknown',ownership_verified=False,release_acceptance=False)
+        # One exclusive regular typed projection, not an app-controlled log.
+        try:
+            data=(json.dumps(value,sort_keys=True)+'\n').encode()
+            if len(data)>256*1024: return
+            directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+            try:
+                info=os.fstat(directory)
+                if info.st_uid!=self.uid: return
+                descriptor=os.open('0-native-protocol-viewport.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                                   0o600,dir_fd=directory)
+                with os.fdopen(descriptor,'wb') as stream: stream.write(data)
+            finally: os.close(directory)
+        except (OSError,ValueError):
+            # No arbitrary exception text or diagnostic failure replaces the gate.
+            pass
+
+    def finish_native_protocol(self):
+        drain=getattr(self,'native_protocol_drain',None)
+        if drain is not None:
+            try: drain.finish()
+            except Exception: pass
 
     def setup(self):
         require(Path('/etc/arctic/default-apps').is_file(), 'system role file unavailable')
@@ -827,7 +1229,7 @@ class Smoke:
         fixture,expected,source_sha=self.visual_fixture()
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
         ipc=self.root/'visual-reference-ipc.sock'
-        player=self.fresh_window(lambda:self.launch(['/usr/bin/celluloid','--no-existing-session',
+        player=self.fresh_window(lambda:(self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch)(['/usr/bin/celluloid','--no-existing-session',
             '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),
             'celluloid',r'celluloid')
         self.wait(lambda:ipc.is_socket())
@@ -890,6 +1292,8 @@ class Smoke:
             info['oracle']=dict(status='failed',error=type(exc).__name__+': '+str(exc))
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
+        if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
         require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')
@@ -1037,6 +1441,7 @@ def run_checks(prefix, stage, *, disposable_guest=False, gui_v6=False):
     finally:
         smoke.gate('owned-process-cleanup-config-preservation',smoke.cleanup)
         smoke.gate('selinux-and-new-avcs',security.finish)
+        smoke.finish_native_protocol()
     report=dict(schema=SCHEMA,stage=stage,status='failed' if any(g['status']=='failed' for g in smoke.gates)
                 else 'limited-smoke-passed',release_acceptance=False,gates=smoke.gates,steps=smoke.steps,
                 proven_new_processes=smoke.owned,diagnostic_trace=dict(path=str(smoke.root/'gui-trace.log'),
