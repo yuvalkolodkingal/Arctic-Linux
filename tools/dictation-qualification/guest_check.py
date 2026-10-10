@@ -56,6 +56,76 @@ SESSION_INVALID_CODES = {
         'receiver-process-died', 'receiver-window-duplicate', 'receiver-window-identity',
         'receiver-focus-request-failed', 'receiver-window-disappeared', 'observation-timeout'),
 }
+WAIT_DIAGNOSTIC_TARGETS = ('receiver-clear', 'capture-link', 'terminal-state', 'text-delivery',
+                           'engine-exit', 'microphone-error', 'lock-state', 'unlock-state',
+                           'loader-lock', 'loader-exit', 'loader-endpoint', 'loader-engine',
+                           'loader-route', 'loader-terminal', 'loader-delivery')
+WAIT_DIAGNOSTIC_STATES = ('ready', 'error', 'recording', 'transcribing', 'unavailable')
+WAIT_DIAGNOSTIC_BACKENDS = ('', 'cpu', 'vulkan')
+
+def wait_status_projection(value):
+    """Closed enums only; never export status messages, text, paths or unknown values."""
+    if type(value) is not dict:
+        return ('unknown', 'unknown')
+    state, backend = value.get('state'), value.get('active_backend')
+    state = state if type(state) is str and state in WAIT_DIAGNOSTIC_STATES else 'unknown'
+    backend = ('idle' if backend == '' else backend) if type(backend) is str and backend in WAIT_DIAGNOSTIC_BACKENDS else 'unknown'
+    return (state, backend)
+
+def wait_runtime_projection(path, uid):
+    """Failure-only observation from an owned bounded regular descriptor, not readiness."""
+    fd = None
+    try:
+        if type(uid) is not int or uid <= 0:
+            return ('unknown', 'unknown')
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        before = os.fstat(fd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != uid
+                or before.st_mode & 0o077 or not 0 < before.st_size <= 16384):
+            return ('unknown', 'unknown')
+        raw = os.read(fd, 16385)
+        after = os.fstat(fd)
+        if (len(raw) != before.st_size or len(raw) > 16384
+                or (before.st_dev, before.st_ino, before.st_uid, before.st_mode,
+                    before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+                != (after.st_dev, after.st_ino, after.st_uid, after.st_mode,
+                    after.st_size, after.st_mtime_ns, after.st_ctime_ns)):
+            return ('unknown', 'unknown')
+        named = os.stat(path, follow_symlinks=False)
+        if (before.st_dev, before.st_ino, before.st_uid, before.st_mode,
+            before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                named.st_dev, named.st_ino, named.st_uid, named.st_mode,
+                named.st_size, named.st_mtime_ns, named.st_ctime_ns):
+            return ('unknown', 'unknown')
+        def unique_pairs(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError()
+                result[key] = value
+            return result
+        return wait_status_projection(json.loads(raw, object_pairs_hook=unique_pairs))
+    except Exception:
+        # Diagnostics cannot replace the original failure or interrupt cleanup.
+        return ('unknown', 'unknown')
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+
+def wait_diagnostic_code(target, last, current, graph):
+    require(type(target) is str and target in WAIT_DIAGNOSTIC_TARGETS, 'unknown-wait-diagnostic-target')
+    def projection(value):
+        if type(value) is not tuple or len(value) != 2:
+            return ('unknown', 'unknown')
+        return wait_status_projection({'state': value[0], 'active_backend': '' if type(value[1]) is str and value[1] == 'idle' else value[1]})
+    last, current = projection(last), projection(current)
+    # Last graph poll: owned engine, matching PID node, capture-class node,
+    # exact source present, exact owned capture link. Unknown is not false.
+    bits = ''.join('1' if v is True else '0' if v is False else 'u' for v in graph) if type(graph) is tuple and len(graph) == 5 else 'uuuuu'
+    return 'wait-' + target + '-last-' + last[0] + '-' + last[1] + '-now-' + current[0] + '-' + current[1] + '-lg' + bits
 
 def session_diagnostic_code(stage, error):
     """Only fixed setup stages/classes enter public codes, never exception text."""
@@ -242,6 +312,7 @@ class Checker:
 
     def gate(self, name, fn, kind='actual-session'):
         require(name in self.gates, 'unknown-gate')
+        self._wait_last_status = self._wait_last_graph = None
         result = {'id': name, 'status': 'failed', 'evidence_kind': kind, 'code': 'collector-failed', 'observations': {}}
         try:
             observations = fn()
@@ -276,12 +347,31 @@ class Checker:
         else:
             require(value.get('active_cpu_variant') == '', 'status-idle-cpu-variant')
         self.snapshots.append(result.stdout.decode())
+        self._wait_last_status = wait_status_projection(value)
         return value
+
+    def observe(self, target, fn, seconds=20):
+        """Use the original predicate/budget; label only its fixed timeout failure."""
+        require(type(target) is str and target in WAIT_DIAGNOSTIC_TARGETS, 'unknown-wait-diagnostic-target')
+        try:
+            return wait(fn, seconds)
+        except Invalid as error:
+            arguments = BaseException.args.__get__(error)
+            if not (type(arguments) is tuple and len(arguments) == 1
+                    and type(arguments[0]) is str and arguments[0] == 'observation-timeout'):
+                raise
+            try:
+                current = wait_runtime_projection(self.runtime / 'arctic/dictation.json', self.account.pw_uid)
+                code = wait_diagnostic_code(target, self.__dict__.get('_wait_last_status'), current,
+                                            self.__dict__.get('_wait_last_graph'))
+            except Exception:
+                code = wait_diagnostic_code(target, None, None, None)
+            raise Invalid(code) from None
 
     def empty(self):
         path = self.root / 'clear'
         path.touch(mode=0o600); os.chown(path, self.account.pw_uid, self.account.pw_gid)
-        wait(lambda: not path.exists() and (self.root / 'received.private').read_bytes() == b'')
+        self.observe('receiver-clear', lambda: not path.exists() and (self.root / 'received.private').read_bytes() == b'')
 
     def engines(self):
         found = []
@@ -431,9 +521,14 @@ class Checker:
         captures = {o['id'] for o in objects if o.get('type') == 'PipeWire:Interface:Node'
                     and str(o.get('info', {}).get('props', {}).get('application.process.id')) == str(pid)
                     and o.get('info', {}).get('props', {}).get('media.class') == 'Stream/Input/Audio'}
-        return any(o.get('type') == 'PipeWire:Interface:Link'
+        linked = any(o.get('type') == 'PipeWire:Interface:Link'
                    and o.get('info', {}).get('output-node-id') == self.source
                    and o.get('info', {}).get('input-node-id') in captures for o in objects)
+        owner = any(o.get('type') == 'PipeWire:Interface:Node'
+                    and str(o.get('info', {}).get('props', {}).get('application.process.id')) == str(pid) for o in objects)
+        source = any(o.get('type') == 'PipeWire:Interface:Node' and o.get('id') == self.source for o in objects)
+        self._wait_last_graph = (True, owner, bool(captures), source, linked)
+        return linked
 
     def play(self, sample):
         self.audio = self.root / 'fixture.wav'
@@ -456,12 +551,12 @@ class Checker:
                 and sha(engines[0][2]) == self.assets[cpu_key]['sha256'], 'cpu-owned-process-profile-pin')
         if loader is not None:
             self.loader_engine(engines[0], *loader)
-        wait(self.capture_link, 10)
+        self.observe('capture-link', self.capture_link, 10)
         self.play(sample)
         require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0, 'fixture-playback-failed')
         stopped = self.status('stop', check=False)
         require(stopped.get('ok') is True and stopped.get('state') == 'transcribing', 'recording-stop-failed')
-        wait(lambda: self.status().get('state') in ('ready', 'error'), 240)
+        self.observe('terminal-state', lambda: self.status().get('state') in ('ready', 'error'), 240)
         elapsed = time.monotonic_ns() - before
         require(self.status().get('state') == 'ready', 'cpu-transcription-failed')
         # Controller completion and GTK's Wayland delivery are different events.
@@ -472,7 +567,7 @@ class Checker:
             stable = stable + 1 if value and value == previous else 0
             previous = value
             return value if stable >= 3 else None
-        hypothesis = wait(received, 5)
+        hypothesis = self.observe('text-delivery', received, 5)
         require(hypothesis and not hypothesis.endswith('\n') and '\n' not in hypothesis, 'empty-or-unintended-enter')
         require(self.focused(), 'insertion-focus-lost')
         if sample['language'] == 'he':
@@ -502,11 +597,11 @@ class Checker:
     def cancel(self):
         self.empty(); self.status('set-backend', 'cpu'); self.status('set-language', 'en')
         require(self.status('start')['state'] == 'recording', 'cancel-recording-not-started')
-        wait(self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.5)
+        self.observe('capture-link', self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.5)
         value = self.status('cancel')
         self.kill(self.player); self.player = None
         require(value.get('state') == 'ready', 'cancel-not-ready')
-        wait(lambda: not self.engines()); self.no_engine()
+        self.observe('engine-exit', lambda: not self.engines()); self.no_engine()
         time.sleep(.5)
         require((self.root / 'received.private').read_bytes() == b'', 'cancel-inserted-text')
         return {'count': 0, 'drained': True}
@@ -514,7 +609,7 @@ class Checker:
     def broker_death(self):
         self.empty(); self.status('set-backend', 'cpu'); self.status('set-language', 'en')
         require(self.status('start')['state'] == 'recording', 'broker-death-recording-not-started')
-        wait(self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
+        self.observe('capture-link', self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
         engines = self.engines(); require(len(engines) == 1, 'broker-death-engine-not-unique')
         engine_pid = engines[0][0]
         parent = (Path('/proc') / str(engine_pid) / 'status').read_text()
@@ -528,7 +623,7 @@ class Checker:
         require(iter_process(broker) == ticks, 'broker-replaced-before-kill')
         self.kill_identity(broker, ticks)
         self.kill(self.player); self.player = None
-        wait(lambda: not self.engines(), 10); self.no_engine()
+        self.observe('engine-exit', lambda: not self.engines(), 10); self.no_engine()
         value = self.status()
         require(value.get('ready') is True and value.get('state') == 'ready', 'broker-death-stale-status')
         require((self.root / 'received.private').read_bytes() == b'', 'broker-death-inserted-text')
@@ -553,14 +648,14 @@ class Checker:
     def microphone(self):
         self.empty(); self.status('set-backend', 'cpu')
         require(self.status('start')['state'] == 'recording', 'mic-recording-not-started')
-        wait(self.capture_link, 10)
+        self.observe('capture-link', self.capture_link, 10)
         self.destroy_route(restore=False)
         try:
             objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
             remaining = [o for o in objects if o.get('type') == 'PipeWire:Interface:Node'
                          and o.get('info', {}).get('props', {}).get('media.class', '').startswith('Audio/Source')]
             require(not remaining, 'microphone-isolation-unavailable')
-            value = wait(lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
+            value = self.observe('microphone-error', lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
             require(bool(value.get('error')) and value.get('ok') is False, 'mic-failure-not-actionable')
             require((self.root / 'received.private').read_bytes() == b'', 'mic-failure-inserted-text')
             self.no_engine()
@@ -571,17 +666,17 @@ class Checker:
     def locked(self):
         self.empty(); self.status('set-backend', 'cpu')
         require(self.status('start')['state'] == 'recording', 'lock-recording-not-started')
-        wait(self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
+        self.observe('capture-link', self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
         self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'lock'])
-        wait(lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'true')
+        self.observe('lock-state', lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'true')
         self.kill(self.player); self.player = None
-        wait(lambda: not self.engines(), 5); self.no_engine()
+        self.observe('engine-exit', lambda: not self.engines(), 5); self.no_engine()
         value = self.status('start', check=False)
         require(value.get('ok') is False and value.get('state') == 'error', 'recording-started-while-locked')
         require((self.root / 'received.private').read_bytes() == b'', 'lock-inserted-text')
         # Existing host interactive path types only its disposable test password.
         print('ARCTIC-DESKTOP-UNLOCK-REQUESTED', flush=True)
-        wait(lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
+        self.observe('unlock-state', lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
         self.status('cancel', check=False)
         require(self.focused(), 'receiver-focus-after-unlock')
         return {'locked': True, 'count': 0, 'drained': True}
@@ -593,13 +688,13 @@ class Checker:
         if value.get('ok') is not True or value.get('state') != 'recording' or value.get('active_backend') != 'vulkan':
             self.status('cancel', check=False); self.status('set-backend', 'cpu')
             raise Invalid('no-supported-vulkan-device')
-        wait(self.capture_link, 10)
+        self.observe('capture-link', self.capture_link, 10)
         found = self.engines(); require(len(found) == 1, 'gpu-engine-not-unique')
         pid, ticks, binary = found[0]
         require(binary == PAYLOAD / self.names['vulkan'] and iter_process(pid) == ticks
                 and sha(binary) == self.assets['vulkan']['sha256'], 'gpu-owned-process-identity')
         self.kill_identity(pid, ticks)
-        failed = wait(lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
+        failed = self.observe('terminal-state', lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
         require(failed.get('active_backend') == 'cpu' and bool(failed.get('error')), 'gpu-failure-no-advertised-cpu-retry')
         self.no_engine()
         # Keep preference forced Vulkan: advertised CPU retry must still work.
@@ -706,9 +801,9 @@ class Checker:
                         fcntl.flock(launch, fcntl.LOCK_EX | fcntl.LOCK_NB); return True
                     except BlockingIOError:
                         return False
-                wait(locked, 3)
+                self.observe('loader-lock', locked, 3)
                 self.broker_identity(old); self.kill_identity(old[0], old[1])
-                wait(lambda: not (Path('/proc') / str(old[0])).exists(), 5)
+                self.observe('loader-exit', lambda: not (Path('/proc') / str(old[0])).exists(), 5)
                 self.no_engine()
                 wrapper = subprocess.Popen(self.prefix + [key + '=' + value for key, value in environment.items()]
                     + ['/usr/bin/python3', '-I', str(CONTROLLER), '_broker'], stdout=subprocess.DEVNULL,
@@ -717,7 +812,7 @@ class Checker:
                     require(wrapper.poll() is None, 'loader-broker-wrapper-died')
                     control = self.private / 'control.sock'
                     return control.exists() and control.lstat().st_ino != old[2]
-                wait(published, 5)
+                self.observe('loader-endpoint', published, 5)
                 broker = self.broker_identity()
                 require(broker[0] != old[0] and broker[2] != old[2], 'loader-broker-not-fresh')
                 parent = (Path('/proc') / str(broker[0]) / 'status').read_text()
@@ -734,7 +829,7 @@ class Checker:
                     found = self.engines()
                     require(len(found) <= 1, 'loader-engine-not-unique')
                     return found[0] if found else None
-                engine = wait(observed, 5)
+                engine = self.observe('loader-engine', observed, 5)
                 require(engine[2] == PAYLOAD / self.names['vulkan']
                         and sha(engine[2]) == self.assets['vulkan']['sha256'], 'loader-vulkan-process-pin')
                 self.loader_engine(engine, broker, environment)
@@ -756,13 +851,13 @@ class Checker:
                     if self.status(check=False).get('state') == 'error':
                         return 'error'
                     return 'capture' if self.engines() and self.capture_link() else None
-                if wait(capture_or_error, 10) == 'capture':
+                if self.observe('loader-route', capture_or_error, 10) == 'capture':
                     sample = next(s for s in self.fixtures if s['language'] == 'en' and s['source_row'] == 0)
                     self.play(sample)
                     require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0, 'loader-playback-failed')
                     if self.status(check=False).get('state') == 'recording':
                         self.status('stop', check=False)
-            terminal = wait(lambda: (v if (v := self.status(check=False)).get('state') in ('ready', 'error') else None), 240)
+            terminal = self.observe('loader-terminal', lambda: (v if (v := self.status(check=False)).get('state') in ('ready', 'error') else None), 240)
             continued = terminal.get('state') == 'ready'
             continuation = []
             if continued:
@@ -777,7 +872,7 @@ class Checker:
                     stable = stable + 1 if text and text == previous else 0
                     previous = text
                     return text if stable >= 3 else None
-                hypothesis = wait(received, 5)
+                hypothesis = self.observe('loader-delivery', received, 5)
                 require(hypothesis and '\n' not in hypothesis and self.focused(), 'loader-continuation-insertion-failed')
                 self.phrases.append(hypothesis)
                 metrics = self.accuracy.metrics((DATA / 'dictation-fixtures' / sample['reference']).read_text(), hypothesis)

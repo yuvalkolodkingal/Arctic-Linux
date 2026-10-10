@@ -4,7 +4,7 @@
     "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
     "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
     "tools/dictation-qualification/contract.py": "1ab44f66d744939d4bd7d6b7034f4c2beac738168d1ae34c2572a1f95a0da3cf",
-    "tools/dictation-qualification/guest_check.py": "7d197c24c5450e08caaed8b512524c868f57a646011eeaad25764203553adffd",
+    "tools/dictation-qualification/guest_check.py": "f1cd2cbd0e6b03e662f8fdfdfe396fd29b6e321a5c8681cea069aa2cc4f7fdd4",
     "tools/dictation-qualification/runner.py": "2f63cbc09a5673433eedab194909504faa51f8f11cab7be59e4b1bc6843a3ec3",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
