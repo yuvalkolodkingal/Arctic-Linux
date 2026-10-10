@@ -26,7 +26,16 @@ class ExceptionShapeTest(unittest.TestCase):
         added = b"            last_observer_phase='unavailable',\n            # Class tokens are unauthenticated shape observations, not causes.\n            exception_shape=dict(reason='not_observed', count='unavailable',\n                exception_class='none', format='none')),\n"
         self.assertEqual(raw.count(added), 1)
         raw = raw.replace(added, b"            last_observer_phase='unavailable'),\n")
-        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+        # Preserve the original history digest through exactly three reviewed identity inverses.
+        historical = raw
+        for current, previous in (
+                (b'f8e8e9d2cc7900607111f98d51c5071b09e2434aedb6eda9a000f3badd45c57c', b'5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'),
+                (b'eb8ceacf12fd964651dc614c823773928b0fd13a17f32ffd3457659c01441cc9', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
+                (b'57a256b79e362360e2fb1de39b65f007002765df6a02769e26042f5e7364ddea', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
+        ):
+            self.assertEqual(historical.count(current), 1)
+            historical = historical.replace(current, previous)
+        self.assertEqual(hashlib.sha256(historical).hexdigest(),
             'bb9006d12b5bb6e0cbae417c0301c2f529948eca63ccff57b915c9679abb5185')
         self.old = types.ModuleType('original_exception_shape_classifier')
         self.old.__file__ = str(P.ROOT/'tools/performance/run-paired.py')

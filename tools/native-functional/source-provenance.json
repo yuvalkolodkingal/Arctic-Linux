@@ -3,7 +3,7 @@
   "native_source_sha256": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
   "files": {
     "native_smoke.py": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
-    "guest-check-native-v6.py": "aab4323815e239b5debeccf93c4b73f727cd9ed54715f519b8bb1e99915a1d78",
+    "guest-check-native-v6.py": "5cbf0c6385465cfa5f94fd3addaa36729e030a10b2864af5424f09438c4580ec",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -32,7 +32,8 @@
     "test_native_protocol_diagnostics.py": "c9435541f95460131e047866256ce105705dce0e6dc230d0bcbf1a4bf37fc114",
     "test_renderer_trials.py": "30df3e5d8d07f73075c1be8d38008af836667d7e5bdaaafe780aedfa8d655133",
     "test_native_capture_controls.py": "884d01f7ad7de8a6551ab6abdd25c46209c526bcfc78508fe7a809fc3b3723ae",
-    "test_native_bulk_transport.py": "5da5e45a6989e64e36ff2f0b2bb650550d5b3761e252e432b1bafac0f9984a42"
+    "test_native_bulk_transport.py": "5da5e45a6989e64e36ff2f0b2bb650550d5b3761e252e432b1bafac0f9984a42",
+    "test_native_public_evidence.py": "18f251ae5280110c76c9fa73ca84b05f5edfa5d489087e50214272331aef0436"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {
@@ -124,5 +125,23 @@
       "records"
     ],
     "wire_bytes_limit": 33554432
+  },
+  "public_evidence_export": {
+    "scope": "finite artifacts written by the pinned Native audit; exact four isolated HOME/XDG profile directories remain private",
+    "private_profile_directories": [
+      "home",
+      "config",
+      "data",
+      "cache"
+    ],
+    "private_bytes_modified": false,
+    "durable_private_host_copy": false,
+    "private_retention": "existing owned guest temporary root until poweroff",
+    "unknown_admitted_suffix_outside_public_inventory": "export failure",
+    "native_runtime_and_acceptance_validators_unchanged": true,
+    "file_count_limit": 128,
+    "file_bytes_limit": 4194304,
+    "aggregate_bytes_limit": 16777216,
+    "release_acceptance": false
   }
 }

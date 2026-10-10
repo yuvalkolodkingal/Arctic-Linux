@@ -111,19 +111,13 @@ class ExternalOriginalScreeningTests(unittest.TestCase):
             with self.subTest(url=url):
                 self.rejected(dns(url))
 
-    def test_known_tokens_require_exact_observed_context(self):
+    def test_metadata_tokens_require_exact_observed_context(self):
         for url in screen.FEDORA_METADATA:
             for content in (url.encode() + b'\n', b'ordinary public URL: ' + url.encode(),
                     dns(url).replace(b'Curl error (6)', b'Curl error (9)'),
                     dns(url).replace(b'mirrors.fedoraproject.org]', b'private.example]')):
                 with self.subTest(content=content):
                     self.rejected(content)
-        unit = screen.ZRAM_UNIT.encode()
-        for content in (unit, b'Stopped ' + unit,
-                b'[ 1.2] systemd[2]: Stopped ' + unit + b' - Create swap on /dev/zram0.\n',
-                b'[ 1.2] systemd[1]: Stopped ' + unit + b' - Private text.\n'):
-            self.rejected(content)
-
     def test_connect_latency_only_varies_as_a_bounded_decimal_field(self):
         actual = next(line for line in FIXTURE.read_bytes().splitlines(keepends=True)
             if b'Curl error (7)' in line)

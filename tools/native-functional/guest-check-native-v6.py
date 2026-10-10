@@ -1979,6 +1979,54 @@ def native_bulk_export(encoded, manifest, provenance, begin):
 # END NATIVE_BULK_TRANSPORT
 
 
+# BEGIN NATIVE_PUBLIC_EVIDENCE_INVENTORY
+# This is the finite output inventory of the pinned Native audit, not an
+# extension-based application-profile publisher. The four isolated HOME/XDG
+# directories remain intact in the guest temporary root until its lifecycle
+# ends; they do not acquire a durable host copy through this public transport.
+NATIVE_PRIVATE_PROFILE_DIRECTORIES = frozenset(('home', 'config', 'data', 'cache'))
+NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
+    'report.json', 'gui-trace.log', 'gui-trace-summary.json', 'final-clients.json',
+    'visual-oracle.json', 'moving-player-proof.json',
+    'fullscreen-player-receipts.json', 'fullscreen-player-captures.json',
+    'terminal-role.json', 'file-manager-terminal.json',
+    '0-native-protocol-viewport.json', '0-controlled-renderer-trials.json',
+    'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
+    'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
+    'renderer-trial-default/reference.png', 'renderer-trial-gl/reference.png',
+    'files with spaces/editor fixture.txt',
+)) | frozenset(
+    directory + '/' + filename
+    for directory in ('archive source', *('extracted ' + kind for kind in
+        ('zip', '7z', 'tar', 'tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst', 'cpio', '7z-encrypted')))
+    for filename in ('nested directory/hello world.txt', 'Unicode-\u05e9.txt')
+) | frozenset('gui-launch-' + str(index) + '.log' for index in range(130)) | frozenset(
+    'gui-%02d-' % index + label + '.png'
+    for index in range(13)  # Seven one-use gate failures plus six GUI diagnostics.
+    for label in (
+        'failure-fresh-defaults-and-isolation', 'failure-archive-content-roundtrips',
+        'failure-actual-role-file-manager-terminal-editor',
+        'failure-open-codec-content-and-player-state',
+        'failure-portal-and-accessibility-reachability',
+        'failure-owned-process-cleanup-config-preservation', 'failure-selinux-and-new-avcs',
+        'text-fixture-before-location', 'text-fixture-navigation-confirmed',
+        'archive-fixture-before-location', 'archive-fixture-navigation-confirmed',
+        'file-manager-F4-mapped', 'editor-save-confirmed',
+    )
+)
+
+
+def native_public_evidence_member(relative):
+    # Caller has already enforced the original root, regular-file and symlink
+    # guards. Do not inspect, decode, rename, remove or copy private profile data.
+    if relative.split('/', 1)[0] in NATIVE_PRIVATE_PROFILE_DIRECTORIES:
+        return False
+    require(relative in NATIVE_PUBLIC_EVIDENCE_FILES,
+            'unexpected native public evidence member outside the source inventory')
+    return True
+# END NATIVE_PUBLIC_EVIDENCE_INVENTORY
+
+
 def main():
     # This sole replaced entrypoint binds the original harness location/stage.
     import base64
@@ -2039,7 +2087,7 @@ def main():
         error = type(exc).__name__+': '+str(exc)
         traceback.print_exc()
     finally:
-        # Export only owned guest JSON/screens/logs/text, even after failed gates.
+        # Export the audit's owned public artifacts, even after failed gates.
         # Raw serial is retained if bounded export itself fails or is interrupted.
         try:
             if report is not None:
@@ -2059,6 +2107,8 @@ def main():
                     if not path.is_file() or path.suffix.lower() not in ('.json','.png','.log','.txt','.tsv','.rgb'):
                         continue
                     relative = path.relative_to(root).as_posix()
+                    if not native_public_evidence_member(relative):
+                        continue
                     require(len(entries) < 128 and path.stat().st_size <= 4*1024*1024,
                             'native evidence file count/size exceeded bound')
                     data = path.read_bytes()
@@ -2071,6 +2121,11 @@ def main():
                     entries.append(entry)
                     encoded.append((entry,chunks))
             require(provenance is not None, 'native bulk requires original runtime provenance')
+            print('ARCTIC-NATIVE-PRIVATE-PROFILES '+json.dumps(dict(
+                  schema='arctic-native-private-profile-disclosure-v1', stage=stage,
+                  category='private-isolated-profiles-retained-not-published',
+                  retention='owned-guest-tmp-until-poweroff', durable_host_copy=False,
+                  release_acceptance=False),sort_keys=True),flush=True)
             native_bulk_export(encoded, dict(schema='arctic-native-evidence-v1',
                   stage=stage,files=entries,bytes=total,evidence_root=str(roots[0]) if roots else None), provenance, begin)
             export_complete = True

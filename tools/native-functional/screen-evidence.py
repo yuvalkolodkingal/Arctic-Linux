@@ -179,6 +179,19 @@ def public_token_spans(line):
                 and (end == len(line) or line[end] in delimiters)):
             spans.add((start, end, start, end))
     # END EXACT_PUBLIC_CONFIGFS_UNIT
+    # BEGIN EXACT_PUBLIC_ZRAM_UNIT
+    # Actual same-Match observation unit-012 attests this public token only.
+    # Its surrounding lifecycle/message remains unknown. Match the accepted
+    # token boundary policy without granting a record or template exception.
+    for match in EXTERNAL_SENSITIVE.finditer(line):
+        start, end = match.span()
+        delimiters = ' \t\r\n:'
+        if (end - start == len(ZRAM_UNIT)
+                and match.group(0) == ZRAM_UNIT
+                and (start == 0 or line[start - 1] in delimiters)
+                and (end == len(line) or line[end] in delimiters)):
+            spans.add((start, end, start, end))
+    # END EXACT_PUBLIC_ZRAM_UNIT
     for url in FEDORA_METADATA:
         quoted = re.escape(url)
         dns = ('Curl error \\(6\\): Could not resolve hostname for ' + quoted +
