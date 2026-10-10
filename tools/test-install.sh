@@ -83,6 +83,19 @@
 # and --boot-network select each phase independently. None adds host forwards.
 set -euo pipefail
 
+# Private host progress only. The fresh token is never copied to the guest CD.
+dictation_host_stage() {
+  case "${1:-}" in
+    host-data|host-container|container-packages|container-audio|container-data|container-disk|container-profile|container-driver|container-complete) ;;
+    *) return 0 ;;
+  esac
+  if [[ "${ARCTIC_DICTATION_HOST_TOKEN:-}" =~ ^[0-9a-f]{32}$ ]]; then
+    printf 'ARCTIC-DICTATION-HOST-STAGE %s %s\n' "$ARCTIC_DICTATION_HOST_TOKEN" "$1" 2>/dev/null || true
+  fi
+  return 0
+}
+dictation_host_stage host-data
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tools/lib/container.sh
 source "$HERE/lib/container.sh"
@@ -529,6 +542,26 @@ luks, password = E["LUKS_PASSPHRASE"], E["USER_PASSWORD"]
 boot_append = E.get("BOOT_APPEND", "").strip()
 LIVE_APPEND = "console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"
 
+DICTATION_HOST_STAGES = frozenset({
+    "install-acquire", "install-menu", "install-live", "install-settle",
+    "install-terminal", "install-start-marker", "install-start-observed",
+    "install-not-started", "install-engine", "install-exit-observed",
+    "install-exit-missing-vm-running", "install-exit-missing-vm-exited",
+    "install-shutdown", "install-cleanup", "boot-acquire", "boot-menu",
+    "boot-unlock", "boot-login", "boot-settle", "boot-terminal",
+    "boot-collect", "boot-collect-observed", "boot-collect-missing",
+    "boot-shutdown", "boot-cleanup"})
+
+def dictation_host_stage(code):
+    import re
+    token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+    if code not in DICTATION_HOST_STAGES or re.fullmatch("[0-9a-f]{32}", token) is None:
+        return
+    try:
+        print("ARCTIC-DICTATION-HOST-STAGE " + token + " " + code, flush=True)
+    except (OSError, ValueError):
+        pass
+
 # Default-off physical native input; no device, focus retry or guest acknowledgement channel.
 physical_module = None
 physical_controllers = {}
@@ -773,9 +806,11 @@ def stage_install():
     vm = None
     display = None
     try:
+        dictation_host_stage("install-acquire")
         if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
         vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("install", True), True), "install", display.display_arg if display else None)), "/tmp/qmp-install.sock", "install")
         if display is not None: enable_taskbar_display(vm, display, "install")
+        dictation_host_stage("install-menu")
         if wait_menu(vm, "install", 300):
             vm.keys("home")
             edit_entry(vm, "install", LIVE_APPEND, 2)   # setparams, (empty), linux
@@ -783,6 +818,7 @@ def stage_install():
         start = time.time()
         # The live session is up when live-session logs its mode (journal → serial).
         n = 0
+        dictation_host_stage("install-live")
         while time.time() - start < 1500 and vm.alive():
             if vmtest.serial_has(serial("install"), "live session mode:"):
                 log(f"live session started after {time.time() - start:.0f}s")
@@ -793,15 +829,18 @@ def stage_install():
             time.sleep(10)
         else:
             log("no 'live session mode' line in the serial log; trying the terminal anyway")
+        dictation_host_stage("install-settle")
         time.sleep(120)   # the shell (Quickshell) and the welcome card settle
         vm.shot("install-20-live-desktop")
         started = False
         for attempt in (1, 2, 3):
+            dictation_host_stage("install-terminal")
             open_terminal(vm, f"install-2{attempt}")
             command = "sudo sh /dev/sr0; exit" if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" else "sudo sh /dev/sr0"
             vm.type_text(command, gap=0.3)
             vm.keys("ret")
             t = time.time()
+            dictation_host_stage("install-start-marker")
             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
                 physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"install")
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("install"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
@@ -813,14 +852,17 @@ def stage_install():
                 time.sleep(.1 if physical_active else 5)
             vm.shot(f"install-2{attempt}-command-typed")
             if started:
+                dictation_host_stage("install-start-observed")
                 log(f"run.sh started (attempt {attempt})")
                 break
             log(f"run.sh did not start (attempt {attempt})")
         if not started:
+            dictation_host_stage("install-not-started")
             vm.shot("install-29-not-started")
             return 90
         t = time.time()
         k = 0
+        dictation_host_stage("install-engine")
         while time.time() - t < install_timeout and vm.alive():
             physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"install")
             if k % 10 == 0 and not physical_active:
@@ -833,9 +875,12 @@ def stage_install():
         rc = vmtest.serial_value(serial("install"), "ARCTIC-INSTALL-EXIT=")
         log(f"install finished after {time.time() - t:.0f}s: exit {rc}")
         if rc is None:
+            dictation_host_stage("install-exit-missing-vm-running" if vm.proc.poll() is None else "install-exit-missing-vm-exited")
             log("install timed out")
             vm.shot("install-49-timeout")
             return 91
+        dictation_host_stage("install-exit-observed")
+        dictation_host_stage("install-shutdown")
         if not vm.wait_exit(600):
             vm.shot("install-48-no-poweroff")
             log("the live system did not power off")
@@ -847,6 +892,7 @@ def stage_install():
             log("ARCTIC-PRISTINE-INSTALL-POWEROFF=clean")
         return int(rc) if rc.isdigit() else 92
     finally:
+        dictation_host_stage("install-cleanup")
         close_taskbar_vm(vm, display)
 
 # ---- stage 2: boot the installed disk ------------------------------------------------------
@@ -871,9 +917,11 @@ def stage_boot():
     display = None
     ok = True
     try:
+        dictation_host_stage("boot-acquire")
         if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
         vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("boot", False), False), "boot", display.display_arg if display else None)), "/tmp/qmp-boot.sock", "boot")
         if display is not None: enable_taskbar_display(vm, display, "boot")
+        dictation_host_stage("boot-menu")
         if wait_menu(vm, "boot", 240):
             if boot_append:
                 # A BLS entry: load_video, set gfxpayload=keep, insmod gzio, linux, initrd.
@@ -882,6 +930,7 @@ def stage_boot():
             else:
                 vm.keys("ret")
                 log("booting the default entry")
+        dictation_host_stage("boot-unlock")
         p = wait_for(vm, "boot-30", {"prompt"}, 900)
         if p:
             time.sleep(3)
@@ -928,6 +977,7 @@ def stage_boot():
             vm.shot("boot-41-no-login-detected")
             log("no login screen detected; typing the password anyway")
             ok = False
+        dictation_host_stage("boot-login")
         for attempt in (1, 2, 3):
             vm.type_text(password, gap=0.3)
             time.sleep(1)
@@ -947,6 +997,7 @@ def stage_boot():
             log(f"still on the login screen after the password (attempt {attempt}): typing it again")
             vm.shot(f"boot-43-login-again-{attempt}")
         # The desktop: the login card is gone and the screen settles.
+        dictation_host_stage("boot-settle")
         t = time.time()
         prev = None
         stable = 0
@@ -969,6 +1020,7 @@ def stage_boot():
         collected = False
         lock_password_sent = False
         for attempt in ((1,) if E.get("COLLECT_VIA") == "console" or E.get("NATIVE_TASKBAR_FIXTURE") == "1" else (1, 2, 3)):
+            dictation_host_stage("boot-terminal")
             if E.get("COLLECT_VIA") == "console":
                 vm.keys("ctrl-alt-f3")
                 time.sleep(5)
@@ -993,6 +1045,7 @@ def stage_boot():
             # The supplemental taskbar helper has its own unchanged 30m check
             # deadline plus 10m bounded export; preserve the original 1h budget.
             collect_limit = 6000 if E.get("NATIVE_TASKBAR_FIXTURE") == "1" else 3600 if E.get("GUEST_CHECK") else 240
+            dictation_host_stage("boot-collect")
             while time.time() - t < collect_limit and vm.alive():
                 physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"boot")
                 dictation_indicator_poll(vm)
@@ -1016,6 +1069,7 @@ def stage_boot():
             collected = vmtest.serial_has(serial("boot"), "ARCTIC-COLLECT-END")
             vm.shot(f"boot-5{attempt + 1}-collected")
             if collected:
+                dictation_host_stage("boot-collect-observed")
                 log(f"collected into serial-boot.log (ARCTIC-COLLECT-BEGIN/END, attempt {attempt})")
                 break
             log(f"collect.sh did not finish (attempt {attempt})")
@@ -1036,15 +1090,18 @@ def stage_boot():
             log("collected from the debug shell" if collected else "debug shell collect did not finish")
             ok = False   # the session itself didn't work
         if not collected:
+            dictation_host_stage("boot-collect-missing")
             ok = False
         if E.get("GUEST_CHECK") and vmtest.serial_value(serial("boot"), "ARCTIC-INSTALLED-SMOKE-EXIT=") != "0":
             ok = False
         time.sleep(5)
         vm.shot("boot-99-final")
+        dictation_host_stage("boot-shutdown")
         if E.get("GUEST_CHECK") and not vm.wait_exit(120):
             ok = False
         return 0 if ok else 1
     finally:
+        dictation_host_stage("boot-cleanup")
         close_taskbar_vm(vm, display)
 
 rc = 0
@@ -1071,6 +1128,17 @@ sys.exit(rc)
 PY
 
 inner=$(cat <<'INNER'
+dictation_host_stage() {
+  case "${1:-}" in
+    host-data|host-container|container-packages|container-audio|container-data|container-disk|container-profile|container-driver|container-complete) ;;
+    *) return 0 ;;
+  esac
+  if [[ "${ARCTIC_DICTATION_HOST_TOKEN:-}" =~ ^[0-9a-f]{32}$ ]]; then
+    printf 'ARCTIC-DICTATION-HOST-STAGE %s %s\n' "$ARCTIC_DICTATION_HOST_TOKEN" "$1" 2>/dev/null || true
+  fi
+  return 0
+}
+dictation_host_stage container-packages
 pkgs=(qemu-system-x86-core qemu-img edk2-ovmf seabios-bin python3-pillow xorriso
       qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci)
 if [[ "$VM_TOOLS_PREPARED" == 1 ]]; then
@@ -1084,6 +1152,7 @@ fi
   sha256sum /usr/share/edk2/ovmf/*.fd /usr/share/seabios/*.bin
 } > "$OUT/vm-toolchain.txt"
 if [[ "$NATIVE_AUDIO_FIXTURE" == 1 ]]; then
+  dictation_host_stage container-audio
   # Capability queries exit without starting QEMU/VMs. No backend fallback.
   audio_help="$(qemu-system-x86_64 -audiodev help)"
   device_help="$(qemu-system-x86_64 -device help)"
@@ -1098,7 +1167,9 @@ if [[ "$NATIVE_TASKBAR_FIXTURE" == 1 ]]; then
   # The guarded taskbar CD is immutable and explicitly owned by guest root.
   data_owner_args=(-uid 0 -gid 0)
 fi
+dictation_host_stage container-data
 xorriso -as mkisofs -quiet -V ARCTICTEST -J -R "${data_owner_args[@]}" -G "$OUT/sysarea.sh" -o "$OUT/data.iso" "$OUT/data"
+dictation_host_stage container-disk
 if [ "$STAGE" != boot ]; then
   qemu-img create -q -f qcow2 "$OUT/target.qcow2" 40G
   [ "$FIRMWARE" = uefi ] && cp /usr/share/edk2/ovmf/OVMF_VARS.fd "$OUT/OVMF_VARS.fd"
@@ -1108,6 +1179,7 @@ elif [ -n "$FRESH_BOOT_FROM" ]; then
   qemu-img create -q -f qcow2 -F qcow2 -b "$FRESH_BOOT_FROM/target.qcow2" "$OUT/target.qcow2"
   cp "$FRESH_BOOT_FROM/OVMF_VARS.fd" "$OUT/OVMF_VARS.fd"
 fi
+dictation_host_stage container-profile
 PROFILE_USER="$(python3 -c 'import pathlib,tomllib,sys; print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())["account"]["username"])' "$OUT/data/profile.toml")"
 [[ "$PROFILE_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || exit 1
 export PROFILE_USER
@@ -1115,7 +1187,9 @@ ACCEL="tcg,thread=multi"
 [ -e /dev/kvm ] && ACCEL=kvm
 export ACCEL
 rc=0
+dictation_host_stage container-driver
 python3 -c "$DRIVER" || rc=$?
+dictation_host_stage container-complete
 chown -R "$HOST_UID:$HOST_GID" "$OUT"
 exit $rc
 INNER
@@ -1130,7 +1204,9 @@ if [[ -n "${ARCTIC_VM_CONTAINER_NAME:-}" ]]; then
   [[ "$ARCTIC_VM_CONTAINER_NAME" =~ ^arctic-paired-[a-z0-9-]{1,80}$ ]] || arctic_die "invalid task VM container name"
   name_args=(--name "$ARCTIC_VM_CONTAINER_NAME")
 fi
+dictation_host_stage host-container
 "$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
+  -e ARCTIC_DICTATION_HOST_TOKEN="${ARCTIC_DICTATION_HOST_TOKEN:-}" \
   -e NATIVE_LAUNCHER_FIXTURE="$([[ -f "$DATA/native-launcher.py" ]] && echo 1 || echo 0)" \
   -e NATIVE_AUDIO_FIXTURE="$NATIVE_AUDIO_FIXTURE" \
   -e NATIVE_TWO_OUTPUTS="$NATIVE_TWO_OUTPUTS" \

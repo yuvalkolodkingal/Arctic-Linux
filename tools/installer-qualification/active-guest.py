@@ -219,15 +219,22 @@ def installer_type(G):
             return value
 
         def prepare(self):
-            self.find_gui(); self.identities()
+            self.diagnostic_phase = 'prepare-find-gui'
+            self.find_gui()
+            self.diagnostic_phase = 'prepare-identities'
+            self.identities()
+            self.diagnostic_phase = 'prepare-rpc'
             self.rpc = ActiveRPC()
+            self.diagnostic_phase = 'prepare-target'
             self.target_disk(pristine=True)
+            self.diagnostic_phase = 'prepare-credentials'
             private = G.strict_json(G.read_regular('/run/t/active-credentials.json', 4096, True))
             G.require(set(private) == {'password'} and type(private['password']) is str
                       and re.fullmatch('[a-z0-9]{32}', private['password']), 'private credential fixture differs')
             self.password = private['password']
             pages = ('welcome', 'keyboard', 'network', 'timezone', 'disk', 'encryption', 'account', 'apps', 'summary')
             for page in pages:
+                self.diagnostic_phase = 'prepare-' + page + '-ready'
                 self.wait(lambda: (lambda s: s.get('page') == s.get('current') == page and s.get('ready') is True)(
                     G.strict_json(self.ipc('state'))), 30, 'real wizard page did not become ready')
                 values = {'keyboard': {'layout': 'il', 'variant': ''}, 'disk': {'disk': '/dev/vda', 'mode': 'erase'},
@@ -236,22 +243,31 @@ def installer_type(G):
                           'account': dict(full_name='Arctic Qualification', username='arcticqual', hostname='arctic-qual',
                                           password=self.password, confirm=self.password, autologin=False, same_as_disk=False)}
                 if page in values:
+                    self.diagnostic_phase = 'prepare-' + page + '-fill'
                     G.require(self.ipc('fill', values[page]) == 'ok', 'real wizard fill failed')
+                self.diagnostic_phase = 'prepare-' + page + '-valid'
                 self.wait(lambda: G.strict_json(self.ipc('state')).get('valid') is True, 30, 'real wizard selection is invalid')
                 if page == 'summary':
+                    self.diagnostic_phase = 'prepare-summary-config'
                     self.safe_config = self.rpc.config()
                     G.require(self.safe_config['disk'] == {'disk': '/dev/vda', 'mode': 'erase'}
                               and self.safe_config['encryption'] == {'enabled': False}
                               and self.safe_config['network'] == {'offline': True}, 'safe Summary offline/disk/encryption differs')
+                    self.diagnostic_phase = 'prepare-summary-identities'
                     self.prestart_identities = self.identities()
+                self.diagnostic_phase = 'prepare-' + page + '-next'
                 G.require(self.ipc('next') == 'ok', 'real wizard armed Next failed')
             self.password = None  # No credential payload survives into the public report.
+            self.diagnostic_phase = 'prepare-copy'
             value = self.wait(self.unchanged, 180, 'real GUI engine did not enter genuine copy')
+            self.diagnostic_phase = 'prepare-copy-identities'
             G.require(value['identities'] == self.prestart_identities, 'GUI Start replaced the original engine')
             self.writer_identity = value['writer']['process']
+            self.diagnostic_phase = 'prepare-visible'
             state, outputs = self.state(), self.outputs()
             layers = G.strict_json(self.command(['mmsg', 'get', 'all-layers'], desktop=True)[1])['layers']
             visible = self.visible(state, layers, outputs)
+            self.diagnostic_phase = 'prepare-baseline-physical'
             self.baseline = dict(value, target_disk=self.target_disk(), state=state, outputs=outputs, visible=visible,
                                  capture=self.capture('baseline', visible), drm_heads=self.drm_heads(),
                                  packaged_sources=self.packaged_sources(), rpc_peer=self.rpc.peer, scope=SCOPE)
@@ -351,14 +367,19 @@ def installer_type(G):
                           cases=self.results, samples=self.samples)
             errors, security = [], None
             try:
+                self.diagnostic_phase = 'security-init'
                 security = self.native.SecurityInterval()
+                self.diagnostic_phase = 'prepare-start'
                 report['baseline'] = self.prepare()
+                self.diagnostic_phase = 'vt-0'
                 self.results.append(self.vt_cycle(0))
+                self.diagnostic_phase = 'output-0'
                 self.results.append(self.output_cycle(0))
+                self.diagnostic_phase = 'completion'
                 report['completion'] = self.finish_install()
             except BaseException as exc:
                 # Free-form stderr/RPC/account text is deliberately not exported.
-                errors.append(type(exc).__name__ + ': active installation or restoration failed')
+                errors.append(G.masked_active_error(exc, self.diagnostic_phase))
             finally:
                 self.password = None
                 report['cleanup'] = self.cleanup(); errors.extend(report['cleanup']['errors'])
