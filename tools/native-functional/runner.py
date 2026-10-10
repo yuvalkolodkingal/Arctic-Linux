@@ -91,6 +91,17 @@ class R(E.R):
                         copied[output.name] = dict(bytes=output.stat().st_size, sha256=R.digest(output),
                                                   original_bytes=path.stat().st_size, original_sha256=R.digest(path))
                         continue
+                    if path.name in ('native-evidence-install.log','native-evidence-boot.log','serial-install.log','serial-boot.log'):
+                        limit=32*1024*1024 if path.name.startswith('native-evidence-') else 128*1024*1024
+                        R.require(path.stat().st_size<=limit,'Oversized original native transport')
+                        fd=os.open(target/path.name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+                        os.fchmod(fd,0o600)
+                        with os.fdopen(fd,'wb') as output, path.open('rb') as source:
+                            shutil.copyfileobj(source,output)
+                        R.require((target/path.name).stat().st_size==path.stat().st_size
+                                  and R.digest(target/path.name)==R.digest(path),'Original native transport copy differs')
+                        copied[path.name]=dict(bytes=path.stat().st_size,sha256=R.digest(path),private_original=True)
+                        continue
                     if path.name in ('serial-install.log', 'serial-boot.log') and path.stat().st_size >= 128 * 1024 * 1024:
                         R.require(path.stat().st_size <= 256 * 1024 * 1024, 'Oversized serial transport')
                         # The full taskbar transport is extracted separately. Do
