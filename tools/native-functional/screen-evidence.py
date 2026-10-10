@@ -322,6 +322,70 @@ UTF8_MEMBER_DIAGNOSTICS = {
     'native-installed/gui-trace.log': 'native-installed-gui-trace',
 }
 
+# BEGIN NATIVE_UTF8_MEMBER_INVENTORY
+# Additional fixed writers in runner.py, test-install.sh, evidence.py and the
+# pinned Native checker. These labels confer no format/privacy exception.
+UTF8_MEMBER_DIAGNOSTICS.update({
+    'vm-prepared-image-id.txt': 'native-tool-image-id',
+    'vm-prepared-image-owner.json': 'native-tool-image-owner',
+    'taskbar-display-capabilities.txt': 'native-display-capabilities',
+    'native-stages.json': 'native-stage-results',
+    'harness/vm-toolchain.txt': 'native-vm-toolchain',
+    'harness/native-audio-capabilities.txt': 'native-audio-capabilities',
+    'harness/test-install-stage.log': 'native-install-driver',
+    'virtual-audio/native-audio-install.json': 'native-live-audio-receipt',
+    'virtual-audio/native-audio-boot.json': 'native-installed-audio-receipt',
+})
+for _native_stage, _vm_stage in (('live', 'install'), ('installed', 'boot')):
+    for _filename, _role in (
+        ('native-stop-' + _vm_stage + '.json', 'stop'),
+        ('taskbar-display-' + _vm_stage + '.json', 'display-receipt'),
+        ('native-physical-' + _native_stage + '.log', 'physical-host'),
+        ('native-editor-save-' + _native_stage + '.log', 'editor-host'),
+    ):
+        UTF8_MEMBER_DIAGNOSTICS['harness/' + _filename] = 'native-' + _native_stage + '-' + _role
+    for _filename, _role in (
+        ('report.json', 'report'),
+        ('transport-manifest.json', 'transport-manifest'),
+        ('serial-native-report.json', 'serial-report'),
+        ('serial-native-provenance.json', 'provenance'),
+        ('physical-host-receipt.json', 'physical-receipt'),
+        ('editor-save-host-receipt.json', 'editor-receipt'),
+        ('0-native-protocol-viewport.json', 'protocol-receipt'),
+        ('0-controlled-renderer-trials.json', 'renderer-trial-receipt'),
+        ('gui-trace-summary.json', 'gui-summary'),
+        ('final-clients.json', 'final-clients'),
+        ('fullscreen-player-receipts.json', 'fullscreen-receipts'),
+        ('fullscreen-player-captures.json', 'fullscreen-captures'),
+        ('moving-player-proof.json', 'moving-player'),
+        ('visual-oracle.json', 'visual-oracle'),
+        ('terminal-role.json', 'terminal-role'),
+        ('file-manager-terminal.json', 'file-manager-terminal'),
+        ('files with spaces/editor fixture.txt', 'editor-fixture'),
+        ('archive source/Unicode-\u05e9.txt', 'archive-unicode-fixture'),
+    ):
+        UTF8_MEMBER_DIAGNOSTICS['native-' + _native_stage + '/' + _filename] = 'native-' + _native_stage + '-' + _role
+    for _archive_kind in ('zip', '7z', 'tar', 'tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst', 'cpio', '7z-encrypted'):
+        UTF8_MEMBER_DIAGNOSTICS['native-' + _native_stage + '/extracted ' + _archive_kind + '/Unicode-\u05e9.txt'] = 'native-' + _native_stage + '-archive-unicode-extract'
+    # Every numbered launch log remains in the export root. At most 128 guest
+    # files are admitted; the two subordinate renderer launches can advance
+    # self.launches without creating these logs. No number is printed.
+    for _launch_index in range(130):
+        UTF8_MEMBER_DIAGNOSTICS['native-' + _native_stage + '/gui-launch-' + str(_launch_index) + '.log'] = 'native-' + _native_stage + '-gui-launch'
+for _filename, _role in (
+    ('transport-manifest.json', 'transport'),
+    ('taskbar-report.json', 'report'),
+    ('serial-taskbar-report.json', 'serial-report'),
+    ('serial-taskbar-provenance.json', 'provenance'),
+    ('taskbar-state.json', 'state'),
+    ('gui-trace.log', 'gui-trace'),
+    ('gui-trace-summary.json', 'gui-summary'),
+    ('final-clients.json', 'final-clients'),
+):
+    UTF8_MEMBER_DIAGNOSTICS['taskbar/' + _filename] = 'native-taskbar-' + _role
+del _native_stage, _vm_stage, _filename, _role, _archive_kind, _launch_index
+# END NATIVE_UTF8_MEMBER_INVENTORY
+
 
 def diagnose_invalid_utf8_member(relative):
     """Emit only a fixed role and reason; no error contents are inspected."""
