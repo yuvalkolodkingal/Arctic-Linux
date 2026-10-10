@@ -98,8 +98,54 @@ def packaged_source_hashes(tree):
             data = data.split(start, 1)[1].split(b'\nEOF\n', 1)[0] + b'\n'
             require(data.startswith(b'#!/bin/sh\n') and data.endswith(b'exec quickshell -p /usr/share/arctic/installer-ui "$@"\n'),
                     'installer wrapper source differs')
+            # Fedora 44's default brp-mangle-shebangs rewrites only this first
+            # line. Compare the one exact packaged representation, including
+            # every remaining source byte; an unprocessed wrapper is rejected.
+            data = b'#!/usr/bin/sh\n' + data.split(b'\n', 1)[1]
         result[installed] = dict(bytes=len(data), sha256=digest(data))
     return result
+
+
+PACKAGED_SOURCE_DIAGNOSTIC_PATHS = (
+    ('wrapper', '/usr/bin/arctic-installer'),
+    ('shell', '/usr/share/arctic/installer-ui/shell.qml'),
+    ('engine', '/usr/share/arctic/installer-ui/Engine.qml'),
+    ('wizard', '/usr/share/arctic/installer-ui/Wizard.qml'),
+    ('frame', '/usr/share/arctic/installer-ui/Frame.qml'),
+    ('keyboard', '/usr/share/arctic/installer-ui/steps/KeyboardStep.qml'))
+
+
+def packaged_source_observation(mapping, path):
+    """Inspect bounded builtin values without projecting any guest data."""
+    if type(mapping) is not dict or len(mapping) > 6 or any(type(k) is not str for k in mapping):
+        return 'unknown', None
+    if path not in mapping:
+        return 'absent', None
+    value = mapping[path]
+    if type(value) is not dict or len(value) != 2 or any(type(k) is not str for k in value) or \
+            set(value) != {'bytes', 'sha256'} or type(value['bytes']) is not int or \
+            not is_hash(value['sha256']):
+        return 'present', None
+    return 'present', value
+
+
+def diagnose_packaged_sources(observed, expected):
+    """Fixed per-path comparisons are observations, never an acceptance gate."""
+    for label, path in PACKAGED_SOURCE_DIAGNOSTIC_PATHS:
+        expected_presence, expected_value = packaged_source_observation(expected, path)
+        observed_presence, observed_value = packaged_source_observation(observed, path)
+        valid = expected_value is not None and observed_value is not None
+        byte_code = hash_code = 'uncompared'
+        if valid:
+            byte_code = 'equal' if observed_value['bytes'] == expected_value['bytes'] else 'different'
+            hash_code = 'equal' if observed_value['sha256'] == expected_value['sha256'] else 'different'
+        code = ('installer-packaged-source-' + label + '-expected-' + expected_presence +
+                '-observed-' + observed_presence + '-types-' + ('valid' if valid else 'invalid') +
+                '-bytes-' + byte_code + '-sha256-' + hash_code)
+        try:
+            print('ARCTIC-INSTALLER-DIAGNOSTIC=' + code, flush=True)
+        except Exception:
+            pass  # Closed stdout must not replace the original acceptance failure.
 
 
 def context_check(value):
@@ -216,6 +262,7 @@ def validate_report(report, expected_context, files, image_loader, source_hashes
     baseline = report['baseline']; engine_check(baseline['engine']); identity_check(baseline['identities'], report['desktop_uid'])
     require(baseline['initial_wizard']['current'] == 'welcome' and baseline['rpc_peer']['uid'] == 0,
             'real initial wizard/root RPC peer differs')
+    diagnose_packaged_sources(baseline.get('packaged_sources'), source_hashes)
     require(source_hashes is not None and same(baseline['packaged_sources'], source_hashes) and
             set(source_hashes) == set(PACKAGED_SOURCES), 'packaged GUI bytes differ from exact image source')
     keyboard = baseline['keyboard_files']
@@ -426,24 +473,24 @@ _ASSERTION_SITES = {
     ('contract.py', 'validate_report', 2): 'idle-028',
     ('contract.py', 'validate_report', 6): 'idle-029',
     ('contract.py', 'validate_report', 12): 'idle-030',
-    ('contract.py', 'validate_report', 14): 'idle-031',
-    ('contract.py', 'validate_report', 17): 'idle-032',
-    ('contract.py', 'validate_report', 23): 'idle-033',
-    ('contract.py', 'validate_report', 30): 'idle-034',
-    ('contract.py', 'validate_report', 34): 'idle-035',
-    ('contract.py', 'validate_report', 36): 'idle-036',
-    ('contract.py', 'validate_report', 41): 'idle-037',
-    ('contract.py', 'validate_report', 45): 'idle-038',
-    ('contract.py', 'validate_report', 49): 'idle-039',
-    ('contract.py', 'validate_report', 53): 'idle-040',
-    ('contract.py', 'validate_report', 55): 'idle-041',
-    ('contract.py', 'validate_report', 57): 'idle-042',
-    ('contract.py', 'validate_report', 60): 'idle-043',
-    ('contract.py', 'validate_report', 63): 'idle-044',
-    ('contract.py', 'validate_report', 67): 'idle-045',
-    ('contract.py', 'validate_report', 71): 'idle-046',
-    ('contract.py', 'validate_report', 74): 'idle-047',
-    ('contract.py', 'validate_report', 76): 'idle-048',
+    ('contract.py', 'validate_report', 15): 'idle-031',
+    ('contract.py', 'validate_report', 18): 'idle-032',
+    ('contract.py', 'validate_report', 24): 'idle-033',
+    ('contract.py', 'validate_report', 31): 'idle-034',
+    ('contract.py', 'validate_report', 35): 'idle-035',
+    ('contract.py', 'validate_report', 37): 'idle-036',
+    ('contract.py', 'validate_report', 42): 'idle-037',
+    ('contract.py', 'validate_report', 46): 'idle-038',
+    ('contract.py', 'validate_report', 50): 'idle-039',
+    ('contract.py', 'validate_report', 54): 'idle-040',
+    ('contract.py', 'validate_report', 56): 'idle-041',
+    ('contract.py', 'validate_report', 58): 'idle-042',
+    ('contract.py', 'validate_report', 61): 'idle-043',
+    ('contract.py', 'validate_report', 64): 'idle-044',
+    ('contract.py', 'validate_report', 68): 'idle-045',
+    ('contract.py', 'validate_report', 72): 'idle-046',
+    ('contract.py', 'validate_report', 75): 'idle-047',
+    ('contract.py', 'validate_report', 77): 'idle-048',
     ('contract.py', 'validate_execution', 1): 'idle-049',
     ('contract.py', 'validate_execution', 6): 'idle-050',
     ('contract.py', 'validate_execution', 10): 'idle-051',

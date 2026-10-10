@@ -201,6 +201,13 @@ TARGET_DIAGNOSTIC_ERRNOS = {1: 'eperm', 5: 'eio', 6: 'enxio', 12: 'enomem',
     30: 'erofs', 38: 'enosys', 40: 'eloop', 95: 'eopnotsupp'}
 ACTIVE_DIAGNOSTIC_PHASES = frozenset((
     *TARGET_DIAGNOSTIC_PHASES,
+    'copy-identities', 'copy-identity-continuity', 'copy-snapshot', 'copy-progress-fields',
+    'copy-progress-guard', 'copy-config', 'copy-shipped-bindings', 'copy-keyboard-files',
+    'copy-keyboard-continuity', 'copy-writer', 'copy-observation', 'copy-progress-continuity',
+    'writer-daemon', 'writer-enumerate', 'writer-process-stat', 'writer-process-filter',
+    'writer-process-proof', 'writer-process-argv', 'writer-unique', 'writer-continuity',
+    'writer-mount-source', 'writer-mount-block', 'writer-mount-fstype', 'writer-mount-guard',
+    'writer-partition-guard', 'writer-partition-major-minor',
     'target-lsblk-disks-ram-proof', 'target-lsblk-disks-ram-unproved',
     'unknown', 'security-init', 'prepare-start', 'prepare-find-gui', 'prepare-identities',
     'prepare-rpc', 'prepare-target', 'prepare-credentials', 'prepare-summary-config',

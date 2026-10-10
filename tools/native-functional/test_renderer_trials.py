@@ -130,7 +130,8 @@ class RendererControls(unittest.TestCase):
                             is_focused=True,is_visible=True,is_fullscreen=True)
                 monitors=dict(monitors=[dict(name='synthetic-monitor',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)])
                 trial.fresh_window=Mock(return_value=player);trial.alive=Mock(return_value=client)
-                trial.fullscreen=Mock();trial.gtk_binding=Mock(return_value=dict(package='gtk4',version='4.22.5',mapped_library_sha256='b'*64))
+                trial.fullscreen=Mock();trial.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
+                trial.gtk_binding=Mock(return_value=dict(package='gtk4',version='4.22.5',mapped_library_sha256='b'*64))
                 trial.native_protocol_drain=Mock(bind=Mock(return_value=True),snapshot=Mock(return_value=dict(
                     realized_renderer=dict(status='reported-realized',renderer=renderer,release_acceptance=False,
                                            owned_stderr_binding_verified=True,video_widget_or_framebuffer_attested=False))))
@@ -220,6 +221,8 @@ class RendererControls(unittest.TestCase):
 
     def test_full_source_rollback_preserves_every_primary_function_and_bound(self):
         new=(HERE/'native_smoke.py').read_text()
+        from test_native_capture_controls import restore_capture_source
+        new=restore_capture_source(new)
         # Remove the complete new top-level diagnostic block and one new class.
         new=new[:new.index('# BEGIN CONTROLLED_RENDERER_TRIALS\n')]+new[new.index('# END CONTROLLED_RENDERER_TRIALS\n')+len('# END CONTROLLED_RENDERER_TRIALS\n\n\n'):]
         start=new.index('class NativeRendererProjection:');end=new.index('class NativeProtocolDrain:',start);new=new[:start]+new[end:]

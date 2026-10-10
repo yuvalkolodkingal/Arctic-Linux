@@ -92,7 +92,7 @@ class LaunchDiagnostics(unittest.TestCase):
                              type_text=typed, keys=keys, shot=shot)
         def marker(path, value):
             return (value == 'live session mode:' and live) or (value == 'ARCTIC-TEST-STARTED' and started)
-        env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage'}, {
+        env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage', 'dictation_acquire_vm'}, {
             'E': {'GUEST_CHECK':'fixture', 'ARCTIC_DICTATION_HOST_TOKEN':'a'*32},
             'taskbar_display_module':None, 'vmtest':SimpleNamespace(VM=lambda *a:vm,
                 serial_has=marker, serial_value=lambda *a:None),
@@ -159,11 +159,11 @@ class LaunchDiagnostics(unittest.TestCase):
         old_tree,new_tree=ast.parse(old_driver),ast.parse(DRIVER)
         old_enum=next(n for n in old_tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='DICTATION_HOST_STAGES' for t in n.targets))
         edits=[]
-        helpers=[n for n in new_tree.body if isinstance(n,ast.FunctionDef) and n.name in ('dictation_install_wait_vm_stage', 'dictation_launch_desktop')]
+        helpers=[n for n in new_tree.body if isinstance(n,ast.FunctionDef) and n.name in ('dictation_install_wait_vm_stage', 'dictation_launch_desktop', 'dictation_acquire_vm', 'dictation_qemu_startup')]
         for n in ast.walk(new_tree):
             if any(helper.lineno < getattr(n,'lineno',0) <= helper.end_lineno for helper in helpers):
                 continue
-            if isinstance(n,ast.FunctionDef) and n.name in ('dictation_install_wait_vm_stage', 'dictation_launch_desktop'):
+            if isinstance(n,ast.FunctionDef) and n.name in ('dictation_install_wait_vm_stage', 'dictation_launch_desktop', 'dictation_acquire_vm', 'dictation_qemu_startup'):
                 edits.append((n.lineno-1,n.end_lineno+1,[]))
             if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='DICTATION_HOST_STAGES' for t in n.targets):
                 edits.append((n.lineno-1,n.end_lineno,old_driver.splitlines(keepends=True)[old_enum.lineno-1:old_enum.end_lineno]))
@@ -178,6 +178,8 @@ class LaunchDiagnostics(unittest.TestCase):
         lines=DRIVER.splitlines(keepends=True)
         for begin,end,replacement in sorted(edits,reverse=True): lines[begin:end]=replacement
         rolled=''.join(lines)
+        self.assertEqual(rolled.count('vm = dictation_acquire_vm('),2)
+        rolled=rolled.replace('vm = dictation_acquire_vm(', 'vm = vmtest.VM(')
         coherent = ('        # A versioned coherent v2 floor, without partially masked host XSAVE.\n'
                     "        # QEMU Westmere-v2 adds spec-ctrl to Westmere's pre-AVX CPU model;\n"
                     '        # enforce rejects unsupported requested features before guest execution.\n'

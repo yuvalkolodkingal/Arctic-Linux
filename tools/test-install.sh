@@ -558,7 +558,13 @@ DICTATION_HOST_STAGES = frozenset({
     "install-marker-wait-observed", "install-marker-wait-unobserved",
     "install-marker-vm-running", "install-marker-vm-exited", "install-marker-vm-unknown",
     "install-command-shot-before", "install-command-shot-after",
-    "install-preterminal-capture-preserved", "install-preterminal-capture-unavailable"})
+    "install-preterminal-capture-preserved", "install-preterminal-capture-unavailable",
+    "vm-acquire-qemu-exited", "vm-acquire-no-qmp", "vm-acquire-system-exit",
+    "vm-acquire-file-missing", "vm-acquire-permission-error", "vm-acquire-os-error",
+    "vm-acquire-json-error", "vm-acquire-qmp-error", "vm-acquire-keyboard-interrupt",
+    "vm-acquire-other-error", "vm-acquire-stderr-unobserved",
+    "vm-acquire-enforce-host-unavailable", "vm-acquire-enforce-only-spec-ctrl",
+    "vm-acquire-enforce-floor-unavailable", "vm-acquire-enforce-tcg-unavailable"})
 
 def dictation_host_stage(code):
     import re
@@ -569,6 +575,112 @@ def dictation_host_stage(code):
         print("ARCTIC-DICTATION-HOST-STAGE " + token + " " + code, flush=True)
     except (OSError, ValueError):
         pass
+
+def dictation_qemu_startup(name, started_ns, error):
+    """Optional fixed startup facts; never format or export private stderr/argv."""
+    import json, re, stat
+    token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+    if type(token) is not str or re.fullmatch("[0-9a-f]{32}", token) is None:
+        return
+    if type(name) is not str or name not in ("install", "boot"):
+        return
+    classes = {SystemExit: "vm-acquire-system-exit", FileNotFoundError: "vm-acquire-file-missing",
+               PermissionError: "vm-acquire-permission-error", OSError: "vm-acquire-os-error",
+               json.JSONDecodeError: "vm-acquire-json-error", vmtest.QMPError: "vm-acquire-qmp-error",
+               KeyboardInterrupt: "vm-acquire-keyboard-interrupt"}
+    code = classes.get(type(error), "vm-acquire-other-error")
+    if type(error) is SystemExit:
+        args = BaseException.args.__get__(error)
+        if type(args) is tuple and len(args) == 1 and type(args[0]) is str:
+            if args[0] == "qemu exited: see qemu-" + name + ".log":
+                code = "vm-acquire-qemu-exited"
+            elif args[0] == "no QMP socket":
+                code = "vm-acquire-no-qmp"
+    dictation_host_stage(code)
+    codes = ["vm-acquire-stderr-unobserved"]
+    directory = descriptor = None
+    try:
+        if code != "vm-acquire-qemu-exited" or type(started_ns) is not int or started_ns <= 0:
+            raise ValueError()
+        directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        parent = os.fstat(directory)
+        # /out is a host-owned bind mount. Its file is written by this container's
+        # QEMU; bind its exact owner and stable directory rather than assume UID 0.
+        if not stat.S_ISDIR(parent.st_mode) or parent.st_mode & 0o022:
+            raise ValueError()
+        filename = "qemu-" + name + ".log"
+        descriptor = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = None
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid()
+                    or before.st_mode & 0o022 or before.st_nlink != 1
+                    or not 0 < before.st_size <= 65536
+                    or before.st_mtime_ns < started_ns or before.st_ctime_ns < started_ns):
+                raise ValueError()
+            data = stream.read(65537)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode, info.st_nlink,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        current = os.stat(out, follow_symlinks=False)
+        if (fields(before) != fields(after)
+                or fields(after) != fields(os.stat(filename, dir_fd=directory, follow_symlinks=False))
+                or len(data) != before.st_size
+                or (parent.st_dev, parent.st_ino, parent.st_uid, parent.st_mode)
+                != (current.st_dev, current.st_ino, current.st_uid, current.st_mode)):
+            raise ValueError()
+        # QEMU 10.2/11 target/i386/cpu.c: exact complete Linux stderr lines.
+        # A closed literal maps to a fixed label; unknown text is never returned.
+        lines = data.splitlines(keepends=True)
+        if any(not line.endswith(b"\n") or line.endswith(b"\r\n") for line in lines):
+            raise ValueError()
+        fatal = b"qemu-system-x86_64: Host doesn't support requested features\n"
+        tcg = b"qemu-system-x86_64: TCG doesn't support requested features\n"
+        warning = b"qemu-system-x86_64: warning: host doesn't support requested feature: "
+        spec = warning + b"CPUID[eax=07h,ecx=00h].EDX.spec-ctrl [bit 26]\n"
+        floor = {
+            b"CPUID[eax=01h].EDX.fpu [bit 0]\n", b"CPUID[eax=01h].EDX.cx8 [bit 8]\n",
+            b"CPUID[eax=01h].EDX.cmov [bit 15]\n", b"CPUID[eax=01h].EDX.mmx [bit 23]\n",
+            b"CPUID[eax=01h].EDX.fxsr [bit 24]\n", b"CPUID[eax=01h].EDX.sse [bit 25]\n",
+            b"CPUID[eax=01h].EDX.sse2 [bit 26]\n", b"CPUID[eax=80000001h].EDX.lm [bit 29]\n",
+            b"CPUID[eax=80000001h].EDX.syscall [bit 11]\n", b"CPUID[eax=01h].ECX.sse3 [bit 0]\n",
+            b"CPUID[eax=01h].ECX.ssse3 [bit 9]\n", b"CPUID[eax=01h].ECX.sse4.1 [bit 19]\n",
+            b"CPUID[eax=01h].ECX.sse4.2 [bit 20]\n", b"CPUID[eax=01h].ECX.popcnt [bit 23]\n",
+            b"CPUID[eax=01h].ECX.cx16 [bit 13]\n", b"CPUID[eax=80000001h].ECX.lahf-lm [bit 0]\n"}
+        if fatal in lines:
+            codes = ["vm-acquire-enforce-host-unavailable"]
+            if spec in lines and all(line in (spec, fatal) for line in lines):
+                codes.append("vm-acquire-enforce-only-spec-ctrl")
+            if any(warning + feature in lines for feature in floor):
+                codes.append("vm-acquire-enforce-floor-unavailable")
+        elif tcg in lines:
+            codes = ["vm-acquire-enforce-tcg-unavailable"]
+    except BaseException:
+        pass  # Optional observations must not replace the original exception.
+    finally:
+        for fd in (descriptor, directory):
+            if fd is not None:
+                try: os.close(fd)
+                except BaseException: pass
+    for code in codes:
+        dictation_host_stage(code)
+
+def dictation_acquire_vm(argv, qmp_path, name):
+    """Call the original constructor once, forwarding its value or exception."""
+    started_ns = 0
+    try:
+        import re
+        token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+        if type(token) is str and re.fullmatch("[0-9a-f]{32}", token):
+            started_ns = time.time_ns()
+    except Exception:
+        pass
+    try:
+        return vmtest.VM(argv, qmp_path, name)
+    except BaseException as error:
+        try: dictation_qemu_startup(name, started_ns, error)
+        except BaseException: pass
+        raise
 
 def dictation_install_wait_vm_stage(vm):
     """Optional owned-process fact only; no QMP read, error text or new budget."""
@@ -881,7 +993,7 @@ def stage_install():
     try:
         dictation_host_stage("install-acquire")
         if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
-        vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("install", True), True), "install", display.display_arg if display else None)), "/tmp/qmp-install.sock", "install")
+        vm = dictation_acquire_vm(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("install", True), True), "install", display.display_arg if display else None)), "/tmp/qmp-install.sock", "install")
         if display is not None: enable_taskbar_display(vm, display, "install")
         dictation_host_stage("install-menu")
         if wait_menu(vm, "install", 300):
@@ -1003,7 +1115,7 @@ def stage_boot():
     try:
         dictation_host_stage("boot-acquire")
         if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
-        vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("boot", False), False), "boot", display.display_arg if display else None)), "/tmp/qmp-boot.sock", "boot")
+        vm = dictation_acquire_vm(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("boot", False), False), "boot", display.display_arg if display else None)), "/tmp/qmp-boot.sock", "boot")
         if display is not None: enable_taskbar_display(vm, display, "boot")
         dictation_host_stage("boot-menu")
         if wait_menu(vm, "boot", 240):

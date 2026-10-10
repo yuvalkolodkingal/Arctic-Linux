@@ -4,13 +4,13 @@
     "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
     "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
     "tools/dictation-qualification/contract.py": "1ab44f66d744939d4bd7d6b7034f4c2beac738168d1ae34c2572a1f95a0da3cf",
-    "tools/dictation-qualification/guest_check.py": "cfa23327fe71aa43d2b6ca00d40920bd5006f858c884bf25c037d9efaeb6138c",
-    "tools/dictation-qualification/runner.py": "6960f42f10eab826de9e95aae7d0e8be076b7943b10580292628867211222dbe",
+    "tools/dictation-qualification/guest_check.py": "cb25c6ea06a0d9db413a736cd58e87f46a72125566de889952daa2af31a114ce",
+    "tools/dictation-qualification/runner.py": "ad04db3f469a837b9c997e545891d226d3e423757fe0d0914706206a1a7d6b04",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/test-install.sh": "de9e58463f4e1d4903f17bbb3ce8d1fa6e9358a9ee827fbe553c0cb453dd6784"
+    "tools/test-install.sh": "c31cf11ac895590b71635aa2900e1091b5d45cbc0dc4b50c5e2a25b7b37f24cf"
   },
   "fixture_decoder": {
     "libsndfile": "1.2.2",

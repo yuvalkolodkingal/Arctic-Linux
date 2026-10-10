@@ -420,9 +420,27 @@ class Checker:
         return result['status'] == 'passed'
 
     def status(self, verb='status', *args, check=True):
-        result = self.cmd(['/usr/bin/arctic-dictation', verb, *args], check=check)
+        result = self.cmd(['/usr/bin/arctic-dictation', verb, *args], check=False if verb == 'status' else check)
         require(len(result.stdout) <= 16384, 'status-byte-bound')
-        value = json.loads(result.stdout)
+        if verb == 'status':
+            require(type(result.returncode) is int and result.returncode in (0, 1)
+                    and type(result.stdout) is bytes and type(result.stderr) is bytes
+                    and not result.stderr, 'status-command-outcome')
+            def fields(pairs):
+                value = {}
+                for key, item in pairs:
+                    require(key not in value, 'status-json-fields')
+                    value[key] = item
+                return value
+            value = json.loads(result.stdout, object_pairs_hook=fields,
+                parse_constant=lambda _value: (_ for _ in ()).throw(Invalid('status-json-fields')))
+            require(type(value) is dict and type(value.get('ok')) is bool
+                    and ((result.returncode == 0 and value['ok'] is True)
+                         or (result.returncode == 1 and value['ok'] is False
+                             and value.get('state') == 'error' and type(value.get('error')) is str
+                             and bool(value['error']))), 'status-command-outcome')
+        else:
+            value = json.loads(result.stdout)
         require(isinstance(value, dict) and {key: value.get(key) for key in PROFILES[self.profile_id]} == PROFILES[self.profile_id]
                 and all(type(value.get(key)) is type(item) for key, item in PROFILES[self.profile_id].items())
                 and value.get('version') == '1.1.0' and value.get('profile_selection') == 'recommended'

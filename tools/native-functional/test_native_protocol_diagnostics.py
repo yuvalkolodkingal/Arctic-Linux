@@ -24,6 +24,8 @@ N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
 def restore_native_source(text):
     """Reverse only the explicit diagnostic instrumentation, byte for byte."""
+    from test_native_capture_controls import restore_capture_source
+    text=restore_capture_source(text)
     text=text.replace('import selectors\n','').replace('import threading\n','')
     a=text.index('# BEGIN NATIVE_PROTOCOL_DIAGNOSTICS\n')
     z=text.index('# END NATIVE_PROTOCOL_DIAGNOSTICS\n',a)+len('# END NATIVE_PROTOCOL_DIAGNOSTICS\n\n\n')
@@ -271,6 +273,8 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.fresh_window=Mock(side_effect=lambda start,*args:(start() or proof))
             smoke.alive=Mock(return_value=client);smoke.wait=Mock();smoke.trace=Mock();smoke.diagnostic=Mock(return_value=None)
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock()
+            smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
+            smoke.reference_settings_config=Mock()
             commands=[];captures=[];closed=[];original_close=os.close;original_pipe=os.pipe;original_drain=N.NativeProtocolDrain
             def command(argv):
                 commands.append(argv)
@@ -373,6 +377,7 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64));smoke.fresh_window=Mock(return_value=proof)
             smoke.alive=Mock(return_value=client);smoke.wait=Mock();smoke.trace=Mock()
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_drain=Mock()
+            smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.native_protocol_drain.snapshot.return_value=dict(status='unknown',ownership_verified=False)
             commands=[]
             def command(argv):

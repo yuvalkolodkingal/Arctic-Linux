@@ -1317,12 +1317,80 @@ class Smoke:
         require(expected.stat().st_size==160*120*3,'reference decoded RGB frame size differs')
         return fixture,expected,digest(source)
 
+    def launch_reference_player(self, argv, launch):
+        # Only this owned reference window uses private keyfile settings. Its
+        # supported UI action must not write the desktop user's dconf database.
+        require(argv[0]=='/usr/bin/celluloid', 'reference controls require Celluloid')
+        if not getattr(self,'gui_v6',False):
+            launch(argv)
+            return
+        self.reference_settings_config()
+        original=self.prefix
+        require(not any(x.startswith('GSETTINGS_BACKEND=') for x in original),
+                'reference settings backend already selected')
+        self.prefix=original+['GSETTINGS_BACKEND=keyfile']
+        try:
+            launch(argv)
+        finally:
+            self.prefix=original
+
+    def reference_settings_config(self):
+        configs=[x.split('=',1)[1] for x in self.prefix if x.startswith('XDG_CONFIG_HOME=')]
+        # GNU env applies the final assignment after the discovered desktop
+        # config. Renderer trials intentionally share the primary private config.
+        require(configs, 'reference settings config is absent')
+        config=Path(configs[-1])
+        expected=(self.root.parent if isinstance(self,RendererTrialSmoke) else self.root)/'config'
+        info=config.lstat()
+        require(config==expected and config.is_absolute() and stat.S_ISDIR(info.st_mode)
+                and info.st_uid==self.uid and not info.st_mode&0o022 and config.resolve()==config,
+                'reference settings config is not exact private owned directory')
+        return config
+
+    def hide_reference_controls(self, player, ipc):
+        require(player['executable']=='/usr/bin/celluloid' and player['is_xwayland'] is False,
+                'reference controls require owned native Celluloid')
+        before=self.alive(player)
+        require(before.get('is_focused') is True and before.get('is_fullscreen') is True,
+                'reference controls require fresh focused fullscreen player')
+        config=self.reference_settings_config()
+        environ=Path('/proc')/str(player['pid'])/'environ'
+        require(environ.stat().st_uid==self.uid, 'reference settings process owner differs')
+        with environ.open('rb') as stream: raw=stream.read(65537)
+        require(len(raw)<=65536, 'reference settings environment exceeded bound')
+        values=raw.split(b'\0')
+        require([x for x in values if x.startswith(b'GSETTINGS_BACKEND=')]==[b'GSETTINGS_BACKEND=keyfile']
+                and [x for x in values if x.startswith(b'XDG_CONFIG_HOME=')]==[
+                    b'XDG_CONFIG_HOME='+os.fsencode(config)], 'reference settings process/config binding differs')
+        query=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','/usr/bin/gsettings','get',
+               'io.github.celluloid-player.Celluloid.window-state','show-controls']
+        initial=self.cmd(query,timeout=5)[1]
+        require(initial in ('true','false'), 'reference controls initial state is not boolean')
+        mpv_hide_reference_controls(ipc,player['pid'],self.uid)
+        def hidden():
+            result=self.cmd(query,timeout=5)[1]
+            require(result in ('true','false'), 'reference controls readback is not boolean')
+            return result=='false'
+        self.wait(hidden,5,'owned reference controls hidden readback')
+        after=self.alive(player)
+        require(all(after.get(k)==before.get(k) for k in ('id','pid','appid','foreign_toplevel_id',
+                'monitor','is_focused','is_visible','is_fullscreen','x','y','width','height')),
+                'reference controls player identity/focus/geometry changed')
+        value=dict(action='win.set-controls-visible(false)',transport='owned mpv IPC SO_PEERCRED',
+                   settings_backend='keyfile',private_config_process_bound=True,
+                   before_visible=initial=='true',after_visible=False,
+                   readback_scope='supported action writes private setting after GTK control-box visibility update',
+                   release_acceptance=False)
+        self.trace('reference-controls-hidden',receipt=value)
+        return value
+
     def visual_media(self):
         fixture,expected,source_sha=self.visual_fixture()
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
         ipc=self.root/'visual-reference-ipc.sock'
-        player=self.fresh_window(lambda:(self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch)(['/usr/bin/celluloid','--no-existing-session',
-            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),
+        player=self.fresh_window(lambda:self.launch_reference_player(['/usr/bin/celluloid','--no-existing-session',
+            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
+            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
             'celluloid',r'celluloid')
         self.wait(lambda:ipc.is_socket())
         def ready_reference():
@@ -1343,6 +1411,7 @@ class Smoke:
         self.wait(lambda:self.alive(player).get('is_focused') is True,10)
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
+            controls=self.hide_reference_controls(player,ipc)
         time.sleep(.5)
         client=self.alive(player)
         monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
@@ -1378,6 +1447,8 @@ class Smoke:
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
+        if getattr(self,'gui_v6',False):
+            info['capture_precondition']=controls
         try:
             info['oracle']=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
         except Exception as exc:
@@ -1613,8 +1684,8 @@ class RendererTrialSmoke(Smoke):
         private=None
         try:
             ipc=self.root/'player.sock'
-            player=self.fresh_window(lambda:self.launch_renderer(['/usr/bin/celluloid','--no-existing-session',
-                '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),'celluloid',r'celluloid')
+            player=self.fresh_window(lambda:self.launch_reference_player(['/usr/bin/celluloid','--no-existing-session',
+                '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],self.launch_renderer),'celluloid',r'celluloid')
             require(self.native_protocol_drain.bind(player,self.uid),'controlled owned stderr binding unavailable')
             value['player']={k:player[k] for k in ('pid','start_ticks','executable_sha256')}
             value['player'].update(uid=self.uid,client_id=int(player['client_id']),executable='/usr/bin/celluloid')
@@ -1643,6 +1714,7 @@ class RendererTrialSmoke(Smoke):
                     'controlled focus action failed')
             self.wait(lambda:self.alive(player).get('is_focused') is True,10)
             self.fullscreen(player)
+            value['capture_precondition']=self.hide_reference_controls(player,ipc)
             time.sleep(.5)
             before=self.alive(player); monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
             monitor,geometry,crop=visual_capture_geometry(before,monitors)
@@ -1690,6 +1762,42 @@ class RendererTrialSmoke(Smoke):
                 except OSError: value['private_rgb_cleanup_completed']=False
         return value
 # END CONTROLLED_RENDERER_TRIALS
+
+
+def mpv_hide_reference_controls(path, expected_pid, expected_uid):
+    """The sole supported fixed per-window UI command; never an arbitrary action."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
+            'reference controls IPC identity is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'reference controls IPC path owner/type differs')
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid), 'reference controls IPC peer differs')
+        peer.sendall(b'{"command":["script-message","celluloid-action","win.set-controls-visible(false)"],"request_id":43}\n')
+        data=b''; deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            chunk=peer.recv(4096)
+            require(chunk, 'reference controls IPC disconnected before acknowledgement')
+            data+=chunk
+            require(len(data)<=4096, 'reference controls IPC reply exceeded bound')
+            while b'\n' in data:
+                line,data=data.split(b'\n',1)
+                def pairs(items):
+                    value={}
+                    for key,item in items:
+                        require(key not in value, 'reference controls IPC duplicate field')
+                        value[key]=item
+                    return value
+                message=json.loads(line,object_pairs_hook=pairs)
+                require(type(message) is dict, 'reference controls IPC reply is not an object')
+                if message.get('request_id')==43:
+                    require(type(message['request_id']) is int and message.get('error')=='success'
+                            and message.get('data') is None, 'reference controls IPC command failed')
+                    return
+        raise RuntimeError('reference controls IPC acknowledgement timed out')
 
 
 def mpv_property(path, key, expected_pid, expected_uid):
@@ -1773,7 +1881,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '63ef27ec411ba6c629143e318ef6fab2cd17e3c1f827ae374ebbb374b30d6507'
+    native_source_sha = '65245d62a93ee8405d3dc2eaeff976202bf15f9fae0462d6d7b32db794851b7a'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

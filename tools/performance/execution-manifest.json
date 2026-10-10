@@ -27,7 +27,7 @@
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
     "tools/performance/qualification.py": "e452f27cc1229684613f39dc2ff59d6b32500b817cf97f26cc74f80434943495",
     "tools/performance/run-paired.py": "6ed895e00eb9f80a964aa50066bb244a3a390aa696c31bbde652301b7638f799",
-    "tools/test-install.sh": "de9e58463f4e1d4903f17bbb3ce8d1fa6e9358a9ee827fbe553c0cb453dd6784"
+    "tools/test-install.sh": "c31cf11ac895590b71635aa2900e1091b5d45cbc0dc4b50c5e2a25b7b37f24cf"
   },
   "image": {
     "archive_bytes": 1930013330,

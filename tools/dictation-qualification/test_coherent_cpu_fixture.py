@@ -84,6 +84,8 @@ class CpuControls(unittest.TestCase):
 
     def test_complete_source_rollback_preserves_original_schema_gates_and_budgets(self):
         text=Path(guest.__file__).read_text()
+        from test_status_protocol import restore_status_protocol
+        text=restore_status_protocol(text)
         start=text.index('\ndef verify_small_cpu_fixture(')
         end=text.index('\ndef authenticated_capture_nodes(',start)
         restored=(text[:start]+text[end:]).replace(

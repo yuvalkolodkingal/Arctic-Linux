@@ -255,32 +255,49 @@ def installer_type(G):
                         disk_bytes=self.context['disk_bytes'], major_minor=major_minor)
 
         def writer(self, identities):
+            writer_previous_phase = getattr(self, 'diagnostic_phase', 'unknown')
+            self.diagnostic_phase = 'writer-daemon'
             daemon = identities['daemon']['pid']
             matches = []
+            self.diagnostic_phase = 'writer-enumerate'
             for node in Path('/proc').glob('[0-9]*'):
                 try:
+                    self.diagnostic_phase = 'writer-process-stat'
                     fields = (node / 'stat').read_text().rsplit(')', 1)[1].split()
+                    self.diagnostic_phase = 'writer-process-filter'
                     if int(fields[1]) != daemon or (node / 'comm').read_text().strip() != 'rsync':
                         continue
+                    self.diagnostic_phase = 'writer-process-proof'
                     proof, _ = G.process_proof(int(node.name), 0, '/usr/bin/rsync')
+                    self.diagnostic_phase = 'writer-process-argv'
                     G.require(proof['argv'][-2:] == ['/run/rootfsbase/', '/mnt/']
                               and '--info=progress2' in proof['argv'], 'actual copy writer argv differs')
                     matches.append(proof)
                 except (FileNotFoundError, ProcessLookupError):
                     pass
+            self.diagnostic_phase = 'writer-unique'
             G.require(len(matches) == 1, 'one original daemon-owned copy writer is required')
             process = matches[0]
+            self.diagnostic_phase = 'writer-continuity'
             G.require(self.writer_identity is None or process == self.writer_identity, 'original copy writer was replaced')
+            self.diagnostic_phase = 'writer-mount-source'
             source = self.command(['findmnt', '--raw', '--noheadings', '--output', 'SOURCE', '--mountpoint', '/mnt'])[1]
+            self.diagnostic_phase = 'writer-mount-block'
             block = self.command(['findmnt', '--raw', '--nofsroot', '--noheadings', '--output', 'SOURCE', '--mountpoint', '/mnt'])[1]
+            self.diagnostic_phase = 'writer-mount-fstype'
             fstype = self.command(['findmnt', '--raw', '--noheadings', '--output', 'FSTYPE', '--mountpoint', '/mnt'])[1]
+            self.diagnostic_phase = 'writer-mount-guard'
             G.require(re.fullmatch('/dev/vda[1-9][0-9]*', block) and fstype == 'btrfs'
                       and source in (block, block + '[/@]'), 'actual writer target mount is not owned btrfs')
             partition = Path('/sys/class/block') / Path(block).name
+            self.diagnostic_phase = 'writer-partition-guard'
             G.require(partition.resolve().parent == Path('/sys/class/block/vda').resolve(), 'target partition belongs to another disk')
-            return dict(process=process, ancestor_pids=[process['pid'], daemon], target_serial=self.context['disk_serial'],
+            self.diagnostic_phase = 'writer-partition-major-minor'
+            value = dict(process=process, ancestor_pids=[process['pid'], daemon], target_serial=self.context['disk_serial'],
                         mount=dict(target='/mnt', source=source, block_source=block, fstype=fstype,
                                    major_minor=(partition / 'dev').read_text().strip()))
+            self.diagnostic_phase = writer_previous_phase
+            return value
 
         def visible(self, state, layers, outputs, expected_count=2):
             G.require(state['page'] == state['current'] == 'install' and state['keyboard'] == 'il'
@@ -293,29 +310,43 @@ def installer_type(G):
             return G.window_proof(projected, layers, outputs, expected_count)
 
         def unchanged(self):
+            copy_previous_phase = getattr(self, 'diagnostic_phase', 'unknown')
+            self.diagnostic_phase = 'copy-identities'
             identities = self.identities()
+            self.diagnostic_phase = 'copy-identity-continuity'
             G.require(self.baseline is None or identities == self.baseline['identities'], 'original active engine/GUI identity changed')
+            self.diagnostic_phase = 'copy-snapshot'
             engine = self.rpc.snapshot()
+            self.diagnostic_phase = 'copy-progress-fields'
             options = engine['install']['options']; progress = options['progress']
+            self.diagnostic_phase = 'copy-progress-guard'
             G.require(engine['hello']['state'] == engine['wizard']['state'] == 'installing'
                       and engine['wizard']['current'] == 'install' and engine['keyboard']['data'] == G.KEYBOARD
                       and progress['event'] == 'progress' and progress['phase'] == 'copy'
                       and type(progress['percent']) is int and 0 < progress['percent'] < 100
                       and progress['paused'] is False and not options['attention'] and not options['failed'],
                       'genuine copy phase is required for every disruption observation')
+            self.diagnostic_phase = 'copy-config'
             G.require(self.rpc.config() == self.safe_config, 'active safe configuration changed')
             if self.baseline is not None:
+                self.diagnostic_phase = 'copy-shipped-bindings'
                 G.require(self.drm_heads() == self.baseline['drm_heads']
                           and self.packaged_sources() == self.baseline['packaged_sources'],
                           'active shipped sources or physical head binding changed')
+            self.diagnostic_phase = 'copy-keyboard-files'
             keyboard = self.keyboard_files()
+            self.diagnostic_phase = 'copy-keyboard-continuity'
             G.require(self.baseline is None or keyboard == self.baseline['keyboard_files'], 'active Hebrew configuration changed')
+            self.diagnostic_phase = 'copy-writer'
             writer = self.writer(identities)
+            self.diagnostic_phase = 'copy-observation'
             value = dict(engine=engine, identities=identities, keyboard_files=keyboard, config=self.safe_config,
                          writer=writer, elapsed_ns=time.monotonic_ns() - self.started_ns)
+            self.diagnostic_phase = 'copy-progress-continuity'
             G.require(not self.samples or progress['percent'] >= self.samples[-1]['engine']['install']['options']['progress']['percent'],
                       'active engine progress regressed')
             self.samples.append(value)
+            self.diagnostic_phase = copy_previous_phase
             return value
 
         def prepare(self):

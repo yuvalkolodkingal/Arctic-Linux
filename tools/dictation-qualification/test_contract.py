@@ -329,10 +329,10 @@ class ContractControls(unittest.TestCase):
         module = self.guest()
         checker = module.Checker.__new__(module.Checker)
         checker.profile_id = 'turbo-q5-v3'; checker.snapshots = []
-        value = {**c.PROFILES['turbo-q5-v3'], 'version': '1.1.0', 'profile_selection': 'recommended',
+        value = {**c.PROFILES['turbo-q5-v3'], 'ok': True, 'state': 'ready', 'version': '1.1.0', 'profile_selection': 'recommended',
                  'recommended_profile': c.PROFILES['turbo-q5-v3'], 'compatibility_profile': c.PROFILES['small-v2'],
                  'compatibility_required': False, 'active_backend': 'cpu', 'active_cpu_variant': 'avx2'}
-        checker.cmd = mock.Mock(return_value=mock.Mock(stdout=json.dumps(value).encode()))
+        checker.cmd = mock.Mock(return_value=mock.Mock(stdout=json.dumps(value).encode(), stderr=b'', returncode=0))
         checker.status()
         for key, item, code in (('model', 'small', 'status-profile-descriptor-pin'),
                                 ('download_bytes', 572524159, 'status-profile-descriptor-pin'),

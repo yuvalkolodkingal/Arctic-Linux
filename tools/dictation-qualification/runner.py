@@ -47,7 +47,13 @@ HOST_STAGES = frozenset({
     'install-marker-wait-observed', 'install-marker-wait-unobserved',
     'install-marker-vm-running', 'install-marker-vm-exited', 'install-marker-vm-unknown',
     'install-command-shot-before', 'install-command-shot-after',
-    'install-preterminal-capture-preserved', 'install-preterminal-capture-unavailable'})
+    'install-preterminal-capture-preserved', 'install-preterminal-capture-unavailable',
+    'vm-acquire-qemu-exited', 'vm-acquire-no-qmp', 'vm-acquire-system-exit',
+    'vm-acquire-file-missing', 'vm-acquire-permission-error', 'vm-acquire-os-error',
+    'vm-acquire-json-error', 'vm-acquire-qmp-error', 'vm-acquire-keyboard-interrupt',
+    'vm-acquire-other-error', 'vm-acquire-stderr-unobserved',
+    'vm-acquire-enforce-host-unavailable', 'vm-acquire-enforce-only-spec-ctrl',
+    'vm-acquire-enforce-floor-unavailable', 'vm-acquire-enforce-tcg-unavailable'})
 PHASES = frozenset({'online-installed', 'offline-installed', 'recovery', 'recovered-offline'})
 CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator'})
 TRUSTED_ERRORS = {
