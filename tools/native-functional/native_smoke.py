@@ -368,7 +368,9 @@ class NativeProtocolProjection:
     MAX_RECORDS = 512
     INTERFACES = {'wl_compositor', 'wl_subcompositor', 'xdg_wm_base',
                   'wp_viewporter', 'wl_shm', 'zwp_linux_dmabuf_v1'}
-    HEADER = re.compile(r'^\[\s*[0-9]{1,12}\.[0-9]{1,6}\]\s*(?:\{[^{}\r\n]{1,80}\}\s*)?'
+    HEADER = re.compile(r'^\[(?:\s*[0-9]{1,12}\.[0-9]{1,6}|'
+                        r'(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{6})\]\s*'
+                        r'(?:\{[^{}\r\n]{1,80}\}\s*)?'
                         r'(?P<send>->\s*)?(?P<iface>[a-z][a-z0-9_]{0,63})[@#](?P<id>[0-9]{1,8})\.'
                         r'(?P<op>[a-z_]{1,64})\((?P<args>[^\r\n]*)\)$')
     def __init__(self):

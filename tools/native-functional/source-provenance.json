@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "acd83c0247aa74a6fe65105d87016fd09ea4b7b12eec87a70b246c6e3f93aac6",
+  "native_source_sha256": "a9bed2b6f2cb71ffe944c60d0527c8bd14180a98cdccd31961574b911dfc82f9",
   "files": {
-    "native_smoke.py": "acd83c0247aa74a6fe65105d87016fd09ea4b7b12eec87a70b246c6e3f93aac6",
-    "guest-check-native-v6.py": "ece303a93b147b33d3d777c80a034d24ce5cc2e67ce6bd3319aea349f3307412",
+    "native_smoke.py": "a9bed2b6f2cb71ffe944c60d0527c8bd14180a98cdccd31961574b911dfc82f9",
+    "guest-check-native-v6.py": "04f868dba16443df76ebd24773b1cb75b10e66ebc527de781a2ef55300373431",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -29,7 +29,7 @@
     "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
     "test_native_v6.py": "1ee2213393b4974bae151192bc354361ed2eed77be8f382b6580741fb7adba17",
     "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
-    "test_native_protocol_diagnostics.py": "f8413cda460849c07071bfa84403cbb3278fa67af1ffec1b1cc5cca541e70fed"
+    "test_native_protocol_diagnostics.py": "0c1d41b59494b3a0f2b04206fcfb1223677e950f5995180ff3601b0540ca8705"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {

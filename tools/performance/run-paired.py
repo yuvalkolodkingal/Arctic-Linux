@@ -42,6 +42,14 @@ def failure_phase_summary(work, screen_failure):
             reported_incomplete_collection=False, console_restored=False,
             collector_begin=False, collector_end=False),
         smoke_exit='unavailable', console_restore_error='unavailable',
+        # envelope-only-begin
+        guest_envelope=dict(reason='not_observed',
+            counts={key: 'unavailable' for key in ('collector_begin', 'collector_end', 'smoke_exit',
+                'tracebacks', 'supported_exceptions', 'unsupported_exception_like_lines',
+                'admitted_observer_records', 'frames', 'source_candidates')},
+            collector_order='unavailable', frame_status='unavailable', control_status='unavailable',
+            last_observer_phase='unavailable'),
+        # envelope-only-end
         guest_failure=dict(status='unavailable', code='none', exception_class='none',
             last_observer_phase='unavailable'))
     work = Path(work).absolute()
@@ -90,37 +98,80 @@ def failure_phase_summary(work, screen_failure):
             return prepared_json(content) if content is not None else None
         except (ValueError, UnicodeError, RecursionError):
             return None
+    # envelope-only-begin
+    def envelope_count(number):
+        return 'zero' if number == 0 else 'one' if number == 1 else 'multiple'
+    def envelope_phase_prefix(body, traces, observer):
+        # These fixed observations remain unauthenticated UART categories.
+        # Invalid/duplicate identities or phases admit no phase observation.
+        keys = {'measurement_conditions', 'rpm_inventory', 'external_execution', 'app_roles',
+            'measured_payload', 'pristine_idle_measurement_scope', 'pristine_idle_samples',
+            'role_workload', 'role_measurement_order', 'keep_awake_restored', 'done'}
+        records, seen, phase, valid = 0, set(), 'unavailable', True
+        for line in body[:traces[0]] if traces else body:
+            if not line.startswith('ARCTIC-PERFORMANCE '):
+                continue
+            if len(line.encode()) > 1048576:
+                valid = False
+                break
+            record = value(line[len('ARCTIC-PERFORMANCE '):])
+            if (type(record) is not dict or set(record) != {'stage', 'check', 'value'}
+                    or record['stage'] != 'installed' or type(record['check']) is not str):
+                valid = False
+                break
+            if record['check'] == 'observer_source_sha256':
+                if record['value'] != observer['source_sha256']:
+                    valid = False
+                    break
+                records += 1
+            elif record['check'] in keys:
+                if record['check'] in seen:
+                    valid = False
+                    break
+                seen.add(record['check'])
+                phase = record['check']
+        envelope = result['guest_envelope']
+        envelope['counts']['admitted_observer_records'] = envelope_count(records) if valid else 'unavailable'
+        envelope['last_observer_phase'] = phase if valid and records == 1 else 'unavailable'
+    # envelope-only-end
     def guest_failure(content, state, context):
         # Source-bound traceback shape is a diagnostic observation, never
         # authenticated runtime acceptance. All output strings are fixed here.
         import ast
         unknown = dict(status='unknown', code='none', exception_class='none',
             last_observer_phase='unavailable')
+        envelope = result['guest_envelope']  # envelope-only
         pins = dict(guest='5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e',
             causal='3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9')
         observer = dict(source_sha256='1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2',
             frozen_sha256='7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7',
             comparator_sha256='4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9')
         if result['smoke_exit'] != 'nonzero':
+            envelope['reason'] = 'smoke_not_nonzero'  # envelope-only
             return unknown
         declared = context.get('external_execution')
         if (type(declared) is not dict or declared.get('observer') != observer
                 or state.get('observer_sha256') != observer['frozen_sha256']):
+            envelope['reason'] = 'observer_context_mismatch'  # envelope-only
             return dict(unknown, status='source_mismatch')
         frozen, status = read('frozen-observer.py', 131072)
         if status != 'readable' or hashlib.sha256(frozen).hexdigest() != observer['frozen_sha256']:
+            envelope['reason'] = 'frozen_observer_mismatch'  # envelope-only
             return dict(unknown, status='source_mismatch')
         try:
             source_root = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         except OSError:
+            envelope['reason'] = 'source_root_unavailable'  # envelope-only
             return dict(unknown, status='source_mismatch')
         inventory = []
         try:
             if os.fstat(source_root).st_uid != os.geteuid():
+                envelope['reason'] = 'source_directory_owner'  # envelope-only
                 return dict(unknown, status='source_mismatch')
             for name, expected in pins.items():
                 raw, status = read('tools/performance/' + name + '.py', 131072, source_root)
                 if status != 'readable' or hashlib.sha256(raw).hexdigest() != expected:
+                    envelope['reason'] = 'source_blob_mismatch'  # envelope-only
                     return dict(unknown, status='source_mismatch')
                 tree = ast.parse(raw)
                 parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
@@ -148,6 +199,7 @@ def failure_phase_summary(work, screen_failure):
                         function=function, exception=node.exc.func.id, prefix=prefix, exact=exact,
                         raise_sha256=hashlib.sha256(ast.get_source_segment(raw.decode(), node).encode()).hexdigest()))
         except (ValueError, UnicodeError, SyntaxError):
+            envelope['reason'] = 'source_parse_failure'  # envelope-only
             return dict(unknown, status='source_mismatch')
         finally:
             os.close(source_root)
@@ -155,12 +207,16 @@ def failure_phase_summary(work, screen_failure):
         # A changed source requires a fresh explicit inventory review.
         digest = hashlib.sha256(json.dumps(inventory, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         if len(inventory) != 104 or digest != '2d94f03b8519b3a3e4d95f24a2834dec5171997a84e6deba1f02e20fd936701b':
+            envelope['reason'] = 'source_inventory_mismatch'  # envelope-only
             return dict(unknown, status='source_mismatch')
         try:
             serial = content.decode('utf-8')
         except UnicodeError:
+            envelope['reason'] = 'uart_utf8'  # envelope-only
             return dict(unknown, status='invalid_uart')
+        envelope['control_status'] = 'present' if any(ord(c) < 32 and c not in '\t\r\n' or ord(c) == 127 for c in serial) else 'none'  # envelope-only
         if not serial.endswith('\n') or '\x00' in serial:
+            envelope['reason'] = 'uart_termination'  # envelope-only
             return dict(unknown, status='invalid_uart')
         # Only LF/CRLF records count. Other terminal/control bytes cannot
         # manufacture an observer record, traceback frame or collector marker.
@@ -168,64 +224,91 @@ def failure_phase_summary(work, screen_failure):
         positions = lambda token: [i for i, line in enumerate(lines) if line == token]
         begins, ends = positions('ARCTIC-COLLECT-BEGIN'), positions('ARCTIC-COLLECT-END')
         exits = [i for i, line in enumerate(lines) if re.fullmatch('ARCTIC-INSTALLED-SMOKE-EXIT=[0-9]{1,3}', line)]
+        envelope['counts'].update(collector_begin=envelope_count(len(begins)), collector_end=envelope_count(len(ends)), smoke_exit=envelope_count(len(exits)))  # envelope-only
         if len(begins) != 1 or len(ends) != 1 or len(exits) != 1:
+            envelope['reason'] = 'marker_multiplicity'  # envelope-only
             return dict(unknown, status='ambiguous')
         begin, end, exit_at = begins[0], ends[0], exits[0]
+        envelope['collector_order'] = 'ordered' if begin < exit_at < end else 'invalid'  # envelope-only
         if not begin < exit_at < end or not 1 <= int(lines[exit_at].rsplit('=', 1)[1]) <= 255:
+            envelope['reason'] = 'marker_order' if not begin < exit_at < end else 'smoke_exit_range'  # envelope-only
             return unknown
         body = lines[begin + 1:exit_at]
         traces = [i for i, line in enumerate(body) if line == 'Traceback (most recent call last):']
         exceptions = [i for i, line in enumerate(body)
             if re.match(r'^(?:RuntimeError|ValueError|InterruptedError): ', line)]
+        envelope['counts'].update(tracebacks=envelope_count(len(traces)), supported_exceptions=envelope_count(len(exceptions)))  # envelope-only
+        envelope['counts']['unsupported_exception_like_lines'] = envelope_count(sum(bool(re.match(r'^(?:[A-Za-z_][A-Za-z_0-9]*\.)*[A-Z][A-Za-z_0-9]*: ', line)) and not re.match(r'^(?:RuntimeError|ValueError|InterruptedError): ', line) for line in body))  # envelope-only
+        envelope_phase_prefix(body, traces, observer)  # envelope-only
         if len(traces) > 1 or len(exceptions) > 1:
+            envelope['reason'] = 'traceback_multiplicity'  # envelope-only
             return dict(unknown, status='ambiguous')
         if len(traces) != 1 or len(exceptions) != 1 or traces[0] >= exceptions[0]:
+            envelope['reason'] = 'traceback_order' if len(traces) == len(exceptions) == 1 else 'traceback_missing'  # envelope-only
             return unknown
         phase_keys = {'measurement_conditions', 'rpm_inventory', 'external_execution', 'app_roles',
             'measured_payload', 'pristine_idle_measurement_scope', 'pristine_idle_samples',
             'role_workload', 'role_measurement_order', 'keep_awake_restored', 'done'}
         observer_records, seen_phases, last_phase = 0, set(), 'unavailable'
+        envelope['counts']['admitted_observer_records'] = 'zero'  # envelope-only
         for line in body[:traces[0]]:
             if not line.startswith('ARCTIC-PERFORMANCE '):
                 continue
             if len(line.encode()) > 1048576:
+                envelope['reason'] = 'observer_record_oversized'  # envelope-only
                 return dict(unknown, status='invalid_uart')
             record = value(line[len('ARCTIC-PERFORMANCE '):])
             if (type(record) is not dict or set(record) != {'stage', 'check', 'value'}
                     or record['stage'] != 'installed' or type(record['check']) is not str):
+                envelope['reason'] = 'observer_record_invalid'  # envelope-only
                 return dict(unknown, status='invalid_uart')
             if record['check'] == 'observer_source_sha256':
                 observer_records += 1
                 if record['value'] != observer['source_sha256']:
+                    envelope['reason'] = 'observer_source_mismatch'  # envelope-only
                     return dict(unknown, status='source_mismatch')
+                envelope['counts']['admitted_observer_records'] = envelope_count(observer_records)  # envelope-only
             elif record['check'] in phase_keys:
                 if record['check'] in seen_phases:
+                    envelope['reason'] = 'observer_phase_duplicate'  # envelope-only
                     return dict(unknown, status='ambiguous')
                 seen_phases.add(record['check'])
                 last_phase = record['check']
         if observer_records != 1:
+            envelope['reason'] = 'observer_record_count'  # envelope-only
             return dict(unknown, status='ambiguous' if observer_records else 'unknown')
+        envelope['last_observer_phase'] = last_phase  # envelope-only
         # Wrapper line 11 calls the original main. An echoed literal or a
         # traceback from another path cannot supply a source-known code.
         frame = re.compile(r'  File "/run/t/guest-check\.py", line ([1-9][0-9]{0,3}), in ([A-Za-z_][A-Za-z_0-9]*|<module>)')
         frames = []
+        envelope['counts']['frames'] = 'zero'  # envelope-only
         for line in body[traces[0] + 1:exceptions[0]]:
             matched = frame.fullmatch(line)
             if matched:
                 frames.append((int(matched[1]), matched[2]))
+                envelope['counts']['frames'] = envelope_count(len(frames))  # envelope-only
             elif not line.startswith('    ') or len(line) > 4096:
+                envelope['frame_status'] = 'control' if any(ord(c) < 32 and c not in '\t\r' or ord(c) == 127 for c in line) else 'unrecognized'  # envelope-only
+                envelope['reason'] = 'frame_unrecognized'  # envelope-only
                 return unknown
         if (not 2 <= len(frames) <= 128 or frames[0] != (11, '<module>')
                 or frames[1][1] != 'main' or not 871 <= frames[1][0] <= 942):
+            envelope['frame_status'] = 'invalid_chain'  # envelope-only
+            envelope['reason'] = 'frame_chain_invalid'  # envelope-only
             return unknown
+        envelope['frame_status'] = 'recognized'  # envelope-only
         exception = body[exceptions[0]]
         candidates = [entry for entry in inventory
             if entry['line'] <= frames[-1][0] <= entry['end_line'] and entry['function'] == frames[-1][1]
             and (exception == entry['exception'] + ': ' + entry['prefix'] if entry['exact']
                  else exception.startswith(entry['exception'] + ': ' + entry['prefix']))]
+        envelope['counts']['source_candidates'] = envelope_count(len(candidates))  # envelope-only
         if len(candidates) != 1:
+            envelope['reason'] = 'source_candidate_count'  # envelope-only
             return dict(unknown, status='ambiguous' if candidates else 'unknown')
         entry = candidates[0]
+        envelope['reason'] = 'source_known_shape'  # envelope-only
         return dict(status='source_known_shape', code=entry['source'] + '_' + str(entry['line']),
             exception_class=entry['exception'], last_observer_phase=last_phase)
     try:

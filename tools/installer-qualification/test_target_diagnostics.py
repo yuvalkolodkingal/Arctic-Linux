@@ -82,8 +82,10 @@ class TargetModel:
 
             def read_text(self):
                 if self.path.endswith('/device/serial'):
+                    raise FileNotFoundError('virtio serial belongs to the block node')
+                if self.path.endswith('/serial'):
                     model.observe('target-serial')
-                    if '/sr0/' in self.path:
+                    if '/sr0/' in self.path or '/vdb/' in self.path:
                         if model.override.get('foreign_serial_error') is not None:
                             raise model.override['foreign_serial_error']
                         raise FileNotFoundError('synthetic unrelated serial')
@@ -96,9 +98,11 @@ class TargetModel:
                     return model.override.get('major_minor', '254:0')
                 raise AssertionError('unexpected synthetic read')
 
-            def resolve(self):
+            def resolve(self, strict=False):
                 if self.path.endswith('/device/driver'):
                     model.observe('target-driver')
+                    if '/sr0/' in self.path:
+                        return Node('/sys/bus/scsi/drivers/sr')
                     return Node('/sys/bus/virtio/drivers/' + model.override.get('driver', 'virtio_blk'))
                 model.observe('target-pristine-partitions')
                 if self.name == 'vda1':
@@ -169,7 +173,7 @@ class TargetControls(unittest.TestCase):
                 self.assertEqual(result, dict(path='/dev/vda', sysfs='/sys/class/block/vda',
                     serial='ARCTIC-OWNED-TARGET', disk_bytes=64 * 1024**3, major_minor='254:0'))
                 self.assertEqual(value.diagnostic_phase, 'prepare-target')
-                expected = ['target-enumerate', 'target-partition', 'target-serial', 'target-driver',
+                expected = ['target-enumerate', 'target-partition', 'target-driver', 'target-serial', 'target-driver',
                     'target-size', 'target-node-stat', 'target-major-minor', 'target-lsblk-disks']
                 if pristine:
                     expected += ['target-pristine-partitions', 'target-pristine-partitions', 'target-lsblk-mounts']
@@ -179,7 +183,7 @@ class TargetControls(unittest.TestCase):
         for error in (None, OSError(22, PRIVATE), HostileOSError(PRIVATE)):
             with self.subTest(kind=type(error).__name__), tempfile.TemporaryDirectory() as temp:
                 value = self.instance(Path(temp))
-                model = TargetModel(self, value, override=dict(nodes=['sr0', 'vda'], foreign_serial_error=error))
+                model = TargetModel(self, value, override=dict(nodes=['vdb', 'vda'], foreign_serial_error=error))
                 value.command = model.command
                 with patch.object(A, 'Path', model.path):
                     if error is None:
@@ -193,7 +197,7 @@ class TargetControls(unittest.TestCase):
     def test_original_guard_failures_and_short_circuit_remain_closed(self):
         cases = [({'serial': 'other'}, 'owned target serial/path is absent or ambiguous'),
             ({'nodes': ['vda', 'vda']}, 'owned target serial/path is absent or ambiguous'),
-            ({'driver': 'unsafe'}, 'owned target driver/size differs'),
+            ({'driver': 'unsafe'}, 'owned target serial/path is absent or ambiguous'),
             ({'size': '1'}, 'owned target driver/size differs'),
             ({'major_minor': '8:0'}, 'owned target device identity differs'),
             ({'mode': stat.S_IFREG | 0o600}, 'owned target device identity differs'),

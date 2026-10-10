@@ -368,7 +368,9 @@ class NativeProtocolProjection:
     MAX_RECORDS = 512
     INTERFACES = {'wl_compositor', 'wl_subcompositor', 'xdg_wm_base',
                   'wp_viewporter', 'wl_shm', 'zwp_linux_dmabuf_v1'}
-    HEADER = re.compile(r'^\[\s*[0-9]{1,12}\.[0-9]{1,6}\]\s*(?:\{[^{}\r\n]{1,80}\}\s*)?'
+    HEADER = re.compile(r'^\[(?:\s*[0-9]{1,12}\.[0-9]{1,6}|'
+                        r'(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{6})\]\s*'
+                        r'(?:\{[^{}\r\n]{1,80}\}\s*)?'
                         r'(?P<send>->\s*)?(?P<iface>[a-z][a-z0-9_]{0,63})[@#](?P<id>[0-9]{1,8})\.'
                         r'(?P<op>[a-z_]{1,64})\((?P<args>[^\r\n]*)\)$')
     def __init__(self):
@@ -1465,7 +1467,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'acd83c0247aa74a6fe65105d87016fd09ea4b7b12eec87a70b246c6e3f93aac6'
+    native_source_sha = 'a9bed2b6f2cb71ffe944c60d0527c8bd14180a98cdccd31961574b911dfc82f9'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

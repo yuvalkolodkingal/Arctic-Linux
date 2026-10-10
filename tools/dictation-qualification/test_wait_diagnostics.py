@@ -205,21 +205,24 @@ class WaitDiagnosticControls(unittest.TestCase):
             path, uid = self.file(root, raw + b' ' * (16384 - len(raw)))
             self.assertEqual(guest.wait_runtime_projection(path, uid), ('recording', 'cpu'))
 
-    def test_existing_capture_predicate_identity_is_unchanged_and_facts_are_bool_only(self):
+    def test_authenticated_capture_identity_and_facts_are_bool_only(self):
         checker = self.checker(); checker.source = 77
         checker.engines = mock.Mock(return_value=[(41, 123, Path('/synthetic-engine'))])
-        def node(identity, pid, media):
+        def node(identity, pid, media, client=None):
             return {'id': identity, 'type': 'PipeWire:Interface:Node',
-                    'info': {'props': {'application.process.id': pid, 'media.class': media}}}
+                    'info': {'props': {'application.process.id': pid, 'media.class': media,
+                                       **({'client.id': client} if client is not None else {})}}}
+        client = {'id': 33, 'type': 'PipeWire:Interface:Client', 'info': {'props': {
+            'pipewire.protocol': 'protocol-native', 'pipewire.sec.pid': 41, 'pipewire.sec.uid': checker.account.pw_uid}}}
         source = node(77, 1, 'Audio/Source')
-        capture = node(81, '41', 'Stream/Input/Audio')
-        link = {'type': 'PipeWire:Interface:Link', 'info': {'output-node-id': 77, 'input-node-id': 81}}
+        capture = node(81, '41', 'Stream/Input/Audio', 33)
+        link = {'id': 82, 'type': 'PipeWire:Interface:Link', 'info': {'output-node-id': 77, 'input-node-id': 81}}
         for objects, expected, facts in (([source], False, (True, False, False, True, False)),
-                ([source, node(81, 41, 'Stream/Output/Audio')], False, (True, True, False, True, False)),
+                ([source, node(81, 41, 'Stream/Output/Audio', 33)], False, (True, True, False, True, False)),
                 ([source, capture], False, (True, True, True, True, False)),
                 ([capture, link], True, (True, True, True, False, True)),
                 ([source, capture, link], True, (True, True, True, True, True))):
-            checker.cmd = mock.Mock(return_value=SimpleNamespace(stdout=json.dumps(objects).encode()))
+            checker.cmd = mock.Mock(return_value=SimpleNamespace(stdout=json.dumps([client] + objects).encode()))
             self.assertIs(checker.capture_link(), expected)
             self.assertEqual(checker._wait_last_graph, facts)
             self.assertTrue(all(type(v) is bool for v in facts))
@@ -249,7 +252,9 @@ class WaitDiagnosticControls(unittest.TestCase):
         old = subprocess.check_output(['git', '-C', str(REPO), 'show', BASE + ':tools/dictation-qualification/guest_check.py']).decode()
         new = Path(guest.__file__).read_text()
         original, revised = ast.parse(old), ast.parse(new)
-        helper_names = {'wait_status_projection', 'wait_runtime_projection', 'wait_diagnostic_code'}
+        helper_names = {'wait_status_projection', 'wait_runtime_projection', 'wait_diagnostic_code',
+                        'authenticated_capture_nodes'}
+        old_capture = next(n for n in ast.walk(original) if isinstance(n, ast.FunctionDef) and n.name == 'capture_link')
         revised.body = [n for n in revised.body if not (isinstance(n, ast.FunctionDef) and n.name in helper_names)
                         and not (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id.startswith('WAIT_DIAGNOSTIC_') for t in n.targets))]
         for tree in (original, revised):
@@ -262,13 +267,10 @@ class WaitDiagnosticControls(unittest.TestCase):
                         method.body = [n for n in method.body if not (isinstance(n, ast.Assign)
                             and any(isinstance(t, ast.Attribute) and t.attr.startswith('_wait_last_') for t in n.targets))]
                         if method.name == 'capture_link':
-                            # Drop only the added fact observers, restore original return.
-                            method.body = [n for n in method.body if not (isinstance(n, ast.Assign)
-                                and any(isinstance(t, ast.Name) and t.id in ('owner', 'source') for t in n.targets))]
-                            linked = next(n for n in method.body if isinstance(n, ast.Assign)
-                                          and any(isinstance(t, ast.Name) and t.id == 'linked' for t in n.targets))
-                            method.body = [n for n in method.body if n is not linked]
-                            method.body[-1] = ast.Return(value=linked.value)
+                            # The focused client-binding controls separately prove the
+                            # intended ownership change; restore this whole method here
+                            # to retain the original diagnostics-only rollback proof.
+                            method.body = old_capture.body
                         for n in ast.walk(method):
                             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'observe':
                                 n.func = ast.Name(id='wait', ctx=ast.Load()); n.args = n.args[1:]

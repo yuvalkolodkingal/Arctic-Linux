@@ -137,7 +137,10 @@ def installer_type(G):
                     self.diagnostic_phase = 'target-enumerate'
                     continue
                 try:
-                    if self.target_read('target-serial', lambda: (node / 'device/serial').read_text().strip()) == self.context['disk_serial']:
+                    if self.target_read('target-driver', lambda: (node / 'device/driver').resolve(strict=True).name) != 'virtio_blk':
+                        self.diagnostic_phase = 'target-enumerate'
+                        continue
+                    if self.target_read('target-serial', lambda: (node / 'serial').read_text().strip()) == self.context['disk_serial']:
                         disks.append(node)
                 except FileNotFoundError:
                     pass
