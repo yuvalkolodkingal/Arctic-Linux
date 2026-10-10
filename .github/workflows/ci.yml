@@ -10,6 +10,7 @@ on:
       - codex/safe-rerender-v5-20261010
       - codex/safe-rerender-v6-20261010
       - codex/safe-rerender-v7-20261010
+      - codex/safe-rerender-v8-20261010
   pull_request:
   workflow_dispatch:
 
