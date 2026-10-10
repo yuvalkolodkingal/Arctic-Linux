@@ -882,7 +882,8 @@ def dictation_cpu_argv(argv):
         # A versioned coherent v2 floor, without partially masked host XSAVE.
         # QEMU Westmere-v2 adds spec-ctrl to Westmere's pre-AVX CPU model;
         # enforce rejects unsupported requested features before guest execution.
-        argv[at] = "Westmere-v2,enforce"
+        # The hosted fixture lacks only optional spec-ctrl; retain its v2 floor.
+        argv[at] = "Westmere-v2,-spec-ctrl,enforce"
     return argv
 
 def native_taskbar_argv(argv, name, display_arg=None):

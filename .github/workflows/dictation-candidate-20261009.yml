@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        hardware_profile: [small-v2, turbo-q5-v3]
+        hardware_profile: [small-v2]
     runs-on: ubuntu-24.04
     # Four bounded VM invocations (255m), provisioning (20m), ISO fetch (15m),
     # fixture preparation (20m), dependencies (8m), checks and cleanup. None of

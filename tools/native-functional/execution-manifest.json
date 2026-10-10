@@ -18,7 +18,7 @@
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/native-functional/taskbar.py": "458a9ec5f8ebc0b7c612163c29fa5c372cd3c03010d146217b1aa7215ff7a1df",
-    "tools/test-install.sh": "c31cf11ac895590b71635aa2900e1091b5d45cbc0dc4b50c5e2a25b7b37f24cf"
+    "tools/test-install.sh": "e8e5e7e3db092c03d1354fc46262dfafcb3cbecc6527138ee9896ac69d4c7d85"
   },
   "image": {
     "archive_bytes": 1930013330,

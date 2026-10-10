@@ -1,6 +1,6 @@
 {
   "execution_files": {
-    ".github/workflows/dictation-candidate-20261009.yml": "514ea67cb2306ba4e88968e4fac78fab7f0369e9bb028da3c23c0ffac20b3c6d",
+    ".github/workflows/dictation-candidate-20261009.yml": "2d83e502506fe5e27bb73c1515c99ded73a21c374249cfd8740aaba0302960a6",
     "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
     "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
     "tools/dictation-qualification/contract.py": "1ab44f66d744939d4bd7d6b7034f4c2beac738168d1ae34c2572a1f95a0da3cf",
@@ -10,7 +10,7 @@
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/test-install.sh": "c31cf11ac895590b71635aa2900e1091b5d45cbc0dc4b50c5e2a25b7b37f24cf"
+    "tools/test-install.sh": "e8e5e7e3db092c03d1354fc46262dfafcb3cbecc6527138ee9896ac69d4c7d85"
   },
   "fixture_decoder": {
     "libsndfile": "1.2.2",

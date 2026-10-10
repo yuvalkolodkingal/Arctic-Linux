@@ -183,7 +183,8 @@ class LaunchDiagnostics(unittest.TestCase):
         coherent = ('        # A versioned coherent v2 floor, without partially masked host XSAVE.\n'
                     "        # QEMU Westmere-v2 adds spec-ctrl to Westmere's pre-AVX CPU model;\n"
                     '        # enforce rejects unsupported requested features before guest execution.\n'
-                    '        argv[at] = "Westmere-v2,enforce"\n')
+                    '        # The hosted fixture lacks only optional spec-ctrl; retain its v2 floor.\n'
+                    '        argv[at] = "Westmere-v2,-spec-ctrl,enforce"\n')
         self.assertEqual(rolled.count(coherent),1)
         rolled=rolled.replace(coherent, '        argv[at] += ",-avx,-avx2,-fma,-f16c,-bmi1,-bmi2"\n',1)
         self.assertEqual(rolled,old_driver)

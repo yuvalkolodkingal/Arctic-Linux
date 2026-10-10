@@ -223,6 +223,8 @@ class StartupDiagnostics(unittest.TestCase):
         for start,end,replacement in sorted(edits,reverse=True):lines[start:end]=replacement
         restored=''.join(lines);self.assertEqual(restored.count('vm = dictation_acquire_vm('),2)
         restored=restored.replace('vm = dictation_acquire_vm(','vm = vmtest.VM(')
+        restored=restored.replace('        # The hosted fixture lacks only optional spec-ctrl; retain its v2 floor.\n', '', 1)
+        restored=restored.replace('"Westmere-v2,-spec-ctrl,enforce"', '"Westmere-v2,enforce"', 1)
         self.assertEqual(restored,old_driver);self.assertEqual(SHELL.replace(DRIVER,restored,1),old_shell)
         self.assertEqual(ast.dump(ast.parse(restored),include_attributes=False),ast.dump(ast.parse(old_driver),include_attributes=False))
         old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode();new_runner=Path(r.__file__).read_text()
