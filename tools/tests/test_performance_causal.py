@@ -202,13 +202,15 @@ class CausalControls(unittest.TestCase):
             self.assertIsNotNone(child.poll())
 
     def test_explicit_retained_and_baseline_profiles_are_bound_in_replay(self):
-        # Evidence permits exactly these two additional whole executables;
+        # Each packaging build needs its exact whole identity and audit;
         # equal code or source alone cannot admit a new packaging build.
         expected={
             '2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b':
                 (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
             '67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35':
-                (0x430d0,0x435de,'11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd')}
+                (0x430d0,0x435de,'11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd'),
+            '98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca':
+                (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc')}
         self.assertEqual(C.MAPPING_PROFILES,R.comparison.MAPPING_PROFILES)
         admitted={profile['executable_sha256']:profile for profile in C.MAPPING_PROFILES}
         self.assertEqual(set(admitted),set(expected)|{'1c66767fc0d814e9002306c983524b476edc671de544f3b2a6f755ea7a52dcb1'})
@@ -216,7 +218,10 @@ class CausalControls(unittest.TestCase):
             profile=admitted[digest]
             self.assertEqual((profile['function_file_offset'],profile['instruction_file_offset'],
                 profile['function_sha256']),(start,upper,function_digest))
-            self.assertEqual(profile['native_audit_sha256'],'dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c')
+            self.assertEqual(profile['native_audit_sha256'],
+                'eef982194692b3a10412de30a47afcb3bdc675dec00d29f7840bdaf01d54d80c'
+                if digest=='98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca'
+                else 'dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c')
             bound=R.causal_bound(.09975,.1,profile_index=C.MAPPING_PROFILES.index(profile))
             proof=bound['causal_lower_bound']
             address=proof['upper_executable_mapping']['start']+upper-proof['upper_executable_mapping']['file_offset']
