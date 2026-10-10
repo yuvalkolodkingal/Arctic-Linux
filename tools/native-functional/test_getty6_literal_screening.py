@@ -15,8 +15,22 @@ DESCRIPTION='Getty on tty6'
 FIXTURE=ROOT/'tests/fixtures/installer-getty6-public-template.json'
 FIXTURE_SHA='b50504c68f9d21ac69ee9b38e5d0df2af915db4546244b2137b3c0910c6c35fa'
 
+BACKEND_OBSERVER_ADDITIONS = (
+    b"WRITE_OBSERVATION_LABELS = (\n    ('bytes', ('true', 'false', 'unknown')),\n    ('operations', ('true', 'false', 'unknown')),\n    ('clock', ('true', 'false', 'unknown')),\n    ('vm', ('running', 'not-running', 'process-exited', 'unknown')),\n    ('phase', ('vt-away', 'output-disconnect', 'output-restore', 'unknown')),\n    ('cycle', ('zero', 'unknown')),\n)\nDIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(\n    'installer-inner-driver-collect-write-' + field + '-' + label\n    for field, labels in WRITE_OBSERVATION_LABELS for label in labels)\n",
+    b"def write_observation_codes(error, controller_source):\n    if collection_guard_code(error, controller_source) != 'installer-inner-driver-collect-guard-collection-034':\n        return ()\n    observation = error.__dict__.get('_arctic_installer_write_observation')\n    source = controller_source.__dict__\n    if type(observation) is not tuple or len(observation) != 7 or observation[0] is not source.get('_COLLECTION_GUARD_TOKEN'):\n        return ()\n    if not all(type(value) is str and value in labels\n            for value, (_, labels) in zip(observation[1:], WRITE_OBSERVATION_LABELS)):\n        return ()\n    return tuple('installer-inner-driver-collect-write-' + field + '-' + value\n                 for value, (field, _) in zip(observation[1:], WRITE_OBSERVATION_LABELS))\n\n\n",
+    b"            if code == 'installer-inner-driver-collect-guard-collection-034':\n                try:\n                    observed = write_observation_codes(error, controller_source)\n                except Exception:\n                    observed = ()\n                for observation in observed:\n                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)\n",
+)
+
+def restore_backend_write_observer(driver):
+    """Remove only three exact source additions; preserve historical bytes."""
+    for addition in BACKEND_OBSERVER_ADDITIONS:
+        if driver.count(addition)!=1:raise AssertionError("Expected one exact backend observer addition")
+        driver=driver.replace(addition,b"",1)
+    return driver
+
 def restore_bounded_collection_observer(driver):
     """Strict test-only inverse; retain the entire historical fixture hash."""
+    driver=restore_backend_write_observer(driver)
     for current,original in (
         (b'MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64\n',b''),
         (b'        for _ in range(MAX_COLLECTION_DIAGNOSTIC_FRAMES):\n            if traceback is None:\n                break\n',b'        while traceback is not None:\n'),
@@ -57,6 +71,20 @@ class GettySixControls(unittest.TestCase):
             restore_bounded_collection_observer(driver.replace(b'MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64',b'MAX_COLLECTION_DIAGNOSTIC_FRAMES = 63',1))
         unknown=restore_bounded_collection_observer(driver+b'\n# uncontrolled original-byte mutation\n')
         with self.assertRaises(AssertionError):self.assertEqual(hashlib.sha256(unknown).hexdigest(),expected)
+
+    def test_backend_inverse_rejects_each_mutated_duplicate_or_missing_addition(self):
+        driver=(ROOT/'installer-qualification/driver.py').read_bytes()
+        expected=json.loads(FIXTURE.read_bytes())['fixture_source']['source_sha256']
+        self.assertEqual(hashlib.sha256(restore_bounded_collection_observer(driver)).hexdigest(),expected)
+        for addition in BACKEND_OBSERVER_ADDITIONS:
+            for mutant in (driver.replace(addition,addition+b'# changed known addition\n',1),
+                    driver.replace(addition,b'',1),driver+addition):
+                with self.subTest(addition=addition[:40],bytes=len(mutant)),self.assertRaises(AssertionError):
+                    # An unapproved byte adjacent to a known addition must also
+                    # fail the unchanged whole historical hash after inversion.
+                    restored=restore_bounded_collection_observer(mutant)
+                    self.assertEqual(hashlib.sha256(restored).hexdigest(),expected)
+        self.assertIn("for key in ('ctrl', 'alt', 'f6')",restore_bounded_collection_observer(driver).decode())
 
     def test_exact_all_three_lifecycle_contexts_preserve_original_bytes_without_output(self):
         for prefix in ('[ 1.234] systemd[1]: ','[  OK  ] ','         '):

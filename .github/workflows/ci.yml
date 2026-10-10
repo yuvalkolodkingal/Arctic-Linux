@@ -2,6 +2,14 @@ name: CI
 
 on:
   push:
+    tags: ["**"]
+    branches-ignore:
+      - codex/qualification-dispatch-20261010
+      - codex/qualification-dispatch-20261008
+      - codex/safe-rerender-v4-20261010
+      - codex/safe-rerender-v5-20261010
+      - codex/safe-rerender-v6-20261010
+      - codex/safe-rerender-v7-20261010
   pull_request:
   workflow_dispatch:
 

@@ -1,0 +1,82 @@
+name: Same-image Safe default and combined visibility/full-damage restart experiment (unqualified)
+
+on:
+  push:
+    branches: [codex/safe-rerender-v7-20261010]
+    paths: [.github/safe-rerender-v7-20261010.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: bc0521136520daaa221e815822e88ffc44107957
+          path: source
+          persist-credentials: false
+      - name: Verify exact image pins and sole reviewed activation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import importlib.util, json
+          from pathlib import Path
+          path = Path('execution/tools/safe-diagnostic-v7/common.py')
+          spec = importlib.util.spec_from_file_location('safe_guard', path)
+          module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+          receipt = module.guard(Path('execution'), Path('source'))
+          Path('execution/out').mkdir(exist_ok=True)
+          Path('execution/out/safe-source-guard.json').write_text(json.dumps(receipt,sort_keys=True)+'\n')
+          PY
+      - name: Verify and fetch same successful original image
+        timeout-minutes: 12
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/arctic-safe"
+          python3 -B execution/tools/native-functional/fetch-image.py \
+            --manifest execution/tools/safe-diagnostic-v7/execution-manifest.json \
+            --out "$RUNNER_TEMP/arctic-safe/inputs"
+      - name: Record original baseline and two attested restart arms
+        timeout-minutes: 20
+        run: |
+          timeout --signal=TERM --kill-after=15s 19m bash execution/tools/safe-diagnostic-v7/run.sh \
+            "$GITHUB_WORKSPACE/execution" "$RUNNER_TEMP/arctic-safe/inputs" "$RUNNER_TEMP/arctic-safe/diagnostic"
+      - name: Upload screened original context diagnostic bytes (no acceptance)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-safe-rerender-context
+          path: ${{ runner.temp }}/arctic-safe/diagnostic/screened/context/
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 6
+      - name: Upload screened original default-restart diagnostic bytes (no acceptance)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-safe-rerender-default-restart
+          path: ${{ runner.temp }}/arctic-safe/diagnostic/screened/default-restart/
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 6
+      - name: Upload screened original combined-restart diagnostic bytes (no acceptance)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-safe-rerender-combined-restart
+          path: ${{ runner.temp }}/arctic-safe/diagnostic/screened/combined-restart/
+          if-no-files-found: ignore
+          retention-days: 14
+          compression-level: 6

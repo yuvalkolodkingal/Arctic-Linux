@@ -67,11 +67,14 @@ class RuleControls(unittest.TestCase):
             'transcription-label':'תמלול:'+PRIVATE}
         for category,value in cases.items():
             with self.subTest(category=category):
-                self.assertEqual(self.rejected(value.encode()),'ARCTIC-EVIDENCE-RULE=source-view-'+category+'\n')
+                expected = 'ARCTIC-EVIDENCE-RULE=source-view-'+category+'\n'
+                if category == 'email-shape':
+                    expected += 'ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-unknown-unit\n'
+                self.assertEqual(self.rejected(value.encode()), expected)
 
     def test_first_actual_rejecting_match_not_later_rule_or_exempted_token_is_observed(self):
         self.assertEqual(self.rejected(b'private@example.invalid password='+PRIVATE.encode()),
-            'ARCTIC-EVIDENCE-RULE=source-view-email-shape\n')
+            'ARCTIC-EVIDENCE-RULE=source-view-email-shape\nARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-unknown-unit\n')
         safe=b'2026-10-10T18:00:00.000Z [  OK  ] Stopped systemd-zram-setup@zram0.service - Create swap on /dev/zram0.\n'
         self.assertIs(S.external_text(safe),safe)
         self.assertEqual(self.rejected(safe+b'password='+PRIVATE.encode()),'ARCTIC-EVIDENCE-RULE=source-view-named-secret\n')
@@ -114,5 +117,69 @@ class RuleControls(unittest.TestCase):
             for category in (*[v[0] for v in S.EXTERNAL_RULE_ALTERNATIVES],'unknown-rule'):
                 raw=('ARCTIC-EVIDENCE-RULE='+phase+'-'+category+'\n').encode()
                 self.assertIs(S.external_text(raw),raw)
+
+    def test_email_candidate_ids_are_exact_public_literals_and_never_exemptions(self):
+        self.assertEqual(len(S.EXTERNAL_EMAIL_CANDIDATES), 12)
+        self.assertEqual(tuple(v for v, _ in S.EXTERNAL_EMAIL_CANDIDATES),
+            (*[unit for unit, _ in S.CANONICAL_UNITS], S.ZRAM_UNIT))
+        for literal, identifier in S.EXTERNAL_EMAIL_CANDIDATES:
+            with self.subTest(identifier=identifier):
+                # Only the actually attested unit-001 now preserves its public
+                # token. Every other candidate retains the original rejection.
+                if literal == 'modprobe@configfs.service':
+                    public = literal.encode()
+                    self.assertIs(S.external_text(public), public)
+                    self.assertEqual(self.rejected((literal+' password='+PRIVATE).encode()),
+                        'ARCTIC-EVIDENCE-RULE=source-view-named-secret\n')
+                else:
+                    self.assertEqual(self.rejected(literal.encode()),
+                        'ARCTIC-EVIDENCE-RULE=source-view-email-shape\n'
+                        'ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-' + identifier + '\n')
+                raw=('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-'+identifier+'\n').encode()
+                self.assertIs(S.external_text(raw),raw)
+                # Recognizing one public token grants no private line exemption.
+                if literal != 'modprobe@configfs.service':
+                    self.assertIn('source-view-'+identifier, self.rejected((literal+' password='+PRIVATE).encode()))
+
+    def test_private_or_malformed_public_unit_overlaps_stay_unknown_and_fatal(self):
+        for value in ('private@example.invalid', 'private-getty@tty6.service',
+                'getty@tty6.service.private', 'GETTY@tty6.service',
+                'getty@tty7.service', 'getty@tty6.servicex',
+                'private.user@1000.service', 'modprobe@drm.service.private',
+                'getty@tty6.servicе', 'getty@tty6.service-private',
+                'getty@tty6.service+private', 'getty@tty6.service=private',
+                'getty@tty6.service/PRIVATE', '/getty@tty6.service'):
+            # A non-ASCII final confusable can end the matched ASCII suffix;
+            # keep it joined to an ASCII private suffix for an exact mismatch.
+            if value == 'getty@tty6.servicе': value += '.private'
+            with self.subTest(value=value):
+                self.assertIn('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-unknown-unit\n',
+                    self.rejected(value.encode()))
+
+    def test_candidate_requires_original_literal_contiguity_and_delimiters(self):
+        for raw, phase in (
+                (b'getty@tty6.ser\x1b[31mvice', 'source-view'),
+                (b'getty@tty6.s\x1b[2Jervice', 'terminal-view'),
+                (b'\x1bPgetty@tty6.service\x1b\\', 'source-view')):
+            with self.subTest(raw=raw):
+                self.assertIn('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=' + phase + '-unknown-unit\n',
+                    self.rejected(raw))
+        for raw in (b'getty@tty6.service:', b' public getty@tty6.service private ',
+                b'\x1b[31mgetty@tty6.service\x1b[0m'):
+            with self.subTest(raw=raw):
+                self.assertIn('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-unit-010\n',
+                    self.rejected(raw))
+
+    def test_candidate_observer_second_print_failure_keeps_primary_or_cancellation(self):
+        for failure in (RuntimeError(PRIVATE), TypeError(PRIVATE), OSError(PRIVATE)):
+            with patch('builtins.print', side_effect=(None, failure)):
+                with self.assertRaises(RuntimeError) as caught:
+                    S.external_text(b'getty@tty6.service')
+            self.assertEqual(caught.exception.args, ('Sensitive text in external evidence',))
+        for cancellation in (KeyboardInterrupt(PRIVATE), SystemExit(PRIVATE)):
+            with patch('builtins.print', side_effect=(None, cancellation)):
+                with self.assertRaises(type(cancellation)) as caught:
+                    S.external_text(b'getty@tty6.service')
+            self.assertIs(caught.exception, cancellation)
 
 if __name__=='__main__':unittest.main()

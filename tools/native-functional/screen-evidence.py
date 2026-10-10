@@ -92,9 +92,11 @@ EXTERNAL_RULE_ALTERNATIVES = (
 EXTERNAL_RULES = tuple((label, re.compile('(?i)' + pattern)) for label, pattern in EXTERNAL_RULE_ALTERNATIVES)
 EXTERNAL_RULE_PHASES = ('source-view', 'terminal-view', 'terminal-payload')
 MAX_DIAGNOSTIC_MATCH_BYTES = 16 * 1024
+EXTERNAL_EMAIL_CANDIDATES = tuple((literal, 'unit-' + format(index, '03d'))
+    for index, literal in enumerate((*[unit for unit, _ in CANONICAL_UNITS], ZRAM_UNIT), 1))
 
 
-def diagnose_sensitive_match(match, phase):
+def diagnose_sensitive_match(match, phase, original=None, boundaries=None, removed=None):
     """Only a closed category from the same rejected match; no value or path."""
     if type(phase) is not str or phase not in EXTERNAL_RULE_PHASES:
         return
@@ -109,12 +111,29 @@ def diagnose_sensitive_match(match, phase):
                     label = candidate
                     break
     print('ARCTIC-EVIDENCE-RULE=' + phase + '-' + label, flush=True)
+    if label == 'email-shape':
+        candidate = 'unknown-unit'
+        # A regex may end at a public prefix inside a malformed private token.
+        # Only delimiter-bounded, contiguous original public bytes get an ID;
+        # this observation still leaves the original rejection in force.
+        start, end = match.span()
+        delimiters = ' \t\r\n:'
+        bounded = ((start == 0 or match.string[start - 1] in delimiters)
+            and (end == len(match.string) or match.string[end] in delimiters))
+        if bounded and type(original) is str and type(boundaries) is array and type(removed) is array:
+            first, last = original_span(start, end, boundaries, removed)
+            if last - first == len(value) and original[first:last] == value:
+                for literal, identifier in EXTERNAL_EMAIL_CANDIDATES:
+                    if value == literal:
+                        candidate = identifier
+                        break
+        print('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=' + phase + '-' + candidate, flush=True)
 
 
-def reject_sensitive_match(match, phase):
+def reject_sensitive_match(match, phase, original=None, boundaries=None, removed=None):
     error = RuntimeError('Sensitive text in external evidence')
     try:
-        diagnose_sensitive_match(match, phase)
+        diagnose_sensitive_match(match, phase, original, boundaries, removed)
     except Exception:
         pass  # Optional observations cannot replace the original rejection.
     raise error
@@ -147,6 +166,19 @@ def original_span(start, end, boundaries, removed):
 def public_token_spans(line):
     """Identify match and literal-proof spans in exact observed message forms."""
     spans = set()
+    # BEGIN EXACT_PUBLIC_CONFIGFS_UNIT
+    # Actual same-Match observation unit-001 attests this public unit only.
+    # Preserve the existing delimiter and original-contiguity checks; no
+    # substring, other unit, or complete-line exception is granted.
+    for match in EXTERNAL_SENSITIVE.finditer(line):
+        start, end = match.span()
+        delimiters = ' \t\r\n:'
+        if (end - start == len('modprobe@configfs.service')
+                and match.group(0) == 'modprobe@configfs.service'
+                and (start == 0 or line[start - 1] in delimiters)
+                and (end == len(line) or line[end] in delimiters)):
+            spans.add((start, end, start, end))
+    # END EXACT_PUBLIC_CONFIGFS_UNIT
     for url in FEDORA_METADATA:
         quoted = re.escape(url)
         dns = ('Curl error \\(6\\): Could not resolve hostname for ' + quoted +
@@ -220,7 +252,7 @@ def external_text(content):
         if any(original_span(*match.span(), boundaries, removed) not in allowed and (rejected := match)
                 for match in EXTERNAL_SENSITIVE.finditer(scanned)):
             # Never include the matched private value in this error or upload.
-            reject_sensitive_match(rejected, phase)
+            reject_sensitive_match(rejected, phase, value, boundaries, removed)
     # Scan OSC/DCS payloads before removing complete terminal bookkeeping.
     require_safe(view, boundaries, removed)
     if '\x1b' in view:
@@ -297,6 +329,48 @@ def diagnose_invalid_utf8_member(relative):
     print('ARCTIC-EVIDENCE-DIAGNOSTIC=utf8-' + role + '-rejection-invalid-utf8', flush=True)
 
 
+# BEGIN PUBLIC_NATIVE_BINARY_ARCHIVE_FIXTURE
+# The public archive roundtrip intentionally includes NUL and 0xff in a .txt
+# fixture. Only its finite, source-bound extractor destinations and public bytes
+# receive a binary format; arbitrary text and changed fixtures stay rejected.
+PUBLIC_NATIVE_BINARY_PATHS = frozenset((
+    'native-live/archive source/nested directory/hello world.txt',
+    'native-installed/archive source/nested directory/hello world.txt',
+    'native-live/extracted zip/nested directory/hello world.txt',
+    'native-installed/extracted zip/nested directory/hello world.txt',
+    'native-live/extracted 7z/nested directory/hello world.txt',
+    'native-installed/extracted 7z/nested directory/hello world.txt',
+    'native-live/extracted tar/nested directory/hello world.txt',
+    'native-installed/extracted tar/nested directory/hello world.txt',
+    'native-live/extracted tar.gz/nested directory/hello world.txt',
+    'native-installed/extracted tar.gz/nested directory/hello world.txt',
+    'native-live/extracted tar.bz2/nested directory/hello world.txt',
+    'native-installed/extracted tar.bz2/nested directory/hello world.txt',
+    'native-live/extracted tar.xz/nested directory/hello world.txt',
+    'native-installed/extracted tar.xz/nested directory/hello world.txt',
+    'native-live/extracted tar.zst/nested directory/hello world.txt',
+    'native-installed/extracted tar.zst/nested directory/hello world.txt',
+    'native-live/extracted cpio/nested directory/hello world.txt',
+    'native-installed/extracted cpio/nested directory/hello world.txt',
+    'native-live/extracted 7z-encrypted/nested directory/hello world.txt',
+    'native-installed/extracted 7z-encrypted/nested directory/hello world.txt',
+))
+PUBLIC_NATIVE_BINARY_BYTES = b'Arctic archive roundtrip\n\x00\xff\n'
+PUBLIC_NATIVE_BINARY_SHA256 = 'c9d50f54b92301a97f875d92dff1900e82942dafb5af5404c9feda6183a97bc4'
+
+
+def public_native_binary_format(relative, content):
+    if type(relative) is not str or relative not in PUBLIC_NATIVE_BINARY_PATHS:
+        return None
+    if (type(content) is not bytes or content != PUBLIC_NATIVE_BINARY_BYTES
+            or hashlib.sha256(content).hexdigest() != PUBLIC_NATIVE_BINARY_SHA256):
+        raise RuntimeError('Native public binary archive fixture bytes differ')
+    return dict(schema='arctic-native-public-binary-fixture-v1',
+                source_format='binary-archive-roundtrip', bytes=28,
+                sha256=PUBLIC_NATIVE_BINARY_SHA256, release_acceptance=False)
+# END PUBLIC_NATIVE_BINARY_ARCHIVE_FIXTURE
+
+
 def copy_screened(source, target, *, external=False):
     files = sorted(source.rglob('*'))
     if len(files) > 1000:
@@ -319,7 +393,8 @@ def copy_screened(source, target, *, external=False):
         content = path.read_bytes()
         original = hashlib.sha256(content).hexdigest()
         redactions = 0
-        if path.suffix in TEXT:
+        source_format = public_native_binary_format(path.relative_to(source).as_posix(), content)
+        if path.suffix in TEXT and source_format is None:
             if external:
                 try:
                     content = external_text(content)
@@ -346,6 +421,8 @@ def copy_screened(source, target, *, external=False):
         output.write_bytes(content)
         manifest['files'][relative.as_posix()] = dict(original_sha256=original,
                 uploaded_sha256=hashlib.sha256(content).hexdigest(), bytes=len(content), redactions=redactions)
+        if source_format is not None:
+            manifest.setdefault('source_formats', {})[relative.as_posix()] = source_format
     (target / 'upload-screening.json').write_text(json.dumps(manifest, indent=2) + '\n')
 
 
