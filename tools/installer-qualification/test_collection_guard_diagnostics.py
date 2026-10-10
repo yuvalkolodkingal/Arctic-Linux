@@ -47,8 +47,8 @@ class CollectionControls(unittest.TestCase):
             with self.subTest(bad=bad),tempfile.TemporaryDirectory() as temp:
                 out=Path(temp)
                 def query(vm,name,*_):
-                    if name=='query-block':return [{'inserted':{'node-name':'target0','file':PRIVATE if bad=='identity' else str(out/'target.qcow2'),'ro':False}}]
-                    return [{'node-name':'target0','stats':{'wr_bytes':PRIVATE,'wr_operations':0}}]
+                    if name=='query-block':return [{'device':'active_target','inserted':{'node-name':'target0','file':PRIVATE if bad=='identity' else str(out/'target.qcow2'),'ro':False}}]
+                    return [{'device':'active_target','node-name':'target0','stats':{'wr_bytes':PRIVATE,'wr_operations':0}}]
                 control=self.controller(out,query)
                 with self.assertRaises(RuntimeError) as caught:control.active_write_proof()
                 self.assertEqual(self.code(caught.exception),'installer-inner-driver-collect-guard-collection-'+('032'if bad=='identity'else'033'))
@@ -58,8 +58,8 @@ class CollectionControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             out=Path(temp)
             def query(vm,name,*_):
-                if name=='query-block':return [{'inserted':{'node-name':'target0','file':str(out/'target.qcow2'),'ro':False}}]
-                return [{'node-name':'target0','stats':{'wr_bytes':0,'wr_operations':0}}]
+                if name=='query-block':return [{'device':'active_target','inserted':{'node-name':'target0','file':str(out/'target.qcow2'),'ro':False}}]
+                return [{'device':'active_target','node-name':'target0','stats':{'wr_bytes':0,'wr_operations':0}}]
             control=self.controller(out,query)
             with patch.object(C.time,'monotonic',side_effect=(0,0,21)), \
                     self.assertRaises(RuntimeError) as caught:control.active_write_proof()

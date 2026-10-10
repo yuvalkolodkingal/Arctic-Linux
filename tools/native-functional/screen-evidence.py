@@ -92,9 +92,11 @@ EXTERNAL_RULE_ALTERNATIVES = (
 EXTERNAL_RULES = tuple((label, re.compile('(?i)' + pattern)) for label, pattern in EXTERNAL_RULE_ALTERNATIVES)
 EXTERNAL_RULE_PHASES = ('source-view', 'terminal-view', 'terminal-payload')
 MAX_DIAGNOSTIC_MATCH_BYTES = 16 * 1024
+EXTERNAL_EMAIL_CANDIDATES = tuple((literal, 'unit-' + format(index, '03d'))
+    for index, literal in enumerate((*[unit for unit, _ in CANONICAL_UNITS], ZRAM_UNIT), 1))
 
 
-def diagnose_sensitive_match(match, phase):
+def diagnose_sensitive_match(match, phase, original=None, boundaries=None, removed=None):
     """Only a closed category from the same rejected match; no value or path."""
     if type(phase) is not str or phase not in EXTERNAL_RULE_PHASES:
         return
@@ -109,12 +111,29 @@ def diagnose_sensitive_match(match, phase):
                     label = candidate
                     break
     print('ARCTIC-EVIDENCE-RULE=' + phase + '-' + label, flush=True)
+    if label == 'email-shape':
+        candidate = 'unknown-unit'
+        # A regex may end at a public prefix inside a malformed private token.
+        # Only delimiter-bounded, contiguous original public bytes get an ID;
+        # this observation still leaves the original rejection in force.
+        start, end = match.span()
+        delimiters = ' \t\r\n:'
+        bounded = ((start == 0 or match.string[start - 1] in delimiters)
+            and (end == len(match.string) or match.string[end] in delimiters))
+        if bounded and type(original) is str and type(boundaries) is array and type(removed) is array:
+            first, last = original_span(start, end, boundaries, removed)
+            if last - first == len(value) and original[first:last] == value:
+                for literal, identifier in EXTERNAL_EMAIL_CANDIDATES:
+                    if value == literal:
+                        candidate = identifier
+                        break
+        print('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=' + phase + '-' + candidate, flush=True)
 
 
-def reject_sensitive_match(match, phase):
+def reject_sensitive_match(match, phase, original=None, boundaries=None, removed=None):
     error = RuntimeError('Sensitive text in external evidence')
     try:
-        diagnose_sensitive_match(match, phase)
+        diagnose_sensitive_match(match, phase, original, boundaries, removed)
     except Exception:
         pass  # Optional observations cannot replace the original rejection.
     raise error
@@ -220,7 +239,7 @@ def external_text(content):
         if any(original_span(*match.span(), boundaries, removed) not in allowed and (rejected := match)
                 for match in EXTERNAL_SENSITIVE.finditer(scanned)):
             # Never include the matched private value in this error or upload.
-            reject_sensitive_match(rejected, phase)
+            reject_sensitive_match(rejected, phase, value, boundaries, removed)
     # Scan OSC/DCS payloads before removing complete terminal bookkeeping.
     require_safe(view, boundaries, removed)
     if '\x1b' in view:
