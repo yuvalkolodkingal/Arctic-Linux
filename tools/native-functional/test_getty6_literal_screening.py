@@ -15,6 +15,17 @@ DESCRIPTION='Getty on tty6'
 FIXTURE=ROOT/'tests/fixtures/installer-getty6-public-template.json'
 FIXTURE_SHA='b50504c68f9d21ac69ee9b38e5d0df2af915db4546244b2137b3c0910c6c35fa'
 
+def restore_bounded_collection_observer(driver):
+    """Strict test-only inverse; retain the entire historical fixture hash."""
+    for current,original in (
+        (b'MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64\n',b''),
+        (b'        for _ in range(MAX_COLLECTION_DIAGNOSTIC_FRAMES):\n            if traceback is None:\n                break\n',b'        while traceback is not None:\n'),
+        (b'        if traceback is not None:\n            return None  # Never present a truncated prefix as the deepest phase.\n',b''),
+    ):
+        if driver.count(current)!=1:raise AssertionError('Expected one exact bounded observer addition')
+        driver=driver.replace(current,original,1)
+    return driver
+
 class GettySixControls(unittest.TestCase):
     def rejected(self,value):
         stream=io.StringIO();raw=value.encode()
@@ -33,9 +44,19 @@ class GettySixControls(unittest.TestCase):
             self.assertIs(proof['verified_unit_record']['rpm_file_digest_verified'],True)
             self.assertEqual(proof['verified_unit_record']['rpm_file_digest'],d['template_sha256'])
         driver=(ROOT/'installer-qualification/driver.py').read_bytes()
+        driver=restore_bounded_collection_observer(driver)
         self.assertEqual(hashlib.sha256(driver).hexdigest(),d['fixture_source']['source_sha256'])
         self.assertIn("for key in ('ctrl', 'alt', 'f6')",driver.decode())
         self.assertTrue(any('no private prior uart token' in value.lower() for value in d['limits']))
+
+    def test_bounded_observer_inverse_rejects_mutated_addition_and_unknown_original_byte(self):
+        driver=(ROOT/'installer-qualification/driver.py').read_bytes()
+        expected=json.loads(FIXTURE.read_bytes())['fixture_source']['source_sha256']
+        self.assertEqual(hashlib.sha256(restore_bounded_collection_observer(driver)).hexdigest(),expected)
+        with self.assertRaises(AssertionError):
+            restore_bounded_collection_observer(driver.replace(b'MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64',b'MAX_COLLECTION_DIAGNOSTIC_FRAMES = 63',1))
+        unknown=restore_bounded_collection_observer(driver+b'\n# uncontrolled original-byte mutation\n')
+        with self.assertRaises(AssertionError):self.assertEqual(hashlib.sha256(unknown).hexdigest(),expected)
 
     def test_exact_all_three_lifecycle_contexts_preserve_original_bytes_without_output(self):
         for prefix in ('[ 1.234] systemd[1]: ','[  OK  ] ','         '):

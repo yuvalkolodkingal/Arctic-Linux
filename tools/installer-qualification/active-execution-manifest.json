@@ -19,7 +19,7 @@
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/native_smoke.py": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
     "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
-    "tools/native-functional/screen-evidence.py": "539bb4b88dde94c3c12b7e70cb803c506f90e75d021a44ebc4a29a34aa3469cf",
+    "tools/native-functional/screen-evidence.py": "7062a15b6b777de8106e7d4779e993bc66814ccd5220aa9482142f932bf32c11",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",

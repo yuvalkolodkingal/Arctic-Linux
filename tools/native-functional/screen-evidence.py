@@ -271,6 +271,32 @@ def diagnose_external_member(relative, error):
     print('ARCTIC-EVIDENCE-DIAGNOSTIC=external-text-' + role + '-rejection-' + reason, flush=True)
 
 
+# Exact paths emitted by the Native runner; an unknown filename stays private.
+# These labels only identify a strict decoding rejection, never its byte value,
+# offset, exception text, or whether any Native acceptance record was complete.
+UTF8_MEMBER_DIAGNOSTICS = {
+    'execution.json': 'native-execution',
+    'native-harness.log': 'native-harness',
+    'provision.log': 'native-provision',
+    'taskbar-build.log': 'native-taskbar-build',
+    'harness/serial-install.log': 'native-live-uart',
+    'harness/serial-boot.log': 'native-installed-uart',
+    'harness/native-evidence-install.log': 'native-live-bulk',
+    'harness/native-evidence-boot.log': 'native-installed-bulk',
+    'harness/qemu-install.log': 'native-live-qemu',
+    'harness/qemu-boot.log': 'native-installed-qemu',
+    'harness/test.log': 'native-driver',
+    'native-live/gui-trace.log': 'native-live-gui-trace',
+    'native-installed/gui-trace.log': 'native-installed-gui-trace',
+}
+
+
+def diagnose_invalid_utf8_member(relative):
+    """Emit only a fixed role and reason; no error contents are inspected."""
+    role = UTF8_MEMBER_DIAGNOSTICS.get(relative, 'other-text') if type(relative) is str else 'other-text'
+    print('ARCTIC-EVIDENCE-DIAGNOSTIC=utf8-' + role + '-rejection-invalid-utf8', flush=True)
+
+
 def copy_screened(source, target, *, external=False):
     files = sorted(source.rglob('*'))
     if len(files) > 1000:
@@ -304,7 +330,15 @@ def copy_screened(source, target, *, external=False):
                         pass  # Optional observations cannot replace the original rejection.
                     raise
             else:
-                value, redactions = SENSITIVE.subn('[redacted]', content.decode('utf-8'))
+                try:
+                    value = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        diagnose_invalid_utf8_member(path.relative_to(source).as_posix())
+                    except BaseException:
+                        pass  # A diagnostic failure cannot replace the strict original decode rejection.
+                    raise
+                value, redactions = SENSITIVE.subn('[redacted]', value)
                 content = value.encode()
         relative = path.relative_to(source)
         output = target / relative
