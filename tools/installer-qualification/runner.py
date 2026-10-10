@@ -130,6 +130,31 @@ def relay_inner(log, token):
         pass
 
 
+def primary_reported_codes(report, active):
+    """Read the first failed-report error without exporting free-form text."""
+    prefix = 'installer-reported-' + ('active' if active else 'idle') + '-primary-'
+    errors = report.get('errors') if type(report) is dict else None
+    if type(errors) is not list or len(errors) > 64:
+        return (prefix + 'invalid',)
+    if not errors:
+        return (prefix + 'unrun',)
+    first = errors[0]
+    if type(first) is not str or len(first) > 4096:
+        return (prefix + 'invalid',)
+    guest = E.guest
+    if active:
+        classes = {name: label for name, label in guest.DIAGNOSTIC_EXCEPTION_CLASSES.values()}
+        classes['OtherError'] = 'other-error'
+        match = re.fullmatch(r'([A-Za-z]+): active installation or restoration failed \[phase=([a-z0-9-]+); reason=([a-z0-9-]+)\]', first)
+        if match and match[1] in classes and match[2] in guest.ACTIVE_DIAGNOSTIC_PHASES and match[3] in {'unknown', *guest.PRIMARY_DIAGNOSTIC_LITERALS.values()}:
+            return (prefix + 'exception-' + classes[match[1]], prefix + 'phase-' + match[2], prefix + 'reason-' + match[3])
+        if first in {name + ': active installation or restoration failed' for name in classes}:
+            return (prefix + 'masked',)
+        return (prefix + 'unknown',)
+    reasons = {'RuntimeError: ' + message: code for message, code in guest.PRIMARY_DIAGNOSTIC_LITERALS.items()}
+    return (prefix + 'reason-' + reasons[first],) if first in reasons else (prefix + 'unknown',)
+
+
 def reported_codes(report, active):
     """Bounded fixed labels describe reported scalars, never acceptance verdicts."""
     profile = 'active' if active else 'idle'
@@ -138,6 +163,7 @@ def reported_codes(report, active):
         return (prefix + 'report-invalid',)
     status = report.get('status')
     codes = [prefix + 'status-' + (status if type(status) is str and status in ('passed', 'failed', 'unrun') else 'invalid')]
+    codes.extend(primary_reported_codes(report, active))
     for key in ('baseline', 'completion') if active else ('baseline',):
         codes.append(prefix + key + '-' + ('observed' if type(report.get(key)) is dict and report[key] else 'unrun'))
     cases = report.get('cases')
