@@ -196,6 +196,36 @@ def external_text(content):
     return content
 
 
+EXTERNAL_MEMBER_DIAGNOSTICS = {
+    'execution.json': 'execution',
+    'provision.log': 'provision',
+    'capture-build.log': 'capture-build',
+    'installer-harness.log': 'installer-harness',
+    'host/host-execution.json': 'installer-host-execution',
+    'host/installer-host-transitions.json': 'installer-transitions',
+    'host/serial.log': 'installer-live-uart',
+    'host/serial-installed.log': 'installer-installed-uart',
+    'host/installed-boot.json': 'installer-installed-proof',
+    'installer/installer-report.json': 'installer-report',
+    'installer/serial-installer-report.json': 'installer-serial-report',
+    'installer/installer-state.json': 'installer-state',
+    'installer/installer-provenance.json': 'installer-provenance',
+    'installer/transport-manifest.json': 'installer-transport',
+}
+
+
+def diagnose_external_member(relative, error):
+    """Source-closed member/rejection labels; never print any path or message."""
+    role = EXTERNAL_MEMBER_DIAGNOSTICS.get(relative, 'other-text') if type(relative) is str else 'other-text'
+    reason = 'other-error'
+    if type(error) is RuntimeError and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
+        if error.args[0] == 'Sensitive text in external evidence':
+            reason = 'sensitive-text'
+        elif error.args[0] == 'Incomplete terminal escape in external evidence':
+            reason = 'incomplete-terminal'
+    print('ARCTIC-EVIDENCE-DIAGNOSTIC=external-text-' + role + '-rejection-' + reason, flush=True)
+
+
 def copy_screened(source, target, *, external=False):
     files = sorted(source.rglob('*'))
     if len(files) > 1000:
@@ -220,7 +250,14 @@ def copy_screened(source, target, *, external=False):
         redactions = 0
         if path.suffix in TEXT:
             if external:
-                content = external_text(content)
+                try:
+                    content = external_text(content)
+                except Exception as error:
+                    try:
+                        diagnose_external_member(path.relative_to(source).as_posix(), error)
+                    except Exception:
+                        pass  # Optional observations cannot replace the original rejection.
+                    raise
             else:
                 value, redactions = SENSITIVE.subn('[redacted]', content.decode('utf-8'))
                 content = value.encode()

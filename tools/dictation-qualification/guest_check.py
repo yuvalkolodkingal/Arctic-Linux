@@ -254,9 +254,17 @@ def sha(path):
 def read(path):
     return json.loads(Path(path).read_text())
 
-def run(argv, timeout=20, check=True):
+def run(argv, timeout=20, check=True, output_role=None):
+    require(output_role is None or (type(output_role) is str and output_role == 'interval-journal'),
+            'unknown-command-output-role')
     result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
-    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, 'command-output-bound')
+    code = 'command-output-bound'
+    if output_role is not None:
+        # Only this source-assigned role and builtin byte counts enter a failed
+        # gate code. Never include argv, the cursor, logs, stderr or error text.
+        require(type(result.stdout) is bytes and type(result.stderr) is bytes, 'command-output-byte-types')
+        code += '-journal-o' + str(len(result.stdout)) + '-e' + str(len(result.stderr))
+    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, code)
     if check:
         require(result.returncode == 0, 'command-failed')
     return result
@@ -1085,7 +1093,7 @@ class Checker:
 
     def leakage(self):
         require(len(self.phrases) >= 10, 'leak-scan-missing-real-hypotheses')
-        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60).stdout.decode()
+        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60, output_role='interval-journal').stdout.decode()
         journal = '\n'.join(str(json.loads(line).get('MESSAGE', '')) for line in rows.splitlines() if line)
         notices = self.cmd(['/usr/bin/arctic-shell-ipc', 'notifications', 'history']).stdout.decode()
         # Also inspect the fallback daemon if it actually owns a user process.
@@ -1154,7 +1162,7 @@ class Checker:
 
     def avcs(self):
         self.security()
-        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60).stdout.decode()
+        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60, output_role='interval-journal').stdout.decode()
         journal = '\n'.join(str(json.loads(line).get('MESSAGE', '')) for line in rows.splitlines() if line)
         after = self.audit_state()
         require(after['enabled'] == self.audit_before['enabled'] and after['enabled'] in (1, 2)

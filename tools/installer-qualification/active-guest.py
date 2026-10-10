@@ -281,11 +281,13 @@ def installer_type(G):
             self.diagnostic_phase = 'writer-continuity'
             G.require(self.writer_identity is None or process == self.writer_identity, 'original copy writer was replaced')
             self.diagnostic_phase = 'writer-mount-source'
-            source = self.command(['findmnt', '--raw', '--noheadings', '--output', 'SOURCE', '--mountpoint', '/mnt'])[1]
+            # The installer's private self-bind remains below the btrfs mount.
+            # Ignore shadowed rows; the unchanged guards still check the topmost mount.
+            source = self.command(['findmnt', '--raw', '--noheadings', '--output', 'SOURCE', '--mountpoint', '/mnt', '--uniq'])[1]
             self.diagnostic_phase = 'writer-mount-block'
-            block = self.command(['findmnt', '--raw', '--nofsroot', '--noheadings', '--output', 'SOURCE', '--mountpoint', '/mnt'])[1]
+            block = self.command(['findmnt', '--raw', '--nofsroot', '--noheadings', '--output', 'SOURCE', '--mountpoint', '/mnt', '--uniq'])[1]
             self.diagnostic_phase = 'writer-mount-fstype'
-            fstype = self.command(['findmnt', '--raw', '--noheadings', '--output', 'FSTYPE', '--mountpoint', '/mnt'])[1]
+            fstype = self.command(['findmnt', '--raw', '--noheadings', '--output', 'FSTYPE', '--mountpoint', '/mnt', '--uniq'])[1]
             self.diagnostic_phase = 'writer-mount-guard'
             G.require(re.fullmatch('/dev/vda[1-9][0-9]*', block) and fstype == 'btrfs'
                       and source in (block, block + '[/@]'), 'actual writer target mount is not owned btrfs')

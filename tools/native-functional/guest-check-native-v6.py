@@ -1869,7 +1869,7 @@ def run_checks(prefix, stage, *, disposable_guest=False, gui_v6=False):
     if gui_v6:
         report['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
     (smoke.root/'report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
-    print('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False),flush=True)
+    print('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False,separators=(',',':')),flush=True)
     return report
 
 
@@ -1881,7 +1881,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '65245d62a93ee8405d3dc2eaeff976202bf15f9fae0462d6d7b32db794851b7a'
+    native_source_sha = '51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

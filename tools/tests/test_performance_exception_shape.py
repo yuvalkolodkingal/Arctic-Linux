@@ -18,6 +18,9 @@ class ExceptionShapeTest(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.prepare_guest()
         raw = (P.ROOT/'tools/performance/run-paired.py').read_bytes()
+        raw = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', raw)
+        raw = b''.join(line for line in raw.splitlines(keepends=True) if b'# colored-trace-only # envelope-only' not in line)
+        raw = raw.replace(b"exception_class='none', format='none'),\n", b"exception_class='none', format='none')),\n", 1)
         raw = re.sub(rb'(?ms)^    # exception-shape-only-begin\n.*?^    # exception-shape-only-end\n', b'', raw)
         raw = b''.join(line for line in raw.splitlines(keepends=True) if b'# exception-shape-only # envelope-only' not in line)
         added = b"            last_observer_phase='unavailable',\n            # Class tokens are unauthenticated shape observations, not causes.\n            exception_shape=dict(reason='not_observed', count='unavailable',\n                exception_class='none', format='none')),\n"
@@ -30,6 +33,8 @@ class ExceptionShapeTest(unittest.TestCase):
         exec(compile(raw, self.old.__file__, 'exec'), self.old.__dict__)
         self.old.ROOT = P.inner.ROOT
         consumer = (P.ROOT/'tools/performance/qualification.py').read_bytes()
+        consumer = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', consumer)
+        consumer = consumer.replace(b", 'colored_traceback'}", b"}", 1)
         consumer = re.sub(rb'(?ms)^    # exception-shape-only-begin\n.*?^    # exception-shape-only-end\n', b'', consumer)
         added = b"'control_status', 'last_observer_phase', 'exception_shape'}"
         self.assertEqual(consumer.count(added), 1)
@@ -44,6 +49,7 @@ class ExceptionShapeTest(unittest.TestCase):
         old = self.old.failure_phase_summary(self.fixture.work, 'sensitive_text')
         without = copy.deepcopy(result)
         without['guest_envelope'].pop('exception_shape')
+        without['guest_envelope'].pop('colored_traceback')
         self.assertEqual(without, old)
         text = json.dumps(result).encode()
         for private in (b'do-not-export', b'private.invalid', 'מילים סודיות'.encode(), b'guest-check.py'):

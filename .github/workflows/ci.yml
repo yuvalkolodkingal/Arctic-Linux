@@ -161,7 +161,13 @@ jobs:
       - name: Python unittest (tools/tests, the repository publishing helpers)
         run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
       - name: Recovered native probe controls (host fixtures only)
-        run: python3 -m unittest discover -s tools/native-functional -p 'test_*.py' -v
+        timeout-minutes: 15
+        run: |
+          # Owned Unix peer fixtures require a real, positive desktop UID.
+          runuser -u nobody -- env PYTHONDONTWRITEBYTECODE=1 \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory \
+            GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            python3 -m unittest discover -s tools/native-functional -p 'test_*.py' -v
       - name: Dictation fixture provenance and accuracy scoring controls
         run: python3 -m unittest discover -s tools/dictation-accuracy -p 'test_*.py' -v
       - name: Exact-image dictation evidence and execution controls
