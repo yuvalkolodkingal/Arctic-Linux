@@ -33,6 +33,42 @@ CONTROLLER = Path('/usr/share/arctic/dictation/dictation.py')
 CHILD_EXEC = CONTROLLER.with_name('child_exec.py')
 PAYLOAD = Path('/opt/arctic/voxtype/1.1.0')
 SYSTEM = Path('/var/lib/arctic/dictation')
+SESSION_PREFLIGHT_STAGES = ('accuracy-module-import', 'fixture-bundle-validation',
+                            'broker-cancel', 'cpu-backend-selection',
+                            'virtual-microphone-route', 'receiver-window')
+SESSION_ERROR_TYPES = ((Invalid, 'invalid'), (OSError, 'os-error'),
+                       (ValueError, 'value-error'), (subprocess.TimeoutExpired, 'timeout'),
+                       (KeyError, 'key-error'), (TypeError, 'type-error'))
+SESSION_COMMAND_CODES = ('command-output-bound', 'command-failed')
+SESSION_STATUS_CODES = SESSION_COMMAND_CODES + (
+    'status-byte-bound', 'status-profile-descriptor-pin', 'status-profile-byte-types',
+    'optimized-cpu-incompatible', 'status-backend-unknown', 'status-backend-profile',
+    'status-cpu-variant-profile', 'status-idle-cpu-variant')
+SESSION_INVALID_CODES = {
+    'accuracy-module-import': (),
+    'fixture-bundle-validation': ('fixture-bundle-validation-failed',),
+    'broker-cancel': SESSION_STATUS_CODES,
+    'cpu-backend-selection': SESSION_STATUS_CODES,
+    'virtual-microphone-route': SESSION_COMMAND_CODES + (
+        'native-audio-tool-missing', 'loopback-flags-unavailable',
+        'loopback-process-died', 'observation-timeout'),
+    'receiver-window': SESSION_COMMAND_CODES + (
+        'receiver-process-died', 'receiver-window-duplicate', 'receiver-window-identity',
+        'receiver-focus-request-failed', 'receiver-window-disappeared', 'observation-timeout'),
+}
+
+def session_diagnostic_code(stage, error):
+    """Only fixed setup stages/classes enter public codes, never exception text."""
+    require(type(stage) is str and stage in SESSION_PREFLIGHT_STAGES, 'unknown-session-preflight-stage')
+    if isinstance(error, Invalid) and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
+        for code in SESSION_INVALID_CODES[stage]:
+            if error.args[0] == code:
+                return 'session-' + stage + '-' + code
+    for error_class, label in SESSION_ERROR_TYPES:
+        if isinstance(error, error_class):
+            return 'session-' + stage + '-' + label
+    raise Invalid('unknown-session-preflight-error-type')
+
 def installed_controller():
     spec = importlib.util.spec_from_file_location('arctic_installed_dictation', CONTROLLER)
     controller = importlib.util.module_from_spec(spec)
@@ -940,14 +976,23 @@ class Checker:
         return values
 
     def session(self):
+        self.session_preflight_stage = 'accuracy-module-import'
         spec = importlib.util.spec_from_file_location('arctic_accuracy', DATA / 'dictation-accuracy/accuracy.py')
         self.accuracy = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.accuracy)
+        self.session_preflight_stage = 'fixture-bundle-validation'
         try:
             self.fixtures = self.accuracy.load_fixtures(DATA / 'dictation-fixtures', self.context['fixture_manifest_sha256'])
         except self.accuracy.Invalid:
             raise Invalid('fixture-bundle-validation-failed') from None
-        self.status('cancel', check=False); self.status('set-backend', 'cpu')
-        self.route(); self.window_start()
+        self.session_preflight_stage = 'broker-cancel'
+        self.status('cancel', check=False)
+        self.session_preflight_stage = 'cpu-backend-selection'
+        self.status('set-backend', 'cpu')
+        self.session_preflight_stage = 'virtual-microphone-route'
+        self.route()
+        self.session_preflight_stage = 'receiver-window'
+        self.window_start()
+        self.session_preflight_stage = None
         require(self.gate('local-offline-transcription', self.offline, 'actual-boot'), 'session-network-not-isolated')
         require(self.gate('recording-status-published', self.published), 'indicator-handshake-incomplete')
         self.gate('cpu-english-transcription-insertion', lambda: self.samples('en'))
@@ -967,6 +1012,7 @@ class Checker:
 
     def execute(self):
         phase = self.context['phase']
+        failure_code = 'prerequisite-or-collector-failed'
         self.gate('selinux-enforcing', self.security, 'actual-boot')
         if phase == 'live':
             self.gate('live-payload-model-absent', self.absence, 'actual-installed-files')
@@ -986,13 +1032,15 @@ class Checker:
                 if available and integrity:
                     try:
                         self.session()
-                    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
-                        pass
+                    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+                        stage = getattr(self, 'session_preflight_stage', None)
+                        if stage in SESSION_PREFLIGHT_STAGES:
+                            failure_code = session_diagnostic_code(stage, error)
         self.gate('no-new-avcs', self.avcs, 'interval-log-scan')
         present = {g['id'] for g in self.report['gates']}
         for name in sorted(self.gates - present):
             self.report['gates'].append({'id': name, 'status': 'unrun', 'evidence_kind': EXPECTED_KINDS[name],
-                                        'code': 'prerequisite-or-collector-failed', 'observations': {}})
+                                        'code': failure_code, 'observations': {}})
         self.report['status'] = 'passed' if all(g['status'] == 'passed' for g in self.report['gates']) else 'failed'
         return self.report
 
