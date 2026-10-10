@@ -145,9 +145,13 @@ def primary_reported_codes(report, active):
     if active:
         classes = {name: label for name, label in guest.DIAGNOSTIC_EXCEPTION_CLASSES.values()}
         classes['OtherError'] = 'other-error'
-        match = re.fullmatch(r'([A-Za-z]+): active installation or restoration failed \[phase=([a-z0-9-]+); reason=([a-z0-9-]+)\]', first)
-        if match and match[1] in classes and match[2] in guest.ACTIVE_DIAGNOSTIC_PHASES and match[3] in {'unknown', *guest.PRIMARY_DIAGNOSTIC_LITERALS.values()}:
-            return (prefix + 'exception-' + classes[match[1]], prefix + 'phase-' + match[2], prefix + 'reason-' + match[3])
+        match = re.fullmatch(r'([A-Za-z]+): active installation or restoration failed \[phase=([a-z0-9-]+)(?:; errno=([a-z0-9-]+))?; reason=([a-z0-9-]+)\]', first)
+        if match and match[1] in classes and match[2] in guest.ACTIVE_DIAGNOSTIC_PHASES and match[4] in {'unknown', *guest.PRIMARY_DIAGNOSTIC_LITERALS.values()}:
+            if match[3] is not None and not (match[1] == 'OSError' and match[2] in guest.TARGET_DIAGNOSTIC_PHASES and
+                    match[3] in {'unknown', 'other', *guest.TARGET_DIAGNOSTIC_ERRNOS.values()}):
+                return (prefix + 'unknown',)
+            return (prefix + 'exception-' + classes[match[1]], prefix + 'phase-' + match[2],
+                    *((prefix + 'errno-' + match[3],) if match[3] is not None else ()), prefix + 'reason-' + match[4])
         if first in {name + ': active installation or restoration failed' for name in classes}:
             return (prefix + 'masked',)
         return (prefix + 'unknown',)
@@ -422,9 +426,9 @@ def main():
     finally:
         diagnostic_stage = 'cleanup'
         with H.cleanup_signals() as pending:
-            for image in owned_images:
+            for image in reversed(owned_images):
                 try:
-                    subprocess.run(['docker', 'image', 'rm', image], check=True, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(['docker', 'image', 'rm', '--no-prune', image], check=True, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 except BaseException as error:
                     diagnose(diagnostic_stage, error)
                     errors.append('owned image cleanup: ' + type(error).__name__ + ': ' + str(error))

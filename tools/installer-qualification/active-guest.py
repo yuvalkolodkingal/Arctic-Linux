@@ -123,34 +123,45 @@ def installer_type(G):
             fields['elapsed_ns'] = self.samples[-1]['elapsed_ns']
             return super().request(kind, cycle, **fields)
 
+        def target_read(self, phase, read):
+            self.diagnostic_phase = phase
+            return read()
+
         def target_disk(self, pristine=False):
+            target_previous_phase = getattr(self, 'diagnostic_phase', 'unknown')
             disks = []
+            self.diagnostic_phase = 'target-enumerate'
             for node in Path('/sys/class/block').iterdir():
+                self.diagnostic_phase = 'target-partition'
                 if (node / 'partition').exists():
+                    self.diagnostic_phase = 'target-enumerate'
                     continue
                 try:
-                    if (node / 'device/serial').read_text().strip() == self.context['disk_serial']:
+                    if self.target_read('target-serial', lambda: (node / 'device/serial').read_text().strip()) == self.context['disk_serial']:
                         disks.append(node)
                 except FileNotFoundError:
                     pass
+                self.diagnostic_phase = 'target-enumerate'
             G.require(len(disks) == 1 and disks[0].name == 'vda', 'owned target serial/path is absent or ambiguous')
             node = disks[0]
-            G.require((node / 'device/driver').resolve().name == 'virtio_blk'
-                      and int((node / 'size').read_text()) * 512 == self.context['disk_bytes'],
+            G.require(self.target_read('target-driver', lambda: (node / 'device/driver').resolve().name) == 'virtio_blk'
+                      and int(self.target_read('target-size', lambda: (node / 'size').read_text())) * 512 == self.context['disk_bytes'],
                       'owned target driver/size differs')
             path = Path('/dev/vda')
-            info = path.stat()
-            major_minor = (node / 'dev').read_text().strip()
+            info = self.target_read('target-node-stat', lambda: path.stat())
+            major_minor = self.target_read('target-major-minor', lambda: (node / 'dev').read_text().strip())
             G.require(major_minor == str(os.major(info.st_rdev)) + ':' + str(os.minor(info.st_rdev))
                       and __import__('stat').S_ISBLK(info.st_mode), 'owned target device identity differs')
-            all_disks = json.loads(self.command(['lsblk', '--json', '--bytes', '--nodeps', '-o', 'NAME,TYPE,SIZE'])[1])['blockdevices']
+            all_disks = json.loads(self.target_read('target-lsblk-disks', lambda: self.command(['lsblk', '--json', '--bytes', '--nodeps', '-o', 'NAME,TYPE,SIZE']))[1])['blockdevices']
             G.require([d['name'] for d in all_disks if d['type'] == 'disk'] == ['vda'], 'unexpected writable guest disk')
             if pristine:
+                self.diagnostic_phase = 'target-pristine-partitions'
                 G.require(not any((n / 'partition').exists() and n.resolve().parent == node.resolve()
                                   for n in Path('/sys/class/block').iterdir()), 'owned target already has partitions')
-                rows = json.loads(self.command(['lsblk', '--json', '-o', 'NAME,MOUNTPOINTS', '/dev/vda'])[1])['blockdevices']
+                rows = json.loads(self.target_read('target-lsblk-mounts', lambda: self.command(['lsblk', '--json', '-o', 'NAME,MOUNTPOINTS', '/dev/vda']))[1])['blockdevices']
                 G.require(len(rows) == 1 and not rows[0].get('children') and not any(rows[0].get('mountpoints') or []),
                           'owned target is already in use')
+            self.diagnostic_phase = target_previous_phase
             return dict(path='/dev/vda', sysfs='/sys/class/block/vda', serial=self.context['disk_serial'],
                         disk_bytes=self.context['disk_bytes'], major_minor=major_minor)
 
