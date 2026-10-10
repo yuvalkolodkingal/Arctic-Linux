@@ -124,13 +124,22 @@ class RuleControls(unittest.TestCase):
             (*[unit for unit, _ in S.CANONICAL_UNITS], S.ZRAM_UNIT))
         for literal, identifier in S.EXTERNAL_EMAIL_CANDIDATES:
             with self.subTest(identifier=identifier):
-                self.assertEqual(self.rejected(literal.encode()),
-                    'ARCTIC-EVIDENCE-RULE=source-view-email-shape\n'
-                    'ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-' + identifier + '\n')
+                # Only the actually attested unit-001 now preserves its public
+                # token. Every other candidate retains the original rejection.
+                if literal == 'modprobe@configfs.service':
+                    public = literal.encode()
+                    self.assertIs(S.external_text(public), public)
+                    self.assertEqual(self.rejected((literal+' password='+PRIVATE).encode()),
+                        'ARCTIC-EVIDENCE-RULE=source-view-named-secret\n')
+                else:
+                    self.assertEqual(self.rejected(literal.encode()),
+                        'ARCTIC-EVIDENCE-RULE=source-view-email-shape\n'
+                        'ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-' + identifier + '\n')
                 raw=('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-'+identifier+'\n').encode()
                 self.assertIs(S.external_text(raw),raw)
                 # Recognizing one public token grants no private line exemption.
-                self.assertIn('source-view-'+identifier, self.rejected((literal+' password='+PRIVATE).encode()))
+                if literal != 'modprobe@configfs.service':
+                    self.assertIn('source-view-'+identifier, self.rejected((literal+' password='+PRIVATE).encode()))
 
     def test_private_or_malformed_public_unit_overlaps_stay_unknown_and_fatal(self):
         for value in ('private@example.invalid', 'private-getty@tty6.service',
