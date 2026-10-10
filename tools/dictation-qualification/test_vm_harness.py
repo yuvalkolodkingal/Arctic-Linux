@@ -128,12 +128,12 @@ class HarnessControls(unittest.TestCase):
                 argv = env['dictation_network_argv'](env['qemu_argv']('fixture', with_iso), with_iso)
                 self.assertEqual(argv[argv.index('-netdev') + 1], 'user,id=net0' + ('' if online else ',restrict=on'))
 
-    def test_legacy_cpu_fixture_masks_only_fixed_features_and_keeps_original_input(self):
+    def test_legacy_cpu_fixture_uses_coherent_versioned_model_and_keeps_other_inputs(self):
         for cpu in ('host', 'max'):
             original = ['qemu-system-x86_64', '-cpu', cpu, '-netdev', 'user,id=net0,restrict=on']
             env = functions({'dictation_cpu_argv'}, {'E': {'NATIVE_DICTATION_CPU_PROFILE': 'small-v2', 'DICTATION_FIXTURE': '1'}})
             changed = env['dictation_cpu_argv'](original)
-            self.assertEqual(changed, [original[0], '-cpu', cpu + ',-avx,-avx2,-fma,-f16c,-bmi1,-bmi2', *original[3:]])
+            self.assertEqual(changed, [original[0], '-cpu', 'Westmere-v2,enforce', *original[3:]])
             self.assertEqual(original[2], cpu)
 
     def test_modern_and_default_cpu_fixture_preserve_original_model(self):

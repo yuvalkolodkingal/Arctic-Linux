@@ -162,6 +162,14 @@ class CaptureClientBindingControls(unittest.TestCase):
     def test_complete_helper_byte_and_ast_rollback_excludes_only_owned_binding(self):
         old = subprocess.check_output(['git', '-C', str(REPO), 'show', BASE + ':tools/dictation-qualification/guest_check.py']).decode()
         new = Path(guest.__file__).read_text()
+        from test_status_protocol import restore_status_protocol
+        new = restore_status_protocol(new)
+        # Compatibility CPU fixture controls separately prove this intended
+        # pre-gate requirement before the earlier ownership rollback proof.
+        new = new.replace("        if self.profile_id == 'small-v2':\n            verify_small_cpu_fixture(cpuinfo)\n", '')
+        begin = new.index('\ndef verify_small_cpu_fixture(')
+        end = new.index('\ndef authenticated_capture_nodes(', begin)
+        new = new[:begin] + new[end:]
         original, revised = ast.parse(old), ast.parse(new)
         helpers = [n for n in revised.body if isinstance(n, ast.FunctionDef) and n.name == 'authenticated_capture_nodes']
         self.assertEqual(len(helpers), 1)

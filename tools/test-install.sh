@@ -550,7 +550,21 @@ DICTATION_HOST_STAGES = frozenset({
     "install-shutdown", "install-cleanup", "boot-acquire", "boot-menu",
     "boot-unlock", "boot-login", "boot-settle", "boot-terminal",
     "boot-collect", "boot-collect-observed", "boot-collect-missing",
-    "boot-shutdown", "boot-cleanup"})
+    "boot-shutdown", "boot-cleanup",
+    "install-live-observed", "install-live-unobserved",
+    "install-terminal-attempt-one", "install-terminal-attempt-two", "install-terminal-attempt-three",
+    "install-command-type-before", "install-command-type-after",
+    "install-command-enter-before", "install-command-enter-after",
+    "install-marker-wait-observed", "install-marker-wait-unobserved",
+    "install-marker-vm-running", "install-marker-vm-exited", "install-marker-vm-unknown",
+    "install-command-shot-before", "install-command-shot-after",
+    "install-preterminal-capture-preserved", "install-preterminal-capture-unavailable",
+    "vm-acquire-qemu-exited", "vm-acquire-no-qmp", "vm-acquire-system-exit",
+    "vm-acquire-file-missing", "vm-acquire-permission-error", "vm-acquire-os-error",
+    "vm-acquire-json-error", "vm-acquire-qmp-error", "vm-acquire-keyboard-interrupt",
+    "vm-acquire-other-error", "vm-acquire-stderr-unobserved",
+    "vm-acquire-enforce-host-unavailable", "vm-acquire-enforce-only-spec-ctrl",
+    "vm-acquire-enforce-floor-unavailable", "vm-acquire-enforce-tcg-unavailable"})
 
 def dictation_host_stage(code):
     import re
@@ -561,6 +575,174 @@ def dictation_host_stage(code):
         print("ARCTIC-DICTATION-HOST-STAGE " + token + " " + code, flush=True)
     except (OSError, ValueError):
         pass
+
+def dictation_qemu_startup(name, started_ns, error):
+    """Optional fixed startup facts; never format or export private stderr/argv."""
+    import json, re, stat
+    token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+    if type(token) is not str or re.fullmatch("[0-9a-f]{32}", token) is None:
+        return
+    if type(name) is not str or name not in ("install", "boot"):
+        return
+    classes = {SystemExit: "vm-acquire-system-exit", FileNotFoundError: "vm-acquire-file-missing",
+               PermissionError: "vm-acquire-permission-error", OSError: "vm-acquire-os-error",
+               json.JSONDecodeError: "vm-acquire-json-error", vmtest.QMPError: "vm-acquire-qmp-error",
+               KeyboardInterrupt: "vm-acquire-keyboard-interrupt"}
+    code = classes.get(type(error), "vm-acquire-other-error")
+    if type(error) is SystemExit:
+        args = BaseException.args.__get__(error)
+        if type(args) is tuple and len(args) == 1 and type(args[0]) is str:
+            if args[0] == "qemu exited: see qemu-" + name + ".log":
+                code = "vm-acquire-qemu-exited"
+            elif args[0] == "no QMP socket":
+                code = "vm-acquire-no-qmp"
+    dictation_host_stage(code)
+    codes = ["vm-acquire-stderr-unobserved"]
+    directory = descriptor = None
+    try:
+        if code != "vm-acquire-qemu-exited" or type(started_ns) is not int or started_ns <= 0:
+            raise ValueError()
+        directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        parent = os.fstat(directory)
+        # /out is a host-owned bind mount. Its file is written by this container's
+        # QEMU; bind its exact owner and stable directory rather than assume UID 0.
+        if not stat.S_ISDIR(parent.st_mode) or parent.st_mode & 0o022:
+            raise ValueError()
+        filename = "qemu-" + name + ".log"
+        descriptor = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = None
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid()
+                    or before.st_mode & 0o022 or before.st_nlink != 1
+                    or not 0 < before.st_size <= 65536
+                    or before.st_mtime_ns < started_ns or before.st_ctime_ns < started_ns):
+                raise ValueError()
+            data = stream.read(65537)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode, info.st_nlink,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        current = os.stat(out, follow_symlinks=False)
+        if (fields(before) != fields(after)
+                or fields(after) != fields(os.stat(filename, dir_fd=directory, follow_symlinks=False))
+                or len(data) != before.st_size
+                or (parent.st_dev, parent.st_ino, parent.st_uid, parent.st_mode)
+                != (current.st_dev, current.st_ino, current.st_uid, current.st_mode)):
+            raise ValueError()
+        # QEMU 10.2/11 target/i386/cpu.c: exact complete Linux stderr lines.
+        # A closed literal maps to a fixed label; unknown text is never returned.
+        lines = data.splitlines(keepends=True)
+        if any(not line.endswith(b"\n") or line.endswith(b"\r\n") for line in lines):
+            raise ValueError()
+        fatal = b"qemu-system-x86_64: Host doesn't support requested features\n"
+        tcg = b"qemu-system-x86_64: TCG doesn't support requested features\n"
+        warning = b"qemu-system-x86_64: warning: host doesn't support requested feature: "
+        spec = warning + b"CPUID[eax=07h,ecx=00h].EDX.spec-ctrl [bit 26]\n"
+        floor = {
+            b"CPUID[eax=01h].EDX.fpu [bit 0]\n", b"CPUID[eax=01h].EDX.cx8 [bit 8]\n",
+            b"CPUID[eax=01h].EDX.cmov [bit 15]\n", b"CPUID[eax=01h].EDX.mmx [bit 23]\n",
+            b"CPUID[eax=01h].EDX.fxsr [bit 24]\n", b"CPUID[eax=01h].EDX.sse [bit 25]\n",
+            b"CPUID[eax=01h].EDX.sse2 [bit 26]\n", b"CPUID[eax=80000001h].EDX.lm [bit 29]\n",
+            b"CPUID[eax=80000001h].EDX.syscall [bit 11]\n", b"CPUID[eax=01h].ECX.sse3 [bit 0]\n",
+            b"CPUID[eax=01h].ECX.ssse3 [bit 9]\n", b"CPUID[eax=01h].ECX.sse4.1 [bit 19]\n",
+            b"CPUID[eax=01h].ECX.sse4.2 [bit 20]\n", b"CPUID[eax=01h].ECX.popcnt [bit 23]\n",
+            b"CPUID[eax=01h].ECX.cx16 [bit 13]\n", b"CPUID[eax=80000001h].ECX.lahf-lm [bit 0]\n"}
+        if fatal in lines:
+            codes = ["vm-acquire-enforce-host-unavailable"]
+            if spec in lines and all(line in (spec, fatal) for line in lines):
+                codes.append("vm-acquire-enforce-only-spec-ctrl")
+            if any(warning + feature in lines for feature in floor):
+                codes.append("vm-acquire-enforce-floor-unavailable")
+        elif tcg in lines:
+            codes = ["vm-acquire-enforce-tcg-unavailable"]
+    except BaseException:
+        pass  # Optional observations must not replace the original exception.
+    finally:
+        for fd in (descriptor, directory):
+            if fd is not None:
+                try: os.close(fd)
+                except BaseException: pass
+    for code in codes:
+        dictation_host_stage(code)
+
+def dictation_acquire_vm(argv, qmp_path, name):
+    """Call the original constructor once, forwarding its value or exception."""
+    started_ns = 0
+    try:
+        import re
+        token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+        if type(token) is str and re.fullmatch("[0-9a-f]{32}", token):
+            started_ns = time.time_ns()
+    except Exception:
+        pass
+    try:
+        return vmtest.VM(argv, qmp_path, name)
+    except BaseException as error:
+        try: dictation_qemu_startup(name, started_ns, error)
+        except BaseException: pass
+        raise
+
+def dictation_install_wait_vm_stage(vm):
+    """Optional owned-process fact only; no QMP read, error text or new budget."""
+    import re
+    if re.fullmatch("[0-9a-f]{32}", E.get("ARCTIC_DICTATION_HOST_TOKEN", "")) is None:
+        return
+    try:
+        value = vm.proc.poll()
+        code = ("install-marker-vm-running" if value is None else
+                "install-marker-vm-exited" if type(value) is int else "install-marker-vm-unknown")
+    except Exception:
+        code = "install-marker-vm-unknown"
+    dictation_host_stage(code)
+
+def dictation_launch_desktop(path):
+    """Preserve only the original QMP shot taken before the first terminal."""
+    import hashlib, json, re, stat
+    token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+    if re.fullmatch("[0-9a-f]{32}", token) is None:
+        return
+    names = []
+    fd = None
+    try:
+        if type(path) is not str or path != out + "/install-20-live-desktop.png":
+            raise ValueError()
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        before = os.fstat(fd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid()
+                or before.st_mode & 0o022 or not 8 < before.st_size <= 4 * 1024 * 1024):
+            raise ValueError()
+        with os.fdopen(fd, "rb") as stream:
+            fd = None
+            data = stream.read(4 * 1024 * 1024 + 1)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        if (fields(before) != fields(after) or fields(after) != fields(os.stat(path, follow_symlinks=False))
+                or len(data) != before.st_size or not data.startswith(b"\x89PNG\r\n\x1a\n")):
+            raise ValueError()
+        proof = {"schema": "arctic-dictation-preterminal-capture-v1", "capture_stage": "before-first-terminal",
+                 "path": "dictation-launch-desktop.png", "bytes": len(data),
+                 "sha256": hashlib.sha256(data).hexdigest(), "token_sha256": hashlib.sha256(token.encode()).hexdigest()}
+        for name, content in ((proof["path"], data), ("dictation-launch-desktop-receipt.json",
+                (json.dumps(proof, sort_keys=True) + "\n").encode())):
+            descriptor = os.open(out + "/" + name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            names.append(name)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(content)
+        dictation_host_stage("install-preterminal-capture-preserved")
+    except Exception:
+        for name in names:
+            try:
+                os.unlink(out + "/" + name)
+            except OSError:
+                pass
+        dictation_host_stage("install-preterminal-capture-unavailable")
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 # Default-off physical native input; no device, focus retry or guest acknowledgement channel.
 physical_module = None
@@ -697,7 +879,10 @@ def dictation_cpu_argv(argv):
     argv = list(argv)
     if profile == "small-v2":
         at = argv.index("-cpu") + 1
-        argv[at] += ",-avx,-avx2,-fma,-f16c,-bmi1,-bmi2"
+        # A versioned coherent v2 floor, without partially masked host XSAVE.
+        # QEMU Westmere-v2 adds spec-ctrl to Westmere's pre-AVX CPU model;
+        # enforce rejects unsupported requested features before guest execution.
+        argv[at] = "Westmere-v2,enforce"
     return argv
 
 def native_taskbar_argv(argv, name, display_arg=None):
@@ -808,7 +993,7 @@ def stage_install():
     try:
         dictation_host_stage("install-acquire")
         if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
-        vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("install", True), True), "install", display.display_arg if display else None)), "/tmp/qmp-install.sock", "install")
+        vm = dictation_acquire_vm(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("install", True), True), "install", display.display_arg if display else None)), "/tmp/qmp-install.sock", "install")
         if display is not None: enable_taskbar_display(vm, display, "install")
         dictation_host_stage("install-menu")
         if wait_menu(vm, "install", 300):
@@ -821,6 +1006,7 @@ def stage_install():
         dictation_host_stage("install-live")
         while time.time() - start < 1500 and vm.alive():
             if vmtest.serial_has(serial("install"), "live session mode:"):
+                dictation_host_stage("install-live-observed")
                 log(f"live session started after {time.time() - start:.0f}s")
                 break
             n += 1
@@ -828,17 +1014,23 @@ def stage_install():
                 vm.shot(f"install-10-boot-{int(time.time() - start):04d}s")
             time.sleep(10)
         else:
+            dictation_host_stage("install-live-unobserved")
             log("no 'live session mode' line in the serial log; trying the terminal anyway")
         dictation_host_stage("install-settle")
         time.sleep(120)   # the shell (Quickshell) and the welcome card settle
-        vm.shot("install-20-live-desktop")
+        dictation_launch_desktop(vm.shot("install-20-live-desktop"))
         started = False
         for attempt in (1, 2, 3):
+            dictation_host_stage(("install-terminal-attempt-one", "install-terminal-attempt-two", "install-terminal-attempt-three")[attempt - 1])
             dictation_host_stage("install-terminal")
             open_terminal(vm, f"install-2{attempt}")
             command = "sudo sh /dev/sr0; exit" if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" else "sudo sh /dev/sr0"
+            dictation_host_stage("install-command-type-before")
             vm.type_text(command, gap=0.3)
+            dictation_host_stage("install-command-type-after")
+            dictation_host_stage("install-command-enter-before")
             vm.keys("ret")
+            dictation_host_stage("install-command-enter-after")
             t = time.time()
             dictation_host_stage("install-start-marker")
             while time.time() - t < (3600 if E.get("GUEST_CHECK") else 240) and vm.alive():
@@ -850,7 +1042,11 @@ def stage_install():
                     started = True
                     break
                 time.sleep(.1 if physical_active else 5)
+            dictation_host_stage("install-marker-wait-observed" if started else "install-marker-wait-unobserved")
+            dictation_install_wait_vm_stage(vm)
+            dictation_host_stage("install-command-shot-before")
             vm.shot(f"install-2{attempt}-command-typed")
+            dictation_host_stage("install-command-shot-after")
             if started:
                 dictation_host_stage("install-start-observed")
                 log(f"run.sh started (attempt {attempt})")
@@ -919,7 +1115,7 @@ def stage_boot():
     try:
         dictation_host_stage("boot-acquire")
         if taskbar_display_module is not None: display = taskbar_display_module.TaskbarDisplay()
-        vm = vmtest.VM(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("boot", False), False), "boot", display.display_arg if display else None)), "/tmp/qmp-boot.sock", "boot")
+        vm = dictation_acquire_vm(dictation_cpu_argv(native_taskbar_argv(dictation_network_argv(qemu_argv("boot", False), False), "boot", display.display_arg if display else None)), "/tmp/qmp-boot.sock", "boot")
         if display is not None: enable_taskbar_display(vm, display, "boot")
         dictation_host_stage("boot-menu")
         if wait_menu(vm, "boot", 240):

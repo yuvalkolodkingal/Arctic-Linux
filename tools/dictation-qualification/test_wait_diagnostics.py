@@ -251,6 +251,14 @@ class WaitDiagnosticControls(unittest.TestCase):
     def test_entire_original_ast_rolls_back_and_wait_bytes_are_identical(self):
         old = subprocess.check_output(['git', '-C', str(REPO), 'show', BASE + ':tools/dictation-qualification/guest_check.py']).decode()
         new = Path(guest.__file__).read_text()
+        from test_status_protocol import restore_status_protocol
+        new = restore_status_protocol(new)
+        # Compatibility CPU fixture controls separately cover this pre-gate
+        # requirement; reverse only that addition for the older wait proof.
+        new = new.replace("        if self.profile_id == 'small-v2':\n            verify_small_cpu_fixture(cpuinfo)\n", '')
+        begin = new.index('\ndef verify_small_cpu_fixture(')
+        end = new.index('\ndef authenticated_capture_nodes(', begin)
+        new = new[:begin] + new[end:]
         original, revised = ast.parse(old), ast.parse(new)
         helper_names = {'wait_status_projection', 'wait_runtime_projection', 'wait_diagnostic_code',
                         'authenticated_capture_nodes'}

@@ -63,6 +63,44 @@ WAIT_DIAGNOSTIC_TARGETS = ('receiver-clear', 'capture-link', 'terminal-state', '
 WAIT_DIAGNOSTIC_STATES = ('ready', 'error', 'recording', 'transcribing', 'unavailable')
 WAIT_DIAGNOSTIC_BACKENDS = ('', 'cpu', 'vulkan')
 
+def verify_small_cpu_fixture(cpuinfo):
+    """Check every declared two-vCPU Small fixture before any application gate.
+
+    The host runner fixes --smp 2. Westmere-v2 supplies the x86-64-v2 floor
+    without AVX or XSAVE; this checks observed guest flags, not a model name.
+    No arbitrary flag, processor text or raw cpuinfo enters public output.
+    """
+    code = 'actual-compatibility-cpu-fixture'
+    require(type(cpuinfo) is bytes and 0 < len(cpuinfo) <= 1024 * 1024, code)
+    try:
+        text = cpuinfo.decode('ascii')
+    except UnicodeError:
+        raise Invalid(code) from None
+    floor = {'fpu', 'cx8', 'cmov', 'mmx', 'fxsr', 'sse', 'sse2', 'lm', 'syscall',
+             'pni', 'ssse3', 'sse4_1', 'sse4_2', 'popcnt', 'cx16', 'lahf_lm'}
+    excluded = {'avx', 'avx2', 'fma', 'f16c', 'bmi1', 'bmi2',
+                'xsave', 'xsaveopt', 'xsavec', 'xsaves', 'osxsave'}
+    records = re.split(r'\n[ \t]*\n', text.strip())
+    require(len(records) == 2, code)
+    processors = set()
+    for record in records:
+        fields = {'processor': [], 'flags': []}
+        for line in record.splitlines():
+            key, separator, value = line.partition(':')
+            if separator and key.strip() in fields:
+                fields[key.strip()].append(value.strip())
+        require(all(len(values) == 1 for values in fields.values()), code)
+        processor = fields['processor'][0]
+        require(processor in ('0', '1') and processor not in processors, code)
+        processors.add(processor)
+        words = fields['flags'][0].split()
+        require(0 < len(words) <= 512 and len(words) == len(set(words))
+                and all(re.fullmatch(r'[a-z0-9][a-z0-9_]{0,63}', word) for word in words), code)
+        flags = set(words)
+        require(floor <= flags and not excluded & flags
+                and not any(word.startswith(('avx', 'amx_', 'apx')) for word in words), code)
+    require(processors == {'0', '1'}, code)
+
 def authenticated_capture_nodes(objects, pid, uid):
     """Bind stream nodes to native-protocol peer credentials, never app metadata.
 
@@ -327,6 +365,8 @@ class Checker:
         self.assets = PROFILE_ASSETS[self.profile_id]
         self.names = {key: asset['name'] for key, asset in self.assets.items()}
         cpuinfo = Path('/proc/cpuinfo').read_bytes()
+        if self.profile_id == 'small-v2':
+            verify_small_cpu_fixture(cpuinfo)
         require(self.controller.profile_selection() == 'recommended'
                 and self.profile['id'] == self.profile_id
                 and self.controller.recommended_profile(cpuinfo.decode())['id'] == self.profile_id,
@@ -380,9 +420,27 @@ class Checker:
         return result['status'] == 'passed'
 
     def status(self, verb='status', *args, check=True):
-        result = self.cmd(['/usr/bin/arctic-dictation', verb, *args], check=check)
+        result = self.cmd(['/usr/bin/arctic-dictation', verb, *args], check=False if verb == 'status' else check)
         require(len(result.stdout) <= 16384, 'status-byte-bound')
-        value = json.loads(result.stdout)
+        if verb == 'status':
+            require(type(result.returncode) is int and result.returncode in (0, 1)
+                    and type(result.stdout) is bytes and type(result.stderr) is bytes
+                    and not result.stderr, 'status-command-outcome')
+            def fields(pairs):
+                value = {}
+                for key, item in pairs:
+                    require(key not in value, 'status-json-fields')
+                    value[key] = item
+                return value
+            value = json.loads(result.stdout, object_pairs_hook=fields,
+                parse_constant=lambda _value: (_ for _ in ()).throw(Invalid('status-json-fields')))
+            require(type(value) is dict and type(value.get('ok')) is bool
+                    and ((result.returncode == 0 and value['ok'] is True)
+                         or (result.returncode == 1 and value['ok'] is False
+                             and value.get('state') == 'error' and type(value.get('error')) is str
+                             and bool(value['error']))), 'status-command-outcome')
+        else:
+            value = json.loads(result.stdout)
         require(isinstance(value, dict) and {key: value.get(key) for key in PROFILES[self.profile_id]} == PROFILES[self.profile_id]
                 and all(type(value.get(key)) is type(item) for key, item in PROFILES[self.profile_id].items())
                 and value.get('version') == '1.1.0' and value.get('profile_selection') == 'recommended'

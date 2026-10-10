@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "a9bed2b6f2cb71ffe944c60d0527c8bd14180a98cdccd31961574b911dfc82f9",
+  "native_source_sha256": "65245d62a93ee8405d3dc2eaeff976202bf15f9fae0462d6d7b32db794851b7a",
   "files": {
-    "native_smoke.py": "a9bed2b6f2cb71ffe944c60d0527c8bd14180a98cdccd31961574b911dfc82f9",
-    "guest-check-native-v6.py": "04f868dba16443df76ebd24773b1cb75b10e66ebc527de781a2ef55300373431",
+    "native_smoke.py": "65245d62a93ee8405d3dc2eaeff976202bf15f9fae0462d6d7b32db794851b7a",
+    "guest-check-native-v6.py": "5f7162831266c9ee2ff7e16f3e407fb01384d5ad57ffd8fbd3d34e7eba44ae42",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -29,7 +29,9 @@
     "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
     "test_native_v6.py": "1ee2213393b4974bae151192bc354361ed2eed77be8f382b6580741fb7adba17",
     "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
-    "test_native_protocol_diagnostics.py": "0c1d41b59494b3a0f2b04206fcfb1223677e950f5995180ff3601b0540ca8705"
+    "test_native_protocol_diagnostics.py": "c9435541f95460131e047866256ce105705dce0e6dc230d0bcbf1a4bf37fc114",
+    "test_renderer_trials.py": "30df3e5d8d07f73075c1be8d38008af836667d7e5bdaaafe780aedfa8d655133",
+    "test_native_capture_controls.py": "3a6ce64a73fd594cdf0b7d4d4c71ef27a5464ce53a3746913270f1fb6178bcb1"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {
@@ -37,5 +39,47 @@
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
     "release_acceptance": false
+  },
+  "controlled_renderer_trials": {
+    "trigger": "original static oracle unmatched only",
+    "interventions": [
+      "GSK_RENDERER unset",
+      "GSK_RENDERER=gl"
+    ],
+    "same_primary_fixture_oracle_settle_seconds": 0.5,
+    "primary_failure_and_overall_FAIL_preserved": true,
+    "GTK_source_version": "4.22.5",
+    "realized_renderer": "closed successful GSK realization message plus owned process/fd2 and mapped GTK RPM/library binding",
+    "raw_stderr_exported": false,
+    "release_acceptance": false,
+    "upstream_source_sha256": {
+      "gskrenderer.c": "d7976357a39dfc695f4419e77265be593f6cef11fabe85877d550b3efa978df4",
+      "gskdebugprivate.h": "c7b08473062632e550d884a8287afbbdce00c0cf0dd2af45d86e2004c682ffb5",
+      "gskdebug.c": "00d934fc7bec46a17be298144cebbb7cb5e978b8edab768caa81819382d0e5cc",
+      "gdkdebugprivate.h": "96fbd2e0f5ef8a99085bfc8f6bb73046fafbf420219ef35178e562448e990b0c"
+    }
+  },
+  "capture_precondition": {
+    "scope": "owned static reference player and subordinate same-fixture trials only",
+    "action": "script-message celluloid-action win.set-controls-visible(false)",
+    "private_settings_backend": "keyfile in existing owned isolated XDG_CONFIG_HOME; actual process environment bound",
+    "readback": "window-state show-controls false, written by supported action after GTK control visibility update",
+    "settle_seconds": 0.5,
+    "oracle_bytes_unchanged": true,
+    "release_acceptance": false,
+    "upstream_celluloid_version": "0.30",
+    "upstream_source_sha256": {
+      "celluloid-application.c": "42b6528cbe8d3ff2e18f62a582fbdc03b188cc9a7def9e42094fb091a594d7f6",
+      "celluloid-common.c": "c787a3164e34fd367f382484b4244b03e48abba82313dfa3308c68e6b8776025",
+      "celluloid-controller-actions.c": "fa5cbbacbbbb165176776504279c89da2081a614496d425fb2922690b04079f3",
+      "celluloid-controller.c": "94c5cba4078be1d1df3fa7b06e91007ab5833be400f49a7a52e0df4a48ee9daf",
+      "celluloid-main-window.c": "c12256cdd96e797111365ea405462c419d20784b9d38d1245e9d786289ebb2a5",
+      "celluloid-view.c": "aa2981a472b61388cd53317afcee94991f1b17bd660456f0b252283dbc14bd1f"
+    },
+    "upstream_glib_version": "2.88.3",
+    "upstream_glib_source_sha256": {
+      "gkeyfilesettingsbackend.c": "51a5d48003567ffb89f6b365f871fe2e16d9483c89d6bce7d3ad208465fcfc98",
+      "gsimpleaction.c": "4394f26f49ed227941a7e13b6f0be50ba380f89ad91030e65e551d8427119938"
+    }
   }
 }
