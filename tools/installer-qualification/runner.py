@@ -21,6 +21,66 @@ _display_spec = importlib.util.spec_from_file_location('installer_runner_signal_
 _display = importlib.util.module_from_spec(_display_spec)
 _display_spec.loader.exec_module(_display)
 
+DIAGNOSTIC_STAGES = ('docker-info', 'provision', 'capture-build', 'build-binding', 'context',
+                     'source-verify', 'run-live', 'extract', 'report-validation',
+                     'execution-validation', 'cleanup')
+DIAGNOSTIC_ERROR_TYPES = ((subprocess.TimeoutExpired, 'timeout'),
+                          (subprocess.CalledProcessError, 'command-error'),
+                          (InterruptedError, 'interrupted'), (OSError, 'os-error'),
+                          (RuntimeError, 'runtime-error'), (ValueError, 'value-error'),
+                          (KeyError, 'key-error'), (TypeError, 'type-error'),
+                          (KeyboardInterrupt, 'keyboard-interrupt'), (SystemExit, 'system-exit'))
+PREPARATION_DIAGNOSTICS = (
+    ('Owned preparation container already exists', 'owned-container-exists'),
+    ('Immutable owned prepared image missing', 'prepared-image-missing'))
+DIAGNOSTIC_LITERALS = {
+    'provision': PREPARATION_DIAGNOSTICS,
+    'capture-build': PREPARATION_DIAGNOSTICS,
+    'build-binding': (('Actual physical capture build differs', 'capture-build-binding'),),
+    'context': (('installer context fields differ', 'context-fields'),
+                ('installer context identities differ', 'context-identities'),
+                ('active installer context fields differ', 'context-fields'),
+                ('active installer context schema differs', 'context-schema'),
+                ('active installer owned target or write throttle differs', 'context-target')),
+    'source-verify': (
+        ('Installer lane disabled until the final image and execution code are reviewed', 'manifest-disabled'),
+        ('Requires the reviewed disposable installer Actions lane', 'actions-identity'),
+        ('Invalid pinned image', 'image-pin'),
+        ('Dirty or changed image/execution checkout', 'checkout-changed'),
+        ('Installer execution inventory differs', 'execution-inventory'),
+        ('Actual final ISO bytes differ', 'iso-bytes')),
+    'extract': (('installer output destination must be unused', 'output-used'),
+                ('installer output parent is a symlink', 'output-symlink'),
+                ('installer output parent became a symlink', 'output-symlink'),
+                ('installer port input exceeds bound', 'port-bound'),
+                ('installer UART input exceeds bound', 'uart-bound')),
+    'report-validation': (('Host and guest actual transitions differ', 'transition-binding'),),
+    'execution-validation': (('installer execution identity/status differs', 'execution-identity'),
+                             ('active installer execution identity/status differs', 'execution-identity')),
+}
+
+
+def diagnostic_code(stage, error):
+    """Select fixed stage/class/literal codes without formatting private errors."""
+    C.require(type(stage) is str and stage in DIAGNOSTIC_STAGES, 'Unknown installer diagnostic stage')
+    if isinstance(error, RuntimeError) and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
+        for message, code in DIAGNOSTIC_LITERALS.get(stage, ()):
+            if error.args[0] == message:
+                return 'installer-' + stage + '-' + code
+    for error_class, label in DIAGNOSTIC_ERROR_TYPES:
+        if isinstance(error, error_class):
+            return 'installer-' + stage + '-' + label
+    return 'installer-' + stage + '-other-error'
+
+
+def diagnose(stage, error):
+    code = diagnostic_code(stage, error)
+    try:
+        print('ARCTIC-INSTALLER-DIAGNOSTIC=' + code, flush=True)
+    except (OSError, ValueError):
+        # Closed Actions stdout must not interrupt original failure cleanup.
+        pass
+
 
 def sha(path):
     value = hashlib.sha256()
@@ -155,12 +215,14 @@ def main():
     def save(): write(args.evidence / 'execution.json', state)
     def interrupted(number, frame): raise InterruptedError('Installer qualification signal ' + str(number))
     signal.signal(signal.SIGINT, interrupted); signal.signal(signal.SIGTERM, interrupted)
+    diagnostic_stage = 'docker-info'
     try:
         save()
         subprocess.check_output(['docker', 'info', '--format', '{{.ServerVersion}}'], timeout=30)
         for script, argument, seconds, name, extra in (
                 ('tools/performance/prepare-vm-tools.sh', args.evidence, 20 * 60, 'provision', {}),
                 ('tools/native-functional/prepare-taskbar-tools.sh', None, 15 * 60, 'capture-build', None)):
+            diagnostic_stage = name
             container = 'arctic-paired-native-' + uuid.uuid4().hex
             check = subprocess.run(['docker', 'container', 'inspect', container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
             C.require(check.returncode != 0, 'Owned preparation container already exists')
@@ -175,6 +237,7 @@ def main():
             prepared = receipt.read_text().strip()
             C.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}', prepared), 'Immutable owned prepared image missing')
             owned_images.append(prepared)
+        diagnostic_stage = 'build-binding'
         build = json.loads((payload / 'build-provenance.json').read_text())
         C.require(build['schema'] == 'arctic-taskbar-tools-v1' and build['release_acceptance'] is False and
                   set(build['sources']) == {'shell/dev/virtual-pointer.c', 'tools/native-functional/taskbar-screencopy.c', 'shell/dev/wlr-screencopy-unstable-v1.xml'} and
@@ -182,6 +245,7 @@ def main():
                   build['binaries']['raw-screencopy'] == sha(payload / 'raw-screencopy') and
                   (payload / 'raw-screencopy').read_bytes()[:4] == b'\x7fELF', 'Actual physical capture build differs')
         state['build'], state['vm_tool_image_id'] = build, prepared
+        diagnostic_stage = 'context'
         context = dict(schema='arctic-installer-context-v1', source_sha=manifest['image']['source_sha'],
                        iso_sha256=manifest['image']['sha256'], iso_bytes=manifest['image']['bytes'], execution_sha=os.environ['GITHUB_SHA'],
                        binding_id=uuid.uuid4().hex, checker_sha256=state['source_inputs']['tools/installer-qualification/guest.py'],
@@ -195,18 +259,25 @@ def main():
                 disk_node='target0', write_bps=8*1024**2)
         contract.context_check(context); state['context'] = context
         context_file = payload / 'installer-context.json'; write(context_file, context)
+        diagnostic_stage = 'source-verify'
         verify(args, execution); save()
         env = dict(os.environ, CONTAINER_ENGINE='docker', ARCTIC_VM_CONTAINER_NAME='arctic-paired-native-' + uuid.uuid4().hex,
                    ARCTIC_FEDORA_IMAGE=prepared)
         try:
+            diagnostic_stage = 'run-live'
             execute(['bash', str(HERE / 'run-live.sh'), str(args.source), str(execution), str(iso), str(payload),
                      str(context_file), 'uefi', str(vm)], args.evidence / 'installer-harness.log',
                     (80 if args.active_profile else 35) * 60, execution, env)
-        except BaseException as error: errors.append('harness: ' + type(error).__name__ + ': ' + str(error))
-        finally: state['diagnostic_streams'] = preserve_host(vm, args.evidence / 'host', args.active_profile)
+        except BaseException as error:
+            diagnose(diagnostic_stage, error)
+            errors.append('harness: ' + type(error).__name__ + ': ' + str(error))
+        finally:
+            diagnostic_stage = 'extract'
+            state['diagnostic_streams'] = preserve_host(vm, args.evidence / 'host', args.active_profile)
         result = E.extract(vm / 'installer-port.log', vm / 'serial.log', args.evidence / 'installer', context)
         report = result['report']; state['guest'] = result['state']
         state['host'] = json.loads((args.evidence / 'host/host-execution.json').read_text())
+        diagnostic_stage = 'report-validation'
         contract.validate_report(report, context, result['files'], lambda name: (args.evidence / 'installer' / name).read_bytes(), contract.packaged_source_hashes(args.source))
         if args.active_profile:
             contract.validate_catalog_selection(report, (args.source / 'modules/catalog.toml').read_bytes())
@@ -218,16 +289,21 @@ def main():
         state['required_images'] = {name: sha(args.evidence / name) for name in contract.REQUIRED_IMAGES}
         state['status'] = ('live_installer_active_restoration_completed_and_installed_boot_passed_pending_manual_visual_review'
                            if args.active_profile else 'live_installer_restoration_passed_pending_manual_visual_review')
+        diagnostic_stage = 'execution-validation'
         contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], (vm / 'serial.log').read_bytes(),
                              lambda name: (args.evidence / name).read_bytes())
     except BaseException as error:
+        diagnose(diagnostic_stage, error)
         errors.append(type(error).__name__ + ': ' + str(error))
     finally:
+        diagnostic_stage = 'cleanup'
         with H.cleanup_signals() as pending:
             for image in owned_images:
                 try:
                     subprocess.run(['docker', 'image', 'rm', image], check=True, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except BaseException as error: errors.append('owned image cleanup: ' + type(error).__name__ + ': ' + str(error))
+                except BaseException as error:
+                    diagnose(diagnostic_stage, error)
+                    errors.append('owned image cleanup: ' + type(error).__name__ + ': ' + str(error))
             H.persist_cleanup_state(args.evidence / 'execution.json', state, errors, pending)
     return int(bool(errors))
 
