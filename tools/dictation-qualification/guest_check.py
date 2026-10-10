@@ -63,6 +63,97 @@ WAIT_DIAGNOSTIC_TARGETS = ('receiver-clear', 'capture-link', 'terminal-state', '
 WAIT_DIAGNOSTIC_STATES = ('ready', 'error', 'recording', 'transcribing', 'unavailable')
 WAIT_DIAGNOSTIC_BACKENDS = ('', 'cpu', 'vulkan')
 
+def verify_small_cpu_fixture(cpuinfo):
+    """Check every declared two-vCPU Small fixture before any application gate.
+
+    The host runner fixes --smp 2. Westmere-v2 supplies the x86-64-v2 floor
+    without AVX or XSAVE; this checks observed guest flags, not a model name.
+    No arbitrary flag, processor text or raw cpuinfo enters public output.
+    """
+    code = 'actual-compatibility-cpu-fixture'
+    require(type(cpuinfo) is bytes and 0 < len(cpuinfo) <= 1024 * 1024, code)
+    try:
+        text = cpuinfo.decode('ascii')
+    except UnicodeError:
+        raise Invalid(code) from None
+    floor = {'fpu', 'cx8', 'cmov', 'mmx', 'fxsr', 'sse', 'sse2', 'lm', 'syscall',
+             'pni', 'ssse3', 'sse4_1', 'sse4_2', 'popcnt', 'cx16', 'lahf_lm'}
+    excluded = {'avx', 'avx2', 'fma', 'f16c', 'bmi1', 'bmi2',
+                'xsave', 'xsaveopt', 'xsavec', 'xsaves', 'osxsave'}
+    records = re.split(r'\n[ \t]*\n', text.strip())
+    require(len(records) == 2, code)
+    processors = set()
+    for record in records:
+        fields = {'processor': [], 'flags': []}
+        for line in record.splitlines():
+            key, separator, value = line.partition(':')
+            if separator and key.strip() in fields:
+                fields[key.strip()].append(value.strip())
+        require(all(len(values) == 1 for values in fields.values()), code)
+        processor = fields['processor'][0]
+        require(processor in ('0', '1') and processor not in processors, code)
+        processors.add(processor)
+        words = fields['flags'][0].split()
+        require(0 < len(words) <= 512 and len(words) == len(set(words))
+                and all(re.fullmatch(r'[a-z0-9][a-z0-9_]{0,63}', word) for word in words), code)
+        flags = set(words)
+        require(floor <= flags and not excluded & flags
+                and not any(word.startswith(('avx', 'amx_', 'apx')) for word in words), code)
+    require(processors == {'0', '1'}, code)
+
+def authenticated_capture_nodes(objects, pid, uid):
+    """Bind stream nodes to native-protocol peer credentials, never app metadata.
+
+    PipeWire 1.6.9 assigns client.id on the server and protects it from stream
+    updates. Its native protocol derives pipewire.sec.pid/uid from SO_PEERCRED;
+    client updates cannot replace security properties. ALSA stream nodes need
+    not repeat application.process.id, which is not an authenticated identity.
+    """
+    def number(value):
+        if type(value) is int:
+            return value if 0 <= value < 2**32 else None
+        if type(value) is str and re.fullmatch(r'0|[1-9][0-9]{0,9}', value):
+            result = int(value)
+            return result if result < 2**32 else None
+        return None
+    if type(objects) is not list or type(pid) is not int or type(uid) is not int or pid <= 0 or uid <= 0:
+        return set(), set()
+    seen, clients, nodes = set(), [], []
+    for obj in objects:
+        if (type(obj) is not dict or any(type(key) is not str for key in obj)
+                or type(obj.get('id')) is not int or number(obj['id']) is None or obj['id'] in seen):
+            return set(), set()
+        seen.add(obj['id'])
+        kind = obj.get('type')
+        if type(kind) is not str:
+            return set(), set()
+        if kind not in ('PipeWire:Interface:Client', 'PipeWire:Interface:Node'):
+            continue
+        info = obj.get('info')
+        props = info.get('props') if type(info) is dict and all(type(key) is str for key in info) else None
+        if type(props) is not dict or any(type(key) is not str for key in props):
+            return set(), set()
+        if kind == 'PipeWire:Interface:Client':
+            protocol = props.get('pipewire.protocol')
+            if (type(protocol) is str and protocol == 'protocol-native'
+                    and number(props.get('pipewire.sec.pid')) == pid and number(props.get('pipewire.sec.uid')) == uid):
+                clients.append(obj['id'])
+        else:
+            nodes.append((obj['id'], props))
+    if len(clients) != 1:
+        return set(), set()
+    owned, captures = set(), set()
+    for identity, props in nodes:
+        if number(props.get('client.id')) != clients[0]:
+            continue
+        if 'application.process.id' in props and number(props['application.process.id']) != pid:
+            continue
+        owned.add(identity)
+        media = props.get('media.class')
+        if type(media) is str and media == 'Stream/Input/Audio':
+            captures.add(identity)
+    return owned, captures
+
 def wait_status_projection(value):
     """Closed enums only; never export status messages, text, paths or unknown values."""
     if type(value) is not dict:
@@ -122,7 +213,7 @@ def wait_diagnostic_code(target, last, current, graph):
             return ('unknown', 'unknown')
         return wait_status_projection({'state': value[0], 'active_backend': '' if type(value[1]) is str and value[1] == 'idle' else value[1]})
     last, current = projection(last), projection(current)
-    # Last graph poll: owned engine, matching PID node, capture-class node,
+    # Last graph poll: owned engine, authenticated client-owned node, capture-class node,
     # exact source present, exact owned capture link. Unknown is not false.
     bits = ''.join('1' if v is True else '0' if v is False else 'u' for v in graph) if type(graph) is tuple and len(graph) == 5 else 'uuuuu'
     return 'wait-' + target + '-last-' + last[0] + '-' + last[1] + '-now-' + current[0] + '-' + current[1] + '-lg' + bits
@@ -274,6 +365,8 @@ class Checker:
         self.assets = PROFILE_ASSETS[self.profile_id]
         self.names = {key: asset['name'] for key, asset in self.assets.items()}
         cpuinfo = Path('/proc/cpuinfo').read_bytes()
+        if self.profile_id == 'small-v2':
+            verify_small_cpu_fixture(cpuinfo)
         require(self.controller.profile_selection() == 'recommended'
                 and self.profile['id'] == self.profile_id
                 and self.controller.recommended_profile(cpuinfo.decode())['id'] == self.profile_id,
@@ -518,14 +611,12 @@ class Checker:
         engines = self.engines(); require(len(engines) == 1, 'recording-engine-not-unique')
         pid = engines[0][0]
         objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
-        captures = {o['id'] for o in objects if o.get('type') == 'PipeWire:Interface:Node'
-                    and str(o.get('info', {}).get('props', {}).get('application.process.id')) == str(pid)
-                    and o.get('info', {}).get('props', {}).get('media.class') == 'Stream/Input/Audio'}
+        owned, captures = authenticated_capture_nodes(objects, pid, self.account.pw_uid)
+        require(self.engines() == engines, 'recording-engine-changed')
         linked = any(o.get('type') == 'PipeWire:Interface:Link'
                    and o.get('info', {}).get('output-node-id') == self.source
-                   and o.get('info', {}).get('input-node-id') in captures for o in objects)
-        owner = any(o.get('type') == 'PipeWire:Interface:Node'
-                    and str(o.get('info', {}).get('props', {}).get('application.process.id')) == str(pid) for o in objects)
+                   and o.get('info', {}).get('input-node-id') in captures for o in objects) if captures else False
+        owner = bool(owned)
         source = any(o.get('type') == 'PipeWire:Interface:Node' and o.get('id') == self.source for o in objects)
         self._wait_last_graph = (True, owner, bool(captures), source, linked)
         return linked

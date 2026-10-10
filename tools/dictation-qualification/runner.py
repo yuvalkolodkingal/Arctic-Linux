@@ -39,7 +39,15 @@ HOST_STAGES = frozenset({
     'install-exit-missing-vm-exited', 'install-shutdown', 'install-cleanup',
     'boot-acquire', 'boot-menu', 'boot-unlock', 'boot-login', 'boot-settle',
     'boot-terminal', 'boot-collect', 'boot-collect-observed',
-    'boot-collect-missing', 'boot-shutdown', 'boot-cleanup'})
+    'boot-collect-missing', 'boot-shutdown', 'boot-cleanup',
+    'install-live-observed', 'install-live-unobserved',
+    'install-terminal-attempt-one', 'install-terminal-attempt-two', 'install-terminal-attempt-three',
+    'install-command-type-before', 'install-command-type-after',
+    'install-command-enter-before', 'install-command-enter-after',
+    'install-marker-wait-observed', 'install-marker-wait-unobserved',
+    'install-marker-vm-running', 'install-marker-vm-exited', 'install-marker-vm-unknown',
+    'install-command-shot-before', 'install-command-shot-after',
+    'install-preterminal-capture-preserved', 'install-preterminal-capture-unavailable'})
 PHASES = frozenset({'online-installed', 'offline-installed', 'recovery', 'recovered-offline'})
 CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator'})
 TRUSTED_ERRORS = {
@@ -114,6 +122,124 @@ def relay_host_stages(path, token, phase):
                 os.close(fd)
             except OSError:
                 pass
+
+
+def launch_diagnostic_read(root, name, maximum):
+    """Read a fixed private regular file without following links or accepting races."""
+    require(type(name) is str and name not in ('', '.', '..') and '/' not in name
+            and type(maximum) is int and 0 < maximum <= 16 * 1024 * 1024, '')
+    directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        parent = os.fstat(directory)
+        require(parent.st_uid in (0, os.geteuid()) and not parent.st_mode & 0o022, '')
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, 'rb') as stream:
+            before = os.fstat(stream.fileno())
+            require(stat.S_ISREG(before.st_mode) and before.st_uid in (0, os.geteuid())
+                    and not before.st_mode & 0o022 and 0 < before.st_size <= maximum, '')
+            data = stream.read(maximum + 1)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        require(fields(before) == fields(after) == fields(os.stat(name, dir_fd=directory, follow_symlinks=False))
+                and len(data) == before.st_size, '')
+        current = os.stat(root, follow_symlinks=False)
+        require((parent.st_dev, parent.st_ino, parent.st_uid, parent.st_mode)
+                == (current.st_dev, current.st_ino, current.st_uid, current.st_mode)
+                and stat.S_ISDIR(current.st_mode), '')
+        return data
+    finally:
+        os.close(directory)
+
+
+def launch_diagnostic_png(data):
+    """Accept bounded, metadata-free RGB/RGBA PNGs; preserve their original bytes."""
+    import struct
+    import zlib
+    require(type(data) is bytes and 8 < len(data) <= 4 * 1024 * 1024
+            and data.startswith(b'\x89PNG\r\n\x1a\n'), '')
+    at, compressed, dimensions, ended = 8, bytearray(), None, False
+    while at < len(data):
+        require(at + 12 <= len(data) and not ended, '')
+        size, kind = struct.unpack('>I4s', data[at:at + 8])
+        end = at + 12 + size
+        require(end <= len(data) and kind in (b'IHDR', b'IDAT', b'IEND'), '')
+        body = data[at + 8:end - 4]
+        require(zlib.crc32(kind + body) & 0xffffffff == struct.unpack('>I', data[end - 4:end])[0], '')
+        if kind == b'IHDR':
+            require(at == 8 and dimensions is None and size == 13, '')
+            width, height, depth, color, compression, filtering, interlace = struct.unpack('>IIBBBBB', body)
+            require(0 < width <= 1920 and 0 < height <= 1080 and width * height <= 1920 * 1080
+                    and depth == 8 and color in (2, 6) and (compression, filtering, interlace) == (0, 0, 0), '')
+            dimensions = (width, height, 3 if color == 2 else 4)
+        elif kind == b'IDAT':
+            require(dimensions is not None and size > 0, '')
+            compressed.extend(body)
+        else:
+            require(size == 0 and dimensions is not None and compressed, '')
+            ended = True
+        at = end
+    require(ended, '')
+    width, height, channels = dimensions
+    row = width * channels + 1
+    decoder = zlib.decompressobj()
+    raw = decoder.decompress(compressed, row * height + 1)
+    require(decoder.eof and not decoder.unconsumed_tail and not decoder.unused_data
+            and len(raw) == row * height and all(raw[index] <= 4 for index in range(0, len(raw), row)), '')
+    return width, height
+
+
+def preserve_launch_diagnostic(vm, private_log, token, ctx, evidence, contract):
+    """Failure-only pre-command diagnostic; it cannot satisfy any acceptance gate."""
+    try:
+        require(ctx['phase'] == 'online-installed' and type(token) is str
+                and re.fullmatch('[0-9a-f]{32}', token), '')
+        contract.context(ctx)
+        raw = launch_diagnostic_read(private_log.parent, private_log.name, 16 * 1024 * 1024)
+        prefix = b'ARCTIC-DICTATION-HOST-STAGE ' + token.encode() + b' '
+        codes = {line[len(prefix):-1] for line in raw.splitlines(keepends=True)
+                 if line.startswith(prefix) and line.endswith(b'\n') and not line.endswith(b'\r\n')}
+        require(b'install-preterminal-capture-preserved' in codes
+                and not codes & {b'install-marker-wait-observed', b'install-start-observed', b'install-engine', b'install-exit-observed'}, '')
+        def strict_object(pairs):
+            result = {}
+            for key, value in pairs:
+                require(key not in result, '')
+                result[key] = value
+            return result
+        proof = json.loads(launch_diagnostic_read(vm, 'dictation-launch-desktop-receipt.json', 4096),
+                           object_pairs_hook=strict_object)
+        require(type(proof) is dict and set(proof) == {'schema', 'capture_stage', 'path', 'bytes', 'sha256', 'token_sha256'}
+                and proof['schema'] == 'arctic-dictation-preterminal-capture-v1'
+                and proof['capture_stage'] == 'before-first-terminal' and proof['path'] == 'dictation-launch-desktop.png'
+                and type(proof['bytes']) is int and 8 < proof['bytes'] <= 4 * 1024 * 1024
+                and type(proof['sha256']) is str and re.fullmatch('[0-9a-f]{64}', proof['sha256'])
+                and proof['token_sha256'] == hashlib.sha256(token.encode()).hexdigest(), '')
+        image = launch_diagnostic_read(vm, proof['path'], 4 * 1024 * 1024)
+        require(len(image) == proof['bytes'] and hashlib.sha256(image).hexdigest() == proof['sha256'], '')
+        width, height = launch_diagnostic_png(image)
+        record = dict(schema='arctic-dictation-launch-diagnostic-v1', status='diagnostic_only', release_acceptance=False,
+                      context=ctx, capture_stage=proof['capture_stage'], capture_nonce_sha256=proof['token_sha256'],
+                      guest_command_start='unobserved',
+                      execution_files={name: sha(ROOT / name) for name in
+                                       ('tools/test-install.sh', 'tools/dictation-qualification/runner.py')},
+                      image=dict(path='launch-preterminal-online-installed.png', bytes=len(image),
+                                 sha256=proof['sha256'], width=width, height=height))
+        created = []
+        try:
+            for name, content in ((record['image']['path'], image), ('launch-preterminal-online-installed.json',
+                                   (json.dumps(record, sort_keys=True) + '\n').encode())):
+                descriptor = os.open(evidence / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                created.append(name)
+                with os.fdopen(descriptor, 'wb') as stream:
+                    stream.write(content)
+        except BaseException:
+            for name in created:
+                (evidence / name).unlink(missing_ok=True)
+            raise
+        return True
+    except Exception:
+        return False  # Optional evidence cannot alter the original failure, cleanup or limits.
 
 
 def require(value, reason):
@@ -332,6 +458,7 @@ def run(args):
                 errors.append('harness-failed')
                 diagnostic(phase, 'harness', error, contract)
                 relay_host_stages(private / (phase + '.log'), diagnostic_token, phase)
+                preserve_launch_diagnostic(vm, private / (phase + '.log'), diagnostic_token, ctx, args.evidence, contract)
             # Preserve structurally safe reports even when the collector's
             # nonzero exit correctly prevents acceptance.
             for observed_stage in (('live', 'installed') if stage == 'all' else ('installed',)):
