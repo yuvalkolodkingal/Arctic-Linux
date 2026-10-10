@@ -9,7 +9,7 @@
     "tools/installer-qualification/evidence.py": "d9f98ad0e3fed14b3c77898ba0924ccceaa06777a45f3eea7c28eb38e0dc1d9b",
     "tools/installer-qualification/guest.py": "8ac9cef711ffdeb2b52421592298e1deb0f68bb04eaf6822cee34edb61e22ccd",
     "tools/installer-qualification/run-live.sh": "5c2dbbdd51e2f6aefdb630f2bb7512ccee5ca1f413bc695a4a8f203959275d5c",
-    "tools/installer-qualification/runner.py": "936b9dc40d08dcacfdd022a9fbab31cb326b4d6b6366efd329207483bf61fb83",
+    "tools/installer-qualification/runner.py": "48b8d408f2bd8b146a6dd95b56c8e40b7cc154c70d392f9009ede87168ef94bc",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
