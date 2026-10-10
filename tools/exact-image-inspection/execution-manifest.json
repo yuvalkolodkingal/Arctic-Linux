@@ -4,11 +4,65 @@
     "tools/exact-image-inspection/inspect.py": "b2e042ff3f22bae7a7024075ad293ab53fa1fea01e8d4e91403de90ec78cc573",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
   },
-  "image": {},
+  "image": {
+    "archive_bytes": 1930013330,
+    "archive_sha256": "07d60353230eccd0b077279cf6195d73dc6a57f61d9cba3c55503776a76be716",
+    "artifact_id": 11664120624,
+    "bytes": 1929826304,
+    "name": "Arctic-Linux-1.2-candidate-38032256030-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "1695aa2af6ec0da618e87c5387a03f44752121111f0bbe6900699d9549b40994",
+    "run_id": 38032256030,
+    "sha256": "0ab25cc921873ba8750042a6265b6a9e42e669cd78a08d6621c140fd18468609",
+    "source_sha": "bc0521136520daaa221e815822e88ffc44107957"
+  },
   "observer_profile_admitted": false,
   "performance_acceptance": false,
-  "ready": false,
+  "ready": true,
   "release_acceptance": false,
   "schema": "arctic-exact-image-mango-inspection-v1",
-  "source_files": {}
+  "source_files": {
+    ".github/workflows/iso.yml": {
+      "blob_sha": "00467cba49f8f1aa8ccec1dc28add752f734014f",
+      "bytes": 21454,
+      "mode": "100644",
+      "sha256": "38db0bc43b4bf37cd3819f6a62fe936c7fed74bcd373641336391e693d32287f"
+    },
+    "iso/kiwi/config.kiwi": {
+      "blob_sha": "25b367dc0fc1c5558d208385b178fa11496e887f",
+      "bytes": 10626,
+      "mode": "100644",
+      "sha256": "cdafa1655892b149cf5a8816538a234460a2825a580b868f7b56c8408e95932e"
+    },
+    "packaging/mangowm.spec": {
+      "blob_sha": "6787aee370e574570cdecd8a884e6d7126cf13af",
+      "bytes": 3484,
+      "mode": "100644",
+      "sha256": "e9de7e9cce9e2a73beadedd1a1623f87f72d23abd703baffa839f5bcd63eb531"
+    },
+    "packaging/patches/mango-client-geometry-events.patch": {
+      "blob_sha": "7c7cf591884bf89cab85d7270a6bbc0d5babf339",
+      "bytes": 3502,
+      "mode": "100644",
+      "sha256": "0dc2b073a07a2f3f425b9ba5255d56ee6f244180279747a55079a969cf8271a9"
+    },
+    "packaging/patches/mango-output-teardown.patch": {
+      "blob_sha": "3b502ebcdfcccaa4a6ddc054905a7ca27852d284",
+      "bytes": 1334,
+      "mode": "100644",
+      "sha256": "751aaae5b7b211349066b2ae0aac533f87ec91261f2c1edc86a41cafc41c7561"
+    },
+    "packaging/patches/mango-software-renderer-dmabuf.patch": {
+      "blob_sha": "28f1f8b8f92711d912568a48f05ca8d27c7b4998",
+      "bytes": 1050,
+      "mode": "100644",
+      "sha256": "00ae475f37e1061963fa3213b9681b67134a9b3cbfc4214114ed37e3dcc043dd"
+    },
+    "tools/build-iso.sh": {
+      "blob_sha": "1c346f69b321a1863e0d68b954b5b8d9ebd0e278",
+      "bytes": 17278,
+      "mode": "100755",
+      "sha256": "c9c1c3172f054ce3ea9270689262dfd5e965c282f5b57ffd75302a36a0ee909b"
+    }
+  }
 }
