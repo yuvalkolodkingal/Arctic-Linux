@@ -22,7 +22,7 @@
     "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
     "tools/performance/contract.py": "c3a4b423154e6542488e7290bc7f75a59e4381084eee0e225f2602b342d0aefb",
     "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
-    "tools/performance/guest.py": "5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e",
+    "tools/performance/guest.py": "f8e8e9d2cc7900607111f98d51c5071b09e2434aedb6eda9a000f3badd45c57c",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
     "tools/performance/qualification.py": "7e018cb8e378fedc8ea252fca5f1dfbef3912ffaa50b0e6896cbd934df549743",
@@ -43,8 +43,8 @@
   },
   "observer": {
     "comparator_sha256": "4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9",
-    "frozen_sha256": "7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7",
-    "source_sha256": "1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2"
+    "frozen_sha256": "57a256b79e362360e2fb1de39b65f007002765df6a02769e26042f5e7364ddea",
+    "source_sha256": "eb8ceacf12fd964651dc614c823773928b0fd13a17f32ffd3457659c01441cc9"
   },
   "performance_mode": "frozen-external-paired-v1",
   "ready": true,
