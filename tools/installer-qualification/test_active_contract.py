@@ -190,8 +190,9 @@ def fixture():
         'Owned offline UEFI installation with encryption explicitly disabled through the shipped GUI',
         'QEMU target writes capped at 8 MiB/s to retain genuine copy across both disruptions; no performance claim',
         'All seven active restoration and pre-input console captures require independent manual review; original idle/native/CLI gates remain required'])
-    state['build'].update(compiler='gcc (GCC) 16.1.1', packages=['gcc-16.1.1-1.fc44.x86_64',
-        'wayland-devel-1.24.0-1.fc44.x86_64', 'wayland-libs-1.24.0-1.fc44.x86_64'],
+    state['build'].update(compiler='gcc (GCC) 16.2.1', packages=['gcc-16.2.1-2.fc44.x86_64',
+        'wayland-devel-1.26.0-1.fc44.x86_64', 'libwayland-client-1.26.0-1.fc44.x86_64',
+        'libwayland-server-1.26.0-1.fc44.x86_64', 'libwayland-egl-1.26.0-1.fc44.x86_64'],
         display_host=dict(backend='dbus', gl=False,
             packages=['dbus-daemon-1.16.2-1.fc44.x86_64', 'glib2-2.88.0-1.fc44.x86_64',
                       'qemu-ui-dbus-11.0.0-1.fc44.x86_64', 'qemu-ui-opengl-11.0.0-1.fc44.x86_64'],

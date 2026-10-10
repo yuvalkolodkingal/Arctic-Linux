@@ -9,7 +9,7 @@
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
     "tools/native-functional/evidence.py": "3ad76896c10c86558ed257e8eab20754d6e534307b7c6db17236c8bc03be3a1e",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/prepare-taskbar-tools.sh": "2a22db1672e6c516182819286ad1a1ef988c4cd7cda10ac81871a2b1c2e8f1cb",
+    "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
     "tools/native-functional/runner.py": "28c4d7e4188175358c4588180cf53b59ae57de293344babbfd765bc618e685fb",
     "tools/native-functional/screen-evidence.py": "62536ba81bd098f5d67bc6525bbfd7ccf69b8b61745bc1ee9aa27a3e8bf9490a",
     "tools/native-functional/source-provenance.json": "82df9062ba8c810509ea93cb8cba324cc03364c88142e61832cf6f34b24e789d",

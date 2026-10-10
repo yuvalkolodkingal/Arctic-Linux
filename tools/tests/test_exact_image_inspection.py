@@ -10,6 +10,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -55,6 +56,21 @@ class ManifestControls(unittest.TestCase):
         with patch.object(S, 'api') as api, self.assertRaisesRegex(ValueError, 'disabled'):
             S.activation_guard(shipped, ROOT)
         api.assert_not_called()
+
+    def test_generated_evidence_upload_includes_only_owned_hidden_source_exports(self):
+        workflow = (ROOT / S.WORKFLOW).read_text()
+        upload = workflow.split('- name: Upload static inspection evidence (unqualified)', 1)[1]
+        self.assertIn('path: ${{ runner.temp }}/arctic-exact-image-mango-evidence\n', upload)
+        self.assertIn('include-hidden-files: true\n', upload)
+        self.assertNotIn('github.workspace', upload)
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            with patch.object(S, 'OUTPUT', output), patch.object(S, 'ALLOWED', set()):
+                name = 'candidate/source/.github/workflows/iso.yml'
+                S.put(name, b'public pinned producer workflow')
+                S.write_report()
+                report = S.read_json((output / 'report.json').read_text())
+                self.assertEqual(report['files'][name]['sha256'], S.sha(output / name))
 
     def test_exact_typed_pins_cannot_enable_acceptance_or_guess_an_image(self):
         self.assertEqual(S.validate_manifest(manifest()), image())
@@ -229,6 +245,77 @@ class StaticExtractionControls(unittest.TestCase):
                             (inventory, row * 2), (inventory, row.replace(str(stat.S_IFREG | 0o755), str(stat.S_IFLNK | 0o755)))):
             with patch.object(S, 'rpm_query', side_effect=[rows, files]), self.assertRaises(ValueError):
                 S.library_record(Path('/proof'))
+
+    def test_unversioned_and_versioned_library_selection_preserves_regular_uniqueness_and_diagnostics(self):
+        inventory = 'wlroots0.20\t0.20.2\tx86_64\n'
+        paths = ('/usr/lib64/libwlroots-0.20.so', '/usr/lib64/libwlroots-0.20.so.0.20.2')
+        def row(path, mode=stat.S_IFREG | 0o755):
+            return path + '\t' + '1' * 64 + '\t' + str(mode) + '\n'
+        for path in paths:
+            report = {'tools': {}}
+            with patch.object(S, 'REPORT', report), patch.object(S, 'rpm_query', side_effect=[inventory, row(path)]):
+                self.assertEqual(S.library_record(Path('/proof')), ('wlroots0.20', path))
+            diagnostic = report['tools']['wlroots_library_selection']
+            self.assertEqual(diagnostic['regular_match_count'], 1)
+            self.assertEqual(diagnostic['candidates'][0]['path'], path)
+            self.assertEqual(diagnostic['status'], 'selected_pending_payload_hash_and_ELF_ABI_verification')
+        for files, count in ((row(paths[0]) + row(paths[1]), 2),
+                             (row(paths[0], stat.S_IFLNK | 0o755), 0)):
+            report = {'tools': {}}
+            with patch.object(S, 'REPORT', report), patch.object(S, 'rpm_query', side_effect=[inventory, files]), \
+                    self.assertRaises(ValueError): S.library_record(Path('/proof'))
+            self.assertEqual(report['tools']['wlroots_library_selection']['regular_match_count'], count)
+        report = {'tools': {}}
+        files = row(paths[0]) + row(paths[1], stat.S_IFLNK | 0o755)
+        with patch.object(S, 'REPORT', report), patch.object(S, 'rpm_query', side_effect=[inventory, files]):
+            self.assertEqual(S.library_record(Path('/proof')), ('wlroots0.20', paths[0]))
+
+    def test_missing_wrong_version_and_many_candidate_diagnostics_stay_bounded(self):
+        report = {'tools': {}}
+        with patch.object(S, 'REPORT', report), patch.object(S, 'rpm_query', return_value='wlroots0.20\t0.20.3\tx86_64\n'), \
+                self.assertRaises(ValueError): S.library_record(Path('/proof'))
+        self.assertEqual(report['tools']['wlroots_library_selection']['matching_package_count'], 0)
+        self.assertEqual(report['tools']['wlroots_library_selection']['observed_packages'][0]['version'], '0.20.3')
+        report = {'tools': {}}
+        with patch.object(S, 'REPORT', report), patch.object(S, 'rpm_query', side_effect=['wlroots0.20\t0.20.2\tx86_64\n', '']), \
+                self.assertRaises(ValueError): S.library_record(Path('/proof'))
+        self.assertEqual(report['tools']['wlroots_library_selection']['candidate_count'], 0)
+        self.assertEqual(report['tools']['wlroots_library_selection']['regular_match_count'], 0)
+        self.assertEqual(report['tools']['wlroots_library_selection']['candidates'], [])
+        rows = ''.join('/usr/lib64/libwlroots-0.20.so.' + str(i) + '\t' + '1' * 64 + '\t' +
+                       str(stat.S_IFLNK | 0o755) + '\n' for i in range(100))
+        report = {'tools': {}}
+        with patch.object(S, 'REPORT', report), patch.object(S, 'rpm_query', side_effect=['wlroots0.20\t0.20.2\tx86_64\n', rows]), \
+                self.assertRaises(ValueError): S.library_record(Path('/proof'))
+        diagnostic = report['tools']['wlroots_library_selection']
+        self.assertEqual(diagnostic['candidate_count'], 100)
+        self.assertEqual(diagnostic['regular_match_count'], 0)
+        self.assertEqual(len(diagnostic['candidates']), 8)
+        self.assertEqual(diagnostic['candidate_samples_omitted'], 92)
+        self.assertLess(len(json.dumps(diagnostic)), 5000)
+
+    def test_filtered_extraction_accepts_exact_unversioned_or_versioned_library_only(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, RUNNER_TEMP=temp), \
+                patch.object(S, 'reader_capture', return_value=(0, '')) as reader:
+            for name in ('/usr/lib64/libwlroots-0.20.so', '/usr/lib64/libwlroots-0.20.so.0.20.2'):
+                proof = {}
+                S.extract_selected(Path(temp) / 'rootfs.image', Path(temp), name, 'wlroots', proof, time.monotonic() + 120)
+                self.assertIn('--path=' + name, reader.call_args.args[1])
+            reader.reset_mock()
+            for name in ('/usr/lib64/libwlroots-0.21.so', '/usr/lib64/libwlroots-0.20.so.debug',
+                         '/usr/lib64/libwlroots-0.20.so/../../etc/passwd'):
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    S.extract_selected(Path(temp) / 'rootfs.image', Path(temp), name, 'wlroots', {}, time.monotonic() + 120)
+            reader.assert_not_called()
+
+    def test_selected_library_still_requires_exact_rpm_payload_digest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'wlroots'; path.write_bytes(b'actual image library')
+            target = '/usr/lib64/libwlroots-0.20.so'
+            identity = 'wlroots0.20\t0.20.2\t1.fc44\tx86_64\t8\n'
+            row = target + '\t' + '0' * 64 + '\t' + str(stat.S_IFREG | 0o755) + '\n'
+            with patch.object(S, 'rpm_query', side_effect=[identity, row]), self.assertRaises(ValueError):
+                S.rpm_identity(Path(temp), path, target, 'wlroots0.20', '0.20.2')
 
     @unittest.skipUnless(all(shutil.which(name) for name in ('gcc', 'readelf', 'objdump')), 'Native static ELF tools needed')
     def test_real_elf_is_archived_and_disassembled_without_running_it(self):
