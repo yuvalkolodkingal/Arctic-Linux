@@ -19,6 +19,8 @@
 #                                             live session and copy the session log, failed
 #                                             units and warnings to serial.log
 #   tools/test-iso.sh --secureboot            UEFI with Secure Boot on (OVMF secboot, MS keys)
+#   tools/test-iso.sh --require-startup       require the selected live desktop mode, Mango,
+#                                             SELinux enforcing and completed session collection
 #
 # QEMU runs headless in a Fedora 44 container (qemu-system-x86-core, edk2-ovmf) with a QMP
 # socket. Screenshots (PNG) go to out/test/<firmware>-<mode>/: the boot menu when it
@@ -46,6 +48,7 @@ SECUREBOOT=0
 VGA=virtio
 APPEND=""
 COLLECT=0
+REQUIRE_STARTUP=0
 OUTBASE="$ROOT/out/test"
 
 while (( $# )); do
@@ -61,6 +64,7 @@ while (( $# )); do
     --vga) VGA="$2"; shift 2 ;;
     --append) APPEND="$APPEND $2"; shift 2 ;;
     --collect) COLLECT=1; shift ;;
+    --require-startup) REQUIRE_STARTUP=1; COLLECT=1; shift ;;
     --debug) APPEND="$APPEND console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1"; shift ;;
     --secureboot) SECUREBOOT=1; FIRMWARE=uefi; shift ;;
     --out) OUTBASE="$2"; shift 2 ;;
@@ -70,6 +74,9 @@ while (( $# )); do
 done
 case "$FIRMWARE" in uefi|bios) ;; *) arctic_die "--firmware takes uefi or bios" ;; esac
 case "$MODE" in try|install|safe|check|disk) ;; *) arctic_die "--mode takes try, install, safe, check or disk" ;; esac
+if (( REQUIRE_STARTUP )); then
+  case "$MODE" in try|install|safe) ;; *) arctic_die "--require-startup supports try, install or safe" ;; esac
+fi
 [[ -f "$ISO" ]] || arctic_die "no ISO at $ISO (run tools/build-iso.sh)"
 ISO="$(cd "$(dirname "$ISO")" && pwd)/$(basename "$ISO")"
 
@@ -90,10 +97,12 @@ import os, sys, time
 sys.path.insert(0, "/arctic-lib")
 import vmtest
 from vmtest import log, looks_like_boot_menu
+from iso_startup import collection_command, collection_complete
 
 out, mode, timeout, interval = os.environ["OUT"], os.environ["MODE"], int(os.environ["TIMEOUT"]), int(os.environ["INTERVAL"])
 append = os.environ.get("APPEND", "").strip()
 collect = os.environ.get("COLLECT") == "1"
+require_startup = os.environ.get("REQUIRE_STARTUP") == "1"
 t0 = vmtest.T0
 vm = vmtest.VM(sys.argv[1:], f"{out}/qmp.sock", "iso", qemu_log=f"{out}/qemu.log")
 shot, keys, type_text = vm.shot, vm.keys, vm.type_text
@@ -114,6 +123,11 @@ while time.time() - t0 < min(300, timeout) and vm.alive():
 if os.path.exists(f"{out}/00-probe.png"):
     os.remove(f"{out}/00-probe.png")
 if not menu_seen:
+    if require_startup:
+        log("FAIL: requested boot mode cannot be verified without a detected menu")
+        shot("01-no-menu-detected")
+        vm.quit()
+        sys.exit(1)
     log("boot menu not detected; continuing (the default entry boots by itself)")
     shot("01-no-menu-detected")
 else:
@@ -145,19 +159,22 @@ while time.time() - t0 < timeout and vm.alive():
     time.sleep(10 if elapsed < 120 else interval)
 
 if collect and vm.alive():
-    # A terminal in the session (Super+Enter → arctic-open terminal), then logs to the serial port.
-    shot("97-before-collect")
-    keys("meta_l-ret")
-    time.sleep(60)
-    keys("ret")          # skips the fetch animation (any key does) and gives a fresh prompt
-    time.sleep(5)
-    shot("98-terminal")
-    type_text("sudo sh -c '(echo ARCTIC-COLLECT-BEGIN; cat ~liveuser/.local/share/sddm/*.log; "
-              "systemctl --failed --no-pager; journalctl -b -p warning --no-pager; getenforce; flatpak list; "
-              "echo ARCTIC-COLLECT-END) >/dev/ttyS0 2>&1'", gap=0.2)
-    keys("ret")
-    time.sleep(30)
-    log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
+    # Install mode owns exclusive keyboard focus; preserve its actual window
+    # and collect from an authenticated live console instead of driving the UI.
+    from iso_startup import collect_session
+    try:
+        collect_session(vm, mode, require_startup, shot, log, serial_path=f"{out}/serial.log")
+    except (RuntimeError, ValueError) as error:
+        # Keep the exact collector failure in the screened test.log artifact,
+        # rather than only in the running producer's unavailable stderr.
+        log(f"FAIL: session collection: {error}")
+        shot("99-final")
+        vm.quit()
+        sys.exit(1)
+    if vmtest.serial_has(f"{out}/serial.log", "ARCTIC-COLLECT-END"):
+        log("collected the session log into serial.log (between ARCTIC-COLLECT-BEGIN/END)")
+    else:
+        log("session collection did not complete; inspect the terminal screenshot and serial log")
 
 if vm.alive():
     shot("99-final")
@@ -166,6 +183,9 @@ if vm.alive():
 else:
     log(f"qemu exited early with code {vm.proc.returncode}")
 vm.quit()
+if collect and not collection_complete(f"{out}/serial.log", mode if require_startup else None):
+    log("FAIL: selected desktop startup/session collection did not qualify")
+    sys.exit(1)
 PY
 
 inner=$(cat <<'INNER'
@@ -182,7 +202,7 @@ args=(qemu-system-x86_64 -machine "$machine" -accel "$accel" -cpu max -smp "$SMP
       -serial "file:$OUT/serial.log" -monitor none -no-reboot
       -drive file=/iso,media=cdrom,readonly=on,if=none,id=cd -device ide-cd,drive=cd,bootindex=0
       -drive file=/tmp/target.qcow2,if=none,id=disk -device virtio-blk-pci,drive=disk,bootindex=1
-      -netdev user,id=net0 -device virtio-net-pci,netdev=net0
+      -netdev user,id=net0,restrict=on -device virtio-net-pci,netdev=net0
       -device qemu-xhci -device usb-tablet -rtc base=utc)
 if [ "$FIRMWARE" = uefi ]; then
   code=/usr/share/edk2/ovmf/OVMF_CODE.fd
@@ -205,7 +225,7 @@ INNER
 arctic_log "booting $(basename "$ISO") ($FIRMWARE, mode $MODE, ${TIMEOUT}s) → $OUT"
 "$engine" run --rm "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e OUT=/out -e MODE="$MODE" -e TIMEOUT="$TIMEOUT" -e INTERVAL="$INTERVAL" \
-  -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
+  -e FIRMWARE="$FIRMWARE" -e SECUREBOOT="$SECUREBOOT" -e VGA="$VGA" -e APPEND="$APPEND" -e COLLECT="$COLLECT" -e REQUIRE_STARTUP="$REQUIRE_STARTUP" -e MEMORY="$MEMORY" -e SMP="$SMP" -e DRIVER="$DRIVER" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$ISO:/iso:ro" -v "$OUT:/out" -v "$HERE/lib:/arctic-lib:ro" \
   "$ARCTIC_FEDORA_IMAGE" bash -c "$ARCTIC_CONTAINER_PROLOGUE$inner"

@@ -16,6 +16,10 @@ export XDG_CURRENT_DESKTOP=mango
 # Virtual machines and "Safe graphics mode" (nomodeset → simpledrm) only have software
 # rendering. wlroots refuses it unless allowed; scenefx needs GLES, so no pixman here.
 export WLR_RENDERER_ALLOW_SOFTWARE=1
+if grep -Eq '(^| )nomodeset( |$)' /proc/cmdline 2>/dev/null; then
+  export WLR_RENDERER_FORCE_SOFTWARE=1
+  export LIBGL_ALWAYS_SOFTWARE=1
+fi
 case "$(systemd-detect-virt --vm 2>/dev/null)" in
   none|"") ;;
   *) export WLR_NO_HARDWARE_CURSORS=1 ;;

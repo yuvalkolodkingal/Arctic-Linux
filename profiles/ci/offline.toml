@@ -1,8 +1,7 @@
 # CI profile: the default install (encrypted, whole disk) with no internet, as in
-# tools/test-install.sh. The apps come from the live image where the catalog has one (kitty,
-# fish, Nautilus, VLC); Zen (the browser is required) and Zed have to be downloaded, so offline
-# they fail, are retried once and are deferred to /var/lib/arctic/pending.json together with
-# the media codecs (arctic-firstboot installs them once the machine is online).
+# tools/test-install.sh. GNOME Web, FeatherPad, Foot, fish, PCManFM + XArchiver
+# and Celluloid come from the live image. Optional media codecs and Flatpak
+# themes are retried and deferred until online; default apps need no download.
 # The harness passes ARCTIC_LUKS_PASSPHRASE and ARCTIC_USER_PASSWORD and types the
 # passphrase at boot.
 
@@ -33,11 +32,11 @@ hostname = "arctic-ci"
 autologin = false
 
 [apps]
-browser = ["zen"]
-editor = ["zed"]
-terminal = ["kitty"]
+browser = ["gnome-web"]
+editor = ["featherpad"]
+terminal = ["foot"]
 shell = ["fish"]
-files = ["nautilus"]
+files = ["pcmanfm"]
 office = []
-video = ["vlc"]
+video = ["celluloid"]
 extras = []

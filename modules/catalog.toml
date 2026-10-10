@@ -33,7 +33,7 @@ choice = "one"
 required = true
 note = "Becomes your default browser."
 role = "web browser"
-modules = ["zen", "firefox", "brave", "chrome", "librewolf", "chromium", "vivaldi"]
+modules = ["gnome-web", "zen", "firefox", "brave", "chrome", "librewolf", "chromium", "vivaldi"]
 
 [[category]]
 id = "editor"
@@ -41,7 +41,7 @@ name = "Editor"
 choice = "any"
 note = ""
 role = "code editor"
-modules = ["zed", "vscode", "vscodium", "neovim", "helix", "kate", "emacs", "text-editor"]
+modules = ["featherpad", "zed", "vscode", "vscodium", "neovim", "helix", "kate", "emacs", "text-editor"]
 
 [[category]]
 id = "terminal"
@@ -50,7 +50,7 @@ choice = "one"
 required = true
 note = "Opens with Super + Enter."
 role = "terminal"
-modules = ["kitty", "ghostty", "alacritty", "foot", "konsole"]
+modules = ["foot", "kitty", "ghostty", "alacritty", "konsole"]
 
 [[category]]
 id = "shell"
@@ -67,7 +67,7 @@ name = "File manager"
 choice = "any"
 note = ""
 role = "file manager"
-modules = ["yazi", "thunar", "nautilus", "dolphin", "nemo", "pcmanfm-qt"]
+modules = ["pcmanfm", "yazi", "thunar", "nautilus", "dolphin", "nemo", "pcmanfm-qt"]
 
 [[category]]
 id = "office"
@@ -83,7 +83,7 @@ name = "Video"
 choice = "any"
 note = ""
 role = "video player"
-modules = ["vlc", "mpv", "celluloid", "haruna", "kodi", "jellyfin"]
+modules = ["celluloid", "vlc", "mpv", "haruna", "kodi", "jellyfin"]
 
 [[category]]
 id = "music"
@@ -214,8 +214,8 @@ modules = ["flathub", "bazaar", "flatseal", "mission-center", "gnome-disks", "pi
 # Download size (MB) of each shared download, counted once per install: the Flatpak runtimes
 # (Flathub API /api/v2/summary/<runtime> on 2026-09-27) and "akmods", the tools that build a
 # driver for the kernel (akmods, kernel-devel, gcc, rpm-build; about 550 MB on a bare Fedora 44
-# container on 2026-09-27, roughly half that on top of the live image). The defaults already pull
-# freedesktop 25.08 (Zen), the freedesktop 26.08 SDK (Zed) and KDE 6.10 (Collabora); every
+# container on 2026-09-27, roughly half that on top of the live image). Optional Zen pulls
+# freedesktop 25.08, Zed the freedesktop 26.08 SDK and Collabora KDE 6.10; every
 # other GNOME/KDE runtime costs 400+ MB the first time, which is why small GNOME apps whose
 # Fedora package is current install with dnf first. Not counted: org.freedesktop.Platform.GL.default
 # (~150 MB per freedesktop branch) and codecs-extra.

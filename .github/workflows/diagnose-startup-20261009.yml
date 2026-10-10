@@ -1,0 +1,166 @@
+name: Diagnose retained candidate startup
+
+on:
+  push:
+    branches: [codex/console-gray-fix-20261009]
+    paths: [.github/diagnose-startup-20261009.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        # Safe passed at 445f560; rerun the corrected BIOS IPC display selector only.
+        include:
+          - firmware: bios
+            mode: install
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify reviewed diagnostic activation
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          assert os.environ['RUNNER_ENVIRONMENT'] == 'github-hosted'
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/console-gray-fix-20261009'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          reviewed = Path('.github/diagnose-startup-20261009.activate').read_text().strip()
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          assert re.fullmatch('[0-9a-f]{40}', reviewed)
+          assert event['before'] == reviewed and event['after'] == os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == reviewed
+          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/diagnose-startup-20261009.activate']
+          assert not subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()
+          print('Diagnostic only: retained failed candidate; no release qualification or publication')
+          PY
+      - name: Verify fixed retained ISO archive and bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, shutil, stat, subprocess, zipfile
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'arctic-startup-diagnostic'
+          root.mkdir()
+          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11592229323'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          digest = '7b5d5d6e49f7f7773451a7279603aa65642562a050718d52366660b13ae20abb'
+          assert metadata['name'] == 'arctic-linux-iso' and not metadata['expired']
+          assert metadata['workflow_run']['id'] == 37875703862
+          assert metadata['workflow_run']['head_sha'] == '50c8bc4cd576baf741868aaa17b94737199ccc9d'
+          assert metadata['size_in_bytes'] == 1929411588 and metadata['digest'] == 'sha256:' + digest
+          archive = root / 'retained.zip'
+          with archive.open('xb') as output:
+              subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+          assert archive.stat().st_size == 1929411588
+          with archive.open('rb') as handle:
+              assert hashlib.file_digest(handle, 'sha256').hexdigest() == digest
+          filename = 'Arctic-Linux-1.2-candidate-37875703862-1-x86_64.iso'
+          with zipfile.ZipFile(archive) as members:
+              info = members.infolist()
+              assert len(info) <= 8 and sum(item.file_size for item in info) < 2_010_000_000
+              assert len({item.filename for item in info}) == len(info)
+              for item in info:
+                  path = Path(item.filename)
+                  assert not path.is_absolute() and '..' not in path.parts
+                  assert not stat.S_ISLNK(item.external_attr >> 16)
+              images = [item for item in info if Path(item.filename).name == filename]
+              assert len(images) == 1 and images[0].file_size == 1929226240
+              with members.open(images[0]) as source, (root / filename).open('xb') as target:
+                  shutil.copyfileobj(source, target, length=1024 * 1024)
+          archive.unlink()
+          with (root / filename).open('rb') as handle:
+              assert hashlib.file_digest(handle, 'sha256').hexdigest() == '88e77b3145c895760496fad39cf471dfd7b5e4975a5e0b699cbeb136eb43c08a'
+          print('Verified retained candidate:', filename, 1929226240)
+          PY
+      - name: Diagnose requested startup mode in an owned KVM guest
+        env:
+          FIRMWARE: ${{ matrix.firmware }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          test -c /dev/kvm
+          sudo chmod 666 /dev/kvm
+          tools/test-iso.sh \
+            --iso "$RUNNER_TEMP/arctic-startup-diagnostic/Arctic-Linux-1.2-candidate-37875703862-1-x86_64.iso" \
+            --firmware "$FIRMWARE" --mode "$MODE" --require-startup --timeout 120 --interval 15 --kvm \
+            --append 'console=tty0 console=ttyS0,115200 systemd.journald.forward_to_console=1'
+      - name: Screen only owned startup diagnostics
+        id: screen
+        if: always()
+        env:
+          FIRMWARE: ${{ matrix.firmware }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          python3 -B - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          source = Path('out/test') / (os.environ['FIRMWARE'] + '-' + os.environ['MODE'])
+          target = Path(os.environ['RUNNER_TEMP']) / 'startup-picked'
+          target.mkdir()
+          if source.is_symlink():
+              raise RuntimeError('Diagnostic source must be an owned directory')
+          total = 0
+          for path in source.rglob('*'):
+              if path.suffix not in ('.json', '.log', '.txt', '.tsv', '.png', '.rgb', '.wav'):
+                  continue
+              if path.is_symlink() or not path.is_file():
+                  raise RuntimeError('Unexpected startup diagnostic member')
+              size = path.stat().st_size
+              total += size
+              if size > 128 * 1024 * 1024 or total > 512 * 1024 * 1024:
+                  raise RuntimeError('Startup diagnostic byte bounds exceeded')
+              output = target / path.relative_to(source)
+              output.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(path, output)
+          PY
+          python3 -B tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/startup-picked" --out "$RUNNER_TEMP/startup-screened"
+      - name: Emit bounded screened startup evidence
+        if: always() && steps.screen.outcome == 'success'
+        run: |
+          python3 -B - <<'PY'
+          import base64, hashlib, os, struct
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'startup-screened'
+          for name in ('test.log', 'serial.log'):
+              path = root / name
+              if not path.is_file():
+                  continue
+              data = path.read_bytes()
+              assert len(data) <= 128 * 1024 * 1024
+              print('ARCTIC-STARTUP-TEXT-BEGIN', name)
+              print(data.decode('utf-8', errors='replace')[-16384:])
+              print('ARCTIC-STARTUP-TEXT-END', name)
+          for name in ('97-before-collect.png', '97-console-login.png', '97-console-authentication-failed.png', '99-final.png'):
+              path = root / name
+              if not path.is_file():
+                  continue
+              data = path.read_bytes()
+              assert len(data) <= 2 * 1024 * 1024 and data.startswith(b'\x89PNG\r\n\x1a\n')
+              width, height = struct.unpack('>II', data[16:24])
+              assert 1 <= width <= 4096 and 1 <= height <= 4096
+              print('ARCTIC-STARTUP-PNG-BEGIN', name, hashlib.sha256(data).hexdigest())
+              encoded = base64.b64encode(data).decode('ascii')
+              for offset in range(0, len(encoded), 1024):
+                  print('ARCTIC-STARTUP-PNG-DATA', encoded[offset:offset + 1024])
+              print('ARCTIC-STARTUP-PNG-END', name)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostic-startup-${{ matrix.firmware }}-${{ matrix.mode }}
+          path: ${{ runner.temp }}/startup-screened/
+          if-no-files-found: ignore
+          retention-days: 14

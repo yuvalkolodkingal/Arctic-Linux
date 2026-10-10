@@ -1,12 +1,12 @@
-# In the live image (arctic-desktop requires it).
+# Optional terminal; the optimized live image uses Foot.
 id = "kitty"
 name = "kitty"
 summary = "Fast, GPU-drawn terminal."
 category = "terminal"
-default = true
+default = false
 tile = "kitty"
 icon = "terminal"
-in_live_image = true
+in_live_image = false
 gpu = true
 requires = []
 conflicts = []

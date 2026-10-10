@@ -1,0 +1,112 @@
+name: Candidate dictation image qualification
+
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.dictation]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  dictation:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    strategy:
+      fail-fast: false
+      matrix:
+        hardware_profile: [small-v2, turbo-q5-v3]
+    runs-on: ubuntu-24.04
+    # Four bounded VM invocations (255m), provisioning (20m), ISO fetch (15m),
+    # fixture preparation (20m), dependencies (8m), checks and cleanup. None of
+    # these limits relaxes a functional, integrity or image-size gate.
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify reviewed activation and disabled-until-pinned manifest
+        id: image
+        working-directory: execution
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, subprocess
+          from pathlib import Path
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          reviewed = Path('.github/qualification-20261010.dictation').read_text().strip()
+          assert re.fullmatch('[0-9a-f]{40}', reviewed)
+          assert event['before'] == reviewed and event['after'] == os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == reviewed
+          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/qualification-20261010.dictation']
+          manifest = json.loads(Path('tools/dictation-qualification/execution-manifest.json').read_text())
+          assert manifest['ready'] is True and manifest['release_acceptance'] is False
+          assert manifest['hardware_profiles'] == ['small-v2', 'turbo-q5-v3']
+          assert re.fullmatch('[0-9a-f]{40}', manifest['image']['source_sha'])
+          assert re.fullmatch('[0-9a-f]{64}', manifest['fixture_manifest_sha256'])
+          from importlib.util import spec_from_file_location, module_from_spec
+          spec = spec_from_file_location('dictation_image_runner', 'tools/dictation-qualification/runner.py')
+          runner = module_from_spec(spec); spec.loader.exec_module(runner)
+          assert set(manifest['execution_files']) == runner.FILES
+          for name, expected in manifest['execution_files'].items():
+              path = Path(name)
+              assert not path.is_symlink() and re.fullmatch('[0-9a-f]{64}', expected)
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == expected
+          assert manifest['fixture_decoder'] == {'pyarrow': '20.0.0', 'soundfile': '0.13.1', 'libsndfile': '1.2.2'}
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('source=' + manifest['image']['source_sha'] + '\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.image.outputs.source }}
+          path: source
+          persist-credentials: false
+      - name: Install pinned fixture decoder and host VM observer
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil
+          python3 -m venv "$RUNNER_TEMP/arctic-dictation-decoder"
+          "$RUNNER_TEMP/arctic-dictation-decoder/bin/pip" install --disable-pip-version-check \
+            --only-binary=:all: pyarrow==20.0.0 soundfile==0.13.1 numpy==2.2.6 cffi==1.17.1 pycparser==2.22
+      - name: Prepare verified public Hebrew and English local audio fixtures
+        timeout-minutes: 20
+        run: |
+          mkdir "$RUNNER_TEMP/arctic-dictation"
+          "$RUNNER_TEMP/arctic-dictation-decoder/bin/python" -B execution/tools/dictation-accuracy/accuracy.py prepare \
+            --cache "$RUNNER_TEMP/arctic-dictation/source-cache" \
+            --bundle "$RUNNER_TEMP/arctic-dictation/fixtures"
+          python3 -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          manifest = json.loads(Path('execution/tools/dictation-qualification/execution-manifest.json').read_text())
+          fixture = Path(os.environ['RUNNER_TEMP']) / 'arctic-dictation/fixtures/fixtures.json'
+          assert hashlib.sha256(fixture.read_bytes()).hexdigest() == manifest['fixture_manifest_sha256']
+          assert json.loads(fixture.read_text())['decoder'] == manifest['fixture_decoder']
+          PY
+      - name: Fetch the retained ISO and verify its real bytes and source
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B execution/tools/native-functional/fetch-image.py \
+            --manifest execution/tools/dictation-qualification/execution-manifest.json \
+            --out "$RUNNER_TEMP/arctic-dictation/inputs"
+      - name: Online installation, offline first boot, local sessions and offline recovery
+        run: |
+          python3 -B execution/tools/dictation-qualification/runner.py \
+            --source "$GITHUB_WORKSPACE/source" --inputs "$RUNNER_TEMP/arctic-dictation/inputs" \
+            --manifest "$GITHUB_WORKSPACE/execution/tools/dictation-qualification/execution-manifest.json" \
+            --hardware-profile '${{ matrix.hardware_profile }}' \
+            --fixtures "$RUNNER_TEMP/arctic-dictation/fixtures" \
+            --evidence "$RUNNER_TEMP/arctic-dictation/evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dictation-candidate-qualification-${{ matrix.hardware_profile }}
+          # This directory contains only validated transcript-free structured
+          # reports. Raw serial, setup and session logs are never copied here.
+          path: ${{ runner.temp }}/arctic-dictation/evidence/
+          if-no-files-found: ignore
+          retention-days: 14

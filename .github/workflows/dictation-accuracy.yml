@@ -1,0 +1,58 @@
+name: Dictation accuracy research
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dictation-accuracy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cpu:
+    name: Pinned Hebrew and English CPU measurements
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install fixture decoding tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-venv libasound2t64
+          python3 -m venv "$RUNNER_TEMP/fixture-tools"
+          "$RUNNER_TEMP/fixture-tools/bin/pip" install \
+            pyarrow==20.0.0 soundfile==0.13.1 numpy==2.2.6 cffi==1.17.1 pycparser==2.22
+      - name: Scoring and provenance negative controls
+        run: |
+          "$RUNNER_TEMP/fixture-tools/bin/python" -m unittest discover -s tools/dictation-accuracy -p 'test_*.py'
+      - name: Download verified official fixtures and local runtime
+        run: |
+          "$RUNNER_TEMP/fixture-tools/bin/python" tools/dictation-accuracy/accuracy.py prepare \
+            --cache "$RUNNER_TEMP/fleurs-cache" \
+            --bundle "$RUNNER_TEMP/fleurs-private" \
+            --payload "$RUNNER_TEMP/voxtype-private"
+      - name: Ten CPU transcriptions with networking unavailable
+        run: |
+          fixture_hash=$(python3 -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/fleurs-private/summary.json"))["fixture_manifest_sha256"])')
+          sudo unshare --net -- env ARCTIC_SOURCE_COMMIT="$GITHUB_SHA" \
+            python3 tools/dictation-accuracy/accuracy.py measure \
+            --bundle "$RUNNER_TEMP/fleurs-private" --fixture-sha256 "$fixture_hash" \
+            --binary "$RUNNER_TEMP/voxtype-private/voxtype-cpu" \
+            --model "$RUNNER_TEMP/voxtype-private/ggml-small.bin" \
+            --output "$RUNNER_TEMP/accuracy-private" --threads 2 --timeout 600
+      - name: Export transcript-free report
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/accuracy-report"
+          if sudo test -f "$RUNNER_TEMP/accuracy-private/report.json"; then
+            sudo cat "$RUNNER_TEMP/accuracy-private/report.json" > "$RUNNER_TEMP/accuracy-report/report.json"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dictation-accuracy-report
+          path: ${{ runner.temp }}/accuracy-report/report.json
+          if-no-files-found: warn
+          retention-days: 14

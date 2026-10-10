@@ -95,7 +95,7 @@ var APPS = {
   "category": "browser",
   "glyph": "compass",
   "summary": "Calm, privacy-first browser with vertical tabs.",
-  "default": true
+  "default": false
  },
  "firefox": {
   "name": "Firefox",
@@ -116,7 +116,7 @@ var APPS = {
   "category": "editor",
   "glyph": "code",
   "summary": "Fast, modern code editor.",
-  "default": true
+  "default": false
  },
  "vscodium": {
   "name": "VSCodium",
@@ -144,7 +144,7 @@ var APPS = {
   "category": "terminal",
   "glyph": "terminal",
   "summary": "Fast, GPU-drawn terminal.",
-  "default": true
+  "default": false
  },
  "alacritty": {
   "name": "Alacritty",
@@ -158,21 +158,21 @@ var APPS = {
   "category": "terminal",
   "glyph": "terminal",
   "summary": "Lightweight Wayland terminal.",
-  "default": false
+  "default": true
  },
  "zsh": {
   "name": "zsh",
   "category": "shell",
   "glyph": "prompt",
   "summary": "Friendly shell with smart completion.",
-  "default": true
+  "default": false
  },
  "fish": {
   "name": "fish",
   "category": "shell",
   "glyph": "prompt",
   "summary": "Shell with suggestions as you type.",
-  "default": false
+  "default": true
  },
  "bash": {
   "name": "bash",
@@ -186,14 +186,14 @@ var APPS = {
   "category": "files",
   "glyph": "folder",
   "summary": "Quick file manager inside the terminal.",
-  "default": true
+  "default": false
  },
  "thunar": {
   "name": "Thunar",
   "category": "files",
   "glyph": "folder",
   "summary": "Simple windowed file manager.",
-  "default": true
+  "default": false
  },
  "nautilus": {
   "name": "Files (Nautilus)",
@@ -207,7 +207,7 @@ var APPS = {
   "category": "office",
   "glyph": "document",
   "summary": "Documents, spreadsheets and slides.",
-  "default": true
+  "default": false
  },
  "libreoffice": {
   "name": "LibreOffice",
@@ -228,7 +228,7 @@ var APPS = {
   "category": "video",
   "glyph": "play",
   "summary": "Plays almost any video or audio file.",
-  "default": true
+  "default": false
  },
  "mpv": {
   "name": "mpv",
@@ -242,7 +242,7 @@ var APPS = {
   "category": "video",
   "glyph": "film",
   "summary": "Simple player built on mpv.",
-  "default": false
+  "default": true
  },
  "flathub": {
   "name": "Flathub",
@@ -818,9 +818,6 @@ var APPS = {
   "summary": "Free, no-logs VPN from Proton.",
   "default": false
  },
- "tor-client": { "name": "Tor SOCKS client", "glyph": "globe", "category": "security", "default": false },
- "tailscale": { "name": "Tailscale", "glyph": "globe", "category": "security", "default": false },
- "vpn-tools": { "name": "OpenVPN support", "glyph": "globe", "category": "security", "default": false },
  "tor-browser": {
   "name": "Tor Browser",
   "category": "security",
@@ -988,9 +985,86 @@ var APPS = {
   "glyph": "clock",
   "summary": "Browse and restore system snapshots.",
   "default": false
+ },
+ "nvidia": {
+  "name": "NVIDIA driver",
+  "category": "drivers",
+  "glyph": "cpu",
+  "summary": "NVIDIA’s own driver for your {device}: full speed for games, video and 3D apps.",
+  "default": true
+ },
+ "nvidia-580xx": {
+  "name": "NVIDIA driver (580 series)",
+  "category": "drivers",
+  "glyph": "cpu",
+  "summary": "NVIDIA’s driver for your {device}: full speed for games, video and 3D apps.",
+  "default": true
+ },
+ "broadcom-wl": {
+  "name": "Broadcom Wi-Fi driver",
+  "category": "drivers",
+  "glyph": "wifi",
+  "summary": "Broadcom’s driver, so your {device} works.",
+  "default": true
+ },
+ "intel-media": {
+  "name": "Intel video acceleration",
+  "category": "drivers",
+  "glyph": "film",
+  "summary": "Plays and records H.264 and H.265 video on your {device} instead of the processor.",
+  "default": true
+ },
+ "amd-video": {
+  "name": "AMD video acceleration",
+  "category": "drivers",
+  "glyph": "film",
+  "summary": "Plays and records H.264 and H.265 video on your {device} instead of the processor.",
+  "default": true
+ },
+ "gnome-web": {
+  "name": "GNOME Web",
+  "category": "browser",
+  "glyph": "globe",
+  "summary": "A simple browser with a sandboxed WebKit web process.",
+  "default": true
+ },
+ "featherpad": {
+  "name": "FeatherPad",
+  "category": "editor",
+  "glyph": "file",
+  "summary": "Lightweight text editor with tabs, search and highlighting.",
+  "default": true
+ },
+ "pcmanfm": {
+  "name": "PCManFM",
+  "category": "files",
+  "glyph": "folder",
+  "summary": "Simple folders, tabs and graphical archive tools.",
+  "default": true
+ },
+ "tor-client": {
+  "name": "Tor SOCKS client",
+  "category": "security",
+  "glyph": "globe",
+  "summary": "Optional per-app SOCKS connection. Starts only when you request it.",
+  "default": false
+ },
+ "tailscale": {
+  "name": "Tailscale",
+  "category": "security",
+  "glyph": "globe",
+  "summary": "Private device network. Sign-in and routing remain your choice.",
+  "default": false
+ },
+ "vpn-tools": {
+  "name": "OpenVPN support",
+  "category": "security",
+  "glyph": "globe",
+  "summary": "Import provider OpenVPN files. WireGuard already uses NetworkManager.",
+  "default": false
  }
 };
-var CATEGORIES = [["browser","Browser","one","Becomes your default browser."],["editor","Editor","many",""],["terminal","Terminal","one","Opens with Super + Enter."],["shell","Shell","one","What runs inside the terminal."],["files","File manager","many",""],["office","Office","one",""],["video","Video","many",""],["music","Music & audio","many",""],["photos","Photos","many",""],["graphics","Graphics & design","many",""],["recording","Recording & editing","many",""],["chat","Chat & calls","many",""],["email","Email & calendar","many",""],["notes","Notes & tasks","many",""],["reading","PDF & e-books","many",""],["gaming","Games","many",""],["security","Passwords & privacy","many",""],["sync","Downloads & sync","many",""],["dev","Developer tools","many",""],["containers","Containers & VMs","many",""],["extras","Utilities","many",""]];
+var CATEGORIES = [["drivers","Drivers","many","Found on this computer. These come from RPM Fusion and aren’t open source."],["browser","Browser","one","Becomes your default browser."],["editor","Editor","many",""],["terminal","Terminal","one","Opens with Super + Enter."],["shell","Shell","one","What runs inside the terminal."],["files","File manager","many",""],["office","Office","one",""],["video","Video","many",""],["music","Music & audio","many",""],["photos","Photos","many",""],["graphics","Graphics & design","many",""],["recording","Recording & editing","many",""],["chat","Chat & calls","many",""],["email","Email & calendar","many",""],["notes","Notes & tasks","many",""],["reading","PDF & e-books","many",""],["gaming","Games","many",""],["security","Passwords & privacy","many",""],["sync","Downloads & sync","many",""],["dev","Developer tools","many",""],["containers","Containers & VMs","many",""],["extras","Utilities","many",""]];
 var STEP_NAMES = ["Welcome","Keyboard","Network","Time zone","Disk","Encryption","Account","Apps","Summary","Install"];
 // Build an SVG data URI for icon `name` stroked with `color` (a #rrggbb string).
 function svg(name, color, stroke) {

@@ -1,0 +1,74 @@
+name: Candidate installer restoration qualification
+
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.installer]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  installer:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify reviewed activation and exact final image
+        id: image
+        working-directory: execution
+        run: |
+          python3 -B - <<'PY'
+          import json,os,re,subprocess
+          from pathlib import Path
+          event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          reviewed=Path('.github/qualification-20261010.installer').read_text().strip()
+          assert re.fullmatch('[0-9a-f]{40}',reviewed)
+          assert event['before']==reviewed and event['after']==os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git','rev-parse','HEAD^'],text=True).strip()==reviewed
+          assert subprocess.check_output(['git','diff','--name-only',reviewed,'HEAD'],text=True).splitlines()==['.github/qualification-20261010.installer']
+          manifest=json.loads(Path('tools/installer-qualification/execution-manifest.json').read_text())
+          assert manifest['ready'] is True and manifest['release_acceptance'] is False
+          source=manifest['image']['source_sha']
+          assert re.fullmatch('[0-9a-f]{40}',source)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write('source='+source+'\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.image.outputs.source }}
+          path: source
+          persist-credentials: false
+      - name: Install host-only physical evidence decoder
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil
+          /usr/bin/python3 -B -c 'from PIL import Image; print("Physical evidence decoder available")'
+      - name: Fetch verified final candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        timeout-minutes: 15
+        run: |
+          mkdir "$RUNNER_TEMP/arctic-installer"
+          /usr/bin/python3 -B execution/tools/native-functional/fetch-image.py --manifest execution/tools/installer-qualification/execution-manifest.json --out "$RUNNER_TEMP/arctic-installer/inputs"
+      - name: Real live installer restoration
+        timeout-minutes: 75
+        run: |
+          /usr/bin/python3 -B execution/tools/installer-qualification/runner.py --source "$GITHUB_WORKSPACE/source" --inputs "$RUNNER_TEMP/arctic-installer/inputs" --manifest "$GITHUB_WORKSPACE/execution/tools/installer-qualification/execution-manifest.json" --evidence "$RUNNER_TEMP/arctic-installer/evidence"
+      - name: Screen bounded VM evidence
+        if: always()
+        run: |
+          /usr/bin/python3 -B execution/tools/native-functional/screen-evidence.py --preserve-original --source "$RUNNER_TEMP/arctic-installer/evidence" --out "$RUNNER_TEMP/arctic-installer/screened"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-installer-restoration
+          path: ${{ runner.temp }}/arctic-installer/screened/
+          if-no-files-found: ignore
+          retention-days: 14

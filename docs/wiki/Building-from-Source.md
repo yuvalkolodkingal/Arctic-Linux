@@ -106,12 +106,14 @@ tools/build-iso.sh --create-only          # reuse a kept image root, only run th
 tools/build-iso.sh --debug                # kiwi --debug
 ```
 
-It runs `kiwi-ng system prepare` (packages and `iso/kiwi/config.sh`), installs Zen Browser from
-Flathub into the image, then `kiwi-ng system create`. With `--zen auto`, Zen is kept only while
-the ISO stays within GitHub's 2 GiB asset limit; otherwise the image is built again without it.
+It runs `kiwi-ng system prepare` (packages and `iso/kiwi/config.sh`), then `kiwi-ng system
+create`. GNOME Web, Foot, PCManFM with XArchiver, Celluloid, FeatherPad, Fish and Nano are
+included natively. `--zen yes` additionally preloads optional Zen from Flathub; `--zen auto`
+tolerates its download failure. A size miss never removes apps or triggers another build.
 
 Output in `out/iso/`: the ISO, its `.sha256`, the package list (`.packages`) and `.build-info`,
-which says `zen_preinstalled=1` or `0`.
+which records `default_browser=gnome-web` and `zen_preinstalled=1` or `0`. The full RPM
+inventory (`.rpm-inventory.tsv`) and actual Flatpak refs (`.flatpak-refs.txt`) are also saved.
 
 The boot menu comes from `iso/kiwi/grub-arctic.cfg.iso-template`. Each entry boots with
 `rd.live.image` and `arctic.mode=try` or `arctic.mode=install`; Safe graphics adds `nomodeset`,
@@ -159,7 +161,9 @@ warnings, `pending.json`, `getenforce` and the user's shell. Screenshots of ever
 `out/test/install/<firmware>/`.
 
 The VM has no internet in some environments, so the default profile installs offline and the
-downloaded apps (Zen, Zed, the codecs) are put off to `arctic-firstboot`.
+optional downloads (extra media codecs and Flatpak themes) are put off to `arctic-firstboot`.
+The selected default apps are already available offline. Selecting optional Zen, Zed or
+other apps adds their downloads; failed optional downloads can be deferred.
 
 ## Screenshots for this wiki: `tools/screenshot-tour.sh`
 
@@ -258,7 +262,7 @@ repository.
 
 Push a tag that starts with `v`, for example `v0.2.0`. `iso.yml` builds everything and creates the
 release **Arctic Linux 0.2.0** with the ISO and its `.sha256`, and writes release notes that say
-whether Zen is preinstalled. If the ISO is larger than 2 GiB, it's split into `.partNN` files with
+which apps are preinstalled. If the ISO is larger than 2 GiB, it's split into `.partNN` files with
 instructions for joining them.
 
 Running `iso.yml` by hand (**Actions → ISO → Run workflow**) builds the ISO as an artifact.

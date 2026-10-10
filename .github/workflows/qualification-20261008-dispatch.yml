@@ -1,0 +1,74 @@
+name: Reviewed candidate qualification build
+
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.activate]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/qualification-dispatch-20261010' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Dispatch the reviewed artifact-only build once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF_NAME'] == 'codex/qualification-dispatch-20261010'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          source = os.environ['GITHUB_SHA']
+          reviewed = Path('.github/qualification-20261010.activate').read_text().strip()
+          assert re.fullmatch('[0-9a-f]{40}', source) and re.fullmatch('[0-9a-f]{40}', reviewed)
+          assert event['before'] == reviewed and event['after'] == source
+          parent = subprocess.check_output(['git', 'rev-parse', source + '^'], text=True).strip()
+          assert parent == reviewed
+          assert subprocess.check_output(['git', 'rev-list', '--parents', '-n', '1', source], text=True).split() == [source, reviewed]
+          marker = Path('.github/qualification-20261010.activate')
+          assert marker.is_file() and not marker.is_symlink() and marker.read_bytes() == (reviewed + '\n').encode()
+          assert not subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()
+          changed = subprocess.check_output(['git', 'diff', '--name-only', reviewed, source], text=True).splitlines()
+          assert changed == ['.github/qualification-20261010.activate'], changed
+          inputs = {'release': False, 'tag': '', 'prerelease': True, 'draft': False,
+                    'boot_test': True, 'nix_acceptance': False, 'performance_acceptance': False,
+                    'performance_mode': 'frozen-external-paired-v1',
+                    'expected_source_sha': source}
+          # Compile the reviewed bytes directly; ignored bytecode is not source.
+          fetch_path = Path('tools/native-functional/fetch-image.py')
+          assert fetch_path.is_file() and not fetch_path.is_symlink()
+          fetch_bytes = fetch_path.read_bytes()
+          assert fetch_bytes == subprocess.check_output(['git', 'show', source + ':' + fetch_path.as_posix()])
+          checker = {'__name__': 'reviewed_producer_inputs', '__file__': str(fetch_path)}
+          exec(compile(fetch_bytes, str(fetch_path), 'exec'), checker)
+          checker['validate_external_inputs'](inputs, source)
+          path = Path(os.environ['RUNNER_TEMP']) / 'qualification-20261010-request.json'
+          with path.open('x') as output:
+              json.dump({'ref': os.environ['GITHUB_REF_NAME'], 'inputs': inputs}, output, indent=2)
+              output.write('\n')
+          PY
+          current=$(gh api repos/yuvalkolodkingal/Arctic-Linux/git/ref/heads/codex/qualification-dispatch-20261010 --jq .object.sha)
+          test "$current" = "$GITHUB_SHA"
+          gh api --method POST repos/yuvalkolodkingal/Arctic-Linux/actions/workflows/iso.yml/dispatches \
+            --input "$RUNNER_TEMP/qualification-20261010-request.json"
+      - name: Retain the source and fixed request
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "qualification-20261010-dispatch-${{ github.run_id }}"
+          path: "${{ runner.temp }}/qualification-20261010-request.json"
+          if-no-files-found: error
+          retention-days: 14

@@ -107,7 +107,7 @@ func TestGoldenNVIDIALUKSBusy(t *testing.T) {
 			t.Errorf("plan has %q", not)
 		}
 	}
-	if len(job.Outcome.Notes) != 0 {
+	if !reflect.DeepEqual(job.Outcome.Notes, []string{NoteDictationPending}) {
 		t.Errorf("notes %v", job.Outcome.Notes)
 	}
 }
@@ -138,7 +138,7 @@ func TestLateCloseFailureKeepsSystem(t *testing.T) {
 			t.Errorf("plan lacks %q", w)
 		}
 	}
-	if !reflect.DeepEqual(job.Outcome.Notes, []string{NoteStillOpen}) {
+	if !reflect.DeepEqual(job.Outcome.Notes, []string{NoteDictationPending, NoteStillOpen}) {
 		t.Errorf("notes %v", job.Outcome.Notes)
 	}
 	if job.Outcome.MOK != "requested" {
@@ -179,6 +179,7 @@ func TestFailureAfterCommitKeepsBootEntry(t *testing.T) {
 // a real error (no such package) is not.
 func TestDNFNetworkRetry(t *testing.T) {
 	job := loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["files"] = []string{"pcmanfm", "yazi"}
 	var mu sync.Mutex
 	fails := 0
 	rec := &Recorder{Respond: func(c Cmd) (string, error) {
@@ -214,7 +215,9 @@ func TestDNFNetworkRetry(t *testing.T) {
 		}
 		return DefaultRespond(c)
 	}}
-	runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, newReporter())
+	job = loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["files"] = []string{"pcmanfm", "yazi"}
+	runPlan(t, job, rec, newReporter())
 	if strings.Contains(rec.Plan(), "# wait 5s") {
 		t.Error("retried a failure that isn't the network's")
 	}

@@ -1,0 +1,30 @@
+id = "pcmanfm"
+name = "PCManFM"
+summary = "Simple folders, tabs and graphical archive tools."
+category = "files"
+default = true
+tile = "pcmanfm"
+icon = "folder"
+in_live_image = true
+gpu = true
+requires = []
+conflicts = []
+
+[[install]]
+# Fedora 44's maintained GTK 3 build, not GTK 2. XArchiver preserves graphical
+# archive creation/extraction; libfm already knows its command interface.
+method = "dnf"
+packages = ["pcmanfm", "xarchiver", "7zip", "zip", "unzip", "tar", "xz", "bzip2", "zstd", "cpio"]
+# Archive helpers are shared system tools: keep them if this app is unticked.
+remove = ["pcmanfm", "xarchiver"]
+download_mb = 2
+
+[defaults]
+desktop_id = "pcmanfm.desktop"
+role = "files"
+command = "pcmanfm"
+mime = ["inode/directory"]
+
+[[defaults.associations]]
+desktop_id = "xarchiver.desktop"
+mime = ["application/zip", "application/gzip", "application/x-7z-compressed", "application/x-tar", "application/x-compressed-tar", "application/x-bzip", "application/x-bzip2", "application/x-bzip-compressed-tar", "application/x-xz", "application/x-xz-compressed-tar", "application/zstd", "application/x-zstd-compressed-tar", "application/x-cpio"]

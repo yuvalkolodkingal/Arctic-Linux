@@ -96,6 +96,58 @@ func runPlan(t *testing.T, job *backend.Job, rec *Recorder, rep *testReporter) e
 	return in.Run(context.Background())
 }
 
+func TestDictationInstallQueueAndNonfatalSetup(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		offline, fail, completed bool
+	}{
+		{"online", false, false, false},
+		{"offline", true, false, false},
+		{"download-failure", false, true, false},
+		{"ready", false, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			job := loadJob(t, "defaults.toml", "uefi")
+			job.Offline = tc.offline
+			var setup *Cmd
+			rec := &Recorder{
+				ExistsFn: func(p string) bool {
+					return (tc.completed && p == "/mnt/var/lib/arctic/dictation/verified.json") || DefaultExists(p)
+				},
+				Respond: func(c Cmd) (string, error) {
+					if c.Name == "chroot" && strings.Contains(strings.Join(c.Args, " "), "/usr/share/arctic/dictation/dictation.py") {
+						copy := c
+						setup = &copy
+						if tc.fail {
+							return "", errors.New("download failed")
+						}
+					}
+					return DefaultRespond(c)
+				},
+			}
+			if err := runPlan(t, job, rec, newReporter()); err != nil {
+				t.Fatalf("dictation setup must not fail OS installation: %v", err)
+			}
+			if setup == nil || !setup.AllowFail {
+				t.Fatal("installer must make a nonfatal target setup attempt")
+			}
+			if strings.Contains(strings.Join(setup.Args, " "), "--offline") != tc.offline {
+				t.Fatalf("wrong offline setup contract: %v", setup.Args)
+			}
+			plan := rec.Plan()
+			if !strings.Contains(plan, "enable arctic-dictation-setup.timer") ||
+				!strings.Contains(plan, "write /mnt/var/lib/arctic/dictation/pending.json") ||
+				!strings.Contains(plan, "\"state\":\"queued\"") {
+				t.Fatal("installation must persist and enable retryable first-boot setup")
+			}
+			notes := strings.Join(job.Outcome.Notes, "\n")
+			if strings.Contains(notes, "Local dictation is not ready yet") == tc.completed {
+				t.Fatalf("readiness note must reflect setup receipt: %v", job.Outcome.Notes)
+			}
+		})
+	}
+}
+
 func golden(t *testing.T, name, got string) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
@@ -154,21 +206,119 @@ func TestGoldenDefaultUEFILUKS(t *testing.T) {
 		"$ cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --label arctic-root --key-file - /dev/nvme0n1p4 < [secret: disk passphrase]",
 		"$ efibootmgr --create --disk /dev/nvme0n1 --part 2 --label 'Arctic Linux' --loader '\\EFI\\fedora\\shimx64.efi'",
 		"FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak",
-		"$ chroot /mnt dnf copr enable -y lihaohong/yazi",
+		"browser=epiphany",
+		"editor=featherpad",
+		"terminal=foot",
+		"files=pcmanfm",
 		"$ useradd --root /mnt --create-home --user-group --groups wheel --shell /usr/bin/fish --comment 'Arctic User' --password [secret: password hash] arctic-user",
 	} {
 		if !strings.Contains(plan, want) {
 			t.Errorf("plan lacks %q", want)
 		}
 	}
-	for _, id := range []string{"zen", "zed", "kitty", "fish", "yazi", "nautilus", "collabora", "vlc"} {
+	for _, id := range []string{"gnome-web", "featherpad", "foot", "fish", "pcmanfm", "celluloid"} {
 		if rep.modules[id] != protocol.ModInstalled {
 			t.Errorf("%s: %s", id, rep.modules[id])
 		}
 	}
 	last := rep.progress[len(rep.progress)-1]
-	if last.Percent != 100 || last.AppsDone != 8 || rep.modules["bash"] != "" {
+	if last.Percent != 100 || last.AppsDone != 6 || rep.modules["bash"] != "" {
 		t.Errorf("last progress %+v", last)
+	}
+}
+
+// Fresh defaults come from the image copy. Failed online package checks must
+// still leave usable app roles, while genuinely downloaded codecs/themes defer.
+func TestCompanionMimeDefaults(t *testing.T) {
+	job := loadJob(t, "defaults.toml", "uefi")
+	in := New(&Recorder{}, job, newReporter(), Options{})
+	want := "application/zip=xarchiver.desktop\n"
+	if mime := in.mimeApps(); !strings.Contains(mime, want) || !strings.Contains(mime, "inode/directory=pcmanfm.desktop\n") {
+		t.Fatalf("selected PCManFM lost directory or companion archive defaults: %s", mime)
+	}
+	// An explicit primary handler from any selected app wins over companions.
+	job.Catalog.Modules["celluloid"].Defaults.Mime = append(job.Catalog.Modules["celluloid"].Defaults.Mime, "application/zip")
+	if mime := in.mimeApps(); strings.Contains(mime, want) || !strings.Contains(mime, "application/zip=io.github.celluloid_player.Celluloid.desktop\n") {
+		t.Fatalf("companion replaced a selected primary handler: %s", mime)
+	}
+	job.Catalog.Modules["celluloid"].Defaults.Mime = nil
+	in.skipped["pcmanfm"] = true
+	if mime := in.mimeApps(); strings.Contains(mime, "xarchiver.desktop") {
+		t.Fatalf("skipped module still supplied archive defaults: %s", mime)
+	}
+	delete(in.skipped, "pcmanfm")
+	job.Data.Apps.Selection["files"] = []string{"nautilus"}
+	if mime := in.mimeApps(); strings.Contains(mime, "xarchiver.desktop") || !strings.Contains(mime, "inode/directory=org.gnome.Nautilus.desktop\n") {
+		t.Fatalf("deselected companion leaked into the alternative file manager: %s", mime)
+	}
+}
+
+func TestFreshInstallPreservesLiveMimeHandlers(t *testing.T) {
+	live, err := os.ReadFile("../../packaging/desktop/live-mimeapps.list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := loadJob(t, "defaults.toml", "uefi")
+	in := New(&Recorder{}, job, newReporter(), Options{})
+	installed := in.mimeApps()
+	for _, line := range strings.Split(string(live), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "[") {
+			continue
+		}
+		want := strings.TrimSuffix(line, ";") + "\n"
+		if !strings.Contains(installed, want) {
+			t.Errorf("fresh install lost live handler %q", line)
+		}
+	}
+}
+
+func TestFreshDefaultsCompleteOffline(t *testing.T) {
+	for _, profileName := range []string{"defaults.toml", "ci/offline.toml"} {
+		t.Run(profileName, func(t *testing.T) {
+			job := loadJob(t, profileName, "uefi")
+			job.Offline = true
+			rec := &Recorder{Respond: func(c Cmd) (string, error) {
+				if c.Name == "flatpak" && len(c.Args) > 0 && (c.Args[0] == "install" || c.Args[0] == "remote-add") {
+					return "", errors.New("network is unreachable")
+				}
+				if c.Name == "chroot" && len(c.Args) > 2 && c.Args[1] == "dnf" && (c.Args[2] == "install" || c.Args[2] == "swap") {
+					return "", errors.New("network is unreachable")
+				}
+				return DefaultRespond(c)
+			}}
+			rep := newReporter()
+			rep.decide = func(string, int) backend.Decision { return backend.Defer }
+			if err := runPlan(t, job, rec, rep); err != nil {
+				t.Fatal(err)
+			}
+			plan := rec.Plan()
+			for _, id := range []string{"gnome-web", "featherpad", "foot", "fish", "pcmanfm", "celluloid"} {
+				if !job.Catalog.Modules[id].InLiveImage || rep.modules[id] != protocol.ModInstalled {
+					t.Errorf("%s: not preserved as a preloaded app (%s)", id, rep.modules[id])
+				}
+				if strings.Contains(plan, `"id": "`+id+`"`) {
+					t.Errorf("preloaded app %s was deferred", id)
+				}
+			}
+			for _, want := range []string{
+				"browser=epiphany", "editor=featherpad", "terminal=foot", "files=pcmanfm",
+				"x-scheme-handler/https=org.gnome.Epiphany.desktop", "inode/directory=pcmanfm.desktop",
+				"application/zip=xarchiver.desktop", "application/x-7z-compressed=xarchiver.desktop",
+				"video/mp4=io.github.celluloid_player.Celluloid.desktop",
+				`"id": "codecs"`, `"id": "adw-gtk3-flatpak"`, `"id": "adw-gtk3-dark-flatpak"`,
+				"write /mnt/var/lib/arctic/pending.json", "$ usermod --root /mnt --lock root",
+			} {
+				if !strings.Contains(plan, want) {
+					t.Errorf("offline plan lacks %q", want)
+				}
+			}
+			last := rep.progress[len(rep.progress)-1]
+			if last.Percent != 100 || last.AppsDone != 6 {
+				t.Errorf("offline install did not complete: %+v", last)
+			}
+			checkNoSecrets(t, plan)
+		})
 	}
 }
 
@@ -192,7 +342,7 @@ func TestGoldenAlternativeBIOSAlongside(t *testing.T) {
 		`type=21686148-6449-6E6F-744E-656564454649, name="BIOS boot"`,
 		"$ chroot /mnt grub2-install --target=i386-pc /dev/nvme0n1",
 		"GRUB_DISABLE_OS_PROBER=false",
-		"$ chroot /mnt dnf remove -y --no-autoremove kitty kitty-shell-integration kitty-kitten vlc vlc-gui-qt vlc-plugins-freeworld",
+		"$ chroot /mnt dnf remove -y --no-autoremove epiphany featherpad pcmanfm xarchiver celluloid",
 		"User=alt",
 		"KEYMAP=de-nodeadkeys",
 		"--shell /usr/bin/fish",
@@ -206,6 +356,19 @@ func TestGoldenAlternativeBIOSAlongside(t *testing.T) {
 			t.Errorf("alongside/no-LUKS plan must not run %s", not)
 		}
 	}
+	// Removing the unselected file manager must keep shared archive/recovery tools.
+	for _, command := range rec.Commands() {
+		if !strings.Contains(command, "dnf remove") {
+			continue
+		}
+		for _, field := range strings.Fields(command) {
+			for _, helper := range []string{"7zip", "zip", "unzip", "tar", "xz", "bzip2", "zstd", "cpio"} {
+				if field == helper {
+					t.Errorf("fresh target removes shared archive tool %s: %s", helper, command)
+				}
+			}
+		}
+	}
 }
 
 func TestOptionalFailureSkipAndDefer(t *testing.T) {
@@ -217,6 +380,7 @@ func TestOptionalFailureSkipAndDefer(t *testing.T) {
 	}
 	// Skip.
 	job := loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["editor"] = []string{"zed"} // old editor remains selectable
 	rec := &Recorder{Respond: failZed}
 	rep := newReporter()
 	if err := runPlan(t, job, rec, rep); err != nil {
@@ -230,6 +394,7 @@ func TestOptionalFailureSkipAndDefer(t *testing.T) {
 	}
 	// Retry once, then defer (the unattended policy) → pending.json.
 	job = loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["editor"] = []string{"zed"}
 	rec = &Recorder{Respond: failZed}
 	rep = newReporter()
 	rep.decide = func(id string, n int) backend.Decision {
@@ -252,6 +417,7 @@ func TestOptionalFailureSkipAndDefer(t *testing.T) {
 func TestFallbackMethod(t *testing.T) {
 	// The yazi COPR is down: the batch fails, then yazi falls back to Nix.
 	job := loadJob(t, "defaults.toml", "uefi")
+	job.Data.Apps.Selection["files"] = []string{"pcmanfm", "yazi"} // optional TUI retains Nix fallback
 	rec := &Recorder{Respond: func(c Cmd) (string, error) {
 		if strings.Contains(c.String(), "copr enable") {
 			return "", errors.New("copr unreachable")
@@ -464,6 +630,43 @@ func TestLateFailureRemovesBootEntry(t *testing.T) {
 	}
 }
 
+func TestNixSocketFailureStopsBeforeServiceDisable(t *testing.T) {
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.String() == "systemctl --root=/mnt enable nix-daemon.socket" {
+			return "", errors.New("nix-daemon.socket is missing")
+		}
+		return DefaultRespond(c)
+	}}
+	err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, newReporter())
+	if err == nil || !strings.HasPrefix(err.Error(), "configure: ") || !strings.Contains(err.Error(), "nix-daemon.socket") {
+		t.Fatalf("required Nix socket failure must abort configuration, got %v", err)
+	}
+	plan := rec.Plan()
+	if strings.Contains(plan, "$ systemctl --root=/mnt disable nix-daemon.service") ||
+		strings.Contains(plan, "$ systemctl --root=/mnt set-default graphical.target") {
+		t.Errorf("handed off a partially configured Nix service:\n%s", plan)
+	}
+}
+
+func TestNixServiceDisableFailureRetainsSocket(t *testing.T) {
+	rec := &Recorder{Respond: func(c Cmd) (string, error) {
+		if c.String() == "systemctl --root=/mnt disable nix-daemon.service" {
+			return "", errors.New("cannot disable eager daemon startup")
+		}
+		return DefaultRespond(c)
+	}}
+	if err := runPlan(t, loadJob(t, "defaults.toml", "uefi"), rec, newReporter()); err != nil {
+		t.Fatalf("a disable failure must retain functional Nix and finish installation: %v", err)
+	}
+	plan := rec.Plan()
+	enable := strings.Index(plan, "$ systemctl --root=/mnt enable nix-daemon.socket")
+	disable := strings.Index(plan, "$ systemctl --root=/mnt disable nix-daemon.service")
+	handoff := strings.Index(plan, "$ systemctl --root=/mnt set-default graphical.target")
+	if enable < 0 || !(enable < disable && disable < handoff) {
+		t.Errorf("socket enable must precede service disable and handoff:\n%s", plan)
+	}
+}
+
 // Non-Latin layouts get "us" first plus a switch, and a Latin console keymap for the disk
 // passphrase at boot; empty values are never written (mango rejects "key=").
 func TestKeyboardFiles(t *testing.T) {
@@ -556,14 +759,15 @@ func TestQuote(t *testing.T) {
 	}
 }
 
-// The ISO may ship Zen as a Flatpak (tools/build-iso.sh, only under 2 GiB) although the catalog
-// can't say so: the copied /var/lib/flatpak decides.
+// Older images may ship Zen as a Flatpak: preserve detection and selection of a
+// copied optional browser even though fresh images default to GNOME Web.
 func TestPreinstalledFlatpakFromTheImage(t *testing.T) {
 	zenInImage := func(p string) bool {
 		return DefaultExists(p) || p == "/mnt/var/lib/flatpak/app/app.zen_browser.zen"
 	}
 	// Ticked: kept from the copy, never downloaded, reported installed.
 	job := loadJob(t, "ci/default.toml", "uefi")
+	job.Data.Apps.Selection["browser"] = []string{"zen"}
 	rec := &Recorder{ExistsFn: zenInImage}
 	rep := newReporter()
 	if err := runPlan(t, job, rec, rep); err != nil {

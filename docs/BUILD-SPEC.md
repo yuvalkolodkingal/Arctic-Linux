@@ -70,7 +70,7 @@ checked against the SHA-256 there and again in `%prep`.
 |---|---|---|
 | `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL; LOGO names the icon arctic-logos installs in hicolor and `/usr/share/pixmaps`, checked in `%check`; fastfetch has no built-in Arctic logo and would draw Fedora's by ID_LIKE, hence the fox in the fastfetch layouts, §3.1), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
 | `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/pixmaps/arctic-logo-icon.{png,svg}` (os-release `LOGO`), `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
-| `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.svg` + rendered `*.png` (3840×2160) | The 6 design wallpapers. Provides `desktop-backgrounds-compat` if needed by sddm. |
+| `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.jpg`, collection metadata, credit/copyright notices and a real photo PNG for default/greeter aliases; existing illustrated SVG/PNG compatibility paths | The 19 pinned author photographs are the fresh gallery, with City Afterglow as default. Their upstream copyright is retained; see `docs/PHOTO-WALLPAPERS.md`. Provides `desktop-backgrounds-compat`. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-fonts-symbols` | `/usr/share/fonts/arctic-symbols/SymbolsNerdFont{,Mono}-Regular.ttf` ← Source1, `/usr/share/fontconfig/conf.avail/66-arctic-nerd-symbols.conf` ← `packaging/fonts/` (+ its link in `/etc/fonts/conf.d/`) | noarch. The symbols appended weakly after `monospace`, JetBrains Mono and Adwaita Mono, so the terminal's icons (yazi, eza, prompts) work with any code font. License from the release's LICENSE and readme: MIT AND CC-BY-4.0 AND Apache-2.0 AND OFL-1.1-RFN AND OFL-1.1 AND Unlicense. Recommended by `arctic-shell` (with `arctic-themes-extra`), listed in `config.kiwi`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
@@ -90,17 +90,22 @@ checked against the SHA-256 there and again in `%prep`.
 Metapackage: `arctic-desktop` (subpackage, no files) Requires everything a desktop needs:
 mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-settings, arctic-desktop-config,
 arctic-backgrounds, arctic-fonts, arctic-logos, arctic-release, arctic-plymouth-theme,
-arctic-grub-theme, kitty, kitty-shell-integration, zsh, fastfetch, swaybg, swayidle,
+arctic-grub-theme, fastfetch, swaybg, swayidle,
 swaylock, grim, slurp, wl-clipboard, cliphist, brightnessctl, playerctl, wireplumber,
 pipewire-pulseaudio, NetworkManager-wifi, bluez,
 xdg-desktop-portal-wlr, xdg-desktop-portal-gtk, xdg-user-dirs, xdg-utils, libnotify,
 librsvg2-tools, jetbrains-mono-fonts-all, google-noto-sans-fonts, polkit, gnome-keyring,
-gnome-keyring-pam, Thunar, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
+gnome-keyring-pam, qt6-qtwayland, qt5-qtwayland, xorg-x11-server-Xwayland,
 fuzzel (fallback launcher), flatpak, nix, nix-daemon, arctic-selinux, python3-pillow,
 adw-gtk3-theme, qt5ct, qt6ct (§3.1); Recommends btop, mako (the waybar session's notification
 daemon; the shell is its own notification server), pavucontrol, network-manager-applet and
 blueman (the shell draws its own sound, network and Bluetooth menus and pairs with its own
 agent; the waybar session and the menus' "More…" links still use them). arctic-shell Requires glib2 (gdbus).
+
+Swappable defaults are Recommends: Epiphany, Foot, fish, GTK 3 PCManFM, XArchiver,
+Celluloid and FeatherPad. The installer can replace or deselect them without removing
+the desktop metapackage. Fresh media also includes Bash, Nano and archive format tools;
+the composed install follows the selected module packages and MIME defaults (§5, §7).
 
 ## 3. Desktop session (installed and live)
 
@@ -336,6 +341,26 @@ reads (sshd_config.d is root-only). Units:
 `arctic-flatpak-update.timer` (system and user), `gcr-ssh-agent.socket` (user preset), and the
 XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
 
+### 3.4 Local dictation
+
+`arctic-desktop-config` ships `packaging/dictation/` as the small standard-library
+controller in `/usr/share/arctic/dictation/`, `/usr/bin/arctic-dictation`, the fixed
+polkit setup helper, and `arctic-dictation-setup.service`/`.timer`. No engine binary
+or model belongs in the RPM/live ISO. Installer finalization writes a target setup
+queue, enables the background timer and makes a bounded, nonfatal online setup
+attempt; offline installations retain an explicit unready first-boot queue. The
+fixed hardware profiles use Voxtype 1.1.0 baseline/Small (506,181,191 bytes) on
+legacy or unknown CPUs and AVX2/Vulkan/Turbo Q5 (678,117,115 bytes) on validated
+x86-64-v3 CPUs, plus missing system dependencies. Each attempt downloads one
+multilingual model and verifies exact bytes and SHA-256 before readiness. GPU
+failure offers a fresh CPU recording; optimized CPU incompatibility offers an
+explicit administrator-authorized Small setup, without automatic audio retry or
+model download. See [DICTATION.md](DICTATION.md) for hashes, sizes,
+dependency/readiness checks, privacy, lock and cancellation behavior, commands and
+the native release acceptance contract. CI/RPM checks run the dictation control
+tests; systemd CI verifies its service and timer, and installer goldens include the queue/setup
+hook. Source checks do not qualify audio inference or the final image.
+
 ## 4. Engine ↔ installer UI protocol
 
 - `arcticd` listens on `/run/arcticd.sock` (systemd socket activation: `arcticd.socket`,
@@ -389,7 +414,7 @@ XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
 |---|---|---|---|
 | 1 | `welcome` | `{language:"en_US.UTF-8"}` | `{languages:[{id,name(native),english}], suggested}` |
 | 2 | `keyboard` | `{layout:"us", variant:"", xkb:{layout, variant, options, keymap, latin}}` (`xkb` is read-only, what the choice gives: Latin layouts alone; non-Latin ones as `us,<layout>` with `grp:alt_shift_toggle` and a Latin console keymap). A valid SetStep also writes `xkb` to the live system's `/etc/arctic/mango/keyboard.conf` (sourced by the live session); the UI then runs `mmsg dispatch reload_config`, so passwords are typed as on the installed system | `{layouts:[{layout,variant,name,description,suggested:bool}]}` |
-| 3 | `network` | `{}` | `{online,wired,ssid,driver_hint?}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online. `driver_hint` is set when a detected Wi-Fi card only works once its driver is installed (Broadcom wl): how to get online meanwhile |
+| 3 | `network` | `{offline:bool}` (default `false`) | `{online,wired,ssid,driver_hint?}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online. Without connectivity, the explicit **Install offline** choice enables normal Next; it persists on revisits without changing the actual network state. Apps already on the image work; downloads and security updates wait for connectivity, and dictation stays unready until its app and a verified model are installed. `driver_hint` is set when a detected Wi-Fi card only works once its driver is installed (Broadcom wl): how to get online meanwhile |
 | 4 | `timezone` | `{timezone:"Asia/Jerusalem", auto_time:true}` | `{detected:{city,timezone,source:"network"\|"default"}, regions:{Europe:[{city,timezone}],…}}` |
 | 5 | `disk` | `{disk:"/dev/nvme0n1", mode:"erase"\|"alongside"}` | `{disks:[{path,model,size_bytes,size_label,removable,install_media:bool,existing_os:[…],alongside_possible:bool,alongside_label:"Uses 120 GB of free space"}]}` (install media excluded; alongside needs ≥ 40 GB free, on UEFI an ESP to share, on MBR room for two primary partitions) |
 | 6 | `encryption` | `{enabled:true}` | `{min_score:2, weak_warning, passphrase_set, strength?}` (passphrase via SetSecrets; `strength` is the saved one's CheckPassphrase result). `min_score` is the warning threshold, not a gate: below it the step shows `weak_warning` ("This passphrase is easy to guess: someone who has your computer could read your files. You can still use it.") in a warning banner and Next still works. Next needs a passphrase (both fields matching, English (US) characters on a non-Latin layout — checked by the UI) |
@@ -417,6 +442,7 @@ glyph from its `icon`) by `installer-ui/dev/export-assets.js`.
 `modules/<category>/<id>/module.toml` as in PLAN §4.1, fields: `id, name, summary, category,
 default, tile, icon, in_live_image, gpu, proprietary, requires, conflicts, [[install]] method = "dnf"|"copr"|"flatpak"|"nix"
 (+ packages | copr+packages | remote+ref | attr), verified, download_mb, [defaults] desktop_id, mime,
+optional [[defaults.associations]] desktop_id + mime for installed companion apps (primary selected apps take precedence),
 [session] …`. Hidden mandatory modules live in `modules/_system/`. Profiles (`profiles/*.toml`)
 reference module ids only.
 
@@ -527,14 +553,22 @@ closed at the end); os-prober only runs for "alongside". Every command goes thro
 kiwi-ng 11 (Fedora 44 package `kiwi-cli` + `kiwi-systemdeps-iso-media`), description in
 `iso/kiwi/` derived from fedora-kiwi-descriptions (F44). Image type iso, hybrid, UEFI (shim,
 Secure Boot) + BIOS. Packages: `arctic-desktop`, `arctic-installer`, `arctic-live`,
-livesys-scripts, kernel, dracut-live. The ISO workflow requires the Firefox-based Zen Flatpak
-(`--zen yes`): missing browser installation fails the build, and images above 2 GiB retain it.
-The release path splits larger images; workflow artifacts retain the complete ISO. The local
-builder's optional `--zen auto|no` modes remain available for development. Enforcing VM
-acceptance launches Zen through its exported desktop entry as the normal desktop user in
-the live session and both installed boots, requiring a mapped window to persist five seconds.
+livesys-scripts, kernel, dracut-live. The approved fresh-media defaults are native GNOME Web
+(Epiphany), Foot, fish, PCManFM with XArchiver, Celluloid and FeatherPad; Nano and Bash remain
+available for recovery. The builder fails if a required default app is absent. Zen, Firefox
+and the previous richer apps remain optional catalog choices. `--zen yes` additionally
+preloads Zen; `--zen auto` tolerates its download failure, and neither mode removes an app
+after a size miss. The default is `--zen no`; GNOME Web is always included.
+The native browser shares required WebKitGTK 6.0 with Arctic web apps. Its web-process
+sandbox is mandatory; it does not have the Flatpak outer UI sandbox or full Firefox
+extension/Zen workspace compatibility, and paid DRM streaming has not been qualified.
+The release path can split larger images; workflow artifacts retain the complete ISO.
+Enforcing VM acceptance launches the configured browser as the desktop user in the live
+session and both installed boots, requiring a mapped window to persist five seconds and
+checking the native WebKit process's containment.
 The workflow checks the ISO checksum before upload and publishes a separate small metadata
-artifact containing its checksum, package list and source/build identity. Repos: Fedora 44 +
+artifact containing its checksum, full RPM inventory, actual Flatpak refs and source/build
+identity. Repos: Fedora 44 +
 updates + the local `out/repo`. Boot menu entries
 (GRUB, both firmwares): "Try Arctic Linux" (`rd.live.image arctic.mode=try quiet rhgb`),
 "Install Arctic Linux" (`… arctic.mode=install`), "Safe graphics mode" (`nomodeset`),
@@ -576,7 +610,7 @@ git checkout the build time stands in for the commit time.) Every build of every
 Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 1.2.0, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 1.2.1, mangowm 0.17.3); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),

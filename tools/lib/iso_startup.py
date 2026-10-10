@@ -1,0 +1,228 @@
+"""Fail-closed evidence for the disposable ISO boot harness."""
+import shlex
+import base64
+import zlib
+import time
+import re
+import uuid
+from pathlib import Path
+
+
+def console_screen(path):
+    """Input guard only: refuse to type shell commands into a graphical wizard.
+
+    Guest authentication, installer IPC, enforcing SELinux and unique completion
+    records still determine startup acceptance. A dark image alone never passes.
+    """
+    from PIL import Image
+    try:
+        with Image.open(path) as image:
+            if not (320 <= image.width <= 4096 and 200 <= image.height <= 4096):
+                return False
+            # Linux's normal VT foreground is VGA light gray (170), while bold
+            # text can be white. The retained BIOS tty6 has 4,184 gray pixels
+            # and no pixels at 192+, so a white-only check rejects a real getty.
+            # Examine original pixels; a missing/blank/graphical capture fails.
+            histogram = image.convert('L').histogram()
+            total = image.width * image.height
+            return sum(histogram[:17]) / total > .90 and sum(histogram[160:]) >= 30
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def console_auth_command(nonce):
+    if not re.fullmatch('[0-9a-f]{32}', nonce):
+        raise ValueError('Invalid console authentication nonce')
+    # Only the authenticated live account can emit this response. sudo merely
+    # opens the serial device after the unprivileged caller's identity checks.
+    response = 'printf "ARCTIC-CONSOLE-READY=' + nonce + ' user=liveuser uid=%s\\n" "$1" >/dev/ttyS0'
+    return ('uid=$(id -u); test "$(id -un)" = liveuser && '
+            'test "$uid" = "$(id -u liveuser)" && test "$uid" -ge 1000 && '
+            'sudo sh -c ' + shlex.quote(response) + ' sh "$uid"')
+
+
+def console_authenticated(path, nonce):
+    if not re.fullmatch('[0-9a-f]{32}', nonce):
+        return False
+    try:
+        content = Path(path).read_bytes()
+    except (OSError, TypeError):
+        return False
+    if len(content) > 1024 * 1024:
+        return False
+    lines = content.decode('utf-8', errors='replace').splitlines()
+    records = [line for line in lines if line.startswith('ARCTIC-CONSOLE-READY=')]
+    if len(records) != 1:
+        return False
+    match = re.fullmatch('ARCTIC-CONSOLE-READY=' + nonce + r' user=liveuser uid=([0-9]+)', records[0])
+    return bool(match and 1000 <= int(match[1]) <= 2147483647)
+
+
+def installer_probe(require_visible=False):
+    validate = ("import json,sys; s=" + ("json.loads(sys.argv[1])" if require_visible else "json.load(sys.stdin)") + "; "
+                "assert s['page']=='welcome' and s['ready'] is True "
+                "and s['connected'] is True and not s['failure']")
+    if require_visible:
+        validate += (" and s['window']['visible'] is True "
+                     "and s['window']['backing_visible'] is True "
+                     "and s['window']['width'] >= 320 and s['window']['height'] >= 200 "
+                     "and isinstance(s['window']['screen'],str) and s['window']['screen'] != ''")
+        validate += ("; layers=json.loads(sys.argv[2])['layers']; "
+                     "mapped=[l for l in layers if l['name']=='arctic-installer']; "
+                     "assert len(mapped)==1 and mapped[0]['layer']=='top' "
+                     "and mapped[0]['monitor']==s['window']['screen']; "
+                     "print('ARCTIC-INSTALLER-WINDOW='+json.dumps(dict(window=s['window'],layers=mapped)))")
+    # Quickshell's path selector filters instances by WAYLAND_DISPLAY. A tty
+    # login has no display environment, even while the installer remains alive.
+    # Discover exactly one actual socket; never guess a display or start a UI.
+    select = ("runtime=/run/user/$(id -u liveuser); display=; "
+            "for socket in \"$runtime\"/wayland-*; do "
+            "[ -S \"$socket\" ] || continue; "
+            "[ -z \"$display\" ] || exit 1; display=${socket##*/}; done; "
+            "test -n \"$display\" || exit 1; ")
+    query = "quickshell ipc -p /usr/share/arctic/installer-ui call installer state"
+    if require_visible:
+        select += ("mango=; for socket in \"$runtime\"/mango-*.sock; do "
+                   "[ -S \"$socket\" ] || continue; "
+                   "[ -z \"$mango\" ] || exit 1; mango=$socket; done; "
+                   "test -n \"$mango\" && ")
+        query = ('state=$(' + query + ') && layers=$(mmsg get all-layers) && python3 -c ' +
+                 shlex.quote(validate) + ' "$state" "$layers"')
+        return select + ('runuser -u liveuser -- env XDG_RUNTIME_DIR="$runtime" '
+                         'WAYLAND_DISPLAY="$display" MANGO_INSTANCE_SIGNATURE="$mango" sh -c ' +
+                         shlex.quote(query))
+    return select + ("runuser -u liveuser -- env XDG_RUNTIME_DIR=\"$runtime\" "
+            "WAYLAND_DISPLAY=\"$display\" "
+            + query + " | "
+            "python3 -c " + shlex.quote(validate))
+
+
+def installer_restoration_probe(timeout_seconds=25):
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 25:
+        raise ValueError('Installer restoration deadline must be 1..25 seconds')
+    # Bound the whole operation, including an unresponsive IPC command. Repeat
+    # the complete socket/state/mapped-layer check as outputs return, then fail
+    # closed before the host's installer collection wait ends.
+    loop = 'until (' + installer_probe(require_visible=True) + '); do sleep 1; done'
+    return 'timeout ' + str(timeout_seconds) + 's sh -c ' + shlex.quote(loop)
+
+
+def restore_desktop():
+    # Discover the live user's real Wayland VT rather than guessing tty1/tty2.
+    return ("restored=0; for s in $(loginctl list-sessions --no-legend | "
+            "awk '$3==\"liveuser\" {print $1}'); do "
+            "[ \"$(loginctl show-session \"$s\" -p Type --value)\" = wayland ] || continue; "
+            "vt=$(loginctl show-session \"$s\" -p VTNr --value); "
+            "case $vt in ''|0|*[!0-9]*) continue;; esac; "
+            "if chvt \"$vt\"; then restored=1; break; fi; done; "
+            "test \"$restored\" = 1")
+
+
+def collection_command(mode, require_startup):
+    commands = ('echo ARCTIC-COLLECT-BEGIN; cat ~liveuser/.local/share/sddm/*.log; '
+                'cat /proc/cmdline; mokutil --sb-state; '
+                'systemctl --failed --no-pager; journalctl -b -p warning --no-pager; '
+                'getenforce; flatpak list; ')
+    if require_startup:
+        if mode not in ('try', 'install', 'safe'):
+            raise ValueError('startup qualification supports try, install and safe')
+        requested = 'install' if mode == 'install' else 'try'
+        checks = ["grep -Eq '(^| )rd.live.image( |$)' /proc/cmdline",
+                  f"grep -Eq '(^| )arctic.mode={requested}( |$)' /proc/cmdline",
+                  'pgrep -u liveuser -x mango >/dev/null',
+                  'test "$(getenforce)" = Enforcing']
+        checks.append(("" if mode == 'safe' else '! ') +
+                      "grep -Eq '(^| )nomodeset( |$)' /proc/cmdline")
+        if mode == 'install':
+            # Preserve the exclusive-focus installer and prove it actually
+            # reached its connected, ready welcome state before collecting.
+            checks.extend(['(' + installer_probe() + ')', '(' + restore_desktop() + ')',
+                           '(' + installer_restoration_probe() + ')'])
+        commands += 'if ' + ' && '.join(checks) + '; then '
+        commands += f'echo ARCTIC-STARTUP-PASS={mode}; else echo ARCTIC-STARTUP-FAILED; fi; '
+    commands += 'echo ARCTIC-COLLECT-END'
+    return 'sudo sh -c ' + shlex.quote('(' + commands + ') >/dev/ttyS0 2>&1')
+
+
+def console_transport(command):
+    # Nested shell quoting expands the complete mapping/retry probe to 12 KB.
+    # Sending those keystrokes at the verified VT's conservative rate takes
+    # forty minutes. Compress only this generated, reviewed command as data;
+    # the actual authentication, privilege and acceptance checks are unchanged.
+    payload = base64.b64encode(zlib.compress(command.encode(), 9)).decode('ascii')
+    program = ('import base64,zlib,subprocess; '
+               'subprocess.run(["sh","-c",zlib.decompress(base64.b64decode(' +
+               repr(payload) + ')).decode()],check=True)')
+    return 'python3 -c ' + shlex.quote(program)
+
+
+def collect_session(vm, mode, require_startup, shot, log, sleep=time.sleep, serial_path=None):
+    shot('97-before-collect')
+    if mode == 'install':
+        if serial_path is None:
+            raise ValueError('Live console authentication needs the owned serial log')
+        # The installer intentionally has exclusive layer-shell keyboard focus.
+        # Super+Enter and typed shell commands would instead drive its wizard.
+        # tty3 can belong to the live SDDM greeter (the retained BIOS captures
+        # show the installer before Ctrl+Alt+F3 and that greeter afterwards).
+        # logind reserves tty6 for a getty by default; still verify its actual
+        # image before any input. Keep modifiers down through QEMU's 100 ms
+        # key-up delay instead of a zero-duration input-send-event batch.
+        reply = vm.cmd('send-key', keys=[dict(type='qcode', data=key)
+                       for key in ('ctrl', 'alt', 'f6')], **{'hold-time': 100})
+        if 'error' in reply:
+            raise RuntimeError('QEMU refused the console VT chord')
+        sleep(5)
+        if not console_screen(shot('97-console-login')):
+            raise RuntimeError('Console VT was not visible; refused to type into the installer')
+        vm.type_text('liveuser', gap=.2)
+        vm.keys('ret')
+        sleep(3)
+        # PAM may request the live account's empty password. If the shell is
+        # already up, this is just an empty command. Never send the probe as a
+        # password: first require a fresh response from the actual live UID.
+        vm.keys('ret')
+        sleep(3)
+        nonce = uuid.uuid4().hex
+        vm.type_text(console_auth_command(nonce), gap=.2)
+        vm.keys('ret')
+        for _ in range(30):
+            if console_authenticated(serial_path, nonce):
+                break
+            sleep(1)
+        else:
+            shot('97-console-authentication-failed')
+            raise RuntimeError('Live console authentication did not produce an exact UID response')
+        log('authenticated liveuser text console with a unique UID response')
+    else:
+        vm.keys('meta_l-ret')
+        sleep(60)
+        vm.keys('ret')
+        sleep(5)
+    shot('98-console' if mode == 'install' else '98-terminal')
+    command = collection_command(mode, require_startup)
+    if mode == 'install':
+        command = console_transport(command)
+    vm.type_text(command, gap=.2)
+    vm.keys('ret')
+    # Leave room for journal collection plus the complete 25-second remapping
+    # deadline on BIOS/TCG, rather than terminating a still-valid guest probe.
+    sleep(45 if mode == 'install' and require_startup else 30)
+    log('session collection command sent through ' + ('console' if mode == 'install' else 'terminal'))
+
+
+def collection_complete(path, mode=None):
+    try:
+        lines = Path(path).read_text(errors='replace').splitlines()
+    except OSError:
+        return False
+    markers = ['ARCTIC-COLLECT-BEGIN', 'ARCTIC-COLLECT-END']
+    if mode is not None:
+        markers.append('ARCTIC-STARTUP-PASS=' + mode)
+        if 'ARCTIC-STARTUP-FAILED' in lines:
+            return False
+    # Commands echoed in warnings, partial/duplicate collections or another mode
+    # cannot stand in for exact, uniquely emitted guest records.
+    return (all(lines.count(marker) == 1 for marker in markers)
+            and lines.index(markers[0]) < lines.index(markers[1])
+            and (mode is None or lines.index(markers[0]) < lines.index(markers[2]) < lines.index(markers[1])))

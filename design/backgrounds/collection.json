@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/yuvalkolodkingal/Wallpapers",
+  "revision": "4f0288d170ad505a4f6c7239f85e200b44836621",
+  "author": "Yuval Kolodkin-Gal",
+  "default": "city-afterglow",
+  "wallpapers": [
+    {
+      "slug": "butterfly-in-gold",
+      "title": "Butterfly in Gold",
+      "theme": "canopy",
+      "description": "An orange butterfly among pale leaves and deep green shade.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "7c5d713468aff0be216a3f1c10c18492d495ce9d329fd7f18e674740f572e5fb",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "butterfly-in-gold.jpg"
+    },
+    {
+      "slug": "fig-thief",
+      "title": "Fig Thief",
+      "theme": "canopy",
+      "description": "A parakeet tucked into the green light of a fig tree.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "7f6a453d4298ae2f983237424b1ef7cb9ed20d3ea367437c76469af5f675f1bb",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "fig-thief.jpg"
+    },
+    {
+      "slug": "porcelain-petals",
+      "title": "Porcelain Petals",
+      "theme": "canopy",
+      "description": "Pale blue flowers against shaded leaves.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "4d7b40ea5d5bca3dbc61915beb91bd2fbaa0d1e1a165f87fa8f8ac24655e41c6",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "porcelain-petals.jpg"
+    },
+    {
+      "slug": "hoopoe-in-the-grass",
+      "title": "Hoopoe in the Grass",
+      "theme": "canopy",
+      "description": "A low view of a hoopoe framed by fine blades of grass.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "a1ec7aa559048ddb2d052547e410eff9f5e9644149ba4a498423e0f113d9bf70",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "hoopoe-in-the-grass.jpg"
+    },
+    {
+      "slug": "canopy-light",
+      "title": "Canopy Light",
+      "theme": "canopy",
+      "description": "Sunlight tracing the veins of broad leaves.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "a202379fbbd80d38d0aa6bef1ac02f84159c5bb0eb6cdef0065f31202b4134b2",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "canopy-light.jpg"
+    },
+    {
+      "slug": "a-place-to-pause",
+      "title": "A Place to Pause",
+      "theme": "canopy",
+      "description": "Two wooden chairs on a quiet garden path.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "128ffdbd245918d4bd49428ebd38e9ad967084d4f095b59ccd7575628c011cfc",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "a-place-to-pause.jpg"
+    },
+    {
+      "slug": "garden-nap",
+      "title": "Garden Nap",
+      "theme": "canopy",
+      "description": "A resting tabby surrounded by tall leaves.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "65b496f322847f903cbc399e9fe4c64ec5c5ae6a80500ba3fe9a9d96b46419cb",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "garden-nap.jpg"
+    },
+    {
+      "slug": "violet-water",
+      "title": "Violet Water",
+      "theme": "lagoon",
+      "description": "Violet flower spikes above green water and bright leaves.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "dc117d7ffd3d84ca6adbedcad2f70e9b336acc554b7939550a2421bfff93bb27",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "violet-water.jpg"
+    },
+    {
+      "slug": "quiet-water",
+      "title": "Quiet Water",
+      "theme": "lagoon",
+      "description": "A white egret standing in rippled olive water.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "ec267d459f36af792765904917d27dbcae7e529df948aa398ac9ae79a3b19ffb",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "quiet-water.jpg"
+    },
+    {
+      "slug": "reed-reflections",
+      "title": "Reed Reflections",
+      "theme": "lagoon",
+      "description": "A duck gliding through long reflections of reeds.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "56d9e1de88f204ebdb773691b900505a9c11f79397b354c29fb5eef1b230e1cf",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "reed-reflections.jpg"
+    },
+    {
+      "slug": "open-sky",
+      "title": "Open Sky",
+      "theme": "lagoon",
+      "description": "A small plane crossing a broad field of muted blue.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "634f198afb4bbe1d5f9c5fdff3b1488126b51e7795221ea900bf2515083a7673",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "open-sky.jpg"
+    },
+    {
+      "slug": "featherlines",
+      "title": "Featherlines",
+      "theme": "lagoon",
+      "description": "An abstract close view of blue feather barbs and their central shaft.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "97f6600d370c47f25c3d07ca9a9107d911526318e95f92e07228185e103f51bc",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "featherlines.jpg"
+    },
+    {
+      "slug": "last-amber",
+      "title": "Last Amber",
+      "theme": "ember",
+      "description": "A roofline and trees silhouetted against an amber evening sky.",
+      "width": 2992,
+      "height": 1683,
+      "sha256": "7bdc67803f96f511a7c9dd09384e517598fce26bc8598621860e080c294a7bb8",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "last-amber.jpg"
+    },
+    {
+      "slug": "city-afterglow",
+      "title": "City Afterglow",
+      "theme": "ember",
+      "description": "Cloud layers and a warm sun above the city skyline.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "3a49ed965b054bebc2ca8147fb608029287d1670632cb305bd08d3801b7a147e",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "city-afterglow.jpg"
+    },
+    {
+      "slug": "ember-clouds-city-silhouette",
+      "title": "Ember Clouds, City Silhouette",
+      "theme": "ember",
+      "description": "Sunlit cloud edges glow orange beside a dark city silhouette.",
+      "width": 2048,
+      "height": 1152,
+      "sha256": "7af8cb5ce0d87773109d759afdd1d14ef22ce7e84fdc1533da1539083cd11b0b",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "ember-clouds-city-silhouette.jpg"
+    },
+    {
+      "slug": "magenta-in-the-leaves",
+      "title": "Magenta in the Leaves",
+      "theme": "dusk",
+      "description": "A magenta flower peeking through a canopy of leaves.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "519a40e51e5b42587e2a4d9634bfa04674b149a261cf72a496e279c6d5958f7c",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "magenta-in-the-leaves.jpg"
+    },
+    {
+      "slug": "bottlebrush",
+      "title": "Bottlebrush",
+      "theme": "dusk",
+      "description": "Crimson stamens among cool leaves, with a restrained color balance.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "2aba23fe39b0caf180ebbf916d156b8e5c9964ea9c5b22e07b04340d0d58da12",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "bottlebrush.jpg"
+    },
+    {
+      "slug": "pink-berry",
+      "title": "Pink Berry",
+      "theme": "dusk",
+      "description": "A single bright pink fruit nested between soft green leaves.",
+      "width": 2992,
+      "height": 1683,
+      "sha256": "1747bc213c4afa4fddfbba6cc1c91638b46d6ef5ea51080f9ccb4736007bad54",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "pink-berry.jpg"
+    },
+    {
+      "slug": "rose-city",
+      "title": "Rose City",
+      "theme": "dusk",
+      "description": "A soft-focus city sunset retaining the photographer\u2019s existing rose and violet grade.",
+      "width": 3840,
+      "height": 2160,
+      "sha256": "70b4314190ff0c6c5e35a29850e39823f71f064a21a39a1b8a7196f911cafcb2",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "rose-city.jpg"
+    }
+  ]
+}

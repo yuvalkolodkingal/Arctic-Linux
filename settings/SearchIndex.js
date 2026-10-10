@@ -24,6 +24,8 @@ var PAGES = [
       words: "headphones devices pair wireless" },
     { id: "sound", title: "Sound", icon: "volume", file: "SoundPage.qml",
       words: "audio volume speakers microphone output input mute" },
+    { id: "dictation", title: "Dictation", icon: "mic", file: "DictationPage.qml",
+      words: "voice speech voxtype whisper local transcription hebrew english microphone model" },
     { id: "notifications", title: "Notifications", icon: "bell", file: "NotificationsPage.qml",
       words: "alerts do not disturb dnd history banners pop-ups toasts quiet" },
     { id: "updates", title: "Updates", icon: "download", file: "UpdatesPage.qml",
@@ -47,6 +49,13 @@ var PAGES = [
 ];
 
 var ENTRIES = [
+    ["dictation", "dictation.setup", "Prepare local dictation", "voxtype whisper multilingual model download install offline retry not ready"],
+    ["dictation", "dictation.profile", "Dictation hardware model", "small large turbo q5 avx2 baseline compatibility recommended hardware cpu model"],
+    ["dictation", "dictation.record", "Start and stop dictation", "voice speech recording transcript text shortcut microphone"],
+    ["dictation", "dictation.cancel", "Cancel dictation", "discard recording transcription stop abort"],
+    ["dictation", "dictation.language", "Dictation language", "hebrew english multilingual auto detect עברית"],
+    ["dictation", "dictation.backend", "Dictation acceleration", "gpu vulkan cpu fallback hardware"],
+    ["dictation", "dictation.privacy", "Dictation privacy", "local audio no upload logs transcript"],
     ["appearance", "appearance.theme", "Theme", "winter polar night dark light mode colours"],
     ["appearance", "appearance.auto", "Match colours to the wallpaper", "auto automatic accent"],
     ["appearance", "appearance.mode", "Light or dark", "dark mode light mode"],

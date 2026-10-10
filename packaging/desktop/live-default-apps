@@ -1,0 +1,6 @@
+# Starting roles for fresh Arctic Linux live images and installs made from them.
+# The installer writes the apps you pick; ~/.config/arctic/default-apps overrides these.
+terminal=foot
+browser=epiphany
+editor=featherpad
+files=pcmanfm

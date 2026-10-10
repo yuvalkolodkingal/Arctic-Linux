@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fixed operation only. pkexec cannot provide arbitrary Python/setup arguments.
+case "$#:$1" in
+  0:) ;;
+  1:--compatibility|1:--recommended) ;;
+  *) exit 2 ;;
+esac
+exec /usr/bin/python3 -I /usr/share/arctic/dictation/dictation.py --queue "$@"

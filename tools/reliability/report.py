@@ -24,10 +24,11 @@ def read_records(path):
 def evaluate(directory, upgrade=False, app_profile='legacy'):
     if app_profile not in ('legacy', 'lightweight'):
         raise ValueError('unsupported reliability app profile: ' + str(app_profile))
-    stages = [('live', 'serial-install.log', tuple(c for c in CHECKS if c != 'app-editor' or app_profile == 'lightweight')),
-              ('installed', 'serial-boot.log', CHECKS + (('upgrade',) if upgrade else ()))]
+    required = CHECKS + (('wallpapers',) if app_profile == 'lightweight' else ())
+    stages = [('live', 'serial-install.log', tuple(c for c in required if c != 'network' and (c != 'app-editor' or app_profile == 'lightweight'))),
+              ('installed', 'serial-boot.log', required + (('upgrade',) if upgrade else ()))]
     if upgrade:
-        stages.append(('installed', 'serial-upgrade.log', CHECKS + ('upgrade-transaction',)))
+        stages.append(('installed', 'serial-upgrade.log', required + ('upgrade-transaction',)))
     results = []
     for stage, filename, checks in stages:
         try:
@@ -53,6 +54,8 @@ def evaluate(directory, upgrade=False, app_profile='legacy'):
                         status='passed' if any(line.endswith(target) for line in log.splitlines())
                         else 'failed' if 'boot stage: exit' in log else 'unrun',
                         evidence='test.log', detail=target))
+    results.append(dict(stage='live', check='network', status='unrun',
+                        detail='Isolated offline install; external HTTPS is required in the installed stage'))
     if app_profile == 'legacy':
         results.append(dict(stage='live', check='app-editor', status='unrun',
                             detail='Legacy Zed is downloaded at install time, not required in the live image'))

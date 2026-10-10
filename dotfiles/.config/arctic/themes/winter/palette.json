@@ -65,6 +65,6 @@
     "ansi-15": "#3e4a58",
     "shadow": "#12171e33"
   },
-  "wallpaper": "snowfield-winter",
-  "lock_wallpaper": "fox-winter"
+  "wallpaper": "/usr/share/backgrounds/arctic/default.jpg",
+  "lock_wallpaper": "/usr/share/backgrounds/arctic/default.jpg"
 }

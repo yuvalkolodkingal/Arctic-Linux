@@ -2,10 +2,10 @@ id = "celluloid"
 name = "Celluloid"
 summary = "Simple player built on mpv."
 category = "video"
-default = false
+default = true
 tile = "celluloid"
 icon = "film"
-in_live_image = false
+in_live_image = true
 gpu = true
 requires = []
 conflicts = []
@@ -15,7 +15,7 @@ conflicts = []
 # The RPM ships the same io.github.celluloid_player.Celluloid.desktop.
 method = "dnf"
 packages = ["celluloid"]
-download_mb = 23
+download_mb = 15
 
 [[install]]
 method = "flatpak"
@@ -31,9 +31,15 @@ mime = [
   "video/mp4",
   "video/x-matroska",
   "video/webm",
+  "video/mpeg",
   "video/quicktime",
   "video/x-msvideo",
+  "video/ogg",
   "audio/mpeg",
   "audio/flac",
   "audio/ogg",
+  "audio/x-vorbis+ogg",
+  "audio/x-wav",
+  "audio/mp4",
+  "audio/opus",
 ]

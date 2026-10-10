@@ -855,15 +855,20 @@ func (in *Installer) configurePhase(ctx context.Context) error {
 	if !d.Timezone.AutoTime {
 		timeAction = "disable"
 	}
-	// One unit per call: a unit missing from the image is logged, not fatal.
+	// Enable the Nix socket before disabling eager startup. Its enable failure is
+	// fatal: handing off an installed system without core Nix access is unsafe.
+	// Other unavailable units are logged individually as before.
 	type unitAction struct{ action, unit string }
 	var actions []unitAction
 	for _, u := range units {
 		actions = append(actions, unitAction{"enable", u})
+		if u == "nix-daemon.socket" {
+			actions = append(actions, unitAction{"disable", "nix-daemon.service"})
+		}
 	}
 	actions = append(actions, unitAction{timeAction, "chronyd.service"})
 	for _, a := range actions {
-		res, err := in.R.Run(ctx, Cmd{Name: "systemctl", Args: []string{"--root=" + in.Opt.Target, a.action, a.unit}, AllowFail: true})
+		res, err := in.R.Run(ctx, Cmd{Name: "systemctl", Args: []string{"--root=" + in.Opt.Target, a.action, a.unit}, AllowFail: a.unit != "nix-daemon.socket"})
 		if err != nil {
 			return err
 		}
@@ -1214,9 +1219,9 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 }
 
 // inLiveImage reports whether the copy already brought the module: in_live_image in the
-// catalog, or a Flatpak app the live image happens to ship. tools/build-iso.sh preinstalls
-// Zen only while the ISO stays under 2 GiB (BUILD-SPEC §7), so the copied
-// /var/lib/flatpak decides, not the catalog.
+// catalog, or an optional Flatpak app explicitly preloaded by tools/build-iso.sh
+// (BUILD-SPEC §7). The copied /var/lib/flatpak decides whether that optional
+// download is already available; a size miss never strips apps.
 func (in *Installer) inLiveImage(m *catalog.Module) bool {
 	if m.InLiveImage {
 		return true
@@ -1500,6 +1505,7 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 			return err
 		}
 	}
+	in.finishDictation(ctx)
 	if len(in.deferred) > 0 {
 		// Version 2 carries each module's install methods, because the catalog leaves the
 		// installed system together with arctic-installer (arctic-firstboot reads this).
@@ -1565,6 +1571,42 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 	_, err = in.R.Run(ctx, Cmd{Name: "umount", Args: []string{t}, AllowFail: true})
 	return err
 }
+
+// finishDictation keeps the speech engine and model out of the live image. The
+// copied system gets a bounded online setup attempt, or an explicit first-boot
+// queue when offline. A model/dependency download must never undo an OS install.
+func (in *Installer) finishDictation(ctx context.Context) {
+	queue := "{\"version\":\"1.1.0\"}\n"
+	// The fixed setup helper selects the hardware profile and exact disclosure
+	// before network access; don't duplicate model/byte constants in Go.
+	status := "{\"state\":\"queued\",\"progress\":0,\"error\":\"\",\"version\":\"1.1.0\"}\n"
+	for _, file := range []struct{ name, data string }{{"pending.json", queue}, {"setup.json", status}} {
+		if err := in.write(in.tgt("/var/lib/arctic/dictation/"+file.name), file.data, 0o644); err != nil {
+			in.Rep.Logf("dictation queue could not be saved (continuing): %v", err)
+			in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteDictationPending)
+			return
+		}
+	}
+	if err := in.run(ctx, "systemctl", "--root="+in.Opt.Target, "enable", "arctic-dictation-setup.timer"); err != nil {
+		in.Rep.Logf("dictation first-boot setup could not be enabled (continuing): %v", err)
+	}
+	args := []string{"--install"}
+	if in.Job.Offline {
+		args = append(args, "--offline")
+	}
+	in.t.Update(0.4, "Preparing local dictation (model download depends on hardware; audio stays on this computer)…")
+	setupCtx, cancel := context.WithTimeout(ctx, 11*time.Minute)
+	defer cancel()
+	if _, err := in.R.Run(setupCtx, Chroot(in.Opt.Target, Cmd{Name: "/usr/bin/python3", Args: append([]string{"-I", "/usr/share/arctic/dictation/dictation.py"}, args...), AllowFail: true})); err != nil {
+		in.Rep.Logf("dictation setup did not finish (continuing with a retryable queue): %v", err)
+	}
+	if !in.R.Exists(in.tgt("/var/lib/arctic/dictation/verified.json")) {
+		in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteDictationPending)
+	}
+}
+
+// NoteDictationPending describes a retryable, nonfatal download or offline queue.
+const NoteDictationPending = "Local dictation is not ready yet. Connect to the internet and choose Retry setup in Settings → Dictation."
 
 // NoteStillOpen is the Done screen's note when the new system is complete but its disk
 // couldn't be let go of at the end (Outcome.Notes).
@@ -1645,7 +1687,7 @@ func (in *Installer) installedApps() []*catalog.Module {
 
 func (in *Installer) defaultApps() string {
 	apps := in.installedApps()
-	terminal := "kitty"
+	terminal := "foot"
 	for _, m := range apps {
 		if m.Defaults.Role == "terminal" && in.Job.Data.Apps.Selection.Contains(m.ID) {
 			terminal = in.command(m)
@@ -1674,18 +1716,28 @@ func (in *Installer) defaultApps() string {
 func (in *Installer) mimeApps() string {
 	seen := map[string]bool{}
 	var lines []string
-	for _, m := range in.installedApps() {
-		if !in.Job.Data.Apps.Selection.Contains(m.ID) {
-			continue
-		}
-		id := in.desktopID(m)
+	add := func(id string, mime []string) {
 		if id == "" {
-			continue
+			return
 		}
-		for _, mt := range m.Defaults.Mime {
+		for _, mt := range mime {
 			if !seen[mt] {
 				seen[mt] = true
 				lines = append(lines, mt+"="+id)
+			}
+		}
+	}
+	apps := in.installedApps()
+	// Primary handlers from every selected app take precedence over companions.
+	for _, m := range apps {
+		if in.Job.Data.Apps.Selection.Contains(m.ID) {
+			add(in.desktopID(m), m.Defaults.Mime)
+		}
+	}
+	for _, m := range apps {
+		if in.Job.Data.Apps.Selection.Contains(m.ID) {
+			for _, association := range m.Defaults.Associations {
+				add(association.DesktopID, association.Mime)
 			}
 		}
 	}

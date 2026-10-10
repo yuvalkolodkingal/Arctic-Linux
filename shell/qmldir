@@ -11,6 +11,7 @@ singleton WeatherService 1.0 WeatherService.qml
 singleton NotificationService 1.0 NotificationService.qml
 singleton KeyboardService 1.0 KeyboardService.qml
 singleton RecordService 1.0 RecordService.qml
+singleton DictationService 1.0 DictationService.qml
 singleton AppsService 1.0 AppsService.qml
 singleton MenuState 1.0 MenuState.qml
 singleton Tools 1.0 Tools.qml

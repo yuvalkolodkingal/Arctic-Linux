@@ -289,7 +289,7 @@ Every step is idempotent, checkpointed, logged and has a dry-run mode.
    touch /mnt/var/lib/flatpak/.fedora-initialized  # stop Fedora's OCI remote being added at first boot
    ```
 4. **Nix**: installed as Fedora RPMs (`nix`, `nix-daemon`), already in the live image ✅. `arctic-selinux` adds the `/nix` file contexts, reusing the NixOS installer's `nix.fc` (LGPL-2.1, credited). The key rule is `/nix/var/nix/daemon-socket(/.*)? → var_run_t`, which fixes Fedora bug 2525943.
-   - Enable `nix-daemon.service`, and switch to the socket only once CI shows no AVC denials.
+   - The optimization candidate enables upstream `nix-daemon.socket` and disables eager daemon startup. An enforcing installed-VM trial passed socket activation, real Foot/profile add/remove/rollback and an offline reboot with no matching new AVCs; exact-candidate CI remains a merge gate. No SELinux rule changes or existing-user service migration are included.
    - `auto-optimise-store = false` (Fedora bug 2416675).
    - Nix apps go system-wide from the live host:
      `nix --store /mnt profile add --profile /mnt/nix/var/nix/profiles/default <pinned installables> --log-format internal-json`.

@@ -75,11 +75,19 @@ type Install struct {
 
 // Defaults declares what the module becomes the default for.
 type Defaults struct {
-	DesktopID string   `toml:"desktop_id" json:"desktop_id,omitempty"`
-	Mime      []string `toml:"mime" json:"mime,omitempty"`
-	Role      string   `toml:"role" json:"role,omitempty"`       // key in /etc/arctic/default-apps
-	Command   string   `toml:"command" json:"command,omitempty"` // may contain {terminal}
-	Shell     string   `toml:"shell" json:"shell,omitempty"`     // login shell for the shell category
+	DesktopID    string            `toml:"desktop_id" json:"desktop_id,omitempty"`
+	Mime         []string          `toml:"mime" json:"mime,omitempty"`
+	Associations []MimeAssociation `toml:"associations" json:"associations,omitempty"` // companion apps installed by this module
+	Role         string            `toml:"role" json:"role,omitempty"`                 // key in /etc/arctic/default-apps
+	Command      string            `toml:"command" json:"command,omitempty"`           // may contain {terminal}
+	Shell        string            `toml:"shell" json:"shell,omitempty"`               // login shell for the shell category
+}
+
+// MimeAssociation gives a companion app its own MIME handler, without changing
+// the selected module's desktop ID or taking precedence over selected apps.
+type MimeAssociation struct {
+	DesktopID string   `toml:"desktop_id" json:"desktop_id"`
+	Mime      []string `toml:"mime" json:"mime"`
 }
 
 // Session holds desktop-component settings (only used by system modules in v0.1).
@@ -254,8 +262,8 @@ func (in Install) RemovePackages() []string {
 }
 
 // MarkPreinstalled sets InLiveImage on the Flatpak apps the live image ships although the
-// catalog doesn't list them there (the ISO build preinstalls Zen only while the ISO stays
-// under 2 GiB). has reports whether a ref is installed in the image. It returns the ids.
+// catalog doesn't list them there (the builder can optionally preload Zen). A size miss
+// never removes an app. has reports whether a ref is installed and returns the ids.
 func (c *Catalog) MarkPreinstalled(has func(ref string) bool) []string {
 	var ids []string
 	for _, id := range c.Order {

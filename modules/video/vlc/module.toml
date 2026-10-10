@@ -1,12 +1,12 @@
-# In the live image, including vlc-plugins-freeworld (the ISO build enables RPM Fusion).
+# Optional player; the optimized live image uses Celluloid.
 id = "vlc"
 name = "VLC"
 summary = "Plays almost any video or audio file."
 category = "video"
-default = true
+default = false
 tile = "vlc"
 icon = "play"
-in_live_image = true
+in_live_image = false
 gpu = true
 requires = []
 conflicts = []

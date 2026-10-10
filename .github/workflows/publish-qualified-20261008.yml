@@ -1,0 +1,187 @@
+name: Publish the qualified retained Arctic ISO
+
+on:
+  push:
+    branches: [codex/publish-qualified-20261010]
+    paths: [.github/qualification-20261010.publish]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  prepare:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    # Six bounded evidence downloads (15 minutes each), exact-image fetch
+    # (20 minutes), bounded source fetches, hash validation and artifact upload.
+    # The dictation and installer lanes supplement every original acceptance gate.
+    timeout-minutes: 160
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          filter: blob:none
+          sparse-checkout: |
+            .github
+            tools
+          persist-credentials: false
+      - name: Install the bounded image evidence decoder
+        timeout-minutes: 7
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 \
+            install -y --no-install-recommends python3-pil
+      - name: Verify all evidence and prepare the exact retained ISO assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          /usr/bin/python3 -B tools/qualified-release/prepare.py --manifest tools/qualified-release/manifest.json \
+            --out "$RUNNER_TEMP/qualified-assets"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-publication-assets
+          path: ${{ runner.temp }}/qualified-assets/
+          compression-level: 0
+          retention-days: 14
+  publish:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/qualified-release
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-publication-assets
+          path: assets
+      - name: Verify exact bytes, upload a draft, verify uploaded digests, publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, subprocess
+          from pathlib import Path
+          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/publish-qualified-20261010'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          repo = 'repos/yuvalkolodkingal/Arctic-Linux'
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', repo + path], timeout=60))
+          def tag_target(optional=False):
+              result = subprocess.run(['gh', 'api', repo + '/git/ref/tags/v1.2.1'],
+                                      text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+              if result.returncode and optional and '(HTTP 404)' in result.stderr:
+                  return None
+              assert result.returncode == 0, 'Cannot verify the release tag'
+              obj = json.loads(result.stdout)['object']
+              seen = set()
+              for _ in range(10):
+                  assert re.fullmatch('[0-9a-f]{40}', obj['sha']) and obj['sha'] not in seen
+                  seen.add(obj['sha'])
+                  if obj['type'] == 'commit':
+                      return obj['sha']
+                  assert obj['type'] == 'tag', 'Tag resolves to a non-commit object'
+                  obj = api('/git/tags/' + obj['sha'])['object']
+              raise RuntimeError('Annotated tag chain exceeds verification bound')
+          def promotion_guard(target):
+              assert tag_target() == target, 'Actual release tag target differs'
+              assert api('/git/ref/heads/main')['object']['sha'] == target, 'Main advanced during draft upload'
+              assert not api('/pulls?state=open&per_page=100'), 'A PR opened during draft upload'
+          def ensure_tag(target):
+              existing = tag_target(optional=True)
+              assert existing in (None, target), 'Existing tag points at an unqualified source'
+              if existing is None:
+                  subprocess.run(['gh', 'api', '--method', 'POST', repo + '/git/refs',
+                                  '-f', 'ref=refs/tags/v1.2.1', '-f', 'sha=' + target],
+                                 check=True, stdout=subprocess.DEVNULL, timeout=60)
+              assert tag_target() == target, 'Created release tag target differs'
+          def uploaded_draft(target):
+              # The tag endpoint is documented for published releases. Listing
+              # with write access includes drafts; verify this unique tag and ID.
+              matches = [release for release in api('/releases?per_page=100')
+                         if release['tag_name'] == 'v1.2.1']
+              assert len(matches) == 1, 'Owned uploaded draft is absent or ambiguous'
+              release = matches[0]
+              assert type(release['id']) is int and release['id'] > 0
+              actual = api('/releases/' + str(release['id']))
+              assert actual['id'] == release['id'] and actual['tag_name'] == 'v1.2.1'
+              assert actual['draft'] is True and actual['target_commitish'] == target
+              return actual
+          def sha(path):
+              value = hashlib.sha256()
+              with path.open('rb') as source:
+                  for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                      value.update(chunk)
+              return value.hexdigest()
+          root = Path('assets')
+          assert {path.name for path in root.iterdir()} == {
+              'Arctic-Linux-1.2.1-x86_64.iso', 'Arctic-Linux-1.2.1-x86_64.iso.sha256',
+              'Arctic-Linux-1.2.1-x86_64.iso.torrent', 'Arctic-Linux-1.2.1-x86_64.iso.torrent.sha256',
+              'qualification.json', 'release-notes.md'}
+          assert all(path.is_file() and not path.is_symlink() for path in root.iterdir())
+          proof = json.loads((root / 'qualification.json').read_text())
+          assert proof['tag'] == 'v1.2.1' and proof['release_acceptance'] == 'qualified'
+          target = proof['release_main_sha']
+          assert re.fullmatch('[0-9a-f]{40}', target)
+          assert api('/git/ref/heads/main')['object']['sha'] == target
+          assert not api('/pulls?state=open&per_page=100')
+          assert tag_target(optional=True) in (None, target), 'Existing tag points at an unqualified source'
+          iso = root / 'Arctic-Linux-1.2.1-x86_64.iso'
+          assert 0 < iso.stat().st_size == proof['image']['bytes'] < 2_000_000_000
+          assert sha(iso) == proof['image']['sha256']
+          checksum = root / (iso.name + '.sha256')
+          assert checksum.read_text().strip().split() == [proof['image']['sha256'], iso.name]
+          torrent = root / (iso.name + '.torrent')
+          torrent_checksum = root / (torrent.name + '.sha256')
+          assert torrent_checksum.read_text().strip().split() == [proof['torrent']['torrent_sha256'], torrent.name]
+          assert sha(torrent) == proof['torrent']['torrent_sha256']
+          subprocess.run(['python3', '-B', 'tools/qualified-release/torrent.py', 'create',
+                          '--iso', str(iso), '--torrent', str(root / 'regenerated.torrent'), '--tag', 'v1.2.1'],
+                         check=True, stdout=subprocess.DEVNULL, timeout=120)
+          assert (root / 'regenerated.torrent').read_bytes() == torrent.read_bytes()
+          (root / 'regenerated.torrent').unlink()
+          assets = [iso, checksum, torrent, torrent_checksum, root / 'qualification.json']
+          # Draft creation need not materialize a tag. Bind an actual ref to
+          # the fully qualified target before creating/uploading the draft.
+          ensure_tag(target)
+          # Creating a draft first prevents a partially uploaded release becoming
+          # public. A verification failure leaves only this owned draft to repair.
+          subprocess.run(['gh', 'release', 'create', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
+                          '--target', target, '--verify-tag', '--title', 'Arctic Linux 1.2.1', '--draft',
+                          '--notes-file', str(root / 'release-notes.md'), *map(str, assets)], check=True, timeout=20 * 60)
+          release = uploaded_draft(target)
+          assert release['draft'] is True and release['prerelease'] is False
+          assert release['target_commitish'] == target and len(release['assets']) == len(assets)
+          expected = {path.name: (path.stat().st_size, 'sha256:' + sha(path)) for path in assets}
+          assert {asset['name']: (asset['size'], asset['digest']) for asset in release['assets']} == expected
+          assert all(asset['state'] == 'uploaded' for asset in release['assets'])
+          # Uploading nearly 2 GB can take minutes. Recheck the actual tag,
+          # main and all-PR-closure gates immediately before public promotion.
+          promotion_guard(target)
+          subprocess.run(['gh', 'release', 'edit', 'v1.2.1', '--repo', 'yuvalkolodkingal/Arctic-Linux',
+                          '--draft=false', '--prerelease=false', '--latest'], check=True, timeout=60)
+          release = api('/releases/tags/v1.2.1')
+          assert release['draft'] is False and release['prerelease'] is False
+          assert {asset['name']: (asset['size'], asset['digest']) for asset in release['assets']} == expected
+          print('ARCTIC-QUALIFIED-RELEASE', release['html_url'], proof['image']['sha256'], flush=True)
+          PY
+      - name: Verify the full public download and actual HTTP torrent piece ranges
+        run: |
+          python3 -B tools/qualified-release/torrent.py verify-public \
+            --iso assets/Arctic-Linux-1.2.1-x86_64.iso \
+            --torrent assets/Arctic-Linux-1.2.1-x86_64.iso.torrent --tag v1.2.1 \
+            > release-download-verification.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-download-verification
+          path: release-download-verification.json
+          if-no-files-found: error
+          retention-days: 14

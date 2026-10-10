@@ -272,6 +272,10 @@ def wallpaper_picture():
             return drawn
     except OSError:
         pass
+    for folder in DESIGN_DIRS:
+        default = os.path.join(folder, "default.jpg")
+        if os.path.isfile(default):
+            return default
     return design_file("aurora", variant)
 
 

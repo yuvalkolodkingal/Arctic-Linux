@@ -1,0 +1,5 @@
+# The fresh-image builder appends this record to libfm's system terminals.list if missing.
+[foot]
+open_arg=-e
+noclose_arg=--hold -e
+desktop_id=foot.desktop

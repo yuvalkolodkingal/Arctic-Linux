@@ -7,7 +7,7 @@
 #   arctic-release         packaging/release/                  os-release, macros.dist, presets,
 #                                                              the Arctic repositories + key
 #   arctic-logos           branding/logos/ (install-path tree) system-logos
-#   arctic-backgrounds     design/wallpapers/*.svg (+ PNG rendered here)
+#   arctic-backgrounds     design/backgrounds/ photos; legacy design/wallpapers/ compatibility
 #   arctic-fonts           branding/fonts/Figtree-*.ttf (else design/fonts/Figtree-*.woff2)
 #   arctic-fonts-symbols   Nerd Fonts "Symbols Only" (Source1, the one download) + packaging/fonts
 #   arctic-selinux         packaging/selinux/arctic-nix.{te,fc} (compiled here)
@@ -49,7 +49,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        1.2.0
+Version:        1.2.1
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -149,15 +149,16 @@ hicolor arctic-logo-icon / fedora-logo-icon / start-here icons) and the brand SV
 %package -n arctic-backgrounds
 Summary:        Arctic Linux wallpapers
 BuildArch:      noarch
+License:        MIT AND LicenseRef-YKG-Wallpapers
 # SDDM requires desktop-backgrounds-compat for /usr/share/backgrounds/default.*; Arctic's
 # default wallpaper takes its place (and keeps Fedora's 10 MB f44-backgrounds out).
 Provides:       desktop-backgrounds-compat = %{version}-%{release}
 Conflicts:      desktop-backgrounds-compat
 
 %description -n arctic-backgrounds
-The six Arctic Linux wallpapers (snowfield, aurora and fox, each in Winter and Polar night)
-as SVG and as 3840×2160 PNG in /usr/share/backgrounds/arctic, plus the
-/usr/share/backgrounds/default{,-dark}.png names other programs look for.
+Photographs by Yuval Kolodkin-Gal from the pinned Wallpapers collection, with
+credits and checksums. Fresh desktop, lock and greeter defaults use a photo.
+Legacy illustrations remain available for existing saved wallpaper choices.
 
 # ---------------------------------------------------------------------------------------------
 %package -n arctic-fonts
@@ -224,10 +225,10 @@ Requires:       python3-dbus
 Requires:       python3-gobject-base
 Requires:       polkit
 %{?systemd_requires}
-# kitty and fish are the default terminal and shell, but the installer lets people pick others
+# Foot and fish are the default terminal and shell, but the installer lets people pick others
 # and removes the unticked ones (dnf remove --no-autoremove), so they must be weak deps.
 Recommends:     fish
-Recommends:     kitty
+Recommends:     foot
 Requires:       libnotify
 Requires:       procps-ng
 Requires:       util-linux
@@ -602,11 +603,13 @@ Requires:       mangowm >= 0.17.3
 Requires:       sddm
 # Swappable in the installer's app picker (terminal, shell, file manager, video): weak deps,
 # so unticking one doesn't remove this metapackage.
-Recommends:     kitty
-Recommends:     kitty-shell-integration
+Recommends:     epiphany
+Recommends:     foot
 Recommends:     fish
-Recommends:     nautilus
-Recommends:     vlc
+Recommends:     pcmanfm
+Recommends:     xarchiver
+Recommends:     celluloid
+Recommends:     featherpad
 Requires:       fastfetch
 # Stream 3b (notifications): the Arctic shell is its own notification server; mako is the
 # waybar session's daemon (and the shell's fallback), so it is a weak dependency now.
@@ -728,7 +731,9 @@ if [ -f go.mod ]; then
   export GOTOOLCHAIN=local CGO_ENABLED=0 GOPROXY=off GOFLAGS="-buildmode=pie -trimpath"
   if [ -d vendor ]; then GOFLAGS="$GOFLAGS -mod=vendor"; fi
   export GOFLAGS
-  export GOCACHE="$PWD/_build/gocache" GOPATH="$PWD/_build/gopath"
+  # The container wrapper supplies a builder/native-library-qualified cache.
+  # Direct rpmbuild keeps its isolated default; no build cache enters the RPM.
+  export GOCACHE="${ARCTIC_GOCACHE:-$PWD/_build/gocache}" GOPATH="$PWD/_build/gopath"
   mkdir -p _build/bin
   for cmd in arcticd arctic-install arctic-webapp; do
     go build -ldflags "-s -w -B gobuildid" -o "_build/bin/$cmd" "./cmd/$cmd"
@@ -766,8 +771,10 @@ for toml in design/themes/*/colors.toml; do
 done
 # --- end stream 6
 
-# ---- Wallpapers: SVG → 3840×2160 PNG ----
+# ---- Photo masters, one compatibility default PNG, and legacy saved choices ----
 mkdir -p _build/backgrounds
+python3 -B design/tools/import-wallpapers.py --check --png _build/backgrounds/default.png
+cp -p design/backgrounds/*.jpg design/backgrounds/collection.json _build/backgrounds/
 for svg in design/wallpapers/*.svg; do
   cp -p "$svg" _build/backgrounds/
   rsvg-convert -w 3840 -h 2160 -o "_build/backgrounds/$(basename "$svg" .svg).png" "$svg"
@@ -838,8 +845,10 @@ test -s logos.files
 # ---------------------------------------------------------------- arctic-backgrounds
 install -d %{buildroot}%{_datadir}/backgrounds/arctic
 install -pm 0644 _build/backgrounds/* %{buildroot}%{_datadir}/backgrounds/arctic/
-ln -s arctic/aurora-winter.png %{buildroot}%{_datadir}/backgrounds/default.png
-ln -s arctic/aurora-polar-night.png %{buildroot}%{_datadir}/backgrounds/default-dark.png
+photo_default=$(python3 -c 'import json; print(json.load(open("design/backgrounds/collection.json"))["default"])')
+ln -s "$photo_default.jpg" %{buildroot}%{_datadir}/backgrounds/arctic/default.jpg
+ln -s arctic/default.png %{buildroot}%{_datadir}/backgrounds/default.png
+ln -s arctic/default.png %{buildroot}%{_datadir}/backgrounds/default-dark.png
 
 # ---------------------------------------------------------------- arctic-fonts
 install -d %{buildroot}%{_datadir}/fonts/arctic
@@ -865,7 +874,18 @@ install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinu
 # arctic-firstboot finishes app installs the installer put off (/var/lib/arctic/pending.json).
 # It lives here, not in arctic-installer, because the installer is removed from the new system.
 install -Dpm 0644 packaging/systemd/arctic-firstboot.service %{buildroot}%{_unitdir}/arctic-firstboot.service
+install -Dpm 0644 packaging/systemd/arctic-firstboot.timer %{buildroot}%{_unitdir}/arctic-firstboot.timer
 install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir}/arctic/arctic-firstboot
+# Dictation ships only the controller. The installer/first-boot service fetches
+# the pinned Voxtype binaries and multilingual model after the live-root copy.
+install -Dpm 0755 packaging/dictation/arctic-dictation %{buildroot}%{_bindir}/arctic-dictation
+install -Dpm 0755 packaging/dictation/arctic-dictation-setup %{buildroot}%{_libexecdir}/arctic/arctic-dictation-setup
+install -Dpm 0755 packaging/dictation/arctic-dictation-install %{buildroot}%{_libexecdir}/arctic/arctic-dictation-install
+install -Dpm 0644 packaging/dictation/dictation.py %{buildroot}%{_datadir}/arctic/dictation/dictation.py
+install -Dpm 0644 packaging/dictation/child_exec.py %{buildroot}%{_datadir}/arctic/dictation/child_exec.py
+install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
+install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
+install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
 # New accounts start from /etc/skel. What Arctic keeps up to date is installed once, in
 # /usr/share/arctic, and the home directory only points at it, so package updates reach
 # accounts that already exist (a copy in the home directory would never change again):
@@ -932,6 +952,10 @@ install -pm 0644 design/logos/arctic-mark-16-*.svg "$themegen/data/logos/"
 # compile from source (and fail to write __pycache__ into /usr/share).
 %py_byte_compile %{python3} %{buildroot}%{_datadir}/arctic/themegen
 install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arctic/default-apps
+# Image-only defaults: config.sh applies these while building fresh live media.
+# Updating this RPM does not replace an existing computer's chosen role/MIME defaults.
+install -Dpm 0644 packaging/desktop/live-default-apps %{buildroot}%{_datadir}/arctic/live-default-apps
+install -Dpm 0644 packaging/desktop/live-mimeapps.list %{buildroot}%{_datadir}/arctic/live-mimeapps.list
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
 install -Dpm 0755 packaging/nix/arctic-nix-system %{buildroot}%{_libexecdir}/arctic-nix-system
@@ -1050,6 +1074,9 @@ install -pm 0644 fetch/config %{buildroot}%{_datadir}/arctic/fetch/config
 install -d %{buildroot}%{_datadir}/arctic/settings
 # tests/ and dev/ (headless screenshots) are development-only.
 tar -C settings --exclude=./tests --exclude=./dev --exclude=./README.md -cf - . | tar -C %{buildroot}%{_datadir}/arctic/settings -xf -
+# Each Quickshell config root needs a local resource. Keep the status whitelist
+# sourced from one canonical parser; never follow an import outside Settings.
+install -pm 0644 shell/DictationStatus.js %{buildroot}%{_datadir}/arctic/settings/DictationStatus.js
 chmod 0755 %{buildroot}%{_datadir}/arctic/settings/scripts/arctic_settings.py
 desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/settings/org.arcticlinux.Settings.desktop
 install -Dpm 0644 packaging/settings/org.arcticlinux.Settings.svg \
@@ -1085,6 +1112,8 @@ install -Dpm 0644 packaging/sddm-wayland-mango/greeter.conf %{buildroot}%{_datad
 # ---------------------------------------------------------------- arctic-sddm-theme
 install -d %{buildroot}%{_datadir}/sddm/themes/arctic
 cp -a branding/sddm/arctic/. %{buildroot}%{_datadir}/sddm/themes/arctic/
+# theme.conf.user and broker-selected images keep their existing precedence.
+ln -sf %{_datadir}/backgrounds/arctic/default.png %{buildroot}%{_datadir}/sddm/themes/arctic/background.png
 
 # ---------------------------------------------------------------- arctic-plymouth-theme
 install -d %{buildroot}%{_datadir}/plymouth/themes/arctic
@@ -1158,6 +1187,7 @@ for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/
 done
 # arctic-update's file handling (update.conf, dnf5's offline state, the status file).
 python3 -m unittest discover -s packaging/updates -p 'test_*.py'
+python3 -m unittest discover -s packaging/dictation -p 'test_*.py'
 # ---- stream 1 (web apps): the host is the real cgo build and the manager is cgo-free; both
 # start without a display; the launcher entries the manager writes are valid.
 readelf -d %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
@@ -1289,16 +1319,26 @@ done
 %post -n arctic-desktop-config
 systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 %systemd_post arctic-login-wallpaper.service
-%systemd_post arctic-firstboot.service arctic-update-stage.timer
+%systemd_post arctic-firstboot.timer arctic-update-stage.timer
+%systemd_post arctic-dictation-setup.timer
 %systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-login-wallpaper.service
-%systemd_preun arctic-firstboot.service arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
+%systemd_preun arctic-firstboot.service arctic-firstboot.timer arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
+%systemd_preun arctic-dictation-setup.service arctic-dictation-setup.timer
 %systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# Migrate old boot-wanted download services to post-boot retries once. Do not stop a
+# currently running setup, and do not override later administrator timer choices.
+if [ ! -e %{_sharedstatedir}/arctic/.postboot-setup-timers ]; then
+  if systemctl --no-reload disable arctic-firstboot.service arctic-dictation-setup.service >/dev/null 2>&1 && \
+     systemctl --no-reload preset arctic-firstboot.timer arctic-dictation-setup.timer >/dev/null 2>&1; then
+    mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.postboot-setup-timers || :
+  fi
+fi
 # Systems installed before automatic updates existed (0.1) get the new timers once, as the
 # presets say (%%systemd_post presets only on a first install). Removing the marker doesn't
 # undo a choice: `arctic-update auto off` also sets AUTO=off, which the timer's check honours.
@@ -1427,6 +1467,7 @@ fi
 %license LICENSE
 
 %files -n arctic-backgrounds
+%license LICENSE design/backgrounds/COPYRIGHT design/backgrounds/NOTICE
 %dir %{_datadir}/backgrounds
 %{_datadir}/backgrounds/arctic/
 %{_datadir}/backgrounds/default.png
@@ -1460,6 +1501,8 @@ fi
 %dir %{_sysconfdir}/arctic
 %dir %{_sysconfdir}/arctic/mango
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
+%{_datadir}/arctic/live-default-apps
+%{_datadir}/arctic/live-mimeapps.list
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %{_libexecdir}/arctic-nix-system
 %{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
@@ -1498,8 +1541,16 @@ fi
 %{_userunitdir}/mango-session.target.d/arctic-autostart.conf
 %{_userunitdir}/app-*@autostart.service.d/
 %{_unitdir}/arctic-firstboot.service
+%{_unitdir}/arctic-firstboot.timer
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
+%{_bindir}/arctic-dictation
+%{_libexecdir}/arctic/arctic-dictation-setup
+%{_libexecdir}/arctic/arctic-dictation-install
+%{_datadir}/arctic/dictation/
+%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
+%{_unitdir}/arctic-dictation-setup.service
+%{_unitdir}/arctic-dictation-setup.timer
 %{_libexecdir}/arctic/neofetch
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer
@@ -1610,6 +1661,11 @@ fi
 # metapackage: no files
 
 %changelog
+* Fri Oct 09 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.1-1
+- Repair taskbar frame transitions and installer window restoration.
+- Use the lightweight default applications and repository photo wallpapers.
+- Prepare local Hebrew and English dictation during installation, with retryable offline setup.
+
 * Sun Oct 04 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.0-1
 - Nix integration, taskbar fixes, two-row Get apps and reliable update checks.
 

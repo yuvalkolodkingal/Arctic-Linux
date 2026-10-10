@@ -1,0 +1,20 @@
+{
+  "ready": false,
+  "release_acceptance": false,
+  "publication_approved": true,
+  "tag": "v1.2.1",
+  "main_sha": null,
+  "image": null,
+  "performance": null,
+  "native": null,
+  "taskbar_media_review": null,
+  "dictation": null,
+  "dictation_media_review": null,
+  "installer": null,
+  "installer_media_review": null,
+  "installer_active": null,
+  "installer_active_media_review": null,
+  "update": null,
+  "media_review": null,
+  "execution_files": {}
+}

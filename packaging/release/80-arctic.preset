@@ -11,7 +11,10 @@ disable plasmalogin.service
 enable arcticd.socket
 disable arcticd.service
 # Finishes app installs the installer had to put off (only runs when pending.json exists).
-enable arctic-firstboot.service
+disable arctic-firstboot.service
+enable arctic-firstboot.timer
+disable arctic-dictation-setup.service
+enable arctic-dictation-setup.timer
 
 # Updates (arctic-update): downloaded daily in the background, installed at the next restart
 # by dnf5-offline-transaction.service (static, wanted by system-update.target). Not
@@ -27,10 +30,10 @@ enable snapper-cleanup.timer
 disable snapper-timeline.timer
 disable snapper-boot.timer
 
-# Nix (Fedora's nix-daemon package). The service, not the socket, until CI shows no AVC
-# denials with the socket (docs/PLAN.md §6.6).
-enable nix-daemon.service
-disable nix-daemon.socket
+# Nix: upstream socket activation starts the daemon on the first store request.
+# The enforcing install/profile/GUI/reboot trial needs no SELinux policy change.
+enable nix-daemon.socket
+disable nix-daemon.service
 
 # Live media: Fedora's livesys scripts set up the live user (also in 90-default.preset).
 enable livesys.service

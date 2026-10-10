@@ -38,7 +38,8 @@ The automated sequence is:
 
 1. Download the exact tag's ISO and verify its SHA-256.
 2. Boot **Try Arctic Linux**, reach the real Mango user session, assert Arctic version and
-   live root, fetch HTTPS with certificate validation from inside the guest (DNS + routing +
+   live root. The live installation lane remains offline; external HTTPS is explicitly
+   unrun here and required after disk boot. The installed probe validates HTTPS (DNS + routing +
    TLS + response), and open terminal, Nautilus, Zen, Settings and VLC windows.
 3. Use the ISO's actual unattended installer, as a systemd service, on a newly created blank
    disk with the existing encrypted CI profile. A nonzero or missing installer result fails.

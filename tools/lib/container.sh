@@ -5,7 +5,7 @@
 #   CONTAINER_ENGINE      docker | podman (default: whichever is installed, docker first)
 #   ARCTIC_CA_BUNDLE      extra CA bundle to trust inside the container (default:
 #                         /root/.ccr/ca-bundle.crt when it exists, e.g. behind an agent proxy)
-#   HTTPS_PROXY/https_proxy  passed through (with --network host) only when set
+#   HTTPS_PROXY/https_proxy, HTTP_PROXY/http_proxy  passed through only when set
 #
 # Nothing proxy-specific is added on a machine without a proxy (GitHub runners).
 
@@ -32,12 +32,26 @@ arctic_engine() {
   fi
 }
 
+# Resolve once, then run by this immutable ID. A concurrently repointed tag must
+# not change the toolchain after its identity has been recorded in cache metadata.
+arctic_resolve_image() {
+  local engine="$1" image="$2" image_id
+  "$engine" image inspect "$image" >/dev/null 2>&1 || "$engine" pull "$image" >&2
+  image_id="$("$engine" image inspect --format '{{.Id}}' "$image")" || return
+  # Docker prefixes sha256; Podman returns the immutable bare digest.
+  [[ "$image_id" =~ ^(sha256:)?[0-9a-f]{64}$ ]] || arctic_die "invalid builder image identity: $image_id"
+  printf '%s\n' "$image_id"
+}
+
 # Fills the array ARCTIC_CONTAINER_ARGS with the network/proxy/CA options for this host.
 arctic_container_args() {
   ARCTIC_CONTAINER_ARGS=()
   local proxy="${HTTPS_PROXY:-${https_proxy:-}}"
-  if [[ -n "$proxy" ]]; then
-    ARCTIC_CONTAINER_ARGS+=(--network host -e "https_proxy=$proxy" -e "HTTPS_PROXY=$proxy")
+  local http_proxy_value="${HTTP_PROXY:-${http_proxy:-}}"
+  if [[ -n "$proxy$http_proxy_value" ]]; then
+    ARCTIC_CONTAINER_ARGS+=(--network host)
+    [[ -z "$proxy" ]] || ARCTIC_CONTAINER_ARGS+=(-e "https_proxy=$proxy" -e "HTTPS_PROXY=$proxy")
+    [[ -z "$http_proxy_value" ]] || ARCTIC_CONTAINER_ARGS+=(-e "http_proxy=$http_proxy_value" -e "HTTP_PROXY=$http_proxy_value")
     local noproxy="${NO_PROXY:-${no_proxy:-}}"
     [[ -n "$noproxy" ]] && ARCTIC_CONTAINER_ARGS+=(-e "no_proxy=$noproxy" -e "NO_PROXY=$noproxy")
   fi

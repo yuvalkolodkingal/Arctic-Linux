@@ -1,0 +1,90 @@
+name: Candidate native image qualification
+
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.native]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  native:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    # Sequential phase limits allow 8m host dependencies + 15m artifact fetch
+    # + 20m VM provisioning + 15m taskbar tool compilation + 180m harness.
+    # The installed matrix supplements every frozen original native gate.
+    # Leave time for verification,
+    # cleanup and screened evidence without changing any acceptance limit.
+    timeout-minutes: 270
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify reviewed single-file activation and pinned source
+        id: image
+        working-directory: execution
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          reviewed = Path('.github/qualification-20261010.native').read_text().strip()
+          assert re.fullmatch('[0-9a-f]{40}', reviewed)
+          assert event['before'] == reviewed and event['after'] == os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == reviewed
+          assert subprocess.check_output(['git', 'diff', '--name-only', reviewed, 'HEAD'], text=True).splitlines() == ['.github/qualification-20261010.native']
+          manifest = json.loads(Path('tools/native-functional/execution-manifest.json').read_text())
+          assert manifest['ready'] is True and manifest['release_acceptance'] is False
+          source = manifest['image']['source_sha']
+          assert re.fullmatch('[0-9a-f]{40}', source)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('source=' + source + '\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.image.outputs.source }}
+          path: source
+          persist-credentials: false
+      - name: Install and verify host evidence decoder before starting guests
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil
+          python3 -B - <<'PY'
+          import sys
+          sys.path.insert(0, 'execution/tools/lib')
+          import vmtest
+          assert vmtest.chord_for('A') == ['shift', 'a']
+          print('Host PNG and physical-input evidence dependencies are available')
+          PY
+      - name: Fetch and verify retained ISO archive and actual image bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/arctic-native"
+          python3 -B execution/tools/native-functional/fetch-image.py \
+            --manifest execution/tools/native-functional/execution-manifest.json \
+            --out "$RUNNER_TEMP/arctic-native/inputs"
+      - name: Native live and encrypted offline installed acceptance
+        run: |
+          python3 -B execution/tools/native-functional/runner.py \
+            --source "$GITHUB_WORKSPACE/source" --inputs "$RUNNER_TEMP/arctic-native/inputs" \
+            --manifest "$GITHUB_WORKSPACE/execution/tools/native-functional/execution-manifest.json" \
+            --evidence "$RUNNER_TEMP/arctic-native/evidence"
+      - name: Screen bounded diagnostic files before upload
+        if: always()
+        run: |
+          python3 -B execution/tools/native-functional/screen-evidence.py \
+            --source "$RUNNER_TEMP/arctic-native/evidence" --out "$RUNNER_TEMP/arctic-native/screened"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-candidate-qualification
+          path: ${{ runner.temp }}/arctic-native/screened/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,0 +1,119 @@
+{
+  "description": "Getty on tty6",
+  "fixture_source": {
+    "activation": "send-key ctrl, alt, f6",
+    "exact_source": "f256dde2687f840f606cf4ec79b8493b0217d00a",
+    "function": "authenticate_console",
+    "path": "tools/installer-qualification/driver.py",
+    "repository": "yuvalkolodkingal/Arctic-Linux",
+    "source_sha256": "227526585c43d3f70be1c28617107876acb51f1eb51c1526efa3a0434f917834"
+  },
+  "instance": "tty6",
+  "limits": [
+    "Existing local Fedora44 image package FILEDIGESTS/header inventory; signatures are not independently verified and no exact A2 ISO package version is asserted.",
+    "The fixed known ASCII tty6 instance expands the package Description=Getty on %I to Getty on tty6.",
+    "Fixture source intentionally activates VT6; no private prior UART token was reconstructed or asserted to equal this public literal.",
+    "Only the existing strict exact lifecycle/deactivation contexts can permit this one literal, never arbitrary getty, tty, service, hostname or email strings."
+  ],
+  "original_ten_unit_fixture": {
+    "bytes": 8268,
+    "path": "/workspace/arctic-installer-sensitive-category-collection-source-20261010/tools/tests/fixtures/external-canonical-unit-cases.json",
+    "sha256": "273a9a9fe3652b8b25446164c72d8f4b36b3b3ac436a9a64dc4b74e32aa554c5"
+  },
+  "package_inventory_evidence": [
+    {
+      "image": "arctic-qualification-fedora44:local",
+      "image_id": "sha256:0567db9073b403d5fd14476ef5d19bba4b59fc2bdfe40bd4ea43d05a96f774ca",
+      "inventory_limits": [
+        "Local image inventory, not an exact target ISO or VM test.",
+        "Package FILEDIGESTS and link targets verified against database headers; RPM signature not independently verified here.",
+        "Missing historical raw tokens were not reconstructed."
+      ],
+      "original_inventory": {
+        "bytes": 244156,
+        "path": "/workspace/arctic-external-original-screening/out/external-screening-unit-inventory/qualification/package-verified-units.json",
+        "sha256": "3934712751372c48979bc7121e4e2c941443152526847940742d54dd397c564e"
+      },
+      "original_template": {
+        "bytes": 2028,
+        "path": "/workspace/arctic-external-original-screening/out/external-screening-unit-inventory/qualification/object-988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e",
+        "sha256": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e"
+      },
+      "package": {
+        "arch": "x86_64",
+        "epoch": 0,
+        "file_digest_algorithm": 8,
+        "header_sha256": "9232af1751fdd945d7a8c643867e27f61bdaa0badd0842fc6d91772dae8e7e8f",
+        "name": "systemd",
+        "release": "1.fc44",
+        "version": "259.9"
+      },
+      "rpm_database_sha256": "b78fa8fa4e889657f1f592f0fad3d8986b814f7c2c6d77c19f3190b096219a8a",
+      "verified_unit_record": {
+        "modprobe_instances": [],
+        "package": "systemd",
+        "path": "/usr/lib/systemd/system/getty@.service",
+        "rpm_file_digest": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e",
+        "rpm_file_digest_verified": true,
+        "selected_fields": [
+          "Description=Getty on %I",
+          "After=systemd-user-sessions.service plymouth-quit-wait.service getty-pre.target",
+          "After=rc-local.service",
+          "Before=getty.target",
+          "Before=rescue.service",
+          "ExecStart=-/usr/sbin/agetty --noreset --noclear --issue-file=/etc/issue:/etc/issue.d:/run/issue.d:/usr/lib/issue.d - ${TERM}"
+        ],
+        "sha256": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e"
+      }
+    },
+    {
+      "image": "arctic-headless-display-fedora44:local",
+      "image_id": "sha256:3c41bf8a38534181a1612949768dfae5af46c21931acfccceacf7c9e0cfe9afb",
+      "inventory_limits": [
+        "Local image inventory, not an exact target ISO or VM test.",
+        "Package FILEDIGESTS and link targets verified against database headers; RPM signature not independently verified here.",
+        "Missing historical raw tokens were not reconstructed."
+      ],
+      "original_inventory": {
+        "bytes": 20093,
+        "path": "/workspace/arctic-external-original-screening/out/external-screening-unit-inventory/headless/package-verified-units.json",
+        "sha256": "bd1676c8d29613565dc80fbe254110a155b06bf723627a68941b545acd1f1734"
+      },
+      "original_template": {
+        "bytes": 2028,
+        "path": "/workspace/arctic-external-original-screening/out/external-screening-unit-inventory/headless/object-988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e",
+        "sha256": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e"
+      },
+      "package": {
+        "arch": "x86_64",
+        "epoch": 0,
+        "file_digest_algorithm": 8,
+        "header_sha256": "9232af1751fdd945d7a8c643867e27f61bdaa0badd0842fc6d91772dae8e7e8f",
+        "name": "systemd",
+        "release": "1.fc44",
+        "version": "259.9"
+      },
+      "rpm_database_sha256": "c3a0c3bb75e8bf62c0f491b4738c462ea12d738fec790c2e79ff08a0a38a5568",
+      "verified_unit_record": {
+        "modprobe_instances": [],
+        "package": "systemd",
+        "path": "/usr/lib/systemd/system/getty@.service",
+        "rpm_file_digest": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e",
+        "rpm_file_digest_verified": true,
+        "selected_fields": [
+          "Description=Getty on %I",
+          "After=systemd-user-sessions.service plymouth-quit-wait.service getty-pre.target",
+          "After=rc-local.service",
+          "Before=getty.target",
+          "Before=rescue.service",
+          "ExecStart=-/usr/sbin/agetty --noreset --noclear --issue-file=/etc/issue:/etc/issue.d:/run/issue.d:/usr/lib/issue.d - ${TERM}"
+        ],
+        "sha256": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e"
+      }
+    }
+  ],
+  "schema": "arctic-package-verified-getty6-fixed-fixture-v1",
+  "template_sha256": "988eaaf6676a10fa3d34548eb25bd9e73c6544ee0674bf0b374f56a9019b5d1e",
+  "template_utf8": "#  SPDX-License-Identifier: LGPL-2.1-or-later\n#\n#  This file is part of systemd.\n#\n#  systemd is free software; you can redistribute it and/or modify it\n#  under the terms of the GNU Lesser General Public License as published by\n#  the Free Software Foundation; either version 2.1 of the License, or\n#  (at your option) any later version.\n\n[Unit]\nDescription=Getty on %I\nDocumentation=man:agetty(8) man:systemd-getty-generator(8)\nDocumentation=https://0pointer.de/blog/projects/serial-console.html\nAfter=systemd-user-sessions.service plymouth-quit-wait.service getty-pre.target\nAfter=rc-local.service\n\n# If additional gettys are spawned during boot then we should make\n# sure that this is synchronized before getty.target, even though\n# getty.target didn't actually pull it in.\nBefore=getty.target\nIgnoreOnIsolate=yes\n\n# IgnoreOnIsolate causes issues with sulogin, if someone isolates\n# rescue.target or starts rescue.service from multi-user.target or\n# graphical.target.\nConflicts=rescue.service\nBefore=rescue.service\n\n# On systems without virtual consoles, don't start any getty. Note\n# that serial gettys are covered by serial-getty@.service, not this\n# unit.\nConditionPathExists=/dev/tty0\n\n[Service]\nExecStart=-/usr/sbin/agetty --noreset --noclear --issue-file=/etc/issue:/etc/issue.d:/run/issue.d:/usr/lib/issue.d - ${TERM}\nType=idle\nRestart=always\nRestartSec=0\nUtmpIdentifier=%I\nStandardInput=tty\nStandardOutput=tty\nTTYPath=/dev/%I\nTTYReset=yes\nTTYVHangup=yes\nTTYVTDisallocate=yes\nIgnoreSIGPIPE=no\nSendSIGHUP=yes\nImportCredential=tty.virtual.%I.agetty.*:agetty.\nImportCredential=tty.virtual.%I.login.*:login.\nImportCredential=agetty.*\nImportCredential=login.*\nImportCredential=shell.*\n\n# Unset locale for the console getty since the console has problems\n# displaying some internationalized messages.\nUnsetEnvironment=LANG LANGUAGE LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION\n\n[Install]\nWantedBy=getty.target\nDefaultInstance=tty1\n",
+  "unit": "getty@tty6.service"
+}

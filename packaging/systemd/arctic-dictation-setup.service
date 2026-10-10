@@ -1,0 +1,16 @@
+[Unit]
+Description=Install Arctic's local dictation engine and multilingual model
+ConditionPathExists=/var/lib/arctic/dictation/pending.json
+# Do not pull NetworkManager-wait-online into login; the post-boot timer retries offline.
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 -I /usr/share/arctic/dictation/dictation.py --system-setup
+TimeoutStartSec=12min
+RuntimeMaxSec=12min
+Nice=10
+IOSchedulingClass=idle
+UMask=0077
+StandardOutput=null
+StandardError=null

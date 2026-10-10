@@ -2,13 +2,25 @@
 
 `tools/build-iso.sh` builds this description with kiwi-ng 11 in a privileged Fedora 44
 container, adding the local RPM repository from `tools/build-rpms.sh` (`out/repo`) with
-`--add-repo`. It runs `kiwi-ng system prepare` (packages + `config.sh`), installs Zen Browser
-from Flathub into the image root from outside the chroot (`--zen auto`: kept only while the ISO
-stays ≤ 2 GiB for local development), then `kiwi-ng system create` (SELinux labels, live initrd,
-erofs, ISO). The workflow explicitly uses `--zen yes`, requiring the non-Chromium browser
-even above 2 GiB; its release path already supports split downloads.
+`--add-repo`. It runs `kiwi-ng system prepare` (packages + `config.sh`), then
+`kiwi-ng system create` (SELinux labels, live initrd, erofs, ISO). GNOME Web (Epiphany)
+is the required non-Chromium browser and shares WebKitGTK with Arctic's web apps.
+The default `--zen no` keeps Zen optional; `--zen yes` additionally preloads it from
+Flathub and fails if that download is absent, while `--zen auto` tolerates download failure.
 Output: `out/iso/Arctic-Linux-1.2-x86_64.iso`, its `.sha256`, the package list and
 `.build-info` (whether Zen is in it).
+
+Candidates can use `--name Arctic-Linux-1.2-optimized-candidate-x86_64.iso`.
+Artifact-only workflow candidates pass `--max-bytes 1999999999` and
+`--preferred-max-bytes 1599999999` to the builder. If the required limit is missed,
+the builder retains the image/checksum and exits with a failure; the workflow
+continues far enough to upload that candidate for inspection. All workflow paths,
+including tag builds and manual releases, then require a size strictly below
+2,000,000,000 decimal bytes in the final `Required optimized ISO size` step before
+publication. Below 1,600,000,000 bytes is a preference, not a publication gate.
+The workflow never removes features to meet the budget.
+Explicit `--erofs-compression`, `--erofs-cluster` and `--dedupe` experiments
+must pass the functional/performance gates in `docs/OPTIMIZATION.md` before adoption.
 
 | File | What it is |
 |---|---|
@@ -23,3 +35,12 @@ rd.live.image` and `arctic.mode=try` (Install: `arctic.mode=install`; Safe graph
 live autologin to show the SDDM login screen.
 
 Test it with `tools/test-iso.sh` (QEMU, OVMF or SeaBIOS, screenshots in `out/test/`).
+The ISO release workflow requires `--require-startup` in Try, Install and Safe
+graphics lanes. A timeout or an undetected boot menu fails qualification. The
+selected live kernel mode, live-user Mango session, enforcing SELinux and unique
+completed session records must all be observed. These startup gates supplement
+the installed-system, media, update/reboot and performance acceptance checks.
+
+On a constrained builder, `--scratch /path/to/dedicated/scratch` puts create-stage
+intermediates and temporary files on that storage; the prepared root stays in
+`--work`. Keep enough scratch capacity for both the root payload and ISO.

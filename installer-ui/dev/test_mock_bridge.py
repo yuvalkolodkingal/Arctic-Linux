@@ -211,6 +211,27 @@ class MockBridgeTest(unittest.TestCase):
         self.assertEqual(b.ok("Next")["current"], "timezone")
         self.assertEqual(b.ok("Back")["current"], "keyboard")
 
+    def test_explicit_offline_choice_survives_back_without_fake_connectivity(self):
+        b = self.start()
+        b.ok("Next"), b.ok("Next")
+        b.ok("SetStep", {"id": "network", "data": {"offline": True}})
+        self.assertEqual(b.ok("Next")["current"], "timezone")
+        self.assertFalse(b.ok("NetworkState")["online"])
+        self.assertEqual(b.ok("Back")["current"], "network")
+        self.assertTrue(b.ok("GetStep", {"id": "network"})["data"]["offline"])
+        b.ok("SetStep", {"id": "network", "data": {"offline": False}})
+        self.assertEqual(b.call("Next")["error"]["code"], "offline")
+
+    def test_offline_choice_rejects_nonboolean_inputs(self):
+        b = self.start()
+        b.ok("SetStep", {"id": "network", "data": {"offline": True}})
+        for value in (None, "true", 1, {}, []):
+            self.assertEqual(b.call("SetStep", {"id": "network", "data": {"offline": value}})["error"]["code"], "bad_request")
+            self.assertTrue(b.ok("GetStep", {"id": "network"})["data"]["offline"])
+        for data in ({"Offline": None}, {"OFFLINE": None}, {"Offline": False}, {"offline": True, "OFFLINE": False}, {"online": True}):
+            self.assertEqual(b.call("SetStep", {"id": "network", "data": data})["error"]["code"], "bad_request")
+            self.assertTrue(b.ok("GetStep", {"id": "network"})["data"]["offline"])
+
     def test_validation_errors_have_fields(self):
         b = self.start()
         err = b.call("SetStep", {"id": "account", "data": {"full_name": "Noa", "username": "Noa!", "hostname": "x"}})["error"]
@@ -354,6 +375,10 @@ class MockBridgeTest(unittest.TestCase):
         self.assertEqual([k for k, c in cats.items() if c["required"]], ["browser", "terminal", "shell"])
         self.assertEqual(cats["office"]["choice"], "one")
         sel = apps["data"]["selection"]
+        # The lightweight catalog starts with no office app. Select one first
+        # so removal still proves that an optional one-choice category may empty.
+        sel["office"] = [next(m["id"] for m in apps["options"]["modules"] if m["category"] == "office")]
+        b.ok("SetStep", {"id": "apps", "data": {"selection": sel}})
         before = b.ok("EstimateDownload", {"selection": sel})
         sel["office"] = []
         b.ok("SetStep", {"id": "apps", "data": {"selection": sel}})

@@ -164,6 +164,19 @@ Rectangle {
     }
 
     // ---- clock ---------------------------------------------------------------------
+    // Photos can be bright or dark behind the clock. Keep its small date readable
+    // on a solid themed surface while retaining the same clock position and styling.
+    Rectangle {
+        x: clock.x - Theme.space5
+        y: clock.y - Theme.space3
+        width: clock.width + 2 * Theme.space5
+        height: clock.height + 2 * Theme.space3
+        color: Theme.surface
+        border.color: Theme.line
+        border.width: 1
+        radius: Theme.radiusLg
+        Accessible.ignored: true
+    }
     Column {
         id: clock
         property date now: new Date()

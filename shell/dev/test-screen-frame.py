@@ -6,6 +6,7 @@ desktop. --baseline-ref replays the old ScreenFrame first and records whether
 the same covered-mode transitions reproduce a stale native window geometry.
 """
 import argparse
+import importlib.util
 import json
 import math
 import os
@@ -224,6 +225,163 @@ def exercise(base, out, compositor, frame_source=None):
                                 'right': (capture.width - round(58 * scale), capture.height // 2)}[edge]
                         assert image.getpixel((x, y)) == (33, 131, 79), (label, name, 'interior is not backdrop')
             results.append(dict(case=label, state=actual))
+
+        if not is_sway and not frame_source:
+            # Exercise the real installer too: its single persistent Top window
+            # receives closed when all outputs disappear, unlike the frame's
+            # per-screen Variants. Readiness alone cannot prove it remapped.
+            installer_source = SOURCE.parent / 'installer-ui'
+            installer_env = dict(env, ARCTIC_INSTALLER_BRIDGE='python3 ' +
+                                 str(installer_source / 'dev/mock-bridge.py'),
+                                 ARCTIC_LIVE_KEYBOARD='true',
+                                 ARCTIC_MOCK_LOG=str(out / 'installer-engine.log'))
+            with (out / 'installer.log').open('w') as log:
+                installer = subprocess.Popen(['quickshell', '--no-color', '-p', str(installer_source)],
+                                             env=installer_env, stdout=log, stderr=log)
+                processes.append(installer)
+
+            def installer_ipc(*words):
+                validate_preview(installer, out / 'installer.log')
+                return run('quickshell', 'ipc', '--pid', installer.pid, 'call', 'installer', *words)
+
+            def installer_state():
+                try:
+                    return json.loads(installer_ipc('state'))
+                except subprocess.CalledProcessError:
+                    return {}
+
+            def installer_ready(page, keyboard=None):
+                actual = installer_state()
+                return (actual.get('page') == page and actual.get('ready') is True
+                        and (keyboard is None or actual.get('keyboard') == keyboard))
+
+            wait(lambda: installer_ready('welcome'), 'private installer did not reach ready welcome')
+            assert installer_ipc('next') == 'ok'
+            wait(lambda: installer_ready('keyboard'), 'private keyboard form was not ready')
+            assert installer_ipc('fill', json.dumps(dict(layout='de'))) == 'ok'
+            wait(lambda: installer_ready('keyboard', 'de'), 'private keyboard choice did not save')
+            initial_installer = installer_state()
+            installer_pid = installer.pid
+
+            def verify_installer(label):
+                actual = installer_state()
+                window = actual['window']
+                assert actual['page'] == initial_installer['page'] == 'keyboard'
+                assert actual['keyboard'] == initial_installer['keyboard'] == 'de'
+                assert actual['connected'] is True and actual['ready'] is True and not actual['failure']
+                assert window['visible'] is True and window['backing_visible'] is True
+                layers = json.loads(run('mmsg', 'get', 'all-layers'))['layers']
+                mapped = [layer for layer in layers if layer['name'] == 'arctic-installer']
+                assert len(mapped) == 1 and mapped[0]['layer'] == 'top', mapped
+                assert mapped[0]['monitor'] == window['screen'] and window['screen'] in names
+                output = next(o for o in json.loads(run('wlr-randr', '--json'))
+                              if o['name'] == window['screen'])
+                mode = next(m for m in output['modes'] if m['current'])
+                assert abs(window['width'] - mode['width'] / output['scale']) <= 1
+                assert abs(window['height'] - mode['height'] / output['scale']) <= 1
+                raw = base / 'installer-capture.ppm'
+                run(capture_path, window['screen'], raw)
+                with Image.open(raw) as image:
+                    image.save(out / (label + '.png'))
+                    pixel = image.convert('RGB').getpixel((image.width - 10, image.height // 2))
+                    background = ImageColor.getrgb(window['background'])[:3]
+                    assert max(abs(a - b) for a, b in zip(pixel, background)) <= 3, (label, pixel, background)
+                assert installer.poll() is None and installer.pid == installer_pid
+                assert (out / 'installer-engine.log').read_text().count('"method": "Hello"') == 1
+                results.append(dict(case=label, installer_pid=installer_pid, state=actual, layers=mapped))
+                print('Installer restoration:', label, json.dumps(actual), flush=True)
+
+            ipc('cover', 'false')
+            time.sleep(.3)
+            verify_installer('installer-before-output-loss')
+            # Exercise the real output destroy signal with Bottom/Top layers
+            # and covered frame surfaces still mapped. Recreating all outputs
+            # must retain the compositor and preview processes across cycles.
+            compositor_pid = display.pid
+            for cycle in range(3):
+                ipc('cover', 'true')
+                time.sleep(.2)
+                run('mmsg', 'dispatch', 'destroy_all_virtual_output')
+                assert display.poll() is None, (out / 'compositor.log').read_text()
+                wait(lambda: not json.loads(run('wlr-randr', '--json')),
+                     'destroyed outputs remain advertised')
+                # Qt can retain a screen model while the backend has no
+                # outputs. Record that transient state; require the real
+                # output inventory to be empty and exact restored models below.
+                transient = state()
+                results.append(dict(case=f'outputs-unavailable-{cycle}', state=transient))
+                print('No advertised outputs; transient Qt frame models:', json.dumps(transient), flush=True)
+                for _ in range(2):
+                    run('mmsg', 'dispatch', 'create_virtual_output')
+                wait(lambda: len(json.loads(run('wlr-randr', '--json'))) == 2,
+                     'recreated outputs were not advertised')
+                names = sorted(output['name'] for output in json.loads(run('wlr-randr', '--json')))
+                assert len(set(names)) == 2 and all(name.startswith('HEADLESS-') for name in names)
+                for name, mode, position in zip(names, ('1024x768', '900x1600'), ('0,0', '1024,0')):
+                    run('wlr-randr', '--output', name, '--custom-mode', mode, '--pos', position)
+                def frames_restored():
+                    surfaces = state()['surfaces']
+                    return len(surfaces) == 2 and {surface['screen'] for surface in surfaces} == set(names)
+
+                wait(frames_restored, 'frame surfaces did not return on recreated outputs')
+                validate_preview(preview, out / 'shell.log')
+                assert display.poll() is None and display.pid == compositor_pid
+                ipc('cover', 'false')
+                pointer.stdin.write('move 200 200 1924 1600\n')
+                pointer.stdin.flush()
+                assert pointer.stdout.readline().strip() == 'OK'
+                time.sleep(.2)
+                def installer_restored():
+                    window = installer_state().get('window', {})
+                    return (window.get('visible') is True and window.get('backing_visible') is True
+                            and window.get('screen') in names)
+
+                wait(installer_restored, 'installer did not show again after output restoration')
+                verify_installer(f'installer-restored-{cycle}')
+                results.append(dict(case=f'output-teardown-{cycle}', compositor_pid=compositor_pid,
+                                    state=state()))
+                print(f'Output teardown cycle {cycle}: same Mango/preview processes survived.', flush=True)
+            stop(installer)
+
+            # Exercise the production observer against actual private Mango and
+            # Foot before the unchanged frame matrix. Keep its precision result
+            # separate: this forced-software, headless rendering fixture is not
+            # the ISO's guest graphics/session. Every failed bracket remains a
+            # failed measurement; only the full paired ISO run can qualify it.
+            observer_spec = importlib.util.spec_from_file_location('native_mapping_observer',
+                SOURCE.parent / 'tools/performance/guest.py')
+            observer = importlib.util.module_from_spec(observer_spec)
+            observer_spec.loader.exec_module(observer)
+            fields = ('PATH', 'HOME', 'LANG', 'XDG_RUNTIME_DIR', 'XDG_CONFIG_HOME',
+                'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'WAYLAND_DISPLAY',
+                'MANGO_INSTANCE_SIGNATURE', 'DBUS_SESSION_BUS_ADDRESS',
+                'QT_QPA_PLATFORM', 'QT_NO_XDG_DESKTOP_PORTAL')
+            prefix = ['env'] + [f'{key}={env[key]}' for key in fields if key in env]
+            observer.emit = lambda check, value: print('ARCTIC-PERFORMANCE ' + json.dumps(
+                dict(stage='private-frame-fixture', check=check, value=value)), flush=True)
+            measurements = []
+            raw_observations = []
+            for launch in range(4):
+                brackets = []
+                elapsed = observer.startup(prefix, ['foot'], ('foot',), timeout=30,
+                    hold_seconds=.1, observations=brackets,
+                    poll_seconds=observer.ROLE_POLL_SECONDS, label='private-foot')
+                assert len(brackets) == 1
+                bracket = brackets[0]
+                limit = min(.005, elapsed*.025)
+                raw_observations.append(bracket)
+                measurements.append(dict(launch=launch, observed_seconds=elapsed,
+                    lower_seconds=bracket['lower_seconds'], upper_seconds=bracket['upper_seconds'],
+                    interval_seconds=bracket['interval_seconds'], observer=bracket['observer'],
+                    precision_limit_seconds=limit, precision_valid=bracket['interval_seconds'] <= limit))
+            precision = dict(case='native-foot-observer-precision',
+                status=('measurement_precision_gate_passed' if all(m['precision_valid'] for m in measurements)
+                        else 'measurement_precision_gate_failed'), measurements=measurements,
+                scope='Private forced-software/headless fixture; not ISO qualification')
+            (out / 'native-foot-precision.json').write_text(json.dumps(
+                dict(precision, raw_observations=raw_observations), indent=2)+'\n')
+            results.append(precision)
+            print('ARCTIC-NATIVE-FOOT-PRECISION ' + json.dumps(precision), flush=True)
 
         # Keep mixed-DPI coverage and exercise both rounded physical axes.
         # One common scale-1 profile already covers both outputs; then scale

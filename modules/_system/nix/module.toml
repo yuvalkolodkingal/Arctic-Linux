@@ -16,4 +16,4 @@ packages = ["nix", "nix-daemon", "arctic-selinux"]
 download_mb = 0
 
 [session]
-services = ["nix-daemon.service"]
+services = ["nix-daemon.socket"]

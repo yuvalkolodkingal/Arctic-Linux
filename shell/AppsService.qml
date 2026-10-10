@@ -304,6 +304,9 @@ Singleton {
     // The large lists go 5 minutes after the launcher closes, unless a job runs; the next
     // Get apps loads them again.
     onWatchingChanged: if (watching) dropTimer.stop(); else dropTimer.restart()
+    // A job can outlast that timeout. Start a fresh idle period after it finishes, so the
+    // lists still get released without opening and closing Get apps a second time.
+    onBusyChanged: if (busy) dropTimer.stop(); else if (!watching) dropTimer.restart()
     Timer {
         id: dropTimer
         interval: 5 * 60 * 1000
