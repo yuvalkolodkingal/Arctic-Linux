@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 import uuid
+from types import FunctionType, ModuleType
 
 DIAGNOSTIC_STAGES = (
     'run-live-init', 'run-live-context', 'run-live-payload', 'run-live-credentials',
@@ -48,9 +49,61 @@ DIAGNOSTIC_CODES = frozenset(
     for label in ('other-error', *(label for _, label in DIAGNOSTIC_ERROR_TYPES),
                   *(code for _, code in DIAGNOSTIC_LITERALS.get(stage, ()))))
 
+COLLECTION_GUARD_LABELS = ('collection-001', 'collection-002', 'collection-003', 'collection-004', 'collection-005', 'collection-006', 'collection-007', 'collection-008', 'collection-009', 'collection-010', 'collection-011', 'collection-012', 'collection-013', 'collection-014', 'collection-015', 'collection-016', 'collection-017', 'collection-018', 'collection-019', 'collection-020', 'collection-021', 'collection-022', 'collection-023', 'collection-024', 'collection-025', 'collection-026', 'collection-027', 'collection-028', 'collection-029', 'collection-030', 'collection-031', 'collection-032', 'collection-033', 'collection-034', 'collection-035')
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-collect-guard-' + code for code in COLLECTION_GUARD_LABELS)
+MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64
+COLLECTION_PHASE_LABELS = ('request-json', 'request-json-fields', 'request-json-constant',
+    'output-head', 'request-poll', 'console-capture', 'output-transition',
+    'target-write-progress', 'target-write-sample')
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-collect-phase-' + code + '-runtime-error' for code in COLLECTION_PHASE_LABELS)
 
-def diagnostic_code(stage, error):
+
+def collection_guard_code(error, controller_source):
+    """Only a pinned controller's source-minted identity; no exception text."""
+    if type(error) is not RuntimeError or type(controller_source) is not ModuleType:
+        return None
+    source = controller_source.__dict__
+    function = source.get('require')
+    if type(function) is not FunctionType or function.__globals__ is not source or \
+            source.get('__file__') != str(Path(__file__).with_name('controller.py')) or \
+            function.__code__.co_filename != source['__file__']:
+        return None
+    proof = error.__dict__.get('_arctic_installer_collection_guard')
+    if type(proof) is tuple and len(proof) == 2 and proof[0] is source.get('_COLLECTION_GUARD_TOKEN') and \
+            type(proof[1]) is str and proof[1] in COLLECTION_GUARD_LABELS:
+        return 'installer-inner-driver-collect-guard-' + proof[1]
+    # A nested owned operation can fail before one of the controller's guards.
+    # Project the deepest exact source code object, never exception text/locals.
+    traceback, phase = error.__traceback__, None
+    owners, phases = source.get('_COLLECTION_GUARD_OWNERS'), source.get('_COLLECTION_GUARD_PHASES')
+    if type(owners) is set and type(phases) is dict:
+        for _ in range(MAX_COLLECTION_DIAGNOSTIC_FRAMES):
+            if traceback is None:
+                break
+            frame = traceback.tb_frame
+            if frame.f_globals is source and any(frame.f_code is code for code in owners):
+                candidate = phases.get(frame.f_code.co_qualname)
+                if type(candidate) is str and candidate in COLLECTION_PHASE_LABELS:
+                    phase = candidate
+            traceback = traceback.tb_next
+        if traceback is not None:
+            return None  # Never present a truncated prefix as the deepest phase.
+        if phase is not None:
+            return 'installer-inner-driver-collect-phase-' + phase + '-runtime-error'
+    return None
+
+
+def diagnostic_code(stage, error, controller_source=None):
     require(type(stage) is str and stage in DIAGNOSTIC_STAGES, 'Unknown installer inner stage')
+    if stage == 'driver-collect':
+        try:
+            guarded = collection_guard_code(error, controller_source)
+        except Exception:
+            guarded = None  # Optional identity cannot replace the original failure.
+        if guarded is not None:
+            return guarded
     if isinstance(error, RuntimeError) and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
         for message, label in DIAGNOSTIC_LITERALS.get(stage, ()):
             if error.args[0] == message:
@@ -61,14 +114,14 @@ def diagnostic_code(stage, error):
     return 'installer-inner-' + stage + '-other-error'
 
 
-def diagnose(stage, error):
+def diagnose(stage, error, controller_source=None):
     # This host-only nonce is never copied into the test CD, guest or context.
     token = os.environ.get('ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN', '')
     if type(token) is str and re.fullmatch('[0-9a-f]{32}', token):
-        code = diagnostic_code(stage, error)
+        code = diagnostic_code(stage, error, controller_source)
         try:
             print('ARCTIC-INSTALLER-INNER ' + token + ' ' + code, flush=True)
-        except (OSError, ValueError):
+        except Exception:
             pass
 
 
@@ -465,7 +518,7 @@ def main():
             (out/'installed-boot.json').write_text(json.dumps(report,sort_keys=True,allow_nan=False)+'\n')
         state['status'] = 'host_completed_pending_guest_evidence_validation_and_visual_review'
     except BaseException as error:
-        diagnose(diagnostic_stage, error)
+        diagnose(diagnostic_stage, error, controller_module)
         errors.append(type(error).__name__ + ': ' + str(error))
     finally:
         with controller_module.cleanup_signals() as pending:

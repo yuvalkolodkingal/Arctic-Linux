@@ -92,7 +92,7 @@ class LaunchDiagnostics(unittest.TestCase):
                              type_text=typed, keys=keys, shot=shot)
         def marker(path, value):
             return (value == 'live session mode:' and live) or (value == 'ARCTIC-TEST-STARTED' and started)
-        env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage', 'dictation_acquire_vm'}, {
+        env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage', 'dictation_acquire_vm', 'record_native_stop'}, {
             'E': {'GUEST_CHECK':'fixture', 'ARCTIC_DICTATION_HOST_TOKEN':'a'*32},
             'taskbar_display_module':None, 'vmtest':SimpleNamespace(VM=lambda *a:vm,
                 serial_has=marker, serial_value=lambda *a:None),

@@ -9,11 +9,13 @@ import datetime
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import uuid
 
@@ -75,12 +77,75 @@ class R(E.R):
                 raise
 
     @staticmethod
+    def preserve_native_stop(path, target):
+        """Retain only a closed, root-owned failure observation; never a gate."""
+        R.require(path.name in ('native-stop-install.json', 'native-stop-boot.json'), 'Unexpected native stop member')
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as source:
+            info = os.fstat(source.fileno())
+            R.require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600,
+                      'Native stop source is not a private root-owned regular file')
+            R.require(info.st_size <= 4096, 'Oversized native stop diagnostic')
+            raw = source.read(4097)
+            R.require(len(raw) == info.st_size, 'Native stop source size changed')
+        def unique(rows):
+            value = {}
+            for key, item in rows:
+                R.require(key not in value, 'Duplicate native stop field')
+                value[key] = item
+            return value
+        value = json.loads(raw, object_pairs_hook=unique,
+                           parse_constant=lambda _: (_ for _ in ()).throw(RuntimeError('Nonfinite native stop number')))
+        R.require(type(value) is dict and set(value) == {'schema', 'phase', 'qemu_returncode', 'elapsed_seconds',
+            'deadline_seconds', 'deadline_reached', 'exit_marker_present', 'reason', 'release_acceptance'},
+            'Native stop field inventory differs')
+        code, elapsed, deadline = value['qemu_returncode'], value['elapsed_seconds'], value['deadline_seconds']
+        R.require((code is None or type(code) is int) and type(elapsed) in (int, float) and math.isfinite(elapsed)
+                  and elapsed >= 0 and type(deadline) is int and deadline > 0, 'Native stop numeric types differ')
+        reason = 'process-exited' if code is not None else 'deadline-expired' if elapsed >= deadline else 'exit-marker-missing'
+        R.require(value['schema'] == 'arctic-native-harness-stop-v1'
+                  and value['phase'] == path.name[len('native-stop-'):-len('.json')]
+                  and type(value['deadline_reached']) is bool and value['deadline_reached'] == (elapsed >= deadline)
+                  and value['exit_marker_present'] is False and value['reason'] == reason
+                  and value['release_acceptance'] is False, 'Native stop closed source contract differs')
+        current = path.stat(follow_symlinks=False)
+        R.require((current.st_dev, current.st_ino, current.st_uid, current.st_mode, current.st_size) ==
+                  (info.st_dev, info.st_ino, info.st_uid, info.st_mode, info.st_size), 'Native stop source identity changed')
+        output = target / path.name
+        fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        acquired = os.fstat(fd)
+        try:
+            with os.fdopen(fd, 'wb') as copied:
+                os.fchmod(copied.fileno(), 0o600)
+                copied.write(raw)
+            digest = hashlib.sha256(raw).hexdigest()
+            R.require(R.digest(output) == digest and not path.is_symlink() and R.digest(path) == digest,
+                      'Native stop original byte preservation differs')
+        except BaseException:
+            try:
+                current = output.stat(follow_symlinks=False)
+                if (current.st_dev, current.st_ino) == (acquired.st_dev, acquired.st_ino):
+                    output.unlink()
+            except BaseException:
+                pass  # Optional cleanup must preserve the original observation failure.
+            raise
+        return dict(bytes=len(raw), sha256=digest, private_original=True, release_acceptance=False)
+
+    @staticmethod
     def preserve_phase(vm, evidence, name):
         target = evidence / name
         target.mkdir(parents=True, exist_ok=True)
         copied = {}
         if vm.exists():
             for path in vm.iterdir():
+                if path.name in ('native-stop-install.json', 'native-stop-boot.json'):
+                    try:
+                        copied[path.name] = R.preserve_native_stop(path, target)
+                    except BaseException:
+                        # A rejected optional observation cannot overwrite the
+                        # primary harness failure or export unvalidated bytes.
+                        copied[path.name] = dict(retained=False, reason='closed-record-rejected', release_acceptance=False)
+                    continue
                 if path.is_file() and not path.is_symlink() and (path.suffix in ('.log', '.png', '.txt')
                         or path.name in ('taskbar-display-install.json', 'taskbar-display-boot.json')):
                     if path.name in ('taskbar-install.log', 'taskbar-boot.log'):

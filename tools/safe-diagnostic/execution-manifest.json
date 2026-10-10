@@ -7,7 +7,7 @@
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/native_smoke.py": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
-    "tools/native-functional/screen-evidence.py": "d2291fea86226abb32766f680bccddc48bb6f6399c6ce6c189417cc1317dcfde",
+    "tools/native-functional/screen-evidence.py": "7062a15b6b777de8106e7d4779e993bc66814ccd5220aa9482142f932bf32c11",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
     "tools/safe-diagnostic/common.py": "387de65aec653cb2a76d6bad1a41cdd55b196fb4f8b14b144ce26dbf461c09d7",
     "tools/safe-diagnostic/guest.py": "6e9528454754dd9587ff238a744ec8784229ed880f95bb6dfa2260d3c63edae5",

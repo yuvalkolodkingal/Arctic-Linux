@@ -35,6 +35,7 @@ CANONICAL_UNITS = (
     ('user@1000.service', 'User Manager for UID 1000'),
     ('user-runtime-dir@1000.service', 'User Runtime Directory /run/user/1000'),
     ('getty@tty1.service', 'Getty on tty1'),
+    ('getty@tty6.service', 'Getty on tty6'),
     ('serial-getty@ttyS0.service', 'Serial Getty on ttyS0'),
 )
 # Cmd.String in internal/installer/runner.go replaces the secret argument with
@@ -73,6 +74,50 @@ EXTERNAL_SENSITIVE = re.compile(SENSITIVE.pattern +
     r'|\bcryptsetup (?:luksFormat|open) [^\r\n]* < (?!\[secret: disk passphrase\])\S+'
     r'|(?:transcript|transcription|transcribed(?:\s+text)?|recognized\s+text|dictation\s+(?:text|result)'
     r'|תמלול|תמליל|טקסט\s+מזוהה)["\']?\s*[:=]')
+
+# These are the original alternatives in their original order. Classification
+# receives only the already rejected Match, never a second read of the member.
+EXTERNAL_RULE_ALTERNATIVES = (
+    ('github-credential', r'(?:gh[pousr]_|github_pat_)[a-z0-9_]+'),
+    ('aws-credential', r'AKIA[A-Z0-9]{16}'),
+    ('authorization', r'authorization:\s*\S+(?:\s+\S+)?'),
+    ('email-shape', r'[\w.+-]+@[\w.-]+\.[a-z]{2,}'),
+    ('queried-url', r'https?://[^\s"<>]*\?[^\s"<>]*'),
+    ('credential-url', r'https?://[^\s"<>]*@[^\s"<>]+'),
+    ('named-secret', r'["\']?\b(?:password|passwd|token|access_token|refresh_token|api_key|client_secret|secret)["\']?\s*[:=]\s*[^\s,}]+'),
+    ('secret-option', r'--(?:password|token|api-key)\s+(?!\[secret: password hash\])\S+'),
+    ('disk-secret-input', r'\bcryptsetup (?:luksFormat|open) [^\r\n]* < (?!\[secret: disk passphrase\])\S+'),
+    ('transcription-label', r'(?:transcript|transcription|transcribed(?:\s+text)?|recognized\s+text|dictation\s+(?:text|result)|תמלול|תמליל|טקסט\s+מזוהה)["\']?\s*[:=]'),
+)
+EXTERNAL_RULES = tuple((label, re.compile('(?i)' + pattern)) for label, pattern in EXTERNAL_RULE_ALTERNATIVES)
+EXTERNAL_RULE_PHASES = ('source-view', 'terminal-view', 'terminal-payload')
+MAX_DIAGNOSTIC_MATCH_BYTES = 16 * 1024
+
+
+def diagnose_sensitive_match(match, phase):
+    """Only a closed category from the same rejected match; no value or path."""
+    if type(phase) is not str or phase not in EXTERNAL_RULE_PHASES:
+        return
+    label = 'unknown-rule'
+    if type(match) is re.Match and match.end(0) - match.start(0) <= MAX_DIAGNOSTIC_MATCH_BYTES:
+        # Check offsets before copying. Even non-ASCII conversion is bounded by
+        # four times this budget; overflow keeps the original rejection below.
+        value = match.group(0)
+        if len(value.encode('utf-8')) <= MAX_DIAGNOSTIC_MATCH_BYTES:
+            for candidate, rule in EXTERNAL_RULES:
+                if rule.fullmatch(value):
+                    label = candidate
+                    break
+    print('ARCTIC-EVIDENCE-RULE=' + phase + '-' + label, flush=True)
+
+
+def reject_sensitive_match(match, phase):
+    error = RuntimeError('Sensitive text in external evidence')
+    try:
+        diagnose_sensitive_match(match, phase)
+    except Exception:
+        pass  # Optional observations cannot replace the original rejection.
+    raise error
 
 
 def classification_view(value, *, escapes=SGR):
@@ -171,11 +216,11 @@ def external_text(content):
             original_proof_start, original_proof_end = original_span(proof_start, proof_end, boundaries, removed)
             if value[original_proof_start:original_proof_end] == view[proof_start:proof_end]:
                 allowed.add((original_start, original_end))
-    def require_safe(scanned, boundaries, removed):
-        if any(original_span(*match.span(), boundaries, removed) not in allowed
+    def require_safe(scanned, boundaries, removed, phase='source-view'):
+        if any(original_span(*match.span(), boundaries, removed) not in allowed and (rejected := match)
                 for match in EXTERNAL_SENSITIVE.finditer(scanned)):
             # Never include the matched private value in this error or upload.
-            raise RuntimeError('Sensitive text in external evidence')
+            reject_sensitive_match(rejected, phase)
     # Scan OSC/DCS payloads before removing complete terminal bookkeeping.
     require_safe(view, boundaries, removed)
     if '\x1b' in view:
@@ -184,15 +229,15 @@ def external_text(content):
             # DCS/SOS/APC introduce a word character (P/X/_) that must not
             # conceal a credential's leading word boundary. Payloads receive
             # no public-token exception, even if invisible on the terminal.
-            if EXTERNAL_SENSITIVE.search(payload):
-                raise RuntimeError('Sensitive text in external evidence')
+            if (rejected := EXTERNAL_SENSITIVE.search(payload)):
+                reject_sensitive_match(rejected, 'terminal-payload')
         terminal_view, terminal_boundaries, terminal_removed = classification_view(value, escapes=TERMINAL)
         if '\x1b' in terminal_view:
             raise RuntimeError('Incomplete terminal escape in external evidence')
         # A second scan catches private labels/tokens split by CSI/OSC/DCS.
         # Public exceptions still originate only in the strict SGR view and
         # must map to the same contiguous original literal token bytes.
-        require_safe(terminal_view, terminal_boundaries, terminal_removed)
+        require_safe(terminal_view, terminal_boundaries, terminal_removed, 'terminal-view')
     return content
 
 
@@ -224,6 +269,32 @@ def diagnose_external_member(relative, error):
         elif error.args[0] == 'Incomplete terminal escape in external evidence':
             reason = 'incomplete-terminal'
     print('ARCTIC-EVIDENCE-DIAGNOSTIC=external-text-' + role + '-rejection-' + reason, flush=True)
+
+
+# Exact paths emitted by the Native runner; an unknown filename stays private.
+# These labels only identify a strict decoding rejection, never its byte value,
+# offset, exception text, or whether any Native acceptance record was complete.
+UTF8_MEMBER_DIAGNOSTICS = {
+    'execution.json': 'native-execution',
+    'native-harness.log': 'native-harness',
+    'provision.log': 'native-provision',
+    'taskbar-build.log': 'native-taskbar-build',
+    'harness/serial-install.log': 'native-live-uart',
+    'harness/serial-boot.log': 'native-installed-uart',
+    'harness/native-evidence-install.log': 'native-live-bulk',
+    'harness/native-evidence-boot.log': 'native-installed-bulk',
+    'harness/qemu-install.log': 'native-live-qemu',
+    'harness/qemu-boot.log': 'native-installed-qemu',
+    'harness/test.log': 'native-driver',
+    'native-live/gui-trace.log': 'native-live-gui-trace',
+    'native-installed/gui-trace.log': 'native-installed-gui-trace',
+}
+
+
+def diagnose_invalid_utf8_member(relative):
+    """Emit only a fixed role and reason; no error contents are inspected."""
+    role = UTF8_MEMBER_DIAGNOSTICS.get(relative, 'other-text') if type(relative) is str else 'other-text'
+    print('ARCTIC-EVIDENCE-DIAGNOSTIC=utf8-' + role + '-rejection-invalid-utf8', flush=True)
 
 
 def copy_screened(source, target, *, external=False):
@@ -259,7 +330,15 @@ def copy_screened(source, target, *, external=False):
                         pass  # Optional observations cannot replace the original rejection.
                     raise
             else:
-                value, redactions = SENSITIVE.subn('[redacted]', content.decode('utf-8'))
+                try:
+                    value = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        diagnose_invalid_utf8_member(path.relative_to(source).as_posix())
+                    except BaseException:
+                        pass  # A diagnostic failure cannot replace the strict original decode rejection.
+                    raise
+                value, redactions = SENSITIVE.subn('[redacted]', value)
                 content = value.encode()
         relative = path.relative_to(source)
         output = target / relative
