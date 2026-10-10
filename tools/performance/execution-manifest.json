@@ -15,7 +15,7 @@
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/screen-evidence.py": "0632c2dd5f561df19235a90693d7d2494c8843485d11fccb8af1f7b9dd1ffdd0",
+    "tools/native-functional/screen-evidence.py": "edaab4a91057af4ea538a606efb354162c68206ef8d723f06aa1b1c76b55dce7",
     "tools/performance/causal.py": "3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9",
     "tools/performance/compare.py": "4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9",
     "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
@@ -26,7 +26,7 @@
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
     "tools/performance/qualification.py": "7e018cb8e378fedc8ea252fca5f1dfbef3912ffaa50b0e6896cbd934df549743",
-    "tools/performance/run-paired.py": "18244b971aa4c7028ef66899ef04901e242b5157865291726c0d954dd3a2ecde",
+    "tools/performance/run-paired.py": "1954e1c1509e102bf5f9327c66b780456eb4d722355cbd0f0672df0aff4892fd",
     "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
   },
   "image": {
