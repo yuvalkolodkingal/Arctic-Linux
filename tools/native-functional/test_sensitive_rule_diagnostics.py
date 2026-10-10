@@ -119,14 +119,15 @@ class RuleControls(unittest.TestCase):
                 self.assertIs(S.external_text(raw),raw)
 
     def test_email_candidate_ids_are_exact_public_literals_and_never_exemptions(self):
+        self.assertEqual(S.ZRAM_UNIT, 'systemd-zram-setup@zram0.service')
         self.assertEqual(len(S.EXTERNAL_EMAIL_CANDIDATES), 12)
         self.assertEqual(tuple(v for v, _ in S.EXTERNAL_EMAIL_CANDIDATES),
             (*[unit for unit, _ in S.CANONICAL_UNITS], S.ZRAM_UNIT))
         for literal, identifier in S.EXTERNAL_EMAIL_CANDIDATES:
             with self.subTest(identifier=identifier):
-                # Only the actually attested unit-001 now preserves its public
-                # token. Every other candidate retains the original rejection.
-                if literal == 'modprobe@configfs.service':
+                # Only the two attested exact public literals preserve their
+                # tokens. Every other candidate retains the original rejection.
+                if literal in ('modprobe@configfs.service', S.ZRAM_UNIT):
                     public = literal.encode()
                     self.assertIs(S.external_text(public), public)
                     self.assertEqual(self.rejected((literal+' password='+PRIVATE).encode()),
@@ -138,7 +139,7 @@ class RuleControls(unittest.TestCase):
                 raw=('ARCTIC-EVIDENCE-EMAIL-CANDIDATE=source-view-'+identifier+'\n').encode()
                 self.assertIs(S.external_text(raw),raw)
                 # Recognizing one public token grants no private line exemption.
-                if literal != 'modprobe@configfs.service':
+                if literal not in ('modprobe@configfs.service', S.ZRAM_UNIT):
                     self.assertIn('source-view-'+identifier, self.rejected((literal+' password='+PRIVATE).encode()))
 
     def test_private_or_malformed_public_unit_overlaps_stay_unknown_and_fatal(self):

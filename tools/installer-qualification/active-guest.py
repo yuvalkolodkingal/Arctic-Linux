@@ -464,8 +464,21 @@ def installer_type(G):
                 self.diagnostic_phase = 'completion-snapshot'
                 engine = self.rpc.snapshot()
                 self.diagnostic_phase = 'completion-engine-guard'
-                G.require(not engine['install']['options']['failed'] and not engine['install']['options']['attention'],
-                          'real active installation failed or requires attention')
+                try:
+                    G.require(not engine['install']['options']['failed'] and not engine['install']['options']['attention'],
+                              'real active installation failed or requires attention')
+                except Exception:
+                    self.completion_guard_diagnostic = 'unknown'
+                    self.completion_phase_diagnostic = 'unknown'
+                    try:
+                        self.completion_guard_diagnostic = G.completion_guard_diagnostic(engine)
+                    except Exception:
+                        pass
+                    try:
+                        self.completion_phase_diagnostic = G.completion_phase_diagnostic(engine)
+                    except Exception:
+                        pass
+                    raise
                 if engine['hello']['state'] != 'done':
                     self.diagnostic_phase = 'completion-wait'
                     return None
@@ -524,7 +537,9 @@ def installer_type(G):
                 report['completion'] = self.finish_install()
             except BaseException as exc:
                 # Free-form stderr/RPC/account text is deliberately not exported.
-                errors.append(G.masked_active_error(exc, self.diagnostic_phase))
+                errors.append(G.masked_active_error(exc, self.diagnostic_phase,
+                    getattr(self, 'completion_guard_diagnostic', 'unknown'),
+                    getattr(self, 'completion_phase_diagnostic', 'unknown')))
             finally:
                 self.password = None
                 report['cleanup'] = self.cleanup(); errors.extend(report['cleanup']['errors'])

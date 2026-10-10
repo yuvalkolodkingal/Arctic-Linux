@@ -238,14 +238,56 @@ def primary_diagnostic_errno(error):
     return TARGET_DIAGNOSTIC_ERRNOS.get(number, 'other') if type(number) is int else 'unknown'
 
 
-def masked_active_error(error, phase):
+COMPLETION_GUARD_DIAGNOSTICS = frozenset(('unknown',
+    'failed-false-attention-false', 'failed-false-attention-true',
+    'failed-true-attention-false', 'failed-true-attention-true'))
+COMPLETION_PHASE_DIAGNOSTICS = frozenset(('unknown', 'disk', 'copy', 'configure', 'bootloader', 'apps', 'finalize'))
+
+
+def completion_guard_diagnostic(snapshot):
+    """Project only exact boolean operands from this owned completion snapshot."""
+    value = snapshot
+    for key in ('install', 'options'):
+        if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+            return 'unknown'
+        value = value.get(key)
+    if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+        return 'unknown'
+    failed, attention = value.get('failed'), value.get('attention')
+    if type(failed) is not bool or type(attention) is not bool:
+        return 'unknown'
+    return 'failed-' + ('true' if failed else 'false') + '-attention-' + ('true' if attention else 'false')
+
+
+def completion_phase_diagnostic(snapshot):
+    """Project a known last reported phase, without claiming an error cause."""
+    value = snapshot
+    for key in ('install', 'options', 'progress'):
+        if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+            return 'unknown'
+        value = value.get(key)
+    if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+        return 'unknown'
+    phase = value.get('phase')
+    return phase if type(phase) is str and len(phase) <= 16 and phase in COMPLETION_PHASE_DIAGNOSTICS else 'unknown'
+
+
+def masked_active_error(error, phase, completion_guard=None, completion_phase=None):
     """Keep the original mask and only append fixed trusted failure labels."""
     error_class = next((name for error_type, (name, _) in DIAGNOSTIC_EXCEPTION_CLASSES.items()
                         if type(error) is error_type), 'OtherError')
     phase = phase if type(phase) is str and phase in ACTIVE_DIAGNOSTIC_PHASES else 'unknown'
     errno = '; errno=' + primary_diagnostic_errno(error) if type(error) is OSError and phase in TARGET_DIAGNOSTIC_PHASES else ''
+    guard = ''
+    if phase == 'completion-engine-guard' and completion_guard is not None:
+        label = completion_guard if type(completion_guard) is str and len(completion_guard) <= 40 and completion_guard in COMPLETION_GUARD_DIAGNOSTICS else 'unknown'
+        guard = '; engine-guard=' + label
+    stage = ''
+    if phase == 'completion-engine-guard' and completion_guard is not None and completion_phase is not None:
+        label = completion_phase if type(completion_phase) is str and len(completion_phase) <= 16 and completion_phase in COMPLETION_PHASE_DIAGNOSTICS else 'unknown'
+        stage = '; engine-phase=' + label
     return (error_class + ': active installation or restoration failed [phase=' + phase + errno +
-            '; reason=' + primary_diagnostic_reason(error) + ']')
+            '; reason=' + primary_diagnostic_reason(error) + guard + stage + ']')
 
 
 def require(condition, message):

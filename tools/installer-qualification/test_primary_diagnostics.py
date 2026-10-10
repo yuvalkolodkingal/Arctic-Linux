@@ -232,7 +232,7 @@ class PrimaryControls(unittest.TestCase):
         calls = [node for node in ast.walk(source) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                  and node.func.attr == 'masked_active_error']
         self.assertEqual(len(calls), 1)
-        self.assertEqual(ast.unparse(calls[0]), 'G.masked_active_error(exc, self.diagnostic_phase)')
+        self.assertEqual(ast.unparse(calls[0]), "G.masked_active_error(exc, self.diagnostic_phase, getattr(self, 'completion_guard_diagnostic', 'unknown'), getattr(self, 'completion_phase_diagnostic', 'unknown'))")
         self.assertNotIn('str(error)', ast.unparse(ast.parse(__import__('inspect').getsource(G.masked_active_error))))
         self.assertNotIn('str(error)', ast.unparse(ast.parse(__import__('inspect').getsource(G.primary_diagnostic_reason))))
         value = G.masked_active_error(RuntimeError(PRIVATE), 'prepare-account-fill')
