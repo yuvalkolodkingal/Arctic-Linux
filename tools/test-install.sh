@@ -1254,6 +1254,77 @@ def native_login_record(before, after, attempt, qmp, pointer):
         release_acceptance=False), sort_keys=True))
 # END NATIVE_LOGIN_INPUT_OBSERVATION
 
+# Failure-only observations bind actual loaded function code and global identity.
+# The private phase log can contain secrets; no exception value or raw line is relayed.
+_DICTATION_DRIVER_BINDING = ()
+
+def dictation_driver_binding():
+    import re, types
+    if E.get("DICTATION_FIXTURE") != "1" or re.fullmatch("[0-9a-f]{32}", E.get("ARCTIC_DICTATION_HOST_TOKEN", "")) is None:
+        return ()
+    source = globals()
+    driver_names = ("stage_boot", "dictation_acquire_vm", "dictation_cpu_argv",
+        "dictation_network_argv", "native_taskbar_argv", "qemu_argv", "enable_taskbar_display",
+        "close_taskbar_vm", "wait_menu", "edit_entry", "open_terminal", "serial", "wait_for",
+        "native_login_geometry", "native_login_type", "native_login_click", "native_login_record",
+        "dictation_indicator_poll", "physical_poll")
+    vm_names = ("__init__", "alive", "cmd", "shot", "press", "keys", "type_text", "quit", "wait_exit")
+    module_names = ("serial_has", "serial_value", "classify", "looks_like_boot_menu", "chord_for", "log")
+    entries = []
+    for name in driver_names:
+        fn = source.get(name)
+        if type(fn) is not types.FunctionType or fn.__globals__ is not source:
+            return ()
+        entries.append((fn.__code__, source, "driver-" + name.replace("_", "-")))
+    for names, owner, prefix in ((vm_names, vmtest.VM.__dict__, "vm-"),
+                                  (module_names, vmtest.__dict__, "vmtest-")):
+        for name in names:
+            fn = owner.get(name)
+            if type(fn) is not types.FunctionType or fn.__globals__ is not vmtest.__dict__:
+                return ()
+            entries.append((fn.__code__, vmtest.__dict__, prefix + name.strip("_").replace("_", "-")))
+    frames = tuple((code, namespace, label, frozenset(line for _, _, line in code.co_lines()
+                    if type(line) is int and line > 0)) for code, namespace, label in entries)
+    classes = ((vmtest.QMPError, "qmp-error"), (RuntimeError, "runtime-error"),
+        (FileNotFoundError, "file-not-found"), (PermissionError, "permission-error"),
+        (OSError, "os-error"), (ValueError, "value-error"), (TypeError, "type-error"),
+        (KeyError, "key-error"), (UnicodeDecodeError, "unicode-error"),
+        (TimeoutError, "timeout"), (InterruptedError, "interrupted-error"),
+        (KeyboardInterrupt, "keyboard-interrupt"), (SystemExit, "system-exit"))
+    return frames, classes
+
+def dictation_driver_failure(scope, error):
+    """Observe actual Source frames; never change the original exception/cleanup."""
+    try:
+        import json, re, types
+        token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
+        if (scope not in ("boot-body", "boot-cleanup") or E.get("DICTATION_FIXTURE") != "1"
+                or type(token) is not str or re.fullmatch("[0-9a-f]{32}", token) is None
+                or type(_DICTATION_DRIVER_BINDING) is not tuple or len(_DICTATION_DRIVER_BINDING) != 2):
+            return
+        frames, classes = _DICTATION_DRIVER_BINDING
+        code = next((label for cls, label in classes if type(error) is cls), "other-error")
+        tb = BaseException.__traceback__.__get__(error)
+        observed = []
+        while tb is not None and len(observed) < 32:
+            if type(tb) is not types.TracebackType:
+                return
+            match = next(((label, tb.tb_lineno) for owned, namespace, label, lines in frames
+                if tb.tb_frame.f_code is owned and tb.tb_frame.f_globals is namespace
+                and type(tb.tb_lineno) is int and tb.tb_lineno in lines), ("unknown", 0))
+            observed.append(match)
+            tb = tb.tb_next
+        if tb is not None:
+            return  # A bounded observation cannot describe a truncated traceback.
+        frame = observed[-1] if observed else ("unknown", 0)
+        caller = next((item for item in reversed(observed[:-1]) if item[0] != "unknown"), ("unknown", 0))
+        value = dict(schema="arctic-dictation-driver-failure-v1", scope=scope, error=code,
+                     frame=frame[0], frame_line=frame[1], caller=caller[0], caller_line=caller[1],
+                     release_acceptance=False)
+        print("ARCTIC-DICTATION-DRIVER-FAILURE " + token + " " + json.dumps(value, sort_keys=True), flush=True)
+    except BaseException:
+        pass  # Even a second cancellation or failed diagnostic write preserves bare raise.
+
 def stage_boot():
     vm = None
     display = None
@@ -1455,9 +1526,29 @@ def stage_boot():
         if E.get("GUEST_CHECK") and not vm.wait_exit(120):
             ok = False
         return 0 if ok else 1
+    except BaseException as error:
+        try:
+            dictation_driver_failure("boot-body", error)
+        except BaseException:
+            pass
+        raise
     finally:
         dictation_host_stage("boot-cleanup")
-        close_taskbar_vm(vm, display)
+        try:
+            close_taskbar_vm(vm, display)
+        except BaseException as error:
+            try:
+                dictation_driver_failure("boot-cleanup", error)
+            except BaseException:
+                pass
+            raise
+
+# Capture the real loaded Driver and VMtest once, before the original stage calls.
+# Imports/setup failures before this point remain unobserved.
+try:
+    _DICTATION_DRIVER_BINDING = dictation_driver_binding()
+except Exception:
+    _DICTATION_DRIVER_BINDING = ()
 
 rc = 0
 if stage in ("all", "install"):

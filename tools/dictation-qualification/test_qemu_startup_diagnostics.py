@@ -14,6 +14,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from test_host_diagnostics import DRIVER, ROOT, SHELL, driver_functions, r
+from test_driver_failure_diagnostic import (restore_driver_failure_diagnostics,
+    restore_runner_driver_diagnostics, restore_native_login_observation, restore_runner_collector_projection)
 
 BASE='222dc0f5a758d7682b192c3e035aaad450a22e88'
 HELPERS={'dictation_qemu_startup','dictation_acquire_vm'}
@@ -217,7 +219,8 @@ class StartupDiagnostics(unittest.TestCase):
                       if isinstance(n, ast.FunctionDef) and n.name == 'restore_native_bulk_driver')
         namespace = {}
         exec(compile(ast.Module(body=[helper], type_ignores=[]), str(helper_path), 'exec'), namespace)
-        driver = namespace['restore_native_bulk_driver'](DRIVER)
+        observed_driver = restore_native_login_observation(restore_driver_failure_diagnostics(DRIVER))
+        driver = namespace['restore_native_bulk_driver'](observed_driver)
         shell = SHELL.replace(DRIVER, driver, 1)
         old_shell=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/test-install.sh']).decode()
         old_driver=old_shell.split("DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
@@ -234,7 +237,7 @@ class StartupDiagnostics(unittest.TestCase):
         restored=restored.replace('"Westmere-v2,-spec-ctrl,enforce"', '"Westmere-v2,enforce"', 1)
         self.assertEqual(restored,old_driver);self.assertEqual(shell.replace(driver,restored,1),old_shell)
         self.assertEqual(ast.dump(ast.parse(restored),include_attributes=False),ast.dump(ast.parse(old_driver),include_attributes=False))
-        old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode();new_runner=Path(r.__file__).read_text()
+        old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode();new_runner=restore_runner_collector_projection(restore_runner_driver_diagnostics(Path(r.__file__).read_text()))
         a,b=enum(old_runner,'HOST_STAGES'),enum(new_runner,'HOST_STAGES');lines=new_runner.splitlines(keepends=True)
         lines[b.lineno-1:b.end_lineno]=old_runner.splitlines(keepends=True)[a.lineno-1:a.end_lineno]
         self.assertEqual(''.join(lines),old_runner)

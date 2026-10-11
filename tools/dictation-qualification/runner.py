@@ -150,6 +150,87 @@ def relay_collector_failures(vm, phase):
         pass  # Preserve the same original failure, predicates and owned cleanup.
 
 
+# These are Source observations, never a report gate or authenticated log origin.
+DRIVER_FAILURE_CLASSES = frozenset({'qmp-error', 'runtime-error', 'file-not-found', 'permission-error',
+    'os-error', 'value-error', 'type-error', 'key-error', 'unicode-error', 'timeout', 'interrupted-error',
+    'keyboard-interrupt', 'system-exit', 'other-error'})
+DRIVER_FAILURE_FUNCTIONS = (
+    ('driver-', 'stage_boot', 'dictation_acquire_vm', 'dictation_cpu_argv', 'dictation_network_argv',
+     'native_taskbar_argv', 'qemu_argv', 'enable_taskbar_display', 'close_taskbar_vm', 'wait_menu',
+     'edit_entry', 'open_terminal', 'serial', 'wait_for', 'native_login_geometry', 'native_login_type',
+     'native_login_click', 'native_login_record', 'dictation_indicator_poll', 'physical_poll'),
+    ('vm-', '__init__', 'alive', 'cmd', 'shot', 'press', 'keys', 'type_text', 'quit', 'wait_exit'),
+    ('vmtest-', 'serial_has', 'serial_value', 'classify', 'looks_like_boot_menu', 'chord_for', 'log'))
+
+def driver_failure_lines():
+    """Compile admitted Source bytes only; do not import or execute the Driver."""
+    import types
+    shell = (ROOT / 'tools/test-install.sh').read_text()
+    driver = shell.split("DRIVER <<'PY' || true\n", 1)[1].split('\nPY\n', 1)[0]
+    driver_codes = {item.co_name: item for item in compile(driver, '<driver-source>', 'exec').co_consts
+                    if type(item) is types.CodeType}
+    vm_codes = {item.co_name: item for item in compile((ROOT / 'tools/lib/vmtest.py').read_text(),
+                '<vmtest-source>', 'exec').co_consts if type(item) is types.CodeType}
+    methods = {item.co_name: item for item in vm_codes['VM'].co_consts if type(item) is types.CodeType}
+    result = {'unknown': frozenset({0})}
+    for names, codes in zip(DRIVER_FAILURE_FUNCTIONS, (driver_codes, methods, vm_codes)):
+        for name in names[1:]:
+            result[names[0] + name.strip('_').replace('_', '-')] = frozenset(
+                line for _, _, line in codes[name].co_lines() if type(line) is int and line > 0)
+    return result
+
+def driver_failure_record(raw, lines):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError()
+            result[key] = value
+        return result
+    def constant(_value):
+        raise ValueError()
+    try:
+        if type(raw) is not bytes or not 0 < len(raw) <= 2048:
+            return None
+        value = json.loads(raw.decode('ascii'), object_pairs_hook=pairs, parse_constant=constant)
+        if (type(value) is not dict or set(value) != {'schema', 'scope', 'error', 'frame', 'frame_line',
+                'caller', 'caller_line', 'release_acceptance'}
+                or value['schema'] != 'arctic-dictation-driver-failure-v1'
+                or value['release_acceptance'] is not False
+                or type(value['scope']) is not str or value['scope'] not in ('boot-body', 'boot-cleanup')
+                or type(value['error']) is not str or value['error'] not in DRIVER_FAILURE_CLASSES):
+            return None
+        for name in ('frame', 'caller'):
+            if (type(value[name]) is not str or value[name] not in lines
+                    or type(value[name + '_line']) is not int or value[name + '_line'] not in lines[value[name]]):
+                return None
+        return value
+    except (UnicodeError, ValueError, KeyError, TypeError):
+        return None
+
+def relay_driver_failures(path, token, phase):
+    """Project fixed Source labels from an owned phase file only on harness failure."""
+    if type(phase) is not str or phase not in PHASES or type(token) is not str or re.fullmatch('[0-9a-f]{32}', token) is None:
+        return
+    try:
+        raw = launch_diagnostic_read(Path(path).parent, Path(path).name, 16 * 1024 * 1024)
+        lines = driver_failure_lines()
+        prefix = b'ARCTIC-DICTATION-DRIVER-FAILURE ' + token.encode('ascii') + b' '
+        seen = set()
+        for line in raw.splitlines(keepends=True):
+            if not line.endswith(b'\n') or line.endswith(b'\r\n') or not line.startswith(prefix):
+                continue
+            value = driver_failure_record(line[len(prefix):-1], lines)
+            if value is None:
+                continue
+            canonical = json.dumps(value, sort_keys=True)
+            if canonical in seen or len(seen) >= 4:
+                continue
+            seen.add(canonical)
+            print('ARCTIC-DICTATION-DRIVER-OBSERVATION ' + phase + ' ' + canonical, flush=True)
+    except BaseException:
+        pass  # Diagnostics must not replace the same harness exception/cancellation.
+
 def diagnostic(phase, stage, error, contract):
     if phase not in PHASES or stage not in CATCH_STAGES:
         return
@@ -542,6 +623,7 @@ def run(args):
                 errors.append('harness-failed')
                 diagnostic(phase, 'harness', error, contract)
                 relay_host_stages(private / (phase + '.log'), diagnostic_token, phase)
+                relay_driver_failures(private / (phase + '.log'), diagnostic_token, phase)
                 relay_collector_failures(vm, phase)
                 preserve_launch_diagnostic(vm, private / (phase + '.log'), diagnostic_token, ctx, args.evidence, contract)
             # Preserve structurally safe reports even when the collector's
