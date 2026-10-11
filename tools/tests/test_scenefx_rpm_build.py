@@ -137,12 +137,25 @@ rpm() {
     -qf) [[ "$FAULT" != owner-error ]] || return 1
          if [[ "$2" == /usr/bin/mango ]]; then name=mangowm; else name=scenefx; fi ;;
     -q) if [[ "$2" == --whatprovides ]]; then
+          [[ "$3" == 'scenefx(arctic-software-sync)' ]] || return 1
           [[ "$FAULT" != provider-error ]] || return 1; name=scenefx
         else [[ "$FAULT" != installed-error ]] || return 1; name="$2"; fi ;;
     -V) [[ "$FAULT" != verify && !( "$FAULT" == mango-verify && "$2" == mangowm ) ]]; return ;;
     *) return 1 ;;
   esac
   if [[ "$name" == mangowm ]]; then version=0.17.3; release=1.fc44; else version=0.5; release=2.fc44; fi
+  if [[ "$*" == *PROVIDENAME* ]]; then
+    [[ "$FAULT" != capability-query-error ]] || return 1
+    local flags='=' provided_version=0.5 capability='scenefx(arctic-software-sync)'
+    [[ "$FAULT" != capability-flags ]] || flags='>='
+    [[ "$FAULT" != capability-version ]] || provided_version=0.6
+    [[ "$FAULT" != capability-case ]] || capability='SceneFX(arctic-software-sync)'
+    [[ "$FAULT" != capability-private ]] || provided_version='private-capability-user@example.invalid'
+    [[ "$FAULT" != capability-missing ]] || capability='foreign-capability'
+    printf 'scenefx\\t=\\t0.5-2.fc44\\n%s\\t%s\\t%s\\n' "$capability" "$flags" "$provided_version"
+    [[ "$FAULT" != capability-duplicate ]] || printf 'scenefx(arctic-software-sync)\\t=\\t0.5\\n'
+    return 0
+  fi
   if [[ "$*" == *FILEDIGESTALGO* ]]; then
     [[ !( "$1" == -qp && "$FAULT" == local-files-error ) && !( "$1" == -q && "$FAULT" == installed-files-error ) ]] || return 1
     local digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa algo=8
@@ -151,6 +164,9 @@ rpm() {
     printf '%s\\n/usr/lib/fixture-%s\\t%s\\t\\t33188\\n' "$algo" "$name" "$digest"
     return
   fi
+  [[ !( "$1" == -qp && "$FAULT" == local-identity-error ) ]] || return 1
+  if [[ "$1" == -q && "$2" == --whatprovides && "$FAULT" == provider-private ]]; then
+    release='private-operand-user@example.invalid'; fi
   if [[ "$1" == -q && "$2" != --whatprovides && "$FAULT" == "$name-noop" ]]; then release=3.fc44; fi
   if [[ "$1" == -qf ]]; then
     case "$FAULT" in owner) name=foreign ;; owner-release) release=3.fc44 ;; owner-arch) arch=i686 ;; esac
@@ -237,6 +253,53 @@ readlink() { [[ "$2" == /usr/lib64/libscenefx-0.5.so ]] || return 1; printf '/us
                 self.assertIn('rpm:-qf', commands)
                 self.assertIn('rpm:-q', commands)
                 self.assertIn('rpm:-V', commands)
+
+    def test_failure_only_diagnostics_identify_the_original_rejecting_branch(self):
+        faults = {'local-identity-error': 'local-identity-query',
+                  'installed-error': 'installed-identity-query',
+                  'scenefx-noop': 'native-identity',
+                  'owner-error': 'file-owner-query', 'owner-release': 'file-owner-identity',
+                  'local-files-error': 'local-files-query',
+                  'installed-files-error': 'installed-files-query',
+                  'algo': 'sha256-file-inventory-format',
+                  'payload-scenefx': 'installed-file-inventory-differs',
+                  'verify': 'installed-files-verification',
+                  'provider-error': 'scenefx-provider-query',
+                  'provider-release': 'scenefx-provider-identity'}
+        for fault, label in faults.items():
+            with self.subTest(fault=fault):
+                result, _ = self.run_install(fault=fault, scene=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn('ADMITTED', result.stdout)
+                lines = result.stderr.splitlines()
+                self.assertEqual(lines[0], 'ARCTIC-RPM-VERIFY-FAIL=' + label)
+                self.assertTrue(all(line.startswith(('ARCTIC-RPM-VERIFY-FAIL=',
+                                                     'ARCTIC-RPM-VERIFY-CONTEXT=')) for line in lines))
+        result, _ = self.run_install(scene=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, '')
+
+    def test_private_query_operands_are_not_formatted_by_failure_diagnostics(self):
+        result, _ = self.run_install(fault='provider-private', scene=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, 'ARCTIC-RPM-VERIFY-FAIL=scenefx-provider-identity\n')
+        self.assertNotIn('private-operand', result.stdout + result.stderr)
+        self.assertNotIn('example.invalid', result.stdout + result.stderr)
+
+    def test_capability_name_query_retains_the_exact_single_version_tuple(self):
+        result, _ = self.run_install(scene=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for fault in ('capability-flags', 'capability-version', 'capability-duplicate',
+                      'capability-case', 'capability-private', 'capability-missing'):
+            with self.subTest(fault=fault):
+                result, _ = self.run_install(fault=fault, scene=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stderr, 'ARCTIC-RPM-VERIFY-FAIL=scenefx-capability-version\n')
+                self.assertNotIn('ADMITTED', result.stdout)
+                self.assertNotIn('example.invalid', result.stdout + result.stderr)
+        result, _ = self.run_install(fault='capability-query-error', scene=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, 'ARCTIC-RPM-VERIFY-FAIL=scenefx-capability-query\n')
 
 
 if __name__ == '__main__':

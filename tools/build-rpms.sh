@@ -347,28 +347,41 @@ verify_installed_rpm() {
   local expected installed owner expected_files installed_files
   local identity='%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n'
   local files='%{FILEDIGESTALGO}\n[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILELINKTOS}\t%{FILEMODES}\n]'
-  expected="$(rpm -qp --nosignature --qf "$identity" "$1")" || return 1
-  installed="$(rpm -q "$2" --qf "$identity")" || return 1
+  expected="$(rpm -qp --nosignature --qf "$identity" "$1")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=local-identity-query' >&2; return 1; }
+  installed="$(rpm -q "$2" --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=installed-identity-query' >&2; return 1; }
   [[ "$expected" =~ ^"$2"-[0-9]+:[0-9][A-Za-z0-9.+~^_]*-[A-Za-z0-9._+~^]+[.]x86_64$ \
-      && "$installed" == "$expected" ]] || return 1
+      && "$installed" == "$expected" ]] || { echo 'ARCTIC-RPM-VERIFY-FAIL=native-identity' >&2; return 1; }
   if [[ -n "${3:-}" ]]; then
-    owner="$(rpm -qf "$3" --qf "$identity")" || return 1
-    [[ "$owner" == "$expected" ]] || return 1
+    owner="$(rpm -qf "$3" --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=file-owner-query' >&2; return 1; }
+    [[ "$owner" == "$expected" ]] || { echo 'ARCTIC-RPM-VERIFY-FAIL=file-owner-identity' >&2; return 1; }
   fi
   # Identity alone cannot distinguish different payloads rebuilt at the same EVR.
   # Verify against the local RPM's SHA-256 file/link/mode inventory as well.
-  expected_files="$(rpm -qp --nosignature --qf "$files" "$1")" || return 1
-  installed_files="$(rpm -q "$2" --qf "$files")" || return 1
-  [[ "$expected_files" == $'8\n/'* && "$installed_files" == "$expected_files" ]] || return 1
-  rpm -V "$2"
+  expected_files="$(rpm -qp --nosignature --qf "$files" "$1")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=local-files-query' >&2; return 1; }
+  installed_files="$(rpm -q "$2" --qf "$files")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=installed-files-query' >&2; return 1; }
+  [[ "$expected_files" == $'8\n/'* && "$installed_files" == "$expected_files" ]] || {
+    if [[ "$expected_files" != $'8\n/'* ]]; then
+      echo 'ARCTIC-RPM-VERIFY-FAIL=sha256-file-inventory-format' >&2
+    else
+      echo 'ARCTIC-RPM-VERIFY-FAIL=installed-file-inventory-differs' >&2
+    fi
+    return 1
+  }
+  rpm -V "$2" || { local status=$?; echo 'ARCTIC-RPM-VERIFY-FAIL=installed-files-verification' >&2; return "$status"; }
 }
 verify_scenefx() {
-  local owner provider
+  local owner provider provides
   local identity='%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n'
-  owner="$(rpm -qf /usr/lib64/libscenefx-0.5.so --qf "$identity")" || return 1
-  provider="$(rpm -q --whatprovides 'scenefx(arctic-software-sync) = 0.5' --qf "$identity")" || return 1
-  [[ "$owner" =~ ^scenefx-[0-9]+:0[.]5-[A-Za-z0-9._+~^]+[.]x86_64$ && "$provider" == "$owner" ]] || return 1
-  rpm -V scenefx
+  owner="$(rpm -qf /usr/lib64/libscenefx-0.5.so --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-owner-query' >&2; return 1; }
+  provider="$(rpm -q --whatprovides 'scenefx(arctic-software-sync)' --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-provider-query' >&2; return 1; }
+  [[ "$owner" =~ ^scenefx-[0-9]+:0[.]5-[A-Za-z0-9._+~^]+[.]x86_64$ && "$provider" == "$owner" ]] || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-provider-identity' >&2; return 1; }
+  # RPM's --whatprovides selects a capability name, not a version expression.
+  # Retain the exact version requirement separately in the same owning package.
+  provides="$(rpm -q scenefx --qf '[%{PROVIDENAME}\t%{PROVIDEFLAGS:depflags}\t%{PROVIDEVERSION}\n]')" || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-capability-query' >&2; return 1; }
+  [[ "$(printf '%s\n' "$provides" | grep -Fc $'scenefx(arctic-software-sync)\t')" == 1 \
+      && "$(printf '%s\n' "$provides" | grep -Fxc $'scenefx(arctic-software-sync)\t=\t0.5')" == 1 ]] \
+    || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-capability-version' >&2; return 1; }
+  rpm -V scenefx || { local status=$?; echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-files-verification' >&2; return "$status"; }
 }
 install_scenefx() {
   local rpm devel
@@ -376,8 +389,8 @@ install_scenefx() {
   devel="$(ls -t "$1"/scenefx-devel-[0-9]*.x86_64.rpm 2>/dev/null | head -n1)"
   [[ -n "$rpm" && -n "$devel" ]] || return 1
   dnf "${dnf_args[@]}" -y install "$rpm" "$devel" || return 1
-  verify_installed_rpm "$rpm" scenefx /usr/lib64/libscenefx-0.5.so || return 1
-  verify_installed_rpm "$devel" scenefx-devel || return 1
+  verify_installed_rpm "$rpm" scenefx /usr/lib64/libscenefx-0.5.so || { echo 'ARCTIC-RPM-VERIFY-CONTEXT=scenefx-runtime' >&2; return 1; }
+  verify_installed_rpm "$devel" scenefx-devel || { echo 'ARCTIC-RPM-VERIFY-CONTEXT=scenefx-devel' >&2; return 1; }
   verify_scenefx
 }
 if [[ " $SPECS " != *" scenefx "* && -n "$(ls /out/repo/scenefx-[0-9]*.x86_64.rpm 2>/dev/null)" ]]; then

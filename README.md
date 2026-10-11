@@ -6,15 +6,15 @@ with an identity drawn from the arctic fox. One live USB: boot it to **Try Arcti
 and it only downloads the apps you pick.
 
 - **Desktop:** Mango, a Quickshell shell (bar, launcher with calculator and commands, wallpaper
-  picker, Get apps (install and remove apps), OSD, lock screen), Arctic Settings (`Super + S`), mako, kitty + Fish with the animated `arctic-fetch`
-  fox, two themes (Winter and Polar night) switched with `Super + Shift + T`.
+  picker, Get Apps and a separate Remove Apps menu, OSD, lock screen), Arctic Settings (`Super + S`), mako, Foot + Fish with the animated `arctic-fetch`
+  fox, with themes switched using `Super + Shift + T`.
 - **System:** night light (`Super + Ctrl + N`) and keep awake (`Super + Ctrl + I`), screen modes
   (`Super + P`) and the laptop lid, printing and scanning without drivers, USB drives that mount
   themselves, apps' own "start on login", daily Flatpak updates and firmware updates, snapshots
   you can undo an update with, and Settings pages for date and time, sharing (firewall, SSH) and
   users.
-- **Default apps (all swappable in the installer):** Zen, Zed, kitty, Fish, yazi, Nautilus,
-  Collabora Office, VLC. Nix and Flatpak come preinstalled.
+- **Default apps:** Epiphany (GNOME Web), Foot, GTK3 PCManFM, XArchiver, Celluloid,
+  FeatherPad, Nano and Fish/Bash. The installer offers alternative apps; Nix integration and Flatpak are available.
 - **Installer:** a Go engine (`arcticd`) behind a Quickshell wizard. Disk encryption is on by
   default (LUKS2 + btrfs).
 
