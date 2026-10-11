@@ -116,7 +116,7 @@ def observe_installed_prompt(label, observed_line):
     # Source function. Foreign callers cannot attach observations to its owner.
     frame = sys._getframe(1)
     try:
-        if frame.f_globals is not globals() or frame.f_code is not console_prompt.__code__:
+        if frame.f_globals is not globals() or (frame.f_code is not console_prompt.__code__ and frame.f_code is not console_user_identity.__code__):
             return
     finally:
         del frame
@@ -481,6 +481,65 @@ def ocr_provenance():
                 version=subprocess.check_output(['tesseract','--version'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines()[0])
 
 
+# BEGIN INSTALLED_USER_NONCE_IDENTITY
+def installed_user_command(nonce):
+    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
+            'installed user identity nonce differs')
+    # The echoed command contains placeholders, not the complete output record.
+    # No credential, sudo command, shell setting or authentication is changed.
+    return ('sh -c \'printf "\\nARCTIC-%s %s uid=%s user=%s\\n" '
+            'USER "$1" "$(id -u)" "$(id -un)"\' sh ' + nonce)
+
+
+def installed_user_line(nonce):
+    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
+            'installed user identity nonce differs')
+    return 'ARCTIC-USER ' + nonce + ' uid=1000 user=arcticqual'
+
+
+def console_user_identity(vm, startup, out, nonce, private_password):
+    """One nonsecret command; exact UID/name response before any sudo input."""
+    deadline = time.monotonic() + 45
+    expected = installed_user_line(nonce)
+    command = installed_user_command(nonce)
+    require(expected not in command, 'installed user command can mimic its response')
+    sent = False
+    while vm.alive() and time.monotonic() < deadline:
+        path = vm.shot('installed-login-shell-probe')
+        require(path and startup.console_screen(path), 'actual password console disappeared')
+        result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
+                                capture_output=True, timeout=10, check=True)
+        require(len(result.stdout) <= 65536, 'prompt OCR exceeds bound')
+        text = result.stdout.decode()
+        require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        observed_line = lines[-1].rstrip('_| ') if lines else None
+        observe_installed_prompt('installed-login-shell', observed_line)
+        require(not any(line in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual')
+                        for line in lines), 'installed user login did not reach its identity challenge')
+        records = [line for line in lines if line.startswith('ARCTIC-USER ')]
+        if records:
+            require(sent and records == [expected], 'installed user identity response differs')
+            from PIL import Image
+            with Image.open(path) as image:
+                require(image.size == (1280,720), 'installed prompt physical dimensions differ')
+            require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+            Path(path).unlink()
+            return dict(prompt_kind='installed-user-nonce-identity', nonce=nonce,
+                        username='arcticqual', uid=1000,
+                        observed_line_sha256=hashlib.sha256(expected.encode('utf-8')).hexdigest(),
+                        observed_ns=time.monotonic_ns())
+        if not sent and observed_line is not None and observed_line != 'Password:':
+            require(time.monotonic() + len(command)*.08 + .3 < deadline,
+                    'installed user identity deadline exceeded')
+            vm.type_text(command, gap=.08); vm.keys('ret')
+            require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+            sent = True
+        time.sleep(.5)
+    raise RuntimeError('exact installed user identity was not observed; sudo input refused')
+# END INSTALLED_USER_NONCE_IDENTITY
+
+
 @observed_installed_auth
 def boot_installed(vm, startup, vmtest, out, context):
     """Authenticate on a new QEMU boot of the same disk, with hidden TTY secrets."""
@@ -505,8 +564,8 @@ def boot_installed(vm, startup, vmtest, out, context):
     vm.type_text('arcticqual', gap=.15); vm.keys('ret')
     getty = console_prompt(vm,startup,out,'installed-getty-password','Password:',password)
     vm.type_text(password, gap=.1); vm.keys('ret')
-    shell = console_prompt(vm,startup,out,'installed-login-shell','arcticqual@arctic-qual ~ >',password,archive=False)
     nonce = uuid.uuid4().hex
+    shell = console_user_identity(vm,startup,out,nonce,password)
     vm.type_text('sudo sh /dev/sr0 ' + nonce, gap=.08); vm.keys('ret')
     sudo = console_prompt(vm,startup,out,'installed-sudo-password','[sudo] password for arcticqual:',password)
     vm.type_text(password, gap=.1); vm.keys('ret')
@@ -528,7 +587,7 @@ def boot_installed(vm, startup, vmtest, out, context):
             require(report['context'] == context and report['authentication']['nonce'] == nonce,
                     'fresh installed helper context/authentication differs')
             prompts = dict(schema='arctic-active-password-prompts-v1',engine=ocr_provenance(),getty=getty,sudo=sudo,
-                login_shell={key: shell[key] for key in ('prompt_kind','observed_line_sha256','observed_ns')},
+                login_shell=shell,
                 private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
             return report, dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest()), prompts
         time.sleep(.5)

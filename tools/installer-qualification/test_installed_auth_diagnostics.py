@@ -46,6 +46,8 @@ class InstalledAuthDiagnostics(unittest.TestCase):
             return error,codes,calls
     def test_exact_original_boot_and_console_behavior_rolls_back(self):
         child=(HERE/'driver.py').read_text();base=subprocess.check_output(['git','-C',str(HERE),'show','0d10f5bb05be466ecba00b98ef9e4a568af2dcb3:tools/installer-qualification/driver.py'],text=True)
+        from test_installed_user_identity import restore_driver_source
+        child=restore_driver_source(child)
         a=child.index('# BEGIN INSTALLED_AUTH_FINITE_OBSERVER');b=child.index('# END INSTALLED_AUTH_FINITE_OBSERVER',a)+len('# END INSTALLED_AUTH_FINITE_OBSERVER\n\n');child=child[:a]+child[b:]
         child=child.replace("            if stage == 'driver-installed-proof':\n                for observation in installed_auth_codes(error):\n                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)\n",'',1)
         child=child.replace('        observe_installed_prompt(label, observed_line)\n','',1).replace('@observed_installed_auth\n','',1)

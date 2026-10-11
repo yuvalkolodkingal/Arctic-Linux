@@ -88,6 +88,14 @@ SERIAL_NEIGHBORS = {
     '{': 'ascii-open-brace', '}': 'ascii-close-brace', ':': 'ascii-colon',
     ';': 'ascii-semicolon', '.': 'ascii-period', '-': 'ascii-hyphen',
     '/': 'ascii-slash', '\\': 'ascii-backslash', '\x1b': 'terminal-escape',
+    '=': 'ascii-equals', '!': 'ascii-exclamation', '#': 'ascii-hash',
+    '$': 'ascii-dollar', '%': 'ascii-percent', '&': 'ascii-ampersand',
+    '*': 'ascii-asterisk', '+': 'ascii-plus', ',': 'ascii-comma',
+    '<': 'ascii-angle-open', '>': 'ascii-angle-close', '?': 'ascii-question',
+    '@': 'ascii-at', '^': 'ascii-caret', '_': 'ascii-underscore',
+    '`': 'ascii-grave', '|': 'ascii-pipe', '~': 'ascii-tilde',
+    '\x00': 'terminal-nul', '\x07': 'terminal-bel', '\x08': 'terminal-backspace',
+    '\x7f': 'terminal-delete',
 }
 
 
