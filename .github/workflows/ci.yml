@@ -18,6 +18,7 @@ on:
       - codex/final-installed-ui-live-mount-20261011
       - codex/final-installed-ui-guest-diagnostic-20261011
       - codex/final-installed-ui-categories-20261011
+      - codex/final-installed-ui-categories-owner-20261011
   pull_request:
   workflow_dispatch:
 
