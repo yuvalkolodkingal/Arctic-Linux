@@ -21,6 +21,7 @@ on:
       - codex/final-installed-ui-categories-owner-20261011
       - codex/final-installed-ui-probe-failure-20261011
       - codex/final-installed-ui-settings-readiness-20261011
+      - codex/final-ui-csi-snapshot-20261011
   pull_request:
   workflow_dispatch:
 
