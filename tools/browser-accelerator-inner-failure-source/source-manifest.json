@@ -1,0 +1,25 @@
+{
+  "Source_only": true,
+  "actual_inner_cause": false,
+  "actual_new_executable_namespace_and_workflow": null,
+  "actual_new_run": null,
+  "base": "4cf178c4a8cd5fb5e539b18d92b1a8db5c651b48",
+  "file_pins": {
+    "tools/browser-accelerator-inner-failure-source/README.md": "2d871537d1666009ce1648be82fd613e3949ae60fb17f2387457f112a5bd7e94",
+    "tools/browser-accelerator-inner-failure-source/failure-upload-recipe.yml": "32a56ca59feb7b0e9454bb3d0e1756cd7e5eb513e5e8cdc48dd841c1ad760598",
+    "tools/browser-accelerator-inner-failure-source/producer.py": "ffcd85e7066f1c272d2c98fca54c7ce969284e14ee8b5cc1a58757be12cb6d47",
+    "tools/browser-accelerator-inner-failure-source/runner.py": "f3f1c1afd8e181c93cc6f19f3bb2d7182041be9b5943ecea3135980ed029f1b0",
+    "tools/browser-accelerator-inner-failure-source/source-inverse.json": "06478db0f8dd7cd300c77cb2d4e84343222388cfde4e3c1c19ac1698112cec4e",
+    "tools/browser-accelerator-inner-failure-source/test_source.py": "3e1a1ef6d325d1d4d902bd23a20b9f9071aed9908f0cc589b32e50a9d0617209"
+  },
+  "old_product_and_executable_files_unchanged": true,
+  "only_finite_failure_recipe_addition": true,
+  "original_private_producer_log_admitted": false,
+  "original_sdk_security_deps_spec_checks_workload_deadlines_private_modes_cleanup_unchanged": true,
+  "performance_acceptance": false,
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-browser-inner-failure-disabled-Source-v1",
+  "source_signature_full_fingerprint_only": true,
+  "whole_original_success_group_uploader_unchanged": true
+}

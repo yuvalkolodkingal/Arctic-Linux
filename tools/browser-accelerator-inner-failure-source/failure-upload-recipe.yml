@@ -1,0 +1,8 @@
+      - name: Retain only closed finite failure observation
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-epiphany-build-finite-failure-20261011
+          path: ${{ runner.temp }}/arctic-accelerator-ab-finite-failure/finite-failure.json
+          if-no-files-found: ignore
+          retention-days: 7
