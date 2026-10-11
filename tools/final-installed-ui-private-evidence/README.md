@@ -1,0 +1,11 @@
+# Disabled current UI evidence preparation
+
+This component is based on the exact published `44c789f068a49d642b5122288ccccca767f1ddc0` installed UI lane. Its command is disabled. It adds no marker, workflow or operational authority. All historical lane files, plans and markers remain unchanged.
+
+The original UI host main, guest, common, composition, 2400-second offline installer, 4200-second host harness, 720-second guest alarm, 16-capture limit, real PAM, security checks and complete original-UART gate remain authoritative. Only declared dependencies are composed: same-buffer exact b3 scanner loading with failure-only same-exception/Match observation, an exact optional failure-tail suppression in a privately staged harness, and an independent artifact publication wrapper.
+
+The diagnostic transport parser is a separate derivative of the exact original common `decode`. Its inverse restores only its name/signature, the whole-UART gate and output writes. All framing, context, chunk, inventory, expansion, complete SHA-256 and original typed report predicates remain. Its members never prove complete UART, UI, PAM, runtime cause or release acceptance. Raw UART snapshots remain private and are never uploaded. Only fixed originals independently admitted by full report screening or every-chunk PNG CRC and three OCR modes (3, 6, 11) can be published. Successful publication also adds the same strict PNG/OCR checks to every original screenshot.
+
+Original full-screen failures keep the same exception and failed result even when optional diagnostic acquisition or publication fails. Actual cancellation is propagated on successful paths. The publication directory and every retained generation are checked after rename, before a caller can emit its upload admission marker. Arbitrary later same-UID mutation after admission is outside this practical concurrency claim.
+
+The actual current UI host has a completed harness but rejected UARTs; its exact token, UI/PAM result and functional cause remain unknown. This Source preparation does not read or replay those originals. A separately reviewed fresh namespace, whole closure, sole-first-marker guard, OCR host dependency and upload marker condition are required before any runtime.
