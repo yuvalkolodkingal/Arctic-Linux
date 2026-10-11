@@ -1,0 +1,71 @@
+{
+  "base": "f23be8b034cfb58b171541e77f79c8fab1d43913",
+  "boot_network": "offline",
+  "failure_aggregate_bound": 201326592,
+  "failure_png_bound": 8388608,
+  "failure_png_max": 4,
+  "failure_uart_bounds": {
+    "serial-boot.log": 134217728,
+    "serial-install.log": 16777216
+  },
+  "firmware": "bios",
+  "harness_seconds": 6600,
+  "image": {
+    "archive_bytes": 1929907101,
+    "archive_sha256": "3a8132aa4578fdb62b2aa1e3bf5c340229f1a483678d03ddf2c565fb39afadcd",
+    "artifact_id": 11689591362,
+    "bytes": 1929719808,
+    "name": "Arctic-Linux-1.2-candidate-38102474066-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "3034ea88d4ba1d1e434942f90c42b8057d3667ad2e7f6ee739b895ebdfc86d1d",
+    "run_id": 38102474066,
+    "sha256": "807eaaa64ab8480ec2b18bc8434fd5e37d82c41b73a3e0a6f002c35d152ba54c",
+    "source_sha": "326690f173d4dc4f049f43e046c8380e66825a07"
+  },
+  "install_network": "offline",
+  "install_timeout": 2400,
+  "ocr_timeout_seconds_per_image": 20,
+  "operational_cli": false,
+  "published_execution_files": {
+    ".github/workflows/ci.yml": "78aaa717aa663d768e2d2b71d9dfa2b1f5af7f57e1de36250943e653593707ed",
+    ".github/workflows/final-bios-install-20261011.yml": "3f4b6aa3892efa2ac845cd0669f744abee1e861b428761e5669267b76ac7d5f6",
+    ".github/workflows/final-bios-observed-install-20261011.yml": "38c4e62ca4aa2d7b38ba3a39161932bffeaeb01ecfa57bc95cde58448d3516c4",
+    "tools/final-bios-failure-observer/composition.py": "00ec2296df0c04769c8df3af6b66c04638c34c84d9a080620cbe655901a4e63a",
+    "tools/final-bios-failure-observer/driver-entry.py": "285a7cae892e2118cfde159a8347d6b8f114121106e71daa56cd42dfd2c42673",
+    "tools/final-bios-failure-observer/execution-manifest.json": "d045b2bc68148cf4f5dee426359212fa78fac5cbe07c376eec5f132069ec9108",
+    "tools/final-bios-failure-observer/observer.py": "6592648b54600af57e685e2baa84149a9637001822ff9b4d9592c50ce213e43a",
+    "tools/final-bios-install/common.py": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
+    "tools/final-bios-install/compose.py": "c8f47ea3855c9fb6816907644d4d56497683fda04b6ea0bbff397de637c440bc",
+    "tools/final-bios-install/execution-manifest.json": "8de540f7ed691b63838aa2f6023a08f6e3eca6635577c71968eb68118d789abe",
+    "tools/final-bios-install/guest.py": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "tools/final-bios-install/run.py": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
+    "tools/final-bios-install/security.py": "963112315a154824080ad0b4aded28f3e2e7a68ebe2c9562a14c37714b9b8e0b",
+    "tools/final-bios-observed-install/common.py": "c7ea3c6d0db51f6f1964b14871f8bb8a321854e24a6069d452679b8df8fbe457",
+    "tools/final-bios-observed-install/execution-manifest.json": "d540688845dba459834f0edc4fec2aae21af011ff4ee99be76904cc833ef53a1",
+    "tools/final-bios-observed-install/run.py": "829253a93fc7f24f1ee3d9c216d0ab4342572b31773e9032b9834e2a2e56bcc1",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
+    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
+  },
+  "qualification_supplied": false,
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-bios-failure-originals-disabled-source-v1",
+  "self_execution_files": {
+    "tools/final-bios-failure-evidence/README.md": "c84eaffeb3ce2110fe0b7bf3fa8d168ffd762e1ad42adc8d89b59bb1de54310d",
+    "tools/final-bios-failure-evidence/evidence.py": "cfac29590aebf025ef314acb471637855e56c8dca68014104a488de5a4409cbc",
+    "tools/final-bios-failure-evidence/test_evidence.py": "77a2924398464ebcbb08dad930b03709e63dac26e8863b2801a32d82e90c36e6"
+  },
+  "source_files": {
+    "internal/installer/installer.go": "5d5748a1ed1c89ab78ec4078cae2d6401753575df6c4a5680e5c9cb37ad2061a",
+    "modules/catalog.toml": "c8f9e4d5c1749919a7145127229839c10902acfc72b5dc11a757a4e19e6965e3",
+    "profiles/ci/offline.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
+    "tools/dictation-qualification/contract.py": "1ab44f66d744939d4bd7d6b7034f4c2beac738168d1ae34c2572a1f95a0da3cf",
+    "tools/dictation-qualification/guest_check.py": "81e51c751433ef08f88aaa7d2027a872a2a2cb522b23dd589342ed4c4faa2f47",
+    "tools/native-functional/native_smoke.py": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+  }
+}
