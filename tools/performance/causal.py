@@ -872,15 +872,88 @@ def forward_mango_file(executable, mango):
         os.close(fd)
 
 
+
+def forward_file_identity(info):
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+            info.st_gid, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def forward_map_files(proc, rows, path, raw, expected):
+    """Bind VMA magic-link FDs to the verified file; proc dev and stat dev differ on Btrfs."""
+    import stat, sys
+    descriptors = []
+    def opened(path, flags, **kwargs):
+        with deferred_termination():
+            fd = os.open(path, flags | os.O_CLOEXEC, **kwargs)
+            descriptors.append(fd)
+        return fd
+    try:
+        if (not re.fullmatch(r'/proc/[1-9][0-9]{0,9}', str(proc)) or not 0 < len(rows) <= 64
+                or not 0 < len(raw) <= 64 * 1024 * 1024):
+            raise StoreProofError('Forward-store mapped file scope differs')
+        root = opened(proc, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        maps = opened('map_files', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root)
+        status = opened('stat', os.O_RDONLY | os.O_NOFOLLOW, dir_fd=root)
+        def owner():
+            value = os.pread(status, 8193, 0)
+            if len(value) > 8192:
+                raise StoreProofError('Forward-store process identity is oversized')
+            ticks = int(value.rsplit(b')', 1)[1].split()[19])
+            root_info, stat_info = os.fstat(root), os.fstat(status)
+            if ticks <= 0 or not stat.S_ISREG(stat_info.st_mode) or stat_info.st_uid != root_info.st_uid:
+                raise StoreProofError('Forward-store process metadata differs')
+            return root_info.st_uid, root_info.st_ino, ticks
+        process = owner()
+        canonical = opened(path, os.O_RDONLY | os.O_NOFOLLOW)
+        if (forward_file_identity(os.fstat(canonical)) != expected
+                or os.pread(canonical, len(raw) + 1, 0) != raw):
+            raise StoreProofError('Forward-store canonical file changed')
+        names = set()
+        for row in rows:
+            if len(row) != 6:
+                raise StoreProofError('Forward-store mapped file entry differs')
+            name = row[0]
+            if (row[5] != str(path) or name in names
+                    or not re.fullmatch(r'[0-9a-f]{1,16}-[0-9a-f]{1,16}', name)
+                    or int(name.split('-')[0], 16) >= int(name.split('-')[1], 16)
+                    or os.readlink(name, dir_fd=maps) != str(path)):
+                raise StoreProofError('Forward-store mapped file entry differs')
+            names.add(name)
+            # This single controlled procfs magic link intentionally follows its verified VMA.
+            mapped = opened(name, os.O_RDONLY | os.O_NONBLOCK, dir_fd=maps)
+            info = os.fstat(mapped)
+            if (not stat.S_ISREG(info.st_mode) or forward_file_identity(info) != expected
+                    or not re.fullmatch(r'[0-9]+', row[4]) or int(row[4]) != info.st_ino
+                    or os.pread(mapped, len(raw) + 1, 0) != raw
+                    or forward_file_identity(os.fstat(mapped)) != expected
+                    or os.readlink(name, dir_fd=maps) != str(path)):
+                raise StoreProofError('Forward-store mapped FD differs from verified file')
+        if (owner() != process or forward_file_identity(os.fstat(canonical)) != expected
+                or os.pread(canonical, len(raw) + 1, 0) != raw):
+            raise StoreProofError('Forward-store file or process identity changed')
+    finally:
+        active = sys.exc_info()[0] is not None
+        failed = None
+        try:
+            with deferred_termination():
+                for fd in reversed(descriptors):
+                    try:
+                        os.close(fd)
+                    except OSError as error:
+                        failed = error
+        except BaseException:
+            if not active:
+                raise
+        if failed is not None and not active:
+            raise failed
+
 def forward_provider(proc, executable, mango):
     import stat
     maps = (proc / 'maps').read_text()
     raw, mango_identity = forward_mango_file(executable, mango)
     mango_rows = [line.split(None, 5) for line in maps.splitlines() if len(line.split(None, 5)) == 6]
     mango_rows = [row for row in mango_rows if row[5] == str(executable)]
-    mango_device = f'{os.major(mango_identity[0]):02x}:{os.minor(mango_identity[0]):02x}'
-    if not mango_rows or any(row[3] != mango_device or int(row[4]) != mango_identity[1] for row in mango_rows):
-        raise StoreProofError('Forward-store Mango mapping differs from verified file')
+    forward_map_files(proc, mango_rows, executable, raw, mango_identity)
     virtual = forward_jump_slot(raw)
     # Derive the text load bias and the separate data-load file offset. Mango's
     # writable LOAD has a real +0x1000 virtual/file difference; never assume zero.
@@ -922,8 +995,7 @@ def forward_provider(proc, executable, mango):
             rows = [line.split(None, 5) for line in maps.splitlines() if len(line.split(None, 5)) == 6]
             rows = [row for row in rows if row[5] == str(path)]
             device = f'{os.major(info.st_dev):02x}:{os.minor(info.st_dev):02x}'
-            if any(row[3] != device or int(row[4]) != info.st_ino for row in rows):
-                raise StoreProofError('Forward-store mapping inode differs from verified file')
+            forward_map_files(proc, rows, path, data, forward_file_identity(info))
             entry = instruction_mapping(path, maps, profile['offset'])
             if entry['instruction_address'] != target:
                 continue
