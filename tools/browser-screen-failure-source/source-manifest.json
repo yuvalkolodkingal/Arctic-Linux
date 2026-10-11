@@ -1,0 +1,51 @@
+{
+  "UID_allowance_added": false,
+  "base": "8c336e475825d5bdcd7c77b9771cadea69776bf7",
+  "build_performance_release_acceptance": false,
+  "corrected_from": "26d6f5bf7ad14da026e8d0b2e153f1a54ebd81e3",
+  "execution_allowed": false,
+  "held_intermediate": "6c06a78d3d595c44303ebe52f9c248673da93418",
+  "historical_cause_proven": false,
+  "inverse": "whole original scanner after only classification_view replacement",
+  "limits": {
+    "diagnostic_characters": 1024,
+    "original_member_bytes": 67108864,
+    "traceback_frames": 64
+  },
+  "original_scanner_sha256": "b3d56536397ff1c46caf082b97a070ff3eae383c2c277898c572cb34eb76f336",
+  "output_capture": "private scanner namespace print adapter bound before snapshots",
+  "primary_and_cancellation_preserved": true,
+  "process_stdout_modified": false,
+  "ready": false,
+  "schema": "arctic-disabled-host-screen-failure-source-v1",
+  "selected_scanner_sha256": "0c2176c4892e45e485eeac32f564fdfe9fb1619f142ac0b60babeed52924075f",
+  "source_files": {
+    "README.md": "b2aa924a03c13d21124380247320a0b149c09ead50a669db548844e42d0fcef8",
+    "observer.py": "f840090158b36a709c4ee1bdc60660d7b66fd5e0cf2a5a716d6c78f5a78318f5",
+    "ownership.py": "144dfd018190701e8888a07e3e16f807de493f59a5b7aa2afffa36bbc8b1c3ee",
+    "scanner.py": "0c2176c4892e45e485eeac32f564fdfe9fb1619f142ac0b60babeed52924075f",
+    "test_source.py": "014472157a25d3a30d2757f60f9218d04708c6b9bc7e4a15eb547c185d625341"
+  },
+  "source_proofs": [
+    {
+      "bytes": 6310,
+      "path": "/workspace/Arctic-Linux/out/independent-bounded-csi338c-Source-20261011/final-independent-disabled-Source-peer.json",
+      "sha256": "a3305b5495dbacee0ffb71437d5968ede524e9b8256a749ddeca179c6049a794"
+    },
+    {
+      "bytes": 1405,
+      "path": "/workspace/Arctic-Linux/out/independent-bounded-csi338c-Source-20261011/mandatory-reviewer-source-only-fixture-history.json",
+      "sha256": "455d6fd33a2e0d49896153838752ccca6a93f3758e5940d61cf6b33b1542ec68"
+    },
+    {
+      "bytes": 11089,
+      "path": "/workspace/Arctic-Linux/out/independent-active-qmp-csi-c6ee-Source-20261011/final-independent-disabled-Source-peer.json",
+      "sha256": "6523994898b0eac9685c32dd4f488f9a2d0d834e2e4e714ce3458dc818e3d704"
+    },
+    {
+      "bytes": 3666,
+      "path": "/workspace/Arctic-Linux/out/fedora44-key-import-public-Source-research-20261011/concise-public-Source-proof.json",
+      "sha256": "03d813bff505d8ecc081713f7eed577cf3d779a18048676c76bfdee04ae9b378"
+    }
+  ]
+}
