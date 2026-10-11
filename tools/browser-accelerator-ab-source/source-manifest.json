@@ -1,0 +1,118 @@
+{
+  "VM_runs": 0,
+  "actual_AB_builds": 0,
+  "actual_GTK_controls_run": false,
+  "benchmark_acceptance": false,
+  "debugsource_c_h_files_scanned": 341,
+  "dynamic_navigation_rows": 2,
+  "evidence": [
+    {
+      "bytes": 3752,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/signed-source-accelerator-census.json",
+      "sha256": "29c1004bb99ab3ae7c23e3d96a703552ff528c39abc21247f396251796ff220b"
+    },
+    {
+      "bytes": 11957,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/epiphany-50.6-webextension-commands.c",
+      "sha256": "c968b47c84d2282ac494b33c684a87b98389f1a167a74d14ad5f73c95e9c9376"
+    },
+    {
+      "bytes": 1065,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/exact-SRPM-Source-signature-receipt.json",
+      "sha256": "68a703870854b081821fb6aaef3004e67de98e463f1dc7deb286a56634adadbc"
+    },
+    {
+      "bytes": 1039,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/signed-SRPM-members.json",
+      "sha256": "447368864ff8bf3b72ac47b8956b0ee8b87640c10780bea652ac047b90191bf0"
+    },
+    {
+      "bytes": 476,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/signed-SRPM-window-debugsource-join.json",
+      "sha256": "f950b5a90740f2f9ebe09b4e4f5fb56af704b047d20a4bfee49816be650d2e73"
+    },
+    {
+      "bytes": 8598,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/official-epiphany-50.6.spec",
+      "sha256": "4e0f87ba947c53bc463d2f6ee38aee592c69b89f6a17f228a64f33c19bc18d51"
+    },
+    {
+      "bytes": 54964,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/gtk-4.22.5-gtkapplication.c",
+      "sha256": "8dff2b4865388d08ee8182235ce16ec80b8c31f44e504946991156ffd4390c17"
+    },
+    {
+      "bytes": 9781,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/gtk-4.22.5-gtkapplicationaccels.c",
+      "sha256": "535a4d6daed1c75a6798661b4eddbead0579ef5befc019d5aba5c7000f1f1af9"
+    },
+    {
+      "bytes": 31899,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/gtk-4.22.5-gtkapplicationwindow.c",
+      "sha256": "d6dce7bc94e4690db18769c0383056b41f7b60700ea636d813f595981bb6a552"
+    },
+    {
+      "bytes": 5832,
+      "path": "/tmp/arctic-epiphany-static-symbols-20261011/exact-public-ELF-debug-source-joins.json",
+      "sha256": "bdbcd6ffc5f634ed0bde5e99b1ef12338ff5452f06da78fb79ebb7248ed8d875"
+    },
+    {
+      "bytes": 200132,
+      "path": "/tmp/arctic-epiphany-static-symbols-20261011/epiphany-debugsource-member-0254",
+      "sha256": "e89ce90f2df97f30e855e98723ee1040e1bbd71bbf05aada9a6898000bc1fa9a"
+    },
+    {
+      "bytes": 57824,
+      "path": "/tmp/arctic-epiphany-static-symbols-20261011/epiphany-debugsource-member-0242",
+      "sha256": "a09768a74b4ef58a0b06cb7e9b63e9339488935bb5788374977e6e55ce4cf897"
+    }
+  ],
+  "execution_ready": false,
+  "immutable_default_rows": 43,
+  "low_hook_phases": [
+    "application_run",
+    "window_construct",
+    "window_constructed",
+    "accelerator_set"
+  ],
+  "official_GTK_tag_not_equal_attestation_of_Fedora_patchset": true,
+  "original_head": "6f43d240643b00eeb44f7f3aab33415b326150e2",
+  "original_tree": "43b42e96eb086d381f82c639fb37e718f929fe0d",
+  "preserved": [
+    "dynamic_shell_and_extension_setters",
+    "per_window_direction",
+    "per_window_action_groups",
+    "session_restore",
+    "sandbox",
+    "SELinux",
+    "portals",
+    "accessibility",
+    "role_workload",
+    "10_percent_regression_gate",
+    "5_millisecond_precision_gate"
+  ],
+  "product_patch": false,
+  "proposal_mutations": [
+    "once_per_application_immutable_default_registration",
+    "explicit_foreign_native_default_remap_persistence"
+  ],
+  "schema": "arctic-disabled-epiphany-accelerator-ab-source-v1",
+  "source_files": {
+    "README.md": "ac6a1be20cb61c2b4989537cbf4ebe3f9401bfa1303f524971c8fd3ff62ef6c9",
+    "build_recipe.py": "c80ddd2d21378f22c4a35163e324085f28ecf16841d18fb5bff87f41f756a279",
+    "candidate.py": "7cee3ef2e4d3e998075bfb86e7febb4bf4e17ca6fbd097d9f55eb3b736694320",
+    "execution-context.json": "27c111f183d419591ff0b5fe8fa73b87f9513192ff3670f3b93975c391dc0306",
+    "profile.py": "f4487e165b1fc010abb6d2b120b475cbb8b9b4f70cef29db3d99cc2a9f8c626a",
+    "source-inverse.json": "b43edaaeab217087f81567269c8135c54a04914a864c6c0055bab32d7afe4fbd",
+    "test_source.py": "964b927a144eab904d9542170eeeb44c454bca12a6c48055f3eed6d005456983"
+  },
+  "unbound_until_actual_hosted_build": [
+    "container_digest",
+    "resolved_dependency_census",
+    "macro_census",
+    "custom_whole_ELFs",
+    "custom_BuildIDs",
+    "custom_debuginfo",
+    "overlay_runtime_provider_identity"
+  ]
+}

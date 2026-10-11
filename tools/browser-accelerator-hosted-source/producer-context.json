@@ -1,0 +1,18 @@
+{
+  "build_environment": "one_disposable_rootful_Fedora44_container_no_host_package_install",
+  "candidate": {
+    "bytes": 2333,
+    "sha256": "7cee3ef2e4d3e998075bfb86e7febb4bf4e17ca6fbd097d9f55eb3b736694320"
+  },
+  "container": null,
+  "gtk_control": {
+    "bytes": 8219,
+    "sha256": "262768d49c70e0266f4981e0bda0dde214474fb1c43f94fc1f246a30df5d79ff"
+  },
+  "ready": false,
+  "schema": "arctic-accelerator-ab-hosted-build-v1",
+  "window_source": {
+    "bytes": 200132,
+    "sha256": "e89ce90f2df97f30e855e98723ee1040e1bbd71bbf05aada9a6898000bc1fa9a"
+  }
+}

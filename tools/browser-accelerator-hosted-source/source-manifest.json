@@ -1,0 +1,63 @@
+{
+  "VM_runs": 0,
+  "actual_GTK_control_execution_count": 0,
+  "candidate_source_peer_sha256": "aefe649a672c4e5512ed420f005bcf898a832053670b60a98960abca4caf768b",
+  "evidence": [
+    {
+      "bytes": 6380,
+      "path": "/tmp/arctic-independent-browser-accelerator-a734-20261011/final-independent-disabled-Source-peer.json",
+      "sha256": "aefe649a672c4e5512ed420f005bcf898a832053670b60a98960abca4caf768b"
+    },
+    {
+      "bytes": 1720,
+      "path": "/tmp/arctic-browser-fedora-signing-key-support-20261011/key-support-retry-receipt.json",
+      "sha256": "77bac266c87e72be054825bce23c9839107b7407b89d2cafe355cb984066bcbd"
+    },
+    {
+      "bytes": 1065,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/exact-SRPM-Source-signature-receipt.json",
+      "sha256": "68a703870854b081821fb6aaef3004e67de98e463f1dc7deb286a56634adadbc"
+    },
+    {
+      "bytes": 1039,
+      "path": "/tmp/arctic-browser-accelerator-ab-source-preparation-20261011/signed-SRPM-members.json",
+      "sha256": "447368864ff8bf3b72ac47b8956b0ee8b87640c10780bea652ac047b90191bf0"
+    }
+  ],
+  "local_control_limits": [
+    "UID1000_actual_owned_files_with_explicit_root_UID_normalization_in_reader_fixtures",
+    "actual_SIGINT_ALRM_handoff_and_real_FD_generations",
+    "no_actual_rootful_container_or_GTK_SDK"
+  ],
+  "operational_requirements_pending": [
+    "reviewed_host_workflow_and_firstADD_guard",
+    "actual_container_identity_digest_proof",
+    "root_owned_readonly_Input_staging",
+    "container_level_whole_child_cleanup",
+    "private_whole_original_build_log_retention",
+    "strict_host_RPM_ELF_debug_extractor_and_upload",
+    "custom_overlay_inventory_and_maps_Source_admission"
+  ],
+  "package_build_count": 0,
+  "producer_execution_count": 0,
+  "ready": false,
+  "schema": "arctic-disabled-matching-SRPM-hosted-producer-source-v1",
+  "source_files": {
+    "README.md": "56832f94081a9c88b77794d73968ee6966151b3f5b3162da8c944c8f34adae0e",
+    "gtk-control.c": "262768d49c70e0266f4981e0bda0dde214474fb1c43f94fc1f246a30df5d79ff",
+    "producer-context.json": "09e2b9d7f71232d2b1decddb27ab0c71a485b03b1a7ba00c5468a8fb3bc3bc2f",
+    "producer.py": "1cfeb1978bc93691f6b9af817dc3e27ee207674706d62d63216463b293468731",
+    "test_producer.py": "6c3db9d219f5d7d9ff8b2d3b3da62fdc9985a96b0d5a21b19a00192fa9a4dde9"
+  },
+  "source_invariants": [
+    "exact_SRPM_whole_and_signature",
+    "all_three_exact_Source_members",
+    "same_container_dependencies_macros_topdir_flags",
+    "both_full_original_rpmbuild_phases",
+    "no_host_package_install",
+    "no_image_payload_install",
+    "exact_F10_matching_devel_versions_or_FAIL",
+    "all_custom_ELF_and_runtime_inventory_unbound"
+  ],
+  "source_parent": "a734288fc4c38040005d280b46e0dc4abba52bb2"
+}
