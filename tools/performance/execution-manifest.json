@@ -1,16 +1,53 @@
 {
   "schema": "arctic-external-paired-plan-v1",
-  "ready": false,
+  "ready": true,
   "release_acceptance": false,
   "performance_mode": "frozen-external-paired-v1",
-  "image": null,
+  "image": {
+    "archive_bytes": 1929907101,
+    "archive_sha256": "3a8132aa4578fdb62b2aa1e3bf5c340229f1a483678d03ddf2c565fb39afadcd",
+    "artifact_id": 11689591362,
+    "bytes": 1929719808,
+    "name": "Arctic-Linux-1.2-candidate-38102474066-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "3034ea88d4ba1d1e434942f90c42b8057d3667ad2e7f6ee739b895ebdfc86d1d",
+    "run_id": 38102474066,
+    "sha256": "807eaaa64ab8480ec2b18bc8434fd5e37d82c41b73a3e0a6f002c35d152ba54c",
+    "source_sha": "326690f173d4dc4f049f43e046c8380e66825a07"
+  },
   "baseline": {
     "name": "Arctic-Linux-1.2-x86_64.iso",
     "bytes": 2322073600,
     "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f",
     "profile_sha256": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d"
   },
-  "candidate_source_files": {},
-  "observer": {},
-  "execution_files": {}
+  "candidate_source_files": {
+    "profiles/ci/offline.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
+    "shell/AppsService.qml": "3d5c34c6a79fd5c24c1f733792ef56816089f38678a187337a13f2964c92116e",
+    "shell/BatteryService.qml": "e33a7dd29ef10cf5671b6984aaa1a690a994baa460ffdcacf0f49adfabffea35"
+  },
+  "observer": {
+    "source_sha256": "9d3ee35fc81c4550acb4247e56bf70390714d8bdd91efc6df76f838b1018306c",
+    "frozen_sha256": "fbc6648c165470b9a1aa8cdb0831bc50b3f3e8565953653b32e42eaa614d8cb4",
+    "comparator_sha256": "cde38b23d8fcad896fffd4983081aa6739f9b9af1dc7246562b3d6cf308528ed"
+  },
+  "execution_files": {
+    ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
+    "tools/performance/causal.py": "2bc983a29c15e5c24c5f9c03fb5a640003dcf5bc95d9672f3622142f59545161",
+    "tools/performance/compare.py": "cde38b23d8fcad896fffd4983081aa6739f9b9af1dc7246562b3d6cf308528ed",
+    "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
+    "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
+    "tools/performance/contract.py": "c3a4b423154e6542488e7290bc7f75a59e4381084eee0e225f2602b342d0aefb",
+    "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
+    "tools/performance/guest.py": "4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
+    "tools/performance/qualification.py": "7e018cb8e378fedc8ea252fca5f1dfbef3912ffaa50b0e6896cbd934df549743",
+    "tools/performance/run-paired.py": "ef4e4c0c6304b853a918a69cd447bc80a179424f46f6887aadb5786de14be911",
+    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
+  }
 }

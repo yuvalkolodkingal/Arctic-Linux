@@ -78,7 +78,7 @@ MAPPING_PROFILES = (
          client_type_offset=0, client_surface_offset=328, xdg_type=0,
          xdg_toplevel_offset=56, xdg_appid_offset=192,
          xwayland_type=2, xwayland_class_offset=144),
-)
+    dict(executable_sha256='52e6072d93970d48c067b148a696edd5cb85a3504f1f855fdffaf123b8f7a58f', native_audit_sha256='8b2b265bce2765cfc43a60605fae714c9bae7f0cd3659d1839df84e58708afa8', function_file_offset=0x43110, function_size=4109, function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc', instruction_file_offset=0x4361e, client_ext_offset=1584, lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3), ipc_function_file_offset=0x6b00, ipc_function_size=1234, ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead', client_type_offset=0, client_surface_offset=328, xdg_type=0, xdg_toplevel_offset=56, xdg_appid_offset=192, xwayland_type=2, xwayland_class_offset=144),)
 
 
 def mapping_profile(path):
@@ -395,7 +395,7 @@ def loss_counts(root):
     return result
 
 
-class LowerBoundProbe:
+class OuterBoundProbe:
     def __init__(self, prefix):
         self.prefix = prefix
         self.root = None
@@ -715,3 +715,429 @@ class LowerBoundProbe:
             del self.old_sigterm
         if errors:
             raise RuntimeError('Owned causal instrumentation cleanup failed: ' + '; '.join(errors))
+
+
+# Whole providers from both frozen ISO images, independently decoded and reviewed.
+# wl_list_insert's forward publication is +15; its immediate following IP is +19.
+# The +23 backward-neighbor store and original Mango completion remain witnessed.
+FORWARD_AUDIT_SHA256 = 'd9344fb1fb3a7129871f5a36c710951085e9fe07faa490cf04fd168afe1d00e9'
+FORWARD_PEER_SHA256 = 'a3dedf94835b8ab4190d639d6a3c17350e6ada860f7b764a0fdb0facd0bdc3ff'
+FORWARD_METHOD = 'wlroots-mango-original-appid-wayland-forward-store-bracket-raw-v6'
+FORWARD_PROFILES = (
+    dict(path='/usr/lib64/libwayland-server.so.0.26.0', bytes=87160,
+         sha256='6f27c2fc1589f9d8e5525ea7729fbf35cbd27d5501f36b068cad4213a665736d',
+         owner='libwayland-server\t0\t1.26.0\t1.fc44\tx86_64', offset=0x4290),
+    dict(path='/usr/lib64/libwayland-client.so.0.26.0', bytes=66168,
+         sha256='cb517c02f6e808257932a4b3f1a4bd1232ce415cdd8e41a854ff0f0e918b51c9',
+         owner='libwayland-client\t0\t1.26.0\t1.fc44\tx86_64', offset=0x2f90),
+)
+FORWARD_BYTES = bytes.fromhex('f30f1efa488b470848893e4889460848897708488b4608488930c3')
+
+
+class StoreProofError(RuntimeError):
+    """Fixed failure labels; no new traceback-cause admission or weaker fallback."""
+
+
+def forward_callers(proof):
+    return [proof['lower_executable_mappings'][branch]['instruction_address'] + 5
+            for branch in ('tail', 'head', 'scroller')]
+
+
+def forward_readbacks_valid(readbacks, pid, callers):
+    """Validate all nine original schemas and four exact store/PID/type/caller schemas."""
+    names = {'map_store_' + phase + '_' + kind for phase in ('before', 'after') for kind in ('xdg', 'x11')}
+    if (type(readbacks) is not dict or type(callers) is not list or len(callers) != 3
+            or len(set(callers)) != 3 or any(type(value) is not int or not 0 < value < 2**64 for value in callers)):
+        return False
+    outer = {name: record for name, record in readbacks.items() if name not in names}
+    if set(readbacks) != set(outer) | names or not kernel_readbacks_valid(outer, pid):
+        return False
+    ids = [re.search(r'^ID: ([0-9]+)$', record['format_text'], re.M) for record in readbacks.values()]
+    if any(value is None for value in ids) or len({value[1] for value in ids}) != 13:
+        return False
+    old_footer = r'print fmt: "(%lx) client_type=%u original_app_id=\"%s\" foreign_id=\"%s\" app_id=\"%s\" client=0x%Lx handle=0x%Lx owner=0x%Lx", REC->__probe_ip, REC->client_type, __get_str(original_app_id), __get_str(foreign_id), __get_str(app_id), REC->client, REC->handle, REC->owner'
+    new_footer = old_footer.replace('owner=0x%Lx"', 'owner=0x%Lx position=0x%Lx link=0x%Lx caller=0x%Lx"') + ', REC->position, REC->link, REC->caller'
+    for name in sorted(names):
+        record = readbacks[name]
+        if type(record) is not dict or set(record) != {'format_text', 'format_sha256', 'filter_text', 'filter_sha256'}:
+            return False
+        for key, maximum in (('format', 16384), ('filter', 1024)):
+            text = record[key + '_text']
+            if (type(text) is not str or not 0 < len(text) <= maximum or not text.endswith('\n')
+                    or any(c not in '\n\t' and not ' ' <= c <= '~' for c in text)
+                    or hashlib.sha256(text.encode('ascii')).hexdigest() != record[key + '_sha256']):
+                return False
+        kind = name.rsplit('_', 1)[1]
+        expected = 'common_pid==' + str(pid) + '&&client_type==' + ('0' if kind == 'xdg' else '2')
+        expected += '&&(' + '||'.join('caller==' + str(value) for value in callers) + ')'
+        if re.sub(r'[ \t\n]', '', record['filter_text']) != expected or '\n' in record['filter_text'][:-1]:
+            return False
+        text = record['format_text']
+        for field, offset in (('position', 56), ('link', 64), ('caller', 72)):
+            pattern = r'^[ \t]*field:u64 ' + field + r';[ \t]*offset:' + str(offset) + r';[ \t]*size:8;[ \t]*signed:0;[ \t]*\n'
+            text, count = re.subn(pattern, '', text, flags=re.M)
+            if count != 1:
+                return False
+        if text.count(new_footer) != 1:
+            return False
+        text = text.replace(new_footer, old_footer).replace('name: ' + name + '\n', 'name: map_listed_' + kind + '\n', 1)
+        filter_text = 'common_pid == ' + str(pid) + ' && client_type == ' + ('0' if kind == 'xdg' else '2') + '\n'
+        trial = dict(outer)
+        trial['map_listed_' + kind] = dict(format_text=text, format_sha256=hashlib.sha256(text.encode()).hexdigest(),
+            filter_text=filter_text, filter_sha256=hashlib.sha256(filter_text.encode()).hexdigest())
+        if not kernel_readbacks_valid(trial, pid):
+            return False
+    return True
+
+
+def forward_probe_commands(group, mango, provider):
+    commands = native_probe_commands(group, Path(provider['profile']['path']), mango,
+        dict(map_store_before=provider['profile']['offset'] + 15, map_store_after=provider['profile']['offset'] + 19))
+    return {name: command[:-1] + ' position=%di:x64 link=%si:x64 caller=+0(%sp):x64\n'
+            for name, command in commands.items()}
+
+
+def forward_trace_receipt(line, pid):
+    token = re.search(r': (map_store_(before|after)_(xdg|x11)):', line)
+    if token is None:
+        return trace_receipt(line, pid)
+    fields = re.search(r' position=(0x[0-9a-f]+) link=(0x[0-9a-f]+) caller=(0x[0-9a-f]+)\s*$', line)
+    if not fields or any(not 0 < int(value, 16) < 2**64 for value in fields.groups()):
+        raise StoreProofError('Forward-store receipt fields are malformed')
+    alias = 'map_before_tail_' if token[2] == 'before' else 'map_listed_'
+    event = trace_receipt(line[:fields.start()].replace(token[1], alias + token[3], 1), pid)
+    event.update(event=token[1], position_address=int(fields[1], 16), link_address=int(fields[2], 16), caller_address=int(fields[3], 16))
+    return event
+
+
+def forward_jump_slot(raw):
+    """Decode the exact ELF64 JUMP_SLOT symbol; no guessed runtime GOT address."""
+    try:
+        header = struct.unpack_from('<16sHHIQQQIHHHHHH', raw)
+        if raw[:6] != b'\x7fELF\x02\x01' or header[2] != 62 or header[11] != 64 or not 0 < header[12] <= 4096:
+            raise StoreProofError('Forward-store Mango ELF layout differs')
+        sections = [struct.unpack_from('<IIQQQQIIQQ', raw, header[6] + index*64) for index in range(header[12])]
+        found = []
+        for section in sections:
+            if section[1] != 4 or section[9] != 24 or section[5] % 24:
+                continue
+            symbols = sections[section[6]]
+            strings = sections[symbols[6]]
+            if symbols[1] != 11 or symbols[9] != 24 or strings[4] + strings[5] > len(raw):
+                continue
+            for offset in range(section[4], section[4] + section[5], 24):
+                address, info, addend = struct.unpack_from('<QQq', raw, offset)
+                if info & 0xffffffff != 7 or (info >> 32)*24 >= symbols[5]:
+                    continue
+                symbol = struct.unpack_from('<IBBHQQ', raw, symbols[4] + (info >> 32)*24)
+                start = strings[4] + symbol[0]
+                end = raw.find(b'\0', start, strings[4] + strings[5])
+                if end >= start and raw[start:end] == b'wl_list_insert':
+                    if addend != 0 or symbol[3] != 0:
+                        raise StoreProofError('Forward-store relocation is not an imported JUMP_SLOT')
+                    found.append(address)
+        if len(found) != 1:
+            raise StoreProofError('Forward-store relocation is absent or ambiguous')
+        return found[0]
+    except (IndexError, struct.error) as error:
+        raise StoreProofError('Forward-store ELF tables are malformed') from error
+
+
+def forward_memory_word(proc, address):
+    fd = os.open(proc / 'mem', os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    try:
+        raw = os.pread(fd, 8, address)
+        if len(raw) != 8:
+            raise StoreProofError('Forward-store resolved target is unreadable')
+        return struct.unpack('<Q', raw)[0]
+    finally:
+        os.close(fd)
+
+
+def forward_mango_file(executable, mango):
+    import stat
+    fd = os.open(executable, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        identity = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_uid,
+            value.st_gid, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+        if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= 64 * 1024 * 1024:
+            raise StoreProofError('Forward-store Mango is not one bounded regular file')
+        raw = os.pread(fd, info.st_size + 1, 0)
+        if (len(raw) != info.st_size or identity(os.fstat(fd)) != identity(info)
+                or hashlib.sha256(raw).hexdigest() != mango['executable_sha256']):
+            raise StoreProofError('Forward-store Mango identity changed')
+        return raw, identity(info)
+    finally:
+        os.close(fd)
+
+
+def forward_provider(proc, executable, mango):
+    import stat
+    maps = (proc / 'maps').read_text()
+    raw, mango_identity = forward_mango_file(executable, mango)
+    mango_rows = [line.split(None, 5) for line in maps.splitlines() if len(line.split(None, 5)) == 6]
+    mango_rows = [row for row in mango_rows if row[5] == str(executable)]
+    mango_device = f'{os.major(mango_identity[0]):02x}:{os.minor(mango_identity[0]):02x}'
+    if not mango_rows or any(row[3] != mango_device or int(row[4]) != mango_identity[1] for row in mango_rows):
+        raise StoreProofError('Forward-store Mango mapping differs from verified file')
+    virtual = forward_jump_slot(raw)
+    # Derive the text load bias and the separate data-load file offset. Mango's
+    # writable LOAD has a real +0x1000 virtual/file difference; never assume zero.
+    segments = [struct.unpack_from('<IIQQQQQQ', raw, struct.unpack_from('<Q', raw, 32)[0] + n*56)
+                for n in range(struct.unpack_from('<H', raw, 56)[0])]
+    text_loads = [segment for segment in segments if segment[0] == 1 and segment[1] & 1
+        and segment[2] <= mango['instruction_file_offset'] < segment[2] + segment[5]]
+    data_loads = [segment for segment in segments if segment[0] == 1 and segment[1] & 4
+        and segment[3] <= virtual and virtual + 8 <= segment[3] + segment[5]]
+    if len(text_loads) != 1 or len(data_loads) != 1 or text_loads[0][2] != text_loads[0][3]:
+        raise StoreProofError('Forward-store Mango load bias ABI differs')
+    got_file_offset = virtual - data_loads[0][3] + data_loads[0][2]
+    mapping = instruction_mapping(executable, maps, mango['instruction_file_offset'])
+    address = mapping['start'] - mapping['file_offset'] + virtual
+    got_maps = [line.split(None, 5) for line in maps.splitlines() if len(line.split(None, 5)) == 6]
+    got_maps = [row for row in got_maps if row[5] == str(executable) and row[1].startswith('r')
+                and int(row[0].split('-')[0], 16) <= address and address + 8 <= int(row[0].split('-')[1], 16)]
+    if len(got_maps) != 1:
+        raise StoreProofError('Forward-store GOT lacks one readable Mango mapping')
+    got_row = got_maps[0]
+    got_mapping = dict(start=int(got_row[0].split('-')[0], 16), end=int(got_row[0].split('-')[1], 16),
+        file_offset=int(got_row[2], 16), address=address)
+    if got_mapping['start'] + got_file_offset - got_mapping['file_offset'] != address:
+        raise StoreProofError('Forward-store GOT virtual/file mapping differs')
+    target = forward_memory_word(proc, address)
+    matched = []
+    for profile in FORWARD_PROFILES:
+        path = Path(profile['path'])
+        if not any(line.endswith(' ' + str(path)) for line in maps.splitlines()):
+            continue
+        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            data = os.pread(fd, profile['bytes'] + 1, 0)
+            if (not stat.S_ISREG(info.st_mode) or info.st_size != profile['bytes'] or len(data) != profile['bytes']
+                    or hashlib.sha256(data).hexdigest() != profile['sha256']
+                    or data[profile['offset']:profile['offset'] + 27] != FORWARD_BYTES):
+                raise StoreProofError('Forward-store provider whole ELF differs')
+            rows = [line.split(None, 5) for line in maps.splitlines() if len(line.split(None, 5)) == 6]
+            rows = [row for row in rows if row[5] == str(path)]
+            device = f'{os.major(info.st_dev):02x}:{os.minor(info.st_dev):02x}'
+            if any(row[3] != device or int(row[4]) != info.st_ino for row in rows):
+                raise StoreProofError('Forward-store mapping inode differs from verified file')
+            entry = instruction_mapping(path, maps, profile['offset'])
+            if entry['instruction_address'] != target:
+                continue
+            owner = subprocess.check_output(['rpm', '-qf', '--qf', '%{NAME}\t%{EPOCHNUM}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\n', str(path)], text=True, timeout=30).strip()
+            checked = subprocess.run(['rpm', '-Vf', str(path)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+            if owner != profile['owner'] or checked.returncode or checked.stdout or checked.stderr:
+                raise StoreProofError('Forward-store provider full RPM verification failed')
+            matched.append(dict(profile=dict(profile), entry_mapping=entry,
+                before_mapping=instruction_mapping(path, maps, profile['offset'] + 15),
+                after_mapping=instruction_mapping(path, maps, profile['offset'] + 19),
+                got_address=address, got_virtual_address=virtual, got_file_offset=got_file_offset,
+                got_mapping=got_mapping, resolved_target=target,
+                inode=info.st_ino, device=device, rpm_owner=owner,
+                audit_sha256=FORWARD_AUDIT_SHA256, peer_sha256=FORWARD_PEER_SHA256))
+        finally:
+            os.close(fd)
+    current_maps = (proc / 'maps').read_text()
+    relevant = {str(executable)} | {profile['path'] for profile in FORWARD_PROFILES}
+    selected = lambda value: [line for line in value.splitlines() if len(line.split(None, 5)) == 6 and line.split(None, 5)[5] in relevant]
+    _, current_identity = forward_mango_file(executable, mango)
+    if (len(matched) != 1 or current_identity != mango_identity or selected(current_maps) != selected(maps)
+            or forward_memory_word(proc, address) != target):
+        raise StoreProofError('Forward-store provider resolution is unknown or changed')
+    return matched[0]
+
+
+def forward_bound(probe, outer, windows, started, ipc_lower, ipc_upper, timeout):
+    provider = probe.proof.get('forward_provider')
+    if type(provider) is not dict:
+        raise StoreProofError('Forward-store provider proof is mandatory')
+    identities = [window['foreign_toplevel_id'] for window in windows]
+    deadline = time.monotonic() + timeout
+    with probe.condition:
+        while not all(key in probe.store_events['before'] and key in probe.store_events['after'] for key in identities):
+            if probe.error:
+                raise StoreProofError('Forward-store reader failed')
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise StoreProofError('Forward-store receipts are missing; no weaker fallback')
+            probe.condition.wait(remaining)
+        if probe.error:
+            raise StoreProofError('Forward-store reader failed')
+        before = [dict(probe.store_events['before'][key]) for key in identities]
+        after = [dict(probe.store_events['after'][key]) for key in identities]
+    probe._check_owner()
+    probe._check_readbacks()
+    current = forward_provider(Path('/proc') / str(probe.pid), probe.executable, probe.proof['upper_mapping_profile'])
+    probe._check_owner()
+    if current != provider:
+        raise StoreProofError('Forward-store provider changed during launch')
+    proof = dict(outer[2], method=FORWARD_METHOD, matched_store_before_events=before, matched_store_after_events=after)
+    lower = max(ipc_lower, min(event['lower_monotonic_ns'] for event in before))
+    upper = min(ipc_upper, min(event['upper_monotonic_ns'] for event in after))
+    # Reuse the independently identical validator also required by the comparator.
+    if not forward_events_valid(proof, started, lower, upper):
+        raise StoreProofError('Forward-store identity, nesting or completion witness differs')
+    return lower, upper, dict(proof, loss_counts=loss_counts(probe.instance))
+
+
+def forward_events_valid(proof, started, lower, upper):
+    """Strict shared producer/replay validation; outer caller/identity checks are additional."""
+    provider = proof.get('forward_provider')
+    if (type(provider) is not dict or set(provider) != {'profile', 'entry_mapping', 'before_mapping', 'after_mapping',
+            'got_address', 'got_virtual_address', 'got_file_offset', 'got_mapping', 'resolved_target', 'inode', 'device', 'rpm_owner', 'audit_sha256', 'peer_sha256'}
+            or provider.get('profile') not in FORWARD_PROFILES
+            or proof.get('mango_sha256') not in {'67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35',
+                '52e6072d93970d48c067b148a696edd5cb85a3504f1f855fdffaf123b8f7a58f'}
+            or provider.get('audit_sha256') != FORWARD_AUDIT_SHA256 or provider.get('peer_sha256') != FORWARD_PEER_SHA256
+            or provider.get('rpm_owner') != provider['profile']['owner']
+            or any(type(provider.get(key)) is not int or provider[key] <= 0 for key in
+                   ('got_address', 'got_virtual_address', 'got_file_offset', 'resolved_target', 'inode'))
+            or not isinstance(provider.get('device'), str) or not re.fullmatch('[0-9a-f]{2,8}:[0-9a-f]{2,8}', provider['device'])
+            or provider['got_virtual_address'] != 0x7ddb8 or provider['got_file_offset'] != 0x7cdb8):
+        return False
+    got = provider['got_mapping']
+    if (type(got) is not dict or set(got) != {'start', 'end', 'file_offset', 'address'}
+            or any(type(value) is not int or value < 0 for value in got.values())
+            or not (0 < got['start'] <= got['address'] and got['address'] + 8 <= got['end'])
+            or got['address'] != provider['got_address']
+            or got['address'] != got['start'] + provider['got_file_offset'] - got['file_offset']):
+        return False
+    for key, delta in (('entry_mapping', 0), ('before_mapping', 15), ('after_mapping', 19)):
+        mapping = provider.get(key)
+        offset = provider['profile']['offset'] + delta
+        if (type(mapping) is not dict or set(mapping) != {'start', 'end', 'file_offset', 'instruction_address'}
+                or any(type(value) is not int or value < 0 for value in mapping.values())
+                or not 0 < mapping['start'] <= mapping['instruction_address'] < mapping['end']
+                or not mapping['file_offset'] <= offset < mapping['file_offset'] + mapping['end'] - mapping['start']
+                or mapping['instruction_address'] != mapping['start'] + offset - mapping['file_offset']
+                or any(mapping[field] != provider['entry_mapping'][field] for field in ('start', 'end', 'file_offset'))):
+            return False
+    mango = proof.get('upper_executable_mapping', {})
+    if (provider['resolved_target'] != provider['entry_mapping']['instruction_address']
+            or provider['got_address'] != mango.get('start', 0) - mango.get('file_offset', 0) + provider['got_virtual_address']
+            or not forward_readbacks_valid(proof.get('kernel_event_readbacks'), proof.get('kernel_pid'), forward_callers(proof))):
+        return False
+    outer_before, outer_after = proof.get('matched_events'), proof.get('matched_upper_events')
+    before, after = proof.get('matched_store_before_events'), proof.get('matched_store_after_events')
+    if (any(type(events) is not list for events in (outer_before, outer_after, before, after))
+            or not 0 < len(before) <= 64 or len({len(events) for events in (outer_before, outer_after, before, after)}) != 1):
+        return False
+    for old_before, old_after, first, second in zip(outer_before, outer_after, before, after):
+        if any(type(event) is not dict for event in (old_before, old_after, first, second)):
+            return False
+        branch = re.fullmatch('map_before_(tail|head|scroller)_(xdg|x11)', old_before.get('event', ''))
+        if not branch:
+            return False
+        for phase, edge, event in (('before', 'lower', first), ('after', 'upper', second)):
+            text = event.get('kernel_timestamp_text')
+            token = re.fullmatch(r'([0-9]{1,20})\.([0-9]{1,9})', text) if type(text) is str else None
+            if not token:
+                return False
+            resolution = 10 ** (9 - len(token[2]))
+            literal = int(token[1])*1_000_000_000 + int(token[2].ljust(9, '0'))
+            if (resolution > 1000 or event.get('event') != 'map_store_' + phase + '_' + branch[2]
+                    or any(type(event.get(key)) is not int for key in ('kernel_pid', 'instruction_address', 'client_type',
+                        'client_address', 'handle_address', 'handle_owner_address', 'position_address', 'link_address', 'caller_address',
+                        'kernel_text_monotonic_ns', 'timestamp_resolution_ns', 'timestamp_rounding_allowance_ns', edge + '_monotonic_ns'))
+                    or event['kernel_text_monotonic_ns'] != literal or event['timestamp_resolution_ns'] != resolution
+                    or event['timestamp_rounding_allowance_ns'] != resolution
+                    or event[edge + '_monotonic_ns'] != literal + (resolution if edge == 'upper' else -resolution)
+                    or event['instruction_address'] != provider[phase + '_mapping']['instruction_address']
+                    or event['caller_address'] != proof['lower_executable_mappings'][branch[1]]['instruction_address'] + 5
+                    or event['link_address'] != old_before['client_address'] + 280
+                    or not 0 < event['position_address'] < 2**64
+                    or (branch[1] == 'head' and event['position_address'] != mango['start'] - mango['file_offset'] + 0x7f348)
+                    or any(event.get(key) != old_before.get(key) for key in ('kernel_pid', 'foreign_toplevel_id',
+                        'client_type', 'original_app_id', 'app_id', 'client_address', 'handle_address', 'handle_owner_address'))):
+                return False
+        if (first['position_address'] != second['position_address']
+                or not old_before['kernel_text_monotonic_ns'] <= first['kernel_text_monotonic_ns'] <= second['kernel_text_monotonic_ns'] <= old_after['kernel_text_monotonic_ns']):
+            return False
+    expected_lower = max(proof['ipc_lower_monotonic_ns'], min(event['lower_monotonic_ns'] for event in before))
+    expected_upper = min(proof['ipc_upper_monotonic_ns'], min(event['upper_monotonic_ns'] for event in after))
+    return (all(type(value) is int for value in (started, lower, upper))
+            and started <= lower <= upper <= proof['ipc_upper_monotonic_ns']
+            and lower == expected_lower and upper == expected_upper)
+
+
+class LowerBoundProbe(OuterBoundProbe):
+    """Add an audited store bracket; inherit every original outer/security/cleanup gate."""
+    def __init__(self, prefix):
+        super().__init__(prefix)
+        self.store_events = {'before': {}, 'after': {}}
+
+    def __enter__(self):
+        super().__enter__()  # Original setup handles its own complete failure unwind.
+        try:
+            self._check_owner()
+            (self.instance / 'tracing_on').write_text('0')
+            provider = forward_provider(Path('/proc') / str(self.pid), self.executable, self.proof['upper_mapping_profile'])
+            self.proof['forward_provider'] = provider
+            commands = forward_probe_commands(self.group, self.proof['upper_mapping_profile'], provider)
+            readbacks = dict(self.proof['kernel_event_readbacks'])
+            for name, command in commands.items():
+                with deferred_termination():
+                    self.requested_events.add(name)
+                    write_uprobe_command(self.root, command)
+                event = self.instance / 'events' / self.group / name
+                kind = '0' if name.endswith('_xdg') else '2'
+                expression = 'common_pid == ' + str(self.pid) + ' && client_type == ' + kind
+                expression += ' && (' + ' || '.join('caller == ' + str(value) for value in forward_callers(self.proof)) + ')'
+                (event / 'filter').write_text(expression)
+                readbacks[name] = self._readback(event)
+                (event / 'enable').write_text('1')
+            if not forward_readbacks_valid(readbacks, self.pid, forward_callers(self.proof)):
+                raise StoreProofError('Forward-store registered kernel schema differs')
+            self.proof['kernel_event_readbacks'] = readbacks
+            self._check_owner()
+            (self.instance / 'tracing_on').write_text('1')
+            loss_counts(self.instance)
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def _check_readbacks(self):
+        actual = {name: self._readback(self.instance / 'events' / self.group / name)
+                  for name in self.requested_events}
+        if (actual != self.proof['kernel_event_readbacks']
+                or not forward_readbacks_valid(actual, self.pid, forward_callers(self.proof))):
+            raise StoreProofError('Forward-store registered kernel schema changed')
+
+    def bound(self, windows, started_ns, ipc_lower_ns, ipc_upper_ns, pattern, timeout=2):
+        deadline = time.monotonic() + timeout
+        outer = super().bound(windows, started_ns, ipc_lower_ns, ipc_upper_ns, pattern, timeout)
+        return forward_bound(self, outer, windows, started_ns, ipc_lower_ns, ipc_upper_ns, max(0, deadline - time.monotonic()))
+
+    def _read(self):
+        pending = b''
+        try:
+            while not self.stopped.is_set():
+                if not select.select([self.fd], [], [], .05)[0]:
+                    continue
+                try:
+                    pending += os.read(self.fd, 65536)
+                except BlockingIOError:
+                    continue
+                if len(pending) > 128 * 1024:
+                    raise StoreProofError('Unbounded causal kernel line')
+                while b'\n' in pending:
+                    line, pending = pending.split(b'\n', 1)
+                    if not line or line.startswith(b'#'):
+                        continue
+                    event = forward_trace_receipt(line.decode('ascii'), self.pid)
+                    key = event['foreign_toplevel_id']
+                    with self.condition:
+                        target = (self.store_events['before' if event['event'].startswith('map_store_before_') else 'after'] if event['event'].startswith('map_store_') else self.events if event['event'] == 'map_create' else
+                                  self.lower_events if event['event'].startswith('map_before_') else self.upper_events)
+                        if key in target or len(self.events)+len(self.lower_events)+len(self.upper_events)+sum(map(len, self.store_events.values())) >= MAX_EVENTS:
+                            raise StoreProofError('Duplicate or unbounded causal kernel events')
+                        target[key] = event
+                        self.condition.notify_all()
+        except BaseException as error:
+            with self.condition:
+                self.error = str(error)
+                self.condition.notify_all()
