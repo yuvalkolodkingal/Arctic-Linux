@@ -1,0 +1,35 @@
+From: Arctic Linux maintainers
+Subject: [PATCH] Complete forced-software frames before releasing the render buffer
+
+Arctic's Safe graphics session and greeter select SceneFX's existing
+WLR_RENDERER_FORCE_SOFTWARE=1 EGL path. In the non-timeline submit branch,
+complete that frame while its EGL context and render buffer are still held.
+An owned same-image default/completion trial removed the observed stale
+scanout regions; initial boot and installed-image validation remain required.
+
+Keep the normal hardware and explicit signal-timeline paths unchanged. Check
+the existing exact boolean without env_parse_bool's per-frame logging.
+
+--- a/render/fx_renderer/fx_pass.c
++++ b/render/fx_renderer/fx_pass.c
+@@ -3,6 +3,7 @@
+ #include <stdlib.h>
+ #include <assert.h>
+ #include <pixman.h>
++#include <string.h>
+ #include <time.h>
+ #include <unistd.h>
+ #include <wlr/render/allocator.h>
+@@ -147,6 +148,12 @@
+ 		}
+ 	} else {
+ 		glFlush();
++		// Safe graphics explicitly selects software EGL with this option.
++		// Complete writes before restoring the context and unlocking the buffer.
++		const char *force_software = getenv("WLR_RENDERER_FORCE_SOFTWARE");
++		if (force_software != NULL && strcmp(force_software, "1") == 0) {
++			glFinish();
++		}
+ 	}
+ 
+ 	ok = true;

@@ -50,18 +50,19 @@ type Installer struct {
 	Rep backend.Reporter
 	Opt Options
 
-	t          *backend.Tracker
-	cat        *catalog.Catalog
-	lay        layout
-	source     string
-	reposDone  map[string]bool
-	coprDone   map[string]bool
-	remoteDone map[string]bool
-	usedMethod map[string]catalog.Install
-	skipped    map[string]bool
-	deferred   []string
-	flatpakRan bool
-	bootNum    string // firmware boot entry this run created (removed again on failure)
+	t                *backend.Tracker
+	cat              *catalog.Catalog
+	lay              layout
+	source           string
+	reposDone        map[string]bool
+	coprDone         map[string]bool
+	remoteDone       map[string]bool
+	usedMethod       map[string]catalog.Install
+	skipped          map[string]bool
+	deferred         []string
+	deferredPackages []string
+	flatpakRan       bool
+	bootNum          string // firmware boot entry this run created (removed again on failure)
 	// Drivers (drivers.go).
 	drvStatus   map[string]string
 	akmodsReady bool
@@ -1094,7 +1095,7 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 	var rmPkgs, rmRefs []string
 	for _, id := range in.cat.Order {
 		m := in.cat.Modules[id]
-		if !inLive(m) || m.Always || sel.Contains(id) {
+		if in.Job.Offline || !inLive(m) || m.Always || sel.Contains(id) {
 			continue
 		}
 		p := m.Primary()
@@ -1131,11 +1132,15 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 		if inLive(m) {
 			continue
 		}
-		// Without a connection a driver would only fail; arctic-firstboot installs it once
-		// the new system is online.
-		if m.IsHardware() && in.Job.Offline {
+		// Offline setup keeps the copied apps and queues missing payloads, including
+		// mandatory codecs/themes, without waiting for a download Retry/Skip answer.
+		if in.Job.Offline {
 			in.Rep.Logf("%s: offline, putting it off to first boot", m.ID)
 			in.deferred = append(in.deferred, m.ID)
+			if visible(m) {
+				in.Rep.Module(protocol.ModuleEvent{ID: m.ID, Name: m.Name, Status: protocol.ModDeferred})
+				in.t.AppDone()
+			}
 			continue
 		}
 		todo = append(todo, m)
@@ -1158,6 +1163,18 @@ func (in *Installer) appsPhase(ctx context.Context) error {
 			ensure = append(ensure, m)
 			extra = append(extra, m.Primary().Packages...)
 		}
+	}
+	if in.Job.Offline {
+		// Preserve locale/alongside support and app completeness checks in the same
+		// retryable queue; even dnf's installed-package checks may fetch metadata.
+		seen := map[string]bool{}
+		for _, pkg := range extra {
+			if !seen[pkg] {
+				in.deferredPackages = append(in.deferredPackages, pkg)
+				seen[pkg] = true
+			}
+		}
+		extra = nil
 	}
 	total := len(todo)
 	done := 0
@@ -1506,7 +1523,7 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 		}
 	}
 	in.finishDictation(ctx)
-	if len(in.deferred) > 0 {
+	if len(in.deferred) > 0 || len(in.deferredPackages) > 0 {
 		// Version 2 carries each module's install methods, because the catalog leaves the
 		// installed system together with arctic-installer (arctic-firstboot reads this).
 		// Drivers also carry what happens after their packages are in: the akmod to build
@@ -1525,6 +1542,10 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 				mods = append(mods, pendingModule{ID: m.ID, Name: m.Name, Install: m.Install, Akmod: m.Akmod, KernelArgs: m.KernelArgs(in.lay.luks)})
 			}
 		}
+		if len(in.deferredPackages) > 0 {
+			mods = append(mods, pendingModule{ID: "installer-support", Name: "Language and app support",
+				Install: []catalog.Install{{Method: catalog.MethodDNF, Packages: in.deferredPackages}}})
+		}
 		doc := map[string]any{"version": 2, "nixpkgs": in.cat.Nixpkgs, "modules": mods}
 		hashPath, err := in.pendingDriverKey(ctx)
 		if err != nil {
@@ -1534,8 +1555,15 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 			doc["mok_hash"] = hashPath
 		}
 		b, _ := json.MarshalIndent(doc, "", "  ")
-		if err := in.write(in.tgt("/var/lib/arctic/pending.json"), string(b)+"\n", 0o644); err != nil {
-			return err
+		if in.Job.Offline {
+			if _, err := in.runChroot(ctx, Cmd{Name: "/usr/bin/python3", Args: []string{"-I", "/usr/libexec/arctic/arctic-firstboot", "--queue"}, Stdin: append(b, '\n')}); err != nil {
+				return err
+			}
+			in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteAppsPending)
+		} else {
+			if err := in.write(in.tgt("/var/lib/arctic/pending.json"), string(b)+"\n", 0o644); err != nil {
+				return err
+			}
 		}
 	}
 	in.t.Update(0.5, wizard.StatusTidy)
@@ -1607,6 +1635,9 @@ func (in *Installer) finishDictation(ctx context.Context) {
 
 // NoteDictationPending describes a retryable, nonfatal download or offline queue.
 const NoteDictationPending = "Local dictation is not ready yet. Connect to the internet and choose Retry setup in Settings → Dictation."
+
+// NoteAppsPending keeps deferred offline support visible on the Done screen.
+const NoteAppsPending = "Arctic Linux is installed. Some selected apps, codecs and language support will finish setting up after you connect to the internet. Copied apps remain available; setup retries every 15 minutes after first boot."
 
 // NoteStillOpen is the Done screen's note when the new system is complete but its disk
 // couldn't be let go of at the end (Outcome.Notes).

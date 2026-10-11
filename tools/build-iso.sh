@@ -92,6 +92,7 @@ fi
 [[ -f "$REPO/repodata/repomd.xml" ]] || arctic_die "no RPM repository at $REPO (run tools/build-rpms.sh first)"
 ls "$REPO"/arctic-desktop-*.rpm >/dev/null 2>&1 || arctic_die "$REPO has no arctic-desktop package"
 ls "$REPO"/mangowm-*.rpm >/dev/null 2>&1 || arctic_die "$REPO has no mangowm package"
+ls "$REPO"/scenefx-[0-9]*.x86_64.rpm >/dev/null 2>&1 || arctic_die "$REPO has no patched scenefx package"
 
 mkdir -p "$WORK" "$OUT" "$ROOT/out/logs"
 REPO="$(cd "$REPO" && pwd)"; WORK="$(cd "$WORK" && pwd)"; OUT="$(cd "$OUT" && pwd)"

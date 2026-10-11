@@ -307,13 +307,16 @@ func TestFreshDefaultsCompleteOffline(t *testing.T) {
 				"application/zip=xarchiver.desktop", "application/x-7z-compressed=xarchiver.desktop",
 				"video/mp4=io.github.celluloid_player.Celluloid.desktop",
 				`"id": "codecs"`, `"id": "adw-gtk3-flatpak"`, `"id": "adw-gtk3-dark-flatpak"`,
-				"write /mnt/var/lib/arctic/pending.json", "$ usermod --root /mnt --lock root",
+				"/usr/libexec/arctic/arctic-firstboot --queue", "$ usermod --root /mnt --lock root",
 			} {
 				if !strings.Contains(plan, want) {
 					t.Errorf("offline plan lacks %q", want)
 				}
 			}
 			last := rep.progress[len(rep.progress)-1]
+			if len(rep.attention) != 0 {
+				t.Fatalf("offline defaults required a human download decision: %v", rep.attention)
+			}
 			if last.Percent != 100 || last.AppsDone != 6 {
 				t.Errorf("offline install did not complete: %+v", last)
 			}
