@@ -81,7 +81,7 @@ jobs:
           /usr/bin/python3 -B - <<'PY'
           import hashlib
           from pathlib import Path
-          assert hashlib.sha256(Path('execution/tools/installer-qualification/screen-diagnostic.py').read_bytes()).hexdigest() == '94ce0fb0ca86ad83fb37c6c5867cae840dffd8569196260d290e8db3911649f2'
+          assert hashlib.sha256(Path('execution/tools/installer-qualification/screen-diagnostic.py').read_bytes()).hexdigest() == '11b61e1af867ae10b9fd7d261b5665a24519d594f538edc751e7662ec493f741'
           PY
           /usr/bin/python3 -B execution/tools/installer-qualification/screen-diagnostic.py --profile idle --source "$RUNNER_TEMP/arctic-installer/evidence" --out "$RUNNER_TEMP/arctic-installer/diagnostic-partial"
       - uses: actions/upload-artifact@v4

@@ -292,7 +292,7 @@ def masked_active_error(error, phase, completion_guard=None, completion_phase=No
 
 SECURITY_DIAGNOSTIC_STEPS = frozenset(('unknown', 'state', 'journal-query', 'journal-json',
     'audit-file-stat', 'audit-file-read', 'verify-security', 'execute', 'audit-status'))
-SECURITY_DIAGNOSTIC_GUARDS = frozenset(('unknown', *('guard-' + format(n, '03d') for n in range(1, 12))))
+SECURITY_DIAGNOSTIC_GUARDS = frozenset(('unknown', *('guard-' + format(n, '03d') for n in range(1, 20))))
 SECURITY_DIAGNOSTIC_COMMANDS = frozenset(('unknown', 'getenforce', 'audit-status', 'journal-interval'))
 SECURITY_DIAGNOSTIC_ROLES = frozenset(('unknown', 'rsync', 'quickshell', 'auditctl', 'journalctl', 'systemd'))
 SECURITY_DIAGNOSTIC_OBJECTS = frozenset(('unknown', 'file', 'dir', 'lnk-file', 'chr-file', 'process'))
@@ -304,7 +304,8 @@ _SECURITY_GUARD_SITES = {
     ('verify_security', 1): 'guard-005', ('verify_security', 2): 'guard-006',
     ('verify_security', 3): 'guard-007', ('verify_security', 5): 'guard-008',
     ('SecurityInterval.finish', 9): 'guard-009', ('SecurityInterval.finish', 11): 'guard-010',
-    ('SecurityInterval.finish', 17): 'guard-011'}
+    ('SecurityInterval.finish', 17): 'guard-011',
+    ('execute_journal_interval', 50): 'guard-012', ('execute_journal_interval', 53): 'guard-013', ('execute_journal_interval', 62): 'guard-014', ('execute_journal_interval', 64): 'guard-015', ('execute_journal_interval', 70): 'guard-016', ('execute_journal_interval', 72): 'guard-017', ('execute_journal_interval', 74): 'guard-018', ('execute_journal_interval', 89): 'guard-019'}
 
 
 def security_finalization_diagnostic(error, native):
@@ -320,7 +321,7 @@ def security_finalization_diagnostic(error, native):
     if type(native) is not ModuleType or type(native.__dict__.get('__file__')) is not str:
         return result
     owners = {}
-    for name in ('execute', 'parse_audit_status', 'verify_security', 'require'):
+    for name in ('execute', 'execute_journal_interval', 'parse_audit_status', 'verify_security', 'require'):
         fn = native.__dict__.get(name)
         if type(fn) is FunctionType and fn.__globals__ is native.__dict__ and fn.__code__.co_filename == native.__dict__['__file__']:
             owners[fn.__code__] = name
@@ -364,6 +365,16 @@ def security_finalization_diagnostic(error, native):
                 for field, target in (('stdout', 'stdout_bytes'), ('stderr', 'stderr_bytes')):
                     value = process.__dict__.get(field)
                     if type(value) is bytes and len(value) <= 64 * 1024 * 1024: result[target] = len(value)
+        elif name == 'execute_journal_interval':
+            result['step'] = 'journal-json' if offset in (69, 70) else 'journal-query'
+            args = frame.f_locals.get('argv')
+            if type(args) is list and len(args) == 8 and all(type(v) is str for v in args) and args[:4] == ['journalctl', '-b', '--no-pager', '--after-cursor'] and args[5:] == ['-o', 'json', '--quiet']:
+                result['command'] = 'journal-interval'
+            code = frame.f_locals.get('exit_code')
+            if type(code) is int and -255 <= code <= 255: result['exit_code'] = code
+            for field in ('stdout_bytes', 'stderr_bytes'):
+                value = frame.f_locals.get(field)
+                if type(value) is int and 0 <= value <= 64 * 1024 * 1024: result[field] = value
     # A guard ID requires the exact final native.require raising frame and its
     # immediate trusted caller; a matching message or outer phase is insufficient.
     if type(error) is RuntimeError and len(frames) >= 2:

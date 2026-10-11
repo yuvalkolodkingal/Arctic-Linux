@@ -43,11 +43,39 @@ def scanner():
     return module
 
 
+PUBLIC_LITERAL = 'serial-getty@ttyS0.service'
+PUBLIC_LABEL = 'serial-getty-ttyS0-source-fragment'
+
+def serial_source_fragment(scanner, match, phase, original=None, boundaries=None, removed=None):
+    result = {'candidate': 'unknown', 'original_contiguous': False,
+              'privacy_admitted': False, 'operand_digest': None,
+              'whole_unit_or_runtime_cause_proven': False}
+    if (type(phase) is not str or phase not in scanner.EXTERNAL_RULE_PHASES
+            or type(match) is not re.Match or type(original) is not str
+            or type(boundaries) is not scanner.array or type(removed) is not scanner.array
+            or match.end() - match.start() != len(PUBLIC_LITERAL)):
+        return result
+    if match.group(0) != PUBLIC_LITERAL:
+        return result
+    if len(boundaries) != len(removed):
+        return result
+    first, last = scanner.original_span(match.start(), match.end(), boundaries, removed)
+    if (type(first) is int and type(last) is int and 0 <= first <= last <= len(original)
+            and last - first == len(PUBLIC_LITERAL)
+            and original[first:last] == PUBLIC_LITERAL):
+        result['candidate'] = PUBLIC_LABEL
+        result['original_contiguous'] = True
+    return result
+
+
 def classify_match(m, match, phase, original=None, boundaries=None, removed=None):
     result = dict(phase=phase if type(phase) is str and phase in m.EXTERNAL_RULE_PHASES else 'unknown',
         rule='unknown-rule', codepoints=None, bytes=None, unit_like=None,
         original_contiguous=False, delimiter_bounded=False,
-        public_candidate='unknown', public_candidate_sha256=None)
+        public_candidate='unknown', public_candidate_sha256=None,
+        known_source_fragment='unknown')
+    fragment = serial_source_fragment(m, match, phase, original, boundaries, removed)
+    result['known_source_fragment'] = fragment['candidate']
     if type(match) is not re.Match or match.end() - match.start() > MAX_MATCH:
         return result
     value = match.group(0)

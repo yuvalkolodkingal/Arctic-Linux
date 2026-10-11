@@ -63,6 +63,142 @@ def execute(argv, *, cwd=None, input_bytes=None, stdout_path=None, timeout=45,
     return result.returncode, output.decode(errors='replace').strip(), result.stderr.decode(errors='replace')
 
 
+def execute_journal_interval(argv, *, timeout=60):
+    """Unfiltered JSON interval; discard only records the original AVC rule ignores.
+
+    Both pipes are drained under one deadline. Every full MESSAGE value, including
+    journalctl's duplicate-field arrays, uses the original str(MESSAGE) semantics.
+    Limits fail closed: 4 MiB per line and selected evidence plus stderr, 64 MiB
+    processed raw bytes. No partial interval is accepted after a limit or error.
+    """
+    deadline = time.monotonic() + timeout
+    process, selector, primary = None, None, None
+    selected, pending, stderr = bytearray(), bytearray(), bytearray()
+    raw_bytes, stdout_bytes, stderr_bytes, exit_code = 0, 0, 0, None
+    pending_signal = None
+    old_handlers = {value: signal.getsignal(value) for value in (signal.SIGINT, signal.SIGTERM)}
+
+    def interrupted(signum, frame):
+        # Never raise between acquisition and assignment or during cleanup.
+        # Polling below makes this deferral bounded without masking child signals.
+        nonlocal pending_signal
+        if pending_signal is None:
+            pending_signal = signum
+
+    def check_cancelled():
+        if pending_signal == signal.SIGINT:
+            raise KeyboardInterrupt
+        if pending_signal is not None:
+            raise InterruptedError('journal invocation interrupted')
+
+    try:
+        for value in old_handlers:
+            signal.signal(value, interrupted)
+        process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   bufsize=0, close_fds=True, start_new_session=True)
+        check_cancelled()
+        selector = selectors.DefaultSelector()
+        for stream, role in ((process.stdout, 'stdout'), (process.stderr, 'stderr')):
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, role)
+        while selector.get_map():
+            check_cancelled()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(argv, timeout)
+            for key, _ in selector.select(min(remaining, .05)):
+                check_cancelled()
+                chunk = os.read(key.fd, 65536)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                raw_bytes += len(chunk)
+                require(raw_bytes <= 64 * 1024 * 1024, 'journal raw processing cap exceeded')
+                if key.data == 'stderr':
+                    stderr_bytes += len(chunk)
+                    require(len(selected) + stderr_bytes <= LIMIT, 'journal selected evidence bound exceeded')
+                    stderr.extend(chunk)
+                    continue
+                stdout_bytes += len(chunk)
+                pending.extend(chunk)
+                while True:
+                    check_cancelled()
+                    end = pending.find(b'\n')
+                    if end < 0:
+                        require(len(pending) <= LIMIT, 'journal line bound exceeded')
+                        break
+                    require(end + 1 <= LIMIT, 'journal line bound exceeded')
+                    line = bytes(pending[:end + 1])
+                    del pending[:end + 1]
+                    if line == b'\n':
+                        continue
+                    entry = json.loads(line.decode(errors='replace'))
+                    require(type(entry) is dict, 'journal JSON record type differs')
+                    if AVC.search(str(entry.get('MESSAGE', ''))):
+                        require(len(selected) + len(line) + stderr_bytes <= LIMIT, 'journal selected evidence bound exceeded')
+                        selected.extend(line)
+        require(not pending, 'journal JSON interval is truncated')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(argv, timeout)
+        while True:
+            check_cancelled()
+            # WNOWAIT keeps the exited leader's PID reserved for group cleanup.
+            info = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            if info is not None:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(argv, timeout)
+            time.sleep(min(remaining, .05))
+        exit_code = info.si_status if info.si_code == os.CLD_EXITED else -info.si_status
+        require(exit_code == 0, 'journal command failed')
+        return exit_code, selected.decode(errors='replace').strip(), stderr.decode(errors='replace')
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        cleanup_error = None
+        # Never poll/wait/reap before stopping the owned group, even on success.
+        # An unreaped leader reserves its group ID; confirm it with WNOWAIT.
+        if process is not None:
+            reserved = True
+            try:
+                os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            except ChildProcessError as error:
+                reserved = False  # A foreign reaper relinquished that reservation.
+                cleanup_error = error
+            except BaseException as error:
+                cleanup_error = error
+            if reserved:
+                try:
+                    try: os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError: pass
+                except BaseException as error:
+                    if cleanup_error is None: cleanup_error = error
+                try: process.wait(timeout=3)
+                except BaseException as error:
+                    if cleanup_error is None: cleanup_error = error
+        if selector is not None:
+            try: selector.close()
+            except BaseException as error:
+                if cleanup_error is None: cleanup_error = error
+        if process is not None:
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    try: stream.close()
+                    except BaseException as error:
+                        if cleanup_error is None: cleanup_error = error
+        for value, handler in old_handlers.items():
+            try: signal.signal(value, handler)
+            except BaseException as error:
+                if cleanup_error is None: cleanup_error = error
+        if primary is None:
+            if cleanup_error is not None:
+                raise cleanup_error
+            check_cancelled()
+
+
 def digest(path):
     value = hashlib.sha256()
     with open(path, 'rb') as stream:
@@ -172,8 +308,8 @@ class SecurityInterval:
 
     def finish(self):
         after = self.state()
-        journal = execute(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,
-                           '-o', 'json'], timeout=60)[1]
+        journal = execute_journal_interval(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,
+                                            '-o', 'json', '--quiet'], timeout=60)[1]
         messages = '\n'.join(str(json.loads(line).get('MESSAGE', ''))
                              for line in journal.splitlines() if line)
         if self.audit_offset:

@@ -1,6 +1,6 @@
 {
   "execution_files": {
-    ".github/workflows/installer-active-candidate-20261009.yml": "7166ad5ccc4165248dd364a9e2b05ef25db3ddbe0134b1f18b230b766d202e51",
+    ".github/workflows/installer-active-candidate-20261009.yml": "5eb2ff794b70515fb9882f08a5b156591a831307abf6e6a3b21c6c7e8d73adc8",
     "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/installer-qualification/active-contract.py": "3feef8b7936db6d1e9857161f6eaa920b4678553174c808c9b54b0985405ef39",
@@ -9,7 +9,7 @@
     "tools/installer-qualification/controller.py": "1336faf7de7f120b840244e894f8f52f3dcfb4370272b5cdf4eea7a3f678cbf5",
     "tools/installer-qualification/driver.py": "aefad4467dbd70a2e1ff1b833aa56851a53b7a40d63e299f359a50b954282649",
     "tools/installer-qualification/evidence.py": "d9f98ad0e3fed14b3c77898ba0924ccceaa06777a45f3eea7c28eb38e0dc1d9b",
-    "tools/installer-qualification/guest.py": "dadc992ab0f67a86c5031779490628810666d62cc0c357821282f3a9994ec8db",
+    "tools/installer-qualification/guest.py": "cb9db36bd65ea0e1a6ef79bbce9ddd76093b023a00ae5ee3a27f8a17398e705b",
     "tools/installer-qualification/installed-guest.py": "1e2e592d97878f7348ad6d81e1ef617ee04634f6188d8992824100f657c6be1e",
     "tools/installer-qualification/run-live.sh": "7e2eb556ce49ecda84d464a814179ffccf96d715202607ca441c74ae27950ec9",
     "tools/installer-qualification/runner.py": "b045046f8bf69979f2261d217025177cfae1da92362e7c3928fd5fa16c97cc98",
@@ -17,7 +17,7 @@
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/native_smoke.py": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
+    "tools/native-functional/native_smoke.py": "45aae8d4a798dd5be3299c22fea9e77a001bda73fae12f7e4fe517b0c79d08c0",
     "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
     "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
