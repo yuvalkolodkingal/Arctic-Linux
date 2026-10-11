@@ -14,6 +14,9 @@ CONTEXT = {'source_sha', 'iso_sha256', 'iso_bytes', 'checker_sha256',
            'native_sha256', 'manifest_sha256', 'mimeapps_sha256'}
 UUID = re.compile('[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}')
 GTK3 = 'libgtk-3.so.0()(64bit)'
+# RPM post-release snapshots can use a caret in VERSION. Other components
+# retain their existing grammar.
+RPM_VERSION = re.compile('[A-Za-z0-9_.+~^-]+')
 
 
 def require(condition, message):
@@ -91,7 +94,8 @@ def probe(prefix, stage, context, mimes):
     for row in package_rows.splitlines():
         fields = row.split('\t')
         require(len(fields) == 4 and fields[0] in PACKAGES and fields[0] not in packages and
-                all(re.fullmatch('[A-Za-z0-9_.+~-]+', value) for value in fields),
+                RPM_VERSION.fullmatch(fields[1]) and
+                all(re.fullmatch('[A-Za-z0-9_.+~-]+', fields[index]) for index in (0, 2, 3)),
                 'Installed application RPM inventory is missing, duplicate or malformed')
         packages[fields[0]] = dict(version=fields[1], release=fields[2], arch=fields[3])
     require(set(packages) == set(PACKAGES), 'Installed requested application set differs')
@@ -124,7 +128,9 @@ def validate_report(record, expected_context, mimes, provenance=None):
             'Installed requested application inventory differs')
     for name, package in record['packages'].items():
         require(type(package) is dict and set(package) == {'version', 'release', 'arch'} and
-                all(type(value) is str and re.fullmatch('[A-Za-z0-9_.+~-]+', value) for value in package.values()) and
+                all(type(value) is str for value in package.values()) and
+                RPM_VERSION.fullmatch(package['version']) and
+                all(re.fullmatch('[A-Za-z0-9_.+~-]+', package[key]) for key in ('release', 'arch')) and
                 package['arch'] == 'x86_64', 'Installed application NEVRA differs: ' + name)
     require(type(record['pcmanfm']) is dict and set(record['pcmanfm']) == {'owner', 'requirements'},
             'PCManFM RPM linkage inventory differs')
