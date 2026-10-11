@@ -228,10 +228,11 @@ class ExternalOriginalScreeningTests(unittest.TestCase):
             for variant_index, content in enumerate(variants):
                 with self.subTest(unit=unit, content=content):
                     raw = content.encode()
-                    # The separately reviewed exact configfs token is public
-                    # without a lifecycle/description prerequisite. Its private
-                    # affixes, case changes and every other unit remain rejected.
-                    if unit == 'modprobe@configfs.service' and variant_index in (5, 6, 7, 8, 9, 10, 11):
+                    # The separately reviewed exact configfs and Fuse tokens
+                    # are public without a lifecycle/description prerequisite.
+                    # Private affixes, case changes and every other unit retain
+                    # their original rejection requirements.
+                    if unit in ('modprobe@configfs.service', 'modprobe@fuse.service') and variant_index in (5, 6, 7, 8, 9, 10, 11):
                         self.assertIs(screen.external_text(raw), raw)
                     else:
                         self.rejected(raw)
