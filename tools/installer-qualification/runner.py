@@ -146,6 +146,36 @@ def relay_inner(log, token):
         pass
 
 
+def security_reported_codes(first):
+    """Only source-formatted security diagnostics; no arbitrary error text."""
+    prefix = 'installer-reported-active-primary-security-'
+    if first == 'active security interval failed':
+        return (prefix + 'finalization-failed', prefix + 'step-unknown')
+    if type(first) is not str or len(first) > 4096:
+        return None
+    match = re.fullmatch(r'active security interval failed \[class=([a-z-]+); step=([a-z-]+); guard=([a-z0-9-]+); command=([a-z-]+); exit=(none|-?[0-9]+); out=(none|[0-9]+); err=(none|[0-9]+); avcs=(unknown|[0-9]+); subject=([a-z-]+); object=([a-z-]+); path=([a-z-]+); permission=([a-z-]+)\]', first)
+    if match is None:
+        return None
+    g = E.guest
+    classes = {label for _, label in g.DIAGNOSTIC_EXCEPTION_CLASSES.values()} | {'other-error', 'timeout', 'command-error'}
+    if match[1] not in classes or match[2] not in g.SECURITY_DIAGNOSTIC_STEPS or match[3] not in g.SECURITY_DIAGNOSTIC_GUARDS or match[4] not in g.SECURITY_DIAGNOSTIC_COMMANDS:
+        return None
+    numbers = []
+    for value, absent, maximum in ((match[5], 'none', 255), (match[6], 'none', 64*1024*1024), (match[7], 'none', 64*1024*1024), (match[8], 'unknown', 1024*1024)):
+        if value == absent: numbers.append(value); continue
+        if len(value) > 9: return None
+        number = int(value)
+        if str(number) != value or abs(number) > maximum or (len(numbers) > 0 and number < 0): return None
+        numbers.append(value)
+    if match[9] not in g.SECURITY_DIAGNOSTIC_ROLES or match[10] not in g.SECURITY_DIAGNOSTIC_OBJECTS or match[11] not in g.SECURITY_DIAGNOSTIC_PATHS or match[12] not in g.SECURITY_DIAGNOSTIC_PERMISSIONS:
+        return None
+    return (prefix + 'finalization-failed', prefix + 'exception-' + match[1], prefix + 'step-' + match[2],
+        prefix + 'guard-' + match[3], prefix + 'command-' + match[4],
+        *(prefix + label + '-' + value for label, value in zip(('exit', 'outbytes', 'errbytes', 'avc-count'), numbers)),
+        prefix + 'avc-subject-' + match[9], prefix + 'avc-object-' + match[10],
+        prefix + 'avc-path-' + match[11], prefix + 'avc-permission-' + match[12])
+
+
 def primary_reported_codes(report, active):
     """Read the first failed-report error without exporting free-form text."""
     prefix = 'installer-reported-' + ('active' if active else 'idle') + '-primary-'
@@ -159,6 +189,9 @@ def primary_reported_codes(report, active):
         return (prefix + 'invalid',)
     guest = E.guest
     if active:
+        security_codes = security_reported_codes(first)
+        if security_codes is not None:
+            return security_codes
         classes = {name: label for name, label in guest.DIAGNOSTIC_EXCEPTION_CLASSES.values()}
         classes['OtherError'] = 'other-error'
         match = re.fullmatch(r'([A-Za-z]+): active installation or restoration failed \[phase=([a-z0-9-]+)(?:; errno=([a-z0-9-]+))?; reason=([a-z0-9-]+)(?:; engine-guard=([a-z0-9-]+))?(?:; engine-phase=([a-z0-9-]+))?\]', first)

@@ -290,6 +290,127 @@ def masked_active_error(error, phase, completion_guard=None, completion_phase=No
             '; reason=' + primary_diagnostic_reason(error) + guard + stage + ']')
 
 
+SECURITY_DIAGNOSTIC_STEPS = frozenset(('unknown', 'state', 'journal-query', 'journal-json',
+    'audit-file-stat', 'audit-file-read', 'verify-security', 'execute', 'audit-status'))
+SECURITY_DIAGNOSTIC_GUARDS = frozenset(('unknown', *('guard-' + format(n, '03d') for n in range(1, 12))))
+SECURITY_DIAGNOSTIC_COMMANDS = frozenset(('unknown', 'getenforce', 'audit-status', 'journal-interval'))
+SECURITY_DIAGNOSTIC_ROLES = frozenset(('unknown', 'rsync', 'quickshell', 'auditctl', 'journalctl', 'systemd'))
+SECURITY_DIAGNOSTIC_OBJECTS = frozenset(('unknown', 'file', 'dir', 'lnk-file', 'chr-file', 'process'))
+SECURITY_DIAGNOSTIC_PATHS = frozenset(('unknown', 'target-root', 'live-root', 'selinux-config', 'rsync-executable'))
+SECURITY_DIAGNOSTIC_PERMISSIONS = frozenset(('unknown', 'read', 'write', 'execute', 'create', 'search', 'getattr', 'setattr', 'open', 'unlink', 'add-name', 'remove-name', 'mounton'))
+_SECURITY_GUARD_SITES = {
+    ('execute', 11): 'guard-001', ('execute', 13): 'guard-002',
+    ('parse_audit_status', 2): 'guard-003', ('parse_audit_status', 3): 'guard-004',
+    ('verify_security', 1): 'guard-005', ('verify_security', 2): 'guard-006',
+    ('verify_security', 3): 'guard-007', ('verify_security', 5): 'guard-008',
+    ('SecurityInterval.finish', 9): 'guard-009', ('SecurityInterval.finish', 11): 'guard-010',
+    ('SecurityInterval.finish', 17): 'guard-011'}
+
+
+def security_finalization_diagnostic(error, native):
+    """Closed exact-source traceback observations; never error/AVC text."""
+    import subprocess
+    from types import FunctionType, ModuleType
+    result = dict(error_class=DIAGNOSTIC_EXCEPTION_CLASSES.get(type(error), ('OtherError', 'other-error'))[1],
+        step='unknown', guard='unknown', command='unknown', exit_code=None,
+        stdout_bytes=None, stderr_bytes=None,
+        avc_count=None, avc_subject='unknown', avc_object='unknown', avc_path='unknown', avc_permission='unknown')
+    if type(error) is subprocess.TimeoutExpired: result['error_class'] = 'timeout'
+    if type(error) is subprocess.CalledProcessError: result['error_class'] = 'command-error'
+    if type(native) is not ModuleType or type(native.__dict__.get('__file__')) is not str:
+        return result
+    owners = {}
+    for name in ('execute', 'parse_audit_status', 'verify_security', 'require'):
+        fn = native.__dict__.get(name)
+        if type(fn) is FunctionType and fn.__globals__ is native.__dict__ and fn.__code__.co_filename == native.__dict__['__file__']:
+            owners[fn.__code__] = name
+    interval = native.__dict__.get('SecurityInterval')
+    if type(interval) is type:
+        for name in ('state', 'finish'):
+            fn = interval.__dict__.get(name)
+            if type(fn) is staticmethod: fn = fn.__func__
+            if type(fn) is FunctionType and fn.__globals__ is native.__dict__ and fn.__code__.co_filename == native.__dict__['__file__']:
+                owners[fn.__code__] = 'SecurityInterval.' + name
+    if not isinstance(error, BaseException): return result
+    frames, tb = [], BaseException.__traceback__.__get__(error, type(error))
+    for _ in range(64):
+        if tb is None: break
+        frames.append((tb.tb_frame, tb.tb_lineno)); tb = tb.tb_next
+    if tb is not None:
+        return result  # A truncated prefix is not a source attribution.
+    known = [(frame, line, owners[frame.f_code]) for frame, line in frames
+        if frame.f_globals is native.__dict__ and frame.f_code in owners]
+    for frame, line, name in known:
+        offset = line - frame.f_code.co_firstlineno
+        if name == 'SecurityInterval.finish':
+            result['step'] = ('state' if offset == 1 else 'journal-query' if offset in (2, 3)
+                else 'journal-json' if offset in (4, 5) else 'audit-file-stat' if offset in (7, 15, 16)
+                else 'audit-file-read' if offset in (8, 12, 13, 14, 18)
+                else 'verify-security' if offset == 19 else 'unknown')
+        elif name == 'SecurityInterval.state': result['step'] = 'state'
+        elif name == 'parse_audit_status': result['step'] = 'audit-status'
+        elif name == 'verify_security': result['step'] = 'verify-security'
+        elif name == 'execute':
+            args = frame.f_locals.get('argv')
+            if type(args) is list and all(type(v) is str for v in args) and len(args) <= 8:
+                if args == ['getenforce']: result['command'] = 'getenforce'
+                elif args == ['auditctl', '-s']: result['command'] = 'audit-status'
+                elif len(args) == 7 and args[:4] == ['journalctl', '-b', '--no-pager', '--after-cursor'] and args[5:] == ['-o', 'json']:
+                    result['command'] = 'journal-interval'
+            process = frame.f_locals.get('result')
+            if type(process) is subprocess.CompletedProcess:
+                code = process.__dict__.get('returncode')
+                if type(code) is int and -255 <= code <= 255: result['exit_code'] = code
+                for field, target in (('stdout', 'stdout_bytes'), ('stderr', 'stderr_bytes')):
+                    value = process.__dict__.get(field)
+                    if type(value) is bytes and len(value) <= 64 * 1024 * 1024: result[target] = len(value)
+    # A guard ID requires the exact final native.require raising frame and its
+    # immediate trusted caller; a matching message or outer phase is insufficient.
+    if type(error) is RuntimeError and len(frames) >= 2:
+        raised, _ = frames[-1]; caller, line = frames[-2]
+        if raised.f_globals is native.__dict__ and owners.get(raised.f_code) == 'require' and caller.f_globals is native.__dict__:
+            result['guard'] = _SECURITY_GUARD_SITES.get((owners.get(caller.f_code), line - caller.f_code.co_firstlineno), 'unknown')
+            if result['guard'] == 'guard-008':
+                denied = caller.f_locals.get('denied')
+                if type(denied) is list and len(denied) <= 1024 * 1024 and all(type(v) is str for v in denied):
+                    result['avc_count'] = len(denied)
+                    # Only the first already-rejected Source AVC record is
+                    # compared with fixed source process/path roles and Linux
+                    # object/permission IDs. No context, account, inode, PID,
+                    # unmatched path/value or original line is exported.
+                    first = denied[0] if denied and len(denied[0]) <= 16384 else ''
+                    import shlex
+                    try: tokens = shlex.split(first, comments=False, posix=True)
+                    except ValueError: tokens = []
+                    fields = {}
+                    for token in tokens:
+                        if '=' in token:
+                            key, value = token.split('=', 1)
+                            if key in ('comm', 'tclass', 'name', 'path'):
+                                fields[key] = value if key not in fields else None
+                    if fields.get('comm') in SECURITY_DIAGNOSTIC_ROLES: result['avc_subject'] = fields['comm']
+                    result['avc_object'] = {'file':'file', 'dir':'dir', 'lnk_file':'lnk-file', 'chr_file':'chr-file', 'process':'process'}.get(fields.get('tclass'),'unknown')
+                    for raw, label in (('/mnt','target-root'),('/run/rootfsbase','live-root'),('/etc/selinux','selinux-config'),('/usr/bin/rsync','rsync-executable')):
+                        if fields.get('name') == raw or fields.get('path') == raw: result['avc_path'] = label; break
+                    for index in range(max(0, len(tokens)-4)):
+                        if tokens[index:index+3] == ['avc:', 'denied', '{'] and tokens[index+4] == '}':
+                            permission = tokens[index+3].replace('_','-')
+                            if permission in SECURITY_DIAGNOSTIC_PERMISSIONS: result['avc_permission'] = permission
+    return result
+
+
+def masked_security_finalization_error(error, native):
+    value = security_finalization_diagnostic(error, native)
+    return ('active security interval failed [class=' + value['error_class'] + '; step=' + value['step']
+        + '; guard=' + value['guard'] + '; command=' + value['command']
+        + '; exit=' + ('none' if value['exit_code'] is None else str(value['exit_code']))
+        + '; out=' + ('none' if value['stdout_bytes'] is None else str(value['stdout_bytes']))
+        + '; err=' + ('none' if value['stderr_bytes'] is None else str(value['stderr_bytes']))
+        + '; avcs=' + ('unknown' if value['avc_count'] is None else str(value['avc_count']))
+        + '; subject=' + value['avc_subject'] + '; object=' + value['avc_object']
+        + '; path=' + value['avc_path'] + '; permission=' + value['avc_permission'] + ']')
+
+
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
