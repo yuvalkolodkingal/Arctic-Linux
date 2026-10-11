@@ -1660,8 +1660,15 @@ class Smoke:
                     and stat.S_IMODE(current.st_mode)==0o600 and current.st_size==w*h*3<=LIMIT
                     and (current.st_dev,current.st_ino)==(reserved_rgb.st_dev,reserved_rgb.st_ino),
                     'readiness RGB identity, ownership or bound differs')
-            raw=rgb.read_bytes()
-            require(rgb.lstat()==current,'readiness RGB changed while read')
+            # Reading may update atime; pin all content/identity metadata instead.
+            # The already-owned descriptor also prevents a substituted pathname
+            # from supplying pixels between the initial stat and the read.
+            os.lseek(rgb_guard,0,os.SEEK_SET)
+            with os.fdopen(rgb_guard,'rb',closefd=False) as stream: raw=stream.read(LIMIT+1)
+            final_rgb=os.fstat(rgb_guard); pathname_rgb=rgb.lstat()
+            stable=('st_dev','st_ino','st_uid','st_gid','st_mode','st_nlink','st_size','st_mtime_ns','st_ctime_ns')
+            require(len(raw)==current.st_size and all(getattr(current,k)==getattr(final_rgb,k)
+                    ==getattr(pathname_rgb,k) for k in stable),'readiness RGB changed while read')
             oracle=evaluate_reference_rgb(raw,w,h,expected.read_bytes())
             remaining()  # A match completed after the inherited deadline cannot pass.
             result=dict(player=player,player_state=state,client_before=client,client_after=after,
@@ -2482,7 +2489,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '7e08bf34c2b2509fa6d73c6f622f741e9ab393e2cb35e565ad86d9038c354e27'
+    native_source_sha = '82cb72d81be20fd5d0a3b4f802fdbef7d7364377cd6a42dea334422b0a3ee89c'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []
