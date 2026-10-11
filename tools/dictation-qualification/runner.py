@@ -93,6 +93,69 @@ COLLECTOR_FAILURE_GUARDS = frozenset({'unknown',
 COLLECTOR_FAILURE_GUARDS |= frozenset('contract-' + format(index, '03d') for index in range(1, 62))
 # END REPORT_CONTRACT_GUARD_RELAY
 
+# BEGIN GATE_FAILURE_SUMMARY_RELAY
+# These syntactically checked UART labels remain unauthenticated observations;
+# no summary can satisfy a report or release gate.
+GATE_FAILURE_CODES = ('actual-boot-stage-mismatch', 'actual-hardware-profile-mismatch', 'audit-disabled-or-lost-records', 'audit-interval-rotated-or-oversized', 'audit-log-disappeared', 'audit-new-log-oversized', 'audit-status-unavailable', 'broker-command-identity', 'broker-death-engine-not-unique', 'broker-death-inserted-text', 'broker-death-recording-not-started', 'broker-death-retained-transcript', 'broker-death-stale-status', 'broker-not-owned', 'broker-replaced-before-kill', 'cancel-inserted-text', 'cancel-not-ready', 'cancel-recording-not-started', 'collector-failed', 'command-failed', 'command-output-byte-types', 'context-boot-stage-mismatch', 'cpu-owned-process-profile-pin', 'cpu-recording-not-started', 'cpu-transcription-failed', 'desktop-mango-ambiguous', 'desktop-not-unique', 'desktop-wayland-ambiguous', 'empty-or-unintended-enter', 'encrypted-root-not-observed', 'engine-parent-unavailable', 'engine-survived-cancel', 'explicit-root-disposable-guest-required', 'fixture-bundle-validation-failed', 'fixture-language-rows', 'fixture-playback-failed', 'gpu-engine-not-unique', 'gpu-failure-no-advertised-cpu-retry', 'gpu-gate-requires-modern-profile', 'gpu-owned-process-identity', 'hebrew-script-not-inserted', 'indicator-handshake-incomplete', 'indicator-interval-not-empty-recording', 'indicator-receiver-not-empty', 'indicator-recording-not-started', 'indicator-screenshot-missing', 'insertion-focus-lost', 'installed-binary-not-executable', 'installed-child-guard-sha256', 'installed-controller-not-ready', 'installed-file-size', 'installed-payload-sha256', 'installed-profile-asset-inventory', 'installed-profile-asset-pin', 'installed-profile-descriptor-pin', 'installed-profile-inventory', 'journal-cursor-unavailable', 'journal-json-duplicate-field', 'journal-json-entry-type', 'journal-json-invalid', 'journal-json-nonfinite', 'journal-message-encoding', 'journal-message-type', 'journal-output-byte-type', 'leak-scan-excerpt-too-short', 'leak-scan-missing-real-hypotheses', 'legacy-gpu-profile-pin', 'legacy-vulkan-start-not-rejected', 'live-base-scan-unreadable', 'live-base-unavailable', 'live-controller-false-readiness', 'live-payload-receipt-present', 'live-speech-payload-or-model-present', 'live-whisper-weight-present', 'loader-broker-changed', 'loader-broker-command-identity', 'loader-broker-not-fresh', 'loader-broker-not-owned', 'loader-broker-process-reused', 'loader-broker-wrapper-died', 'loader-broker-wrapper-parent', 'loader-continuation-insertion-failed', 'loader-control-socket-unsafe', 'loader-engine-not-unique', 'loader-engine-parent-mismatch', 'loader-environment-bound', 'loader-environment-not-inherited', 'loader-environment-process-identity', 'loader-error-inserted-text', 'loader-error-not-actionable-cpu-retry', 'loader-error-retained-transcript', 'loader-fixture-already-present', 'loader-gate-requires-modern-profile', 'loader-launch-lock-unsafe', 'loader-owned-cleanup-failed', 'loader-playback-failed', 'loader-receiver-not-empty-before-retry', 'loader-retry-preference-changed', 'loader-start-command-outcome', 'loader-start-response-bound', 'loader-start-response-json', 'loader-vulkan-process-pin', 'lock-inserted-text', 'lock-recording-not-started', 'loopback-flags-unavailable', 'loopback-process-died', 'mic-failure-inserted-text', 'mic-failure-not-actionable', 'mic-recording-not-started', 'microphone-isolation-unavailable', 'missing-model-not-actionable', 'missing-model-restore-integrity', 'native-audio-tool-missing', 'new-selinux-avc', 'no-supported-vulkan-device', 'observation-timeout', 'observed', 'offline-became-ready', 'offline-desktop-not-responsive', 'offline-firstboot-timer-not-enabled', 'offline-network-manager-inactive', 'offline-payload-unexpected', 'offline-queue-missing-or-false-ready', 'offline-recording-not-blocked', 'offline-size-undisclosed', 'optimized-cpu-incompatible', 'outside-network-response', 'owned-cleanup-failed', 'owned-process-reused-before-signal', 'playback-fixture-sha256', 'preexisting-engine-forbidden', 'prerequisite-or-collector-failed', 'private-transcript-files-remain', 'qemu-kvm-guest-required', 'ready-still-pending', 'receipt-file-pin', 'receipt-file-pin-types', 'receipt-profile-pin', 'receipt-version-source', 'receiver-directory-unsafe', 'receiver-focus-after-unlock', 'receiver-focus-lost', 'receiver-focus-request-failed', 'receiver-gtk-init', 'receiver-must-be-user', 'receiver-process-died', 'receiver-window-disappeared', 'receiver-window-duplicate', 'receiver-window-identity', 'recording-engine-changed', 'recording-engine-not-unique', 'recording-started-while-locked', 'recording-status-not-published', 'recording-stop-failed', 'recovery-neither-pending-nor-ready', 'recovery-not-ready', 'recovery-timer-not-enabled', 'reviewed-source-hash-mismatch', 'reviewed-test-cd-location-required', 'root-crypt-device-unavailable', 'selinux-not-enforcing', 'session-network-not-isolated', 'status-backend-profile', 'status-backend-unknown', 'status-byte-bound', 'status-command-outcome', 'status-cpu-variant-profile', 'status-idle-cpu-variant', 'status-json-fields', 'status-profile-byte-types', 'status-profile-descriptor-pin', 'transcript-found-in-public-surface', 'unknown', 'unknown-command-output-role', 'unknown-gate', 'unknown-session-preflight-error-type', 'unknown-session-preflight-stage', 'unknown-wait-diagnostic-target', 'unsafe-installed-file')
+GATE_FAILURE_EXPECTED = (('live', 'small-v2', ('live-controller-unavailable', 'live-payload-model-absent', 'no-new-avcs', 'selinux-enforcing')), ('live', 'turbo-q5-v3', ('live-controller-unavailable', 'live-payload-model-absent', 'no-new-avcs', 'selinux-enforcing')), ('offline-installed', 'small-v2', ('encrypted-installed-boot', 'no-new-avcs', 'offline-os-healthy', 'offline-setup-pending', 'selinux-enforcing')), ('offline-installed', 'turbo-q5-v3', ('encrypted-installed-boot', 'no-new-avcs', 'offline-os-healthy', 'offline-setup-pending', 'selinux-enforcing')), ('online-installed', 'small-v2', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'installed-payload-integrity', 'legacy-gpu-unsupported-cpu-retry', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'online-installer-ready', 'recording-status-published', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('online-installed', 'turbo-q5-v3', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'gpu-loader-fault-handling-new-cpu-retry', 'gpu-runtime-failure-cpu-retry', 'installed-payload-integrity', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'online-installer-ready', 'recording-status-published', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovered-offline', 'small-v2', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'installed-payload-integrity', 'legacy-gpu-unsupported-cpu-retry', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'recording-status-published', 'recovered-ready', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovered-offline', 'turbo-q5-v3', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'gpu-loader-fault-handling-new-cpu-retry', 'gpu-runtime-failure-cpu-retry', 'installed-payload-integrity', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'recording-status-published', 'recovered-ready', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovery', 'small-v2', ('encrypted-installed-boot', 'explicit-service-recovery-ready', 'installed-payload-integrity', 'no-new-avcs', 'selinux-enforcing')), ('recovery', 'turbo-q5-v3', ('encrypted-installed-boot', 'explicit-service-recovery-ready', 'installed-payload-integrity', 'no-new-avcs', 'selinux-enforcing')))
+
+def gate_failure_record(raw):
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            if key in value:
+                raise ValueError()
+            value[key] = item
+        return value
+    def constant(_value):
+        raise ValueError()
+    try:
+        if type(raw) is not bytes or not 0 < len(raw) <= 16384:
+            return None
+        value = json.loads(raw.decode('ascii'), object_pairs_hook=pairs, parse_constant=constant)
+        if (type(value) is not dict or set(value) != {'schema', 'phase', 'profile', 'gates', 'release_acceptance'}
+            or value['schema'] != 'arctic-dictation-gate-failure-v1' or value['release_acceptance'] is not False
+            or type(value['phase']) is not str or type(value['profile']) is not str):
+            return None
+        expected = next((names for p, h, names in GATE_FAILURE_EXPECTED
+                         if (p, h) == (value['phase'], value['profile'])), None)
+        if expected is None or type(value['gates']) is not list or len(value['gates']) != len(expected):
+            return None
+        for row, name in zip(value['gates'], expected):
+            if (type(row) is not dict or set(row) != {'id', 'status', 'code'}
+                or any(type(row[key]) is not str for key in ('id', 'status', 'code'))
+                or row['id'] != name or row['status'] not in ('passed', 'failed', 'unrun')
+                or row['code'] not in GATE_FAILURE_CODES):
+                return None
+        return value
+    except (UnicodeError, ValueError, KeyError, TypeError):
+        return None
+
+def relay_gate_failures(vm, phase):
+    if type(phase) is not str or phase not in PHASES:
+        return
+    try:
+        raw = launch_diagnostic_read(vm, 'serial-boot.log', 16 * 1024 * 1024)
+        prefix = b'ARCTIC-DICTATION-GATE-SUMMARY '
+        records = []
+        for line in raw.splitlines(keepends=True):
+            if not line.endswith(b'\n') or not line.startswith(prefix):
+                continue
+            body = line[len(prefix):-1]
+            if body.endswith(b'\r'):
+                body = body[:-1]
+            value = gate_failure_record(body)
+            if value is None or value['phase'] not in ('live', phase):
+                continue
+            records.append(value)
+            if len(records) > 1:
+                return  # Duplicate/contradictory records cannot select an observation.
+        if len(records) == 1:
+            print('ARCTIC-DICTATION-GATE-FAILURE ' + phase + ' ' + json.dumps(records[0], sort_keys=True), flush=True)
+    except BaseException:
+        pass  # Diagnostic cancellation cannot replace the original private failure.
+# END GATE_FAILURE_SUMMARY_RELAY
+
 def collector_failure_record(raw):
     """Decode an exact fixed failure record; never export any unknown field."""
     def pairs(items):
@@ -132,6 +195,7 @@ def relay_collector_failures(vm, phase):
     """Failure-only bounded projection from owned private UART; no raw excerpts."""
     if type(phase) is not str or phase not in PHASES:
         return
+    relay_gate_failures(vm, phase)
     try:
         raw = launch_diagnostic_read(vm, 'serial-boot.log', 16 * 1024 * 1024)
         prefix = b'ARCTIC-DICTATION-COLLECTOR-FAILURE '

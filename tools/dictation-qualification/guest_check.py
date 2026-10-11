@@ -271,6 +271,12 @@ def collector_failure(error):
             result.update(frame='report-contract', guard=guard)
             if len(frames) >= 3 and frames[-3].f_code is main.__code__ and frames[-3].f_globals is main.__globals__:
                 result['caller'] = 'main'
+            # BEGIN TRANSPARENT_GATE_SUMMARY_CALLER
+            elif (len(frames) >= 4 and frames[-3].f_code is _GATE_VALIDATE_CODE
+                  and frames[-3].f_globals is _GATE_NAMESPACE
+                  and frames[-4].f_code is main.__code__ and frames[-4].f_globals is main.__globals__):
+                result['caller'] = 'main'  # Same owned main through the transparent validation wrapper.
+            # END TRANSPARENT_GATE_SUMMARY_CALLER
         return result
     for frame in frames[-1:]:
         for function, label in owners:
@@ -300,6 +306,110 @@ def emit_collector_failure(error):
         print('ARCTIC-DICTATION-COLLECTOR-FAILURE ' + json.dumps(collector_failure(error), sort_keys=True), flush=True)
     except Exception:
         pass  # Optional diagnostics cannot replace the same original failure.
+
+# BEGIN OWNED_GATE_FAILURE_SUMMARY
+# Only Source-owned rejected-report scalar observations. No counts, errors,
+# transcripts, hashes, command output or report observations enter this record.
+GATE_FAILURE_CODES = ('actual-boot-stage-mismatch', 'actual-hardware-profile-mismatch', 'audit-disabled-or-lost-records', 'audit-interval-rotated-or-oversized', 'audit-log-disappeared', 'audit-new-log-oversized', 'audit-status-unavailable', 'broker-command-identity', 'broker-death-engine-not-unique', 'broker-death-inserted-text', 'broker-death-recording-not-started', 'broker-death-retained-transcript', 'broker-death-stale-status', 'broker-not-owned', 'broker-replaced-before-kill', 'cancel-inserted-text', 'cancel-not-ready', 'cancel-recording-not-started', 'collector-failed', 'command-failed', 'command-output-byte-types', 'context-boot-stage-mismatch', 'cpu-owned-process-profile-pin', 'cpu-recording-not-started', 'cpu-transcription-failed', 'desktop-mango-ambiguous', 'desktop-not-unique', 'desktop-wayland-ambiguous', 'empty-or-unintended-enter', 'encrypted-root-not-observed', 'engine-parent-unavailable', 'engine-survived-cancel', 'explicit-root-disposable-guest-required', 'fixture-bundle-validation-failed', 'fixture-language-rows', 'fixture-playback-failed', 'gpu-engine-not-unique', 'gpu-failure-no-advertised-cpu-retry', 'gpu-gate-requires-modern-profile', 'gpu-owned-process-identity', 'hebrew-script-not-inserted', 'indicator-handshake-incomplete', 'indicator-interval-not-empty-recording', 'indicator-receiver-not-empty', 'indicator-recording-not-started', 'indicator-screenshot-missing', 'insertion-focus-lost', 'installed-binary-not-executable', 'installed-child-guard-sha256', 'installed-controller-not-ready', 'installed-file-size', 'installed-payload-sha256', 'installed-profile-asset-inventory', 'installed-profile-asset-pin', 'installed-profile-descriptor-pin', 'installed-profile-inventory', 'journal-cursor-unavailable', 'journal-json-duplicate-field', 'journal-json-entry-type', 'journal-json-invalid', 'journal-json-nonfinite', 'journal-message-encoding', 'journal-message-type', 'journal-output-byte-type', 'leak-scan-excerpt-too-short', 'leak-scan-missing-real-hypotheses', 'legacy-gpu-profile-pin', 'legacy-vulkan-start-not-rejected', 'live-base-scan-unreadable', 'live-base-unavailable', 'live-controller-false-readiness', 'live-payload-receipt-present', 'live-speech-payload-or-model-present', 'live-whisper-weight-present', 'loader-broker-changed', 'loader-broker-command-identity', 'loader-broker-not-fresh', 'loader-broker-not-owned', 'loader-broker-process-reused', 'loader-broker-wrapper-died', 'loader-broker-wrapper-parent', 'loader-continuation-insertion-failed', 'loader-control-socket-unsafe', 'loader-engine-not-unique', 'loader-engine-parent-mismatch', 'loader-environment-bound', 'loader-environment-not-inherited', 'loader-environment-process-identity', 'loader-error-inserted-text', 'loader-error-not-actionable-cpu-retry', 'loader-error-retained-transcript', 'loader-fixture-already-present', 'loader-gate-requires-modern-profile', 'loader-launch-lock-unsafe', 'loader-owned-cleanup-failed', 'loader-playback-failed', 'loader-receiver-not-empty-before-retry', 'loader-retry-preference-changed', 'loader-start-command-outcome', 'loader-start-response-bound', 'loader-start-response-json', 'loader-vulkan-process-pin', 'lock-inserted-text', 'lock-recording-not-started', 'loopback-flags-unavailable', 'loopback-process-died', 'mic-failure-inserted-text', 'mic-failure-not-actionable', 'mic-recording-not-started', 'microphone-isolation-unavailable', 'missing-model-not-actionable', 'missing-model-restore-integrity', 'native-audio-tool-missing', 'new-selinux-avc', 'no-supported-vulkan-device', 'observation-timeout', 'observed', 'offline-became-ready', 'offline-desktop-not-responsive', 'offline-firstboot-timer-not-enabled', 'offline-network-manager-inactive', 'offline-payload-unexpected', 'offline-queue-missing-or-false-ready', 'offline-recording-not-blocked', 'offline-size-undisclosed', 'optimized-cpu-incompatible', 'outside-network-response', 'owned-cleanup-failed', 'owned-process-reused-before-signal', 'playback-fixture-sha256', 'preexisting-engine-forbidden', 'prerequisite-or-collector-failed', 'private-transcript-files-remain', 'qemu-kvm-guest-required', 'ready-still-pending', 'receipt-file-pin', 'receipt-file-pin-types', 'receipt-profile-pin', 'receipt-version-source', 'receiver-directory-unsafe', 'receiver-focus-after-unlock', 'receiver-focus-lost', 'receiver-focus-request-failed', 'receiver-gtk-init', 'receiver-must-be-user', 'receiver-process-died', 'receiver-window-disappeared', 'receiver-window-duplicate', 'receiver-window-identity', 'recording-engine-changed', 'recording-engine-not-unique', 'recording-started-while-locked', 'recording-status-not-published', 'recording-stop-failed', 'recovery-neither-pending-nor-ready', 'recovery-not-ready', 'recovery-timer-not-enabled', 'reviewed-source-hash-mismatch', 'reviewed-test-cd-location-required', 'root-crypt-device-unavailable', 'selinux-not-enforcing', 'session-network-not-isolated', 'status-backend-profile', 'status-backend-unknown', 'status-byte-bound', 'status-command-outcome', 'status-cpu-variant-profile', 'status-idle-cpu-variant', 'status-json-fields', 'status-profile-byte-types', 'status-profile-descriptor-pin', 'transcript-found-in-public-surface', 'unknown', 'unknown-command-output-role', 'unknown-gate', 'unknown-session-preflight-error-type', 'unknown-session-preflight-stage', 'unknown-wait-diagnostic-target', 'unsafe-installed-file')
+GATE_FAILURE_EXPECTED = (('live', 'small-v2', ('live-controller-unavailable', 'live-payload-model-absent', 'no-new-avcs', 'selinux-enforcing')), ('live', 'turbo-q5-v3', ('live-controller-unavailable', 'live-payload-model-absent', 'no-new-avcs', 'selinux-enforcing')), ('offline-installed', 'small-v2', ('encrypted-installed-boot', 'no-new-avcs', 'offline-os-healthy', 'offline-setup-pending', 'selinux-enforcing')), ('offline-installed', 'turbo-q5-v3', ('encrypted-installed-boot', 'no-new-avcs', 'offline-os-healthy', 'offline-setup-pending', 'selinux-enforcing')), ('online-installed', 'small-v2', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'installed-payload-integrity', 'legacy-gpu-unsupported-cpu-retry', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'online-installer-ready', 'recording-status-published', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('online-installed', 'turbo-q5-v3', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'gpu-loader-fault-handling-new-cpu-retry', 'gpu-runtime-failure-cpu-retry', 'installed-payload-integrity', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'online-installer-ready', 'recording-status-published', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovered-offline', 'small-v2', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'installed-payload-integrity', 'legacy-gpu-unsupported-cpu-retry', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'recording-status-published', 'recovered-ready', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovered-offline', 'turbo-q5-v3', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'gpu-loader-fault-handling-new-cpu-retry', 'gpu-runtime-failure-cpu-retry', 'installed-payload-integrity', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'recording-status-published', 'recovered-ready', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovery', 'small-v2', ('encrypted-installed-boot', 'explicit-service-recovery-ready', 'installed-payload-integrity', 'no-new-avcs', 'selinux-enforcing')), ('recovery', 'turbo-q5-v3', ('encrypted-installed-boot', 'explicit-service-recovery-ready', 'installed-payload-integrity', 'no-new-avcs', 'selinux-enforcing')))
+
+def closed_gate_code(value):
+    if type(value) is not str:
+        return 'unknown'
+    return next((label for label in GATE_FAILURE_CODES if value == label), 'unknown')
+
+def gate_failure_binding_intact():
+    return (Checker is _GATE_CHECKER and validate is _REPORT_VALIDATE
+            and require is _REPORT_REQUIRE and Invalid is _REPORT_INVALID
+            and all(function.__code__ is code and function.__globals__ is namespace
+                    for function, code, namespace in _GATE_FUNCTIONS)
+            and all(namespace.get(name, _GATE_ABSENT) is value for namespace, name, value in _GATE_GLOBALS)
+            and json.dumps is _GATE_SERIALIZER and _GATE_SERIALIZER.__code__ is _GATE_SERIALIZER_CODE
+            and _GATE_SERIALIZER.__globals__ is _GATE_SERIALIZER_GLOBALS
+            and all(Checker.__dict__.get(name) is value for name, value in _GATE_METHODS))
+
+def gate_failure_summary(error, checker, report, declared):
+    """Bind the actual loaded validate throw/caller, then project fixed scalars.
+
+    A scalar is an observation of the owned report, not proof of gate success
+    or of the original exception at an earlier application callsite.
+    """
+    if not gate_failure_binding_intact() or type(error) is not _REPORT_INVALID:
+        return None
+    trace = BaseException.__traceback__.__get__(error)
+    traces, seen = [], set()
+    for _ in range(64):
+        if trace is None:
+            break
+        if id(trace) in seen:
+            return None
+        seen.add(id(trace)); traces.append(trace); trace = trace.tb_next
+    if trace is not None or len(traces) < 3:
+        return None
+    caller, validating, throwing = traces[-3:]
+    if (caller.tb_frame.f_code is not _GATE_VALIDATE_CODE
+        or caller.tb_frame.f_globals is not _GATE_NAMESPACE
+        or caller.tb_frame.f_locals.get('checker') is not checker
+        or caller.tb_frame.f_locals.get('report') is not report
+        or caller.tb_frame.f_locals.get('declared') is not declared
+        or owned_report_guard(validating, throwing) == 'unknown'):
+        return None
+    line = next((line for start, end, line in _GATE_VALIDATE_CODE.co_lines()
+                 if start <= caller.tb_lasti < end), None)
+    if type(line) is not int or type(caller.tb_lineno) is not int or line != caller.tb_lineno:
+        return None
+    if (type(checker) is not _GATE_CHECKER or type(report) is not dict
+        or type(declared) is not dict or checker.__dict__.get('report') is not report
+        or checker.__dict__.get('context') is not declared
+        or report.get('context') is not declared
+        or set(report) != {'schema', 'status', 'release_acceptance', 'context', 'boot_id',
+                          'controller_sha256', 'payload', 'gates', 'samples', 'limitations',
+                          'disk', 'profile', 'hardware'}
+        or report.get('release_acceptance') is not False):
+        return None
+    phase, profile = declared.get('phase'), declared.get('hardware_profile')
+    if type(phase) is not str or type(profile) is not str:
+        return None
+    expected = next((names for p, h, names in GATE_FAILURE_EXPECTED if (p, h) == (phase, profile)), None)
+    if (expected is None or type(checker.__dict__.get('profile_id')) is not str
+        or checker.__dict__['profile_id'] != profile
+        or type(checker.__dict__.get('gates')) is not set
+        or checker.__dict__['gates'] != set(expected)):
+        return None
+    rows = report.get('gates')
+    if type(rows) is not list or len(rows) != len(expected):
+        return None
+    by_id = {}
+    for row in rows:
+        if (type(row) is not dict or set(row) != {'id', 'status', 'evidence_kind', 'code', 'observations'}
+            or any(type(row[key]) is not str for key in ('id', 'status', 'evidence_kind', 'code'))
+            or type(row['observations']) is not dict
+            or not set(row['observations']) <= set(_GATE_OBSERVATION_KEYS)
+            or row['id'] not in expected or row['id'] in by_id
+            or row['status'] not in ('passed', 'failed', 'unrun')
+            or row['evidence_kind'] != next((kind for name, kind in _GATE_KINDS if name == row['id']), None)):
+            return None
+        by_id[row['id']] = dict(id=row['id'], status=row['status'], code=closed_gate_code(row['code']))
+    if set(by_id) != set(expected):
+        return None
+    return dict(schema='arctic-dictation-gate-failure-v1', phase=phase, profile=profile,
+                gates=[by_id[name] for name in expected], release_acceptance=False)
+
+def emit_gate_failure_summary(error, checker, report, declared):
+    try:
+        value = gate_failure_summary(error, checker, report, declared)
+        if value is not None:
+            print('ARCTIC-DICTATION-GATE-SUMMARY ' + json.dumps(value, sort_keys=True), flush=True)
+    except BaseException:
+        pass  # Even a diagnostic cancellation cannot replace the primary throw.
+
+def validate_collected_report(checker, report, declared, fixture_manifest):
+    try:
+        validate(report, declared, fixture_manifest=fixture_manifest)
+    except Invalid as error:
+        emit_gate_failure_summary(error, checker, report, declared)
+        raise  # SAME original validator exception; every acceptance predicate remains.
+# END OWNED_GATE_FAILURE_SUMMARY
 
 def verify_small_cpu_fixture(cpuinfo):
     """Check every declared two-vCPU Small fixture before any application gate.
@@ -1615,10 +1725,34 @@ def main():
                                'code': 'prerequisite-or-collector-failed', 'observations': {}})
     report['status'] = 'passed' if all(g['status'] == 'passed' for g in report['gates']) else 'failed'
     collector_failure_phase = 'report-validation'
-    validate(report, declared, fixture_manifest=DATA / 'dictation-fixtures/fixtures.json')
+    validate_collected_report(checker, report, declared, DATA / 'dictation-fixtures/fixtures.json')
     collector_failure_phase = 'report-emission'
     print('ARCTIC-DICTATION-QUALIFICATION ' + json.dumps(report, sort_keys=True), flush=True)
     return int(report['status'] != 'passed')
+
+# BEGIN OWNED_GATE_FAILURE_BINDING
+# Capture the actual loaded functions, globals and class entries once. Foreign
+# lookalike CodeTypes/globals and later substitutions cannot emit a summary.
+_GATE_CHECKER = Checker
+_GATE_NAMESPACE = globals()
+_GATE_VALIDATE_CODE = validate_collected_report.__code__
+_GATE_METHODS = tuple((name, value) for name, value in Checker.__dict__.items()
+                      if isinstance(value, (type(main), staticmethod)))
+_GATE_FUNCTIONS = tuple((function, function.__code__, function.__globals__)
+    for function in tuple(value for value in globals().values()
+                          if type(value) is type(main) and value.__globals__ is globals())
+    + tuple(value.__func__ if isinstance(value, staticmethod) else value
+            for _, value in _GATE_METHODS))
+_GATE_ABSENT = object()
+_GATE_SERIALIZER = json.dumps
+_GATE_SERIALIZER_CODE = json.dumps.__code__
+_GATE_SERIALIZER_GLOBALS = json.dumps.__globals__
+_GATE_GLOBALS = tuple((namespace, name, namespace.get(name, _GATE_ABSENT))
+    for _, code, namespace in _GATE_FUNCTIONS for name in code.co_names
+    if not name.startswith('_GATE_') and name != 'collector_failure_phase')
+_GATE_KINDS = tuple(sorted(EXPECTED_KINDS.items()))
+_GATE_OBSERVATION_KEYS = tuple(sorted(_REPORT_GLOBALS['OBSERVATIONS']))
+# END OWNED_GATE_FAILURE_BINDING
 
 if __name__ == '__main__':
     try:

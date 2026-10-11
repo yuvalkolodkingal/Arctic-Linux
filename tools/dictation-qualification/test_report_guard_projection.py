@@ -24,6 +24,8 @@ BRANCH_SHA256='2a9cbca44f6b6437fd5e5bf85a7b6dd160afa081ae518aabcbe9e57b0a777673'
 RUNNER_ADDON_SHA256='b86d97be3d594cfa584b8cdf187ab614c4b86bec69b229e1760a553d090d7b28'
 
 def restore_report_guard_projection(text):
+    from test_gate_failure_summary import restore_gate_failure_summary
+    text=restore_gate_failure_summary(text)
     begin='# BEGIN OWNED_REPORT_CONTRACT_GUARDS\n';end='# END OWNED_REPORT_CONTRACT_GUARDS\n\n'
     if begin not in text:return text
     assert text.count(begin)==text.count(end)==1
@@ -42,6 +44,8 @@ def restore_report_guard_projection(text):
     return text
 
 def restore_report_guard_relay(text):
+    from test_gate_failure_summary import restore_gate_failure_relay
+    text=restore_gate_failure_relay(text)
     begin='# BEGIN REPORT_CONTRACT_GUARD_RELAY\n';end='# END REPORT_CONTRACT_GUARD_RELAY\n\n'
     if begin not in text:return text
     assert text.count(begin)==text.count(end)==1
