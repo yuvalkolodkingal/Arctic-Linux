@@ -174,6 +174,159 @@ def generated_source_family(m, match, phase, original=None, boundaries=None, rem
 # END BOUNDED_PUBLIC_BROKER_NOTIFICATION_DIAGNOSTIC
 
 
+# BEGIN EXACT_REJECTED_MATCH_ALIGNMENT
+# Additive finite Source-text diagnostics only. The original scanner and its
+# first-rejection order remain unchanged. No offsets, values or new hashes are
+# exported, and exact Source alignment does not authenticate executed code.
+DIAGNOSTIC_SENSITIVE_PATTERN = '(?i)(?:gh[pousr]_|github_pat_)[a-z0-9_]+|AKIA[A-Z0-9]{16}|authorization:\\s*\\S+(?:\\s+\\S+)?|[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}|https?://[^\\s"<>]*\\?[^\\s"<>]*|https?://[^\\s"<>]*@[^\\s"<>]+|["\\\']?\\b(?:password|passwd|token|access_token|refresh_token|api_key|client_secret|secret)["\\\']?\\s*[:=]\\s*[^\\s,}]+|--(?:password|token|api-key)\\s+(?!\\[secret: password hash\\])\\S+|\\bcryptsetup (?:luksFormat|open) [^\\r\\n]* < (?!\\[secret: disk passphrase\\])\\S+|(?:transcript|transcription|transcribed(?:\\s+text)?|recognized\\s+text|dictation\\s+(?:text|result)|תמלול|תמליל|טקסט\\s+מזוהה)["\\\']?\\s*[:=]'
+DIAGNOSTIC_SENSITIVE_FLAGS = 34
+DIAGNOSTIC_SGR = re.compile('\\x1b\\[[0-9;:]*m', 32)
+DIAGNOSTIC_TERMINAL = re.compile('\\x1b\\[[0-?]*[ -/]*[@-~]|\\x1b\\][^\\x1b\\x07\\r\\n]*(?:\\x07|\\x1b\\\\)|\\x1b[PX^_][^\\x1b\\r\\n]*\\x1b\\\\|\\x1b(?![\\[\\]PX^_])[ -/]*[0-~]', 32)
+DIAGNOSTIC_RULE_LABELS = ('github-credential', 'aws-credential', 'authorization', 'email-shape', 'queried-url', 'credential-url', 'named-secret', 'secret-option', 'disk-secret-input', 'transcription-label')
+DIAGNOSTIC_BROKER_NUMERIC_FRAGMENT = re.compile(
+    r'1\.(?P<unique>[0-9]{1,21})-org\.freedesktop\.Notifications@'
+    r'(?P<instance>[0-9]{1,21})\.service')
+
+
+def diagnostic_view_alignment(m, match, phase, original, boundaries, removed):
+    result = dict(regex='unverified', offsets='unverified', mapping='unverified')
+    if type(match) is not re.Match:
+        result['regex'] = 'not-regex-match'
+        return result
+    if type(m.EXTERNAL_SENSITIVE) is not re.Pattern or match.re is not m.EXTERNAL_SENSITIVE:
+        result['regex'] = 'foreign-regex-match'
+        return result
+    if (match.re.pattern != DIAGNOSTIC_SENSITIVE_PATTERN
+            or match.re.flags != DIAGNOSTIC_SENSITIVE_FLAGS):
+        result['regex'] = 'scanner-pattern-differs'
+        return result
+    result['regex'] = 'exact-scanner-regex'
+    if (type(match.string) is not str or not 0 <= match.start() < match.end() <= len(match.string)
+            or match.end() - match.start() > MAX_MATCH):
+        result['offsets'] = 'match-outside-diagnostic-bound'
+        return result
+    if match.pos != 0 or match.endpos != len(match.string):
+        result['offsets'] = 'match-window-differs'
+        return result
+    replay = match.re.match(match.string, match.start())
+    if replay is None or replay.span() != match.span():
+        result['offsets'] = 'match-span-differs'
+        return result
+    result['offsets'] = 'exact-scanner-span'
+    if type(phase) is not str or phase not in m.EXTERNAL_RULE_PHASES:
+        result['mapping'] = 'phase-unknown'
+        return result
+    if phase == 'terminal-payload':
+        result['mapping'] = ('payload-without-original-map' if original is None
+                             and boundaries is None and removed is None else 'payload-map-differs')
+        return result
+    if (type(original) is not str or len(original) > MAX_MEMBER
+            or type(boundaries) is not m.array or type(removed) is not m.array
+            or boundaries.typecode != 'I' or removed.typecode != 'I'
+            or len(boundaries) != len(removed)):
+        result['mapping'] = 'original-map-unavailable'
+        return result
+    escapes = DIAGNOSTIC_SGR if phase == 'source-view' else DIAGNOSTIC_TERMINAL
+    # Replay the exact pinned view/map with bounded chunks, rather than copy a
+    # second whole private view. No chunk or mapping index leaves this function.
+    cursor = view_cursor = count = index = 0
+    def segment_equal(first, last, at):
+        for position in range(first, last, 4096):
+            end = min(position + 4096, last)
+            if original[position:end] != match.string[at:at + end - position]:
+                return False
+            at += end - position
+        return True
+    for escape in escapes.finditer(original):
+        length = escape.start() - cursor
+        if not segment_equal(cursor, escape.start(), view_cursor):
+            result['mapping'] = 'scanner-view-differs'
+            return result
+        view_cursor += length
+        expected_boundary = escape.start() - count
+        count += escape.end() - escape.start()
+        if (index >= len(boundaries) or boundaries[index] != expected_boundary
+                or removed[index] != count):
+            result['mapping'] = 'original-map-differs'
+            return result
+        index += 1
+        cursor = escape.end()
+    if index != len(boundaries):
+        result['mapping'] = 'original-map-differs'
+    elif (not segment_equal(cursor, len(original), view_cursor)
+            or view_cursor + len(original) - cursor != len(match.string)):
+        result['mapping'] = 'scanner-view-differs'
+    else:
+        result['mapping'] = 'exact-source-view' if phase == 'source-view' else 'exact-terminal-view'
+    return result
+
+
+def diagnostic_candidate_reason(row):
+    if row['rule'] != 'email-shape':
+        return 'rule-not-email-shape'
+    if row['unit_like'] is not True:
+        return 'not-unit-shaped'
+    if not row['delimiter_bounded']:
+        return 'match-delimiter-differs'
+    if not row['original_contiguous']:
+        return 'match-not-original-contiguous'
+    if row['public_candidate'] != 'unknown':
+        return 'known-public-literal'
+    return 'not-catalogued-public-literal'
+
+
+def diagnostic_family_reason(m, match, phase, original, boundaries, removed, row):
+    if phase != 'source-view':
+        return 'phase-not-source-view'
+    if row['rule'] != 'email-shape':
+        return 'rule-not-email-shape'
+    if match.end() - match.start() > 256:
+        return 'fragment-outside-family-bound'
+    fragment = BROKER_NOTIFICATION_FRAGMENT.fullmatch(match.group(0))
+    if fragment is None:
+        if DIAGNOSTIC_BROKER_NUMERIC_FRAGMENT.fullmatch(match.group(0)) is not None:
+            return 'noncanonical-source-numeric-shape'
+        return 'not-known-public-family-fragment'
+    if (int(fragment.group('unique')) >= 18446744073709551615
+            or int(fragment.group('instance')) > 18446744073709551615):
+        return 'source-numeric-range-differs'
+    first, last = m.original_span(match.start(), match.end(), boundaries, removed)
+    if not (type(first) is int and type(last) is int and 0 <= first <= last <= len(original)):
+        return 'original-family-span-differs'
+    if last - first != match.end() - match.start() or original[first:last] != match.group(0):
+        return 'family-fragment-not-contiguous'
+    if first < 6 or original[first - 6:first] != 'dbus-:':
+        return 'known-family-prefix-differs'
+    start, end = first - 6, last
+    delimiters = ' \t\r\n:'
+    if ((start != 0 and original[start - 1] not in delimiters)
+            or (end != len(original) and original[end] not in delimiters)):
+        return 'whole-family-delimiter-differs'
+    return 'known-public-family'
+
+
+def annotated_match(m, match, phase, original=None, boundaries=None, removed=None):
+    alignment = diagnostic_view_alignment(m, match, phase, original, boundaries, removed)
+    aligned = (alignment['regex'] == 'exact-scanner-regex'
+               and alignment['offsets'] == 'exact-scanner-span'
+               and alignment['mapping'] in ('exact-source-view', 'exact-terminal-view',
+                                            'payload-without-original-map'))
+    # Foreign/truncated/incorrectly mapped Matches cannot receive a known
+    # public label merely because their copied substring resembles one.
+    row = (classify_match(m, match, phase, original, boundaries, removed) if aligned
+           else classify_match(m, None, phase))
+    alignment.update(source_rule=('external-rule-' + format(DIAGNOSTIC_RULE_LABELS.index(row['rule']) + 1, '03d')
+                                  if row['rule'] in DIAGNOSTIC_RULE_LABELS else 'unknown'),
+        candidate_reason=diagnostic_candidate_reason(row) if aligned else 'source-alignment-unverified',
+        family_reason=diagnostic_family_reason(m, match, phase, original, boundaries, removed, row)
+                      if aligned else 'source-alignment-unverified',
+        source_text_observation_only=True, actual_code_ownership=False,
+        privacy_admitted=False, runtime_cause_proven=False)
+    row['source_match_diagnostic'] = alignment
+    return row
+# END EXACT_REJECTED_MATCH_ALIGNMENT
+
+
 def classify_match(m, match, phase, original=None, boundaries=None, removed=None):
     result = dict(phase=phase if type(phase) is str and phase in m.EXTERNAL_RULE_PHASES else 'unknown',
         rule='unknown-rule', codepoints=None, bytes=None, unit_like=None,
@@ -220,7 +373,7 @@ def screened_text(m, content):
     observations = []
     prior = m.diagnose_sensitive_match
     def observe(match, phase, original=None, boundaries=None, removed=None):
-        observations.append(classify_match(m, match, phase, original, boundaries, removed))
+        observations.append(annotated_match(m, match, phase, original, boundaries, removed))
         prior(match, phase, original, boundaries, removed)
     m.diagnose_sensitive_match = observe
     try:

@@ -497,6 +497,15 @@ def installed_user_line(nonce):
     return 'ARCTIC-USER ' + nonce + ' uid=1000 user=arcticqual'
 
 
+def installed_shell_ready(observed_line):
+    # F10's default Fish4.6 prompt_login + fish_prompt render the exact
+    # qualification account, hostname, home cwd and non-root suffix.
+    # OCR may omit the separating space before the suffix; neither fixed
+    # spelling accepts a greeting, getty, root or unrelated shell suffix.
+    return type(observed_line) is str and observed_line in (
+        'arcticqual@arctic-qual ~ >', 'arcticqual@arctic-qual ~>')
+
+
 def console_user_identity(vm, startup, out, nonce, private_password):
     """One nonsecret command; exact UID/name response before any sudo input."""
     deadline = time.monotonic() + 45
@@ -504,6 +513,7 @@ def console_user_identity(vm, startup, out, nonce, private_password):
     command = installed_user_command(nonce)
     require(expected not in command, 'installed user command can mimic its response')
     sent = False
+    greeting_exit_sent = False
     while vm.alive() and time.monotonic() < deadline:
         path = vm.shot('installed-login-shell-probe')
         require(path and startup.console_screen(path), 'actual password console disappeared')
@@ -530,11 +540,21 @@ def console_user_identity(vm, startup, out, nonce, private_password):
                         observed_line_sha256=hashlib.sha256(expected.encode('utf-8')).hexdigest(),
                         observed_ns=time.monotonic_ns())
         if not sent and observed_line is not None and observed_line != 'Password:':
-            require(time.monotonic() + len(command)*.08 + .3 < deadline,
-                    'installed user identity deadline exceeded')
-            vm.type_text(command, gap=.08); vm.keys('ret')
-            require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
-            sent = True
+            if not installed_shell_ready(observed_line):
+                # Fish's startup greeting owns/flushed terminal input before
+                # its prompt. One nonsecret Return dismisses that greeting;
+                # no nonce command or sudo input is sent without readiness.
+                if not greeting_exit_sent:
+                    require(time.monotonic() + .3 < deadline,
+                            'installed user identity deadline exceeded')
+                    vm.keys('ret')
+                    greeting_exit_sent = True
+            else:
+                require(time.monotonic() + len(command)*.08 + .3 < deadline,
+                        'installed user identity deadline exceeded')
+                vm.type_text(command, gap=.08); vm.keys('ret')
+                require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+                sent = True
         time.sleep(.5)
     raise RuntimeError('exact installed user identity was not observed; sudo input refused')
 # END INSTALLED_USER_NONCE_IDENTITY
