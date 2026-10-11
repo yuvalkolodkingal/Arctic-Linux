@@ -32,6 +32,7 @@ design/                 design system sources (read-only input)
 design/themegen/        theme engine (arctic-themegen): palettes → theme folders, templates, wallpaper colours (§10)
 packaging/arctic-linux.spec   ONE spec, many subpackages (§2), Source0 = repo tarball
 packaging/mangowm.spec        Mango built from upstream
+packaging/scenefx.spec        Fedora-compatible SceneFX 0.5 with Safe software completion
 live/                   live-session files (livesys session, arctic-live-session, sddm live conf)
 iso/kiwi/               kiwi-ng description for the live ISO
 tools/build-rpms.sh     builds all RPMs in a Fedora 44 container → out/repo (createrepo_c), out/BUILD-INFO;
@@ -85,7 +86,8 @@ checked against the SHA-256 there and again in `%prep`.
 | `arctic-plymouth-theme` | `/usr/share/plymouth/themes/arctic/` ← `branding/plymouth/arctic/` | Requires plymouth-plugin-script. %post: `plymouth-set-default-theme arctic` (no initrd rebuild in %post). |
 | `arctic-grub-theme` | `/boot/grub2/themes/arctic/` ← `branding/grub/arctic/` (+ `/usr/share/arctic/grub-theme/` copy) | Installed system sets `GRUB_THEME`; the ISO uses the same files. |
 | `arctic-live` | `/usr/libexec/livesys/sessions.d/livesys-arctic`, `/usr/libexec/arctic/live-session`, `/usr/share/arctic/mango/live.conf` | Only in the live image. |
-| `mangowm` (packaging/mangowm.spec) | upstream mango 0.17.3 | BuildRequires meson, gcc, `pkgconfig(wlroots-0.20)`, `pkgconfig(scenefx-0.5)`, wayland-devel, wayland-protocols-devel, libinput-devel, libxkbcommon-devel, pcre2-devel, pixman-devel, cjson-devel, pango-devel, libdrm-devel, xcb deps (`xorg-x11-server-Xwayland-devel`/libxcb-devel, xcb-util-wm-devel). `Source0: https://github.com/mangowm/mango/archive/refs/tags/0.17.3.tar.gz`. `/etc/mango/config.conf` marked `%config(noreplace)`. |
+| `mangowm` (packaging/mangowm.spec) | upstream mango 0.17.3 | BuildRequires meson, gcc, `pkgconfig(wlroots-0.20)`, `pkgconfig(scenefx-0.5)`, wayland-devel, wayland-protocols-devel, libinput-devel, libxkbcommon-devel, pcre2-devel, pixman-devel, cjson-devel, pango-devel, libdrm-devel, xcb deps (`xorg-x11-server-Xwayland-devel`/libxcb-devel, xcb-util-wm-devel). Requires Arctic's ABI-compatible `scenefx >= 0.5-2`. `Source0: https://github.com/mangowm/mango/archive/refs/tags/0.17.3.tar.gz`. `/etc/mango/config.conf` marked `%config(noreplace)`. |
+| `scenefx`, `scenefx-devel` (packaging/scenefx.spec) | Fedora-compatible SceneFX 0.5 library, headers and pkg-config metadata | Build from the exact MIT upstream/Fedora archive, SHA-256 `0fa8ecca0e310f813efd052624c5ed7d9153d6a0fdead5cc957d34c07f9a86c6`, retaining `libscenefx-0.5.so` and the public 0.5 API. Release base 2 precedes the Arctic snapshot suffix. The builder checks cached and downloaded archives; `%prep` checks them again. In the non-timeline submit branch, exact existing `WLR_RENDERER_FORCE_SOFTWARE=1` adds `glFinish()` after `glFlush()` before EGL context restoration and buffer release. The ordinary hardware and explicit timeline paths are unchanged. Existing Safe greeter/session selectors select this path; no new flags, diagnostic interposer or counters ship. `%check` compiles and exercises the actual submit function's branch/cleanup order. Initial live Safe, greeter and installed-image tests remain qualification gates. |
 
 Metapackage: `arctic-desktop` (subpackage, no files) Requires everything a desktop needs:
 mangowm, sddm, sddm-wayland-mango, arctic-sddm-theme, arctic-shell, arctic-settings, arctic-desktop-config,
@@ -594,12 +596,13 @@ SVG strings) can be exported by running the design bundle in node:
 
 ## 9. Package repository: versions, channels, publishing
 
-Arctic's own packages (all of `arctic-linux.spec` and `mangowm`) update from a signed dnf
+Arctic's own packages (all of `arctic-linux.spec`, `mangowm` and `scenefx`) update from a signed dnf
 repository on the project's GitHub Pages site; Fedora's packages keep coming from Fedora. No COPR.
 
-**Versions.** Both specs: `Release: 1%{?arctic_snapshot}%{?dist}`. `tools/build-rpms.sh` defines
+**Versions.** Arctic and Mango use `Release: 1%{?arctic_snapshot}%{?dist}`; the compatible
+SceneFX runtime/devel use base Release 2. `tools/build-rpms.sh` defines
 `arctic_snapshot` as `.<commit time>.<build time>.git<commit, 7 hex>` (`--release-suffix auto`,
-the default; `none` gives `1.fc44`; any other value is used as given; env
+the default; `none` gives the plain base Release (`1.fc44` or `2.fc44`); any other value is used as given; env
 `ARCTIC_RELEASE_SUFFIX`): the commit's committer date as UTC `yyyymmddHHMMSS`, then the build's UTC
 `yyyymmddHHMM`, e.g. `arctic-shell-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44`. rpm
 compares the commit time first, so a build of newer code is always the newer package, whenever it
@@ -607,14 +610,21 @@ was built: the repository's builds of later commits update what an ISO installed
 built afterwards from an older commit (a re-run for an old tag), and a stable build of a later
 commit updates a testing build. The same commit built twice: the later build wins. (Outside a
 git checkout the build time stands in for the commit time.) Every build of every commit is a new
-Release of all 15 packages, so each publish to stable is a full Arctic update (about 9 MB) for
+Release of all packages built, so each publish to stable is a full Arctic update for
 every stable system, and every package's scriptlets run again: they are written for that
 (arctic-plymouth-theme sets the splash only on first install; arctic-selinux skips `semodule`
-when its module is unchanged). Version stays the spec's (arctic-linux 1.2.1, mangowm 0.17.3); a
+when its module is unchanged). Version stays the spec's (arctic-linux 1.2.1, mangowm 0.17.3,
+scenefx 0.5); a
 release bumps it with a `%changelog` entry. The ISO workflow builds through the same script, so
 the same scheme applies there. `out/BUILD-INFO` (key=value): `version`, `release_suffix`,
 `build_time`, `commit_time`, `git_commit`, `git_dirty`, `specs`, `gpg_key` (fingerprint),
 `arctic_repos` (`enabled|disabled|not-built`), one `rpm=`/`srpm=` line per package built.
+
+Mango also requires the exact `scenefx(arctic-software-sync) = 0.5` capability,
+provided by Arctic's patched runtime. A higher-release unpatched Fedora package cannot
+silently replace that runtime while satisfying Mango. Arctic must carry applicable
+SceneFX updates and the matching 0.5 correction together; package and signed-update
+transactions must validate this dependency before publication.
 
 **Site layout** (https://yuvalkolodkingal.github.io/Arctic-Linux/):
 

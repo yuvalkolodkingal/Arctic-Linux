@@ -1,6 +1,6 @@
 # MangoWM for Arctic Linux.
 # Forked from Terra's anda/desktops/mangowm/mangowm.spec (Olivia <git@olivia.sh>) with the
-# fixes from docs/PLAN.md §12: built against Fedora's own wlroots 0.20 and scenefx 0.5,
+# fixes from docs/PLAN.md §12: built against Fedora's wlroots 0.20 and Arctic's scenefx 0.5,
 # portal/chooser Recommends, and /etc/mango/config.conf kept as %%config(noreplace).
 #
 # Arctic never edits /etc/mango/config.conf: users get ~/.config/mango/config.conf from
@@ -42,6 +42,11 @@ BuildRequires:  pkgconfig(xcb)
 BuildRequires:  pkgconfig(xcb-icccm)
 BuildRequires:  pkgconfig(xcb-randr)
 BuildRequires:  xorg-x11-server-Xwayland-devel
+
+# The same-name Arctic SceneFX package retains the 0.5 ABI and completes frames
+# in the existing forced-software Safe graphics path.
+Requires:       scenefx%{?_isa} >= 0.5-2
+Requires:       scenefx(arctic-software-sync) = 0.5
 
 # mango-portals.conf prefers gtk + wlr; wlr needs a chooser (slurp).
 Recommends:     xdg-desktop-portal-wlr
