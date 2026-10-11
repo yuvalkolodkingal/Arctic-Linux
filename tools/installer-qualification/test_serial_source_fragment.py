@@ -41,6 +41,7 @@ class SerialSourceFragment(unittest.TestCase):
         source=(HERE/'screen-diagnostic.py').read_text();start=source.index('PUBLIC_LITERAL =');end=source.index('def classify_match(',start);source=source[:start]+source[end:]
         source=source.replace("public_candidate='unknown', public_candidate_sha256=None,\n        known_source_fragment='unknown')","public_candidate='unknown', public_candidate_sha256=None)",1)
         source=source.replace("    fragment = serial_source_fragment(m, match, phase, original, boundaries, removed)\n    result['known_source_fragment'] = fragment['candidate']\n",'',1)
+        source=source.replace("    result['source_context'] = serial_source_context(m, match, phase, original, boundaries, removed)\n",'',1)
         self.assertEqual(hashlib.sha256(source.encode()).hexdigest(),'94ce0fb0ca86ad83fb37c6c5867cae840dffd8569196260d290e8db3911649f2')
         self.assertEqual(hashlib.sha256((HERE.parent/'native-functional/screen-evidence.py').read_bytes()).hexdigest(),D.SCANNER_SHA256)
     def test_partial_diagnostic_still_omits_rejected_UART_and_stays_unqualified(self):

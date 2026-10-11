@@ -68,6 +68,64 @@ def serial_source_fragment(scanner, match, phase, original=None, boundaries=None
     return result
 
 
+# BEGIN SERIAL_SOURCE_CONTEXT_OBSERVATION
+# Official systemd v259, peeled commit 9ca433482f2281d71718718705ca8cd3bf562ad6,
+# src/shared/install.c: install_change_dump_success, "Removed '%s'." and
+# "Unit %s is masked, ignoring.". Whole upstream bytes/provenance are retained
+# in the Source fixture; these formats grant no privacy or runtime exemption.
+SERIAL_CONTEXT_PATHS = (
+    ('etc-getty-wants', '/etc/systemd/system/getty.target.wants/' + PUBLIC_LITERAL),
+    ('etc-system-unit', '/etc/systemd/system/' + PUBLIC_LITERAL),
+    ('run-system-unit', '/run/systemd/system/' + PUBLIC_LITERAL),
+    ('run-generator-getty-wants', '/run/systemd/generator/getty.target.wants/' + PUBLIC_LITERAL),
+    ('run-generator-early-getty-wants', '/run/systemd/generator.early/getty.target.wants/' + PUBLIC_LITERAL),
+    ('run-generator-late-getty-wants', '/run/systemd/generator.late/getty.target.wants/' + PUBLIC_LITERAL),
+)
+SERIAL_NEIGHBORS = {
+    ' ': 'ascii-space', '\t': 'ascii-tab', "'": 'ascii-single-quotation',
+    '"': 'ascii-double-quotation', '[': 'ascii-open-square', ']': 'ascii-close-square',
+    '(': 'ascii-open-parenthesis', ')': 'ascii-close-parenthesis',
+    '{': 'ascii-open-brace', '}': 'ascii-close-brace', ':': 'ascii-colon',
+    ';': 'ascii-semicolon', '.': 'ascii-period', '-': 'ascii-hyphen',
+    '/': 'ascii-slash', '\\': 'ascii-backslash', '\x1b': 'terminal-escape',
+}
+
+
+def serial_source_context(m, match, phase, original=None, boundaries=None, removed=None):
+    """Only exact whole public records and closed neighboring character classes."""
+    result = dict(whole_record='unknown', preceding='unknown', following='unknown',
+                  privacy_admitted=False, runtime_cause_proven=False)
+    fragment = serial_source_fragment(m, match, phase, original, boundaries, removed)
+    if fragment['candidate'] != PUBLIC_LABEL or not fragment['original_contiguous']:
+        return result
+    first, last = m.original_span(match.start(), match.end(), boundaries, removed)
+    # Find the original record without stripping escapes or allocating an
+    # unbounded private record. Unknown records never receive a hash or excerpt.
+    left = max(original.rfind('\n', 0, first), original.rfind('\r', 0, first)) + 1
+    candidates = [n for n in (original.find('\n', last), original.find('\r', last)) if n >= 0]
+    right = min(candidates) if candidates else len(original)
+    def neighbor(position):
+        if not left <= position < right:
+            return 'record-edge'
+        value = original[position]
+        return SERIAL_NEIGHBORS.get(value, 'ascii-alphanumeric' if value.isascii() and value.isalnum()
+                                    else 'other-ascii' if value.isascii() else 'non-ascii')
+    result['preceding'], result['following'] = neighbor(first - 1), neighbor(last)
+    if right - left > 4096:
+        return result
+    record = original[left:right]
+    # No timestamps, ANSI removal, arbitrary paths, suffixes or substitutions
+    # are accepted by this finite whole-record attestation.
+    for label, path in SERIAL_CONTEXT_PATHS:
+        if record == "Removed '" + path + "'.":
+            result['whole_record'] = 'official-install-unlink-' + label
+            return result
+    if record == 'Unit ' + PUBLIC_LITERAL + ' is masked, ignoring.':
+        result['whole_record'] = 'official-install-masked-serial-unit'
+    return result
+# END SERIAL_SOURCE_CONTEXT_OBSERVATION
+
+
 def classify_match(m, match, phase, original=None, boundaries=None, removed=None):
     result = dict(phase=phase if type(phase) is str and phase in m.EXTERNAL_RULE_PHASES else 'unknown',
         rule='unknown-rule', codepoints=None, bytes=None, unit_like=None,
@@ -76,6 +134,7 @@ def classify_match(m, match, phase, original=None, boundaries=None, removed=None
         known_source_fragment='unknown')
     fragment = serial_source_fragment(m, match, phase, original, boundaries, removed)
     result['known_source_fragment'] = fragment['candidate']
+    result['source_context'] = serial_source_context(m, match, phase, original, boundaries, removed)
     if type(match) is not re.Match or match.end() - match.start() > MAX_MATCH:
         return result
     value = match.group(0)
