@@ -15,7 +15,7 @@ StepPage {
     readonly property int apps: info.apps_installed !== undefined ? info.apps_installed : Wizard.appsInstalled
     readonly property string firstName: info.first_name || ""
     title: "Arctic Linux is ready"
-    lede: "Everything is installed, including " + apps + (apps === 1 ? " app" : " apps") + "." + (firstName !== "" ? " Welcome aboard, " + firstName + "." : "")
+    lede: "Arctic Linux is installed, with " + apps + (apps === 1 ? " app" : " apps") + " ready to use." + (firstName !== "" ? " Welcome aboard, " + firstName + "." : "")
     measure: 520
     showBack: false
     nextLabel: "Restart now"

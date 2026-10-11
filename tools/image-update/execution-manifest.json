@@ -1,22 +1,4 @@
 {
-  "ready": true,
-  "release_acceptance": false,
-  "image": {
-    "archive_bytes": 1930013330,
-    "archive_sha256": "07d60353230eccd0b077279cf6195d73dc6a57f61d9cba3c55503776a76be716",
-    "artifact_id": 11664120624,
-    "bytes": 1929826304,
-    "name": "Arctic-Linux-1.2-candidate-38032256030-1-x86_64.iso",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "1695aa2af6ec0da618e87c5387a03f44752121111f0bbe6900699d9549b40994",
-    "run_id": 38032256030,
-    "sha256": "0ab25cc921873ba8750042a6265b6a9e42e669cd78a08d6621c140fd18468609",
-    "source_sha": "bc0521136520daaa221e815822e88ffc44107957"
-  },
-  "stable": {
-    "source_sha": "d997d11d89f44e3f967065b0e97b496cd3d48fef",
-    "run_id": 38085502181
-  },
   "execution_files": {
     ".github/workflows/image-update-20261008.yml": "427e7311a4e4c4d748eff563b9b27667f8618d6c6047c6503d2ebd0e711ff4b9",
     "tools/image-update/guard.py": "ac469cfb3df10f7fe3cf3ececcc790ccf3b3be2acb44a9f2ca9d7dea6f9ac185",
@@ -24,12 +6,30 @@
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/screen-evidence.py": "0632c2dd5f561df19235a90693d7d2494c8843485d11fccb8af1f7b9dd1ffdd0",
+    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
     "tools/nix-acceptance/guest.py": "fc172e0d6051d058eb9594c2421eae42283bf8fc61cf6fe23fd666df955047bb",
     "tools/performance/compose-nix-probe.py": "153df2c42e8af09e42ab9de9d1a3b580b36391ba34c9547938b54b3d0985f3c0",
-    "tools/performance/guest.py": "f8e8e9d2cc7900607111f98d51c5071b09e2434aedb6eda9a000f3badd45c57c",
+    "tools/performance/guest.py": "4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5",
     "tools/performance/offline-update-boot.py": "9b16c14adbd1129a2bfe01a44c7157f695c68a30956d19c865e8dc66d5d01b09",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
+  },
+  "image": {
+    "archive_bytes": 1929907101,
+    "archive_sha256": "3a8132aa4578fdb62b2aa1e3bf5c340229f1a483678d03ddf2c565fb39afadcd",
+    "artifact_id": 11689591362,
+    "bytes": 1929719808,
+    "name": "Arctic-Linux-1.2-candidate-38102474066-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "3034ea88d4ba1d1e434942f90c42b8057d3667ad2e7f6ee739b895ebdfc86d1d",
+    "run_id": 38102474066,
+    "sha256": "807eaaa64ab8480ec2b18bc8434fd5e37d82c41b73a3e0a6f002c35d152ba54c",
+    "source_sha": "326690f173d4dc4f049f43e046c8380e66825a07"
+  },
+  "ready": true,
+  "release_acceptance": false,
+  "stable": {
+    "run_id": 38103434313,
+    "source_sha": "1a5c3cb0dc6783fc088b40e414fa7c766df99449"
   }
 }

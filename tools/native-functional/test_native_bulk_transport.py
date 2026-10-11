@@ -29,6 +29,21 @@ BOOT='11111111-2222-4333-8444-555555555555'
 def sha(data):return hashlib.sha256(data).hexdigest()
 def line(prefix,value):return prefix+' '+json.dumps(value,sort_keys=True)+'\n'
 
+def restore_native_bulk_driver(driver):
+    """Strict test-only inverse of the three accepted Native bulk additions."""
+    additions = [
+        '    # The original Native fixture alone gets a second, output-only bulk port.\n    # BEGIN/report/END and physical controllers stay on their original UART.\n    if E.get("NATIVE_PHYSICAL_FIXTURE") == "1":\n        if E.get("NATIVE_AUDIO_FIXTURE") != "1" or not E.get("GUEST_CHECK") or E.get("NATIVE_LAUNCHER_FIXTURE") != "1":\n            raise RuntimeError("Invalid original native bulk fixture")\n        native_path = f"{out}/native-evidence-{name}.log".replace(",", ",,")\n        argv += ["-chardev", f"file,id=native_evidence,path={native_path}",\n                 "-device", "virtserialport,bus=taskbar_serial.0,chardev=native_evidence,name=arctic-native-evidence"]\n',
+        'def record_native_stop(vm, name, started, limit, marker):\n    # Failure-only observation from this owned QEMU; no raw stderr or new gate.\n    if E.get("NATIVE_PHYSICAL_FIXTURE") != "1" or E.get("NATIVE_TASKBAR_FIXTURE") != "1":\n        return\n    import json\n    status=vm.proc.poll()\n    elapsed=max(0,time.time()-started)\n    reason="process-exited" if status is not None else "deadline-expired" if elapsed>=limit else "exit-marker-missing"\n    value=dict(schema="arctic-native-harness-stop-v1",phase=name,qemu_returncode=status,\n               elapsed_seconds=elapsed,deadline_seconds=limit,deadline_reached=elapsed>=limit,\n               exit_marker_present=marker is not None,reason=reason,release_acceptance=False)\n    try:\n        fd=os.open(f"{out}/native-stop-{name}.json",os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)\n        with os.fdopen(fd,"w") as stream:stream.write(json.dumps(value,sort_keys=True)+"\\n")\n    except BaseException:\n        pass  # A secondary diagnostic error cannot replace the original failure.\n\n',
+        '            record_native_stop(vm,"install",t,install_timeout,rc)\n',
+    ]
+    for addition in additions:
+        if driver.count(addition) != 1:
+            raise AssertionError('Native bulk rollback requires one exact addition')
+        driver = driver.replace(addition, '', 1)
+    return driver
+
+
+
 def fixture(stage='live',data=b'synthetic original evidence'):
     begin=dict(stage=stage,native_source_sha256=E.NATIVE_SOURCE_SHA,checker_sha256=E.CHECKERS['native-functional'][1],release_acceptance=False)
     proof=dict(begin,boot_id=BOOT)
@@ -53,6 +68,20 @@ def refooter(rows):
 
 
 class BulkTransportControls(unittest.TestCase):
+    def test_bulk_driver_rollback_is_exact_and_rejects_mutated_additions(self):
+        shell = (HERE.parents[1] / 'tools/test-install.sh').read_text()
+        driver = shell.split("DRIVER <<'PY' || true\n", 1)[1].split('\nPY\n', 1)[0]
+        restored = restore_native_bulk_driver(driver)
+        original = shell.replace(driver, restored, 1)
+        self.assertEqual(sha(original.encode()), 'e8e5e7e3db092c03d1354fc46262dfafcb3cbecc6527138ee9896ac69d4c7d85')
+        for before, after in [('name=arctic-native-evidence', 'name=arctic-native-evidence-mutated'),
+                              ('def record_native_stop(', 'def record_native_stop_mutated('),
+                              ('            record_native_stop(vm,"install",t,install_timeout,rc)\n', '')]:
+            with self.subTest(mutation=before):
+                self.assertEqual(driver.count(before), 1)
+                with self.assertRaises(AssertionError):
+                    restore_native_bulk_driver(driver.replace(before, after, 1))
+
     def test_missing_port_and_secondary_close_error_preserve_primary_no_fallback(self):
         _,_,begin,proof,_=fixture()
         manifest=dict(schema='arctic-native-evidence-v1',stage='live',files=[],bytes=0,evidence_root=None)

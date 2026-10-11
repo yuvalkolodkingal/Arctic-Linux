@@ -71,9 +71,14 @@ class PublicConfigfsControls(unittest.TestCase):
             self.rejected(raw)
 
     def test_other_public_units_and_unknown_emails_retain_original_rejection(self):
+        self.assertEqual(S.ZRAM_UNIT, 'systemd-zram-setup@zram0.service')
         for literal, _ in S.EXTERNAL_EMAIL_CANDIDATES[1:]:
             with self.subTest(literal=literal):
-                self.rejected(literal.encode())
+                if literal in ('modprobe@fuse.service', S.ZRAM_UNIT):
+                    public = literal.encode()
+                    self.assertIs(S.external_text(public), public)
+                else:
+                    self.rejected(literal.encode())
         self.rejected(b'private@example.invalid')
 
     def test_same_full_match_and_all_other_private_rules_remain_fatal(self):

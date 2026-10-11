@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
+  "native_source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
   "files": {
-    "native_smoke.py": "51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532",
-    "guest-check-native-v6.py": "aab4323815e239b5debeccf93c4b73f727cd9ed54715f519b8bb1e99915a1d78",
+    "native_smoke.py": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
+    "guest-check-native-v6.py": "e9135f35df4fc3c39ff825e2e37bee253158623b5a9a81cbf841db1f8df7a93b",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -31,8 +31,10 @@
     "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
     "test_native_protocol_diagnostics.py": "c9435541f95460131e047866256ce105705dce0e6dc230d0bcbf1a4bf37fc114",
     "test_renderer_trials.py": "30df3e5d8d07f73075c1be8d38008af836667d7e5bdaaafe780aedfa8d655133",
-    "test_native_capture_controls.py": "884d01f7ad7de8a6551ab6abdd25c46209c526bcfc78508fe7a809fc3b3723ae",
-    "test_native_bulk_transport.py": "eceb2e8885c223ab47e86a938c89d06d0b04cb199d2b52462bc172ba3f083665"
+    "test_native_capture_controls.py": "869ad0785fd8fb981d618aed1d3cd0845ba0a52d893f1bc7e99d8b6eb735c1ef",
+    "test_native_bulk_transport.py": "5da5e45a6989e64e36ff2f0b2bb650550d5b3761e252e432b1bafac0f9984a42",
+    "test_native_public_evidence.py": "6d82d955b67b613e9ebd891bbbd49288598eec15e2a76ac5ed4e619dbeaa1ed0",
+    "test_controls_state_trials.py": "6d9fe7db865cba02788e627448c0f01276fd66f9bf7349083bfdfc976077ec74"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {
@@ -58,7 +60,8 @@
       "gskdebugprivate.h": "c7b08473062632e550d884a8287afbbdce00c0cf0dd2af45d86e2004c682ffb5",
       "gskdebug.c": "00d934fc7bec46a17be298144cebbb7cb5e978b8edab768caa81819382d0e5cc",
       "gdkdebugprivate.h": "96fbd2e0f5ef8a99085bfc8f6bb73046fafbf420219ef35178e562448e990b0c"
-    }
+    },
+    "retained_definition_not_invoked_from_primary": true
   },
   "capture_precondition": {
     "scope": "owned static reference player and subordinate same-fixture trials only",
@@ -124,5 +127,47 @@
       "records"
     ],
     "wire_bytes_limit": 33554432
+  },
+  "public_evidence_export": {
+    "scope": "finite artifacts written by the pinned Native audit; exact four isolated HOME/XDG profile directories remain private",
+    "private_profile_directories": [
+      "home",
+      "config",
+      "data",
+      "cache"
+    ],
+    "private_bytes_modified": false,
+    "durable_private_host_copy": false,
+    "private_retention": "existing owned guest temporary root until poweroff",
+    "unknown_admitted_suffix_outside_public_inventory": "export failure",
+    "native_runtime_and_acceptance_validators_unchanged": false,
+    "file_count_limit": 128,
+    "file_bytes_limit": 4194304,
+    "aggregate_bytes_limit": 16777216,
+    "release_acceptance": false,
+    "acceptance_validators_unchanged": true
+  },
+  "controls_state_trials": {
+    "trigger": "original static oracle unmatched only; replaces the optional default/gl invocation",
+    "ordered_interventions": [
+      "private show-controls true to false",
+      "private show-controls false to false"
+    ],
+    "same_default_launcher_flags": [
+      "env -u GSK_RENDERER",
+      "GSK_DEBUG=renderer",
+      "WAYLAND_DEBUG=client"
+    ],
+    "original_primary_failure_and_overall_FAIL_preserved": true,
+    "same_fixture_oracle_settle_seconds": 0.5,
+    "diagnostic_seconds_each": 120,
+    "private_keyfile_backend_only": true,
+    "process_bound_initial_and_final_readback_required": true,
+    "original_and_ordered_shared_config_cache_history_confound": true,
+    "primary_GSK_environment_not_fully_attested": true,
+    "video_widget_or_framebuffer_attested": false,
+    "three_optional_public_slots_replaced_not_added": true,
+    "release_acceptance": false,
+    "rendering_cause_proven": false
   }
 }

@@ -131,6 +131,9 @@ class LegacyAppidControls(unittest.TestCase):
 
     def test_exact_parent_whole_byte_rollback_reproduces_string_predicate_rejection(self):
         data = (ROOT / 'tools/performance/guest.py').read_bytes()
+        declared_tuple = b"appids=tuple(app['appids'])"
+        self.assertEqual(data.count(declared_tuple), 2)
+        data = data.replace(declared_tuple, b"appids=list(app['appids'])")
         old = b'startup(prefix, command, pattern, observations=bounds)'
         new = b'startup(prefix, command, (pattern,), observations=bounds)'
         self.assertEqual(data.count(new), 1)

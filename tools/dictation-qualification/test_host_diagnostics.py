@@ -157,7 +157,7 @@ class HostDiagnostics(unittest.TestCase):
                 shot=lambda *a:None, alive=lambda:next(alive),
                 proc=SimpleNamespace(poll=lambda:17 if dead else None))
             serial_has = lambda path, marker: marker in ('live session mode:', 'ARCTIC-TEST-STARTED')
-            env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage', 'dictation_launch_desktop', 'dictation_acquire_vm'}, dict(E={'GUEST_CHECK':'fixture'},
+            env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage', 'dictation_launch_desktop', 'dictation_acquire_vm', 'record_native_stop'}, dict(E={'GUEST_CHECK':'fixture'},
                 taskbar_display_module=None, vmtest=SimpleNamespace(VM=lambda *a:vm,
                     serial_has=serial_has, serial_value=lambda *a:None),
                 time=SimpleNamespace(time=lambda:next(ticks), sleep=lambda seconds:None),
