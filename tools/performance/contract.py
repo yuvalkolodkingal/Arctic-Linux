@@ -43,24 +43,62 @@ def same(left, right):
         right, sort_keys=True, separators=(',', ':'), allow_nan=False)
 
 
-def observer_hashes_from_sources(guest_bytes, causal_bytes):
-    """Reconstruct the pinned composer's exact output, without executing sources."""
+FAILURE_OBSERVATION_HELPER = '''import builtins,json,sys,types
+def install(roots,store,source):
+ old=sys.excepthook
+ names="RuntimeError TypeError NameError ValueError AttributeError KeyError IndexError AssertionError OSError FileNotFoundError PermissionError TimeoutError ProcessLookupError InterruptedError EOFError ZeroDivisionError OverflowError MemoryError KeyboardInterrupt".split()
+ classes=tuple((getattr(builtins,n),n) for n in names)+((store,"StoreProofError"),)
+ def hook(kind,error,original):
+  try:
+   label=next((n for c,n in classes if type(error) is c and kind is c),"unsupported")
+   domain,site,phase,relation="none","none","unavailable","none"
+   tb=original;count=0;selected=0
+   while type(tb) is types.TracebackType and count<128:
+    count+=1
+    for tag,root in roots:
+     pending=[root]
+     while pending:
+      code=pending.pop()
+      if tb.tb_frame.f_code is code and any(a<=tb.tb_lasti<b and line==tb.tb_lineno for a,b,line in code.co_lines()):
+       domain,site,phase,selected=tag,tag+"_"+str(tb.tb_lineno),code.co_name,count
+      pending.extend(c for c in code.co_consts if type(c) is types.CodeType)
+    tb=tb.tb_next
+   if tb is not None:domain,site,phase,selected="none","none","unavailable",0
+   relation=("leaf" if selected==count else "ancestor") if selected else "none"
+   record={"schema":"arctic-loaded-failure-observation-v1","exception_class":label,"domain":domain,"site":site,"phase":phase,"relation":relation,"source_sha256":source}
+   print("ARCTIC-PERFORMANCE "+json.dumps({"stage":"installed","check":"failure_observation","value":record},sort_keys=True,separators=(",",":")),flush=True)
+  except BaseException:pass
+  old(kind,error,original)
+ sys.excepthook=hook
+'''
+
+
+def frozen_observer_bytes(guest_bytes, causal_bytes):
+    """Compose pinned sources; the fail-only hook retains the original entry line."""
     source, causal = guest_bytes.decode('utf-8'), causal_bytes.decode('utf-8')
     require('\r' not in source and '\r' not in causal, 'Observer sources must use LF newlines')
     combined = digest(guest_bytes + b'\0' + causal_bytes)
-    frozen = ('#!/usr/bin/env python3\nimport sys, types\n'
+    return ('#!/usr/bin/env python3\nimport sys, types; _failure={}; '
+        f'exec({FAILURE_OBSERVATION_HELPER!r}, _failure)\n'
         'causal = types.ModuleType("arctic_performance_causal")\n'
         'causal.__file__ = __file__\n'
         'sys.modules[causal.__name__] = causal\n'
-        f'exec(compile({causal!r}, __file__, "exec"), causal.__dict__)\n'
+        f'_causal_code=compile({causal!r}, __file__, "exec"); exec(_causal_code, causal.__dict__)\n'
         'measurement = {"__name__": "arctic_measurement", "__file__": __file__}\n'
-        f'exec(compile({source!r}, __file__, "exec"), measurement)\n'
+        f'_guest_code=compile({source!r}, __file__, "exec"); exec(_guest_code, measurement)\n'
         'if sys.argv[1] == "installed":\n'
-        f'    measurement["emit"]("observer_source_sha256", {combined!r})\n'
+        f'    measurement["emit"]("observer_source_sha256", {combined!r}); '
+        '_failure["install"]((("causal",_causal_code),("guest",_guest_code)), '
+        f'causal.__dict__["StoreProofError"], {combined!r})\n'
         '    measurement["main"](preconditioned=True, causal_precision=True)\n'
         'else:\n'
         '    print("ARCTIC-PERFORMANCE-SKIPPED: live stage; installed comparison only", flush=True)\n').encode()
-    return dict(source_sha256=combined, frozen_sha256=digest(frozen))
+
+
+def observer_hashes_from_sources(guest_bytes, causal_bytes):
+    """Reconstruct the pinned composer's exact output, without executing sources."""
+    return dict(source_sha256=digest(guest_bytes + b'\0' + causal_bytes),
+        frozen_sha256=digest(frozen_observer_bytes(guest_bytes, causal_bytes)))
 
 
 def observer_hashes(root):

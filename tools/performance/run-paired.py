@@ -54,8 +54,12 @@ def failure_phase_summary(work, screen_failure):
                 exception_class='none', format='none'),
             # colored-trace-only-begin
             colored_traceback=dict(reason='not_observed', code='none', exception_class='none',
-                frames='unavailable', candidates='unavailable', format='none')),
+                frames='unavailable', candidates='unavailable', format='none'),
             # colored-trace-only-end
+            # loaded-failure-only-begin
+            loaded_failure=dict(status='unavailable', exception_class='none', domain='none',
+                site='none', phase='unavailable', relation='none')),
+            # loaded-failure-only-end
         # envelope-only-end
         guest_failure=dict(status='unavailable', code='none', exception_class='none',
             last_observer_phase='unavailable'))
@@ -272,6 +276,58 @@ def failure_phase_summary(work, screen_failure):
         envelope['counts']['admitted_observer_records'] = envelope_count(records) if valid else 'unavailable'
         envelope['last_observer_phase'] = phase if valid and records == 1 else 'unavailable'
     # envelope-only-end
+    # loaded-failure-only-begin
+    def envelope_loaded_failure(body, observer, scopes):
+        """Source-bound observations only; never cause or measurement acceptance."""
+        out = result['guest_envelope']['loaded_failure']
+        candidates = []
+        observer_positions = []
+        for position, line in enumerate(body):
+            if not line.startswith('ARCTIC-PERFORMANCE ') or len(line.encode()) > 4096:
+                continue
+            record = value(line[len('ARCTIC-PERFORMANCE '):])
+            if type(record) is dict:
+                if record.get('check') == 'failure_observation':
+                    candidates.append((position, record))
+                elif record.get('check') == 'observer_source_sha256':
+                    observer_positions.append(position)
+        if not candidates:
+            return
+        if len(candidates) != 1:
+            out['status'] = 'ambiguous'
+            return
+        position, record = candidates[0]
+        observation = record.get('value')
+        classes = set(('RuntimeError TypeError NameError ValueError AttributeError KeyError IndexError '
+            'AssertionError OSError FileNotFoundError PermissionError TimeoutError ProcessLookupError '
+            'InterruptedError EOFError ZeroDivisionError OverflowError MemoryError KeyboardInterrupt '
+            'StoreProofError unsupported').split())
+        if (type(observation) is not dict or set(record) != {'stage', 'check', 'value'}
+                or record['stage'] != 'installed' or set(observation) != {'schema', 'exception_class',
+                    'domain', 'site', 'phase', 'relation', 'source_sha256'}
+                or any(type(item) is not str for item in observation.values())
+                or observation['schema'] != 'arctic-loaded-failure-observation-v1'
+                or observation['source_sha256'] != observer['source_sha256']
+                or observation['exception_class'] not in classes
+                or result['guest_envelope']['counts']['admitted_observer_records'] != 'one'
+                or len(observer_positions) != 1 or observer_positions[0] >= position):
+            out['status'] = 'invalid'
+            return
+        domain, site, phase, relation = (observation[k] for k in ('domain', 'site', 'phase', 'relation'))
+        if domain == 'none' and (site, phase, relation) == ('none', 'unavailable', 'none'):
+            status = 'class_observed'
+        elif (domain in {'guest', 'causal'} and relation in {'leaf', 'ancestor'}
+                and re.fullmatch(domain + '_[1-9][0-9]{0,3}', site)
+                and any(s['source'] == domain and s['function'] == phase
+                    and int(site.split('_')[1]) in s['sites'] for s in scopes)):
+            status = 'source_code_observed'
+        else:
+            out['status'] = 'invalid'
+            return
+        out.update(status=status, exception_class=observation['exception_class'],
+            domain=domain, site=site, phase=phase, relation=relation)
+
+    # loaded-failure-only-end
     def guest_failure(content, state, context):
         # Source-bound traceback shape is a diagnostic observation, never
         # authenticated runtime acceptance. All output strings are fixed here.
@@ -282,7 +338,7 @@ def failure_phase_summary(work, screen_failure):
         pins = dict(guest='4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5',
             causal='2bc983a29c15e5c24c5f9c03fb5a640003dcf5bc95d9672f3622142f59545161')
         observer = dict(source_sha256='9d3ee35fc81c4550acb4247e56bf70390714d8bdd91efc6df76f838b1018306c',
-            frozen_sha256='fbc6648c165470b9a1aa8cdb0831bc50b3f3e8565953653b32e42eaa614d8cb4',
+            frozen_sha256='ca667dc850db8483e4066d45ec39f118aae5be3ebbe777c7d1ed9297b4c4bb1b',
             comparator_sha256='cde38b23d8fcad896fffd4983081aa6739f9b9af1dc7246562b3d6cf308528ed')
         if result['smoke_exit'] != 'nonzero':
             envelope['reason'] = 'smoke_not_nonzero'  # envelope-only
@@ -303,6 +359,7 @@ def failure_phase_summary(work, screen_failure):
             return dict(unknown, status='source_mismatch')
         inventory = []
         source_frames = []  # colored-trace-only # envelope-only
+        loaded_scopes = []  # loaded-failure-only
         try:
             if os.fstat(source_root).st_uid != os.geteuid():
                 envelope['reason'] = 'source_directory_owner'  # envelope-only
@@ -313,6 +370,20 @@ def failure_phase_summary(work, screen_failure):
                     envelope['reason'] = 'source_blob_mismatch'  # envelope-only
                     return dict(unknown, status='source_mismatch')
                 tree = ast.parse(raw)
+                # loaded-failure-only-begin
+                executable_sites = {line for node in ast.walk(tree)
+                    if isinstance(node, (ast.Raise, ast.Call, ast.Subscript, ast.Attribute, ast.BinOp,
+                        ast.UnaryOp, ast.Compare, ast.Name, ast.Assert))
+                    for line in range(node.lineno, node.end_lineno + 1)}
+                loaded_scopes.extend(dict(source=name, function=node.name,
+                    sites=executable_sites & set(range(node.lineno, node.end_lineno + 1)))
+                    for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
+                expression_names = {ast.Lambda: '<lambda>', ast.ListComp: '<listcomp>',
+                    ast.DictComp: '<dictcomp>', ast.SetComp: '<setcomp>', ast.GeneratorExp: '<genexpr>'}
+                loaded_scopes.extend(dict(source=name, function=expression_names[type(node)],
+                    sites=executable_sites & set(range(node.lineno, node.end_lineno + 1)))
+                    for node in ast.walk(tree) if type(node) in expression_names)
+                # loaded-failure-only-end
                 source_frames.extend(dict(source=name, function=node.name, start=node.lineno,  # colored-trace-only # envelope-only
                     end=node.end_lineno, lines=raw.decode().splitlines()) for node in ast.walk(tree)  # colored-trace-only # envelope-only
                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))  # colored-trace-only # envelope-only
@@ -384,6 +455,7 @@ def failure_phase_summary(work, screen_failure):
         envelope_phase_prefix(body, traces, observer)  # envelope-only
         envelope_exception_shape(body, traces)  # exception-shape-only # envelope-only
         envelope_colored_traceback(body, traces, inventory, source_frames)  # colored-trace-only # envelope-only
+        envelope_loaded_failure(body, observer, loaded_scopes)  # loaded-failure-only
         if len(traces) > 1 or len(exceptions) > 1:
             envelope['reason'] = 'traceback_multiplicity'  # envelope-only
             return dict(unknown, status='ambiguous')

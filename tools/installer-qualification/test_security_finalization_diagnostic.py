@@ -3,11 +3,14 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 HERE=Path(__file__).resolve().parent
@@ -55,34 +58,89 @@ class SecurityFinalizationDiagnostic(unittest.TestCase):
         if argv==['auditctl','-s']:return subprocess.CompletedProcess(argv,0,b'enabled 0\nlost 0\n',b'')
         return subprocess.CompletedProcess(argv,code,out,err)
 
+    @contextlib.contextmanager
+    def journal(self, interval, program):
+        """Exact journal argv routed to one bounded, owned synthetic child."""
+        real = subprocess.Popen
+        children = []
+        expected = ['journalctl', '-b', '--no-pager', '--after-cursor', interval.cursor,
+                    '-o', 'json', '--quiet']
+        def acquire(argv, **kwargs):
+            self.assertEqual(argv, expected)
+            self.assertEqual(kwargs, dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                bufsize=0, close_fds=True, start_new_session=True))
+            child = real([sys.executable, '-c', program], **kwargs)
+            children.append(child)
+            return child
+        try:
+            with mock.patch.object(N.subprocess, 'Popen', side_effect=acquire):
+                yield
+        finally:
+            try:
+                self.assertEqual(len(children), 1)
+                for child in children:
+                    self.assertIsNotNone(child.returncode, 'Owned journal child was not reaped')
+                    self.assertTrue(child.stdout.closed and child.stderr.closed,
+                                    'Owned journal pipes remained open')
+                    with self.assertRaises(ChildProcessError):
+                        os.waitpid(child.pid, os.WNOHANG)
+            finally:
+                # Only this fixture's known child is eligible for fallback cleanup.
+                for child in children:
+                    if child.returncode is None:
+                        try: os.killpg(child.pid, signal.SIGKILL)
+                        except ProcessLookupError: pass
+                        child.wait(timeout=3)
+                    for stream in (child.stdout, child.stderr):
+                        if stream is not None: stream.close()
+
     def test_actual_full_finish_command_bound_and_exit_guard_source(self):
         with tempfile.TemporaryDirectory() as temp:
             interval=self.interval(Path(temp)/'absent-audit')
-            for out,code,guard in [(b'x'*(N.LIMIT+1),0,'guard-001'),(b'',7,'guard-002')]:
-                with mock.patch.object(N.subprocess,'run',side_effect=lambda argv,**kwargs:self.response(argv,code,out,b'PRIVATE_STDERR_SENTINEL')):
+            private=b'PRIVATE_STDERR_SENTINEL'
+            cases=[("import sys; sys.stderr.buffer.write(b'x'*"+str(N.LIMIT+1)+"); sys.stderr.flush()",
+                    'guard-013', None, N.LIMIT+1),
+                   ("import sys; sys.stderr.buffer.write("+repr(private)+"); sys.stderr.flush(); raise SystemExit(7)",
+                    'guard-019', 7, len(private))]
+            for program,guard,code,stderr_bytes in cases:
+                with self.subTest(guard=guard), self.journal(interval,program), mock.patch.object(
+                        N.subprocess,'run',side_effect=lambda argv,**kwargs:self.response(argv)):
                     error=self.raised(interval.finish)
-                row=G.security_finalization_diagnostic(error,N)
-                self.assertEqual(row['guard'],guard);self.assertEqual(row['command'],'journal-interval');self.assertEqual(row['exit_code'],code)
-                self.assertEqual(row['stdout_bytes'],len(out));self.assertEqual(row['stderr_bytes'],len(b'PRIVATE_STDERR_SENTINEL'))
-                mask=G.masked_security_finalization_error(error,N);self.assertNotIn('PRIVATE_',mask);self.assertNotIn('journalctl',mask)
-                self.assertIn('installer-reported-active-primary-security-command-journal-interval',R.primary_reported_codes({'errors':[mask]},True))
+                    row=G.security_finalization_diagnostic(error,N)
+                    self.assertEqual(row['guard'],guard);self.assertEqual(row['command'],'journal-interval')
+                    self.assertEqual(row['exit_code'],code);self.assertEqual(row['stdout_bytes'],0)
+                    self.assertEqual(row['stderr_bytes'],stderr_bytes)
+                    mask=G.masked_security_finalization_error(error,N)
+                    self.assertNotIn('PRIVATE_',mask);self.assertNotIn('journalctl',mask)
+                    self.assertIn('installer-reported-active-primary-security-command-journal-interval',
+                                  R.primary_reported_codes({'errors':[mask]},True))
 
     def test_actual_full_finish_timeout_no_made_up_exit(self):
         with tempfile.TemporaryDirectory() as temp:
-            interval=self.interval(Path(temp)/'absent-audit');primary=subprocess.TimeoutExpired(['PRIVATE_ARG'],60,output=b'PRIVATE_OUTPUT')
-            def run(argv,**kwargs):
-                if argv[0]=='journalctl':raise primary
-                return self.response(argv)
-            with mock.patch.object(N.subprocess,'run',side_effect=run):error=self.raised(interval.finish)
-            self.assertIs(error,primary);row=G.security_finalization_diagnostic(error,N)
-            self.assertEqual(row['error_class'],'timeout');self.assertEqual(row['step'],'journal-query');self.assertEqual(row['command'],'journal-interval')
-            self.assertIsNone(row['exit_code']);self.assertIsNone(row['stdout_bytes']);self.assertEqual(row['guard'],'unknown')
+            interval=self.interval(Path(temp)/'absent-audit')
+            # Advance only the helper's clock; subprocess cleanup retains real time.
+            clock=iter((0.,61.))
+            with self.journal(interval,'import time; time.sleep(30)'), mock.patch.object(
+                    N.subprocess,'run',side_effect=lambda argv,**kwargs:self.response(argv)), mock.patch.object(
+                    N,'time',SimpleNamespace(monotonic=lambda:next(clock))):
+                error=self.raised(interval.finish)
+                self.assertIs(type(error),subprocess.TimeoutExpired)
+                self.assertEqual(error.timeout,60)
+                self.assertEqual(error.cmd,['journalctl','-b','--no-pager','--after-cursor',
+                    interval.cursor,'-o','json','--quiet'])
+                row=G.security_finalization_diagnostic(error,N)
+                self.assertEqual(row['error_class'],'timeout');self.assertEqual(row['step'],'journal-query')
+                self.assertEqual(row['command'],'journal-interval');self.assertIsNone(row['exit_code'])
+                self.assertEqual(row['stdout_bytes'],0);self.assertEqual(row['stderr_bytes'],0)
+                self.assertEqual(row['guard'],'unknown')
 
     def test_actual_audit_file_identity_and_status_guards(self):
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'audit';path.write_bytes(b'');interval=self.interval(path);st=path.stat();interval.audit_offset=(st.st_dev,st.st_ino+1,0)
-            with mock.patch.object(N.subprocess,'run',side_effect=lambda argv,**kwargs:self.response(argv)):error=self.raised(interval.finish)
-            self.assertEqual(G.security_finalization_diagnostic(error,N)['guard'],'guard-009')
+            with self.journal(interval,'pass'), mock.patch.object(N.subprocess,'run',
+                    side_effect=lambda argv,**kwargs:self.response(argv)):
+                error=self.raised(interval.finish)
+                self.assertEqual(G.security_finalization_diagnostic(error,N)['guard'],'guard-009')
         for data,guard in [('lost 0\n','guard-003'),('enabled 0\n','guard-004')]:
             error=self.raised(lambda:N.parse_audit_status(data));self.assertEqual(G.security_finalization_diagnostic(error,N)['guard'],guard)
 
