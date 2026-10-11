@@ -1,0 +1,17 @@
+{
+  "base": "4a95bc93108cda963a7c90a6ada8f515b35d36bd",
+  "body_hash_new": "1a0fd1dfb090a90f3672859db0b2658db114996fbda6f735640a81af809f14f2",
+  "body_hash_old": "528ee9b5eb7d40deddaa7c858b71ef1d7e02a0b9cd6fa62741314d33448fdf20",
+  "function_lines_and_source_failure_site_tables_unchanged": true,
+  "one_original_package_census_require_predicate_change": {
+    "new": " require(all(re.fullmatch(r'[A-Za-z0-9_.+\\-]+-[0-9]+:[A-Za-z0-9._^+~\\-]+\\.[A-Za-z0-9_]+',x) or re.fullmatch(r'gpg-pubkey-0:(?:[0-9a-f]{8}|[0-9a-f]{40})-[0-9a-f]{1,8}\\.\\(none\\)',x) for x in rows),'producer_package_shape')",
+    "old": " require(all(re.fullmatch(r'[A-Za-z0-9_.+\\-]+-[0-9]+:[A-Za-z0-9._^+~\\-]+\\.[A-Za-z0-9_]+',x) for x in rows),'producer_package_shape')"
+  },
+  "original_bytes": 25068,
+  "original_path": "tools/browser-accelerator-inner-failure-source/producer.py",
+  "original_sha256": "ffcd85e7066f1c272d2c98fca54c7ce969284e14ee8b5cc1a58757be12cb6d47",
+  "query_raw_bytes_sort_equality_timeouts_limits_sdk_builds_signature_trust_cleanup_unchanged": true,
+  "schema": "arctic-canonical-imported-key-census-inverse-v1",
+  "virtual_key_scope": "legacy8 or current publicly proved Fedora44 v4full40 fingerprint VERSION; uint32 creation-time release rendered lowercase unpadded hexadecimal1-8; missing ARCH exactly(none); no generalized absent architecture exemption",
+  "whole_inverse_only_predicate_and_derived_body_hash": true
+}

@@ -1,0 +1,24 @@
+{
+  "Source_only": true,
+  "actual_new_executable_namespace": null,
+  "actual_new_run": null,
+  "actual_new_workflow": null,
+  "actual_rejected_row_known": false,
+  "all_previous_executable_and_product_files_unchanged": true,
+  "base": "4a95bc93108cda963a7c90a6ada8f515b35d36bd",
+  "file_pins": {
+    "tools/browser-package-census-source/README.md": "843a018b2f66edc02a2cdb8b1c686554554146a0bbb503babd657a8353c6d4b0",
+    "tools/browser-package-census-source/producer.py": "80d40dca17bfe05d82499b6c8461a9b7e24612e6bf34a00590f4d0c01ec63dce",
+    "tools/browser-package-census-source/source-inverse.json": "8fceb151d1d0bd871319519c2a8332aef5a2809e567b758b118a8ad4bb11056d",
+    "tools/browser-package-census-source/test_source.py": "a7788d550935b79a64192b1c28fff4437f549e838539e8f634bb98ed05994f42"
+  },
+  "hosted_RPM6_runtime_frames_authenticated": false,
+  "original_producer": {
+    "bytes": 25068,
+    "path": "tools/browser-accelerator-inner-failure-source/producer.py",
+    "sha256": "ffcd85e7066f1c272d2c98fca54c7ce969284e14ee8b5cc1a58757be12cb6d47"
+  },
+  "product_build_performance_release_acceptance": false,
+  "ready": false,
+  "schema": "arctic-canonical-public-key-package-census-disabled-Source-v1"
+}
