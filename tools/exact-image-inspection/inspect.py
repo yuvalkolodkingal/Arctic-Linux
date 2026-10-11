@@ -36,6 +36,21 @@ FEDORA_BASE_ID = 'sha256:ccb55df1d2413428166d80b08aa37a4bdcb61a63d09fff6f8abc0d5
 EROFS_NEVRA = 'erofs-utils-1.9.4-1.fc44.x86_64'
 XZ_NEVRA = 'xz-libs-1:5.8.2-2.fc44.x86_64'
 WLROOTS_LIBRARY_PATH = r'/usr/lib64/libwlroots-0\.20\.so(?:\.[0-9]+)*'
+WAYLAND_LIBRARY_PATHS = {kind: r'/usr/lib64/libwayland-' + kind + r'\.so\.0(?:\.[0-9]+)*'
+                         for kind in ('server', 'client')}
+# Research-only baseline. This is the unchanged performance baseline, not an
+# exception to any candidate/producer size gate. Parts and the complete ISO
+# were authenticated in original retained baseline inspection 37988626533.
+BASELINE_RESEARCH = {
+    'name': 'Arctic-Linux-1.2-x86_64.iso', 'bytes': 2322073600,
+    'sha256': '054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f',
+    'release_id': 403366368, 'tag': 'v1.2.0',
+    'parts': [
+        {'suffix': '00', 'asset_id': 611480575, 'bytes': 1992294400,
+         'sha256': '325e2538a0ff18e235fabc12e191933114042c9fccc2983233a4d36307edc4d7'},
+        {'suffix': '01', 'asset_id': 611480574, 'bytes': 329779200,
+         'sha256': 'd8c6ac234f5962a18c131314e5b666211c00aaad36bc4244d3eabb3d4fbfe18a'}],
+    'scope': 'Static research only; no release, performance or profile admission'}
 READER = None
 OUTPUT = None
 ALLOWED = set()
@@ -388,7 +403,8 @@ def download_candidate(image, folder):
 
 
 def extract_selected(filesystem, selected, source, destination, provenance, deadline):
-    require((source in ('/usr/bin/mango', '/usr/lib/sysimage/rpm') or re.fullmatch(WLROOTS_LIBRARY_PATH, source))
+    require((source in ('/usr/bin/mango', '/usr/lib/sysimage/rpm') or re.fullmatch(WLROOTS_LIBRARY_PATH, source)
+             or any(re.fullmatch(pattern, source) for pattern in WAYLAND_LIBRARY_PATHS.values()))
             and re.fullmatch('[a-z0-9_-]+', destination), 'Unexpected filtered extraction path')
     remaining = deadline - time.monotonic()
     require(remaining > 30, 'Aggregate filtered extraction budget exceeded')
@@ -450,22 +466,108 @@ def rpm_identity(root, path, target, package, version):
             'verification_scope': 'This extracted ELF equals its image RPMDB digest; RPM signatures and other files are not verified'}
 
 
-def save_elf(label, path, max_size):
+def wayland_library_records(root, needed):
+    require(type(needed) is set and needed <= {'libwayland-server.so.0', 'libwayland-client.so.0'}
+            and 'libwayland-server.so.0' in needed, 'Expected bounded Wayland provider dependencies')
+    rows = rpm_query(root, ['-qa', '--qf', '%{NAME}\t%{VERSION}\t%{ARCH}\n']).splitlines()
+    matches = [row.split('\t') for row in rows if re.fullmatch(r'wayland-libs\t[0-9]+(?:\.[0-9]+){1,2}\tx86_64', row)]
+    require(len(matches) == 1, 'Exactly one actual x86_64 Wayland RPM is needed')
+    package, version, _ = matches[0]
+    files = rpm_query(root, ['-q', package, '--qf', '[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\n]']).splitlines()
+    result = []
+    for kind, pattern in WAYLAND_LIBRARY_PATHS.items():
+        if 'libwayland-' + kind + '.so.0' not in needed:
+            continue
+        libraries = [row.split('\t') for row in files
+            if re.fullmatch(pattern + r'\t[0-9a-f]{64}\t[0-9]{1,6}', row)
+            and stat.S_IFMT(int(row.rsplit('\t', 1)[1])) == stat.S_IFREG]
+        require(len(libraries) == 1, 'Exactly one actual regular required Wayland provider is needed')
+        result.append({'kind': kind, 'package': package, 'version': version, 'path': libraries[0][0]})
+    return result
+
+
+def dynamic_dependencies(path):
+    text = capture(['readelf', '-dW', str(path)], limit=256 * 1024)[1]
+    names = re.findall(r'\(NEEDED\).*Shared library: \[([^]\r\n]+)\]', text)
+    require(0 < len(names) <= 128 and len(names) == len(set(names))
+            and all(re.fullmatch(r'lib[A-Za-z0-9._+-]{1,128}', name) for name in names),
+            'Unexpected static dynamic dependency inventory')
+    return names
+
+
+def collect_wayland(filesystem, selected, root, mango, provenance, deadline, scope):
+    require(scope in {'candidate', 'baseline'}, 'Unexpected Wayland evidence scope')
+    dependencies = dynamic_dependencies(mango)
+    needed = set(dependencies) & {'libwayland-server.so.0', 'libwayland-client.so.0'}
+    require('libwayland-server.so.0' in needed, 'Mango lacks the required Wayland server dependency')
+    # Both bounded RPM-owned providers are retained: the client provider can
+    # also occur transitively through wlroots. Static dependency inventory does
+    # not establish which provider the live loader actually resolves.
+    records = wayland_library_records(root, {'libwayland-server.so.0', 'libwayland-client.so.0'})
+    provenance['wayland_dependencies'] = dependencies
+    provenance['wayland_providers'] = []
+    for record in records:
+        label = 'wayland-' + record['kind']
+        extract_selected(filesystem, selected, record['path'], label, provenance['filesystem'], deadline)
+        library = safe_regular(selected, label)
+        identity = rpm_identity(root, library, record['path'], record['package'], record['version'])
+        elf = save_elf(label, library, 2 * 1024 * 1024, scope=scope)
+        symbol_text = capture(['readelf', '-sW', str(library)], limit=2 * 1024 * 1024)[1]
+        symbols = sorted(set((int(value, 16), int(size)) for value, size in re.findall(
+            r'^\s*\d+:\s+([0-9a-fA-F]+)\s+([0-9]+)\s+FUNC\s+GLOBAL\s+DEFAULT\s+[0-9]+\s+wl_list_insert(?:@@?[A-Za-z0-9_.]+)?\s*$',
+            symbol_text, re.M)))
+        require(len(symbols) == 1 and 0 < symbols[0][1] <= 4096, 'Unique bounded wl_list_insert function required')
+        provenance['wayland_providers'].append({'kind': record['kind'], 'rpm': identity, 'elf': elf,
+            'wl_list_insert_symbol': {'value': symbols[0][0], 'bytes': symbols[0][1]},
+            'direct_mango_dependency': 'libwayland-' + record['kind'] + '.so.0' in needed,
+            'runtime_resolution': 'Not established; actual process mappings/callsite/provider proof required',
+            'profile_admitted': False})
+
+
+def download_baseline(folder):
+    folder.mkdir(mode=0o700)
+    expected = {BASELINE_RESEARCH['name'] + '.part' + part['suffix'] for part in BASELINE_RESEARCH['parts']}
+    command = ['gh', 'release', 'download', BASELINE_RESEARCH['tag'], '--repo', REPO, '--dir', str(folder)]
+    for name in sorted(expected):
+        command += ['--pattern', name]
+    capture(command, timeout=15 * 60, limit=64000)
+    require({entry.name for entry in folder.iterdir()} == expected, 'Original research baseline part inventory differs')
+    iso = folder / BASELINE_RESEARCH['name']
+    parts = []
+    with iso.open('xb') as target:
+        for part in BASELINE_RESEARCH['parts']:
+            path = safe_regular(folder, BASELINE_RESEARCH['name'] + '.part' + part['suffix'])
+            require(path.stat().st_size == part['bytes'] and sha(path) == part['sha256'],
+                    'Original research baseline part bytes differ')
+            parts.append({'name': path.name, 'original_release_asset_id': part['asset_id'], 'bytes': part['bytes'], 'sha256': part['sha256']})
+            with path.open('rb') as stream:
+                shutil.copyfileobj(stream, target, 8 * 1024 * 1024)
+            path.unlink()
+    require(iso.stat().st_size == BASELINE_RESEARCH['bytes'] and sha(iso) == BASELINE_RESEARCH['sha256'],
+            'Original immutable research baseline bytes differ')
+    return iso, {'image': {key: BASELINE_RESEARCH[key] for key in ('name', 'bytes', 'sha256')},
+        'release': {key: BASELINE_RESEARCH[key] for key in ('release_id', 'tag')}, 'original_parts': parts,
+        'scope': BASELINE_RESEARCH['scope'], 'performance_acceptance': False, 'release_acceptance': False}
+
+
+def save_elf(label, path, max_size, *, scope='candidate'):
+    require(scope in {'candidate', 'baseline'}, 'Unexpected static ELF evidence scope')
     raw = path.read_bytes()
     require(4096 <= len(raw) <= max_size and raw[:6] == b'\x7fELF\x02\x01'
             and struct.unpack_from('<H', raw, 18)[0] == 62, 'Expected bounded little-endian x86_64 ELF')
-    put('candidate/' + label + '.elf', raw)
+    put(scope + '/' + label + '.elf', raw)
     result = {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(), 'machine': 'x86_64',
               'sections': elf_sections(raw), 'profile_status': 'requires_independent_machine_code_and_abi_review'}
     for filename, argv in [('headers', ['readelf', '-hW', '-lW', '-SW', '-nW', '-dW', '-sW', str(path)]),
                            ('unwind', ['readelf', '--debug-dump=frames', '-W', str(path)]),
                            ('disassembly', ['objdump', '-d', '-w', str(path)])]:
         text = capture(argv, limit=12 * 1024 * 1024)[1]
-        put('candidate/' + label + '-' + filename + '.txt', text.encode())
+        put(scope + '/' + label + '-' + filename + '.txt', text.encode())
     return result
 
 
-def inspect_iso(iso, provenance, folder):
+def inspect_iso(iso, provenance, folder, *, scope='candidate'):
+    require(scope in {'candidate', 'baseline'}, 'Unexpected static image scope')
     # Data-only extraction: no mounts, loop devices, target execution or appliance.
     listing = capture(['xorriso', '-indev', str(iso), '-find', '/LiveOS', '-type', 'f', '-exec', 'echo', '--'],
                       limit=1024 * 1024)[1]
@@ -501,6 +603,12 @@ def inspect_iso(iso, provenance, folder):
     for entry in entries:
         shutil.copyfile(entry, db_target / entry.name)
         identity['selected_rpmdb'][entry.name] = {'bytes': entry.stat().st_size, 'sha256': sha(entry)}
+    if scope == 'baseline':
+        # No candidate Mango/wlroots version is assumed for the old baseline.
+        # Its unchanged whole ISO identity was checked before any extraction.
+        collect_wayland(filesystem, selected, root, mango, provenance, deadline, scope)
+        provenance['mango_sha256'] = sha(mango)
+        return
     package, library_target = library_record(root)
     extract_selected(filesystem, selected, library_target, 'wlroots', identity, deadline)
     library = safe_regular(selected, 'wlroots')
@@ -508,6 +616,7 @@ def inspect_iso(iso, provenance, folder):
     provenance['wlroots_rpm'] = rpm_identity(root, library, library_target, package, '0.20.2')
     provenance['mango_elf'] = save_elf('mango', mango, 4 * 1024 * 1024)
     provenance['wlroots_elf'] = save_elf('wlroots', library, 8 * 1024 * 1024)
+    collect_wayland(filesystem, selected, root, mango, provenance, deadline, scope)
     provenance['abi_review'] = {'status': 'pending_independent_review',
         'evidence': 'Exact complete ELF bytes, sections, dynamic symbols, dependencies, unwind and disassembly',
         'limitations': ['Compiled source-header structure offsets are not independently measured by this lane',
@@ -539,6 +648,14 @@ def main():
             provenance['source'] = source
             REPORT['images']['candidate'] = provenance
             inspect_iso(iso, provenance, folder)
+        # The complete candidate temporary ISO/rootfs/RPMDB is already removed
+        # before fetching baseline parts. Both are research-only static inputs.
+        require(shutil.disk_usage(os.environ['RUNNER_TEMP']).free > 8 * 1024**3, 'Insufficient hosted baseline temporary disk')
+        with tempfile.TemporaryDirectory(prefix='arctic-static-baseline-wayland-', dir=os.environ['RUNNER_TEMP']) as temp:
+            folder = Path(temp)
+            iso, provenance = download_baseline(folder / 'download')
+            REPORT['images']['baseline'] = provenance
+            inspect_iso(iso, provenance, folder, scope='baseline')
         REPORT['status'] = 'static_evidence_complete_pending_independent_review'
     except Exception as error:
         REPORT['failure'] = {'type': type(error).__name__,

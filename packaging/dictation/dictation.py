@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import select
 import signal
 import socket
@@ -154,7 +155,7 @@ def dependencies_ready(libraries=None, commands=None, profile=None):
     # Fedora library sonames may be symlinks; inspect their resolved, root-owned
     # targets, never a user PATH substitute. No subprocess or full model rehash
     # belongs in a frequently refreshed readiness check.
-    commands = [Path("/usr/bin/wtype"), Path("/usr/bin/wl-copy")] if commands is None else commands
+    commands = [Path("/usr/bin/wtype"), Path("/usr/bin/wl-copy"), Path("/usr/bin/pw-dump")] if commands is None else commands
     profile = desired_profile() if profile is None else profile
     paths = [*commands, *(profile["libraries"] if libraries is None else libraries)]
     for path in paths:
@@ -590,11 +591,211 @@ def lock_supervisor(generation, arguments):
         marker.unlink(missing_ok=True)
 
 
+
+INPUT_GRAPH_BYTES = 2 * 1024 * 1024
+INPUT_GRAPH_OBJECTS = 8192
+INPUT_QUERY_SECONDS = 1.5
+INPUT_QUERY_INTERVAL = 1.0
+INPUT_ROUTE_START_SECONDS = 3
+INPUT_UNKNOWN_SECONDS = 2
+
+
+def capture_routes(objects, pid, uid):
+    """Private server graph fingerprints; app metadata never establishes ownership."""
+    def number(value):
+        if type(value) is int and 0 <= value < 2**64:
+            return value
+        if type(value) is str and re.fullmatch(r"0|[1-9][0-9]{0,19}", value):
+            result = int(value)
+            return result if result < 2**64 else None
+        return None
+    if type(objects) is not list or len(objects) > INPUT_GRAPH_OBJECTS or type(pid) is not int or type(uid) is not int or pid <= 0 or uid <= 0:
+        return None
+    rows, clients, seen = {}, [], set()
+    for obj in objects:
+        if (type(obj) is not dict or any(type(k) is not str for k in obj) or type(obj.get("id")) is not int
+                or not 0 <= obj["id"] < 2**32 or obj["id"] in seen):
+            return None
+        seen.add(obj["id"])
+        kind, info = obj.get("type"), obj.get("info")
+        if type(kind) is not str:
+            return None
+        if kind not in ("PipeWire:Interface:Client", "PipeWire:Interface:Node", "PipeWire:Interface:Link"):
+            continue
+        props = info.get("props") if type(info) is dict and all(type(k) is str for k in info) else None
+        if type(props) is not dict or any(type(k) is not str for k in props) or number(props.get("object.serial")) is None:
+            return None
+        rows[obj["id"]] = (kind, info, props)
+        if (kind == "PipeWire:Interface:Client" and type(props.get("pipewire.protocol")) is str
+                and props["pipewire.protocol"] == "protocol-native"
+                and number(props.get("pipewire.sec.pid")) == pid and number(props.get("pipewire.sec.uid")) == uid):
+            clients.append(obj["id"])
+    if len(clients) > 1:
+        return None
+    if not clients:
+        return frozenset()
+    client = clients[0]
+    captures = {identity for identity, (kind, info, props) in rows.items()
+                if kind == "PipeWire:Interface:Node" and number(props.get("client.id")) == client
+                and type(props.get("media.class")) is str and props["media.class"] == "Stream/Input/Audio"
+                and ("application.process.id" not in props or number(props["application.process.id"]) == pid)
+                and ("application.process.uid" not in props or number(props["application.process.uid"]) == uid)}
+    result = set()
+    for identity, (kind, info, props) in rows.items():
+        if kind != "PipeWire:Interface:Link":
+            continue
+        source, capture = info.get("output-node-id"), info.get("input-node-id")
+        if type(source) is not int or type(capture) is not int or capture not in captures or source not in rows:
+            continue
+        source_kind, _info, source_props = rows[source]
+        if (source_kind != "PipeWire:Interface:Node" or type(source_props.get("media.class")) is not str
+                or source_props["media.class"] not in ("Audio/Source", "Audio/Source/Virtual")):
+            continue
+        result.add(tuple((key, number(rows[key][2]["object.serial"])) for key in (client, capture, source, identity)))
+    return frozenset(result)
+
+
+def audio_engine_identity(process, binary):
+    """Recheck the owned Popen, kernel UID/start time and pinned executable."""
+    try:
+        if process.poll() is not None or type(process.pid) is not int or process.pid <= 0:
+            return None
+        path = Path("/proc") / str(process.pid)
+        started = process_start(process.pid)
+        if not started or path.stat().st_uid != os.getuid() or (path / "exe").resolve(strict=True) != Path(binary).resolve(strict=True):
+            return None
+        if process.poll() is not None or process_start(process.pid) != started:
+            return None
+        return (process.pid, os.getuid(), started)
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+class RecordingInputWatch:
+    """One recording epoch; bounded private snapshots never contain audio or text.
+
+    A lost selected route ends this recording even if another source is present.
+    Reconnecting requires an explicit new recording. Unknown observation stops
+    safely with a separate error; it is never reported as confirmed device loss.
+    """
+    def __init__(self, process, binary, env):
+        self.process, self.binary = process, binary
+        self.env = env.copy()
+        self.identity = audio_engine_identity(process, binary)
+        self.stop = threading.Event()
+        self.lock = threading.Lock()
+        self.query = None
+        self.failure = ""
+        self.selected = None
+        self.thread = threading.Thread(target=self.watch, daemon=True)
+        self.thread.start()
+
+    def close(self):
+        self.stop.set()
+        with self.lock:
+            query = self.query
+            if query and query.poll() is None:
+                try:
+                    query.kill()
+                except ProcessLookupError:
+                    pass
+        # No join in the broker: cancel, lock and IPC remain responsive. Only this
+        # epoch's worker can reap its query, and its result is no longer consulted.
+
+    def snapshot(self):
+        query = None
+        try:
+            with self.lock:
+                if self.stop.is_set():
+                    return None
+                query = supervised(["/usr/bin/pw-dump"], env=self.env,
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                self.query = query
+            limit, deadline, raw = INPUT_GRAPH_BYTES, time.monotonic() + INPUT_QUERY_SECONDS, bytearray()
+            os.set_blocking(query.stdout.fileno(), False)
+            while not self.stop.is_set() and time.monotonic() < deadline:
+                readers, _, _ = select.select([query.stdout], [], [], 0.05)
+                if not readers:
+                    continue
+                chunk = os.read(query.stdout.fileno(), min(65536, limit + 1 - len(raw)))
+                if not chunk:
+                    if query.wait(timeout=0.1) != 0:
+                        return None
+                    def pairs(items):
+                        value = {}
+                        for key, item in items:
+                            if key in value:
+                                raise ValueError()
+                            value[key] = item
+                        return value
+                    objects = json.loads(raw, object_pairs_hook=pairs,
+                                         parse_constant=lambda _value: (_ for _ in ()).throw(ValueError()))
+                    return capture_routes(objects, self.identity[0], self.identity[1])
+                raw.extend(chunk)
+                if len(raw) > limit:
+                    return None
+            return None
+        except (OSError, ValueError, TypeError, RecursionError, subprocess.TimeoutExpired):
+            return None
+        finally:
+            if query:
+                if query.poll() is None:
+                    try:
+                        query.kill()
+                    except ProcessLookupError:
+                        pass
+                try:
+                    query.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    pass
+                query.stdout.close()
+                with self.lock:
+                    if self.query is query:
+                        self.query = None
+
+    def watch(self):
+        deadline = time.monotonic() + INPUT_ROUTE_START_SECONDS
+        uncertain = None
+        while not self.stop.is_set():
+            if self.process.poll() is not None:
+                return  # Existing engine/GPU failure handling owns process exit.
+            if self.identity is None or audio_engine_identity(self.process, self.binary) != self.identity:
+                self.failure = "audio-monitor"
+                return
+            routes = self.snapshot()
+            if self.stop.is_set():
+                return
+            if self.process.poll() is not None:
+                return
+            if audio_engine_identity(self.process, self.binary) != self.identity:
+                self.failure = "audio-monitor"
+                return
+            now = time.monotonic()
+            if routes is None:
+                uncertain = now if uncertain is None else uncertain
+                if now - uncertain >= INPUT_UNKNOWN_SECONDS:
+                    self.failure = "audio-monitor"
+                    return
+            else:
+                uncertain = None
+                if self.selected is None:
+                    if routes:
+                        self.selected = routes
+                    elif now >= deadline:
+                        self.failure = "microphone"
+                        return
+                elif not self.selected <= routes:
+                    self.failure = "microphone"
+                    return
+            self.stop.wait(INPUT_QUERY_INTERVAL)
+
+
 class Broker:
     def __init__(self, shared, private):
         self.shared, self.private = shared, private
         self.process = None
         self.output_process = None
+        self.input_watch = None
         self.runtime = {}
         self.failure = ""
         self.last_active = time.monotonic()
@@ -630,6 +831,7 @@ class Broker:
         return self.lock_state
 
     def terminate(self):
+        self.stop_input_watch()
         # Own Popen handles only: callers cannot supply a PID or process group.
         for process in (self.output_process, self.process):
             if process and process.poll() is None:
@@ -644,6 +846,11 @@ class Broker:
                     process.wait(timeout=2)
         self.process = self.output_process = None
         self.erase()
+
+    def stop_input_watch(self):
+        watch, self.input_watch = self.input_watch, None
+        if watch:
+            watch.close()
 
     def drain(self, stream, process):
         # Classify only. Raw upstream logs are discarded, never stored or shown.
@@ -721,22 +928,44 @@ class Broker:
         if cancellation(self.private) != generation or self.locked(force=True):
             self.terminate()
             return self.write(ok=True, state="ready", error="", message="Recording discarded.")
-        result = self.record("start")
+        try:
+            result = self.record("start")
+        except (OSError, subprocess.TimeoutExpired):
+            return self.record_control_failure("start", backend)
         if cancellation(self.private) != generation or (self.shared / "dictation-locked").exists():
             self.terminate()
             return self.write(ok=True, state="ready", error="", message="Recording discarded.")
         if result:
-            self.terminate()
-            return self.write(ok=False, state="error", error="Recording could not start. Check the microphone in Sound settings.")
+            return self.record_control_failure("start", backend)
         self.started = time.monotonic()
         self.stopped = 0
         self.last_active = self.started
+        self.input_watch = RecordingInputWatch(self.process, self.binary, self.env)
         return self.write(ok=True, state="recording", error="", compatibility_required=False, active_backend=backend,
                           active_cpu_variant=self.cpu_variant if backend == "cpu" else "")
 
     def record(self, verb):
         return subprocess.run([self.binary, "--quiet", "--config", str(self.private / "config.toml"), "record", verb],
                               env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3).returncode
+
+    def record_control_failure(self, verb, backend):
+        # A failed owned recording command can precede the next engine tick.
+        # Preserve an observed microphone failure; otherwise a failed Vulkan
+        # recording selects CPU only for a later, explicitly started recording.
+        if cancellation(self.private) != self.cancel_generation or (self.shared / "dictation-locked").exists():
+            self.terminate()
+            return self.write(ok=True, state="ready", error="", message="Recording discarded.")
+        gpu_retry = backend == "vulkan" and self.failure not in ("microphone", "audio-monitor")
+        self.terminate()
+        if gpu_retry:
+            self.fallback_cpu = True
+            message = ("GPU initialization failed. CPU is selected for this session; record again."
+                       if verb == "start" else "GPU transcription failed. CPU is selected for this session; record again.")
+            return self.write(ok=False, state="error", error=message, active_backend="cpu",
+                              active_cpu_variant=desired_profile()["cpu_variant"])
+        message = ("Recording could not start. Check the microphone in Sound settings."
+                   if verb == "start" else "Recording could not stop safely and was discarded. Record again.")
+        return self.write(ok=False, state="error", error=message)
 
     def command(self, verb, generation=None):
         self.last_active = time.monotonic()
@@ -746,6 +975,7 @@ class Broker:
         if verb == "start":
             return self.start(generation)
         if verb == "cancel":
+            self.stop_input_watch()
             if self.process and self.process.poll() is None:
                 try:
                     self.record("cancel")
@@ -755,9 +985,22 @@ class Broker:
             self.failure = ""
             return self.write(ok=True, state="ready" if ready() else "unavailable", error="", active_backend="", message="Recording discarded.")
         if verb == "stop" and state == "recording":
-            if self.record("stop"):
-                self.terminate()
-                return self.write(ok=False, state="error", error="Recording could not stop safely and was discarded. Record again.")
+            if self.input_watch and self.input_watch.failure:
+                # A confirmed loss observed before Stop must not be turned into
+                # intended transcription merely because IPC won the tick race.
+                if self.process and self.process.poll() is None and not self.failure:
+                    self.failure = self.input_watch.failure
+                self.tick()
+                return snapshot(self.runtime)
+            # Stop tears down the capture link normally. Disarm this epoch first,
+            # so a late result cannot discard intended transcription or a retry.
+            self.stop_input_watch()
+            try:
+                failed = self.record("stop")
+            except (OSError, subprocess.TimeoutExpired):
+                failed = True
+            if failed:
+                return self.record_control_failure("stop", self.runtime.get("active_backend"))
             self.stopped = time.monotonic()
             return self.write(ok=True, state="transcribing", error="", message="Release the shortcut keys.")
         return snapshot(self.runtime)
@@ -769,6 +1012,9 @@ class Broker:
             self.terminate()
             self.write(ok=True, state="ready", error="", message="Recording discarded on lock.", active_backend="")
             return
+        if (self.input_watch and self.runtime.get("state") == "recording" and self.input_watch.failure
+                and self.process.poll() is None and not self.failure):
+            self.failure = self.input_watch.failure
         if self.failure or self.process.poll() is not None:
             category = self.failure
             backend = self.runtime.get("active_backend")
@@ -779,6 +1025,8 @@ class Broker:
                 message = "Optimized CPU inference is incompatible. Choose Small compatibility setup in Settings, then record again."
             elif category == "microphone":
                 message = "The microphone could not record. Select an input in Sound settings and try again."
+            elif category == "audio-monitor":
+                message = "The microphone connection could not be checked safely. Recording was discarded. Check Sound settings and record again."
             elif backend == "vulkan":
                 self.fallback_cpu = True
                 message = "GPU transcription failed. CPU is selected for this session; record again."

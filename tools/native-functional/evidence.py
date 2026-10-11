@@ -4,16 +4,18 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = '99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b'
+NATIVE_SOURCE_SHA = 'd7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'f5998bc2c1e61fc4ed4d87a942fbd67dbc7a65b736011fc246092247cb25f529')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'e9135f35df4fc3c39ff825e2e37bee253158623b5a9a81cbf841db1f8df7a93b')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -335,6 +337,114 @@ def installed_scope(serial):
               'Installed collection incomplete')
     return '\n'.join(lines[lines.index('ARCTIC-COLLECT-BEGIN')+1:lines.index('ARCTIC-COLLECT-END')])
 
+# BEGIN NATIVE_BULK_RECONCILIATION
+def native_bulk_json(text):
+    def pairs(items):
+        result={}
+        for key,value in items:
+            R.require(key not in result,'Duplicate native bulk JSON key')
+            result[key]=value
+        return result
+    def constant(_):
+        raise RuntimeError('Nonfinite native bulk JSON value')
+    return json.loads(text,object_pairs_hook=pairs,parse_constant=constant)
+
+def read_native_bulk(path):
+    # Retain the original sidecar independently; this read never modifies it.
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    try:
+        before=os.fstat(fd)
+        R.require(stat.S_ISREG(before.st_mode) and before.st_nlink==1
+                  and 0<before.st_size<=32*1024*1024,'Missing/unsafe/oversized native bulk sidecar')
+        chunks=[];count=0
+        while count<=32*1024*1024:
+            part=os.read(fd,min(65536,32*1024*1024+1-count))
+            if not part:break
+            count+=len(part);chunks.append(part)
+        after=os.fstat(fd)
+        current=os.stat(path,follow_symlinks=False)
+        R.require(count==before.st_size and count<=32*1024*1024
+                  and all(getattr(before,k)==getattr(after,k) for k in
+                    ('st_dev','st_ino','st_uid','st_mode','st_size','st_mtime_ns','st_ctime_ns')),
+                  'Native bulk sidecar changed during read')
+        R.require(stat.S_ISREG(current.st_mode) and (current.st_dev,current.st_ino)==(before.st_dev,before.st_ino),
+                  'Native bulk sidecar path changed during read')
+        return b''.join(chunks)
+    finally:os.close(fd)
+
+def reconcile_native_bulk(serial,wire,stage):
+    # First require the actual original UART END, pinned BEGIN, and same-boot
+    # provenance. A complete sidecar alone cannot manufacture a native result.
+    R.require(type(stage) is str and stage in ('live','installed'),'Native bulk stage differs')
+    block,begin,end=native_block(serial,stage)
+    uart=serial.splitlines()
+    strict_begin=native_bulk_json(next(line.split(' ',1)[1] for line in uart if line.startswith('ARCTIC-NATIVE-RUNNER-BEGIN ')))
+    strict_end=native_bulk_json(next(line.split(' ',1)[1] for line in uart if line.startswith('ARCTIC-NATIVE-RUNNER-END ')))
+    R.require(type(strict_begin) is dict and set(strict_begin)=={'stage','native_source_sha256','checker_sha256','release_acceptance'}
+              and strict_begin==begin and strict_begin['release_acceptance'] is False and strict_end==end,
+              'Native bulk UART framing grammar differs')
+    R.require(set(end)=={'stage','status','error','evidence_export_complete','release_acceptance'}
+              and end['status'] in ('passed','failed') and end['evidence_export_complete'] is True
+              and (end['error'] is None or type(end['error']) is str)
+              and ((end['status']=='passed')==(end['error'] is None)), 'Incomplete native UART END')
+    proofs=[native_bulk_json(line.split(' ',1)[1]) for line in block if line.startswith('ARCTIC-NATIVE-PROVENANCE ')]
+    R.require(len(proofs)==1,'Missing/duplicate native bulk UART provenance')
+    proof=proofs[0]
+    context=dict(schema='arctic-native-bulk-v1',stage=stage,boot_id=proof.get('boot_id'),
+                 native_source_sha256=NATIVE_SOURCE_SHA,checker_sha256=CHECKERS['native-functional'][1],
+                 release_acceptance=False)
+    R.require(proof.get('stage')==stage and proof.get('native_source_sha256')==context['native_source_sha256']
+              and proof.get('checker_sha256')==context['checker_sha256'] and proof.get('release_acceptance') is False
+              and type(context['boot_id']) is str and re.fullmatch(
+                  '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',context['boot_id']), 'Native bulk UART context differs')
+    R.require(not any(line.startswith(('ARCTIC-NATIVE-EVIDENCE-CHUNK ','ARCTIC-NATIVE-EVIDENCE-MANIFEST '))
+                      for line in serial.splitlines()), 'Mixed UART/bulk native evidence forbidden')
+    R.require(type(wire) is bytes and 0<len(wire)<=32*1024*1024 and wire.endswith(b'\n')
+              and b'\r' not in wire and b'\x00' not in wire,'Incomplete/oversized native bulk wire')
+    rows=wire.splitlines(keepends=True)
+    R.require(3<=len(rows)<=128*172+3 and all(len(row)-1<=65536 and row.endswith(b'\n') for row in rows),
+              'Native bulk line/count bound differs')
+    text=[row[:-1].decode('ascii',errors='strict') for row in rows]
+    R.require(text[0].startswith('ARCTIC-NATIVE-BULK-BEGIN ') and text[-1].startswith('ARCTIC-NATIVE-BULK-END '),
+              'Native bulk framing differs')
+    header=native_bulk_json(text[0].split(' ',1)[1]);footer=native_bulk_json(text[-1].split(' ',1)[1])
+    R.require(type(header) is dict and set(header)==set(context) and header==context
+              and header['release_acceptance'] is False,'Native bulk header context differs')
+    body=b''.join(rows[1:-1])
+    R.require(type(footer) is dict and set(footer)==set(context)|{'bytes','lines','sha256'}
+              and all(footer[k]==v for k,v in context.items()) and footer['release_acceptance'] is False
+              and type(footer['bytes']) is int and footer['bytes']==len(body)
+              and type(footer['lines']) is int and footer['lines']==len(rows)-2
+              and footer['sha256']==hashlib.sha256(body).hexdigest(),'Native bulk footer/hash differs')
+    R.require(text[-2].startswith('ARCTIC-NATIVE-EVIDENCE-MANIFEST '),'Native bulk final manifest missing')
+    for line in text[1:-2]:
+        R.require(line.startswith('ARCTIC-NATIVE-EVIDENCE-CHUNK '),'Unknown/replayed native bulk record')
+        value=native_bulk_json(line.split(' ',1)[1])
+        R.require(type(value) is dict and set(value)=={'path','index','data'}
+                  and type(value['path']) is str and 0<len(value['path'])<=4096
+                  and not any(ord(c)<32 or ord(c)==127 for c in value['path']) and type(value['index']) is int
+                  and 0<=value['index']<172 and type(value['data']) is str,'Native bulk chunk grammar differs')
+        decoded=base64.b64decode(value['data'],validate=True)
+        R.require(0<len(decoded)<=24576,'Native bulk original chunk byte bound differs')
+    manifest=native_bulk_json(text[-2].split(' ',1)[1])
+    R.require(type(manifest) is dict and set(manifest)=={'schema','stage','files','bytes','evidence_root'}
+              and manifest['schema']=='arctic-native-evidence-v1' and manifest['stage']==stage
+              and type(manifest['files']) is list and len(manifest['files'])<=128
+              and type(manifest['bytes']) is int and 0<=manifest['bytes']<=MAX_TOTAL,
+              'Native bulk original manifest grammar/bounds differ')
+    for entry in manifest['files']:
+        R.require(type(entry) is dict and set(entry)=={'path','bytes','sha256','compressed_bytes','chunks','encoding'}
+                  and type(entry['path']) is str and 0<len(entry['path'])<=4096
+                  and not any(ord(c)<32 or ord(c)==127 for c in entry['path']),
+                  'Native bulk file-entry grammar differs')
+    # No original UART byte is normalized or discarded. Insert only the exact
+    # complete original body before its existing END, for unchanged check_native.
+    marker='ARCTIC-NATIVE-RUNNER-END '
+    at=serial.index(marker)
+    R.require(at==0 or serial[at-1]=='\n','Native bulk END is not a complete UART line')
+    return serial[:at]+body.decode('ascii')+serial[at:]
+# END NATIVE_BULK_RECONCILIATION
+
 def validate_harness_serial(vm,evidence):
     results={};errors=[];serials={}
     for stage,name in (('live','serial-install.log'),('installed','serial-boot.log')):
@@ -342,6 +452,7 @@ def validate_harness_serial(vm,evidence):
             serial=(vm/name).read_text(errors='replace')
             serials[stage]=serial
             scoped=installed_scope(serial) if stage=='installed' else serial
+            scoped=reconcile_native_bulk(scoped,read_native_bulk(vm/('native-evidence-'+('install' if stage=='live' else 'boot')+'.log')),stage)
             results[stage]=check_native(scoped,stage,evidence/('native-'+stage))
             ready=records(serial.splitlines(),'ARCTIC-NATIVE-LAUNCHER-READY ')
             gone=records(serial.splitlines(),'ARCTIC-NATIVE-LAUNCHER-GONE ')

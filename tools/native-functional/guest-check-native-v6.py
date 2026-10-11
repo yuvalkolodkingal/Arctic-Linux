@@ -20,11 +20,13 @@ import re
 import shlex
 import shutil
 import signal
+import selectors
 import socket
 import stat
 import struct
 import subprocess
 import tempfile
+import threading
 import time
 
 
@@ -354,6 +356,374 @@ def evaluate_reference_rgb(data, width, height, reference):
                 reason='No bounded 16-color reference ROI with sufficient matching visible content')
 
 
+# BEGIN NATIVE_PROTOCOL_DIAGNOSTICS
+class NativeProtocolProjection:
+    """Closed numeric projection of one client stderr stream, never raw text.
+
+    These are client-side requests/events, not proof that a compositor displayed
+    a buffer. A unique xdg root is structural; GTK GLArea identity remains open.
+    """
+    MAX_INPUT = 1024 * 1024
+    MAX_LINE = 2048
+    MAX_RECORDS = 512
+    INTERFACES = {'wl_compositor', 'wl_subcompositor', 'xdg_wm_base',
+                  'wp_viewporter', 'wl_shm', 'zwp_linux_dmabuf_v1'}
+    HEADER = re.compile(r'^\[(?:\s*[0-9]{1,12}\.[0-9]{1,6}|'
+                        r'(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{6})\]\s*'
+                        r'(?:\{[^{}\r\n]{1,80}\}\s*)?'
+                        r'(?P<send>->\s*)?(?P<iface>[a-z][a-z0-9_]{0,63})[@#](?P<id>[0-9]{1,8})\.'
+                        r'(?P<op>[a-z_]{1,64})\((?P<args>[^\r\n]*)\)$')
+    def __init__(self):
+        self.objects = {1:'wl_display'}
+        self.surfaces, self.xdg, self.toplevels, self.children = {}, {}, {}, {}
+        self.viewports, self.buffers, self.pools = {}, {}, {}
+        self.records = []
+        self.rejected = self.capped = False
+        self.input_bytes = self.omitted = 0
+
+    @staticmethod
+    def number(text, low=0, high=1048576):
+        if not re.fullmatch(r'-?[0-9]{1,10}', text): raise ValueError()
+        value=int(text)
+        if not low<=value<=high: raise ValueError()
+        return value
+
+    def object(self, text, interface, new=False):
+        match=re.fullmatch(r'(?:new id )?([a-z][a-z0-9_]{0,63}|\[unknown\])[@#]([0-9]{1,8})',text)
+        if not match or match[1] not in (interface,'[unknown]'): raise ValueError()
+        value=self.number(match[2],2)
+        if new:
+            if len(self.objects)>=1024: self.capped=True; raise ValueError()
+            if not text.startswith('new id ') or value in self.objects: raise ValueError()
+            self.objects[value]=interface
+        elif self.objects.get(value)!=interface: raise ValueError()
+        return value
+
+    def feed(self, line):
+        self.input_bytes+=len(line)
+        if self.input_bytes>self.MAX_INPUT or len(line)>self.MAX_LINE:
+            self.capped=True; return
+        if self.rejected or self.capped: return
+        try:
+            text=line.decode('ascii').rstrip('\n')
+        except UnicodeDecodeError:
+            self.omitted+=1; return
+        match=self.HEADER.fullmatch(text)
+        if not match:
+            self.omitted+=1; return
+        iface,op=match['iface'],match['op']; args=match['args']; send=bool(match['send'])
+        key=(iface,op)
+        selected={('wl_display','get_registry'),('wl_registry','bind'),('wl_compositor','create_surface'),
+            ('wl_subcompositor','get_subsurface'),('xdg_wm_base','get_xdg_surface'),('xdg_surface','get_toplevel'),
+            ('xdg_toplevel','configure'),('xdg_surface','configure'),('xdg_surface','ack_configure'),
+            ('wl_surface','attach'),('wl_surface','commit'),('wl_surface','set_buffer_scale'),
+            ('wl_surface','set_buffer_transform'),('wp_viewporter','get_viewport'),('wp_viewport','set_source'),
+            ('wp_viewport','set_destination'),('wl_subsurface','set_position'),('wl_subsurface','set_sync'),
+            ('wl_subsurface','set_desync'),('wl_shm','create_pool'),('wl_shm_pool','create_buffer'),
+            ('zwp_linux_dmabuf_v1','create_params'),('zwp_linux_buffer_params_v1','create_immed')}
+        if key not in selected:
+            # Account for opaque new objects without exporting their names.
+            for match_id in re.finditer(r'new id (?:[a-z][a-z0-9_]{0,63}|\[unknown\])[@#]([0-9]{1,8})',args):
+                value=int(match_id[1])
+                if not 2<=value<=1048576 or value in self.objects: self.rejected=True; return
+                if len(self.objects)>=1024: self.capped=True; return
+                self.objects[value]='unsupported'
+            self.omitted+=1; return
+        try:
+            receiver=self.number(match['id'],1)
+            if self.objects.get(receiver)!=iface: raise ValueError()
+            event=key in {('xdg_toplevel','configure'),('xdg_surface','configure')}
+            if send==event: raise ValueError()
+            values=args.split(', ') if args else []
+            row=dict(interface=iface,object_id=receiver,operation=op,direction='request' if send else 'event')
+            if key==('wl_display','get_registry'):
+                if len(values)!=1 or any(v=='wl_registry' for v in self.objects.values()): raise ValueError()
+                row['created_id']=self.object(values[0],'wl_registry',True)
+            elif key==('wl_registry','bind'):
+                if len(values)!=4: raise ValueError()
+                interface=values[1][1:-1] if re.fullmatch(r'"[a-z][a-z0-9_]{0,63}"',values[1]) else None
+                if interface not in self.INTERFACES:
+                    match_id=re.fullmatch(r'new id (?:[a-z][a-z0-9_]{0,63}|\[unknown\])[@#]([0-9]{1,8})',values[3])
+                    if not match_id: raise ValueError()
+                    opaque=self.number(match_id[1],2)
+                    if len(self.objects)>=1024: self.capped=True; raise ValueError()
+                    if opaque in self.objects: raise ValueError()
+                    self.objects[opaque]='unsupported'
+                    self.omitted+=1; return
+                row.update(global_id=self.number(values[0],1),version=self.number(values[2],1,64),
+                           created_id=self.object(values[3],interface,True),bound_interface=interface)
+            elif key==('wl_compositor','create_surface'):
+                if len(values)!=1 or len(self.surfaces)>=64: raise ValueError()
+                surface=self.object(values[0],'wl_surface',True); self.surfaces[surface]={}
+                row['created_id']=surface
+            elif key==('xdg_wm_base','get_xdg_surface'):
+                if len(values)!=2: raise ValueError()
+                surface=self.object(values[1],'wl_surface'); child=self.object(values[0],'xdg_surface',True)
+                if surface in self.xdg.values() or surface in self.children: raise ValueError()
+                self.xdg[child]=surface; row.update(created_id=child,surface_id=surface)
+            elif key==('xdg_surface','get_toplevel'):
+                if len(values)!=1 or receiver not in self.xdg: raise ValueError()
+                if self.xdg[receiver] in self.toplevels.values(): raise ValueError()
+                top=self.object(values[0],'xdg_toplevel',True); self.toplevels[top]=self.xdg[receiver]
+                row.update(created_id=top,surface_id=self.xdg[receiver])
+            elif key==('wl_subcompositor','get_subsurface'):
+                if len(values)!=3: raise ValueError()
+                child=self.object(values[1],'wl_surface'); parent=self.object(values[2],'wl_surface')
+                if child==parent or child in self.children or child in self.xdg.values(): raise ValueError()
+                # Reject loops and ambiguity, never identify a video widget by guess.
+                cursor=parent
+                for _ in range(64):
+                    if cursor==child: raise ValueError()
+                    if cursor not in self.children: break
+                    cursor=self.children[cursor]['parent_id']
+                else: raise ValueError()
+                sub=self.object(values[0],'wl_subsurface',True)
+                self.children[child]={'parent_id':parent,'subsurface_id':sub}
+                row.update(created_id=sub,surface_id=child,parent_id=parent)
+            elif key in {('xdg_surface','configure'),('xdg_surface','ack_configure')}:
+                if len(values)!=1 or receiver not in self.xdg: raise ValueError()
+                serial=self.number(values[0],1,4294967295); surface=self.xdg[receiver]
+                if serial==self.surfaces[surface].get('configure_serial') and op=='configure': raise ValueError()
+                if op=='ack_configure' and serial!=self.surfaces[surface].get('configure_serial'): raise ValueError()
+                self.surfaces[surface]['configure_serial' if op=='configure' else 'ack_serial']=serial
+                row.update(surface_id=surface,serial=serial)
+            elif key==('xdg_toplevel','configure'):
+                if len(values)!=3 or not re.fullmatch(r'array\[[0-9]{1,4}\]',values[2]): raise ValueError()
+                surface=self.toplevels[receiver]; w=self.number(values[0],0,16384); h=self.number(values[1],0,16384)
+                self.surfaces[surface]['requested_size']=[w,h]; row.update(surface_id=surface,width=w,height=h)
+            elif key==('wp_viewporter','get_viewport'):
+                if len(values)!=2: raise ValueError()
+                surface=self.object(values[1],'wl_surface')
+                if surface in self.viewports.values(): raise ValueError()
+                viewport=self.object(values[0],'wp_viewport',True); self.viewports[viewport]=surface
+                row.update(created_id=viewport,surface_id=surface)
+            elif iface=='wp_viewport':
+                surface=self.viewports[receiver]
+                if op=='set_destination':
+                    if len(values)!=2: raise ValueError()
+                    pair=[self.number(v,-1,16384) for v in values]
+                    if pair!=[-1,-1] and min(pair)<1: raise ValueError()
+                    self.surfaces[surface]['viewport_destination']=pair; row.update(surface_id=surface,dimensions=pair)
+                else:
+                    if len(values)!=4 or any(not re.fullmatch(r'-?[0-9]{1,6}(?:\.[0-9]{1,8})?',v) for v in values): raise ValueError()
+                    box=[float(v) for v in values]
+                    if any(not math.isfinite(v) or not -1<=v<=16384 for v in box): raise ValueError()
+                    if box!=[-1.0]*4 and (min(box[:2])<0 or min(box[2:])<=0): raise ValueError()
+                    self.surfaces[surface]['viewport_source']=box; row.update(surface_id=surface,rectangle=box)
+            elif iface=='wl_subsurface':
+                matches=[s for s,v in self.children.items() if v['subsurface_id']==receiver]
+                if len(matches)!=1: raise ValueError()
+                surface=matches[0]; row['surface_id']=surface
+                if op=='set_position':
+                    if len(values)!=2: raise ValueError()
+                    pair=[self.number(v,-32768,32768) for v in values]
+                    self.surfaces[surface]['position']=pair; row['position']=pair
+                else:
+                    if values: raise ValueError()
+                    self.surfaces[surface]['synchronized']=op=='set_sync'
+            elif key==('wl_shm','create_pool'):
+                if len(values)!=3 or not re.fullmatch(r'fd [0-9]{1,8}|[0-9]{1,8}',values[1]): raise ValueError()
+                pool=self.object(values[0],'wl_shm_pool',True); size=self.number(values[2],1,268435456)
+                self.pools[pool]=size; row.update(created_id=pool,pool_bytes=size)
+            elif key==('wl_shm_pool','create_buffer'):
+                if len(values)!=6: raise ValueError()
+                buf=self.object(values[0],'wl_buffer',True)
+                offset,w,h,stride,fmt=[self.number(v,0,4294967295) for v in values[1:]]
+                if not 1<=w<=16384 or not 1<=h<=16384 or not w<=stride<=262144 or offset+stride*h>self.pools[receiver]: raise ValueError()
+                if fmt in (0,1) and stride<w*4: raise ValueError()
+                self.buffers[buf]=dict(width=w,height=h,stride=stride,format=fmt,transport='shm')
+                row.update(created_id=buf,**self.buffers[buf])
+            elif key==('zwp_linux_dmabuf_v1','create_params'):
+                if len(values)!=1: raise ValueError()
+                row['created_id']=self.object(values[0],'zwp_linux_buffer_params_v1',True)
+            elif key==('zwp_linux_buffer_params_v1','create_immed'):
+                if len(values)!=5: raise ValueError()
+                buf=self.object(values[0],'wl_buffer',True); w,h,fmt,flags=[self.number(v,0,4294967295) for v in values[1:]]
+                if not 1<=w<=16384 or not 1<=h<=16384: raise ValueError()
+                self.buffers[buf]=dict(width=w,height=h,format=fmt,transport='dmabuf',plane_stride_observed=False)
+                row.update(created_id=buf,**self.buffers[buf])
+            elif iface=='wl_surface':
+                surface=self.surfaces[receiver]; row['surface_id']=receiver
+                if op=='attach':
+                    if len(values)!=3: raise ValueError()
+                    buf=None if values[0]=='nil' else self.object(values[0],'wl_buffer')
+                    surface.update(buffer_id=buf,attach_offset=[self.number(v,-32768,32768) for v in values[1:]])
+                    row.update(buffer_id=buf,attach_offset=surface['attach_offset'])
+                elif op=='set_buffer_scale':
+                    if len(values)!=1: raise ValueError()
+                    surface['buffer_scale']=self.number(values[0],1,16); row['scale']=surface['buffer_scale']
+                elif op=='set_buffer_transform':
+                    if len(values)!=1: raise ValueError()
+                    surface['buffer_transform']=self.number(values[0],0,7); row['transform']=surface['buffer_transform']
+                elif op=='commit':
+                    if values: raise ValueError()
+                    row['client_transaction']=dict(surface)
+            if len(self.records)>=self.MAX_RECORDS: self.capped=True; return
+            self.records.append(row)
+        except (ValueError,KeyError,IndexError,OverflowError):
+            self.rejected=True
+
+    def snapshot(self):
+        roots=sorted(set(self.toplevels.values()))
+        status='rejected' if self.rejected else 'incomplete' if self.capped else 'observed' if len(roots)==1 else 'unknown'
+        return dict(status=status,records=list(self.records),input_bytes=self.input_bytes,
+                    omitted_lines=self.omitted,unique_xdg_root_id=roots[0] if len(roots)==1 else None,
+                    structural_surfaces=[dict(surface_id=s,**v,**self.children.get(s,{})) for s,v in sorted(self.surfaces.items())],
+                    video_surface_identified=False,compositor_commit_or_display_proven=False)
+
+
+class NativeRendererProjection:
+    """GTK 4.22.5 successful realization messages; no arbitrary log export.
+
+    gsk_renderer_new_for_surface_full emits this literal only after successful
+    realization, through gdk_debug_message's unprefixed stderr line. A requested
+    environment variable alone is never a renderer observation. The message
+    identifies a GSK toplevel renderer, not GtkGLArea or an mpv framebuffer.
+    """
+    LINE=re.compile(rb"Using renderer '(GskGLRenderer|GskVulkanRenderer|GskCairoRenderer)' for surface 'GdkWaylandToplevel'\n")
+    TYPES={b'GskGLRenderer':'gl',b'GskVulkanRenderer':'vulkan',b'GskCairoRenderer':'cairo'}
+    MAX_BYTES=256*1024
+    def __init__(self):
+        self.types=set(); self.messages=0; self.bytes=0; self.capped=False
+    def feed(self,line):
+        if type(line) is not bytes: return
+        self.bytes+=len(line)
+        if self.bytes>self.MAX_BYTES:
+            self.capped=True; return
+        if len(line)>256: return
+        match=self.LINE.fullmatch(line)
+        if match:
+            if self.messages>=16: self.capped=True; return
+            self.types.add(self.TYPES[match[1]]); self.messages+=1
+    def snapshot(self):
+        observed=len(self.types)==1 and not self.capped
+        return dict(status='reported-realized' if observed else 'unknown',
+                    renderer=next(iter(self.types)) if observed else None,
+                    message_count=self.messages,capped=self.capped,
+                    gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
+                    video_widget_or_framebuffer_attested=False,release_acceptance=False)
+
+
+class NativeProtocolDrain:
+    """One bounded private capture; drain excess until original app cleanup.
+
+    No raw file is inside the guest export tree. A descriptor identity, actual
+    app fd2 and start-ticks bind the stream; wrapper PID is never app ownership.
+    """
+    RAW_CAP=256*1024
+    def __init__(self,renderer=False):
+        self.stream=None; self.projection=NativeProtocolProjection(); self.lock=threading.Lock()
+        self.renderer=NativeRendererProjection() if renderer is True else None
+        self.stop=threading.Event(); self.eof=False; self.failed=False; self.partial=False
+        self.pending_bytes=0; self.timed_out=False
+        self.binding=None; self.raw_bytes=0; self.raw_fd=None
+        private=Path(tempfile.mkdtemp(prefix='arctic-native-protocol-private-',dir='/tmp'))
+        self.raw_path=private/'stderr.private'
+        directory=os.open(private,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:
+            info=os.fstat(directory)
+            if info.st_uid!=os.geteuid() or info.st_mode&0o077:
+                raise RuntimeError('private protocol directory identity differs')
+            self.raw_fd=os.open('stderr.private',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=directory)
+        finally: os.close(directory)
+        info=os.fstat(self.raw_fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.geteuid() or info.st_nlink!=1 or info.st_mode&0o077:
+            self._close_capture(); raise RuntimeError('private protocol file identity differs')
+        self.thread=None
+
+    def _close_capture(self):
+        # One owner may close repeatedly after setup failure or normal EOF.
+        descriptor=self.raw_fd; self.raw_fd=None
+        if descriptor is not None:
+            try: os.close(descriptor)
+            except OSError: self.failed=True
+        if self.stream is not None:
+            try: self.stream.close()
+            except OSError: self.failed=True
+
+    def start(self,stream):
+        self.stream=stream
+        self.thread=threading.Thread(target=self._drain,daemon=True)
+        try: self.thread.start()
+        except Exception:
+            self.failed=True; self.thread=None; self._close_capture()
+            raise RuntimeError('owned protocol drainage unavailable') from None
+
+    def _drain(self):
+        pending=b''; deadline=time.monotonic()+300
+        try:
+            os.set_blocking(self.stream.fileno(),False)
+            with selectors.DefaultSelector() as selector:
+                selector.register(self.stream,selectors.EVENT_READ)
+                while not self.stop.is_set() and time.monotonic()<deadline:
+                    if not selector.select(.1): continue
+                    block=os.read(self.stream.fileno(),4096)
+                    if not block: self.eof=True; break
+                    with self.lock:
+                        kept=block[:max(0,self.RAW_CAP-self.raw_bytes)]
+                        if kept:
+                            offset=0
+                            while offset<len(kept):
+                                count=os.write(self.raw_fd,kept[offset:])
+                                if count<=0: raise OSError()
+                                offset+=count
+                            self.raw_bytes+=len(kept)
+                        pending+=block
+                        while b'\n' in pending:
+                            line,pending=pending.split(b'\n',1); self.projection.feed(line+b'\n')
+                            if self.renderer is not None: self.renderer.feed(line+b'\n')
+                        if len(pending)>self.projection.MAX_LINE:
+                            self.projection.capped=True; pending=b''
+                        self.pending_bytes=len(pending)
+                if pending: self.partial=True
+                if not self.eof and not self.stop.is_set(): self.timed_out=True
+        except (OSError,ValueError): self.failed=True
+        finally:
+            self._close_capture()
+
+    def bind(self,proof,uid):
+        try:
+            current=identity(proof['pid'],uid)
+            if any(current[k]!=proof[k] for k in ('pid','start_ticks','executable')): return False
+            if digest(current['executable'])!=proof['executable_sha256']: return False
+            pipe=os.fstat(self.stream.fileno()); actual=os.stat(Path('/proc')/str(proof['pid'])/'fd/2')
+            if not stat.S_ISFIFO(pipe.st_mode) or (pipe.st_dev,pipe.st_ino)!=(actual.st_dev,actual.st_ino): return False
+            self.binding={k:proof[k] for k in ('pid','start_ticks','executable_sha256')}
+            self.binding.update(uid=uid,client_id=int(proof['client_id']),pipe_device=pipe.st_dev,pipe_inode=pipe.st_ino)
+            return True
+        except (OSError,ValueError,KeyError,RuntimeError): return False
+
+    def snapshot(self,proof,uid):
+        matched=self.bind(proof,uid)
+        with self.lock:
+            value=self.projection.snapshot()
+        value.update(owner=self.binding if matched else None,ownership_verified=matched,
+                     private_raw_bytes=self.raw_bytes,drain_failed=self.failed,partial_line=self.partial or self.pending_bytes>0,
+                     private_raw_truncated=self.raw_bytes>=self.RAW_CAP,time_cap_reached=self.timed_out,
+                     input_complete=self.eof,private_raw_exported=False,release_acceptance=False,
+                     scope='owned client protocol observations only; GTK GLArea/framebuffer identity remains unknown')
+        value['protocol_sender_authenticated']=False
+        value['exclusive_stderr_writer_proven']=False
+        if not matched or self.failed or self.partial or self.pending_bytes: value['status']='unknown'
+        elif self.timed_out: value['status']='incomplete'
+        if not matched:
+            value.update(records=[],structural_surfaces=[],unique_xdg_root_id=None)
+        if self.renderer is not None:
+            with self.lock: realized=self.renderer.snapshot()
+            if not matched or self.failed or self.timed_out:
+                realized.update(status='unknown',renderer=None)
+            realized.update(owned_stderr_binding_verified=matched,
+                            exclusive_writer_proven=False,environment_request_is_not_attestation=True)
+            value['realized_renderer']=realized
+        return value
+
+    def finish(self):
+        self.stop.set()
+        if self.thread is not None: self.thread.join(timeout=1)
+        else: self._close_capture()
+# END NATIVE_PROTOCOL_DIAGNOSTICS
+
+
 class Smoke:
     def __init__(self, prefix, stage):
         require(prefix[:2] == ['runuser', '-u'] and prefix[3:5] == ['--', 'env'], 'invalid desktop prefix')
@@ -400,6 +770,188 @@ class Smoke:
             child = subprocess.Popen(self.prefix+argv, stdout=stream, stderr=stream)
         self.launches.append(child)
         self.steps.append(dict(argv=argv, status='started-asynchronously', log=str(log)))
+
+    def launch_protocol_player(self, argv):
+        # Only the already isolated static Celluloid, no renderer/command flag.
+        require(argv[0]=='/usr/bin/celluloid' and getattr(self,'gui_v6',False),
+                'native protocol diagnostic player selection differs')
+        drain=None; reader=None; writer=None
+        try:
+            drain=NativeProtocolDrain()
+            read,writer=os.pipe()
+            try: reader=os.fdopen(read,'rb',buffering=0)
+            except BaseException:
+                os.close(read); raise
+            # Optional setup finishes before any diagnostic app is launched.
+            drain.start(reader)
+        except (OSError,RuntimeError):
+            if drain is not None: drain.finish()
+            if reader is not None: reader.close()
+            if writer is not None: os.close(writer)
+            # A failed private capture setup uses the original, uninstrumented launch.
+            self.launch(argv); return
+        log=self.root/('gui-launch-'+str(len(self.launches))+'.log')
+        try:
+            with log.open('ab') as stream:
+                child=subprocess.Popen(self.prefix+['WAYLAND_DEBUG=client']+argv,stdout=stream,stderr=writer)
+        except BaseException:
+            drain.finish(); raise
+        finally: os.close(writer)
+        self.launches.append(child)
+        self.steps.append(dict(argv=argv,status='started-asynchronously',log=str(log)))
+        self.native_protocol_drain=drain
+
+    def native_protocol_diagnostic(self, player, state, screenshot, client):
+        value=dict(schema='arctic-native-owned-protocol-viewport-v1',stage=self.stage if self.stage in ('live','installed') else 'unknown',
+                   observed_monotonic_ns=time.monotonic_ns(),
+                   release_acceptance=False,video_widget_and_framebuffer_dimensions=None,rendering_cause_proven=False)
+        try:
+            sha=screenshot['sha256']
+            if not isinstance(sha,str) or not re.fullmatch('[0-9a-f]{64}',sha): raise ValueError()
+            value['primary_screenshot_sha256']=sha
+            value['checker_sha256']=digest(Path(__file__))
+            if (any(type(client.get(k)) is not int for k in ('id','pid','x','y','width','height'))
+                    or type(client.get('is_fullscreen')) is not bool
+                    or not 1<=client['width']<=16384 or not 1<=client['height']<=16384
+                    or not all(-32768<=client[k]<=32768 for k in ('x','y'))): raise ValueError()
+            if client['pid']!=player['pid'] or client['id']!=int(player['client_id']): raise ValueError()
+            value['primary_capture_intended_geometry']={k:client[k] for k in ('id','pid','x','y','width','height','is_fullscreen')}
+            value['geometry_scope']='existing owned client snapshot immediately before primary PNG; protocol prefix sampled after unchanged oracle'
+            value['protocol']=self.native_protocol_drain.snapshot(player,self.uid)
+            params=state.get('video-params',{})
+            value['decoded_video_dimensions']={k:params[k] for k in ('w','h')
+                 if type(params.get(k)) is int and 1<=params[k]<=16384}
+            value['optional_mpv_output_and_osd_dimensions']='not_collected'
+        except Exception:
+            value['protocol']=dict(status='unknown',ownership_verified=False,release_acceptance=False)
+        # One exclusive regular typed projection, not an app-controlled log.
+        try:
+            data=(json.dumps(value,sort_keys=True)+'\n').encode()
+            if len(data)>256*1024: return
+            directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+            try:
+                info=os.fstat(directory)
+                if info.st_uid!=self.uid: return
+                descriptor=os.open('0-native-protocol-viewport.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                                   0o600,dir_fd=directory)
+                with os.fdopen(descriptor,'wb') as stream: stream.write(data)
+            finally: os.close(directory)
+        except (OSError,ValueError):
+            # No arbitrary exception text or diagnostic failure replaces the gate.
+            pass
+
+    def finish_native_protocol(self):
+        drain=getattr(self,'native_protocol_drain',None)
+        if drain is not None:
+            try: drain.finish()
+            except Exception: pass
+
+    def controlled_renderer_trials(self,fixture,expected,source_sha,primary):
+        """Failure-only diagnostics. Primary oracle/error and overall FAIL stand."""
+        rows=[dict(intervention=mode,status='unrun',release_acceptance=False)
+              for mode in ('default','gl')]
+        value=dict(schema='arctic-native-controlled-renderers-v1',stage=self.stage,
+            primary_screenshot_sha256=primary['screenshot']['sha256'],
+            primary_oracle_status='unmatched',primary_failure_preserved=True,
+            same_fixture_sha256=primary['fixture_sha256'],same_expected_rgb_sha256=primary['expected_rgb_sha256'],
+            trials=rows,release_acceptance=False,rendering_cause_proven=False,
+            controls=dict(order=['default','gl'],fresh_owned_app_each=True,settle_seconds=.5,
+                same_static_oracle=True,shared_isolated_config_and_cache=True,
+                preceding_primary_and_default_warm_cache_confound=True,
+                gsk_debug_renderer_both=True,wayland_debug_client_both=True,
+                GPU_acceleration_or_software_rendering_proven=False))
+        try:
+            require(primary['oracle']['status']=='unmatched','controlled trials require the failed primary oracle')
+            require(digest(fixture)==primary['fixture_sha256'] and digest(expected)==primary['expected_rgb_sha256'],
+                    'controlled fixture identity changed')
+            self.finish_native_protocol()
+            # Retire only the two already-proved fresh Celluloid processes.
+            # Other baseline apps/configuration stay as observed; no global kill.
+            players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
+            require(1<=len(players)<=2,'controlled primary player inventory differs')
+            for player in players: retire_renderer_player(player,self.uid)
+            for index,mode in enumerate(('default','gl')):
+                trial=None
+                try:
+                    trial=RendererTrialSmoke(self,mode)
+                    rows[index]=trial.observe(fixture,expected,source_sha)
+                except Exception as error:
+                    rows[index].update(status='unknown',error=renderer_trial_error(error))
+                finally:
+                    if trial is not None:
+                        # Parent cleanup retains every fresh proof even after a
+                        # trial failure; bounded private stderr never enters export.
+                        self.owned.extend(trial.owned); self.launches.extend(trial.launches)
+                        trial.finish_native_protocol()
+                        cleanup=True
+                        for player in trial.owned:
+                            try: retire_renderer_player(player,self.uid)
+                            except Exception: cleanup=False
+                        rows[index]['owned_trial_cleanup_completed']=cleanup
+        except Exception as error:
+            value['preparation_error']=renderer_trial_error(error)
+        # Failures of this optional receipt cannot replace the primary error.
+        try:
+            write_renderer_receipt(self.root,self.uid,value)
+        except (OSError,ValueError,RuntimeError): pass
+
+    # BEGIN CONTROLLED_CONTROLS_INVOCATION
+    def controlled_controls_trials(self,fixture,expected,source_sha,primary):
+        """Two failure-only default players; the original primary remains failed."""
+        states=('transition','hidden')
+        rows=[dict(intervention=state,status='unrun',release_acceptance=False) for state in states]
+        value=dict(schema='arctic-native-controls-state-v1',stage=self.stage,
+            primary_screenshot_sha256=primary['screenshot']['sha256'],
+            primary_oracle_status='unmatched',primary_failure_preserved=True,
+            primary_capture_precondition=primary['capture_precondition'],
+            same_fixture_sha256=primary['fixture_sha256'],same_expected_rgb_sha256=primary['expected_rgb_sha256'],
+            trials=rows,release_acceptance=False,rendering_cause_proven=False,
+            controls=dict(order=list(states),initial_controls_visible=[True,False],
+                fresh_owned_app_each=True,requested_gsk_renderer='unset',
+                settle_seconds=.5,diagnostic_time_bound_seconds_each=120,
+                same_static_oracle=True,shared_isolated_config_and_cache=True,
+                original_primary_and_ordered_warm_cache_confound=True,
+                preceding_primary_player_environment_not_fully_attested=True,
+                gsk_debug_renderer_both=True,wayland_debug_client_both=True,
+                video_widget_or_framebuffer_attested=False,
+                GUI_controls_visibility_is_setting_readback_not_pixel_attestation=True))
+        try:
+            require(primary['oracle']['status']=='unmatched','controls trials require the failed primary oracle')
+            require(digest(fixture)==primary['fixture_sha256'] and digest(expected)==primary['expected_rgb_sha256'],
+                    'controls trial fixture identity changed')
+            self.finish_native_protocol()
+            players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
+            require(1<=len(players)<=2,'controls trial primary player inventory differs')
+            for player in players: retire_renderer_player(player,self.uid)
+            seen=set()
+            for index,state in enumerate(states):
+                trial=None
+                try:
+                    trial=ControlsTrialSmoke(self,state)
+                    rows[index]=trial.observe(fixture,expected,source_sha)
+                    player=rows[index].get('player')
+                    if player is not None:
+                        identity_key=(player['pid'],player['start_ticks'])
+                        require(identity_key not in seen and not any(identity_key==(p.get('pid'),p.get('start_ticks'))
+                                for p in players),'controls trial player is not a new process')
+                        seen.add(identity_key)
+                except Exception as error:
+                    rows[index].update(status='unknown',error=renderer_trial_error(error))
+                finally:
+                    if trial is not None:
+                        self.owned.extend(trial.owned); self.launches.extend(trial.launches)
+                        trial.finish_native_protocol()
+                        cleanup=True
+                        for player in trial.owned:
+                            try: retire_renderer_player(player,self.uid)
+                            except Exception: cleanup=False
+                        rows[index]['owned_trial_cleanup_completed']=cleanup
+                require(trial is None or cleanup,'controls trial owned retirement incomplete')
+        except Exception as error:
+            value['preparation_error']=renderer_trial_error(error)
+        try: write_controls_receipt(self.root,self.uid,value)
+        except (OSError,ValueError,RuntimeError): pass
+    # END CONTROLLED_CONTROLS_INVOCATION
 
     def setup(self):
         require(Path('/etc/arctic/default-apps').is_file(), 'system role file unavailable')
@@ -823,12 +1375,80 @@ class Smoke:
         require(expected.stat().st_size==160*120*3,'reference decoded RGB frame size differs')
         return fixture,expected,digest(source)
 
+    def launch_reference_player(self, argv, launch):
+        # Only this owned reference window uses private keyfile settings. Its
+        # supported UI action must not write the desktop user's dconf database.
+        require(argv[0]=='/usr/bin/celluloid', 'reference controls require Celluloid')
+        if not getattr(self,'gui_v6',False):
+            launch(argv)
+            return
+        self.reference_settings_config()
+        original=self.prefix
+        require(not any(x.startswith('GSETTINGS_BACKEND=') for x in original),
+                'reference settings backend already selected')
+        self.prefix=original+['GSETTINGS_BACKEND=keyfile']
+        try:
+            launch(argv)
+        finally:
+            self.prefix=original
+
+    def reference_settings_config(self):
+        configs=[x.split('=',1)[1] for x in self.prefix if x.startswith('XDG_CONFIG_HOME=')]
+        # GNU env applies the final assignment after the discovered desktop
+        # config. Renderer trials intentionally share the primary private config.
+        require(configs, 'reference settings config is absent')
+        config=Path(configs[-1])
+        expected=(self.root.parent if isinstance(self,RendererTrialSmoke) else self.root)/'config'
+        info=config.lstat()
+        require(config==expected and config.is_absolute() and stat.S_ISDIR(info.st_mode)
+                and info.st_uid==self.uid and not info.st_mode&0o022 and config.resolve()==config,
+                'reference settings config is not exact private owned directory')
+        return config
+
+    def hide_reference_controls(self, player, ipc):
+        require(player['executable']=='/usr/bin/celluloid' and player['is_xwayland'] is False,
+                'reference controls require owned native Celluloid')
+        before=self.alive(player)
+        require(before.get('is_focused') is True and before.get('is_fullscreen') is True,
+                'reference controls require fresh focused fullscreen player')
+        config=self.reference_settings_config()
+        environ=Path('/proc')/str(player['pid'])/'environ'
+        require(environ.stat().st_uid==self.uid, 'reference settings process owner differs')
+        with environ.open('rb') as stream: raw=stream.read(65537)
+        require(len(raw)<=65536, 'reference settings environment exceeded bound')
+        values=raw.split(b'\0')
+        require([x for x in values if x.startswith(b'GSETTINGS_BACKEND=')]==[b'GSETTINGS_BACKEND=keyfile']
+                and [x for x in values if x.startswith(b'XDG_CONFIG_HOME=')]==[
+                    b'XDG_CONFIG_HOME='+os.fsencode(config)], 'reference settings process/config binding differs')
+        query=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','/usr/bin/gsettings','get',
+               'io.github.celluloid-player.Celluloid.window-state','show-controls']
+        initial=self.cmd(query,timeout=5)[1]
+        require(initial in ('true','false'), 'reference controls initial state is not boolean')
+        mpv_hide_reference_controls(ipc,player['pid'],self.uid)
+        def hidden():
+            result=self.cmd(query,timeout=5)[1]
+            require(result in ('true','false'), 'reference controls readback is not boolean')
+            return result=='false'
+        self.wait(hidden,5,'owned reference controls hidden readback')
+        after=self.alive(player)
+        require(all(after.get(k)==before.get(k) for k in ('id','pid','appid','foreign_toplevel_id',
+                'monitor','is_focused','is_visible','is_fullscreen','x','y','width','height')),
+                'reference controls player identity/focus/geometry changed')
+        value=dict(action='win.set-controls-visible(false)',transport='owned mpv IPC SO_PEERCRED',
+                   settings_backend='keyfile',private_config_process_bound=True,
+                   before_visible=initial=='true',after_visible=False,
+                   readback_scope='supported action writes private setting after GTK control-box visibility update',
+                   release_acceptance=False)
+        self.trace('reference-controls-hidden',receipt=value)
+        return value
+
     def visual_media(self):
         fixture,expected,source_sha=self.visual_fixture()
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
         ipc=self.root/'visual-reference-ipc.sock'
-        player=self.fresh_window(lambda:self.launch(['/usr/bin/celluloid','--no-existing-session',
-            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),
+        player=self.fresh_window(lambda:self.launch_reference_player(['/usr/bin/celluloid','--no-existing-session',
+            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
+            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
             'celluloid',r'celluloid')
         self.wait(lambda:ipc.is_socket())
         def ready_reference():
@@ -849,6 +1469,7 @@ class Smoke:
         self.wait(lambda:self.alive(player).get('is_focused') is True,10)
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
+            controls=self.hide_reference_controls(player,ipc)
         time.sleep(.5)
         client=self.alive(player)
         monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
@@ -884,6 +1505,8 @@ class Smoke:
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
+        if getattr(self,'gui_v6',False):
+            info['capture_precondition']=controls
         try:
             info['oracle']=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
         except Exception as exc:
@@ -891,7 +1514,11 @@ class Smoke:
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
         if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
+        if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
+        if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':
+            self.controlled_controls_trials(fixture,expected,source_sha,info)
         require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
 
@@ -980,6 +1607,329 @@ class Smoke:
                     retained_tmp_evidence=str(self.root))
 
 
+# BEGIN CONTROLLED_RENDERER_TRIALS
+def renderer_trial_error(error):
+    return {RuntimeError:'guard-error',OSError:'os-error',ValueError:'value-error',
+            TypeError:'type-error',KeyError:'key-error',subprocess.TimeoutExpired:'timeout'}.get(type(error),'other-error')
+
+
+def write_renderer_receipt(root,uid,value):
+    raw=(json.dumps(value,sort_keys=True)+'\n').encode()
+    require(len(raw)<=512*1024,'controlled renderer receipt exceeded bound')
+    directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        require(os.fstat(directory).st_uid==uid,'controlled receipt directory owner differs')
+        fd=os.open('0-controlled-renderer-trials.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                   0o600,dir_fd=directory)
+        with os.fdopen(fd,'wb') as stream:
+            os.fchown(stream.fileno(),uid,-1)
+            info=os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_uid==uid and info.st_nlink==1
+                    and not info.st_mode&0o077,'controlled receipt file identity differs')
+            stream.write(raw)
+    finally: os.close(directory)
+
+
+def retire_renderer_player(proof,uid):
+    require(type(uid) is int and uid>0 and proof.get('executable')=='/usr/bin/celluloid'
+            and all(type(proof.get(k)) is int and proof[k]>0 for k in ('pid','start_ticks')),
+            'controlled cleanup requires proved native player identity')
+    try: descriptor=os.pidfd_open(proof['pid'])
+    except ProcessLookupError: return
+    try:
+        current=identity(proof['pid'],uid)
+        require(all(current[k]==proof[k] for k in ('pid','start_ticks','executable'))
+                and digest(current['executable'])==proof['executable_sha256'],
+                'controlled cleanup player identity changed')
+        signal.pidfd_send_signal(descriptor,signal.SIGTERM)
+    finally: os.close(descriptor)
+    until=time.monotonic()+5
+    while time.monotonic()<until:
+        try:
+            current=identity(proof['pid'],uid)
+            if any(current[k]!=proof[k] for k in ('pid','start_ticks','executable')): return
+        except (FileNotFoundError,ProcessLookupError,RuntimeError): return
+        time.sleep(.1)
+    raise RuntimeError('controlled cleanup player survived bounded retirement')
+
+
+class RendererTrialSmoke(Smoke):
+    """One owned default/GL diagnostic, isolated from the primary receipt state."""
+    def __init__(self,parent,mode):
+        require(mode in ('default','gl'),'unsupported controlled renderer intervention')
+        self.mode=mode; self.user=parent.user; self.uid=parent.uid; self.stage=parent.stage
+        self.root=parent.root/('renderer-trial-'+mode)
+        self.root.mkdir(mode=0o700); os.chown(self.root,self.uid,self.user.pw_gid)
+        self.prefix=list(parent.prefix); self.original_prefix=list(parent.original_prefix)
+        self.owned=[]; self.launches=[]; self.gui_v6=True
+        self.deadline=time.monotonic()+120
+
+    def trace(self,*args,**kwargs):
+        pass  # No arbitrary client snapshots, stdout, stderr, argv or labels.
+
+    def remaining(self):
+        value=self.deadline-time.monotonic()
+        require(value>0,'controlled renderer diagnostic time bound')
+        return value
+
+    def cmd(self,argv,*,original=False,**kwargs):
+        require(original is False,'controlled renderer commands use isolated prefix')
+        kwargs['timeout']=min(kwargs.get('timeout',45),self.remaining())
+        return execute(self.prefix+argv,**kwargs)
+
+    def clients(self):
+        data=json.loads(self.cmd(['mmsg','get','all-clients'])[1])
+        require(type(data) is dict and type(data.get('clients')) is list,
+                'controlled renderer client collection differs')
+        require(all(type(c) is dict and type(c.get('id')) is int for c in data['clients'])
+                and len({c['id'] for c in data['clients']})==len(data['clients']),
+                'controlled renderer client identities differ')
+        return {str(c['id']):c for c in data['clients']}
+
+    def wait(self,fn,timeout=30,label='functional observation'):
+        return Smoke.wait(self,fn,min(timeout,self.remaining()),'controlled renderer observation')
+
+    def launch_renderer(self,argv):
+        require(argv[0]=='/usr/bin/celluloid','controlled renderer executable differs')
+        drain=NativeProtocolDrain(renderer=True); reader=None; writer=None
+        self.native_protocol_drain=drain
+        try:
+            read,writer=os.pipe()
+            try: reader=os.fdopen(read,'rb',buffering=0)
+            except BaseException:
+                os.close(read); raise
+            drain.start(reader)
+            options=['env','-u','GSK_RENDERER','GSK_DEBUG=renderer','WAYLAND_DEBUG=client']
+            if self.mode=='gl': options.append('GSK_RENDERER=gl')
+            child=subprocess.Popen(self.prefix+options+argv,stdout=subprocess.DEVNULL,stderr=writer)
+            self.launches.append(child)
+        except BaseException:
+            drain.finish(); raise
+        finally:
+            if writer is not None: os.close(writer)
+
+    def fullscreen(self,player):
+        before=self.alive(player)
+        require(before.get('is_fullscreen') is False,'controlled player was not a fresh window')
+        response=self.cmd(['mmsg','dispatch','togglefullscreen','client,'+player['client_id']])
+        require(response[0]==0 and json.loads(response[1])=={'success':True},'controlled fullscreen action failed')
+        self.wait(lambda:self.alive(player).get('is_fullscreen') is True,10)
+
+    def gtk_binding(self,player):
+        require(self.cmd(['rpm','-q','--qf','%{VERSION}','gtk4'])[1]=='4.22.5',
+                'controlled renderer GTK source version differs')
+        path=Path('/proc')/str(player['pid'])/'maps'
+        require(path.stat().st_uid==self.uid,'controlled GTK maps owner differs')
+        with path.open() as stream: raw=stream.read(LIMIT+1)
+        require(len(raw)<=LIMIT,'controlled GTK maps exceeded bound')
+        paths={Path(line.split(maxsplit=5)[5]).resolve(strict=True) for line in raw.splitlines()
+               if len(line.split(maxsplit=5))==6 and Path(line.split(maxsplit=5)[5]).name.startswith('libgtk-4.so.')}
+        require(len(paths)==1,'controlled player GTK mapping absent or ambiguous')
+        library=paths.pop(); info=library.stat()
+        require(stat.S_ISREG(info.st_mode) and info.st_uid==0 and not info.st_mode&0o022,
+                'controlled mapped GTK library unsafe')
+        require(self.cmd(['rpm','-qf','--qf','%{NAME}:%{VERSION}',str(library)])[1]=='gtk4:4.22.5',
+                'controlled mapped GTK package differs')
+        self.alive(player)
+        return dict(package='gtk4',version='4.22.5',mapped_library_sha256=digest(library))
+
+    def observe(self,fixture,expected,source_sha):
+        value=dict(intervention=self.mode,status='unknown',release_acceptance=False,
+            requested_gsk_renderer='unset' if self.mode=='default' else 'gl',
+            recording_flags=['GSK_DEBUG=renderer','WAYLAND_DEBUG=client'],
+            command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
+            settle_seconds=.5,diagnostic_time_bound_seconds=120,rendering_cause_proven=False)
+        private=None
+        try:
+            ipc=self.root/'player.sock'
+            player=self.fresh_window(lambda:self.launch_reference_player(['/usr/bin/celluloid','--no-existing-session',
+                '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],self.launch_renderer),'celluloid',r'celluloid')
+            require(self.native_protocol_drain.bind(player,self.uid),'controlled owned stderr binding unavailable')
+            value['player']={k:player[k] for k in ('pid','start_ticks','executable_sha256')}
+            value['player'].update(uid=self.uid,client_id=int(player['client_id']),executable='/usr/bin/celluloid')
+            value['gtk']=self.gtk_binding(player)
+            self.wait(lambda:ipc.is_socket())
+            def ready():
+                try: return mpv_property(ipc,'video-params',player['pid'],self.uid)
+                except RuntimeError as error:
+                    args=BaseException.args.__get__(error)
+                    if type(args) is tuple and len(args)==1 and type(args[0]) is str and args[0]=='mpv property unavailable: video-params': return None
+                    raise
+            self.wait(ready)
+            state={k:mpv_property(ipc,k,player['pid'],self.uid)
+                   for k in ('path','pause','video-params','current-vo','time-pos')}
+            require(state['path']==str(fixture) and state['pause'] is False and state['current-vo']=='libmpv'
+                    and type(state['video-params']) is dict and type(state['video-params'].get('w')) is int
+                    and type(state['video-params'].get('h')) is int
+                    and state['video-params']['w']==160 and state['video-params']['h']==120,
+                    'controlled exact media state differs')
+            require(type(state['time-pos']) in (int,float) and math.isfinite(state['time-pos'])
+                    and 0<=state['time-pos']<=100000,'controlled playback time invalid')
+            value['media']=dict(fixture_sha256=digest(fixture),expected_rgb_sha256=digest(expected),
+                input_rgb_sha256=source_sha,decoded_video_dimensions=[160,120],pause=False,current_vo='libmpv',
+                observed_time_seconds=state['time-pos'])
+            require(json.loads(self.cmd(['mmsg','dispatch','focusid','client,'+player['client_id']])[1]).get('success') is True,
+                    'controlled focus action failed')
+            self.wait(lambda:self.alive(player).get('is_focused') is True,10)
+            self.fullscreen(player)
+            value['capture_precondition']=self.hide_reference_controls(player,ipc)
+            time.sleep(.5)
+            before=self.alive(player); monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            monitor,geometry,crop=visual_capture_geometry(before,monitors)
+            require(before.get('is_fullscreen') is True and crop==dict(x=0,y=0,width=monitor['width'],height=monitor['height']),
+                    'controlled capture requires full owned fullscreen viewport')
+            image=self.root/'reference.png'
+            require(not image.exists() and not image.is_symlink(),'controlled PNG path already exists')
+            self.cmd(['grim','-o',monitor['name'],str(image)])
+            info=image.lstat()
+            require(stat.S_ISREG(info.st_mode) and info.st_uid==self.uid and info.st_nlink==1
+                    and 0<info.st_size<=LIMIT,'controlled PNG identity or bound differs')
+            header=image.read_bytes()[:24]
+            require(header[:8]==b'\x89PNG\r\n\x1a\n' and header[12:16]==b'IHDR'
+                    and list(struct.unpack('>II',header[16:24]))==[monitor['width'],monitor['height']],
+                    'controlled PNG dimensions differ')
+            after=self.alive(player); monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
+            require(all(after.get(k)==before.get(k) for k in ('id','pid','is_visible','is_focused','is_fullscreen','monitor'))
+                    and geometry_after==geometry and crop_after==crop
+                    and all(monitor_after.get(k)==monitor.get(k) for k in ('name','x','y','width','height','scale','is_hdr')),
+                    'controlled capture identity or geometry changed')
+            value['capture']=dict(path='renderer-trial-'+self.mode+'/reference.png',sha256=digest(image),
+                bytes=info.st_size,dimensions=[monitor['width'],monitor['height']],client_geometry=geometry,
+                client_pixel_crop=crop,complete_owned_viewport=True,screencopy_may_request_repaint=True)
+            private=Path(tempfile.mkdtemp(prefix='arctic-renderer-rgb-private-',dir='/tmp'))
+            os.chown(private,self.uid,self.user.pw_gid)
+            rgb=private/'frame.private'
+            x,y,w,h=[crop[k] for k in ('x','y','width','height')]
+            self.cmd(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-i',str(image),'-frames:v','1',
+                      '-vf',f'crop={w}:{h}:{x}:{y}','-pix_fmt','rgb24','-f','rawvideo',str(rgb)])
+            require(rgb.stat().st_size==w*h*3<=LIMIT,'controlled raw RGB frame bound differs')
+            value['actual_rgb_sha256']=digest(rgb)
+            require(digest(fixture)==value['media']['fixture_sha256'] and digest(expected)==value['media']['expected_rgb_sha256'],
+                    'controlled fixture changed during capture')
+            value['oracle']=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
+            value['protocol']=self.native_protocol_drain.snapshot(player,self.uid)
+            value['realized_renderer']=value['protocol']['realized_renderer']
+            value['status']='observed' if value['realized_renderer']['status']=='reported-realized' else 'unknown'
+            value['requested_renderer_matched']=value['realized_renderer']['renderer']=='gl' if self.mode=='gl' else None
+        except Exception as error:
+            value['error']=renderer_trial_error(error)
+        finally:
+            if private is not None:
+                try: shutil.rmtree(private)
+                except OSError: value['private_rgb_cleanup_completed']=False
+        return value
+# END CONTROLLED_RENDERER_TRIALS
+
+
+# BEGIN CONTROLLED_CONTROLS_STUDY
+def write_controls_receipt(root,uid,value):
+    raw=(json.dumps(value,sort_keys=True)+'\n').encode()
+    require(len(raw)<=512*1024,'controlled renderer receipt exceeded bound')
+    directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        require(os.fstat(directory).st_uid==uid,'controlled receipt directory owner differs')
+        fd=os.open('0-controls-state-trials.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                   0o600,dir_fd=directory)
+        with os.fdopen(fd,'wb') as stream:
+            os.fchown(stream.fileno(),uid,-1)
+            info=os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_uid==uid and info.st_nlink==1
+                    and not info.st_mode&0o077,'controlled receipt file identity differs')
+            stream.write(raw)
+    finally: os.close(directory)
+
+
+
+class ControlsTrialSmoke(RendererTrialSmoke):
+    """Same default renderer/capture, changing only private initial controls state."""
+    def __init__(self,parent,state):
+        require(type(state) is str and state in ('transition','hidden'),
+                'unsupported controls state intervention')
+        self.mode='default'; self.state=state
+        self.initial_visible=state=='transition'
+        self.user=parent.user; self.uid=parent.uid; self.stage=parent.stage
+        self.root=parent.root/('controls-trial-'+state)
+        self.root.mkdir(mode=0o700); os.chown(self.root,self.uid,self.user.pw_gid)
+        self.prefix=list(parent.prefix); self.original_prefix=list(parent.original_prefix)
+        self.owned=[]; self.launches=[]; self.gui_v6=True
+        self.deadline=time.monotonic()+120
+
+    def seed_controls(self):
+        self.reference_settings_config()
+        require(not any(x.startswith('GSETTINGS_BACKEND=') for x in self.prefix),
+                'controls trial settings backend already selected')
+        key=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','/usr/bin/gsettings']
+        schema=['io.github.celluloid-player.Celluloid.window-state','show-controls']
+        wanted='true' if self.initial_visible else 'false'
+        result=self.cmd(key+['set']+schema+[wanted],timeout=5)
+        require(result[0]==0,'controls trial private setting write failed')
+        result=self.cmd(key+['get']+schema,timeout=5)
+        require(result[0]==0 and result[1]==wanted,'controls trial private initial state differs')
+        return dict(initial_visible=self.initial_visible,settings_backend='keyfile',
+                    private_config_verified=True,seed_readback_matched=True,
+                    setting='window-state show-controls',release_acceptance=False)
+
+    def hide_reference_controls(self,player,ipc):
+        value=super().hide_reference_controls(player,ipc)
+        require(type(value.get('before_visible')) is bool and value['before_visible']==self.initial_visible
+                and value.get('after_visible') is False and value.get('private_config_process_bound') is True,
+                'controls trial process-bound initial or hidden state differs')
+        return value
+
+    def observe(self,fixture,expected,source_sha):
+        # A failed seed aborts before launch; no fallback or guessed initial state.
+        seed=self.seed_controls()
+        value=super().observe(fixture,expected,source_sha)
+        value['intervention']=self.state
+        value['controls_seed']=seed
+        value['controls_history']=dict(initial_visible=self.initial_visible,action='win.set-controls-visible(false)',
+            desired_final_visible=False,comparison='true-to-false' if self.initial_visible else 'false-to-false',
+            setting_readback_not_framebuffer_attestation=True,release_acceptance=False)
+        if 'capture' in value:
+            # Inherited capture writes this exact owned directory; this is its
+            # source-controlled relative filename, not a new image or conversion.
+            value['capture']['path']='controls-trial-'+self.state+'/reference.png'
+        return value
+# END CONTROLLED_CONTROLS_STUDY
+
+
+def mpv_hide_reference_controls(path, expected_pid, expected_uid):
+    """The sole supported fixed per-window UI command; never an arbitrary action."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
+            'reference controls IPC identity is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'reference controls IPC path owner/type differs')
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid), 'reference controls IPC peer differs')
+        peer.sendall(b'{"command":["script-message","celluloid-action","win.set-controls-visible(false)"],"request_id":43}\n')
+        data=b''; deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            chunk=peer.recv(4096)
+            require(chunk, 'reference controls IPC disconnected before acknowledgement')
+            data+=chunk
+            require(len(data)<=4096, 'reference controls IPC reply exceeded bound')
+            while b'\n' in data:
+                line,data=data.split(b'\n',1)
+                def pairs(items):
+                    value={}
+                    for key,item in items:
+                        require(key not in value, 'reference controls IPC duplicate field')
+                        value[key]=item
+                    return value
+                message=json.loads(line,object_pairs_hook=pairs)
+                require(type(message) is dict, 'reference controls IPC reply is not an object')
+                if message.get('request_id')==43:
+                    require(type(message['request_id']) is int and message.get('error')=='success'
+                            and message.get('data') is None, 'reference controls IPC command failed')
+                    return
+        raise RuntimeError('reference controls IPC acknowledgement timed out')
+
+
 def mpv_property(path, key, expected_pid, expected_uid):
     with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
         peer.settimeout(2)
@@ -1037,6 +1987,7 @@ def run_checks(prefix, stage, *, disposable_guest=False, gui_v6=False):
     finally:
         smoke.gate('owned-process-cleanup-config-preservation',smoke.cleanup)
         smoke.gate('selinux-and-new-avcs',security.finish)
+        smoke.finish_native_protocol()
     report=dict(schema=SCHEMA,stage=stage,status='failed' if any(g['status']=='failed' for g in smoke.gates)
                 else 'limited-smoke-passed',release_acceptance=False,gates=smoke.gates,steps=smoke.steps,
                 proven_new_processes=smoke.owned,diagnostic_trace=dict(path=str(smoke.root/'gui-trace.log'),
@@ -1048,8 +1999,162 @@ def run_checks(prefix, stage, *, disposable_guest=False, gui_v6=False):
     if gui_v6:
         report['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
     (smoke.root/'report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
-    print('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False),flush=True)
+    print('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False,separators=(',',':')),flush=True)
     return report
+
+
+# BEGIN NATIVE_BULK_TRANSPORT
+class NativeBulkWriter:
+    """Write the bounded stream without an unbounded blocking device write."""
+    def __init__(self, fd):
+        self.fd = fd
+        self.deadline = time.monotonic() + 2400
+        self.bytes = 0
+
+    def write(self, text):
+        import select
+        data = text.encode('ascii')
+        require(data.endswith(b'\n') and data.count(b'\n')==1 and len(data)-1<=65536,
+                'native bulk original line bound differs')
+        self.bytes += len(data)
+        require(self.bytes <= 32 * 1024 * 1024, 'native bulk wire byte bound exceeded')
+        deadline = min(self.deadline, time.monotonic() + 60)
+        view = memoryview(data)
+        while view:
+            require(time.monotonic() < deadline, 'native bulk virtio write timed out')
+            try:
+                count = os.write(self.fd, view)
+                require(count > 0, 'native bulk virtio device disconnected')
+                view = view[count:]
+            except BlockingIOError:
+                require(select.select([], [self.fd], [], max(0, deadline-time.monotonic()))[1],
+                        'native bulk virtio write timed out')
+        return len(text)
+
+    def flush(self):
+        pass  # Unbuffered os.write; END is written before the UART completion receipt.
+
+    def close(self):
+        if self.fd is not None:
+            fd, self.fd = self.fd, None
+            os.close(fd)
+
+
+def open_native_bulk_port():
+    alias = Path('/dev/virtio-ports') / 'arctic-native-evidence'
+    canonical = alias.resolve(strict=True)
+    require(canonical.parent == Path('/dev') and re.fullmatch('vport[0-9]+p[0-9]+', canonical.name),
+            'native bulk named virtio port resolves outside the canonical device namespace')
+    attrs = Path('/sys/class/virtio-ports') / canonical.name
+    # Sysfs class entries are kernel-owned symlinks; their attributes bind the
+    # named channel to the exact opened device, rather than trusting a dev alias.
+    for path in (alias.parent, attrs / 'name', attrs / 'dev'):
+        info = path.stat()
+        require(info.st_uid == 0 and not info.st_mode & 0o022, 'native bulk device/sysfs metadata is unprotected')
+    name = (attrs / 'name').read_text().strip()
+    device = (attrs / 'dev').read_text().strip()
+    require(name == 'arctic-native-evidence' and re.fullmatch('[0-9]{1,5}:[0-9]{1,5}', device),
+            'native bulk sysfs channel name/device differs')
+    major, minor = (int(v) for v in device.split(':'))
+    fd = os.open(canonical, os.O_WRONLY | os.O_NOFOLLOW | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        require(stat.S_ISCHR(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022
+                and (os.major(info.st_rdev), os.minor(info.st_rdev)) == (major, minor),
+                'native bulk virtio device type/owner/protection/sysfs identity differs')
+        receipt = dict(schema='arctic-native-bulk-virtio-port-v1', name='arctic-native-evidence', device=str(canonical),
+                       major=major, minor=minor, uid=info.st_uid, mode=stat.S_IMODE(info.st_mode))
+        return NativeBulkWriter(fd), receipt
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def native_bulk_export(encoded, manifest, provenance, begin):
+    # Every original chunk/manifest line remains byte-identical. The protected
+    # named output port is mandatory; there is no slow UART fallback.
+    context = dict(schema='arctic-native-bulk-v1', stage=begin['stage'],
+                   boot_id=provenance['boot_id'], native_source_sha256=begin['native_source_sha256'],
+                   checker_sha256=begin['checker_sha256'], release_acceptance=False)
+    require(context['stage'] in ('live','installed') and re.fullmatch(
+        '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', context['boot_id']), 'native bulk context differs')
+    import base64
+    port, _ = open_native_bulk_port()
+    primary=None
+    try:
+        port.write('ARCTIC-NATIVE-BULK-BEGIN '+json.dumps(context,sort_keys=True)+'\n')
+        total, count, digestor = 0, 0, hashlib.sha256()
+        def emit(line):
+            nonlocal total, count
+            raw = (line+'\n').encode('ascii')
+            require(len(raw)-1 <= 65536, 'native bulk line exceeds original UART bound')
+            total += len(raw); count += 1
+            require(total <= 32*1024*1024 and count <= 128*172+1, 'native bulk wire bounds differ')
+            digestor.update(raw);port.write(line+'\n')
+        for entry, chunks in encoded:
+            require(1 <= len(chunks) <= 172, 'native bulk original chunk bound differs')
+            for index, chunk in enumerate(chunks):
+                emit('ARCTIC-NATIVE-EVIDENCE-CHUNK '+json.dumps(dict(path=entry['path'],index=index,
+                     data=base64.b64encode(chunk).decode()),sort_keys=True))
+        emit('ARCTIC-NATIVE-EVIDENCE-MANIFEST '+json.dumps(manifest,sort_keys=True))
+        footer=dict(context, bytes=total, lines=count, sha256=digestor.hexdigest())
+        port.write('ARCTIC-NATIVE-BULK-END '+json.dumps(footer,sort_keys=True)+'\n')
+    except BaseException as exc:
+        primary=exc
+        raise
+    finally:
+        try:port.close()
+        except BaseException:
+            if primary is None:raise
+# END NATIVE_BULK_TRANSPORT
+
+
+# BEGIN NATIVE_PUBLIC_EVIDENCE_INVENTORY
+# This is the finite output inventory of the pinned Native audit, not an
+# extension-based application-profile publisher. The four isolated HOME/XDG
+# directories remain intact in the guest temporary root until its lifecycle
+# ends; they do not acquire a durable host copy through this public transport.
+NATIVE_PRIVATE_PROFILE_DIRECTORIES = frozenset(('home', 'config', 'data', 'cache'))
+NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
+    'report.json', 'gui-trace.log', 'gui-trace-summary.json', 'final-clients.json',
+    'visual-oracle.json', 'moving-player-proof.json',
+    'fullscreen-player-receipts.json', 'fullscreen-player-captures.json',
+    'terminal-role.json', 'file-manager-terminal.json',
+    '0-native-protocol-viewport.json', '0-controls-state-trials.json',
+    'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
+    'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
+    'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
+    'files with spaces/editor fixture.txt',
+)) | frozenset(
+    directory + '/' + filename
+    for directory in ('archive source', *('extracted ' + kind for kind in
+        ('zip', '7z', 'tar', 'tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst', 'cpio', '7z-encrypted')))
+    for filename in ('nested directory/hello world.txt', 'Unicode-\u05e9.txt')
+) | frozenset('gui-launch-' + str(index) + '.log' for index in range(130)) | frozenset(
+    'gui-%02d-' % index + label + '.png'
+    for index in range(13)  # Seven one-use gate failures plus six GUI diagnostics.
+    for label in (
+        'failure-fresh-defaults-and-isolation', 'failure-archive-content-roundtrips',
+        'failure-actual-role-file-manager-terminal-editor',
+        'failure-open-codec-content-and-player-state',
+        'failure-portal-and-accessibility-reachability',
+        'failure-owned-process-cleanup-config-preservation', 'failure-selinux-and-new-avcs',
+        'text-fixture-before-location', 'text-fixture-navigation-confirmed',
+        'archive-fixture-before-location', 'archive-fixture-navigation-confirmed',
+        'file-manager-F4-mapped', 'editor-save-confirmed',
+    )
+)
+
+
+def native_public_evidence_member(relative):
+    # Caller has already enforced the original root, regular-file and symlink
+    # guards. Do not inspect, decode, rename, remove or copy private profile data.
+    if relative.split('/', 1)[0] in NATIVE_PRIVATE_PROFILE_DIRECTORIES:
+        return False
+    require(relative in NATIVE_PUBLIC_EVIDENCE_FILES,
+            'unexpected native public evidence member outside the source inventory')
+    return True
+# END NATIVE_PUBLIC_EVIDENCE_INVENTORY
 
 
 def main():
@@ -1060,11 +2165,12 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b'
+    native_source_sha = 'd7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []
     expected_uid = None
+    provenance = None
     begin = dict(stage=stage, native_source_sha256=native_source_sha,
                  checker_sha256=digest(Path(__file__)), release_acceptance=False)
     print('ARCTIC-NATIVE-RUNNER-BEGIN '+json.dumps(begin,sort_keys=True),flush=True)
@@ -1111,7 +2217,7 @@ def main():
         error = type(exc).__name__+': '+str(exc)
         traceback.print_exc()
     finally:
-        # Export only owned guest JSON/screens/logs/text, even after failed gates.
+        # Export the audit's owned public artifacts, even after failed gates.
         # Raw serial is retained if bounded export itself fails or is interrupted.
         try:
             if report is not None:
@@ -1131,6 +2237,8 @@ def main():
                     if not path.is_file() or path.suffix.lower() not in ('.json','.png','.log','.txt','.tsv','.rgb'):
                         continue
                     relative = path.relative_to(root).as_posix()
+                    if not native_public_evidence_member(relative):
+                        continue
                     require(len(entries) < 128 and path.stat().st_size <= 4*1024*1024,
                             'native evidence file count/size exceeded bound')
                     data = path.read_bytes()
@@ -1142,12 +2250,14 @@ def main():
                                  compressed_bytes=len(compressed),chunks=len(chunks),encoding='zlib+base64')
                     entries.append(entry)
                     encoded.append((entry,chunks))
-            for entry,chunks in encoded:
-                for index,chunk in enumerate(chunks):
-                    print('ARCTIC-NATIVE-EVIDENCE-CHUNK '+json.dumps(dict(path=entry['path'],index=index,
-                          data=base64.b64encode(chunk).decode()),sort_keys=True),flush=True)
-            print('ARCTIC-NATIVE-EVIDENCE-MANIFEST '+json.dumps(dict(schema='arctic-native-evidence-v1',
-                  stage=stage,files=entries,bytes=total,evidence_root=str(roots[0]) if roots else None),sort_keys=True),flush=True)
+            require(provenance is not None, 'native bulk requires original runtime provenance')
+            print('ARCTIC-NATIVE-PRIVATE-PROFILES '+json.dumps(dict(
+                  schema='arctic-native-private-profile-disclosure-v1', stage=stage,
+                  category='private-isolated-profiles-retained-not-published',
+                  retention='owned-guest-tmp-until-poweroff', durable_host_copy=False,
+                  release_acceptance=False),sort_keys=True),flush=True)
+            native_bulk_export(encoded, dict(schema='arctic-native-evidence-v1',
+                  stage=stage,files=entries,bytes=total,evidence_root=str(roots[0]) if roots else None), provenance, begin)
             export_complete = True
         except BaseException as exc:
             export_error = type(exc).__name__+': '+str(exc)

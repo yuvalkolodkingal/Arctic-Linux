@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import uuid
 
@@ -26,6 +27,225 @@ FILES = {'.github/workflows/dictation-candidate-20261009.yml',
          'tools/dictation-accuracy/pins.json', 'tools/test-install.sh', 'tools/lib/vmtest.py',
          'tools/lib/container.sh', 'tools/performance/prepare-vm-tools.sh',
          'tools/native-functional/fetch-image.py'}
+
+# Failure diagnostics are fixed labels, never exception text or command output.
+HOST_STAGES = frozenset({
+    'host-data', 'host-container', 'container-packages', 'container-audio',
+    'container-data', 'container-disk', 'container-profile', 'container-driver',
+    'container-complete', 'install-acquire', 'install-menu', 'install-live',
+    'install-settle', 'install-terminal', 'install-start-marker',
+    'install-start-observed', 'install-not-started', 'install-engine',
+    'install-exit-observed', 'install-exit-missing-vm-running',
+    'install-exit-missing-vm-exited', 'install-shutdown', 'install-cleanup',
+    'boot-acquire', 'boot-menu', 'boot-unlock', 'boot-login', 'boot-settle',
+    'boot-terminal', 'boot-collect', 'boot-collect-observed',
+    'boot-collect-missing', 'boot-shutdown', 'boot-cleanup',
+    'install-live-observed', 'install-live-unobserved',
+    'install-terminal-attempt-one', 'install-terminal-attempt-two', 'install-terminal-attempt-three',
+    'install-command-type-before', 'install-command-type-after',
+    'install-command-enter-before', 'install-command-enter-after',
+    'install-marker-wait-observed', 'install-marker-wait-unobserved',
+    'install-marker-vm-running', 'install-marker-vm-exited', 'install-marker-vm-unknown',
+    'install-command-shot-before', 'install-command-shot-after',
+    'install-preterminal-capture-preserved', 'install-preterminal-capture-unavailable',
+    'vm-acquire-qemu-exited', 'vm-acquire-no-qmp', 'vm-acquire-system-exit',
+    'vm-acquire-file-missing', 'vm-acquire-permission-error', 'vm-acquire-os-error',
+    'vm-acquire-json-error', 'vm-acquire-qmp-error', 'vm-acquire-keyboard-interrupt',
+    'vm-acquire-other-error', 'vm-acquire-stderr-unobserved',
+    'vm-acquire-enforce-host-unavailable', 'vm-acquire-enforce-only-spec-ctrl',
+    'vm-acquire-enforce-floor-unavailable', 'vm-acquire-enforce-tcg-unavailable'})
+PHASES = frozenset({'online-installed', 'offline-installed', 'recovery', 'recovered-offline'})
+CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator'})
+TRUSTED_ERRORS = {
+    'Private dictation harness command failed': 'command-failed',
+    'Missing or oversized private dictation serial log': 'serial-missing-or-oversized',
+    'Missing/duplicate/oversized dictation report': 'report-missing-duplicate-or-oversized',
+    'Missing dictation indicator receipt': 'indicator-receipt-missing',
+    'Indicator receipt/report binding differs': 'indicator-binding-differs',
+    'Indicator screenshot bytes differ': 'indicator-image-differs'}
+TRUSTED_CONTRACT_ERRORS = frozenset({
+    'report-fields', 'report-schema-scope', 'report-context-boot', 'report-controller',
+    'report-profile-descriptor', 'report-hardware-fields', 'report-hardware-profile',
+    'report-payload-pins', 'report-payload-pin-types', 'report-disk-type',
+    'report-missing-duplicate-extra-gates', 'gate-fields', 'gate-status',
+    'gate-safe-code', 'gate-observation-fields', 'report-status-derived',
+    'image-dictation-gates-incomplete'})
+
+
+def diagnostic(phase, stage, error, contract):
+    if phase not in PHASES or stage not in CATCH_STAGES:
+        return
+    classes = {subprocess.TimeoutExpired: 'timeout-expired',
+               subprocess.CalledProcessError: 'command-error', FileNotFoundError: 'file-not-found',
+               PermissionError: 'permission-error', OSError: 'os-error',
+               UnicodeDecodeError: 'unicode-error', json.JSONDecodeError: 'json-error',
+               KeyError: 'key-error', TypeError: 'type-error', ValueError: 'value-error',
+               RuntimeError: 'runtime-error', InterruptedError: 'interrupted-error',
+               KeyboardInterrupt: 'keyboard-interrupt', SystemExit: 'system-exit'}
+    code = 'contract-invalid' if type(error) is contract.Invalid else classes.get(type(error), 'other-error')
+    args = BaseException.args.__get__(error)
+    if type(args) is tuple and len(args) == 1 and type(args[0]) is str:
+        if type(error) is RuntimeError and args[0] in TRUSTED_ERRORS:
+            code = TRUSTED_ERRORS[args[0]]
+        elif type(error) is contract.Invalid:
+            code = args[0] if args[0] in TRUSTED_CONTRACT_ERRORS else 'contract-invalid'
+    try:
+        print('ARCTIC-DICTATION-HOST-FAILURE ' + phase + ' ' + stage + ' ' + code, flush=True)
+    except (OSError, ValueError):
+        pass  # Closed diagnostic stdout cannot change state or owned cleanup.
+
+
+def relay_host_stages(path, token, phase):
+    if phase not in PHASES or type(token) is not str or re.fullmatch('[0-9a-f]{32}', token) is None:
+        return
+    fd = None
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 16 * 1024 * 1024:
+            return
+        with os.fdopen(fd, 'rb') as stream:
+            fd = None
+            raw = stream.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024:
+            return
+        prefix = b'ARCTIC-DICTATION-HOST-STAGE ' + token.encode('ascii') + b' '
+        seen = set()
+        allowed = {value.encode('ascii') for value in HOST_STAGES}
+        for line in raw.splitlines(keepends=True):
+            if not line.endswith(b'\n') or line.endswith(b'\r\n') or not line.startswith(prefix):
+                continue
+            code = line[len(prefix):-1]
+            if code not in allowed or code in seen:
+                continue
+            seen.add(code)
+            print('ARCTIC-DICTATION-HOST-PROGRESS ' + phase + ' ' + code.decode('ascii'), flush=True)
+    except (OSError, ValueError):
+        pass  # No private bytes, paths or errors are exported.
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+def launch_diagnostic_read(root, name, maximum):
+    """Read a fixed private regular file without following links or accepting races."""
+    require(type(name) is str and name not in ('', '.', '..') and '/' not in name
+            and type(maximum) is int and 0 < maximum <= 16 * 1024 * 1024, '')
+    directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        parent = os.fstat(directory)
+        require(parent.st_uid in (0, os.geteuid()) and not parent.st_mode & 0o022, '')
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, 'rb') as stream:
+            before = os.fstat(stream.fileno())
+            require(stat.S_ISREG(before.st_mode) and before.st_uid in (0, os.geteuid())
+                    and not before.st_mode & 0o022 and 0 < before.st_size <= maximum, '')
+            data = stream.read(maximum + 1)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        require(fields(before) == fields(after) == fields(os.stat(name, dir_fd=directory, follow_symlinks=False))
+                and len(data) == before.st_size, '')
+        current = os.stat(root, follow_symlinks=False)
+        require((parent.st_dev, parent.st_ino, parent.st_uid, parent.st_mode)
+                == (current.st_dev, current.st_ino, current.st_uid, current.st_mode)
+                and stat.S_ISDIR(current.st_mode), '')
+        return data
+    finally:
+        os.close(directory)
+
+
+def launch_diagnostic_png(data):
+    """Accept bounded, metadata-free RGB/RGBA PNGs; preserve their original bytes."""
+    import struct
+    import zlib
+    require(type(data) is bytes and 8 < len(data) <= 4 * 1024 * 1024
+            and data.startswith(b'\x89PNG\r\n\x1a\n'), '')
+    at, compressed, dimensions, ended = 8, bytearray(), None, False
+    while at < len(data):
+        require(at + 12 <= len(data) and not ended, '')
+        size, kind = struct.unpack('>I4s', data[at:at + 8])
+        end = at + 12 + size
+        require(end <= len(data) and kind in (b'IHDR', b'IDAT', b'IEND'), '')
+        body = data[at + 8:end - 4]
+        require(zlib.crc32(kind + body) & 0xffffffff == struct.unpack('>I', data[end - 4:end])[0], '')
+        if kind == b'IHDR':
+            require(at == 8 and dimensions is None and size == 13, '')
+            width, height, depth, color, compression, filtering, interlace = struct.unpack('>IIBBBBB', body)
+            require(0 < width <= 1920 and 0 < height <= 1080 and width * height <= 1920 * 1080
+                    and depth == 8 and color in (2, 6) and (compression, filtering, interlace) == (0, 0, 0), '')
+            dimensions = (width, height, 3 if color == 2 else 4)
+        elif kind == b'IDAT':
+            require(dimensions is not None and size > 0, '')
+            compressed.extend(body)
+        else:
+            require(size == 0 and dimensions is not None and compressed, '')
+            ended = True
+        at = end
+    require(ended, '')
+    width, height, channels = dimensions
+    row = width * channels + 1
+    decoder = zlib.decompressobj()
+    raw = decoder.decompress(compressed, row * height + 1)
+    require(decoder.eof and not decoder.unconsumed_tail and not decoder.unused_data
+            and len(raw) == row * height and all(raw[index] <= 4 for index in range(0, len(raw), row)), '')
+    return width, height
+
+
+def preserve_launch_diagnostic(vm, private_log, token, ctx, evidence, contract):
+    """Failure-only pre-command diagnostic; it cannot satisfy any acceptance gate."""
+    try:
+        require(ctx['phase'] == 'online-installed' and type(token) is str
+                and re.fullmatch('[0-9a-f]{32}', token), '')
+        contract.context(ctx)
+        raw = launch_diagnostic_read(private_log.parent, private_log.name, 16 * 1024 * 1024)
+        prefix = b'ARCTIC-DICTATION-HOST-STAGE ' + token.encode() + b' '
+        codes = {line[len(prefix):-1] for line in raw.splitlines(keepends=True)
+                 if line.startswith(prefix) and line.endswith(b'\n') and not line.endswith(b'\r\n')}
+        require(b'install-preterminal-capture-preserved' in codes
+                and not codes & {b'install-marker-wait-observed', b'install-start-observed', b'install-engine', b'install-exit-observed'}, '')
+        def strict_object(pairs):
+            result = {}
+            for key, value in pairs:
+                require(key not in result, '')
+                result[key] = value
+            return result
+        proof = json.loads(launch_diagnostic_read(vm, 'dictation-launch-desktop-receipt.json', 4096),
+                           object_pairs_hook=strict_object)
+        require(type(proof) is dict and set(proof) == {'schema', 'capture_stage', 'path', 'bytes', 'sha256', 'token_sha256'}
+                and proof['schema'] == 'arctic-dictation-preterminal-capture-v1'
+                and proof['capture_stage'] == 'before-first-terminal' and proof['path'] == 'dictation-launch-desktop.png'
+                and type(proof['bytes']) is int and 8 < proof['bytes'] <= 4 * 1024 * 1024
+                and type(proof['sha256']) is str and re.fullmatch('[0-9a-f]{64}', proof['sha256'])
+                and proof['token_sha256'] == hashlib.sha256(token.encode()).hexdigest(), '')
+        image = launch_diagnostic_read(vm, proof['path'], 4 * 1024 * 1024)
+        require(len(image) == proof['bytes'] and hashlib.sha256(image).hexdigest() == proof['sha256'], '')
+        width, height = launch_diagnostic_png(image)
+        record = dict(schema='arctic-dictation-launch-diagnostic-v1', status='diagnostic_only', release_acceptance=False,
+                      context=ctx, capture_stage=proof['capture_stage'], capture_nonce_sha256=proof['token_sha256'],
+                      guest_command_start='unobserved',
+                      execution_files={name: sha(ROOT / name) for name in
+                                       ('tools/test-install.sh', 'tools/dictation-qualification/runner.py')},
+                      image=dict(path='launch-preterminal-online-installed.png', bytes=len(image),
+                                 sha256=proof['sha256'], width=width, height=height))
+        created = []
+        try:
+            for name, content in ((record['image']['path'], image), ('launch-preterminal-online-installed.json',
+                                   (json.dumps(record, sort_keys=True) + '\n').encode())):
+                descriptor = os.open(evidence / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                created.append(name)
+                with os.fdopen(descriptor, 'wb') as stream:
+                    stream.write(content)
+        except BaseException:
+            for name in created:
+                (evidence / name).unlink(missing_ok=True)
+            raise
+        return True
+    except Exception:
+        return False  # Optional evidence cannot alter the original failure, cleanup or limits.
 
 
 def require(value, reason):
@@ -221,10 +441,12 @@ def run(args):
             checker.write_text('import os,sys\nos.execv("/usr/bin/python3", ["/usr/bin/python3", '
                                '"/run/t/dictation-qualification/guest_check.py", sys.argv[1], "--disposable-guest"])\n')
             container = 'arctic-paired-dictation-' + uuid.uuid4().hex
+            diagnostic_token = uuid.uuid4().hex
             env = dict(os.environ, CONTAINER_ENGINE='docker', ARCTIC_VM_CONTAINER_NAME=container,
                        ARCTIC_FEDORA_IMAGE=prepared, ARCTIC_VM_TOOLS_PREPARED='1',
                        ARCTIC_DICTATION_BUNDLE=str(payload), ARCTIC_NATIVE_AUDIO_FIXTURE='1',
-                       ARCTIC_NATIVE_DICTATION_CPU_PROFILE=args.hardware_profile)
+                       ARCTIC_NATIVE_DICTATION_CPU_PROFILE=args.hardware_profile,
+                       ARCTIC_DICTATION_HOST_TOKEN=diagnostic_token)
             vm = private / ('vm-' + kind)
             # Reusing the same target and firmware variables proves offline recovery,
             # rather than substituting a second ready image or fresh disk.
@@ -238,8 +460,11 @@ def run(args):
             errors = []
             try:
                 execute(argv, private / (phase + '.log'), limit, env, container)
-            except BaseException:
+            except BaseException as error:
                 errors.append('harness-failed')
+                diagnostic(phase, 'harness', error, contract)
+                relay_host_stages(private / (phase + '.log'), diagnostic_token, phase)
+                preserve_launch_diagnostic(vm, private / (phase + '.log'), diagnostic_token, ctx, args.evidence, contract)
             # Preserve structurally safe reports even when the collector's
             # nonzero exit correctly prevents acceptance.
             for observed_stage in (('live', 'installed') if stage == 'all' else ('installed',)):
@@ -247,13 +472,15 @@ def run(args):
                 try:
                     state['reports'][key] = reports(vm, observed_stage, ctx, args.evidence, contract,
                                                    args.fixtures / 'fixtures.json')
-                except BaseException:
+                except BaseException as error:
                     errors.append(key + '-failed-or-unrun')
+                    diagnostic(phase, 'report-' + observed_stage, error, contract)
             if phase in ('online-installed', 'recovered-offline'):
                 try:
                     state['indicators'][phase] = indicator(vm, ctx, args.evidence)
-                except BaseException:
+                except BaseException as error:
                     errors.append(phase + '-indicator-failed-or-unrun')
+                    diagnostic(phase, 'indicator', error, contract)
             save()
             require(not errors, 'Exact image dictation phase failed')
         contract.validate_execution(state, {name: json.loads((args.evidence / item['path']).read_text())

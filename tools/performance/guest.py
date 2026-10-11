@@ -515,7 +515,7 @@ def declare_roles(prefix, context, inventory):
             package = dict(kind='flatpak', ref=app['flatpak'], commit=commit)
         roles[role] = dict(id=ident, role=role, configured_command=configured,
                           legacy_system_mime_fallback=legacy_zen_fallback, program_path=state['programs'][app['program']],
-                          appids=list(app['appids']), package=package)
+                          appids=tuple(app['appids']), package=package)
     return dict(image=image, roles=roles, configuration_sources=state['sources'],
                 default_browser_desktop=browser, pristine_state=state, boot_context=context,
                 meaning='First GUI-role execution from a pristine installed profile after normal desktop login; shared OS libraries and host disk caches may already be warm')
@@ -565,7 +565,7 @@ def functional_roles(prefix, inventory=None):
             package = dict(kind='flatpak', ref=app['flatpak'], commit=commit)
         roles[role] = dict(id=ident, role=role, program_path=path,
                           configured_command=state['configured'].get(role, ''),
-                          appids=list(app['appids']), package=package)
+                          appids=tuple(app['appids']), package=package)
     return dict(image=image, roles=roles, default_browser_desktop=browser,
                 configuration_sources=state['sources'], first_use_measurement=False)
 
@@ -829,7 +829,7 @@ def measure(prefix, declared=None, workload=None, order=None, complete=True, pre
         for pattern, command in [('kitty', ['kitty']), ('org.gnome.nautilus', ['nautilus', '--new-window']),
                                  ('zen', ['flatpak', 'run', 'app.zen_browser.zen', 'about:blank'])]:
             bounds = []
-            samples = [startup(prefix, command, pattern, observations=bounds) for _ in range(3)]
+            samples = [startup(prefix, command, (pattern,), observations=bounds) for _ in range(3)]
             emit('startup_' + pattern + '_seconds', dict(first=samples[0], warm=samples[1:],
                  observation_bounds=bounds, poll_sleep_seconds=MAPPING_POLL_SECONDS,
                  observer=MAPPING_OBSERVER))

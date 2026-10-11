@@ -48,6 +48,248 @@ OVERRIDES = ('ARCTIC_INSTALLER_BRIDGE', 'ARCTIC_INSTALLER_SOCKET', 'ARCTIC_INSTA
              'ARCTIC_LIVE_KEYBOARD')
 
 
+# Only source-attested fixed literals and phases may survive active error masking.
+# These labels describe failures; they never alter a report or release verdict.
+PRIMARY_DIAGNOSTIC_LITERALS = {'DRM connector belongs to another card': 'drm-connector-belongs-to-another-card',
+ 'guest disk inventory is not bounded': 'guest-disk-inventory-is-not-bounded',
+ 'Mango DRM process is absent or ambiguous': 'mango-drm-process-is-absent-or-ambiguous',
+ 'Mango DRM process session differs': 'mango-drm-process-session-differs',
+ 'Mango DRM process changed during observation': 'mango-drm-process-changed-during-observation',
+ 'Mango DRM descriptor has no canonical sysfs identity': 'mango-drm-descriptor-has-no-canonical-sysfs-identity',
+ 'Mango DRM descriptor major/minor backlink differs': 'mango-drm-descriptor-major-minor-backlink-differs',
+ 'Mango primary/render DRM device binding differs': 'mango-primary-render-drm-device-binding-differs',
+ 'actual DRM PCI transport is not virtio-pci': 'actual-drm-pci-transport-is-not-virtio-pci',
+ 'actual DRM virtio child is not GPU': 'actual-drm-virtio-child-is-not-gpu',
+ 'GUI Hebrew autosave has not completed': 'gui-hebrew-autosave-has-not-completed',
+ 'GUI Start replaced the original engine': 'gui-start-replaced-the-original-engine',
+ 'GUI fill outside Hebrew keyboard choice': 'gui-fill-outside-hebrew-keyboard-choice',
+ 'GUI is not the packaged installer invocation': 'gui-is-not-the-packaged-installer-invocation',
+ 'GUI method outside bounded whitelist': 'gui-method-outside-bounded-whitelist',
+ 'GUI reconnected or subscription inventory is ambiguous': 'gui-reconnected-or-subscription-inventory-is-ambiguous',
+ 'Hebrew fill is only permitted on ready keyboard': 'hebrew-fill-is-only-permitted-on-ready-keyboard',
+ 'Next is only permitted from ready welcome': 'next-is-only-permitted-from-ready-welcome',
+ 'QEMU head binding requires exactly one actual DRM card': 'qemu-head-binding-requires-exactly-one-actual-drm-card',
+ 'account fixture differs (details withheld)': 'account-fixture-differs-details-withheld',
+ 'active GUI IPC failed (details withheld)': 'active-gui-ipc-failed-details-withheld',
+ 'active GUI is not on a ready wizard page': 'active-gui-is-not-on-a-ready-wizard-page',
+ 'active GUI method outside whitelist': 'active-gui-method-outside-whitelist',
+ 'active Hebrew configuration changed': 'active-hebrew-configuration-changed',
+ 'active Next is disabled': 'active-next-is-disabled',
+ 'active desktop does not own the actual foreground VT': 'active-desktop-does-not-own-the-actual-foreground-vt',
+ 'active engine progress regressed': 'active-engine-progress-regressed',
+ 'active fill outside reviewed choice': 'active-fill-outside-reviewed-choice',
+ 'active safe configuration changed': 'active-safe-configuration-changed',
+ 'active shipped sources or physical head binding changed': 'active-shipped-sources-or-physical-head-binding-changed',
+ 'active state parameters differ': 'active-state-parameters-differ',
+ 'actual DRM connector ID absent': 'actual-drm-connector-id-absent',
+ 'actual DRM device is not virtio_gpu': 'actual-drm-device-is-not-virtio-gpu',
+ 'actual DRM virtual connector inventory differs from exact two-head contract': 'actual-drm-virtual-connector-inventory-differs-from-exact-two-head-contract',
+ 'actual GUI page, choice, connection, or readiness differs': 'actual-gui-page-choice-connection-or-readiness-differs',
+ 'actual Hebrew keyboard baseline did not settle': 'actual-hebrew-keyboard-baseline-did-not-settle',
+ 'actual PCI device is not the isolated QEMU virtio GPU': 'actual-pci-device-is-not-the-isolated-qemu-virtio-gpu',
+ 'actual active GUI state differs': 'actual-active-gui-state-differs',
+ 'actual active engine identity differs': 'actual-active-engine-identity-differs',
+ 'actual copy writer argv differs': 'actual-copy-writer-argv-differs',
+ 'actual current output mode missing or ambiguous': 'actual-current-output-mode-missing-or-ambiguous',
+ 'actual default engine socket type/owner/mode differs': 'actual-default-engine-socket-type-owner-mode-differs',
+ 'actual engine Hello identity differs': 'actual-engine-hello-identity-differs',
+ 'actual engine connection closed': 'actual-engine-connection-closed',
+ 'actual engine started an installation': 'actual-engine-started-an-installation',
+ 'actual engine state changed during restoration': 'actual-engine-state-changed-during-restoration',
+ 'actual installer background pixels are absent': 'actual-installer-background-pixels-are-absent',
+ 'actual installer backing window is not visible': 'actual-installer-backing-window-is-not-visible',
+ 'actual installer process uses a test/mock override': 'actual-installer-process-uses-a-test-mock-override',
+ 'actual live Hebrew configuration differs': 'actual-live-hebrew-configuration-differs',
+ 'actual live engine identity/state differs': 'actual-live-engine-identity-state-differs',
+ 'actual writer target mount is not owned btrfs': 'actual-writer-target-mount-is-not-owned-btrfs',
+ 'armed Summary config changed': 'armed-summary-config-changed',
+ 'auto-opened installer must already be ready at welcome': 'auto-opened-installer-must-already-be-ready-at-welcome',
+ 'bridge is not the real default-socket invocation': 'bridge-is-not-the-real-default-socket-invocation',
+ 'bundle is not protected root-owned content': 'bundle-is-not-protected-root-owned-content',
+ 'default engine listening socket is missing or ambiguous': 'default-engine-listening-socket-is-missing-or-ambiguous',
+ 'duplicate JSON key': 'duplicate-json-key',
+ 'duplicate actual output': 'duplicate-actual-output',
+ 'duplicate process environment key': 'duplicate-process-environment-key',
+ 'engine response exceeded time/byte bound': 'engine-response-exceeded-time-byte-bound',
+ 'engine response framing differs': 'engine-response-framing-differs',
+ 'engine returned an error, event, or different response id': 'engine-returned-an-error-event-or-different-response-id',
+ 'engine snapshot fields differ': 'engine-snapshot-fields-differ',
+ 'engine socket peer is not root': 'engine-socket-peer-is-not-root',
+ 'engine uses unexpected mock/test/runtime flags': 'engine-uses-unexpected-mock-test-runtime-flags',
+ 'file changed while being read': 'file-changed-while-being-read',
+ 'file is nonregular or oversized': 'file-is-nonregular-or-oversized',
+ 'genuine copy phase is required for every disruption observation': 'genuine-copy-phase-is-required-for-every-disruption-observation',
+ 'initial actual engine page differs': 'initial-actual-engine-page-differs',
+ 'installer ELF path differs': 'installer-elf-path-differs',
+ 'installer PNG exceeded bound': 'installer-png-exceeded-bound',
+ 'installer RPC method or parameters outside read-only whitelist': 'installer-rpc-method-or-parameters-outside-read-only-whitelist',
+ 'installer belongs to a different actual session': 'installer-belongs-to-a-different-actual-session',
+ 'installer check budget exhausted': 'installer-check-budget-exhausted',
+ 'installer does not occupy the complete logical output': 'installer-does-not-occupy-the-complete-logical-output',
+ 'installer executable is not a native ELF': 'installer-executable-is-not-a-native-elf',
+ 'installer mapped to unavailable or ambiguous output': 'installer-mapped-to-unavailable-or-ambiguous-output',
+ 'installer process is dead': 'installer-process-is-dead',
+ 'installer process owner differs': 'installer-process-owner-differs',
+ 'invalid actual output identity': 'invalid-actual-output-identity',
+ 'invalid actual output inventory': 'invalid-actual-output-inventory',
+ 'invalid actual output scale': 'invalid-actual-output-scale',
+ 'invalid actual physical mode': 'invalid-actual-physical-mode',
+ 'invalid capture label': 'invalid-capture-label',
+ 'invalid listening Unix socket inode': 'invalid-listening-unix-socket-inode',
+ 'invalid mapped layer inventory': 'invalid-mapped-layer-inventory',
+ 'invalid native physical capture': 'invalid-native-physical-capture',
+ 'invalid process PID': 'invalid-process-pid',
+ 'invalid process command line': 'invalid-process-command-line',
+ 'live keyboard file protection differs': 'live-keyboard-file-protection-differs',
+ 'live-keyboard helper has not completed': 'live-keyboard-helper-has-not-completed',
+ 'malformed process environment': 'malformed-process-environment',
+ 'missing or duplicate mapped installer': 'missing-or-duplicate-mapped-installer',
+ 'native capture requires normal output transform': 'native-capture-requires-normal-output-transform',
+ 'nonfinite JSON number': 'nonfinite-json-number',
+ 'one original daemon-owned copy writer is required': 'one-original-daemon-owned-copy-writer-is-required',
+ 'original active engine/GUI identity changed': 'original-active-engine-gui-identity-changed',
+ 'original actual bridge process changed': 'original-actual-bridge-process-changed',
+ 'original copy writer was replaced': 'original-copy-writer-was-replaced',
+ 'original shipped GUI process changed': 'original-shipped-gui-process-changed',
+ 'owned target already has partitions': 'owned-target-already-has-partitions',
+ 'owned target device identity differs': 'owned-target-device-identity-differs',
+ 'owned target driver/size differs': 'owned-target-driver-size-differs',
+ 'owned target is already in use': 'owned-target-is-already-in-use',
+ 'owned target serial/path is absent or ambiguous': 'owned-target-serial-path-is-absent-or-ambiguous',
+ 'packaged installer entry point differs': 'packaged-installer-entry-point-differs',
+ 'physical capture dimensions differ': 'physical-capture-dimensions-differ',
+ 'prepared real engine Hebrew state differs': 'prepared-real-engine-hebrew-state-differs',
+ 'private credential fixture differs': 'private-credential-fixture-differs',
+ 'process environment is oversized': 'process-environment-is-oversized',
+ 'raw capture target already exists': 'raw-capture-target-already-exists',
+ 'real GUI engine did not enter genuine copy': 'real-gui-engine-did-not-enter-genuine-copy',
+ 'real GUI must own exactly one default-socket bridge': 'real-gui-must-own-exactly-one-default-socket-bridge',
+ 'real Hebrew choice failed': 'real-hebrew-choice-failed',
+ 'real bridge session differs': 'real-bridge-session-differs',
+ 'real keyboard page did not load': 'real-keyboard-page-did-not-load',
+ 'real root engine does not own the default listening socket FD': 'real-root-engine-does-not-own-the-default-listening-socket-fd',
+ 'real root engine service identity differs': 'real-root-engine-service-identity-differs',
+ 'real welcome Next failed': 'real-welcome-next-failed',
+ 'real wizard armed Next failed': 'real-wizard-armed-next-failed',
+ 'real wizard fill failed': 'real-wizard-fill-failed',
+ 'real wizard page did not become ready': 'real-wizard-page-did-not-become-ready',
+ 'real wizard selection is invalid': 'real-wizard-selection-is-invalid',
+ 'requires exactly one already running packaged installer': 'requires-exactly-one-already-running-packaged-installer',
+ 'restoration enabled-output count differs': 'restoration-enabled-output-count-differs',
+ 'safe Summary offline/disk/encryption differs': 'safe-summary-offline-disk-encryption-differs',
+ 'target partition belongs to another disk': 'target-partition-belongs-to-another-disk',
+ 'unexpected GUI method parameters': 'unexpected-gui-method-parameters',
+ 'unexpected writable guest disk': 'unexpected-writable-guest-disk',
+ 'virtio GPU PCI device binding is absent or ambiguous': 'virtio-gpu-pci-device-binding-is-absent-or-ambiguous'}
+DIAGNOSTIC_EXCEPTION_CLASSES = {
+    RuntimeError: ('RuntimeError', 'runtime-error'), ValueError: ('ValueError', 'value-error'),
+    KeyError: ('KeyError', 'key-error'), TypeError: ('TypeError', 'type-error'),
+    OSError: ('OSError', 'os-error'), InterruptedError: ('InterruptedError', 'interrupted'),
+    FileNotFoundError: ('FileNotFoundError', 'file-not-found'),
+    PermissionError: ('PermissionError', 'permission-error'),
+    ProcessLookupError: ('ProcessLookupError', 'process-lookup-error'),
+    TimeoutError: ('TimeoutError', 'timeout-error'),
+    KeyboardInterrupt: ('KeyboardInterrupt', 'keyboard-interrupt'),
+    SystemExit: ('SystemExit', 'system-exit'), Exception: ('Exception', 'exception'),
+    BaseException: ('BaseException', 'base-exception')}
+TARGET_DIAGNOSTIC_PHASES = frozenset((
+    'target-enumerate', 'target-partition', 'target-serial', 'target-driver',
+    'target-size', 'target-node-stat', 'target-major-minor', 'target-lsblk-disks',
+    'target-pristine-partitions', 'target-lsblk-mounts'))
+TARGET_DIAGNOSTIC_ERRNOS = {1: 'eperm', 5: 'eio', 6: 'enxio', 12: 'enomem',
+    13: 'eacces', 16: 'ebusy', 19: 'enodev', 20: 'enotdir', 22: 'einval',
+    30: 'erofs', 38: 'enosys', 40: 'eloop', 95: 'eopnotsupp'}
+ACTIVE_DIAGNOSTIC_PHASES = frozenset((
+    *TARGET_DIAGNOSTIC_PHASES,
+    'copy-identities', 'copy-identity-continuity', 'copy-snapshot', 'copy-progress-fields',
+    'copy-progress-guard', 'copy-config', 'copy-shipped-bindings', 'copy-keyboard-files',
+    'copy-keyboard-continuity', 'copy-writer', 'copy-observation', 'copy-progress-continuity',
+    'writer-daemon', 'writer-enumerate', 'writer-process-stat', 'writer-process-filter',
+    'writer-process-proof', 'writer-process-argv', 'writer-unique', 'writer-continuity',
+    'writer-mount-source', 'writer-mount-block', 'writer-mount-fstype', 'writer-mount-guard',
+    'writer-partition-guard', 'writer-partition-major-minor',
+    'target-lsblk-disks-ram-proof', 'target-lsblk-disks-ram-unproved',
+    'unknown', 'security-init', 'prepare-start', 'prepare-find-gui', 'prepare-identities',
+    'prepare-rpc', 'prepare-target', 'prepare-credentials', 'prepare-summary-config',
+    'prepare-summary-identities', 'prepare-copy', 'prepare-copy-identities',
+    'prepare-visible', 'prepare-baseline-physical', 'vt-0', 'output-0', 'completion',
+    'completion-wait', 'completion-snapshot', 'completion-engine-guard', 'completion-gui-state',
+    'completion-gui-guard', 'completion-identities', 'completion-identity-guard', 'completion-result',
+    *('prepare-' + page + '-' + operation
+      for page in ('welcome', 'keyboard', 'network', 'timezone', 'disk', 'encryption',
+                   'account', 'apps', 'summary')
+      for operation in ('ready', 'valid', 'next')),
+    *('prepare-' + page + '-fill'
+      for page in ('keyboard', 'network', 'disk', 'encryption', 'account', 'apps'))))
+
+
+def primary_diagnostic_reason(error):
+    # Exact builtin type avoids hostile subclass properties or __str__ calls.
+    if type(error) is RuntimeError and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
+        return PRIMARY_DIAGNOSTIC_LITERALS.get(error.args[0], 'unknown')
+    return 'unknown'
+
+
+def primary_diagnostic_errno(error):
+    """Read only the builtin descriptor of an exact builtin OSError."""
+    if type(error) is not OSError:
+        return 'unknown'
+    number = OSError.errno.__get__(error, OSError)
+    return TARGET_DIAGNOSTIC_ERRNOS.get(number, 'other') if type(number) is int else 'unknown'
+
+
+COMPLETION_GUARD_DIAGNOSTICS = frozenset(('unknown',
+    'failed-false-attention-false', 'failed-false-attention-true',
+    'failed-true-attention-false', 'failed-true-attention-true'))
+COMPLETION_PHASE_DIAGNOSTICS = frozenset(('unknown', 'disk', 'copy', 'configure', 'bootloader', 'apps', 'finalize'))
+
+
+def completion_guard_diagnostic(snapshot):
+    """Project only exact boolean operands from this owned completion snapshot."""
+    value = snapshot
+    for key in ('install', 'options'):
+        if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+            return 'unknown'
+        value = value.get(key)
+    if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+        return 'unknown'
+    failed, attention = value.get('failed'), value.get('attention')
+    if type(failed) is not bool or type(attention) is not bool:
+        return 'unknown'
+    return 'failed-' + ('true' if failed else 'false') + '-attention-' + ('true' if attention else 'false')
+
+
+def completion_phase_diagnostic(snapshot):
+    """Project a known last reported phase, without claiming an error cause."""
+    value = snapshot
+    for key in ('install', 'options', 'progress'):
+        if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+            return 'unknown'
+        value = value.get(key)
+    if type(value) is not dict or len(value) > 16 or not all(type(item) is str for item in value):
+        return 'unknown'
+    phase = value.get('phase')
+    return phase if type(phase) is str and len(phase) <= 16 and phase in COMPLETION_PHASE_DIAGNOSTICS else 'unknown'
+
+
+def masked_active_error(error, phase, completion_guard=None, completion_phase=None):
+    """Keep the original mask and only append fixed trusted failure labels."""
+    error_class = next((name for error_type, (name, _) in DIAGNOSTIC_EXCEPTION_CLASSES.items()
+                        if type(error) is error_type), 'OtherError')
+    phase = phase if type(phase) is str and phase in ACTIVE_DIAGNOSTIC_PHASES else 'unknown'
+    errno = '; errno=' + primary_diagnostic_errno(error) if type(error) is OSError and phase in TARGET_DIAGNOSTIC_PHASES else ''
+    guard = ''
+    if phase == 'completion-engine-guard' and completion_guard is not None:
+        label = completion_guard if type(completion_guard) is str and len(completion_guard) <= 40 and completion_guard in COMPLETION_GUARD_DIAGNOSTICS else 'unknown'
+        guard = '; engine-guard=' + label
+    stage = ''
+    if phase == 'completion-engine-guard' and completion_guard is not None and completion_phase is not None:
+        label = completion_phase if type(completion_phase) is str and len(completion_phase) <= 16 and completion_phase in COMPLETION_PHASE_DIAGNOSTICS else 'unknown'
+        stage = '; engine-phase=' + label
+    return (error_class + ': active installation or restoration failed [phase=' + phase + errno +
+            '; reason=' + primary_diagnostic_reason(error) + guard + stage + ']')
+
+
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
@@ -354,6 +596,47 @@ def window_proof(state, layers, outputs, expected_count=2):
     return dict(window=win, layers=mapped, output=output, physical_size=[mode['width'], mode['height']])
 
 
+def mango_drm_devices(uid, session, proc_root=Path('/proc'), sys_root=Path('/sys')):
+    """Bind the real compositor's open primary/render FDs to sysfs devices."""
+    mangos = []
+    for proc in Path(proc_root).glob('[0-9]*'):
+        try:
+            if proc.stat().st_uid != uid or (proc / 'comm').read_text().strip() != 'mango':
+                continue
+            proof, env = process_proof(int(proc.name), uid, '/usr/bin/mango', proc_root)
+            require(env.get('XDG_SESSION_ID') == session, 'Mango DRM process session differs')
+            mangos.append(proof)
+        except (FileNotFoundError, ProcessLookupError):
+            pass
+    require(len(mangos) == 1, 'Mango DRM process is absent or ambiguous')
+    proof = mangos[0]
+    devices, primary = set(), set()
+    for descriptor in (Path(proc_root) / str(proof['pid']) / 'fd').iterdir():
+        if not descriptor.name.isdigit():
+            continue
+        try:
+            info = descriptor.stat()
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if not stat.S_ISCHR(info.st_mode) or os.major(info.st_rdev) != 226:
+            continue
+        number = str(os.major(info.st_rdev)) + ':' + str(os.minor(info.st_rdev))
+        node = (Path(sys_root) / 'dev/char' / number).resolve(strict=True)
+        require(re.fullmatch(r'card[0-9]+|renderD[0-9]+', node.name) and
+                (Path(sys_root) / 'class/drm' / node.name).resolve(strict=True) == node,
+                'Mango DRM descriptor has no canonical sysfs identity')
+        require((node / 'dev').read_text().strip() == number,
+                'Mango DRM descriptor major/minor backlink differs')
+        device = (node / 'device').resolve(strict=True)
+        devices.add(device)
+        if re.fullmatch('card[0-9]+', node.name):
+            primary.add(device)
+    require(primary and devices == primary, 'Mango primary/render DRM device binding differs')
+    current, _ = process_proof(proof['pid'], uid, '/usr/bin/mango', proc_root)
+    require(current == proof, 'Mango DRM process changed during observation')
+    return primary
+
+
 class Installer:
     def __init__(self, native, context, request=emit):
         self.native, self.context, self.request_emit = native, context, request
@@ -535,15 +818,15 @@ class Installer:
     def drm_heads(self):
         # A single isolated virtio GPU initializes scanouts in index order.
         # Linux DRM virtual connector numbering therefore binds Virtual-1/2
-        # to scanout head 0/1. Reject extra cards, renamed/extra connectors,
-        # or missing kernel evidence rather than guessing from layout alone.
+        # to scanout head 0/1. Bind Mango's open DRM devices before requiring
+        # one card; reject renamed/extra connectors or missing kernel evidence.
+        compositor_devices = mango_drm_devices(self.uid, self.session)
         cards = sorted(p for p in Path('/sys/class/drm').glob('card*')
-                       if re.fullmatch('card[0-9]+', p.name))
+                       if re.fullmatch('card[0-9]+', p.name) and
+                       (p / 'device').resolve(strict=True) in compositor_devices)
         require(len(cards) == 1, 'QEMU head binding requires exactly one actual DRM card')
         card = cards[0]
         device = (card / 'device').resolve(strict=True)
-        driver = (card / 'device/driver').resolve(strict=True)
-        require(driver.name == 'virtio_gpu', 'actual DRM device is not virtio_gpu')
         pci = [p for p in (device, *device.parents)
                if re.fullmatch(r'[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]', p.name)]
         require(len(pci) == 1, 'virtio GPU PCI device binding is absent or ambiguous')
@@ -551,6 +834,15 @@ class Installer:
         vendor = (pci / 'vendor').read_text().strip()
         pci_id = (pci / 'device').read_text().strip()
         require(vendor == '0x1af4' and pci_id == '0x1050', 'actual PCI device is not the isolated QEMU virtio GPU')
+        require(device == pci and (device / 'driver').resolve(strict=True).name == 'virtio-pci',
+                'actual DRM PCI transport is not virtio-pci')
+        children = [p for p in device.glob('virtio*') if re.fullmatch('virtio[0-9]+', p.name)
+                    and p.resolve(strict=True).parent == device
+                    and (p / 'driver').resolve(strict=True).name == 'virtio_gpu']
+        require(len(children) == 1, 'actual DRM device is not virtio_gpu')
+        require(int((children[0] / 'device').read_text().strip(), 16) == 16,
+                'actual DRM virtio child is not GPU')
+        driver = (children[0] / 'driver').resolve(strict=True)
         connectors = sorted(p for p in Path('/sys/class/drm').glob(card.name + '-*') if p.is_dir())
         require({p.name for p in connectors} == {card.name + '-Virtual-1', card.name + '-Virtual-2'},
                 'actual DRM virtual connector inventory differs from exact two-head contract')
@@ -593,7 +885,11 @@ class Installer:
         initial_engine = self.rpc.snapshot()
         require(initial_engine['wizard']['current'] == 'welcome', 'initial actual engine page differs')
         require(self.ipc('next') == 'ok', 'real welcome Next failed')
-        self.wait(lambda: strict_json(self.ipc('state')).get('page') == 'keyboard', 15,
+        def keyboard_ready():
+            state = strict_json(self.ipc('state'))
+            return (state.get('page') == state.get('current') == 'keyboard'
+                    and state.get('ready') is True)
+        self.wait(keyboard_ready, 15,
                   'real keyboard page did not load')
         require(self.ipc('fill', {'layout': 'il', 'variant': ''}) == 'ok', 'real Hebrew choice failed')
         def settled():

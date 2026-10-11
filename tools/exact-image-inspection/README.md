@@ -39,6 +39,20 @@ sections, headers, symbols, dependencies, unwind data and full disassembly. This
 is not verification of target RPM signatures, every installed file or compiled
 header offsets. Evidence is bounded below 31 MiB; partial failure remains failure.
 
+The same invocation also retains both RPM-owned Wayland server/client provider
+ELFs, their `wl_list_insert` symbols and disassembly. After the candidate scratch
+directory has been removed, it fetches the unchanged performance baseline from
+the two fixed v1.2.0 release parts. Part size/hash and the complete baseline size
+and hash must match the inline research pins before filtered EROFS extraction.
+The 2,322,073,600-byte baseline is a separate, static research input; the strict
+candidate size gate remains unchanged. Baseline library versions come from that
+image's own RPMDB. No candidate wlroots/Mango version is assumed for it.
+
+These provider files prepare a possible closer list-store timing review. They
+do not establish live symbol resolution, admit a library/profile or narrow a
+measurement interval. Exact complete library bytes, instruction flow, field
+chains and runtime provider/callsite identity still require independent review.
+
 An independent reviewer must inspect the actual full mapping/getter control flow
 and field chains before a changed executable or ABI receives any new explicit
 observer/comparator profile. This lane creates no such profile. Runtime readiness,

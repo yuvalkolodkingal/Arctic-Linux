@@ -1,20 +1,20 @@
 {
   "execution_files": {
     ".github/workflows/inspect-exact-image-mango-20261010.yml": "186b1366730886d9413cee6531fb7f6c3c583435d820778bf8181bc92a8743cb",
-    "tools/exact-image-inspection/inspect.py": "001c8e1996870c02155c117fc4e6c7859dd036ab0f50c086c89fe35296a2e291",
+    "tools/exact-image-inspection/inspect.py": "090a9625e3f13b954a7ab4f46c3e43328039bc1a054faa4dacedeee8587e6a93",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
   },
   "image": {
-    "archive_bytes": 1930013330,
-    "archive_sha256": "07d60353230eccd0b077279cf6195d73dc6a57f61d9cba3c55503776a76be716",
-    "artifact_id": 11664120624,
-    "bytes": 1929826304,
-    "name": "Arctic-Linux-1.2-candidate-38032256030-1-x86_64.iso",
+    "archive_bytes": 1929907101,
+    "archive_sha256": "3a8132aa4578fdb62b2aa1e3bf5c340229f1a483678d03ddf2c565fb39afadcd",
+    "artifact_id": 11689591362,
+    "bytes": 1929719808,
+    "name": "Arctic-Linux-1.2-candidate-38102474066-1-x86_64.iso",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "1695aa2af6ec0da618e87c5387a03f44752121111f0bbe6900699d9549b40994",
-    "run_id": 38032256030,
-    "sha256": "0ab25cc921873ba8750042a6265b6a9e42e669cd78a08d6621c140fd18468609",
-    "source_sha": "bc0521136520daaa221e815822e88ffc44107957"
+    "producer_receipt_sha256": "3034ea88d4ba1d1e434942f90c42b8057d3667ad2e7f6ee739b895ebdfc86d1d",
+    "run_id": 38102474066,
+    "sha256": "807eaaa64ab8480ec2b18bc8434fd5e37d82c41b73a3e0a6f002c35d152ba54c",
+    "source_sha": "326690f173d4dc4f049f43e046c8380e66825a07"
   },
   "observer_profile_admitted": false,
   "performance_acceptance": false,
@@ -35,10 +35,10 @@
       "sha256": "cdafa1655892b149cf5a8816538a234460a2825a580b868f7b56c8408e95932e"
     },
     "packaging/mangowm.spec": {
-      "blob_sha": "6787aee370e574570cdecd8a884e6d7126cf13af",
-      "bytes": 3484,
+      "blob_sha": "c737c838a97bc39aab165902b865972ab1bff665",
+      "bytes": 3717,
       "mode": "100644",
-      "sha256": "e9de7e9cce9e2a73beadedd1a1623f87f72d23abd703baffa839f5bcd63eb531"
+      "sha256": "f9bc844457bc4d37a1a2456da12695b4120b6e82a53841472ed254732c322212"
     },
     "packaging/patches/mango-client-geometry-events.patch": {
       "blob_sha": "7c7cf591884bf89cab85d7270a6bbc0d5babf339",
@@ -59,10 +59,10 @@
       "sha256": "00ae475f37e1061963fa3213b9681b67134a9b3cbfc4214114ed37e3dcc043dd"
     },
     "tools/build-iso.sh": {
-      "blob_sha": "1c346f69b321a1863e0d68b954b5b8d9ebd0e278",
-      "bytes": 17278,
+      "blob_sha": "7c8da1697d131c7917806d4fe1cc68373aa6ae3a",
+      "bytes": 17384,
       "mode": "100755",
-      "sha256": "c9c1c3172f054ce3ea9270689262dfd5e965c282f5b57ffd75302a36a0ee909b"
+      "sha256": "ecfca99ecbf5c85bc7186fd4d9d46b784b11449c374e3cc74db3d6db069101c9"
     }
   }
 }

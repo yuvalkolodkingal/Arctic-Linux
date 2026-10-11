@@ -12,6 +12,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import types
 import time
 import zipfile
@@ -263,6 +264,206 @@ class DirectoryArchive:
         return (self.root/name).read_bytes()
 
 
+def fixed_screen_failure(error):
+    """Classify only existing fixed errors; never stringify private values."""
+    if type(error) is TimeoutError:
+        return 'deadline'
+    if type(error) is not RuntimeError or len(error.args) != 1 or type(error.args[0]) is not str:
+        return 'unclassified'
+    return {'Sensitive text in external evidence': 'sensitive_text',
+        'Incomplete terminal escape in external evidence': 'terminal_escape',
+        'Too many diagnostic members': 'member_count',
+        'Diagnostic symlinks are forbidden': 'member_type',
+        'Diagnostic members must be regular files': 'member_type',
+        'Diagnostic byte bounds exceeded': 'member_size',
+        'Diagnostics must be an owned directory and upload path unused': 'ownership'}.get(
+            error.args[0], 'unclassified')
+
+
+def export_failure_phase(work, screened, screening_failure):
+    """Fail-only fallback: preserve private originals and screen fixed labels."""
+    work, screened = Path(work).absolute(), Path(screened).absolute()
+    C.require(work.name == 'work' and screened.name == 'screened'
+        and work.parent == screened.parent and work.parent.resolve() == work.parent
+        and work.parent.is_dir() and not work.parent.is_symlink()
+        and not screened.exists() and not screened.is_symlink(),
+        'Failure summary paths are not unused owned siblings')
+    helper = load('paired_failure_phase', ROOT/'tools/performance/run-paired.py')
+    screen = load('paired_failure_screen', ROOT/'tools/native-functional/screen-evidence.py')
+    summary = helper.failure_phase_summary(work, screening_failure)
+    # Independently close the new diagnostic fields before the unchanged
+    # scanner. These are source-site labels, never error messages or results.
+    C.require(type(summary) is dict and set(summary) == {'schema', 'status', 'release_acceptance',
+        'performance_acceptance', 'original_evidence_uploaded', 'screening_failure',
+        'private_owner_verified', 'observed_context', 'runner_phase', 'read_status', 'markers',
+        'smoke_exit', 'console_restore_error', 'guest_failure', 'guest_envelope'}
+        and summary['schema'] == 'arctic-paired-failure-phase-v1', 'Unsafe failure summary fields')
+    diagnostic = summary['guest_failure']
+    sites = dict(guest=(193, 203, 205, 211, 215, 218, 221, 223, 227, 252, 255, 288, 324,
+        335, 360, 402, 418, 465, 470, 472, 484, 486, 488, 493, 498, 504, 509, 514, 529,
+        537, 544, 550, 559, 564, 607, 610, 621, 638, 653, 662, 690, 708, 751, 880, 884, 899, 940),
+        causal=(87, 90, 103, 107, 111, 116, 120, 123, 139, 285, 288, 296, 305, 308, 319,
+        322, 328, 332, 336, 343, 347, 358, 363, 375, 377, 391, 394, 418, 420, 422, 424,
+        427, 439, 445, 448, 451, 455, 461, 465, 489, 501, 510, 530, 558, 569, 586, 596,
+        605, 607, 616, 619, 621, 629, 642, 659, 666, 717))
+    codes = {name + '_' + str(line): 'InterruptedError' if (name, line) == ('causal', 427)
+        else 'RuntimeError' for name, lines in sites.items() for line in lines}
+    phases = {'unavailable', 'measurement_conditions', 'rpm_inventory', 'external_execution',
+        'app_roles', 'measured_payload', 'pristine_idle_measurement_scope', 'pristine_idle_samples',
+        'role_workload', 'role_measurement_order', 'keep_awake_restored', 'done'}
+    C.require(type(diagnostic) is dict
+        and set(diagnostic) == {'status', 'code', 'exception_class', 'last_observer_phase'}
+        and all(type(value) is str for value in diagnostic.values())
+        and diagnostic['status'] in {'unavailable', 'unknown', 'ambiguous', 'source_mismatch',
+            'invalid_uart', 'source_known_shape'}
+        and ((diagnostic['status'] == 'source_known_shape'
+            and codes.get(diagnostic['code']) == diagnostic['exception_class']
+            and diagnostic['last_observer_phase'] in phases)
+        or (diagnostic['status'] != 'source_known_shape' and diagnostic['code'] == 'none'
+            and diagnostic['exception_class'] == 'none' and diagnostic['last_observer_phase'] == 'unavailable')),
+        'Unsafe guest failure diagnostic')
+    # Envelope categories explain rejected shapes without exposing UART text.
+    # They are independently closed here and confer no runtime acceptance.
+    envelope = summary['guest_envelope']
+    counts = {'collector_begin', 'collector_end', 'smoke_exit', 'tracebacks',
+        'supported_exceptions', 'unsupported_exception_like_lines',
+        'admitted_observer_records', 'frames', 'source_candidates'}
+    source_faults = {'observer_context_mismatch', 'frozen_observer_mismatch',
+        'source_root_unavailable', 'source_directory_owner', 'source_blob_mismatch',
+        'source_parse_failure', 'source_inventory_mismatch', 'observer_source_mismatch'}
+    invalid = {'uart_utf8', 'uart_termination', 'observer_record_oversized', 'observer_record_invalid'}
+    ambiguous = {'marker_multiplicity', 'traceback_multiplicity', 'observer_phase_duplicate'}
+    unknown = {'smoke_not_nonzero', 'marker_order', 'smoke_exit_range', 'traceback_missing', 'traceback_order',
+        'frame_unrecognized', 'frame_chain_invalid'}
+    reasons = source_faults | invalid | ambiguous | unknown | {'not_observed',
+        'observer_record_count', 'source_candidate_count', 'source_known_shape'}
+    C.require(type(envelope) is dict and set(envelope) == {'reason', 'counts',
+        'collector_order', 'frame_status', 'control_status', 'last_observer_phase', 'exception_shape', 'colored_traceback'}
+        and type(envelope['reason']) is str and envelope['reason'] in reasons
+        and type(envelope['counts']) is dict and set(envelope['counts']) == counts
+        and all(type(value) is str and value in {'unavailable', 'zero', 'one', 'multiple'}
+            for value in envelope['counts'].values())
+        and type(envelope['collector_order']) is str
+        and envelope['collector_order'] in {'unavailable', 'ordered', 'invalid'}
+        and type(envelope['frame_status']) is str
+        and envelope['frame_status'] in {'unavailable', 'recognized', 'unrecognized', 'control', 'invalid_chain'}
+        and type(envelope['control_status']) is str
+        and envelope['control_status'] in {'unavailable', 'none', 'present'}
+        and type(envelope['last_observer_phase']) is str
+        and envelope['last_observer_phase'] in phases, 'Unsafe guest UART envelope')
+    reason, category = envelope['reason'], diagnostic['status']
+    C.require((reason == 'not_observed' and category == 'unavailable')
+        or (reason in source_faults and category == 'source_mismatch')
+        or (reason in invalid and category == 'invalid_uart')
+        or (reason in ambiguous and category == 'ambiguous')
+        or (reason in unknown and category == 'unknown')
+        or (reason == 'observer_record_count' and ((category == 'unknown'
+            and envelope['counts']['admitted_observer_records'] == 'zero')
+            or (category == 'ambiguous' and envelope['counts']['admitted_observer_records'] == 'multiple')))
+        or (reason == 'source_candidate_count' and ((category == 'unknown'
+            and envelope['counts']['source_candidates'] == 'zero')
+            or (category == 'ambiguous' and envelope['counts']['source_candidates'] == 'multiple')))
+        or (reason == 'source_known_shape' and category == 'source_known_shape'
+            and all(envelope['counts'][key] == 'one' for key in counts - {'frames', 'unsupported_exception_like_lines'})
+            and envelope['counts']['frames'] == 'multiple'
+            and envelope['collector_order'] == 'ordered' and envelope['frame_status'] == 'recognized'
+            and envelope['last_observer_phase'] == diagnostic['last_observer_phase']),
+        'Guest UART envelope contradicts original classification')
+    C.require(envelope['last_observer_phase'] == 'unavailable'
+        or envelope['counts']['admitted_observer_records'] == 'one',
+        'Guest UART envelope phase lacks unique admitted observer identity')
+    # exception-shape-only-begin
+    # Independent closed vocabulary; observing a token never changes the
+    # original source-known classifier or any runtime acceptance requirement.
+    shape = envelope['exception_shape']
+    classes = {'RuntimeError', 'ValueError', 'InterruptedError', 'TypeError',
+        'NameError', 'UnboundLocalError', 'AttributeError', 'KeyError', 'IndexError',
+        'OSError', 'FileNotFoundError', 'PermissionError', 'ProcessLookupError',
+        'TimeoutError', 'ConnectionError', 'BrokenPipeError', 'ImportError',
+        'ModuleNotFoundError', 'AssertionError', 'MemoryError', 'OverflowError',
+        'ZeroDivisionError', 'StopIteration', 'KeyboardInterrupt', 'SystemExit'}
+    C.require(type(shape) is dict and set(shape) == {'reason', 'count', 'exception_class', 'format'}
+        and all(type(value) is str for value in shape.values())
+        and shape['reason'] in {'not_observed', 'traceback_not_unique', 'observer_not_unique',
+            'exception_control', 'exception_missing', 'exception_multiplicity',
+            'unsupported_class', 'class_token_observed'}
+        and shape['count'] in {'unavailable', 'zero', 'one', 'multiple'}
+        and ((shape['reason'] == 'class_token_observed' and shape['count'] == 'one'
+            and shape['exception_class'] in classes and shape['format'] in {'plain', 'python314_default'})
+        or (shape['reason'] != 'class_token_observed'
+            and shape['exception_class'] == shape['format'] == 'none')),
+        'Unsafe unauthenticated exception shape')
+    C.require((shape['reason'] in {'not_observed', 'traceback_not_unique', 'observer_not_unique'}
+            and shape['count'] == 'unavailable')
+        or (shape['reason'] == 'exception_missing' and shape['count'] == 'zero')
+        or (shape['reason'] == 'exception_multiplicity' and shape['count'] == 'multiple')
+        or (shape['reason'] in {'unsupported_class', 'class_token_observed'} and shape['count'] == 'one')
+        or (shape['reason'] == 'exception_control' and shape['count'] != 'unavailable'),
+        'Exception shape count contradicts rejection category')
+    C.require(shape['count'] == 'unavailable' or (envelope['counts']['tracebacks'] == 'one'
+        and envelope['counts']['admitted_observer_records'] == 'one'
+        and envelope['collector_order'] == 'ordered'
+        and summary['smoke_exit'] == 'nonzero' and summary['private_owner_verified'] is True),
+        'Exception shape lacks owned source-bound ordered failure envelope')
+    # exception-shape-only-end
+    # colored-trace-only-begin
+    projection = envelope['colored_traceback']
+    C.require(type(projection) is dict and set(projection) == {'reason', 'code',
+        'exception_class', 'frames', 'candidates', 'format'}
+        and all(type(value) is str for value in projection.values())
+        and projection['reason'] in {'not_observed', 'traceback_not_unique', 'observer_not_unique',
+            'exception_not_supported', 'frame_source_unknown', 'frame_unrecognized',
+            'frame_context_unknown', 'frame_chain_invalid', 'source_candidate_count', 'source_projection'}
+        and projection['frames'] in {'unavailable', 'zero', 'one', 'multiple'}
+        and projection['candidates'] in {'unavailable', 'zero', 'one', 'multiple'}
+        and ((projection['reason'] == 'source_projection'
+            and codes.get(projection['code']) == projection['exception_class']
+            and projection['frames'] == 'multiple' and projection['candidates'] == 'one'
+            and projection['format'] == 'python314_default')
+        or (projection['reason'] != 'source_projection'
+            and projection['code'] == projection['exception_class'] == projection['format'] == 'none')),
+        'Unsafe unauthenticated colored source projection')
+    C.require(projection['reason'] == 'not_observed' or
+        (envelope['counts']['tracebacks'] == 'one'
+            or projection['reason'] == 'traceback_not_unique'),
+        'Colored source projection lacks unique traceback')
+    C.require(projection['reason'] in {'not_observed', 'traceback_not_unique', 'observer_not_unique'}
+        or (envelope['counts']['admitted_observer_records'] == 'one'
+            and envelope['collector_order'] == 'ordered' and summary['smoke_exit'] == 'nonzero'
+            and summary['private_owner_verified'] is True),
+        'Colored source projection lacks owned source-bound failure envelope')
+    C.require(projection['reason'] in {'not_observed', 'traceback_not_unique',
+        'observer_not_unique', 'exception_not_supported'} or
+        (shape['reason'] == 'class_token_observed' and shape['format'] == 'python314_default'
+            and (projection['reason'] != 'source_projection'
+                or projection['exception_class'] == shape['exception_class'])),
+        'Colored source projection contradicts independent exception shape')
+    C.require((projection['reason'] in {'not_observed', 'traceback_not_unique',
+            'observer_not_unique', 'exception_not_supported'}
+            and projection['frames'] == projection['candidates'] == 'unavailable')
+        or (projection['reason'] in {'frame_source_unknown', 'frame_unrecognized',
+            'frame_context_unknown', 'frame_chain_invalid'} and projection['candidates'] == 'unavailable')
+        or (projection['reason'] == 'source_candidate_count'
+            and projection['frames'] == 'multiple' and projection['candidates'] in {'zero', 'multiple'})
+        or (projection['reason'] == 'source_projection'
+            and projection['frames'] == 'multiple' and projection['candidates'] == 'one'),
+        'Colored source projection counts contradict rejection category')
+    # colored-trace-only-end
+    content = (json.dumps(summary, sort_keys=True, indent=2, allow_nan=False) + '\n').encode()
+    C.require(len(content) <= 4096 and summary['release_acceptance'] is False
+        and summary['performance_acceptance'] is False and summary['original_evidence_uploaded'] is False
+        and summary['status'] == 'unqualified_fixed_observations_only', 'Unsafe failure summary')
+    with tempfile.TemporaryDirectory(prefix='arctic-paired-fixed-phase-', dir=work.parent) as temporary:
+        target = Path(temporary)/'unqualified-failure-phase.json'
+        with target.open('xb') as output:
+            os.chmod(target, 0o600)
+            output.write(content)
+        # This is the unchanged atomic scanner. No original member is dropped
+        # from a purported passing archive; this separate summary cannot replay.
+        screen.screen_external(Path(temporary), screened)
+    print('ARCTIC-PAIRED-FAILURE-PHASE-EXPORT=unqualified_summary_only', flush=True)
+
+
 def run(args):
     plan, parent = activation(args.manifest)
     C.require(not args.work.exists() and not args.evidence.exists() and not args.screened.exists(),
@@ -281,6 +482,7 @@ def run(args):
     child = None
     failure = None
     errors = []
+    screening_failure = 'not_observed'
     def interrupted(signum, frame):
         raise InterruptedError('External paired lane interrupted: ' + str(signum))
     previous = {}
@@ -315,10 +517,13 @@ def run(args):
                 with defer_signals() as cleanup_signals:
                     errors.extend(stop_owned(child))
                     def attempt(label, action):
+                        nonlocal screening_failure
                         try:
                             with evidence_deadline():
                                 return action()
                         except BaseException as error:
+                            if label in {'screen', 'screen failed state', 'screen late cancellation'}:
+                                screening_failure = fixed_screen_failure(error)
                             errors.append(label + ': ' + type(error).__name__)
                             return None
                     def status():
@@ -391,6 +596,10 @@ def run(args):
                             attempt('replace owned late screening', lambda: shutil.rmtree(args.screened))
                         if screen is not None:
                             attempt('screen late cancellation', screen_owned)
+            if (failure is not None or code or errors or cleanup_signals) and not args.screened.exists():
+                with defer_signals():
+                    attempt('unqualified fixed phase summary', lambda: export_failure_phase(
+                        args.work, args.screened, screening_failure))
         finally:
             with signal_transition():
                 for signum, handler in previous.items():

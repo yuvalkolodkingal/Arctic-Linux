@@ -266,6 +266,85 @@ class MainTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             return firstboot.main(runner, sb=sb)
 
+    def test_offline_queue_merges_idempotently_and_retries_without_losing_dictation(self):
+        self.write([engine_entry('editor/zed')])
+        dictation = self.pending.parent / 'dictation' / 'pending.json'
+        dictation.parent.mkdir()
+        dictation.write_bytes(b'{"version":"1.1.0"}\n')
+        support = {'id': 'installer-support', 'name': 'Language and app support',
+                   'install': [{'method': 'dnf', 'packages': ['glibc-langpack-he', 'os-prober'], 'verified': False, 'download_mb': 0}]}
+        doc = {'version': 2, 'nixpkgs': 'github:NixOS/nixpkgs/abc',
+               'modules': [engine_entry('_system/codecs'), support]}
+        firstboot.queue(doc)
+        first = self.pending.read_bytes()
+        firstboot.queue(doc)
+        self.assertEqual(self.pending.read_bytes(), first)
+        self.assertEqual({m['id'] for m in json.loads(first)['modules']},
+                         {'zed', 'codecs', 'installer-support'})
+        self.assertEqual(self.pending.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.main(FakeRunner(fail=[['dnf', 'install']])), 1)
+        left = json.loads(self.pending.read_bytes())['modules']
+        self.assertEqual({m['id'] for m in left}, {'codecs', 'installer-support'})
+        self.assertEqual(self.main(FakeRunner(installed={'ffmpeg-free'})), 0)
+        self.assertFalse(self.pending.exists())
+        self.assertEqual(dictation.read_bytes(), b'{"version":"1.1.0"}\n')
+
+    def test_queue_preserves_legacy_ids_and_rejects_conflicting_pins(self):
+        self.pending.write_text(json.dumps({'version': 1, 'nixpkgs': 'old-pin',
+                                           'modules': ['zed']}) + '\n')
+        doc = {'version': 2, 'nixpkgs': 'old-pin', 'modules': [engine_entry('_system/codecs')]}
+        firstboot.queue(doc)
+        merged = json.loads(self.pending.read_bytes())
+        self.assertEqual(merged['modules'][0], 'zed')
+        original = self.pending.read_bytes()
+        doc['nixpkgs'] = 'different-pin'
+        with self.assertRaises(ValueError):
+            firstboot.queue(doc)
+        self.assertEqual(self.pending.read_bytes(), original)
+
+    def test_queue_support_packages_accumulate_but_other_definitions_are_not_replaced(self):
+        def support(packages):
+            return {'id': 'installer-support', 'name': 'Language and app support',
+                    'install': [{'method': 'dnf', 'packages': packages, 'verified': False, 'download_mb': 0}]}
+        self.write([engine_entry('editor/zed'), support(['glibc-langpack-he'])])
+        doc = {'version': 2, 'modules': [support(['glibc-langpack-en', 'glibc-langpack-he'])]}
+        firstboot.queue(doc)
+        first = self.pending.read_bytes()
+        firstboot.queue(doc)
+        self.assertEqual(self.pending.read_bytes(), first)
+        entry = json.loads(first)['modules'][1]
+        self.assertEqual(entry['install'][0]['packages'], ['glibc-langpack-he', 'glibc-langpack-en'])
+        changed = engine_entry('editor/zed')
+        changed['name'] = 'Changed definition'
+        with self.assertRaises(ValueError):
+            firstboot.queue({'version': 2, 'modules': [changed]})
+        self.assertEqual(self.pending.read_bytes(), first)
+
+    def test_queue_failure_keeps_original_bytes_and_removes_temporary_file(self):
+        self.write([engine_entry('editor/zed')])
+        original = self.pending.read_bytes()
+        doc = {'version': 2, 'modules': [engine_entry('_system/codecs')]}
+        with mock.patch.object(Path, 'replace', side_effect=OSError('private write failure')):
+            with self.assertRaises(OSError):
+                firstboot.queue(doc)
+        self.assertEqual(self.pending.read_bytes(), original)
+        self.assertEqual(list(self.pending.parent.glob('.pending-*')), [])
+        self.pending.write_bytes(b'{malformed')
+        with self.assertRaises(ValueError):
+            firstboot.queue(doc)
+        self.assertEqual(self.pending.read_bytes(), b'{malformed')
+
+    def test_queue_stdin_rejects_malformed_input_without_private_error_output(self):
+        self.write([engine_entry('editor/zed')])
+        original = self.pending.read_bytes()
+        for raw in (b'{invalid-private', b'{"version":true,"modules":[]}', b'x' * ((1 << 20) + 1)):
+            out = io.StringIO()
+            with mock.patch.object(firstboot.sys, 'stdin', mock.Mock(buffer=io.BytesIO(raw))), contextlib.redirect_stdout(out):
+                self.assertEqual(firstboot.queue_stdin(), 1)
+            self.assertEqual(self.pending.read_bytes(), original)
+            self.assertNotIn('private', out.getvalue())
+            self.assertNotIn('invalid', out.getvalue())
+
     def test_everything_installed_removes_the_file(self):
         self.write([engine_entry('extras/flathub'), engine_entry('_system/codecs')])
         self.assertEqual(self.main(FakeRunner(installed={'ffmpeg-free'})), 0)

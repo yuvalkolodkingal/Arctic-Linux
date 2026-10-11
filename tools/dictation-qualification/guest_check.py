@@ -33,6 +33,203 @@ CONTROLLER = Path('/usr/share/arctic/dictation/dictation.py')
 CHILD_EXEC = CONTROLLER.with_name('child_exec.py')
 PAYLOAD = Path('/opt/arctic/voxtype/1.1.0')
 SYSTEM = Path('/var/lib/arctic/dictation')
+SESSION_PREFLIGHT_STAGES = ('accuracy-module-import', 'fixture-bundle-validation',
+                            'broker-cancel', 'cpu-backend-selection',
+                            'virtual-microphone-route', 'receiver-window')
+SESSION_ERROR_TYPES = ((Invalid, 'invalid'), (OSError, 'os-error'),
+                       (ValueError, 'value-error'), (subprocess.TimeoutExpired, 'timeout'),
+                       (KeyError, 'key-error'), (TypeError, 'type-error'))
+SESSION_COMMAND_CODES = ('command-output-bound', 'command-failed')
+SESSION_STATUS_CODES = SESSION_COMMAND_CODES + (
+    'status-byte-bound', 'status-profile-descriptor-pin', 'status-profile-byte-types',
+    'optimized-cpu-incompatible', 'status-backend-unknown', 'status-backend-profile',
+    'status-cpu-variant-profile', 'status-idle-cpu-variant')
+SESSION_INVALID_CODES = {
+    'accuracy-module-import': (),
+    'fixture-bundle-validation': ('fixture-bundle-validation-failed',),
+    'broker-cancel': SESSION_STATUS_CODES,
+    'cpu-backend-selection': SESSION_STATUS_CODES,
+    'virtual-microphone-route': SESSION_COMMAND_CODES + (
+        'native-audio-tool-missing', 'loopback-flags-unavailable',
+        'loopback-process-died', 'observation-timeout'),
+    'receiver-window': SESSION_COMMAND_CODES + (
+        'receiver-process-died', 'receiver-window-duplicate', 'receiver-window-identity',
+        'receiver-focus-request-failed', 'receiver-window-disappeared', 'observation-timeout'),
+}
+WAIT_DIAGNOSTIC_TARGETS = ('receiver-clear', 'capture-link', 'terminal-state', 'text-delivery',
+                           'engine-exit', 'microphone-error', 'lock-state', 'unlock-state',
+                           'loader-lock', 'loader-exit', 'loader-endpoint', 'loader-engine',
+                           'loader-route', 'loader-terminal', 'loader-delivery')
+WAIT_DIAGNOSTIC_STATES = ('ready', 'error', 'recording', 'transcribing', 'unavailable')
+WAIT_DIAGNOSTIC_BACKENDS = ('', 'cpu', 'vulkan')
+
+def verify_small_cpu_fixture(cpuinfo):
+    """Check every declared two-vCPU Small fixture before any application gate.
+
+    The host runner fixes --smp 2. Westmere-v2 supplies the x86-64-v2 floor
+    without AVX or XSAVE; this checks observed guest flags, not a model name.
+    No arbitrary flag, processor text or raw cpuinfo enters public output.
+    """
+    code = 'actual-compatibility-cpu-fixture'
+    require(type(cpuinfo) is bytes and 0 < len(cpuinfo) <= 1024 * 1024, code)
+    try:
+        text = cpuinfo.decode('ascii')
+    except UnicodeError:
+        raise Invalid(code) from None
+    floor = {'fpu', 'cx8', 'cmov', 'mmx', 'fxsr', 'sse', 'sse2', 'lm', 'syscall',
+             'pni', 'ssse3', 'sse4_1', 'sse4_2', 'popcnt', 'cx16', 'lahf_lm'}
+    excluded = {'avx', 'avx2', 'fma', 'f16c', 'bmi1', 'bmi2',
+                'xsave', 'xsaveopt', 'xsavec', 'xsaves', 'osxsave'}
+    records = re.split(r'\n[ \t]*\n', text.strip())
+    require(len(records) == 2, code)
+    processors = set()
+    for record in records:
+        fields = {'processor': [], 'flags': []}
+        for line in record.splitlines():
+            key, separator, value = line.partition(':')
+            if separator and key.strip() in fields:
+                fields[key.strip()].append(value.strip())
+        require(all(len(values) == 1 for values in fields.values()), code)
+        processor = fields['processor'][0]
+        require(processor in ('0', '1') and processor not in processors, code)
+        processors.add(processor)
+        words = fields['flags'][0].split()
+        require(0 < len(words) <= 512 and len(words) == len(set(words))
+                and all(re.fullmatch(r'[a-z0-9][a-z0-9_]{0,63}', word) for word in words), code)
+        flags = set(words)
+        require(floor <= flags and not excluded & flags
+                and not any(word.startswith(('avx', 'amx_', 'apx')) for word in words), code)
+    require(processors == {'0', '1'}, code)
+
+def authenticated_capture_nodes(objects, pid, uid):
+    """Bind stream nodes to native-protocol peer credentials, never app metadata.
+
+    PipeWire 1.6.9 assigns client.id on the server and protects it from stream
+    updates. Its native protocol derives pipewire.sec.pid/uid from SO_PEERCRED;
+    client updates cannot replace security properties. ALSA stream nodes need
+    not repeat application.process.id, which is not an authenticated identity.
+    """
+    def number(value):
+        if type(value) is int:
+            return value if 0 <= value < 2**32 else None
+        if type(value) is str and re.fullmatch(r'0|[1-9][0-9]{0,9}', value):
+            result = int(value)
+            return result if result < 2**32 else None
+        return None
+    if type(objects) is not list or type(pid) is not int or type(uid) is not int or pid <= 0 or uid <= 0:
+        return set(), set()
+    seen, clients, nodes = set(), [], []
+    for obj in objects:
+        if (type(obj) is not dict or any(type(key) is not str for key in obj)
+                or type(obj.get('id')) is not int or number(obj['id']) is None or obj['id'] in seen):
+            return set(), set()
+        seen.add(obj['id'])
+        kind = obj.get('type')
+        if type(kind) is not str:
+            return set(), set()
+        if kind not in ('PipeWire:Interface:Client', 'PipeWire:Interface:Node'):
+            continue
+        info = obj.get('info')
+        props = info.get('props') if type(info) is dict and all(type(key) is str for key in info) else None
+        if type(props) is not dict or any(type(key) is not str for key in props):
+            return set(), set()
+        if kind == 'PipeWire:Interface:Client':
+            protocol = props.get('pipewire.protocol')
+            if (type(protocol) is str and protocol == 'protocol-native'
+                    and number(props.get('pipewire.sec.pid')) == pid and number(props.get('pipewire.sec.uid')) == uid):
+                clients.append(obj['id'])
+        else:
+            nodes.append((obj['id'], props))
+    if len(clients) != 1:
+        return set(), set()
+    owned, captures = set(), set()
+    for identity, props in nodes:
+        if number(props.get('client.id')) != clients[0]:
+            continue
+        if 'application.process.id' in props and number(props['application.process.id']) != pid:
+            continue
+        owned.add(identity)
+        media = props.get('media.class')
+        if type(media) is str and media == 'Stream/Input/Audio':
+            captures.add(identity)
+    return owned, captures
+
+def wait_status_projection(value):
+    """Closed enums only; never export status messages, text, paths or unknown values."""
+    if type(value) is not dict:
+        return ('unknown', 'unknown')
+    state, backend = value.get('state'), value.get('active_backend')
+    state = state if type(state) is str and state in WAIT_DIAGNOSTIC_STATES else 'unknown'
+    backend = ('idle' if backend == '' else backend) if type(backend) is str and backend in WAIT_DIAGNOSTIC_BACKENDS else 'unknown'
+    return (state, backend)
+
+def wait_runtime_projection(path, uid):
+    """Failure-only observation from an owned bounded regular descriptor, not readiness."""
+    fd = None
+    try:
+        if type(uid) is not int or uid <= 0:
+            return ('unknown', 'unknown')
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        before = os.fstat(fd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != uid
+                or before.st_mode & 0o077 or not 0 < before.st_size <= 16384):
+            return ('unknown', 'unknown')
+        raw = os.read(fd, 16385)
+        after = os.fstat(fd)
+        if (len(raw) != before.st_size or len(raw) > 16384
+                or (before.st_dev, before.st_ino, before.st_uid, before.st_mode,
+                    before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+                != (after.st_dev, after.st_ino, after.st_uid, after.st_mode,
+                    after.st_size, after.st_mtime_ns, after.st_ctime_ns)):
+            return ('unknown', 'unknown')
+        named = os.stat(path, follow_symlinks=False)
+        if (before.st_dev, before.st_ino, before.st_uid, before.st_mode,
+            before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                named.st_dev, named.st_ino, named.st_uid, named.st_mode,
+                named.st_size, named.st_mtime_ns, named.st_ctime_ns):
+            return ('unknown', 'unknown')
+        def unique_pairs(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError()
+                result[key] = value
+            return result
+        return wait_status_projection(json.loads(raw, object_pairs_hook=unique_pairs))
+    except Exception:
+        # Diagnostics cannot replace the original failure or interrupt cleanup.
+        return ('unknown', 'unknown')
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+
+def wait_diagnostic_code(target, last, current, graph):
+    require(type(target) is str and target in WAIT_DIAGNOSTIC_TARGETS, 'unknown-wait-diagnostic-target')
+    def projection(value):
+        if type(value) is not tuple or len(value) != 2:
+            return ('unknown', 'unknown')
+        return wait_status_projection({'state': value[0], 'active_backend': '' if type(value[1]) is str and value[1] == 'idle' else value[1]})
+    last, current = projection(last), projection(current)
+    # Last graph poll: owned engine, authenticated client-owned node, capture-class node,
+    # exact source present, exact owned capture link. Unknown is not false.
+    bits = ''.join('1' if v is True else '0' if v is False else 'u' for v in graph) if type(graph) is tuple and len(graph) == 5 else 'uuuuu'
+    return 'wait-' + target + '-last-' + last[0] + '-' + last[1] + '-now-' + current[0] + '-' + current[1] + '-lg' + bits
+
+def session_diagnostic_code(stage, error):
+    """Only fixed setup stages/classes enter public codes, never exception text."""
+    require(type(stage) is str and stage in SESSION_PREFLIGHT_STAGES, 'unknown-session-preflight-stage')
+    if isinstance(error, Invalid) and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
+        for code in SESSION_INVALID_CODES[stage]:
+            if error.args[0] == code:
+                return 'session-' + stage + '-' + code
+    for error_class, label in SESSION_ERROR_TYPES:
+        if isinstance(error, error_class):
+            return 'session-' + stage + '-' + label
+    raise Invalid('unknown-session-preflight-error-type')
+
 def installed_controller():
     spec = importlib.util.spec_from_file_location('arctic_installed_dictation', CONTROLLER)
     controller = importlib.util.module_from_spec(spec)
@@ -57,9 +254,17 @@ def sha(path):
 def read(path):
     return json.loads(Path(path).read_text())
 
-def run(argv, timeout=20, check=True):
+def run(argv, timeout=20, check=True, output_role=None):
+    require(output_role is None or (type(output_role) is str and output_role == 'interval-journal'),
+            'unknown-command-output-role')
     result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
-    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, 'command-output-bound')
+    code = 'command-output-bound'
+    if output_role is not None:
+        # Only this source-assigned role and builtin byte counts enter a failed
+        # gate code. Never include argv, the cursor, logs, stderr or error text.
+        require(type(result.stdout) is bytes and type(result.stderr) is bytes, 'command-output-byte-types')
+        code += '-journal-o' + str(len(result.stdout)) + '-e' + str(len(result.stderr))
+    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, code)
     if check:
         require(result.returncode == 0, 'command-failed')
     return result
@@ -112,6 +317,49 @@ def desktop():
             pass
     require(len(users) == 1, 'desktop-not-unique')
     return users[0]
+
+def journal_messages(rows):
+    """Decode every full MESSAGE value from journalctl's reversible JSON schema.
+
+    --all retains long values; binary values and repeated fields are arrays.
+    Unreadable or truncated material fails closed rather than becoming a clean
+    scan. Raw messages stay private and never become diagnostic error text.
+    """
+    require(type(rows) is bytes, 'journal-output-byte-type')
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, 'journal-json-duplicate-field')
+            value[key] = item
+        return value
+    def invalid_constant(_value):
+        raise Invalid('journal-json-nonfinite')
+    def text(value):
+        if type(value) is str:
+            value.encode('utf-8')
+            return value
+        require(type(value) is list and all(type(byte) is int and 0 <= byte <= 255
+                                           for byte in value), 'journal-message-type')
+        return bytes(value).decode('utf-8')
+    messages = []
+    try:
+        for line in rows.decode('utf-8').split('\n'):
+            if not line:
+                continue
+            entry = json.loads(line, object_pairs_hook=unique, parse_constant=invalid_constant)
+            require(type(entry) is dict, 'journal-json-entry-type')
+            if 'MESSAGE' not in entry:
+                continue
+            value = entry['MESSAGE']
+            if type(value) is list and value and not all(type(byte) is int for byte in value):
+                messages.extend(text(item) for item in value)
+            else:
+                messages.append(text(value))
+    except UnicodeError:
+        raise Invalid('journal-message-encoding') from None
+    except (ValueError, RecursionError):
+        raise Invalid('journal-json-invalid') from None
+    return '\n'.join(messages)
 
 def iter_process(pid):
     value = (Path('/proc') / str(pid) / 'stat').read_text()
@@ -168,6 +416,8 @@ class Checker:
         self.assets = PROFILE_ASSETS[self.profile_id]
         self.names = {key: asset['name'] for key, asset in self.assets.items()}
         cpuinfo = Path('/proc/cpuinfo').read_bytes()
+        if self.profile_id == 'small-v2':
+            verify_small_cpu_fixture(cpuinfo)
         require(self.controller.profile_selection() == 'recommended'
                 and self.profile['id'] == self.profile_id
                 and self.controller.recommended_profile(cpuinfo.decode())['id'] == self.profile_id,
@@ -206,6 +456,7 @@ class Checker:
 
     def gate(self, name, fn, kind='actual-session'):
         require(name in self.gates, 'unknown-gate')
+        self._wait_last_status = self._wait_last_graph = None
         result = {'id': name, 'status': 'failed', 'evidence_kind': kind, 'code': 'collector-failed', 'observations': {}}
         try:
             observations = fn()
@@ -220,9 +471,27 @@ class Checker:
         return result['status'] == 'passed'
 
     def status(self, verb='status', *args, check=True):
-        result = self.cmd(['/usr/bin/arctic-dictation', verb, *args], check=check)
+        result = self.cmd(['/usr/bin/arctic-dictation', verb, *args], check=False if verb == 'status' else check)
         require(len(result.stdout) <= 16384, 'status-byte-bound')
-        value = json.loads(result.stdout)
+        if verb == 'status':
+            require(type(result.returncode) is int and result.returncode in (0, 1)
+                    and type(result.stdout) is bytes and type(result.stderr) is bytes
+                    and not result.stderr, 'status-command-outcome')
+            def fields(pairs):
+                value = {}
+                for key, item in pairs:
+                    require(key not in value, 'status-json-fields')
+                    value[key] = item
+                return value
+            value = json.loads(result.stdout, object_pairs_hook=fields,
+                parse_constant=lambda _value: (_ for _ in ()).throw(Invalid('status-json-fields')))
+            require(type(value) is dict and type(value.get('ok')) is bool
+                    and ((result.returncode == 0 and value['ok'] is True)
+                         or (result.returncode == 1 and value['ok'] is False
+                             and value.get('state') == 'error' and type(value.get('error')) is str
+                             and bool(value['error']))), 'status-command-outcome')
+        else:
+            value = json.loads(result.stdout)
         require(isinstance(value, dict) and {key: value.get(key) for key in PROFILES[self.profile_id]} == PROFILES[self.profile_id]
                 and all(type(value.get(key)) is type(item) for key, item in PROFILES[self.profile_id].items())
                 and value.get('version') == '1.1.0' and value.get('profile_selection') == 'recommended'
@@ -240,12 +509,31 @@ class Checker:
         else:
             require(value.get('active_cpu_variant') == '', 'status-idle-cpu-variant')
         self.snapshots.append(result.stdout.decode())
+        self._wait_last_status = wait_status_projection(value)
         return value
+
+    def observe(self, target, fn, seconds=20):
+        """Use the original predicate/budget; label only its fixed timeout failure."""
+        require(type(target) is str and target in WAIT_DIAGNOSTIC_TARGETS, 'unknown-wait-diagnostic-target')
+        try:
+            return wait(fn, seconds)
+        except Invalid as error:
+            arguments = BaseException.args.__get__(error)
+            if not (type(arguments) is tuple and len(arguments) == 1
+                    and type(arguments[0]) is str and arguments[0] == 'observation-timeout'):
+                raise
+            try:
+                current = wait_runtime_projection(self.runtime / 'arctic/dictation.json', self.account.pw_uid)
+                code = wait_diagnostic_code(target, self.__dict__.get('_wait_last_status'), current,
+                                            self.__dict__.get('_wait_last_graph'))
+            except Exception:
+                code = wait_diagnostic_code(target, None, None, None)
+            raise Invalid(code) from None
 
     def empty(self):
         path = self.root / 'clear'
         path.touch(mode=0o600); os.chown(path, self.account.pw_uid, self.account.pw_gid)
-        wait(lambda: not path.exists() and (self.root / 'received.private').read_bytes() == b'')
+        self.observe('receiver-clear', lambda: not path.exists() and (self.root / 'received.private').read_bytes() == b'')
 
     def engines(self):
         found = []
@@ -314,16 +602,17 @@ class Checker:
         for name in ('pw-loopback', 'pw-play', 'pw-dump', 'wpctl'):
             require(Path('/usr/bin', name).is_file(), 'native-audio-tool-missing')
         help_text = self.cmd(['/usr/bin/pw-loopback', '--help']).stdout.decode()
-        require('--capture-props' in help_text and '--playback-props' in help_text, 'loopback-flags-unavailable')
+        require('--channels' in help_text and '--channel-map' in help_text
+                and '--capture-props' in help_text and '--playback-props' in help_text, 'loopback-flags-unavailable')
         old = self.cmd(['/usr/bin/wpctl', 'inspect', '@DEFAULT_AUDIO_SOURCE@'], check=False)
         match = re.search(r'\bid (\d+),', old.stdout.decode())
         self.old_source = int(match.group(1)) if match else None
         nonce = os.urandom(8).hex()
         self.sink_name = 'ArcticDictationFixtureSink' + nonce
         self.source_name = 'ArcticDictationFixtureSource' + nonce
-        self.loop = subprocess.Popen(self.prefix + ['/usr/bin/pw-loopback', '--channels=1', '--rate=16000',
-            '--capture-props=media.class=Audio/Sink node.name=' + self.sink_name,
-            '--playback-props=media.class=Audio/Source node.name=' + self.source_name],
+        self.loop = subprocess.Popen(self.prefix + ['/usr/bin/pw-loopback', '--channels=1', '--channel-map=[ MONO ]',
+            '--capture-props=audio.rate=16000 media.class=Audio/Sink node.name=' + self.sink_name,
+            '--playback-props=audio.rate=16000 media.class=Audio/Source node.name=' + self.source_name],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         def observed():
             require(self.loop.poll() is None, 'loopback-process-died')
@@ -391,12 +680,15 @@ class Checker:
         engines = self.engines(); require(len(engines) == 1, 'recording-engine-not-unique')
         pid = engines[0][0]
         objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
-        captures = {o['id'] for o in objects if o.get('type') == 'PipeWire:Interface:Node'
-                    and str(o.get('info', {}).get('props', {}).get('application.process.id')) == str(pid)
-                    and o.get('info', {}).get('props', {}).get('media.class') == 'Stream/Input/Audio'}
-        return any(o.get('type') == 'PipeWire:Interface:Link'
+        owned, captures = authenticated_capture_nodes(objects, pid, self.account.pw_uid)
+        require(self.engines() == engines, 'recording-engine-changed')
+        linked = any(o.get('type') == 'PipeWire:Interface:Link'
                    and o.get('info', {}).get('output-node-id') == self.source
-                   and o.get('info', {}).get('input-node-id') in captures for o in objects)
+                   and o.get('info', {}).get('input-node-id') in captures for o in objects) if captures else False
+        owner = bool(owned)
+        source = any(o.get('type') == 'PipeWire:Interface:Node' and o.get('id') == self.source for o in objects)
+        self._wait_last_graph = (True, owner, bool(captures), source, linked)
+        return linked
 
     def play(self, sample):
         self.audio = self.root / 'fixture.wav'
@@ -419,12 +711,12 @@ class Checker:
                 and sha(engines[0][2]) == self.assets[cpu_key]['sha256'], 'cpu-owned-process-profile-pin')
         if loader is not None:
             self.loader_engine(engines[0], *loader)
-        wait(self.capture_link, 10)
+        self.observe('capture-link', self.capture_link, 10)
         self.play(sample)
         require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0, 'fixture-playback-failed')
         stopped = self.status('stop', check=False)
         require(stopped.get('ok') is True and stopped.get('state') == 'transcribing', 'recording-stop-failed')
-        wait(lambda: self.status().get('state') in ('ready', 'error'), 240)
+        self.observe('terminal-state', lambda: self.status().get('state') in ('ready', 'error'), 240)
         elapsed = time.monotonic_ns() - before
         require(self.status().get('state') == 'ready', 'cpu-transcription-failed')
         # Controller completion and GTK's Wayland delivery are different events.
@@ -435,7 +727,7 @@ class Checker:
             stable = stable + 1 if value and value == previous else 0
             previous = value
             return value if stable >= 3 else None
-        hypothesis = wait(received, 5)
+        hypothesis = self.observe('text-delivery', received, 5)
         require(hypothesis and not hypothesis.endswith('\n') and '\n' not in hypothesis, 'empty-or-unintended-enter')
         require(self.focused(), 'insertion-focus-lost')
         if sample['language'] == 'he':
@@ -465,11 +757,11 @@ class Checker:
     def cancel(self):
         self.empty(); self.status('set-backend', 'cpu'); self.status('set-language', 'en')
         require(self.status('start')['state'] == 'recording', 'cancel-recording-not-started')
-        wait(self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.5)
+        self.observe('capture-link', self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.5)
         value = self.status('cancel')
         self.kill(self.player); self.player = None
         require(value.get('state') == 'ready', 'cancel-not-ready')
-        wait(lambda: not self.engines()); self.no_engine()
+        self.observe('engine-exit', lambda: not self.engines()); self.no_engine()
         time.sleep(.5)
         require((self.root / 'received.private').read_bytes() == b'', 'cancel-inserted-text')
         return {'count': 0, 'drained': True}
@@ -477,7 +769,7 @@ class Checker:
     def broker_death(self):
         self.empty(); self.status('set-backend', 'cpu'); self.status('set-language', 'en')
         require(self.status('start')['state'] == 'recording', 'broker-death-recording-not-started')
-        wait(self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
+        self.observe('capture-link', self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
         engines = self.engines(); require(len(engines) == 1, 'broker-death-engine-not-unique')
         engine_pid = engines[0][0]
         parent = (Path('/proc') / str(engine_pid) / 'status').read_text()
@@ -491,7 +783,7 @@ class Checker:
         require(iter_process(broker) == ticks, 'broker-replaced-before-kill')
         self.kill_identity(broker, ticks)
         self.kill(self.player); self.player = None
-        wait(lambda: not self.engines(), 10); self.no_engine()
+        self.observe('engine-exit', lambda: not self.engines(), 10); self.no_engine()
         value = self.status()
         require(value.get('ready') is True and value.get('state') == 'ready', 'broker-death-stale-status')
         require((self.root / 'received.private').read_bytes() == b'', 'broker-death-inserted-text')
@@ -516,14 +808,14 @@ class Checker:
     def microphone(self):
         self.empty(); self.status('set-backend', 'cpu')
         require(self.status('start')['state'] == 'recording', 'mic-recording-not-started')
-        wait(self.capture_link, 10)
+        self.observe('capture-link', self.capture_link, 10)
         self.destroy_route(restore=False)
         try:
             objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
             remaining = [o for o in objects if o.get('type') == 'PipeWire:Interface:Node'
                          and o.get('info', {}).get('props', {}).get('media.class', '').startswith('Audio/Source')]
             require(not remaining, 'microphone-isolation-unavailable')
-            value = wait(lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
+            value = self.observe('microphone-error', lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
             require(bool(value.get('error')) and value.get('ok') is False, 'mic-failure-not-actionable')
             require((self.root / 'received.private').read_bytes() == b'', 'mic-failure-inserted-text')
             self.no_engine()
@@ -534,17 +826,17 @@ class Checker:
     def locked(self):
         self.empty(); self.status('set-backend', 'cpu')
         require(self.status('start')['state'] == 'recording', 'lock-recording-not-started')
-        wait(self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
+        self.observe('capture-link', self.capture_link, 10); self.play(self.fixtures[0]); time.sleep(.3)
         self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'lock'])
-        wait(lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'true')
+        self.observe('lock-state', lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'true')
         self.kill(self.player); self.player = None
-        wait(lambda: not self.engines(), 5); self.no_engine()
+        self.observe('engine-exit', lambda: not self.engines(), 5); self.no_engine()
         value = self.status('start', check=False)
         require(value.get('ok') is False and value.get('state') == 'error', 'recording-started-while-locked')
         require((self.root / 'received.private').read_bytes() == b'', 'lock-inserted-text')
         # Existing host interactive path types only its disposable test password.
         print('ARCTIC-DESKTOP-UNLOCK-REQUESTED', flush=True)
-        wait(lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
+        self.observe('unlock-state', lambda: self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
         self.status('cancel', check=False)
         require(self.focused(), 'receiver-focus-after-unlock')
         return {'locked': True, 'count': 0, 'drained': True}
@@ -556,13 +848,13 @@ class Checker:
         if value.get('ok') is not True or value.get('state') != 'recording' or value.get('active_backend') != 'vulkan':
             self.status('cancel', check=False); self.status('set-backend', 'cpu')
             raise Invalid('no-supported-vulkan-device')
-        wait(self.capture_link, 10)
+        self.observe('capture-link', self.capture_link, 10)
         found = self.engines(); require(len(found) == 1, 'gpu-engine-not-unique')
         pid, ticks, binary = found[0]
         require(binary == PAYLOAD / self.names['vulkan'] and iter_process(pid) == ticks
                 and sha(binary) == self.assets['vulkan']['sha256'], 'gpu-owned-process-identity')
         self.kill_identity(pid, ticks)
-        failed = wait(lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
+        failed = self.observe('terminal-state', lambda: (v if (v := self.status()).get('state') == 'error' else None), 10)
         require(failed.get('active_backend') == 'cpu' and bool(failed.get('error')), 'gpu-failure-no-advertised-cpu-retry')
         self.no_engine()
         # Keep preference forced Vulkan: advertised CPU retry must still work.
@@ -669,9 +961,9 @@ class Checker:
                         fcntl.flock(launch, fcntl.LOCK_EX | fcntl.LOCK_NB); return True
                     except BlockingIOError:
                         return False
-                wait(locked, 3)
+                self.observe('loader-lock', locked, 3)
                 self.broker_identity(old); self.kill_identity(old[0], old[1])
-                wait(lambda: not (Path('/proc') / str(old[0])).exists(), 5)
+                self.observe('loader-exit', lambda: not (Path('/proc') / str(old[0])).exists(), 5)
                 self.no_engine()
                 wrapper = subprocess.Popen(self.prefix + [key + '=' + value for key, value in environment.items()]
                     + ['/usr/bin/python3', '-I', str(CONTROLLER), '_broker'], stdout=subprocess.DEVNULL,
@@ -680,7 +972,7 @@ class Checker:
                     require(wrapper.poll() is None, 'loader-broker-wrapper-died')
                     control = self.private / 'control.sock'
                     return control.exists() and control.lstat().st_ino != old[2]
-                wait(published, 5)
+                self.observe('loader-endpoint', published, 5)
                 broker = self.broker_identity()
                 require(broker[0] != old[0] and broker[2] != old[2], 'loader-broker-not-fresh')
                 parent = (Path('/proc') / str(broker[0]) / 'status').read_text()
@@ -697,7 +989,7 @@ class Checker:
                     found = self.engines()
                     require(len(found) <= 1, 'loader-engine-not-unique')
                     return found[0] if found else None
-                engine = wait(observed, 5)
+                engine = self.observe('loader-engine', observed, 5)
                 require(engine[2] == PAYLOAD / self.names['vulkan']
                         and sha(engine[2]) == self.assets['vulkan']['sha256'], 'loader-vulkan-process-pin')
                 self.loader_engine(engine, broker, environment)
@@ -719,13 +1011,13 @@ class Checker:
                     if self.status(check=False).get('state') == 'error':
                         return 'error'
                     return 'capture' if self.engines() and self.capture_link() else None
-                if wait(capture_or_error, 10) == 'capture':
+                if self.observe('loader-route', capture_or_error, 10) == 'capture':
                     sample = next(s for s in self.fixtures if s['language'] == 'en' and s['source_row'] == 0)
                     self.play(sample)
                     require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0, 'loader-playback-failed')
                     if self.status(check=False).get('state') == 'recording':
                         self.status('stop', check=False)
-            terminal = wait(lambda: (v if (v := self.status(check=False)).get('state') in ('ready', 'error') else None), 240)
+            terminal = self.observe('loader-terminal', lambda: (v if (v := self.status(check=False)).get('state') in ('ready', 'error') else None), 240)
             continued = terminal.get('state') == 'ready'
             continuation = []
             if continued:
@@ -740,7 +1032,7 @@ class Checker:
                     stable = stable + 1 if text and text == previous else 0
                     previous = text
                     return text if stable >= 3 else None
-                hypothesis = wait(received, 5)
+                hypothesis = self.observe('loader-delivery', received, 5)
                 require(hypothesis and '\n' not in hypothesis and self.focused(), 'loader-continuation-insertion-failed')
                 self.phrases.append(hypothesis)
                 metrics = self.accuracy.metrics((DATA / 'dictation-fixtures' / sample['reference']).read_text(), hypothesis)
@@ -844,8 +1136,8 @@ class Checker:
 
     def leakage(self):
         require(len(self.phrases) >= 10, 'leak-scan-missing-real-hypotheses')
-        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60).stdout.decode()
-        journal = '\n'.join(str(json.loads(line).get('MESSAGE', '')) for line in rows.splitlines() if line)
+        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json', '--output-fields=MESSAGE', '--all'], 60, output_role='interval-journal').stdout
+        journal = journal_messages(rows)
         notices = self.cmd(['/usr/bin/arctic-shell-ipc', 'notifications', 'history']).stdout.decode()
         # Also inspect the fallback daemon if it actually owns a user process.
         fallback = self.cmd(['/usr/bin/pgrep', '-u', str(self.account.pw_uid), '-x', 'mako'], check=False)
@@ -913,8 +1205,8 @@ class Checker:
 
     def avcs(self):
         self.security()
-        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json'], 60).stdout.decode()
-        journal = '\n'.join(str(json.loads(line).get('MESSAGE', '')) for line in rows.splitlines() if line)
+        rows = run(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor, '-o', 'json', '--output-fields=MESSAGE', '--all'], 60, output_role='interval-journal').stdout
+        journal = journal_messages(rows)
         after = self.audit_state()
         require(after['enabled'] == self.audit_before['enabled'] and after['enabled'] in (1, 2)
                 and after['lost'] == self.audit_before['lost'], 'audit-disabled-or-lost-records')
@@ -940,14 +1232,23 @@ class Checker:
         return values
 
     def session(self):
+        self.session_preflight_stage = 'accuracy-module-import'
         spec = importlib.util.spec_from_file_location('arctic_accuracy', DATA / 'dictation-accuracy/accuracy.py')
         self.accuracy = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.accuracy)
+        self.session_preflight_stage = 'fixture-bundle-validation'
         try:
             self.fixtures = self.accuracy.load_fixtures(DATA / 'dictation-fixtures', self.context['fixture_manifest_sha256'])
         except self.accuracy.Invalid:
             raise Invalid('fixture-bundle-validation-failed') from None
-        self.status('cancel', check=False); self.status('set-backend', 'cpu')
-        self.route(); self.window_start()
+        self.session_preflight_stage = 'broker-cancel'
+        self.status('cancel', check=False)
+        self.session_preflight_stage = 'cpu-backend-selection'
+        self.status('set-backend', 'cpu')
+        self.session_preflight_stage = 'virtual-microphone-route'
+        self.route()
+        self.session_preflight_stage = 'receiver-window'
+        self.window_start()
+        self.session_preflight_stage = None
         require(self.gate('local-offline-transcription', self.offline, 'actual-boot'), 'session-network-not-isolated')
         require(self.gate('recording-status-published', self.published), 'indicator-handshake-incomplete')
         self.gate('cpu-english-transcription-insertion', lambda: self.samples('en'))
@@ -967,6 +1268,7 @@ class Checker:
 
     def execute(self):
         phase = self.context['phase']
+        failure_code = 'prerequisite-or-collector-failed'
         self.gate('selinux-enforcing', self.security, 'actual-boot')
         if phase == 'live':
             self.gate('live-payload-model-absent', self.absence, 'actual-installed-files')
@@ -986,13 +1288,15 @@ class Checker:
                 if available and integrity:
                     try:
                         self.session()
-                    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
-                        pass
+                    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+                        stage = getattr(self, 'session_preflight_stage', None)
+                        if stage in SESSION_PREFLIGHT_STAGES:
+                            failure_code = session_diagnostic_code(stage, error)
         self.gate('no-new-avcs', self.avcs, 'interval-log-scan')
         present = {g['id'] for g in self.report['gates']}
         for name in sorted(self.gates - present):
             self.report['gates'].append({'id': name, 'status': 'unrun', 'evidence_kind': EXPECTED_KINDS[name],
-                                        'code': 'prerequisite-or-collector-failed', 'observations': {}})
+                                        'code': failure_code, 'observations': {}})
         self.report['status'] = 'passed' if all(g['status'] == 'passed' for g in self.report['gates']) else 'failed'
         return self.report
 

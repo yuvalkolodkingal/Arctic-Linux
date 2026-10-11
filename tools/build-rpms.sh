@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Build the Arctic Linux RPMs in a Fedora 44 container → out/repo (a createrepo_c repository).
 #
-#   tools/build-rpms.sh                 build mangowm + arctic-linux
+#   tools/build-rpms.sh                 build scenefx + mangowm + arctic-linux
 #   tools/build-rpms.sh --only arctic   only packaging/arctic-linux.spec
-#   tools/build-rpms.sh --only mangowm  only packaging/mangowm.spec
+#   tools/build-rpms.sh --only mangowm  scenefx, then packaging/mangowm.spec
+#   tools/build-rpms.sh --only scenefx  only packaging/scenefx.spec
 #   tools/build-rpms.sh --src DIR       build from DIR instead of this checkout (e.g. a copy
 #                                       with placeholder files, or another commit checked
 #                                       out there); DIR need not be a git repo
@@ -11,9 +12,8 @@
 #   tools/build-rpms.sh --cache DIR     build-only DNF/Go cache (default: <out>/cache/build)
 #   tools/build-rpms.sh --no-cache      use fresh caches for a measured cold build
 #   tools/build-rpms.sh --release-suffix auto|none|SUFFIX
-#                                       what follows "1" in the Release of both specs
-#                                       (Release: 1%{?arctic_snapshot}%{?dist}). auto (the
-#                                       default): .<commit time>.<build time>.git<commit>,
+#                                       snapshot suffix after each spec's base Release.
+#                                       auto (default): .<commit time>.<build time>.git<commit>,
 #                                       both UTC (yyyymmddHHMMSS of the commit's committer
 #                                       date, yyyymmddHHMM of the build), e.g.
 #                                       arctic-shell-0.2.0-1.20260928030512.202609280310.gitabc1234.fc44:
@@ -21,7 +21,8 @@
 #                                       later build of the same commit; an old commit built
 #                                       again stays older than the newer code. Not a git
 #                                       checkout: the build time stands in for the commit
-#                                       time. none: plain 1.fc44. Env: ARCTIC_RELEASE_SUFFIX.
+#                                       time. none: plain base Release.fc44 (1 or 2).
+#                                       Env: ARCTIC_RELEASE_SUFFIX.
 #   tools/build-rpms.sh --gpg-public-key FILE
 #                                       the Arctic repository's public signing key, shipped by
 #                                       arctic-release as /etc/pki/rpm-gpg/RPM-GPG-KEY-arctic.
@@ -37,9 +38,9 @@
 # Source0 of arctic-linux.spec is `git archive --prefix=arctic-linux-<Version>/` of the working
 # tree: the committed tree plus every uncommitted change, including untracked (not ignored)
 # files (plain `git stash create` would miss untracked files, so a throwaway index is used),
-# plus the public key given above. The mango release tarball and arctic-linux.spec's Source1 (the
+# plus the public key given above. Mango, pinned SceneFX and arctic-linux.spec's Source1 (the
 # Nerd Font symbols release) are downloaded once and cached in out/sources/. Versions come from
-# the specs.
+# the specs; SceneFX integrity is checked on every use and in its %prep.
 #
 # Output: out/repo/*.rpm + repodata, out/srpms/*.src.rpm, out/debug/ (debuginfo),
 # out/logs/rpmbuild-*.log, and out/BUILD-INFO (key=value lines: version, release_suffix,
@@ -82,7 +83,7 @@ while (( $# )); do
     *) arctic_die "unknown option: $1" ;;
   esac
 done
-case "$ONLY" in ""|arctic|mangowm) ;; *) arctic_die "--only takes arctic or mangowm" ;; esac
+case "$ONLY" in ""|arctic|mangowm|scenefx) ;; *) arctic_die "--only takes arctic, mangowm or scenefx" ;; esac
 
 spec_value() { # spec_value SPEC TAG: the first "TAG: value" of a spec (no macros in it)
   sed -n "s/^$2:[[:space:]]*//p" "$SRC/packaging/$1" | head -n1
@@ -92,6 +93,14 @@ MANGO_VERSION="$(spec_value mangowm.spec Version)"
 [[ "$VERSION" =~ ^[0-9][0-9A-Za-z.+~^_]*$ ]] || arctic_die "can't read Version from packaging/arctic-linux.spec"
 [[ "$MANGO_VERSION" =~ ^[0-9][0-9A-Za-z.+~^_]*$ ]] || arctic_die "can't read Version from packaging/mangowm.spec"
 MANGO_URL="https://github.com/mangowm/mango/archive/refs/tags/${MANGO_VERSION}.tar.gz"
+SCENEFX_VERSION=""; SCENEFX_SHA256=""
+if [[ "$ONLY" != arctic ]]; then
+  SCENEFX_VERSION="$(spec_value scenefx.spec Version)"
+  SCENEFX_SHA256="$(sed -n 's/^%global[[:space:]]\+scenefx_sha256[[:space:]]\+//p' "$SRC/packaging/scenefx.spec" | head -n1)"
+  [[ "$SCENEFX_VERSION" =~ ^[0-9][0-9.]*$ && "$SCENEFX_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+    || arctic_die "can't read scenefx version / SHA-256 from packaging/scenefx.spec"
+fi
+SCENEFX_URL="https://github.com/wlrfx/scenefx/archive/refs/tags/${SCENEFX_VERSION}/scenefx-${SCENEFX_VERSION}.tar.gz"
 # --- stream 6: arctic-linux.spec's Source1, pinned there by version and SHA-256. Specs before
 # 0.3 (an older --src) have none, and nothing to fetch.
 NERD_VERSION="$(sed -n 's/^%global[[:space:]]\+nerd_version[[:space:]]\+//p' "$SRC/packaging/arctic-linux.spec" | head -n1)"
@@ -139,7 +148,7 @@ esac
 # A Release may not contain "-"; keep to what rpm compares predictably.
 [[ -z "$SUFFIX" || "$SUFFIX" =~ ^(\.[A-Za-z0-9_+~^]+)+$ ]] ||
   arctic_die "bad --release-suffix '$SUFFIX': use dot-separated letters, digits, _ + ~ ^"
-arctic_log "Release: 1${SUFFIX}.fc44 (arctic-linux $VERSION, mangowm $MANGO_VERSION)"
+arctic_log "Release suffix: ${SUFFIX:-none}.fc44 (arctic-linux $VERSION base 1, mangowm $MANGO_VERSION base 1, scenefx ${SCENEFX_VERSION:-not-built} base 2)"
 
 # ---- 1. The repository's public key (arctic-release) ----------------------------------
 key_file=""      # the key file that goes into Source0 (a copy in $tmpdir), if one is supplied
@@ -167,7 +176,7 @@ if [[ -n "$key_note" ]]; then
 elif [[ -f "$SRC/$KEY_PATH_IN_TREE" ]]; then
   grep -q 'PRIVATE KEY' "$SRC/$KEY_PATH_IN_TREE" && arctic_die "$KEY_PATH_IN_TREE holds a PRIVATE key"
   arctic_log "arctic-release: repository key from $KEY_PATH_IN_TREE"
-elif [[ "$ONLY" != mangowm ]]; then
+elif [[ "$ONLY" != mangowm && "$ONLY" != scenefx ]]; then
   if [[ "$REQUIRE_KEY" == 1 ]]; then
     arctic_die "no repository public key: set ARCTIC_GPG_PUBLIC_KEY, pass --gpg-public-key FILE or commit $KEY_PATH_IN_TREE"
   fi
@@ -181,7 +190,7 @@ effective_key="$key_file"
 
 # ---- 2. Source tarballs -------------------------------------------------------------
 tarball="$OUT/sources/arctic-linux-$VERSION.tar.gz"
-if [[ "$ONLY" != mangowm ]]; then
+if [[ "$ONLY" != mangowm && "$ONLY" != scenefx ]]; then
   rm -f "$tarball"
   if (( is_git )); then
     arctic_log "archiving the working tree of $SRC (committed + uncommitted + untracked)"
@@ -233,7 +242,7 @@ if [[ "$ONLY" != mangowm ]]; then
 fi
 
 mango_tar="$OUT/sources/mango-$MANGO_VERSION.tar.gz"
-if [[ "$ONLY" != arctic && ! -s "$mango_tar" ]]; then
+if [[ "$ONLY" != arctic && "$ONLY" != scenefx && ! -s "$mango_tar" ]]; then
   arctic_log "downloading mango $MANGO_VERSION"
   if ! curl -fsSL --retry 3 --retry-delay 3 -o "$mango_tar.part" "$MANGO_URL"; then
     # Some proxies allow git but not GitHub's archive endpoint: the same tarball is
@@ -246,10 +255,27 @@ if [[ "$ONLY" != arctic && ! -s "$mango_tar" ]]; then
   mv "$mango_tar.part" "$mango_tar"
 fi
 
+# Validate cached sources as well as fresh downloads. SceneFX's %prep repeats this
+# immutable Fedora/upstream archive check before applying the Safe-mode patch.
+if [[ "$ONLY" != arctic ]]; then
+  scenefx_tar="$OUT/sources/scenefx-$SCENEFX_VERSION.tar.gz"
+  if [[ ! -s "$scenefx_tar" ]]; then
+    arctic_log "downloading scenefx $SCENEFX_VERSION"
+    curl -fsSL --retry 3 --retry-delay 3 -o "$scenefx_tar.part" "$SCENEFX_URL" \
+      || arctic_die "couldn't download $SCENEFX_URL"
+    echo "$SCENEFX_SHA256  $scenefx_tar.part" | sha256sum -c --quiet - \
+      || { rm -f "$scenefx_tar.part"; arctic_die "SceneFX source doesn't match the pinned SHA-256"; }
+    mv "$scenefx_tar.part" "$scenefx_tar"
+  fi
+  echo "$SCENEFX_SHA256  $scenefx_tar" | sha256sum -c --quiet - \
+    || arctic_die "cached SceneFX source doesn't match the pinned SHA-256"
+  cp "$SRC/packaging/scenefx/test_safe_completion.py" "$OUT/sources/"
+fi
+
 # --- stream 6: Source1 (the Nerd Font symbols release); a download that doesn't match the pinned
 # SHA-256 is refused here rather than by rpmbuild's %prep.
 nerd_tar="$OUT/sources/NerdFontsSymbolsOnly-$NERD_VERSION.tar.xz"
-if [[ -n "$NERD_VERSION" && "$ONLY" != mangowm && ! -s "$nerd_tar" ]]; then
+if [[ -n "$NERD_VERSION" && "$ONLY" != mangowm && "$ONLY" != scenefx && ! -s "$nerd_tar" ]]; then
   arctic_log "downloading the Nerd Font symbols $NERD_VERSION"
   curl -fsSL --retry 3 --retry-delay 3 -o "$nerd_tar.part" "$NERD_URL" \
     || arctic_die "couldn't download $NERD_URL"
@@ -266,8 +292,9 @@ fi
 
 # ---- 3. Build in the container --------------------------------------------------------
 specs=()
-[[ "$ONLY" != arctic ]] && specs+=(mangowm)
-[[ "$ONLY" != mangowm ]] && specs+=(arctic-linux)
+[[ "$ONLY" != arctic ]] && specs+=(scenefx)
+[[ "$ONLY" != arctic && "$ONLY" != scenefx ]] && specs+=(mangowm)
+[[ "$ONLY" != mangowm && "$ONLY" != scenefx ]] && specs+=(arctic-linux)
 
 arctic_ensure_engine
 engine="$(arctic_engine)"
@@ -285,7 +312,7 @@ if [[ "$BUILD_CACHE_ENABLED" == 1 ]]; then
   mkdir -p /cache/dnf /cache/go-build
   dnf_args=(--setopt=system_cachedir=/cache/dnf --setopt=keepcache=True)
 fi
-if ! dnf "${dnf_args[@]}" -y install rpm-build rpmdevtools createrepo_c 'dnf5-command(builddep)' cpio > /out/logs/build-tools-install.log 2>&1; then
+if ! dnf "${dnf_args[@]}" -y install rpm-build rpmdevtools createrepo_c 'dnf5-command(builddep)' cpio binutils > /out/logs/build-tools-install.log 2>&1; then
   tail -n 80 /out/logs/build-tools-install.log
   exit 1
 fi
@@ -299,8 +326,76 @@ define=()
 install_mango() {
   local rpm
   rpm="$(ls -t "$1"/mangowm-[0-9]*.x86_64.rpm 2>/dev/null | head -n1 || true)"
-  if [[ -n "$rpm" ]]; then dnf "${dnf_args[@]}" -y install "$rpm" >/dev/null 2>&1 || echo "note: could not install $rpm for %check"; fi
+  if [[ "${2:-optional}" == required ]]; then
+    [[ -n "$rpm" ]] || return 1
+    dnf "${dnf_args[@]}" -y install "$rpm" || return 1
+    verify_installed_rpm "$rpm" mangowm /usr/bin/mango || return 1
+    verify_scenefx || return 1
+    # Validate the installed, newly built executable's actual loader resolution.
+    rpm -V mangowm || return 1
+    readelf -d /usr/bin/mango > /out/logs/mango-dynamic.log || return 1
+    grep -Eq '\(NEEDED\).*\[libscenefx-0\.5\.so\]' /out/logs/mango-dynamic.log || return 1
+    ldd /usr/bin/mango > /out/logs/mango-linkage.log || return 1
+    local resolved
+    resolved="$(awk '$1 == "libscenefx-0.5.so" && $2 == "=>" { print $3 }' /out/logs/mango-linkage.log)"
+    [[ "$(readlink -e "$resolved")" == /usr/lib64/libscenefx-0.5.so ]]
+  elif [[ -n "$rpm" ]]; then
+    dnf "${dnf_args[@]}" -y install "$rpm" >/dev/null 2>&1 || echo "note: could not install $rpm for %check"
+  fi
 }
+verify_installed_rpm() {
+  local expected installed owner expected_files installed_files
+  local identity='%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n'
+  local files='%{FILEDIGESTALGO}\n[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILELINKTOS}\t%{FILEMODES}\n]'
+  expected="$(rpm -qp --nosignature --qf "$identity" "$1")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=local-identity-query' >&2; return 1; }
+  installed="$(rpm -q "$2" --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=installed-identity-query' >&2; return 1; }
+  [[ "$expected" =~ ^"$2"-[0-9]+:[0-9][A-Za-z0-9.+~^_]*-[A-Za-z0-9._+~^]+[.]x86_64$ \
+      && "$installed" == "$expected" ]] || { echo 'ARCTIC-RPM-VERIFY-FAIL=native-identity' >&2; return 1; }
+  if [[ -n "${3:-}" ]]; then
+    owner="$(rpm -qf "$3" --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=file-owner-query' >&2; return 1; }
+    [[ "$owner" == "$expected" ]] || { echo 'ARCTIC-RPM-VERIFY-FAIL=file-owner-identity' >&2; return 1; }
+  fi
+  # Identity alone cannot distinguish different payloads rebuilt at the same EVR.
+  # Verify against the local RPM's SHA-256 file/link/mode inventory as well.
+  expected_files="$(rpm -qp --nosignature --qf "$files" "$1")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=local-files-query' >&2; return 1; }
+  installed_files="$(rpm -q "$2" --qf "$files")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=installed-files-query' >&2; return 1; }
+  [[ "$expected_files" == $'8\n/'* && "$installed_files" == "$expected_files" ]] || {
+    if [[ "$expected_files" != $'8\n/'* ]]; then
+      echo 'ARCTIC-RPM-VERIFY-FAIL=sha256-file-inventory-format' >&2
+    else
+      echo 'ARCTIC-RPM-VERIFY-FAIL=installed-file-inventory-differs' >&2
+    fi
+    return 1
+  }
+  rpm -V "$2" || { local status=$?; echo 'ARCTIC-RPM-VERIFY-FAIL=installed-files-verification' >&2; return "$status"; }
+}
+verify_scenefx() {
+  local owner provider provides
+  local identity='%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n'
+  owner="$(rpm -qf /usr/lib64/libscenefx-0.5.so --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-owner-query' >&2; return 1; }
+  provider="$(rpm -q --whatprovides 'scenefx(arctic-software-sync)' --qf "$identity")" || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-provider-query' >&2; return 1; }
+  [[ "$owner" =~ ^scenefx-[0-9]+:0[.]5-[A-Za-z0-9._+~^]+[.]x86_64$ && "$provider" == "$owner" ]] || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-provider-identity' >&2; return 1; }
+  # RPM's --whatprovides selects a capability name, not a version expression.
+  # Retain the exact version requirement separately in the same owning package.
+  provides="$(rpm -q scenefx --qf '[%{PROVIDENAME}\t%{PROVIDEFLAGS:depflags}\t%{PROVIDEVERSION}\n]')" || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-capability-query' >&2; return 1; }
+  [[ "$(printf '%s\n' "$provides" | grep -Fc $'scenefx(arctic-software-sync)\t')" == 1 \
+      && "$(printf '%s\n' "$provides" | grep -Fxc $'scenefx(arctic-software-sync)\t=\t0.5')" == 1 ]] \
+    || { echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-capability-version' >&2; return 1; }
+  rpm -V scenefx || { local status=$?; echo 'ARCTIC-RPM-VERIFY-FAIL=scenefx-files-verification' >&2; return "$status"; }
+}
+install_scenefx() {
+  local rpm devel
+  rpm="$(ls -t "$1"/scenefx-[0-9]*.x86_64.rpm 2>/dev/null | head -n1)"
+  devel="$(ls -t "$1"/scenefx-devel-[0-9]*.x86_64.rpm 2>/dev/null | head -n1)"
+  [[ -n "$rpm" && -n "$devel" ]] || return 1
+  dnf "${dnf_args[@]}" -y install "$rpm" "$devel" || return 1
+  verify_installed_rpm "$rpm" scenefx /usr/lib64/libscenefx-0.5.so || { echo 'ARCTIC-RPM-VERIFY-CONTEXT=scenefx-runtime' >&2; return 1; }
+  verify_installed_rpm "$devel" scenefx-devel || { echo 'ARCTIC-RPM-VERIFY-CONTEXT=scenefx-devel' >&2; return 1; }
+  verify_scenefx
+}
+if [[ " $SPECS " != *" scenefx "* && -n "$(ls /out/repo/scenefx-[0-9]*.x86_64.rpm 2>/dev/null)" ]]; then
+  install_scenefx /out/repo
+fi
 [[ " $SPECS " == *" mangowm "* ]] || install_mango /out/repo
 for spec in $SPECS; do
   echo "==> $spec: installing build dependencies"
@@ -325,7 +420,8 @@ for spec in $SPECS; do
   fi
   printf '%s_rpmbuild\t%s\n' "$spec" "$((SECONDS - phase_started))" >> /out/logs/build-timings.tsv
   grep -E '^(Wrote|warning):' "/out/logs/rpmbuild-$spec.log" | sed 's,^,  ,' || true
-  [[ "$spec" == mangowm ]] && install_mango /root/rpmbuild/RPMS/x86_64
+  [[ "$spec" != scenefx ]] || install_scenefx /root/rpmbuild/RPMS/x86_64
+  [[ "$spec" != mangowm ]] || install_mango /root/rpmbuild/RPMS/x86_64 required
 done
 # Earlier builds of the specs built now make way (packages of the other spec stay: --only).
 mkdir -p /out/debug

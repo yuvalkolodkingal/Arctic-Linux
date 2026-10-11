@@ -66,7 +66,9 @@ def main():
             and command(['findmnt', '--raw', '--noheadings', '-o', 'FSTYPE', '--mountpoint', '/']) == 'btrfs'
             and Path('/sys/class/block/' + Path(block).name).resolve().parent == Path('/sys/class/block/vda').resolve(),
             'installed root is not this owned target disk')
-    serial = Path('/sys/class/block/vda/device/serial').read_text().strip()
+    require(Path('/sys/class/block/vda/device/driver').resolve(strict=True).name == 'virtio_blk',
+            'installed target driver differs')
+    serial = Path('/sys/class/block/vda/serial').read_text().strip()
     require(serial == context['disk_serial'] and command(['getenforce']) == 'Enforcing', 'installed target/security differs')
     values = dict(row.split('=', 1) for row in protected('/etc/vconsole.conf', 4096).decode().splitlines()
                   if '=' in row and not row.startswith('#'))

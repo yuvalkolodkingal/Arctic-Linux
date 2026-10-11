@@ -14,6 +14,147 @@ import subprocess
 import sys
 import time
 import uuid
+from types import FunctionType, ModuleType
+
+DIAGNOSTIC_STAGES = (
+    'run-live-init', 'run-live-context', 'run-live-payload', 'run-live-credentials',
+    'run-live-permissions', 'run-live-bootstrap', 'run-live-container-binding',
+    'run-live-container-run', 'container-packages', 'container-display', 'container-data',
+    'container-driver', 'driver-unhandled', 'driver-display', 'driver-prepare',
+    'driver-acquire', 'driver-enable', 'driver-menu', 'driver-console', 'driver-controller',
+    'driver-launch', 'driver-collect', 'driver-transitions', 'driver-live-report',
+    'driver-live-stop', 'driver-installed-prepare', 'driver-installed-acquire',
+    'driver-installed-enable', 'driver-installed-proof', 'driver-persist',
+    'driver-output-cleanup', 'driver-host-cleanup', 'driver-handle-cleanup')
+DIAGNOSTIC_ERROR_TYPES = ((subprocess.TimeoutExpired, 'timeout'),
+    (subprocess.CalledProcessError, 'command-error'), (InterruptedError, 'interrupted'),
+    (OSError, 'os-error'), (RuntimeError, 'runtime-error'), (ValueError, 'value-error'),
+    (KeyError, 'key-error'), (TypeError, 'type-error'),
+    (KeyboardInterrupt, 'keyboard-interrupt'), (SystemExit, 'system-exit'))
+DIAGNOSTIC_LITERALS = {
+    'driver-acquire': (('owned installer QEMU exited before QMP', 'qemu-exited'),
+        ('owned installer QMP acquisition timed out', 'qmp-timeout')),
+    'driver-enable': (('owned installer VM did not run', 'not-running'),),
+    'driver-menu': (('actual installer boot menu was not detected', 'menu-absent'),),
+    'driver-console': (('actual live install session did not start', 'session-absent'),
+        ('real console not visible; refused GUI input', 'console-absent'),
+        ('live console UID authentication failed', 'uid-authentication')),
+    'driver-collect': (('installer guest evidence did not complete in bound', 'evidence-incomplete'),),
+    'driver-live-report': (('active live collector did not pass', 'collector-failed'),),
+    'driver-installed-proof': (('fresh installed login display did not appear', 'login-absent'),
+        ('fresh installed proof did not complete', 'proof-incomplete')),
+}
+DIAGNOSTIC_CODES = frozenset(
+    'installer-inner-' + stage + '-' + label for stage in DIAGNOSTIC_STAGES
+    for label in ('other-error', *(label for _, label in DIAGNOSTIC_ERROR_TYPES),
+                  *(code for _, code in DIAGNOSTIC_LITERALS.get(stage, ()))))
+
+COLLECTION_GUARD_LABELS = ('collection-001', 'collection-002', 'collection-003', 'collection-004', 'collection-005', 'collection-006', 'collection-007', 'collection-008', 'collection-009', 'collection-010', 'collection-011', 'collection-012', 'collection-013', 'collection-014', 'collection-015', 'collection-016', 'collection-017', 'collection-018', 'collection-019', 'collection-020', 'collection-021', 'collection-022', 'collection-023', 'collection-024', 'collection-025', 'collection-026', 'collection-027', 'collection-028', 'collection-029', 'collection-030', 'collection-031', 'collection-032', 'collection-033', 'collection-034', 'collection-035')
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-collect-guard-' + code for code in COLLECTION_GUARD_LABELS)
+MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64
+WRITE_OBSERVATION_LABELS = (
+    ('bytes', ('true', 'false', 'unknown')),
+    ('operations', ('true', 'false', 'unknown')),
+    ('clock', ('true', 'false', 'unknown')),
+    ('vm', ('running', 'not-running', 'process-exited', 'unknown')),
+    ('phase', ('vt-away', 'output-disconnect', 'output-restore', 'unknown')),
+    ('cycle', ('zero', 'unknown')),
+)
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-collect-write-' + field + '-' + label
+    for field, labels in WRITE_OBSERVATION_LABELS for label in labels)
+COLLECTION_PHASE_LABELS = ('request-json', 'request-json-fields', 'request-json-constant',
+    'output-head', 'request-poll', 'console-capture', 'output-transition',
+    'target-write-progress', 'target-write-sample')
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-collect-phase-' + code + '-runtime-error' for code in COLLECTION_PHASE_LABELS)
+
+
+def collection_guard_code(error, controller_source):
+    """Only a pinned controller's source-minted identity; no exception text."""
+    if type(error) is not RuntimeError or type(controller_source) is not ModuleType:
+        return None
+    source = controller_source.__dict__
+    function = source.get('require')
+    if type(function) is not FunctionType or function.__globals__ is not source or \
+            source.get('__file__') != str(Path(__file__).with_name('controller.py')) or \
+            function.__code__.co_filename != source['__file__']:
+        return None
+    proof = error.__dict__.get('_arctic_installer_collection_guard')
+    if type(proof) is tuple and len(proof) == 2 and proof[0] is source.get('_COLLECTION_GUARD_TOKEN') and \
+            type(proof[1]) is str and proof[1] in COLLECTION_GUARD_LABELS:
+        return 'installer-inner-driver-collect-guard-' + proof[1]
+    # A nested owned operation can fail before one of the controller's guards.
+    # Project the deepest exact source code object, never exception text/locals.
+    traceback, phase = error.__traceback__, None
+    owners, phases = source.get('_COLLECTION_GUARD_OWNERS'), source.get('_COLLECTION_GUARD_PHASES')
+    if type(owners) is set and type(phases) is dict:
+        for _ in range(MAX_COLLECTION_DIAGNOSTIC_FRAMES):
+            if traceback is None:
+                break
+            frame = traceback.tb_frame
+            if frame.f_globals is source and any(frame.f_code is code for code in owners):
+                candidate = phases.get(frame.f_code.co_qualname)
+                if type(candidate) is str and candidate in COLLECTION_PHASE_LABELS:
+                    phase = candidate
+            traceback = traceback.tb_next
+        if traceback is not None:
+            return None  # Never present a truncated prefix as the deepest phase.
+        if phase is not None:
+            return 'installer-inner-driver-collect-phase-' + phase + '-runtime-error'
+    return None
+
+
+def write_observation_codes(error, controller_source):
+    if collection_guard_code(error, controller_source) != 'installer-inner-driver-collect-guard-collection-034':
+        return ()
+    observation = error.__dict__.get('_arctic_installer_write_observation')
+    source = controller_source.__dict__
+    if type(observation) is not tuple or len(observation) != 7 or observation[0] is not source.get('_COLLECTION_GUARD_TOKEN'):
+        return ()
+    if not all(type(value) is str and value in labels
+            for value, (_, labels) in zip(observation[1:], WRITE_OBSERVATION_LABELS)):
+        return ()
+    return tuple('installer-inner-driver-collect-write-' + field + '-' + value
+                 for value, (field, _) in zip(observation[1:], WRITE_OBSERVATION_LABELS))
+
+
+def diagnostic_code(stage, error, controller_source=None):
+    require(type(stage) is str and stage in DIAGNOSTIC_STAGES, 'Unknown installer inner stage')
+    if stage == 'driver-collect':
+        try:
+            guarded = collection_guard_code(error, controller_source)
+        except Exception:
+            guarded = None  # Optional identity cannot replace the original failure.
+        if guarded is not None:
+            return guarded
+    if isinstance(error, RuntimeError) and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
+        for message, label in DIAGNOSTIC_LITERALS.get(stage, ()):
+            if error.args[0] == message:
+                return 'installer-inner-' + stage + '-' + label
+    for error_class, label in DIAGNOSTIC_ERROR_TYPES:
+        if isinstance(error, error_class):
+            return 'installer-inner-' + stage + '-' + label
+    return 'installer-inner-' + stage + '-other-error'
+
+
+def diagnose(stage, error, controller_source=None):
+    # This host-only nonce is never copied into the test CD, guest or context.
+    token = os.environ.get('ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN', '')
+    if type(token) is str and re.fullmatch('[0-9a-f]{32}', token):
+        code = diagnostic_code(stage, error, controller_source)
+        try:
+            print('ARCTIC-INSTALLER-INNER ' + token + ' ' + code, flush=True)
+            if code == 'installer-inner-driver-collect-guard-collection-034':
+                try:
+                    observed = write_observation_codes(error, controller_source)
+                except Exception:
+                    observed = ()
+                for observation in observed:
+                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)
+        except Exception:
+            pass
 
 
 def require(value, message):
@@ -337,25 +478,34 @@ def main():
         raise InterruptedError('Installer VM signal ' + str(number))
     signal.signal(signal.SIGINT, interrupted)
     signal.signal(signal.SIGTERM, interrupted)
+    diagnostic_stage = 'driver-display'
     try:
         display = display_module.TaskbarDisplay()
         active = context.get('schema') == 'arctic-installer-active-context-v1'
+        diagnostic_stage = 'driver-prepare'
         argv = prepare_vm(display, out, args.firmware, context)
         state['qemu_argv'] = argv
         if active:
             state['target_proof'] = dict(path='target.qcow2', virtual_bytes=context['disk_bytes'], serial=context['disk_serial'],
                                         backing_file=False, node_name='target0', write_bps=context['write_bps'])
+        diagnostic_stage = 'driver-acquire'
         vm = owned_vm_type(vmtest, display_module)(argv, str(out / 'qmp.sock'), 'installer-live')
+        diagnostic_stage = 'driver-enable'
         state['display_preparation'] = dict(display.enable(vm), controller_sha256=sha('/execution/tools/native-functional/taskbar-display.py'))
         display_module.qmp_query(vm, 'cont')
         require(display_module.qmp_query(vm, 'query-status')['running'] is True, 'owned installer VM did not run')
+        diagnostic_stage = 'driver-menu'
         choose_install(vm, vmtest, out)
         state['iso_booted'] = True
+        diagnostic_stage = 'driver-console'
         state['console_authentication'] = authenticate_console(vm, startup, vmtest, out)
+        diagnostic_stage = 'driver-controller'
         controller = controller_module.InstallerController(vm, display, context, out)
         # The CD launcher returns to the discovered Wayland VT before the
         # checker observes the pre-existing packaged installer and engine.
+        diagnostic_stage = 'driver-launch'
         vm.type_text('sudo sh /dev/sr0', gap=.1); vm.keys('ret')
+        diagnostic_stage = 'driver-collect'
         deadline = time.monotonic() + (56*60 if active else 660)
         while vm.alive() and time.monotonic() < deadline:
             controller.poll(out / 'serial.log')
@@ -364,23 +514,30 @@ def main():
             time.sleep(.1)
         else:
             raise RuntimeError('installer guest evidence did not complete in bound')
+        diagnostic_stage = 'driver-transitions'
         state['host_transitions'] = controller.finish()
         if active:
             # Read the protected report directly from the original port before
             # stopping this owned live VM; extraction is independently repeated later.
+            diagnostic_stage = 'driver-live-report'
             reports = [controller_module.strict_json(line.split(' ',1)[1]) for line in
                        (out/'installer-port.log').read_text().splitlines() if line.startswith('ARCTIC-INSTALLER-REPORT ')]
             require(len(reports) == 1 and reports[0]['status'] == 'passed', 'active live collector did not pass')
             live_boot, live_pid = reports[0]['boot_id'], vm.proc.pid
+            diagnostic_stage = 'driver-live-stop'
             state['output_cleanup'] = controller.restore()
             stop_owned(vm, display); vm.close_handles()
             state['live_qemu_stopped_before_installed_boot'] = vm.proc.poll() is not None
             controller = None
+            diagnostic_stage = 'driver-installed-prepare'
             display = display_module.TaskbarDisplay()
             argv = prepare_vm(display, out, args.firmware, context, installed=True)
+            diagnostic_stage = 'driver-installed-acquire'
             vm = owned_vm_type(vmtest, display_module)(argv, str(out/'qmp-installed.sock'), 'installer-installed')
             require(vm.proc.pid != live_pid, 'installed boot reused the live QEMU process')
+            diagnostic_stage = 'driver-installed-enable'
             display.enable(vm); display_module.qmp_query(vm, 'cont')
+            diagnostic_stage = 'driver-installed-proof'
             report, serial_proof, prompts = boot_installed(vm, startup, vmtest, out, context)
             state['password_prompt_evidence'] = prompts
             require(report['boot_id'] != live_boot, 'installed boot reused the live guest boot')
@@ -389,27 +546,40 @@ def main():
                 boot_id=report['boot_id'], parent_live_boot_id=live_boot, selinux=report['selinux'],
                 root=report['root'], keyboard=report['keyboard'], authentication=report['authentication'],
                 serial=serial_proof, receipt_sha256=hashlib.sha256(json.dumps(report,sort_keys=True,allow_nan=False).encode()).hexdigest())
+            diagnostic_stage = 'driver-persist'
             (out/'installed-boot.json').write_text(json.dumps(report,sort_keys=True,allow_nan=False)+'\n')
         state['status'] = 'host_completed_pending_guest_evidence_validation_and_visual_review'
     except BaseException as error:
+        diagnose(diagnostic_stage, error, controller_module)
         errors.append(type(error).__name__ + ': ' + str(error))
     finally:
         with controller_module.cleanup_signals() as pending:
             if controller is not None:
                 try: state['output_cleanup'] = controller.restore()
-                except BaseException as error: errors.append('output cleanup: ' + type(error).__name__ + ': ' + str(error))
+                except BaseException as error:
+                    diagnose('driver-output-cleanup', error)
+                    errors.append('output cleanup: ' + type(error).__name__ + ': ' + str(error))
             try:
                 stop_owned(vm, display)
                 state['owned_qemu_stopped'] = vm is None or vm.proc.poll() is not None
                 state['owned_private_bus_closed'] = display is None or display.closed
             except BaseException as error:
+                diagnose('driver-host-cleanup', error)
                 errors.append('host cleanup: ' + type(error).__name__ + ': ' + str(error))
             if vm is not None:
                 try: vm.close_handles()
-                except BaseException as error: errors.append('handle cleanup: ' + type(error).__name__ + ': ' + str(error))
+                except BaseException as error:
+                    diagnose('driver-handle-cleanup', error)
+                    errors.append('handle cleanup: ' + type(error).__name__ + ': ' + str(error))
             controller_module.persist_cleanup_state(out / 'host-execution.json', state, errors, pending)
     return int(bool(errors))
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        result = main()
+    except BaseException as error:
+        if not isinstance(error, SystemExit) or error.code != 0:
+            diagnose('driver-unhandled', error)
+        raise
+    raise SystemExit(result)
