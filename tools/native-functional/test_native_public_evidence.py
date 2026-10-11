@@ -35,7 +35,8 @@ N = load('native_public_runtime', HERE / 'native_smoke.py')
 
 def original_guest():
     # A whole-byte reversal, usable in an RPM Source0 archive without Git.
-    source = (HERE / 'guest-check-native-v6.py').read_text()
+    from test_controls_state_trials import restore_controls_guest
+    source = restore_controls_guest((HERE / 'guest-check-native-v6.py').read_text())
     start = source.index('# BEGIN NATIVE_PUBLIC_EVIDENCE_INVENTORY\n')
     stop = source.index('# END NATIVE_PUBLIC_EVIDENCE_INVENTORY\n', start)
     source = source[:start] + source[stop + len('# END NATIVE_PUBLIC_EVIDENCE_INVENTORY\n\n\n'):]
