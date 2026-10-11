@@ -1,0 +1,81 @@
+name: Final installed UI feature qualification
+
+on:
+  push:
+    branches: [codex/final-installed-ui-20261011]
+    paths: [.github/final-installed-ui-20261011.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  installed-ui:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    # 15m original image transport +20m owned VM tools +70m encrypted-install
+    # host harness. The installed UI guest itself has a strict 12m alarm.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read disabled-by-default exact final-image manifest
+        id: image
+        working-directory: execution
+        run: |
+          python3 -B - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0,'tools/final-installed-ui')
+          import common
+          value=common.manifest(common.strict_json(Path('tools/final-installed-ui/execution-manifest.json').read_bytes()),True)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as stream:
+              stream.write('source='+value['image']['source_sha']+'\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          ref: ${{ steps.image.outputs.source }}
+          persist-credentials: false
+      - name: Verify sole first marker and all source execution pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0,'execution/tools/final-installed-ui')
+          import common
+          common.guard(common.manifest(common.strict_json(Path('execution/tools/final-installed-ui/execution-manifest.json').read_bytes()),True),Path('source').resolve())
+          PY
+      - name: Install PNG decoder
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil
+      - name: Fetch original final ISO and verify full archive and image bytes
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/arctic-final-ui"
+          python3 -B execution/tools/native-functional/fetch-image.py --manifest execution/tools/final-installed-ui/execution-manifest.json --out "$RUNNER_TEMP/arctic-final-ui/inputs"
+      - name: Encrypted installation and production UI with real PAM
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B execution/tools/final-installed-ui/run.py --source "$GITHUB_WORKSPACE/source" --inputs "$RUNNER_TEMP/arctic-final-ui/inputs" --out "$RUNNER_TEMP/arctic-final-ui/evidence"
+      - name: Screen complete original UARTs and finite original PNG inventory
+        if: always()
+        run: |
+          python3 -B execution/tools/final-installed-ui/run.py --screen --source "$RUNNER_TEMP/arctic-final-ui/evidence/public" --inputs "$RUNNER_TEMP/arctic-final-ui/inputs" --out "$RUNNER_TEMP/arctic-final-ui/screened"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-installed-ui-originals
+          path: ${{ runner.temp }}/arctic-final-ui/screened/
+          if-no-files-found: ignore
+          retention-days: 14

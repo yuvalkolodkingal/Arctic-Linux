@@ -13,6 +13,7 @@ on:
       - codex/safe-rerender-v11-20261010
       - codex/safe-rerender-v9-20261010
       - codex/safe-rerender-v8-20261010
+      - codex/final-installed-ui-20261011
   pull_request:
   workflow_dispatch:
 
