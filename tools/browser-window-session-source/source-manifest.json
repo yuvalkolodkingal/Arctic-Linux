@@ -1,0 +1,195 @@
+{
+  "Source_only": true,
+  "base": "059ec55169c6e921a8ae516d85cd9dd1bdb58b72",
+  "base_tree": "5fcfbcd33a9e8152b98cc3ca2710467cf3930d56",
+  "benchmark_acceptance": false,
+  "failed_header_acquisition": {
+    "attempts": 2,
+    "both_HTTP_status": 404,
+    "corrected_path_error_body": {
+      "bytes": 14,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-webkit-header-corrected-path-http-error-body",
+      "sha256": "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
+    },
+    "initial_error_response_bytes_retained": false,
+    "paths": [
+      "Source/WebKit/UIProcess/API/gtk/WebKitWebView.h",
+      "Source/WebKit/UIProcess/API/glib/WebKitWebView.h"
+    ],
+    "proposed_ref": "webkitgtk-2.54.1",
+    "repository": "WebKit/WebKit"
+  },
+  "file_pins": {
+    "README.md": "0ec6bb7eec286b5a44919634ef90e6431d942e68c7f73a7e43cac7263c0cbed4",
+    "execution-context.json": "27c111f183d419591ff0b5fe8fa73b87f9513192ff3670f3b93975c391dc0306",
+    "profile.py": "fc8fe6aed73ebd47aaeed2f3bb741f3ef3d3f87c6434c5a21374c2ff498b271d",
+    "source-inverse.json": "c4bfb0b933d337a586385baa9dd009a7fc4b403d4f3824d0f556078984b0a182",
+    "test_source.py": "70cb803ce21a0863f078ee96f091ad24ee1ef6ba25de60fda765b8f933406004"
+  },
+  "limitations": [
+    "No Fedora runtime export, dynamic caller GOT resolution, exact Fedora GTK/GIO argument ABI, debuginfo Build-ID, ELF byte retention, Source package/release parity, process-persistence or startup-cause proof from this Source preparation.",
+    "All inherited DBus identifier parsing and limits remain exact; original parameter-ABI uncertainty remains explicit.",
+    "Added probes may perturb timings or exhaust unchanged8192event cap, which rejects rather than silently sampling.",
+    "Five optional Epiphany timings require genuine dynamic exports; unavailable symbols remain absent.",
+    "Generic GIO async timing alone does not identify session reads or their contents.",
+    "No new workflow, public objects, ref, activation, acquisition of prior private originals, actualVM, product change or qualification."
+  ],
+  "observer_original": {
+    "Root_actual_admission_sha256": "4ec6cc783c23dd8ec9346dc82c5f9cd9a419d9d00a3a80105bda37d5af5ed214",
+    "Source_consumer_peer_sha256": "e0b4f6f476a6f181e0f2330db2d48a4e7a6e35ff0c415b2c56ef3f3670a8d38d",
+    "commit": "b871d9a6a76ef06e3699795655b9fee7b7fb1e19",
+    "path": "tools/browser-startup-visibility/profile.py",
+    "sha256": "8c25c416fc9393cacbd69422f4fe9e8942ea687d7f8fc88d9bc7ae52f0711f92"
+  },
+  "official_Source_references": [
+    {
+      "HTTP_status": 200,
+      "bytes": 5817,
+      "headers_retained": false,
+      "kind": "official_raw_header_reference",
+      "no_runtime_Fedora_ABI_claim": true,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-header-gtk-gtk-gtkapplication.h",
+      "ref": "bd25f1e2dc2c2fbf3b8864e61afe642910ba359c",
+      "ref_peeled_commit_attested": true,
+      "repository": "GNOME/gtk",
+      "sha256": "06899fc9e69c309a6c79c75ab41c59a295d851b0436ae04641e44c0863c242e9",
+      "symbol_names_present": [
+        "gtk_application_add_window"
+      ]
+    },
+    {
+      "HTTP_status": 200,
+      "bytes": 12581,
+      "headers_retained": false,
+      "kind": "official_raw_header_reference",
+      "no_runtime_Fedora_ABI_claim": true,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-header-gtk-gtk-gtkwindow.h",
+      "ref": "bd25f1e2dc2c2fbf3b8864e61afe642910ba359c",
+      "ref_peeled_commit_attested": true,
+      "repository": "GNOME/gtk",
+      "sha256": "0c75f6369fe504ce93531e2ed0bbcba605361c0e8c3dbd084e2416c7e313d664",
+      "symbol_names_present": [
+        "gtk_window_set_child",
+        "gtk_window_set_default_size"
+      ]
+    },
+    {
+      "HTTP_status": 200,
+      "bytes": 1894,
+      "headers_retained": false,
+      "kind": "official_raw_header_reference",
+      "no_runtime_Fedora_ABI_claim": true,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-header-libadwaita-src-adw-application-window.h",
+      "ref": "1.9.4",
+      "ref_peeled_commit_attested": false,
+      "repository": "GNOME/libadwaita",
+      "sha256": "7680d07c8f31f34466953d1c12adf5f4db49341d62cfc957b931091dbaa8255a",
+      "symbol_names_present": [
+        "adw_application_window_set_content"
+      ]
+    },
+    {
+      "HTTP_status": 200,
+      "bytes": 10055,
+      "headers_retained": false,
+      "kind": "official_raw_header_reference",
+      "no_runtime_Fedora_ABI_claim": true,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-header-libadwaita-src-adw-tab-view.h",
+      "ref": "1.9.4",
+      "ref_peeled_commit_attested": false,
+      "repository": "GNOME/libadwaita",
+      "sha256": "f92d74378d97273741b84b7c3e692f10d9f8551a619410c2dab1c311da3266e8",
+      "symbol_names_present": [
+        "adw_tab_view_append",
+        "adw_tab_view_set_selected_page"
+      ]
+    },
+    {
+      "HTTP_status": 200,
+      "bytes": 86261,
+      "headers_retained": false,
+      "kind": "official_raw_header_reference",
+      "no_runtime_Fedora_ABI_claim": true,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-header-glib-gio-gfile.h",
+      "ref": "2.88.3",
+      "ref_peeled_commit_attested": false,
+      "repository": "GNOME/glib",
+      "sha256": "c22f1dcabeb1fdcbd4958ba239681e770f29bc95aa4b99b143512c120eb3600f",
+      "symbol_names_present": [
+        "g_file_read_async",
+        "g_file_read_finish"
+      ]
+    },
+    {
+      "HTTP_status": 200,
+      "bytes": 9129,
+      "headers_retained": false,
+      "kind": "official_raw_header_reference",
+      "no_runtime_Fedora_ABI_claim": true,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-header-glib-gio-ginputstream.h",
+      "ref": "2.88.3",
+      "ref_peeled_commit_attested": false,
+      "repository": "GNOME/glib",
+      "sha256": "376edf811b4bdc522b3a8629fb407703e581bc4a61a4ce8d0856bdd61db1454d",
+      "symbol_names_present": [
+        "g_input_stream_read_async",
+        "g_input_stream_read_finish"
+      ]
+    },
+    {
+      "bytes": 49625,
+      "commit": "6eaf573ea9838bcaeb33c52388d0b763373f012a",
+      "kind": "official_exact50.6_commit_source_reference",
+      "no_private_symbol_offset_inferred": true,
+      "path": "/tmp/arctic-final-paired-browser-source-investigation-20261011/official-50.6-src-ephy-session.c",
+      "sha256": "107fc3a92f40a121ab97cbb10f235911c751f31006698687d5e4d3a70bb26b23",
+      "symbol_names_present": [
+        "ephy_session_resume",
+        "ephy_session_load",
+        "webkit_web_view_restore_session_state"
+      ]
+    },
+    {
+      "bytes": 57824,
+      "commit": "6eaf573ea9838bcaeb33c52388d0b763373f012a",
+      "kind": "official_exact50.6_commit_source_reference",
+      "no_private_symbol_offset_inferred": true,
+      "path": "/workspace/Arctic-Linux/out/browser-launch-investigation-20261011/ephy-shell.c",
+      "sha256": "a09768a74b4ef58a0b06cb7e9b63e9339488935bb5788374977e6e55ce4cf897",
+      "symbol_names_present": [
+        "ephy_shell_open_uris",
+        "ephy_shell_new_tab_full",
+        "ephy_window_new"
+      ]
+    }
+  ],
+  "optional_symbol_observation": {
+    "argument_fetches_for_new_symbols": false,
+    "capture_session_and_view_settings": "optional public API names; exact2.54.1header was not acquired and runtime export presence remains untested",
+    "library_resolver": "whole RPM-owned ELF dynamic exported function table only",
+    "missing_symbols": "explicit absent, no substitution",
+    "unverified_debuginfo_or_guessed_offsets": false
+  },
+  "product_optimization_proven": false,
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-browser-window-session-source-preparation-v1",
+  "unchanged_contract": {
+    "SELinux": "Enforcing",
+    "all_existing_Source_paths_plans_and_markers": true,
+    "browser_argv": [
+      "epiphany",
+      "--new-window",
+      "same_original_loopback_URL"
+    ],
+    "exec_gate_process_generation_and_cleanup": true,
+    "library_inventory_RPM_whole_identity": true,
+    "original_event_cap": 8192,
+    "original_line_cap": 16384,
+    "original_native_bracket_limit_ms": 5,
+    "original_paired_regression_limit_percent": 10,
+    "precondition_seconds": 45,
+    "repeated_launches": 3,
+    "repeated_persistence_seconds": 5
+  }
+}
