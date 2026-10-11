@@ -15,6 +15,7 @@ on:
       - codex/safe-rerender-v8-20261010
       - codex/final-installed-ui-20261011
       - codex/final-installed-ui-diagnostic-20261011
+      - codex/final-installed-ui-live-mount-20261011
   pull_request:
   workflow_dispatch:
 
