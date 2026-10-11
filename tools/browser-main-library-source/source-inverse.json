@@ -1,0 +1,79 @@
+{
+  "original_head": "9d81a7d17ad63992a9ae61d52d36552b1b615010",
+  "original_path": "tools/browser-window-session-source/profile.py",
+  "original_sha256": "fc8fe6aed73ebd47aaeed2f3bb741f3ef3d3f87c6434c5a21374c2ff498b271d",
+  "replacements": [
+    {
+      "new": "EPHY_MAIN = dict(path='/usr/lib64/epiphany/libephymain.so', bytes=1230808,\n    sha256='43cf869aa860d7810494f830cd184bfb76415a0aee0b916d6400eac62f93c44a',\n    build_id='63172b101f14d494d31a8b4c249ee4ae8d1a630a')\n# Whole matching signed runtime/debug ELF plus Build-ID/debuglink/DWZ proof.\n# These static entry file offsets are valid ONLY for EPHY_MAIN's whole bytes.\nEPHY_STATIC = {\n    'session_start_element': 281936, 'session_end_element': 284832,\n    'session_read_cb': 267200, 'load_stream_read_cb': 277632,\n    'ephy_window_constructed.lto_priv.0': 354368,\n    'ephy_window_init.lto_priv.0': 357136,\n}\nLIBRARIES = {\n    'ephymain': ('libephymain.so', 'epiphany-runtime'),\n",
+      "old": "LIBRARIES = {\n"
+    },
+    {
+      "new": "('ephymain', 'ephy_session_resume', None)",
+      "old": "('browser', 'ephy_session_resume', None)"
+    },
+    {
+      "new": "('ephymain', 'ephy_session_load', None)",
+      "old": "('browser', 'ephy_session_load', None)"
+    },
+    {
+      "new": "('ephymain', 'ephy_window_new', None)",
+      "old": "('browser', 'ephy_window_new', None)"
+    },
+    {
+      "new": "('ephymain', 'ephy_shell_open_uris', None)",
+      "old": "('browser', 'ephy_shell_open_uris', None)"
+    },
+    {
+      "new": "('ephymain', 'ephy_shell_new_tab_full', None)",
+      "old": "('browser', 'ephy_shell_new_tab_full', None)"
+    },
+    {
+      "new": "    'session_parse_start': ('ephymain', 'session_start_element', None),\n    'session_parse_end': ('ephymain', 'session_end_element', None),\n    'session_read_callback': ('ephymain', 'session_read_cb', None),\n    'session_load_callback': ('ephymain', 'load_stream_read_cb', None),\n    'window_constructed': ('ephymain', 'ephy_window_constructed.lto_priv.0', None),\n    'window_initialize': ('ephymain', 'ephy_window_init.lto_priv.0', None),\n    'application_window_add': ('gtk',",
+      "old": "    'application_window_add': ('gtk',"
+    },
+    {
+      "new": "def elf_build_id(raw):\n    \"\"\"Resolve one bounded GNU Build-ID from exact ELF64 x86_64 note bytes.\"\"\"\n    require(64 <= len(raw) <= MAX_ELF and raw[:6] == b'\\x7fELF\\x02\\x01', 'implementation_elf_layout')\n    header = struct.unpack_from('<16sHHIQQQIHHHHHH', raw)\n    require(header[2] == 62 and header[11] == 64 and header[12] > 0\n            and header[6] + header[12] * 64 <= len(raw), 'implementation_elf_layout')\n    found = []\n    for index in range(header[12]):\n        section = struct.unpack_from('<IIQQQQIIQQ', raw, header[6] + index * 64)\n        if section[1] != 7:\n            continue\n        require(section[4] + section[5] <= len(raw), 'implementation_elf_notes')\n        offset, end = section[4], section[4] + section[5]\n        while offset < end:\n            require(offset + 12 <= end, 'implementation_elf_notes')\n            namesz, descsz, kind = struct.unpack_from('<III', raw, offset)\n            offset += 12\n            desc = offset + ((namesz + 3) & ~3)\n            next_offset = desc + ((descsz + 3) & ~3)\n            require(next_offset <= end, 'implementation_elf_notes')\n            if kind == 3 and raw[offset:offset + namesz] == b'GNU\\0':\n                require(0 < descsz <= 64, 'implementation_elf_notes')\n                found.append(raw[desc:desc + descsz].hex())\n            offset = next_offset\n    require(len(found) == 1, 'implementation_build_id')\n    return found[0]\n\n\ndef implementation_symbols(raw):\n    \"\"\"No guessed offset, fallback, argument fetch or compiler-version assumption.\"\"\"\n    require(len(raw) == EPHY_MAIN['bytes']\n            and hashlib.sha256(raw).hexdigest() == EPHY_MAIN['sha256']\n            and elf_build_id(raw) == EPHY_MAIN['build_id'], 'implementation_whole_elf')\n    result = {}\n    for ident, symbol, registers in PHASES.values():\n        if ident != 'ephymain':\n            continue\n        require(registers is None, 'implementation_probe_arguments')\n        if symbol in EPHY_STATIC:\n            offset = EPHY_STATIC[symbol]\n            header = struct.unpack_from('<16sHHIQQQIHHHHHH', raw)\n            require(header[9] == 56 and header[5] + header[10] * 56 <= len(raw), 'implementation_elf_layout')\n            loads = [struct.unpack_from('<IIQQQQQQ', raw, header[5] + index * 56)\n                     for index in range(header[10])]\n            require(type(offset) is int and len([p for p in loads if p[0] == 1 and p[1] & 1\n                    and p[2] <= offset < p[2] + p[5] and p[2] + p[5] <= len(raw)]) == 1,\n                    'implementation_static_entry')\n            result[symbol] = offset\n        else:\n            result[symbol] = exported_offset(raw, symbol)\n            require(result[symbol] is not None, 'implementation_export_absent')\n    return result\n\n\ndef mapped_implementation(pid, uid, ticks, libraries, causal):\n    \"\"\"After timed mapping: bind the same browser generation's exact library VMAs.\"\"\"\n    import stat\n    require(proc_identity(pid, uid)[0] == ticks, 'implementation_process_generation')\n    path = Path(EPHY_MAIN['path'])\n    record = libraries['ephymain']\n    require(record['path'] == str(path) and record['bytes'] == EPHY_MAIN['bytes']\n            and record['sha256'] == EPHY_MAIN['sha256']\n            and record['build_id'] == EPHY_MAIN['build_id']\n            and file_identity(path) == tuple(record['file_identity']), 'implementation_inventory_binding')\n    fd = None\n    try:\n        with causal.deferred_termination():\n            fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)\n        info = os.fstat(fd)\n        expected = causal.forward_file_identity(info)\n        require(stat.S_ISREG(info.st_mode) and info.st_size == EPHY_MAIN['bytes'], 'implementation_file_binding')\n        raw = os.pread(fd, info.st_size + 1, 0)\n        require(causal.forward_file_identity(os.fstat(fd)) == expected\n                and len(raw) == info.st_size and hashlib.sha256(raw).hexdigest() == EPHY_MAIN['sha256']\n                and elf_build_id(raw) == EPHY_MAIN['build_id'], 'implementation_file_binding')\n    finally:\n        if fd is not None:\n            with causal.deferred_termination():\n                os.close(fd)\n    proc = Path('/proc') / str(pid)\n    with (proc / 'maps').open('rb') as stream:\n        maps = stream.read(1024 * 1024 + 1)\n    require(0 < len(maps) <= 1024 * 1024, 'implementation_maps_limit')\n    rows = [line.split(None, 5) for line in maps.decode('ascii').splitlines()]\n    rows = [row for row in rows if len(row) == 6 and row[5] == str(path)]\n    require(0 < len(rows) <= 64, 'implementation_maps_absent')\n    # Unchanged reviewed helper resolves controlled procfs map_files links to\n    # whole canonical file identity/bytes; proc maps device != stat device on Btrfs.\n    causal.forward_map_files(proc, rows, path, raw, expected)\n    require(proc_identity(pid, uid)[0] == ticks\n            and file_identity(path) == tuple(record['file_identity']), 'implementation_process_generation')\n    return dict(verified=True, library_sha256=EPHY_MAIN['sha256'], build_id=EPHY_MAIN['build_id'],\n                mapped_segments=len(rows), same_generation=True)\n\n\ndef inventory(context):\n",
+      "old": "def inventory(context):\n"
+    },
+    {
+      "new": "r'=>\\s+(/(?:usr/)?lib64/(?:epiphany/libephymain\\.so|[A-Za-z0-9_.+-]+))\\s+\\('",
+      "old": "r'=>\\s+(/(?:usr/)?lib64/[A-Za-z0-9_.+-]+)\\s+\\('"
+    },
+    {
+      "new": "        require((path == Path(EPHY_MAIN['path']) if ident == 'ephymain' else path.parent == Path('/usr/lib64'))\n                and path.is_file() and not path.is_symlink(), 'runtime_library_path')",
+      "old": "        require(path.parent == Path('/usr/lib64') and path.is_file() and not path.is_symlink(), 'runtime_library_path')"
+    },
+    {
+      "new": "        symbols = (implementation_symbols(raw) if ident == 'ephymain' else\n                   {symbol: exported_offset(raw, symbol) for lib, symbol, _ in PHASES.values() if lib == ident})",
+      "old": "        symbols = {symbol: exported_offset(raw, symbol) for lib, symbol, _ in PHASES.values() if lib == ident}"
+    },
+    {
+      "new": "                             file_identity=list(before))\n        if ident == 'ephymain':\n            result[ident]['build_id'] = elf_build_id(raw)\n    return result",
+      "old": "                             file_identity=list(before))\n    return result"
+    },
+    {
+      "new": "            implementation = mapped_implementation(pid, uid, start_ticks, libraries, causal)\n            phases.stop()\n",
+      "old": "            phases.stop()\n"
+    },
+    {
+      "new": "                    verified_executable_sha256=libraries['browser']['sha256']),\n                implementation_library=implementation,",
+      "old": "                    verified_executable_sha256=libraries['browser']['sha256']),"
+    },
+    {
+      "new": "runtime_library_path runtime_library_rpm_verification runtime_package_binding\nimplementation_elf_layout implementation_elf_notes implementation_build_id\nimplementation_whole_elf implementation_probe_arguments implementation_static_entry\nimplementation_export_absent implementation_process_generation\nimplementation_inventory_binding implementation_file_binding implementation_maps_limit\nimplementation_maps_absent\n",
+      "old": "runtime_library_path runtime_library_rpm_verification runtime_package_binding\n"
+    },
+    {
+      "new": "        (inventory, 'runtime_inventory'), (exported_offset, 'elf_inventory'),\n        (elf_build_id, 'elf_inventory'), (implementation_symbols, 'elf_inventory'),\n        (mapped_implementation, 'browser_launch'),",
+      "old": "        (inventory, 'runtime_inventory'), (exported_offset, 'elf_inventory'),"
+    },
+    {
+      "new": "sandboxing. It probes existing exact-ELF functions, not replacement functions.",
+      "old": "sandboxing. It probes existing exported functions, not replacement functions."
+    },
+    {
+      "new": "        before = file_identity(path)\n        if ident == 'ephymain':\n            require(before[2] == EPHY_MAIN['bytes'], 'implementation_file_binding')\n        raw = path.read_bytes()",
+      "old": "        before = file_identity(path)\n        raw = path.read_bytes()"
+    }
+  ]
+}

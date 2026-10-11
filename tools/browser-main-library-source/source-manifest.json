@@ -1,0 +1,62 @@
+{
+  "Source_only": true,
+  "actual_implementation_library_and_process_mapping_admitted": false,
+  "base": "9d81a7d17ad63992a9ae61d52d36552b1b615010",
+  "base_tree": "fab61f62a552335bea5d569ded2f13d1d793cf3a",
+  "benchmark_acceptance": false,
+  "helper_peer_sha256": "dfefd49adffec51dbd44602183097999a82ed7f9c77c67d5790c4fb7ac014144",
+  "limitations": [
+    "Actual runtime library and map_files proof remain required.",
+    "No startup cause, improvement, optimization acceptance, benchmark or release qualification.",
+    "Exact Fedora GTK/GIO argument ABI uncertainty remains unchanged.",
+    "Local virtual providers are labelled; exact retained official package bytes are real static evidence.",
+    "Additional hooks may exhaust unchanged event cap; failure is mandatory, no sampling."
+  ],
+  "matching_whole_elf_debug_source_joins": {
+    "bytes": 5832,
+    "path": "/tmp/arctic-epiphany-static-symbols-20261011/exact-public-ELF-debug-source-joins.json",
+    "sha256": "bdbcd6ffc5f634ed0bde5e99b1ef12338ff5452f06da78fb79ebb7248ed8d875"
+  },
+  "original_Source_peer_sha256": "48c6774002beb22f65abf47be0a5160abc2bb1a3fa77f2171f7c43203bdcf678",
+  "original_operational_peer_sha256": "d2b9354f625b9361107844b2919f149fc22a0e620d916e46dce0990ddb4a5703",
+  "product_optimization_proven": false,
+  "public_package_evidence": {
+    "bytes": 10891,
+    "path": "/tmp/arctic-epiphany-static-symbols-20261011/frozen-public-package-static-author-receipt.json",
+    "sha256": "3917ad3200fc065e1b6f46aba9a9b160c77162387b59457ce1af0357d2aae237"
+  },
+  "ready": false,
+  "release_acceptance": false,
+  "retained_partial_diagnostic_projection_sha256": "9d1d206ab0be9148b37a4880aad0c37fb5d0a4b62dbc9f6e452cec8c0308d1ed",
+  "schema": "arctic-browser-main-library-disabled-source-v1",
+  "signed_debug_source_files": [
+    {
+      "bytes": 49625,
+      "path": "/tmp/arctic-epiphany-static-symbols-20261011/epiphany-debugsource-member-0240",
+      "sha256": "107fc3a92f40a121ab97cbb10f235911c751f31006698687d5e4d3a70bb26b23"
+    },
+    {
+      "bytes": 57824,
+      "path": "/tmp/arctic-epiphany-static-symbols-20261011/epiphany-debugsource-member-0242",
+      "sha256": "a09768a74b4ef58a0b06cb7e9b63e9339488935bb5788374977e6e55ce4cf897"
+    },
+    {
+      "bytes": 200132,
+      "path": "/tmp/arctic-epiphany-static-symbols-20261011/epiphany-debugsource-member-0254",
+      "sha256": "e89ce90f2df97f30e855e98723ee1040e1bbd71bbf05aada9a6898000bc1fa9a"
+    },
+    {
+      "bytes": 153209,
+      "path": "/tmp/arctic-epiphany-static-symbols-20261011/epiphany-debugsource-member-0038",
+      "sha256": "d291f417cd1c82044db9235dc91c18677b2d3a3ea9322fb050a1c15e59082a1c"
+    }
+  ],
+  "source_files": {
+    "README.md": "3f23027c3a49bc7e99866f3dba9e6a53f00dd90f7c81d1372a821985e372c2b5",
+    "execution-context.json": "27c111f183d419591ff0b5fe8fa73b87f9513192ff3670f3b93975c391dc0306",
+    "profile.py": "5df3ca848724b183ba6bd2ee5979eeac4ecf86a69e88f075116b8ca28a331011",
+    "source-inverse.json": "3440daf81f2eaf9dca7e48538ac4e3938490ebedcd5dfbdc3ed0769c68006b8a",
+    "test_source.py": "a465bfffeea1afdc71e3f3adc570a32913b9dd5ea7420cda513725fdaef8be1e"
+  },
+  "unchanged_helper_sha256": "d6af122d05390f96bf020f728ec9d74066f8d5b5e91d2f9b0cbb0bb187c508ec"
+}
