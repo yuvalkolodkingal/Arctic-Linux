@@ -85,18 +85,62 @@ class WaylandProviderControls(unittest.TestCase):
                        for kind in ('server','client'))
 
     def test_each_provider_must_be_unique_regular_exact_rpmdb_file(self):
-        inventory='wayland-libs\t1.26.0\tx86_64\n';files=self.rows();needed={'libwayland-server.so.0','libwayland-client.so.0'}
-        with patch.object(S,'rpm_query',side_effect=[inventory,files]):
+        inventory='wayland-libs\t0\t1.26.0\t1.fc44\tx86_64\n';files=self.rows();needed={'libwayland-server.so.0','libwayland-client.so.0'}
+        def query(inv, rows):
+            return lambda _root,args: inv if args[:2]==['-q','--whatprovides'] else rows
+        with patch.object(S,'rpm_query',side_effect=query(inventory,files)):
             records=S.wayland_library_records(Path('/proof'),needed)
             self.assertEqual([r['kind'] for r in records],['server','client'])
         for inv,rows in ((inventory*2,files),(inventory.replace('x86_64','aarch64'),files),(inventory,files*2),
             (inventory,files.replace(str(stat.S_IFREG|0o755),str(stat.S_IFLNK|0o755))),
             (inventory,files.replace('1'*64,'x'*64)),(inventory,files.splitlines()[0]+'\n')):
-            with self.subTest(inventory=inv,files=rows),patch.object(S,'rpm_query',side_effect=[inv,rows]),self.assertRaises(ValueError):
+            with self.subTest(inventory=inv,files=rows),patch.object(S,'rpm_query',side_effect=query(inv,rows)),self.assertRaises(ValueError):
                 S.wayland_library_records(Path('/proof'),needed)
         with patch.object(S,'rpm_query') as query,self.assertRaises(ValueError):
             S.wayland_library_records(Path('/proof'),{'libunknown.so.0'})
         query.assert_not_called()
+
+    def test_actual_fedora44_split_names_resolve_individually_and_file_ownership_must_match(self):
+        # Source-bound naming/version fixture from the retained original final
+        # producer RPM inventory rows784-787. This is a synthetic RPMDB response
+        # control, not execution of or admission for the target packages.
+        owners={kind:'libwayland-'+kind+'\t0\t1.26.0\t1.fc44\tx86_64\n' for kind in ('server','client')}
+        paths={kind:'/usr/lib64/libwayland-'+kind+'.so.0.26.0' for kind in owners}
+        needed={'libwayland-server.so.0','libwayland-client.so.0'}
+        for fault in (None,'no_capability_owner','duplicate_capability_owner','duplicate_path_owner',
+                      'mismatched_path_owner','different_release_owner','different_epoch_owner',
+                      'malformed_owner','missing_regular_file','bad_digest'):
+            calls=[]
+            def query(_root,args):
+                calls.append(args)
+                if args[:2]==['-q','--whatprovides']:
+                    requested=args[2];kind='server' if 'server' in requested else 'client'
+                    row=owners[kind]
+                    if kind=='server':
+                        capability=requested.endswith('()(64bit)')
+                        if capability and fault=='no_capability_owner':return ''
+                        if capability and fault=='duplicate_capability_owner':return row+row
+                        if capability and fault=='malformed_owner':return row.replace('libwayland-server','../private')
+                        if not capability and fault=='duplicate_path_owner':return row+row
+                        if not capability and fault=='mismatched_path_owner':return owners['client']
+                        if not capability and fault=='different_release_owner':return row.replace('1.fc44','2.fc44')
+                        if not capability and fault=='different_epoch_owner':return row.replace('\t0\t','\t1\t')
+                    return row
+                kind=args[1].removeprefix('libwayland-')
+                if kind=='server' and fault=='missing_regular_file':return ''
+                digest='x'*64 if kind=='server' and fault=='bad_digest' else '1'*64
+                return paths[kind]+'\t'+digest+'\t'+str(stat.S_IFREG|0o755)+'\n'
+            with self.subTest(fault=fault),patch.object(S,'rpm_query',side_effect=query):
+                if fault is None:
+                    result=S.wayland_library_records(Path('/proof'),needed)
+                    self.assertEqual([(r['kind'],r['package'],r['version'],r['path'])for r in result],
+                        [(kind,'libwayland-'+kind,'1.26.0',paths[kind])for kind in ('server','client')])
+                    self.assertEqual([r['rpm_owner']for r in result],
+                        [dict(name='libwayland-'+kind,epoch='0',version='1.26.0',release='1.fc44',arch='x86_64')for kind in ('server','client')])
+                    self.assertEqual([c[2]for c in calls if c[:2]==['-q','--whatprovides']],
+                        ['libwayland-server.so.0()(64bit)',paths['server'],'libwayland-client.so.0()(64bit)',paths['client']])
+                else:
+                    with self.assertRaises(ValueError):S.wayland_library_records(Path('/proof'),needed)
 
     def test_filtered_reader_accepts_only_exact_provider_paths_and_never_runs_the_target(self):
         with tempfile.TemporaryDirectory() as temporary,patch.dict(os.environ,RUNNER_TEMP=temporary),\
@@ -153,7 +197,7 @@ class WaylandProviderControls(unittest.TestCase):
             subprocess.run(['gcc','-O2','-fPIC','-shared','-o',str(binary),str(source)],check=True)
             digest=S.sha(binary);rows=''.join('/usr/lib64/libwayland-'+kind+'.so.0.26.0\t'+digest+'\t'+str(stat.S_IFREG|0o755)+'\n'for kind in ('server','client'))
             def query(_root,args):
-                if args[0]=='-qa':return 'wayland-libs\t1.26.0\tx86_64\n'
+                if args[:2]==['-q','--whatprovides']:return 'wayland-libs\t0\t1.26.0\t1.fc44\tx86_64\n'
                 if 'FILEDIGESTALGO' in args[-1]:return 'wayland-libs\t1.26.0\t1.fc44\tx86_64\t8\n'
                 return rows
             def extract(_fs,out,_source,destination,_proof,_deadline): shutil.copyfile(binary,out/destination)
@@ -173,6 +217,18 @@ class WaylandProviderControls(unittest.TestCase):
                     self.assertRaisesRegex(ValueError,'server dependency'):
                 S.collect_wayland(root/'filesystem',selected,root,binary,{},time.monotonic()+120,'candidate')
             query.assert_not_called()
+
+            def wrong_payload_query(_root,args):
+                if args[:2]==['-q','--whatprovides']:
+                    kind='server' if 'server' in args[2] else 'client'
+                    return 'libwayland-'+kind+'\t0\t1.26.0\t1.fc44\tx86_64\n'
+                if 'FILEDIGESTALGO' in args[-1]:return args[1]+'\t1.26.0\t1.fc44\tx86_64\t8\n'
+                return ''.join('/usr/lib64/libwayland-'+kind+'.so.0.26.0\t'+'0'*64+'\t'+str(stat.S_IFREG|0o755)+'\n' for kind in ('server','client'))
+            with patch.object(S,'dynamic_dependencies',return_value=['libwayland-server.so.0']),\
+                    patch.object(S,'rpm_query',side_effect=wrong_payload_query),\
+                    patch.object(S,'extract_selected',side_effect=extract),\
+                    self.assertRaisesRegex(ValueError,'differs from unique RPMDB regular-file digest'):
+                S.collect_wayland(root/'filesystem',selected,root,binary,{'filesystem':{}},time.monotonic()+120,'candidate')
 
 
 if __name__=='__main__':unittest.main()

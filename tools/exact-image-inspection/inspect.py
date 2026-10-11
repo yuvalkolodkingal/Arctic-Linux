@@ -469,20 +469,31 @@ def rpm_identity(root, path, target, package, version):
 def wayland_library_records(root, needed):
     require(type(needed) is set and needed <= {'libwayland-server.so.0', 'libwayland-client.so.0'}
             and 'libwayland-server.so.0' in needed, 'Expected bounded Wayland provider dependencies')
-    rows = rpm_query(root, ['-qa', '--qf', '%{NAME}\t%{VERSION}\t%{ARCH}\n']).splitlines()
-    matches = [row.split('\t') for row in rows if re.fullmatch(r'wayland-libs\t[0-9]+(?:\.[0-9]+){1,2}\tx86_64', row)]
-    require(len(matches) == 1, 'Exactly one actual x86_64 Wayland RPM is needed')
-    package, version, _ = matches[0]
-    files = rpm_query(root, ['-q', package, '--qf', '[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\n]']).splitlines()
     result = []
     for kind, pattern in WAYLAND_LIBRARY_PATHS.items():
         if 'libwayland-' + kind + '.so.0' not in needed:
             continue
+        # Fedora44 splits these providers into libwayland-server/client RPMs.
+        # Derive the actual owner for each fixed ELF64 SONAME, including an
+        # older image's packaging, rather than assuming a package/version.
+        identity_format = '%{NAME}\t%{EPOCHNUM}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\n'
+        owners = rpm_query(root, ['-q', '--whatprovides', 'libwayland-' + kind + '.so.0()(64bit)',
+                                  '--qf', identity_format]).splitlines()
+        require(len(owners) == 1 and re.fullmatch(
+            r'[a-z0-9][a-z0-9+._-]{0,127}\t[0-9]{1,10}\t[0-9]+(?:\.[0-9]+){1,2}'
+            r'\t[0-9A-Za-z][0-9A-Za-z.+~_-]{0,127}\tx86_64', owners[0]),
+            'Exactly one actual x86_64 Wayland RPM is needed')
+        package, epoch, version, release, arch = owners[0].split('\t')
+        files = rpm_query(root, ['-q', package, '--qf', '[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\n]']).splitlines()
         libraries = [row.split('\t') for row in files
             if re.fullmatch(pattern + r'\t[0-9a-f]{64}\t[0-9]{1,6}', row)
             and stat.S_IFMT(int(row.rsplit('\t', 1)[1])) == stat.S_IFREG]
         require(len(libraries) == 1, 'Exactly one actual regular required Wayland provider is needed')
-        result.append({'kind': kind, 'package': package, 'version': version, 'path': libraries[0][0]})
+        file_owners = rpm_query(root, ['-q', '--whatprovides', libraries[0][0],
+                                      '--qf', identity_format]).splitlines()
+        require(file_owners == owners, 'Required Wayland file lacks the same unique RPMDB owner')
+        result.append({'kind': kind, 'package': package, 'version': version, 'path': libraries[0][0],
+            'rpm_owner': {'name': package, 'epoch': epoch, 'version': version, 'release': release, 'arch': arch}})
     return result
 
 
@@ -517,7 +528,8 @@ def collect_wayland(filesystem, selected, root, mango, provenance, deadline, sco
             r'^\s*\d+:\s+([0-9a-fA-F]+)\s+([0-9]+)\s+FUNC\s+GLOBAL\s+DEFAULT\s+[0-9]+\s+wl_list_insert(?:@@?[A-Za-z0-9_.]+)?\s*$',
             symbol_text, re.M)))
         require(len(symbols) == 1 and 0 < symbols[0][1] <= 4096, 'Unique bounded wl_list_insert function required')
-        provenance['wayland_providers'].append({'kind': record['kind'], 'rpm': identity, 'elf': elf,
+        provenance['wayland_providers'].append({'kind': record['kind'], 'rpm': identity,
+            'rpm_owner': record['rpm_owner'], 'elf': elf,
             'wl_list_insert_symbol': {'value': symbols[0][0], 'bytes': symbols[0][1]},
             'direct_mango_dependency': 'libwayland-' + record['kind'] + '.so.0' in needed,
             'runtime_resolution': 'Not established; actual process mappings/callsite/provider proof required',

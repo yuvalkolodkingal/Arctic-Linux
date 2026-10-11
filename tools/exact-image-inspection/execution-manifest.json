@@ -1,7 +1,7 @@
 {
   "execution_files": {
     ".github/workflows/inspect-exact-image-mango-20261010.yml": "186b1366730886d9413cee6531fb7f6c3c583435d820778bf8181bc92a8743cb",
-    "tools/exact-image-inspection/inspect.py": "090a9625e3f13b954a7ab4f46c3e43328039bc1a054faa4dacedeee8587e6a93",
+    "tools/exact-image-inspection/inspect.py": "cd4111036f16b5686e3aac63104369951e2ac5e897b8a8ccd5ebe16df1113a86",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
   },
   "image": {
