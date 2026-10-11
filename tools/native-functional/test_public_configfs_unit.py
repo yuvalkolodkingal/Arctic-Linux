@@ -74,7 +74,7 @@ class PublicConfigfsControls(unittest.TestCase):
         self.assertEqual(S.ZRAM_UNIT, 'systemd-zram-setup@zram0.service')
         for literal, _ in S.EXTERNAL_EMAIL_CANDIDATES[1:]:
             with self.subTest(literal=literal):
-                if literal == S.ZRAM_UNIT:
+                if literal in ('modprobe@fuse.service', S.ZRAM_UNIT):
                     public = literal.encode()
                     self.assertIs(S.external_text(public), public)
                 else:

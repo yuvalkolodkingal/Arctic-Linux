@@ -19,6 +19,8 @@ N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
 
 def restore_capture_source(text):
+    from test_controls_state_trials import restore_controls_native
+    text=restore_controls_native(text)
     text=text.replace("json.dumps(report,ensure_ascii=False,separators=(',',':'))","json.dumps(report,ensure_ascii=False)")
     a=text.index('    def launch_reference_player('); z=text.index('    def visual_media(',a)
     text=text[:a]+text[z:]

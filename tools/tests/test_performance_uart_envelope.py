@@ -25,9 +25,9 @@ class UARTEnvelopeTest(unittest.TestCase):
         # Preserve the original history digest through exactly three reviewed identity inverses.
         historical = raw
         for current, previous in (
-                (b'f8e8e9d2cc7900607111f98d51c5071b09e2434aedb6eda9a000f3badd45c57c', b'5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'),
-                (b'eb8ceacf12fd964651dc614c823773928b0fd13a17f32ffd3457659c01441cc9', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
-                (b'57a256b79e362360e2fb1de39b65f007002765df6a02769e26042f5e7364ddea', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
+                (b'4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5', b'5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'),
+                (b'515ff75b394b28c9d2d02f0838612cbb86b06e2a24be25580f19554632abe064', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
+                (b'9acbe74ffb8c64b63f9f180246c26ba69ae2ba80c620a1cb8baca8d9fdc4fc79', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
         ):
             self.assertEqual(historical.count(current), 1)
             historical = historical.replace(current, previous)

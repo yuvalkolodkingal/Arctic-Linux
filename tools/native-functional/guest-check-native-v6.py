@@ -895,6 +895,64 @@ class Smoke:
             write_renderer_receipt(self.root,self.uid,value)
         except (OSError,ValueError,RuntimeError): pass
 
+    # BEGIN CONTROLLED_CONTROLS_INVOCATION
+    def controlled_controls_trials(self,fixture,expected,source_sha,primary):
+        """Two failure-only default players; the original primary remains failed."""
+        states=('transition','hidden')
+        rows=[dict(intervention=state,status='unrun',release_acceptance=False) for state in states]
+        value=dict(schema='arctic-native-controls-state-v1',stage=self.stage,
+            primary_screenshot_sha256=primary['screenshot']['sha256'],
+            primary_oracle_status='unmatched',primary_failure_preserved=True,
+            primary_capture_precondition=primary['capture_precondition'],
+            same_fixture_sha256=primary['fixture_sha256'],same_expected_rgb_sha256=primary['expected_rgb_sha256'],
+            trials=rows,release_acceptance=False,rendering_cause_proven=False,
+            controls=dict(order=list(states),initial_controls_visible=[True,False],
+                fresh_owned_app_each=True,requested_gsk_renderer='unset',
+                settle_seconds=.5,diagnostic_time_bound_seconds_each=120,
+                same_static_oracle=True,shared_isolated_config_and_cache=True,
+                original_primary_and_ordered_warm_cache_confound=True,
+                preceding_primary_player_environment_not_fully_attested=True,
+                gsk_debug_renderer_both=True,wayland_debug_client_both=True,
+                video_widget_or_framebuffer_attested=False,
+                GUI_controls_visibility_is_setting_readback_not_pixel_attestation=True))
+        try:
+            require(primary['oracle']['status']=='unmatched','controls trials require the failed primary oracle')
+            require(digest(fixture)==primary['fixture_sha256'] and digest(expected)==primary['expected_rgb_sha256'],
+                    'controls trial fixture identity changed')
+            self.finish_native_protocol()
+            players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
+            require(1<=len(players)<=2,'controls trial primary player inventory differs')
+            for player in players: retire_renderer_player(player,self.uid)
+            seen=set()
+            for index,state in enumerate(states):
+                trial=None
+                try:
+                    trial=ControlsTrialSmoke(self,state)
+                    rows[index]=trial.observe(fixture,expected,source_sha)
+                    player=rows[index].get('player')
+                    if player is not None:
+                        identity_key=(player['pid'],player['start_ticks'])
+                        require(identity_key not in seen and not any(identity_key==(p.get('pid'),p.get('start_ticks'))
+                                for p in players),'controls trial player is not a new process')
+                        seen.add(identity_key)
+                except Exception as error:
+                    rows[index].update(status='unknown',error=renderer_trial_error(error))
+                finally:
+                    if trial is not None:
+                        self.owned.extend(trial.owned); self.launches.extend(trial.launches)
+                        trial.finish_native_protocol()
+                        cleanup=True
+                        for player in trial.owned:
+                            try: retire_renderer_player(player,self.uid)
+                            except Exception: cleanup=False
+                        rows[index]['owned_trial_cleanup_completed']=cleanup
+                require(trial is None or cleanup,'controls trial owned retirement incomplete')
+        except Exception as error:
+            value['preparation_error']=renderer_trial_error(error)
+        try: write_controls_receipt(self.root,self.uid,value)
+        except (OSError,ValueError,RuntimeError): pass
+    # END CONTROLLED_CONTROLS_INVOCATION
+
     def setup(self):
         require(Path('/etc/arctic/default-apps').is_file(), 'system role file unavailable')
         config = Path(next((x.split('=',1)[1] for x in self.original_prefix[5:]
@@ -1460,7 +1518,7 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
         if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':
-            self.controlled_renderer_trials(fixture,expected,source_sha,info)
+            self.controlled_controls_trials(fixture,expected,source_sha,info)
         require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
 
@@ -1764,6 +1822,78 @@ class RendererTrialSmoke(Smoke):
 # END CONTROLLED_RENDERER_TRIALS
 
 
+# BEGIN CONTROLLED_CONTROLS_STUDY
+def write_controls_receipt(root,uid,value):
+    raw=(json.dumps(value,sort_keys=True)+'\n').encode()
+    require(len(raw)<=512*1024,'controlled renderer receipt exceeded bound')
+    directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        require(os.fstat(directory).st_uid==uid,'controlled receipt directory owner differs')
+        fd=os.open('0-controls-state-trials.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                   0o600,dir_fd=directory)
+        with os.fdopen(fd,'wb') as stream:
+            os.fchown(stream.fileno(),uid,-1)
+            info=os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_uid==uid and info.st_nlink==1
+                    and not info.st_mode&0o077,'controlled receipt file identity differs')
+            stream.write(raw)
+    finally: os.close(directory)
+
+
+
+class ControlsTrialSmoke(RendererTrialSmoke):
+    """Same default renderer/capture, changing only private initial controls state."""
+    def __init__(self,parent,state):
+        require(type(state) is str and state in ('transition','hidden'),
+                'unsupported controls state intervention')
+        self.mode='default'; self.state=state
+        self.initial_visible=state=='transition'
+        self.user=parent.user; self.uid=parent.uid; self.stage=parent.stage
+        self.root=parent.root/('controls-trial-'+state)
+        self.root.mkdir(mode=0o700); os.chown(self.root,self.uid,self.user.pw_gid)
+        self.prefix=list(parent.prefix); self.original_prefix=list(parent.original_prefix)
+        self.owned=[]; self.launches=[]; self.gui_v6=True
+        self.deadline=time.monotonic()+120
+
+    def seed_controls(self):
+        self.reference_settings_config()
+        require(not any(x.startswith('GSETTINGS_BACKEND=') for x in self.prefix),
+                'controls trial settings backend already selected')
+        key=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','/usr/bin/gsettings']
+        schema=['io.github.celluloid-player.Celluloid.window-state','show-controls']
+        wanted='true' if self.initial_visible else 'false'
+        result=self.cmd(key+['set']+schema+[wanted],timeout=5)
+        require(result[0]==0,'controls trial private setting write failed')
+        result=self.cmd(key+['get']+schema,timeout=5)
+        require(result[0]==0 and result[1]==wanted,'controls trial private initial state differs')
+        return dict(initial_visible=self.initial_visible,settings_backend='keyfile',
+                    private_config_verified=True,seed_readback_matched=True,
+                    setting='window-state show-controls',release_acceptance=False)
+
+    def hide_reference_controls(self,player,ipc):
+        value=super().hide_reference_controls(player,ipc)
+        require(type(value.get('before_visible')) is bool and value['before_visible']==self.initial_visible
+                and value.get('after_visible') is False and value.get('private_config_process_bound') is True,
+                'controls trial process-bound initial or hidden state differs')
+        return value
+
+    def observe(self,fixture,expected,source_sha):
+        # A failed seed aborts before launch; no fallback or guessed initial state.
+        seed=self.seed_controls()
+        value=super().observe(fixture,expected,source_sha)
+        value['intervention']=self.state
+        value['controls_seed']=seed
+        value['controls_history']=dict(initial_visible=self.initial_visible,action='win.set-controls-visible(false)',
+            desired_final_visible=False,comparison='true-to-false' if self.initial_visible else 'false-to-false',
+            setting_readback_not_framebuffer_attestation=True,release_acceptance=False)
+        if 'capture' in value:
+            # Inherited capture writes this exact owned directory; this is its
+            # source-controlled relative filename, not a new image or conversion.
+            value['capture']['path']='controls-trial-'+self.state+'/reference.png'
+        return value
+# END CONTROLLED_CONTROLS_STUDY
+
+
 def mpv_hide_reference_controls(path, expected_pid, expected_uid):
     """The sole supported fixed per-window UI command; never an arbitrary action."""
     require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
@@ -1990,10 +2120,10 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'visual-oracle.json', 'moving-player-proof.json',
     'fullscreen-player-receipts.json', 'fullscreen-player-captures.json',
     'terminal-role.json', 'file-manager-terminal.json',
-    '0-native-protocol-viewport.json', '0-controlled-renderer-trials.json',
+    '0-native-protocol-viewport.json', '0-controls-state-trials.json',
     'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
     'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
-    'renderer-trial-default/reference.png', 'renderer-trial-gl/reference.png',
+    'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
     'files with spaces/editor fixture.txt',
 )) | frozenset(
     directory + '/' + filename
@@ -2035,7 +2165,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532'
+    native_source_sha = 'd7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

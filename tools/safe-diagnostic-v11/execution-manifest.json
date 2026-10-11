@@ -1,6 +1,6 @@
 {
   "execution_files": {
-    ".github/workflows/safe-rerender-v5-20261010.yml": "23ad26f8f8d0969e3bdef8c41f4b85717a2d318a236467b73ee9cdb3178c4d52",
+    ".github/workflows/safe-rerender-v11-20261010.yml": "fd3973f7313697bdb9dec092a95f1f075b4fc256d0868242762fdc7b33b53797",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
@@ -9,11 +9,12 @@
     "tools/native-functional/native_smoke.py": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
     "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
-    "tools/safe-diagnostic-v5/common.py": "817e731b6b60e575a54f28be0a90407b7da6cf0011b6dcf9b11df76fd06468d9",
-    "tools/safe-diagnostic-v5/guest.py": "b6721545141f75ee2599c2d3eb6cc5735ef35f9228f52b3f66104e0bc9d26018",
-    "tools/safe-diagnostic-v5/host.py": "e4ddcc74a197acca0515ddaaeba26e5a6869ca3e2739609c623bf242a823732d",
-    "tools/safe-diagnostic-v5/run.sh": "b28a09b35d4aea9c19b88b6503f46ea5b7c823fef9bbdd1a631fc540ae8e4ffd",
-    "tools/safe-diagnostic-v5/screencopy.c": "72deb18e64b271d8c2fb182511b19056b6d182d1ffdc77106dd9515f22fc40e0"
+    "tools/safe-diagnostic-v11/common.py": "bd03236c7aebd8f046af32d5262a7493e55de7183a81f5ec518b60694dcdced7",
+    "tools/safe-diagnostic-v11/gl-completion.c": "82ced045063fff6c2dc5255cc36269329a360131d3999035dadbbe9ddb03d539",
+    "tools/safe-diagnostic-v11/guest.py": "fe5df223e8ec0f2fccb45c67e339cb2ba94a0b4be1e40c50f8ef9d529390d26a",
+    "tools/safe-diagnostic-v11/host.py": "fb1242d1bdc1dea66bf8d502337529cf51dd68d0e5830366c7dedb04eded8f07",
+    "tools/safe-diagnostic-v11/run.sh": "db7a958841d3bdcfd9341ad1e5ab489d468b29508d94f362f1c1ec76d565b5c6",
+    "tools/safe-diagnostic-v11/screencopy.c": "72deb18e64b271d8c2fb182511b19056b6d182d1ffdc77106dd9515f22fc40e0"
   },
   "image": {
     "archive_bytes": 1930013330,
