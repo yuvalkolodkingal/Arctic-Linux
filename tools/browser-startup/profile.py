@@ -630,11 +630,111 @@ def main():
         json.dump(report, stream, indent=2, sort_keys=True); stream.write('\n')
 
 
+# Failure-only enums below do not alter any measurement or successful path.
+FAILURE_PREFIX = 'ARCTIC-BROWSER-STARTUP-FAILURE collector '
+FAILURE_CODES = frozenset('''
+browser_binary_owner browser_binary_path browser_elf_binding browser_elf_size
+browser_map_timeout browser_not_persistent browser_process_exists
+browser_rpm_verification browser_window_exists context_disabled_or_source
+context_file context_schema disposable_collector_only elf_abi elf_dynamic_strings
+elf_dynamic_symbols elf_layout elf_symbol_ambiguous elf_symbol_executable_load
+elf_symbol_name elf_tables exec_gate_identity exec_gate_not_stopped exec_gate_pid
+exec_gate_pid_reuse exec_gate_timeout fresh_private_report image_binding image_values
+mapped_browser_executable_binding module_binding module_pins
+owned_process_cleanup_failed owned_process_identity owned_scope_limit
+owned_session_binding owned_trace_cleanup_failed owned_window_close_failed
+owned_wrapper_session package_pins required_export_absent required_phase_not_observed
+runtime_library_ambiguity runtime_library_changed runtime_library_owner
+runtime_library_path runtime_library_rpm_verification runtime_package_binding
+selinux_changed selinux_required span_bounds span_order span_timestamp
+span_unmatched_return trace_buffer_limit trace_bus_field trace_bus_identifier
+trace_clock trace_drain_timeout trace_event_limit trace_event_shape trace_fork
+trace_format_changed trace_format_size trace_line_limit trace_partial_line
+trace_pid_filter trace_reader_completion trace_tid vm_only
+'''.split())
+FAILURE_REASONS = FAILURE_CODES | {'os_error', 'command_failed', 'command_timeout',
+                                  'interrupted', 'unclassified_exception'}
+FAILURE_PHASES = frozenset(('unknown', 'initialization', 'context', 'runtime_inventory',
+    'elf_inventory', 'source_modules', 'probe_setup', 'probe_start', 'probe_reader',
+    'probe_stop', 'probe_cleanup', 'probe_decode', 'probe_spans', 'browser_launch',
+    'process_cleanup', 'process_scope'))
+
+
+def finite_failure_record(error):
+    """Only Source code identity and closed enums; never exception text/values."""
+    result = {'scope': 'collector', 'phase': 'unknown', 'reason': 'unclassified_exception'}
+    if not isinstance(error, BaseException):
+        return result
+    owners = {function.__code__: phase for function, phase in (
+        (main, 'initialization'), (validate_context, 'context'),
+        (inventory, 'runtime_inventory'), (exported_offset, 'elf_inventory'),
+        (load_module, 'source_modules'), (PhaseProbe.__enter__, 'probe_setup'),
+        (PhaseProbe.start, 'probe_start'), (PhaseProbe._read, 'probe_reader'),
+        (PhaseProbe.stop, 'probe_stop'), (PhaseProbe.__exit__, 'probe_cleanup'),
+        (parse_event, 'probe_decode'), (spans, 'probe_spans'),
+        (launch, 'browser_launch'), (stop_owned_scope, 'process_cleanup'),
+        (owned_scope, 'process_scope'))}
+    trace = BaseException.__getattribute__(error, '__traceback__')
+    owned_guard = False
+    for _ in range(64):
+        if trace is None:
+            break
+        code = trace.tb_frame.f_code
+        if code in owners:
+            result['phase'] = owners[code]
+        owned_guard |= code is require.__code__
+        trace = trace.tb_next
+    if trace is not None:
+        return {'scope': 'collector', 'phase': 'unknown', 'reason': 'unclassified_exception'}
+    if type(error) is RuntimeError and owned_guard:
+        args = BaseException.__getattribute__(error, 'args')
+        if len(args) == 1 and type(args[0]) is str and args[0] in FAILURE_CODES:
+            result['reason'] = args[0]
+    elif type(error) is subprocess.CalledProcessError:
+        result['reason'] = 'command_failed'
+    elif type(error) is subprocess.TimeoutExpired:
+        result['reason'] = 'command_timeout'
+    elif type(error) in (KeyboardInterrupt, InterruptedError, SystemExit):
+        result['reason'] = 'interrupted'
+    elif isinstance(error, OSError):
+        result['reason'] = 'os_error'
+    return result
+
+
+def parse_failure_marker(raw):
+    """Discard all other private stderr; reject ambiguous or malformed markers."""
+    if type(raw) is not bytes or len(raw) > 4096:
+        return None
+    lines = [line for line in raw.splitlines() if line.startswith(FAILURE_PREFIX.encode())]
+    if len(lines) != 1:
+        return None
+    match = re.fullmatch(re.escape(FAILURE_PREFIX.encode()) + rb'([a-z_]+) ([a-z_]+)', lines[0])
+    if match is None:
+        return None
+    phase, reason = (value.decode('ascii') for value in match.groups())
+    if phase not in FAILURE_PHASES or reason not in FAILURE_REASONS:
+        return None
+    return {'scope': 'collector', 'phase': phase, 'reason': reason}
+
+
+def emit_failure_record(error):
+    value = {'scope': 'collector', 'phase': 'unknown', 'reason': 'unclassified_exception'}
+    try:
+        value = finite_failure_record(error)
+    except BaseException:
+        pass  # A classifier failure cannot expose the original exception chain.
+    try:
+        print(FAILURE_PREFIX + value['phase'] + ' ' + value['reason'], file=sys.stderr, flush=True)
+    except BaseException:
+        pass
+
+
 if __name__ == '__main__':
     try:
         main()
-    except BaseException:
+    except BaseException as error:
         # The host may record only this fixed failure label. All diagnostics
         # remain private; no arbitrary exception or application text is echoed.
         print('ARCTIC-BROWSER-STARTUP-DIAGNOSTIC failed', file=sys.stderr)
+        emit_failure_record(error)
         sys.exit(1)

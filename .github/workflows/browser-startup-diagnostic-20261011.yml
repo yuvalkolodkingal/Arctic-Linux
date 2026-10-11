@@ -1,16 +1,16 @@
-name: Separate exact-image browser startup diagnostic
+name: Separate exact-image browser startup diagnostic with finite failures
 
 on:
   push:
-    branches: [codex/browser-startup-diagnostic-20261011]
-    paths: [.github/browser-startup-diagnostic-20261011.activate]
+    branches: [codex/browser-startup-diagnostic-finite-20261011]
+    paths: [.github/browser-startup-diagnostic-finite-20261011.activate]
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: arctic-browser-startup-diagnostic-20261011
+  group: arctic-browser-startup-diagnostic-finite-20261011
   cancel-in-progress: false
 
 jobs:

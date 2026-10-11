@@ -17,8 +17,8 @@ import types
 import uuid
 
 REPO = 'yuvalkolodkingal/Arctic-Linux'
-BRANCH = 'codex/browser-startup-diagnostic-20261011'
-MARKER = '.github/browser-startup-diagnostic-20261011.activate'
+BRANCH = 'codex/browser-startup-diagnostic-finite-20261011'
+MARKER = '.github/browser-startup-diagnostic-finite-20261011.activate'
 WORKFLOW = '.github/workflows/browser-startup-diagnostic-20261011.yml'
 MANIFEST = 'tools/browser-startup-execution/execution-manifest.json'
 SOURCE = '326690f173d4dc4f049f43e046c8380e66825a07'
@@ -54,6 +54,109 @@ SOURCE_FILES = {'tools/test-install.sh', 'tools/performance/prepare-vm-tools.sh'
                 'tools/native-functional/screen-evidence.py', 'profiles/ci/offline.toml',
                 *{'tools/lib/' + name for name in ('arcticrepo.py', 'container.sh', 'iso_startup.py',
                                                  'tour-agent.sh', 'tour.py', 'vmtest.py')}}
+HOST_FAILURE_PHASES = frozenset(('unknown', 'activation', 'fetch_exact_image',
+    'prepare_private_vm_tools', 'separate_offline_install', 'separate_diagnostic_boot',
+    'collected_diagnostic_only', 'prepared_image_cleanup', 'private_original_binding',
+    'privacy_screen'))
+HOST_FAILURE_CODES = frozenset('''
+abi_limit activation_marker_must_be_new activation_marker_regular_add actual_mango_binding
+cancelled_acquisition clean_execution clean_install_poweroff cleanup_interrupted command_bound
+contained_file disabled_or_profile_not_admitted disabled_original_context duplicate_json
+exact_clean_image_source execution_source_unchanged file_pin_inventory frozen_module helper_pins
+hosted_lane image_source_required kvm_required manifest_blob manifest_identity manifest_schema
+manifest_unchanged missing_report new_diagnostic_output_required observer_identity other_qemu_active
+owned_command_failed owned_command_or_cleanup_failed owned_container_remains owned_file
+owned_guest_completion pristine_base_unchanged private_original_bound private_original_changed
+private_original_type profile_binding report_checksum report_envelope report_execution_binding
+report_sequence screened_output_required sole_activation_child sole_reviewed_parent source_pins
+stable_file tracked_bytes uart_bound unchanged_branch unchanged_vm_toolchain whole_image_binding
+whole_image_unchanged wrapper_template
+'''.split())
+COMMAND_OUTCOMES = frozenset(('success', 'nonzero', 'signal', 'timeout', 'interrupted',
+                             'spawn_failed', 'unclassified_failure'))
+CLEANUP_OUTCOMES = frozenset(('term_failed', 'kill_failed', 'reap_failed',
+                            'container_absence_unproved', 'cleanup_interrupted'))
+COMMAND_PHASES = {'image-fetch.log': 'fetch_exact_image', 'tools.log': 'prepare_private_vm_tools',
+    'install-harness.log': 'separate_offline_install', 'boot-harness.log': 'separate_diagnostic_boot',
+    'privacy-screen.log': 'privacy_screen'}
+failure_emitted = False
+
+
+class OwnedCommandFailure(RuntimeError):
+    def __init__(self, observation):
+        super().__init__('owned_command_or_cleanup_failed')
+        self.observation = observation
+
+
+def finite_host_failure(error, phase):
+    value = {'scope': 'host', 'phase': phase if type(phase) is str and phase in HOST_FAILURE_PHASES else 'unknown',
+             'reason': 'unclassified_exception'}
+    if type(error) is OwnedCommandFailure:
+        record = error.observation
+        if (type(record) is dict and set(record) == {'scope', 'phase', 'command', 'cleanup'}
+                and type(record['scope']) is str and record['scope'] == 'host_command'
+                and type(record['phase']) is str and record['phase'] in HOST_FAILURE_PHASES
+                and type(record['command']) is str and record['command'] in COMMAND_OUTCOMES and type(record['cleanup']) is list
+                and len(record['cleanup']) <= 5 and all(type(item) is str and item in CLEANUP_OUTCOMES for item in record['cleanup'])):
+            return dict(record, cleanup=list(record['cleanup']))
+    elif type(error) is RuntimeError:
+        trace = BaseException.__getattribute__(error, '__traceback__'); owned = False
+        for _ in range(64):
+            if trace is None: break
+            owned |= trace.tb_frame.f_code is require.__code__; trace = trace.tb_next
+        args = BaseException.__getattribute__(error, 'args')
+        if trace is None and owned and len(args) == 1 and type(args[0]) is str and args[0] in HOST_FAILURE_CODES:
+            value['reason'] = args[0]
+    elif type(error) is subprocess.CalledProcessError: value['reason'] = 'command_failed'
+    elif type(error) is subprocess.TimeoutExpired: value['reason'] = 'command_timeout'
+    elif type(error) in (KeyboardInterrupt, InterruptedError, SystemExit): value['reason'] = 'interrupted'
+    elif isinstance(error, OSError): value['reason'] = 'os_error'
+    return value
+
+
+def emit_host_failure(error, phase):
+    global failure_emitted
+    value = {'scope': 'host', 'phase': 'unknown', 'reason': 'unclassified_exception'}
+    try:
+        value = finite_host_failure(error, phase)
+    except BaseException:
+        pass
+    try:
+        print('ARCTIC-BROWSER-STARTUP-HOST-FAILURE ' + json.dumps(value, sort_keys=True), flush=True)
+    except BaseException:
+        pass
+    failure_emitted = True
+    return value
+
+
+def guest_failure_observation(root, work, manifest):
+    """No raw UART or unknown marker token is copied into this projection."""
+    result = {'status': 'unavailable', 'records': []}
+    try:
+        raw = safe_file(work, 'diagnostic-boot/serial-boot.log', MAX_UART)
+        profile = frozen_module(root / 'tools/browser-startup/profile.py',
+            manifest['observer_files']['tools/browser-startup/profile.py'], 'owned_guest_failure_profile')
+        wrapper = frozen_module(root / 'tools/browser-startup-execution/guest-wrapper.py',
+            manifest['execution_files']['tools/browser-startup-execution/guest-wrapper.py'], 'owned_guest_failure_wrapper')
+        lines = []
+        for match in re.finditer(rb'(?m)^ARCTIC-BROWSER-STARTUP-FAILURE [^\r\n]*\r?$', raw):
+            if match.end() - match.start() > 256 or len(lines) == 2:
+                return {'status': 'invalid_finite_marker', 'records': []}
+            lines.append(match[0].removesuffix(b'\r'))
+        if not lines: return {'status': 'no_finite_marker', 'records': []}
+        seen, records = set(), []
+        for line in lines:
+            match = re.fullmatch(rb'ARCTIC-BROWSER-STARTUP-FAILURE (collector|guest) ([a-z_]+) ([a-z_]+)', line)
+            if match is None: return {'status': 'invalid_finite_marker', 'records': []}
+            scope, phase, reason = (part.decode('ascii') for part in match.groups())
+            phases = profile.FAILURE_PHASES if scope == 'collector' else wrapper.FAILURE_PHASES
+            reasons = profile.FAILURE_REASONS if scope == 'collector' else wrapper.FAILURE_REASONS
+            if scope in seen or phase not in phases or reason not in reasons:
+                return {'status': 'invalid_finite_marker', 'records': []}
+            seen.add(scope); records.append({'scope': scope, 'phase': phase, 'reason': reason})
+        return {'status': 'valid_finite_markers', 'records': records}
+    except BaseException:
+        return result
 
 
 def require(value, code):
@@ -285,6 +388,7 @@ def deferred_signals():
 
 def execute(argv, log, cwd, env, timeout, name=None):
     process = None; failed = False; pending = []; cleanup_errors = []
+    command = 'unclassified_failure'
     with log.open('x') as output:
         os.chmod(log, 0o600)
         try:
@@ -292,9 +396,14 @@ def execute(argv, log, cwd, env, timeout, name=None):
                 process = subprocess.Popen(argv, cwd=cwd, env=env, stdout=output,
                                            stderr=subprocess.STDOUT, start_new_session=True)
             require(not pending, 'cancelled_acquisition')
-            require(process.wait(timeout=timeout) == 0, 'owned_command_failed')
-        except BaseException:
+            status = process.wait(timeout=timeout)
+            command = 'success' if status == 0 else 'signal' if status < 0 else 'nonzero'
+            require(status == 0, 'owned_command_failed')
+        except BaseException as error:
             failed = True
+            if type(error) is subprocess.TimeoutExpired: command = 'timeout'
+            elif type(error) in (KeyboardInterrupt, InterruptedError, SystemExit) or pending: command = 'interrupted'
+            elif process is None: command = 'spawn_failed'
         finally:
             with deferred_signals() as cleanup_pending:
                 if process is not None:
@@ -316,7 +425,10 @@ def execute(argv, log, cwd, env, timeout, name=None):
                         require(name.encode() not in names.splitlines(), 'owned_container_remains')
                     except BaseException: cleanup_errors.append('container_absence_unproved')
                 failed |= bool(cleanup_pending or cleanup_errors)
-    require(not failed, 'owned_command_or_cleanup_failed')
+    if failed:
+        if cleanup_pending: cleanup_errors.append('cleanup_interrupted')
+        raise OwnedCommandFailure({'scope': 'host_command', 'phase': COMMAND_PHASES.get(log.name, 'unknown'),
+                                   'command': command, 'cleanup': cleanup_errors})
 
 
 def idle_host():
@@ -447,6 +559,11 @@ def main():
     except BaseException as error:
         failure = error
         state['failure_type'] = type(error).__name__
+        observation = emit_host_failure(error, state['phase'])
+        state.setdefault('failure_observations', []).append(observation)
+        guest = guest_failure_observation(root, work, manifest)
+        state['guest_failure_observation'] = guest
+        print('ARCTIC-BROWSER-STARTUP-GUEST-FAILURE ' + json.dumps(guest, sort_keys=True), flush=True)
         save('blocked_fixed_observation_only')
     finally:
         try:
@@ -456,6 +573,8 @@ def main():
                 save(state['phase'])
         except BaseException as error:
             failure = error; state['failure_type'] = type(error).__name__
+            observation = emit_host_failure(error, 'prepared_image_cleanup')
+            state.setdefault('failure_observations', []).append(observation)
             state['prepared_image_cleanup'] = {'status': 'blocked'}
             save('blocked_cleanup_unproved')
         try:
@@ -463,6 +582,8 @@ def main():
             save(state['phase'])
         except BaseException as error:
             failure = error; state['failure_type'] = type(error).__name__
+            observation = emit_host_failure(error, 'private_original_binding')
+            state.setdefault('failure_observations', []).append(observation)
             save('blocked_private_original_binding')
     if failure is not None: raise RuntimeError('diagnostic_blocked')
     save('source_bound_diagnostic_no_qualification')
@@ -475,6 +596,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except BaseException:
+    except BaseException as error:
+        if not failure_emitted: emit_host_failure(error, 'activation')
         print('ARCTIC-BROWSER-STARTUP-HOST blocked', flush=True)
         sys.exit(1)

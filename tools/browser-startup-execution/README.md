@@ -29,8 +29,8 @@ There is no workflow_dispatch/manual bypass, and no activation was performed.
 
 The execution checkout and image-source checkout are siblings. Both are clean,
 the latter is exactly SourceA326, and every invoked source helper is checked
-against tracked bytes and its manifest hash. All five original observer files
-retain their frozen bytes. No browser flags, renderer override, service changes,
+against tracked bytes and its manifest hash. The original context, upstream references and README
+retain their frozen bytes; the new classifier and its tests have explicit current pins. No browser flags, renderer override, service changes,
 sandbox changes, broad input access or acceptance changes are introduced.
 
 The VM conditions match SourceA326's actual paired workload: UEFI, q35,
@@ -83,6 +83,33 @@ not been measured. That limit is explicit; this preparation adds no acquisition
 or invented header provenance. Only an actual reviewed guest report can show
 which exported synchronous spans are slow. Async dispatch spans do not measure
 reply latency, and these probes do not attribute all WebKit/static/graphics work.
-The unchanged collector intentionally emits a generic fixed failure label. If
-an actual collection fails, a separately reviewed finite source classifier is
-needed for more detail; unknown exception/app/trace text is never exposed.
+The first actual run `38109255907` reached its separate diagnostic boot and
+failed without a report. Its original Source and sealed private log remain
+immutable; they establish no browser cause or performance result.
+
+This next Source preparation adds **failure-only** classification. Every
+original collector function, including all measurement, workload, precision,
+process and probe cleanup functions, retains its exact AST. Only the collector's
+outer failure handler emits one extra marker. It identifies a phase by actual
+Source code-object identity and a reason by an exact owned guard code or fixed
+exception category; it never formats exception arguments, traceback text or
+private values. Unknown helpers and exceptions remain explicitly unclassified.
+The original `0e9df53b` observer field is reference provenance; current collector
+and test bytes have separate exact `observer_files` pins.
+
+The guest retains raw collector stderr in a fresh root-owned **0700** directory
+and **0600** regular file. After failure only, it accepts at most one bounded
+marker with closed collector enums and forwards that marker. It separately
+classifies payload/security/staging/collector/report/unmount failures. Duplicate,
+malformed, excessive or unknown markers disclose no tokens. The host keeps UART
+private and projects only these fixed records, and reports command completion,
+timeout/interruption and owned cleanup outcomes separately. Any cleanup failure
+still rejects collection. There is no raw failure artifact upload.
+
+The proposed fresh lane is `codex/browser-startup-diagnostic-finite-20261011`
+with a new regular ADD-only marker; the completed old branch is untouched.
+No activation or retry has occurred. Source controls cover actual owned child
+failure, cancellation, timeout/reaping and private stderr. Local guest positive
+controls simulate only root UID metadata because the author is unprivileged;
+real file modes, identities, bytes and child cleanup are checked, and this is
+not a guest root-ownership or VM execution claim.

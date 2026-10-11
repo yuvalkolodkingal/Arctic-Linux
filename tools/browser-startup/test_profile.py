@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Focused controls for finite diagnostic output and exact function attribution."""
 import copy
+import ast
+from contextlib import redirect_stderr
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -256,6 +259,81 @@ class RealReaderDrainControls(unittest.TestCase):
                 value.stop()
             self.assertTrue(value.finish_requested.is_set())
             self.assertFalse(value.drained.is_set())
+
+
+class FailureOnlyControls(unittest.TestCase):
+    def test_original_successful_functions_and_all_thresholds_are_exact_AST(self):
+        path = Path(__file__).with_name('profile.py'); root = path.parents[2]
+        original = ast.parse(subprocess.check_output(['git', '-C', str(root), 'show',
+            '0e9df53b9d101ea74acbaaa318c0d35d4330b25d:tools/browser-startup/profile.py']))
+        current = ast.parse(path.read_bytes())
+        new = {n.name: n for n in current.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
+        for old in original.body:
+            if isinstance(old, (ast.FunctionDef, ast.ClassDef)):
+                self.assertEqual(ast.dump(old, include_attributes=False), ast.dump(new[old.name], include_attributes=False))
+            elif not isinstance(old, ast.If):
+                self.assertIn(ast.dump(old, include_attributes=False),
+                              {ast.dump(node, include_attributes=False) for node in current.body})
+        codes = {n.args[1].value for n in ast.walk(original) if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name) and n.func.id == 'require'
+            and len(n.args) > 1 and isinstance(n.args[1], ast.Constant)}
+        self.assertEqual(PROFILE.FAILURE_CODES, codes)
+
+    def test_actual_inventory_guard_and_ELF_parser_have_owned_phase_codes(self):
+        from unittest.mock import patch
+        with patch.object(PROFILE.subprocess, 'check_output', return_value='synthetic-private-value'):
+            try: PROFILE.inventory({'packages': {'epiphany-runtime': 'expected'}})
+            except RuntimeError as error:
+                record = PROFILE.finite_failure_record(error)
+        self.assertEqual(record, {'scope': 'collector', 'phase': 'runtime_inventory', 'reason': 'runtime_package_binding'})
+        try: PROFILE.exported_offset(b'private transcript payload', 'g_application_run')
+        except RuntimeError as error: record = PROFILE.finite_failure_record(error)
+        self.assertEqual(record['phase'], 'elf_inventory'); self.assertEqual(record['reason'], 'elf_layout')
+
+    def test_actual_probe_parser_failure_and_unowned_spoof_do_not_echo_values(self):
+        try: PROFILE.parse_event('private transcript or queried URL')
+        except RuntimeError as error:
+            out = io.StringIO()
+            with redirect_stderr(out): PROFILE.emit_failure_record(error)
+        value = PROFILE.parse_failure_marker(out.getvalue().encode())
+        self.assertEqual(value, {'scope': 'collector', 'phase': 'probe_decode', 'reason': 'trace_event_shape'})
+        self.assertNotIn('private', out.getvalue())
+        for error in (RuntimeError('runtime_package_binding'), RuntimeError('private transcript'),
+                      subprocess.CalledProcessError(1, ['private'], stderr=b'private transcript')):
+            value = PROFILE.finite_failure_record(error)
+            self.assertEqual(value['phase'], 'unknown')
+            self.assertNotIn('private', json.dumps(value))
+        self.assertEqual(PROFILE.finite_failure_record(RuntimeError('runtime_package_binding'))['reason'], 'unclassified_exception')
+
+    def test_marker_rejects_duplicates_unknowns_partial_extra_and_large_private_input(self):
+        good = b'ARCTIC-BROWSER-STARTUP-FAILURE collector probe_decode trace_event_shape\n'
+        self.assertIsNotNone(PROFILE.parse_failure_marker(b'private stderr\n' + good))
+        for raw in (good + good, good.replace(b'probe_decode', b'private'),
+                    good.replace(b'trace_event_shape', b'private'), good.rstrip() + b' extra',
+                    good[:-4], b'x' * 4097):
+            self.assertIsNone(PROFILE.parse_failure_marker(raw))
+
+    def test_hostile_exception_representation_is_never_touched(self):
+        class Hostile(RuntimeError):
+            def __str__(self): raise AssertionError('private repr')
+            def __repr__(self): raise AssertionError('private repr')
+            def __getattribute__(self, name):
+                if name in ('args', '__traceback__'): raise AssertionError('private field')
+                return super().__getattribute__(name)
+        out = io.StringIO()
+        with redirect_stderr(out): PROFILE.emit_failure_record(Hostile('private transcript'))
+        self.assertEqual(out.getvalue(), 'ARCTIC-BROWSER-STARTUP-FAILURE collector unknown unclassified_exception\n')
+
+    def test_classifier_and_output_failure_cannot_expose_exception_chain(self):
+        from unittest.mock import patch
+        out = io.StringIO()
+        with patch.object(PROFILE, 'finite_failure_record', side_effect=RuntimeError('private transcript')), redirect_stderr(out):
+            PROFILE.emit_failure_record(RuntimeError('other private exception'))
+        self.assertEqual(out.getvalue(), 'ARCTIC-BROWSER-STARTUP-FAILURE collector unknown unclassified_exception\n')
+        class FaultySink:
+            def write(self, _): raise OSError('private output failure')
+            def flush(self): raise OSError('private output failure')
+        with redirect_stderr(FaultySink()): PROFILE.emit_failure_record(RuntimeError('private exception'))
 
 
 if __name__ == '__main__':

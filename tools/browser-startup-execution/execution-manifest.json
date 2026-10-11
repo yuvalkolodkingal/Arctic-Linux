@@ -23,11 +23,11 @@
     "workload": "SourceA326_loopback_role_workload"
   },
   "execution_files": {
-    ".github/workflows/browser-startup-diagnostic-20261011.yml": "34f4e0908e20fb3145a98916d2b706d6132211feceb7336de7a78acd1aa18f99",
-    "tools/browser-startup-execution/README.md": "1508321aaf07e46c76966f1386a21354ff4fa1721d878f50b4e24d65863043ed",
-    "tools/browser-startup-execution/guest-wrapper.py": "b94f74a4891fb9736ed463ba428e64e4dd1998e7843b37fa1a2aa981fed5d3a1",
-    "tools/browser-startup-execution/runner.py": "5377ff2430115b37455728837e69e414ecc37598d8f2e6d8f5db78017ceba9f3",
-    "tools/browser-startup-execution/test_runner.py": "37a177f64906f3d562d4080aba142717d4b42bd31d36ebd56cf8878e5f03be6f"
+    ".github/workflows/browser-startup-diagnostic-20261011.yml": "aab41d9944e20705721e33969f2035f6fc38d690d4c2178422ab5269430501c6",
+    "tools/browser-startup-execution/README.md": "8d83c66b18e1a683b6b45ed9614a4c943780e8478b31b23d92bab27cb720f64b",
+    "tools/browser-startup-execution/guest-wrapper.py": "8187b1d05c48aaf8d577d1b7df881a6c6c19e2408a7fb5226ad2d3af58668ad0",
+    "tools/browser-startup-execution/runner.py": "d91e64b8a280aba1e426dec08fa1fc6138f8d98d816a092f726f0d9596d81b85",
+    "tools/browser-startup-execution/test_runner.py": "2b625ca4275bf178274f71d491a89398381c8891d4b925206f6ffa65cae335f0"
   },
   "helper_files": {
     "causal.py": "28a130d5dea409198e44f463e37f83f0363596c7a9e7303950ec0fce6011a43d",
@@ -53,8 +53,8 @@
   "observer_files": {
     "tools/browser-startup/README.md": "1627e546a900b20b2f52a608053eb910a8bea1dbcd4fd6cd7f76a0c5e948f321",
     "tools/browser-startup/execution-context.json": "91148b5a7580752ea9c11465ed493ea68c50d4717fdb11e70f9b9adfa2ef1b7c",
-    "tools/browser-startup/profile.py": "a8a59b1279d719c246023455629ea25c290f0f474c9272e13c2d312efac9f696",
-    "tools/browser-startup/test_profile.py": "5e1a7dc5415bad28c3d014ff2dc100e9f1a266943180ec91f7abbffdc660a039",
+    "tools/browser-startup/profile.py": "bb99a303c9cee4a91fd6dd11ee88968d9420689dfa5232cef87ff3d130ea399e",
+    "tools/browser-startup/test_profile.py": "a305004dd13b7756c0fedc2669315ac259d0319568ebda218f0efff98bd4d481",
     "tools/browser-startup/upstream-source.json": "e7b0fe81ff565e4d4646cc891c27f2b5cc330178a35b1d449e9eb6c6cc069f18"
   },
   "performance_acceptance": false,

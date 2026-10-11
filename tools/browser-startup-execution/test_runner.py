@@ -1,6 +1,6 @@
 import base64
 import ast
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, contextmanager
 import hashlib
 import importlib.util
 import io
@@ -21,6 +21,20 @@ def module(name):
     result = importlib.util.module_from_spec(spec); spec.loader.exec_module(result)
     return result
 runner = module('runner'); wrapper = module('guest-wrapper')
+
+
+@contextmanager
+def synthetic_root_metadata(private):
+    """Only root UID is simulated; actual mode/inode/bytes/child cleanup remain real."""
+    original_stat, original_fstat = Path.stat, os.fstat
+    def root_uid(info):
+        values = {key: getattr(info, key) for key in dir(info) if key.startswith('st_')}
+        return types.SimpleNamespace(**dict(values, st_uid=0))
+    def stat_fixture(path, *args, **kwargs):
+        info = original_stat(path, *args, **kwargs)
+        return root_uid(info) if path == private else info
+    with patch.object(Path, 'stat', stat_fixture), patch.object(wrapper.os, 'fstat', side_effect=lambda fd: root_uid(original_fstat(fd))):
+        yield
 
 
 class SourceControls(unittest.TestCase):
@@ -62,7 +76,8 @@ class SourceControls(unittest.TestCase):
         for name, expected in m['observer_files'].items():
             raw = (root / name).read_bytes()
             self.assertEqual(hashlib.sha256(raw).hexdigest(), expected)
-            self.assertEqual(raw, subprocess.check_output(['git', '-C', str(root), 'show', runner.OBSERVER + ':' + name]))
+            if name not in ('tools/browser-startup/profile.py', 'tools/browser-startup/test_profile.py'):
+                self.assertEqual(raw, subprocess.check_output(['git', '-C', str(root), 'show', runner.OBSERVER + ':' + name]))
 
     def test_exact_ten_fields_and_conditions(self):
         for group, field, replacement in [('image', 'bytes', True), ('image', 'bytes', float(runner.IMAGE['bytes'])),
@@ -132,7 +147,9 @@ class SourceControls(unittest.TestCase):
         result = subprocess.run([sys.executable, '-B', str(HERE / 'guest-wrapper.py'), 'installed'],
                                 capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(result.stdout, b'ARCTIC-BROWSER-STARTUP-DIAGNOSTIC transport_failed\n')
+        phase = b'arguments' if os.geteuid() != 0 else b'payload'
+        self.assertEqual(result.stdout, b'ARCTIC-BROWSER-STARTUP-DIAGNOSTIC transport_failed\n'
+                         b'ARCTIC-BROWSER-STARTUP-FAILURE guest ' + phase + b' guest_guard\n')
         self.assertEqual(result.stderr, b'')
 
     def test_actual_composer_freezes_original_sources_and_staging_modes(self):
@@ -187,6 +204,137 @@ class SourceControls(unittest.TestCase):
             with self.assertRaises(RuntimeError), redirect_stdout(io.StringIO()):
                 scanner.screen_external(bad, temp / 'rejected')
             self.assertFalse((temp / 'rejected').exists())
+
+
+class FiniteFailureControls(unittest.TestCase):
+    def test_actual_host_guard_code_requires_owned_source_frame(self):
+        manifest = json.loads((HERE / 'execution-manifest.json').read_bytes())
+        manifest['conditions']['vcpus'] = 4
+        try: runner.validate_manifest(manifest)
+        except RuntimeError as error: record = runner.finite_host_failure(error, 'activation')
+        self.assertEqual(record, {'scope': 'host', 'phase': 'activation', 'reason': 'manifest_identity'})
+        self.assertEqual(runner.finite_host_failure(RuntimeError('manifest_identity'), 'activation')['reason'],
+                         'unclassified_exception')
+
+    def test_actual_child_nonzero_keeps_private_output_and_classifies_command(self):
+        with tempfile.TemporaryDirectory() as value:
+            root = Path(value)
+            with self.assertRaises(runner.OwnedCommandFailure) as caught:
+                runner.execute([sys.executable, '-c', 'import sys;print("private transcript");sys.exit(7)'],
+                    root / 'boot-harness.log', root, dict(os.environ), 10)
+            record = runner.finite_host_failure(caught.exception, 'separate_diagnostic_boot')
+            self.assertEqual(record, {'scope': 'host_command', 'phase': 'separate_diagnostic_boot',
+                'command': 'nonzero', 'cleanup': []})
+            self.assertNotIn('private', json.dumps(record))
+            self.assertIn(b'private transcript', (root / 'boot-harness.log').read_bytes())
+
+    def test_real_cancellation_at_Popen_retains_and_reaps_owned_child(self):
+        children = []; original = subprocess.Popen
+        def spawn(*args, **kwargs):
+            child = original(*args, **kwargs); children.append(child)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return child
+        def interrupt(*_): raise InterruptedError('private cancel detail')
+        old = signal.signal(signal.SIGTERM, interrupt)
+        try:
+            with tempfile.TemporaryDirectory() as value, patch.object(runner.subprocess, 'Popen', side_effect=spawn):
+                root = Path(value)
+                with self.assertRaises(runner.OwnedCommandFailure) as caught:
+                    runner.execute([sys.executable, '-c', 'import time;time.sleep(30)'], root / 'boot-harness.log',
+                        root, dict(os.environ), 10)
+                record = runner.finite_host_failure(caught.exception, 'unknown')
+                self.assertEqual(record['command'], 'interrupted'); self.assertEqual(record['cleanup'], [])
+                self.assertEqual(len(children), 1)
+                self.assertIsNotNone(children[0].poll())
+                with self.assertRaises(ProcessLookupError): os.kill(children[0].pid, 0)
+        finally: signal.signal(signal.SIGTERM, old)
+
+    def test_cleanup_failure_still_rejects_a_successful_real_owned_child(self):
+        with tempfile.TemporaryDirectory() as value:
+            root = Path(value); name = 'owned-private-control-name'
+            with patch.object(runner.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)), \
+                 patch.object(runner, 'capture', return_value=(name + '\n').encode()):
+                with self.assertRaises(runner.OwnedCommandFailure) as caught:
+                    runner.execute([sys.executable, '-c', 'pass'], root / 'boot-harness.log', root, dict(os.environ), 10, name)
+            record = runner.finite_host_failure(caught.exception, 'unknown')
+            self.assertEqual(record['command'], 'success')
+            self.assertEqual(record['cleanup'], ['container_absence_unproved'])
+            self.assertNotIn(name, json.dumps(record))
+
+    def test_poisoned_host_records_and_exception_representations_never_export(self):
+        poison = {'scope': 'host_command', 'phase': ['private'], 'command': 'private', 'cleanup': []}
+        value = runner.finite_host_failure(runner.OwnedCommandFailure(poison), ['private'])
+        self.assertEqual(value, {'scope': 'host', 'phase': 'unknown', 'reason': 'unclassified_exception'})
+        class Hostile(RuntimeError):
+            def __str__(self): raise AssertionError('private representation')
+            def __repr__(self): raise AssertionError('private representation')
+            def __getattribute__(self, name):
+                if name in ('args', '__traceback__'): raise AssertionError('private field')
+                return super().__getattribute__(name)
+        self.assertEqual(runner.finite_host_failure(Hostile('private transcript'), 'separate_diagnostic_boot')['reason'],
+                         'unclassified_exception')
+        for item in ('private', [], True):
+            with self.assertRaises(RuntimeError), redirect_stdout(io.StringIO()):
+                wrapper.emit_finite_failure({'scope': 'guest', 'phase': item, 'reason': 'guest_guard'})
+        out = io.StringIO()
+        with patch.object(runner, 'finite_host_failure', side_effect=RuntimeError('private transcript')), redirect_stdout(out):
+            value = runner.emit_host_failure(RuntimeError('private original'), 'separate_diagnostic_boot')
+        self.assertEqual(value, {'scope': 'host', 'phase': 'unknown', 'reason': 'unclassified_exception'})
+        self.assertNotIn('private', out.getvalue())
+
+    def test_actual_guest_stderr_capture_forwards_only_one_validated_marker(self):
+        root = HERE.parents[1]; profile_bytes = (root / 'tools/browser-startup/profile.py').read_bytes()
+        checksum = hashlib.sha256(profile_bytes).hexdigest(); original = subprocess.run
+        private_bytes = b'private transcript and queried URL\nARCTIC-BROWSER-STARTUP-FAILURE collector runtime_inventory runtime_package_binding\n'
+        def child(argv, **kwargs):
+            self.assertEqual(argv, ['/usr/bin/python3', '-B', '/run/t/profile.py'])
+            self.assertEqual(kwargs['timeout'], 900); self.assertIs(kwargs['stdout'], subprocess.DEVNULL)
+            return original([sys.executable, '-c', 'import os;os.write(2,' + repr(private_bytes) + ');raise SystemExit(1)'], **kwargs)
+        with tempfile.TemporaryDirectory() as value:
+            private = Path(value) / 'private'; out = io.StringIO()
+            with synthetic_root_metadata(private), patch.object(wrapper.subprocess, 'run', side_effect=child), redirect_stdout(out):
+                with self.assertRaises(subprocess.CalledProcessError): wrapper.invoke_collector(profile_bytes, checksum, private)
+            self.assertEqual(out.getvalue(), 'ARCTIC-BROWSER-STARTUP-FAILURE collector runtime_inventory runtime_package_binding\n')
+            self.assertEqual((private / 'collector.stderr').read_bytes(), private_bytes)
+            self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+            self.assertEqual((private / 'collector.stderr').stat().st_mode & 0o777, 0o600)
+
+    def test_real_guest_timeout_reaps_child_and_large_stderr_stays_private(self):
+        root = HERE.parents[1]; raw = (root / 'tools/browser-startup/profile.py').read_bytes()
+        original = subprocess.run
+        with tempfile.TemporaryDirectory() as value:
+            base = Path(value); pidfile = base / 'pid'
+            script = 'from pathlib import Path;import os,time;Path(' + repr(str(pidfile)) + ').write_text(str(os.getpid()));os.write(2,b"private"*10000);time.sleep(30)'
+            def child(argv, **kwargs):
+                self.assertEqual(kwargs['timeout'], 900)
+                kwargs['timeout'] = .2
+                return original([sys.executable, '-c', script], **kwargs)
+            out = io.StringIO()
+            with synthetic_root_metadata(base / 'private'), patch.object(wrapper.subprocess, 'run', side_effect=child), redirect_stdout(out):
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    wrapper.invoke_collector(raw, hashlib.sha256(raw).hexdigest(), base / 'private')
+            self.assertEqual(out.getvalue(), 'ARCTIC-BROWSER-STARTUP-FAILURE collector unknown unclassified_exception\n')
+            self.assertGreater((base / 'private/collector.stderr').stat().st_size, 4096)
+            with self.assertRaises(ProcessLookupError): os.kill(int(pidfile.read_text()), 0)
+            with patch.object(wrapper.subprocess, 'run', side_effect=AssertionError('no child before binding')):
+                with self.assertRaises(RuntimeError): wrapper.invoke_collector(raw, 'f' * 64, base / 'never-created')
+            self.assertFalse((base / 'never-created').exists())
+
+    def test_actual_host_UART_projection_rejects_poison_duplicates_and_symlink(self):
+        root = HERE.parents[1]; manifest = json.loads((HERE / 'execution-manifest.json').read_bytes())
+        good = b'ARCTIC-BROWSER-STARTUP-FAILURE collector runtime_inventory runtime_package_binding\n'
+        with tempfile.TemporaryDirectory() as value:
+            work = Path(value); (work / 'diagnostic-boot').mkdir(); path = work / 'diagnostic-boot/serial-boot.log'
+            path.write_bytes(b'private UART text\n' + good)
+            got = runner.guest_failure_observation(root, work, manifest)
+            self.assertEqual(got, {'status': 'valid_finite_markers', 'records': [
+                {'scope': 'collector', 'phase': 'runtime_inventory', 'reason': 'runtime_package_binding'}]})
+            self.assertNotIn('private', json.dumps(got))
+            for bad in (good + good, good.replace(b'runtime_inventory', b'private'), good + b'ARCTIC-BROWSER-STARTUP-FAILURE guest staging private\n'):
+                path.write_bytes(bad)
+                self.assertEqual(runner.guest_failure_observation(root, work, manifest), {'status': 'invalid_finite_marker', 'records': []})
+            path.unlink(); (work / 'other').write_bytes(good); path.symlink_to(work / 'other')
+            self.assertEqual(runner.guest_failure_observation(root, work, manifest), {'status': 'unavailable', 'records': []})
 
 
 if __name__ == '__main__': unittest.main(verbosity=2)
