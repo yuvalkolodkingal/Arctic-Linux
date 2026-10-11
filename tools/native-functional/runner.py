@@ -20,6 +20,7 @@ import subprocess
 import uuid
 
 import evidence as E
+import failure_evidence as F
 import apps as A
 
 HERE = Path(__file__).resolve().parent
@@ -256,7 +257,7 @@ def verify(args):
               'tools/native-functional/compose-photo-probe.py',
               'tools/native-functional/apps.py',
               'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
-              'tools/native-functional/source-provenance.json'} | TASKBAR_FILES, 'Execution pin set differs')
+              'tools/native-functional/source-provenance.json', 'tools/native-functional/failure_evidence.py'} | TASKBAR_FILES, 'Execution pin set differs')
     R.verify_iso(args.inputs)
 
 def checker_proof():
@@ -270,157 +271,172 @@ preserve_audio = E.preserve_audio
 
 def run(args):
     verify(args) # Rehash the actual unsplit ISO immediately before any VM.
-    docker=R.require_docker();R.require(Path('/dev/kvm').is_char_device(),'KVM disappeared')
-    vm=args.evidence.parent/'native-vm';R.require(not vm.exists(),'Native VM output must be unused')
-    state=dict(status='prepared',candidate_iso_source=R.SOURCE,execution_checker_head=os.environ['GITHUB_SHA'],
-               iso_bytes=R.ISO_BYTES,iso_sha256=R.ISO_SHA256,checker=checker_proof(),docker_server_version=docker,
-               release_acceptance=False,source_image_run=R.ORIGINAL_RUN,
-               recovered_native_source_commit='bdf797b19833fc8fe4002a328333edfc3777dfed')
-    prepared=None
-    owned_images=[]
-    def save():
-        state['recorded_at_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
-        R.write_json(args.evidence/'execution.json',state)
-    def interrupted(signum,frame):raise InterruptedError('Native run interrupted by signal '+str(signum))
-    signal.signal(signal.SIGTERM,interrupted);signal.signal(signal.SIGINT,interrupted)
-    try:
-        save();container='arctic-paired-native-'+uuid.uuid4().hex
-        env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container)
-        R.execute(['bash',str(args.source/'tools/performance/prepare-vm-tools.sh'),str(args.evidence)],
-                  args.evidence/'provision.log',20*60,args.source,env,container)
-        prepared=(args.evidence/'vm-prepared-image-id.txt').read_text().strip()
-        R.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}',prepared),'Immutable test-tool image ID missing')
-        owned_images.append(prepared)
-        verify(args) # refuse changed source before preparing any guest payload
-        state.update(status='running_live_install_first_boot',vm_tool_image_id=prepared);save()
-        payload = args.evidence.parent / 'native-payload'
-        R.require(not payload.exists(), 'Native payload must be unused')
-        payload.mkdir()
-        taskbar_payload = payload / 'taskbar'
-        taskbar_payload.mkdir()
-        container='arctic-paired-native-'+uuid.uuid4().hex
-        env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container,ARCTIC_FEDORA_IMAGE=prepared)
-        R.execute(['bash', str(args.bundle/'prepare-taskbar-tools.sh'), str(args.bundle.parents[1]), str(taskbar_payload)],
-                  args.evidence/'taskbar-build.log',15*60,args.bundle.parents[1],env,container)
-        build = json.loads((taskbar_payload/'build-provenance.json').read_text())
-        R.require(build['schema']=='arctic-taskbar-tools-v1' and build['release_acceptance'] is False
-                  and set(build['sources']) == {'shell/dev/virtual-pointer.c','tools/native-functional/taskbar-screencopy.c',
-                                              'shell/dev/wlr-screencopy-unstable-v1.xml'}, 'Taskbar compilation source inventory differs')
-        for name, expected in build['sources'].items(): R.pinned_file(args.bundle.parents[1]/name, expected)
-        for name, expected in build['binaries'].items():
-            R.require(name in ('virtual-pointer','raw-screencopy'), 'Unexpected taskbar binary')
-            R.pinned_file(taskbar_payload/name,expected)
-            R.require((taskbar_payload/name).read_bytes()[:4]==b'\x7fELF', 'Taskbar tool is not native ELF')
-        R.require(set(build['binaries'])=={'virtual-pointer','raw-screencopy'},'Taskbar binary inventory differs')
-        display_host = build.get('display_host', {})
-        R.require(display_host.get('backend') == 'dbus' and display_host.get('gl') is False
-                  and set(display_host.get('programs', {})) == {'/usr/bin/qemu-system-x86_64',
-                    '/usr/bin/dbus-daemon', '/usr/bin/gdbus'}
-                  and all(re.fullmatch('[0-9a-f]{64}', value) for value in display_host['programs'].values())
-                  and len(display_host.get('packages', [])) == 4,
-                  'Taskbar display host inventory differs')
-        R.pinned_file(taskbar_payload/'taskbar-display-capabilities.txt', display_host['capabilities_sha256'])
-        base_prepared = prepared
-        prepared = (taskbar_payload/'taskbar-vm-prepared-image-id.txt').read_text().strip()
-        R.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}', prepared), 'Immutable taskbar VM image ID missing')
-        owned_images.append(prepared)
-        shutil.copyfile(taskbar_payload/'taskbar-display-capabilities.txt', args.evidence/'taskbar-display-capabilities.txt')
-        state.update(vm_base_tool_image_id=base_prepared, vm_tool_image_id=prepared)
-        for name in ('taskbar.py','taskbar-runtime.py','native_smoke.py'): shutil.copyfile(args.bundle/name, taskbar_payload/name)
-        taskbar_context=dict(schema='arctic-taskbar-context-v1',source_sha=R.SOURCE,iso_sha256=R.ISO_SHA256,
-            iso_bytes=R.ISO_BYTES,execution_sha=os.environ['GITHUB_SHA'],capture_nonce=uuid.uuid4().hex,
-            checker_sha256=R.digest(taskbar_payload/'taskbar.py'),runtime_sha256=R.digest(taskbar_payload/'taskbar-runtime.py'),
-            native_sha256=R.digest(taskbar_payload/'native_smoke.py'),pointer_sha256=R.digest(taskbar_payload/'virtual-pointer'),
-            capture_sha256=R.digest(taskbar_payload/'raw-screencopy'))
-        R.write_json(taskbar_payload/'taskbar-context.json',taskbar_context)
-        state.update(taskbar_context=taskbar_context,taskbar_build=build);save()
-        spec = importlib.util.spec_from_file_location('native_photo_composer', args.bundle / 'compose-photo-probe.py')
-        composer = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(composer)
-        photo_probe = payload / 'photo-check.py'
-        app_context = dict(source_sha=R.SOURCE, iso_sha256=R.ISO_SHA256, iso_bytes=R.ISO_BYTES)
-        photo_collection_sha = composer.compose(args.source, photo_probe, app_context, args.bundle.parents[1])
-        app_context.update(checker_sha256=R.digest(args.bundle/'apps.py'),
-            native_sha256=R.digest(args.bundle/'native_smoke.py'),
-            manifest_sha256=R.digest(args.source/'iso/kiwi/config.kiwi'),
-            mimeapps_sha256=R.digest(args.source/'packaging/desktop/live-mimeapps.list'))
-        mimes = A.mime_defaults((args.source/'packaging/desktop/live-mimeapps.list').read_bytes())
-        state['app_defaults_context'] = app_context
-        state['photo_probe'] = dict(sha256=R.digest(photo_probe), collection_sha256=photo_collection_sha);save()
-        name,sha=CHECKERS['native-functional'];R.pinned_file(args.bundle/name,sha)
-        container='arctic-paired-native-'+uuid.uuid4().hex
-        env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container,
-                 ARCTIC_FEDORA_IMAGE=prepared,ARCTIC_VM_TOOLS_PREPARED='1',ARCTIC_NATIVE_AUDIO_FIXTURE='1',
-                 ARCTIC_NATIVE_LAUNCHER=str(args.bundle/'native-launcher-v6.py'),
-                 ARCTIC_NATIVE_EDITOR_SAVE_FIXTURE='1',ARCTIC_NATIVE_PHYSICAL_CONTROLLER=str(args.bundle/'native-physical-controller.py'),
-                 ARCTIC_NATIVE_PHOTO_CHECKER=str(photo_probe),
-                 ARCTIC_NATIVE_TASKBAR_BUNDLE=str(taskbar_payload),ARCTIC_NATIVE_TWO_OUTPUTS='1',
-                 ARCTIC_NATIVE_TASKBAR_DISPLAY_CONTROLLER=str(args.bundle/'taskbar-display.py'),
-                 ARCTIC_NATIVE_TASKBAR_DISPLAY_SHA=R.digest(args.bundle/'taskbar-display.py'),
-                 ARCTIC_NATIVE_PHYSICAL_SHA=R.digest(args.bundle/'native-physical-controller.py'),
-                 ARCTIC_NATIVE_PHYSICAL_CHECKER_SHA=sha)
-        argv=['bash',str(args.bundle.parents[1]/'tools/test-install.sh'),'--iso',str(args.inputs/'iso'/R.ISO),
-              '--kvm','--memory','4096','--smp','2','--boot-append','','--install-timeout','2400',
-              '--boot-network','offline','--guest-check',str(args.bundle/name),
-              '--profile',str(args.source/'profiles/ci/offline.toml'),'--out',str(vm)]
-        verify(args) # recheck actual source/ISO after provisioning, immediately before the sole VM
-        state['immediate_pre_vm_verification']=dict(iso=R.verify_iso(args.inputs),execution_manifest_sha256=R.digest(args.manifest));save()
-        errors=[]
-        try:R.execute(argv,args.evidence/'native-harness.log',180*60,args.bundle.parents[1],env,container)
-        except BaseException as error:errors.append('harness: '+str(error))
-        finally:state['harness_evidence']=R.preserve_phase(vm,args.evidence,'harness');save()
+    with F.Observation(args.evidence,args.manifest,globals(),E.__dict__) as observation:
+        observation.milestone('host-validation')
+        docker=R.require_docker();R.require(Path('/dev/kvm').is_char_device(),'KVM disappeared')
+        vm=args.evidence.parent/'native-vm';R.require(not vm.exists(),'Native VM output must be unused')
+        state=dict(status='prepared',candidate_iso_source=R.SOURCE,execution_checker_head=os.environ['GITHUB_SHA'],
+                   iso_bytes=R.ISO_BYTES,iso_sha256=R.ISO_SHA256,checker=checker_proof(),docker_server_version=docker,
+                   release_acceptance=False,source_image_run=R.ORIGINAL_RUN,
+                   recovered_native_source_commit='bdf797b19833fc8fe4002a328333edfc3777dfed')
+        prepared=None
+        owned_images=[]
+        def save():
+            state['recorded_at_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
+            R.write_json(args.evidence/'execution.json',state)
+        def interrupted(signum,frame):raise InterruptedError('Native run interrupted by signal '+str(signum))
+        signal.signal(signal.SIGTERM,interrupted);signal.signal(signal.SIGINT,interrupted)
         try:
-            state['taskbar_displays'] = R.display_evidence(vm, R.digest(args.bundle/'taskbar-display.py'))
-        except BaseException as error:errors.append('taskbar display setup: '+str(error))
-        # Extract complete available native files and bounded WAV even on failed probes.
-        try:
-            state['native_stages']=validate_harness_serial(vm,args.evidence)
-            state['physical_stages']={stage:check_physical((vm/name).read_text(),stage,vm,args.evidence/('native-'+stage))
-                for stage,name in (('live','serial-install.log'),('installed','serial-boot.log'))}
-            state['editor_save_stages']={stage:check_editor_save((vm/name).read_text(),stage,vm,args.evidence/('native-'+stage))
-                 for stage,name in (('live','serial-install.log'),('installed','serial-boot.log'))}
-            state['photos'] = {}
-            state['apps'] = {}
-            for stage, name in (('live', 'serial-install.log'), ('installed', 'serial-boot.log')):
-                rows = E.records((vm/name).read_text().splitlines(), 'ARCTIC-NATIVE-PHOTOS ')
-                R.require(len(rows) == 1 and rows[0]['stage'] == stage and rows[0]['status'] == 'passed'
-                          and rows[0]['collection_sha256'] == photo_collection_sha
-                          and rows[0]['release_acceptance'] is False, 'Missing/failed pinned photo image verification: ' + stage)
-                state['photos'][stage] = rows[0]
-                rows = E.records((vm/name).read_text().splitlines(), 'ARCTIC-NATIVE-APP-DEFAULTS ')
-                R.require(len(rows) == 1 and rows[0]['stage'] == stage, 'Missing/duplicate actual app-defaults proof: ' + stage)
-                proof = json.loads((args.evidence/('native-'+stage)/'serial-native-provenance.json').read_text())
-                A.validate_report(rows[0], app_context, mimes, proof)
-                state['apps'][stage] = rows[0]
-        except BaseException as error:errors.append('native stages: '+str(error))
-        try:
-            serial=vm/'serial-boot.log'
-            R.require(serial.is_file() and not serial.is_symlink() and serial.stat().st_size<=256*1024*1024,
-                      'Missing/oversized taskbar serial transport')
-            port=vm/'taskbar-boot.log'
-            R.require(port.is_file() and not port.is_symlink() and port.stat().st_size<=210*1024*1024,
-                      'Missing/oversized taskbar virtio port transport')
-            spec=importlib.util.spec_from_file_location('native_taskbar_evidence',args.bundle/'taskbar-evidence.py')
-            taskbar_evidence=importlib.util.module_from_spec(spec);spec.loader.exec_module(taskbar_evidence)
-            state['taskbar_transport']=dict(name=port.name,bytes=port.stat().st_size,sha256=R.digest(port),
-                kind='root-owned named virtio-serial output bound to original installed native boot')
-            state['taskbar']=taskbar_evidence.check_taskbar(serial.read_text(),taskbar_context,args.evidence/'taskbar',
-                                                         transport_serial=port.read_text())
-        except BaseException as error:errors.append('taskbar: '+str(error))
-        state['audio']={}
-        for stage in ('install','boot'):
-            try:state['audio'][stage]=preserve_audio(vm/('native-audio-'+stage+'.wav'),args.evidence/'virtual-audio')
-            except BaseException as error:errors.append(stage+' audio: '+str(error))
-        R.require(not errors,'; '.join(errors))
-        state['status']='limited_native_live_installed_smoke_passed_pending_visual_audio_review';save()
-    except BaseException as error:
-        state.update(status='failed_or_unrun',error=str(error));save();raise
-    finally:
-        for image in reversed(owned_images):
+            save();container='arctic-paired-native-'+uuid.uuid4().hex
+            env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container)
+            observation.milestone('host-provisioning')
+            R.execute(['bash',str(args.source/'tools/performance/prepare-vm-tools.sh'),str(args.evidence)],
+                      args.evidence/'provision.log',20*60,args.source,env,container)
+            prepared=(args.evidence/'vm-prepared-image-id.txt').read_text().strip()
+            R.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}',prepared),'Immutable test-tool image ID missing')
+            owned_images.append(prepared)
+            verify(args) # refuse changed source before preparing any guest payload
+            state.update(status='running_live_install_first_boot',vm_tool_image_id=prepared);save()
+            payload = args.evidence.parent / 'native-payload'
+            R.require(not payload.exists(), 'Native payload must be unused')
+            payload.mkdir()
+            taskbar_payload = payload / 'taskbar'
+            taskbar_payload.mkdir()
+            container='arctic-paired-native-'+uuid.uuid4().hex
+            env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container,ARCTIC_FEDORA_IMAGE=prepared)
+            observation.milestone('taskbar-compilation')
+            R.execute(['bash', str(args.bundle/'prepare-taskbar-tools.sh'), str(args.bundle.parents[1]), str(taskbar_payload)],
+                      args.evidence/'taskbar-build.log',15*60,args.bundle.parents[1],env,container)
+            build = json.loads((taskbar_payload/'build-provenance.json').read_text())
+            R.require(build['schema']=='arctic-taskbar-tools-v1' and build['release_acceptance'] is False
+                      and set(build['sources']) == {'shell/dev/virtual-pointer.c','tools/native-functional/taskbar-screencopy.c',
+                                                  'shell/dev/wlr-screencopy-unstable-v1.xml'}, 'Taskbar compilation source inventory differs')
+            for name, expected in build['sources'].items(): R.pinned_file(args.bundle.parents[1]/name, expected)
+            for name, expected in build['binaries'].items():
+                R.require(name in ('virtual-pointer','raw-screencopy'), 'Unexpected taskbar binary')
+                R.pinned_file(taskbar_payload/name,expected)
+                R.require((taskbar_payload/name).read_bytes()[:4]==b'\x7fELF', 'Taskbar tool is not native ELF')
+            R.require(set(build['binaries'])=={'virtual-pointer','raw-screencopy'},'Taskbar binary inventory differs')
+            display_host = build.get('display_host', {})
+            R.require(display_host.get('backend') == 'dbus' and display_host.get('gl') is False
+                      and set(display_host.get('programs', {})) == {'/usr/bin/qemu-system-x86_64',
+                        '/usr/bin/dbus-daemon', '/usr/bin/gdbus'}
+                      and all(re.fullmatch('[0-9a-f]{64}', value) for value in display_host['programs'].values())
+                      and len(display_host.get('packages', [])) == 4,
+                      'Taskbar display host inventory differs')
+            R.pinned_file(taskbar_payload/'taskbar-display-capabilities.txt', display_host['capabilities_sha256'])
+            base_prepared = prepared
+            prepared = (taskbar_payload/'taskbar-vm-prepared-image-id.txt').read_text().strip()
+            R.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}', prepared), 'Immutable taskbar VM image ID missing')
+            owned_images.append(prepared)
+            shutil.copyfile(taskbar_payload/'taskbar-display-capabilities.txt', args.evidence/'taskbar-display-capabilities.txt')
+            state.update(vm_base_tool_image_id=base_prepared, vm_tool_image_id=prepared)
+            for name in ('taskbar.py','taskbar-runtime.py','native_smoke.py'): shutil.copyfile(args.bundle/name, taskbar_payload/name)
+            taskbar_context=dict(schema='arctic-taskbar-context-v1',source_sha=R.SOURCE,iso_sha256=R.ISO_SHA256,
+                iso_bytes=R.ISO_BYTES,execution_sha=os.environ['GITHUB_SHA'],capture_nonce=uuid.uuid4().hex,
+                checker_sha256=R.digest(taskbar_payload/'taskbar.py'),runtime_sha256=R.digest(taskbar_payload/'taskbar-runtime.py'),
+                native_sha256=R.digest(taskbar_payload/'native_smoke.py'),pointer_sha256=R.digest(taskbar_payload/'virtual-pointer'),
+                capture_sha256=R.digest(taskbar_payload/'raw-screencopy'))
+            R.write_json(taskbar_payload/'taskbar-context.json',taskbar_context)
+            state.update(taskbar_context=taskbar_context,taskbar_build=build);save()
+            observation.milestone('payload-composition')
+            spec = importlib.util.spec_from_file_location('native_photo_composer', args.bundle / 'compose-photo-probe.py')
+            composer = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(composer)
+            photo_probe = payload / 'photo-check.py'
+            app_context = dict(source_sha=R.SOURCE, iso_sha256=R.ISO_SHA256, iso_bytes=R.ISO_BYTES)
+            photo_collection_sha = composer.compose(args.source, photo_probe, app_context, args.bundle.parents[1])
+            app_context.update(checker_sha256=R.digest(args.bundle/'apps.py'),
+                native_sha256=R.digest(args.bundle/'native_smoke.py'),
+                manifest_sha256=R.digest(args.source/'iso/kiwi/config.kiwi'),
+                mimeapps_sha256=R.digest(args.source/'packaging/desktop/live-mimeapps.list'))
+            mimes = A.mime_defaults((args.source/'packaging/desktop/live-mimeapps.list').read_bytes())
+            state['app_defaults_context'] = app_context
+            state['photo_probe'] = dict(sha256=R.digest(photo_probe), collection_sha256=photo_collection_sha);save()
+            name,sha=CHECKERS['native-functional'];R.pinned_file(args.bundle/name,sha)
+            container='arctic-paired-native-'+uuid.uuid4().hex
+            env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container,
+                     ARCTIC_FEDORA_IMAGE=prepared,ARCTIC_VM_TOOLS_PREPARED='1',ARCTIC_NATIVE_AUDIO_FIXTURE='1',
+                     ARCTIC_NATIVE_LAUNCHER=str(args.bundle/'native-launcher-v6.py'),
+                     ARCTIC_NATIVE_EDITOR_SAVE_FIXTURE='1',ARCTIC_NATIVE_PHYSICAL_CONTROLLER=str(args.bundle/'native-physical-controller.py'),
+                     ARCTIC_NATIVE_PHOTO_CHECKER=str(photo_probe),
+                     ARCTIC_NATIVE_TASKBAR_BUNDLE=str(taskbar_payload),ARCTIC_NATIVE_TWO_OUTPUTS='1',
+                     ARCTIC_NATIVE_TASKBAR_DISPLAY_CONTROLLER=str(args.bundle/'taskbar-display.py'),
+                     ARCTIC_NATIVE_TASKBAR_DISPLAY_SHA=R.digest(args.bundle/'taskbar-display.py'),
+                     ARCTIC_NATIVE_PHYSICAL_SHA=R.digest(args.bundle/'native-physical-controller.py'),
+                     ARCTIC_NATIVE_PHYSICAL_CHECKER_SHA=sha)
+            argv=['bash',str(args.bundle.parents[1]/'tools/test-install.sh'),'--iso',str(args.inputs/'iso'/R.ISO),
+                  '--kvm','--memory','4096','--smp','2','--boot-append','','--install-timeout','2400',
+                  '--boot-network','offline','--guest-check',str(args.bundle/name),
+                  '--profile',str(args.source/'profiles/ci/offline.toml'),'--out',str(vm)]
+            verify(args) # recheck actual source/ISO after provisioning, immediately before the sole VM
+            state['immediate_pre_vm_verification']=dict(iso=R.verify_iso(args.inputs),execution_manifest_sha256=R.digest(args.manifest));save()
+            errors=[]
+            observation.milestone('harness-execution')
+            try:R.execute(argv,args.evidence/'native-harness.log',180*60,args.bundle.parents[1],env,container)
+            except BaseException as error:observation.handled('harness',error);errors.append('harness: '+str(error))
+            finally:
+                observation.milestone('harness-retention')
+                state['harness_evidence']=R.preserve_phase(vm,args.evidence,'harness');save()
             try:
-                subprocess.run(['docker','image','rm',image],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
-            except BaseException:
-                pass
+                state['taskbar_displays'] = R.display_evidence(vm, R.digest(args.bundle/'taskbar-display.py'))
+            except BaseException as error:observation.handled('taskbar-display',error);errors.append('taskbar display setup: '+str(error))
+            # Extract complete available native files and bounded WAV even on failed probes.
+            observation.milestone('guest-validation')
+            try:
+                state['native_stages']=validate_harness_serial(vm,args.evidence)
+                state['physical_stages']={stage:check_physical((vm/name).read_text(),stage,vm,args.evidence/('native-'+stage))
+                    for stage,name in (('live','serial-install.log'),('installed','serial-boot.log'))}
+                state['editor_save_stages']={stage:check_editor_save((vm/name).read_text(),stage,vm,args.evidence/('native-'+stage))
+                     for stage,name in (('live','serial-install.log'),('installed','serial-boot.log'))}
+                state['photos'] = {}
+                state['apps'] = {}
+                for stage, name in (('live', 'serial-install.log'), ('installed', 'serial-boot.log')):
+                    rows = E.records((vm/name).read_text().splitlines(), 'ARCTIC-NATIVE-PHOTOS ')
+                    R.require(len(rows) == 1 and rows[0]['stage'] == stage and rows[0]['status'] == 'passed'
+                              and rows[0]['collection_sha256'] == photo_collection_sha
+                              and rows[0]['release_acceptance'] is False, 'Missing/failed pinned photo image verification: ' + stage)
+                    state['photos'][stage] = rows[0]
+                    rows = E.records((vm/name).read_text().splitlines(), 'ARCTIC-NATIVE-APP-DEFAULTS ')
+                    R.require(len(rows) == 1 and rows[0]['stage'] == stage, 'Missing/duplicate actual app-defaults proof: ' + stage)
+                    proof = json.loads((args.evidence/('native-'+stage)/'serial-native-provenance.json').read_text())
+                    A.validate_report(rows[0], app_context, mimes, proof)
+                    state['apps'][stage] = rows[0]
+            except BaseException as error:observation.handled('guest-validation',error);errors.append('native stages: '+str(error))
+            observation.milestone('taskbar-validation')
+            try:
+                serial=vm/'serial-boot.log'
+                R.require(serial.is_file() and not serial.is_symlink() and serial.stat().st_size<=256*1024*1024,
+                          'Missing/oversized taskbar serial transport')
+                port=vm/'taskbar-boot.log'
+                R.require(port.is_file() and not port.is_symlink() and port.stat().st_size<=210*1024*1024,
+                          'Missing/oversized taskbar virtio port transport')
+                spec=importlib.util.spec_from_file_location('native_taskbar_evidence',args.bundle/'taskbar-evidence.py')
+                taskbar_evidence=importlib.util.module_from_spec(spec);spec.loader.exec_module(taskbar_evidence)
+                state['taskbar_transport']=dict(name=port.name,bytes=port.stat().st_size,sha256=R.digest(port),
+                    kind='root-owned named virtio-serial output bound to original installed native boot')
+                state['taskbar']=taskbar_evidence.check_taskbar(serial.read_text(),taskbar_context,args.evidence/'taskbar',
+                                                             transport_serial=port.read_text())
+            except BaseException as error:observation.handled('taskbar',error);errors.append('taskbar: '+str(error))
+            observation.milestone('audio-validation')
+            state['audio']={}
+            for stage in ('install','boot'):
+                try:state['audio'][stage]=preserve_audio(vm/('native-audio-'+stage+'.wav'),args.evidence/'virtual-audio')
+                except BaseException as error:observation.handled('audio-'+stage,error);errors.append(stage+' audio: '+str(error))
+            R.require(not errors,'; '.join(errors))
+            state['status']='limited_native_live_installed_smoke_passed_pending_visual_audio_review';save()
+            observation.milestone('source-run-passed')
+        except BaseException as error:
+            try:state.update(status='failed_or_unrun',error=str(error));save()
+            except BaseException:pass # Optional state output cannot replace the primary failure.
+            raise
+        finally:
+            observation.milestone('owned-image-cleanup')
+            for image in reversed(owned_images):
+                try:
+                    subprocess.run(['docker','image','rm',image],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+                except BaseException:
+                    pass
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

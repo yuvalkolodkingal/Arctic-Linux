@@ -54,7 +54,7 @@ jobs:
         timeout-minutes: 8
         run: |
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil tesseract-ocr tesseract-ocr-eng
           python3 -B - <<'PY'
           import sys
           sys.path.insert(0, 'execution/tools/lib')
@@ -77,12 +77,17 @@ jobs:
             --manifest "$GITHUB_WORKSPACE/execution/tools/native-functional/execution-manifest.json" \
             --evidence "$RUNNER_TEMP/arctic-native/evidence"
       - name: Screen bounded diagnostic files before upload
+        id: screen
         if: always()
         run: |
-          python3 -B execution/tools/native-functional/screen-evidence.py \
-            --source "$RUNNER_TEMP/arctic-native/evidence" --out "$RUNNER_TEMP/arctic-native/screened" --preserve-original
+          native_screen_status=0
+          python3 -B execution/tools/native-functional/failure_evidence.py \
+            --source "$RUNNER_TEMP/arctic-native/evidence" --out "$RUNNER_TEMP/arctic-native/screened" \
+            --manifest "$GITHUB_WORKSPACE/execution/tools/native-functional/execution-manifest.json" \
+            --github-output "$GITHUB_OUTPUT" || native_screen_status=$?
+          exit "$native_screen_status"
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.screen.outputs.upload_admitted == 'true'
         with:
           name: native-candidate-qualification
           path: ${{ runner.temp }}/arctic-native/screened/

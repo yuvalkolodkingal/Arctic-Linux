@@ -1,6 +1,6 @@
 {
   "execution_files": {
-    ".github/workflows/native-candidate-20261008.yml": "8d06459c74f65ba26a93c1c8319180c5934288990dcc357e4393c6b4bc0ffdb5",
+    ".github/workflows/native-candidate-20261008.yml": "93791286427bf47bd136e554bee5b630c970fa8725440a9b024ce1c55f249d65",
     "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
@@ -8,9 +8,10 @@
     "tools/native-functional/apps.py": "94e8806225c09772edc4e7836973d2e73cf9121206e69b082e1a0d7d35703a0f",
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
     "tools/native-functional/evidence.py": "8f9cb3c929449e11bd6ebd16c760253d3341f03d38e93f8caafa5638c40a021b",
+    "tools/native-functional/failure_evidence.py": "e6df1cf98d5e21ccf36b0702676f8f9ce91b5fa8cb08cf27e7d3de2f228677df",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
-    "tools/native-functional/runner.py": "bcfca9f56a74f654510dfcc164fe601cac556e7855c13746c9b39739550e2995",
+    "tools/native-functional/runner.py": "3a13bec2f482e0488bb5e2025be26d5a15d3d279ef970cca937d9082a5c00475",
     "tools/native-functional/screen-evidence.py": "b3d56536397ff1c46caf082b97a070ff3eae383c2c277898c572cb34eb76f336",
     "tools/native-functional/source-provenance.json": "735c824f7676bbb03eb4b8d2b0329efbaffdf47e07a663a57708696a7afcc74d",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
