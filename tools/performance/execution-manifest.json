@@ -36,7 +36,7 @@
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
+    "tools/native-functional/screen-evidence.py": "b3d56536397ff1c46caf082b97a070ff3eae383c2c277898c572cb34eb76f336",
     "tools/performance/causal.py": "d6af122d05390f96bf020f728ec9d74066f8d5b5e91d2f9b0cbb0bb187c508ec",
     "tools/performance/compare.py": "cde38b23d8fcad896fffd4983081aa6739f9b9af1dc7246562b3d6cf308528ed",
     "tools/performance/compose-paired-probe.py": "40db96b98f2f3ad77a88c65435ed6d626370c2f3bd9d88ae1de8e669934c1c73",
