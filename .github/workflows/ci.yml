@@ -5,6 +5,7 @@ on:
     tags: ["**"]
     branches-ignore:
       - codex/qualification-dispatch-20261010
+      - codex/active-installer-identity-csi-20261011
       - codex/qualification-dispatch-20261008
       - codex/safe-rerender-v4-20261010
       - codex/safe-rerender-v5-20261010
