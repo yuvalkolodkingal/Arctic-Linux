@@ -96,8 +96,8 @@ class Controls(unittest.TestCase):
     def test_buffered_real_writes_wait_then_require_growth_and_keep_original_counter(self):
         counters=iter([{'wr_bytes':100,'wr_operations':2},{'wr_bytes':100,'wr_operations':2},{'wr_bytes':500,'wr_operations':3}])
         def query(vm,name,*args):
-            if name=='query-block':return [{'inserted':{'node-name':'target0','file':'/tmp/owned/target.qcow2','ro':False}}]
-            return [{'node-name':'target0','stats':next(counters)}]
+            if name=='query-block':return [{'device':'active_target','inserted':{'node-name':'target0','file':'/tmp/owned/target.qcow2','ro':False}}]
+            return [{'device':'active_target','node-name':'target0','stats':next(counters)}]
         controller=object.__new__(H.InstallerController);controller.out=Path('/tmp/owned');controller.context=context();controller.receipts=[]
         controller.vm=object();controller.display=types.SimpleNamespace(_query=query)
         with patch.object(H.time,'sleep'):proof=controller.active_write_proof()

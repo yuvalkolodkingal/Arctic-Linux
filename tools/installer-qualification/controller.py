@@ -39,6 +39,39 @@ def _mint_collection_guard(error):
         del frame
 
 
+def _observe_write_failure(error, before, after, vm, display, expected, position):
+    """Closed observations of the rejected growth gate, never private counters."""
+    if type(error) is not RuntimeError:
+        return
+    proof = error.__dict__.get('_arctic_installer_collection_guard')
+    if type(proof) is not tuple or len(proof) != 2 or proof[0] is not _COLLECTION_GUARD_TOKEN or type(proof[1]) is not str or proof[1] != 'collection-034':
+        return
+    growth = []
+    for field in ('wr_bytes', 'wr_operations', 'monotonic_ns'):
+        first = before.get(field) if type(before) is dict else None
+        last = after.get(field) if type(after) is dict else None
+        growth.append(('true' if last > first else 'false')
+            if type(first) is int and type(last) is int and first >= 0 and last >= 0 else 'unknown')
+    phase, cycle, status = 'unknown', 'unknown', 'unknown'
+    if type(expected) is list and type(position) is int and 0 <= position < len(expected):
+        current = expected[position]
+        if type(current) is tuple and len(current) == 2:
+            if type(current[0]) is str and current[0] in ('vt-away', 'output-disconnect', 'output-restore'):
+                phase = current[0]
+            if type(current[1]) is int and current[1] == 0:
+                cycle = 'zero'
+    try:
+        if vm.proc.poll() is not None:
+            status = 'process-exited'
+        else:
+            value = display._query(vm, 'query-status')
+            if type(value) is dict and type(value.get('running')) is bool:
+                status = 'running' if value['running'] else 'not-running'
+    except Exception:
+        pass  # Use the existing query deadline; status failure stays unknown.
+    error._arctic_installer_write_observation = (_COLLECTION_GUARD_TOKEN, *growth, status, phase, cycle)
+
+
 @contextmanager
 def cleanup_signals():
     """Finish bounded owned cleanup and let the caller record cancellation."""
@@ -246,12 +279,22 @@ class InstallerController:
         """Two actual QMP counters on only the freshly acquired target node."""
         def sample():
             rows = self.display._query(self.vm, 'query-block')
-            owned = [row['inserted'] for row in rows if row.get('inserted', {}).get('node-name') == 'target0']
-            require(len(owned) == 1 and owned[0].get('file') == str(self.out / 'target.qcow2')
+            bindings = [row for row in rows if row.get('inserted', {}).get('node-name') == 'target0'
+                or row.get('device') == 'active_target']
+            owned = [row.get('inserted', {}) for row in bindings]
+            require(len(owned) == 1 and bindings[0].get('device') == 'active_target'
+                    and owned[0].get('node-name') == 'target0'
+                    and owned[0].get('file') == str(self.out / 'target.qcow2')
                     and owned[0].get('ro') is False, 'QMP target is not this invocation’s writable disk')
-            stats = self.display._query(self.vm, 'query-blockstats', {'query-nodes': True})
-            selected = [row['stats'] for row in stats if row.get('node-name') == 'target0']
-            require(len(selected) == 1 and all(type(selected[0].get(k)) is int and selected[0][k] >= 0
+            # Node-level stats do not fill these accounting counters. The
+            # backend owning this exact target supplies completed-write stats.
+            stats = self.display._query(self.vm, 'query-blockstats', {'query-nodes': False})
+            bindings = [row for row in stats if row.get('node-name') == 'target0'
+                or row.get('device') == 'active_target']
+            selected = [row.get('stats', {}) for row in bindings]
+            require(len(selected) == 1 and bindings[0].get('device') == 'active_target'
+                    and bindings[0].get('node-name') == 'target0'
+                    and all(type(selected[0].get(k)) is int and selected[0][k] >= 0
                     for k in ('wr_bytes', 'wr_operations')), 'actual owned target counters absent')
             return dict(wr_bytes=selected[0]['wr_bytes'], wr_operations=selected[0]['wr_operations'],
                         monotonic_ns=time.monotonic_ns())
@@ -264,8 +307,15 @@ class InstallerController:
             time.sleep(.5); after = sample()
             if after['wr_bytes'] > before['wr_bytes'] and after['wr_operations'] > before['wr_operations']:
                 break
-        require(after['wr_bytes'] > before['wr_bytes'] and after['wr_operations'] > before['wr_operations']
-                and after['monotonic_ns'] > before['monotonic_ns'], 'genuine target writes did not continue during disruption')
+        try:
+            require(after['wr_bytes'] > before['wr_bytes'] and after['wr_operations'] > before['wr_operations']
+                    and after['monotonic_ns'] > before['monotonic_ns'], 'genuine target writes did not continue during disruption')
+        except RuntimeError as error:
+            try:
+                _observe_write_failure(error, before, after, self.vm, self.display, self.expected, self.position)
+            except Exception:
+                pass  # Optional observations cannot replace the original gate.
+            raise
         if self.receipts:
             require(before['wr_bytes'] >= self.receipts[-1]['disk_io']['after']['wr_bytes'], 'target write counters regressed')
         return dict(node_name='target0', before=before, after=after, write_bps=self.context['write_bps'],
@@ -311,10 +361,10 @@ _COLLECTION_GUARD_SITES = {
     ('InstallerController.poll', 52): 'collection-029',
     ('InstallerController.poll', 55): 'collection-030',
     ('InstallerController.finish', 1): 'collection-031',
-    ('InstallerController.active_write_proof.<locals>.sample', 3): 'collection-032',
-    ('InstallerController.active_write_proof.<locals>.sample', 7): 'collection-033',
-    ('InstallerController.active_write_proof', 22): 'collection-034',
-    ('InstallerController.active_write_proof', 25): 'collection-035',
+    ('InstallerController.active_write_proof', 33): 'collection-034',
+    ('InstallerController.active_write_proof', 42): 'collection-035',
+    ('InstallerController.active_write_proof.<locals>.sample', 5): 'collection-032',
+    ('InstallerController.active_write_proof.<locals>.sample', 15): 'collection-033',
 }
 
 def _collection_owned_codes(function):

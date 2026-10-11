@@ -53,6 +53,17 @@ COLLECTION_GUARD_LABELS = ('collection-001', 'collection-002', 'collection-003',
 DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
     'installer-inner-driver-collect-guard-' + code for code in COLLECTION_GUARD_LABELS)
 MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64
+WRITE_OBSERVATION_LABELS = (
+    ('bytes', ('true', 'false', 'unknown')),
+    ('operations', ('true', 'false', 'unknown')),
+    ('clock', ('true', 'false', 'unknown')),
+    ('vm', ('running', 'not-running', 'process-exited', 'unknown')),
+    ('phase', ('vt-away', 'output-disconnect', 'output-restore', 'unknown')),
+    ('cycle', ('zero', 'unknown')),
+)
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-collect-write-' + field + '-' + label
+    for field, labels in WRITE_OBSERVATION_LABELS for label in labels)
 COLLECTION_PHASE_LABELS = ('request-json', 'request-json-fields', 'request-json-constant',
     'output-head', 'request-poll', 'console-capture', 'output-transition',
     'target-write-progress', 'target-write-sample')
@@ -95,6 +106,20 @@ def collection_guard_code(error, controller_source):
     return None
 
 
+def write_observation_codes(error, controller_source):
+    if collection_guard_code(error, controller_source) != 'installer-inner-driver-collect-guard-collection-034':
+        return ()
+    observation = error.__dict__.get('_arctic_installer_write_observation')
+    source = controller_source.__dict__
+    if type(observation) is not tuple or len(observation) != 7 or observation[0] is not source.get('_COLLECTION_GUARD_TOKEN'):
+        return ()
+    if not all(type(value) is str and value in labels
+            for value, (_, labels) in zip(observation[1:], WRITE_OBSERVATION_LABELS)):
+        return ()
+    return tuple('installer-inner-driver-collect-write-' + field + '-' + value
+                 for value, (field, _) in zip(observation[1:], WRITE_OBSERVATION_LABELS))
+
+
 def diagnostic_code(stage, error, controller_source=None):
     require(type(stage) is str and stage in DIAGNOSTIC_STAGES, 'Unknown installer inner stage')
     if stage == 'driver-collect':
@@ -121,6 +146,13 @@ def diagnose(stage, error, controller_source=None):
         code = diagnostic_code(stage, error, controller_source)
         try:
             print('ARCTIC-INSTALLER-INNER ' + token + ' ' + code, flush=True)
+            if code == 'installer-inner-driver-collect-guard-collection-034':
+                try:
+                    observed = write_observation_codes(error, controller_source)
+                except Exception:
+                    observed = ()
+                for observation in observed:
+                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)
         except Exception:
             pass
 
