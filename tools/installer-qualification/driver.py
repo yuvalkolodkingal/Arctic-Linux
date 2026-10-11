@@ -515,8 +515,8 @@ def console_user_identity(vm, startup, out, nonce, private_password):
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         observed_line = lines[-1].rstrip('_| ') if lines else None
         observe_installed_prompt('installed-login-shell', observed_line)
-        require(not any(line in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual')
-                        for line in lines), 'installed user login did not reach its identity challenge')
+        require(observed_line not in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual'),
+                'installed user login did not reach its identity challenge')
         records = [line for line in lines if line.startswith('ARCTIC-USER ')]
         if records:
             require(sent and records == [expected], 'installed user identity response differs')

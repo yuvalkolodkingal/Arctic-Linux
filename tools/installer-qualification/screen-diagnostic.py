@@ -22,7 +22,10 @@ MAX_MATCH = 16 * 1024
 # retained package-verified getty@.service template permits %I instances, and
 # the exact guest returns to its discovered VT after explicitly visiting VT6.
 # No alias, arbitrary instance, or unknown token is exported.
-EXTRA_UNIT_CANDIDATES = tuple(('getty@tty' + str(n) + '.service', 'getty-template-tty' + str(n)) for n in range(2, 6))
+EXTRA_UNIT_CANDIDATES = tuple(('getty@tty' + str(n) + '.service', 'getty-template-tty' + str(n)) for n in range(2, 6)) + (
+    ('modprobe@nvmet_tcp.service', 'vendor-unit-006'),
+    ('modprobe@thunderbolt_net.service', 'vendor-unit-007'),
+)
 
 
 def load(name, path):
@@ -134,14 +137,52 @@ def serial_source_context(m, match, phase, original=None, boundaries=None, remov
 # END SERIAL_SOURCE_CONTEXT_OBSERVATION
 
 
+# BEGIN BOUNDED_PUBLIC_BROKER_NOTIFICATION_DIAGNOSTIC
+# Official broker v37 forms dbus-<unique>-<escaped Name>@<uint64>.service.
+# Official mako v1.11.0 activates org.freedesktop.Notifications with Exec and
+# no SystemdService. This is a Source-shaped diagnostic family only; no
+# original value, numeric field, operand digest, runtime cause or exemption.
+BROKER_NOTIFICATION_FRAGMENT = re.compile(
+    r'1\.(?P<unique>0|[1-9][0-9]{0,19})-org\.freedesktop\.Notifications@'
+    r'(?P<instance>0|[1-9][0-9]{0,19})\.service')
+
+
+def generated_source_family(m, match, phase, original=None, boundaries=None, removed=None):
+    if (type(phase) is not str or phase != 'source-view' or type(match) is not re.Match
+            or type(original) is not str or type(boundaries) is not m.array
+            or type(removed) is not m.array or len(boundaries) != len(removed)
+            or not 0 < match.end() - match.start() <= 256):
+        return 'unknown'
+    matched = BROKER_NOTIFICATION_FRAGMENT.fullmatch(match.group(0))
+    if matched is None:
+        return 'unknown'
+    if (int(matched.group('unique')) >= 18446744073709551615
+            or int(matched.group('instance')) > 18446744073709551615):
+        return 'unknown'
+    first, last = m.original_span(match.start(), match.end(), boundaries, removed)
+    if not (type(first) is int and type(last) is int and 6 <= first <= last <= len(original)
+            and last - first == match.end() - match.start()
+            and original[first:last] == match.group(0)
+            and original[first - 6:first] == 'dbus-:'):
+        return 'unknown'
+    start, end = first - 6, last
+    delimiters = ' \t\r\n:'
+    if ((start != 0 and original[start - 1] not in delimiters)
+            or (end != len(original) and original[end] not in delimiters)):
+        return 'unknown'
+    return 'broker-public-notifications'
+# END BOUNDED_PUBLIC_BROKER_NOTIFICATION_DIAGNOSTIC
+
+
 def classify_match(m, match, phase, original=None, boundaries=None, removed=None):
     result = dict(phase=phase if type(phase) is str and phase in m.EXTERNAL_RULE_PHASES else 'unknown',
         rule='unknown-rule', codepoints=None, bytes=None, unit_like=None,
         original_contiguous=False, delimiter_bounded=False,
         public_candidate='unknown', public_candidate_sha256=None,
-        known_source_fragment='unknown')
+        known_source_fragment='unknown', generated_source_family='unknown')
     fragment = serial_source_fragment(m, match, phase, original, boundaries, removed)
     result['known_source_fragment'] = fragment['candidate']
+    result['generated_source_family'] = generated_source_family(m, match, phase, original, boundaries, removed)
     result['source_context'] = serial_source_context(m, match, phase, original, boundaries, removed)
     if type(match) is not re.Match or match.end() - match.start() > MAX_MATCH:
         return result

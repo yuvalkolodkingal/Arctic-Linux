@@ -1,13 +1,13 @@
 {
   "execution_files": {
-    ".github/workflows/installer-active-candidate-20261009.yml": "22a147d5504b7679085e6f0aa6319239b2dbca1ad0481123b0539804c90c47c6",
+    ".github/workflows/installer-active-candidate-20261009.yml": "11f3c2f5b4d1cd19311f52b50e7151786bc3b4169f28da9389bda163f55dca09",
     "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/installer-qualification/active-contract.py": "e1c2322357873d5af6c46872bd76d2dc15ed9940e420e40b9e7c2c4bc120919d",
     "tools/installer-qualification/active-guest.py": "8a5c705e2523f4c6226467cc4ddd8074c2ea135ff18cbd696295fdbdb7db0b6a",
     "tools/installer-qualification/contract.py": "8fed9073e82e32c8f0650d7c91f57b06ca23ae80a2d8a33c83e5bc803e0705c0",
     "tools/installer-qualification/controller.py": "1336faf7de7f120b840244e894f8f52f3dcfb4370272b5cdf4eea7a3f678cbf5",
-    "tools/installer-qualification/driver.py": "e5542b844586342f5dadf9bb6c0b1326ca52afe36ef7cc80dfcae10378b51a6f",
+    "tools/installer-qualification/driver.py": "9e53952045537af0ca67a95f618f3b010e54cbfba4df5bacb138ef216a9ef0bf",
     "tools/installer-qualification/evidence.py": "d9f98ad0e3fed14b3c77898ba0924ccceaa06777a45f3eea7c28eb38e0dc1d9b",
     "tools/installer-qualification/guest.py": "cb9db36bd65ea0e1a6ef79bbce9ddd76093b023a00ae5ee3a27f8a17398e705b",
     "tools/installer-qualification/installed-guest.py": "1e2e592d97878f7348ad6d81e1ef617ee04634f6188d8992824100f657c6be1e",
