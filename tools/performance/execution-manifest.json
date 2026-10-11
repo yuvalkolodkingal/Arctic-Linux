@@ -48,6 +48,6 @@
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
     "tools/performance/qualification.py": "81c60ba70bb8b1ccbcc32e1fbd21f03a43e5ed022c024526b81d4fce0e729e1e",
     "tools/performance/run-paired.py": "6b15b973fa1c42365ddfeea3a6728378c51c33d461e097b8e5b859c564068466",
-    "tools/test-install.sh": "c3ed5827c2f006ab1d391d63e67140456de273d3d54fbd3b53f3368c171619d3"
+    "tools/test-install.sh": "8117929d2f38779b211b4da144a029b9bf6536856ee490c6a9624f3ba9661ac6"
   }
 }

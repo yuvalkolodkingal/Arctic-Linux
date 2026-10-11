@@ -8,7 +8,7 @@
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/native_smoke.py": "82cb72d81be20fd5d0a3b4f802fdbef7d7364377cd6a42dea334422b0a3ee89c",
     "tools/native-functional/screen-evidence.py": "b3d56536397ff1c46caf082b97a070ff3eae383c2c277898c572cb34eb76f336",
-    "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
+    "tools/native-functional/taskbar-runtime.py": "79d7bb42657ec6cfd4ddf447ea543f4f53ed3849c0d83c8cfa9c5db70822ca02",
     "tools/safe-diagnostic-v4/common.py": "ed9d9774796afc733d69ddca0a7275461370bc771166b712202af615184e3eed",
     "tools/safe-diagnostic-v4/guest.py": "1405954d37def85eef9993a8125796264c556a8e17ca90c4de4b91afce9705f7",
     "tools/safe-diagnostic-v4/host.py": "e4ddcc74a197acca0515ddaaeba26e5a6869ca3e2739609c623bf242a823732d",

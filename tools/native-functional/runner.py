@@ -328,7 +328,7 @@ def run(args):
         state.update(vm_base_tool_image_id=base_prepared, vm_tool_image_id=prepared)
         for name in ('taskbar.py','taskbar-runtime.py','native_smoke.py'): shutil.copyfile(args.bundle/name, taskbar_payload/name)
         taskbar_context=dict(schema='arctic-taskbar-context-v1',source_sha=R.SOURCE,iso_sha256=R.ISO_SHA256,
-            iso_bytes=R.ISO_BYTES,execution_sha=os.environ['GITHUB_SHA'],token=uuid.uuid4().hex,
+            iso_bytes=R.ISO_BYTES,execution_sha=os.environ['GITHUB_SHA'],capture_nonce=uuid.uuid4().hex,
             checker_sha256=R.digest(taskbar_payload/'taskbar.py'),runtime_sha256=R.digest(taskbar_payload/'taskbar-runtime.py'),
             native_sha256=R.digest(taskbar_payload/'native_smoke.py'),pointer_sha256=R.digest(taskbar_payload/'virtual-pointer'),
             capture_sha256=R.digest(taskbar_payload/'raw-screencopy'))

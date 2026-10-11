@@ -69,7 +69,7 @@ class Controls(unittest.TestCase):
             port, serial, builder.context if context is None else context)
         return E.decode(chunks, manifest, begin['context'], report)
 
-    def test_real_producer_exporter_and_decoder_use_binding_id_while_shared_protocol_keeps_token(self):
+    def test_real_producer_exporter_and_decoder_use_binding_id_while_shared_protocol_uses_capture_nonce(self):
         builder = self.builder()
         with tempfile.TemporaryDirectory(prefix='arctic-native-smoke-installer-public-') as temporary:
             root = Path(temporary)
@@ -99,7 +99,8 @@ class Controls(unittest.TestCase):
         self.assertNotIn('token', set(keys_recursive(self.state)))
         self.assertNotIn('ocr', set(keys_recursive(self.state)))
         self.assertNotIn('login_shell_ocr', set(keys_recursive(self.state)))
-        self.assertIn('token', N.FIELDS)
+        self.assertIn('capture_nonce', N.FIELDS)
+        self.assertNotIn('token', N.FIELDS)
         self.assertNotIn('binding_id', N.FIELDS)
 
     def test_legacy_context_fields_are_rejected_in_both_profiles(self):

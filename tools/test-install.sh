@@ -1235,6 +1235,7 @@ def native_login_click(vm, path):
 
 
 def native_login_record(before, after, attempt, qmp, pointer):
+    import json
     a, b = native_login_geometry(before), native_login_geometry(after)
     changed = "unknown"
     if a is not None and b == a:
@@ -1326,6 +1327,7 @@ def dictation_driver_failure(scope, error):
         pass  # Even a second cancellation or failed diagnostic write preserves bare raise.
 
 def stage_boot():
+    import json
     vm = None
     display = None
     ok = True

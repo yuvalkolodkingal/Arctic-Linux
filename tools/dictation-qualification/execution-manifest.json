@@ -10,7 +10,7 @@
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/test-install.sh": "c3ed5827c2f006ab1d391d63e67140456de273d3d54fbd3b53f3368c171619d3"
+    "tools/test-install.sh": "8117929d2f38779b211b4da144a029b9bf6536856ee490c6a9624f3ba9661ac6"
   },
   "fixture_decoder": {
     "libsndfile": "1.2.2",

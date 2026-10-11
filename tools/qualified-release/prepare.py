@@ -687,12 +687,12 @@ def taskbar_proof(archive, manifest):
             'Taskbar retained original transport bytes/hash or bounded prefix differs')
     context = execution['taskbar_context']
     image, pin = manifest['image'], manifest['native']
-    require(set(context) == {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'token',
+    require(set(context) == {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'capture_nonce',
             'checker_sha256', 'runtime_sha256', 'native_sha256', 'pointer_sha256', 'capture_sha256'}
             and context['schema'] == 'arctic-taskbar-context-v1'
             and context['source_sha'] == image['source_sha'] and context['iso_sha256'] == image['sha256']
             and context['iso_bytes'] == image['bytes'] and context['execution_sha'] == pin['source_sha']
-            and re.fullmatch('[0-9a-f]{32}', context['token']), 'Taskbar exact-image execution context differs')
+            and re.fullmatch('[0-9a-f]{32}', context['capture_nonce']), 'Taskbar exact-image execution context differs')
     for key, name in (('checker_sha256', 'taskbar.py'), ('runtime_sha256', 'taskbar-runtime.py'),
                       ('native_sha256', 'native_smoke.py')):
         require(context[key] == source_hash(pin['source_sha'], 'tools/native-functional/' + name),
@@ -725,7 +725,7 @@ def taskbar_proof(archive, manifest):
     collector = state['collector']
     require(collector['status'] == 'passed' and collector['error'] is None
             and collector['evidence_export_complete'] is True and collector['release_acceptance'] is False
-            and collector['token'] == context['token']
+            and collector['capture_nonce'] == context['capture_nonce']
             and all(collector[key] == provenance[key] for key in ('boot_id', 'desktop_uid', 'active_desktop_session')),
             'Taskbar collector completion proof differs')
     channel = provenance['transport']

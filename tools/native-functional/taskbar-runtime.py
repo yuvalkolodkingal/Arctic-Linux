@@ -23,7 +23,7 @@ MAX_TOTAL = 128 * 1024 * 1024
 MAX_FILES = 512
 CHUNK = 18 * 1024  # Base64 text is at most 24 KiB, excluding the JSON envelope.
 TIMEOUT = 1800
-FIELDS = {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'token',
+FIELDS = {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'capture_nonce',
           'checker_sha256', 'runtime_sha256', 'native_sha256', 'pointer_sha256', 'capture_sha256'}
 BUNDLE = {'taskbar.py': 'checker_sha256', 'taskbar-runtime.py': 'runtime_sha256',
           'native_smoke.py': 'native_sha256', 'virtual-pointer': 'pointer_sha256',
@@ -51,14 +51,14 @@ def strict_json(text):
 def validate_context(value):
     require(type(value) is dict and set(value) == FIELDS
             and value['schema'] == 'arctic-taskbar-context-v1', 'taskbar context schema differs')
-    for key in FIELDS - {'schema', 'iso_bytes', 'source_sha', 'execution_sha', 'token'}:
+    for key in FIELDS - {'schema', 'iso_bytes', 'source_sha', 'execution_sha', 'capture_nonce'}:
         require(type(value[key]) is str and re.fullmatch('[0-9a-f]{64}', value[key]),
                 'taskbar SHA-256 differs: ' + key)
     for key in ('source_sha', 'execution_sha'):
         require(type(value[key]) is str and re.fullmatch('[0-9a-f]{40}', value[key]),
                 'taskbar commit differs: ' + key)
-    require(type(value['token']) is str and re.fullmatch('[0-9a-f]{32}', value['token']),
-            'taskbar execution token differs')
+    require(type(value['capture_nonce']) is str and re.fullmatch('[0-9a-f]{32}', value['capture_nonce']),
+            'taskbar execution capture_nonce differs')
     require(type(value['iso_bytes']) is int and 0 < value['iso_bytes'] < 2_000_000_000,
             'taskbar exact-image size differs')
     return value
@@ -186,7 +186,7 @@ def inventory(root, uid):
     return files, total
 
 
-def export(root, uid, token, stream=None):
+def export(root, uid, capture_nonce, stream=None):
     files, total = inventory(root, uid)  # Check every bound before emitting a partial archive.
     entries = []
     for name, data in files:
@@ -195,9 +195,9 @@ def export(root, uid, token, stream=None):
         entries.append(dict(path=name, bytes=len(data), sha256=digest(data),
                             compressed_bytes=len(compressed), chunks=len(parts), encoding='zlib+base64'))
         for index, part in enumerate(parts):
-            emit('EVIDENCE-CHUNK', dict(token=token, path=name, index=index,
+            emit('EVIDENCE-CHUNK', dict(capture_nonce=capture_nonce, path=name, index=index,
                                       data=base64.b64encode(part).decode('ascii')), stream)
-    emit('EVIDENCE-MANIFEST', dict(schema='arctic-taskbar-evidence-v1', token=token,
+    emit('EVIDENCE-MANIFEST', dict(schema='arctic-taskbar-evidence-v1', capture_nonce=capture_nonce,
                                  evidence_root=str(root), files=entries, bytes=total), stream)
 
 
@@ -275,17 +275,17 @@ def main(argv=None):
                 if report is None:
                     report = strict_json(read_regular(root / 'taskbar-report.json'))
                     emit('REPORT', report, port)
-                export(root, uid, context['token'], port)
+                export(root, uid, context['capture_nonce'], port)
                 complete = True
             except BaseException as exc:
                 error = (error + '; ' if error else '') + 'evidence export: ' + type(exc).__name__ + ': ' + str(exc)[:2000]
             if signal.sigpending() & {signal.SIGTERM, signal.SIGINT}:
                 error = (error + '; ' if error else '') + 'collector cancellation pending during export'
             passed = error is None and complete and report is not None and report.get('status') == 'passed'
-            end = dict(token=context['token'], **identity, status='passed' if passed else 'failed',
+            end = dict(capture_nonce=context['capture_nonce'], **identity, status='passed' if passed else 'failed',
                        error=error, evidence_export_complete=complete, release_acceptance=False)
             emit('END', end, port)
-            emit('PORT-END', dict(schema='arctic-taskbar-port-end-v1', token=context['token'], **identity,
+            emit('PORT-END', dict(schema='arctic-taskbar-port-end-v1', capture_nonce=context['capture_nonce'], **identity,
                                  status=end['status'], release_acceptance=False,
                                  end_sha256=digest(json.dumps(end, sort_keys=True, allow_nan=False).encode('ascii'))))
         finally:
