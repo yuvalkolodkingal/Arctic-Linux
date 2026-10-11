@@ -1,0 +1,25 @@
+{
+  "base": "522efdbc7bdc21db262fe0b31d7b77ce0209eb15",
+  "current_historical_cause_attributed": false,
+  "files": {
+    "README.md": "55f79d467c903998e7bf8669a2bfaacc6952d7e73d40e848397aa7a83896a3a3",
+    "producer.py": "fb8916fad4f1335d93ba2396ebad053e3129a70c73a3bc8bbad222c1b931dc7b",
+    "runner.py": "d1bc47418558d9dc27c4d19c292cf4eb703588b01f08b2266d255c9b9e77c2c4",
+    "source-inverse.json": "1a9eb23e078e329b2c28f6d7552e4897e2901f44e94463a7c4fc1797890e9b16",
+    "test_source.py": "77793a123bb618f1580140c0d4992b23d7b893a814abbb96db87765d208fe7a6"
+  },
+  "official_rpm_import_Source": {
+    "bytes": 7260,
+    "path": "/workspace/Arctic-Linux/out/browser-rpm-key-source-research-20261011/rpm-6.0.2-rpmchecksig.cc",
+    "sha256": "c3888aef15efa1ee0a7c64c2584d7e1e0607514f7f08c6fc9bc6152706964a90"
+  },
+  "original_producer_path": "tools/browser-accelerator-hosted-source/producer.py",
+  "original_runner_path": "tools/browser-accelerator-host-meson-20261011/runner.py",
+  "public_key_source_witness": {
+    "bytes": 5864,
+    "path": "/workspace/Arctic-Linux/out/browser-rpm-key-source-research-20261011/armored-key-full-SRPM-witness.json",
+    "sha256": "d966dc2c8b574c8d9221ed43bd3725265caf88638c0ce7a4948aaa988ad0068a"
+  },
+  "ready": false,
+  "schema": "arctic-browser-armored-key-disabled-source-v1"
+}

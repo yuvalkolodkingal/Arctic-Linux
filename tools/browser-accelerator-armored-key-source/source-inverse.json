@@ -1,0 +1,43 @@
+{
+  "armored_key": {
+    "bytes": 1672,
+    "sha256": "93642aec521a1e5e96dd715f7ae0ec0850ebc9de09a94ce03cae5263f26cc18a"
+  },
+  "base": "522efdbc7bdc21db262fe0b31d7b77ce0209eb15",
+  "binary_key": {
+    "bytes": 1176,
+    "sha256": "ee42b9c07cf45061e59446506442fed9a68270e2a65b775d41b2549501fc4dbc"
+  },
+  "fingerprint": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+  "producer": {
+    "bytes": 15362,
+    "changes": [
+      [
+        "ee42b9c07cf45061e59446506442fed9a68270e2a65b775d41b2549501fc4dbc",
+        "93642aec521a1e5e96dd715f7ae0ec0850ebc9de09a94ce03cae5263f26cc18a"
+      ],
+      [
+        "read_bound(Path('/inputs/Fedora44-primary.gpg'),1176,KEY_SHA)",
+        "read_bound(Path('/inputs/Fedora44-primary.gpg'),1672,KEY_SHA)"
+      ]
+    ],
+    "path": "tools/browser-accelerator-hosted-source/producer.py",
+    "sha256": "1cfeb1978bc93691f6b9af817dc3e27ee207674706d62d63216463b293468731"
+  },
+  "runner": {
+    "bytes": 33156,
+    "changes": [
+      [
+        "'--no-autostart','--export',FINGERPRINT",
+        "'--no-autostart','--armor','--export',FINGERPRINT"
+      ],
+      [
+        "len(key)==1176",
+        "len(key)==1672"
+      ]
+    ],
+    "path": "tools/browser-accelerator-host-meson-20261011/runner.py",
+    "sha256": "9ce5887ca8a16496d48aeb49c84106e9964547ec2e0c1f83a4a0471bc5d08788"
+  },
+  "schema": "arctic-browser-armored-key-source-inverse-v1"
+}
