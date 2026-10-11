@@ -111,19 +111,13 @@ class ExternalOriginalScreeningTests(unittest.TestCase):
             with self.subTest(url=url):
                 self.rejected(dns(url))
 
-    def test_known_tokens_require_exact_observed_context(self):
+    def test_metadata_tokens_require_exact_observed_context(self):
         for url in screen.FEDORA_METADATA:
             for content in (url.encode() + b'\n', b'ordinary public URL: ' + url.encode(),
                     dns(url).replace(b'Curl error (6)', b'Curl error (9)'),
                     dns(url).replace(b'mirrors.fedoraproject.org]', b'private.example]')):
                 with self.subTest(content=content):
                     self.rejected(content)
-        unit = screen.ZRAM_UNIT.encode()
-        for content in (unit, b'Stopped ' + unit,
-                b'[ 1.2] systemd[2]: Stopped ' + unit + b' - Create swap on /dev/zram0.\n',
-                b'[ 1.2] systemd[1]: Stopped ' + unit + b' - Private text.\n'):
-            self.rejected(content)
-
     def test_connect_latency_only_varies_as_a_bounded_decimal_field(self):
         actual = next(line for line in FIXTURE.read_bytes().splitlines(keepends=True)
             if b'Curl error (7)' in line)
@@ -231,9 +225,17 @@ class ExternalOriginalScreeningTests(unittest.TestCase):
                 original.replace('Finished', 'UnexpectedStatus'),
                 original.replace(' - ', ': '), original + ' extra text', unit,
                 original.replace('[ 1.234] systemd[1]: ', 'ordinary text: '))
-            for content in variants:
+            for variant_index, content in enumerate(variants):
                 with self.subTest(unit=unit, content=content):
-                    self.rejected(content.encode())
+                    raw = content.encode()
+                    # The separately reviewed exact configfs and Fuse tokens
+                    # are public without a lifecycle/description prerequisite.
+                    # Private affixes, case changes and every other unit retain
+                    # their original rejection requirements.
+                    if unit in ('modprobe@configfs.service', 'modprobe@fuse.service') and variant_index in (5, 6, 7, 8, 9, 10, 11):
+                        self.assertIs(screen.external_text(raw), raw)
+                    else:
+                        self.rejected(raw)
         for unit, description in (('user@1001.service', 'User Manager for UID 1001'),
                 ('user@01000.service', 'User Manager for UID 01000'),
                 ('user-runtime-dir@0.service', 'User Runtime Directory /run/user/0'),

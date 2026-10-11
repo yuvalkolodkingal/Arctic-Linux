@@ -92,7 +92,7 @@ class LaunchDiagnostics(unittest.TestCase):
                              type_text=typed, keys=keys, shot=shot)
         def marker(path, value):
             return (value == 'live session mode:' and live) or (value == 'ARCTIC-TEST-STARTED' and started)
-        env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage', 'dictation_acquire_vm'}, {
+        env = driver_functions({'stage_install', 'dictation_install_wait_vm_stage', 'dictation_acquire_vm', 'record_native_stop'}, {
             'E': {'GUEST_CHECK':'fixture', 'ARCTIC_DICTATION_HOST_TOKEN':'a'*32},
             'taskbar_display_module':None, 'vmtest':SimpleNamespace(VM=lambda *a:vm,
                 serial_has=marker, serial_value=lambda *a:None),
@@ -154,9 +154,16 @@ class LaunchDiagnostics(unittest.TestCase):
             self.assertEqual(path.read_text(),hostile+good)
 
     def test_whole_shell_driver_runner_bytes_roll_back_only_added_observers(self):
+        helper_path = ROOT / 'tools/native-functional/test_native_bulk_transport.py'
+        helper = next(n for n in ast.parse(helper_path.read_text()).body
+                      if isinstance(n, ast.FunctionDef) and n.name == 'restore_native_bulk_driver')
+        namespace = {}
+        exec(compile(ast.Module(body=[helper], type_ignores=[]), str(helper_path), 'exec'), namespace)
+        driver = namespace['restore_native_bulk_driver'](DRIVER)
+        shell = SHELL.replace(DRIVER, driver, 1)
         old_shell=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/test-install.sh']).decode()
         old_driver=old_shell.split("DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
-        old_tree,new_tree=ast.parse(old_driver),ast.parse(DRIVER)
+        old_tree,new_tree=ast.parse(old_driver),ast.parse(driver)
         old_enum=next(n for n in old_tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='DICTATION_HOST_STAGES' for t in n.targets))
         edits=[]
         helpers=[n for n in new_tree.body if isinstance(n,ast.FunctionDef) and n.name in ('dictation_install_wait_vm_stage', 'dictation_launch_desktop', 'dictation_acquire_vm', 'dictation_qemu_startup')]
@@ -175,7 +182,7 @@ class LaunchDiagnostics(unittest.TestCase):
                 if call.func.id=='dictation_launch_desktop':
                     self.assertEqual(ast.unparse(call.args[0]), "vm.shot('install-20-live-desktop')")
                     edits.append((n.lineno-1,n.end_lineno,['        vm.shot("install-20-live-desktop")\n']))
-        lines=DRIVER.splitlines(keepends=True)
+        lines=driver.splitlines(keepends=True)
         for begin,end,replacement in sorted(edits,reverse=True): lines[begin:end]=replacement
         rolled=''.join(lines)
         self.assertEqual(rolled.count('vm = dictation_acquire_vm('),2)
@@ -188,7 +195,7 @@ class LaunchDiagnostics(unittest.TestCase):
         self.assertEqual(rolled.count(coherent),1)
         rolled=rolled.replace(coherent, '        argv[at] += ",-avx,-avx2,-fma,-f16c,-bmi1,-bmi2"\n',1)
         self.assertEqual(rolled,old_driver)
-        self.assertEqual(SHELL.replace(DRIVER,rolled,1),old_shell)
+        self.assertEqual(shell.replace(driver,rolled,1),old_shell)
         self.assertEqual(ast.dump(ast.parse(rolled),include_attributes=False),ast.dump(old_tree,include_attributes=False))
         old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode()
         new_runner=Path(r.__file__).read_text()

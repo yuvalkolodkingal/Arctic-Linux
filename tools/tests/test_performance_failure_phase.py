@@ -230,6 +230,22 @@ class FixedFailurePhaseTest(unittest.TestCase):
         self.assertEqual({p.name for p in args.screened.iterdir()}, {'unqualified-failure-phase.json', 'upload-screening.json'})
 
     def prepare_guest(self):
+        # CI runs as root inside Fedora while the mounted checkout may belong
+        # to the host runner. Keep the production ownership gate unchanged:
+        # its source bytes must come from this test's own source directory.
+        self.observer_sources = self.root/'observer-sources'
+        for name in ('guest', 'causal'):
+            relative = 'tools/performance/'+name+'.py'
+            original = (ROOT/relative).read_bytes()
+            target = self.observer_sources/relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(original)
+            self.assertEqual(target.read_bytes(), original)
+            self.assertEqual(target.stat().st_uid, os.geteuid())
+        self.assertEqual(self.observer_sources.stat().st_uid, os.geteuid())
+        source_patch = patch.object(inner, 'ROOT', self.observer_sources)
+        source_patch.start()
+        self.addCleanup(source_patch.stop)
         self.observer = F.contract.observer_hashes(ROOT)
         self.state['observer_sha256'] = self.observer['frozen_sha256']
         self.write('status.json', json.dumps(self.state))
@@ -401,6 +417,25 @@ class FixedFailurePhaseTest(unittest.TestCase):
         self.write('runs/candidate/1/serial-boot.log', 'ARCTIC-INSTALLED-SMOKE-EXIT=1\n')
         self.assertEqual(self.summary()['guest_failure']['status'], 'ambiguous')
         self.assertEqual(self.summary()['observed_context'], 'candidate_1')
+
+    def test_wrong_source_directory_or_file_owner_still_fails_closed(self):
+        self.prepare_guest()
+        self.write('runs/baseline/1/serial-boot.log', self.guest_trace())
+        self.assertEqual(self.summary()['guest_failure']['status'], 'source_known_shape')
+        real_fstat = os.fstat
+        for path in (self.observer_sources,
+                self.observer_sources/'tools/performance/guest.py',
+                self.observer_sources/'tools/performance/causal.py'):
+            inode = path.stat().st_ino
+            def wrong_owner(fd):
+                info = real_fstat(fd)
+                if info.st_ino == inode:
+                    fields = list(info); fields[4] = os.geteuid()+1
+                    return os.stat_result(fields)
+                return info
+            with self.subTest(source=path.name), patch.object(inner.os, 'fstat', side_effect=wrong_owner):
+                self.assertEqual(self.summary()['guest_failure']['status'], 'source_mismatch')
+        self.assertEqual(self.summary()['guest_failure']['status'], 'source_known_shape')
 
     def test_actual_descriptor_owner_regular_type_symlink_and_changed_read_guards(self):
         self.prepare_guest()

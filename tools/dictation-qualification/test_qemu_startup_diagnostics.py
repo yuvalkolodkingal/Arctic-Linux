@@ -212,20 +212,27 @@ class StartupDiagnostics(unittest.TestCase):
             self.assertEqual(out.getvalue(),''.join('ARCTIC-DICTATION-HOST-PROGRESS online-installed '+code+'\n' for code in sorted(new_codes)))
 
     def test_whole_shell_driver_and_runner_rollback_to_accepted_b3_is_byte_exact(self):
+        helper_path = ROOT / 'tools/native-functional/test_native_bulk_transport.py'
+        helper = next(n for n in ast.parse(helper_path.read_text()).body
+                      if isinstance(n, ast.FunctionDef) and n.name == 'restore_native_bulk_driver')
+        namespace = {}
+        exec(compile(ast.Module(body=[helper], type_ignores=[]), str(helper_path), 'exec'), namespace)
+        driver = namespace['restore_native_bulk_driver'](DRIVER)
+        shell = SHELL.replace(DRIVER, driver, 1)
         old_shell=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/test-install.sh']).decode()
         old_driver=old_shell.split("DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
         def enum(text,name):return next(n for n in ast.parse(text).body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==name for t in n.targets))
-        old_enum,new_enum=enum(old_driver,'DICTATION_HOST_STAGES'),enum(DRIVER,'DICTATION_HOST_STAGES')
+        old_enum,new_enum=enum(old_driver,'DICTATION_HOST_STAGES'),enum(driver,'DICTATION_HOST_STAGES')
         edits=[(new_enum.lineno-1,new_enum.end_lineno,old_driver.splitlines(keepends=True)[old_enum.lineno-1:old_enum.end_lineno])]
-        for node in ast.parse(DRIVER).body:
+        for node in ast.parse(driver).body:
             if isinstance(node,ast.FunctionDef) and node.name in HELPERS:edits.append((node.lineno-1,node.end_lineno+1,[]))
-        lines=DRIVER.splitlines(keepends=True)
+        lines=driver.splitlines(keepends=True)
         for start,end,replacement in sorted(edits,reverse=True):lines[start:end]=replacement
         restored=''.join(lines);self.assertEqual(restored.count('vm = dictation_acquire_vm('),2)
         restored=restored.replace('vm = dictation_acquire_vm(','vm = vmtest.VM(')
         restored=restored.replace('        # The hosted fixture lacks only optional spec-ctrl; retain its v2 floor.\n', '', 1)
         restored=restored.replace('"Westmere-v2,-spec-ctrl,enforce"', '"Westmere-v2,enforce"', 1)
-        self.assertEqual(restored,old_driver);self.assertEqual(SHELL.replace(DRIVER,restored,1),old_shell)
+        self.assertEqual(restored,old_driver);self.assertEqual(shell.replace(driver,restored,1),old_shell)
         self.assertEqual(ast.dump(ast.parse(restored),include_attributes=False),ast.dump(ast.parse(old_driver),include_attributes=False))
         old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode();new_runner=Path(r.__file__).read_text()
         a,b=enum(old_runner,'HOST_STAGES'),enum(new_runner,'HOST_STAGES');lines=new_runner.splitlines(keepends=True)

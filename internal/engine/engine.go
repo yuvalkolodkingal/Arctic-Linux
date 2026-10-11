@@ -528,7 +528,7 @@ func (e *Engine) Start(ctx context.Context) *protocol.Error {
 	}
 	d.Apps.Selection = d.Apps.Selection.Clone()
 	job := &backend.Job{Data: d, Disk: disk, Firmware: e.info.Firmware, Catalog: e.cat, Secrets: sec, LogPath: e.opts.LogPath,
-		Hardware: e.hw, Offline: !online}
+		Hardware: e.hw, Offline: d.Network.Offline || !online}
 	if job.NeedsMOK() {
 		code, err := MOKCode()
 		if err != nil {

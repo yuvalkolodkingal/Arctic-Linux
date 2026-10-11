@@ -8,6 +8,7 @@ import subprocess
 import sys
 import unittest
 from unittest import mock
+from test_command_output_diagnostics import restore_command_output_diagnostics
 
 sys.path.insert(0,str(Path(__file__).parent))
 import contract as c
@@ -19,6 +20,7 @@ ORIGINAL_STATUS="    def status(self, verb='status', *args, check=True):\n      
 
 def restore_status_protocol(text):
     """Reverse only the new method; the whole old helper digest proves closure."""
+    text=restore_command_output_diagnostics(text)
     node=next(n for n in ast.walk(ast.parse(text)) if isinstance(n,ast.FunctionDef) and n.name=='status')
     lines=text.splitlines(keepends=True)
     lines[node.lineno-1:node.end_lineno]=ORIGINAL_STATUS.splitlines(keepends=True)
@@ -110,7 +112,7 @@ class StatusProtocolControls(unittest.TestCase):
     def test_complete_old_helper_byte_and_ast_closure(self):
         text=Path(guest.__file__).read_text();restored=restore_status_protocol(text)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),ORIGINAL_GUEST_SHA256)
-        old=ast.parse(restored);new=ast.parse(text)
+        old=ast.parse(restored);new=ast.parse(restore_command_output_diagnostics(text))
         for name in ('run','wait','gate','gpu_failure','microphone','transcribe'):
             select=lambda t:next(n for n in ast.walk(t) if isinstance(n,ast.FunctionDef) and n.name==name)
             self.assertEqual(ast.dump(select(new),include_attributes=False),ast.dump(select(old),include_attributes=False))

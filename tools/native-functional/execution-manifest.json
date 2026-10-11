@@ -5,7 +5,7 @@
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
-    "tools/native-functional/apps.py": "8fc543a04d718e8d460d7b8b063de2f20c28e25fbcc8a4790187c8a0425bc7a8",
+    "tools/native-functional/apps.py": "94e8806225c09772edc4e7836973d2e73cf9121206e69b082e1a0d7d35703a0f",
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
     "tools/native-functional/evidence.py": "1a98a4db72df769e7dbfe7dc887abe3c7c173b1f8d52d986e3ad4c6d71487dd9",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
@@ -21,17 +21,15 @@
     "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
   },
   "image": {
-    "archive_bytes": 1930013330,
-    "archive_sha256": "07d60353230eccd0b077279cf6195d73dc6a57f61d9cba3c55503776a76be716",
-    "artifact_id": 11664120624,
-    "bytes": 1929826304,
-    "name": "Arctic-Linux-1.2-candidate-38032256030-1-x86_64.iso",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "1695aa2af6ec0da618e87c5387a03f44752121111f0bbe6900699d9549b40994",
-    "run_id": 38032256030,
-    "sha256": "0ab25cc921873ba8750042a6265b6a9e42e669cd78a08d6621c140fd18468609",
-    "source_sha": "bc0521136520daaa221e815822e88ffc44107957"
+    "archive_bytes": 1929415684,
+    "archive_sha256": "1b3267d5b7e0fc3b7980f77a3e72345f6ad3061de47a2a3006fcd2c84cb59dee",
+    "artifact_id": 11604221573,
+    "bytes": 1929230336,
+    "name": "Arctic-Linux-1.2-candidate-37903438836-1-x86_64.iso",
+    "run_id": 37903438836,
+    "sha256": "73a95290df7df8d1b4d47c90767e1e231cb340864ed3b3478dde2176b7bfb9c0",
+    "source_sha": "e2a62bb8945f7fe9975cb862986af4dd2be0873d"
   },
-  "ready": true,
+  "ready": false,
   "release_acceptance": false
 }

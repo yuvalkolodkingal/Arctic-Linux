@@ -35,6 +35,7 @@ FEDORA_BASE = 'docker.io/library/fedora@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b6
 FEDORA_BASE_ID = 'sha256:ccb55df1d2413428166d80b08aa37a4bdcb61a63d09fff6f8abc0d561f311053'
 EROFS_NEVRA = 'erofs-utils-1.9.4-1.fc44.x86_64'
 XZ_NEVRA = 'xz-libs-1:5.8.2-2.fc44.x86_64'
+WLROOTS_LIBRARY_PATH = r'/usr/lib64/libwlroots-0\.20\.so(?:\.[0-9]+)*'
 READER = None
 OUTPUT = None
 ALLOWED = set()
@@ -387,7 +388,7 @@ def download_candidate(image, folder):
 
 
 def extract_selected(filesystem, selected, source, destination, provenance, deadline):
-    require(re.fullmatch(r'/usr/(?:bin/mango|lib/sysimage/rpm|lib64/libwlroots-0\.20\.so(?:\.[0-9]+)+)', source)
+    require((source in ('/usr/bin/mango', '/usr/lib/sysimage/rpm') or re.fullmatch(WLROOTS_LIBRARY_PATH, source))
             and re.fullmatch('[a-z0-9_-]+', destination), 'Unexpected filtered extraction path')
     remaining = deadline - time.monotonic()
     require(remaining > 30, 'Aggregate filtered extraction budget exceeded')
@@ -409,12 +410,27 @@ def rpm_query(root, args):
 def library_record(root):
     rows = rpm_query(root, ['-qa', '--qf', '%{NAME}\t%{VERSION}\t%{ARCH}\n']).splitlines()
     matched = [row.split('\t') for row in rows if re.fullmatch(r'wlroots(?:0\.20)?\t0\.20\.2\tx86_64', row)]
+    observed = [row.split('\t') for row in rows if re.fullmatch(
+        r'wlroots(?:0\.20)?\t[0-9][0-9A-Za-z.+~:_-]{0,79}\tx86_64', row)]
+    diagnostic = {'status': 'package_selection_pending', 'required_version': '0.20.2',
+        'matching_package_count': len(matched), 'observed_package_count': len(observed),
+        'observed_packages': [dict(zip(('name', 'version', 'arch'), row)) for row in observed[:8]]}
+    REPORT['tools']['wlroots_library_selection'] = diagnostic
+    diagnostic['status'] = 'package_rejected' if len(matched) != 1 else 'file_selection_pending'
     require(len(matched) == 1, 'Exactly one required wlroots 0.20.2 RPM is needed for ABI evidence')
     package = matched[0][0]
     files = rpm_query(root, ['-q', package, '--qf', '[%{FILENAMES}\t%{FILEDIGESTS}\t%{FILEMODES}\n]']).splitlines()
     libraries = [row.split('\t') for row in files
-                 if re.fullmatch(r'/usr/lib64/libwlroots-0\.20\.so(?:\.[0-9]+)+\t[0-9a-f]{64}\t[0-9]+', row)
+                 if re.fullmatch(WLROOTS_LIBRARY_PATH + r'\t[0-9a-f]{64}\t[0-9]{1,6}', row)
                  and stat.S_IFMT(int(row.rsplit('\t', 1)[1])) == stat.S_IFREG]
+    candidates = [row.split('\t') for row in files if re.fullmatch(
+        WLROOTS_LIBRARY_PATH, row.split('\t', 1)[0])]
+    diagnostic.update(regular_match_count=len(libraries), candidate_count=len(candidates),
+        candidates=[{'path': row[0][:160],
+            'sha256': row[1] if len(row) == 3 and re.fullmatch('[0-9a-f]{64}', row[1]) else 'invalid',
+            'rpm_file_mode': row[2] if len(row) == 3 and re.fullmatch('[0-9]{1,6}', row[2]) else 'invalid'}
+            for row in candidates[:8]], candidate_samples_omitted=max(0, len(candidates) - 8),
+        status='file_rejected' if len(libraries) != 1 else 'selected_pending_payload_hash_and_ELF_ABI_verification')
     require(len(libraries) == 1, 'Exactly one actual regular wlroots shared library is needed')
     return package, libraries[0][0]
 

@@ -19,7 +19,16 @@ class ColoredTracebackTest(unittest.TestCase):
         raw = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', self.original)
         raw = b''.join(line for line in raw.splitlines(keepends=True) if b'# colored-trace-only # envelope-only' not in line)
         raw = raw.replace(b"exception_class='none', format='none'),\n", b"exception_class='none', format='none')),\n", 1)
-        self.assertEqual(hashlib.sha256(raw).hexdigest(), '6ed895e00eb9f80a964aa50066bb244a3a390aa696c31bbde652301b7638f799')
+        # Preserve the original history digest through exactly three reviewed identity inverses.
+        historical = raw
+        for current, previous in (
+                (b'4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5', b'5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'),
+                (b'515ff75b394b28c9d2d02f0838612cbb86b06e2a24be25580f19554632abe064', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
+                (b'9acbe74ffb8c64b63f9f180246c26ba69ae2ba80c620a1cb8baca8d9fdc4fc79', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
+        ):
+            self.assertEqual(historical.count(current), 1)
+            historical = historical.replace(current, previous)
+        self.assertEqual(hashlib.sha256(historical).hexdigest(), '6ed895e00eb9f80a964aa50066bb244a3a390aa696c31bbde652301b7638f799')
         self.old = types.ModuleType('original_color_classifier'); self.old.__file__ = str(P.ROOT/'tools/performance/run-paired.py')
         exec(compile(raw, self.old.__file__, 'exec'), self.old.__dict__); self.old.ROOT = P.inner.ROOT
         consumer = (P.ROOT/'tools/performance/qualification.py').read_bytes()

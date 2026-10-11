@@ -133,7 +133,7 @@ class HarnessControls(unittest.TestCase):
             original = ['qemu-system-x86_64', '-cpu', cpu, '-netdev', 'user,id=net0,restrict=on']
             env = functions({'dictation_cpu_argv'}, {'E': {'NATIVE_DICTATION_CPU_PROFILE': 'small-v2', 'DICTATION_FIXTURE': '1'}})
             changed = env['dictation_cpu_argv'](original)
-            self.assertEqual(changed, [original[0], '-cpu', 'Westmere-v2,enforce', *original[3:]])
+            self.assertEqual(changed, [original[0], '-cpu', 'Westmere-v2,-spec-ctrl,enforce', *original[3:]])
             self.assertEqual(original[2], cpu)
 
     def test_modern_and_default_cpu_fixture_preserve_original_model(self):
