@@ -1,0 +1,86 @@
+{
+  "conditions": {
+    "acceleration": "kvm",
+    "boot_append": "",
+    "boot_network": "offline",
+    "browser": [
+      "epiphany",
+      "--new-window"
+    ],
+    "collector": "console",
+    "cpu": "max",
+    "disk_scope": "new_install_and_one_new_overlay_diagnostic_only",
+    "firmware": "uefi",
+    "install_network": "offline",
+    "machine": "q35",
+    "memory_mib": 4096,
+    "persistence_seconds": 5,
+    "precondition_seconds": 45,
+    "profile": "profiles/ci/offline.toml",
+    "repeated_launches": 3,
+    "vcpus": 2,
+    "vga": "virtio",
+    "workload": "SourceA326_loopback_role_workload"
+  },
+  "execution_files": {
+    ".github/workflows/browser-startup-diagnostic-20261011.yml": "34f4e0908e20fb3145a98916d2b706d6132211feceb7336de7a78acd1aa18f99",
+    "tools/browser-startup-execution/README.md": "1508321aaf07e46c76966f1386a21354ff4fa1721d878f50b4e24d65863043ed",
+    "tools/browser-startup-execution/guest-wrapper.py": "b94f74a4891fb9736ed463ba428e64e4dd1998e7843b37fa1a2aa981fed5d3a1",
+    "tools/browser-startup-execution/runner.py": "5377ff2430115b37455728837e69e414ecc37598d8f2e6d8f5db78017ceba9f3",
+    "tools/browser-startup-execution/test_runner.py": "37a177f64906f3d562d4080aba142717d4b42bd31d36ebd56cf8878e5f03be6f"
+  },
+  "helper_files": {
+    "causal.py": "28a130d5dea409198e44f463e37f83f0363596c7a9e7303950ec0fce6011a43d",
+    "guest.py": "4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5"
+  },
+  "image": {
+    "archive_bytes": 1929907101,
+    "archive_sha256": "3a8132aa4578fdb62b2aa1e3bf5c340229f1a483678d03ddf2c565fb39afadcd",
+    "artifact_id": 11689591362,
+    "bytes": 1929719808,
+    "name": "Arctic-Linux-1.2-candidate-38102474066-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "3034ea88d4ba1d1e434942f90c42b8057d3667ad2e7f6ee739b895ebdfc86d1d",
+    "run_id": 38102474066,
+    "sha256": "807eaaa64ab8480ec2b18bc8434fd5e37d82c41b73a3e0a6f002c35d152ba54c",
+    "source_sha": "326690f173d4dc4f049f43e046c8380e66825a07"
+  },
+  "observer": {
+    "payload_sha256": "857fce0bcd269c2ceb16d0081ce3312dab994f827b4ed660a88ba09ee0bba4df",
+    "peer_receipt_sha256": "4406662f6084fb944c5c3f971c63ec1c43bb47312d802d83ed4a635269226685",
+    "source_leaf": "0e9df53b9d101ea74acbaaa318c0d35d4330b25d"
+  },
+  "observer_files": {
+    "tools/browser-startup/README.md": "1627e546a900b20b2f52a608053eb910a8bea1dbcd4fd6cd7f76a0c5e948f321",
+    "tools/browser-startup/execution-context.json": "91148b5a7580752ea9c11465ed493ea68c50d4717fdb11e70f9b9adfa2ef1b7c",
+    "tools/browser-startup/profile.py": "a8a59b1279d719c246023455629ea25c290f0f474c9272e13c2d312efac9f696",
+    "tools/browser-startup/test_profile.py": "5e1a7dc5415bad28c3d014ff2dc100e9f1a266943180ec91f7abbffdc660a039",
+    "tools/browser-startup/upstream-source.json": "e7b0fe81ff565e4d4646cc891c27f2b5cc330178a35b1d449e9eb6c6cc069f18"
+  },
+  "performance_acceptance": false,
+  "profile_binding": {
+    "audit_sha256": "8b2b265bce2765cfc43a60605fae714c9bae7f0cd3659d1839df84e58708afa8",
+    "causal_sha256": "28a130d5dea409198e44f463e37f83f0363596c7a9e7303950ec0fce6011a43d",
+    "helper_leaf": "b337c234a5502de38139df960401b1e0b92da1b6",
+    "mango_sha256": "52e6072d93970d48c067b148a696edd5cb85a3504f1f855fdffaf123b8f7a58f",
+    "peer_receipt_sha256": "0cc4b036b0e5dad8b075f09253e1357266a54f146c7ca5d745b3dcf3c7d2e7f6"
+  },
+  "ready": true,
+  "release_acceptance": false,
+  "schema": "arctic-browser-startup-execution-v1",
+  "source_files": {
+    "profiles/ci/offline.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
+    "tools/lib/arcticrepo.py": "7d2a195116824090bff883aab07868f431b69d2b8f282fc9dc4641941efe85b4",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
+    "tools/lib/tour-agent.sh": "94d1b1f1d89fc5b50dfa781fdf7972295be58ecf60a0806b64a48c5e345e609f",
+    "tools/lib/tour.py": "6464a48fe095bfb7d187d47eb03b20c331e96e5c51c5445cc51d7c323cc45d59",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/performance/run-paired.py": "74d42c705751c03ad852fa5ee86111f37e87fd536bbd88fd36953756cb9adb31",
+    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
+  },
+  "upstream_abi_limit": "GLib_2.88.0_header_byte_provenance_unretained_exact_Fedora_2.88.3_runtime_ABI_unmeasured"
+}

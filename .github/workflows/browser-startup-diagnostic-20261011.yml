@@ -1,0 +1,57 @@
+name: Separate exact-image browser startup diagnostic
+
+on:
+  push:
+    branches: [codex/browser-startup-diagnostic-20261011]
+    paths: [.github/browser-startup-diagnostic-20261011.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: arctic-browser-startup-diagnostic-20261011
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 160
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Require reviewed exact-image profile and sole activation child
+        working-directory: execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B tools/browser-startup-execution/runner.py --guard-only
+      - uses: actions/checkout@v4
+        with:
+          ref: 326690f173d4dc4f049f43e046c8380e66825a07
+          path: image-source
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Grant this hosted task access to KVM
+        run: |
+          test -c /dev/kvm
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y acl
+          sudo setfacl -m "u:$(id -u):rw" /dev/kvm
+      - name: Fresh offline install and separate diagnostic overlay boot
+        working-directory: execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: timeout --signal=TERM --kill-after=120s 145m python3 -B tools/browser-startup-execution/runner.py --source-root ../image-source
+      - name: Retain only the screened source-bound diagnostic report
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-browser-startup-diagnostic-final-326690f1
+          path: ${{ runner.temp }}/arctic-browser-startup-screened/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6
+          include-hidden-files: true

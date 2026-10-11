@@ -1,0 +1,20 @@
+{
+  "boot_purpose": "separate-browser-startup-diagnostic",
+  "image": null,
+  "modules": {
+    "causal.py": "3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9",
+    "guest.py": "4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5"
+  },
+  "packages": {
+    "epiphany": "epiphany-1:50.6-1.fc44.x86_64",
+    "epiphany-runtime": "epiphany-runtime-1:50.6-1.fc44.x86_64",
+    "glib2": "glib2-0:2.88.3-1.fc44.x86_64",
+    "gtk4": "gtk4-0:4.22.5-2.fc44.x86_64",
+    "libadwaita": "libadwaita-0:1.9.4-1.fc44.x86_64",
+    "libsecret": "libsecret-0:0.21.8.2-2.fc44.x86_64",
+    "webkitgtk6.0": "webkitgtk6.0-0:2.54.1-1.fc44.x86_64"
+  },
+  "ready": false,
+  "schema": "arctic-browser-startup-diagnostic-v1",
+  "source_sha": "326690f173d4dc4f049f43e046c8380e66825a07"
+}

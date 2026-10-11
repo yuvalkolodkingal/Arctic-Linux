@@ -63,7 +63,7 @@ MAPPING_PROFILES = (
          client_type_offset=0, client_surface_offset=328, xdg_type=0,
          xdg_toplevel_offset=56, xdg_appid_offset=192,
          xwayland_type=2, xwayland_class_offset=144),
-)
+    dict(executable_sha256='52e6072d93970d48c067b148a696edd5cb85a3504f1f855fdffaf123b8f7a58f', native_audit_sha256='8b2b265bce2765cfc43a60605fae714c9bae7f0cd3659d1839df84e58708afa8', function_file_offset=0x43110, function_size=4109, function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc', instruction_file_offset=0x4361e, lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3), client_ext_offset=1584, ipc_function_file_offset=0x6b00, ipc_function_size=1234, ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead', client_type_offset=0, client_surface_offset=328, xdg_type=0, xdg_toplevel_offset=56, xdg_appid_offset=192, xwayland_type=2, xwayland_class_offset=144),)
 EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='zen'),
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
 ROLE_COMMANDS = {'kitty': ('kitty',), 'foot': ('foot',), 'nautilus': ('nautilus',),

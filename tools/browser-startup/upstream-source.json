@@ -1,0 +1,37 @@
+{
+  "commit": "6eaf573ea9838bcaeb33c52388d0b763373f012a",
+  "fedora_downstream_patch_identity_inspected": false,
+  "files": [
+    {
+      "bytes": 14982,
+      "path": "src/ephy-main.c",
+      "sha256": "fadff40557029628c2aed54ca7e1645c241a34795047f841564c6fd920dbaf94",
+      "url": "https://raw.githubusercontent.com/GNOME/epiphany/6eaf573ea9838bcaeb33c52388d0b763373f012a/src/ephy-main.c"
+    },
+    {
+      "bytes": 57824,
+      "path": "src/ephy-shell.c",
+      "sha256": "a09768a74b4ef58a0b06cb7e9b63e9339488935bb5788374977e6e55ce4cf897",
+      "url": "https://raw.githubusercontent.com/GNOME/epiphany/6eaf573ea9838bcaeb33c52388d0b763373f012a/src/ephy-shell.c"
+    },
+    {
+      "bytes": 52186,
+      "path": "embed/ephy-embed-shell.c",
+      "sha256": "a8d58064d79af58a710a730ba095c4800d80e543fff43819d2e620d4272a4ab1",
+      "url": "https://raw.githubusercontent.com/GNOME/epiphany/6eaf573ea9838bcaeb33c52388d0b763373f012a/embed/ephy-embed-shell.c"
+    },
+    {
+      "bytes": 22134,
+      "path": "embed/ephy-embed-prefs.c",
+      "sha256": "8a268918818b9beab5337c36f77584ef957830ba598b991422afb242fff0e7df",
+      "url": "https://raw.githubusercontent.com/GNOME/epiphany/6eaf573ea9838bcaeb33c52388d0b763373f012a/embed/ephy-embed-prefs.c"
+    }
+  ],
+  "measured_startup_cause": null,
+  "official_mirror": "https://github.com/GNOME/epiphany",
+  "product_fix": null,
+  "project": "GNOME/epiphany",
+  "release": "50.6",
+  "tag_equals_pinned_commit": true,
+  "tag_object": "288a17f15afc022a8abe84c905ed710951dce4c0"
+}

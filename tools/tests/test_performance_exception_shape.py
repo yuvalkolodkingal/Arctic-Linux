@@ -26,12 +26,14 @@ class ExceptionShapeTest(unittest.TestCase):
         added = b"            last_observer_phase='unavailable',\n            # Class tokens are unauthenticated shape observations, not causes.\n            exception_shape=dict(reason='not_observed', count='unavailable',\n                exception_class='none', format='none')),\n"
         self.assertEqual(raw.count(added), 1)
         raw = raw.replace(added, b"            last_observer_phase='unavailable'),\n")
-        # Preserve the original history digest through exactly three reviewed identity inverses.
+        # Preserve the original history digest through exactly five reviewed identity inverses.
         historical = raw
         for current, previous in (
                 (b'4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5', b'5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'),
-                (b'515ff75b394b28c9d2d02f0838612cbb86b06e2a24be25580f19554632abe064', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
-                (b'9acbe74ffb8c64b63f9f180246c26ba69ae2ba80c620a1cb8baca8d9fdc4fc79', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
+                (b'd065d9e96e7df5805bdec556fc6898cc9474888e1121bfa079ea6228a56ff286', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
+                (b'3a60257552fef0f0e5be8a136c4002e8328459f50937f0bb2f522edbc6f636f8', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
+                (b'28a130d5dea409198e44f463e37f83f0363596c7a9e7303950ec0fce6011a43d', b'3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9'),
+                (b'e8dd895219f0b066275f148713459fbb35e61e7509ea6196fe57537c5e30bef7', b'4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9'),
         ):
             self.assertEqual(historical.count(current), 1)
             historical = historical.replace(current, previous)
