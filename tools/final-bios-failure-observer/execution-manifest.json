@@ -1,0 +1,4939 @@
+{
+  "accepted_bios_source": "3dd66b674f2df266c79de065899f36157eed2f91",
+  "accepted_bios_source_peer_sha256": "c6beab632ebc9d29af4d0bba6a24281d43457185c66c99fca0d39bd242388afc",
+  "allowed_sites": [
+    {
+      "fixed_assertion_label": "return-site-42",
+      "function": "dictation_host_stage",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 42,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-53",
+      "function": "dictation_qemu_startup",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 53,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-55",
+      "function": "dictation_qemu_startup",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 55,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-73",
+      "function": "dictation_qemu_startup",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 73,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-79",
+      "function": "dictation_qemu_startup",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 79,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-89",
+      "function": "dictation_qemu_startup",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 89,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-100",
+      "function": "dictation_qemu_startup",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 100,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-105",
+      "function": "dictation_qemu_startup",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 105,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-148",
+      "function": "dictation_acquire_vm",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 148,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-158",
+      "function": "dictation_install_wait_vm_stage",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 158,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-172",
+      "function": "dictation_launch_desktop",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 172,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-177",
+      "function": "dictation_launch_desktop",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 177,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-182",
+      "function": "dictation_launch_desktop",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 182,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-191",
+      "function": "dictation_launch_desktop",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 191,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-229",
+      "function": "physical_poll",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 229,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-231",
+      "function": "physical_poll",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 231,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "physical serial bound exceeded",
+      "function": "physical_poll",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 233,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "physical unfinished line bound exceeded",
+      "function": "physical_poll",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 237,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-239",
+      "function": "physical_poll",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 239,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-250",
+      "function": "physical_poll",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 250,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-259",
+      "function": "dictation_indicator_poll",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 259,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-267",
+      "function": "dictation_indicator_poll",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 267,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Duplicate dictation indicator request",
+      "function": "dictation_indicator_poll",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 270,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Invalid dictation indicator request",
+      "function": "dictation_indicator_poll",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 278,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Missing/oversized dictation indicator capture",
+      "function": "dictation_indicator_poll",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 281,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Invalid dictation indicator PNG",
+      "function": "dictation_indicator_poll",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 284,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-330",
+      "function": "qemu_argv",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 330,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-334",
+      "function": "dictation_network_argv",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 334,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-340",
+      "function": "dictation_network_argv",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 340,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-345",
+      "function": "dictation_cpu_argv",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 345,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Invalid dictation CPU fixture",
+      "function": "dictation_cpu_argv",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 347,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-356",
+      "function": "dictation_cpu_argv",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 356,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-360",
+      "function": "native_taskbar_argv",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 360,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Invalid private taskbar display fixture",
+      "function": "native_taskbar_argv",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 365,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Invalid original native bulk fixture",
+      "function": "native_taskbar_argv",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 381,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-385",
+      "function": "native_taskbar_argv",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 385,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Taskbar VM failed to continue after UIInfo",
+      "function": "enable_taskbar_display",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 394,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "Taskbar VM did not run after UIInfo",
+      "function": "enable_taskbar_display",
+      "site_kind": "raise",
+      "source": "install-driver",
+      "source_line": 397,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-402",
+      "function": "record_native_stop",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 402,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-421",
+      "function": "close_taskbar_vm",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 421,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-451",
+      "function": "wait_menu",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 451,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-457",
+      "function": "wait_menu",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 457,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-482",
+      "function": "serial",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 482,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-code-1-site-535",
+      "function": "stage_install",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 535,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-code-90-site-553",
+      "function": "stage_install",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 553,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-code-91-site-573",
+      "function": "stage_install",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 573,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-code-93-site-580",
+      "function": "stage_install",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 580,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-code-94-site-583",
+      "function": "stage_install",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 583,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-585",
+      "function": "stage_install",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 585,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-603",
+      "function": "wait_for",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 603,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-site-605",
+      "function": "wait_for",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 605,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "ok-false-site-634",
+      "function": "stage_boot",
+      "site_kind": "false-flag",
+      "source": "install-driver",
+      "source_line": 634,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "ok-false-site-671",
+      "function": "stage_boot",
+      "site_kind": "false-flag",
+      "source": "install-driver",
+      "source_line": 671,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "return-code-1-site-746",
+      "function": "stage_boot",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 746,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "ok-false-site-783",
+      "function": "stage_boot",
+      "site_kind": "false-flag",
+      "source": "install-driver",
+      "source_line": 783,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "ok-false-site-786",
+      "function": "stage_boot",
+      "site_kind": "false-flag",
+      "source": "install-driver",
+      "source_line": 786,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "ok-false-site-788",
+      "function": "stage_boot",
+      "site_kind": "false-flag",
+      "source": "install-driver",
+      "source_line": 788,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "ok-false-site-793",
+      "function": "stage_boot",
+      "site_kind": "false-flag",
+      "source": "install-driver",
+      "source_line": 793,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "nonzero-return-code-1-site-794",
+      "function": "stage_boot",
+      "site_kind": "return",
+      "source": "install-driver",
+      "source_line": 794,
+      "source_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6"
+    },
+    {
+      "fixed_assertion_label": "no QMP socket",
+      "function": "VM.__init__",
+      "site_kind": "raise",
+      "source": "vmtest",
+      "source_line": 54,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-51",
+      "function": "VM.__init__",
+      "site_kind": "raise",
+      "source": "vmtest",
+      "source_line": 51,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-60",
+      "function": "VM.alive",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 60,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "QMP closed",
+      "function": "VM.cmd",
+      "site_kind": "raise",
+      "source": "vmtest",
+      "source_line": 72,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-75",
+      "function": "VM.cmd",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 75,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-77",
+      "function": "VM.cmd",
+      "site_kind": "raise",
+      "source": "vmtest",
+      "source_line": 77,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-83",
+      "function": "VM.shot",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 83,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-91",
+      "function": "VM.shot",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 91,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-92",
+      "function": "VM.shot",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 92,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-88",
+      "function": "VM.shot",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 88,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-132",
+      "function": "VM.wait_exit",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 132,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-134",
+      "function": "VM.wait_exit",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 134,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-148",
+      "function": "chord_for",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 148,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-150",
+      "function": "chord_for",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 150,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-152",
+      "function": "chord_for",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 152,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-153",
+      "function": "chord_for",
+      "site_kind": "raise",
+      "source": "vmtest",
+      "source_line": 153,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-162",
+      "function": "serial_has",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 162,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-164",
+      "function": "serial_has",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 164,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-179",
+      "function": "serial_value",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 179,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-173",
+      "function": "serial_value",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 173,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-189",
+      "function": "_is_amber",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 189,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-211",
+      "function": "amber_runs",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 211,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-224",
+      "function": "_login_controls",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 224,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-269",
+      "function": "_login_controls",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 269,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-270",
+      "function": "_login_controls",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 270,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-285",
+      "function": "classify",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 285,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-291",
+      "function": "classify",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 291,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-293",
+      "function": "classify",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 293,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-295",
+      "function": "classify",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 295,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-296",
+      "function": "classify",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 296,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-283",
+      "function": "classify",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 283,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-304",
+      "function": "looks_like_boot_menu",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 304,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-320",
+      "function": "looks_like_boot_menu",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 320,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-331",
+      "function": "changed_fraction",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 331,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-336",
+      "function": "changed_fraction",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 336,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "return-site-329",
+      "function": "changed_fraction",
+      "site_kind": "return",
+      "source": "vmtest",
+      "source_line": 329,
+      "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+    },
+    {
+      "fixed_assertion_label": "raise-site-17",
+      "function": "require",
+      "site_kind": "raise",
+      "source": "bios-probe",
+      "source_line": 17,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-26",
+      "function": "strict_json",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 26,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "duplicate-json-field",
+      "function": "strict_json.<locals>.fields",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 24,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-25",
+      "function": "strict_json.<locals>.fields",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 25,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-26",
+      "function": "strict_json.<locals>.<lambda>",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 26,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-26",
+      "function": "strict_json.<locals>.<lambda>.<locals>.<genexpr>",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 26,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "context-identity",
+      "function": "context",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 30,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "context-pins",
+      "function": "context",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 31,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-32",
+      "function": "context",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 32,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "context-pins",
+      "function": "context.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 31,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "protected-record",
+      "function": "protected",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 39,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "protected-record-changed",
+      "function": "protected",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 41,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-42",
+      "function": "protected",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 42,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "command-outcome-or-bound",
+      "function": "command",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 48,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-49",
+      "function": "command",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 49,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-52",
+      "function": "text",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 52,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "not-legacy-bios",
+      "function": "firmware",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 56,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "boot-medium",
+      "function": "firmware",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 58,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "boot-id",
+      "function": "firmware",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 59,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-60",
+      "function": "firmware",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 60,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "encrypted-btrfs-root",
+      "function": "encrypted_root",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 65,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "owned-luks-backing-device",
+      "function": "encrypted_root",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 67,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "foreign-root-partition",
+      "function": "encrypted_root",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 69,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "foreign-root-driver",
+      "function": "encrypted_root",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 70,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "luks-uuid",
+      "function": "encrypted_root",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 71,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-72",
+      "function": "encrypted_root",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 72,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-not-queued",
+      "function": "queue_predicate",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 76,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-pending-proof",
+      "function": "queue_predicate",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 77,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-download-disclosure",
+      "function": "queue_predicate",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 78,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-79",
+      "function": "queue_predicate",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 79,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-outside-response",
+      "function": "offline_queue",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 84,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-payload-present",
+      "function": "offline_queue",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 86,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "dictation-status-bound",
+      "function": "offline_queue",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 89,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "dictation-status-outcome",
+      "function": "offline_queue",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 91,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-false-ready",
+      "function": "offline_queue",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 92,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-queue-deadline",
+      "function": "offline_queue",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 94,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-97",
+      "function": "offline_queue",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 97,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "offline-payload-present",
+      "function": "offline_queue.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 86,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "disposable-root",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 101,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "selinux-enforcing",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 105,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "actual-desktop-user",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 108,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "bios-check-failed",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 117,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "read-only-source-cd",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-probe",
+      "source_line": 118,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-code-0-site-122",
+      "function": "main",
+      "site_kind": "return",
+      "source": "bios-probe",
+      "source_line": 122,
+      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+    },
+    {
+      "fixed_assertion_label": "return-site-23",
+      "function": "recover_prepared_image",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 23,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Prepared image recovery intent differs",
+      "function": "recover_prepared_image",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 25,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Prepared image recovery inventory bound",
+      "function": "recover_prepared_image",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 31,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Prepared image recovery ambiguous",
+      "function": "recover_prepared_image",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 33,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-34",
+      "function": "recover_prepared_image",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 34,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Prepared image recovery owner differs",
+      "function": "recover_prepared_image",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 37,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-41",
+      "function": "recover_prepared_image",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 41,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Prepared image recovery ambiguous",
+      "function": "recover_prepared_image.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 33,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-46",
+      "function": "remove_owned_container",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 46,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Container cleanup inventory unavailable",
+      "function": "remove_owned_container",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 47,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Foreign container cleanup refused",
+      "function": "remove_owned_container",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 49,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Foreign container cleanup refused",
+      "function": "remove_owned_container.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 49,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Owned BIOS host invocation interrupted",
+      "function": "execute",
+      "site_kind": "raise",
+      "source": "bios-host",
+      "source_line": 69,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Owned BIOS host invocation interrupted",
+      "function": "execute",
+      "site_kind": "raise",
+      "source": "bios-host",
+      "source_line": 72,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "BIOS host invocation deadline/output bound",
+      "function": "execute",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 75,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "BIOS host invocation failed",
+      "function": "execute",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 79,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Owned BIOS host invocation interrupted",
+      "function": "execute",
+      "site_kind": "raise",
+      "source": "bios-host",
+      "source_line": 112,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-119",
+      "function": "argv",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 119,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original BIOS report identity differs",
+      "function": "validate_report",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 123,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original BIOS boot proof differs",
+      "function": "validate_report",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 125,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original BIOS security proof differs",
+      "function": "validate_report",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 126,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original audit proof differs",
+      "function": "validate_report",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 127,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original encrypted target root differs",
+      "function": "validate_report",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 129,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original offline queue proof differs",
+      "function": "validate_report",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 130,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-131",
+      "function": "validate_report",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 131,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "BIOS original UART bound",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 135,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Whole original BIOS UART privacy rejected",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 136,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "BIOS report line bound",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 140,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Missing or duplicate original BIOS report",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 141,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original guest failed",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 144,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original live/install completion missing",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 147,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original installation order differs",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 148,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original live offline restriction unproven",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 149,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-153",
+      "function": "records",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 153,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original installed completion missing",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 151,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original installed collection order differs",
+      "function": "records",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 152,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original live offline restriction unproven",
+      "function": "records.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 149,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original PNG signature/bound",
+      "function": "original_png",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 157,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original PNG chunk truncated",
+      "function": "original_png",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 160,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original PNG chunk type/bound",
+      "function": "original_png",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 162,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original PNG CRC differs",
+      "function": "original_png",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 163,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original PNG end/trailing bytes differ",
+      "function": "original_png",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 166,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original PNG structure differs",
+      "function": "original_png",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 167,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original screenshot geometry differs",
+      "function": "original_png",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 170,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-171",
+      "function": "original_png",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 171,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Installed boot reused live guest",
+      "function": "original_evidence",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 178,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Original evidence aggregate bound",
+      "function": "original_evidence",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 182,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-183",
+      "function": "original_evidence",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 183,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Finite original publication inventory differs",
+      "function": "publish",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 188,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Publication output already exists",
+      "function": "publish",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 190,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Finite original publication inventory differs",
+      "function": "publish.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 188,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-201",
+      "function": "harness_environment",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 201,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Real hosted KVM required",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 210,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "BIOS output must be unused",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 211,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Prepared tool image identity differs",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 232,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Prepared image owner differs",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 234,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Host BIOS state privacy rejected",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 268,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "UART archive bound",
+      "function": "main",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 274,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "return-site-277",
+      "function": "main",
+      "site_kind": "return",
+      "source": "bios-host",
+      "source_line": 277,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "Owned BIOS main invocation interrupted",
+      "function": "main.<locals>.check_main_signal",
+      "site_kind": "require",
+      "source": "bios-host",
+      "source_line": 223,
+      "source_sha256": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe"
+    },
+    {
+      "fixed_assertion_label": "raise-site-26",
+      "function": "require",
+      "site_kind": "raise",
+      "source": "bios-common",
+      "source_line": 26,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-29",
+      "function": "digest",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 29,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-32",
+      "function": "git",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 32,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Loaded pinned source bytes differ",
+      "function": "load",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 36,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-39",
+      "function": "load",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 39,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-49",
+      "function": "strict_json",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 49,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Duplicate JSON field",
+      "function": "strict_json.<locals>.pairs",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 46,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-48",
+      "function": "strict_json.<locals>.pairs",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 48,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-49",
+      "function": "strict_json.<locals>.<lambda>",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 49,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-49",
+      "function": "strict_json.<locals>.<lambda>.<locals>.<genexpr>",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 49,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Missing/nonregular/oversized owned file",
+      "function": "regular",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 56,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Acquired original changed during read",
+      "function": "regular",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 60,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-62",
+      "function": "regular",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 62,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Requires owned first hosted BIOS push",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 67,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Requires sole first marker ADD",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 74,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Preparation base differs",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 80,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Preparation scope differs",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 82,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Preparation modes/change kinds differ",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 83,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Preparation regular mode/type differs",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 89,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Original CI regular mode/type differs",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 95,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Preparation raw modes/change kinds differ",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 98,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "CI differs beyond the one owned branch exclusion",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 102,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Tracked checkout dirty",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 105,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Image source checkout differs",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 107,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Pinned execution/source bytes differ",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 111,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Producer job inventory incomplete",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 118,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Actual ISO bytes differ",
+      "function": "guard",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 122,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-124",
+      "function": "guard",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 124,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "Pinned source must be regular",
+      "function": "digest_file",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 127,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-131",
+      "function": "digest_file",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 131,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS manifest fields differ",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 138,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS firmware/network/acceptance differs",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 139,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS budgets differ",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 140,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS lane remains disabled",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 141,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS exact final F10 differs",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 144,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS source inventories differ",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 145,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS unsafe source pin",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 147,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS accepted security binding absent",
+      "function": "manifest",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 149,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "return-site-150",
+      "function": "manifest",
+      "site_kind": "return",
+      "source": "bios-common",
+      "source_line": 150,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS exact final F10 differs",
+      "function": "manifest.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 144,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS unsafe source pin",
+      "function": "manifest.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 147,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "BIOS accepted security binding absent",
+      "function": "manifest.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "bios-common",
+      "source_line": 149,
+      "source_sha256": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07"
+    },
+    {
+      "fixed_assertion_label": "raise-site-44",
+      "function": "require",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 44,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "command output exceeded audit bound",
+      "function": "execute",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 58,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-60",
+      "function": "execute",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 60,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-63",
+      "function": "execute",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 63,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-71",
+      "function": "digest",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 71,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid or symlink fixture root",
+      "function": "tree_hashes",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 81,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "non-regular extracted archive member",
+      "function": "tree_hashes",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 85,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "empty fixture tree cannot pass",
+      "function": "tree_hashes",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 91,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-92",
+      "function": "tree_hashes",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 92,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-97",
+      "function": "verify_tree",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 97,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-98",
+      "function": "verify_tree",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 98,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "missing reliable window PID",
+      "function": "identity",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 102,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "window process has a different owner",
+      "function": "identity",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 104,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "window process is dead",
+      "function": "identity",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 106,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-107",
+      "function": "identity",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 107,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-119",
+      "function": "process_snapshot",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 119,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "window is not visibly mapped",
+      "function": "window_proof",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 123,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "missing Wayland/Xwayland evidence",
+      "function": "window_proof",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 125,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "expected a native Wayland window",
+      "function": "window_proof",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 127,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "window belongs to a pre-existing process",
+      "function": "window_proof",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 129,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "mapped PID runs a different executable",
+      "function": "window_proof",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 130,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "mapped PID has not executed the native ELF",
+      "function": "window_proof",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 133,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-134",
+      "function": "window_proof",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 134,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "kernel audit status unobserved",
+      "function": "parse_audit_status",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 139,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "missing audit loss counter",
+      "function": "parse_audit_status",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 140,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-141",
+      "function": "parse_audit_status",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 141,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "SELinux must remain Enforcing",
+      "function": "verify_security",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 145,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "kernel audit mode changed during checks",
+      "function": "verify_security",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 146,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "audit records were lost during checks",
+      "function": "verify_security",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 147,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-149",
+      "function": "verify_security",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 149,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-150",
+      "function": "verify_security",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 150,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "journal cursor unavailable",
+      "function": "SecurityInterval.__init__",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 160,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-170",
+      "function": "SecurityInterval.state",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 170,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-182",
+      "function": "SecurityInterval.finish",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 182,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "audit interval exceeded evidence bound",
+      "function": "SecurityInterval.finish",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 184,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "new audit log exceeded evidence bound",
+      "function": "SecurityInterval.finish",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 190,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-192",
+      "function": "SecurityInterval.finish",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 192,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "ambiguous Wayland session",
+      "function": "discover_desktop",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 209,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "ambiguous or absent actual Mango IPC signature",
+      "function": "discover_desktop",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 221,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "missing desktop PATH/XDG_DATA_DIRS",
+      "function": "discover_desktop",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 226,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "requires exactly one non-root Mango desktop",
+      "function": "discover_desktop",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 234,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-235",
+      "function": "discover_desktop",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 235,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "explicit disposable guest authorization required",
+      "function": "guest_guard",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 239,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "requires root in a disposable QEMU/KVM guest",
+      "function": "guest_guard",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 240,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "SELinux must already be Enforcing",
+      "function": "guest_guard",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 242,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "stage differs from actual boot mode",
+      "function": "guest_guard",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 244,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-253",
+      "function": "visual_reference_frame",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 253,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-253",
+      "function": "visual_reference_frame.<locals>.<genexpr>",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 253,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "actual visual capture client is unfocused/unmapped or has invalid identity",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 259,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid actual visual monitor name",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 264,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid actual visual monitor collection",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 265,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "exact player monitor is unobserved/ambiguous",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 268,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-271",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 271,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid/unbounded actual monitor coordinates/dimensions",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 274,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "nonintegral/unobserved client geometry",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 279,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned player client is clipped/too small/unbounded",
+      "function": "visual_capture_geometry",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 281,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-284",
+      "function": "visual_capture_geometry",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 284,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid/unbounded actual monitor coordinates/dimensions",
+      "function": "visual_capture_geometry.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 274,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "nonintegral/unobserved client geometry",
+      "function": "visual_capture_geometry.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 279,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "unbounded/malformed actual RGB client frame",
+      "function": "evaluate_reference_rgb",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 294,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "visual reference RGB format differs",
+      "function": "evaluate_reference_rgb",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 297,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "decoded reference differs from the exact diagnostic palette",
+      "function": "evaluate_reference_rgb",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 303,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "visual ROI candidates exceed bound",
+      "function": "evaluate_reference_rgb",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 322,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "visual search exceeds bound",
+      "function": "evaluate_reference_rgb",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 330,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-348",
+      "function": "evaluate_reference_rgb",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 348,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-355",
+      "function": "evaluate_reference_rgb",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 355,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "decoded reference differs from the exact diagnostic palette",
+      "function": "evaluate_reference_rgb.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 303,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "decoded reference differs from the exact diagnostic palette",
+      "function": "evaluate_reference_rgb.<locals>.<genexpr>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 303,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-305",
+      "function": "evaluate_reference_rgb.<locals>.close",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 305,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-305",
+      "function": "evaluate_reference_rgb.<locals>.close.<locals>.<genexpr>",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 305,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-386",
+      "function": "NativeProtocolProjection.number",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 386,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-388",
+      "function": "NativeProtocolProjection.number",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 388,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-389",
+      "function": "NativeProtocolProjection.number",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 389,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-393",
+      "function": "NativeProtocolProjection.object",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 393,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-396",
+      "function": "NativeProtocolProjection.object",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 396,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-397",
+      "function": "NativeProtocolProjection.object",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 397,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-400",
+      "function": "NativeProtocolProjection.object",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 400,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-399",
+      "function": "NativeProtocolProjection.object",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 399,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-405",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 405,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-406",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 406,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-413",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 413,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-428",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 428,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-429",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 429,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-431",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 431,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-434",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 434,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-436",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 436,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-440",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 440,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-443",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 443,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-447",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 447,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-449",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 449,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-450",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 450,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-452",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 452,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-456",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 456,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-460",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 460,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-462",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 462,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-465",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 465,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-466",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 466,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-470",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 470,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-472",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 472,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-476",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 476,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-479",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 479,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-484",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 484,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-486",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 486,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-487",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 487,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-491",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 491,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-495",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 495,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-497",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 497,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-503",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 503,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-505",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 505,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-508",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 508,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-510",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 510,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-511",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 511,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-515",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 515,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-518",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 518,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-522",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 522,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-525",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 525,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-529",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 529,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-532",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 532,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-533",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 533,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-537",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 537,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-540",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 540,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-542",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 542,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-548",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 548,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-553",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 553,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-556",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 556,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-559",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 559,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-561",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 561,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-410",
+      "function": "NativeProtocolProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 410,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-569",
+      "function": "NativeProtocolProjection.snapshot",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 569,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-589",
+      "function": "NativeRendererProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 589,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-592",
+      "function": "NativeRendererProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 592,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-593",
+      "function": "NativeRendererProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 593,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-596",
+      "function": "NativeRendererProjection.feed",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 596,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-600",
+      "function": "NativeRendererProjection.snapshot",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 600,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "private protocol directory identity differs",
+      "function": "NativeProtocolDrain.__init__",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 626,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "private protocol file identity differs",
+      "function": "NativeProtocolDrain.__init__",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 631,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned protocol drainage unavailable",
+      "function": "NativeProtocolDrain.start",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 650,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-668",
+      "function": "NativeProtocolDrain._drain",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 668,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-687",
+      "function": "NativeProtocolDrain.bind",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 687,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-688",
+      "function": "NativeProtocolDrain.bind",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 688,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-690",
+      "function": "NativeProtocolDrain.bind",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 690,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-693",
+      "function": "NativeProtocolDrain.bind",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 693,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-694",
+      "function": "NativeProtocolDrain.bind",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 694,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-718",
+      "function": "NativeProtocolDrain.snapshot",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 718,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid desktop prefix",
+      "function": "Smoke.__init__",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 729,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "apps must run as the desktop user",
+      "function": "Smoke.__init__",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 733,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-750",
+      "function": "Smoke.cmd",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 750,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-759",
+      "function": "Smoke.gate",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 759,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-764",
+      "function": "Smoke.gate",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 764,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "native protocol diagnostic player selection differs",
+      "function": "Smoke.launch_protocol_player",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 776,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-792",
+      "function": "Smoke.launch_protocol_player",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 792,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-810",
+      "function": "Smoke.native_protocol_diagnostic",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 810,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-816",
+      "function": "Smoke.native_protocol_diagnostic",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 816,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-817",
+      "function": "Smoke.native_protocol_diagnostic",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 817,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-830",
+      "function": "Smoke.native_protocol_diagnostic",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 830,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-834",
+      "function": "Smoke.native_protocol_diagnostic",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 834,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled trials require the failed primary oracle",
+      "function": "Smoke.controlled_renderer_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 864,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled fixture identity changed",
+      "function": "Smoke.controlled_renderer_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 865,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled primary player inventory differs",
+      "function": "Smoke.controlled_renderer_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 871,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trials require the failed primary oracle",
+      "function": "Smoke.controlled_controls_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 919,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial fixture identity changed",
+      "function": "Smoke.controlled_controls_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 920,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial primary player inventory differs",
+      "function": "Smoke.controlled_controls_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 924,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial player is not a new process",
+      "function": "Smoke.controlled_controls_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 935,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial owned retirement incomplete",
+      "function": "Smoke.controlled_controls_trials",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 949,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial player is not a new process",
+      "function": "Smoke.controlled_controls_trials.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 935,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "system role file unavailable",
+      "function": "Smoke.setup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 957,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-967",
+      "function": "Smoke.setup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 967,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "unexpected config symlink",
+      "function": "Smoke.setup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 973,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-984",
+      "function": "Smoke.setup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 984,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-986",
+      "function": "Smoke.setup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 986,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "close pre-existing test apps in this disposable guest before running",
+      "function": "Smoke.setup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 989,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-995",
+      "function": "Smoke.setup",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 995,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-967",
+      "function": "Smoke.setup.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 967,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "close pre-existing test apps in this disposable guest before running",
+      "function": "Smoke.setup.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 989,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1004",
+      "function": "Smoke.write",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1004,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid compositor client data",
+      "function": "Smoke.clients",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1027,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "duplicate compositor client ID",
+      "function": "Smoke.clients",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1028,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1035",
+      "function": "Smoke.clients",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1035,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1044",
+      "function": "Smoke.wait",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1044,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "raise-site-1047",
+      "function": "Smoke.wait",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 1047,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-1059",
+      "function": "Smoke.diagnostic",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1059,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1060",
+      "function": "Smoke.diagnostic",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1060,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "navigation fixture is outside owned guest evidence",
+      "function": "Smoke.navigate",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1063,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "PATH resolves a different/non-native app",
+      "function": "Smoke.fresh_window",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1075,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1090",
+      "function": "Smoke.fresh_window",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1090,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "ambiguous newly mapped app",
+      "function": "Smoke.fresh_window.<locals>.found",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1083,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1085",
+      "function": "Smoke.fresh_window.<locals>.found",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1085,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1086",
+      "function": "Smoke.fresh_window.<locals>.found",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1086,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "GUI PID exited or was recycled",
+      "function": "Smoke.alive",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1094,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "proved GUI is no longer mapped",
+      "function": "Smoke.alive",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1097,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1099",
+      "function": "Smoke.alive",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1099,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "GUI PID exited or was recycled",
+      "function": "Smoke.alive.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1094,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "physical route requires exact owned native PCManFM",
+      "function": "Smoke.physical_pcmanfm",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1103,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "compositor did not acknowledge owned physical focus",
+      "function": "Smoke.physical_pcmanfm",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1106,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "physical route count/action differs",
+      "function": "Smoke.physical_pcmanfm",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1109,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "physical path is not an exact bounded ASCII fixture",
+      "function": "Smoke.physical_pcmanfm",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1111,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "physical shortcut cannot carry text",
+      "function": "Smoke.physical_pcmanfm",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1113,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "fresh physical owned native focus changed",
+      "function": "Smoke.physical_pcmanfm",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1115,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "unsupported PCManFM physical shortcut",
+      "function": "Smoke.keys",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1127,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1128",
+      "function": "Smoke.keys",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1128,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "compositor did not acknowledge owned focus target",
+      "function": "Smoke.keys",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1132,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "physical save requires owned native FeatherPad",
+      "function": "Smoke.physical_editor_save",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1141,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "physical save requires fresh focused exact fixture editor",
+      "function": "Smoke.physical_editor_save",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1144,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "only one exact editor-save request",
+      "function": "Smoke.physical_editor_save",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1148,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned native player fullscreen only",
+      "function": "Smoke.player_fullscreen",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1161,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "fullscreen must change exactly once",
+      "function": "Smoke.player_fullscreen",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1166,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned fullscreen action failed",
+      "function": "Smoke.player_fullscreen",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1170,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned player identity changed during fullscreen",
+      "function": "Smoke.player_fullscreen",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1175,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "fullscreen did not provide the complete observed monitor viewport",
+      "function": "Smoke.player_fullscreen",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1178,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1187",
+      "function": "Smoke.player_fullscreen",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1187,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned player identity changed during fullscreen",
+      "function": "Smoke.player_fullscreen.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1175,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned fullscreen capture identity/geometry changed",
+      "function": "Smoke.fullscreen_capture_pair",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1190,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned fullscreen capture identity/geometry changed",
+      "function": "Smoke.fullscreen_capture_pair.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1190,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "empty screenshot",
+      "function": "Smoke.screenshot",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1202,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1203",
+      "function": "Smoke.screenshot",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1203,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "7zip helper not available",
+      "function": "Smoke.archives",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1217,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "incorrect password accepted",
+      "function": "Smoke.archives",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1232,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "incorrect password leaked nonempty plaintext",
+      "function": "Smoke.archives",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1234,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "single-file decompression mismatch",
+      "function": "Smoke.archives",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1250,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1256",
+      "function": "Smoke.archives",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1256,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "incorrect password leaked nonempty plaintext",
+      "function": "Smoke.archives.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1234,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "Foot system terminal definition missing",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1264,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "copied actual libfm terminal choice is not Foot",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1269,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "terminal role did not execute literal supplied arguments",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1277,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "file-manager terminal did not execute in the current folder as the desktop user",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1294,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "ambiguous file-manager text fixture",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1298,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "ZIP content gate did not provide its fixture",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1312,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "ambiguous file-manager ZIP fixture",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1315,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1319",
+      "function": "Smoke.gui_files_editor_terminal",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1319,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "Celluloid PID has no mapped libmpv",
+      "function": "Smoke.media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1351,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1364",
+      "function": "Smoke.media",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1364,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1335",
+      "function": "Smoke.media.<locals>.ready",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1335,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1339",
+      "function": "Smoke.media.<locals>.ready",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1339,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference decoded RGB frame size differs",
+      "function": "Smoke.visual_fixture",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1375,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1376",
+      "function": "Smoke.visual_fixture",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1376,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls require Celluloid",
+      "function": "Smoke.launch_reference_player",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1381,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1384",
+      "function": "Smoke.launch_reference_player",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1384,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference settings backend already selected",
+      "function": "Smoke.launch_reference_player",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1387,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference settings backend already selected",
+      "function": "Smoke.launch_reference_player.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1387,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference settings config is absent",
+      "function": "Smoke.reference_settings_config",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1399,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference settings config is not exact private owned directory",
+      "function": "Smoke.reference_settings_config",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1403,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1406",
+      "function": "Smoke.reference_settings_config",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1406,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls require owned native Celluloid",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1409,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls require fresh focused fullscreen player",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1412,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference settings process owner differs",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1416,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference settings environment exceeded bound",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1418,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference settings process/config binding differs",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1420,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls initial state is not boolean",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1426,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls player identity/focus/geometry changed",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1434,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1443",
+      "function": "Smoke.hide_reference_controls",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1443,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls readback is not boolean",
+      "function": "Smoke.hide_reference_controls.<locals>.hidden",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1430,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1431",
+      "function": "Smoke.hide_reference_controls.<locals>.hidden",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1431,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls player identity/focus/geometry changed",
+      "function": "Smoke.hide_reference_controls.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1434,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "exact visual reference file/GUI renderer state differs",
+      "function": "Smoke.visual_media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1463,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "visual player focus failed",
+      "function": "Smoke.visual_media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1468,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "visual capture client identity differs from owned proof",
+      "function": "Smoke.visual_media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1477,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid reference capture PNG",
+      "function": "Smoke.visual_media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1486,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "actual screencopy/monitor dimensions differ",
+      "function": "Smoke.visual_media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1488,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned player identity/geometry/focus or monitor changed across capture",
+      "function": "Smoke.visual_media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1495,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-1522",
+      "function": "Smoke.visual_media",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1522,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1523",
+      "function": "Smoke.visual_media",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1523,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1456",
+      "function": "Smoke.visual_media.<locals>.ready_reference",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1456,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1458",
+      "function": "Smoke.visual_media.<locals>.ready_reference",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1458,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "owned player identity/geometry/focus or monitor changed across capture",
+      "function": "Smoke.visual_media.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1495,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "generated fixture duration/format mismatch",
+      "function": "Smoke.media_fixture",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1539,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "FFV1/PCM decoder content differs from generated source",
+      "function": "Smoke.media_fixture",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1541,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1545",
+      "function": "Smoke.media_fixture",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1545,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "portal did not expose a positive interface version",
+      "function": "Smoke.desktop_services",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1553,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "unexpected accessibility bus address",
+      "function": "Smoke.desktop_services",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1560,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1565",
+      "function": "Smoke.desktop_services",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1565,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-1604",
+      "function": "Smoke.cleanup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1604,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-1605",
+      "function": "Smoke.cleanup",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1605,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1606",
+      "function": "Smoke.cleanup",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1606,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1585",
+      "function": "Smoke.cleanup.<locals>.retired",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1585,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1587",
+      "function": "Smoke.cleanup.<locals>.retired",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1587,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1585",
+      "function": "Smoke.cleanup.<locals>.retired.<locals>.<genexpr>",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1585,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1612",
+      "function": "renderer_trial_error",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1612,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer receipt exceeded bound",
+      "function": "write_renderer_receipt",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1618,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled receipt directory owner differs",
+      "function": "write_renderer_receipt",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1621,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled receipt file identity differs",
+      "function": "write_renderer_receipt",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1627,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled cleanup requires proved native player identity",
+      "function": "retire_renderer_player",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1634,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled cleanup player identity changed",
+      "function": "retire_renderer_player",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1641,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1650",
+      "function": "retire_renderer_player",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1650,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled cleanup player survived bounded retirement",
+      "function": "retire_renderer_player",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 1653,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1638",
+      "function": "retire_renderer_player",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1638,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1651",
+      "function": "retire_renderer_player",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1651,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled cleanup requires proved native player identity",
+      "function": "retire_renderer_player.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1634,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled cleanup player identity changed",
+      "function": "retire_renderer_player.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1641,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "unsupported controlled renderer intervention",
+      "function": "RendererTrialSmoke.__init__",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1659,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer diagnostic time bound",
+      "function": "RendererTrialSmoke.remaining",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1672,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1673",
+      "function": "RendererTrialSmoke.remaining",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1673,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer commands use isolated prefix",
+      "function": "RendererTrialSmoke.cmd",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1676,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1678",
+      "function": "RendererTrialSmoke.cmd",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1678,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer client collection differs",
+      "function": "RendererTrialSmoke.clients",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1682,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer client identities differ",
+      "function": "RendererTrialSmoke.clients",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1684,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1687",
+      "function": "RendererTrialSmoke.clients",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1687,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer client identities differ",
+      "function": "RendererTrialSmoke.clients.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1684,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1690",
+      "function": "RendererTrialSmoke.wait",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1690,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer executable differs",
+      "function": "RendererTrialSmoke.launch_renderer",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1693,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled player was not a fresh window",
+      "function": "RendererTrialSmoke.fullscreen",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1713,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled fullscreen action failed",
+      "function": "RendererTrialSmoke.fullscreen",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1715,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer GTK source version differs",
+      "function": "RendererTrialSmoke.gtk_binding",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1719,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled GTK maps owner differs",
+      "function": "RendererTrialSmoke.gtk_binding",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1722,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled GTK maps exceeded bound",
+      "function": "RendererTrialSmoke.gtk_binding",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1724,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled player GTK mapping absent or ambiguous",
+      "function": "RendererTrialSmoke.gtk_binding",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1727,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled mapped GTK library unsafe",
+      "function": "RendererTrialSmoke.gtk_binding",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1729,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled mapped GTK package differs",
+      "function": "RendererTrialSmoke.gtk_binding",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1731,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1734",
+      "function": "RendererTrialSmoke.gtk_binding",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1734,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled owned stderr binding unavailable",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1747,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled exact media state differs",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1761,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled playback time invalid",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1766,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled focus action failed",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1771,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled capture requires full owned fullscreen viewport",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1779,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled PNG path already exists",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1782,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled PNG identity or bound differs",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1785,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled PNG dimensions differ",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1788,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled capture identity or geometry changed",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1793,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled raw RGB frame bound differs",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1806,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled fixture changed during capture",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1808,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1821",
+      "function": "RendererTrialSmoke.observe",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1821,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1753",
+      "function": "RendererTrialSmoke.observe.<locals>.ready",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1753,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1756",
+      "function": "RendererTrialSmoke.observe.<locals>.ready",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1756,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled capture identity or geometry changed",
+      "function": "RendererTrialSmoke.observe.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1793,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled renderer receipt exceeded bound",
+      "function": "write_controls_receipt",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1828,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled receipt directory owner differs",
+      "function": "write_controls_receipt",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1831,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controlled receipt file identity differs",
+      "function": "write_controls_receipt",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1837,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "unsupported controls state intervention",
+      "function": "ControlsTrialSmoke.__init__",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1847,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial settings backend already selected",
+      "function": "ControlsTrialSmoke.seed_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1860,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial private setting write failed",
+      "function": "ControlsTrialSmoke.seed_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1866,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial private initial state differs",
+      "function": "ControlsTrialSmoke.seed_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1868,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1869",
+      "function": "ControlsTrialSmoke.seed_controls",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1869,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial settings backend already selected",
+      "function": "ControlsTrialSmoke.seed_controls.<locals>.<genexpr>",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1860,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "controls trial process-bound initial or hidden state differs",
+      "function": "ControlsTrialSmoke.hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1875,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1878",
+      "function": "ControlsTrialSmoke.hide_reference_controls",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1878,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1893",
+      "function": "ControlsTrialSmoke.observe",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1893,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC identity is invalid",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1899,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC path owner/type differs",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1902,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC peer differs",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1908,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC disconnected before acknowledgement",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1913,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC reply exceeded bound",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1915,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC reply is not an object",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1925,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC command failed",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1927,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1929",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1929,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC acknowledgement timed out",
+      "function": "mpv_hide_reference_controls",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 1930,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "reference controls IPC duplicate field",
+      "function": "mpv_hide_reference_controls.<locals>.pairs",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1921,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1923",
+      "function": "mpv_hide_reference_controls.<locals>.pairs",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1923,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "player IPC belongs to a different process/user",
+      "function": "mpv_property",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1938,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "player IPC disconnected before reply",
+      "function": "mpv_property",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1944,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "unbounded player IPC reply",
+      "function": "mpv_property",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1946,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "require-site-1951",
+      "function": "mpv_property",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1951,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-1952",
+      "function": "mpv_property",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 1952,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "player IPC request timed out",
+      "function": "mpv_property",
+      "site_kind": "raise",
+      "source": "native-source",
+      "source_line": 1953,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "no advancing playback evidence",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1957,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "wrong file or paused player",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1959,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "player is not using its GUI renderer",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1960,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "no real audio output backend opened",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1961,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "no decoded video parameters",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1962,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "no decoded/input-output audio parameters",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1965,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "invalid or missing fixture playback clock",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1967,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "playback clock did not advance",
+      "function": "validate_player_samples",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1971,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "explicit native GUI diagnostic switch must be Boolean",
+      "function": "run_checks",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 1977,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-2003",
+      "function": "run_checks",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 2003,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "copy only into the reviewed /run/t guest bundle",
+      "function": "main",
+      "site_kind": "require",
+      "source": "native-source",
+      "source_line": 2011,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    },
+    {
+      "fixed_assertion_label": "return-site-2013",
+      "function": "main",
+      "site_kind": "return",
+      "source": "native-source",
+      "source_line": 2013,
+      "source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+    }
+  ],
+  "driver_sha256": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6",
+  "execution_files": {
+    ".github/workflows/final-bios-install-20261011.yml": "3f4b6aa3892efa2ac845cd0669f744abee1e861b428761e5669267b76ac7d5f6",
+    "tools/final-bios-failure-observer/composition.py": "00ec2296df0c04769c8df3af6b66c04638c34c84d9a080620cbe655901a4e63a",
+    "tools/final-bios-failure-observer/driver-entry.py": "285a7cae892e2118cfde159a8347d6b8f114121106e71daa56cd42dfd2c42673",
+    "tools/final-bios-failure-observer/observer.py": "6592648b54600af57e685e2baa84149a9637001822ff9b4d9592c50ce213e43a",
+    "tools/final-bios-install/common.py": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
+    "tools/final-bios-install/compose.py": "c8f47ea3855c9fb6816907644d4d56497683fda04b6ea0bbff397de637c440bc",
+    "tools/final-bios-install/guest.py": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "tools/final-bios-install/run.py": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
+    "tools/final-bios-install/security.py": "963112315a154824080ad0b4aded28f3e2e7a68ebe2c9562a14c37714b9b8e0b",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
+    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
+  },
+  "image": {
+    "archive_bytes": 1929907101,
+    "archive_sha256": "3a8132aa4578fdb62b2aa1e3bf5c340229f1a483678d03ddf2c565fb39afadcd",
+    "artifact_id": 11689591362,
+    "bytes": 1929719808,
+    "name": "Arctic-Linux-1.2-candidate-38102474066-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "3034ea88d4ba1d1e434942f90c42b8057d3667ad2e7f6ee739b895ebdfc86d1d",
+    "run_id": 38102474066,
+    "sha256": "807eaaa64ab8480ec2b18bc8434fd5e37d82c41b73a3e0a6f002c35d152ba54c",
+    "source_sha": "326690f173d4dc4f049f43e046c8380e66825a07"
+  },
+  "limitations": [
+    "No actual failure cause or installation is qualified by this Source leaf.",
+    "Original keyboard-only BIOS behavior remains; Native256 pointer focus requires all three Native fixture flags.",
+    "Guest cause lines remain in original private UART; no failed UART or PNG publication is added.",
+    "Nested unbound frames, unknown sites and existing trace occupancy yield unavailable observation.",
+    "Root must separately author and peer operational admission and publication mapping."
+  ],
+  "observation_only": true,
+  "observer_execution_files": {
+    "tools/final-bios-failure-observer/composition.py": "00ec2296df0c04769c8df3af6b66c04638c34c84d9a080620cbe655901a4e63a",
+    "tools/final-bios-failure-observer/driver-entry.py": "285a7cae892e2118cfde159a8347d6b8f114121106e71daa56cd42dfd2c42673",
+    "tools/final-bios-failure-observer/observer.py": "6592648b54600af57e685e2baa84149a9637001822ff9b4d9592c50ce213e43a"
+  },
+  "operational_cli": false,
+  "original_execution_files": {
+    ".github/workflows/final-bios-install-20261011.yml": "3f4b6aa3892efa2ac845cd0669f744abee1e861b428761e5669267b76ac7d5f6",
+    "tools/final-bios-install/common.py": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
+    "tools/final-bios-install/compose.py": "c8f47ea3855c9fb6816907644d4d56497683fda04b6ea0bbff397de637c440bc",
+    "tools/final-bios-install/guest.py": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "tools/final-bios-install/run.py": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
+    "tools/final-bios-install/security.py": "963112315a154824080ad0b4aded28f3e2e7a68ebe2c9562a14c37714b9b8e0b",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
+    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
+  },
+  "preserved_limits": {
+    "guest_source_bytes": 1048576,
+    "harness_seconds": 6600,
+    "host_log_bytes": 268435456,
+    "install_timeout": 2400,
+    "installed_uart_bytes": 134217728,
+    "live_uart_bytes": 16777216
+  },
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-final-bios-finite-failure-source-v1",
+  "security_binding": {
+    "helper_sha256": "963112315a154824080ad0b4aded28f3e2e7a68ebe2c9562a14c37714b9b8e0b",
+    "independent_receipt_sha256": "c2548e3c3e2834f19b1893e0efbd1b4e9eea67ace82c54ae5ee2f44c2165f216",
+    "source_sha": "5708481d9e18d9935bc6254f9e431e04ecce4bd8"
+  },
+  "source_files": {
+    "internal/installer/installer.go": "5d5748a1ed1c89ab78ec4078cae2d6401753575df6c4a5680e5c9cb37ad2061a",
+    "modules/catalog.toml": "c8f9e4d5c1749919a7145127229839c10902acfc72b5dc11a757a4e19e6965e3",
+    "profiles/ci/offline.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
+    "tools/dictation-qualification/contract.py": "1ab44f66d744939d4bd7d6b7034f4c2beac738168d1ae34c2572a1f95a0da3cf",
+    "tools/dictation-qualification/guest_check.py": "81e51c751433ef08f88aaa7d2027a872a2a2cb522b23dd589342ed4c4faa2f47",
+    "tools/native-functional/native_smoke.py": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8"
+  },
+  "source_parent": "1800239a3078d85f8e2cf666ba5ba702db352a09",
+  "source_site_sha256": {
+    "bios-common": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
+    "bios-host": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
+    "bios-probe": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "install-driver": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6",
+    "native-source": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
+    "vmtest": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
+  }
+}
