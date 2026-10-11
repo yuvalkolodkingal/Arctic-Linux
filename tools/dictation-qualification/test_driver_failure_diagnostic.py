@@ -76,6 +76,8 @@ rc = 0
 
 
 def restore_runner_driver_diagnostics(source):
+    from test_report_guard_projection import restore_report_guard_relay
+    source = restore_report_guard_relay(source)
     begin = '# These are Source observations, never a report gate or authenticated log origin.\n'
     assert source.count(begin) == 1
     start = source.index(begin)
@@ -107,6 +109,8 @@ def restore_native_login_observation(driver):
 
 def restore_runner_collector_projection(source):
     """Compose the already accepted collector projection into older inverses."""
+    from test_report_guard_projection import restore_report_guard_relay
+    source = restore_report_guard_relay(source)
     import hashlib
     begin = 'COLLECTOR_FAILURE_PHASES = '
     assert source.count(begin) == 1

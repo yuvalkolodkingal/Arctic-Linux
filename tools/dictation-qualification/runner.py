@@ -89,6 +89,10 @@ COLLECTOR_FAILURE_GUARDS = frozenset({'unknown',
     'desktop-not-unique', 'unsafe-installed-file', 'installed-file-size',
     'audit-status-unavailable', 'command-failed', 'command-output-bound'})
 
+# BEGIN REPORT_CONTRACT_GUARD_RELAY
+COLLECTOR_FAILURE_GUARDS |= frozenset('contract-' + format(index, '03d') for index in range(1, 62))
+# END REPORT_CONTRACT_GUARD_RELAY
+
 def collector_failure_record(raw):
     """Decode an exact fixed failure record; never export any unknown field."""
     def pairs(items):

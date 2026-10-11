@@ -37,6 +37,8 @@ CURRENT_FOOTER_SHA256 = 'de3bab56ae8993d6e30005c326fd50ce9c3228c11f32798b42e7fa0
 
 def restore_collector_failure_projection(text):
     """Exact whole-byte inverse to actual 53a; unknown changes fail closed."""
+    from test_report_guard_projection import restore_report_guard_projection
+    text = restore_report_guard_projection(text)
     if "# Failure-only observations." not in text:
         return text
     start = text.index("# Failure-only observations.")

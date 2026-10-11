@@ -91,6 +91,125 @@ COLLECTOR_FAILURE_GUARDS = (
 _COLLECTOR_COMMAND_TOKEN = object()
 collector_failure_phase = 'entry'
 
+# BEGIN OWNED_REPORT_CONTRACT_GUARDS
+# Closed Source require sites in the byte-pinned, unchanged contract.validate.
+# These observations never publish a rejected report or satisfy any gate.
+_REPORT_GUARD_SITES = (
+    (145, 145, 'report-fields', 'contract-001'),
+    (146, 146, 'report-schema-scope', 'contract-002'),
+    (147, 147, 'report-context-boot', 'contract-003'),
+    (148, 148, 'report-controller', 'contract-004'),
+    (149, 149, 'report-limitations', 'contract-005'),
+    (151, 153, 'report-profile-descriptor', 'contract-006'),
+    (154, 155, 'report-hardware-fields', 'contract-007'),
+    (156, 159, 'report-hardware-profile', 'contract-008'),
+    (160, 160, 'report-payload-pins', 'contract-009'),
+    (162, 163, 'report-payload-pin-types', 'contract-010'),
+    (164, 164, 'report-disk-type', 'contract-011'),
+    (166, 166, 'live-disk-or-payload-unexpected', 'contract-012'),
+    (168, 169, 'encrypted-disk-identity-fields', 'contract-013'),
+    (170, 173, 'encrypted-disk-identity-invalid', 'contract-014'),
+    (174, 174, 'report-gates-type', 'contract-015'),
+    (176, 177, 'report-missing-duplicate-extra-gates', 'contract-016'),
+    (181, 181, 'gate-fields', 'contract-017'),
+    (182, 182, 'gate-status', 'contract-018'),
+    (183, 183, 'gate-evidence-kind', 'contract-019'),
+    (184, 184, 'gate-safe-code', 'contract-020'),
+    (185, 185, 'gate-observation-fields', 'contract-021'),
+    (188, 190, 'loader-retry-samples-scope-bound', 'contract-022'),
+    (196, 196, 'gate-observation-hash', 'contract-023'),
+    (198, 198, 'gate-observation-boot', 'contract-024'),
+    (200, 200, 'gate-observation-scalar', 'contract-025'),
+    (203, 205, 'gate-contradictory-or-missing-observations', 'contract-026'),
+    (207, 208, 'profile-payload-file-count', 'contract-027'),
+    (209, 209, 'profile-payload-integrity-absent', 'contract-028'),
+    (211, 211, 'legacy-gpu-gate-on-modern-profile', 'contract-029'),
+    (213, 213, 'modern-gpu-gate-on-legacy-profile', 'contract-030'),
+    (215, 216, 'loader-retry-profile-or-coverage', 'contract-031'),
+    (217, 219, 'loader-retry-broker-fixture-identity', 'contract-032'),
+    (221, 227, 'loader-outcome-contradiction', 'contract-033'),
+    (229, 230, 'offline-network-check-successful-response', 'contract-034'),
+    (232, 232, 'recording-indicator-evidence-missing', 'contract-035'),
+    (233, 233, 'recording-indicator-ack-missing', 'contract-036'),
+    (235, 237, 'leak-scan-coverage', 'contract-037'),
+    (240, 245, 'audit-mode-or-loss-changed', 'contract-038'),
+    (247, 250, 'gpu-real-start-and-retry', 'contract-039'),
+    (253, 253, 'passed-encryption-without-disk-identity', 'contract-040'),
+    (254, 254, 'report-samples-bound', 'contract-041'),
+    (257, 257, 'fixture-manifest-required', 'contract-042'),
+    (259, 260, 'fixture-manifest-hash', 'contract-043'),
+    (262, 263, 'fixture-manifest-provenance', 'contract-044'),
+    (265, 266, 'fixture-manifest-selection', 'contract-045'),
+    (275, 275, 'sample-fields', 'contract-046'),
+    (280, 282, 'sample-profile-backend-pins', 'contract-047'),
+    (284, 284, 'sample-language-purpose', 'contract-048'),
+    (285, 285, 'sample-row', 'contract-049'),
+    (287, 287, 'sample-duplicate', 'contract-050'),
+    (289, 290, 'sample-fixture-binding', 'contract-051'),
+    (292, 292, 'sample-hash', 'contract-052'),
+    (294, 294, 'sample-numeric', 'contract-053'),
+    (295, 296, 'sample-positive-counts', 'contract-054'),
+    (299, 300, 'loader-retry-sample-coverage', 'contract-055'),
+    (302, 303, 'loader-continuation-sample-coverage', 'contract-056'),
+    (306, 306, 'loader-continuation-leak-scan-coverage', 'contract-057'),
+    (308, 308, 'session-payload-absent', 'contract-058'),
+    (315, 315, 'session-sample-coverage', 'contract-059'),
+    (316, 316, 'report-status-derived', 'contract-060'),
+    (318, 318, 'image-dictation-gates-incomplete', 'contract-061'),
+)
+_REPORT_VALIDATE = validate
+_REPORT_VALIDATE_CODE = validate.__code__
+_REPORT_GLOBALS = validate.__globals__
+_REPORT_REQUIRE = require
+_REPORT_REQUIRE_CODE = require.__code__
+_REPORT_INVALID = Invalid
+_REPORT_FUNCTION_BINDINGS = tuple((function, function.__code__)
+    for function in (_REPORT_VALIDATE, _REPORT_REQUIRE, context,
+                     _REPORT_GLOBALS['digest'], _REPORT_GLOBALS['uuid'],
+                     _REPORT_GLOBALS['gates'], _REPORT_GLOBALS['pinned']))
+_REPORT_GLOBAL_BINDINGS = tuple((name, _REPORT_GLOBALS[name])
+    for name in ('validate', 'require', 'Invalid', '__file__') + tuple(
+        name for _, code in _REPORT_FUNCTION_BINDINGS for name in code.co_names)
+    if name in _REPORT_GLOBALS)
+COLLECTOR_FAILURE_GUARDS += tuple(row[3] for row in _REPORT_GUARD_SITES)
+
+def owned_report_guard(trace, throwing):
+    """Bind actual traceback codes/globals/LineTable to fixed literal sites."""
+    if (validate is not _REPORT_VALIDATE or require is not _REPORT_REQUIRE or Invalid is not _REPORT_INVALID
+        or any(_REPORT_GLOBALS.get(name) is not value for name, value in _REPORT_GLOBAL_BINDINGS)
+        or any(function.__code__ is not code for function, code in _REPORT_FUNCTION_BINDINGS)
+        or trace.tb_frame.f_code is not _REPORT_VALIDATE_CODE or trace.tb_frame.f_globals is not _REPORT_GLOBALS
+        or throwing.tb_frame.f_code is not _REPORT_REQUIRE_CODE or throwing.tb_frame.f_globals is not _REPORT_GLOBALS):
+        return 'unknown'
+    instructions = list(dis.get_instructions(_REPORT_VALIDATE_CODE, show_caches=True))
+    if len(instructions) > 8192:
+        return 'unknown'
+    selected = next((index for index, item in enumerate(instructions) if item.offset == trace.tb_lasti), None)
+    if selected is None:
+        return 'unknown'
+    line = next((line for start, end, line in _REPORT_VALIDATE_CODE.co_lines()
+                 if start <= trace.tb_lasti < end), None)
+    if type(line) is not int or type(trace.tb_lineno) is not int or line != trace.tb_lineno:
+        return 'unknown'
+    while selected >= 0 and instructions[selected].opname == 'CACHE':
+        selected -= 1
+    if selected < 1 or instructions[selected].opname not in ('CALL', 'CALL_FUNCTION') or instructions[selected].arg != 2:
+        return 'unknown'
+    selected -= 1
+    while selected >= 0 and instructions[selected].opname == 'CACHE':
+        selected -= 1
+    if selected >= 0 and instructions[selected].opname == 'PRECALL':
+        if instructions[selected].arg != 2:
+            return 'unknown'
+        selected -= 1
+    if selected < 0 or instructions[selected].opname != 'LOAD_CONST' or type(instructions[selected].argval) is not str:
+        return 'unknown'
+    literal = instructions[selected].argval
+    matched = [label for first, last, code, label in _REPORT_GUARD_SITES
+               if first <= line <= last and literal == code]
+    return matched[0] if len(matched) == 1 else 'unknown'
+# END OWNED_REPORT_CONTRACT_GUARDS
+
 def collector_guard_literal(trace):
     """Read the literal last argument of the exact throwing require call."""
     instructions = list(dis.get_instructions(trace.tb_frame.f_code, show_caches=True))
@@ -113,7 +232,7 @@ def collector_guard_literal(trace):
     if selected >= 0 and instructions[selected].opname == 'LOAD_CONST':
         value = instructions[selected].argval
         if type(value) is str:
-            return next((code for code in COLLECTOR_FAILURE_GUARDS if value == code), 'unknown')
+            return next((code for code in COLLECTOR_FAILURE_GUARDS if value == code and not code.startswith('contract-')), 'unknown')
     return 'unknown'
 
 def collector_failure(error):
@@ -142,6 +261,17 @@ def collector_failure(error):
         trace = trace.tb_next
     if trace is not None:
         return result  # No truncated prefix is presented as the deepest owner.
+    # A genuine unchanged contract.validate -> require failure gets only a
+    # closed Source site identifier. A copied code with foreign globals or a
+    # changed loaded binding cannot use this path; no values/args are read.
+    if (type(error) is _REPORT_INVALID and len(traces) >= 2
+        and frames[-2].f_code is _REPORT_VALIDATE_CODE):
+        guard = owned_report_guard(traces[-2], traces[-1])
+        if guard != 'unknown':
+            result.update(frame='report-contract', guard=guard)
+            if len(frames) >= 3 and frames[-3].f_code is main.__code__ and frames[-3].f_globals is main.__globals__:
+                result['caller'] = 'main'
+        return result
     for frame in frames[-1:]:
         for function, label in owners:
             if frame.f_code is function.__code__ and frame.f_globals is function.__globals__:
