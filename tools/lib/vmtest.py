@@ -23,6 +23,13 @@ def log(msg):
         f.write(line + "\n")
 
 
+# BEGIN NATIVE BOOTSTRAP INPUT OBSERVATION
+_NATIVE_OBSERVATION = None
+def _native_input(stage):
+    if _NATIVE_OBSERVATION is not None:
+        _NATIVE_OBSERVATION.emit(stage)
+# END NATIVE BOOTSTRAP INPUT OBSERVATION
+
 class QMPError(Exception):
     pass
 
@@ -101,7 +108,16 @@ class VM:
         r = self.cmd("input-send-event", events=down + up)
         if "error" in r:
             # Older QEMU or no device for input-send-event: fall back to send-key.
-            self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 30})
+            _native_input("fallback-entered")
+            fallback = self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 30})
+            if "error" in fallback:
+                error = QMPError("QMP key input refused")
+                try: _native_input("fallback-refused")
+                except BaseException: pass
+                raise error
+            _native_input("fallback-returned")
+        else:
+            _native_input("event-returned")
 
     def keys(self, *names, gap=0.3):
         """Press keys one after the other; "ctrl-x" style names press a chord."""
@@ -334,3 +350,11 @@ def changed_fraction(a, b):
     diff = ImageChops.difference(ia, ib).point(lambda v: 255 if v > 24 else 0)
     hist = diff.histogram()
     return hist[255] / (ia.width * ia.height)
+
+# BEGIN NATIVE BOOTSTRAP INPUT BINDING
+_native_token = os.environ.get("ARCTIC_NATIVE_BOOTSTRAP_TOKEN", "")
+if len(_native_token) == 32 and all(c in "0123456789abcdef" for c in _native_token):
+    import native_bootstrap_observer as _NATIVE_HELPER
+    try: _NATIVE_OBSERVATION = _NATIVE_HELPER.Binding(globals(), "input")
+    except Exception: pass
+# END NATIVE BOOTSTRAP INPUT BINDING

@@ -250,6 +250,12 @@ fi
 if [[ -n "${ARCTIC_NATIVE_LAUNCHER:-}" ]]; then
   [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && "$COLLECT_VIA" == terminal && -f "$ARCTIC_NATIVE_LAUNCHER" ]] || arctic_die "native launcher requires explicit audio/checker/terminal fixture"
   cp "$ARCTIC_NATIVE_LAUNCHER" "$DATA/native-launcher.py"
+  # Native-only correlation token is nonsecret; the Dictation token remains host-only.
+  if [[ "${ARCTIC_NATIVE_BOOTSTRAP_TOKEN:-}" =~ ^[0-9a-f]{32}$ ]]; then
+    [[ -f "$HERE/lib/native_bootstrap_observer.py" && ! -L "$HERE/lib/native_bootstrap_observer.py" ]] || arctic_die "missing Native bootstrap observer"
+    cp "$HERE/lib/native_bootstrap_observer.py" "$DATA/native_bootstrap_observer.py"
+    printf '%s\n' "$ARCTIC_NATIVE_BOOTSTRAP_TOKEN" > "$DATA/native-bootstrap-token"
+  fi
 fi
 if [[ -n "${ARCTIC_NATIVE_PHOTO_CHECKER:-}" ]]; then
   [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && -f "$ARCTIC_NATIVE_PHOTO_CHECKER" ]] || arctic_die "photo fixture requires explicit native launcher/audio/checker"
@@ -499,7 +505,13 @@ cat > "$OUT/sysarea.sh" <<'EOF'
 # tools/test-install.sh: first bytes of the test data CD, run as `sudo sh /dev/sr0 [PID]`.
 mkdir -p /run/t
 mountpoint -q /run/t || mount -o ro /dev/disk/by-label/ARCTICTEST /run/t || exit 1
-if [ -f /run/t/native-launcher.py ]; then exec python3 /run/t/native-launcher.py; fi
+if [ -f /run/t/native-launcher.py ]; then
+  if [ -f /run/t/native-bootstrap-token ]; then
+    ARCTIC_NATIVE_BOOTSTRAP_TOKEN="$(cat /run/t/native-bootstrap-token)"
+    export ARCTIC_NATIVE_BOOTSTRAP_TOKEN
+  fi
+  exec python3 /run/t/native-launcher.py
+fi
 if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
 exit 1
 EOF
@@ -1655,6 +1667,7 @@ fi
 dictation_host_stage host-container
 "$engine" run --rm "${name_args[@]}" "${ARCTIC_CONTAINER_ARGS[@]}" "${kvm_args[@]}" \
   -e ARCTIC_DICTATION_HOST_TOKEN="${ARCTIC_DICTATION_HOST_TOKEN:-}" \
+  -e ARCTIC_NATIVE_BOOTSTRAP_TOKEN="${ARCTIC_NATIVE_BOOTSTRAP_TOKEN:-}" \
   -e NATIVE_LAUNCHER_FIXTURE="$([[ -f "$DATA/native-launcher.py" ]] && echo 1 || echo 0)" \
   -e NATIVE_AUDIO_FIXTURE="$NATIVE_AUDIO_FIXTURE" \
   -e NATIVE_TWO_OUTPUTS="$NATIVE_TWO_OUTPUTS" \

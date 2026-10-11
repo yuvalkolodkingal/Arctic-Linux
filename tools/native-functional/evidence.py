@@ -14,8 +14,8 @@ import zlib
 
 HERE = Path(__file__).resolve().parent
 NATIVE_SOURCE_SHA = '82cb72d81be20fd5d0a3b4f802fdbef7d7364377cd6a42dea334422b0a3ee89c'
-LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'f9a40427443efafb5b5088fc66b6d4f3ad45ac6f7c80ffe5d2903d53fd04e69f')}
+LAUNCHER_SHA = '8dd43bfd2df74c619efa65ef272345fc8517ffd619ecb54a40edfb3aab0cc4a3'
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', '15a065ae8ea95b918b973918534361b1b49de268db09d85cc96f2a4136595b3c')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}

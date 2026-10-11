@@ -2504,11 +2504,11 @@ def main():
         require(len(sys.argv) == 2 and stage in ('live','installed'), 'requires exactly one explicit live/installed stage')
         guest_guard(stage,True)
         helper = Path('/run/t/native-launcher.py')
-        require(hashlib.sha256(helper.read_bytes()).hexdigest() == 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c', 'owned launcher helper changed')
+        require(hashlib.sha256(helper.read_bytes()).hexdigest() == '8dd43bfd2df74c619efa65ef272345fc8517ffd619ecb54a40edfb3aab0cc4a3', 'owned launcher helper changed')
         spec = importlib.util.spec_from_file_location('arctic_native_launcher_library',str(helper))
         launcher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(launcher)
-        launcher_proof = launcher.verify_barrier(stage,'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c')
+        launcher_proof = launcher.verify_barrier(stage,'8dd43bfd2df74c619efa65ef272345fc8517ffd619ecb54a40edfb3aab0cc4a3')
         prefix = discover_desktop()
         expected_uid = pwd.getpwnam(prefix[2]).pw_uid
         require(launcher_proof['foot']['uid'] == expected_uid, 'launcher and measured desktop UIDs differ')

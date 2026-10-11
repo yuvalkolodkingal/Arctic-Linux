@@ -18,6 +18,13 @@ LOCATION = Path('/run/t/native-launcher.py')
 SHELLS = {'bash', 'fish', 'zsh', 'dash', 'sh'}
 
 
+# BEGIN NATIVE BOOTSTRAP LAUNCHER OBSERVATION
+_NATIVE_OBSERVATION = None
+def _native_event(stage, error=None):
+    if _NATIVE_OBSERVATION is not None:
+        _NATIVE_OBSERVATION.emit(stage, error)
+# END NATIVE BOOTSTRAP LAUNCHER OBSERVATION
+
 def require(value, message):
     if not value: raise RuntimeError(message)
 
@@ -109,6 +116,7 @@ def verify_barrier(stage, expected_sha):
 def main():
     descriptors = []
     try:
+        _native_event("entry")
         require(LOCATION.resolve() == Path(__file__).resolve() and os.geteuid() == 0,
                 'Requires the root-owned test-CD launcher location')
         require(len(sys.argv) == 1, 'No launcher arguments are allowed; actual ancestors determine ownership')
@@ -116,12 +124,15 @@ def main():
                 'Requires explicitly disposable QEMU/KVM guest')
         require(subprocess.check_output(['getenforce'],text=True).strip() == 'Enforcing',
                 'Requires enforcing guest SELinux')
+        _native_event("guest-guards-passed")
         stage = 'live' if 'rd.live.image' in Path('/proc/cmdline').read_text().split() else 'installed'
         path = barrier_path(stage); require(not path.exists(), 'Native launcher stage already started')
         proof = identify_launcher()
+        _native_event("ancestry-passed")
         for name in ('shell','foot'):
             descriptors.append(os.pidfd_open(proof[name]['pid']))
             require(identity(proof[name]['pid']) == proof[name], 'Launcher changed while opening pidfd')
+        _native_event("pidfds-passed")
         ready_r, ready_w = os.pipe()
         child = os.fork()
         if child:
@@ -131,6 +142,7 @@ def main():
                         'Detached root probe did not acknowledge readiness')
             finally:
                 os.close(ready_r); os.waitpid(child,0)
+            _native_event("parent-ready")
             return 0
         os.close(ready_r)
         os.setsid()
@@ -139,21 +151,29 @@ def main():
         serial = os.open('/dev/ttyS0',os.O_WRONLY|os.O_NOCTTY)
         os.dup2(null,0); os.dup2(serial,1); os.dup2(serial,2)
         os.close(null); os.close(serial)
+        _native_event("detached")
         proof.update(schema='arctic-native-launcher-v1',stage=stage,
                      boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                      launcher_sha256=hashlib.sha256(LOCATION.read_bytes()).hexdigest(),probe=identity(os.getpid()))
         print('ARCTIC-NATIVE-LAUNCHER-READY '+json.dumps(proof,sort_keys=True),flush=True)
         os.write(ready_w,b'READY\n'); os.close(ready_w)
+        _native_event("ready-written")
         wait_disappeared(proof,descriptors)
+        _native_event("disappeared")
         proof['owned_launcher_gone'] = True
         fd = os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
         with os.fdopen(fd,'w') as stream:
             json.dump(proof,stream,sort_keys=True);stream.write('\n');stream.flush();os.fsync(stream.fileno())
+        _native_event("barrier-written")
         print('ARCTIC-NATIVE-LAUNCHER-GONE '+json.dumps(proof,sort_keys=True),flush=True)
         for fd in descriptors: os.close(fd)
         descriptors.clear()
+        _native_event("exec-entered")
         os.execv('/usr/bin/bash',['bash','/run/t/run.sh' if stage=='live' else '/run/t/collect.sh'])
     except BaseException as error:
+        # An optional diagnosis cannot replace the original launcher failure.
+        try: _native_event("failed", error)
+        except BaseException: pass
         message = 'ARCTIC-NATIVE-LAUNCHER-FAILED '+type(error).__name__+': '+str(error)+'\n'
         try:
             with open('/dev/ttyS0','w') as serial: serial.write(message);serial.flush()
@@ -162,6 +182,14 @@ def main():
     finally:
         for fd in descriptors: os.close(fd)
 
+
+# BEGIN NATIVE BOOTSTRAP LAUNCHER BINDING
+_native_token = os.environ.get("ARCTIC_NATIVE_BOOTSTRAP_TOKEN", "")
+if len(_native_token) == 32 and all(c in "0123456789abcdef" for c in _native_token):
+    import native_bootstrap_observer as _NATIVE_HELPER
+    try: _NATIVE_OBSERVATION = _NATIVE_HELPER.Binding(globals(), "launcher")
+    except Exception: pass
+# END NATIVE BOOTSTRAP LAUNCHER BINDING
 
 if __name__ == '__main__':
     sys.exit(main())
