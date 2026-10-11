@@ -28,6 +28,69 @@ def record():
 
 
 class AppDefaultControls(unittest.TestCase):
+    def inventory_probe(self, rows, requirements=None):
+        """Run the real read-only probe with labelled synthetic guest commands."""
+        prefix = ['runuser', '-u', 'fixture', '--', 'env', 'XDG_SESSION_ID=2']
+        mimes = A.mime_defaults(MIME)
+        def command(argv):
+            if argv == prefix + ['id', '-u']: return '1000'
+            if argv[:2] == ['loginctl', 'show-session']:
+                return {'User': '1000', 'Type': 'wayland', 'Active': 'yes'}[argv[4]]
+            if argv == ['rpm', '-q', '--qf', '%{NAME}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\n', *A.PACKAGES]:
+                return '\n'.join(rows)
+            if argv == ['rpm', '-qf', '--qf', '%{NAME}\n', '/usr/bin/pcmanfm']: return 'pcmanfm'
+            if argv == ['rpm', '-q', '--requires', 'pcmanfm']:
+                return A.GTK3 if requirements is None else requirements
+            self.assertEqual(argv[:len(prefix)], prefix)
+            self.assertEqual(argv[len(prefix):-1], ['LC_ALL=C', 'gio', 'mime'])
+            return 'Default application for “' + argv[-1] + '”: ' + mimes[argv[-1]]
+        def proc_read(path, *args, **kwargs):
+            if str(path) == '/proc/cmdline': return 'fixture-installed'
+            if str(path) == '/proc/sys/kernel/random/boot_id': return BOOT
+            raise AssertionError('Unexpected fixture file read')
+        with patch.object(A, 'command', side_effect=command), patch.object(A.Path, 'read_text', proc_read):
+            return A.probe(prefix, 'installed', CONTEXT, mimes)
+
+    def test_observed_caret_version_passes_actual_inventory_and_report(self):
+        # This VERSION is independently present in the authenticated A2
+        # fresh-defaults inventory; the failed extra query row was not saved.
+        version = '1.4.0^20251022git09087446'
+        rows = [name + '\t' + (version if name == 'pcmanfm' else '1.2') + '\t1.fc44\tx86_64'
+                for name in A.PACKAGES]
+        item = self.inventory_probe(rows)
+        self.assertEqual(item['packages']['pcmanfm']['version'], version)
+        self.assertEqual(set(item['packages']), set(A.PACKAGES))
+        self.assertEqual(item['pcmanfm']['requirements'], [A.GTK3])
+        self.assertEqual(item['mime_defaults'], A.mime_defaults(MIME))
+        self.assertFalse(item['release_acceptance'])
+        self.assertEqual(A.validate_report(item, CONTEXT, A.mime_defaults(MIME))['packages'], item['packages'])
+
+    def test_caret_report_support_does_not_admit_other_malformed_nevra(self):
+        for version in ('1.4.0^20251022git09087446', '1.4.0~rc1', '1.4.0+git.1'):
+            item = record(); item['packages']['pcmanfm']['version'] = version
+            A.validate_report(item, CONTEXT, A.mime_defaults(MIME))
+        for key, value in (('version', ''), ('version', '1.4.0\nsecret'), ('version', '1.4.0\t2'),
+                           ('version', '1.4.0/2'), ('version', '1.4.0\x00'), ('version', 1),
+                           ('release', '1^git.fc44'), ('arch', 'x86_64^git'), ('arch', 'noarch')):
+            item = record(); item['packages']['pcmanfm'][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                A.validate_report(item, CONTEXT, A.mime_defaults(MIME))
+
+    def test_caret_inventory_support_preserves_closed_package_and_gtk3_gates(self):
+        rows = [name + '\t1.2\t1.fc44\tx86_64' for name in A.PACKAGES]
+        index = A.PACKAGES.index('pcmanfm')
+        variants = [rows[:-1], rows + [rows[0]], rows + ['unknown\t1.2\t1.fc44\tx86_64']]
+        for replacement in ('pcmanfm\t\t1.fc44\tx86_64', 'pcmanfm\t1.4.0/2\t1.fc44\tx86_64',
+                            'pcmanfm\t1.4.0\t1^git.fc44\tx86_64', 'pcmanfm\t1.4.0\t1.fc44\tx86_64^git',
+                            'pcmanfm\t1.4.0\t1.fc44\tnoarch', 'pcmanfm\t1.4.0\t1.fc44\tx86_64\textra'):
+            changed = rows.copy(); changed[index] = replacement; variants.append(changed)
+        for variant in variants:
+            with self.subTest(rows=variant), self.assertRaises(RuntimeError): self.inventory_probe(variant)
+        caret = rows.copy(); caret[index] = 'pcmanfm\t1.4.0^20251022git09087446\t1.fc44\tx86_64'
+        for requirements in ('', A.GTK3 + '\nlibgtk-x11-2.0.so.0()(64bit)'):
+            with self.subTest(requirements=requirements), self.assertRaisesRegex(RuntimeError, 'GTK3-only'):
+                self.inventory_probe(caret, requirements)
+
     def test_complete_manifest_mime_context_and_original_native_identity(self):
         item = record()
         proof = {key: item[key] for key in ('stage', 'boot_id', 'desktop_uid', 'active_desktop_session')}
