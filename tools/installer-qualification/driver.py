@@ -87,6 +87,19 @@ AUTH_DIAGNOSTIC_CODES = frozenset(
 DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | AUTH_DIAGNOSTIC_CODES
 
 
+# BEGIN SOURCE-CLOSED FRESH RESPONSE OBSERVATION
+_AUTH_RESPONSE_TOKEN = object()
+AUTH_RESPONSE_CODES = frozenset(
+    'installer-inner-driver-installed-auth-response-' + role + '-' + value
+    for role, values in (('sent', ('true', 'false')),
+                         ('records', ('zero', 'one', 'multiple')),
+                         ('exact-match', ('true', 'false')))
+    for value in values)
+AUTH_DIAGNOSTIC_CODES = AUTH_DIAGNOSTIC_CODES | AUTH_RESPONSE_CODES
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | AUTH_RESPONSE_CODES
+# END SOURCE-CLOSED FRESH RESPONSE OBSERVATION
+
+
 def installed_auth_codes(error):
     if not isinstance(error, BaseException):
         return ()
@@ -109,6 +122,35 @@ def installed_auth_codes(error):
     if type(rows) is not tuple or len(rows) > 96 or any(type(x) is not str or x not in AUTH_DIAGNOSTIC_CODES for x in rows):
         return ()
     return rows
+
+
+def observe_installed_response(sent, record_count, exact_match):
+    """Latest fixed response facts from the exact loaded challenge function only."""
+    frame = sys._getframe(1)
+    try:
+        if frame.f_globals is not globals() or frame.f_code is not console_user_identity.__code__:
+            return
+    finally:
+        del frame
+    owner = _AUTH_ACTIVE
+    if (type(owner) is not dict or type(sent) is not bool or type(exact_match) is not bool
+            or type(record_count) is not int or not 0 <= record_count <= 65536):
+        return
+    cardinality = 'zero' if record_count == 0 else 'one' if record_count == 1 else 'multiple'
+    owner['response'] = (_AUTH_RESPONSE_TOKEN, sent, cardinality, exact_match)
+
+
+def response_observation_codes(owner):
+    if type(owner) is not dict:
+        return ()
+    proof = owner.get('response')
+    if (type(proof) is not tuple or len(proof) != 4 or proof[0] is not _AUTH_RESPONSE_TOKEN
+            or type(proof[1]) is not bool or type(proof[2]) is not str
+            or proof[2] not in ('zero', 'one', 'multiple') or type(proof[3]) is not bool):
+        return ()
+    return ('installer-inner-driver-installed-auth-response-sent-' + ('true' if proof[1] else 'false'),
+            'installer-inner-driver-installed-auth-response-records-' + proof[2],
+            'installer-inner-driver-installed-auth-response-exact-match-' + ('true' if proof[3] else 'false'))
 
 
 def observe_installed_prompt(label, observed_line):
@@ -173,6 +215,10 @@ def observed_installed_auth(original):
                 'installer-inner-driver-installed-auth-qmp-acceptance-is-transport-only',
                 'installer-inner-driver-installed-auth-guest-input-delivery-unproven',
                 'installer-inner-driver-installed-auth-pam-result-unproven'}
+            try:
+                codes |= set(response_observation_codes(owner))
+            except Exception:
+                pass  # Optional response facts cannot replace the owned original failure.
             try:
                 error.__dict__['_arctic_installer_installed_auth_observation'] = (_AUTH_PROOF_TOKEN, tuple(sorted(codes)))
             except BaseException:
@@ -528,6 +574,8 @@ def console_user_identity(vm, startup, out, nonce, private_password):
         require(observed_line not in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual'),
                 'installed user login did not reach its identity challenge')
         records = [line for line in lines if line.startswith('ARCTIC-USER ')]
+        try: observe_installed_response(sent, len(records), records == [expected])
+        except Exception: pass  # Optional fixed observation cannot replace the original guard.
         if records:
             require(sent and records == [expected], 'installed user identity response differs')
             from PIL import Image
