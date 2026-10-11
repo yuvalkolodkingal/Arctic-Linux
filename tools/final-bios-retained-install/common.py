@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exact original BIOS admission derived for a separate observed first ADD."""
+"""Exact BIOS corrective MOD preparation, followed by sole first marker ADD."""
 import hashlib
 import types
 import sys
@@ -10,14 +10,15 @@ import re
 import stat
 import subprocess
 ROOT=Path(__file__).resolve().parents[2]
-BASE='f23be8b034cfb58b171541e77f79c8fab1d43913'
+BASE='b2e6bb551b61136e80f33e865e012821bb67c6ea'
 BRANCH='codex/final-bios-retained-install-20261011'
 MARKER='.github/final-bios-retained-install-20261011.activate'
 WORKFLOW='Final exact-image BIOS installation with retained failure originals'
-ADDITIONS=set(['.github/workflows/final-bios-retained-install-20261011.yml', 'tools/final-bios-failure-evidence/README.md', 'tools/final-bios-failure-evidence/evidence.py', 'tools/final-bios-failure-evidence/execution-manifest.json', 'tools/final-bios-failure-evidence/test_evidence.py', 'tools/final-bios-retained-install/README.md', 'tools/final-bios-retained-install/common.py', 'tools/final-bios-retained-install/execution-manifest.json', 'tools/final-bios-retained-install/run.py', 'tools/final-bios-retained-install/test_composition.py'])
+MODIFICATIONS=set(['tools/final-bios-failure-evidence/execution-manifest.json', 'tools/final-bios-failure-observer/execution-manifest.json', 'tools/final-bios-install/execution-manifest.json', 'tools/final-bios-install/guest.py', 'tools/final-bios-install/test_bios.py', 'tools/final-bios-observed-install/execution-manifest.json', 'tools/final-bios-retained-install/common.py', 'tools/final-bios-retained-install/execution-manifest.json'])
+CORRECTION_TEST_SHA256='a85318c55fb463de0606b070b2f831a820f4cda42a94f75dc5ec3398d24c7436'
 FILES=set(['.github/workflows/ci.yml', '.github/workflows/final-bios-install-20261011.yml', '.github/workflows/final-bios-observed-install-20261011.yml', '.github/workflows/final-bios-retained-install-20261011.yml', 'tools/final-bios-failure-evidence/README.md', 'tools/final-bios-failure-evidence/evidence.py', 'tools/final-bios-failure-evidence/execution-manifest.json', 'tools/final-bios-failure-evidence/test_evidence.py', 'tools/final-bios-failure-observer/composition.py', 'tools/final-bios-failure-observer/driver-entry.py', 'tools/final-bios-failure-observer/execution-manifest.json', 'tools/final-bios-failure-observer/observer.py', 'tools/final-bios-install/common.py', 'tools/final-bios-install/compose.py', 'tools/final-bios-install/execution-manifest.json', 'tools/final-bios-install/guest.py', 'tools/final-bios-install/run.py', 'tools/final-bios-install/security.py', 'tools/final-bios-observed-install/common.py', 'tools/final-bios-observed-install/execution-manifest.json', 'tools/final-bios-observed-install/run.py', 'tools/final-bios-retained-install/README.md', 'tools/final-bios-retained-install/common.py', 'tools/final-bios-retained-install/run.py', 'tools/final-bios-retained-install/test_composition.py', 'tools/lib/container.sh', 'tools/lib/vmtest.py', 'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py', 'tools/performance/prepare-vm-tools.sh', 'tools/performance/producer-receipt.py', 'tools/test-install.sh'])
 SOURCE_FILES={'profiles/ci/offline.toml','tools/native-functional/native_smoke.py','tools/dictation-qualification/guest_check.py','tools/dictation-qualification/contract.py','internal/installer/installer.go','modules/catalog.toml'}
-RETENTION_BINDING={'source_sha': 'f68c4a71987a234d0d95da6ec6bf299373b58ecd', 'source_tree': 'eed37e1f28d98f458e2b758c2f6a1774cf76e2c7', 'source_payload_sha256': '9d6a6a9bef0d29e9a1cadee109d4e35e21fffd4f0892ab982e3371a0ea142aab', 'source_manifest_sha256': '1232ed59dc7b1c644f419e9d28981cb486c92134ff7cdfa2a5e3c071128998d3', 'author_receipt_sha256': 'd729d5627d51e84bfde3ada0e15df842bc3cfc896448150cf7a6bc62ccbf03cb', 'independent_receipt_sha256': '6f9555cc26c5535f4af873d31091eacd4e515daee45a3410817d32895007c73d'}
+RETENTION_BINDING={'source_sha': 'f68c4a71987a234d0d95da6ec6bf299373b58ecd', 'source_tree': 'eed37e1f28d98f458e2b758c2f6a1774cf76e2c7', 'source_payload_sha256': '9d6a6a9bef0d29e9a1cadee109d4e35e21fffd4f0892ab982e3371a0ea142aab', 'source_manifest_sha256': '99929b81fcbd1d9e734f8d3604bae54b998bdcafffa8c10c595e498885638c68', 'author_receipt_sha256': 'd729d5627d51e84bfde3ada0e15df842bc3cfc896448150cf7a6bc62ccbf03cb', 'independent_receipt_sha256': '6f9555cc26c5535f4af873d31091eacd4e515daee45a3410817d32895007c73d'}
 IMAGE_KEYS={'source_sha','run_id','artifact_id','name','bytes','sha256','archive_bytes','archive_sha256','producer_mode','producer_receipt_sha256'}
 
 
@@ -79,18 +80,27 @@ def guard(value, source, inputs=None):
             'Requires sole first marker ADD')
     require(git('rev-list', '--parents', '-n', '1', prep).split() == [prep, BASE], 'Preparation base differs')
     paths = set(git('diff', '--no-renames', '--name-only', BASE, prep).splitlines())
-    require(paths == ADDITIONS, 'Preparation scope differs')
+    require(paths == MODIFICATIONS | {MARKER}, 'Preparation scope differs')
     require(set(git('diff', '--no-renames', '--name-status', BASE, prep).splitlines()) ==
-            {'A\t'+name for name in ADDITIONS},
+            {'M\t'+name for name in MODIFICATIONS} | {'D\t'+MARKER},
             'Preparation modes/change kinds differ')
     expected_raw = set()
-    for name in ADDITIONS:
+    for name in MODIFICATIONS:
+        old_entry = git('ls-tree', BASE, '--', name).split()
         entry = git('ls-tree', prep, '--', name).split()
-        require(len(entry) == 4 and entry[:2] == ['100644', 'blob'] and entry[3] == name,
+        require(len(old_entry) == len(entry) == 4 and old_entry[:2] == entry[:2] == ['100644', 'blob']
+                and old_entry[3] == entry[3] == name and old_entry[2] != entry[2],
                 'Preparation regular mode/type differs')
-        expected_raw.add(':000000 100644 ' + '0'*40 + ' ' + entry[2] + ' A\t' + name)
+        expected_raw.add(':100644 100644 ' + old_entry[2] + ' ' + entry[2] + ' M\t' + name)
+    old_marker = git('ls-tree', BASE, '--', MARKER).split()
+    require(len(old_marker) == 4 and old_marker[:2] == ['100644', 'blob'] and old_marker[3] == MARKER
+            and git('show', BASE+':'+MARKER) == git('rev-parse', BASE+'^')
+            and not git('ls-tree', prep, '--', MARKER), 'Preparation marker removal differs')
+    expected_raw.add(':100644 000000 ' + old_marker[2] + ' ' + '0'*40 + ' D\t' + MARKER)
     require(set(git('diff', '--raw', '--no-abbrev', '--no-renames', BASE, prep).splitlines()) == expected_raw,
             'Preparation raw modes/change kinds differ')
+    require(digest_file(ROOT/'tools/final-bios-install/test_bios.py') == CORRECTION_TEST_SHA256,
+            'Corrected pending fixture bytes differ')
     require(not git('status', '--porcelain') and not subprocess.check_output(
             ['git', '-C', str(source), 'status', '--porcelain'], text=True), 'Tracked checkout dirty')
     require(subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()

@@ -24,7 +24,7 @@ CTX=dict(schema='arctic-final-bios-context-v1',nonce='a'*32,execution_sha='b'*40
 
 def report(stage):
     p=dict(firmware='bios',efi_present=False,live_medium=stage=='live',boot_id=UUID,desktop_uid=1000,security=dict(selinux='Enforcing',audit=dict(enabled=1,lost=0),observed_new_avcs=0,audit_enabled=True,scope=R.SECURITY_SCOPE))
-    if stage=='installed':p.update(root=dict(fstype='btrfs',encrypted=True,target='vda',luks_uuid=UUID),offline_queue=G.queue_predicate(dict(ok=False,ready=False,state='error',download_bytes=506181191),dict(version='1.1.0'),False,'enabled'))
+    if stage=='installed':p.update(root=dict(fstype='btrfs',encrypted=True,target='vda',luks_uuid=UUID),offline_queue=G.queue_predicate(dict(ok=False,ready=False,state='error',download_bytes=506181191),dict(version='1.1.0',profile='small-v2',profile_sha256=G.QUEUE_PROFILES['small-v2']),False,'enabled'))
     return dict(schema='arctic-final-bios-report-v1',context=CTX,stage=stage,status='passed',guest_sha256='f'*64,proof=p,release_acceptance=False)
 
 def wire(stage):
@@ -69,8 +69,8 @@ class BIOSControls(unittest.TestCase):
 
     def test_original_queue_predicates_reject_ready_missing_pending_payload_and_false_timer(self):
         good=dict(ok=False,ready=False,state='error',download_bytes=506181191)
-        self.assertFalse(G.queue_predicate(good,{'version':'1.1.0'},False,'enabled')['ready'])
-        variants=[({**good,'ready':True},{'version':'1.1.0'},False,'enabled'),(good,{},False,'enabled'),(good,{'version':'1.1.0'},True,'enabled'),(good,{'version':'1.1.0'},False,'disabled'),({**good,'download_bytes':1},{'version':'1.1.0'},False,'enabled')]
+        self.assertFalse(G.queue_predicate(good,{'version':'1.1.0','profile':'small-v2','profile_sha256':G.QUEUE_PROFILES['small-v2']},False,'enabled')['ready'])
+        variants=[({**good,'ready':True},{'version':'1.1.0','profile':'small-v2','profile_sha256':G.QUEUE_PROFILES['small-v2']},False,'enabled'),(good,{},False,'enabled'),(good,{'version':'1.1.0','profile':'small-v2','profile_sha256':G.QUEUE_PROFILES['small-v2']},True,'enabled'),(good,{'version':'1.1.0','profile':'small-v2','profile_sha256':G.QUEUE_PROFILES['small-v2']},False,'disabled'),({**good,'download_bytes':1},{'version':'1.1.0','profile':'small-v2','profile_sha256':G.QUEUE_PROFILES['small-v2']},False,'enabled')]
         for args in variants:
             with self.subTest(args=args),self.assertRaises(RuntimeError):G.queue_predicate(*args)
 

@@ -12,6 +12,7 @@ import time
 
 UUID=re.compile('[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}')
 CONTEXT_KEYS={'schema','nonce','execution_sha','source_sha','iso_sha256','probe_sha256','native_sha256','security_sha256'}
+QUEUE_PROFILES = {'small-v2': 'd4b9326169fe0773b36857ce4b2c52d31294c4c421933c5fbb41422227e92756', 'turbo-q5-v3': 'dfc1e2252ca033888fd0262f73fd4643066c736b9d696e4b7481875e76ed4191'}
 
 def require(value,code):
     if not value:raise RuntimeError(code)
@@ -74,7 +75,11 @@ def encrypted_root(sys_root=Path('/sys')):
 
 def queue_predicate(status,pending,verified_exists,timer):
     require(type(status) is dict and type(status.get('ok')) is bool and status.get('ready') is False and status.get('state') in ('queued','error'),'offline-not-queued')
-    require(type(pending) is dict and pending=={'version':'1.1.0'} and not verified_exists and timer=='enabled','offline-pending-proof')
+    valid_pending=(type(pending) is dict and set(pending)=={'version','profile','profile_sha256'}
+                   and all(type(pending[key]) is str for key in pending)
+                   and pending['version']=='1.1.0' and pending['profile'] in QUEUE_PROFILES
+                   and pending['profile_sha256']==QUEUE_PROFILES[pending['profile']])
+    require(valid_pending and not verified_exists and timer=='enabled','offline-pending-proof')
     require(type(status.get('download_bytes')) is int and status['download_bytes'] in (506181191,678117115),'offline-download-disclosure')
     return {'ready':False,'pending':True,'state':status['state'],'version':'1.1.0','timer_enabled':True,'verified_payload':False,'outside_http_response':False}
 

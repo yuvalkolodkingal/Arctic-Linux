@@ -763,356 +763,356 @@
       "source_sha256": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"
     },
     {
-      "fixed_assertion_label": "raise-site-17",
+      "fixed_assertion_label": "raise-site-18",
       "function": "require",
       "site_kind": "raise",
       "source": "bios-probe",
-      "source_line": 17,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 18,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-26",
+      "fixed_assertion_label": "return-site-27",
       "function": "strict_json",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 26,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 27,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "duplicate-json-field",
       "function": "strict_json.<locals>.fields",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 24,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 25,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-25",
+      "fixed_assertion_label": "return-site-26",
       "function": "strict_json.<locals>.fields",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 25,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 26,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-26",
+      "fixed_assertion_label": "return-site-27",
       "function": "strict_json.<locals>.<lambda>",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 26,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 27,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-26",
+      "fixed_assertion_label": "return-site-27",
       "function": "strict_json.<locals>.<lambda>.<locals>.<genexpr>",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 26,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 27,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "context-identity",
       "function": "context",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 30,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 31,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "context-pins",
       "function": "context",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 31,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 32,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-32",
+      "fixed_assertion_label": "return-site-33",
       "function": "context",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 32,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 33,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "context-pins",
       "function": "context.<locals>.<genexpr>",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 31,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 32,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "protected-record",
       "function": "protected",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 39,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 40,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "protected-record-changed",
       "function": "protected",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 41,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 42,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-42",
+      "fixed_assertion_label": "return-site-43",
       "function": "protected",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 42,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 43,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "command-outcome-or-bound",
       "function": "command",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 48,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 49,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-49",
+      "fixed_assertion_label": "return-site-50",
       "function": "command",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 49,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 50,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-52",
+      "fixed_assertion_label": "return-site-53",
       "function": "text",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 52,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 53,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "not-legacy-bios",
       "function": "firmware",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 56,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 57,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "boot-medium",
       "function": "firmware",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 58,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 59,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "boot-id",
       "function": "firmware",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 59,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 60,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-60",
+      "fixed_assertion_label": "return-site-61",
       "function": "firmware",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 60,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 61,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "encrypted-btrfs-root",
       "function": "encrypted_root",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 65,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 66,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "owned-luks-backing-device",
       "function": "encrypted_root",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 67,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 68,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "foreign-root-partition",
       "function": "encrypted_root",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 69,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 70,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "foreign-root-driver",
       "function": "encrypted_root",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 70,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 71,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "luks-uuid",
       "function": "encrypted_root",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 71,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 72,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-72",
+      "fixed_assertion_label": "return-site-73",
       "function": "encrypted_root",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 72,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 73,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-not-queued",
       "function": "queue_predicate",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 76,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 77,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-pending-proof",
       "function": "queue_predicate",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 77,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 82,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-download-disclosure",
       "function": "queue_predicate",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 78,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 83,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-79",
+      "fixed_assertion_label": "return-site-84",
       "function": "queue_predicate",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 79,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 84,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-outside-response",
       "function": "offline_queue",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 84,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 89,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-payload-present",
       "function": "offline_queue",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 86,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 91,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "dictation-status-bound",
       "function": "offline_queue",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 89,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 94,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "dictation-status-outcome",
       "function": "offline_queue",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 91,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 96,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-false-ready",
       "function": "offline_queue",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 92,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 97,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-queue-deadline",
       "function": "offline_queue",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 94,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 99,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-site-97",
+      "fixed_assertion_label": "return-site-102",
       "function": "offline_queue",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 97,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 102,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "offline-payload-present",
       "function": "offline_queue.<locals>.<genexpr>",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 86,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 91,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "disposable-root",
       "function": "main",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 101,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 106,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "selinux-enforcing",
       "function": "main",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 105,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 110,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "actual-desktop-user",
       "function": "main",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 108,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 113,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "bios-check-failed",
       "function": "main",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 117,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 122,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "read-only-source-cd",
       "function": "main",
       "site_kind": "require",
       "source": "bios-probe",
-      "source_line": 118,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 123,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
-      "fixed_assertion_label": "return-code-0-site-122",
+      "fixed_assertion_label": "return-code-0-site-127",
       "function": "main",
       "site_kind": "return",
       "source": "bios-probe",
-      "source_line": 122,
-      "source_sha256": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11"
+      "source_line": 127,
+      "source_sha256": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286"
     },
     {
       "fixed_assertion_label": "return-site-23",
@@ -4851,7 +4851,7 @@
     "tools/final-bios-failure-observer/observer.py": "6592648b54600af57e685e2baa84149a9637001822ff9b4d9592c50ce213e43a",
     "tools/final-bios-install/common.py": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
     "tools/final-bios-install/compose.py": "c8f47ea3855c9fb6816907644d4d56497683fda04b6ea0bbff397de637c440bc",
-    "tools/final-bios-install/guest.py": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "tools/final-bios-install/guest.py": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286",
     "tools/final-bios-install/run.py": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
     "tools/final-bios-install/security.py": "963112315a154824080ad0b4aded28f3e2e7a68ebe2c9562a14c37714b9b8e0b",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
@@ -4892,7 +4892,7 @@
     ".github/workflows/final-bios-install-20261011.yml": "3f4b6aa3892efa2ac845cd0669f744abee1e861b428761e5669267b76ac7d5f6",
     "tools/final-bios-install/common.py": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
     "tools/final-bios-install/compose.py": "c8f47ea3855c9fb6816907644d4d56497683fda04b6ea0bbff397de637c440bc",
-    "tools/final-bios-install/guest.py": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "tools/final-bios-install/guest.py": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286",
     "tools/final-bios-install/run.py": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
     "tools/final-bios-install/security.py": "963112315a154824080ad0b4aded28f3e2e7a68ebe2c9562a14c37714b9b8e0b",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
@@ -4931,7 +4931,7 @@
   "source_site_sha256": {
     "bios-common": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
     "bios-host": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
-    "bios-probe": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "bios-probe": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286",
     "install-driver": "63d325d8bf3b4a49b23e827caa2876dfc8ac28a3bc55b1cf8d6ea0719f9343d6",
     "native-source": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
     "vmtest": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6"

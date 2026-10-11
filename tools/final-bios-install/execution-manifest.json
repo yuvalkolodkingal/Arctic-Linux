@@ -4,7 +4,7 @@
     ".github/workflows/final-bios-install-20261011.yml": "3f4b6aa3892efa2ac845cd0669f744abee1e861b428761e5669267b76ac7d5f6",
     "tools/final-bios-install/common.py": "7fb1fabaab01939436a1849277f11b9d8a2da04445b0bf63f01772583edb3c07",
     "tools/final-bios-install/compose.py": "c8f47ea3855c9fb6816907644d4d56497683fda04b6ea0bbff397de637c440bc",
-    "tools/final-bios-install/guest.py": "b155aacb262500fe97157e292f6debd35ddf695b3d2f1b4ad9e1d119f5416e11",
+    "tools/final-bios-install/guest.py": "42335f632faf01cdbfe43235297ff1ec749f358192b22d33d1186b52fd3af286",
     "tools/final-bios-install/run.py": "b67c638e9d56ea7ae41ad9a5ff7c5222c3adbac64dac6ebb2b96462434553dbe",
     "tools/final-bios-install/security.py": "963112315a154824080ad0b4aded28f3e2e7a68ebe2c9562a14c37714b9b8e0b",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
