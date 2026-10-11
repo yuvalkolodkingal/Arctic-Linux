@@ -6,6 +6,7 @@ the shipped fixed setup wrapper. Public output contains fixed codes and hashes.
 """
 import argparse
 import ctypes
+import dis
 import fcntl
 import hashlib
 import importlib.util
@@ -62,6 +63,113 @@ WAIT_DIAGNOSTIC_TARGETS = ('receiver-clear', 'capture-link', 'terminal-state', '
                            'loader-route', 'loader-terminal', 'loader-delivery')
 WAIT_DIAGNOSTIC_STATES = ('ready', 'error', 'recording', 'transcribing', 'unavailable')
 WAIT_DIAGNOSTIC_BACKENDS = ('', 'cpu', 'vulkan')
+
+# Failure-only observations. These cannot satisfy a report gate, and never
+# include an exception's text, argv, stderr, transcript or unknown operand.
+COLLECTOR_FAILURE_PHASES = ('entry', 'arguments', 'boot-context', 'source-pins',
+                            'checker-init', 'execute', 'owned-cleanup',
+                            'report-validation', 'report-emission')
+COLLECTOR_ERROR_CLASSES = ((Invalid, 'invalid'), (FileNotFoundError, 'file-not-found'),
+    (PermissionError, 'permission-error'), (OSError, 'os-error'),
+    (UnicodeDecodeError, 'unicode-error'), (json.JSONDecodeError, 'json-error'),
+    (ValueError, 'value-error'), (KeyError, 'key-error'), (TypeError, 'type-error'),
+    (subprocess.TimeoutExpired, 'timeout'), (subprocess.CalledProcessError, 'command-error'),
+    (RuntimeError, 'runtime-error'), (InterruptedError, 'interrupted'),
+    (KeyboardInterrupt, 'keyboard-interrupt'), (SystemExit, 'system-exit'))
+COLLECTOR_FAILURE_FRAMES = ('unknown', 'main', 'checker-init', 'installed-controller',
+    'desktop', 'command', 'installed-file', 'file-hash', 'json-file', 'audit-state',
+    'context-contract', 'report-contract')
+COLLECTOR_FAILURE_GUARDS = (
+    'explicit-root-disposable-guest-required', 'reviewed-test-cd-location-required',
+    'qemu-kvm-guest-required', 'actual-boot-stage-mismatch', 'context-boot-stage-mismatch',
+    'reviewed-source-hash-mismatch', 'actual-hardware-profile-mismatch',
+    'journal-cursor-unavailable', 'installed-profile-inventory',
+    'installed-profile-descriptor-pin', 'installed-profile-asset-inventory',
+    'installed-profile-asset-pin', 'desktop-wayland-ambiguous', 'desktop-mango-ambiguous',
+    'desktop-not-unique', 'unsafe-installed-file', 'installed-file-size',
+    'audit-status-unavailable', 'command-failed', 'command-output-bound')
+_COLLECTOR_COMMAND_TOKEN = object()
+collector_failure_phase = 'entry'
+
+def collector_guard_literal(trace):
+    """Read the literal last argument of the exact throwing require call."""
+    instructions = list(dis.get_instructions(trace.tb_frame.f_code, show_caches=True))
+    if len(instructions) > 4096:
+        return 'unknown'
+    selected = next((index for index, item in enumerate(instructions) if item.offset == trace.tb_lasti), None)
+    if selected is None:
+        return 'unknown'
+    while selected >= 0 and instructions[selected].opname == 'CACHE':
+        selected -= 1
+    if selected < 1 or instructions[selected].opname not in ('CALL', 'CALL_FUNCTION') or instructions[selected].arg != 2:
+        return 'unknown'
+    selected -= 1
+    while selected >= 0 and instructions[selected].opname == 'CACHE':
+        selected -= 1
+    if selected >= 0 and instructions[selected].opname == 'PRECALL':
+        if instructions[selected].arg != 2:
+            return 'unknown'
+        selected -= 1
+    if selected >= 0 and instructions[selected].opname == 'LOAD_CONST':
+        value = instructions[selected].argval
+        if type(value) is str:
+            return next((code for code in COLLECTOR_FAILURE_GUARDS if value == code), 'unknown')
+    return 'unknown'
+
+def collector_failure(error):
+    """Project only exact classes and deepest complete Source code identities."""
+    error_label = next((label for kind, label in COLLECTOR_ERROR_CLASSES if type(error) is kind), 'other-error')
+    result = dict(schema='arctic-dictation-collector-failure-v1',
+                  phase=collector_failure_phase if type(collector_failure_phase) is str
+                  and collector_failure_phase in COLLECTOR_FAILURE_PHASES else 'entry',
+                  error=error_label, frame='unknown', caller='unknown', guard='unknown', command_returncode=None,
+                  release_acceptance=False)
+    if error_label == 'other-error':
+        return result
+    owners = [(main, 'main'), (Checker.__init__, 'checker-init'),
+              (installed_controller, 'installed-controller'), (desktop, 'desktop'),
+              (run, 'command'), (owned_file, 'installed-file'), (sha, 'file-hash'),
+              (read, 'json-file'), (Checker.audit_state, 'audit-state'),
+              (context, 'context-contract'), (validate, 'report-contract')]
+    trace = BaseException.__traceback__.__get__(error)
+    frames, traces, seen = [], [], set()
+    for _ in range(64):
+        if trace is None:
+            break
+        if id(trace) in seen:
+            return result
+        seen.add(id(trace)); frames.append(trace.tb_frame); traces.append(trace)
+        trace = trace.tb_next
+    if trace is not None:
+        return result  # No truncated prefix is presented as the deepest owner.
+    for frame in frames[-1:]:
+        for function, label in owners:
+            if frame.f_code is function.__code__ and frame.f_globals is function.__globals__:
+                result['frame'] = label
+    if (type(error) is Invalid and len(frames) >= 2
+        and frames[-1].f_code is require.__code__ and frames[-1].f_globals is require.__globals__
+        and any(frames[-2].f_code is function.__code__ and frames[-2].f_globals is function.__globals__
+                for function, _ in owners)):
+        result['frame'] = next(label for function, label in owners
+                               if frames[-2].f_code is function.__code__
+                               and frames[-2].f_globals is function.__globals__)
+        if len(frames) >= 3:
+            result['caller'] = next((label for function, label in owners
+                                    if frames[-3].f_code is function.__code__
+                                    and frames[-3].f_globals is function.__globals__), 'unknown')
+        result['guard'] = collector_guard_literal(traces[-2])
+        proof = BaseException.__getattribute__(error, '__dict__').get('_arctic_dictation_command_exit')
+        if (frames[-2].f_code is run.__code__ and frames[-2].f_globals is run.__globals__
+            and result['guard'] == 'command-failed' and type(proof) is tuple and len(proof) == 2
+            and proof[0] is _COLLECTOR_COMMAND_TOKEN and type(proof[1]) is int and -255 <= proof[1] <= 255):
+            result['command_returncode'] = proof[1]
+    return result
+
+def emit_collector_failure(error):
+    try:
+        print('ARCTIC-DICTATION-COLLECTOR-FAILURE ' + json.dumps(collector_failure(error), sort_keys=True), flush=True)
+    except Exception:
+        pass  # Optional diagnostics cannot replace the same original failure.
 
 def verify_small_cpu_fixture(cpuinfo):
     """Check every declared two-vCPU Small fixture before any application gate.
@@ -266,7 +374,12 @@ def run(argv, timeout=20, check=True, output_role=None):
         code += '-journal-o' + str(len(result.stdout)) + '-e' + str(len(result.stderr))
     require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, code)
     if check:
-        require(result.returncode == 0, 'command-failed')
+        try:
+            require(result.returncode == 0, 'command-failed')
+        except Invalid as error:
+            if type(error) is Invalid and type(result.returncode) is int and -255 <= result.returncode <= 255:
+                error.__dict__['_arctic_dictation_command_exit'] = (_COLLECTOR_COMMAND_TOKEN, result.returncode)
+            raise
     return result
 
 def wait(fn, seconds=20):
@@ -1316,6 +1429,7 @@ class Checker:
         require(not errors, 'owned-cleanup-failed')
 
 def main():
+    global collector_failure_phase
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     if len(sys.argv) == 4 and sys.argv[1] == '_receiver':
         receiver(sys.argv[2], sys.argv[3]); return 0
@@ -1323,8 +1437,10 @@ def main():
     parser.add_argument('stage', choices=('live', 'installed'))
     parser.add_argument('--disposable-guest', action='store_true')
     args = parser.parse_args()
+    collector_failure_phase = 'arguments'
     require(args.disposable_guest and os.geteuid() == 0, 'explicit-root-disposable-guest-required')
     require(HERE == DATA / 'dictation-qualification', 'reviewed-test-cd-location-required')
+    collector_failure_phase = 'boot-context'
     require(run(['systemd-detect-virt']).stdout.strip() in (b'qemu', b'kvm'), 'qemu-kvm-guest-required')
     live = 'rd.live.image' in Path('/proc/cmdline').read_text().split()
     require(live == (args.stage == 'live'), 'actual-boot-stage-mismatch')
@@ -1332,6 +1448,7 @@ def main():
     if live:
         declared = dict(declared, phase='live')
     require((declared['phase'] == 'live') == live, 'context-boot-stage-mismatch')
+    collector_failure_phase = 'source-pins'
     for path, key in ((HERE / 'guest_check.py', 'checker_sha256'), (HERE / 'contract.py', 'contract_sha256'),
                       (DATA / 'dictation-accuracy/accuracy.py', 'accuracy_sha256'),
                       (DATA / 'dictation-accuracy/pins.json', 'pins_sha256'), (CONTROLLER, 'controller_sha256'),
@@ -1339,16 +1456,24 @@ def main():
         if path in (CONTROLLER, CHILD_EXEC):
             owned_file(path)
         require(sha(path) == declared[key], 'reviewed-source-hash-mismatch')
+    collector_failure_phase = 'checker-init'
     checker = Checker(declared)
     report = checker.report
     try:
+        collector_failure_phase = 'execute'
         report = checker.execute()
-    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
+    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+        emit_collector_failure(error)
         pass
+    except Exception as error:
+        emit_collector_failure(error)
+        raise  # Preserve the same previously unhandled failure before cleanup.
     finally:
         try:
+            collector_failure_phase = 'owned-cleanup'
             checker.close()
-        except (OSError, Invalid, subprocess.TimeoutExpired):
+        except (OSError, Invalid, subprocess.TimeoutExpired) as error:
+            emit_collector_failure(error)
             report = checker.report
             failed_gate = 'transcript-private-cleanup' if 'transcript-private-cleanup' in checker.gates else 'no-new-avcs'
             for gate in report['gates']:
@@ -1359,13 +1484,19 @@ def main():
         report['gates'].append({'id': name, 'status': 'unrun', 'evidence_kind': EXPECTED_KINDS[name],
                                'code': 'prerequisite-or-collector-failed', 'observations': {}})
     report['status'] = 'passed' if all(g['status'] == 'passed' for g in report['gates']) else 'failed'
+    collector_failure_phase = 'report-validation'
     validate(report, declared, fixture_manifest=DATA / 'dictation-fixtures/fixtures.json')
+    collector_failure_phase = 'report-emission'
     print('ARCTIC-DICTATION-QUALIFICATION ' + json.dumps(report, sort_keys=True), flush=True)
     return int(report['status'] != 'passed')
 
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
+    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+        emit_collector_failure(error)
         print('ARCTIC-DICTATION-COLLECTOR-ERROR {"code":"collector-guard-or-setup-failed","release_acceptance":false}', flush=True)
         sys.exit(1)
+    except Exception as error:
+        emit_collector_failure(error)
+        raise  # Original exception, traceback and nonzero outcome stay private.

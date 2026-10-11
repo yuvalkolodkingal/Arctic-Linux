@@ -71,6 +71,84 @@ TRUSTED_CONTRACT_ERRORS = frozenset({
     'gate-safe-code', 'gate-observation-fields', 'report-status-derived',
     'image-dictation-gates-incomplete'})
 
+COLLECTOR_FAILURE_PHASES = frozenset({'entry', 'arguments', 'boot-context', 'source-pins',
+    'checker-init', 'execute', 'owned-cleanup', 'report-validation', 'report-emission'})
+COLLECTOR_FAILURE_ERRORS = frozenset({'invalid', 'file-not-found', 'permission-error', 'os-error',
+    'unicode-error', 'json-error', 'value-error', 'key-error', 'type-error', 'timeout',
+    'command-error', 'runtime-error', 'interrupted', 'keyboard-interrupt', 'system-exit', 'other-error'})
+COLLECTOR_FAILURE_FRAMES = frozenset({'unknown', 'main', 'checker-init', 'installed-controller',
+    'desktop', 'command', 'installed-file', 'file-hash', 'json-file', 'audit-state',
+    'context-contract', 'report-contract'})
+COLLECTOR_FAILURE_GUARDS = frozenset({'unknown',
+    'explicit-root-disposable-guest-required', 'reviewed-test-cd-location-required',
+    'qemu-kvm-guest-required', 'actual-boot-stage-mismatch', 'context-boot-stage-mismatch',
+    'reviewed-source-hash-mismatch', 'actual-hardware-profile-mismatch',
+    'journal-cursor-unavailable', 'installed-profile-inventory',
+    'installed-profile-descriptor-pin', 'installed-profile-asset-inventory',
+    'installed-profile-asset-pin', 'desktop-wayland-ambiguous', 'desktop-mango-ambiguous',
+    'desktop-not-unique', 'unsafe-installed-file', 'installed-file-size',
+    'audit-status-unavailable', 'command-failed', 'command-output-bound'})
+
+def collector_failure_record(raw):
+    """Decode an exact fixed failure record; never export any unknown field."""
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            if key in value:
+                raise ValueError()
+            value[key] = item
+        return value
+    def constant(_value):
+        raise ValueError()
+    try:
+        if type(raw) is not bytes or not 0 < len(raw) <= 4096:
+            return None
+        value = json.loads(raw.decode('ascii'), object_pairs_hook=pairs, parse_constant=constant)
+        if (type(value) is not dict or set(value) != {'schema', 'phase', 'error', 'frame', 'caller', 'guard',
+                'command_returncode', 'release_acceptance'}
+            or value['schema'] != 'arctic-dictation-collector-failure-v1'
+            or value['release_acceptance'] is not False
+            or any(type(value[key]) is not str for key in ('phase', 'error', 'frame', 'caller', 'guard'))
+            or value['phase'] not in COLLECTOR_FAILURE_PHASES or value['error'] not in COLLECTOR_FAILURE_ERRORS
+            or value['frame'] not in COLLECTOR_FAILURE_FRAMES or value['caller'] not in COLLECTOR_FAILURE_FRAMES
+            or value['guard'] not in COLLECTOR_FAILURE_GUARDS):
+            return None
+        code = value['command_returncode']
+        if code is not None and (type(code) is not int or not -255 <= code <= 255 or code == 0
+                                or (value['error'], value['frame'], value['guard']) !=
+                                ('invalid', 'command', 'command-failed')):
+            return None
+        if value['guard'] != 'unknown' and (value['error'] != 'invalid' or value['frame'] == 'unknown'):
+            return None
+        return value
+    except (UnicodeError, ValueError, KeyError, TypeError):
+        return None
+
+def relay_collector_failures(vm, phase):
+    """Failure-only bounded projection from owned private UART; no raw excerpts."""
+    if type(phase) is not str or phase not in PHASES:
+        return
+    try:
+        raw = launch_diagnostic_read(vm, 'serial-boot.log', 16 * 1024 * 1024)
+        prefix = b'ARCTIC-DICTATION-COLLECTOR-FAILURE '
+        seen = set()
+        for line in raw.splitlines(keepends=True):
+            if not line.endswith(b'\n') or not line.startswith(prefix):
+                continue
+            body = line[len(prefix):-1]
+            if body.endswith(b'\r'):
+                body = body[:-1]  # The original guest TTY can emit CRLF.
+            value = collector_failure_record(body)
+            if value is None:
+                continue
+            canonical = json.dumps(value, sort_keys=True)
+            if canonical in seen or len(seen) >= 16:
+                continue
+            seen.add(canonical)
+            print('ARCTIC-DICTATION-GUEST-FAILURE ' + phase + ' ' + canonical, flush=True)
+    except Exception:
+        pass  # Preserve the same original failure, predicates and owned cleanup.
+
 
 def diagnostic(phase, stage, error, contract):
     if phase not in PHASES or stage not in CATCH_STAGES:
@@ -464,6 +542,7 @@ def run(args):
                 errors.append('harness-failed')
                 diagnostic(phase, 'harness', error, contract)
                 relay_host_stages(private / (phase + '.log'), diagnostic_token, phase)
+                relay_collector_failures(vm, phase)
                 preserve_launch_diagnostic(vm, private / (phase + '.log'), diagnostic_token, ctx, args.evidence, contract)
             # Preserve structurally safe reports even when the collector's
             # nonzero exit correctly prevents acceptance.
