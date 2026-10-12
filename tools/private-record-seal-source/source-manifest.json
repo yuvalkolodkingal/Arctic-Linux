@@ -1,0 +1,42 @@
+{
+  "age": {
+    "archive_bytes": 5194720,
+    "archive_sha256": "7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50",
+    "archive_url": "https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz",
+    "binary_sha256": "aaec874ed903da4b02a9d503778ae05ee5005b2acc0f4a4cf10e5d0f17fd4384",
+    "keygen_sha256": "50f849de5f05dc136de3dba623dd2b7e166e7badb9d4e3d83da88f2dbdb2d439",
+    "proof_bytes": 1544,
+    "proof_sha256": "55b941732d9fc88b0db9f954f2de2bb5a8bacb6479063b2cf5f244ffbb9b3f3a",
+    "proof_url": "https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz.proof",
+    "version": "v1.2.1"
+  },
+  "base": "6c08ae63473c7206b17ffe239fb83c5217f37586",
+  "capture": {
+    "envelope_bytes": 16384,
+    "exact_repo_attested_unit_family_required": true,
+    "plaintext_digest_exported": false,
+    "plaintext_file_created": false,
+    "plaintext_length_exported": false,
+    "plaintext_value_exported": false,
+    "privacy_gate_changed": false,
+    "records": 1,
+    "release_acceptance": false,
+    "runtime_gate_changed": false,
+    "same_owned_rejection_only": true,
+    "scanner_changed": false,
+    "source_member_id": "serial-install-log",
+    "unknown_record_family_required": true
+  },
+  "files": {
+    "tools/private-record-seal-source/README.md": "432c94cfab12f837fbec32d6ea34a14e060bef7e6b424336ef9e9ac08293066d",
+    "tools/private-record-seal-source/seal.py": "446fb2a41ea269d54e8490d6e3c6d9d19d6305dbd1dbdb9f3b8e5b239f4a6e2d",
+    "tools/private-record-seal-source/test_source.py": "5b4d1345b49dc84ee80090d5d6d60f2284a203f6f803cee868fcecba89a471f3"
+  },
+  "operational_cli": false,
+  "ready": false,
+  "recipient": null,
+  "recipient_generated_outside_github": false,
+  "recipient_sha256": null,
+  "release_acceptance": false,
+  "schema": "arctic-private-record-seal-disabled-source-v1"
+}
