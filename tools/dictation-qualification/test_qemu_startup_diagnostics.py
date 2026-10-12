@@ -237,6 +237,11 @@ class StartupDiagnostics(unittest.TestCase):
         old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode();new_runner=Path(r.__file__).read_text()
         a,b=enum(old_runner,'HOST_STAGES'),enum(new_runner,'HOST_STAGES');lines=new_runner.splitlines(keepends=True)
         lines[b.lineno-1:b.end_lineno]=old_runner.splitlines(keepends=True)[a.lineno-1:a.end_lineno]
-        self.assertEqual(''.join(lines),old_runner)
+        rolled_runner=''.join(lines)
+        current_profile="    require(manifest.get('hardware_profiles') == ['turbo-q5-v3']\n            and args.hardware_profile in manifest['hardware_profiles'], 'Unreviewed dictation hardware profile')\n"
+        previous_profile="    require(manifest.get('hardware_profiles') == ['small-v2', 'turbo-q5-v3']\n            and args.hardware_profile in manifest['hardware_profiles'], 'Unreviewed dictation hardware profile')\n"
+        self.assertEqual(rolled_runner.count(current_profile),1)
+        rolled_runner=rolled_runner.replace(current_profile,previous_profile,1)
+        self.assertEqual(rolled_runner,old_runner)
 
 if __name__=='__main__':unittest.main()

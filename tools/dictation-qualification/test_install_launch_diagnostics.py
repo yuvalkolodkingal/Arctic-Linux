@@ -209,7 +209,12 @@ class LaunchDiagnostics(unittest.TestCase):
             if isinstance(node,ast.Expr) and isinstance(node.value,ast.Call) and isinstance(node.value.func,ast.Name) and node.value.func.id=='preserve_launch_diagnostic':
                 edits.append((node.lineno-1,node.end_lineno,[]))
         for begin,end,replacement in sorted(edits,reverse=True): lines[begin:end]=replacement
-        self.assertEqual(''.join(lines),old_runner)
+        rolled_runner=''.join(lines)
+        current_profile="    require(manifest.get('hardware_profiles') == ['turbo-q5-v3']\n            and args.hardware_profile in manifest['hardware_profiles'], 'Unreviewed dictation hardware profile')\n"
+        previous_profile="    require(manifest.get('hardware_profiles') == ['small-v2', 'turbo-q5-v3']\n            and args.hardware_profile in manifest['hardware_profiles'], 'Unreviewed dictation hardware profile')\n"
+        self.assertEqual(rolled_runner.count(current_profile),1)
+        rolled_runner=rolled_runner.replace(current_profile,previous_profile,1)
+        self.assertEqual(rolled_runner,old_runner)
 
 class LaunchCaptureDiagnostics(unittest.TestCase):
     def driver(self, root, path, token='a'*32):
