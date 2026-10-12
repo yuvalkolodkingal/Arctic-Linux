@@ -62,6 +62,40 @@ WAIT_DIAGNOSTIC_TARGETS = ('receiver-clear', 'capture-link', 'terminal-state', '
                            'loader-route', 'loader-terminal', 'loader-delivery')
 WAIT_DIAGNOSTIC_STATES = ('ready', 'error', 'recording', 'transcribing', 'unavailable')
 WAIT_DIAGNOSTIC_BACKENDS = ('', 'cpu', 'vulkan')
+COLLECTOR_SETUP_STAGES = ('resource-limits', 'arguments', 'environment', 'context',
+                          'source-integrity', 'controller', 'profile', 'hardware',
+                          'report', 'desktop', 'workspace', 'journal', 'audit', 'execution')
+COLLECTOR_ERROR_TYPES = ((Invalid, 'invalid'), (OSError, 'os-error'),
+                         (ValueError, 'value-error'), (subprocess.TimeoutExpired, 'timeout'),
+                         (KeyError, 'key-error'), (TypeError, 'type-error'))
+COLLECTOR_SETUP_STAGE = 'resource-limits'
+
+def mark_collector_setup(stage):
+    """Record only one source-owned setup stage; never retain failure material."""
+    global COLLECTOR_SETUP_STAGE
+    require(type(stage) is str and stage in COLLECTOR_SETUP_STAGES,
+            'unknown-collector-setup-stage')
+    COLLECTOR_SETUP_STAGE = stage
+
+
+def collector_diagnostic_code(stage, error):
+    """Project setup failures using only built-in type metadata and identity."""
+    require(type(stage) is str and stage in COLLECTOR_SETUP_STAGES,
+            'unknown-collector-setup-stage')
+    # isinstance() may consult a hostile exception instance's __class__ when
+    # an earlier candidate does not match. Read the actual type's MRO through
+    # type's built-in descriptor so no foreign instance or metaclass accessor,
+    # payload, equality, text or representation can run.
+    try:
+        bases = type.__getattribute__(type(error), '__mro__')
+    except BaseException:
+        return 'collector-unknown'
+    if type(bases) is not tuple:
+        return 'collector-unknown'
+    for error_class, label in COLLECTOR_ERROR_TYPES:
+        if any(base is error_class for base in bases):
+            return 'collector-' + stage + '-' + label
+    return 'collector-unknown'
 
 def verify_small_cpu_fixture(cpuinfo):
     """Check every declared two-vCPU Small fixture before any application gate.
@@ -410,11 +444,14 @@ def receiver(path, nonce):
 class Checker:
     def __init__(self, declared):
         self.context = declared
+        mark_collector_setup('controller')
         self.controller = installed_controller()
+        mark_collector_setup('profile')
         self.profile_id = declared['hardware_profile']
         self.profile = self.controller.desired_profile()
         self.assets = PROFILE_ASSETS[self.profile_id]
         self.names = {key: asset['name'] for key, asset in self.assets.items()}
+        mark_collector_setup('hardware')
         cpuinfo = Path('/proc/cpuinfo').read_bytes()
         if self.profile_id == 'small-v2':
             verify_small_cpu_fixture(cpuinfo)
@@ -425,12 +462,15 @@ class Checker:
         self.gates = gates(declared['phase'], self.profile_id)
         hardware = {'profile': self.profile_id, 'v3_supported': self.controller.v3_supported(cpuinfo.decode()),
                     'cpuinfo_sha256': hashlib.sha256(cpuinfo).hexdigest(), 'profile_selection': 'recommended'}
+        mark_collector_setup('report')
         self.report = {'schema': SCHEMA, 'status': 'failed', 'release_acceptance': False,
                        'context': declared, 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                        'controller_sha256': sha(CONTROLLER), 'payload': {}, 'gates': [],
                        'samples': [], 'limitations': LIMITATIONS, 'disk': {},
                        'profile': PROFILES[self.profile_id], 'hardware': hardware}
+        mark_collector_setup('desktop')
         self.account, self.runtime, self.prefix = desktop()
+        mark_collector_setup('workspace')
         self.root = Path(tempfile.mkdtemp(prefix='arctic-dictation-test-', dir='/tmp'))
         os.chmod(self.root, 0o700); os.chown(self.root, self.account.pw_uid, self.account.pw_gid)
         self.prefix += ['XDG_CONFIG_HOME=' + str(self.root / 'config')]
@@ -441,9 +481,11 @@ class Checker:
         self.old_source = None
         self.source = None
         self.initial_processes = {p.name for p in Path('/proc').glob('[0-9]*')}
+        mark_collector_setup('journal')
         cursor = run(['journalctl', '-n', '0', '--show-cursor', '--no-pager']).stdout.decode()
         found = re.search(r'-- cursor: (\S+)', cursor)
         require(found, 'journal-cursor-unavailable'); self.cursor = found.group(1)
+        mark_collector_setup('audit')
         self.audit_before = self.audit_state()
         self.audit_file = Path('/var/log/audit/audit.log')
         self.audit_offset = None
@@ -1316,22 +1358,27 @@ class Checker:
         require(not errors, 'owned-cleanup-failed')
 
 def main():
+    mark_collector_setup('resource-limits')
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    mark_collector_setup('arguments')
     if len(sys.argv) == 4 and sys.argv[1] == '_receiver':
         receiver(sys.argv[2], sys.argv[3]); return 0
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage', choices=('live', 'installed'))
     parser.add_argument('--disposable-guest', action='store_true')
     args = parser.parse_args()
+    mark_collector_setup('environment')
     require(args.disposable_guest and os.geteuid() == 0, 'explicit-root-disposable-guest-required')
     require(HERE == DATA / 'dictation-qualification', 'reviewed-test-cd-location-required')
     require(run(['systemd-detect-virt']).stdout.strip() in (b'qemu', b'kvm'), 'qemu-kvm-guest-required')
     live = 'rd.live.image' in Path('/proc/cmdline').read_text().split()
     require(live == (args.stage == 'live'), 'actual-boot-stage-mismatch')
+    mark_collector_setup('context')
     declared = context(read(DATA / 'dictation-context.json'))
     if live:
         declared = dict(declared, phase='live')
     require((declared['phase'] == 'live') == live, 'context-boot-stage-mismatch')
+    mark_collector_setup('source-integrity')
     for path, key in ((HERE / 'guest_check.py', 'checker_sha256'), (HERE / 'contract.py', 'contract_sha256'),
                       (DATA / 'dictation-accuracy/accuracy.py', 'accuracy_sha256'),
                       (DATA / 'dictation-accuracy/pins.json', 'pins_sha256'), (CONTROLLER, 'controller_sha256'),
@@ -1341,6 +1388,7 @@ def main():
         require(sha(path) == declared[key], 'reviewed-source-hash-mismatch')
     checker = Checker(declared)
     report = checker.report
+    mark_collector_setup('execution')
     try:
         report = checker.execute()
     except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
@@ -1366,6 +1414,11 @@ def main():
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
-        print('ARCTIC-DICTATION-COLLECTOR-ERROR {"code":"collector-guard-or-setup-failed","release_acceptance":false}', flush=True)
+    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+        try:
+            code = collector_diagnostic_code(COLLECTOR_SETUP_STAGE, error)
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
+            code = 'collector-unknown'
+        print('ARCTIC-DICTATION-COLLECTOR-ERROR ' + json.dumps(
+            {'code': code, 'release_acceptance': False}, sort_keys=True), flush=True)
         sys.exit(1)
