@@ -12,7 +12,7 @@
     "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
     "tools/native-functional/runner.py": "1b203bea39e94a8befb344cf0e9cc6c20619fe69af848e95f2c160bfa2117932",
     "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
-    "tools/native-functional/source-provenance.json": "9e0af9b17468460f550422202307274a86b759171f9ff5313faaaf1b2d0fa715",
+    "tools/native-functional/source-provenance.json": "72fff5ae87ad84065d812c7c4a6371b1ec254ef291d42f7f34d8dffbb241052b",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "be332f829fb35a09d42c8b1cbfd94df214ac1a87f10dcec0328dc19de77a346d",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",

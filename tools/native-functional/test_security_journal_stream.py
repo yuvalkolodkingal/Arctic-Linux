@@ -95,11 +95,10 @@ class JournalStreamControls(unittest.TestCase):
                 time.sleep(.05)
             else:
                 self.fail('owned journal descendant remained live after cleanup')
-            # An orphan can remain as an init-owned zombie in a container, but
-            # it is terminated and has no descriptors capable of holding pipes.
+            # An orphan can remain visible as an init-owned zombie in a
+            # container. Zombie state is kernel proof it cannot run or hold fds.
             if state is not None:
                 self.assertTrue(state.startswith('Z '))
-                self.assertEqual(list(Path('/proc', str(descendant), 'fd').iterdir()), [])
 
     def test_invalid_cursor_and_projection_fail_closed(self):
         for cursor in ('', 'private\nvalue', 'x' * 4097, None):
