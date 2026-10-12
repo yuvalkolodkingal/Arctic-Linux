@@ -1,5 +1,5 @@
 {
-  "status": "river_master_composed_alignment_and_render_pending",
+  "status": "validated_unpublished_candidate",
   "source_commit": "a000e91e85c3b584d052c9af589c37047d116af0",
   "flow": {
     "id": "AZ4TDAX0jyQtW3LwUlZZ",
@@ -105,7 +105,7 @@
     "scene_timing_available": true,
     "local_speech_to_text_verification": "passed",
     "transcript_leakage_review": "passed_for_verifier_logs",
-    "authentic_capture_review": "in_progress",
+    "authentic_capture_review": "passed_with_disclosed_evidence",
     "render_verified": true,
     "public_video_published": false,
     "whisper_metrics": {
@@ -190,7 +190,7 @@
   "notes": [
     "Signed provider download URLs are intentionally excluded from source control.",
     "Do not rerun the three nodes unless a named segment is proven unusable.",
-    "The 3 October showcase remains public until refreshed captures, alignment, HyperFrames checks, and final media validation pass.",
+    "The validated candidate remains unpublished until the matching Arctic release finishes qualification.",
     "The private workflow artifact contains the ASR transcript and word timestamps; those text-bearing files are intentionally not committed."
   ]
 }
