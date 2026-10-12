@@ -725,6 +725,10 @@ Page {
                                 id: thumb
                                 required property var modelData
                                 readonly property bool chosen: page.walls.current === modelData.key
+                                readonly property bool hideable: modelData.arctic === true
+                                    && modelData.hideable === true
+                                    && typeof modelData.slug === "string"
+                                    && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(modelData.slug)
                                 width: 152
                                 height: 112
                                 focusPolicy: Qt.StrongFocus
@@ -732,14 +736,15 @@ Page {
                                 Accessible.role: Accessible.RadioButton
                                 Accessible.name: modelData.name
                                 Accessible.checked: chosen
-                                Accessible.description: modelData.arctic
+                                Accessible.description: thumb.hideable
                                     ? "Delete hides it from Arctic’s collection; hidden wallpapers can be restored below"
-                                    : "F2 renames it, Delete deletes it"
+                                    : modelData.arctic ? "" : "F2 renames it, Delete deletes it"
                                 Keys.onPressed: event => {
                                     if (event.key === Qt.Key_F2 && !thumb.modelData.arctic) {
                                         renameDialog.start(thumb.modelData);
                                         event.accepted = true;
-                                    } else if (event.key === Qt.Key_Delete) {
+                                    } else if (event.key === Qt.Key_Delete
+                                               && (thumb.hideable || !thumb.modelData.arctic)) {
                                         deleteDialog.start(thumb.modelData);
                                         event.accepted = true;
                                     }
@@ -797,14 +802,16 @@ Page {
                                         // Personal pictures can be renamed or deleted. Packaged photos
                                         // are hidden per user, so an RPM update cannot bring them back.
                                         Row {
-                                            visible: thumb.hovered || thumb.activeFocus
+                                            visible: (thumb.hovered || thumb.activeFocus)
+                                                     && (thumb.hideable || !thumb.modelData.arctic)
                                             anchors.top: parent.top
                                             anchors.right: parent.right
                                             anchors.margins: 6
                                             spacing: 4
                                             Repeater {
-                                                model: thumb.modelData.arctic
+                                                model: thumb.hideable
                                                        ? [{ icon: "trash", tip: "Hide", action: "hide" }]
+                                                       : thumb.modelData.arctic ? []
                                                        : [{ icon: "edit", tip: "Rename", action: "rename" },
                                                           { icon: "trash", tip: "Delete", action: "delete" }]
                                                 T.AbstractButton {

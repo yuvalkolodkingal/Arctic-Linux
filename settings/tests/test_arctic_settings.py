@@ -1236,6 +1236,7 @@ class WallpaperFilesTest(Home):
         before = self.helper('wallpapers')
         self.assertEqual([item['slug'] for item in before['items'] if item['arctic']],
                          ['city-afterglow', 'ember-clouds'])
+        self.assertTrue(all(item['hideable'] for item in before['items'] if item['arctic']))
         self.helper('wallpaper-hide', 'ember-clouds')
         hidden = self.helper('wallpapers')
         self.assertEqual([item['slug'] for item in hidden['items'] if item['arctic']], ['city-afterglow'])
@@ -1250,6 +1251,22 @@ class WallpaperFilesTest(Home):
                          ['city-afterglow', 'ember-clouds'])
         self.assertEqual(restored['hiddenArctic'], [])
         self.assertNotIn('hidden_arctic', json.loads(state.read_text()))
+
+    def test_missing_or_invalid_collection_keeps_legacy_wallpaper_selectable(self):
+        collection = self.backgrounds / 'collection.json'
+        (self.backgrounds / 'aurora-polar-night.svg').write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9">'
+            '<rect width="16" height="9"/></svg>')
+
+        collection.unlink()
+        missing = [item for item in self.helper('wallpapers')['items'] if item['arctic']]
+        self.assertEqual([(item['key'], item['hideable']) for item in missing], [('aurora', False)])
+        self.assertNotIn('slug', missing[0])
+
+        collection.write_text('{not json')
+        invalid = [item for item in self.helper('wallpapers')['items'] if item['arctic']]
+        self.assertEqual([(item['key'], item['hideable']) for item in invalid], [('aurora', False)])
+        self.assertNotIn('slug', invalid[0])
 
     def test_active_packaged_wallpaper_cannot_be_hidden(self):
         ember = self.backgrounds / 'ember-clouds.jpg'

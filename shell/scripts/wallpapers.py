@@ -374,7 +374,8 @@ def library():
             thumb = thumbnail(path)
         except (OSError, ValueError):
             thumb = ''
-        items.append(dict(item, key=item.get('key', str(path)), path=str(path), thumb=thumb, arctic=True))
+        items.append(dict(item, key=item.get('key', str(path)), path=str(path), thumb=thumb,
+                          arctic=True, hideable=bool(item.get('slug'))))
     folder = Path(data.get('folder') or default_folder()).expanduser()
     system = {p.resolve() for p in SYSTEM if p.is_dir()}
     if folder.is_dir() and folder.resolve() not in system:
