@@ -1,0 +1,11 @@
+# Disabled BIOS exact public DNF line observation
+
+Attach-only Source component on actual da8bf13b4c207621fd1280ec7d02df777b6c4c5e. It emits one boolean only when the same selected scanner rejection, its exact nested caller, and the original owned records parent share the raw/content/view/Match/map identities and the complete English public Fedora44 UID DNF line equals the original mapped line. Both live and installed Source roles are supported. Unknown/affixed/transformed lines remain false.
+
+This is a text equality observation. It does not authenticate a DNF process, hosted package version/locale, current cause, PAM, boot, performance, privacy admission or release. The original scanner remains whole 0c2176c4 and rejects the positive fixture with the same original RuntimeError. No whitelist, redaction, repaired record, numeric limit, input, deadline, install/boot/security/oracle or cleanup changes. Optional observation failures remain inside the inherited primary-preserving catch.
+
+Only describe() and the helper hash literal differ in the copied observer; the copied companion gains one appended function. Whole inverses restore the actual old observer and selected1de helper. Historical build()/main() bodies remain inherited and are not an operational route for this component. No workflow, marker, image or READY activation is provided; future execution needs an independently reviewed explicit mapping.
+
+Public proof: concise-public-Source-proof.json3666B03d813bff505d8ecc081713f7eed577cf3d779a18048676c76bfdee04ae9b378. Official English DNF template and signed-packet-derived UID are Source-only; no runtime/cause/SDK claim. Browser c22d independent peer9254Be82828668b43972f7db01013ac67abcabc4654ac41a69e58c53e07a5cdd6d387 is reused only for this public formatting/equality semantics. BIOS records role binding is tested here separately.
+
+Focused tests use real compiled original records/common/compose and selected scanner Source with synthetic text only. They need the explicitly shared complete GitDB retained at /tmp/arctic-final-functional-git-mdmg9v01/objects.git. No original archive/log/stat/API/VM input is accessed. Initial missing compose test-loader fixture failure is retained; only the fixture dependency loader was corrected.
