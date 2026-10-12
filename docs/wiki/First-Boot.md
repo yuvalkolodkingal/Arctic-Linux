@@ -18,7 +18,7 @@ system, it's listed here too; otherwise the menu simply starts Arctic Linux afte
 
 ## 2. Your disk passphrase
 
-![The start-up screen asking for the disk passphrase](images/luks-prompt.png)
+[Preview of the disk passphrase screen](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/branding/plymouth/preview/passphrase.png)
 
 If you kept encryption on, the fox start-up screen asks you to **Enter your disk passphrase**.
 Type the passphrase you chose in the installer and press `Enter`. Dots show as you type, and a
@@ -34,7 +34,7 @@ Without encryption, this step doesn't appear.
 
 ## 3. The login screen
 
-![The Arctic Linux login screen](images/sddm-login.png)
+[Preview of the Arctic login screen](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/branding/sddm/preview/login-1280x800.png)
 
 Next comes the login screen: a clock and a frosted card with your name and a password field.
 Type your account password and press `Enter`.
@@ -52,7 +52,8 @@ straight to the desktop after the disk passphrase.
 
 ![The installed desktop after logging in](images/installed-desktop.png)
 
-You start in the **Polar night** theme with the aurora wallpaper. The first time you log in, a
+A fresh installation with the current packages starts in **Polar night** with *City Afterglow*.
+An existing account keeps its own wallpaper choice. The first time you log in, a
 **Welcome to Arctic Linux** card shows the keys that get you everywhere, a **Connect** button
 when you aren't online yet, **Get apps**, and **Light** or **Dark**. `Enter` or **Get started**
 closes it; it doesn't come back by itself (the [command menu](Command-Menu)'s **Learn ›
@@ -83,16 +84,19 @@ The [desktop tour](Desktop-Tour) walks through the rest.
 - **Flatpak and Nix**, ready to use. See [Apps and software](Apps-and-Software).
 - **Local dictation** downloads its engine and Hebrew/English Whisper model during
   online installation. Offline or failed setup remains queued for first boot;
-  **Settings → Dictation** shows readiness and **Retry setup**. A failed download
-  does not prevent installation. See [Local dictation](../DICTATION.md).
+  **Settings → Dictation** shows readiness and **Set up / retry…**. A failed download
+  does not prevent installation. See [Local dictation](Local-Dictation).
 
 ## Apps that finish installing after first boot
 
 Sometimes an app can't be downloaded during the install.
 
-- **If you used the installer**, it asked you: **Try again** or **Skip**. An app you skipped isn't
+- **During an online graphical install**, an app download failure asked you: **Try again** or
+  **Skip**. An app you skipped isn't
   installed and isn't retried by itself. The Done screen listed it; add it with
   [Get apps](Apps-and-Software#get-apps) (`Super + Shift + A`) whenever you like.
+- **Offline installs** keep apps that are already on the image and queue selected extra apps
+  for `arctic-firstboot`. The Done screen lists the deferred setup.
 - **Drivers, when you installed offline**, are installed, built and set up by arctic-firstboot
   the first time the computer is online; restart once more after that (the Done screen said so).
   See [Drivers](Drivers#installing-offline).
@@ -127,7 +131,7 @@ updates. To get them right away:
 
 ```sh
 arctic-update now     # download now; installed at the next restart
-flatpak update        # Flatpak apps (Zen, Zed, Collabora Office and others)
+flatpak update        # any optional Flatpak apps you installed
 ```
 
 ## If something went wrong

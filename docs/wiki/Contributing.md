@@ -14,6 +14,9 @@ Open an [issue](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) and inc
 - for desktop problems, the output of `journalctl --user -b` or `arctic-shell --foreground`;
 - a screenshot (`Print` or `Super + Shift + S` saves one to `~/Pictures/Screenshots`).
 
+Review logs/screenshots before posting: installer logs can identify disks, networks or accounts.
+For dictation, include the profile/backend and sanitized status error rather than private speech.
+
 ## Before you change something
 
 - **Read the contracts.** [`docs/BUILD-SPEC.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/BUILD-SPEC.md)
@@ -122,4 +125,5 @@ labels shown on screen.
 
 Arctic Linux is under the MIT licence (see `LICENSE`). By contributing you agree your contribution
 is released under it. The fonts are under the SIL Open Font Licence and the Nix SELinux policy under
-the LGPL 2.1 or later.
+the LGPL 2.1 or later. Photo wallpapers retain their upstream artist's copyright; the MIT
+code licence does not grant general reuse rights to those photographs.
