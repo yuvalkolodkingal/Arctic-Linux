@@ -1,0 +1,56 @@
+name: Preserve River showcase source
+
+on:
+  push:
+    branches:
+      - codex/showcase-river-production
+    paths:
+      - .github/workflows/showcase-river-source-preserve.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: showcase-river-source-preserve
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SOURCE_URL: https://backend.composio.dev/api/v3/sl/B7bKyQbqNw
+      MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
+      SOURCE_TAG: showcase-river-source-2026-10-12
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download and verify recovered existing master
+        run: |
+          curl --fail --location --silent --show-error --retry 4 \
+            --output narration-river-final.mp3 "$SOURCE_URL"
+          printf '%s  %s\n' "$MASTER_SHA256" narration-river-final.mp3 | sha256sum --check -
+          test "$(stat -c %s narration-river-final.mp3)" -eq 12182090
+
+      - name: Preserve in a draft source release
+        run: |
+          if ! gh release view "$SOURCE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$SOURCE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --draft \
+              --title "River showcase source (unpublished)" \
+              --notes "Checksum-verified source audio for the unpublished River showcase candidate. This draft is build input, not the public showcase release."
+          fi
+          gh release upload "$SOURCE_TAG" narration-river-final.mp3 \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Redownload and verify preserved asset
+        run: |
+          mkdir verified
+          gh release download "$SOURCE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern narration-river-final.mp3 \
+            --dir verified
+          printf '%s  %s\n' "$MASTER_SHA256" verified/narration-river-final.mp3 | sha256sum --check -
+          test "$(stat -c %s verified/narration-river-final.mp3)" -eq 12182090
