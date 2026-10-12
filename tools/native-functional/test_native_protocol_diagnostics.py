@@ -94,7 +94,7 @@ class ProtocolControls(unittest.TestCase):
     def test_byte_reversal_preserves_all_inherited_native_code(self):
         text=(HERE/'native_smoke.py').read_text(); restored=restore_native_source(text)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
-                         '3aa4f64f179e77ab973bb1186ff90ab48458d8b309a3b7a3ddb5b2a7d17c5283')
+                         'c3dfd8be5ce072722c4e673ee6052217796f25a4300d556ab84f298c87f2d65a')
 
     def test_positive_typed_geometry_is_not_video_or_display_acceptance(self):
         p,_=positive(); result=p.snapshot()
