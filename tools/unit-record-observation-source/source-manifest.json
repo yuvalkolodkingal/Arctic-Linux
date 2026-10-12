@@ -1,0 +1,40 @@
+{
+  "binding": {
+    "alignment_parent_helper_sha256": "1de427723ec027da1cfac79bff7eada7b875f631c2fab26745b8cad2f71c851b",
+    "diagnostic_path": "tools/unit-record-observation-source/diagnostic.py",
+    "diagnostic_sha256": "cc521c0e7d4fe4c6b95b62b3a53a930b916ffa1dd607eac601d4c200740fb5cc",
+    "enabled": true,
+    "privacy_admission_changed": false,
+    "private_excerpt_exported": false,
+    "private_numeric_field_exported": false,
+    "private_operand_digest_exported": false,
+    "private_operand_exported": false,
+    "private_operand_length_exported": false,
+    "record_family_id_count": 5,
+    "release_acceptance": false,
+    "requested_observer_path": "tools/broker-shape-observation-source/observer.py",
+    "requested_observer_sha256": "0c6c2cc1543fbe8d92e93d0883b641c8f98a3bb27b9d7d2ebe2f56c6fddf4dfd",
+    "runtime_cause_proven": false,
+    "same_owned_rejection_only": true,
+    "scanner_changed": false,
+    "schema": "arctic-bios-unit-record-family-dependency-map-v1",
+    "selected_helper_path": "tools/final-bios-dnf-uid-observation-source/match-diagnostic.py",
+    "selected_helper_sha256": "0d96f7bb82c9b38b64da494113fed52476b4af3c67f34b86566cfe3cdfa5206e",
+    "selected_observer_path": "tools/unit-record-observation-source/observer.py",
+    "selected_observer_sha256": "82bc6c8dda16282f068c936a6edc928924ff4160f6f51161ab2a2ec1430ac2b5",
+    "source_member_id_count": 2,
+    "unit_family_id_count": 1,
+    "whole_alignment_function_sha256": "64354580bd3b1f0304e4fc2d78d420f7690c47130f5a8a28ec945be9ba1311ce"
+  },
+  "files": {
+    "tools/unit-record-observation-source/README.md": "a4fd38e6d3f900088d94416e57b76ef76a636db5a0ffb6f1a0e6dd95e39d763e",
+    "tools/unit-record-observation-source/diagnostic.py": "cc521c0e7d4fe4c6b95b62b3a53a930b916ffa1dd607eac601d4c200740fb5cc",
+    "tools/unit-record-observation-source/observer.py": "82bc6c8dda16282f068c936a6edc928924ff4160f6f51161ab2a2ec1430ac2b5",
+    "tools/unit-record-observation-source/test_source.py": "8710d1708216da9472bbfeac6dc620422a6f0dc309d0b3123354ca9d5862952b"
+  },
+  "operational_cli": false,
+  "parent_observer_sha256": "0c6c2cc1543fbe8d92e93d0883b641c8f98a3bb27b9d7d2ebe2f56c6fddf4dfd",
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-bios-unit-record-family-disabled-Source-v1"
+}

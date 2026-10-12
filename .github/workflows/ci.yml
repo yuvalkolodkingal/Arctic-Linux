@@ -4,6 +4,7 @@ on:
   push:
     tags: ["**"]
     branches-ignore:
+      - codex/final-bios-install-20261011
       - codex/qualification-dispatch-20261010
       - codex/qualification-dispatch-20261008
       - codex/safe-rerender-v4-20261010

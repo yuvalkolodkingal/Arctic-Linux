@@ -1,0 +1,28 @@
+{
+  "command": "python3 -B -m unittest tools/unit-record-observation-source/test_source.py",
+  "exact_commit_archive": true,
+  "isolated_remote_environment": true,
+  "parent_commit": "bc938f05b2e484b9f40dd6e5545157f699f2fd19",
+  "privacy_admission_changed": false,
+  "private_excerpt_exported": false,
+  "private_numeric_field_exported": false,
+  "private_operand_digest_exported": false,
+  "private_operand_exported": false,
+  "private_operand_length_exported": false,
+  "release_acceptance": false,
+  "returncode": 0,
+  "runtime_cause_proven": false,
+  "scanner_changed": false,
+  "schema": "arctic-bios-unit-record-source-review-v1",
+  "scope": [
+    "tools/unit-record-observation-source/README.md",
+    "tools/unit-record-observation-source/diagnostic.py",
+    "tools/unit-record-observation-source/observer.py",
+    "tools/unit-record-observation-source/source-manifest.json",
+    "tools/unit-record-observation-source/test_source.py"
+  ],
+  "source_commit": "6b2cc6325519fca979c7c42fd80890caaa1c9b75",
+  "source_tree": "edeab87d75937c883342be28ce5ac534078b2e6c",
+  "tests_passed": 8,
+  "tests_run": 8
+}
