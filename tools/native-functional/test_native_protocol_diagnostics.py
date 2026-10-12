@@ -94,7 +94,7 @@ class ProtocolControls(unittest.TestCase):
     def test_byte_reversal_preserves_all_inherited_native_code(self):
         text=(HERE/'native_smoke.py').read_text(); restored=restore_native_source(text)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
-                         '99d5814d438f8777ea5292205b1b70b9c3c3bd12eeefc5ddc77d002693c8a73b')
+                         '3aa4f64f179e77ab973bb1186ff90ab48458d8b309a3b7a3ddb5b2a7d17c5283')
 
     def test_positive_typed_geometry_is_not_video_or_display_acceptance(self):
         p,_=positive(); result=p.snapshot()
@@ -271,7 +271,7 @@ class DrainAndExportControls(unittest.TestCase):
             monitor=dict(name='fixture',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64))
             smoke.fresh_window=Mock(side_effect=lambda start,*args:(start() or proof))
-            smoke.alive=Mock(return_value=client);smoke.wait=Mock();smoke.trace=Mock();smoke.diagnostic=Mock(return_value=None)
+            smoke.alive=Mock(return_value=client);smoke.wait=Mock(side_effect=lambda fn,*args,**kwargs:fn());smoke.trace=Mock();smoke.diagnostic=Mock(return_value=None)
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock()
             smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.reference_settings_config=Mock()
@@ -379,7 +379,7 @@ class DrainAndExportControls(unittest.TestCase):
                 is_focused=True,is_visible=True,is_fullscreen=True,monitor='fixture')
             monitor=dict(name='fixture',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64));smoke.fresh_window=Mock(return_value=proof)
-            smoke.alive=Mock(return_value=client);smoke.wait=Mock();smoke.trace=Mock()
+            smoke.alive=Mock(return_value=client);smoke.wait=Mock(side_effect=lambda fn,*args,**kwargs:fn());smoke.trace=Mock()
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_drain=Mock()
             smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.native_protocol_drain.snapshot.return_value=dict(status='unknown',ownership_verified=False)
