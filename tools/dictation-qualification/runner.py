@@ -283,7 +283,7 @@ def verify(args):
                         GITHUB_EVENT_NAME='push', GITHUB_RUN_ATTEMPT='1')
     require(all(os.environ.get(key) == value for key, value in expected_env.items()),
             'Requires reviewed disposable dictation Actions lane')
-    require(manifest.get('hardware_profiles') == ['small-v2', 'turbo-q5-v3']
+    require(manifest.get('hardware_profiles') == ['turbo-q5-v3']
             and args.hardware_profile in manifest['hardware_profiles'], 'Unreviewed dictation hardware profile')
     image = manifest['image']
     require(re.fullmatch('[0-9a-f]{40}', image['source_sha'])
