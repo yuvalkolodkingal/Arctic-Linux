@@ -1,0 +1,38 @@
+{
+  "F10_Source_pins": 20,
+  "accepted_BIOS_same_Match_component_peer_sha256": "15a8ece86f121a06d69824a023ab29af88134ce30b9b1da7e9198e4cff894748",
+  "base": "1cf129331831f697d6a8831140f715cde75e043c",
+  "image": null,
+  "one_fixed_bool_no_privacy_allowance": true,
+  "operational_cli": false,
+  "original_current_MF_runtime_pins": 49,
+  "original_public_Source_inputs": {
+    ".github/workflows/final-ui-bootstrap-csi-20261011.yml": "2c08cac035b116a0c94ee1b0414c012377aeb6c61335ba388a4fa8b01fa33d41",
+    "tools/final-installed-ui-settings-readiness/common.py": "57d253e2f721f841f2daf7a832ab8491a562caac8202deff777e0e29f7adc9c9",
+    "tools/final-installed-ui-settings-readiness/compose.py": "037ede09e9a44e52360dc4054fea367d5a8b0ae5bc1973bac7b0b6e83ce63646",
+    "tools/final-installed-ui-settings-readiness/guest.py": "06767f6d03660c8eafdb163505958f130c5a7be212ed49f49aafb8fded325fa7",
+    "tools/final-installed-ui-settings-readiness/run.py": "56ca3950327c836bfed4944670a1c6a1b84c7be3c5f22dcf9350ac01e0904107",
+    "tools/final-ui-bootstrap-csi-20261011/execution-manifest.json": "c0bedce8af407ab2f8b2f56b11074bf006edbbef5d00ec28082291ece25f1e5b",
+    "tools/final-ui-bootstrap-csi-20261011/match-diagnostic.py": "ca9129f10813699883429be9481b8311468fa724d406714ad38578f3ed4acda7",
+    "tools/final-ui-bootstrap-csi-20261011/native_bootstrap_observer.py": "6b5627a78cda5a3c94ff9ec3dae4c7af667a6add70cc78b69942f91586fbe40c",
+    "tools/final-ui-bootstrap-csi-20261011/observer.py": "1f0be337abe0298e1fe74b625ffcd6afe177bdd693ac3365400879c8e67eb8d7",
+    "tools/final-ui-bootstrap-csi-20261011/originals.py": "ece49eec8188355399561e6eda1acd6ee6edfd007fa7afb9f40c262be153cfdc",
+    "tools/final-ui-bootstrap-csi-20261011/scanner.py": "0c2176c4892e45e485eeac32f564fdfe9fb1619f142ac0b60babeed52924075f",
+    "tools/final-ui-bootstrap-csi-20261011/vmtest-observed.py": "e3e469bdfb3510c47aa51986cb09a3ef155c73b0496bc4a45dc2db07ebe670e6",
+    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
+  },
+  "public_DNF_format_proof_sha256": "03d813bff505d8ecc081713f7eed577cf3d779a18048676c76bfdee04ae9b378",
+  "ready": false,
+  "release_acceptance": false,
+  "retained_original_runtime_pins": 24,
+  "runtime_DNF_locale_cause_PAM_UI_release_qualification": false,
+  "schema": "arctic-current-UI-exact-public-DNF-line-disabled-Source-v1",
+  "selected_scanner_sha256": "0c2176c4892e45e485eeac32f564fdfe9fb1619f142ac0b60babeed52924075f",
+  "self_files": {
+    "tools/final-ui-dnf-uid-observation-source/README.md": "5262fa19709f69fadcddcfd29798a5eb4fbe684da278e7c2aa0f2ca845d9e820",
+    "tools/final-ui-dnf-uid-observation-source/match-diagnostic.py": "07e9573cfe53a8cfe2f6b48b3f7e85394c81cdff9487ef3c42a6c7945833aa98",
+    "tools/final-ui-dnf-uid-observation-source/observer.py": "b7308580854548270a12f04c8fb87eebee21b67527f2b20931d7bfe154241c3b",
+    "tools/final-ui-dnf-uid-observation-source/originals.py": "ece49eec8188355399561e6eda1acd6ee6edfd007fa7afb9f40c262be153cfdc",
+    "tools/final-ui-dnf-uid-observation-source/test_source.py": "1e0122eafef4124472b87e67a3777f4ea2cafb65c21c4c57d13fae17453f9e20"
+  }
+}

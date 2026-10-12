@@ -4,6 +4,7 @@ on:
   push:
     tags: ["**"]
     branches-ignore:
+      - codex/final-ui-dnf-uid-20261012
       - codex/final-ui-bootstrap-csi-20261011
       - codex/qualification-dispatch-20261010
       - codex/qualification-dispatch-20261008
