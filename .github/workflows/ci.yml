@@ -4,6 +4,7 @@ on:
   push:
     tags: ["**"]
     branches-ignore:
+      - codex/browser-accelerator-hosted-build-archived-glib-20261012
       - codex/browser-accelerator-hosted-build-match-20261012
       - codex/browser-accelerator-hosted-build-uid-20261011
       - codex/qualification-dispatch-20261010

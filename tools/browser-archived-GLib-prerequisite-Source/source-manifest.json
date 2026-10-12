@@ -1,0 +1,50 @@
+{
+  "DNF_local_exact_goal_Source_proof": {
+    "bytes": 11374,
+    "path": "/dev/shm/arctic-DNF5-local-RPM-install-Goal-Source-audit-20261012/final-official-local-RPM-install-Goal-Source-findings.json",
+    "sha256": "774acad19602ccbe47e77b6b960a565993abeab59029b8bf3eb410490ee70a99"
+  },
+  "actual_SDK_RPM_ELF_GTK_warm_AB": null,
+  "actual_VM": null,
+  "actual_artifact": null,
+  "actual_isolated_signed_header_proof": {
+    "bytes": 57018,
+    "path": "/dev/shm/arctic-browser-Fedora44-SDK-availability-Source-20261012/actual-isolated-signed-GLib-Source-proof.json",
+    "sha256": "44636276f9a873740f70f3bccab19dc48c6204e2c5d1f3fae05b110695339df1"
+  },
+  "actual_new_execution_namespace": null,
+  "actual_run": null,
+  "availability_Source_proof": {
+    "bytes": 6569,
+    "path": "/dev/shm/arctic-browser-Fedora44-SDK-availability-Source-20261012/current-official-five-SDK-pin-availability-Source-proof.json",
+    "sha256": "821ddb7fbd3ee33aeba25d8497b2c9d509adcd853679f013cd739d33afc9afbd"
+  },
+  "base": "adeae98d77e206851331f682c2cb219ae5b9fcbc",
+  "build_performance_release_acceptance": false,
+  "canonical_UID_remedy_included": false,
+  "execution_allowed": false,
+  "file_pins": {
+    "README.md": "b8b443672c0534dd4da19c62dc521ab1be47ea8923f5a9254bba1c081c575e02",
+    "archived-inputs.json": "e565abd27c8bb0ad6db4ce9f98a8e7f3a24e5ec4bc6cbe94f28a76a34d8a9814",
+    "producer.py": "5940cb98c210a45819a22598155fccdd91f1322c4693a6d60377328577d7d6e9",
+    "source-inverse.json": "f6a6c51b4173b7b5ef21985a389a39674578da311d9c5e331234168562c5cd38",
+    "test_source.py": "9655e658be6b23b83fc7abf8ab45d30957f5c82492981290b56bebc81d3c0a8a"
+  },
+  "limits": {
+    "archived_header": 30,
+    "archived_local_install": 900,
+    "archived_signature": 60,
+    "each_original_RPM_build": 2400,
+    "enclosing_hosted_producer": 7000,
+    "original_GTK_compile_and_control_each": 120,
+    "original_SDK_install": 900,
+    "original_builddep": 900
+  },
+  "no_host_system_payload_or_db_mutations": true,
+  "no_repo_signature_config_changes": true,
+  "original_five_SDK_NEVRAs_and_runtime_devel_contract_unchanged": true,
+  "producer_context_schema_and_defaults_unchanged": true,
+  "ready": false,
+  "runtime_cause_claim": false,
+  "schema": "default-off-exact-archived-GLib-SDK-prerequisite-source-v1"
+}

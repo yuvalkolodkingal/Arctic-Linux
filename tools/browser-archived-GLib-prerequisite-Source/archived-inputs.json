@@ -1,0 +1,29 @@
+{
+  "execution_allowed": false,
+  "glib2_tools_package": "Absent in complete official Koji build and actual signed Requires; tools are contained in these two packages.",
+  "input_RPMs_are_public_signed_Source_witnesses_not_private_build_outputs": true,
+  "inputs": [
+    {
+      "NEVRA": "glib2-0:2.88.3-1.fc44.x86_64",
+      "bytes": 3291840,
+      "filename": "glib2-2.88.3-1.fc44.x86_64.rpm",
+      "header_SHA256": "860f20c8badc0444c858e18637c852023a8f2791b2171285b9af06da635c2ce4",
+      "name": "glib2",
+      "official_URI": "https://kojipkgs.fedoraproject.org/packages/glib2/2.88.3/1.fc44/data/signed/6d9f90a6/x86_64/glib2-2.88.3-1.fc44.x86_64.rpm",
+      "sha256": "03e0c616f95cbcee3a076d4f235f0ce7ec4707926257e4ea73f5fa4f8e2bb888"
+    },
+    {
+      "NEVRA": "glib2-devel-0:2.88.3-1.fc44.x86_64",
+      "bytes": 1576151,
+      "filename": "glib2-devel-2.88.3-1.fc44.x86_64.rpm",
+      "header_SHA256": "d82035b397443bf7db51f67bc858d6bf65ca3347072813565f534fbdf38ca0d1",
+      "name": "glib2-devel",
+      "official_URI": "https://kojipkgs.fedoraproject.org/packages/glib2/2.88.3/1.fc44/data/signed/6d9f90a6/x86_64/glib2-devel-2.88.3-1.fc44.x86_64.rpm",
+      "sha256": "061b42408531714da5154f71db863ea57be82d98671f94d7fbfd6d0bdf2d9695"
+    }
+  ],
+  "key_primary_fingerprint": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+  "new_run_image_RPM_SDK_GTK_warm_AB": null,
+  "ready": false,
+  "schema": "default-off-exact-signed-official-GLib-prerequisite-inputs-v1"
+}
