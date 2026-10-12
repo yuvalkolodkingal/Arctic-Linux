@@ -257,8 +257,8 @@ reload_config`, `mmsg get all-devices|all-clients`, `mango -p`; `arctic-theme se
 on|off|mode auto|dark|light|current --json|list --json` (the theming engine; falls back to
 `arctic-theme winter|polar-night`); `arctic-update status --json|now|apply|channel
 stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
-`scripts/wallpapers.py list|folder|apply|import|delete|rename|hide|restore` (→ `arctic-wallpaper`);
-`arctic-session idle --restart`;
+`scripts/wallpapers.py list|folder|apply|import|delete|rename|hide|restore` (`apply` →
+`arctic-wallpaper`); `arctic-session idle --restart`;
 `wlr-randr --json` / `wlr-randr --output …`; `nmcli`; `gdbus` (power profiles, tuned-ppd);
 `gsettings` (GTK text size, cursor); tools it opens: `nm-connection-editor`, `blueman-manager`,
 `pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install|remove`, `xdg-open`.
@@ -266,9 +266,9 @@ Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Serv
 
 Wallpapers (Appearance): the shell's `scripts/wallpapers.py` (`list`, `folder`, `apply`, `import`,
 `delete`, `rename`, `hide`, `restore`) and `scripts/wallhaven.py` (`search`, `preview`, `download`,
-`set`, `state`, `key`, `prefs`; stdlib urllib + Pillow), through the helper's `wallpaper-set`,
-`wallpaper-import`, `wallpaper-delete`, `wallpaper-rename`, `wallpaper-hide`,
-`wallpaper-restore`, and `wallhaven …`. Only wallhaven.py talks to the network: https://wallhaven.cc/api/v1/search (and
+`set`, `state`, `key`, `prefs`; stdlib urllib + Pillow), through the helper's `wallpapers`,
+`wallpaper-set`, `wallpaper-import`, `wallpaper-delete`, `wallpaper-rename`, `wallpaper-hide`,
+`wallpaper-restore`, `wallpaper-rotate`, and `wallhaven …`. Only wallhaven.py talks to the network: https://wallhaven.cc/api/v1/search (and
 `/settings` to check a key), thumbnails and pictures from th./w.wallhaven.cc (URLs checked); API
 calls are counted in `~/.cache/arctic/wallhaven/api-calls.json` under a lock (45 a minute: wait up
 to 8 s, else `{"wait": N}`), searches cached 15 min, thumbnails in `~/.cache/arctic/wallhaven/`;
