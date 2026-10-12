@@ -24,10 +24,42 @@ raise SystemExit(2)
         raw=path.read_bytes()
         old=S.AGE_BINARY_SHA256;S.AGE_BINARY_SHA256=hashlib.sha256(raw).hexdigest()
         return path,old
-    def test_disabled_source_has_no_real_recipient(self):
+    def test_source_recipient_state_is_closed(self):
         manifest=json.loads((HERE/'source-manifest.json').read_text())
-        self.assertFalse(manifest['ready']);self.assertIsNone(manifest['recipient'])
         self.assertFalse(manifest['release_acceptance'])
+        if manifest['ready']:
+            self.assertTrue(manifest['recipient_generated_outside_github'])
+            self.assertEqual(S.validate_recipient(manifest['recipient'],manifest['recipient_sha256']),manifest['recipient'])
+        else:
+            self.assertIsNone(manifest['recipient']);self.assertIsNone(manifest['recipient_sha256'])
+            self.assertFalse(manifest['recipient_generated_outside_github'])
+    def test_closed_stage_labels_are_finite_and_foreign_errors_fail_closed(self):
+        self.assertEqual(S.closed_failure_label(RuntimeError('private-value')),S.SEAL_STAGE_UNKNOWN)
+        for label in S.SEAL_STAGE_LABELS:
+            error=S.SealStageError(label)
+            self.assertEqual(error.args,(S.SEAL_FAILURE_MESSAGE,))
+            self.assertEqual(S.closed_failure_label(error),label)
+            self.assertRegex(label,r'\Aprivate-seal-stage-[a-z-]+\Z')
+        with self.assertRaises(S.SealStageError) as caught:
+            S.exact_record(RuntimeError('private-value'),{},b'private-value',b'',HERE/'missing')
+        self.assertEqual(S.closed_failure_label(caught.exception),'private-seal-stage-finite-contract')
+        self.assertNotIn('private-value',str(caught.exception))
+    def test_closed_label_does_not_inspect_foreign_exception(self):
+        class Foreign(BaseException):
+            def __str__(self):raise AssertionError('foreign exception was stringified')
+        self.assertEqual(S.closed_failure_label(Foreign()),S.SEAL_STAGE_UNKNOWN)
+    def test_mutated_exact_error_does_not_compare_foreign_args(self):
+        calls=[]
+        class Hostile:
+            def __eq__(self,unused):calls.append('eq');raise AssertionError('foreign equality used')
+            def __str__(self):calls.append('str');raise AssertionError('foreign string used')
+        error=S.SealStageError('private-seal-stage-scanner-frame');error.args=(Hostile(),)
+        self.assertEqual(S.closed_failure_label(error),S.SEAL_STAGE_UNKNOWN)
+        error=S.SealStageError('private-seal-stage-scanner-frame');error.label=Hostile()
+        self.assertEqual(S.closed_failure_label(error),S.SEAL_STAGE_UNKNOWN)
+        del error.label
+        self.assertEqual(S.closed_failure_label(error),S.SEAL_STAGE_UNKNOWN)
+        self.assertEqual(calls,[])
     def test_recipient_is_exact_and_pinned(self):
         self.assertEqual(S.validate_recipient(RECIPIENT,RECIPIENT_SHA),RECIPIENT)
         for bad in ('age1'+'q'*57,'AGE1'+'q'*58,'age1'+'b'*58):

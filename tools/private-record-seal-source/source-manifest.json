@@ -29,8 +29,8 @@
   },
   "files": {
     "tools/private-record-seal-source/README.md": "432c94cfab12f837fbec32d6ea34a14e060bef7e6b424336ef9e9ac08293066d",
-    "tools/private-record-seal-source/seal.py": "780d4289ae3f88943a08e99a2c180344438d58739f78a1a204b6ce9e096736ba",
-    "tools/private-record-seal-source/test_source.py": "4e7625b66e82d36a77b137232caddb67b7848439921e5242992c0e89dbfa63e6"
+    "tools/private-record-seal-source/seal.py": "446fb2a41ea269d54e8490d6e3c6d9d19d6305dbd1dbdb9f3b8e5b239f4a6e2d",
+    "tools/private-record-seal-source/test_source.py": "5b4d1345b49dc84ee80090d5d6d60f2284a203f6f803cee868fcecba89a471f3"
   },
   "operational_cli": false,
   "ready": true,
