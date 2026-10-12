@@ -18,8 +18,8 @@ from unittest.mock import Mock, patch
 import zlib
 
 HERE=Path(__file__).resolve().parent
-BASE_NATIVE_SHA='b414794876093b26f9873e2af3635f01ee4e4b2e73cb0f1dfe3c1de50398377c'
-BASE_GUEST_SHA='6dff42972dfc61eec92fe23f78bc62be58a965ebd823ea2cffe08bd077c1fb4e'
+BASE_NATIVE_SHA='e7a0018c02b0d8fb78db3187db5155544e7462841fb5da841eb5cf1c8a80279f'
+BASE_GUEST_SHA='29ccacbe04be9306de58f275762a4f0b0dd60220d6ea51e40ad805a8b9485926'
 spec=importlib.util.spec_from_file_location('controls_trial_tested',HERE/'native_smoke.py')
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
