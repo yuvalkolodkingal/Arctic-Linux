@@ -208,7 +208,7 @@ SECURITY_DIAGNOSTIC_SITES = {
     ('verify_security', 3): 'security-finish-verify-audit-lost',
     ('verify_security', 4): 'security-finish-verify-journal-projection',
     ('verify_security', 5): 'security-finish-verify-audit-scan',
-    ('verify_security', 7): 'security-finish-verify-avc',
+    ('verify_security', 6): 'security-finish-verify-avc',
     ('SecurityInterval.state', 2): 'security-finish-getenforce',
     ('SecurityInterval.state', 3): 'security-finish-audit-status-command',
     ('SecurityInterval.finish', 1): 'security-finish-state',
