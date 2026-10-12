@@ -1,0 +1,24 @@
+{
+  "schema": "arctic-bios-broker-shape-source-review-v1",
+  "source_commit": "866e1ddde21542b6c9f5611fe66bd51c3260dd23",
+  "source_tree": "3b01c6febfd77a67eae1e649d5a5103615501c04",
+  "parent_commit": "c2c88daba0bcf5824fe998d139410252f8e4a146",
+  "scope": [
+    "tools/broker-shape-observation-source/README.md",
+    "tools/broker-shape-observation-source/diagnostic.py",
+    "tools/broker-shape-observation-source/observer.py",
+    "tools/broker-shape-observation-source/source-manifest.json",
+    "tools/broker-shape-observation-source/test_source.py"
+  ],
+  "command": "python3 -B -m unittest tools/broker-shape-observation-source/test_source.py",
+  "tests_run": 6,
+  "tests_passed": 6,
+  "returncode": 0,
+  "exact_commit_archive": true,
+  "isolated_remote_environment": true,
+  "scanner_changed": false,
+  "privacy_admission_changed": false,
+  "private_operand_exported": false,
+  "runtime_cause_proven": false,
+  "release_acceptance": false
+}

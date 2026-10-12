@@ -1,0 +1,33 @@
+{
+  "binding": {
+    "alignment_parent_helper_sha256": "1de427723ec027da1cfac79bff7eada7b875f631c2fab26745b8cad2f71c851b",
+    "diagnostic_independent_receipt_sha256": "b1bc9b4911ba86ae82e478a91feabddc26b3db0061aeaffb5408b8412b9f96d5",
+    "diagnostic_path": "tools/configured-broker-target-observation-source/diagnostic.py",
+    "diagnostic_sha256": "90ca1b78676dd12937c65c3a1c8df3aea144c268990e4aa516aabfd33616e807",
+    "enabled": true,
+    "privacy_admission_changed": false,
+    "private_operand_exported": false,
+    "release_acceptance": false,
+    "requested_observer_path": "tools/final-bios-dnf-uid-observation-source/observer.py",
+    "requested_observer_sha256": "bf0e8c69558019bd41caffc9f7ed716daa55c9957ed6513ce468e18c655be994",
+    "runtime_cause_proven": false,
+    "same_owned_rejection_only": true,
+    "schema": "arctic-bios-configured-broker-target-dependency-map-v1",
+    "selected_helper_path": "tools/final-bios-dnf-uid-observation-source/match-diagnostic.py",
+    "selected_helper_sha256": "0d96f7bb82c9b38b64da494113fed52476b4af3c67f34b86566cfe3cdfa5206e",
+    "selected_observer_path": "tools/configured-broker-target-observation-source/observer.py",
+    "selected_observer_sha256": "08f047c1479e4348947e2b6034e9b500333a5c9fd99d67187a6910377345da89",
+    "whole_alignment_function_sha256": "64354580bd3b1f0304e4fc2d78d420f7690c47130f5a8a28ec945be9ba1311ce"
+  },
+  "files": {
+    "tools/configured-broker-target-observation-source/README.md": "f8306cf1ff3d3c457a47a4a5e33aa22c8feb33bf4fac5631f8adb17b0b36665d",
+    "tools/configured-broker-target-observation-source/diagnostic.py": "90ca1b78676dd12937c65c3a1c8df3aea144c268990e4aa516aabfd33616e807",
+    "tools/configured-broker-target-observation-source/observer.py": "08f047c1479e4348947e2b6034e9b500333a5c9fd99d67187a6910377345da89",
+    "tools/configured-broker-target-observation-source/test_source.py": "105378555c30b3758ccb2a7e5073e756a04d324663c938d740ed27470ab4f6d6"
+  },
+  "operational_cli": false,
+  "parent_observer_sha256": "bf0e8c69558019bd41caffc9f7ed716daa55c9957ed6513ce468e18c655be994",
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-bios-configured-broker-target-disabled-Source-v1"
+}

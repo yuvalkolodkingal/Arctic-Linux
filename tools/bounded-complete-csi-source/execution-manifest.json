@@ -1,0 +1,16 @@
+{
+  "actual_failure_cause_known": false,
+  "execution_files": {
+    "tools/bounded-complete-csi-source/match-diagnostic.py": "1de427723ec027da1cfac79bff7eada7b875f631c2fab26745b8cad2f71c851b",
+    "tools/bounded-complete-csi-source/scanner.py": "0c2176c4892e45e485eeac32f564fdfe9fb1619f142ac0b60babeed52924075f",
+    "tools/bounded-complete-csi-source/test_source.py": "47b298d977cb5d3e6d993fa5957a35b2505072781c63995c8f540a3221d75869"
+  },
+  "historical_default_build_or_CLI_operational": false,
+  "image": null,
+  "original_raw_bytes_modified": false,
+  "privacy_policy_exceptions_added": false,
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-bounded-complete-CSI-disabled-Source-v1",
+  "source_base_sha": "9a341a415a93a089b19c8cdef3496259bd656a1d"
+}
