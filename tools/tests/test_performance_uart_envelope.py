@@ -22,7 +22,7 @@ class UARTEnvelopeTest(unittest.TestCase):
         raw = re.sub(rb'(?ms)^[ ]*# envelope-only-begin\n.*?^[ ]*# envelope-only-end\n', b'', raw)
         raw = b''.join(line for line in raw.splitlines(keepends=True)
             if not line.rstrip().endswith(b'# envelope-only'))
-        # Preserve the original history digest through exactly three reviewed identity inverses.
+        # Preserve the original history digest through exact reviewed identity inverses.
         historical = raw
         for current, previous in (
                 (b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562', b'3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9'),
