@@ -46,9 +46,14 @@ Rectangle {
     Component.onCompleted: {
         Theme.dark = config.stringValue("colorScheme") !== "winter"
         Theme.reduceMotion = reduceMotion
-        // TextField is a wrapper Item; focus its real editable control so the
-        // first physical key from the display manager reaches the password.
-        passwordField.input.forceActiveFocus()
+        // TextField is a wrapper Item. Defer until SDDM has applied its initial
+        // focus, then focus the real editable control for the installed user.
+        Qt.callLater(function() {
+            if (typedUser)
+                userField.input.forceActiveFocus()
+            else
+                passwordField.input.forceActiveFocus()
+        })
     }
 
     // ---- fonts (bundled; Figtree + JetBrains Mono, SIL OFL) -------------------

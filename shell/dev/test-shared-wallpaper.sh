@@ -74,11 +74,37 @@ shot() {
   grim -o HEADLESS-2 "$OUT/$1-portrait.png"
 }
 shot sddm-a
-# Exercise the actual Wayland keyboard path. Do not submit the test-mode login.
+# Bind input to the exact greeter process instead of assuming an app_id or the
+# compositor's startup focus. Test mode then advances from its required user-name
+# control into the real password TextInput. Do not submit the login.
+swaymsg "[pid=\"$greeter\"] focus" >/dev/null
+swaymsg -t get_tree -r >"$OUT/sddm-focused-tree.json"
+python3 - "$OUT/sddm-focused-tree.json" "$greeter" <<'PY'
+import json
+import sys
+root = json.load(open(sys.argv[1]))
+target = int(sys.argv[2])
+stack = [root]
+owned = []
+focused = []
+while stack:
+    node = stack.pop()
+    if node.get('pid') == target:
+        owned.append(node)
+    if node.get('focused'):
+        focused.append(node)
+    stack.extend(node.get('nodes', []))
+    stack.extend(node.get('floating_nodes', []))
+assert owned, 'greeter PID is absent from the compositor tree'
+assert len(focused) == 1 and focused[0].get('pid') == target, 'greeter surface is not focused'
+PY
+wtype -k Tab
+sleep 1
+shot sddm-password-focused
 wtype -s 80 abc
 sleep 1
 shot sddm-typed
-python3 - "$REPO" "$OUT/sddm-a-landscape.png" "$OUT/sddm-typed-landscape.png" <<'PY'
+python3 - "$REPO" "$OUT/sddm-password-focused-landscape.png" "$OUT/sddm-typed-landscape.png" <<'PY'
 import importlib.util
 import sys
 from pathlib import Path
