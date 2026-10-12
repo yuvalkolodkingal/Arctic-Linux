@@ -159,7 +159,7 @@ class PrimaryControls(unittest.TestCase):
                 if argv == ['getenforce']:
                     return 0, 'Enforcing', ''
                 if argv == ['auditctl', '-s']:
-                    return 0, 'enabled 1\\nlost 0', ''
+                    return 0, 'enabled 1\nlost 0', ''
                 if argv[0] == 'journalctl':
                     return 0, '{"MESSAGE":"' + PRIVATE, ''
                 raise AssertionError('unexpected command')
