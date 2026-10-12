@@ -2,11 +2,13 @@
 import ast,hashlib,importlib.util,json,re,subprocess,unittest
 from pathlib import Path
 from unittest import mock
+from test_collector_diagnostics import restore_collector_diagnostics
 SPEC=importlib.util.spec_from_file_location('journal_messages_guest',Path(__file__).with_name('guest_check.py'))
 guest=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(guest)
 CFCC_SHA256='9eb689b71483dd31c71bb4419648737eff8b64a32600325947b24770f589fdcc'
 
 def restore_journal_projection(text):
+    text=restore_collector_diagnostics(text)
     node=next(n for n in ast.parse(text).body if isinstance(n,ast.FunctionDef) and n.name=='journal_messages')
     lines=text.splitlines(keepends=True);end=node.end_lineno
     assert lines[end]=='\n';del lines[node.lineno-1:end+1]
