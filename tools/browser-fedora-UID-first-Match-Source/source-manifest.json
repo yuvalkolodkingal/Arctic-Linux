@@ -1,0 +1,45 @@
+{
+  "actual_SDK_RPM_ELF_dispatch_warm_AB": null,
+  "actual_base": "6834f506839779530084dfe531305b100184d808",
+  "actual_fixed_email_or_DNF_cause_claim": false,
+  "current_or_older_original_operations": false,
+  "diagnostic_export": "Only the additional fixed equality Boolean; all original closed fields retained, no raw/operand/hash/length/offset export.",
+  "execution_allowed": false,
+  "generalized_email_allowance": false,
+  "limits": {
+    "diagnostic_chars": 1024,
+    "frames": 64,
+    "original": 67108864
+  },
+  "official_format_audit": {
+    "bytes": 4418,
+    "path": "/dev/shm/arctic-browser-public-DNF-format-audit-20261012/public-Source-format-audit.json",
+    "sha256": "8cfe35268e11d21c8221256c90685c9d59c553209860058fc1604e1f008dec6a"
+  },
+  "prior_component_peer": {
+    "bytes": 11340,
+    "path": "/dev/shm/independent-browser-UID-remedy-8e54-Source-20261011/final-independent-disabled-Source-peer.json",
+    "sha256": "6c1563c59ae400d624f1650dabc545280c816b1e672606390150b735f9d43f65"
+  },
+  "privacy_policy_change": false,
+  "public_package_branch_audit": {
+    "bytes": 3583,
+    "path": "/dev/shm/arctic-browser-public-DNF-format-audit-20261012/public-package-import-branch-audit-and-next-plan.json",
+    "sha256": "8f93226ab52a5de9d5d8f47bc6d262adb95c7972634310d04e7871d9557f28ac"
+  },
+  "public_proof": {
+    "bytes": 3666,
+    "path": "/workspace/Arctic-Linux/out/fedora44-key-import-public-Source-research-20261011/concise-public-Source-proof.json",
+    "sha256": "03d813bff505d8ecc081713f7eed577cf3d779a18048676c76bfdee04ae9b378"
+  },
+  "ready": false,
+  "schema": "disabled-same-first-Match-fixed-public-UID-email-observer-source-v1",
+  "schema_to_be_reviewed_for_future_execution": "arctic-accelerator-screen-finite-observation-v3",
+  "source_files": {
+    "README.md": "4bb647f69c6f5f634c54858cc3897de875069c1a3d627e015db58bc3a8a97fc9",
+    "observer.py": "e43ab7d68db903af45ec29c572184a5e934e616f1398a79e45c91eee6c565ce5",
+    "ownership.py": "144dfd018190701e8888a07e3e16f807de493f59a5b7aa2afffa36bbc8b1c3ee",
+    "scanner.py": "b74dba2db145d10d56e430188c4b715dd45a76e12a3f5a661d011cf165498204",
+    "test_source.py": "8cbd4c78ba71a5f2fa2671c40c43ce78ad66774c68ee658c0ff0fd1e969e1e24"
+  }
+}
