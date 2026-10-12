@@ -192,8 +192,8 @@ def closed_row(row):
  return row
 
 def closed(value):
- require(type(value) is dict and set(value)=={'schema','input_states','host_stages','producer_categories',*FALSE_FIELDS})
- require(value['schema']=='arctic-native-bootstrap-observation-v1'
+ require(type(value) is dict and set(value)=={'schema','input_states','host_stages','producer_categories','live_bootstrap',*FALSE_FIELDS})
+ require(value['schema']=='arctic-native-bootstrap-observation-v2'
    and all(value[key] is False for key in FALSE_FIELDS))
  states=value['input_states']
  require(type(states) is dict and set(states)=={'harness','serial-install','serial-boot'}
@@ -204,9 +204,34 @@ def closed(value):
  keys=[]
  for row in rows:closed_row(row);keys.append(tuple(row[key] for key in ('role','stage','error_class','guard_site')))
  require(keys==sorted(set(keys)))
+ guest=value['live_bootstrap']
+ require(type(guest)is dict and set(guest)=={'offline_gate','runner_begin','provenance','runner_end','live_smoke_exit'})
+ require(type(guest['offline_gate'])is str and guest['offline_gate']in ('not-observed','passed','failed','unknown')
+   and type(guest['live_smoke_exit'])is str and guest['live_smoke_exit']in ('not-observed','zero','nonzero','unknown'))
+ require(all(type(guest[key])is bool for key in ('runner_begin','provenance','runner_end')))
  return value
 
-def parse_line(F,line,owned_token,host,rows):
+def parse_line(F,line,owned_token,host,rows,guest=None):
+ # The additional live state records fixed labels only, never their payloads.
+ if guest is not None:
+  require(type(guest)is dict and set(guest)=={'offline_gate','runner_begin','provenance','runner_end','live_smoke_exit'})
+  if line==b'ARCTIC-OFFLINE-GATE=passed: restricted QEMU network, no outside HTTP response':
+   guest['offline_gate'].add('passed')
+  elif line==b'ARCTIC-OFFLINE-GATE=failed: outside HTTP response received':
+   guest['offline_gate'].add('failed')
+  elif line.startswith(b'ARCTIC-OFFLINE-GATE='):
+   guest['offline_gate'].add('unknown')
+  for key,prefix_ in (('runner_begin',b'ARCTIC-NATIVE-RUNNER-BEGIN {'),
+                       ('provenance',b'ARCTIC-NATIVE-PROVENANCE {'),
+                       ('runner_end',b'ARCTIC-NATIVE-RUNNER-END {')):
+   if line.startswith(prefix_) and line.endswith(b'}'):guest[key]=True
+  prefix_=b'ARCTIC-LIVE-SMOKE-EXIT='
+  if line.startswith(prefix_):
+   value_=line[len(prefix_):]
+   label_='unknown'
+   if re.fullmatch(rb'(?:0|[1-9][0-9]{0,2})',value_) and int(value_)<=255:
+    label_='zero'if value_==b'0'else'nonzero'
+   guest['live_smoke_exit'].add(label_)
  # No arbitrary prefix scan: only exact, complete line records are candidates.
  prefix=HOST_PREFIX+owned_token.encode('ascii')+b' '
  if line.startswith(prefix):
@@ -216,13 +241,14 @@ def parse_line(F,line,owned_token,host,rows):
  if line.startswith(prefix):
   row=closed_row(F.strict_json(line[len(prefix):]));rows.add(tuple(row[key] for key in ('role','stage','error_class','guard_site')))
 
-def scan_owned(F,path,owned_token,host,rows):
+def scan_owned(F,path,owned_token,host,rows,guest=None):
  # Stream future owned logs only; no original/private bytes are copied or returned.
  require(token(owned_token) and type(path) is PATH_TYPE and path.is_absolute() and path.resolve()==path)
  if not path.exists():return 'not-observed'
  prior=path.lstat();require(stat.S_ISREG(prior.st_mode) and prior.st_nlink==1
    and prior.st_uid in (0,os.geteuid()) and not prior.st_mode&0o022 and prior.st_size<=128*1024*1024)
  local_host=set();local_rows=set();tail=b''
+ local_guest=dict(offline_gate=set(),runner_begin=False,provenance=False,runner_end=False,live_smoke_exit=set())if guest is not None else None
  with F.owned_fd(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK) as fd:
   require(F.same(prior,os.fstat(fd)))
   remaining=prior.st_size
@@ -230,13 +256,18 @@ def scan_owned(F,path,owned_token,host,rows):
    chunk=os.read(fd,min(65536,remaining));require(chunk);remaining-=len(chunk);tail+=chunk
    while b'\n' in tail:
     line,tail=tail.split(b'\n',1);require(len(line)<=65536)
-    parse_line(F,line.rstrip(b'\r'),owned_token,local_host,local_rows)
+    parse_line(F,line.rstrip(b'\r'),owned_token,local_host,local_rows,local_guest)
    require(len(tail)<=65536)
   require(not os.read(fd,1) and F.same(prior,os.fstat(fd)) and F.same(prior,path.lstat()))
  # Only LF-terminated fixed records are candidates; unrelated tail bytes stay ignored.
  if tail:
   require(not tail.startswith(PREFIX+owned_token.encode('ascii')+b' ')
-    and not tail.startswith(HOST_PREFIX+owned_token.encode('ascii')+b' '))
+    and not tail.startswith(HOST_PREFIX+owned_token.encode('ascii')+b' ')
+    and not(guest is not None and tail.startswith((b'ARCTIC-OFFLINE-GATE=',
+     b'ARCTIC-NATIVE-RUNNER-BEGIN ',b'ARCTIC-NATIVE-PROVENANCE ',b'ARCTIC-NATIVE-RUNNER-END ',b'ARCTIC-LIVE-SMOKE-EXIT='))))
+ if guest is not None:
+  guest['offline_gate'].update(local_guest['offline_gate']);guest['live_smoke_exit'].update(local_guest['live_smoke_exit'])
+  for key in ('runner_begin','provenance','runner_end'):guest[key]=guest[key]or local_guest[key]
  host.update(local_host);rows.update(local_rows);return 'projected'
 
 def project(F,scanner,paths,owned_token,output,primary=None):
@@ -244,12 +275,16 @@ def project(F,scanner,paths,owned_token,output,primary=None):
  try:
   require(token(owned_token) and type(paths) is dict and set(paths)=={'harness','serial-install','serial-boot'})
   states={};host=set();rows=set()
+  guest=dict(offline_gate=set(),runner_begin=False,provenance=False,runner_end=False,live_smoke_exit=set())
   for role,path in paths.items():
-   try:states[role]=scan_owned(F,path,owned_token,host,rows)
+   try:states[role]=scan_owned(F,path,owned_token,host,rows,guest if role=='serial-install'else None)
    except Exception:states[role]='rejected'
   categories=[dict(zip(('role','stage','error_class','guard_site'),key)) for key in sorted(rows)]
-  value=closed(dict(schema='arctic-native-bootstrap-observation-v1',input_states=states,
-    host_stages=sorted(host),producer_categories=categories,**{key:False for key in FALSE_FIELDS}))
+  live=dict(offline_gate=next(iter(guest['offline_gate']))if len(guest['offline_gate'])==1 else'unknown'if guest['offline_gate']else'not-observed',
+    runner_begin=guest['runner_begin'],provenance=guest['provenance'],runner_end=guest['runner_end'],
+    live_smoke_exit=next(iter(guest['live_smoke_exit']))if len(guest['live_smoke_exit'])==1 else'unknown'if guest['live_smoke_exit']else'not-observed')
+  value=closed(dict(schema='arctic-native-bootstrap-observation-v2',input_states=states,
+    host_stages=sorted(host),producer_categories=categories,live_bootstrap=live,**{key:False for key in FALSE_FIELDS}))
   raw=F.encode_json(value);closed(F.strict_json(raw))
   with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
    require(scanner.external_text(raw) is raw)
