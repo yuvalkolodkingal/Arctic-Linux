@@ -20,6 +20,46 @@ import types
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_SHA256 = '054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f'
 BASELINE_PROFILE_SHA256 = 'e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d'
+PRESCREEN_TEXT = frozenset({'.json', '.log', '.txt', '.tsv'})
+
+
+def prescreen_external_stage(screen, root, members):
+    """Run the unchanged external text scanner on one completed VM stage."""
+    root = Path(root).absolute()
+    if root.resolve() != root or root.is_symlink() or not root.is_dir():
+        raise RuntimeError('External prescreen root must be an owned directory')
+    paths = []
+    for member in members:
+        member = Path(member).absolute()
+        if not member.is_relative_to(root):
+            raise RuntimeError('External prescreen member escaped owned root')
+        if member.is_dir() and not member.is_symlink():
+            paths.extend(member.rglob('*'))
+        else:
+            paths.append(member)
+    total = 0
+    for path in sorted(set(paths)):
+        if path.is_symlink():
+            raise RuntimeError('Diagnostic symlinks are forbidden')
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise RuntimeError('Diagnostic members must be regular files')
+        if path.suffix not in PRESCREEN_TEXT:
+            continue
+        size = path.stat().st_size
+        total += size
+        if size > 128 * 1024 * 1024 or total > 512 * 1024 * 1024:
+            raise RuntimeError('Diagnostic byte bounds exceeded')
+        relative = path.relative_to(root).as_posix()
+        try:
+            screen.external_text(path.read_bytes())
+        except Exception as error:
+            try:
+                screen.diagnose_external_member(relative, error)
+            except Exception:
+                pass
+            raise
 
 
 def failure_phase_summary(work, screen_failure):
@@ -717,6 +757,7 @@ def main():
     parser.add_argument('--external-context', type=Path)
     args = parser.parse_args()
     external = None
+    external_screen = None
     candidate_root = ROOT
     candidate_sources = None
     if any((args.candidate_source_root, args.candidate_source_sha, args.external_context)):
@@ -743,6 +784,16 @@ def main():
             raise RuntimeError('External contract bytes differ from Git HEAD')
         contract.__file__ = str(contract_path)
         exec(compile(contract_bytes, contract.__file__, 'exec'), contract.__dict__)
+        screen_path = ROOT/'tools/native-functional/screen-evidence.py'
+        screen_bytes = screen_path.read_bytes()
+        expected_screen = subprocess.check_output(
+            ['git', '-C', str(ROOT), 'show', 'HEAD:tools/native-functional/screen-evidence.py'])
+        if (not screen_path.is_file() or screen_path.is_symlink()
+                or screen_path.resolve() != screen_path or screen_bytes != expected_screen):
+            raise RuntimeError('External evidence scanner differs from Git HEAD')
+        external_screen = types.ModuleType('paired_prescreen')
+        external_screen.__file__ = str(screen_path)
+        exec(compile(screen_bytes, external_screen.__file__, 'exec'), external_screen.__dict__)
         candidate_sources = {name: sha256(candidate_root / name) for name in contract.CANDIDATE_SOURCE_FILES}
     if not Path('/dev/kvm').is_char_device():
         raise RuntimeError('Native KVM required; no silent TCG fallback')
@@ -961,6 +1012,9 @@ def main():
             if 'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean' not in (args.out/(name+'-install-harness.log')).read_text():
                 raise RuntimeError('Installed source did not cleanly power off; first-use snapshot refused')
             pristine[name] = {file: sha256(args.out/name/file) for file in ('target.qcow2', 'OVMF_VARS.fd')}
+            if external_screen is not None:
+                prescreen_external_stage(external_screen, args.out,
+                    (args.out / (name + '-install-harness.log'), args.out / name))
         state['pristine_installed_sources'] = pristine
         for number, name in paired_boot_order():
             require_idle_vm_host()
@@ -989,6 +1043,8 @@ def main():
                 # but discard only this fresh overlay/data CD to bound disk use.
                 for file in ('target.qcow2', 'data.iso'):
                     (archive/file).unlink(missing_ok=True)
+            if external_screen is not None:
+                prescreen_external_stage(external_screen, args.out, (archive,))
             state['runs'].append(dict(image=name, boot=number, archive=str(archive), harness_exit=0))
         for name, expected in pristine.items():
             if {file: sha256(args.out/name/file) for file in expected} != expected:
