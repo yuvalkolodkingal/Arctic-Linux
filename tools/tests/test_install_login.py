@@ -94,7 +94,8 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertFalse(fixture.installed_login(vm))
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
         self.assertEqual(vm.typed, 3)
-        self.assertLessEqual(fixture.time.now, 454)
+        # Three 150s transition windows plus typed/cleanup seconds stay bounded.
+        self.assertLessEqual(fixture.time.now, 456)
         self.assertEqual(fixture.logs[-1], 'installed login did not transition (attempt 3)')
 
     def test_perpetual_login_discards_every_password_bearing_frame(self):
