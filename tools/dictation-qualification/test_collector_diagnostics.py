@@ -22,7 +22,7 @@ def restore_collector_diagnostics(text):
     text = text[:start] + '\n' + text[end:]
     for stage in guest.COLLECTOR_SETUP_STAGES:
         for indent in ('    ', '        '):
-            line = indent + "mark_collector_setup('" + stage + "')\\n"
+            line = indent + "mark_collector_setup('" + stage + "')\n"
             count = text.count(line)
             if count:
                 text = text.replace(line, '')
