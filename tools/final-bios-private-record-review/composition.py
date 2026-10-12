@@ -6,6 +6,22 @@ OLD_MANIFEST='tools/final-bios-unit-record-install/execution-manifest.json'
 SEAL='tools/private-record-seal-source/seal.py'
 SCANNER='tools/bounded-complete-csi-source/scanner.py'
 DIAGNOSTIC='tools/unit-record-observation-source/diagnostic.py'
+SEAL_STAGE_UNKNOWN='private-seal-stage-unknown'
+SEAL_STAGE_LABELS=frozenset({
+    'private-seal-stage-finite-contract','private-seal-stage-traceback-binding',
+    'private-seal-stage-scanner-frame','private-seal-stage-match-locals',
+    'private-seal-stage-unit-family','private-seal-stage-source-replay',
+    'private-seal-stage-record-boundary','private-seal-stage-record-roundtrip',
+    'private-seal-stage-encryption',SEAL_STAGE_UNKNOWN})
+SEAL_DIAGNOSTIC_PREFIX='ARCTIC-PRIVATE-SEAL-DIAGNOSTIC='
+def report_seal_failure(sealer,error):
+    label=SEAL_STAGE_UNKNOWN
+    try:
+        candidate=sealer.closed_failure_label(error)
+        if type(candidate)is str and candidate in SEAL_STAGE_LABELS:label=candidate
+    except BaseException:pass
+    print(SEAL_DIAGNOSTIC_PREFIX+label,flush=True)
+    return label
 def require(value):
     if not value:raise RuntimeError('Private review composition differs')
 def load(raw,path,name):
@@ -34,7 +50,7 @@ def build(root,value,source_loader,new_guard,age_binary,sealed_out):
                         'execution_commit':os.environ['GITHUB_SHA'],
                         'source_commit':binding['source_commit'],
                         'image_sha256':value['image']['sha256']})
-            except BaseException:
-                pass
+            except BaseException as sealing_error:
+                report_seal_failure(sealer,sealing_error)
             raise
     return private_review,wrapped,observed,exact,state

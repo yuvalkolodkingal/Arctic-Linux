@@ -7,8 +7,8 @@ BASE='cf4ef587746f01b4d03dc7ef5ef404b335e41be4'
 BRANCH='codex/final-bios-private-record-review-20261012'
 MARKER='.github/final-bios-private-record-review-20261012.activate'
 WORKFLOW='Final exact-image BIOS encrypted private record review'
-SOURCE_COMMIT='32735de7e41d0b1145df453ebaee43742e34aa2f'
-SOURCE_TREE='c24b9505debc97e2bed5ddffdd722bd235e069ca'
+SOURCE_COMMIT='76b477379761d6589ad05452d4afba7249501135'
+SOURCE_TREE='ad6a9eab6ea3cfce78bc3dbfedb45481034b7688'
 ADDITIONS={
  '.github/workflows/final-bios-private-record-review-20261012.yml',
  *{'tools/private-record-seal-source/'+n for n in ('README.md','seal.py','source-manifest.json','test_source.py')},
