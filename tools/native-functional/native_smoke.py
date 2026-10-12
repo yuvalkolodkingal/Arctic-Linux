@@ -249,16 +249,44 @@ def journal_avc_count(cursor, timeout=60):
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+            cleanup_deadline = time.monotonic() + 5
             try:
                 process.wait(timeout=5)
             except (OSError, subprocess.SubprocessError):
                 pass
+            group_live = True
+            while time.monotonic() < cleanup_deadline:
+                group_live = False
+                for member in Path('/proc').glob('[0-9]*'):
+                    try:
+                        fields = member.joinpath('stat').read_text().rpartition(')')[2].split()
+                    except FileNotFoundError:
+                        continue
+                    except (OSError, UnicodeError):
+                        group_live = True
+                        break
+                    if len(fields) < 3:
+                        group_live = True
+                        break
+                    try:
+                        member_group = int(fields[2])
+                    except ValueError:
+                        group_live = True
+                        break
+                    if member_group == process.pid and fields[0] not in ('Z', 'X'):
+                        group_live = True
+                        break
+                if not group_live:
+                    break
+                time.sleep(.01)
             for stream in (process.stdout, process.stderr):
                 if stream is not None:
                     try:
                         stream.close()
                     except OSError:
                         pass
+            if group_live:
+                raise RuntimeError('journal stream validation failed')
 
 
 def verify_security(before, after, journal_avcs, audit_messages=''):

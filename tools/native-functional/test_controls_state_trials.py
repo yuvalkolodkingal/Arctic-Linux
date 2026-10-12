@@ -24,7 +24,31 @@ spec=importlib.util.spec_from_file_location('controls_trial_tested',HERE/'native
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
 
+STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f'
+PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
+
+
+def restore_security_stream_native(source):
+    if hashlib.sha256(source.encode()).hexdigest()!=STREAM_NATIVE_SHA:
+        raise AssertionError('Streaming journal Native source differs')
+    constants = ('JOURNAL_LINE_LIMIT = 1024 * 1024\n'
+                 'JOURNAL_RECORD_LIMIT = 250000\n'
+                 'JOURNAL_STDERR_LIMIT = 64 * 1024\n'
+                 'JOURNAL_READ_SIZE = 64 * 1024\n')
+    if source.count(constants)!=1:raise AssertionError('Streaming journal constants differ')
+    source=source.replace(constants,'')
+    a=source.index('def _unique_json_object');z=source.index('class SecurityInterval:',a)
+    source=source[:a]+"def verify_security(before, after, new_messages):\n    require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')\n    require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')\n    require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')\n    denied = [line for line in new_messages.splitlines() if AVC.search(line)]\n    require(not denied, 'new AVC requires investigation: ' + '\\n'.join(denied[:20]))\n    return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,\n                audit_enabled=after['audit']['enabled'] in (1,2),\n                scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')\n\n\n"+source[z:]
+    a=source.index('    def finish(self):',source.index('class SecurityInterval:'))
+    z=source.index('\ndef discover_desktop',a)
+    source=source[:a]+"    def finish(self):\n        after = self.state()\n        journal = execute(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,\n                           '-o', 'json'], timeout=60)[1]\n        messages = '\\n'.join(str(json.loads(line).get('MESSAGE', ''))\n                             for line in journal.splitlines() if line)\n        if self.audit_offset:\n            info = self.audit_file.stat()\n            dev, ino, offset = self.audit_offset\n            require((info.st_dev, info.st_ino) == (dev, ino) and info.st_size >= offset,\n                    'audit log rotated/truncated; interval must be reviewed separately')\n            require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')\n            with self.audit_file.open('rb') as stream:\n                stream.seek(offset)\n                messages += '\\n' + stream.read(LIMIT).decode(errors='replace')\n        elif self.audit_file.exists():\n            # The new file may include records not forwarded to the journal.\n            require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')\n            messages += '\\n' + self.audit_file.read_text(errors='replace')\n        return verify_security(self.before, after, messages)\n\n"+source[z:]
+    if hashlib.sha256(source.encode()).hexdigest()!=PRE_STREAM_NATIVE_SHA:
+        raise AssertionError('Pre-streaming Native source differs')
+    return source
+
+
 def restore_controls_native(source):
+    source=restore_security_stream_native(source)
     for start,end in (
         ('    # BEGIN CONTROLLED_CONTROLS_INVOCATION\n','    # END CONTROLLED_CONTROLS_INVOCATION\n\n'),
         ('# BEGIN CONTROLLED_CONTROLS_STUDY\n','# END CONTROLLED_CONTROLS_STUDY\n\n\n'),

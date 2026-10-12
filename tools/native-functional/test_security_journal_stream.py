@@ -82,15 +82,24 @@ class JournalStreamControls(unittest.TestCase):
             self.assert_private_failure(program, timeout=1)
             leader, descendant = (int(value) for value in identity.read_text().split())
             deadline = time.monotonic() + 5
+            state = None
             while time.monotonic() < deadline:
                 try:
-                    os.killpg(leader, 0)
-                except ProcessLookupError:
+                    status = Path('/proc', str(descendant), 'status').read_text()
+                except FileNotFoundError:
+                    state = None
+                    break
+                state = next(line for line in status.splitlines() if line.startswith('State:')).split(':', 1)[1].strip()
+                if state.startswith('Z '):
                     break
                 time.sleep(.05)
             else:
-                self.fail('owned journal process group survived cleanup')
-            self.assertFalse(Path('/proc', str(descendant)).exists())
+                self.fail('owned journal descendant remained live after cleanup')
+            # An orphan can remain as an init-owned zombie in a container, but
+            # it is terminated and has no descriptors capable of holding pipes.
+            if state is not None:
+                self.assertTrue(state.startswith('Z '))
+                self.assertEqual(list(Path('/proc', str(descendant), 'fd').iterdir()), [])
 
     def test_invalid_cursor_and_projection_fail_closed(self):
         for cursor in ('', 'private\nvalue', 'x' * 4097, None):
