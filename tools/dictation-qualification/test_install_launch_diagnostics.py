@@ -16,8 +16,6 @@ from unittest.mock import Mock, patch
 import zlib
 
 from test_host_diagnostics import DRIVER, ROOT, SHELL, driver_functions, r
-from test_driver_failure_diagnostic import (restore_driver_failure_diagnostics,
-    restore_runner_driver_diagnostics, restore_native_login_observation, restore_runner_collector_projection)
 from test_contract import declared, c
 
 BASE = '210f76ed599f5b2c51b16dcb97be3fb6c709cfd8'
@@ -161,8 +159,7 @@ class LaunchDiagnostics(unittest.TestCase):
                       if isinstance(n, ast.FunctionDef) and n.name == 'restore_native_bulk_driver')
         namespace = {}
         exec(compile(ast.Module(body=[helper], type_ignores=[]), str(helper_path), 'exec'), namespace)
-        observed_driver = restore_native_login_observation(restore_driver_failure_diagnostics(DRIVER))
-        driver = namespace['restore_native_bulk_driver'](observed_driver)
+        driver = namespace['restore_native_bulk_driver'](DRIVER)
         shell = SHELL.replace(DRIVER, driver, 1)
         old_shell=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/test-install.sh']).decode()
         old_driver=old_shell.split("DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
@@ -201,7 +198,7 @@ class LaunchDiagnostics(unittest.TestCase):
         self.assertEqual(shell.replace(driver,rolled,1),old_shell)
         self.assertEqual(ast.dump(ast.parse(rolled),include_attributes=False),ast.dump(old_tree,include_attributes=False))
         old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode()
-        new_runner=restore_runner_collector_projection(restore_runner_driver_diagnostics(Path(r.__file__).read_text()))
+        new_runner=Path(r.__file__).read_text()
         def assignment(text):
             return next(n for n in ast.parse(text).body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='HOST_STAGES' for t in n.targets))
         a,b=assignment(old_runner),assignment(new_runner); lines=new_runner.splitlines(keepends=True)

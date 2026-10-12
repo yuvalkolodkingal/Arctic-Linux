@@ -62,7 +62,6 @@ jobs:
         run: |
           /usr/bin/python3 -B execution/tools/installer-qualification/runner.py --active-profile --source "$GITHUB_WORKSPACE/source" --inputs "$RUNNER_TEMP/arctic-installer/inputs" --manifest "$GITHUB_WORKSPACE/execution/tools/installer-qualification/active-execution-manifest.json" --evidence "$RUNNER_TEMP/arctic-installer/evidence"
       - name: Screen bounded VM evidence
-        id: strict_screen
         if: always()
         run: |
           /usr/bin/python3 -B execution/tools/native-functional/screen-evidence.py --preserve-original --source "$RUNNER_TEMP/arctic-installer/evidence" --out "$RUNNER_TEMP/arctic-installer/screened"
@@ -72,22 +71,4 @@ jobs:
           name: candidate-installer-active-restoration
           path: ${{ runner.temp }}/arctic-installer/screened/
           if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Preserve failure-only partial original diagnostics
-        id: partial_diagnostic
-        if: always() && steps.strict_screen.outcome == 'failure'
-        run: |
-          /usr/bin/python3 -B - <<'PY'
-          import hashlib
-          from pathlib import Path
-          assert hashlib.sha256(Path('execution/tools/installer-qualification/screen-diagnostic.py').read_bytes()).hexdigest() == '93b3b5ea0a3dab1cb9d31d485c15495cde7315a05d3965caf02c39101e13e89f'
-          PY
-          /usr/bin/python3 -B execution/tools/installer-qualification/screen-diagnostic.py --profile active --source "$RUNNER_TEMP/arctic-installer/evidence" --out "$RUNNER_TEMP/arctic-installer/diagnostic-partial"
-      - uses: actions/upload-artifact@v4
-        if: always() && steps.strict_screen.outcome == 'failure' && steps.partial_diagnostic.outcome == 'success'
-        with:
-          name: candidate-installer-active-restoration-diagnostic-partial
-          path: ${{ runner.temp }}/arctic-installer/diagnostic-partial/
-          if-no-files-found: error
           retention-days: 14

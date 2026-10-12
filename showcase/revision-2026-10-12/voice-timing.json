@@ -1,0 +1,56 @@
+{
+  "status": "generation_complete_media_download_and_alignment_pending",
+  "voice": {
+    "provider": "ElevenLabs",
+    "name": "River",
+    "voice_id": "SAz9YHcvj6GT2YYXdXww",
+    "model": "eleven_multilingual_v2",
+    "language": "en"
+  },
+  "original_generated_narration_sha256": "f994d8c522aec5fddfeec21ee827775107247ed2c6bb1e20168967aa7e23aae4",
+  "current_narration_sha256": "97e08ddbd66bdda61972fe0cb2615e7194209f350b8e832b1734cc3d5f638065",
+  "primary_clips": [
+    {
+      "chapter": 1,
+      "first_scene": "intro",
+      "last_scene": "files",
+      "scene_count": 19,
+      "text_characters": 3758,
+      "text_sha256": "58ce932f53e9b15439a127fc2d9f1b3e0f795028b94e6fea2e6950db3f1637b5",
+      "generation_id_prefix": "2bj1",
+      "reported_duration_seconds": 236.8,
+      "verified_media_duration_seconds": null,
+      "local_audio_path": null
+    },
+    {
+      "chapter": 2,
+      "first_scene": "terminal",
+      "last_scene": "outro",
+      "scene_count": 19,
+      "text_characters": 4566,
+      "text_sha256": "e5b94bcb0ef3f030acc9ab0625d41aef5ca6a6e693aa6b8d73e95030373e3ba0",
+      "generation_id_prefix": "12xN",
+      "reported_duration_seconds": 278.45,
+      "verified_media_duration_seconds": null,
+      "local_audio_path": null
+    }
+  ],
+  "replacement": {
+    "scene": "winter",
+    "generation_id": "t5x9Fn9vDrTEzv6s1Igy",
+    "text": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule.",
+    "reported_duration_seconds": 12.86,
+    "verified_media_duration_seconds": null,
+    "local_audio_path": null,
+    "original_paragraph_start": null,
+    "original_paragraph_end": null
+  },
+  "reported_original_primary_clip_sum_seconds": 515.25,
+  "final_composed_duration_seconds": null,
+  "sentence_alignment_available": false,
+  "scene_timing_available": false,
+  "generated_audio_binaries_committed": false,
+  "render_verified": false,
+  "public_video_published": false,
+  "notes": "Reported durations are Root's completed generation metadata. Final timing requires admitted audio, measured boundaries and replacement of the original winter paragraph. The old 19-photo paragraph must not remain in the replacement video."
+}

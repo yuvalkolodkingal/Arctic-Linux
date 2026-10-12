@@ -7,9 +7,10 @@
 #   arctic-wallpaper ~/Pictures/x.jpg   any picture of your own (stays the same across theme switches)
 #   arctic-wallpaper render             only render the PNG cache (used by arctic-lock)
 #   arctic-wallpaper current            print the picture in use
-#   arctic-wallpaper rotate 30m|1h|1d [FOLDER|arctic] [--shuffle]
+#   arctic-wallpaper rotate 30m|1h|1d [FOLDER|arctic|both] [--shuffle]
 #                                       change the picture every 30 minutes, hour or day, from
-#                                       FOLDER (default: your wallpaper folder) or Arctic's own
+#                                       FOLDER (default: your wallpaper folder), Arctic's own,
+#                                       or both collections together
 #   arctic-wallpaper rotate off|apply   stop, or start again at login (autostart.conf)
 #   arctic-wallpaper rotate             print the rotation as JSON
 #   arctic-wallpaper next               the next picture now (what the rotation runs)
@@ -139,33 +140,57 @@ your_folder() {   # the wallpaper picker's folder (wallpapers.py): its setting, 
   echo "${f/#\~/$HOME}"
 }
 
-rotation_pictures() {   # rotation_pictures FOLDER|arctic: the pictures to rotate through, sorted
-  local n f photos
+rotation_pictures() {   # rotation_pictures FOLDER|arctic|both: pictures to rotate through, sorted
+  local n f photos own
+  if [[ "$1" == both ]]; then
+    own="$(your_folder)"
+    # Keep the two source lists deterministic and de-duplicate resolved paths. A manually edited
+    # wallpaper folder named like a reserved source must not recurse into this function forever.
+    {
+      rotation_pictures arctic
+      if [[ "$own" != arctic && "$own" != both ]]; then rotation_pictures "$own"; fi
+    } | awk 'NF && !seen[$0]++'
+    return 0
+  fi
   if [[ "$1" == arctic ]]; then
     for f in "${DIRS[@]}"; do
       if [[ -f "$f/collection.json" ]]; then
-        photos=$(python3 - "$f" <<'PY'
+        photos=$(python3 - "$f" "$CONF/wallpapers.json" <<'PY'
 import json, re, sys
 from pathlib import Path
 folder = Path(sys.argv[1])
+hidden = set()
+try:
+    picker = json.loads(Path(sys.argv[2]).read_text())
+    raw = picker.get('hidden_arctic', []) if isinstance(picker, dict) else []
+    if isinstance(raw, list):
+        hidden = {slug for slug in raw if isinstance(slug, str)
+                  and re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug)}
+except (OSError, ValueError):
+    pass
 try:
     data = json.loads((folder / 'collection.json').read_text())
     assert data['schema'] == 1
     photos = []
+    available = 0
     for item in data['wallpapers']:
         slug = item['slug']
-        if not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug) or item['file'] != slug + '.jpg':
+        if (not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug)
+                or item['file'] != slug + '.jpg'):
             continue
         photo = folder / item['file']
         if photo.is_file() and not photo.is_symlink():
-            photos.append(str(photo.resolve()))
+            available += 1
+            if slug not in hidden:
+                photos.append(str(photo.resolve()))
+    if not available:
+        sys.exit(1)
     print('\n'.join(photos), end='')
 except (OSError, ValueError, KeyError, TypeError, AssertionError):
     sys.exit(1)
 PY
         ) || continue
-        [[ -n "$photos" ]] || continue
-        printf '%s\n' "$photos"
+        [[ -z "$photos" ]] || printf '%s\n' "$photos"
         return 0
       fi
     done
@@ -238,13 +263,13 @@ rotate_cmd() {
       while (( $# )); do
         case "$1" in
           --shuffle) shuffle=1 ;;
-          *) [[ -z "$folder" ]] || { echo "usage: arctic-wallpaper rotate 30m|1h|1d [FOLDER|arctic] [--shuffle]" >&2; return 2; }
+          *) [[ -z "$folder" ]] || { echo "usage: arctic-wallpaper rotate 30m|1h|1d [FOLDER|arctic|both] [--shuffle]" >&2; return 2; }
              folder="$1" ;;
         esac
         shift
       done
       [[ -n "$folder" ]] || folder="$(your_folder)"
-      if [[ "$folder" != arctic ]]; then
+      if [[ "$folder" != arctic && "$folder" != both ]]; then
         folder="$(readlink -f "$folder" 2>/dev/null || true)"
         [[ -d "$folder" ]] || { echo "arctic-wallpaper: there is no folder ${folder:-like that}" >&2; return 2; }
       fi
@@ -257,7 +282,7 @@ print("", file=open(sys.argv[1] + ".tmp", "a"))' "$ROTATE" "$every" "$folder" "$
       rm -f "$QUEUE"
       arm_rotation "$every" ;;
     *)
-      echo "usage: arctic-wallpaper rotate [30m|1h|1d [FOLDER|arctic] [--shuffle] | off | apply]" >&2; return 2 ;;
+      echo "usage: arctic-wallpaper rotate [30m|1h|1d [FOLDER|arctic|both] [--shuffle] | off | apply]" >&2; return 2 ;;
   esac
 }
 

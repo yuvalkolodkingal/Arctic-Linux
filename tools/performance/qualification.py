@@ -338,7 +338,7 @@ def export_failure_phase(work, screened, screening_failure):
     reasons = source_faults | invalid | ambiguous | unknown | {'not_observed',
         'observer_record_count', 'source_candidate_count', 'source_known_shape'}
     C.require(type(envelope) is dict and set(envelope) == {'reason', 'counts',
-        'collector_order', 'frame_status', 'control_status', 'last_observer_phase', 'exception_shape', 'colored_traceback', 'loaded_failure'}
+        'collector_order', 'frame_status', 'control_status', 'last_observer_phase', 'exception_shape', 'colored_traceback'}
         and type(envelope['reason']) is str and envelope['reason'] in reasons
         and type(envelope['counts']) is dict and set(envelope['counts']) == counts
         and all(type(value) is str and value in {'unavailable', 'zero', 'one', 'multiple'}
@@ -449,65 +449,6 @@ def export_failure_phase(work, screened, screening_failure):
             and projection['frames'] == 'multiple' and projection['candidates'] == 'one'),
         'Colored source projection counts contradict rejection category')
     # colored-trace-only-end
-    # loaded-failure-only-begin
-    # This projection is an unqualified observation from loaded code objects.
-    # It cannot supply a cause, authenticated event, or measurement verdict.
-    loaded = envelope['loaded_failure']
-    classes = set(('RuntimeError TypeError NameError ValueError AttributeError KeyError IndexError '
-        'AssertionError OSError FileNotFoundError PermissionError TimeoutError ProcessLookupError '
-        'InterruptedError EOFError ZeroDivisionError OverflowError MemoryError KeyboardInterrupt '
-        'StoreProofError unsupported').split())
-    fields = {'status', 'exception_class', 'domain', 'site', 'phase', 'relation'}
-    C.require(type(loaded) is dict and set(loaded) == fields
-        and all(type(item) is str for item in loaded.values())
-        and loaded['status'] in {'unavailable', 'ambiguous', 'invalid', 'class_observed', 'source_code_observed'},
-        'Unsafe loaded failure observation')
-    if loaded['status'] in {'unavailable', 'ambiguous', 'invalid'}:
-        C.require(loaded == dict(status=loaded['status'], exception_class='none', domain='none',
-            site='none', phase='unavailable', relation='none'), 'Unsafe rejected loaded failure observation')
-    else:
-        C.require(loaded['exception_class'] in classes and summary['private_owner_verified'] is True
-            and summary['smoke_exit'] == 'nonzero' and envelope['collector_order'] == 'ordered'
-            and envelope['counts']['admitted_observer_records'] == 'one',
-            'Loaded failure observation lacks owned source-bound failure envelope')
-        if loaded['status'] == 'class_observed':
-            C.require((loaded['domain'], loaded['site'], loaded['phase'], loaded['relation'])
-                == ('none', 'none', 'unavailable', 'none'), 'Unsafe loaded failure class observation')
-        else:
-            import ast
-            pins = dict(guest='4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5',
-                causal='2bc983a29c15e5c24c5f9c03fb5a640003dcf5bc95d9672f3622142f59545161')
-            domain = loaded['domain']
-            C.require(domain in pins and loaded['relation'] in {'leaf', 'ancestor'}
-                and re.fullmatch(domain + '_[1-9][0-9]{0,3}', loaded['site']),
-                'Unsafe loaded failure source coordinate')
-            path = ROOT/'tools/performance'/ (domain + '.py')
-            C.require(path.resolve() == path and not path.is_symlink(), 'Unsafe loaded failure source path')
-            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            with os.fdopen(fd, 'rb') as source:
-                before = os.fstat(source.fileno())
-                C.require(stat.S_ISREG(before.st_mode) and before.st_size <= 131072,
-                    'Unsafe loaded failure source type')
-                raw = source.read(131073)
-                after = os.fstat(source.fileno())
-            identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-            C.require(identity(before) == identity(after) and len(raw) == before.st_size
-                and hashlib.sha256(raw).hexdigest() == pins[domain], 'Loaded failure source bytes differ')
-            tree = ast.parse(raw)
-            line = int(loaded['site'].split('_')[1])
-            executable = {n for node in ast.walk(tree)
-                if isinstance(node, (ast.Raise, ast.Call, ast.Subscript, ast.Attribute, ast.BinOp,
-                    ast.UnaryOp, ast.Compare, ast.Name, ast.Assert))
-                for n in range(node.lineno, node.end_lineno + 1)}
-            expressions = {ast.Lambda: '<lambda>', ast.ListComp: '<listcomp>', ast.DictComp: '<dictcomp>',
-                ast.SetComp: '<setcomp>', ast.GeneratorExp: '<genexpr>'}
-            scopes = [(node.name, node.lineno, node.end_lineno) for node in ast.walk(tree)
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
-            scopes += [(expressions[type(node)], node.lineno, node.end_lineno)
-                for node in ast.walk(tree) if type(node) in expressions]
-            C.require(line in executable and any(name == loaded['phase'] and first <= line <= last
-                for name, first, last in scopes), 'Loaded failure coordinate differs from pinned source')
-    # loaded-failure-only-end
     content = (json.dumps(summary, sort_keys=True, indent=2, allow_nan=False) + '\n').encode()
     C.require(len(content) <= 4096 and summary['release_acceptance'] is False
         and summary['performance_acceptance'] is False and summary['original_evidence_uploaded'] is False

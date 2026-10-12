@@ -36,7 +36,7 @@ Everything works as it will after you install. A few things to try:
 |---|---|
 | `Super + Space` | Open the launcher and search for apps. Type `=12*4` to use it as a calculator. |
 | `Super + Enter` | Open a terminal and see the fox greeting |
-| `Super + F` | Open Nautilus (GNOME Files) |
+| `Super + F` | Open the image's file manager (PCManFM in the replacement) |
 | `Super + Shift + W` | Pick a wallpaper |
 | `Super + Shift + T` | Switch between the Polar night and Winter themes |
 | `Super + /` | See every keyboard shortcut |
@@ -44,17 +44,16 @@ Everything works as it will after you install. A few things to try:
 `Super` is the key with the Windows logo on most keyboards. The [desktop tour](Desktop-Tour)
 explains the rest.
 
-### A browser in the live session
+### Apps in the live session
 
-![Zen Browser in the live session](images/zen-browser.png)
+The replacement image under qualification includes **GNOME Web (Epiphany)** (`Super + B`),
+**Foot** with Fish, **GTK3 PCManFM** with XArchiver, **Celluloid**, **FeatherPad**, Nano and Bash.
+These are native packages. The published 1.2.0 image has earlier app choices; read its release
+page for the actual inventory. Optional apps can be added for a live session with Get apps.
 
-Some builds of the live USB include **Zen Browser**, so you can go online straight away
-(`Super + B`). The release notes on the download page mention it when yours does; the ISO
-build leaves Zen out when including it would make the image larger than 2 GB.
-
-If your copy has no browser, you can add one for this session with **Get apps**
-(`Super + Shift + A`) → **Flathub apps** or **Fedora packages**: type `firefox` and press `Enter`.
-It's gone again when you restart.
+The replacement keeps local dictation's large model and executable out of the live image.
+Installation prepares them online, or queues retryable setup for the installed system. The
+live session does not claim that dictation is ready. See [Local dictation](Local-Dictation).
 
 ## What's different from an installed system
 

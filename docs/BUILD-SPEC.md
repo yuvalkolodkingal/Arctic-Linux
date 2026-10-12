@@ -58,8 +58,8 @@ tools/lib/              container.sh (docker/podman + proxy), vmtest.py (QEMU/QM
 
 ## 2. RPM packages (all from `packaging/arctic-linux.spec` unless noted)
 
-Version 1.2.0, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
-`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-1.2.0/` of the
+Version 1.2.1, `Release: 1%{?arctic_snapshot}%{?dist}` (every build its own Release, §9).
+`Source0: arctic-linux-%{version}.tar.gz` made by `git archive --prefix=arctic-linux-1.2.1/` of the
 working tree (tools/build-rpms.sh; uncommitted and untracked files are included through a
 throwaway index, and so is the repository key, §9). noarch unless it contains Go binaries.
 The one other source is `Source1`, the Nerd Fonts "Symbols Only" release for
@@ -71,7 +71,7 @@ checked against the SHA-256 there and again in `%prep`.
 |---|---|---|
 | `arctic-release` | `/usr/lib/os-release` (NAME="Arctic Linux", ID=arctic, ID_LIKE=fedora, VERSION_ID=0.2, PRETTY_NAME="Arctic Linux 0.2 (Fedora 44 base)", LOGO=arctic-logo-icon, HOME_URL; LOGO names the icon arctic-logos installs in hicolor and `/usr/share/pixmaps`, checked in `%check`; fastfetch has no built-in Arctic logo and would draw Fedora's by ID_LIKE, hence the fox in the fastfetch layouts, §3.1), `/etc/os-release` symlink, `/usr/lib/rpm/macros.d/macros.dist` (%fedora 44, %dist .fc44), `/etc/dnf/plugins/copr.d/arctic.conf` ([main] distribution=fedora), `/usr/share/dnf5/repos.d/arctic.repo` + `arctic-testing.repo` (the Arctic package repository, §9: stable on, testing off) and its key `/etc/pki/rpm-gpg/RPM-GPG-KEY-arctic` (without a key at build time both repo files ship `enabled=0`), presets `/usr/lib/systemd/system-preset/80-arctic.preset` (also: no sshd, as Fedora's desktop editions), `/usr/lib/systemd/user-preset/80-arctic.preset` | Provides `system-release`, `system-release(44)`, `system-release(releasever) = 44`, `base-module(platform:f44)`; Requires `fedora-repos(44)`; Conflicts `fedora-release-common`, `generic-release`. Model on Fedora's generic-release.spec. MUST be proven installable in place of fedora-release in a F44 container (`dnf install --allowerasing arctic-release`). |
 | `arctic-logos` | `/usr/share/pixmaps/{fedora,system}-logo*.png` equivalents, `/usr/share/pixmaps/arctic-logo-icon.{png,svg}` (os-release `LOGO`), `/usr/share/icons/hicolor/*/apps/arctic-logo-icon.png`, `/usr/share/arctic/logos/*.svg` | Provides `system-logos`, `system-logos(%{version})`; Conflicts `fedora-logos`, `generic-logos`. Must satisfy what sddm/plymouth require from system-logos. |
-| `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.jpg`, collection metadata, credit/copyright notices and a real photo PNG for default/greeter aliases; existing illustrated SVG/PNG compatibility paths | The 19 pinned author photographs are the fresh gallery, with City Afterglow as default. Their upstream copyright is retained; see `docs/PHOTO-WALLPAPERS.md`. Provides `desktop-backgrounds-compat`. |
+| `arctic-backgrounds` | `/usr/share/backgrounds/arctic/*.jpg`, collection metadata, credit/copyright notices and a real photo PNG for default/greeter aliases; existing illustrated SVG/PNG compatibility paths | The 28 pinned author photographs are the fresh gallery, with City Afterglow as default. Their upstream copyright is retained; see `docs/PHOTO-WALLPAPERS.md`. Provides `desktop-backgrounds-compat`. |
 | `arctic-fonts` | `/usr/share/fonts/arctic/Figtree-*.woff2` (+ `.ttf` if converted) | JetBrains Mono comes from `jetbrains-mono-fonts-all`. |
 | `arctic-fonts-symbols` | `/usr/share/fonts/arctic-symbols/SymbolsNerdFont{,Mono}-Regular.ttf` ← Source1, `/usr/share/fontconfig/conf.avail/66-arctic-nerd-symbols.conf` ← `packaging/fonts/` (+ its link in `/etc/fonts/conf.d/`) | noarch. The symbols appended weakly after `monospace`, JetBrains Mono and Adwaita Mono, so the terminal's icons (yazi, eza, prompts) work with any code font. License from the release's LICENSE and readme: MIT AND CC-BY-4.0 AND Apache-2.0 AND OFL-1.1-RFN AND OFL-1.1 AND Unlicense. Recommended by `arctic-shell` (with `arctic-themes-extra`), listed in `config.kiwi`. |
 | `arctic-selinux` | `/usr/share/selinux/packages/arctic-nix.pp` | Built from `packaging/selinux/arctic-nix.te/.fc` (`/nix` contexts, see PLAN §6.6). %post: semodule install; `%selinux_modules_install`. |
@@ -129,7 +129,7 @@ wrapped by `arctic-shell-ipc <target> <fn>` (in arctic-shell). Targets: `launche
 <desktop-id>` (Get apps), `power toggle`, `osd volume|brightness|brightnessLevel`, `lock lock`, `keys toggle`,
 `notifications center|dismiss|dismissAll|invoke|dnd <mode>` (through `arctic-notify` and
 `arctic-dnd`, which fall back to makoctl), `keyboard next|set|menu`, `clipboard toggle`,
-`emoji toggle`, `record open|refresh`, `share pick <fifo>`, `capture freeze <dir>|thaw`, and for
+`emoji toggle`, `whatsnew open`, `record open|refresh`, `share pick <fifo>`, `capture freeze <dir>|thaw`, and for
 the bar's own menus `panel toggle|open|close <name>` (network, bluetooth, sound, battery,
 calendar, media, display, notifications, keyboard), `quick toggle|open [page]` (Quick Settings),
 `toggle set|get|states|refresh`, `bar focus` (keyboard mode), `bluetooth pair`,
@@ -141,6 +141,14 @@ Mango's IPC for them. Screen sharing in Mango sessions: `/etc/xdg/xdg-desktop-po
 (`chooser_type=simple`) runs `/usr/libexec/arctic/arctic-share-picker`, which lists every monitor
 and window (the shell's "Share your screen" card over IPC, else fuzzel) and prints
 xdg-desktop-portal-wlr's `Monitor: <output>` / `Window: <id>`.
+
+Per-update What’s New: `/usr/share/arctic/shell/whats-new.json` has schema 1 and a unique
+`update_id`. On an installed system, the shell compares it with
+`${XDG_STATE_HOME:-~/.local/state}/arctic/whats-new-seen`: an existing account sees the card once
+when the packaged id changes, and closing it records that id. A new account with no state file
+records the current id without showing the card because First Login already welcomes that account.
+The card never opens automatically on the live USB. `arctic-shell-ipc whatsnew open` reopens the
+current packaged notes without changing this per-account, per-update rule.
 
 ### 3.1 App theming
 
@@ -241,6 +249,7 @@ previous versions in `~/.local/state/arctic/settings-backups/`):
 | `~/.config/arctic/idle.conf` | `lock_after=`, `suspend_after=` (seconds, 0 = never), read by `arctic-session idle` |
 | `$XDG_RUNTIME_DIR/arctic-settings-display.json` | the display layout to go back to while a change waits to be kept |
 | `~/Pictures/Wallpapers/` (your wallpaper folder) | pictures you add (copied after Pillow decodes them; renamed/deleted only inside that folder, never the one in use); Wallhaven downloads in `wallhaven/wallhaven-<id>.<ext>` |
+| `~/.config/arctic/wallpapers.json` | Your extra wallpaper `folder` and `hidden_arctic` packaged-photo slugs. Hiding is per account: it removes a packaged photo from that account’s picker and rotation without deleting the shared RPM-owned file; restoring one slug or `all` makes it available again. |
 | `~/.config/arctic/wallhaven.json` (mode 600) | Wallhaven filters (`categories`, `purity` — NSFW only with a key —, `sorting`, `range`, `fit`) and the optional `api_key` (never sent to the UI) |
 
 **Commands it calls** (each missing one hides or explains its controls): `mmsg dispatch
@@ -248,16 +257,18 @@ reload_config`, `mmsg get all-devices|all-clients`, `mango -p`; `arctic-theme se
 on|off|mode auto|dark|light|current --json|list --json` (the theming engine; falls back to
 `arctic-theme winter|polar-night`); `arctic-update status --json|now|apply|channel
 stable|testing|auto on|off` (the updater); `arctic-motion on|off`; the shell's
-`scripts/wallpapers.py list|apply` (→ `arctic-wallpaper`); `arctic-session idle --restart`;
+`scripts/wallpapers.py list|folder|apply|import|delete|rename|hide|restore` (`apply` →
+`arctic-wallpaper`); `arctic-session idle --restart`;
 `wlr-randr --json` / `wlr-randr --output …`; `nmcli`; `gdbus` (power profiles, tuned-ppd);
 `gsettings` (GTK text size, cursor); tools it opens: `nm-connection-editor`, `blueman-manager`,
 `pavucontrol`/`pwvucontrol`, `wdisplays`, `arctic-shell-ipc apps install|remove`, `xdg-open`.
 Bluetooth and sound use BlueZ and PipeWire directly (Quickshell.Bluetooth, .Services.Pipewire).
 
-Wallpapers (Appearance): the shell's `scripts/wallpapers.py` (`list`, `apply`, `import`, `delete`,
-`rename`) and `scripts/wallhaven.py` (`search`, `preview`, `download`, `set`, `state`, `key`,
-`prefs`; stdlib urllib + Pillow), through the helper's `wallpaper-import|delete|rename` and
-`wallhaven …`. Only wallhaven.py talks to the network: https://wallhaven.cc/api/v1/search (and
+Wallpapers (Appearance): the shell's `scripts/wallpapers.py` (`list`, `folder`, `apply`, `import`,
+`delete`, `rename`, `hide`, `restore`) and `scripts/wallhaven.py` (`search`, `preview`, `download`,
+`set`, `state`, `key`, `prefs`; stdlib urllib + Pillow), through the helper's `wallpapers`,
+`wallpaper-set`, `wallpaper-import`, `wallpaper-delete`, `wallpaper-rename`, `wallpaper-hide`,
+`wallpaper-restore`, `wallpaper-rotate`, and `wallhaven …`. Only wallhaven.py talks to the network: https://wallhaven.cc/api/v1/search (and
 `/settings` to check a key), thumbnails and pictures from th./w.wallhaven.cc (URLs checked); API
 calls are counted in `~/.cache/arctic/wallhaven/api-calls.json` under a lock (45 a minute: wait up
 to 8 s, else `{"wait": N}`), searches cached 15 min, thumbnails in `~/.cache/arctic/wallhaven/`;

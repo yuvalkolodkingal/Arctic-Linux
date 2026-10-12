@@ -1,30 +1,38 @@
 # Apps and software
 
-Arctic Linux starts with the apps you pick in the installer, from a catalog of 126. Afterwards
+Arctic Linux starts with the apps you pick in the installer, from a catalog of 132. Afterwards
 you can add almost anything from three places: Fedora's own packages (dnf), Flathub (Flatpak) and
-Nix. The quickest way is **Get apps** (`Super + Shift + A`), which also removes apps.
+Nix. **Get apps** (`Super + Shift + A`) installs software; the launcher has a separate
+**Remove apps** menu for uninstalling it.
 
 ## The default apps
 
-These are ticked for you in the installer. Every one can be swapped or unticked.
+New installations select these native apps. You can choose alternatives or untick optional
+roles in the installer. Existing accounts keep their chosen defaults and installed apps when
+Arctic packages update.
 
 | Role | Default | Opens with | Comes from |
 |---|---|---|---|
-| Browser | **Zen Browser**: calm, privacy-first, with vertical tabs | `Super + B` | Flathub |
-| Code editor | **Zed**: fast, modern code editor | `Super + E` | Flathub (community build) |
-| Terminal | **kitty**: fast, GPU-drawn terminal | `Super + Enter` | Fedora |
-| Shell | **Fish**: shell with suggestions as you type | inside the terminal | Fedora |
-| File manager | **Nautilus (GNOME Files)**: browse files and folders | `Super + F` | Fedora |
-| File manager in the terminal | **yazi** | `Super + Shift + F` | COPR `lihaohong/yazi` (Nix as a fallback) |
-| Office | **Collabora Office**: documents, spreadsheets and slides | the launcher | Flathub |
-| Video | **VLC**: plays almost any video or audio file | the launcher | Fedora |
+| Browser | **GNOME Web (Epiphany)** | `Super + B` | Fedora |
+| Text editor | **FeatherPad** | `Super + E` | Fedora |
+| Terminal | **Foot** | `Super + Enter` | Fedora |
+| Shell | **Fish**, with Bash also available | inside the terminal | Fedora |
+| File manager | **PCManFM**, Fedora's GTK3 build | `Super + F` | Fedora |
+| Archives | **XArchiver**, included with PCManFM | opening an archive | Fedora |
+| Video and audio | **Celluloid**, built on mpv | opening a media file | Fedora |
+| Recovery text editor | **Nano** | `nano` in a terminal | Fedora |
+
+Office suites, code editors and the terminal file manager **yazi** are optional. The selected
+browser opens web links, FeatherPad opens text/source files, PCManFM opens folders, XArchiver
+opens supported archives, and Celluloid opens supported audio/video files. **Settings → Default
+apps** changes these choices later. Bash and Nano remain available as system tools.
 
 ## Everything the installer offers
 
-The installer's app picker has **126 apps in 21 sections**. The first seven sections (browser,
+The installer's app picker has **132 apps in 21 sections**. The first seven sections (browser,
 editor, terminal, shell, file manager, office and video) are always open, with the defaults
 ticked. The other fourteen sit under **More apps**: they start folded, and nothing in them is
-ticked until you pick it. Open a section, or type in the **Search 126 apps** box to look through
+ticked until you pick it. Open a section, or type in the search box to look through
 every app by name, description or section (try *music*, *PDF* or *games*).
 
 - **Pick one** sections (browser, terminal, shell) need exactly one app; it becomes your default.
@@ -44,7 +52,8 @@ package repository, and **Nix** the Nix package manager.
 
 | App | What it is | Comes from |
 |---|---|---|
-| **Zen Browser** (ticked) | Calm, privacy-first browser with vertical tabs. | Flathub |
+| **GNOME Web (Epiphany)** (ticked) | Simple browser with a sandboxed WebKit web process. | Fedora |
+| Zen Browser | Calm, privacy-first browser with vertical tabs. | Flathub |
 | Firefox | The classic open-source browser. | Fedora, else Flathub |
 | Brave | Blocks ads and trackers out of the box. | Flathub |
 | Google Chrome · *Proprietary* | Google's browser, synced to your account. | Flathub |
@@ -56,7 +65,8 @@ package repository, and **Nix** the Nix package manager.
 
 | App | What it is | Comes from |
 |---|---|---|
-| **Zed** (ticked) | Fast, modern code editor. | Flathub |
+| **FeatherPad** (ticked) | Lightweight text editor with tabs, search and highlighting. | Fedora |
+| Zed | Fast, modern code editor. | Flathub |
 | Visual Studio Code · *Proprietary* | Microsoft's popular code editor. | Flathub |
 | VSCodium | VS Code without the telemetry. | Flathub |
 | Neovim | Keyboard-driven text editor for the terminal. | Fedora |
@@ -69,10 +79,10 @@ package repository, and **Nix** the Nix package manager.
 
 | App | What it is | Comes from |
 |---|---|---|
-| **kitty** (ticked) | Fast, GPU-drawn terminal. | Fedora |
+| kitty | Fast, GPU-drawn terminal. | Fedora |
 | Ghostty | Fast, native terminal with sensible defaults. | COPR `scottames/ghostty` |
 | Alacritty | Minimal GPU terminal. | Fedora |
-| foot | Lightweight Wayland terminal. | Fedora |
+| **Foot** (ticked) | Lightweight Wayland terminal. | Fedora |
 | Konsole | KDE's terminal with tabs, splits and profiles. | Fedora |
 
 ### Shell
@@ -87,18 +97,21 @@ package repository, and **Nix** the Nix package manager.
 
 | App | What it is | Comes from |
 |---|---|---|
-| **yazi** (ticked) | Quick file manager inside the terminal. | COPR `lihaohong/yazi`, else Nix |
+| **PCManFM** (ticked) | GTK3 file manager, with XArchiver and archive helpers. | Fedora |
+| yazi | Quick file manager inside the terminal. | COPR `lihaohong/yazi`, else Nix |
 | Thunar | Simple windowed file manager. | Fedora |
-| **Files (Nautilus)** (ticked) | GNOME's file manager. | Fedora |
+| Files (Nautilus) | GNOME's file manager. | Fedora |
 | Dolphin | KDE's file manager with tabs and split view. | Fedora |
 | Nemo | Familiar, full-featured file manager. | Fedora |
 | PCManFM-Qt | Very light windowed file manager. | Fedora |
 
 ### Office
 
+No office suite is ticked by default. Choose one if you need it.
+
 | App | What it is | Comes from |
 |---|---|---|
-| **Collabora Office** (ticked) | Documents, spreadsheets and slides. | Flathub |
+| Collabora Office | Documents, spreadsheets and slides. | Flathub |
 | LibreOffice | The full classic office suite. | Flathub, else Fedora |
 | ONLYOFFICE | Office suite close to Microsoft formats. | Flathub |
 
@@ -106,9 +119,9 @@ package repository, and **Nix** the Nix package manager.
 
 | App | What it is | Comes from |
 |---|---|---|
-| **VLC** (ticked) | Plays almost any video or audio file. | Fedora, with RPM Fusion's codec plugins |
+| VLC | Plays almost any video or audio file. | Fedora, with RPM Fusion's codec plugins |
 | mpv | Minimal, keyboard-driven player. | Fedora, else Flathub |
-| Celluloid | Simple player built on mpv. | Fedora, else Flathub |
+| **Celluloid** (ticked) | Simple player built on mpv. | Fedora, else Flathub |
 | Haruna | Feature-rich player built on mpv. | Fedora, else Flathub |
 | Kodi | Media centre for your TV, films and music. | RPM Fusion, else Flathub |
 | Jellyfin Media Player | Watch your Jellyfin server's library. | Flathub |
@@ -229,7 +242,10 @@ These start folded in the picker, and nothing here is ticked by default.
 | Proton Pass | Encrypted passwords from Proton. | Flathub |
 | Authenticator | Two-factor codes for your accounts. | Flathub |
 | Proton VPN | Free, no-logs VPN from Proton. | Flathub |
-| Tor Browser | Browse anonymously over Tor. | Flathub |
+| Tor Browser | Browser with its own Tor connection. | Flathub |
+| Tor SOCKS client | Optional per-app SOCKS connection; starts only when requested. | Fedora |
+| Tailscale | Private network between your devices; sign-in and routing are separate choices. | Fedora |
+| OpenVPN support | NetworkManager plugin for importing a provider profile. | Fedora |
 
 #### Downloads & sync
 
@@ -323,11 +339,12 @@ launcher (`Super + Space`). It first asks where the app should come from:
 | **Flathub apps** (`1`) | Desktop apps from Flathub, each in its own sandbox. No password needed. |
 | **Fedora packages** (`2`) | Apps and tools from Fedora and RPM Fusion, with dnf. Asks for your password once. |
 | **Web apps** (`3`) | Any website as an app, with its own window, icon and sign-in (see [Web apps](Web-Apps)). Shown when the web-app engine is installed. |
-| **Terminal apps** (`4`) | Puts a terminal program like `btop` in the launcher, in a floating or tiled window. |
-| **Remove apps** (`5`) | Uninstalls apps; see [Remove apps](#remove-apps). |
+| **Nix packages** (`4`, installed systems) | Search Nixpkgs, manage your profile, update and roll back. |
+| **Terminal apps** (`5`) | Puts a terminal program like `btop` in the launcher, in a floating or tiled window. |
 | **Console** (`6`) | Type `dnf` and `flatpak` commands. |
 
-Press a card's digit, or move with the arrow keys and press `Enter`. `Esc` goes back one step
+The digits follow the visible cards: Nix is hidden in the live session, and Web apps is hidden
+when its engine is unavailable. Press a card's digit, or move with the arrow keys and press `Enter`. `Esc` goes back one step
 (it closes an open panel, then clears what you typed, then returns to this chooser, then to the
 launcher).
 
@@ -376,8 +393,8 @@ The installer's messages mention "the Software app": that's Get apps.
 
 ![Remove apps, with a tab per source](images/remove-apps.png)
 
-**Remove apps** is card `5` in Get apps, **Remove apps** in the launcher, or **Settings → Default
-apps → Install and remove apps**. It has a tab per source: **Flatpak**, **Fedora packages**,
+**Remove apps** is a separate item in the launcher, also available from **Settings → Default
+apps**. It is separate from Get apps' installation chooser. It has a tab per source: **Flatpak**, **Fedora packages**,
 **Web apps** and **Terminal apps**. Pick an app and press **Remove…** (or `Delete`/`Enter`);
 `Ctrl + Tab` moves between the tabs.
 
@@ -401,7 +418,7 @@ Some packages can't be removed from here, and the page says why:
 
 - **Part of Arctic Linux**: the desktop itself, the session, the package manager, the boot
   loader and the other packages listed in `/usr/share/arctic/shell/scripts/protected-packages.conf`,
-  and everything the Arctic desktop needs (such as Blueman or the volume control). A removal that
+  and everything the Arctic desktop needs (the session, its helpers and required dependencies). A removal that
   would take one of them along is refused as a whole.
 - **Your login shell**: choose another shell first.
 - **Your only terminal**: `Super + Enter` would stop working; install another terminal first.
@@ -426,7 +443,7 @@ sudo dnf upgrade                  # update everything installed with dnf
 ## Flatpak and Flathub
 
 Flathub has many desktop apps, each running in its own sandbox. If you installed any Flatpak app
-in the installer (the defaults include Zen, Zed and Collabora Office) or ticked **Flathub**, the
+in the installer (optional choices include Zen, Zed and Collabora Office) or ticked **Flathub**, the
 Flathub remote is already set up. If it isn't, add it once:
 
 ```sh
@@ -445,6 +462,12 @@ flatpak list                      # what's installed (Remove apps lists them too
 Installed Flatpak apps appear in the launcher.
 
 ## Nix
+
+On an installed system, **Get apps → Nix packages** searches Nixpkgs and shows the packages in
+your own Arctic profile. **Update** refreshes its packages; **Roll back…** switches to its previous
+generation. These actions keep app data and do not roll back the operating system. Pinned inputs
+remain pinned. Nix is updated with Arctic's system packages. Shared or external profiles must be
+managed by their owner.
 
 The Nix package manager comes preinstalled, with its background service running and the SELinux
 settings it needs (Arctic's `arctic-selinux` package). It's handy for command-line tools that
@@ -474,7 +497,8 @@ Everything installed with dnf (the system, Arctic's own packages, apps from Fedo
 Fusion) updates by itself: downloaded in the background every day and installed the next time
 the computer starts. Arctic's own packages come from its signed package repository. The
 **Updates** page in Settings (`Super + S`) shows what's waiting and switches the channel; see
-[Updates](Updates). Flatpak and Nix apps you update yourself:
+[Updates](Updates). Flatpak apps also update daily when automatic updates are on. You can update
+Flatpak apps now and manage Nix profile updates yourself:
 
 ```sh
 flatpak update        # Flatpak apps

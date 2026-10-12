@@ -15,7 +15,7 @@ outputs and a virtual pointer do not qualify physical monitors or GPUs.
 
 The fixed test CD contains the original native helper, taskbar checker/runtime,
 two compiled Wayland probes and a context bound to ISO bytes/SHA, built source,
-execution commit, helper/native/ELF hashes and a random capture nonce. Probe compilation
+execution commit, helper/native/ELF hashes and a random token. Probe compilation
 runs in the prepared Fedora tool container, records exact C/XML hashes and RPM
 versions, and never adds the compiler or development packages to the image.
 The supplemental native host image also includes the official QEMU D-Bus and

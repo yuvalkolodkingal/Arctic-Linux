@@ -1135,199 +1135,7 @@ def wait_for(vm, prefix, want, limit, every=5):
         time.sleep(every)
     return None
 
-# BEGIN NATIVE_LOGIN_INPUT_OBSERVATION
-# Source-owned observations only: no credential text, length, hash or QMP errors.
-def native_login_geometry(path):
-    if not path:
-        return None
-    try:
-        from PIL import Image
-        with Image.open(path) as source:
-            if source.width * source.height > 8 * 1024 * 1024:
-                return None
-            im = source.convert("RGB")
-        w, h = im.size
-        if w < 320 or h < 200:
-            return None
-        ox, oy = max(0, w // 2 - 400), h // 4
-        region = im.crop((ox, oy, min(w, w // 2 + 400), h))
-        rw, rh = region.size
-        mask = bytearray(vmtest._is_amber(p) for p in region.getdata())
-        components = []
-        for seed in range(len(mask)):
-            if not mask[seed]:
-                continue
-            mask[seed] = 0
-            stack = [seed]
-            x0 = x1 = seed % rw
-            y0 = y1 = seed // rw
-            count = 0
-            while stack:
-                i = stack.pop(); x, y = i % rw, i // rw; count += 1
-                x0, x1 = min(x0, x), max(x1, x)
-                y0, y1 = min(y0, y), max(y1, y)
-                for ny in range(max(0, y - 1), min(rh, y + 2)):
-                    for nx in range(max(0, x - 1), min(rw, x + 2)):
-                        j = ny * rw + nx
-                        if mask[j]:
-                            mask[j] = 0; stack.append(j)
-            components.append((x0, y0, x1 + 1, y1 + 1, count))
-        found = set()
-        for bx0, by0, bx1, by1, count in components:
-            bw, bh = bx1 - bx0, by1 - by0
-            if not (28 <= bw <= 96 and 28 <= bh <= 96
-                    and 0.8 <= bw / bh <= 1.25 and count >= 0.65 * bw * bh):
-                continue
-            edges = [(x0, y0, x1, y1) for x0, y0, x1, y1, _ in components
-                     if 3 * bw <= x1 - x0 <= 8 * bw and y1 - y0 <= 0.15 * bh
-                     and 0 < bx0 - x1 <= bw]
-            for tx0, ty0, tx1, ty1 in edges:
-                if abs(ty0 - by0) > 0.2 * bh:
-                    continue
-                for lx0, ly0, lx1, ly1 in edges:
-                    if (abs(ly1 - by1) <= 0.2 * bh and ly0 - ty1 >= 0.7 * bh
-                            and abs(tx0 - lx0) <= 0.2 * bw and abs(tx1 - lx1) <= 0.2 * bw):
-                        found.add((ox + tx0, oy + ty0, ox + tx1, oy + ly1))
-        return (w, h, next(iter(found))) if len(found) == 1 else None
-    except (OSError, ValueError):
-        return None
-
-
-def native_login_type(vm, text):
-    # The exact original VM.type_text performs every key and its original delay.
-    original = vm.cmd
-    accepted = False; rejected = False; unknown = False
-    def observed(name, **arguments):
-        nonlocal accepted, rejected, unknown
-        answer = original(name, **arguments)
-        if name in ("input-send-event", "send-key"):
-            if type(answer) is dict and set(answer) == {"return"}:
-                accepted = True
-            elif type(answer) is dict and "error" in answer:
-                rejected = True
-            else:
-                unknown = True
-        return answer
-    vm.cmd = observed
-    try:
-        vm.type_text(text, gap=0.3)
-    finally:
-        # Never replace a different controller's method on an ownership mismatch.
-        if vm.cmd is observed:
-            vm.cmd = original
-    return "unknown" if unknown else "mixed-error" if accepted and rejected else "rejected" if rejected else "accepted" if accepted else "unobserved"
-
-
-def native_login_click(vm, path):
-    geometry = native_login_geometry(path)
-    if geometry is None:
-        return "not-attempted-geometry-unknown"
-    w, h, (x0, y0, x1, y1) = geometry
-    x, y = (x0 + x1) // 2, (y0 + y1) // 2
-    # The unchanged QEMU constructor already has a USB tablet. This is a normal
-    # physical pointer action on the observed first scanout, never a PAM bypass.
-    answer = vm.cmd("input-send-event", events=[
-        {"type": "abs", "data": {"axis": "x", "value": round(x * 32767 / (w - 1))}},
-        {"type": "abs", "data": {"axis": "y", "value": round(y * 32767 / (h - 1))}},
-        {"type": "btn", "data": {"down": True, "button": "left"}},
-        {"type": "btn", "data": {"down": False, "button": "left"}}])
-    return "accepted" if type(answer) is dict and set(answer) == {"return"} else "rejected" if type(answer) is dict and "error" in answer else "unknown"
-
-
-def native_login_record(before, after, attempt, qmp, pointer):
-    import json
-    a, b = native_login_geometry(before), native_login_geometry(after)
-    changed = "unknown"
-    if a is not None and b == a:
-        from PIL import Image
-        _, _, (x0, y0, x1, y1) = a
-        # Observe only change in the field; it is not a credential or auth oracle.
-        # Text begins after the Source-owned lock icon/padding, before the button.
-        with Image.open(before) as im: old = im.convert("RGB").crop((x0 + 40, y0 + 4, x1 - 4, y1 - 4)).tobytes()
-        with Image.open(after) as im: new = im.convert("RGB").crop((x0 + 40, y0 + 4, x1 - 4, y1 - 4)).tobytes()
-        changed = "changed" if new != old else "unchanged"
-    log("ARCTIC-NATIVE-LOGIN-INPUT " + json.dumps(dict(
-        schema="arctic-native-login-input-observation-v1", attempt=attempt,
-        role="keyboard-only" if attempt == 1 else "pointer-then-keyboard",
-        qmp=qmp, pointer=pointer,
-        password_focus_visual="source-amber-ring-observed" if a is not None else "unknown",
-        password_region=changed, authentication="not-attested",
-        release_acceptance=False), sort_keys=True))
-# END NATIVE_LOGIN_INPUT_OBSERVATION
-
-# Failure-only observations bind actual loaded function code and global identity.
-# The private phase log can contain secrets; no exception value or raw line is relayed.
-_DICTATION_DRIVER_BINDING = ()
-
-def dictation_driver_binding():
-    import re, types
-    if E.get("DICTATION_FIXTURE") != "1" or re.fullmatch("[0-9a-f]{32}", E.get("ARCTIC_DICTATION_HOST_TOKEN", "")) is None:
-        return ()
-    source = globals()
-    driver_names = ("stage_boot", "dictation_acquire_vm", "dictation_cpu_argv",
-        "dictation_network_argv", "native_taskbar_argv", "qemu_argv", "enable_taskbar_display",
-        "close_taskbar_vm", "wait_menu", "edit_entry", "open_terminal", "serial", "wait_for",
-        "native_login_geometry", "native_login_type", "native_login_click", "native_login_record",
-        "dictation_indicator_poll", "physical_poll")
-    vm_names = ("__init__", "alive", "cmd", "shot", "press", "keys", "type_text", "quit", "wait_exit")
-    module_names = ("serial_has", "serial_value", "classify", "looks_like_boot_menu", "chord_for", "log")
-    entries = []
-    for name in driver_names:
-        fn = source.get(name)
-        if type(fn) is not types.FunctionType or fn.__globals__ is not source:
-            return ()
-        entries.append((fn.__code__, source, "driver-" + name.replace("_", "-")))
-    for names, owner, prefix in ((vm_names, vmtest.VM.__dict__, "vm-"),
-                                  (module_names, vmtest.__dict__, "vmtest-")):
-        for name in names:
-            fn = owner.get(name)
-            if type(fn) is not types.FunctionType or fn.__globals__ is not vmtest.__dict__:
-                return ()
-            entries.append((fn.__code__, vmtest.__dict__, prefix + name.strip("_").replace("_", "-")))
-    frames = tuple((code, namespace, label, frozenset(line for _, _, line in code.co_lines()
-                    if type(line) is int and line > 0)) for code, namespace, label in entries)
-    classes = ((vmtest.QMPError, "qmp-error"), (RuntimeError, "runtime-error"),
-        (FileNotFoundError, "file-not-found"), (PermissionError, "permission-error"),
-        (OSError, "os-error"), (ValueError, "value-error"), (TypeError, "type-error"),
-        (KeyError, "key-error"), (UnicodeDecodeError, "unicode-error"),
-        (TimeoutError, "timeout"), (InterruptedError, "interrupted-error"),
-        (KeyboardInterrupt, "keyboard-interrupt"), (SystemExit, "system-exit"))
-    return frames, classes
-
-def dictation_driver_failure(scope, error):
-    """Observe actual Source frames; never change the original exception/cleanup."""
-    try:
-        import json, re, types
-        token = E.get("ARCTIC_DICTATION_HOST_TOKEN", "")
-        if (scope not in ("boot-body", "boot-cleanup") or E.get("DICTATION_FIXTURE") != "1"
-                or type(token) is not str or re.fullmatch("[0-9a-f]{32}", token) is None
-                or type(_DICTATION_DRIVER_BINDING) is not tuple or len(_DICTATION_DRIVER_BINDING) != 2):
-            return
-        frames, classes = _DICTATION_DRIVER_BINDING
-        code = next((label for cls, label in classes if type(error) is cls), "other-error")
-        tb = BaseException.__traceback__.__get__(error)
-        observed = []
-        while tb is not None and len(observed) < 32:
-            if type(tb) is not types.TracebackType:
-                return
-            match = next(((label, tb.tb_lineno) for owned, namespace, label, lines in frames
-                if tb.tb_frame.f_code is owned and tb.tb_frame.f_globals is namespace
-                and type(tb.tb_lineno) is int and tb.tb_lineno in lines), ("unknown", 0))
-            observed.append(match)
-            tb = tb.tb_next
-        if tb is not None:
-            return  # A bounded observation cannot describe a truncated traceback.
-        frame = observed[-1] if observed else ("unknown", 0)
-        caller = next((item for item in reversed(observed[:-1]) if item[0] != "unknown"), ("unknown", 0))
-        value = dict(schema="arctic-dictation-driver-failure-v1", scope=scope, error=code,
-                     frame=frame[0], frame_line=frame[1], caller=caller[0], caller_line=caller[1],
-                     release_acceptance=False)
-        print("ARCTIC-DICTATION-DRIVER-FAILURE " + token + " " + json.dumps(value, sort_keys=True), flush=True)
-    except BaseException:
-        pass  # Even a second cancellation or failed diagnostic write preserves bare raise.
-
 def stage_boot():
-    import json
     vm = None
     display = None
     ok = True
@@ -1394,17 +1202,9 @@ def stage_boot():
             ok = False
         dictation_host_stage("boot-login")
         for attempt in (1, 2, 3):
-            native_input = E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and E.get("NATIVE_TASKBAR_FIXTURE") == "1" and E.get("NATIVE_AUDIO_FIXTURE") == "1"
-            if native_input:
-                before_input = vm.shot(f"boot-42-input-before-{attempt}")
-                pointer = "not-attempted-keyboard-only" if attempt == 1 else native_login_click(vm, before_input)
-                qmp_input = native_login_type(vm, password)
-            else:
-                vm.type_text(password, gap=0.3)
+            vm.type_text(password, gap=0.3)
             time.sleep(1)
-            typed_input = vm.shot(f"boot-42-password-typed-{attempt}")
-            if native_input:
-                native_login_record(before_input, typed_input, attempt, qmp_input, pointer)
+            vm.shot(f"boot-42-password-typed-{attempt}")
             vm.keys("ret")
             # SDDM clears the field and says so when the password was wrong; the card stays.
             t = time.time()
@@ -1415,11 +1215,6 @@ def stage_boot():
                 if q and vmtest.classify(q) != "login":
                     gone = True
                     break
-            if native_input:
-                log("ARCTIC-NATIVE-LOGIN-AUTH " + json.dumps(dict(
-                    schema="arctic-native-login-auth-observation-v1", attempt=attempt,
-                    state="login-card-no-longer-classified" if gone else "login-card-still-classified",
-                    pam_result="not-observed", release_acceptance=False), sort_keys=True))
             if gone:
                 break
             log(f"still on the login screen after the password (attempt {attempt}): typing it again")
@@ -1528,29 +1323,9 @@ def stage_boot():
         if E.get("GUEST_CHECK") and not vm.wait_exit(120):
             ok = False
         return 0 if ok else 1
-    except BaseException as error:
-        try:
-            dictation_driver_failure("boot-body", error)
-        except BaseException:
-            pass
-        raise
     finally:
         dictation_host_stage("boot-cleanup")
-        try:
-            close_taskbar_vm(vm, display)
-        except BaseException as error:
-            try:
-                dictation_driver_failure("boot-cleanup", error)
-            except BaseException:
-                pass
-            raise
-
-# Capture the real loaded Driver and VMtest once, before the original stage calls.
-# Imports/setup failures before this point remain unobserved.
-try:
-    _DICTATION_DRIVER_BINDING = dictation_driver_binding()
-except Exception:
-    _DICTATION_DRIVER_BINDING = ()
+        close_taskbar_vm(vm, display)
 
 rc = 0
 if stage in ("all", "install"):

@@ -18,8 +18,9 @@ There are two built-in themes:
 - **Winter** (light), the fox's snow-white coat.
 
 Press `Super + Shift + T` to switch between light and dark. The bar, launcher, window borders,
-terminal, notifications, lock screen and your apps all change together, and the Arctic wallpapers
-switch to their matching version.
+terminal, notifications, lock screen and your apps all change together. The photo or personal
+wallpaper you selected stays selected; the older illustrated wallpaper names can still follow
+their matching theme.
 
 ### Light by day, dark at night
 
@@ -85,8 +86,9 @@ backgrounds and text get a hint of its tint. Everything that follows the theme c
 This is on by default, and it's called **Match colours to wallpaper**: a switch at the bottom of
 the wallpaper picker (`Super + Shift + W`), and also in Settings under **Appearance**.
 
-- **Arctic's own wallpapers** (Snowfield, Aurora and Fox) keep the Winter and Polar night colours,
-  so a new install looks exactly as designed.
+- **Photo wallpapers** can provide the palette when auto colours are on. The fresh default
+  remains the designed Polar night palette with *City Afterglow*. The older illustrated
+  Snowfield, Aurora and Fox names keep Winter / Polar night and remain supported for existing choices.
 - **Light or dark:** by default the picture decides (a bright picture gives a light theme, a dark
   one a dark theme). You can fix it to light or dark instead (`arctic-theme mode`, or **Light or
   dark** in Settings). `Super + Shift + T` flips it.
@@ -137,8 +139,8 @@ and the login screen uses it too.
 |---|---|---|
 | The Arctic shell (bar, launcher, pop-ups, lock screen), Arctic Settings | read the theme directly | at once |
 | Mango (window borders), kitty, notifications (mako), the fallback bar, fuzzel and swaylock | colour files in the theme folder | at once |
-| **GTK 3 apps** (Thunar, Inkscape, GIMP, Zen's menus, …) | the **adw-gtk3** theme, recoloured with the theme's colours | light/dark at once; colours when the app next starts |
-| **GTK 4 / libadwaita apps** (Nautilus, Celluloid, GNOME apps) | the system's light/dark setting and the theme's colours | light/dark at once; colours when the app next starts |
+| **GTK 3 apps** (PCManFM, XArchiver, Thunar, Inkscape, GIMP, Zen's menus, …) | the **adw-gtk3** theme, recoloured with the theme's colours | light/dark at once; colours when the app next starts |
+| **GTK 4 / libadwaita apps** (GNOME Web, Celluloid, optional Nautilus and other GNOME apps) | the system's light/dark setting and the theme's colours | light/dark at once; colours when the app next starts |
 | **Qt 5 and Qt 6 apps** (VLC, OBS, KDE apps) | **qt5ct** and **qt6ct**, with the theme's palette, Figtree and JetBrains Mono and Adwaita icons | within a few seconds |
 | **Flatpak apps** | GTK Flatpaks read the same colours (Arctic gives every Flatpak read-only access to your GTK and font settings, and installs the adw-gtk3 theme for Flatpak) | as GTK |
 | **Zed** (Flatpak or native) | an "Arctic" theme, copied into Zed's themes folder | at once |
@@ -159,34 +161,54 @@ Steam, mpv's on-screen controls and fish (which uses the terminal's colours).
 
 ![The wallpaper picker](images/wallpapers.png)
 
-`Super + Shift + W` opens the wallpaper picker. Arctic Linux has three wallpapers, each in a
-Winter and a Polar night version:
+`Super + Shift + W` opens the wallpaper picker. The packaged collection contains **twenty-eight
+photographs** from [Yuval Kolodkin-Gal's Wallpapers](https://yuvalkolodkingal.github.io/Wallpapers/).
+Fresh defaults use *City Afterglow*. The new **Ember Clouds, City Silhouette** master is
+**2048 × 1152**, preserved without regeneration or upscaling. The
+[original master](https://yuvalkolodkingal.github.io/Wallpapers/wallpapers/master/ember-clouds-city-silhouette.jpg)
+has SHA-256 `7af8cb5ce0d87773109d759afdd1d14ef22ce7e84fdc1533da1539083cd11b0b`.
+The photos retain their artist's copyright; see the collection's credit and licence notices.
 
-| Wallpaper | Used by default for |
-|---|---|
-| **Snowfield** | Winter |
-| **Aurora** | Polar night |
-| **Fox** | The login screen |
+Package updates preserve `~/.config/arctic/wallpaper`, custom themes and configured login/lock
+backgrounds. The earlier illustrated Snowfield, Aurora and Fox names stay compatible, although
+those drawings are omitted from the new photo gallery and collection rotation.
 
-An Arctic wallpaper follows the theme when you switch. Your own pictures (from
-`~/Pictures/Wallpapers`, or any folder you choose with **Choose folder…**) stay as they are, and
-with **Match colours to wallpaper** on, the desktop takes its colours from them.
-
-To add pictures, use **Settings → Appearance → Add pictures…** or drag them there from Files;
-Settings copies them into your folder and can rename or delete them. **Settings → Appearance →
-Wallhaven** finds wallpapers on [wallhaven.cc](https://wallhaven.cc) and sets one with a click
-(it lands in `~/Pictures/Wallpapers/wallhaven`, so the picker lists it too). See
-[Settings](Settings#appearance).
-
-From a terminal:
+Your own pictures come from `~/Pictures/Wallpapers`, or a folder selected with **Choose folder…**.
+To add pictures, use **Settings → Appearance → Add pictures…** or drag them there; Settings can
+rename or delete the added copies. Delete on a packaged Arctic photo creates a validated
+per-account tombstone under `hidden_arctic` in `~/.config/arctic/wallpapers.json` instead of
+removing the RPM-owned file. Hidden photos stay out of the picker and Arctic/**Both** rotation
+after updates; **Restore hidden Arctic wallpapers** clears those tombstones. The active wallpaper
+must be changed before it can be hidden or deleted. **Wallhaven** downloads only after you search
+and choose an image. **Match colours to wallpaper** draws the palette from the picture when enabled.
 
 ```sh
-arctic-wallpaper fox                       # an Arctic wallpaper: snowfield, aurora or fox
-arctic-wallpaper ~/Pictures/mountains.jpg  # any picture of your own (the colours follow it)
-arctic-wallpaper current                   # print the picture in use
+arctic-wallpaper /usr/share/backgrounds/arctic/ember-clouds-city-silhouette.jpg
+arctic-wallpaper ~/Pictures/mountains.jpg
+arctic-wallpaper current
 ```
 
-PNG, JPEG, WebP, GIF, BMP, TIFF and SVG pictures all work.
+Desktop wallpapers support PNG, JPEG, WebP, GIF, BMP, TIFF and SVG. The shared login/lock image
+accepts a narrower set, as described below.
+
+### Shared login and lock wallpaper
+
+**Settings → Appearance → Login and lock wallpaper** offers **Choose image…** or **Use desktop
+and follow changes…**. After administrator authorization, Arctic publishes one validated copy
+for SDDM and every account's lock screen. The desktop can still use a different picture.
+A shared image is readable by everyone before login, including while its source home is encrypted.
+Following a desktop also publishes that authorized account's future wallpaper rotation and
+manual changes while its local session is active.
+
+**Keep this image; stop following…** freezes the current shared image. **Restore previous shared
+choice…** restores the previous image and mode, and **Restore existing defaults…** removes the
+public copies and resumes the prior login/per-user lock choices. An update does not enable sync
+or publish your private wallpaper by itself.
+
+Use a static PNG, JPEG or WebP, at most 32 MiB and 32 million pixels. The validated copy discards
+capture metadata. If a later desktop image cannot be used, the last successful public copy is
+kept and Settings shows the error. These controls do not change passwords or authentication.
+See [the shared-wallpaper details](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/LOGIN-WALLPAPER.md).
 
 ### A new wallpaper every so often
 
@@ -195,15 +217,18 @@ PNG, JPEG, WebP, GIF, BMP, TIFF and SVG pictures all work.
 ```sh
 arctic-wallpaper rotate 1h                 # every hour, from your wallpaper folder, in name order
 arctic-wallpaper rotate 30m arctic --shuffle   # every 30 minutes, Arctic's own, in random order
+arctic-wallpaper rotate 30m both --shuffle # your folder plus the visible Arctic collection
 arctic-wallpaper rotate 1d ~/Pictures/Trips    # every day, from any folder
 arctic-wallpaper rotate off                # stop
 arctic-wallpaper next                      # the next picture now
 ```
 
-Only the picture changes: the wallpaper you chose (`~/.config/arctic/wallpaper`) and the colours
-stay, so **Match colours to wallpaper** doesn't remake the theme every half hour, and a theme
-switch or the next login starts from your choice again. In random order every picture comes once
-before any comes again. Your [wallpaper hooks](#hooks-for-other-events) run with each picture.
+Each rotated picture becomes your saved choice in `~/.config/arctic/wallpaper`, and
+**Match colours to wallpaper** can update the palette with it. The next login uses the latest
+chosen picture. An enabled shared-login desktop sync follows these changes too. In random order
+every picture from the selected source comes once before any comes again. **Both** treats your
+configured folder and the visible Arctic collection as one round; hidden packaged photos are
+excluded. Your [wallpaper hooks](#hooks-for-other-events) run with each picture.
 The setting is kept in `~/.config/arctic/wallpaper-rotate.json` and runs as the systemd user
 timer `arctic-wallpaper-rotate` (`systemctl --user list-timers` shows the next change).
 
@@ -259,8 +284,8 @@ browser, editor, file manager and terminal file manager. The installer writes yo
 terminal=foot
 browser=gtk-launch org.mozilla.firefox
 editor=gtk-launch com.vscodium.codium
-files=nautilus
-files-tui=kitty -e yazi
+files=pcmanfm
+files-tui=foot -e yazi
 ```
 
 The roles are `terminal`, `browser`, `editor`, `files` and `files-tui`. Use the app's command, or
@@ -279,7 +304,8 @@ these files, which Arctic never overwrites:
 | File | For |
 |---|---|
 | `~/.config/mango/user.conf` | Window manager settings, extra shortcuts and window rules |
-| `~/.config/kitty/user.conf` | The kitty terminal |
+| `~/.config/foot/foot.ini` | The default Foot terminal |
+| `~/.config/kitty/user.conf` | Optional kitty |
 | `~/.config/fish/config.local.fish` | Fish |
 | `~/.zshrc.local` | zsh |
 | `~/.config/arctic/default-apps` | Which app each shortcut opens |

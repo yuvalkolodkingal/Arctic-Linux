@@ -256,41 +256,11 @@ def public_token_spans(line):
     return spans
 
 
-# BEGIN STRICT_SOURCE_OSC3008_SERVICE
-# Disabled Source-format proposal: exact upstream v259 producer field order.
-# This fixed installed-CI context is not an observation of a target UART.
-OSC3008_SERVICE_MAX_CHARS = 512
-OSC3008_SERVICE = re.compile(
-    r'\x1b\]3008;start=[0-9a-f]{32};user=root;hostname=(?:arctic-ci|arctic-qual|localhost-live);'
-    r'machineid=[0-9a-f]{32};bootid=[0-9a-f]{32};'
-    r'pid=(?P<pid>[1-9][0-9]{0,9});pidfdid=(?P<pidfdid>[1-9][0-9]{0,19});'
-    r'comm=\(agetty\);servicename=(?P<unit>serial-getty@ttyS0\.service);'
-    r'invocationid=[0-9a-f]{32};type=service\x1b\\')
-
-
-def public_service_spans(line):
-    """Exempt only the public unit span inside a complete fixed Source form."""
-    spans = set()
-    for frame in STRING_PAYLOADS.finditer(line):
-        if frame.end() - frame.start() > OSC3008_SERVICE_MAX_CHARS:
-            continue
-        matched = OSC3008_SERVICE.fullmatch(frame.group())
-        if matched is None:
-            continue
-        if int(matched.group('pid')) > 2147483647 or int(matched.group('pidfdid')) > 18446744073709551615:
-            continue
-        first, last = matched.span('unit')
-        spans.add((frame.start() + first, frame.start() + last, frame.start(), frame.end()))
-    return spans
-# END STRICT_SOURCE_OSC3008_SERVICE
-
-
 def external_text(content):
     """Reject sensitive evidence; return original bytes, never redacted bytes."""
     value = content.decode('utf-8')
     view, boundaries, removed = classification_view(value)
     allowed = set()
-    allowed_service = set()
     # Iterate records without allocating a list/object for every empty UART
     # line. Bare CR progress updates cannot supply another record's context.
     for record in re.finditer(r'[^\r\n]+', view):
@@ -303,16 +273,6 @@ def external_text(content):
             original_proof_start, original_proof_end = original_span(proof_start, proof_end, boundaries, removed)
             if value[original_proof_start:original_proof_end] == view[proof_start:proof_end]:
                 allowed.add((original_start, original_end))
-        # A whole, contiguous Source-generated frame is required for this
-        # separate payload exception. Generic public tokens do not receive it.
-        for start, end, proof_start, proof_end in public_service_spans(record.group()):
-            start, end = start + record.start(), end + record.start()
-            proof_start, proof_end = proof_start + record.start(), proof_end + record.start()
-            original_start, original_end = original_span(start, end, boundaries, removed)
-            original_proof_start, original_proof_end = original_span(proof_start, proof_end, boundaries, removed)
-            if value[original_proof_start:original_proof_end] == view[proof_start:proof_end]:
-                allowed.add((original_start, original_end))
-                allowed_service.add((original_start, original_end))
     def require_safe(scanned, boundaries, removed, phase='source-view'):
         if any(original_span(*match.span(), boundaries, removed) not in allowed and (rejected := match)
                 for match in EXTERNAL_SENSITIVE.finditer(scanned)):
@@ -323,14 +283,11 @@ def external_text(content):
     if '\x1b' in view:
         for frame in STRING_PAYLOADS.finditer(view):
             payload = frame.group(1) if frame.group(1) is not None else frame.group(2)
-            # DCS/SOS/APC cannot conceal a credential's leading boundary.
-            # Every match is checked; only the exact unit span whose complete
-            # OSC3008 service frame passed above receives a payload exception.
-            payload_start = frame.start(1) if frame.group(1) is not None else frame.start(2)
-            for rejected in EXTERNAL_SENSITIVE.finditer(payload):
-                absolute = (payload_start + rejected.start(), payload_start + rejected.end())
-                if original_span(*absolute, boundaries, removed) not in allowed_service:
-                    reject_sensitive_match(rejected, 'terminal-payload')
+            # DCS/SOS/APC introduce a word character (P/X/_) that must not
+            # conceal a credential's leading word boundary. Payloads receive
+            # no public-token exception, even if invisible on the terminal.
+            if (rejected := EXTERNAL_SENSITIVE.search(payload)):
+                reject_sensitive_match(rejected, 'terminal-payload')
         terminal_view, terminal_boundaries, terminal_removed = classification_view(value, escapes=TERMINAL)
         if '\x1b' in terminal_view:
             raise RuntimeError('Incomplete terminal escape in external evidence')

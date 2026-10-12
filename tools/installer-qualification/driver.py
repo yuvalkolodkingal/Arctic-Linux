@@ -70,175 +70,6 @@ COLLECTION_PHASE_LABELS = ('request-json', 'request-json-fields', 'request-json-
 DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
     'installer-inner-driver-collect-phase-' + code + '-runtime-error' for code in COLLECTION_PHASE_LABELS)
 
-# BEGIN INSTALLED_AUTH_FINITE_OBSERVER
-_AUTH_PROOF_TOKEN = object()
-_AUTH_ACTIVE = None
-AUTH_PHASES = ('installed-display', 'getty-prompt', 'getty-input', 'installed-shell', 'sudo-prompt', 'sudo-input')
-AUTH_INPUT_COMMANDS = {'input-send-event': 'primary', 'send-key': 'send-key'}
-AUTH_REPLY_CLASSES = ('accepted', 'refused', 'exception', 'unknown-reply')
-AUTH_PROMPT_CLASSES = ('getty-password', 'sudo-password', 'user-shell', 'login-incorrect', 'known-login-prompt', 'unknown')
-AUTH_DIAGNOSTIC_CODES = frozenset(
-    'installer-inner-driver-installed-auth-' + phase + '-qmp-' + command + '-' + result
-    for phase in AUTH_PHASES for command in AUTH_INPUT_COMMANDS.values() for result in AUTH_REPLY_CLASSES
-) | frozenset('installer-inner-driver-installed-auth-prompt-' + value for value in AUTH_PROMPT_CLASSES) | frozenset(
-    ('installer-inner-driver-installed-auth-qmp-acceptance-is-transport-only',
-     'installer-inner-driver-installed-auth-guest-input-delivery-unproven',
-     'installer-inner-driver-installed-auth-pam-result-unproven'))
-DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | AUTH_DIAGNOSTIC_CODES
-
-
-# BEGIN SOURCE-CLOSED FRESH RESPONSE OBSERVATION
-_AUTH_RESPONSE_TOKEN = object()
-AUTH_RESPONSE_CODES = frozenset(
-    'installer-inner-driver-installed-auth-response-' + role + '-' + value
-    for role, values in (('sent', ('true', 'false')),
-                         ('records', ('zero', 'one', 'multiple')),
-                         ('exact-match', ('true', 'false')))
-    for value in values)
-AUTH_DIAGNOSTIC_CODES = AUTH_DIAGNOSTIC_CODES | AUTH_RESPONSE_CODES
-DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | AUTH_RESPONSE_CODES
-# END SOURCE-CLOSED FRESH RESPONSE OBSERVATION
-
-
-def installed_auth_codes(error):
-    if not isinstance(error, BaseException):
-        return ()
-    proof = error.__dict__.get('_arctic_installer_installed_auth_observation')
-    if type(proof) is not tuple or len(proof) != 2 or proof[0] is not _AUTH_PROOF_TOKEN:
-        return ()
-    # A copied token/row tuple on a foreign error is not an owned observation.
-    trace = error.__traceback__; owned_wrapper = owned_original = False
-    for _ in range(64):
-        if trace is None:
-            break
-        frame = trace.tb_frame
-        if frame.f_globals is globals():
-            owned_wrapper = owned_wrapper or frame.f_code is boot_installed.__code__
-            owned_original = owned_original or frame.f_code is boot_installed.__wrapped__.__code__
-        trace = trace.tb_next
-    if trace is not None or not owned_wrapper or not owned_original:
-        return ()
-    rows = proof[1]
-    if type(rows) is not tuple or len(rows) > 96 or any(type(x) is not str or x not in AUTH_DIAGNOSTIC_CODES for x in rows):
-        return ()
-    return rows
-
-
-def observe_installed_response(sent, record_count, exact_match):
-    """Latest fixed response facts from the exact loaded challenge function only."""
-    frame = sys._getframe(1)
-    try:
-        if frame.f_globals is not globals() or frame.f_code is not console_user_identity.__code__:
-            return
-    finally:
-        del frame
-    owner = _AUTH_ACTIVE
-    if (type(owner) is not dict or type(sent) is not bool or type(exact_match) is not bool
-            or type(record_count) is not int or not 0 <= record_count <= 65536):
-        return
-    cardinality = 'zero' if record_count == 0 else 'one' if record_count == 1 else 'multiple'
-    owner['response'] = (_AUTH_RESPONSE_TOKEN, sent, cardinality, exact_match)
-
-
-def response_observation_codes(owner):
-    if type(owner) is not dict:
-        return ()
-    proof = owner.get('response')
-    if (type(proof) is not tuple or len(proof) != 4 or proof[0] is not _AUTH_RESPONSE_TOKEN
-            or type(proof[1]) is not bool or type(proof[2]) is not str
-            or proof[2] not in ('zero', 'one', 'multiple') or type(proof[3]) is not bool):
-        return ()
-    return ('installer-inner-driver-installed-auth-response-sent-' + ('true' if proof[1] else 'false'),
-            'installer-inner-driver-installed-auth-response-records-' + proof[2],
-            'installer-inner-driver-installed-auth-response-exact-match-' + ('true' if proof[3] else 'false'))
-
-
-def observe_installed_prompt(label, observed_line):
-    # The original secret-nonappearance guard has already passed in this exact
-    # Source function. Foreign callers cannot attach observations to its owner.
-    frame = sys._getframe(1)
-    try:
-        if frame.f_globals is not globals() or (frame.f_code is not console_prompt.__code__ and frame.f_code is not console_user_identity.__code__):
-            return
-    finally:
-        del frame
-    owner = _AUTH_ACTIVE
-    if type(owner) is not dict or type(label) is not str:
-        return
-    phases = {'installed-getty-password': ('getty-prompt', 'getty-input', 'Password:'),
-              'installed-login-shell': ('installed-shell', 'installed-shell', 'arcticqual@arctic-qual ~ >'),
-              'installed-sudo-password': ('sudo-prompt', 'sudo-input', '[sudo] password for arcticqual:')}
-    if label not in phases:
-        return
-    waiting, matched, expected = phases[label]
-    owner['phase'] = matched if type(observed_line) is str and observed_line == expected else waiting
-    known = {'Password:': 'getty-password', '[sudo] password for arcticqual:': 'sudo-password',
-             'arcticqual@arctic-qual ~ >': 'user-shell', 'Login incorrect': 'login-incorrect',
-             'arctic-qual login:': 'known-login-prompt', 'arctic-qual login: arcticqual': 'known-login-prompt'}
-    label = known.get(observed_line, 'unknown') if type(observed_line) is str and len(observed_line) <= 256 else 'unknown'
-    owner['codes'].add('installer-inner-driver-installed-auth-prompt-' + label)
-
-
-def observed_installed_auth(original):
-    """Keep original input, timeout and authentication behavior; collect enums."""
-    if (type(original) is not FunctionType or original.__globals__ is not globals()
-            or original.__code__.co_name != 'boot_installed' or original.__code__.co_filename != __file__):
-        return original
-    def wrapped(vm, startup, vmtest, out, context):
-        global _AUTH_ACTIVE
-        if _AUTH_ACTIVE is not None:
-            return original(vm, startup, vmtest, out, context)
-        prior = vm.__dict__.get('cmd'); had_own = 'cmd' in vm.__dict__; command = vm.cmd
-        owner = {'phase': 'installed-display', 'codes': set()}
-        def observed_command(name, **arguments):
-            kind = AUTH_INPUT_COMMANDS.get(name) if type(name) is str else None
-            try:
-                reply = command(name, **arguments)
-            except BaseException:
-                if kind is not None:
-                    owner['codes'].add('installer-inner-driver-installed-auth-' + owner['phase'] + '-qmp-' + kind + '-exception')
-                raise
-            if kind is not None:
-                # Return values, arguments, events, keys and credentials are
-                # never retained or formatted. Acceptance proves QMP only.
-                result = 'refused' if type(reply) is dict and 'error' in reply else 'accepted' if type(reply) is dict and 'return' in reply else 'unknown-reply'
-                owner['codes'].add('installer-inner-driver-installed-auth-' + owner['phase'] + '-qmp-' + kind + '-' + result)
-            return reply
-        primary = None
-        try:
-            _AUTH_ACTIVE = owner
-            vm.cmd = observed_command
-            return original(vm, startup, vmtest, out, context)
-        except BaseException as error:
-            primary = error
-            codes = owner['codes'] | {
-                'installer-inner-driver-installed-auth-qmp-acceptance-is-transport-only',
-                'installer-inner-driver-installed-auth-guest-input-delivery-unproven',
-                'installer-inner-driver-installed-auth-pam-result-unproven'}
-            try:
-                codes |= set(response_observation_codes(owner))
-            except Exception:
-                pass  # Optional response facts cannot replace the owned original failure.
-            try:
-                error.__dict__['_arctic_installer_installed_auth_observation'] = (_AUTH_PROOF_TOKEN, tuple(sorted(codes)))
-            except BaseException:
-                pass
-            raise
-        finally:
-            _AUTH_ACTIVE = None
-            try:
-                if vm.__dict__.get('cmd') is observed_command:
-                    if had_own:
-                        vm.cmd = prior
-                    else:
-                        del vm.cmd
-            except BaseException:
-                if primary is None:
-                    raise
-    wrapped.__wrapped__ = original
-    return wrapped
-# END INSTALLED_AUTH_FINITE_OBSERVER
-
 
 def collection_guard_code(error, controller_source):
     """Only a pinned controller's source-minted identity; no exception text."""
@@ -315,9 +146,6 @@ def diagnose(stage, error, controller_source=None):
         code = diagnostic_code(stage, error, controller_source)
         try:
             print('ARCTIC-INSTALLER-INNER ' + token + ' ' + code, flush=True)
-            if stage == 'driver-installed-proof':
-                for observation in installed_auth_codes(error):
-                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)
             if code == 'installer-inner-driver-collect-guard-collection-034':
                 try:
                     observed = write_observation_codes(error, controller_source)
@@ -499,7 +327,6 @@ def console_prompt(vm, startup, out, label, expected, private_password, archive=
         require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         observed_line = lines[-1].rstrip('_| ') if lines else None
-        observe_installed_prompt(label, observed_line)
         if observed_line == expected:
             from PIL import Image
             with Image.open(path) as image:
@@ -527,88 +354,6 @@ def ocr_provenance():
                 version=subprocess.check_output(['tesseract','--version'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines()[0])
 
 
-# BEGIN INSTALLED_USER_NONCE_IDENTITY
-def installed_user_command(nonce):
-    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
-            'installed user identity nonce differs')
-    # The echoed command contains placeholders, not the complete output record.
-    # No credential, sudo command, shell setting or authentication is changed.
-    return ('sh -c \'printf "\\nARCTIC-%s %s uid=%s user=%s\\n" '
-            'USER "$1" "$(id -u)" "$(id -un)"\' sh ' + nonce)
-
-
-def installed_user_line(nonce):
-    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
-            'installed user identity nonce differs')
-    return 'ARCTIC-USER ' + nonce + ' uid=1000 user=arcticqual'
-
-
-def installed_shell_ready(observed_line):
-    # F10's default Fish4.6 prompt_login + fish_prompt render the exact
-    # qualification account, hostname, home cwd and non-root suffix.
-    # OCR may omit the separating space before the suffix; neither fixed
-    # spelling accepts a greeting, getty, root or unrelated shell suffix.
-    return type(observed_line) is str and observed_line in (
-        'arcticqual@arctic-qual ~ >', 'arcticqual@arctic-qual ~>')
-
-
-def console_user_identity(vm, startup, out, nonce, private_password):
-    """One nonsecret command; exact UID/name response before any sudo input."""
-    deadline = time.monotonic() + 45
-    expected = installed_user_line(nonce)
-    command = installed_user_command(nonce)
-    require(expected not in command, 'installed user command can mimic its response')
-    sent = False
-    greeting_exit_sent = False
-    while vm.alive() and time.monotonic() < deadline:
-        path = vm.shot('installed-login-shell-probe')
-        require(path and startup.console_screen(path), 'actual password console disappeared')
-        result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
-                                capture_output=True, timeout=10, check=True)
-        require(len(result.stdout) <= 65536, 'prompt OCR exceeds bound')
-        text = result.stdout.decode()
-        require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        observed_line = lines[-1].rstrip('_| ') if lines else None
-        observe_installed_prompt('installed-login-shell', observed_line)
-        require(observed_line not in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual'),
-                'installed user login did not reach its identity challenge')
-        records = [line for line in lines if line.startswith('ARCTIC-USER ')]
-        try: observe_installed_response(sent, len(records), records == [expected])
-        except Exception: pass  # Optional fixed observation cannot replace the original guard.
-        if records:
-            require(sent and records == [expected], 'installed user identity response differs')
-            from PIL import Image
-            with Image.open(path) as image:
-                require(image.size == (1280,720), 'installed prompt physical dimensions differ')
-            require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
-            Path(path).unlink()
-            return dict(prompt_kind='installed-user-nonce-identity', nonce=nonce,
-                        username='arcticqual', uid=1000,
-                        observed_line_sha256=hashlib.sha256(expected.encode('utf-8')).hexdigest(),
-                        observed_ns=time.monotonic_ns())
-        if not sent and observed_line is not None and observed_line != 'Password:':
-            if not installed_shell_ready(observed_line):
-                # Fish's startup greeting owns/flushed terminal input before
-                # its prompt. One nonsecret Return dismisses that greeting;
-                # no nonce command or sudo input is sent without readiness.
-                if not greeting_exit_sent:
-                    require(time.monotonic() + .3 < deadline,
-                            'installed user identity deadline exceeded')
-                    vm.keys('ret')
-                    greeting_exit_sent = True
-            else:
-                require(time.monotonic() + len(command)*.08 + .3 < deadline,
-                        'installed user identity deadline exceeded')
-                vm.type_text(command, gap=.08); vm.keys('ret')
-                require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
-                sent = True
-        time.sleep(.5)
-    raise RuntimeError('exact installed user identity was not observed; sudo input refused')
-# END INSTALLED_USER_NONCE_IDENTITY
-
-
-@observed_installed_auth
 def boot_installed(vm, startup, vmtest, out, context):
     """Authenticate on a new QEMU boot of the same disk, with hidden TTY secrets."""
     deadline = time.monotonic() + 900
@@ -632,8 +377,8 @@ def boot_installed(vm, startup, vmtest, out, context):
     vm.type_text('arcticqual', gap=.15); vm.keys('ret')
     getty = console_prompt(vm,startup,out,'installed-getty-password','Password:',password)
     vm.type_text(password, gap=.1); vm.keys('ret')
+    shell = console_prompt(vm,startup,out,'installed-login-shell','arcticqual@arctic-qual ~ >',password,archive=False)
     nonce = uuid.uuid4().hex
-    shell = console_user_identity(vm,startup,out,nonce,password)
     vm.type_text('sudo sh /dev/sr0 ' + nonce, gap=.08); vm.keys('ret')
     sudo = console_prompt(vm,startup,out,'installed-sudo-password','[sudo] password for arcticqual:',password)
     vm.type_text(password, gap=.1); vm.keys('ret')
@@ -655,7 +400,7 @@ def boot_installed(vm, startup, vmtest, out, context):
             require(report['context'] == context and report['authentication']['nonce'] == nonce,
                     'fresh installed helper context/authentication differs')
             prompts = dict(schema='arctic-active-password-prompts-v1',engine=ocr_provenance(),getty=getty,sudo=sudo,
-                login_shell=shell,
+                login_shell={key: shell[key] for key in ('prompt_kind','observed_line_sha256','observed_ns')},
                 private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
             return report, dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest()), prompts
         time.sleep(.5)

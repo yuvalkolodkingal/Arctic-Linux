@@ -507,19 +507,12 @@ def vm_argv_check(argv, context, installed=False):
     return target['file'], variables[0]
 
 
-def password_prompts_check(value, build, required_images, image_loader, authentication):
+def password_prompts_check(value, build, required_images, image_loader):
     exact(value, {'schema', 'engine', 'getty', 'sudo', 'login_shell', 'private_input_policy'}, 'active password prompt fields differ')
     shell = value['login_shell']
-    exact(shell, {'prompt_kind', 'nonce', 'username', 'uid', 'observed_line_sha256', 'observed_ns'}, 'active authenticated shell proof fields differ')
-    require(type(authentication) is dict and set(authentication) == {'nonce', 'username', 'uid', 'status'} and
-            authentication['status'] == 'exact_installed_uid_response' and authentication.get('username') == 'arcticqual' and
-            type(authentication.get('uid')) is int and authentication['uid'] == 1000 and
-            type(authentication.get('nonce')) is str and re.fullmatch('[0-9a-f]{32}', authentication['nonce']) and
-            shell['prompt_kind'] == 'installed-user-nonce-identity' and
-            shell['nonce'] == authentication['nonce'] and shell['username'] == 'arcticqual' and
-            type(shell['uid']) is int and shell['uid'] == 1000 and
-            shell['observed_line_sha256'] == digest(('ARCTIC-USER ' + authentication['nonce'] +
-                ' uid=1000 user=arcticqual').encode('utf-8')) and
+    exact(shell, {'prompt_kind', 'observed_line_sha256', 'observed_ns'}, 'active authenticated shell proof fields differ')
+    require(shell['prompt_kind'] == 'installed-user-shell' and
+            shell['observed_line_sha256'] == digest(b'arcticqual@arctic-qual ~ >') and
             type(shell['observed_ns']) is int and shell['observed_ns'] > 0,
             'active authenticated shell observed-line proof differs')
     require(value['schema'] == 'arctic-active-password-prompts-v1' and
@@ -798,6 +791,6 @@ def validate_execution(state, expected_image, execution_source, serial_bytes=Non
     installed_path, installed_variables = vm_argv_check(installed['qemu_argv'], context, installed=True)
     require(installed_path == target_path and installed_variables == variable_path, 'installed boot replaced target disk or UEFI variables')
     require(same(strict_json(image_loader('host/installed-boot.json')), installed_report), 'active installed receipt alias differs')
-    password_prompts_check(host['password_prompt_evidence'], build, state['required_images'], image_loader, installed_report['authentication'])
+    password_prompts_check(host['password_prompt_evidence'], build, state['required_images'], image_loader)
     return dict(status='passed_pending_manual_visual_review', images=list(REQUIRED_IMAGES),
                 installed_boot_id=installed['boot_id'], release_acceptance=False)

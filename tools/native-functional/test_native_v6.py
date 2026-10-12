@@ -119,8 +119,7 @@ class NewControls(unittest.TestCase):
                         for item in n.body:
                             if isinstance(item,ast.FunctionDef):result[n.name+'.'+item.name]=ast.get_source_segment(text,item)
             return result
-        from test_native_security_journal import restore_journal_filter_native
-        after=nodes(restore_journal_filter_native(current))
+        after=nodes(current)
         for name in ('guest_guard','discover_desktop','identity','window_proof','process_snapshot','SecurityInterval',
                      'parse_audit_status','verify_security','tree_hashes','verify_tree','mpv_property','validate_player_samples',
                      'Smoke.cleanup','Smoke.setup','Smoke.archives','Smoke.desktop_services','Smoke.media_fixture'):

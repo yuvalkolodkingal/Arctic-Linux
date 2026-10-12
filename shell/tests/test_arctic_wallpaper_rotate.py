@@ -1,5 +1,5 @@
 """arctic-wallpaper rotate / next (dotfiles/.local/bin): a new picture every so often, from your
-folder or Arctic's; each picture is saved as the choice and the colours follow it (arctic-theme
+folder, Arctic's, or both; each picture is saved as the choice and the colours follow it (arctic-theme
 sync). Fake swaybg, systemd-run, systemctl, arctic-hook and arctic-theme log what they're asked.
 
 Run: python3 -m unittest discover -s shell/tests
@@ -200,6 +200,58 @@ class RotateTests(unittest.TestCase):
         self.assertEqual(sorted(first[1:]), ['a.png', 'b.jpg', 'c.webp'])
         self.wallpaper('next')                                  # a new round, not the same twice
         self.assertNotEqual(self.drawn(), first[-1])
+
+    def test_both_shuffle_combines_personal_and_arctic_pictures(self):
+        for name in ('city-afterglow', 'ember-clouds'):
+            (self.backgrounds / (name + '.jpg')).write_bytes(b'x')
+        photos = [dict(slug=s, file=s + '.jpg') for s in ('city-afterglow', 'ember-clouds')]
+        (self.backgrounds / 'collection.json').write_text(json.dumps(dict(schema=1, wallpapers=photos)))
+        picker_settings = self.config / 'wallpapers.json'
+        picker_settings.write_text(json.dumps({'folder': str(self.pictures), 'future-setting': 7}) + '\n')
+        before = picker_settings.read_bytes()
+        self.wallpaper('rotate', '30m', 'both', '--shuffle')
+        self.assertEqual(json.loads(self.wallpaper('rotate').stdout),
+                         {'every': '30m', 'folder': 'both', 'shuffle': True})
+        seen = []
+        for _ in range(5):
+            self.wallpaper('next')
+            seen.append(self.drawn())
+        self.assertEqual(sorted(seen), ['a.png', 'b.jpg', 'c.webp', 'city-afterglow.jpg',
+                                        'ember-clouds.jpg'])
+        # Rotation changes the active choice, but preserves the picker folder and unknown settings.
+        self.assertEqual(picker_settings.read_bytes(), before)
+
+    def test_both_rotation_excludes_hidden_arctic_wallpapers(self):
+        for name in ('city-afterglow', 'ember-clouds'):
+            (self.backgrounds / (name + '.jpg')).write_bytes(b'x')
+        photos = [dict(slug=s, file=s + '.jpg') for s in ('city-afterglow', 'ember-clouds')]
+        (self.backgrounds / 'collection.json').write_text(json.dumps(dict(schema=1, wallpapers=photos)))
+        picker_settings = self.config / 'wallpapers.json'
+        picker_settings.write_text(json.dumps({
+            'folder': str(self.pictures),
+            'hidden_arctic': ['city-afterglow', '../invalid', 7],
+            'future-setting': True,
+        }) + '\n')
+        before = picker_settings.read_bytes()
+        self.wallpaper('rotate', '30m', 'both', '--shuffle')
+        seen = []
+        for _ in range(4):
+            self.wallpaper('next')
+            seen.append(self.drawn())
+        self.assertEqual(sorted(seen), ['a.png', 'b.jpg', 'c.webp', 'ember-clouds.jpg'])
+        self.assertNotIn('city-afterglow.jpg', seen)
+        self.assertEqual(picker_settings.read_bytes(), before)
+
+        # Hiding the entire photo collection must not bring legacy packaged art back.
+        picker_settings.write_text(json.dumps({
+            'folder': str(self.pictures),
+            'hidden_arctic': ['city-afterglow', 'ember-clouds'],
+        }) + '\n')
+        refused = self.wallpaper('rotate', '1h', 'arctic', code=2)
+        self.assertIn('no pictures in arctic', refused.stderr)
+        self.wallpaper('rotate', '1h', 'both')
+        self.wallpaper('next')
+        self.assertIn(self.drawn(), {'a.png', 'b.jpg', 'c.webp'})
 
     def test_arctics_own(self):
         self.wallpaper('rotate', '1h', 'arctic')

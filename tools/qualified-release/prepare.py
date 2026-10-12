@@ -687,12 +687,12 @@ def taskbar_proof(archive, manifest):
             'Taskbar retained original transport bytes/hash or bounded prefix differs')
     context = execution['taskbar_context']
     image, pin = manifest['image'], manifest['native']
-    require(set(context) == {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'capture_nonce',
+    require(set(context) == {'schema', 'source_sha', 'iso_sha256', 'iso_bytes', 'execution_sha', 'token',
             'checker_sha256', 'runtime_sha256', 'native_sha256', 'pointer_sha256', 'capture_sha256'}
             and context['schema'] == 'arctic-taskbar-context-v1'
             and context['source_sha'] == image['source_sha'] and context['iso_sha256'] == image['sha256']
             and context['iso_bytes'] == image['bytes'] and context['execution_sha'] == pin['source_sha']
-            and re.fullmatch('[0-9a-f]{32}', context['capture_nonce']), 'Taskbar exact-image execution context differs')
+            and re.fullmatch('[0-9a-f]{32}', context['token']), 'Taskbar exact-image execution context differs')
     for key, name in (('checker_sha256', 'taskbar.py'), ('runtime_sha256', 'taskbar-runtime.py'),
                       ('native_sha256', 'native_smoke.py')):
         require(context[key] == source_hash(pin['source_sha'], 'tools/native-functional/' + name),
@@ -725,7 +725,7 @@ def taskbar_proof(archive, manifest):
     collector = state['collector']
     require(collector['status'] == 'passed' and collector['error'] is None
             and collector['evidence_export_complete'] is True and collector['release_acceptance'] is False
-            and collector['capture_nonce'] == context['capture_nonce']
+            and collector['token'] == context['token']
             and all(collector[key] == provenance[key] for key in ('boot_id', 'desktop_uid', 'active_desktop_session')),
             'Taskbar collector completion proof differs')
     channel = provenance['transport']
@@ -943,9 +943,11 @@ def release_notes(proof, comparison):
         'Arctic Linux 1.2.1 for x86_64, with UEFI and BIOS boot.', '',
         'Lightweight defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash. '
         'Includes the covered/fractional screen-frame fix, installer restoration, battery-full icon, lock-screen clock, '
-        'wallpaper settings, separate Remove Apps menu and reliable update detection.', '',
-        'The author\'s 19 photo wallpapers include **Ember Clouds, City Silhouette**. City Afterglow is the fresh-install default; '
-        'existing custom wallpaper choices are preserved.', '',
+        'wallpaper settings, separate Remove Apps menu and reliable update detection. A What’s New card appears once per '
+        'account after each Arctic update.', '',
+        'The author\'s 28 photo wallpapers include **Ember Clouds, City Silhouette**. City Afterglow is the fresh-install default; '
+        'existing custom wallpaper choices are preserved. **Both** rotation combines Arctic and personal pictures. Packaged '
+        'photos can be hidden per account and restored later without deleting shared RPM-owned files.', '',
         'The exact retained ISO passed Try/Install/Safe startup, enforcing encrypted offline installation, native app/media checks, '
         'six live graphical installer restoration cycles retaining the prepared Hebrew keyboard wizard, '
         'VT and hosting-output restoration while the original root-copy writer continued, completion of that same unencrypted offline install '

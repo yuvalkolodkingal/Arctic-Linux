@@ -9,7 +9,6 @@ import unittest
 from unittest.mock import patch
 
 import test_performance_failure_phase as P
-import performance_loaded_failure_fixture as L
 
 
 class ExceptionShapeTest(unittest.TestCase):
@@ -18,7 +17,7 @@ class ExceptionShapeTest(unittest.TestCase):
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.prepare_guest()
-        raw = L.reader_before_projection((P.ROOT/'tools/performance/run-paired.py').read_bytes())
+        raw = (P.ROOT/'tools/performance/run-paired.py').read_bytes()
         raw = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', raw)
         raw = b''.join(line for line in raw.splitlines(keepends=True) if b'# colored-trace-only # envelope-only' not in line)
         raw = raw.replace(b"exception_class='none', format='none'),\n", b"exception_class='none', format='none')),\n", 1)
@@ -27,14 +26,12 @@ class ExceptionShapeTest(unittest.TestCase):
         added = b"            last_observer_phase='unavailable',\n            # Class tokens are unauthenticated shape observations, not causes.\n            exception_shape=dict(reason='not_observed', count='unavailable',\n                exception_class='none', format='none')),\n"
         self.assertEqual(raw.count(added), 1)
         raw = raw.replace(added, b"            last_observer_phase='unavailable'),\n")
-        # Preserve the original history digest through exactly five reviewed identity inverses.
+        # Preserve the original history digest through exactly three reviewed identity inverses.
         historical = raw
         for current, previous in (
                 (b'4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5', b'5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'),
-                (b'9d3ee35fc81c4550acb4247e56bf70390714d8bdd91efc6df76f838b1018306c', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
-                (L.FROZEN, b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
-                (b'2bc983a29c15e5c24c5f9c03fb5a640003dcf5bc95d9672f3622142f59545161', b'3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9'),
-                (b'cde38b23d8fcad896fffd4983081aa6739f9b9af1dc7246562b3d6cf308528ed', b'4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9'),
+                (b'515ff75b394b28c9d2d02f0838612cbb86b06e2a24be25580f19554632abe064', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
+                (b'9acbe74ffb8c64b63f9f180246c26ba69ae2ba80c620a1cb8baca8d9fdc4fc79', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),
         ):
             self.assertEqual(historical.count(current), 1)
             historical = historical.replace(current, previous)
@@ -44,7 +41,7 @@ class ExceptionShapeTest(unittest.TestCase):
         self.old.__file__ = str(P.ROOT/'tools/performance/run-paired.py')
         exec(compile(raw, self.old.__file__, 'exec'), self.old.__dict__)
         self.old.ROOT = P.inner.ROOT
-        consumer = L.consumer_before_projection((P.ROOT/'tools/performance/qualification.py').read_bytes())
+        consumer = (P.ROOT/'tools/performance/qualification.py').read_bytes()
         consumer = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', consumer)
         consumer = consumer.replace(b", 'colored_traceback'}", b"}", 1)
         consumer = re.sub(rb'(?ms)^    # exception-shape-only-begin\n.*?^    # exception-shape-only-end\n', b'', consumer)
@@ -62,7 +59,6 @@ class ExceptionShapeTest(unittest.TestCase):
         without = copy.deepcopy(result)
         without['guest_envelope'].pop('exception_shape')
         without['guest_envelope'].pop('colored_traceback')
-        without['guest_envelope'].pop('loaded_failure')
         self.assertEqual(without, old)
         text = json.dumps(result).encode()
         for private in (b'do-not-export', b'private.invalid', 'מילים סודיות'.encode(), b'guest-check.py'):

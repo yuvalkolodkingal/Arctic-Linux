@@ -25,8 +25,6 @@ N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
 
 def restore_controls_native(source):
-    from test_native_security_journal import restore_journal_filter_native
-    source = restore_journal_filter_native(source)
     for start,end in (
         ('    # BEGIN CONTROLLED_CONTROLS_INVOCATION\n','    # END CONTROLLED_CONTROLS_INVOCATION\n\n'),
         ('# BEGIN CONTROLLED_CONTROLS_STUDY\n','# END CONTROLLED_CONTROLS_STUDY\n\n\n'),

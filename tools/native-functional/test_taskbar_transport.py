@@ -32,7 +32,7 @@ class Controls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.context = dict(schema='arctic-taskbar-context-v1', source_sha='1'*40, execution_sha='2'*40,
-                           iso_sha256='3'*64, iso_bytes=1_900_000_000, capture_nonce='4'*32,
+                           iso_sha256='3'*64, iso_bytes=1_900_000_000, token='4'*32,
                            checker_sha256='5'*64, runtime_sha256='6'*64, native_sha256='7'*64,
                            pointer_sha256='8'*64, capture_sha256='9'*64)
         cls.identity = dict(boot_id='01234567-89ab-cdef-0123-456789abcdef', desktop_uid=1000,
@@ -42,7 +42,7 @@ class Controls(unittest.TestCase):
                          **cls.identity, cmdline='ro quiet', virtualization='qemu', release_acceptance=False)
         cls.begin = dict(schema='arctic-taskbar-runner-v1', stage='installed', context=cls.context,
                          **cls.identity, release_acceptance=False)
-        cls.end = dict(capture_nonce=cls.context['capture_nonce'], **cls.identity, status='passed', error=None,
+        cls.end = dict(token=cls.context['token'], **cls.identity, status='passed', error=None,
                        evidence_export_complete=True, release_acceptance=False)
         cls.native = dict(stage='installed', native_source_sha256=cls.context['native_sha256'],
                           **cls.identity, cmdline='ro quiet', release_acceptance=False)
@@ -120,9 +120,9 @@ class Controls(unittest.TestCase):
             compressed=zlib.compress(data,9);parts=[compressed[i:i+r.CHUNK] for i in range(0,len(compressed),r.CHUNK)]
             entries.append(dict(path=name,bytes=len(data),sha256=hash_bytes(data),compressed_bytes=len(compressed),
                                 chunks=len(parts),encoding='zlib+base64'))
-            rows.extend(('EVIDENCE-CHUNK',dict(capture_nonce=self.context['capture_nonce'],path=name,index=index,data=base64.b64encode(part).decode()))
+            rows.extend(('EVIDENCE-CHUNK',dict(token=self.context['token'],path=name,index=index,data=base64.b64encode(part).decode()))
                         for index,part in enumerate(parts))
-        rows.append(('EVIDENCE-MANIFEST',dict(schema='arctic-taskbar-evidence-v1',capture_nonce=self.context['capture_nonce'],
+        rows.append(('EVIDENCE-MANIFEST',dict(schema='arctic-taskbar-evidence-v1',token=self.context['token'],
                     evidence_root=self.root,files=entries,bytes=sum(map(len,files.values())))))
         rows.append(('END',copy.deepcopy(self.end if end is None else end)))
         return rows
@@ -149,13 +149,13 @@ class Controls(unittest.TestCase):
                             ('active_desktop_session','3'),('native_source_sha256','0'*64),('cmdline','ro different')):
             native=dict(self.native,**{field:value})
             with self.assertRaises(RuntimeError):self.check(self.rows(),native)
-        rows=self.rows();rows[0][1]['context']['capture_nonce']='0'*32
+        rows=self.rows();rows[0][1]['context']['token']='0'*32
         with self.assertRaises(RuntimeError):self.check(rows)
 
     def test_context_exact_fields_iso_bound_and_full_hashes(self):
         for mutate in (lambda c:c.update(extra=1),lambda c:c.update(iso_bytes=2_000_000_000),
                        lambda c:c.update(iso_bytes=True),lambda c:c.update(runtime_sha256='abcd'),
-                       lambda c:c.update(capture_nonce='4'*31),lambda c:c.update(execution_sha='2'*64)):
+                       lambda c:c.update(token='4'*31),lambda c:c.update(execution_sha='2'*64)):
             value=copy.deepcopy(self.context);mutate(value)
             with self.assertRaises(RuntimeError):e.validate_context(value)
 
@@ -175,11 +175,11 @@ class Controls(unittest.TestCase):
 
     def test_chunk_order_duplicate_foreign_token_and_corruption_fail(self):
         rows=self.rows();indexes=[i for i,(k,_) in enumerate(rows) if k=='EVIDENCE-CHUNK']
-        for mutation in ('swap','duplicate','capture_nonce','data','index'):
+        for mutation in ('swap','duplicate','token','data','index'):
             value=copy.deepcopy(rows);i=indexes[0]
             if mutation=='swap':value[i],value[i+1]=value[i+1],value[i]
             elif mutation=='duplicate':value.insert(i,value[i])
-            elif mutation=='capture_nonce':value[i][1]['capture_nonce']='0'*32
+            elif mutation=='token':value[i][1]['token']='0'*32
             elif mutation=='data':value[i][1]['data']='!!!'
             else:value[i][1]['index']=True
             with self.assertRaises((RuntimeError,ValueError)):self.check(value)
@@ -275,7 +275,7 @@ class Controls(unittest.TestCase):
         if channel_mutate:channel_mutate(channel)
         for _,value in rows[:2]:value['transport']=copy.deepcopy(channel)
         end=rows[-1][1]
-        marker=dict(schema='arctic-taskbar-port-end-v1',capture_nonce=self.context['capture_nonce'],**self.identity,
+        marker=dict(schema='arctic-taskbar-port-end-v1',token=self.context['token'],**self.identity,
                     status=end['status'],release_acceptance=False,
                     end_sha256=hash_bytes(json.dumps(end,sort_keys=True,allow_nan=False).encode('ascii')))
         if marker_mutate:marker_mutate(marker)
@@ -290,7 +290,7 @@ class Controls(unittest.TestCase):
     def test_separate_named_port_preserves_native_boot_binding_and_no_uart_evidence(self):
         serial,port=self.port_serial(self.rows())
         self.assertEqual(self.check_port(serial,port)['status'],'passed')
-        for marker_mutate in (lambda v:v.update(capture_nonce='0'*32),lambda v:v.update(end_sha256='0'*64),
+        for marker_mutate in (lambda v:v.update(token='0'*32),lambda v:v.update(end_sha256='0'*64),
                               lambda v:v.update(desktop_uid=1001),lambda v:v.update(status='failed')):
             serial,port=self.port_serial(self.rows(),marker_mutate=marker_mutate)
             with self.assertRaises(RuntimeError):self.check_port(serial,port)

@@ -42,6 +42,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     wallpapers | wallpaper-set KEY                the shell's picker backend (wallpapers.py)
     wallpaper-import PATH|URL…    copy pictures into your wallpaper folder (checked with Pillow)
     wallpaper-delete PATH | wallpaper-rename PATH NAME     your own pictures only
+    wallpaper-hide SLUG | wallpaper-restore [SLUG|all]     hide or restore packaged Arctic photos
     wallhaven ARGS…               the Wallhaven browser (the shell's wallhaven.py: search, preview,
                                   set, state, key, prefs); answers {"ok": false, "offline": true}
                                   instead of failing when Wallhaven can't be reached
@@ -69,7 +70,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
                                   high contrast)
     contrast-set on|off           high contrast (arctic-theme contrast)
     fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
-    wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]     a new picture every so often
+    wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic|both [shuffle]]     a new picture every so often
     theme-install URL | theme-remove NAME     themes from the web (arctic-theme install / remove)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
@@ -2659,6 +2660,18 @@ def cmd_wallpaper_rename(paths, args):
     return _wallpaper_files(paths, ['rename', args[0], args[1]], 'renamed')
 
 
+def cmd_wallpaper_hide(paths, args):
+    if len(args) != 1:
+        raise Failure('usage: wallpaper-hide SLUG')
+    return _wallpaper_files(paths, ['hide', args[0]], 'hidden')
+
+
+def cmd_wallpaper_restore(paths, args):
+    if len(args) > 1:
+        raise Failure('usage: wallpaper-restore [SLUG|all]')
+    return _wallpaper_files(paths, ['restore', args[0] if args else 'all'], 'restored')
+
+
 WALLHAVEN_TIMEOUTS = {'search': 90, 'preview': 60, 'download': 300, 'set': 300}
 
 
@@ -3498,15 +3511,15 @@ ROTATE_EVERY = ('off', '30m', '1h', '1d')
 
 
 def cmd_wallpaper_rotate(paths, args):
-    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]: a new picture every so often,
-    without changing the chosen wallpaper or the colours."""
+    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic|both [shuffle]]: a new picture every so often,
+    saving each new picture as the active choice so the colours can follow it."""
     if not which('arctic-wallpaper'):
         return dict(ok=True, available=False, every='off')
     if args:
         every = args[0]
         if every not in ROTATE_EVERY or (every == 'off') != (len(args) == 1) or len(args) > 3 \
                 or (len(args) == 3 and args[2] != 'shuffle'):
-            raise Failure('usage: wallpaper-rotate off | 30m|1h|1d FOLDER|arctic [shuffle]')
+            raise Failure('usage: wallpaper-rotate off | 30m|1h|1d FOLDER|arctic|both [shuffle]')
         argv = ['arctic-wallpaper', 'rotate', every] + ([] if every == 'off' else
                                                           [args[1]] + (['--shuffle'] if len(args) == 3 else []))
         code, _out, err = run(argv, timeout=30)
@@ -3564,7 +3577,8 @@ COMMANDS = {
     'theme': cmd_theme, 'theme-set': cmd_theme_set, 'theme-auto': cmd_theme_auto, 'theme-mode': cmd_theme_mode,
     'motion': cmd_motion, 'motion-set': cmd_motion_set, 'text-scale': cmd_text_scale,
     'wallpapers': cmd_wallpapers, 'wallpaper-set': cmd_wallpaper_set, 'wallpaper-import': cmd_wallpaper_import,
-    'wallpaper-delete': cmd_wallpaper_delete, 'wallpaper-rename': cmd_wallpaper_rename, 'wallhaven': cmd_wallhaven,
+    'wallpaper-delete': cmd_wallpaper_delete, 'wallpaper-rename': cmd_wallpaper_rename,
+    'wallpaper-hide': cmd_wallpaper_hide, 'wallpaper-restore': cmd_wallpaper_restore, 'wallhaven': cmd_wallhaven,
     'updates': cmd_updates,
     'update-run': cmd_update_run, 'network': cmd_network, 'wifi': cmd_wifi, 'about': cmd_about, 'caps': cmd_caps,
     'bluetooth-pair': cmd_bluetooth_pair, 'battery': cmd_battery, 'shell-set': cmd_shell_set,

@@ -25,6 +25,8 @@ The import validates hashes, 16:9 dimensions, credits and absence of camera/date
 EXIF fields before replacing Arctic's exports. It never changes the source repository.
 
 Package updates do not rewrite `~/.config/arctic/wallpaper`, custom themes,
-`theme.conf.user`, or the authenticated shared-login-wallpaper broker state. Existing
-illustrated names and file paths continue to work; their compatibility images remain
-installed but are omitted from the new photo gallery and collection rotation.
+`theme.conf.user`, or the authenticated shared-login-wallpaper broker state. Per-user packaged
+photo tombstones are kept as validated slugs in `~/.config/arctic/wallpapers.json`, so hidden
+photos stay out of the picker and `arctic`/`both` rotation after an RPM update without deleting
+RPM-owned files. Existing illustrated names and file paths continue to work; their compatibility
+images remain installed but are omitted from the new photo gallery and collection rotation.

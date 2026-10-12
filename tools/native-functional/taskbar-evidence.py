@@ -84,7 +84,7 @@ def block(serial, context, transport_serial=None):
           'taskbar begin schema differs')
     exact(proof, {'schema', 'stage', 'context', 'cmdline', 'virtualization', 'release_acceptance'} | identity_fields | transport_fields,
           'taskbar provenance schema differs')
-    exact(end, {'capture_nonce', 'status', 'error', 'evidence_export_complete', 'release_acceptance'} | identity_fields,
+    exact(end, {'token', 'status', 'error', 'evidence_export_complete', 'release_acceptance'} | identity_fields,
           'taskbar end schema differs')
     require(begin['schema'] == 'arctic-taskbar-runner-v1'
             and proof['schema'] == 'arctic-taskbar-provenance-v1'
@@ -97,7 +97,7 @@ def block(serial, context, transport_serial=None):
             and type(begin['active_desktop_session']) is str
             and re.fullmatch('[A-Za-z0-9_-]{1,64}', begin['active_desktop_session'])
             and all(begin[k] == proof[k] == end[k] for k in identity_fields)
-            and end['capture_nonce'] == context['capture_nonce'], 'taskbar boot/session/UID/capture_nonce differs')
+            and end['token'] == context['token'], 'taskbar boot/session/UID/token differs')
     require(type(proof['cmdline']) is str and len(proof['cmdline']) <= 16384
             and 'rd.live.image' not in proof['cmdline'].split()
             and proof['virtualization'] in ('qemu', 'kvm'), 'taskbar actual installed guest differs')
@@ -115,9 +115,9 @@ def block(serial, context, transport_serial=None):
         require(len(markers) == 1 and native[0][0] < markers[0][0],
                 'taskbar UART completion marker missing/duplicate/reversed')
         marker = markers[0][1]
-        exact(marker, {'schema', 'capture_nonce', 'status', 'end_sha256', 'release_acceptance'} | identity_fields,
+        exact(marker, {'schema', 'token', 'status', 'end_sha256', 'release_acceptance'} | identity_fields,
               'taskbar UART completion schema differs')
-        require(marker['schema'] == 'arctic-taskbar-port-end-v1' and marker['capture_nonce'] == context['capture_nonce']
+        require(marker['schema'] == 'arctic-taskbar-port-end-v1' and marker['token'] == context['token']
                 and marker['release_acceptance'] is False and marker['status'] == end['status']
                 and all(marker[k] == begin[k] for k in identity_fields)
                 and marker['end_sha256'] == hashlib.sha256(json.dumps(end, sort_keys=True, allow_nan=False).encode('ascii')).hexdigest(),
@@ -137,8 +137,8 @@ def block(serial, context, transport_serial=None):
 
 
 def extract(chunks, manifest, context, target):
-    exact(manifest, {'schema', 'capture_nonce', 'evidence_root', 'files', 'bytes'}, 'taskbar manifest schema differs')
-    require(manifest['schema'] == 'arctic-taskbar-evidence-v1' and manifest['capture_nonce'] == context['capture_nonce']
+    exact(manifest, {'schema', 'token', 'evidence_root', 'files', 'bytes'}, 'taskbar manifest schema differs')
+    require(manifest['schema'] == 'arctic-taskbar-evidence-v1' and manifest['token'] == context['token']
             and type(manifest['files']) is list and 1 <= len(manifest['files']) <= MAX_FILES
             and type(manifest['bytes']) is int and 0 <= manifest['bytes'] <= MAX_TOTAL,
             'taskbar manifest identity/bounds differ')
@@ -162,8 +162,8 @@ def extract(chunks, manifest, context, target):
         require(len(selected) == entry['chunks'], 'missing taskbar chunks')
         pieces = []
         for index, chunk in enumerate(selected):
-            exact(chunk, {'capture_nonce', 'path', 'index', 'data'}, 'taskbar chunk schema differs')
-            require(chunk['capture_nonce'] == context['capture_nonce'] and chunk['path'] == name
+            exact(chunk, {'token', 'path', 'index', 'data'}, 'taskbar chunk schema differs')
+            require(chunk['token'] == context['token'] and chunk['path'] == name
                     and type(chunk['index']) is int and chunk['index'] == index
                     and type(chunk['data']) is str and 0 < len(chunk['data']) <= 24576,
                     'duplicate/reordered/oversized taskbar chunk')

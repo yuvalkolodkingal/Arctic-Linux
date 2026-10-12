@@ -53,7 +53,9 @@ flowchart TD
 3. **Mango** starts the normal Arctic autostart (theme, shell, notifications, network applet,
    clipboard, idle) plus, from `live.conf`, `/usr/libexec/arctic/live-session`.
 4. `live-session` reads `arctic.mode`. In install mode it runs `arctic-start-installer`, which
-   opens the installer full screen (one instance at a time, guarded by a lock file). In try mode it
+   opens the installer full screen (one instance at a time, guarded by a lock file). It restores a
+   visible window after returning from a text console or losing its output, while keeping the
+   page, keyboard choice and engine connection. In try mode it
    does nothing, and `arctic-welcome` asks the shell to show the welcome card once per boot.
 
 `arctic-is-live` (true when `rd.live.image` is on the kernel command line) is how every helper
@@ -180,7 +182,7 @@ whether it's already in the live image, and an ordered list of install methods
 (`dnf`, `copr`, `flatpak`, `nix`) with download sizes, whether it's proprietary, plus `[defaults]` (the role it fills in
 `/etc/arctic/default-apps`, its desktop id and the file types it opens). `modules/catalog.toml`
 holds the categories, their order and rules (`one` / `any`, required, `collapsed` for the
-folded **More apps** sections), the pinned nixpkgs revision and the Flatpak runtime sizes: 126
+folded **More apps** sections), the pinned nixpkgs revision and the Flatpak runtime sizes: 132
 apps in 21 sections. Hidden, always-installed modules live in `modules/_system/`
 (`desktop-base`, `flatpak`, `nix`, `codecs`, and the adw-gtk3 themes for Flatpak).
 
@@ -227,7 +229,13 @@ commands.
 - **Default apps:** `arctic-open <role>` reads `/etc/arctic/default-apps` then
   `~/.config/arctic/default-apps`, with a fallback list per role.
 - **arctic-firstboot** (in `arctic-desktop-config`, because the installer is removed from the new
-  system) runs after `network-online.target` when `/var/lib/arctic/pending.json` exists.
+  system) retries selected app downloads deferred by offline or unattended installation, after
+  login through its timer when `/var/lib/arctic/pending.json` exists.
+- **Dictation** ships a small controller with compositor shortcuts, Settings and a recording
+  indicator. Online installation downloads the pinned Voxtype payload and one multilingual
+  Whisper model; offline or failed setup is queued for `arctic-dictation-setup.timer`.
+  Recording stays unready until dependencies and model are present; audio inference is local.
+  See [Local dictation](Local-Dictation).
 
 ## Packaging and the ISO
 
@@ -241,5 +249,8 @@ commands.
   them.
 - The ISO is built by kiwi-ng from `iso/kiwi/config.kiwi`, derived from Fedora's own kiwi
   descriptions: hybrid ISO, UEFI (Fedora's signed shim) and BIOS, erofs root, volume id
-  `Arctic-Linux-1.1`. `config.sh` sets the live session, enables SDDM, `arcticd.socket` and
-  `nix-daemon`, sets the Plymouth theme and removes rescue images to keep the ISO under 2 GiB.
+  `Arctic-Linux-1.2`. `config.sh` sets the live session, enables SDDM, `arcticd.socket` and
+  `nix-daemon`, sets the Plymouth theme and removes rescue images. The image includes the native
+  lightweight app set and packaged photos, with dictation's engine/model downloaded to the target
+  during installation. A qualified replacement must be strictly below **2,000,000,000 bytes**;
+  source changes and historical size measurements do not prove the final image's size.

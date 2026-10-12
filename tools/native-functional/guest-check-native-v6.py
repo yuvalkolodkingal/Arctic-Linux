@@ -63,142 +63,6 @@ def execute(argv, *, cwd=None, input_bytes=None, stdout_path=None, timeout=45,
     return result.returncode, output.decode(errors='replace').strip(), result.stderr.decode(errors='replace')
 
 
-def execute_journal_interval(argv, *, timeout=60):
-    """Unfiltered JSON interval; discard only records the original AVC rule ignores.
-
-    Both pipes are drained under one deadline. Every full MESSAGE value, including
-    journalctl's duplicate-field arrays, uses the original str(MESSAGE) semantics.
-    Limits fail closed: 4 MiB per line and selected evidence plus stderr, 64 MiB
-    processed raw bytes. No partial interval is accepted after a limit or error.
-    """
-    deadline = time.monotonic() + timeout
-    process, selector, primary = None, None, None
-    selected, pending, stderr = bytearray(), bytearray(), bytearray()
-    raw_bytes, stdout_bytes, stderr_bytes, exit_code = 0, 0, 0, None
-    pending_signal = None
-    old_handlers = {value: signal.getsignal(value) for value in (signal.SIGINT, signal.SIGTERM)}
-
-    def interrupted(signum, frame):
-        # Never raise between acquisition and assignment or during cleanup.
-        # Polling below makes this deferral bounded without masking child signals.
-        nonlocal pending_signal
-        if pending_signal is None:
-            pending_signal = signum
-
-    def check_cancelled():
-        if pending_signal == signal.SIGINT:
-            raise KeyboardInterrupt
-        if pending_signal is not None:
-            raise InterruptedError('journal invocation interrupted')
-
-    try:
-        for value in old_handlers:
-            signal.signal(value, interrupted)
-        process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   bufsize=0, close_fds=True, start_new_session=True)
-        check_cancelled()
-        selector = selectors.DefaultSelector()
-        for stream, role in ((process.stdout, 'stdout'), (process.stderr, 'stderr')):
-            os.set_blocking(stream.fileno(), False)
-            selector.register(stream, selectors.EVENT_READ, role)
-        while selector.get_map():
-            check_cancelled()
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired(argv, timeout)
-            for key, _ in selector.select(min(remaining, .05)):
-                check_cancelled()
-                chunk = os.read(key.fd, 65536)
-                if not chunk:
-                    selector.unregister(key.fileobj)
-                    continue
-                raw_bytes += len(chunk)
-                require(raw_bytes <= 64 * 1024 * 1024, 'journal raw processing cap exceeded')
-                if key.data == 'stderr':
-                    stderr_bytes += len(chunk)
-                    require(len(selected) + stderr_bytes <= LIMIT, 'journal selected evidence bound exceeded')
-                    stderr.extend(chunk)
-                    continue
-                stdout_bytes += len(chunk)
-                pending.extend(chunk)
-                while True:
-                    check_cancelled()
-                    end = pending.find(b'\n')
-                    if end < 0:
-                        require(len(pending) <= LIMIT, 'journal line bound exceeded')
-                        break
-                    require(end + 1 <= LIMIT, 'journal line bound exceeded')
-                    line = bytes(pending[:end + 1])
-                    del pending[:end + 1]
-                    if line == b'\n':
-                        continue
-                    entry = json.loads(line.decode(errors='replace'))
-                    require(type(entry) is dict, 'journal JSON record type differs')
-                    if AVC.search(str(entry.get('MESSAGE', ''))):
-                        require(len(selected) + len(line) + stderr_bytes <= LIMIT, 'journal selected evidence bound exceeded')
-                        selected.extend(line)
-        require(not pending, 'journal JSON interval is truncated')
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise subprocess.TimeoutExpired(argv, timeout)
-        while True:
-            check_cancelled()
-            # WNOWAIT keeps the exited leader's PID reserved for group cleanup.
-            info = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
-            if info is not None:
-                break
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired(argv, timeout)
-            time.sleep(min(remaining, .05))
-        exit_code = info.si_status if info.si_code == os.CLD_EXITED else -info.si_status
-        require(exit_code == 0, 'journal command failed')
-        return exit_code, selected.decode(errors='replace').strip(), stderr.decode(errors='replace')
-    except BaseException as error:
-        primary = error
-        raise
-    finally:
-        cleanup_error = None
-        # Never poll/wait/reap before stopping the owned group, even on success.
-        # An unreaped leader reserves its group ID; confirm it with WNOWAIT.
-        if process is not None:
-            reserved = True
-            try:
-                os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
-            except ChildProcessError as error:
-                reserved = False  # A foreign reaper relinquished that reservation.
-                cleanup_error = error
-            except BaseException as error:
-                cleanup_error = error
-            if reserved:
-                try:
-                    try: os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError: pass
-                except BaseException as error:
-                    if cleanup_error is None: cleanup_error = error
-                try: process.wait(timeout=3)
-                except BaseException as error:
-                    if cleanup_error is None: cleanup_error = error
-        if selector is not None:
-            try: selector.close()
-            except BaseException as error:
-                if cleanup_error is None: cleanup_error = error
-        if process is not None:
-            for stream in (process.stdout, process.stderr):
-                if stream is not None:
-                    try: stream.close()
-                    except BaseException as error:
-                        if cleanup_error is None: cleanup_error = error
-        for value, handler in old_handlers.items():
-            try: signal.signal(value, handler)
-            except BaseException as error:
-                if cleanup_error is None: cleanup_error = error
-        if primary is None:
-            if cleanup_error is not None:
-                raise cleanup_error
-            check_cancelled()
-
-
 def digest(path):
     value = hashlib.sha256()
     with open(path, 'rb') as stream:
@@ -308,8 +172,8 @@ class SecurityInterval:
 
     def finish(self):
         after = self.state()
-        journal = execute_journal_interval(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,
-                                            '-o', 'json', '--quiet'], timeout=60)[1]
+        journal = execute(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,
+                           '-o', 'json'], timeout=60)[1]
         messages = '\n'.join(str(json.loads(line).get('MESSAGE', ''))
                              for line in journal.splitlines() if line)
         if self.audit_offset:
@@ -1157,8 +1021,8 @@ class Smoke:
             bytes=self.trace_bytes,omitted_records=self.trace_omitted,last=item,
             bound_bytes=2*1024*1024,client_observations=self.client_observations),ensure_ascii=False))
 
-    def clients(self, *, timeout=45):
-        raw = execute(self.prefix+['mmsg','get','all-clients'],timeout=timeout)[1]
+    def clients(self):
+        raw = execute(self.prefix+['mmsg','get','all-clients'])[1]
         data = json.loads(raw)
         require(isinstance(data.get('clients'),list), 'invalid compositor client data')
         require(len({str(c['id']) for c in data['clients']})==len(data['clients']), 'duplicate compositor client ID')
@@ -1225,11 +1089,11 @@ class Smoke:
         value['executable_sha256'] = digest(value['executable'])
         return value
 
-    def alive(self, proof, *, timeout=None):
+    def alive(self, proof):
         current = identity(proof['pid'],self.uid)
         require(all(current[key] == proof[key] for key in ('pid','start_ticks','executable')),
                 'GUI PID exited or was recycled')
-        client = (self.clients() if timeout is None else self.clients(timeout=timeout)).get(proof['client_id'])
+        client = self.clients().get(proof['client_id'])
         require(client and client.get('pid') == proof['pid'] and client.get('is_visible') is True,
                 'proved GUI is no longer mapped')
         return client
@@ -1578,230 +1442,6 @@ class Smoke:
         self.trace('reference-controls-hidden',receipt=value)
         return value
 
-    def visual_reference_capture(self, player, fixture, expected, source_sha, state, remaining, index):
-        """One actual compositor frame, with the original ownership and RGB oracle."""
-        common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
-        client=self.alive(player,timeout=remaining())
-        monitors=json.loads(self.cmd(['mmsg','get','all-monitors'],timeout=remaining())[1])
-        self.trace('visual-capture-before',player=player,client=client,monitors=monitors)
-        require(str(client.get('id'))==player['client_id'] and client.get('pid')==player['pid'],
-                'visual capture client identity differs from owned proof')
-        monitor,geometry,crop=visual_capture_geometry(client,monitors)
-        x,y,w,h=[crop[key] for key in ('x','y','width','height')]
-        name='celluloid-reference.png' if index==0 else 'celluloid-reference-probe-%02d.png'%index
-        directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
-        rgb=None; rgb_guard=None; capture_pending=None
-        def acquired_fd(fd, acquired):
-            try: current=os.fstat(fd)
-            except OSError: return False
-            return (current.st_dev,current.st_ino,current.st_uid)==(acquired.st_dev,acquired.st_ino,acquired.st_uid)
-        def close_acquired_fd(fd, acquired):
-            if acquired_fd(fd,acquired): os.close(fd)
-        try:
-            root_info=os.fstat(directory)
-            require(root_info.st_uid==self.uid and not root_info.st_mode&0o022,
-                    'readiness capture root ownership or mode differs')
-            descriptor=os.open(name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=directory)
-            os.fchown(descriptor,self.uid,-1)
-            reserved=os.fstat(descriptor)
-            try:
-                # grim's stdout is the exclusive owned inode, never an app-replaceable path.
-                self.cmd(['grim','-o',monitor['name'],'-'],stdout_path='/proc/self/fd/%d'%descriptor,timeout=remaining())
-                require(acquired_fd(descriptor,reserved),'readiness PNG descriptor generation differs')
-            finally:
-                close_acquired_fd(descriptor,reserved)
-            descriptor=os.open(name,os.O_RDONLY|os.O_NOFOLLOW,dir_fd=directory)
-            try:
-                before=os.fstat(descriptor)
-                require(stat.S_ISREG(before.st_mode) and before.st_uid==self.uid and before.st_nlink==1
-                        and stat.S_IMODE(before.st_mode)==0o600 and 0<before.st_size<=LIMIT
-                        and (before.st_dev,before.st_ino)==(reserved.st_dev,reserved.st_ino),
-                        'readiness PNG identity, ownership, mode or bound differs')
-                with os.fdopen(descriptor,'rb',closefd=False) as stream: data=stream.read(LIMIT+1)
-                final=os.fstat(descriptor)
-                require(len(data)==before.st_size and all(getattr(before,k)==getattr(final,k) for k in
-                        ('st_dev','st_ino','st_uid','st_mode','st_nlink','st_size','st_mtime_ns','st_ctime_ns')),
-                        'readiness PNG changed while read')
-            finally: os.close(descriptor)
-            require(os.stat(name,dir_fd=directory,follow_symlinks=False)==final,
-                    'readiness PNG pathname changed')
-            image=self.root/name
-            screenshot=dict(path=str(image),sha256=hashlib.sha256(data).hexdigest(),
-                review='static content oracle plus human review; screencopy can request repaint')
-            require(data[:8]==b'\x89PNG\r\n\x1a\n' and data[12:16]==b'IHDR','invalid reference capture PNG')
-            size=list(struct.unpack('>II',data[16:24]))
-            require(size==[monitor['width'],monitor['height']],'actual screencopy/monitor dimensions differ')
-            after=self.alive(player,timeout=remaining())
-            monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'],timeout=remaining())[1])
-            self.trace('visual-capture-after',player=player,client=after,monitors=monitors_after)
-            monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
-            keys=('id','pid','is_visible','is_focused','monitor')
-            if getattr(self,'gui_v6',False):
-                keys+=('appid','foreign_toplevel_id','is_fullscreen','x','y','width','height')
-                require(client.get('is_fullscreen') is True and after.get('is_fullscreen') is True,
-                        'owned fullscreen capture identity/geometry changed')
-            require(all(after.get(key)==client.get(key) for key in keys)
-                    and geometry_after==geometry and crop_after==crop
-                    and all(monitor_after.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
-                    'owned player identity/geometry/focus or monitor changed across capture')
-            # A private transient RGB decode is not a replacement for the physical PNG.
-            rgb_guard,tempname=tempfile.mkstemp(prefix='arctic-native-readiness-rgb-',dir='/tmp')
-            rgb=Path(tempname); reserved_rgb=os.fstat(rgb_guard)
-            descriptor=os.dup(rgb_guard)
-            try:
-                self.cmd(common+['-f','image2pipe','-i','pipe:0','-frames:v','1','-vf',f'crop={w}:{h}:{x}:{y}',
-                    '-pix_fmt','rgb24','-f','rawvideo','-'],stdout_path='/proc/self/fd/%d'%descriptor,input_bytes=data,timeout=remaining())
-                require(acquired_fd(descriptor,reserved_rgb),'readiness RGB output descriptor generation differs')
-            finally:
-                close_acquired_fd(descriptor,reserved_rgb)
-            require(acquired_fd(rgb_guard,reserved_rgb),'readiness held RGB descriptor generation differs')
-            current=rgb.lstat()
-            require(stat.S_ISREG(current.st_mode) and current.st_uid==os.getuid() and current.st_nlink==1
-                    and stat.S_IMODE(current.st_mode)==0o600 and current.st_size==w*h*3<=LIMIT
-                    and (current.st_dev,current.st_ino)==(reserved_rgb.st_dev,reserved_rgb.st_ino),
-                    'readiness RGB identity, ownership or bound differs')
-            # Reading may update atime; pin all content/identity metadata instead.
-            # The already-owned descriptor also prevents a substituted pathname
-            # from supplying pixels between the initial stat and the read.
-            os.lseek(rgb_guard,0,os.SEEK_SET)
-            with os.fdopen(rgb_guard,'rb',closefd=False) as stream: raw=stream.read(LIMIT+1)
-            final_rgb=os.fstat(rgb_guard); pathname_rgb=rgb.lstat()
-            stable=('st_dev','st_ino','st_uid','st_gid','st_mode','st_nlink','st_size','st_mtime_ns','st_ctime_ns')
-            require(len(raw)==current.st_size and all(getattr(current,k)==getattr(final_rgb,k)
-                    ==getattr(pathname_rgb,k) for k in stable),'readiness RGB changed while read')
-            oracle=evaluate_reference_rgb(raw,w,h,expected.read_bytes())
-            remaining()  # A match completed after the inherited deadline cannot pass.
-            result=dict(player=player,player_state=state,client_before=client,client_after=after,
-                monitors=monitors,monitors_after=monitors_after,screenshot=screenshot,
-                fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),
-                actual_rgb_sha256=hashlib.sha256(raw).hexdigest(),expected_rgb_path=str(expected),
-                capture_pixels=size,client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
-                command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
-                scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware',
-                oracle=oracle)
-            return result,raw,final
-        except BaseException as error:
-            capture_pending=error
-            raise
-        finally:
-            try:
-                if rgb is not None:
-                    try:
-                        current=rgb.lstat()
-                        if not acquired_fd(rgb_guard,reserved_rgb):
-                            if capture_pending is None: raise RuntimeError('readiness held RGB descriptor generation differs')
-                        elif (current.st_dev,current.st_ino,current.st_uid)==(reserved_rgb.st_dev,reserved_rgb.st_ino,reserved_rgb.st_uid):
-                            rgb.unlink()
-                    except FileNotFoundError: pass
-                    except OSError:
-                        if capture_pending is None: raise
-            finally:
-                if rgb_guard is not None: close_acquired_fd(rgb_guard,reserved_rgb)
-                os.close(directory)
-
-    def visual_reference_readiness(self, player, fixture, expected, source_sha, state):
-        """Wait only for the unchanged physical-pixel oracle, never a settings bit."""
-        origin=time.monotonic(); deadline=origin+30  # Original Smoke.wait app observation bound.
-        value=dict(schema='arctic-native-physical-frame-readiness-v1',release_acceptance=False,
-            timeout_seconds=30,maximum_probes=16,unique_png_stop_bytes=LIMIT,
-            maximum_retained_unique_png_bytes=2*LIMIT,
-            probes=[],status='failed',stop_reason='collector-error',elapsed_seconds=0,
-            scope='bounded physical compositor captures; no renderer, cache or player-state intervention')
-        directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
-        descriptor=None; info=None; selected_raw=None; retained={}; unique_bytes=0; baseline=None; pending=None
-        def remaining():
-            result=deadline-time.monotonic()
-            if result<=0: raise subprocess.TimeoutExpired('physical-frame-readiness',30)
-            return result
-        def save():
-            value['elapsed_seconds']=time.monotonic()-origin
-            data=(json.dumps(value,sort_keys=True)+'\n').encode()
-            require(len(data)<=64*1024,'readiness receipt exceeded bound')
-            os.lseek(descriptor,0,os.SEEK_SET); os.ftruncate(descriptor,0)
-            with os.fdopen(descriptor,'wb',closefd=False) as stream: stream.write(data)
-        try:
-            root_info=os.fstat(directory)
-            require(root_info.st_uid==self.uid and not root_info.st_mode&0o022,
-                    'readiness receipt root ownership or mode differs')
-            descriptor=os.open('visual-frame-readiness.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
-                               0o600,dir_fd=directory)
-            os.fchown(descriptor,self.uid,-1)
-            save()
-            time.sleep(min(.5,remaining()))  # Preserve the original first-capture settle, once.
-            for index in range(16):
-                began=time.monotonic()
-                probe=dict(index=index,status='capture-failed',elapsed_seconds=0)
-                value['probes'].append(probe)
-                try:
-                    remaining()
-                    observed,raw,png_stat=self.visual_reference_capture(player,fixture,expected,source_sha,state,remaining,index)
-                    remaining()
-                    info=observed
-                    if baseline is None: baseline=info
-                    else:
-                        require(all(info['client_before'].get(k)==baseline['client_before'].get(k) for k in
-                            ('id','pid','appid','foreign_toplevel_id','monitor','is_focused','is_visible','is_fullscreen','x','y','width','height'))
-                            and info['client_pixel_crop']==baseline['client_pixel_crop']
-                            and info['capture_pixels']==baseline['capture_pixels']
-                            and info['monitors']==baseline['monitors'],
-                            'owned capture identity or output changed between readiness probes')
-                    selected_raw=raw; screenshot=info['screenshot']; image=Path(screenshot['path'])
-                    fingerprint=screenshot['sha256']
-                    if fingerprint in retained:
-                        require(image.lstat()==png_stat,'readiness duplicate PNG pathname changed')
-                        image.unlink(); screenshot['path']=retained[fingerprint]
-                    else:
-                        retained[fingerprint]=str(image); unique_bytes+=png_stat.st_size
-                    probe.update(status=info['oracle']['status'],screenshot=dict(screenshot),
-                        actual_rgb_sha256=info['actual_rgb_sha256'],oracle=info['oracle'],
-                        elapsed_seconds=time.monotonic()-began,unique_png_bytes=unique_bytes)
-                    save()
-                    if unique_bytes>LIMIT:
-                        value['stop_reason']='capture-byte-bound'; break
-                    if info['oracle']['status']=='matched':
-                        value.update(status='matched',stop_reason='first-matching-physical-frame'); break
-                    if index==15: value['stop_reason']='probe-count-bound'; break
-                    time.sleep(min(.2,remaining()))  # Original app-observation poll interval.
-                except subprocess.TimeoutExpired:
-                    probe.update(status='deadline',elapsed_seconds=time.monotonic()-began)
-                    value['stop_reason']='deadline'; break
-                except BaseException as error:
-                    probe.update(status='capture-failed',error=renderer_trial_error(error),elapsed_seconds=time.monotonic()-began)
-                    value['stop_reason']='collector-error'; raise
-            if info is None: raise RuntimeError('physical frame readiness produced no complete capture')
-            if value['status']!='matched': info['oracle']=dict(status='unmatched',reason='bounded physical frame readiness failed')
-            rgb_name='visual-owned-window.rgb'
-            output=os.open(rgb_name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=directory)
-            os.fchown(output,self.uid,-1)
-            with os.fdopen(output,'wb') as stream: stream.write(selected_raw)
-            info['actual_rgb_path']=str(self.root/rgb_name)
-            info['frame_readiness']=value
-            remaining()  # Include selected output completion in the acceptance deadline.
-            return info
-        except BaseException as error:
-            pending=error
-            if isinstance(error,subprocess.TimeoutExpired): value['stop_reason']='deadline'
-            elif value['status']=='matched': value['stop_reason']='collector-error'
-            value['status']='failed'
-            raise
-        finally:
-            try:
-                if descriptor is not None:
-                    try:
-                        try: save()
-                        except BaseException:
-                            if pending is None: raise
-                        if value['status']=='matched':
-                            try: remaining()  # A late final receipt completion cannot pass.
-                            except subprocess.TimeoutExpired:
-                                value.update(status='failed',stop_reason='deadline')
-                                try: save()
-                                except BaseException: pass  # Preserve the deadline failure.
-                                raise
-                    finally: os.close(descriptor)
-            finally: os.close(directory)
-
-
     def visual_media(self):
         fixture,expected,source_sha=self.visual_fixture()
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
@@ -1830,11 +1470,47 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             controls=self.hide_reference_controls(player,ipc)
-        info=self.visual_reference_readiness(player,fixture,expected,source_sha,state)
-        screenshot=info['screenshot']; client=info['client_before']
+        time.sleep(.5)
+        client=self.alive(player)
+        monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+        self.trace('visual-capture-before',player=player,client=client,monitors=monitors)
+        require(str(client.get('id'))==player['client_id'] and client.get('pid')==player['pid'],
+                'visual capture client identity differs from owned proof')
+        monitor,geometry,crop=visual_capture_geometry(client,monitors)
+        x,y,w,h=[crop[key] for key in ('x','y','width','height')]
+        image=self.root/'celluloid-reference.png'
+        self.cmd(['grim','-o',monitor['name'],str(image)])
+        screenshot=dict(path=str(image),sha256=digest(image),review='static content oracle plus human review; screencopy can request repaint')
+        # The PNG header supplies actual physical pixel dimensions, not a config guess.
+        header=image.read_bytes()[:24]
+        require(header[:8]==b'\x89PNG\r\n\x1a\n' and header[12:16]==b'IHDR','invalid reference capture PNG')
+        size=list(struct.unpack('>II',header[16:24]))
+        require(size==[monitor['width'],monitor['height']],'actual screencopy/monitor dimensions differ')
+        after=self.alive(player)
+        monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+        self.trace('visual-capture-after',player=player,client=after,monitors=monitors_after)
+        if getattr(self,'gui_v6',False):
+            self.fullscreen_capture_pair(player,client,after,screenshot)
+        monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
+        require(all(after.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
+                and geometry_after==geometry and crop_after==crop
+                and all(monitor_after.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
+                'owned player identity/geometry/focus or monitor changed across capture')
+        rgb=self.root/'visual-owned-window.rgb'
+        self.cmd(common+['-i',str(image),'-frames:v','1','-vf',f'crop={w}:{h}:{x}:{y}',
+                         '-pix_fmt','rgb24','-f','rawvideo',str(rgb)])
+        info=dict(player=player,player_state=state,client_before=client,client_after=after,monitors=monitors,monitors_after=monitors_after,screenshot=screenshot,
+                  fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),actual_rgb_sha256=digest(rgb),
+                  expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
+                  client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
+                  command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
+                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
-            self.fullscreen_capture_pair(player,client,info['client_after'],screenshot)
+        try:
+            info['oracle']=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
+        except Exception as exc:
+            info['oracle']=dict(status='failed',error=type(exc).__name__+': '+str(exc))
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
         if getattr(self,'gui_v6',False):
@@ -2439,9 +2115,9 @@ def native_bulk_export(encoded, manifest, provenance, begin):
 # directories remain intact in the guest temporary root until its lifecycle
 # ends; they do not acquire a durable host copy through this public transport.
 NATIVE_PRIVATE_PROFILE_DIRECTORIES = frozenset(('home', 'config', 'data', 'cache'))
-NATIVE_PUBLIC_EVIDENCE_FILES = frozenset('celluloid-reference-probe-%02d.png'%index for index in range(1,16)) | frozenset((
+NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'report.json', 'gui-trace.log', 'gui-trace-summary.json', 'final-clients.json',
-    'visual-oracle.json', 'visual-frame-readiness.json', 'moving-player-proof.json',
+    'visual-oracle.json', 'moving-player-proof.json',
     'fullscreen-player-receipts.json', 'fullscreen-player-captures.json',
     'terminal-role.json', 'file-manager-terminal.json',
     '0-native-protocol-viewport.json', '0-controls-state-trials.json',
@@ -2489,7 +2165,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '82cb72d81be20fd5d0a3b4f802fdbef7d7364377cd6a42dea334422b0a3ee89c'
+    native_source_sha = 'd7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

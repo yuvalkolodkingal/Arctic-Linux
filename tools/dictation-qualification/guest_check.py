@@ -6,7 +6,6 @@ the shipped fixed setup wrapper. Public output contains fixed codes and hashes.
 """
 import argparse
 import ctypes
-import dis
 import fcntl
 import hashlib
 import importlib.util
@@ -63,353 +62,6 @@ WAIT_DIAGNOSTIC_TARGETS = ('receiver-clear', 'capture-link', 'terminal-state', '
                            'loader-route', 'loader-terminal', 'loader-delivery')
 WAIT_DIAGNOSTIC_STATES = ('ready', 'error', 'recording', 'transcribing', 'unavailable')
 WAIT_DIAGNOSTIC_BACKENDS = ('', 'cpu', 'vulkan')
-
-# Failure-only observations. These cannot satisfy a report gate, and never
-# include an exception's text, argv, stderr, transcript or unknown operand.
-COLLECTOR_FAILURE_PHASES = ('entry', 'arguments', 'boot-context', 'source-pins',
-                            'checker-init', 'execute', 'owned-cleanup',
-                            'report-validation', 'report-emission')
-COLLECTOR_ERROR_CLASSES = ((Invalid, 'invalid'), (FileNotFoundError, 'file-not-found'),
-    (PermissionError, 'permission-error'), (OSError, 'os-error'),
-    (UnicodeDecodeError, 'unicode-error'), (json.JSONDecodeError, 'json-error'),
-    (ValueError, 'value-error'), (KeyError, 'key-error'), (TypeError, 'type-error'),
-    (subprocess.TimeoutExpired, 'timeout'), (subprocess.CalledProcessError, 'command-error'),
-    (RuntimeError, 'runtime-error'), (InterruptedError, 'interrupted'),
-    (KeyboardInterrupt, 'keyboard-interrupt'), (SystemExit, 'system-exit'))
-COLLECTOR_FAILURE_FRAMES = ('unknown', 'main', 'checker-init', 'installed-controller',
-    'desktop', 'command', 'installed-file', 'file-hash', 'json-file', 'audit-state',
-    'context-contract', 'report-contract')
-COLLECTOR_FAILURE_GUARDS = (
-    'explicit-root-disposable-guest-required', 'reviewed-test-cd-location-required',
-    'qemu-kvm-guest-required', 'actual-boot-stage-mismatch', 'context-boot-stage-mismatch',
-    'reviewed-source-hash-mismatch', 'actual-hardware-profile-mismatch',
-    'journal-cursor-unavailable', 'installed-profile-inventory',
-    'installed-profile-descriptor-pin', 'installed-profile-asset-inventory',
-    'installed-profile-asset-pin', 'desktop-wayland-ambiguous', 'desktop-mango-ambiguous',
-    'desktop-not-unique', 'unsafe-installed-file', 'installed-file-size',
-    'audit-status-unavailable', 'command-failed', 'command-output-bound')
-_COLLECTOR_COMMAND_TOKEN = object()
-collector_failure_phase = 'entry'
-
-# BEGIN OWNED_REPORT_CONTRACT_GUARDS
-# Closed Source require sites in the byte-pinned, unchanged contract.validate.
-# These observations never publish a rejected report or satisfy any gate.
-_REPORT_GUARD_SITES = (
-    (145, 145, 'report-fields', 'contract-001'),
-    (146, 146, 'report-schema-scope', 'contract-002'),
-    (147, 147, 'report-context-boot', 'contract-003'),
-    (148, 148, 'report-controller', 'contract-004'),
-    (149, 149, 'report-limitations', 'contract-005'),
-    (151, 153, 'report-profile-descriptor', 'contract-006'),
-    (154, 155, 'report-hardware-fields', 'contract-007'),
-    (156, 159, 'report-hardware-profile', 'contract-008'),
-    (160, 160, 'report-payload-pins', 'contract-009'),
-    (162, 163, 'report-payload-pin-types', 'contract-010'),
-    (164, 164, 'report-disk-type', 'contract-011'),
-    (166, 166, 'live-disk-or-payload-unexpected', 'contract-012'),
-    (168, 169, 'encrypted-disk-identity-fields', 'contract-013'),
-    (170, 173, 'encrypted-disk-identity-invalid', 'contract-014'),
-    (174, 174, 'report-gates-type', 'contract-015'),
-    (176, 177, 'report-missing-duplicate-extra-gates', 'contract-016'),
-    (181, 181, 'gate-fields', 'contract-017'),
-    (182, 182, 'gate-status', 'contract-018'),
-    (183, 183, 'gate-evidence-kind', 'contract-019'),
-    (184, 184, 'gate-safe-code', 'contract-020'),
-    (185, 185, 'gate-observation-fields', 'contract-021'),
-    (188, 190, 'loader-retry-samples-scope-bound', 'contract-022'),
-    (196, 196, 'gate-observation-hash', 'contract-023'),
-    (198, 198, 'gate-observation-boot', 'contract-024'),
-    (200, 200, 'gate-observation-scalar', 'contract-025'),
-    (203, 205, 'gate-contradictory-or-missing-observations', 'contract-026'),
-    (207, 208, 'profile-payload-file-count', 'contract-027'),
-    (209, 209, 'profile-payload-integrity-absent', 'contract-028'),
-    (211, 211, 'legacy-gpu-gate-on-modern-profile', 'contract-029'),
-    (213, 213, 'modern-gpu-gate-on-legacy-profile', 'contract-030'),
-    (215, 216, 'loader-retry-profile-or-coverage', 'contract-031'),
-    (217, 219, 'loader-retry-broker-fixture-identity', 'contract-032'),
-    (221, 227, 'loader-outcome-contradiction', 'contract-033'),
-    (229, 230, 'offline-network-check-successful-response', 'contract-034'),
-    (232, 232, 'recording-indicator-evidence-missing', 'contract-035'),
-    (233, 233, 'recording-indicator-ack-missing', 'contract-036'),
-    (235, 237, 'leak-scan-coverage', 'contract-037'),
-    (240, 245, 'audit-mode-or-loss-changed', 'contract-038'),
-    (247, 250, 'gpu-real-start-and-retry', 'contract-039'),
-    (253, 253, 'passed-encryption-without-disk-identity', 'contract-040'),
-    (254, 254, 'report-samples-bound', 'contract-041'),
-    (257, 257, 'fixture-manifest-required', 'contract-042'),
-    (259, 260, 'fixture-manifest-hash', 'contract-043'),
-    (262, 263, 'fixture-manifest-provenance', 'contract-044'),
-    (265, 266, 'fixture-manifest-selection', 'contract-045'),
-    (275, 275, 'sample-fields', 'contract-046'),
-    (280, 282, 'sample-profile-backend-pins', 'contract-047'),
-    (284, 284, 'sample-language-purpose', 'contract-048'),
-    (285, 285, 'sample-row', 'contract-049'),
-    (287, 287, 'sample-duplicate', 'contract-050'),
-    (289, 290, 'sample-fixture-binding', 'contract-051'),
-    (292, 292, 'sample-hash', 'contract-052'),
-    (294, 294, 'sample-numeric', 'contract-053'),
-    (295, 296, 'sample-positive-counts', 'contract-054'),
-    (299, 300, 'loader-retry-sample-coverage', 'contract-055'),
-    (302, 303, 'loader-continuation-sample-coverage', 'contract-056'),
-    (306, 306, 'loader-continuation-leak-scan-coverage', 'contract-057'),
-    (308, 308, 'session-payload-absent', 'contract-058'),
-    (315, 315, 'session-sample-coverage', 'contract-059'),
-    (316, 316, 'report-status-derived', 'contract-060'),
-    (318, 318, 'image-dictation-gates-incomplete', 'contract-061'),
-)
-_REPORT_VALIDATE = validate
-_REPORT_VALIDATE_CODE = validate.__code__
-_REPORT_GLOBALS = validate.__globals__
-_REPORT_REQUIRE = require
-_REPORT_REQUIRE_CODE = require.__code__
-_REPORT_INVALID = Invalid
-_REPORT_FUNCTION_BINDINGS = tuple((function, function.__code__)
-    for function in (_REPORT_VALIDATE, _REPORT_REQUIRE, context,
-                     _REPORT_GLOBALS['digest'], _REPORT_GLOBALS['uuid'],
-                     _REPORT_GLOBALS['gates'], _REPORT_GLOBALS['pinned']))
-_REPORT_GLOBAL_BINDINGS = tuple((name, _REPORT_GLOBALS[name])
-    for name in ('validate', 'require', 'Invalid', '__file__') + tuple(
-        name for _, code in _REPORT_FUNCTION_BINDINGS for name in code.co_names)
-    if name in _REPORT_GLOBALS)
-COLLECTOR_FAILURE_GUARDS += tuple(row[3] for row in _REPORT_GUARD_SITES)
-
-def owned_report_guard(trace, throwing):
-    """Bind actual traceback codes/globals/LineTable to fixed literal sites."""
-    if (validate is not _REPORT_VALIDATE or require is not _REPORT_REQUIRE or Invalid is not _REPORT_INVALID
-        or any(_REPORT_GLOBALS.get(name) is not value for name, value in _REPORT_GLOBAL_BINDINGS)
-        or any(function.__code__ is not code for function, code in _REPORT_FUNCTION_BINDINGS)
-        or trace.tb_frame.f_code is not _REPORT_VALIDATE_CODE or trace.tb_frame.f_globals is not _REPORT_GLOBALS
-        or throwing.tb_frame.f_code is not _REPORT_REQUIRE_CODE or throwing.tb_frame.f_globals is not _REPORT_GLOBALS):
-        return 'unknown'
-    instructions = list(dis.get_instructions(_REPORT_VALIDATE_CODE, show_caches=True))
-    if len(instructions) > 8192:
-        return 'unknown'
-    selected = next((index for index, item in enumerate(instructions) if item.offset == trace.tb_lasti), None)
-    if selected is None:
-        return 'unknown'
-    line = next((line for start, end, line in _REPORT_VALIDATE_CODE.co_lines()
-                 if start <= trace.tb_lasti < end), None)
-    if type(line) is not int or type(trace.tb_lineno) is not int or line != trace.tb_lineno:
-        return 'unknown'
-    while selected >= 0 and instructions[selected].opname == 'CACHE':
-        selected -= 1
-    if selected < 1 or instructions[selected].opname not in ('CALL', 'CALL_FUNCTION') or instructions[selected].arg != 2:
-        return 'unknown'
-    selected -= 1
-    while selected >= 0 and instructions[selected].opname == 'CACHE':
-        selected -= 1
-    if selected >= 0 and instructions[selected].opname == 'PRECALL':
-        if instructions[selected].arg != 2:
-            return 'unknown'
-        selected -= 1
-    if selected < 0 or instructions[selected].opname != 'LOAD_CONST' or type(instructions[selected].argval) is not str:
-        return 'unknown'
-    literal = instructions[selected].argval
-    matched = [label for first, last, code, label in _REPORT_GUARD_SITES
-               if first <= line <= last and literal == code]
-    return matched[0] if len(matched) == 1 else 'unknown'
-# END OWNED_REPORT_CONTRACT_GUARDS
-
-def collector_guard_literal(trace):
-    """Read the literal last argument of the exact throwing require call."""
-    instructions = list(dis.get_instructions(trace.tb_frame.f_code, show_caches=True))
-    if len(instructions) > 4096:
-        return 'unknown'
-    selected = next((index for index, item in enumerate(instructions) if item.offset == trace.tb_lasti), None)
-    if selected is None:
-        return 'unknown'
-    while selected >= 0 and instructions[selected].opname == 'CACHE':
-        selected -= 1
-    if selected < 1 or instructions[selected].opname not in ('CALL', 'CALL_FUNCTION') or instructions[selected].arg != 2:
-        return 'unknown'
-    selected -= 1
-    while selected >= 0 and instructions[selected].opname == 'CACHE':
-        selected -= 1
-    if selected >= 0 and instructions[selected].opname == 'PRECALL':
-        if instructions[selected].arg != 2:
-            return 'unknown'
-        selected -= 1
-    if selected >= 0 and instructions[selected].opname == 'LOAD_CONST':
-        value = instructions[selected].argval
-        if type(value) is str:
-            return next((code for code in COLLECTOR_FAILURE_GUARDS if value == code and not code.startswith('contract-')), 'unknown')
-    return 'unknown'
-
-def collector_failure(error):
-    """Project only exact classes and deepest complete Source code identities."""
-    error_label = next((label for kind, label in COLLECTOR_ERROR_CLASSES if type(error) is kind), 'other-error')
-    result = dict(schema='arctic-dictation-collector-failure-v1',
-                  phase=collector_failure_phase if type(collector_failure_phase) is str
-                  and collector_failure_phase in COLLECTOR_FAILURE_PHASES else 'entry',
-                  error=error_label, frame='unknown', caller='unknown', guard='unknown', command_returncode=None,
-                  release_acceptance=False)
-    if error_label == 'other-error':
-        return result
-    owners = [(main, 'main'), (Checker.__init__, 'checker-init'),
-              (installed_controller, 'installed-controller'), (desktop, 'desktop'),
-              (run, 'command'), (owned_file, 'installed-file'), (sha, 'file-hash'),
-              (read, 'json-file'), (Checker.audit_state, 'audit-state'),
-              (context, 'context-contract'), (validate, 'report-contract')]
-    trace = BaseException.__traceback__.__get__(error)
-    frames, traces, seen = [], [], set()
-    for _ in range(64):
-        if trace is None:
-            break
-        if id(trace) in seen:
-            return result
-        seen.add(id(trace)); frames.append(trace.tb_frame); traces.append(trace)
-        trace = trace.tb_next
-    if trace is not None:
-        return result  # No truncated prefix is presented as the deepest owner.
-    # A genuine unchanged contract.validate -> require failure gets only a
-    # closed Source site identifier. A copied code with foreign globals or a
-    # changed loaded binding cannot use this path; no values/args are read.
-    if (type(error) is _REPORT_INVALID and len(traces) >= 2
-        and frames[-2].f_code is _REPORT_VALIDATE_CODE):
-        guard = owned_report_guard(traces[-2], traces[-1])
-        if guard != 'unknown':
-            result.update(frame='report-contract', guard=guard)
-            if len(frames) >= 3 and frames[-3].f_code is main.__code__ and frames[-3].f_globals is main.__globals__:
-                result['caller'] = 'main'
-            # BEGIN TRANSPARENT_GATE_SUMMARY_CALLER
-            elif (len(frames) >= 4 and frames[-3].f_code is _GATE_VALIDATE_CODE
-                  and frames[-3].f_globals is _GATE_NAMESPACE
-                  and frames[-4].f_code is main.__code__ and frames[-4].f_globals is main.__globals__):
-                result['caller'] = 'main'  # Same owned main through the transparent validation wrapper.
-            # END TRANSPARENT_GATE_SUMMARY_CALLER
-        return result
-    for frame in frames[-1:]:
-        for function, label in owners:
-            if frame.f_code is function.__code__ and frame.f_globals is function.__globals__:
-                result['frame'] = label
-    if (type(error) is Invalid and len(frames) >= 2
-        and frames[-1].f_code is require.__code__ and frames[-1].f_globals is require.__globals__
-        and any(frames[-2].f_code is function.__code__ and frames[-2].f_globals is function.__globals__
-                for function, _ in owners)):
-        result['frame'] = next(label for function, label in owners
-                               if frames[-2].f_code is function.__code__
-                               and frames[-2].f_globals is function.__globals__)
-        if len(frames) >= 3:
-            result['caller'] = next((label for function, label in owners
-                                    if frames[-3].f_code is function.__code__
-                                    and frames[-3].f_globals is function.__globals__), 'unknown')
-        result['guard'] = collector_guard_literal(traces[-2])
-        proof = BaseException.__getattribute__(error, '__dict__').get('_arctic_dictation_command_exit')
-        if (frames[-2].f_code is run.__code__ and frames[-2].f_globals is run.__globals__
-            and result['guard'] == 'command-failed' and type(proof) is tuple and len(proof) == 2
-            and proof[0] is _COLLECTOR_COMMAND_TOKEN and type(proof[1]) is int and -255 <= proof[1] <= 255):
-            result['command_returncode'] = proof[1]
-    return result
-
-def emit_collector_failure(error):
-    try:
-        print('ARCTIC-DICTATION-COLLECTOR-FAILURE ' + json.dumps(collector_failure(error), sort_keys=True), flush=True)
-    except Exception:
-        pass  # Optional diagnostics cannot replace the same original failure.
-
-# BEGIN OWNED_GATE_FAILURE_SUMMARY
-# Only Source-owned rejected-report scalar observations. No counts, errors,
-# transcripts, hashes, command output or report observations enter this record.
-GATE_FAILURE_CODES = ('actual-boot-stage-mismatch', 'actual-hardware-profile-mismatch', 'audit-disabled-or-lost-records', 'audit-interval-rotated-or-oversized', 'audit-log-disappeared', 'audit-new-log-oversized', 'audit-status-unavailable', 'broker-command-identity', 'broker-death-engine-not-unique', 'broker-death-inserted-text', 'broker-death-recording-not-started', 'broker-death-retained-transcript', 'broker-death-stale-status', 'broker-not-owned', 'broker-replaced-before-kill', 'cancel-inserted-text', 'cancel-not-ready', 'cancel-recording-not-started', 'collector-failed', 'command-failed', 'command-output-byte-types', 'context-boot-stage-mismatch', 'cpu-owned-process-profile-pin', 'cpu-recording-not-started', 'cpu-transcription-failed', 'desktop-mango-ambiguous', 'desktop-not-unique', 'desktop-wayland-ambiguous', 'empty-or-unintended-enter', 'encrypted-root-not-observed', 'engine-parent-unavailable', 'engine-survived-cancel', 'explicit-root-disposable-guest-required', 'fixture-bundle-validation-failed', 'fixture-language-rows', 'fixture-playback-failed', 'gpu-engine-not-unique', 'gpu-failure-no-advertised-cpu-retry', 'gpu-gate-requires-modern-profile', 'gpu-owned-process-identity', 'hebrew-script-not-inserted', 'indicator-handshake-incomplete', 'indicator-interval-not-empty-recording', 'indicator-receiver-not-empty', 'indicator-recording-not-started', 'indicator-screenshot-missing', 'insertion-focus-lost', 'installed-binary-not-executable', 'installed-child-guard-sha256', 'installed-controller-not-ready', 'installed-file-size', 'installed-payload-sha256', 'installed-profile-asset-inventory', 'installed-profile-asset-pin', 'installed-profile-descriptor-pin', 'installed-profile-inventory', 'journal-cursor-unavailable', 'journal-json-duplicate-field', 'journal-json-entry-type', 'journal-json-invalid', 'journal-json-nonfinite', 'journal-message-encoding', 'journal-message-type', 'journal-output-byte-type', 'leak-scan-excerpt-too-short', 'leak-scan-missing-real-hypotheses', 'legacy-gpu-profile-pin', 'legacy-vulkan-start-not-rejected', 'live-base-scan-unreadable', 'live-base-unavailable', 'live-controller-false-readiness', 'live-payload-receipt-present', 'live-speech-payload-or-model-present', 'live-whisper-weight-present', 'loader-broker-changed', 'loader-broker-command-identity', 'loader-broker-not-fresh', 'loader-broker-not-owned', 'loader-broker-process-reused', 'loader-broker-wrapper-died', 'loader-broker-wrapper-parent', 'loader-continuation-insertion-failed', 'loader-control-socket-unsafe', 'loader-engine-not-unique', 'loader-engine-parent-mismatch', 'loader-environment-bound', 'loader-environment-not-inherited', 'loader-environment-process-identity', 'loader-error-inserted-text', 'loader-error-not-actionable-cpu-retry', 'loader-error-retained-transcript', 'loader-fixture-already-present', 'loader-gate-requires-modern-profile', 'loader-launch-lock-unsafe', 'loader-owned-cleanup-failed', 'loader-playback-failed', 'loader-receiver-not-empty-before-retry', 'loader-retry-preference-changed', 'loader-start-command-outcome', 'loader-start-response-bound', 'loader-start-response-json', 'loader-vulkan-process-pin', 'lock-inserted-text', 'lock-recording-not-started', 'loopback-flags-unavailable', 'loopback-process-died', 'mic-failure-inserted-text', 'mic-failure-not-actionable', 'mic-recording-not-started', 'microphone-isolation-unavailable', 'missing-model-not-actionable', 'missing-model-restore-integrity', 'native-audio-tool-missing', 'new-selinux-avc', 'no-supported-vulkan-device', 'observation-timeout', 'observed', 'offline-became-ready', 'offline-desktop-not-responsive', 'offline-firstboot-timer-not-enabled', 'offline-network-manager-inactive', 'offline-payload-unexpected', 'offline-queue-missing-or-false-ready', 'offline-recording-not-blocked', 'offline-size-undisclosed', 'optimized-cpu-incompatible', 'outside-network-response', 'owned-cleanup-failed', 'owned-process-reused-before-signal', 'playback-fixture-sha256', 'preexisting-engine-forbidden', 'prerequisite-or-collector-failed', 'private-transcript-files-remain', 'qemu-kvm-guest-required', 'ready-still-pending', 'receipt-file-pin', 'receipt-file-pin-types', 'receipt-profile-pin', 'receipt-version-source', 'receiver-directory-unsafe', 'receiver-focus-after-unlock', 'receiver-focus-lost', 'receiver-focus-request-failed', 'receiver-gtk-init', 'receiver-must-be-user', 'receiver-process-died', 'receiver-window-disappeared', 'receiver-window-duplicate', 'receiver-window-identity', 'recording-engine-changed', 'recording-engine-not-unique', 'recording-started-while-locked', 'recording-status-not-published', 'recording-stop-failed', 'recovery-neither-pending-nor-ready', 'recovery-not-ready', 'recovery-timer-not-enabled', 'reviewed-source-hash-mismatch', 'reviewed-test-cd-location-required', 'root-crypt-device-unavailable', 'selinux-not-enforcing', 'session-network-not-isolated', 'status-backend-profile', 'status-backend-unknown', 'status-byte-bound', 'status-command-outcome', 'status-cpu-variant-profile', 'status-idle-cpu-variant', 'status-json-fields', 'status-profile-byte-types', 'status-profile-descriptor-pin', 'transcript-found-in-public-surface', 'unknown', 'unknown-command-output-role', 'unknown-gate', 'unknown-session-preflight-error-type', 'unknown-session-preflight-stage', 'unknown-wait-diagnostic-target', 'unsafe-installed-file')
-GATE_FAILURE_EXPECTED = (('live', 'small-v2', ('live-controller-unavailable', 'live-payload-model-absent', 'no-new-avcs', 'selinux-enforcing')), ('live', 'turbo-q5-v3', ('live-controller-unavailable', 'live-payload-model-absent', 'no-new-avcs', 'selinux-enforcing')), ('offline-installed', 'small-v2', ('encrypted-installed-boot', 'no-new-avcs', 'offline-os-healthy', 'offline-setup-pending', 'selinux-enforcing')), ('offline-installed', 'turbo-q5-v3', ('encrypted-installed-boot', 'no-new-avcs', 'offline-os-healthy', 'offline-setup-pending', 'selinux-enforcing')), ('online-installed', 'small-v2', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'installed-payload-integrity', 'legacy-gpu-unsupported-cpu-retry', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'online-installer-ready', 'recording-status-published', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('online-installed', 'turbo-q5-v3', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'gpu-loader-fault-handling-new-cpu-retry', 'gpu-runtime-failure-cpu-retry', 'installed-payload-integrity', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'online-installer-ready', 'recording-status-published', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovered-offline', 'small-v2', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'installed-payload-integrity', 'legacy-gpu-unsupported-cpu-retry', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'recording-status-published', 'recovered-ready', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovered-offline', 'turbo-q5-v3', ('broker-death-discards', 'cancel-discards', 'cpu-english-transcription-insertion', 'cpu-hebrew-transcription-insertion', 'encrypted-installed-boot', 'gpu-loader-fault-handling-new-cpu-retry', 'gpu-runtime-failure-cpu-retry', 'installed-payload-integrity', 'local-offline-transcription', 'lock-discards', 'microphone-disconnect-error', 'missing-model-error', 'no-new-avcs', 'recording-status-published', 'recovered-ready', 'selinux-enforcing', 'transcript-log-notification-leak-scan', 'transcript-private-cleanup')), ('recovery', 'small-v2', ('encrypted-installed-boot', 'explicit-service-recovery-ready', 'installed-payload-integrity', 'no-new-avcs', 'selinux-enforcing')), ('recovery', 'turbo-q5-v3', ('encrypted-installed-boot', 'explicit-service-recovery-ready', 'installed-payload-integrity', 'no-new-avcs', 'selinux-enforcing')))
-
-def closed_gate_code(value):
-    if type(value) is not str:
-        return 'unknown'
-    return next((label for label in GATE_FAILURE_CODES if value == label), 'unknown')
-
-def gate_failure_binding_intact():
-    return (Checker is _GATE_CHECKER and validate is _REPORT_VALIDATE
-            and require is _REPORT_REQUIRE and Invalid is _REPORT_INVALID
-            and all(function.__code__ is code and function.__globals__ is namespace
-                    for function, code, namespace in _GATE_FUNCTIONS)
-            and all(namespace.get(name, _GATE_ABSENT) is value for namespace, name, value in _GATE_GLOBALS)
-            and json.dumps is _GATE_SERIALIZER and _GATE_SERIALIZER.__code__ is _GATE_SERIALIZER_CODE
-            and _GATE_SERIALIZER.__globals__ is _GATE_SERIALIZER_GLOBALS
-            and all(Checker.__dict__.get(name) is value for name, value in _GATE_METHODS))
-
-def gate_failure_summary(error, checker, report, declared):
-    """Bind the actual loaded validate throw/caller, then project fixed scalars.
-
-    A scalar is an observation of the owned report, not proof of gate success
-    or of the original exception at an earlier application callsite.
-    """
-    if not gate_failure_binding_intact() or type(error) is not _REPORT_INVALID:
-        return None
-    trace = BaseException.__traceback__.__get__(error)
-    traces, seen = [], set()
-    for _ in range(64):
-        if trace is None:
-            break
-        if id(trace) in seen:
-            return None
-        seen.add(id(trace)); traces.append(trace); trace = trace.tb_next
-    if trace is not None or len(traces) < 3:
-        return None
-    caller, validating, throwing = traces[-3:]
-    if (caller.tb_frame.f_code is not _GATE_VALIDATE_CODE
-        or caller.tb_frame.f_globals is not _GATE_NAMESPACE
-        or caller.tb_frame.f_locals.get('checker') is not checker
-        or caller.tb_frame.f_locals.get('report') is not report
-        or caller.tb_frame.f_locals.get('declared') is not declared
-        or owned_report_guard(validating, throwing) == 'unknown'):
-        return None
-    line = next((line for start, end, line in _GATE_VALIDATE_CODE.co_lines()
-                 if start <= caller.tb_lasti < end), None)
-    if type(line) is not int or type(caller.tb_lineno) is not int or line != caller.tb_lineno:
-        return None
-    if (type(checker) is not _GATE_CHECKER or type(report) is not dict
-        or type(declared) is not dict or checker.__dict__.get('report') is not report
-        or checker.__dict__.get('context') is not declared
-        or report.get('context') is not declared
-        or set(report) != {'schema', 'status', 'release_acceptance', 'context', 'boot_id',
-                          'controller_sha256', 'payload', 'gates', 'samples', 'limitations',
-                          'disk', 'profile', 'hardware'}
-        or report.get('release_acceptance') is not False):
-        return None
-    phase, profile = declared.get('phase'), declared.get('hardware_profile')
-    if type(phase) is not str or type(profile) is not str:
-        return None
-    expected = next((names for p, h, names in GATE_FAILURE_EXPECTED if (p, h) == (phase, profile)), None)
-    if (expected is None or type(checker.__dict__.get('profile_id')) is not str
-        or checker.__dict__['profile_id'] != profile
-        or type(checker.__dict__.get('gates')) is not set
-        or checker.__dict__['gates'] != set(expected)):
-        return None
-    rows = report.get('gates')
-    if type(rows) is not list or len(rows) != len(expected):
-        return None
-    by_id = {}
-    for row in rows:
-        if (type(row) is not dict or set(row) != {'id', 'status', 'evidence_kind', 'code', 'observations'}
-            or any(type(row[key]) is not str for key in ('id', 'status', 'evidence_kind', 'code'))
-            or type(row['observations']) is not dict
-            or not set(row['observations']) <= set(_GATE_OBSERVATION_KEYS)
-            or row['id'] not in expected or row['id'] in by_id
-            or row['status'] not in ('passed', 'failed', 'unrun')
-            or row['evidence_kind'] != next((kind for name, kind in _GATE_KINDS if name == row['id']), None)):
-            return None
-        by_id[row['id']] = dict(id=row['id'], status=row['status'], code=closed_gate_code(row['code']))
-    if set(by_id) != set(expected):
-        return None
-    return dict(schema='arctic-dictation-gate-failure-v1', phase=phase, profile=profile,
-                gates=[by_id[name] for name in expected], release_acceptance=False)
-
-def emit_gate_failure_summary(error, checker, report, declared):
-    try:
-        value = gate_failure_summary(error, checker, report, declared)
-        if value is not None:
-            print('ARCTIC-DICTATION-GATE-SUMMARY ' + json.dumps(value, sort_keys=True), flush=True)
-    except BaseException:
-        pass  # Even a diagnostic cancellation cannot replace the primary throw.
-
-def validate_collected_report(checker, report, declared, fixture_manifest):
-    try:
-        validate(report, declared, fixture_manifest=fixture_manifest)
-    except Invalid as error:
-        emit_gate_failure_summary(error, checker, report, declared)
-        raise  # SAME original validator exception; every acceptance predicate remains.
-# END OWNED_GATE_FAILURE_SUMMARY
 
 def verify_small_cpu_fixture(cpuinfo):
     """Check every declared two-vCPU Small fixture before any application gate.
@@ -614,12 +266,7 @@ def run(argv, timeout=20, check=True, output_role=None):
         code += '-journal-o' + str(len(result.stdout)) + '-e' + str(len(result.stderr))
     require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, code)
     if check:
-        try:
-            require(result.returncode == 0, 'command-failed')
-        except Invalid as error:
-            if type(error) is Invalid and type(result.returncode) is int and -255 <= result.returncode <= 255:
-                error.__dict__['_arctic_dictation_command_exit'] = (_COLLECTOR_COMMAND_TOKEN, result.returncode)
-            raise
+        require(result.returncode == 0, 'command-failed')
     return result
 
 def wait(fn, seconds=20):
@@ -1669,7 +1316,6 @@ class Checker:
         require(not errors, 'owned-cleanup-failed')
 
 def main():
-    global collector_failure_phase
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     if len(sys.argv) == 4 and sys.argv[1] == '_receiver':
         receiver(sys.argv[2], sys.argv[3]); return 0
@@ -1677,10 +1323,8 @@ def main():
     parser.add_argument('stage', choices=('live', 'installed'))
     parser.add_argument('--disposable-guest', action='store_true')
     args = parser.parse_args()
-    collector_failure_phase = 'arguments'
     require(args.disposable_guest and os.geteuid() == 0, 'explicit-root-disposable-guest-required')
     require(HERE == DATA / 'dictation-qualification', 'reviewed-test-cd-location-required')
-    collector_failure_phase = 'boot-context'
     require(run(['systemd-detect-virt']).stdout.strip() in (b'qemu', b'kvm'), 'qemu-kvm-guest-required')
     live = 'rd.live.image' in Path('/proc/cmdline').read_text().split()
     require(live == (args.stage == 'live'), 'actual-boot-stage-mismatch')
@@ -1688,7 +1332,6 @@ def main():
     if live:
         declared = dict(declared, phase='live')
     require((declared['phase'] == 'live') == live, 'context-boot-stage-mismatch')
-    collector_failure_phase = 'source-pins'
     for path, key in ((HERE / 'guest_check.py', 'checker_sha256'), (HERE / 'contract.py', 'contract_sha256'),
                       (DATA / 'dictation-accuracy/accuracy.py', 'accuracy_sha256'),
                       (DATA / 'dictation-accuracy/pins.json', 'pins_sha256'), (CONTROLLER, 'controller_sha256'),
@@ -1696,24 +1339,16 @@ def main():
         if path in (CONTROLLER, CHILD_EXEC):
             owned_file(path)
         require(sha(path) == declared[key], 'reviewed-source-hash-mismatch')
-    collector_failure_phase = 'checker-init'
     checker = Checker(declared)
     report = checker.report
     try:
-        collector_failure_phase = 'execute'
         report = checker.execute()
-    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
-        emit_collector_failure(error)
+    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
         pass
-    except Exception as error:
-        emit_collector_failure(error)
-        raise  # Preserve the same previously unhandled failure before cleanup.
     finally:
         try:
-            collector_failure_phase = 'owned-cleanup'
             checker.close()
-        except (OSError, Invalid, subprocess.TimeoutExpired) as error:
-            emit_collector_failure(error)
+        except (OSError, Invalid, subprocess.TimeoutExpired):
             report = checker.report
             failed_gate = 'transcript-private-cleanup' if 'transcript-private-cleanup' in checker.gates else 'no-new-avcs'
             for gate in report['gates']:
@@ -1724,43 +1359,13 @@ def main():
         report['gates'].append({'id': name, 'status': 'unrun', 'evidence_kind': EXPECTED_KINDS[name],
                                'code': 'prerequisite-or-collector-failed', 'observations': {}})
     report['status'] = 'passed' if all(g['status'] == 'passed' for g in report['gates']) else 'failed'
-    collector_failure_phase = 'report-validation'
-    validate_collected_report(checker, report, declared, DATA / 'dictation-fixtures/fixtures.json')
-    collector_failure_phase = 'report-emission'
+    validate(report, declared, fixture_manifest=DATA / 'dictation-fixtures/fixtures.json')
     print('ARCTIC-DICTATION-QUALIFICATION ' + json.dumps(report, sort_keys=True), flush=True)
     return int(report['status'] != 'passed')
-
-# BEGIN OWNED_GATE_FAILURE_BINDING
-# Capture the actual loaded functions, globals and class entries once. Foreign
-# lookalike CodeTypes/globals and later substitutions cannot emit a summary.
-_GATE_CHECKER = Checker
-_GATE_NAMESPACE = globals()
-_GATE_VALIDATE_CODE = validate_collected_report.__code__
-_GATE_METHODS = tuple((name, value) for name, value in Checker.__dict__.items()
-                      if isinstance(value, (type(main), staticmethod)))
-_GATE_FUNCTIONS = tuple((function, function.__code__, function.__globals__)
-    for function in tuple(value for value in globals().values()
-                          if type(value) is type(main) and value.__globals__ is globals())
-    + tuple(value.__func__ if isinstance(value, staticmethod) else value
-            for _, value in _GATE_METHODS))
-_GATE_ABSENT = object()
-_GATE_SERIALIZER = json.dumps
-_GATE_SERIALIZER_CODE = json.dumps.__code__
-_GATE_SERIALIZER_GLOBALS = json.dumps.__globals__
-_GATE_GLOBALS = tuple((namespace, name, namespace.get(name, _GATE_ABSENT))
-    for _, code, namespace in _GATE_FUNCTIONS for name in code.co_names
-    if not name.startswith('_GATE_') and name != 'collector_failure_phase')
-_GATE_KINDS = tuple(sorted(EXPECTED_KINDS.items()))
-_GATE_OBSERVATION_KEYS = tuple(sorted(_REPORT_GLOBALS['OBSERVATIONS']))
-# END OWNED_GATE_FAILURE_BINDING
 
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
-        emit_collector_failure(error)
+    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
         print('ARCTIC-DICTATION-COLLECTOR-ERROR {"code":"collector-guard-or-setup-failed","release_acceptance":false}', flush=True)
         sys.exit(1)
-    except Exception as error:
-        emit_collector_failure(error)
-        raise  # Original exception, traceback and nonzero outcome stay private.

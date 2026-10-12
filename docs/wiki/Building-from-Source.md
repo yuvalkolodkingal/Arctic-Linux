@@ -69,9 +69,9 @@ The packages it builds:
 
 | Package | What it installs |
 |---|---|
-| `arctic-release` | os-release ("Arctic Linux 0.2 (Fedora 44 base)"), dnf and systemd presets, the Arctic package repository (stable on, testing off) and its key; replaces `fedora-release` |
+| `arctic-release` | Current Arctic os-release (Fedora 44 base), dnf and systemd presets, the Arctic package repository (stable on, testing off) and its key; replaces `fedora-release` |
 | `arctic-logos` | The fox mark under the names Fedora's logo packages use |
-| `arctic-backgrounds` | The six wallpapers, SVG and 3840×2160 PNG |
+| `arctic-backgrounds` | Twenty-eight credited photo masters and metadata, plus compatibility backgrounds for existing illustrated choices |
 | `arctic-fonts` | Figtree |
 | `arctic-selinux` | SELinux file contexts for `/nix` |
 | `arctic-desktop-config` | `/etc/skel`, the Mango configuration, the themes, the `arctic-*` commands, `arctic-firstboot`, the theme engine (`arctic-themegen`) and theme hooks, automatic updates and snapper's snapshots around dnf transactions, the app-theming defaults (dconf, Flatpak) |
@@ -95,13 +95,15 @@ Builds the live ISO with kiwi-ng from `iso/kiwi/` in a privileged Fedora 44 cont
 Fedora 44 + updates and the local repository from `build-rpms.sh`.
 
 ```sh
-tools/build-iso.sh                        # → out/iso/Arctic-Linux-1.1-x86_64.iso (+ .sha256)
+tools/build-iso.sh                        # → out/iso/Arctic-Linux-1.2-x86_64.iso (+ .sha256)
 tools/build-iso.sh --repo DIR             # the local RPM repository (default out/repo)
 tools/build-iso.sh --work DIR             # kiwi scratch space (default out/kiwi-work, ~15 GB)
 tools/build-iso.sh --keep-work            # keep the scratch space afterwards
 tools/build-iso.sh --cache DIR            # keep kiwi's package cache between builds
 tools/build-iso.sh --out DIR              # output directory (default out/iso)
-tools/build-iso.sh --zen auto|yes|no      # preinstall Zen Browser (default auto)
+tools/build-iso.sh --zen no|auto|yes      # optional Zen Browser (default no)
+tools/build-iso.sh --name Arctic-candidate.iso  # distinct artifact filename
+tools/build-iso.sh --max-bytes 2000000000 --preferred-max-bytes 1600000000
 tools/build-iso.sh --create-only          # reuse a kept image root, only run the create step
 tools/build-iso.sh --debug                # kiwi --debug
 ```
@@ -109,7 +111,9 @@ tools/build-iso.sh --debug                # kiwi --debug
 It runs `kiwi-ng system prepare` (packages and `iso/kiwi/config.sh`), then `kiwi-ng system
 create`. GNOME Web, Foot, PCManFM with XArchiver, Celluloid, FeatherPad, Fish and Nano are
 included natively. `--zen yes` additionally preloads optional Zen from Flathub; `--zen auto`
-tolerates its download failure. A size miss never removes apps or triggers another build.
+tolerates its download failure. A size miss never removes apps or triggers another build. Keep the oversized artifact for
+review; it fails the requested size gate. The replacement release ceiling is strictly below
+**2,000,000,000 decimal bytes**, with a preference below **1,600,000,000 bytes**.
 
 Output in `out/iso/`: the ISO, its `.sha256`, the package list (`.packages`) and `.build-info`,
 which records `default_browser=gnome-web` and `zen_preinstalled=1` or `0`. The full RPM
@@ -246,7 +250,7 @@ development branch publish testing through `repo-testing.yml`, which starts `rep
 for the pushed commit once no other publish is running or waiting (the `github-pages` environment
 only lets `main` deploy, and a new waiting run would replace a waiting stable one). It fails
 straight away, saying what to change, when GitHub Pages isn't set to **GitHub Actions** (Settings
-→ Pages). Every push to `main` is a new Release of every Arctic package, so it is a full (small)
+→ Pages). Every push to `main` is a new Release of every Arctic package, so it is an
 Arctic update for every stable system. To try the tooling locally without a key:
 
 ```sh
@@ -260,14 +264,25 @@ repository.
 
 ### Making a release
 
-Push a tag that starts with `v`, for example `v0.2.0`. `iso.yml` builds everything and creates the
-release **Arctic Linux 0.2.0** with the ISO and its `.sha256`, and writes release notes that say
-which apps are preinstalled. If the ISO is larger than 2 GiB, it's split into `.partNN` files with
-instructions for joining them.
+Start with an **artifact-only candidate**: run ISO manually with **release** off and record its
+exact source, ISO SHA-256, byte size, package inventory and test evidence. `iso.yml` can run boot,
+Nix and paired-performance lanes; their results must be inspected. A green source build or a
+successful screenshot collection is not enough.
 
-Running `iso.yml` by hand (**Actions → ISO → Run workflow**) builds the ISO as an artifact.
-Tick **release** to also publish a prerelease (tag `v0.2.0-build.<run number>` unless you give
-one), and untick **boot_test** to skip the QEMU boot.
+Before publishing a replacement, complete [the release reliability checks](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/RELEASE-RELIABILITY.md):
+real live/installed boots, installation and recovery, networking, apps/media, SELinux/security,
+Nix, signed stable update plus reboot, online/offline dictation, and the required precise paired
+measurements. Preserve failed and unrun results. The final ISO must be **strictly below
+2,000,000,000 bytes**; regression thresholds and precision requirements are not waived for size.
+
+Tags beginning with `v` or an explicitly enabled manual release use the publishing path. Release
+requests always run the workflow's boot checks and require enabled signed Arctic repositories;
+that workflow gating does not substitute for the complete qualification record. The final
+notes must identify the exact candidate and disclose measured limitations.
+
+The public **v1.2.0** image remains an immutable older, two-part download. The new replacement is
+still under qualification and has no final download, checksum or release claim. Do not replace
+its documentation with guessed future asset links.
 
 ### Publishing the wiki
 
