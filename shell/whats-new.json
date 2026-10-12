@@ -1,13 +1,13 @@
 {
-  "version": "0.3",
-  "title": "What’s new in Arctic Linux 0.3",
+  "schema": 1,
+  "update_id": "2026.10.12-1",
+  "title": "What’s new in Arctic Linux",
   "items": [
-    {"icon": "moon", "title": "Night light and keep awake", "text": "Warmer colours in the evening (Super + Ctrl + N), and no lock or sleep while you present (Super + Ctrl + I)."},
-    {"icon": "document", "title": "Printing, scanning and USB drives", "text": "Printers and scanners work without drivers, and USB drives open by themselves. Settings → Printers and scanners."},
-    {"icon": "download", "title": "Every app kept up to date", "text": "Flatpak apps are updated every day, firmware updates are offered, and you can undo an update from Settings → Updates."},
-    {"icon": "sparkle", "title": "Screens and the lid", "text": "Super + P duplicates or extends your screen; closing the lid with a monitor plugged in keeps working."},
-    {"icon": "sliders", "title": "More in Settings", "text": "Date and time, Sharing, Users and sign-in, and apps that start on login."},
-    {"icon": "sliders", "title": "The command menu and a smarter launcher", "text": "Super + Alt + Space: every system action in one keyboard menu. The launcher finds settings, windows and files too; ? searches the web."}
+    {"icon": "microphone", "title": "Local dictation", "text": "Set up private on-device Hebrew and English dictation in Settings. Audio stays on this computer."},
+    {"icon": "image", "title": "A growing photo collection", "text": "Arctic’s photo wallpapers now replace the old stock backgrounds, while your own wallpaper choice stays yours."},
+    {"icon": "folder", "title": "Lighter everyday apps", "text": "Epiphany, Foot, PCManFM, XArchiver, Celluloid and FeatherPad keep the default desktop quick and focused."},
+    {"icon": "download", "title": "Updates you can trust", "text": "Update checks report repository failures clearly, keep valid queued downloads, and retain signed stable repositories."},
+    {"icon": "sparkle", "title": "Desktop polish", "text": "The bar, lock screen, battery-full icon, wallpaper controls and app menus have received reliability and visual fixes."}
   ],
   "notes_url": "https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Release-Notes"
 }

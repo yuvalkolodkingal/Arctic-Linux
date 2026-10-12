@@ -251,9 +251,10 @@ for `dnf5 offline reboot`.
 
 ## What's new
 
-The first time you log in after an update brings a new Arctic Linux release (0.2 → 0.3, say), a
-card says what's new in it, with **Read the release notes**. It shows once; `arctic-shell-ipc
-whatsnew open` shows it again. The card's text is `/usr/share/arctic/shell/whats-new.json`.
+The first time you log in after each Arctic update, a card says what changed, with **Read the
+release notes**. Each packaged update has a unique note ID, so every update's card shows once per
+account; a brand-new account gets the welcome card instead. `arctic-shell-ipc whatsnew open`
+shows the current card again. Its text is `/usr/share/arctic/shell/whats-new.json`.
 
 ## Flatpak apps, firmware and Nix
 
