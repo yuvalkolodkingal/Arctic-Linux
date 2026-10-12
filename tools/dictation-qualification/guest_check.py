@@ -79,13 +79,23 @@ def mark_collector_setup(stage):
 
 
 def collector_diagnostic_code(stage, error):
-    """Project setup failures to a finite code without reading exception payloads."""
+    """Project setup failures using only built-in type metadata and identity."""
     require(type(stage) is str and stage in COLLECTOR_SETUP_STAGES,
             'unknown-collector-setup-stage')
+    # isinstance() may consult a hostile exception instance's __class__ when
+    # an earlier candidate does not match. Read the actual type's MRO through
+    # type's built-in descriptor so no foreign instance or metaclass accessor,
+    # payload, equality, text or representation can run.
+    try:
+        bases = type.__getattribute__(type(error), '__mro__')
+    except BaseException:
+        return 'collector-unknown'
+    if type(bases) is not tuple:
+        return 'collector-unknown'
     for error_class, label in COLLECTOR_ERROR_TYPES:
-        if isinstance(error, error_class):
+        if any(base is error_class for base in bases):
             return 'collector-' + stage + '-' + label
-    raise Invalid('unknown-collector-setup-error-type')
+    return 'collector-unknown'
 
 def verify_small_cpu_fixture(cpuinfo):
     """Check every declared two-vCPU Small fixture before any application gate.
