@@ -1,0 +1,23 @@
+name: Compute frozen performance observer digest
+
+on:
+  push:
+    branches: [codex/observer-digest-20261012]
+    paths: [.github/workflows/observer-digest-20261012.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Reconstruct frozen observer without executing guest sources
+        run: |
+          python3 -B tools/performance/compose-paired-probe.py /tmp/frozen-observer.py
+          sha256sum /tmp/frozen-observer.py
+          wc -c /tmp/frozen-observer.py
