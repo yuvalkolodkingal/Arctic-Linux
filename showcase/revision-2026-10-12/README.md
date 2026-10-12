@@ -8,15 +8,15 @@ rendered and checked.
   marks screens that must be refreshed before rendering. Future paths name intended captures,
   rather than asserting those files exist or passed review.
 - Voice: ElevenLabs River (`SAz9YHcvj6GT2YYXdXww`), `eleven_multilingual_v2`, English.
-  The two completed primary clips have reported durations of 236.80 and 278.45 seconds
-  (515.25 seconds before replacing one paragraph). Their exact boundary is after `files`;
-  the second clip begins with `terminal`.
-- The completed 12.86-second `winter` replacement says “the project's growing photo collection.”
-  Use that paragraph in place of the earlier 19-photo wording. Final duration is pending
-  downloaded media and boundary measurement.
+  Three source generations were each run once. `voice-timing.json` records their complete
+  session and generation IDs, byte sizes, measured durations and SHA-256 checksums.
+- The measured master is 507.559184 seconds and 12,182,090 bytes. Its SHA-256 is
+  `d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb`.
+  The corrected `winter` paragraph replaces the earlier hard-coded 19-photo wording.
 - `scene-narration.json` contains the spoken text for each scene. `narration.txt` is the same
   text in reading order. `caption-text.json` supplies sentence text with deliberately unset
-  times; `voice-timing.json` records the known generation metadata and remaining work.
+  times. Sentence alignment, captions and scene timing still require verification against the
+  measured River master before rendering.
 - Keep `../DESIGN.md` colours, fonts, restrained motion and readable screens. The installer
   uses labelled demo screens; combined app captures retain their composed-layout disclosure.
   No continuous installation or newly qualified release is claimed.
