@@ -7,12 +7,12 @@
     "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
     "tools/native-functional/apps.py": "94e8806225c09772edc4e7836973d2e73cf9121206e69b082e1a0d7d35703a0f",
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
-    "tools/native-functional/evidence.py": "8c3b808728c4e6f4ac936815099583c73197a2101289bfc25ce1a4afc4e20e22",
+    "tools/native-functional/evidence.py": "dd47ef1bc23a2dd088522fbef7c0d98438785057074795681a414dccff482df4",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
     "tools/native-functional/runner.py": "1b203bea39e94a8befb344cf0e9cc6c20619fe69af848e95f2c160bfa2117932",
     "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
-    "tools/native-functional/source-provenance.json": "efb17509b07da1c927f674b813878cba91ac901d21bfc84c5b814ffb928f1654",
+    "tools/native-functional/source-provenance.json": "72fff5ae87ad84065d812c7c4a6371b1ec254ef291d42f7f34d8dffbb241052b",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "be332f829fb35a09d42c8b1cbfd94df214ac1a87f10dcec0328dc19de77a346d",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
@@ -21,17 +21,15 @@
     "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
   },
   "image": {
-    "archive_bytes": 1934873501,
-    "archive_sha256": "850a6225801cdd84316b883d0e50633966bf5490e1cf5be21e01e9d3001f77a2",
-    "artifact_id": 11756279802,
-    "bytes": 1934686208,
-    "name": "Arctic-Linux-1.2-candidate-38264550818-1-x86_64.iso",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "8ca97cd9aecb51c3fdc9401229acf859318eaad9ec872cb32d61edb9697566b9",
-    "run_id": 38264550818,
-    "sha256": "df261c33bb782f4c0e5f4f6d742f2068cd018a98467fe325b6d41fe72dabef4f",
-    "source_sha": "134af2249b3c5d80448208d978ccb1ef238729f5"
+    "archive_bytes": 1929415684,
+    "archive_sha256": "1b3267d5b7e0fc3b7980f77a3e72345f6ad3061de47a2a3006fcd2c84cb59dee",
+    "artifact_id": 11604221573,
+    "bytes": 1929230336,
+    "name": "Arctic-Linux-1.2-candidate-37903438836-1-x86_64.iso",
+    "run_id": 37903438836,
+    "sha256": "73a95290df7df8d1b4d47c90767e1e231cb340864ed3b3478dde2176b7bfb9c0",
+    "source_sha": "e2a62bb8945f7fe9975cb862986af4dd2be0873d"
   },
-  "ready": true,
+  "ready": false,
   "release_acceptance": false
 }
