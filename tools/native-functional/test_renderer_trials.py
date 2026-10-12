@@ -20,7 +20,7 @@ import zlib
 HERE=Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('renderer_trials_tested',HERE/'native_smoke.py')
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
-BASE_NATIVE_SHA='a9bed2b6f2cb71ffe944c60d0527c8bd14180a98cdccd31961574b911dfc82f9'
+BASE_NATIVE_SHA='dc3cd7a6c17ee6ad9f456b4344b8b272ebffd52b6426cd087d848d4b603dafd6'
 
 
 def renderer_line(name=b'GskGLRenderer',surface=b'GdkWaylandToplevel'):
