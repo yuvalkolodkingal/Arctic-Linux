@@ -27,7 +27,7 @@ def media_duration(path: Path) -> float:
     with av.open(str(path)) as container:
         if container.duration is None:
             raise SystemExit("audio container has no measured duration")
-        return float(container.duration * av.time_base)
+        return float(container.duration / av.time_base)
 
 
 def edit_distance(reference: list[str], hypothesis: list[str]) -> int:
