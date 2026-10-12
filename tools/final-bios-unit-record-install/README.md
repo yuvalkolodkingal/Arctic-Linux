@@ -1,0 +1,3 @@
+Fresh disabled exact-image BIOS diagnostic preparation based on bc938f05b2e484b9f40dd6e5545157f699f2fd19. Thirteen ADD-only paths preserve that whole tree. The only workload observation is a default-off finite projection on the already rejected, same owned source-view Match.
+
+It publishes only a closed source-member ID, the repository-attested XDG autostart unit-family ID, one of five fixed whole-record-family IDs and two booleans. It publishes no matched value, digest, length, numeric field, description or excerpt. The scanner, rejection, encrypted installation, security/privacy oracles and 2400/6600 second limits are unchanged. Runtime cause and release acceptance remain false. This lane cannot qualify a release.
