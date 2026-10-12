@@ -101,18 +101,55 @@
     "source_media_checksums_verified": true,
     "old_19_photo_winter_wording_removed_by_measured_cut": true,
     "corrected_winter_text_present_in_replacement_source": true,
-    "sentence_alignment_available": false,
-    "scene_timing_available": false,
-    "local_speech_to_text_verification": "pending_execution_environment",
-    "transcript_leakage_review": "pending",
+    "sentence_alignment_available": true,
+    "scene_timing_available": true,
+    "local_speech_to_text_verification": "passed",
+    "transcript_leakage_review": "passed_for_verifier_logs",
     "authentic_capture_review": "in_progress",
     "render_verified": false,
-    "public_video_published": false
+    "public_video_published": false,
+    "whisper_metrics": {
+      "audio_duration_seconds": 507.512041,
+      "model": "base.en",
+      "detected_language": "en",
+      "detected_language_probability": 1,
+      "expected_words": 1355,
+      "asr_words": 1363,
+      "edit_distance": 56,
+      "word_error_rate": 0.041328,
+      "sequence_ratio": 0.967623,
+      "exact_token_coverage": 0.97048,
+      "corrected_winter_phrase_token_coverage": 1,
+      "banned_old_phrase_detected": false,
+      "caption_cues": 128,
+      "scenes": 38,
+      "transcript_in_ci_log": false
+    },
+    "verifier_versions": {
+      "python": "3.12.15",
+      "faster-whisper": "1.2.1",
+      "av": "16.0.1",
+      "ctranslate2": "4.8.2",
+      "huggingface-hub": "2.2.0",
+      "tokenizers": "0.23.3",
+      "preflight_seconds": 1,
+      "preflight_segments": 1,
+      "preflight_words": 3,
+      "transcript_in_ci_log": false
+    },
+    "workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545",
+    "alignment_artifact": {
+      "id": 11769902895,
+      "name": "showcase-river-whisper-alignment",
+      "bytes": 44296,
+      "sha256": "81ffcd41f208a37daaff453f1054edea5f22ca86ec6895b6ea22855148a08c96"
+    }
   },
   "generated_audio_binaries_committed": false,
   "notes": [
     "Signed provider download URLs are intentionally excluded from source control.",
     "Do not rerun the three nodes unless a named segment is proven unusable.",
-    "The 3 October showcase remains public until refreshed captures, alignment, HyperFrames checks, and final media validation pass."
+    "The 3 October showcase remains public until refreshed captures, alignment, HyperFrames checks, and final media validation pass.",
+    "The private workflow artifact contains the ASR transcript and word timestamps; those text-bearing files are intentionally not committed."
   ]
 }
