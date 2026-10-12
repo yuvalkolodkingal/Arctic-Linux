@@ -45,6 +45,14 @@ jobs:
             "$MASTER_URL"
           printf '%s  %s\n' "$MASTER_SHA256" \
             showcase/revision-2026-10-12/work/narration-river-final.mp3 | sha256sum --check -
+          python - <<'PY'
+          import av
+          path = "showcase/revision-2026-10-12/work/narration-river-final.mp3"
+          with av.open(path) as container:
+              measured = float(container.duration / av.time_base)
+          assert abs(measured - 507.559184) <= 0.08, measured
+          print(f"measured_duration_seconds={measured:.6f}")
+          PY
 
       - name: Run local Whisper verification and alignment
         run: |
