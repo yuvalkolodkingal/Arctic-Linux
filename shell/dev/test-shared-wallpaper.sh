@@ -74,6 +74,71 @@ shot() {
   grim -o HEADLESS-2 "$OUT/$1-portrait.png"
 }
 shot sddm-a
+# Require the compositor's real startup focus to belong to exactly one greeter
+# surface, then inspect and type on that same output. Do not submit the login.
+swaymsg -t get_tree -r >"$OUT/sddm-startup-tree.json"
+read -r greeter_con greeter_output greeter_suffix < <(python3 - "$OUT/sddm-startup-tree.json" "$greeter" <<'PY'
+import json
+import sys
+root = json.load(open(sys.argv[1]))
+target = int(sys.argv[2])
+owned = []
+focused = []
+stack = [(root, None)]
+while stack:
+    node, output = stack.pop()
+    if node.get('type') == 'output':
+        output = node.get('name')
+    if node.get('pid') == target:
+        owned.append((node.get('id'), output, bool(node.get('focused'))))
+    if node.get('focused'):
+        focused.append((node.get('id'), node.get('pid'), output))
+    stack.extend((child, output) for child in node.get('nodes', []))
+    stack.extend((child, output) for child in node.get('floating_nodes', []))
+assert sorted(output for _node_id, output, _focused in owned) == ['HEADLESS-1', 'HEADLESS-2'], owned
+assert len(focused) == 1 and focused[0][1] == target, focused
+node_id, _pid, output = focused[0]
+assert output in {'HEADLESS-1', 'HEADLESS-2'}, focused
+suffix = 'landscape' if output == 'HEADLESS-1' else 'portrait'
+print(node_id, output, suffix)
+PY
+)
+sleep 1
+shot sddm-password-focused
+# Keep the owned virtual keyboard alive through the capture: destroying it can
+# deactivate the QML window and hide the focus ring before grim samples it.
+wtype -s 80 abc -s 3000 &
+wtype_pid=$!
+sleep 1
+swaymsg -t get_tree -r >"$OUT/sddm-input-tree.json"
+python3 - "$OUT/sddm-input-tree.json" "$greeter_con" "$greeter" "$greeter_output" <<'PY'
+import json
+import sys
+root = json.load(open(sys.argv[1]))
+expected = (int(sys.argv[2]), int(sys.argv[3]), sys.argv[4])
+focused = []
+stack = [(root, None)]
+while stack:
+    node, output = stack.pop()
+    if node.get('type') == 'output':
+        output = node.get('name')
+    if node.get('focused'):
+        focused.append((node.get('id'), node.get('pid'), output))
+    stack.extend((child, output) for child in node.get('nodes', []))
+    stack.extend((child, output) for child in node.get('floating_nodes', []))
+assert focused == [expected], f'unexpected focused surface during input: {focused}'
+PY
+shot sddm-typed
+wait "$wtype_pid"
+python3 - "$REPO" "$OUT/sddm-password-focused-$greeter_suffix.png" "$OUT/sddm-typed-$greeter_suffix.png" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('vmtest', Path(sys.argv[1]) / 'tools/lib/vmtest.py')
+vmtest = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(vmtest)
+assert vmtest.login_password_changed(sys.argv[2], sys.argv[3]), 'physical input did not change password ROI'
+PY
 arctic-login-wallpaper set "$WORK/pictures/b.png" >"$OUT/separate-b.json"
 sleep 6
 shot sddm-b

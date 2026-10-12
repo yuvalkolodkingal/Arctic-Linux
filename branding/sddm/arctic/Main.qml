@@ -46,6 +46,14 @@ Rectangle {
     Component.onCompleted: {
         Theme.dark = config.stringValue("colorScheme") !== "winter"
         Theme.reduceMotion = reduceMotion
+        // TextField is a wrapper Item. Defer until SDDM has applied its initial
+        // focus, then focus the real editable control for the installed user.
+        Qt.callLater(function() {
+            if (testMode || !typedUser)
+                passwordField.input.forceActiveFocus()
+            else
+                userField.input.forceActiveFocus()
+        })
     }
 
     // ---- fonts (bundled; Figtree + JetBrains Mono, SIL OFL) -------------------
@@ -357,7 +365,6 @@ Rectangle {
                     placeholder: qsTr("Password")
                     error: root.failed
                     enabled: !root.busy
-                    focus: true
                     onAccepted: root.login()
                     onTextChanged: if (text.length > 0) { root.failed = false; root.message = "" }
 
@@ -563,13 +570,5 @@ Rectangle {
                 Keys.onBacktabPressed: root.moveFocus(powerButton, -1)
             }
         }
-    }
-
-    // Focus the password field once the window is up (SDDM activates the
-    // primary screen's window).
-    Timer {
-        interval: 0
-        running: primaryScreen
-        onTriggered: (root.typedUser ? userField.input : passwordField.input).forceActiveFocus()
     }
 }

@@ -22,6 +22,13 @@ class ScreenDetectionTests(unittest.TestCase):
         image.save(self.path)
         return vmtest.classify(self.path)
 
+    def password_changed(self, before, after):
+        before_path = self.path.with_name('before.png')
+        after_path = self.path.with_name('after.png')
+        before.save(before_path)
+        after.save(after_path)
+        return vmtest.login_password_changed(before_path, after_path)
+
     def login(self, warm=False, scale=1):
         # Original, unretouched password/button pixels from the retained candidate
         # capture, crop (479,478,797,526), excluding the avatar and test user's name.
@@ -81,6 +88,30 @@ class ScreenDetectionTests(unittest.TestCase):
     def test_dark_and_missing_screens(self):
         self.assertEqual(self.classify(Image.new('RGB', (1280, 800))), 'dark')
         self.assertEqual(vmtest.classify(self.path.with_name('absent.png')), 'none')
+
+    def test_password_roi_detects_bounded_bullet_change(self):
+        before = self.login()
+        after = before.copy()
+        draw = ImageDraw.Draw(after)
+        for x in (550, 565, 580):
+            draw.ellipse((x, 496, x + 7, 503), fill=(235, 238, 242))
+        self.assertTrue(self.password_changed(before, after))
+
+    def test_identical_password_roi_is_rejected(self):
+        before = self.login()
+        self.assertFalse(self.password_changed(before, before.copy()))
+
+    def test_change_outside_password_roi_is_rejected(self):
+        before = self.login()
+        after = before.copy()
+        ImageDraw.Draw(after).rectangle((20, 20, 300, 100), fill=(255, 255, 255))
+        self.assertFalse(self.password_changed(before, after))
+
+    def test_password_change_requires_login_geometry_in_both_frames(self):
+        before = self.login()
+        after = before.copy()
+        ImageDraw.Draw(after).rectangle((752, 480, 795, 523), fill=(24, 28, 34))
+        self.assertFalse(self.password_changed(before, after))
 
 
 if __name__ == '__main__':
