@@ -1,0 +1,91 @@
+name: Verify River showcase master
+
+on:
+  push:
+    branches:
+      - codex/showcase-river-production
+    paths:
+      - .github/workflows/showcase-river-verify.yml
+      - showcase/revision-2026-10-12/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: showcase-river-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  whisper-alignment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHONUNBUFFERED: "1"
+      HF_HUB_DISABLE_PROGRESS_BARS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pinned verifier
+        run: |
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+
+      - name: Download and verify River master
+        env:
+          MASTER_URL: https://backend.composio.dev/api/v3/sl/6WIFgqyMBd
+          MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
+        run: |
+          mkdir -p showcase/revision-2026-10-12/work
+          curl --fail --location --silent --show-error --retry 4 \
+            --output showcase/revision-2026-10-12/work/narration-river-final.mp3 \
+            "$MASTER_URL"
+          printf '%s  %s\n' "$MASTER_SHA256" \
+            showcase/revision-2026-10-12/work/narration-river-final.mp3 | sha256sum --check -
+
+      - name: Run local Whisper verification and alignment
+        run: |
+          python showcase/revision-2026-10-12/align-river.py \
+            --audio showcase/revision-2026-10-12/work/narration-river-final.mp3 \
+            --captions showcase/revision-2026-10-12/caption-text.json \
+            --storyboard showcase/revision-2026-10-12/storyboard.json \
+            --output showcase/revision-2026-10-12/work/aligned \
+            --model base.en \
+            > showcase/revision-2026-10-12/work/verification-summary.json
+
+      - name: Verify log-safe outputs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("showcase/revision-2026-10-12/work")
+          report = json.loads((root / "aligned/whisper-verification.json").read_text())
+          summary = json.loads((root / "verification-summary.json").read_text())
+          assert report == summary
+          assert report["transcript_in_ci_log"] is False
+          assert report["caption_cues"] == 128
+          assert report["scenes"] == 38
+          assert not report["banned_old_phrase_detected"]
+          assert (root / "aligned/whisper-transcript.txt").stat().st_size > 1000
+          print(json.dumps(report, sort_keys=True))
+          PY
+
+      - name: Upload alignment evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: showcase-river-whisper-alignment
+          path: |
+            showcase/revision-2026-10-12/work/aligned/timing.json
+            showcase/revision-2026-10-12/work/aligned/caption-text-aligned.json
+            showcase/revision-2026-10-12/work/aligned/captions.srt
+            showcase/revision-2026-10-12/work/aligned/captions.vtt
+            showcase/revision-2026-10-12/work/aligned/chapters.txt
+            showcase/revision-2026-10-12/work/aligned/whisper-verification.json
+            showcase/revision-2026-10-12/work/aligned/whisper-transcript.txt
+            showcase/revision-2026-10-12/work/aligned/whisper-words.json
+          if-no-files-found: error
+          retention-days: 30
