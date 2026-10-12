@@ -1522,8 +1522,6 @@ class Smoke:
             after=self.alive(player)
             monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
             self.trace('visual-capture-after',player=player,client=after,monitors=monitors_after,attempt=attempt)
-            if getattr(self,'gui_v6',False):
-                self.fullscreen_capture_pair(player,client,after,screenshot)
             monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
             require(all(after.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
                     and geometry_after==geometry and crop_after==crop
@@ -1545,6 +1543,8 @@ class Smoke:
                 actual_rgb_sha256=digest(rgb),oracle=oracle,playback_time_seconds=attempt_time,
                 owned_identity_geometry_unchanged=True))
             if oracle.get('status')=='matched': break
+        if getattr(self,'gui_v6',False):
+            self.fullscreen_capture_pair(player,client,after,screenshot)
         info=dict(player=player,player_state=state,client_before=client,client_after=after,monitors=monitors,monitors_after=monitors_after,screenshot=screenshot,
                   fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),actual_rgb_sha256=digest(rgb),
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
