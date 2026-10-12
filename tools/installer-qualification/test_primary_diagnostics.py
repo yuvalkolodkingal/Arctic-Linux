@@ -2,6 +2,7 @@
 import ast
 import contextlib
 import copy
+import dis
 import importlib.util
 import io
 import json
@@ -22,6 +23,9 @@ spec.loader.exec_module(A)
 spec = importlib.util.spec_from_file_location('primary_private_scanner', Path(__file__).parent.parent / 'native-functional/screen-evidence.py')
 S = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(S)
+spec = importlib.util.spec_from_file_location('primary_native_security', Path(__file__).parent.parent / 'native-functional/native_smoke.py')
+N = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(N)
 PRIVATE = 'password=private-account; Transcript: private-audio; תמלול: private-hebrew'
 
 
@@ -107,6 +111,81 @@ class PrimaryControls(unittest.TestCase):
             self.assertIn('[phase=unknown;', masked)
             self.assertNotIn('private', masked)
 
+    @staticmethod
+    def security_error(call):
+        try:
+            call()
+        except BaseException as error:
+            return error
+        raise AssertionError('security control did not fail')
+
+    def test_security_diagnostic_uses_only_reviewed_source_call_sites(self):
+        clean = dict(selinux='Enforcing', audit=dict(enabled=1, lost=0))
+        cases = (
+            ('security-finish-verify-selinux',
+             lambda: N.verify_security(dict(selinux='Permissive', audit=clean['audit']), clean, '')),
+            ('security-finish-verify-audit-mode',
+             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=0, lost=0)), '')),
+            ('security-finish-verify-audit-lost',
+             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=1, lost=1)), '')),
+            ('security-finish-verify-avc',
+             lambda: N.verify_security(clean, clean, 'type=AVC password=' + PRIVATE)),
+            ('security-finish-audit-status-enabled', lambda: N.parse_audit_status('lost 0')),
+            ('security-finish-audit-status-lost', lambda: N.parse_audit_status('enabled 1')),
+        )
+        for expected, call in cases:
+            with self.subTest(expected=expected):
+                error = self.security_error(call)
+                label = G.security_interval_diagnostic(error, N)
+                self.assertEqual(label, expected)
+                masked = G.masked_active_error(error, label)
+                self.assertNotIn(PRIVATE, masked)
+                self.assertIn('phase=' + expected, masked)
+        functions = {function.__qualname__: function for function in
+                     (N.parse_audit_status, N.verify_security, N.SecurityInterval.state, N.SecurityInterval.finish)}
+        for (qualname, offset), label in G.SECURITY_DIAGNOSTIC_SITES.items():
+            with self.subTest(label=label):
+                self.assertIn(functions[qualname].__code__.co_firstlineno + offset,
+                              {line for _, line in dis.findlinestarts(functions[qualname].__code__)})
+                self.assertRegex(label, r'^security-finish-[a-z0-9]+(?:-[a-z0-9]+)*$')
+
+    def test_security_diagnostic_separates_journal_decode_without_exporting_payload(self):
+        interval = N.SecurityInterval.__new__(N.SecurityInterval)
+        interval.before = dict(selinux='Enforcing', audit=dict(enabled=1, lost=0))
+        interval.cursor = 's=synthetic'
+        with tempfile.TemporaryDirectory() as temp:
+            interval.audit_file = Path(temp) / 'absent-audit.log'
+            def execute(argv, **_):
+                if argv == ['getenforce']:
+                    return 0, 'Enforcing', ''
+                if argv == ['auditctl', '-s']:
+                    return 0, 'enabled 1\nlost 0', ''
+                if argv[0] == 'journalctl':
+                    return 0, '{"MESSAGE":"' + PRIVATE, ''
+                raise AssertionError('unexpected command')
+            error = None
+            with patch.object(N, 'execute', execute):
+                try:
+                    interval.finish()
+                except BaseException as caught:
+                    error = caught
+            self.assertIsNotNone(error)
+            label = G.security_interval_diagnostic(error, N)
+            self.assertEqual(label, 'security-finish-journal-json')
+            value = G.masked_active_error(error, label)
+            self.assertNotIn(PRIVATE, value)
+            self.assertEqual(R.primary_reported_codes({'errors': [value]}, True)[1],
+                             'installer-reported-active-primary-phase-security-finish-journal-json')
+
+    def test_security_diagnostic_rejects_foreign_hostile_and_unbounded_inputs(self):
+        foreign = self.security_error(lambda: (_ for _ in ()).throw(RuntimeError(PRIVATE)))
+        hostile = self.security_error(lambda: (_ for _ in ()).throw(HostileError(PRIVATE)))
+        for error, native in ((foreign, N), (hostile, N), (foreign, SimpleNamespace())):
+            with self.subTest(kind=type(error).__name__, native=type(native).__name__):
+                self.assertEqual(G.security_interval_diagnostic(error, native), 'security-finish-unknown')
+        self.assertIn('security-finish-unknown', G.SECURITY_DIAGNOSTIC_PHASES)
+        self.assertTrue(G.SECURITY_DIAGNOSTIC_PHASES <= G.ACTIVE_DIAGNOSTIC_PHASES)
+
     def test_report_bounds_first_error_only_and_old_active_mask_are_preserved(self):
         valid = G.masked_active_error(RuntimeError('requires exactly one already running packaged installer'), 'prepare-find-gui')
         for active in (False, True):
@@ -131,6 +210,27 @@ class PrimaryControls(unittest.TestCase):
         value.native = SimpleNamespace(SecurityInterval=lambda: SimpleNamespace(finish=lambda: {'selinux': 'Enforcing', 'observed_new_avcs': 0}))
         value.cleanup = lambda: {'original_vt_restored': True, 'engine_retained': False, 'errors': []}
         return value
+
+    def test_actual_active_security_failure_stays_failed_and_private(self):
+        with tempfile.TemporaryDirectory() as temp:
+            value = self.instance(Path(temp))
+            class FailedSecurity:
+                def finish(self):
+                    raise HostileError(PRIVATE)
+            value.native = SimpleNamespace(SecurityInterval=FailedSecurity)
+            value.prepare = lambda: {'baseline': True}
+            value.vt_cycle = lambda cycle: {'kind': 'vt', 'cycle': cycle}
+            value.output_cycle = lambda cycle: {'kind': 'output', 'cycle': cycle}
+            value.finish_install = lambda: {'completion': True}
+            report = value.run()
+            self.assertEqual(report['status'], 'failed')
+            self.assertIs(report['release_acceptance'], False)
+            self.assertNotIn('security', report)
+            self.assertEqual(len(report['cases']), 2)
+            self.assertNotIn(PRIVATE, json.dumps(report))
+            self.assertEqual(report['errors'], [
+                'OtherError: active installation or restoration failed '
+                '[phase=security-finish-unknown; reason=unknown]'])
 
     def test_actual_active_run_keeps_failed_verdict_cleanup_and_private_report_bytes(self):
         for phase in ('prepare-find-gui', 'prepare-account-fill', 'prepare-copy', 'prepare-baseline-physical'):
@@ -231,8 +331,10 @@ class PrimaryControls(unittest.TestCase):
         source = ast.parse((Path(__file__).parent / 'active-guest.py').read_text())
         calls = [node for node in ast.walk(source) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                  and node.func.attr == 'masked_active_error']
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(ast.unparse(calls[0]), "G.masked_active_error(exc, self.diagnostic_phase, getattr(self, 'completion_guard_diagnostic', 'unknown'), getattr(self, 'completion_phase_diagnostic', 'unknown'))")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual({ast.unparse(call) for call in calls}, {
+            "G.masked_active_error(exc, self.diagnostic_phase, getattr(self, 'completion_guard_diagnostic', 'unknown'), getattr(self, 'completion_phase_diagnostic', 'unknown'))",
+            'G.masked_active_error(exc, phase)'})
         self.assertNotIn('str(error)', ast.unparse(ast.parse(__import__('inspect').getsource(G.masked_active_error))))
         self.assertNotIn('str(error)', ast.unparse(ast.parse(__import__('inspect').getsource(G.primary_diagnostic_reason))))
         value = G.masked_active_error(RuntimeError(PRIVATE), 'prepare-account-fill')
