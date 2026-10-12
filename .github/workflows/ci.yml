@@ -7,6 +7,7 @@ on:
       - codex/native-inner-csi-qualification-20261011
       - codex/native-bootstrap-csi-qualification-20261011
       - codex/native-live-bootstrap-qualification-20261011
+      - codex/native-current-launcher-qualification-20261012
       - codex/qualification-dispatch-20261010
       - codex/qualification-dispatch-20261008
       - codex/safe-rerender-v4-20261010

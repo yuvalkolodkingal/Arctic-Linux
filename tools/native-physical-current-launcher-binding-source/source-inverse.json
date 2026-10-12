@@ -1,0 +1,8 @@
+{
+  "schema": "native-physical-current-launcher-two-literal-inverse-v1",
+  "original": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
+  "selected": "8dd43bfd2df74c619efa65ef272345fc8517ffd619ecb54a40edfb3aab0cc4a3",
+  "occurrences": 2,
+  "whole_restore_original_sha256": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae",
+  "all_original_predicates_actions_security_2s25s_oneuse_fallback_unchanged": true
+}

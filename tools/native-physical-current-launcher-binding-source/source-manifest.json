@@ -1,0 +1,35 @@
+{
+  "schema": "native-physical-current-launcher-binding-disabled-Source-v1",
+  "ready": false,
+  "image": null,
+  "Source_base": "d27afb0d298ee67ea7bd820710b32c8a70ed3865",
+  "original_controller": {
+    "path": "tools/native-functional/native-physical-controller.py",
+    "sha256": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae",
+    "bytes": 13678
+  },
+  "selected_mirror": {
+    "path": "tools/native-physical-current-launcher-binding-source/physical-controller.py",
+    "sha256": "46121b95bfa90e4aac754b877b5c218fc691911dd1c2e686302baca20420a651",
+    "bytes": 13678
+  },
+  "current_launcher": {
+    "path": "tools/native-functional/native-launcher-v6.py",
+    "sha256": "8dd43bfd2df74c619efa65ef272345fc8517ffd619ecb54a40edfb3aab0cc4a3",
+    "bytes": 9009
+  },
+  "current_checker": {
+    "path": "tools/native-functional/guest-check-native-v6.py",
+    "sha256": "15a065ae8ea95b918b973918534361b1b49de268db09d85cc96f2a4136595b3c",
+    "bytes": 157645
+  },
+  "current_source_provenance": {
+    "path": "tools/native-functional/source-provenance.json",
+    "sha256": "508d495a64acd600bcfbb74991bd84466a64cad48687c9851e64c960cd5abaa5",
+    "bytes": 7948
+  },
+  "own_activation_marker": null,
+  "runtime_acceptance": false,
+  "runtime_cause": false,
+  "release_acceptance": false
+}
