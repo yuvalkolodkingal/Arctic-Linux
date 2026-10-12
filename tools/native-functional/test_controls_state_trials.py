@@ -18,8 +18,8 @@ from unittest.mock import Mock, patch
 import zlib
 
 HERE=Path(__file__).resolve().parent
-BASE_NATIVE_SHA='51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532'
-BASE_GUEST_SHA='5cbf0c6385465cfa5f94fd3addaa36729e030a10b2864af5424f09438c4580ec'
+BASE_NATIVE_SHA='b414794876093b26f9873e2af3635f01ee4e4b2e73cb0f1dfe3c1de50398377c'
+BASE_GUEST_SHA='6dff42972dfc61eec92fe23f78bc62be58a965ebd823ea2cffe08bd077c1fb4e'
 spec=importlib.util.spec_from_file_location('controls_trial_tested',HERE/'native_smoke.py')
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
@@ -264,13 +264,107 @@ class ControlsStateTrials(unittest.TestCase):
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3));return 0,'',''
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
-            media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv','time-pos':0.0}
+            media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
+            time_calls=[]
+            def prop(path,key,pid,uid):
+                if key!='time-pos':return media[key]
+                time_calls.append(True)
+                return 0 if len(time_calls)==1 else .2
             endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(root/'visual-reference-ipc.sock'))
             try:
-                with patch.object(N,'mpv_property',side_effect=lambda path,key,pid,uid:media[key]),patch.object(N.time,'sleep') as sleep:
-                    with self.assertRaisesRegex(RuntimeError,'^actual static visual fixture content unmatched; rendered-content gate remains open$'):
+                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                    with self.assertRaisesRegex(RuntimeError,'^actual static visual fixture content unmatched; rendered-content gate remains open
+                smoke.controlled_renderer_trials.assert_not_called()
+                actual=json.loads((root/'visual-oracle.json').read_bytes())
+                self.assertEqual(actual['oracle']['status'],'unmatched')
+                self.assertEqual(smoke.controlled_controls_trials.call_args.args[3]['oracle'],actual['oracle'])
+            finally:endpoint.close()
+
+    def test_first_failure_still_attempts_second_fixed_error_and_duplicate_player_unknown(self):
+        for failure in ('exception','reused-player'):
+            with tempfile.TemporaryDirectory() as temporary:
+                first=Mock(owned=[],launches=[],observe=Mock(return_value=dict(player=dict(pid=20,start_ticks=2),status='observed')))
+                second=Mock(owned=[],launches=[],observe=Mock(return_value=dict(player=dict(pid=20,start_ticks=2),status='observed')))
+                if failure=='exception':first.observe.side_effect=RuntimeError('private unknown error')
+                value,_=self.study(Path(temporary),[first,second])
+                second.observe.assert_called_once();self.assertNotIn('private unknown',json.dumps(value))
+                row=value['trials'][0 if failure=='exception' else 1]
+                self.assertEqual(row['status'],'unknown');self.assertEqual(row['error'],'guard-error')
+
+    def test_unretired_first_owned_player_prevents_second_arm(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);fixture=root/'fixture';fixture.write_bytes(b'fixed');expected=root/'expected';expected.write_bytes(b'fixed')
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.stage='live'
+            primary_player=dict(executable='/usr/bin/celluloid',pid=11,start_ticks=1)
+            smoke.owned=[primary_player];smoke.launches=[];smoke.finish_native_protocol=Mock()
+            trial_player=dict(executable='/usr/bin/celluloid',pid=20,start_ticks=2)
+            first=Mock(owned=[trial_player],launches=[],observe=Mock(return_value=dict(status='observed')))
+            second=Mock(owned=[],launches=[],observe=Mock())
+            primary=dict(oracle=dict(status='unmatched'),screenshot=dict(sha256='a'*64),capture_precondition={},
+                fixture_sha256=N.digest(fixture),expected_rgb_sha256=N.digest(expected))
+            def retire(player,uid):
+                if player is trial_player:raise RuntimeError('private optional cleanup')
+            with patch.object(N,'ControlsTrialSmoke',side_effect=[first,second]) as constructor,patch.object(N,'retire_renderer_player',side_effect=retire):
+                smoke.controlled_controls_trials(fixture,expected,'b'*64,primary)
+            second.observe.assert_not_called();self.assertEqual(constructor.call_count,1)
+            value=json.loads((root/'0-controls-state-trials.json').read_bytes())
+            self.assertFalse(value['trials'][0]['owned_trial_cleanup_completed'])
+            self.assertEqual(value['trials'][1]['status'],'unrun');self.assertEqual(value['preparation_error'],'guard-error')
+            self.assertNotIn('private optional',json.dumps(value));self.assertTrue(value['primary_failure_preserved'])
+
+    def test_new_receipt_cannot_follow_symlink_overwrite_or_exceed_old_bound(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);sentinel=root/'foreign';sentinel.write_bytes(b'unchanged')
+            path=root/'0-controls-state-trials.json';path.symlink_to(sentinel)
+            with self.assertRaises(OSError):N.write_controls_receipt(root,os.getuid(),{})
+            self.assertEqual(sentinel.read_bytes(),b'unchanged');path.unlink()
+            N.write_controls_receipt(root,os.getuid(),dict(release_acceptance=False));before=path.read_bytes()
+            with self.assertRaises(OSError):N.write_controls_receipt(root,os.getuid(),{})
+            self.assertEqual(path.read_bytes(),before)
+            with self.assertRaises(RuntimeError):N.write_controls_receipt(root,os.getuid(),{'test':'x'*(512*1024)})
+
+    def test_finite_public_inventory_swaps_only_three_optional_slots(self):
+        spec=importlib.util.spec_from_file_location('controls_inventory_guest',HERE/'guest-check-native-v6.py')
+        guest=importlib.util.module_from_spec(spec);spec.loader.exec_module(guest)
+        new=guest.NATIVE_PUBLIC_EVIDENCE_FILES
+        old=restore_controls_guest((HERE/'guest-check-native-v6.py').read_text())
+        env={};exec(compile(old,'strict-rolled-back-source','exec'),env)
+        removed={'0-controlled-renderer-trials.json','renderer-trial-default/reference.png','renderer-trial-gl/reference.png'}
+        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
+        self.assertEqual(set(new)-set(env['NATIVE_PUBLIC_EVIDENCE_FILES']),added)
+        self.assertEqual(set(env['NATIVE_PUBLIC_EVIDENCE_FILES'])-set(new),removed)
+        self.assertEqual(len(new),len(env['NATIVE_PUBLIC_EVIDENCE_FILES']))
+        for name in added:self.assertTrue(guest.native_public_evidence_member(name))
+        for name in removed|{'controls-trial-private/reference.png','controls-trial-transition/private.png'}:
+            with self.assertRaises(RuntimeError):guest.native_public_evidence_member(name)
+
+    def test_actual_emitted_guest_begin_matches_consumer_and_stale_identities_reject(self):
+        guest_path=HERE/'guest-check-native-v6.py';raw=guest_path.read_text()
+        spec=importlib.util.spec_from_file_location('controls_guest_begin',guest_path)
+        guest=importlib.util.module_from_spec(spec);spec.loader.exec_module(guest)
+        main=next(n for n in ast.parse(raw).body if isinstance(n,ast.FunctionDef) and n.name=='main')
+        first_try=next(i for i,n in enumerate(main.body) if isinstance(n,ast.Try))
+        prefix=ast.Module(body=main.body[:first_try],type_ignores=[])
+        output=io.StringIO()
+        with patch('sys.argv',['labelled-source-fixture','live']),contextlib.redirect_stdout(output):
+            exec(compile(ast.fix_missing_locations(prefix),str(guest_path),'exec'),guest.__dict__)
+        begin=output.getvalue().strip()
+        spec=importlib.util.spec_from_file_location('controls_consumer',HERE/'evidence.py')
+        evidence=importlib.util.module_from_spec(spec);spec.loader.exec_module(evidence)
+        end='ARCTIC-NATIVE-RUNNER-END '+json.dumps(dict(stage='live',status='failed',error='source fixture',evidence_export_complete=False,release_acceptance=False))
+        _,identity,terminal=evidence.native_block(begin+'\n'+end+'\n','live')
+        self.assertEqual(identity['native_source_sha256'],hashlib.sha256((HERE/'native_smoke.py').read_bytes()).hexdigest())
+        self.assertEqual(identity['checker_sha256'],hashlib.sha256(guest_path.read_bytes()).hexdigest())
+        self.assertEqual(terminal['status'],'failed')
+        for field,old in (('native_source_sha256',BASE_NATIVE_SHA),('checker_sha256',BASE_GUEST_SHA)):
+            stale=dict(identity,**{field:old})
+            with self.assertRaises(RuntimeError):evidence.native_block('ARCTIC-NATIVE-RUNNER-BEGIN '+json.dumps(stale)+'\n'+end+'\n','live')
+
+
+if __name__=='__main__':unittest.main()
+):
                         smoke.visual_media()
-                sleep.assert_called_once_with(.5);smoke.controlled_controls_trials.assert_called_once()
+                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*6);smoke.controlled_controls_trials.assert_called_once()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')
