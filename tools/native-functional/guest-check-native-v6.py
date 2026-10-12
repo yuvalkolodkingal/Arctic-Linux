@@ -2211,7 +2211,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '54a0c95dcc41df6c8221bae4a34e82d7fe3f901d20b5fcfb8eef1ff479146ad2'
+    native_source_sha = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []
