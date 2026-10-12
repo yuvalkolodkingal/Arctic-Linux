@@ -1,9 +1,12 @@
 """Bounded journal streaming controls; no journal, guest, or network is used."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -66,6 +69,28 @@ class JournalStreamControls(unittest.TestCase):
         self.assert_private_failure('import sys\nsys.stderr.write(' + repr(PRIVATE + 'x' * 70000) + ')')
         self.assert_private_failure('import sys\nsys.stderr.write(' + repr(PRIVATE) + ');raise SystemExit(9)')
         self.assert_private_failure('import time;time.sleep(2)', timeout=.1)
+
+    def test_exited_leader_cannot_leave_pipe_holding_descendant(self):
+        with tempfile.TemporaryDirectory(prefix='arctic-journal-group-') as temp:
+            identity = Path(temp) / 'identity'
+            child = "import time;time.sleep(60)"
+            program = (
+                "import os,subprocess,sys\n"
+                "child=subprocess.Popen([sys.executable,'-c'," + repr(child) + "])\n"
+                "open(" + repr(str(identity)) + ",'w').write("
+                "str(os.getpid())+' '+str(child.pid))\n")
+            self.assert_private_failure(program, timeout=.1)
+            leader, descendant = (int(value) for value in identity.read_text().split())
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                try:
+                    os.killpg(leader, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(.05)
+            else:
+                self.fail('owned journal process group survived cleanup')
+            self.assertFalse(Path('/proc', str(descendant)).exists())
 
     def test_invalid_cursor_and_projection_fail_closed(self):
         for cursor in ('', 'private\nvalue', 'x' * 4097, None):

@@ -242,15 +242,17 @@ def journal_avc_count(cursor, timeout=60):
         raise RuntimeError('journal stream validation failed') from None
     finally:
         if process is not None:
-            if process.poll() is None:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                try:
-                    process.wait(timeout=5)
-                except (OSError, subprocess.SubprocessError):
-                    pass
+            # The journalctl leader may exit while an inherited pipe is held by
+            # a descendant. The process group is ours because Popen created a
+            # new session; always terminate that owned group before returning.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                pass
             for stream in (process.stdout, process.stderr):
                 if stream is not None:
                     try:
