@@ -192,5 +192,14 @@
     "Do not rerun the three nodes unless a named segment is proven unusable.",
     "The validated candidate remains unpublished until the matching Arctic release finishes qualification.",
     "The 30-day workflow artifact contains the ASR transcript and word timestamps; those text-bearing files are intentionally not committed."
-  ]
+  ],
+  "source_archive": {
+    "kind": "draft_github_release",
+    "tag": "showcase-river-source-2026-10-12",
+    "asset": "narration-river-final.mp3",
+    "bytes": 12182090,
+    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
+    "preservation_workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38304097685",
+    "public": false
+  }
 }

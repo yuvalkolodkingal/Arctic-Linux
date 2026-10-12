@@ -6,7 +6,9 @@ on:
       - codex/showcase-river-production
     paths:
       - .github/workflows/showcase-river-verify.yml
-      - showcase/revision-2026-10-12/**
+      - showcase/revision-2026-10-12/align-river.py
+      - showcase/revision-2026-10-12/caption-text.json
+      - showcase/revision-2026-10-12/storyboard.json
   workflow_dispatch:
 
 permissions:
@@ -36,13 +38,15 @@ jobs:
 
       - name: Download and verify River master
         env:
-          MASTER_URL: https://backend.composio.dev/api/v3/sl/6WIFgqyMBd
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: showcase-river-source-2026-10-12
           MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
         run: |
           mkdir -p showcase/revision-2026-10-12/work
-          curl --fail --location --silent --show-error --retry 4 \
-            --output showcase/revision-2026-10-12/work/narration-river-final.mp3 \
-            "$MASTER_URL"
+          gh release download "$SOURCE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern narration-river-final.mp3 \
+            --dir showcase/revision-2026-10-12/work
           printf '%s  %s\n' "$MASTER_SHA256" \
             showcase/revision-2026-10-12/work/narration-river-final.mp3 | sha256sum --check -
           python - <<'PY'

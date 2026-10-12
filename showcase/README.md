@@ -48,7 +48,7 @@ the full operating guide.
 ## Preview and render
 
 The reproducible path is [`showcase-river-render.yml`](../.github/workflows/showcase-river-render.yml).
-It installs FFmpeg, Python 3.12, Pillow 11.3.0 and Node.js 22, verifies the River master by
+It installs FFmpeg, Python 3.12, Pillow 11.3.0 and Node.js 22, downloads the River master from the unpublished draft source release and verifies it by
 SHA-256, rebuilds the assets and composition, runs HyperFrames 0.8.114 in strict mode, renders
 1080p at 30 fps, embeds captions and chapters, decodes the complete result, and uploads the
 candidate plus its validation evidence.
@@ -63,7 +63,7 @@ python build-composition.py
 npm run check -- --samples 38 --strict
 ```
 
-For a local media render, place the verified River master at `showcase/audio/narration.mp3`.
+For a local media render, obtain `narration-river-final.mp3` from the maintainer-only draft release tagged `showcase-river-source-2026-10-12`, verify it, and place it at `showcase/audio/narration.mp3`.
 Its required SHA-256 is
 `d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb`.
 Then run:

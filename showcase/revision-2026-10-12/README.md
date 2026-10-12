@@ -9,7 +9,8 @@ this candidate is deliberately published.
 - Voice: ElevenLabs River (`SAz9YHcvj6GT2YYXdXww`), `eleven_multilingual_v2`, English.
   Three source generations were each run once. `voice-timing.json` records every session and
   generation ID, byte size, measured duration, splice boundary and SHA-256 checksum.
-- River master: 507.559184 seconds, 12,182,090 bytes, SHA-256
+- River master: preserved as `narration-river-final.mp3` in the unpublished draft source release tagged
+  `showcase-river-source-2026-10-12`; 507.559184 seconds, 12,182,090 bytes, SHA-256
   `d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb`.
   The measured Winter splice replaces the obsolete hard-coded photo count.
 - Alignment: [workflow run 38299503545](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545)
