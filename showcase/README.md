@@ -86,7 +86,7 @@ three one-time ElevenLabs River generation IDs, measured splice, checksums and e
 Do not rerun those nodes unless a named source segment is proven unusable.
 
 The local verifier pins faster-whisper 1.2.1 and PyAV 16.0.1. Transcript-bearing verification
-files remain only in the private workflow artifact; Git contains the log-safe metrics, timings and
+files remain only in the 30-day workflow artifact; Git contains the log-safe metrics, timings and
 captions. Whisper supplies an automated intelligibility check and alignment evidence, not a human
 listening review.
 

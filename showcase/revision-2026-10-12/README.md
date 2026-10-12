@@ -34,7 +34,7 @@ installation recording.
 
 The source describes the **Both** wallpaper mode, the growing project photo collection and
 per-account hide/restore behavior. The narration avoids a fixed wallpaper count. Transcript and
-word-timestamp files are retained only in the private workflow artifact so transcript excerpts do
+word-timestamp files are retained only in the 30-day workflow artifact so transcript excerpts do
 not enter Git or CI logs. Whisper verification measures automated intelligibility and alignment;
 it does not replace human listening.
 

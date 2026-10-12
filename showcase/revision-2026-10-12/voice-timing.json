@@ -191,6 +191,6 @@
     "Signed provider download URLs are intentionally excluded from source control.",
     "Do not rerun the three nodes unless a named segment is proven unusable.",
     "The validated candidate remains unpublished until the matching Arctic release finishes qualification.",
-    "The private workflow artifact contains the ASR transcript and word timestamps; those text-bearing files are intentionally not committed."
+    "The 30-day workflow artifact contains the ASR transcript and word timestamps; those text-bearing files are intentionally not committed."
   ]
 }
