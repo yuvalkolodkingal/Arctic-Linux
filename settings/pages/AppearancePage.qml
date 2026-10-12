@@ -123,7 +123,8 @@ Page {
         if (!p) return "Arctic doesn't know where you are: search for your town.";
         return p.source === "zone" ? p.name + " (from your time zone)" : p.name + (p.detail ? ", " + p.detail : "");
     }
-    // A new picture every so often (arctic-wallpaper rotate): from your folder or Arctic's own.
+    // A new picture every so often (arctic-wallpaper rotate): from your folder, Arctic's own,
+    // or both collections together.
     function setRotate(every, folder, shuffle) {
         const args = every === "off" ? ["off"] : [every, folder || page.walls.folder || "arctic"].concat(shuffle ? ["shuffle"] : []);
         Backend.call(["wallpaper-rotate"].concat(args), r => {
@@ -879,14 +880,18 @@ Page {
         }
         SettingRow {
             title: "From"
-            desc: page.rotate.folder && page.rotate.folder !== "arctic" ? page.tildePath(page.rotate.folder) : ""
+            desc: page.rotate.folder === "both" ? "Your pictures and Arctic's collection"
+                  : page.rotate.folder && page.rotate.folder !== "arctic" ? page.tildePath(page.rotate.folder) : ""
             visible: page.rotate.every && page.rotate.every !== "off"
             resettable: false
             ArSegmented {
                 accessibleName: "Pictures to use"
-                model: [{ value: "mine", label: "Your pictures" }, { value: "arctic", label: "Arctic's" }]
-                value: page.rotate.folder === "arctic" ? "arctic" : "mine"
-                onActivated: v => page.setRotate(page.rotate.every, v === "arctic" ? "arctic" : page.walls.folder, page.rotate.shuffle === true)
+                model: [{ value: "mine", label: "Your pictures" }, { value: "arctic", label: "Arctic's" },
+                    { value: "both", label: "Both" }]
+                value: page.rotate.folder === "both" ? "both" : page.rotate.folder === "arctic" ? "arctic" : "mine"
+                onActivated: v => page.setRotate(page.rotate.every,
+                    v === "both" ? "both" : v === "arctic" ? "arctic" : page.walls.folder,
+                    page.rotate.shuffle === true)
             }
         }
         SettingRow {

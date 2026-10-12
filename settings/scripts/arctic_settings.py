@@ -69,7 +69,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
                                   high contrast)
     contrast-set on|off           high contrast (arctic-theme contrast)
     fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
-    wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]     a new picture every so often
+    wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic|both [shuffle]]     a new picture every so often
     theme-install URL | theme-remove NAME     themes from the web (arctic-theme install / remove)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
@@ -3498,15 +3498,15 @@ ROTATE_EVERY = ('off', '30m', '1h', '1d')
 
 
 def cmd_wallpaper_rotate(paths, args):
-    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic [shuffle]]: a new picture every so often,
-    without changing the chosen wallpaper or the colours."""
+    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic|both [shuffle]]: a new picture every so often,
+    saving each new picture as the active choice so the colours can follow it."""
     if not which('arctic-wallpaper'):
         return dict(ok=True, available=False, every='off')
     if args:
         every = args[0]
         if every not in ROTATE_EVERY or (every == 'off') != (len(args) == 1) or len(args) > 3 \
                 or (len(args) == 3 and args[2] != 'shuffle'):
-            raise Failure('usage: wallpaper-rotate off | 30m|1h|1d FOLDER|arctic [shuffle]')
+            raise Failure('usage: wallpaper-rotate off | 30m|1h|1d FOLDER|arctic|both [shuffle]')
         argv = ['arctic-wallpaper', 'rotate', every] + ([] if every == 'off' else
                                                           [args[1]] + (['--shuffle'] if len(args) == 3 else []))
         code, _out, err = run(argv, timeout=30)
