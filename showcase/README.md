@@ -51,7 +51,9 @@ The reproducible path is [`showcase-river-render.yml`](../.github/workflows/show
 It installs FFmpeg, Python 3.12, Pillow 11.3.0 and Node.js 22, downloads the River master from the unpublished draft source release and verifies it by
 SHA-256, rebuilds the assets and composition, runs HyperFrames 0.8.114 in strict mode, renders
 1080p at 30 fps, embeds captions and chapters, decodes the complete result, and uploads the
-candidate plus its validation evidence.
+candidate plus its validation evidence. GitHub hides draft releases from read-scoped workflow
+tokens, so these trusted push/manual-dispatch workflows grant `contents: write`; checkout persistence
+is disabled and the token is used only by `gh release download`.
 
 For source-only layout work:
 

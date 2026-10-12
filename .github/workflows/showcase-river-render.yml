@@ -16,6 +16,8 @@ on:
   workflow_dispatch:
 
 permissions:
+  # GitHub hides draft releases from a read-scoped workflow token.
+  # This workflow runs only on a trusted branch push or manual dispatch.
   contents: write
 
 concurrency:
@@ -30,6 +32,8 @@ jobs:
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
