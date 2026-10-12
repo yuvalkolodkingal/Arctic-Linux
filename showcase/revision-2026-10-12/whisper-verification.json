@@ -1,0 +1,17 @@
+{
+  "audio_duration_seconds": 507.512041,
+  "model": "base.en",
+  "detected_language": "en",
+  "detected_language_probability": 1,
+  "expected_words": 1355,
+  "asr_words": 1363,
+  "edit_distance": 56,
+  "word_error_rate": 0.041328,
+  "sequence_ratio": 0.967623,
+  "exact_token_coverage": 0.97048,
+  "corrected_winter_phrase_token_coverage": 1.0,
+  "banned_old_phrase_detected": false,
+  "caption_cues": 128,
+  "scenes": 38,
+  "transcript_in_ci_log": false
+}

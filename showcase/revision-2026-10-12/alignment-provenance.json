@@ -1,0 +1,68 @@
+{
+  "source_commit": "38a4a93ae1112e022dd1c7161e15b048bdd4bcc6",
+  "workflow_run": {
+    "id": 38299503545,
+    "url": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545",
+    "conclusion": "success"
+  },
+  "artifact": {
+    "id": 11769902895,
+    "name": "showcase-river-whisper-alignment",
+    "bytes": 44296,
+    "sha256": "81ffcd41f208a37daaff453f1054edea5f22ca86ec6895b6ea22855148a08c96"
+  },
+  "audio": {
+    "file": "narration-river-final.mp3",
+    "bytes": 12182090,
+    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
+    "container_duration_seconds": 507.512041
+  },
+  "verifier_versions": {
+    "python": "3.12.15",
+    "faster-whisper": "1.2.1",
+    "av": "16.0.1",
+    "ctranslate2": "4.8.2",
+    "huggingface-hub": "2.2.0",
+    "tokenizers": "0.23.3",
+    "preflight_seconds": 1,
+    "preflight_segments": 1,
+    "preflight_words": 3,
+    "transcript_in_ci_log": false
+  },
+  "metrics": {
+    "audio_duration_seconds": 507.512041,
+    "model": "base.en",
+    "detected_language": "en",
+    "detected_language_probability": 1,
+    "expected_words": 1355,
+    "asr_words": 1363,
+    "edit_distance": 56,
+    "word_error_rate": 0.041328,
+    "sequence_ratio": 0.967623,
+    "exact_token_coverage": 0.97048,
+    "corrected_winter_phrase_token_coverage": 1,
+    "banned_old_phrase_detected": false,
+    "caption_cues": 128,
+    "scenes": 38,
+    "transcript_in_ci_log": false
+  },
+  "committed_outputs": {
+    "timing.json": "abbefa1b7fbbff58ce67eec2c5dc806690c8207dbe8d5b2c0ce3679f30d6ac28",
+    "caption-text-aligned.json": "4cb707aa6147d78ff0d121e049ddbe765db0f3a7bc3a5682bcf7dc5a26c8bde3",
+    "captions.srt": "3ad2908368001805da493f497272989ad1394ad60505f2ebd540053ffa24738c",
+    "captions.vtt": "4f7859b8fac44ea060284e12ea720f88f360684091d231b34f456aa4090e4f59",
+    "chapters.txt": "49366d971de0eae30cfb3feb9c498a4becb9e0998d3c44c9fe1dc3e77f2231ab",
+    "whisper-verification.json": "6d92ca8ffe7727a5b7dcf356feba1dfb2a43956b7f97b322ec0d1b86464144e9",
+    "verifier-versions.json": "cf8e583eb75abc211f794314756d7ec46840cbf8a15c708b59e5e2c96f095bc0"
+  },
+  "excluded_from_git": [
+    "whisper-transcript.txt",
+    "whisper-words.json"
+  ],
+  "limitations": [
+    "Whisper base.en verifies intelligibility and supplies word-aligned evidence; it is not a human listening review.",
+    "Word error rate is measured against the approved narration text.",
+    "Unmatched caption edge words are locally interpolated from adjacent exact-token timestamps.",
+    "The MP3 container duration is 507.512041 seconds in PyAV; earlier ffprobe reporting was 507.559184 seconds, a 0.047143-second container-accounting difference."
+  ]
+}

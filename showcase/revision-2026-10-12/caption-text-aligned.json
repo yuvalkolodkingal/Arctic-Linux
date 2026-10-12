@@ -1,0 +1,902 @@
+{
+  "language": "en",
+  "timing_status": "whisper_base_en_word_aligned",
+  "cues": [
+    {
+      "scene": "intro",
+      "sentence": 1,
+      "text": "Meet Arctic Linux.",
+      "start": 0.0,
+      "end": 0.9
+    },
+    {
+      "scene": "intro",
+      "sentence": 2,
+      "text": "A calm, keyboard-first desktop built on Fedora, with the Mango tiling window manager.",
+      "start": 1.64,
+      "end": 6.44
+    },
+    {
+      "scene": "intro",
+      "sentence": 3,
+      "text": "Let's take a look at installation, the lighter everyday apps, and a few details that make the desktop your own.",
+      "start": 7.06,
+      "end": 12.84
+    },
+    {
+      "scene": "boot",
+      "sentence": 1,
+      "text": "Start with a live USB.",
+      "start": 13.5,
+      "end": 14.52
+    },
+    {
+      "scene": "boot",
+      "sentence": 2,
+      "text": "The boot menu lets you try Arctic Linux or open the installer.",
+      "start": 15.34,
+      "end": 18.46
+    },
+    {
+      "scene": "boot",
+      "sentence": 3,
+      "text": "You can explore the desktop before deciding to put it on your computer.",
+      "start": 19.24,
+      "end": 22.24
+    },
+    {
+      "scene": "live",
+      "sentence": 1,
+      "text": "The live welcome card gives you a few useful shortcuts.",
+      "start": 23.28,
+      "end": 25.86
+    },
+    {
+      "scene": "live",
+      "sentence": 2,
+      "text": "Keep trying the desktop, or choose Install Arctic Linux.",
+      "start": 26.7,
+      "end": 29.54
+    },
+    {
+      "scene": "live",
+      "sentence": 3,
+      "text": "The install button is also right there on the top bar.",
+      "start": 30.16,
+      "end": 32.36
+    },
+    {
+      "scene": "welcome",
+      "sentence": 1,
+      "text": "The installer starts with your language.",
+      "start": 32.88,
+      "end": 34.22
+    },
+    {
+      "scene": "welcome",
+      "sentence": 2,
+      "text": "Each screen asks one clear question, and the sidebar shows where you are.",
+      "start": 34.92,
+      "end": 38.8
+    },
+    {
+      "scene": "welcome",
+      "sentence": 3,
+      "text": "These installer screens use sample disks, networks, and account details.",
+      "start": 39.28,
+      "end": 43.06
+    },
+    {
+      "scene": "keyboard",
+      "sentence": 1,
+      "text": "Choose your keyboard layout, then try it in the test box.",
+      "start": 43.66,
+      "end": 46.1
+    },
+    {
+      "scene": "keyboard",
+      "sentence": 2,
+      "text": "The live session uses your choice too.",
+      "start": 46.9,
+      "end": 48.68
+    },
+    {
+      "scene": "keyboard",
+      "sentence": 3,
+      "text": "If you switch to a text console or disconnect a screen, the installer keeps your page and your answers.",
+      "start": 49.08,
+      "end": 54.34
+    },
+    {
+      "scene": "network",
+      "sentence": 1,
+      "text": "Connect to Wi-Fi, or plug in a cable.",
+      "start": 55.18,
+      "end": 57.0
+    },
+    {
+      "scene": "network",
+      "sentence": 2,
+      "text": "You can also choose Install offline.",
+      "start": 57.68,
+      "end": 59.22
+    },
+    {
+      "scene": "network",
+      "sentence": 3,
+      "text": "The apps already on the image remain available, while extra downloads wait until you're connected.",
+      "start": 60.02,
+      "end": 64.34
+    },
+    {
+      "scene": "network",
+      "sentence": 4,
+      "text": "Your new system remembers the Wi-Fi connection.",
+      "start": 65.34,
+      "end": 67.44
+    },
+    {
+      "scene": "timezone",
+      "sentence": 1,
+      "text": "Next, check your time zone.",
+      "start": 68.4,
+      "end": 69.68
+    },
+    {
+      "scene": "timezone",
+      "sentence": 2,
+      "text": "The installer suggests a location, and you can change the region or city.",
+      "start": 70.34,
+      "end": 73.9
+    },
+    {
+      "scene": "timezone",
+      "sentence": 3,
+      "text": "Automatic time keeps the clock in sync.",
+      "start": 74.64,
+      "end": 76.76
+    },
+    {
+      "scene": "disk",
+      "sentence": 1,
+      "text": "Choose your disk and how to install.",
+      "start": 77.44,
+      "end": 79.2
+    },
+    {
+      "scene": "disk",
+      "sentence": 2,
+      "text": "Erasing replaces its contents.",
+      "start": 79.84,
+      "end": 81.3
+    },
+    {
+      "scene": "disk",
+      "sentence": 3,
+      "text": "Installing alongside another system is offered when suitable free space is available.",
+      "start": 82.26,
+      "end": 86.1
+    },
+    {
+      "scene": "disk",
+      "sentence": 4,
+      "text": "Back up your files before you continue.",
+      "start": 86.9,
+      "end": 88.64
+    },
+    {
+      "scene": "encryption",
+      "sentence": 1,
+      "text": "Disk encryption is on by default.",
+      "start": 89.24,
+      "end": 90.74
+    },
+    {
+      "scene": "encryption",
+      "sentence": 2,
+      "text": "Create a passphrase, or use the suggested one.",
+      "start": 91.54,
+      "end": 93.92
+    },
+    {
+      "scene": "encryption",
+      "sentence": 3,
+      "text": "You'll enter it when the computer starts.",
+      "start": 94.42,
+      "end": 95.92
+    },
+    {
+      "scene": "encryption",
+      "sentence": 4,
+      "text": "Keep it safe: forgotten passphrases cannot be recovered.",
+      "start": 96.46,
+      "end": 99.34
+    },
+    {
+      "scene": "account",
+      "sentence": 1,
+      "text": "Create your account, set your sign-in password, and name the computer.",
+      "start": 100.0,
+      "end": 102.96
+    },
+    {
+      "scene": "account",
+      "sentence": 2,
+      "text": "Automatic login is optional.",
+      "start": 103.78,
+      "end": 105.1
+    },
+    {
+      "scene": "account",
+      "sentence": 3,
+      "text": "You can also choose to use your account password for the encrypted disk.",
+      "start": 105.84,
+      "end": 108.9
+    },
+    {
+      "scene": "apps",
+      "sentence": 1,
+      "text": "The suggested apps now keep the everyday setup lighter: GNOME Web for browsing, Foot for the terminal, PCManFM for files, FeatherPad for text, and Celluloid for media.",
+      "start": 109.48,
+      "end": 119.12
+    },
+    {
+      "scene": "apps",
+      "sentence": 2,
+      "text": "Choose alternatives if you prefer.",
+      "start": 120.64,
+      "end": 121.74
+    },
+    {
+      "scene": "apps",
+      "sentence": 3,
+      "text": "Office suites and code editors are optional.",
+      "start": 122.32,
+      "end": 124.26
+    },
+    {
+      "scene": "summary",
+      "sentence": 1,
+      "text": "The summary brings your choices together.",
+      "start": 125.12,
+      "end": 126.68
+    },
+    {
+      "scene": "summary",
+      "sentence": 2,
+      "text": "Check the disk, encryption, account, and apps, and change anything you need.",
+      "start": 127.34,
+      "end": 131.28
+    },
+    {
+      "scene": "summary",
+      "sentence": 3,
+      "text": "Nothing is written to the disk until you confirm the install here.",
+      "start": 132.0,
+      "end": 135.44
+    },
+    {
+      "scene": "installing",
+      "sentence": 1,
+      "text": "The progress screen shows the system and your selected apps being installed.",
+      "start": 135.96,
+      "end": 139.2
+    },
+    {
+      "scene": "installing",
+      "sentence": 2,
+      "text": "An optional app download can be retried or skipped.",
+      "start": 140.04,
+      "end": 142.16
+    },
+    {
+      "scene": "installing",
+      "sentence": 3,
+      "text": "Dictation has its own setup queue, so a missing model never stops the whole operating system from installing.",
+      "start": 142.78,
+      "end": 148.22
+    },
+    {
+      "scene": "done",
+      "sentence": 1,
+      "text": "When installation finishes, read the final notes.",
+      "start": 149.06,
+      "end": 151.4
+    },
+    {
+      "scene": "done",
+      "sentence": 2,
+      "text": "They tell you about queued downloads and any Secure Boot steps for a driver.",
+      "start": 152.14,
+      "end": 155.34
+    },
+    {
+      "scene": "done",
+      "sentence": 3,
+      "text": "Remove the USB and restart when you're ready.",
+      "start": 156.4,
+      "end": 158.68
+    },
+    {
+      "scene": "done",
+      "sentence": 4,
+      "text": "These screens are a demonstration, rather than a recording of a fresh install.",
+      "start": 159.66,
+      "end": 163.52
+    },
+    {
+      "scene": "day",
+      "sentence": 1,
+      "text": "On the desktop, five workspaces give each task some room.",
+      "start": 164.32,
+      "end": 167.6
+    },
+    {
+      "scene": "day",
+      "sentence": 2,
+      "text": "The bar stays small, and the backgrounds now come from the project's photo collection.",
+      "start": 168.26,
+      "end": 171.94
+    },
+    {
+      "scene": "day",
+      "sentence": 3,
+      "text": "Existing users keep their own wallpaper choices when they update.",
+      "start": 172.82,
+      "end": 176.02
+    },
+    {
+      "scene": "launcher",
+      "sentence": 1,
+      "text": "Press Super and Space to open the launcher.",
+      "start": 176.68,
+      "end": 178.54
+    },
+    {
+      "scene": "launcher",
+      "sentence": 2,
+      "text": "Type an app name and press Enter.",
+      "start": 179.34,
+      "end": 180.86
+    },
+    {
+      "scene": "launcher",
+      "sentence": 3,
+      "text": "It also finds files, open windows, and settings, so you can get to the next task quickly.",
+      "start": 181.52,
+      "end": 185.96
+    },
+    {
+      "scene": "calculator",
+      "sentence": 1,
+      "text": "The launcher handles small jobs too.",
+      "start": 186.78,
+      "end": 188.37
+    },
+    {
+      "scene": "calculator",
+      "sentence": 2,
+      "text": "Start with an equals sign to calculate, and press Enter to copy the answer.",
+      "start": 188.4,
+      "end": 192.7
+    },
+    {
+      "scene": "calculator",
+      "sentence": 3,
+      "text": "You can convert units, run commands, or set a reminder for later.",
+      "start": 193.44,
+      "end": 196.38
+    },
+    {
+      "scene": "tiling",
+      "sentence": 1,
+      "text": "Open a few windows and Mango arranges them automatically.",
+      "start": 197.56,
+      "end": 200.32
+    },
+    {
+      "scene": "tiling",
+      "sentence": 2,
+      "text": "The amber border marks the one you're using.",
+      "start": 201.22,
+      "end": 202.86
+    },
+    {
+      "scene": "tiling",
+      "sentence": 3,
+      "text": "Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.",
+      "start": 203.48,
+      "end": 207.98
+    },
+    {
+      "scene": "files",
+      "sentence": 1,
+      "text": "PCManFM is the new graphical file manager, using Fedora's GTK three build.",
+      "start": 209.21,
+      "end": 213.74
+    },
+    {
+      "scene": "files",
+      "sentence": 2,
+      "text": "Browse folders and downloads in tabs, and use XArchiver to open or create archives.",
+      "start": 214.4,
+      "end": 218.82
+    },
+    {
+      "scene": "files",
+      "sentence": 3,
+      "text": "Super and F opens whichever file manager you've chosen.",
+      "start": 219.59,
+      "end": 222.26
+    },
+    {
+      "scene": "terminal",
+      "sentence": 1,
+      "text": "Super and Enter opens Foot with Fish and the Arctic fox greeting.",
+      "start": 222.77,
+      "end": 226.08
+    },
+    {
+      "scene": "terminal",
+      "sentence": 2,
+      "text": "Bash and Nano are there too.",
+      "start": 226.78,
+      "end": 227.96
+    },
+    {
+      "scene": "terminal",
+      "sentence": 3,
+      "text": "Fedora packages, Flatpak and Nix give you several ways to add tools, without making a large app collection compulsory.",
+      "start": 229.2,
+      "end": 235.72
+    },
+    {
+      "scene": "everyday",
+      "sentence": 1,
+      "text": "GNOME Web shares the WebKit engine already used by Arctic's web apps.",
+      "start": 236.68,
+      "end": 240.52
+    },
+    {
+      "scene": "everyday",
+      "sentence": 2,
+      "text": "FeatherPad handles everyday text, and Celluloid plays music and video.",
+      "start": 241.14,
+      "end": 245.14
+    },
+    {
+      "scene": "everyday",
+      "sentence": 3,
+      "text": "Chromium remains available for web apps that need calling support.",
+      "start": 245.74,
+      "end": 248.76
+    },
+    {
+      "scene": "everyday",
+      "sentence": 4,
+      "text": "You can change the defaults in Settings.",
+      "start": 249.38,
+      "end": 250.8
+    },
+    {
+      "scene": "getapps",
+      "sentence": 1,
+      "text": "Need something else?",
+      "start": 251.44,
+      "end": 252.2
+    },
+    {
+      "scene": "getapps",
+      "sentence": 2,
+      "text": "Open Get apps and choose Flathub, Fedora packages, a web app, or a terminal tool.",
+      "start": 252.68,
+      "end": 257.62
+    },
+    {
+      "scene": "getapps",
+      "sentence": 3,
+      "text": "Installations continue when you close the launcher.",
+      "start": 258.32,
+      "end": 260.38
+    },
+    {
+      "scene": "getapps",
+      "sentence": 4,
+      "text": "Removing software has its own menu, so it's easier to find the action you want.",
+      "start": 261.16,
+      "end": 264.8
+    },
+    {
+      "scene": "removeapps",
+      "sentence": 1,
+      "text": "Open Remove apps from the launcher to manage Fedora packages, Flatpaks, web apps, and terminal entries.",
+      "start": 265.54,
+      "end": 271.78
+    },
+    {
+      "scene": "removeapps",
+      "sentence": 2,
+      "text": "Arctic shows the proposed removal before you confirm.",
+      "start": 273.08,
+      "end": 275.62
+    },
+    {
+      "scene": "removeapps",
+      "sentence": 3,
+      "text": "It protects the desktop, your login shell, and your only terminal from an accidental removal.",
+      "start": 276.46,
+      "end": 280.88
+    },
+    {
+      "scene": "dictationsetup",
+      "sentence": 1,
+      "text": "Dictation uses Voxtype and a multilingual Whisper model on this computer.",
+      "start": 281.94,
+      "end": 285.92
+    },
+    {
+      "scene": "dictationsetup",
+      "sentence": 2,
+      "text": "Online installation downloads and verifies the engine and model.",
+      "start": 287.08,
+      "end": 290.26
+    },
+    {
+      "scene": "dictationsetup",
+      "sentence": 3,
+      "text": "Offline installation queues setup for first boot.",
+      "start": 291.25,
+      "end": 293.59
+    },
+    {
+      "scene": "dictationsetup",
+      "sentence": 4,
+      "text": "Settings shows the download size, progress, and any retry needed.",
+      "start": 293.62,
+      "end": 297.83
+    },
+    {
+      "scene": "dictationsetup",
+      "sentence": 5,
+      "text": "Recording stays unavailable until setup is ready.",
+      "start": 297.86,
+      "end": 300.93
+    },
+    {
+      "scene": "dictationrecord",
+      "sentence": 1,
+      "text": "Focus a text field, press Super, Control and X, and speak.",
+      "start": 300.96,
+      "end": 305.69
+    },
+    {
+      "scene": "dictationrecord",
+      "sentence": 2,
+      "text": "Press the same keys again to stop and insert.",
+      "start": 305.72,
+      "end": 308.51
+    },
+    {
+      "scene": "dictationrecord",
+      "sentence": 3,
+      "text": "A visible indicator follows recording and transcription, even with the bar hidden.",
+      "start": 308.54,
+      "end": 313.23
+    },
+    {
+      "scene": "dictationrecord",
+      "sentence": 4,
+      "text": "Super, Control and Backspace cancels.",
+      "start": 313.26,
+      "end": 316.77
+    },
+    {
+      "scene": "dictationrecord",
+      "sentence": 5,
+      "text": "Audio stays local, and status messages never display the transcript.",
+      "start": 316.8,
+      "end": 320.78
+    },
+    {
+      "scene": "dictationrecovery",
+      "sentence": 1,
+      "text": "Choose Hebrew, English, or local language detection.",
+      "start": 321.62,
+      "end": 324.36
+    },
+    {
+      "scene": "dictationrecovery",
+      "sentence": 2,
+      "text": "Supported hardware can use Vulkan acceleration.",
+      "start": 325.18,
+      "end": 327.14
+    },
+    {
+      "scene": "dictationrecovery",
+      "sentence": 3,
+      "text": "If the GPU fails, Arctic discards that recording and selects the CPU for your next attempt.",
+      "start": 328.22,
+      "end": 333.46
+    },
+    {
+      "scene": "dictationrecovery",
+      "sentence": 4,
+      "text": "Record again explicitly.",
+      "start": 334.16,
+      "end": 335.14
+    },
+    {
+      "scene": "dictationrecovery",
+      "sentence": 5,
+      "text": "Accuracy and speed depend on the model, your voice, and the computer.",
+      "start": 336.04,
+      "end": 339.6
+    },
+    {
+      "scene": "settings",
+      "sentence": 1,
+      "text": "Super and S opens Arctic Settings.",
+      "start": 340.42,
+      "end": 342.56
+    },
+    {
+      "scene": "settings",
+      "sentence": 2,
+      "text": "Search for a setting instead of hunting through pages.",
+      "start": 343.18,
+      "end": 345.28
+    },
+    {
+      "scene": "settings",
+      "sentence": 3,
+      "text": "Changes apply straight away, and Control and Z undoes the last one.",
+      "start": 345.7,
+      "end": 350.08
+    },
+    {
+      "scene": "bar",
+      "sentence": 1,
+      "text": "Put the bar on any edge, and choose always visible, auto-hide, or dodge windows.",
+      "start": 350.68,
+      "end": 355.6
+    },
+    {
+      "scene": "bar",
+      "sentence": 2,
+      "text": "Move the pointer to its edge, or use the keyboard, to reveal it.",
+      "start": 356.42,
+      "end": 359.94
+    },
+    {
+      "scene": "bar",
+      "sentence": 3,
+      "text": "Recording indicators remain visible.",
+      "start": 360.42,
+      "end": 362.04
+    },
+    {
+      "scene": "bar",
+      "sentence": 4,
+      "text": "The installer keeps its bar available while you're in the live session.",
+      "start": 362.8,
+      "end": 365.62
+    },
+    {
+      "scene": "appearance",
+      "sentence": 1,
+      "text": "Choose Winter or Polar night, or let a wallpaper provide the desktop's colours.",
+      "start": 366.44,
+      "end": 370.27
+    },
+    {
+      "scene": "appearance",
+      "sentence": 2,
+      "text": "The palette follows through the shell, window borders, terminal, and supported apps.",
+      "start": 370.58,
+      "end": 375.3
+    },
+    {
+      "scene": "appearance",
+      "sentence": 3,
+      "text": "Your own pictures stay selected when you change themes.",
+      "start": 376.12,
+      "end": 378.56
+    },
+    {
+      "scene": "winter",
+      "sentence": 1,
+      "text": "Winter keeps the same layout with soft, snow-coloured surfaces.",
+      "start": 379.26,
+      "end": 382.1
+    },
+    {
+      "scene": "winter",
+      "sentence": 2,
+      "text": "The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself.",
+      "start": 382.92,
+      "end": 387.5
+    },
+    {
+      "scene": "winter",
+      "sentence": 3,
+      "text": "You can set a favourite, or let the wallpaper change on a schedule.",
+      "start": 388.3,
+      "end": 391.04
+    },
+    {
+      "scene": "ember",
+      "sentence": 1,
+      "text": "One new choice is Ember Clouds, City Silhouette: warm clouds above the dark outline of the city.",
+      "start": 392.22,
+      "end": 398.31
+    },
+    {
+      "scene": "ember",
+      "sentence": 2,
+      "text": "It's the artist's finished photograph, preserved at its original resolution.",
+      "start": 398.34,
+      "end": 402.92
+    },
+    {
+      "scene": "ember",
+      "sentence": 3,
+      "text": "Set it from the wallpaper picker, or browse the full collection on the project's gallery.",
+      "start": 403.48,
+      "end": 407.7
+    },
+    {
+      "scene": "quick",
+      "sentence": 1,
+      "text": "Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode.",
+      "start": 408.46,
+      "end": 415.24
+    },
+    {
+      "scene": "quick",
+      "sentence": 2,
+      "text": "Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task.",
+      "start": 415.84,
+      "end": 421.77
+    },
+    {
+      "scene": "networkdaily",
+      "sentence": 1,
+      "text": "The network menu lets you join Wi-Fi and manage saved connections or a VPN.",
+      "start": 421.8,
+      "end": 426.92
+    },
+    {
+      "scene": "networkdaily",
+      "sentence": 2,
+      "text": "Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps.",
+      "start": 427.76,
+      "end": 433.94
+    },
+    {
+      "scene": "displays",
+      "sentence": 1,
+      "text": "At your desk, arrange monitors and adjust their resolution, scale, and rotation.",
+      "start": 434.72,
+      "end": 438.86
+    },
+    {
+      "scene": "displays",
+      "sentence": 2,
+      "text": "Super and P switches screen modes.",
+      "start": 439.68,
+      "end": 441.56
+    },
+    {
+      "scene": "displays",
+      "sentence": 3,
+      "text": "Arctic also handles USB drives, printing, and scanning, with settings when you need them.",
+      "start": 442.8,
+      "end": 448.2
+    },
+    {
+      "scene": "shortcuts",
+      "sentence": 1,
+      "text": "You don't have to memorise every shortcut.",
+      "start": 448.72,
+      "end": 450.2
+    },
+    {
+      "scene": "shortcuts",
+      "sentence": 2,
+      "text": "Super and slash opens a searchable guide.",
+      "start": 450.92,
+      "end": 453.1
+    },
+    {
+      "scene": "shortcuts",
+      "sentence": 3,
+      "text": "Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.",
+      "start": 453.7,
+      "end": 459.28
+    },
+    {
+      "scene": "updates",
+      "sentence": 1,
+      "text": "Arctic's signed stable repository keeps existing systems up to date.",
+      "start": 460.41,
+      "end": 464.32
+    },
+    {
+      "scene": "updates",
+      "sentence": 2,
+      "text": "Updates download in the background and install when you restart.",
+      "start": 464.94,
+      "end": 467.56
+    },
+    {
+      "scene": "updates",
+      "sentence": 3,
+      "text": "Settings shows the latest check and anything waiting.",
+      "start": 468.56,
+      "end": 470.56
+    },
+    {
+      "scene": "updates",
+      "sentence": 4,
+      "text": "Save your work before choosing Restart and install.",
+      "start": 471.42,
+      "end": 473.9
+    },
+    {
+      "scene": "updates",
+      "sentence": 5,
+      "text": "There is no need to reinstall for desktop package updates.",
+      "start": 474.62,
+      "end": 477.2
+    },
+    {
+      "scene": "lock",
+      "sentence": 1,
+      "text": "Super and L locks the desktop.",
+      "start": 477.7,
+      "end": 479.52
+    },
+    {
+      "scene": "lock",
+      "sentence": 2,
+      "text": "The clock stays visible, and notifications show a count without their contents.",
+      "start": 480.22,
+      "end": 483.64
+    },
+    {
+      "scene": "lock",
+      "sentence": 3,
+      "text": "Arctic also locks before sleeping.",
+      "start": 484.38,
+      "end": 486.08
+    },
+    {
+      "scene": "lock",
+      "sentence": 4,
+      "text": "Starting a lock cancels dictation, so a phrase isn't inserted after you've stepped away.",
+      "start": 486.72,
+      "end": 491.14
+    },
+    {
+      "scene": "outro",
+      "sentence": 1,
+      "text": "That's Arctic Linux: a guided installer, a calm desktop, useful native apps, and local dictation when setup is complete.",
+      "start": 492.1,
+      "end": 499.3
+    },
+    {
+      "scene": "outro",
+      "sentence": 2,
+      "text": "Find published downloads and the full wiki on GitHub.",
+      "start": 499.9,
+      "end": 502.39
+    },
+    {
+      "scene": "outro",
+      "sentence": 3,
+      "text": "The release page tells you which image has been published, and which checks were performed.",
+      "start": 502.42,
+      "end": 506.98
+    }
+  ]
+}
