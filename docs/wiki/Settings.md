@@ -15,8 +15,8 @@ arctic-settings displays     # open it on a page
 ```
 
 The page names for `arctic-settings <page>` are `appearance`, `windows`, `displays`, `input`,
-`shortcuts`, `apps`, `network`, `bluetooth`, `sound`, `notifications`, `updates`, `power`,
-`startup`, `dictation` and `about`.
+`shortcuts`, `apps`, `network`, `sharing`, `bluetooth`, `sound`, `dictation`, `notifications`,
+`updates`, `power`, `accessibility`, `startup`, `webapps`, `printers`, `datetime`, `users` and `about`.
 
 ## Finding a setting
 
@@ -80,18 +80,24 @@ resolution.
 
 ## Dictation
 
-Local Whisper dictation supports Hebrew and English. Online installation downloads
-the speech engine and multilingual model; offline installation queues first-boot
-setup. The page shows **not ready** until the required files and dependencies are
-available. **Retry setup** resumes a failed download. The pinned files total
-572.5 MB, plus any missing system packages.
+Local Whisper dictation uses **Voxtype 1.1.0** and multilingual models for Hebrew and English.
+Online installation prepares it; offline installation queues first-boot setup. The page shows
+**not ready** until its verified engine, model, audio and insertion dependencies are available.
+**Set up / retry…** resumes setup; **Verify / repair setup…** checks a ready installation.
 
-Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop
-and insert. `Super + Ctrl + BackSpace` cancels. Recording and transcription have a
-visible indicator; locking discards the result. GPU errors select CPU for the
-session and ask you to record again. Audio is processed locally, and transcripts
-are excluded from status, logs and notifications. See [Local dictation](../DICTATION.md)
-for download sizes, privacy details and hardware limitations.
+The fixed file totals are **506,181,191 bytes** (506.2 MB) for **Small compatibility**, or
+**678,117,115 bytes** (678.1 MB) for the **Turbo hardware profile**, plus missing system packages.
+The confirmation discloses the selected size before downloading. **Use compatibility model…**
+is available for CPU compatibility problems, and **Use recommended model…** returns to the
+hardware-selected profile. These are explicit choices, not automatic extra model downloads.
+
+Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop and insert.
+`Super + Ctrl + Backspace` cancels. Recording and transcription have a visible indicator;
+locking discards the result. Language choices are **Detect language**, **Hebrew · עברית** and
+**English**. CPU is available; the Turbo profile also supports Vulkan. A GPU error discards that
+recording, selects CPU for the session and asks you to record again. Audio stays local, and
+status, logs and notifications omit the transcript. See [Local dictation](Local-Dictation) for
+recovery, download integrity and measured limitations.
 
 ## Appearance
 
@@ -131,13 +137,14 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   pictures: JPEG, PNG, WebP, BMP or GIF). Point at one of your own pictures to **rename** or
   **delete** it (or select it and press `F2` or `Delete`). Delete on an Arctic picture hides
   it from the picker and automatic changes without removing its packaged file; **Restore hidden
-  Arctic wallpapers** brings hidden pictures back. Hidden choices survive package updates. A
-  picture in use must be changed before it can be deleted or hidden.
+  Arctic wallpapers** brings hidden pictures back. Validated per-account tombstone slugs are kept
+  under `hidden_arctic` in `~/.config/arctic/wallpapers.json`, so the choice survives package
+  updates. A picture in use must be changed before it can be deleted or hidden.
 - **Change the wallpaper by itself:** a new picture every 30 minutes, hour or day, from your
   pictures, Arctic's own, or **Both**, in name order or **in random order** (every picture once
-  before any comes again). Each picture becomes your wallpaper and the colours follow it: your
-  pictures colour the desktop, Arctic's bring back Winter / Polar night. Wallpaper hooks run with
-  each picture.
+  before any comes again). Hidden Arctic photos are excluded from Arctic and Both rotation. Each
+  picture becomes your wallpaper and the colours follow it: your pictures colour the desktop,
+  Arctic's bring back Winter / Polar night. Wallpaper hooks run with each picture.
 - **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
   press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
   pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at
@@ -153,6 +160,23 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
 Reduce motion, text size and the pointer moved to [Accessibility](#accessibility) in 0.3.
 
 See [Themes and customisation](Themes-and-Customisation) for how themes work and `arctic-theme`.
+
+### Taskbar
+
+**Appearance → Taskbar** sets the edge (Top, Bottom, Left or Right), thickness (28, 32, 40 or
+48 px), and **Always visible**, **Auto-hide** or **Dodge windows**. Point at its edge or press
+`Super + Alt + B` to reveal it. Toggle Workspaces, Clock, Media title and Tray icons separately;
+**Reset taskbar defaults** restores them. Dodge requires the updated Mango session. The live
+installer keeps the bar visible. See [Hiding the bar](Bar-Menus#hiding-the-bar).
+
+### Login and lock wallpaper
+
+**Choose image…** publishes a separate shared image, and **Use desktop and follow changes…**
+follows an authorized account's current and future desktop wallpaper. Both ask for administrator
+authorization. The image is visible to everyone at login and on every lock screen, even while its
+source home is encrypted. Existing users' choices stay unchanged until they opt in. The page
+also offers freeze, restore previous choice and restore existing defaults. See
+[Shared login and lock wallpaper](Themes-and-Customisation#shared-login-and-lock-wallpaper).
 
 ## Windows
 
@@ -270,12 +294,21 @@ The apps your keyboard shortcuts open, and the ones links and files open in: Web
 (`Super + B`), Terminal (`Super + Enter`), Files (`Super + F`), Text editor (`Super + E`), Videos,
 Music, Pictures and PDF documents. The first four are saved in `~/.config/arctic/default-apps`
 (read by `arctic-open`), and every one also in `~/.config/mimeapps.list`, as `xdg-mime default`
-would. **Get apps** installs more; they show up here. **Install and remove apps** opens Get apps
-or Remove apps (`arctic-shell-ipc apps install|remove`).
+would. **Get apps** installs more; they show up here. Separate install and remove
+actions open Get apps or Remove apps (`arctic-shell-ipc apps install|remove`).
 
 - **Web search:** the engine for the launcher's last row and for `?` searches (DuckDuckGo,
   Startpage, Brave Search, Ecosia, Google or Bing). Saved in `~/.config/arctic/shell.json`
   (`webSearch`; your own `https://…%s…` address works there too).
+
+### Gaming (optional)
+
+**Default apps → Gaming (optional) → Review automatic setup…** shows the packages planned for
+the detected hardware, Secure Boot state, warnings and any blocked setup. **Install planned
+packages…** starts DNF's own confirmation only after RPM Fusion is available. Steam manages
+your account, games and Proton downloads. Arctic does not create an account, purchase a game,
+enrol a Secure Boot key or promise compatibility with every game. **Get ProtonPlus…** offers an
+optional manager for additional compatibility tools. See [Drivers](Drivers).
 
 ## Network
 
@@ -289,6 +322,16 @@ OpenVPN (`.ovpn`) or WireGuard (`.conf`) file from your VPN provider; each VPN t
 in the network menu. **Open the editor** starts the connection editor (`nm-connection-editor`) for
 proxies, fixed addresses and certificate logins; **Open nmtui** lists the Wi-Fi networks around
 you in a terminal.
+
+### Optional connections
+
+Network also offers **Tor Browser**, an optional **Tor SOCKS client**, **Tailscale**, and
+**OpenVPN support**. They are distinct choices: Tor Browser routes its own browser; a SOCKS
+service requires per-app routing and proxy-side DNS; Tailscale connects your devices; a VPN
+needs your provider's profile. Nothing is enabled or routed automatically. An ordinary SOCKS
+response is not proof of Tor identity or anonymity, and unconfigured apps or UDP can bypass it.
+Installing a client, starting its existing service, signing in and choosing routes are separate
+actions. NetworkManager handles WireGuard directly.
 
 ## Sharing
 

@@ -6,6 +6,14 @@ A 6 minute 47 second, 1920 × 1080 showcase made with HyperFrames. It walks thro
 
 [![Arctic Linux showcase](poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 
+## Replacement in preparation
+
+The [12 October revision source](revision-2026-10-12/) describes the current native apps, photo
+collection, separate Remove apps, local dictation and stable updates. New River narration has
+been generated through ElevenLabs; downloaded-media validation, sentence alignment, refreshed
+captures and the final render remain pending. The published video below remains the October 3
+edition. No replacement download is claimed yet.
+
 ## What the video shows
 
 The screen images are authentic assets from this repository, using the Arctic brand colors, Figtree, JetBrains Mono, and fox mark. Installer screenshots use demo data; they do not represent an installation performed for this video. Nautilus 50.3 and Kitty running Fish 4.6 were captured as real applications on Fedora 44 with Arctic’s styles. The tiling scene places those separate app captures over the Arctic desktop in HTML. The installer, shell, and Settings screens come from the project’s documented UI previews. The video uses animated screenshots and feature cards, rather than a continuous live screen recording.

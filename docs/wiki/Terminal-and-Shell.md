@@ -1,9 +1,12 @@
 # Terminal and shell
 
-`Super + Enter` opens a terminal. Out of the box that's **kitty** running **Fish**, and a small
+`Super + Enter` opens a terminal. On a new installation that's **Foot** running **Fish**, and a small
 block-drawn fox says hello.
 
-![kitty with the arctic-fetch fox greeting and the prompt](images/terminal-fetch.png)
+![An earlier kitty screenshot showing the same Arctic fox greeting](images/terminal-fetch.png)
+
+The screenshot above uses optional kitty from an earlier build. The current native default is Foot;
+existing accounts keep their chosen terminal.
 
 ## The fox greeting: `arctic-fetch`
 
@@ -109,7 +112,17 @@ work too (`neofetch --logo none`). If you install the real neofetch (from Nix or
 - fastfetch's options and modules: `fastfetch --help`, `fastfetch --list-modules` and
   [its wiki](https://github.com/fastfetch-cli/fastfetch/wiki/Configuration).
 
-## kitty
+## Foot
+
+Foot is the lightweight Wayland terminal selected for new installations. Arctic configures
+JetBrains Mono at 10.5 pt, comfortable padding, a block cursor without blinking, and colours
+from `~/.config/arctic/current/foot/colors.ini`. New windows read the current theme.
+
+Put your own settings in `~/.config/foot/foot.ini`. For example, change the `font` line in its
+`[main]` section to `font=JetBrains Mono:size=12`, or use **Settings → Appearance → Code font**.
+Keep the theme's `include` line if you want its colours to keep following Arctic.
+
+## kitty (optional)
 
 Arctic's kitty is set up to match the desktop:
 
@@ -220,13 +233,15 @@ To log in to this computer from another one, see **Settings → Sharing → Remo
 
 ## Other terminals
 
-If you picked another terminal in the installer (**Ghostty**, **Alacritty**, **foot** or
+If you picked another terminal in the installer (**kitty**, **Ghostty**, **Alacritty** or
 **Konsole**), `Super + Enter` opens that instead. foot and Alacritty get Arctic's colours too (in
 new windows after a theme change); Ghostty and Konsole start with their own look. To switch
 which terminal `Super + Enter` opens, see
 [Themes and customisation](Themes-and-Customisation#default-apps).
 
-## yazi
+## yazi (optional)
+
+Install yazi from the installer or Get apps before using this shortcut.
 
 `Super + Shift + F` (or `y` in the terminal) opens **yazi**, a quick file manager inside the
 terminal. Arrow keys move around, `Enter` opens, and `q` quits.

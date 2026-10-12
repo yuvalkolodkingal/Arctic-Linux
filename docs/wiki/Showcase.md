@@ -1,5 +1,10 @@
 # Arctic Linux showcase
 
+The video below is the published **3 October 2026** edition. A replacement English walkthrough
+with ElevenLabs narration and current default apps, photo wallpapers and local dictation is being
+prepared. Its audio, captures, captions and final render must be checked before new download
+links are published.
+
 [![Watch the Arctic Linux showcase](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-Poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 
 **[Watch or download the full video](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)** · [Release and editable source](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/showcase-2026-10-03) · [English captions (SRT)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/captions.srt) · [Web captions (VTT)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/captions.vtt)

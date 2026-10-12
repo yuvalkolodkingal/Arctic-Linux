@@ -18,7 +18,8 @@ its own, and adds its desktop on top. It's an independent project, not an offici
 
 Yes. Arctic Linux's own code is under the MIT licence; the fonts are under the SIL Open Font
 Licence, and the Nix SELinux policy under the LGPL. The apps it installs keep their own licences.
-Apps that aren't open source are marked **Proprietary** in the installer. The drivers it offers
+Apps that aren't open source are marked **Proprietary** in the installer. Photo wallpapers
+retain the artist's copyright and are not covered by the code's MIT licence. The drivers it offers
 for your hardware come from RPM Fusion: the NVIDIA and Broadcom drivers aren't open source, and
 the Intel and AMD video drivers include formats Fedora can't ship. You can untick all of them.
 
@@ -56,9 +57,10 @@ in the installer. You pick which system to start each time the computer starts. 
 
 ### Why does the installer need the internet?
 
-Only some apps are on the USB stick. The others (for example Zen Browser, Zed and Collabora
-Office by default) are downloaded while Arctic Linux installs, along with the media codecs. That
-keeps the USB image small and the apps current.
+The replacement image includes the native default apps. Optional apps, additional drivers and
+local dictation's engine and model need downloads. Current installer packages let you connect
+during installation or explicitly choose **Install offline** to queue extra setup for later.
+Dictation remains unavailable until its verified files and dependencies are present.
 
 ### How long does installing take?
 
@@ -124,9 +126,9 @@ app's name and press `Enter`. You can also use `dnf`, `flatpak` or Nix from a te
 
 ### How do I remove an app?
 
-Select it in the launcher (`Super + Space`) and press `Shift + Delete`, or open **Get apps → Remove
-apps**. You see exactly what goes before anything is removed. Packages Arctic Linux needs (the
-desktop, Blueman, the volume control, your only terminal, your login shell) can't be removed
+Select it in the launcher (`Super + Space`) and press `Shift + Delete`, or open the launcher's separate **Remove
+apps** item. You see exactly what goes before anything is removed. Packages Arctic Linux needs (the
+desktop and its dependencies, your only terminal, your login shell) can't be removed
 there, and the page says why. See [Remove apps](Apps-and-Software#remove-apps).
 
 ### Where's the Software app the installer mentions?
@@ -138,6 +140,14 @@ That's **Get apps** (`Super + Shift + A`).
 Yes, from version 0.2: **Settings** (`Super + S`, or the first item of the power menu). It
 changes the look, windows, displays, keyboard and mouse, shortcuts, default apps, network,
 Bluetooth, sound, updates, power and startup apps. See [Settings](Settings).
+
+### Can I dictate in Hebrew and English?
+
+Yes, once local setup is ready. **Settings → Dictation** selects the language and shows setup
+progress. `Super + Ctrl + X` starts recording and stops to insert; `Super + Ctrl + Backspace`
+cancels. Whisper runs on the computer, using CPU or supported Vulkan acceleration. A GPU failure
+discards the phrase and asks you to record again on CPU. See [Local dictation](Local-Dictation)
+for download sizes, measured limitations and recovery.
 
 ### How do I update?
 
@@ -173,7 +183,7 @@ but mixing them with Arctic's desktop isn't something we've tested.
 What you change in [Settings](Settings) goes to `~/.config/mango/settings.conf` and a few files in
 `~/.config/arctic/` (the page lists them all). Your own hand-written settings are in your home
 folder too: `~/.config/mango/user.conf` for the window manager,
-`~/.config/kitty/user.conf` for the terminal, `~/.config/fish/config.local.fish` for Fish, `~/.zshrc.local` for zsh and
+`~/.config/foot/foot.ini` for Foot (or `~/.config/kitty/user.conf` for optional kitty), `~/.config/fish/config.local.fish` for Fish, `~/.zshrc.local` for zsh and
 `~/.config/arctic/` for the theme, wallpaper and default apps. See
 [Themes and customisation](Themes-and-Customisation#your-own-settings-files).
 
