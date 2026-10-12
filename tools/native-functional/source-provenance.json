@@ -26,7 +26,7 @@
   "release_acceptance": false,
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "a3f5b1e6acc81b759a0dfa723012ea4db9deb45577514825de6090762d85f6b1",
-    "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
+    "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
     "test_native_v6.py": "3866ef094ef05818c4f039f312b30c8ea91dbfccc5e7c42773f401d81735c97e",
     "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
     "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
