@@ -732,11 +732,11 @@ Page {
                                 Accessible.role: Accessible.RadioButton
                                 Accessible.name: modelData.name
                                 Accessible.checked: chosen
-                                Accessible.description: modelData.arctic ? "" : "F2 renames it, Delete deletes it"
+                                Accessible.description: modelData.arctic
+                                    ? "Delete hides it from Arctic’s collection; hidden wallpapers can be restored below"
+                                    : "F2 renames it, Delete deletes it"
                                 Keys.onPressed: event => {
-                                    if (thumb.modelData.arctic)
-                                        return;
-                                    if (event.key === Qt.Key_F2) {
+                                    if (event.key === Qt.Key_F2 && !thumb.modelData.arctic) {
                                         renameDialog.start(thumb.modelData);
                                         event.accepted = true;
                                     } else if (event.key === Qt.Key_Delete) {
@@ -794,34 +794,41 @@ Page {
                                             radius: Theme.radiusMd
                                             gapColor: Theme.surfaceRaised
                                         }
-                                        // Your own pictures: rename and delete (shown on hover and focus).
+                                        // Personal pictures can be renamed or deleted. Packaged photos
+                                        // are hidden per user, so an RPM update cannot bring them back.
                                         Row {
-                                            visible: !thumb.modelData.arctic && (thumb.hovered || thumb.activeFocus)
+                                            visible: thumb.hovered || thumb.activeFocus
                                             anchors.top: parent.top
                                             anchors.right: parent.right
                                             anchors.margins: 6
                                             spacing: 4
                                             Repeater {
-                                                model: [{ icon: "edit", tip: "Rename" }, { icon: "trash", tip: "Delete" }]
+                                                model: thumb.modelData.arctic
+                                                       ? [{ icon: "trash", tip: "Hide", action: "hide" }]
+                                                       : [{ icon: "edit", tip: "Rename", action: "rename" },
+                                                          { icon: "trash", tip: "Delete", action: "delete" }]
                                                 T.AbstractButton {
                                                     id: hit
                                                     required property var modelData
-                                                    required property int index
                                                     width: 26
                                                     height: 26
                                                     hoverEnabled: true
                                                     focusPolicy: Qt.NoFocus
                                                     Accessible.role: Accessible.Button
                                                     Accessible.name: modelData.tip + " " + thumb.modelData.name
-                                                    onClicked: index === 0 ? renameDialog.start(thumb.modelData) : deleteDialog.start(thumb.modelData)
+                                                    onClicked: modelData.action === "rename"
+                                                               ? renameDialog.start(thumb.modelData)
+                                                               : deleteDialog.start(thumb.modelData)
                                                     background: Rectangle {
                                                         radius: 8
-                                                        color: hit.hovered ? (hit.index === 1 ? Theme.error : Theme.surfaceRaised) : "#b3000000"
+                                                        color: hit.hovered
+                                                               ? (hit.modelData.action === "rename" ? Theme.surfaceRaised : Theme.error)
+                                                               : "#b3000000"
                                                     }
                                                     contentItem: Icon {
                                                         name: hit.modelData.icon
                                                         size: 16
-                                                        color: hit.hovered && hit.index === 0 ? Theme.ink : "#ffffff"
+                                                        color: hit.hovered && hit.modelData.action === "rename" ? Theme.ink : "#ffffff"
                                                     }
                                                 }
                                             }
@@ -857,6 +864,20 @@ Page {
                             weight: Font.DemiBold
                         }
                     }
+                }
+                ArButton {
+                    visible: (page.walls.hiddenArctic || []).length > 0
+                    iconName: "refresh"
+                    text: (page.walls.hiddenArctic || []).length === 1
+                          ? "Restore hidden Arctic wallpaper"
+                          : "Restore " + (page.walls.hiddenArctic || []).length + " hidden Arctic wallpapers"
+                    gapColor: Theme.surfaceRaised
+                    onClicked: Backend.call(["wallpaper-restore", "all"], r => {
+                        if (r.ok) {
+                            page.loadWallpapers();
+                            Backend.notify("success", "Arctic wallpapers restored", false);
+                        }
+                    })
                 }
             }
         }
@@ -1012,8 +1033,10 @@ Page {
         width: 440
         iconName: "trash"
         tone: "error"
-        title: "Delete “" + (item ? item.name : "") + "”?"
-        body: "The picture is deleted from " + (item ? page.tildePath(String(item.path).replace(/\/[^/]*$/, "")) : "your folder") + ". This can’t be undone."
+        title: (item && item.arctic ? "Hide “" : "Delete “") + (item ? item.name : "") + "”?"
+        body: item && item.arctic
+              ? "This packaged picture is hidden from the picker and automatic changes. You can restore it below."
+              : "The picture is deleted from " + (item ? page.tildePath(String(item.path).replace(/\/[^/]*$/, "")) : "your folder") + ". This can’t be undone."
         property var item: null
         function start(it) {
             item = it;
@@ -1027,14 +1050,20 @@ Page {
             },
             ArButton {
                 variant: "destructive"
-                text: "Delete"
-                onClicked: Backend.call(["wallpaper-delete", deleteDialog.item.path], r => {
-                    deleteDialog.close();
-                    if (r.ok) {
-                        page.loadWallpapers();
-                        Backend.notify("success", "Picture deleted", false);
-                    }
-                })
+                text: deleteDialog.item && deleteDialog.item.arctic ? "Hide" : "Delete"
+                onClicked: {
+                    const hiding = deleteDialog.item.arctic;
+                    const command = hiding
+                                  ? ["wallpaper-hide", deleteDialog.item.slug]
+                                  : ["wallpaper-delete", deleteDialog.item.path];
+                    Backend.call(command, r => {
+                        deleteDialog.close();
+                        if (r.ok) {
+                            page.loadWallpapers();
+                            Backend.notify("success", hiding ? "Arctic wallpaper hidden" : "Picture deleted", false);
+                        }
+                    });
+                }
             }
         ]
     }
