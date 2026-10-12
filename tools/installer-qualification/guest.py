@@ -23,6 +23,7 @@ import struct
 import sys
 import tempfile
 import time
+from types import FunctionType, ModuleType
 import zlib
 
 SCHEMA = 'arctic-live-installer-restoration-v1'
@@ -199,8 +200,31 @@ TARGET_DIAGNOSTIC_PHASES = frozenset((
 TARGET_DIAGNOSTIC_ERRNOS = {1: 'eperm', 5: 'eio', 6: 'enxio', 12: 'enomem',
     13: 'eacces', 16: 'ebusy', 19: 'enodev', 20: 'enotdir', 22: 'einval',
     30: 'erofs', 38: 'enosys', 40: 'eloop', 95: 'eopnotsupp'}
+SECURITY_DIAGNOSTIC_SITES = {
+    ('parse_audit_status', 2): 'security-finish-audit-status-enabled',
+    ('parse_audit_status', 3): 'security-finish-audit-status-lost',
+    ('verify_security', 1): 'security-finish-verify-selinux',
+    ('verify_security', 2): 'security-finish-verify-audit-mode',
+    ('verify_security', 3): 'security-finish-verify-audit-lost',
+    ('verify_security', 5): 'security-finish-verify-avc',
+    ('SecurityInterval.state', 1): 'security-finish-getenforce',
+    ('SecurityInterval.state', 2): 'security-finish-audit-status-command',
+    ('SecurityInterval.finish', 1): 'security-finish-state',
+    ('SecurityInterval.finish', 2): 'security-finish-journal-command',
+    ('SecurityInterval.finish', 4): 'security-finish-journal-json',
+    ('SecurityInterval.finish', 7): 'security-finish-audit-stat',
+    ('SecurityInterval.finish', 9): 'security-finish-audit-rotation',
+    ('SecurityInterval.finish', 11): 'security-finish-audit-bound',
+    ('SecurityInterval.finish', 12): 'security-finish-audit-open',
+    ('SecurityInterval.finish', 14): 'security-finish-audit-read',
+    ('SecurityInterval.finish', 15): 'security-finish-audit-exists',
+    ('SecurityInterval.finish', 17): 'security-finish-new-audit-bound',
+    ('SecurityInterval.finish', 18): 'security-finish-new-audit-read',
+    ('SecurityInterval.finish', 19): 'security-finish-verify',
+}
+SECURITY_DIAGNOSTIC_PHASES = frozenset((*SECURITY_DIAGNOSTIC_SITES.values(), 'security-finish-unknown'))
 ACTIVE_DIAGNOSTIC_PHASES = frozenset((
-    *TARGET_DIAGNOSTIC_PHASES,
+    *TARGET_DIAGNOSTIC_PHASES, *SECURITY_DIAGNOSTIC_PHASES,
     'copy-identities', 'copy-identity-continuity', 'copy-snapshot', 'copy-progress-fields',
     'copy-progress-guard', 'copy-config', 'copy-shipped-bindings', 'copy-keyboard-files',
     'copy-keyboard-continuity', 'copy-writer', 'copy-observation', 'copy-progress-continuity',
@@ -221,6 +245,40 @@ ACTIVE_DIAGNOSTIC_PHASES = frozenset((
       for operation in ('ready', 'valid', 'next')),
     *('prepare-' + page + '-fill'
       for page in ('keyboard', 'network', 'disk', 'encryption', 'account', 'apps'))))
+
+
+def security_interval_diagnostic(error, native):
+    """Project only a fixed call-site label from the reviewed native traceback."""
+    fallback = 'security-finish-unknown'
+    if type(native) is not ModuleType or not any(type(error) is kind for kind in DIAGNOSTIC_EXCEPTION_CLASSES):
+        return fallback
+    source = vars(native)
+    path = source.get('__file__')
+    interval = source.get('SecurityInterval')
+    if type(path) is not str or Path(path).name != 'native_smoke.py' or type(interval) is not type:
+        return fallback
+    functions = [source.get(name) for name in ('execute', 'require', 'parse_audit_status', 'verify_security')]
+    functions += [getattr(interval, name, None) for name in ('state', 'finish')]
+    if not all(type(function) is FunctionType and function.__globals__ is source
+               and function.__code__.co_filename == path for function in functions):
+        return fallback
+    owners = {function.__code__ for function in functions}
+    try:
+        trace = BaseException.__traceback__.__get__(error, type(error))
+    except Exception:
+        return fallback
+    result = fallback
+    for _ in range(32):
+        if trace is None:
+            break
+        frame = trace.tb_frame
+        if frame.f_globals is source and frame.f_code in owners:
+            label = SECURITY_DIAGNOSTIC_SITES.get(
+                (frame.f_code.co_qualname, trace.tb_lineno - frame.f_code.co_firstlineno))
+            if label is not None:
+                result = label
+        trace = trace.tb_next
+    return result
 
 
 def primary_diagnostic_reason(error):
