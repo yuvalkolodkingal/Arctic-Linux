@@ -571,12 +571,4 @@ Rectangle {
             }
         }
     }
-
-    // Focus the password field once the window is up (SDDM activates the
-    // primary screen's window).
-    Timer {
-        interval: 0
-        running: primaryScreen
-        onTriggered: (root.typedUser ? userField.input : passwordField.input).forceActiveFocus()
-    }
 }
