@@ -179,7 +179,8 @@ class PrimaryControls(unittest.TestCase):
 
     def test_security_diagnostic_rejects_foreign_hostile_and_unbounded_inputs(self):
         foreign = self.security_error(lambda: (_ for _ in ()).throw(RuntimeError(PRIVATE)))
-        for error, native in ((foreign, N), (HostileError(PRIVATE), N), (foreign, SimpleNamespace())):
+        hostile = self.security_error(lambda: (_ for _ in ()).throw(HostileError(PRIVATE)))
+        for error, native in ((foreign, N), (hostile, N), (foreign, SimpleNamespace())):
             with self.subTest(kind=type(error).__name__, native=type(native).__name__):
                 self.assertEqual(G.security_interval_diagnostic(error, native), 'security-finish-unknown')
         self.assertIn('security-finish-unknown', G.SECURITY_DIAGNOSTIC_PHASES)

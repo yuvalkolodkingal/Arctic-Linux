@@ -250,7 +250,7 @@ ACTIVE_DIAGNOSTIC_PHASES = frozenset((
 def security_interval_diagnostic(error, native):
     """Project only a fixed call-site label from the reviewed native traceback."""
     fallback = 'security-finish-unknown'
-    if type(native) is not ModuleType or not any(type(error) is kind for kind in DIAGNOSTIC_EXCEPTION_CLASSES):
+    if type(native) is not ModuleType or not isinstance(error, BaseException):
         return fallback
     source = vars(native)
     path = source.get('__file__')
