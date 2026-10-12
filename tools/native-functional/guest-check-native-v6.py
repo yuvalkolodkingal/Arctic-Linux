@@ -37,6 +37,10 @@ MIMES = {'inode/directory': 'pcmanfm.desktop', 'text/plain': 'featherpad.desktop
          'application/zip': 'xarchiver.desktop'}
 AVC = re.compile(r'avc:\s*denied|type=(?:USER_)?AVC\b', re.I)
 LIMIT = 4 * 1024 * 1024
+JOURNAL_LINE_LIMIT = 1024 * 1024
+JOURNAL_RECORD_LIMIT = 250000
+JOURNAL_STDERR_LIMIT = 64 * 1024
+JOURNAL_READ_SIZE = 64 * 1024
 
 
 def require(value, message):
@@ -141,12 +145,127 @@ def parse_audit_status(text):
     return dict(enabled=int(fields['enabled']), lost=int(fields['lost']))
 
 
-def verify_security(before, after, new_messages):
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('duplicate journal JSON key')
+        result[key] = value
+    return result
+
+
+def _invalid_json_constant(_value):
+    raise ValueError('nonfinite journal JSON number')
+
+
+def journal_avc_count(cursor, timeout=60):
+    """Scan every bounded journal JSON record without retaining message text."""
+    process = None
+    try:
+        if (type(cursor) is not str or re.fullmatch(r'[A-Za-z0-9_=.;:-]{1,4096}', cursor) is None
+                or type(timeout) not in (int, float) or isinstance(timeout, bool)
+                or not math.isfinite(timeout) or not 0 < timeout <= 600):
+            raise ValueError('invalid journal stream request')
+        process = subprocess.Popen(
+            ['journalctl', '-b', '--no-pager', '--after-cursor', cursor,
+             '-o', 'json', '--output-fields=MESSAGE', '--all'],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            start_new_session=True)
+        if process.stdout is None or process.stderr is None:
+            raise RuntimeError('journal stream pipes unavailable')
+        streams = {process.stdout.fileno(): ('stdout', bytearray()),
+                   process.stderr.fileno(): ('stderr', bytearray())}
+        for descriptor in streams:
+            os.set_blocking(descriptor, False)
+        deadline = time.monotonic() + timeout
+        records = avcs = stderr_bytes = 0
+        with selectors.DefaultSelector() as poller:
+            for descriptor in streams:
+                poller.register(descriptor, selectors.EVENT_READ)
+            while poller.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired('journalctl', timeout)
+                for key, _mask in poller.select(min(1.0, remaining)):
+                    descriptor = key.fd
+                    try:
+                        chunk = os.read(descriptor, JOURNAL_READ_SIZE)
+                    except BlockingIOError:
+                        continue
+                    if not chunk:
+                        poller.unregister(descriptor)
+                        continue
+                    kind, buffer = streams[descriptor]
+                    if kind == 'stderr':
+                        stderr_bytes += len(chunk)
+                        if stderr_bytes > JOURNAL_STDERR_LIMIT:
+                            raise ValueError('journal stderr exceeded bound')
+                        continue
+                    buffer.extend(chunk)
+                    while b'\n' in buffer:
+                        line, _, remainder = buffer.partition(b'\n')
+                        buffer[:] = remainder
+                        if len(line) > JOURNAL_LINE_LIMIT:
+                            raise ValueError('journal record exceeded bound')
+                        if not line:
+                            continue
+                        records += 1
+                        if records > JOURNAL_RECORD_LIMIT:
+                            raise ValueError('journal record count exceeded bound')
+                        record = json.loads(
+                            line.decode('utf-8'), object_pairs_hook=_unique_json_object,
+                            parse_constant=_invalid_json_constant)
+                        if type(record) is not dict:
+                            raise ValueError('journal record is not an object')
+                        message = record.get('MESSAGE', '')
+                        if type(message) is list:
+                            if (len(message) > JOURNAL_LINE_LIMIT
+                                    or any(type(value) is not int or not 0 <= value <= 255
+                                           for value in message)):
+                                raise ValueError('invalid binary journal message')
+                            message = bytes(message).decode(errors='replace')
+                        if type(message) is not str:
+                            raise ValueError('invalid journal message')
+                        if len(message.encode('utf-8')) > JOURNAL_LINE_LIMIT:
+                            raise ValueError('journal message exceeded bound')
+                        if AVC.search(message):
+                            avcs += 1
+                    if len(buffer) > JOURNAL_LINE_LIMIT:
+                        raise ValueError('journal record exceeded bound')
+        if streams[process.stdout.fileno()][1]:
+            raise ValueError('unterminated journal record')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or process.wait(timeout=remaining) != 0:
+            raise RuntimeError('journalctl failed')
+        return dict(records=records, avcs=avcs)
+    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError, RuntimeError):
+        raise RuntimeError('journal stream validation failed') from None
+    finally:
+        if process is not None:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=5)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except OSError:
+                        pass
+
+
+def verify_security(before, after, journal_avcs, audit_messages=''):
     require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')
     require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')
     require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')
-    denied = [line for line in new_messages.splitlines() if AVC.search(line)]
-    require(not denied, 'new AVC requires investigation: ' + '\n'.join(denied[:20]))
+    require(type(journal_avcs) is int and journal_avcs >= 0, 'invalid journal AVC projection')
+    audit_avcs = sum(1 for line in audit_messages.splitlines() if AVC.search(line))
+    require(journal_avcs + audit_avcs == 0, 'new AVC requires investigation')
     return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,
                 audit_enabled=after['audit']['enabled'] in (1,2),
                 scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')
@@ -172,10 +291,8 @@ class SecurityInterval:
 
     def finish(self):
         after = self.state()
-        journal = execute(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,
-                           '-o', 'json'], timeout=60)[1]
-        messages = '\n'.join(str(json.loads(line).get('MESSAGE', ''))
-                             for line in journal.splitlines() if line)
+        journal = journal_avc_count(self.cursor, timeout=60)
+        audit_messages = ''
         if self.audit_offset:
             info = self.audit_file.stat()
             dev, ino, offset = self.audit_offset
@@ -184,13 +301,12 @@ class SecurityInterval:
             require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')
             with self.audit_file.open('rb') as stream:
                 stream.seek(offset)
-                messages += '\n' + stream.read(LIMIT).decode(errors='replace')
+                audit_messages = stream.read(LIMIT).decode(errors='replace')
         elif self.audit_file.exists():
             # The new file may include records not forwarded to the journal.
             require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')
-            messages += '\n' + self.audit_file.read_text(errors='replace')
-        return verify_security(self.before, after, messages)
-
+            audit_messages = self.audit_file.read_text(errors='replace')
+        return verify_security(self.before, after, journal['avcs'], audit_messages)
 
 def discover_desktop():
     """Actual login environment, including post-exec Mango IPC and Xwayland DISPLAY."""

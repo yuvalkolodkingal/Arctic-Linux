@@ -123,13 +123,13 @@ class PrimaryControls(unittest.TestCase):
         clean = dict(selinux='Enforcing', audit=dict(enabled=1, lost=0))
         cases = (
             ('security-finish-verify-selinux',
-             lambda: N.verify_security(dict(selinux='Permissive', audit=clean['audit']), clean, '')),
+             lambda: N.verify_security(dict(selinux='Permissive', audit=clean['audit']), clean, 0)),
             ('security-finish-verify-audit-mode',
-             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=0, lost=0)), '')),
+             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=0, lost=0)), 0)),
             ('security-finish-verify-audit-lost',
-             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=1, lost=1)), '')),
+             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=1, lost=1)), 0)),
             ('security-finish-verify-avc',
-             lambda: N.verify_security(clean, clean, 'type=AVC password=' + PRIVATE)),
+             lambda: N.verify_security(clean, clean, 0, 'type=AVC password=' + PRIVATE)),
             ('security-finish-audit-status-enabled', lambda: N.parse_audit_status('lost 0')),
             ('security-finish-audit-status-lost', lambda: N.parse_audit_status('enabled 1')),
         )
@@ -155,27 +155,20 @@ class PrimaryControls(unittest.TestCase):
         interval.cursor = 's=synthetic'
         with tempfile.TemporaryDirectory() as temp:
             interval.audit_file = Path(temp) / 'absent-audit.log'
-            def execute(argv, **_):
-                if argv == ['getenforce']:
-                    return 0, 'Enforcing', ''
-                if argv == ['auditctl', '-s']:
-                    return 0, 'enabled 1\nlost 0', ''
-                if argv[0] == 'journalctl':
-                    return 0, '{"MESSAGE":"' + PRIVATE, ''
-                raise AssertionError('unexpected command')
             error = None
-            with patch.object(N, 'execute', execute):
-                try:
-                    interval.finish()
-                except BaseException as caught:
-                    error = caught
+            with patch.object(N, 'journal_avc_count', side_effect=RuntimeError(PRIVATE)):
+                with patch.object(interval, 'state', return_value=copy.deepcopy(interval.before)):
+                    try:
+                        interval.finish()
+                    except BaseException as caught:
+                        error = caught
             self.assertIsNotNone(error)
             label = G.security_interval_diagnostic(error, N)
-            self.assertEqual(label, 'security-finish-journal-json')
+            self.assertEqual(label, 'security-finish-journal-stream')
             value = G.masked_active_error(error, label)
             self.assertNotIn(PRIVATE, value)
             self.assertEqual(R.primary_reported_codes({'errors': [value]}, True)[1],
-                             'installer-reported-active-primary-phase-security-finish-journal-json')
+                             'installer-reported-active-primary-phase-security-finish-journal-stream')
 
     def test_security_diagnostic_rejects_foreign_hostile_and_unbounded_inputs(self):
         foreign = self.security_error(lambda: (_ for _ in ()).throw(RuntimeError(PRIVATE)))
