@@ -211,19 +211,13 @@ def amber_runs(path, scale=2):
     return runs, scale
 
 
-def _login_controls(im):
-    """Find the SDDM submit button beside both edges of its password field.
-
-    Wallpaper colours can produce much longer amber runs than the controls. Match
-    their local geometry instead of letting unrelated rows hide the login card.
-    The card is horizontally centred; its exact vertical position depends on the
-    screen height, clock and number of user rows (branding/sddm/arctic/Main.qml).
-    """
+def _login_geometry(im):
+    """Return the password-field and submit-button boxes for the SDDM card."""
     w, h = im.size
     if w < 320 or h < 200:
-        return False
-    region = im.crop((max(0, w // 2 - 400), h // 4,
-                      min(w, w // 2 + 400), h))
+        return None
+    rx0, ry0 = max(0, w // 2 - 400), h // 4
+    region = im.crop((rx0, ry0, min(w, w // 2 + 400), h))
     rw, rh = region.size
     mask = bytearray(_is_amber(p) for p in region.getdata())
     components = []
@@ -259,15 +253,63 @@ def _login_controls(im):
                     and 0 < bx0 - x1 <= bw):
                 edges.append((x0, y0, x1, y1))
         for tx0, ty0, tx1, ty1 in edges:
-            if not (abs(ty0 - by0) <= 0.2 * bh):
+            if abs(ty0 - by0) > 0.2 * bh:
                 continue
             for lx0, ly0, lx1, ly1 in edges:
                 if (abs(ly1 - by1) <= 0.2 * bh
                         and ly0 - ty1 >= 0.7 * bh
                         and abs(tx0 - lx0) <= 0.2 * bw
                         and abs(tx1 - lx1) <= 0.2 * bw):
-                    return True
-    return False
+                    field = (tx0 + rx0, ty0 + ry0, tx1 + rx0, ly1 + ry0)
+                    button = (bx0 + rx0, by0 + ry0, bx1 + rx0, by1 + ry0)
+                    return field, button
+    return None
+
+
+def _login_controls(im):
+    """Find the SDDM submit button beside both edges of its password field.
+
+    Wallpaper colours can produce much longer amber runs than the controls. Match
+    their local geometry instead of letting unrelated rows hide the login card.
+    The card is horizontally centred; its exact vertical position depends on the
+    screen height, clock and number of user rows (branding/sddm/arctic/Main.qml).
+    """
+    return _login_geometry(im) is not None
+
+
+def login_password_changed(before_path, after_path):
+    """Whether bounded pixels inside the detected password text ROI changed.
+
+    This checks that physical input reached the editable field without reading,
+    recognizing or retaining the password. Changes to wallpaper, clock, focus
+    border, lock icon or submit button are excluded.
+    """
+    try:
+        before = Image.open(before_path).convert("L")
+        after = Image.open(after_path).convert("L")
+    except OSError:
+        return False
+    if before.size != after.size:
+        return False
+    before_geometry = _login_geometry(Image.open(before_path).convert("RGB"))
+    after_geometry = _login_geometry(Image.open(after_path).convert("RGB"))
+    if before_geometry is None or after_geometry is None:
+        return False
+    before_field, _ = before_geometry
+    after_field, _ = after_geometry
+    if any(abs(a - b) > 2 for a, b in zip(before_field, after_field)):
+        return False
+    x0, y0, x1, y1 = before_field
+    height = y1 - y0
+    # Exclude the amber border/caret, the leading lock icon and trailing padding.
+    roi = (x0 + height, y0 + max(3, height // 6),
+           x1 - max(3, height // 6), y1 - max(3, height // 6))
+    if roi[2] <= roi[0] or roi[3] <= roi[1]:
+        return False
+    a = before.crop(roi)
+    b = after.crop(roi)
+    changed = sum(abs(x - y) > 24 for x, y in zip(a.getdata(), b.getdata()))
+    return changed >= 24
 
 
 def classify(path):

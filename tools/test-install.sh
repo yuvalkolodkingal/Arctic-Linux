@@ -1135,6 +1135,75 @@ def wait_for(vm, prefix, want, limit, every=5):
         time.sleep(every)
     return None
 
+def discard_private_shot(path):
+    """Remove a transient screenshot that may reveal typed-length or session data."""
+    if not path:
+        return
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
+def installed_login(vm):
+    """Enter the installed password only after its bounded field ROI changes."""
+    for attempt in (1, 2, 3):
+        before = vm.shot(f"boot-42-password-before-{attempt}")
+        if not before or vmtest.classify(before) != "login":
+            log("installed login controls are not visible")
+            return False
+        vm.keys("ctrl-a", "backspace")
+        vm.type_text(password, gap=0.3)
+        time.sleep(1)
+        typed = vm.shot(f"boot-42-password-typed-{attempt}")
+        accepted = (typed and vmtest.classify(typed) == "login"
+                    and vmtest.login_password_changed(before, typed))
+        discard_private_shot(typed)
+        if not accepted:
+            vm.keys("ctrl-a", "backspace")
+            time.sleep(1)
+            log("installed password field did not accept physical input")
+            return False
+        vm.keys("ret")
+        t = time.time()
+        while time.time() - t < 150 and vm.alive():
+            time.sleep(10)
+            probe = vm.shot("boot-43-probe")
+            if probe and vmtest.classify(probe) != "login":
+                return True
+        log(f"installed login did not transition (attempt {attempt})")
+    return False
+
+
+def installed_session_settled(vm):
+    """Require a stable installed desktop and reject any return to SDDM."""
+    t = time.time()
+    previous = None
+    stable = 0
+    index = 0
+    while time.time() - t < 900 and vm.alive():
+        time.sleep(20)
+        index += 1
+        current = vm.shot(f"boot-50-session-{index:02d}")
+        if not current:
+            continue
+        if vmtest.classify(current) == "login":
+            discard_private_shot(previous)
+            discard_private_shot(current)
+            log("installed session returned to the login screen")
+            return False
+        if previous:
+            stable = stable + 1 if vmtest.changed_fraction(previous, current) < 0.02 else 0
+            discard_private_shot(previous)
+        previous = current
+        if stable >= 2 and time.time() - t > 90:
+            log(f"session settled after {time.time() - t:.0f}s")
+            return True
+    discard_private_shot(previous)
+    log("installed session did not settle within 900s")
+    return False
+
+
 def stage_boot():
     vm = None
     display = None
@@ -1201,43 +1270,14 @@ def stage_boot():
             log("no login screen detected; typing the password anyway")
             ok = False
         dictation_host_stage("boot-login")
-        for attempt in (1, 2, 3):
-            vm.type_text(password, gap=0.3)
-            time.sleep(1)
-            vm.shot(f"boot-42-password-typed-{attempt}")
-            vm.keys("ret")
-            # SDDM clears the field and says so when the password was wrong; the card stays.
-            t = time.time()
-            gone = False
-            while time.time() - t < 150 and vm.alive():
-                time.sleep(10)
-                q = vm.shot("boot-43-probe")
-                if q and vmtest.classify(q) != "login":
-                    gone = True
-                    break
-            if gone:
-                break
-            log(f"still on the login screen after the password (attempt {attempt}): typing it again")
-            vm.shot(f"boot-43-login-again-{attempt}")
-        # The desktop: the login card is gone and the screen settles.
+        if not installed_login(vm):
+            vm.shot("boot-44-login-failed")
+            return 1
+        # The desktop must stay off the login card and settle before collection.
         dictation_host_stage("boot-settle")
-        t = time.time()
-        prev = None
-        stable = 0
-        i = 0
-        while time.time() - t < 900 and vm.alive():
-            time.sleep(20)
-            i += 1
-            p = vm.shot(f"boot-50-session-{i:02d}")
-            if not p:
-                continue
-            kind = vmtest.classify(p)
-            if prev and kind != "login":
-                stable = stable + 1 if vmtest.changed_fraction(prev, p) < 0.02 else 0
-            prev = p
-            if stable >= 2 and time.time() - t > 90:
-                break
-        log(f"session settled after {time.time() - t:.0f}s")
+        if not installed_session_settled(vm):
+            vm.shot("boot-50-settle-failed")
+            return 1
         time.sleep(30)
         vm.shot("boot-51-desktop")
         collected = False

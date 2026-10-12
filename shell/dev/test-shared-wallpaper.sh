@@ -74,6 +74,19 @@ shot() {
   grim -o HEADLESS-2 "$OUT/$1-portrait.png"
 }
 shot sddm-a
+# Exercise the actual Wayland keyboard path. Do not submit the test-mode login.
+wtype -s 80 abc
+sleep 1
+shot sddm-typed
+python3 - "$REPO" "$OUT/sddm-a-landscape.png" "$OUT/sddm-typed-landscape.png" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('vmtest', Path(sys.argv[1]) / 'tools/lib/vmtest.py')
+vmtest = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(vmtest)
+assert vmtest.login_password_changed(sys.argv[2], sys.argv[3]), 'physical input did not change password ROI'
+PY
 arctic-login-wallpaper set "$WORK/pictures/b.png" >"$OUT/separate-b.json"
 sleep 6
 shot sddm-b

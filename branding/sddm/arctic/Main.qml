@@ -46,6 +46,9 @@ Rectangle {
     Component.onCompleted: {
         Theme.dark = config.stringValue("colorScheme") !== "winter"
         Theme.reduceMotion = reduceMotion
+        // TextField is a wrapper Item; focus its real editable control so the
+        // first physical key from the display manager reaches the password.
+        passwordField.input.forceActiveFocus()
     }
 
     // ---- fonts (bundled; Figtree + JetBrains Mono, SIL OFL) -------------------
@@ -357,7 +360,6 @@ Rectangle {
                     placeholder: qsTr("Password")
                     error: root.failed
                     enabled: !root.busy
-                    focus: true
                     onAccepted: root.login()
                     onTextChanged: if (text.length > 0) { root.failed = false; root.message = "" }
 
