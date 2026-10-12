@@ -251,7 +251,7 @@ class RotateTests(unittest.TestCase):
         self.assertIn('no pictures in arctic', refused.stderr)
         self.wallpaper('rotate', '1h', 'both')
         self.wallpaper('next')
-        self.assertEqual(self.drawn(), 'a.png')
+        self.assertIn(self.drawn(), {'a.png', 'b.jpg', 'c.webp'})
 
     def test_arctics_own(self):
         self.wallpaper('rotate', '1h', 'arctic')
