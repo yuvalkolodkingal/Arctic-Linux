@@ -15,11 +15,34 @@ def load(name, path):
 
 causal = load('candidate_profile_causal', ROOT / 'tools/performance/causal.py')
 comparison = load('candidate_profile_compare', ROOT / 'tools/performance/compare.py')
+contract = load('candidate_profile_contract', ROOT / 'tools/performance/contract.py')
 AUDIT = ROOT / 'tools/performance/mango-audits/315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab.json'
 AUDIT_SHA256 = '45b14e12747b81f2133d812339267e7460a222d5c9a4e7cb6cc3dd5019c2bba7'
 EXECUTABLE_SHA256 = '315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab'
 
 class CandidateMangoProfileControls(unittest.TestCase):
+    def test_profile_append_preserves_historical_source_and_pins_current_observer(self):
+        marker = b'\\n# candidate-profile-315bc-begin\\n'
+        ending = b'# candidate-profile-315bc-end\\n'
+        old_hashes = {
+            'causal.py': '3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9',
+            'compare.py': '4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9',
+        }
+        for name, expected in old_hashes.items():
+            current = (ROOT / 'tools/performance' / name).read_bytes()
+            self.assertEqual(current.count(marker), 1)
+            before, addition = current.split(marker)
+            self.assertEqual(addition.count(ending), 1)
+            profile, after = addition.split(ending)
+            self.assertTrue(profile.startswith(b'MAPPING_PROFILES += (\\n'))
+            self.assertEqual(hashlib.sha256(before + after).hexdigest(), expected)
+        observer = contract.observer_hashes(ROOT)
+        runner = (ROOT / 'tools/performance/run-paired.py').read_bytes()
+        self.assertEqual(runner.count(hashlib.sha256(
+            (ROOT / 'tools/performance/causal.py').read_bytes()).hexdigest().encode()), 1)
+        for key in ('source_sha256', 'frozen_sha256', 'comparator_sha256'):
+            self.assertEqual(runner.count(observer[key].encode()), 1)
+
     def test_audit_bytes_and_exact_profile_are_bound_in_both_consumers(self):
         raw = AUDIT.read_bytes()
         self.assertEqual(hashlib.sha256(raw).hexdigest(), AUDIT_SHA256)
