@@ -67,6 +67,33 @@ class PrivateValue(ValueError):
         raise AssertionError('exception representation must remain private')
 
 
+def hostile_exception(base, constructor=()):
+    """Return a caught subclass whose every foreign observation path is hostile."""
+    accesses = []
+    class HostileMeta(type):
+        def __getattribute__(cls, name):
+            if name == '__mro__':
+                accesses.append('metaclass-mro')
+                raise AssertionError('foreign metaclass accessor')
+            return type.__getattribute__(cls, name)
+    class Hostile(base, metaclass=HostileMeta):
+        def __getattribute__(self, name):
+            if name in ('__class__', 'args'):
+                accesses.append(name)
+                raise AssertionError('foreign exception accessor')
+            return BaseException.__getattribute__(self, name)
+        def __str__(self):
+            accesses.append('str')
+            raise AssertionError('foreign exception text')
+        def __repr__(self):
+            accesses.append('repr')
+            raise AssertionError('foreign exception representation')
+        def __eq__(self, other):
+            accesses.append('equality')
+            raise AssertionError('foreign exception equality')
+    return Hostile(*constructor), accesses
+
+
 class CollectorDiagnosticControls(unittest.TestCase):
     def test_complete_layer_rolls_back_to_exact_parent_source(self):
         current = Path(guest.__file__).read_text()
@@ -97,6 +124,26 @@ class CollectorDiagnosticControls(unittest.TestCase):
                     public = json.dumps({'code': code, 'release_acceptance': False}, sort_keys=True)
                     self.assertNotIn('private', public)
 
+    def test_every_late_family_avoids_hostile_instance_and_metaclass_access(self):
+        families = (
+            (guest.Invalid, (), 'invalid'),
+            (OSError, ('private path',), 'os-error'),
+            (ValueError, ('private text',), 'value-error'),
+            (subprocess.TimeoutExpired,
+             (['private', 'argv'], 1, b'private output', b'private stderr'), 'timeout'),
+            (KeyError, ('private key',), 'key-error'),
+            (TypeError, ('private type',), 'type-error'),
+        )
+        for base, constructor, label in families:
+            with self.subTest(label=label):
+                error, accesses = hostile_exception(base, constructor)
+                code = guest.collector_diagnostic_code('controller', error)
+                self.assertEqual(code, 'collector-controller-' + label)
+                self.assertEqual(accesses, [])
+                public = json.dumps(
+                    {'code': code, 'release_acceptance': False}, sort_keys=True)
+                self.assertNotIn('private', public)
+
     def test_exception_payload_shape_is_never_read_or_formatted(self):
         class PrivateString(str):
             def __eq__(self, other):
@@ -122,9 +169,11 @@ class CollectorDiagnosticControls(unittest.TestCase):
             with self.subTest(stage=stage), self.assertRaisesRegex(
                     guest.Invalid, '^unknown-collector-setup-stage$'):
                 guest.collector_diagnostic_code(stage, PrivateInvalid('private'))
-        with self.assertRaisesRegex(
-                guest.Invalid, '^unknown-collector-setup-error-type$'):
-            guest.collector_diagnostic_code('controller', RuntimeError('private'))
+        error, accesses = hostile_exception(RuntimeError, ('private',))
+        self.assertEqual(
+            guest.collector_diagnostic_code('controller', error),
+            'collector-unknown')
+        self.assertEqual(accesses, [])
 
     def test_constructor_marks_controller_before_loading_installed_code(self):
         error = PrivateInvalid('private installed controller failure')
