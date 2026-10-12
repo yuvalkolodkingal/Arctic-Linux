@@ -13,6 +13,33 @@ ENVELOPE_BYTES=16384
 MAGIC=b'ARCTIC-PRIVATE-RECORD-V1\x00'
 BECH32=frozenset('qpzry9x8gf2tvdw0s3jn54khce6mua7l')
 ABSENT=object()
+SEAL_STAGE_UNKNOWN='private-seal-stage-unknown'
+SEAL_STAGE_LABELS=frozenset({
+    'private-seal-stage-finite-contract','private-seal-stage-traceback-binding',
+    'private-seal-stage-scanner-frame','private-seal-stage-match-locals',
+    'private-seal-stage-unit-family','private-seal-stage-source-replay',
+    'private-seal-stage-record-boundary','private-seal-stage-record-roundtrip',
+    'private-seal-stage-encryption',SEAL_STAGE_UNKNOWN})
+SEAL_FAILURE_MESSAGE='Private record sealing failed closed'
+
+class SealStageError(RuntimeError):
+    """Carry one authenticated, closed label and no rejected-record detail."""
+    def __init__(self,label):
+        self.label=label if type(label)is str and label in SEAL_STAGE_LABELS else SEAL_STAGE_UNKNOWN
+        super().__init__(SEAL_FAILURE_MESSAGE)
+
+def staged(label,function):
+    if type(label)is not str or label not in SEAL_STAGE_LABELS or label==SEAL_STAGE_UNKNOWN:
+        raise SealStageError(SEAL_STAGE_UNKNOWN)
+    try:return function()
+    except BaseException:raise SealStageError(label) from None
+
+def closed_failure_label(error):
+    """Map any object to a fixed public label without reading foreign exception data."""
+    if type(error)is SealStageError:
+        label=error.label
+        if type(label)is str and label in SEAL_STAGE_LABELS and error.args==(SEAL_FAILURE_MESSAGE,):return label
+    return SEAL_STAGE_UNKNOWN
 
 def require(value,message='Private record sealing contract differs'):
     if not value:raise RuntimeError(message)
@@ -78,44 +105,55 @@ def finite_contract(state):
     return family
 def exact_record(error,state,scanner_raw,diagnostic_raw,diagnostic_path):
     """Return one mutable original record only after the existing closed proof agrees."""
-    finite_contract(state)
-    require(type(error)is builtins.RuntimeError and sha(scanner_raw)==SCANNER_SHA256
-            and sha(diagnostic_raw)==DIAGNOSTIC_SHA256)
-    rows=[];tb=BaseException.__traceback__.__get__(error)
-    for _ in range(64):
-        if tb is None:break
-        rows.append(tb);tb=tb.tb_next
-    require(tb is None)
-    matches=[row.tb_frame for row in rows
-             if row.tb_frame.f_code.co_name=='reject_sensitive_match'
-             and row.tb_frame.f_locals.get('error')is error]
-    require(len(matches)==1,'Exact rejected scanner frame differs')
-    frame=matches[0];owned_function(frame,'reject_sensitive_match',scanner_raw)
-    scanner=types.ModuleType('private_record_exact_scanner');scanner.__dict__.update(frame.f_globals)
-    match=frame.f_locals.get('match');phase=frame.f_locals.get('phase')
-    original=frame.f_locals.get('original');boundaries=frame.f_locals.get('boundaries');removed=frame.f_locals.get('removed')
-    require(type(match)is re.Match and phase=='source-view'and type(original)is str
-            and match.re is scanner.EXTERNAL_SENSITIVE and type(boundaries)is scanner.array
-            and type(removed)is scanner.array and 0<match.end()-match.start()<=256)
-    diagnostic=load(diagnostic_raw,diagnostic_path,'private_record_exact_diagnostic')
-    helper=types.ModuleType('private_record_exact_alignment')
-    helper.diagnostic_view_alignment=lambda *unused:{
-        'regex':'exact-scanner-regex','offsets':'exact-scanner-span','mapping':'exact-source-view'}
-    observed=diagnostic.diagnostic_unit_record_family(scanner,helper,match,phase,original,boundaries,removed,
-        stage='live',enabled=True)
-    require(observed==finite_contract(state),'Closed unit/member proof no longer agrees')
-    view,check_boundaries,check_removed=scanner.classification_view(original)
-    require(view==match.string and check_boundaries==boundaries and check_removed==removed)
-    left=max(view.rfind('\n',0,match.start()),view.rfind('\r',0,match.start()))+1
-    ends=[n for n in(view.find('\n',match.end()),view.find('\r',match.end()))if n>=0]
-    right=min(ends)if ends else len(view)
-    require(0<=left<=match.start()<match.end()<=right<=len(view)and right-left<=4096)
-    first,last=scanner.original_span(left,right,boundaries,removed)
-    require(0<=first<last<=len(original)and last-first<=8192)
-    record=original[first:last]
-    cleaned,_,_=scanner.classification_view(record)
-    require(cleaned==view[left:right]and '\n'not in cleaned and '\r'not in cleaned)
-    return bytearray(record.encode('utf-8'))
+    family=staged('private-seal-stage-finite-contract',lambda:finite_contract(state))
+    def traceback_binding():
+        require(type(error)is builtins.RuntimeError and sha(scanner_raw)==SCANNER_SHA256 and sha(diagnostic_raw)==DIAGNOSTIC_SHA256)
+        rows=[];tb=BaseException.__traceback__.__get__(error)
+        for _ in range(64):
+            if tb is None:break
+            rows.append(tb);tb=tb.tb_next
+        require(tb is None)
+        return rows
+    rows=staged('private-seal-stage-traceback-binding',traceback_binding)
+    def scanner_frame():
+        matches=[row.tb_frame for row in rows if row.tb_frame.f_code.co_name=='reject_sensitive_match' and row.tb_frame.f_locals.get('error')is error]
+        require(len(matches)==1,'Exact rejected scanner frame differs')
+        frame=matches[0];owned_function(frame,'reject_sensitive_match',scanner_raw)
+        return frame
+    frame=staged('private-seal-stage-scanner-frame',scanner_frame)
+    def match_locals():
+        scanner=types.ModuleType('private_record_exact_scanner');scanner.__dict__.update(frame.f_globals)
+        match=frame.f_locals.get('match');phase=frame.f_locals.get('phase')
+        original=frame.f_locals.get('original');boundaries=frame.f_locals.get('boundaries');removed=frame.f_locals.get('removed')
+        require(type(match)is re.Match and phase=='source-view'and type(original)is str and match.re is scanner.EXTERNAL_SENSITIVE and type(boundaries)is scanner.array and type(removed)is scanner.array and 0<match.end()-match.start()<=256)
+        return scanner,match,phase,original,boundaries,removed
+    scanner,match,phase,original,boundaries,removed=staged('private-seal-stage-match-locals',match_locals)
+    def unit_family():
+        diagnostic=load(diagnostic_raw,diagnostic_path,'private_record_exact_diagnostic')
+        helper=types.ModuleType('private_record_exact_alignment')
+        helper.diagnostic_view_alignment=lambda *unused:{'regex':'exact-scanner-regex','offsets':'exact-scanner-span','mapping':'exact-source-view'}
+        observed=diagnostic.diagnostic_unit_record_family(scanner,helper,match,phase,original,boundaries,removed,stage='live',enabled=True)
+        require(observed==family,'Closed unit/member proof no longer agrees')
+    staged('private-seal-stage-unit-family',unit_family)
+    def source_replay():
+        view,check_boundaries,check_removed=scanner.classification_view(original)
+        require(view==match.string and check_boundaries==boundaries and check_removed==removed)
+        return view
+    view=staged('private-seal-stage-source-replay',source_replay)
+    def record_boundary():
+        left=max(view.rfind('\n',0,match.start()),view.rfind('\r',0,match.start()))+1
+        ends=[n for n in(view.find('\n',match.end()),view.find('\r',match.end()))if n>=0]
+        right=min(ends)if ends else len(view)
+        require(0<=left<=match.start()<match.end()<=right<=len(view)and right-left<=4096)
+        first,last=scanner.original_span(left,right,boundaries,removed)
+        require(0<=first<last<=len(original)and last-first<=8192)
+        return left,right,first,last
+    left,right,first,last=staged('private-seal-stage-record-boundary',record_boundary)
+    def record_roundtrip():
+        record=original[first:last];cleaned,_,_=scanner.classification_view(record)
+        require(cleaned==view[left:right]and '\n'not in cleaned and '\r'not in cleaned)
+        return bytearray(record.encode('utf-8'))
+    return staged('private-seal-stage-record-roundtrip',record_roundtrip)
 def envelope(record):
     require(type(record)is bytearray and 0<len(record)<=8192)
     head=MAGIC+len(record).to_bytes(4,'big')
@@ -186,6 +224,7 @@ def seal_failure(error,state,scanner_raw,diagnostic_raw,diagnostic_path,age_bina
                  recipient,recipient_sha256,sealed_out,receipt_public):
     record=exact_record(error,state,scanner_raw,diagnostic_raw,diagnostic_path)
     try:
-        return encrypt_record(age_binary,recipient,recipient_sha256,record,sealed_out,receipt_public)
+        return staged('private-seal-stage-encryption',lambda:encrypt_record(
+            age_binary,recipient,recipient_sha256,record,sealed_out,receipt_public))
     finally:
         wipe(record)
