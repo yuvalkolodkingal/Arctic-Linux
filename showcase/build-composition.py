@@ -9,12 +9,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--static', action='store_true', help='Build end-state layout before animation')
 args=parser.parse_args()
 timing_path=ROOT/'timing.json'
+story=json.loads((ROOT/'storyboard.json').read_text())
 if timing_path.exists():
     timing=json.loads(timing_path.read_text())
+    scene_meta={scene['id']:scene for scene in story}
+    scenes=[{**scene_meta.get(scene['id'],scene),'start':scene['start'],'duration':scene['duration']} for scene in timing['scenes']]
 else:
-    story=json.loads((ROOT/'storyboard.json').read_text())
     timing={'duration':len(story)*12,'scenes':[{**s,'start':i*12,'duration':12} for i,s in enumerate(story)],'captions':[]}
-scenes=timing['scenes']
+    scenes=timing['scenes']
 escape=html.escape
 
 css='''
@@ -45,9 +47,15 @@ h1{margin:0;font-size:68px;line-height:1.05;letter-spacing:-.025em;font-weight:6
 .detail .screen{width:100%;height:auto}\n.light .brand,.light .shortcut{color:#151a21}.light .brand span,.light .brand-bar,.light .chapter,.light .body{color:#4a5663}.light .shortcut{background:#fbfcfd;border-color:#7c8a99}.light .screen{border-color:#7c8a99}
 .hero h1{font-size:83px}.hero .copy{width:530px}.hero .body{max-width:510px}.hero .main{gap:40px}
 .outro h1{font-size:80px}.outro .shortcut{font-size:20px}
-.app-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:1100px}
-.app-card{display:flex;flex-direction:column;gap:22px;padding:36px;background:#1a212a;border:1px solid #6b7a8a;border-radius:20px;min-height:245px}
-.app-symbol{font-family:'JetBrains Mono',monospace;font-size:24px;color:#aeb9c5}.app-name{font-size:44px;font-weight:600;line-height:1.1}.app-use{font-size:26px;color:#aeb9c5;line-height:1.4}
+.app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;width:100%;max-width:1120px}
+.app-card{display:flex;flex-direction:column;gap:12px;padding:24px;background:#1a212a;border:1px solid #6b7a8a;border-radius:20px;min-height:190px}
+.app-symbol{font-family:'JetBrains Mono',monospace;font-size:18px;color:#aeb9c5}.app-name{font-size:34px;font-weight:600;line-height:1.1}.app-use{font-size:21px;color:#aeb9c5;line-height:1.35}
+.evidence-card{width:100%;max-width:1060px;padding:38px;background:#1a212a;border:1px solid #6b7a8a;border-radius:22px;box-shadow:0 18px 60px #00000026}
+.evidence-label{font-family:'JetBrains Mono',monospace;color:#f6bd55;font-size:19px;margin-bottom:24px}
+.evidence-item{font-size:30px;line-height:1.35;padding:18px 0;border-top:1px solid #2f3945}.evidence-item:first-of-type{border-top:0}
+.capture-pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;width:100%;align-items:center}
+.capture-pair figure{margin:0}.capture-pair img{width:100%;border-radius:16px;border:1px solid #6b7a8a;box-shadow:0 18px 60px #00000026}
+.capture-pair figcaption{font-family:'JetBrains Mono',monospace;color:#aeb9c5;font-size:16px;margin-top:10px}
 .tiled-screen{position:relative;width:100%;aspect-ratio:1280/800;border:1px solid #6b7a8a;border-radius:18px;overflow:hidden;box-shadow:0 18px 60px #00000026}
 .tiled-screen .desktop{width:100%;height:100%;display:block}
 .tiled-screen .window{position:absolute;top:5.5%;height:93.25%;object-fit:fill;border:2px solid #2f3945;border-radius:12px}
@@ -71,10 +79,13 @@ for i,s in enumerate(scenes):
     if s.get('shortcut'):extra+=f'<div class="shortcut entrance-key">{escape(s["shortcut"])}</div>'
     if s.get('tag'):extra+=f'<div class="tag entrance-tag">{escape(s["tag"])}</div>'
     if s.get('type')=='apps':
-        apps=[('01 · Browse','Zen','A browser for your everyday web.'),('02 · Create','Zed','An editor for code and projects.'),('03 · Write','Collabora Office','Documents, sheets, and slides.'),('04 · Play','VLC','Video and music, at your desk.')]
+        apps=[('01 · Browse','GNOME Web','Native browsing with WebKit.'),('02 · Terminal','Foot','Fast Wayland terminal with Fish or Bash.'),('03 · Files','PCManFM','GTK3 file management with XArchiver.'),('04 · Write','FeatherPad','Lightweight everyday text editing.'),('05 · Play','Celluloid','Music and video through mpv.'),('06 · Shell','Nano','A familiar editor in the terminal.')]
         media='<div class="app-grid">'+''.join(f'<div class="app-card entrance-card"><div class="app-symbol">{escape(k)}</div><div class="app-name">{escape(n)}</div><div class="app-use">{escape(d)}</div></div>' for k,n,d in apps)+'</div>'
-    elif s['id']=='tiling':
-        media='<div class="tiled-screen entrance-screen"><img class="desktop" src="assets/tiling-desktop.png" alt="Arctic desktop"><img class="window terminal" src="assets/kitty-fish-capture.png" alt="Kitty running Fish"><img class="window files" src="assets/nautilus-tiled-capture.png" alt="Nautilus files"></div>'
+    elif s.get('type')=='qualification-pair':
+        media='<div class="capture-pair entrance-screen"><figure><img src="assets/pcmanfm-qualification.png" alt="PCManFM and FeatherPad exact-candidate capture"><figcaption>Exact candidate · demo files</figcaption></figure><figure><img src="assets/foot-fish-current.png" alt="Foot and Fish exact-candidate capture"><figcaption>Exact candidate · signed update</figcaption></figure></div>'
+    elif s.get('type')=='evidence':
+        evidence=s.get('evidence',[])
+        media='<div class="evidence-card entrance-screen"><div class="evidence-label">QUALIFICATION EVIDENCE</div>'+''.join(f'<div class="evidence-item">{escape(item)}</div>' for item in evidence)+'</div>'
     else:
         media=f'<img class="screen entrance-screen" src="assets/{s["id"]}.png" alt="{escape(s["title"])}">'
     markup.append(f'''<section id="scene-{s['id']}" class="{' '.join(classes)}" aria-label="{escape(s['title'])}">
