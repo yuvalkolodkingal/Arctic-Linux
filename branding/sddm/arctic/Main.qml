@@ -49,10 +49,10 @@ Rectangle {
         // TextField is a wrapper Item. Defer until SDDM has applied its initial
         // focus, then focus the real editable control for the installed user.
         Qt.callLater(function() {
-            if (typedUser)
-                userField.input.forceActiveFocus()
-            else
+            if (testMode || !typedUser)
                 passwordField.input.forceActiveFocus()
+            else
+                userField.input.forceActiveFocus()
         })
     }
 

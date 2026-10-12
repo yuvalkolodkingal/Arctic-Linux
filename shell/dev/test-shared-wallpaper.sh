@@ -75,8 +75,8 @@ shot() {
 }
 shot sddm-a
 # Bind input to the exact greeter process instead of assuming an app_id or the
-# compositor's startup focus. Test mode then advances from its required user-name
-# control into the real password TextInput. Do not submit the login.
+# compositor's startup focus. Test mode exercises the installed path's real
+# password TextInput directly. Do not submit the login.
 swaymsg "[pid=\"$greeter\"] focus" >/dev/null
 swaymsg -t get_tree -r >"$OUT/sddm-focused-tree.json"
 python3 - "$OUT/sddm-focused-tree.json" "$greeter" <<'PY'
@@ -98,7 +98,6 @@ while stack:
 assert owned, 'greeter PID is absent from the compositor tree'
 assert len(focused) == 1 and focused[0].get('pid') == target, 'greeter surface is not focused'
 PY
-wtype -k Tab
 sleep 1
 shot sddm-password-focused
 wtype -s 80 abc
